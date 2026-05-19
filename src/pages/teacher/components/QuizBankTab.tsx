@@ -148,7 +148,7 @@ interface BankDefaultFocus {
 const ORDER_DELIMITER = "||";
 const MATCHING_PAIR_DELIMITER = "=>";
 const DEFAULT_OPTION_COUNT = 4;
-const QUESTION_PAGE_SIZE = 50;
+const QUESTION_PAGE_SIZE = 30;
 const RECENT_CLASS_FOCUS_MIN_STUDENTS = 10;
 const createDefaultOptionItems = () =>
   Array.from({ length: DEFAULT_OPTION_COUNT }, () => "");
@@ -2205,8 +2205,8 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
           읽기 전용 권한입니다. 문제 수정은 관리자만 가능합니다.
         </div>
       )}
-      <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-4">
-        <div className="flex flex-col gap-4">
+      <div className="shrink-0 border-b border-slate-200 bg-white px-4 py-3">
+        <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
             <div>
               <h2 className="text-xl font-black text-slate-900">문제 은행</h2>
@@ -2233,8 +2233,8 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-2 lg:grid-cols-12">
-            <div className="flex rounded-lg border border-slate-200 bg-slate-100 p-1 lg:col-span-2">
+          <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-5 2xl:grid-cols-[128px_108px_minmax(170px,1.45fr)_minmax(170px,1.45fr)_minmax(136px,1fr)_minmax(112px,0.75fr)_minmax(112px,0.75fr)_minmax(104px,0.68fr)_minmax(210px,1.5fr)_96px]">
+            <div className="flex min-w-0 rounded-lg border border-slate-200 bg-slate-100 p-1">
               {(["all", "class"] as AnalyticsScope[]).map((scope) => (
                 <button
                   key={scope}
@@ -2243,7 +2243,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                     userTouchedClassScopeRef.current = true;
                     setAnalyticsScope(scope);
                   }}
-                  className={`flex-1 rounded-md px-3 py-2 text-xs font-black transition ${
+                  className={`flex-1 rounded-md px-2 py-2 text-xs font-black transition ${
                     analyticsScope === scope
                       ? "bg-white text-blue-700 shadow-sm"
                       : "text-slate-500 hover:text-slate-800"
@@ -2260,7 +2260,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                 setClassFilter(e.target.value);
               }}
               disabled={analyticsScope !== "class" || classOptions.length === 0}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 disabled:bg-slate-100 disabled:text-slate-400 lg:col-span-2"
+              className="min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[13px] font-bold text-slate-700 disabled:bg-slate-100 disabled:text-slate-400"
               aria-label="학급 선택"
             >
               {classOptions.length === 0 && <option value="">학급 없음</option>}
@@ -2273,7 +2273,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
             <select
               value={filters.big}
               onChange={(e) => handleBigChange(e.target.value)}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 lg:col-span-2"
+              className="min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[13px] font-bold text-slate-700"
             >
               <option value="">대단원 전체</option>
               {treeData.map((big) => (
@@ -2285,7 +2285,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
             <select
               value={filters.mid}
               onChange={(e) => handleMidChange(e.target.value)}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 lg:col-span-2"
+              className="min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[13px] font-bold text-slate-700"
             >
               <option value="">중단원 전체</option>
               {midOptions.map((mid) => (
@@ -2299,7 +2299,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
               onChange={(e) =>
                 setFilters((prev) => ({ ...prev, small: e.target.value }))
               }
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 lg:col-span-2"
+              className="min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[13px] font-bold text-slate-700"
             >
               <option value="">소단원 전체</option>
               {smallOptions.map((small) => (
@@ -2308,26 +2308,10 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                 </option>
               ))}
             </select>
-            <button
-              type="button"
-              onClick={() => {
-                applyDefaultFocus();
-                setTypeFilter("");
-                setStatusFilter("");
-                setSearchTerm("");
-              }}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-black text-slate-600 transition hover:border-blue-300 hover:text-blue-700 lg:col-span-2"
-            >
-              <i className="fas fa-sync-alt mr-2"></i>
-              초기화
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 gap-2 lg:grid-cols-12">
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 lg:col-span-2"
+              className="min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[13px] font-bold text-slate-700"
             >
               <option value="">평가 유형 전체</option>
               <option value="diagnostic">진단평가</option>
@@ -2337,7 +2321,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 lg:col-span-2"
+              className="min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[13px] font-bold text-slate-700"
             >
               <option value="">문항 유형 전체</option>
               <option value="choice">객관식</option>
@@ -2348,7 +2332,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-              className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 lg:col-span-2"
+              className="min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[13px] font-bold text-slate-700"
             >
               <option value="">상태 전체</option>
               <option value="weak">우선 확인</option>
@@ -2356,21 +2340,34 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
               <option value="data_short">데이터 부족</option>
               <option value="stable">안정</option>
             </select>
-            <div className="relative lg:col-span-6">
+            <div className="relative min-w-0 md:col-span-2 xl:col-span-2 2xl:col-span-1">
               <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400"></i>
               <input
                 type="search"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="문항번호, 문제, 정답, 해설 검색"
-                className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm font-bold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-400"
+                className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-[13px] font-bold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-400"
               />
             </div>
+            <button
+              type="button"
+              onClick={() => {
+                applyDefaultFocus();
+                setTypeFilter("");
+                setStatusFilter("");
+                setSearchTerm("");
+              }}
+              className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[13px] font-black text-slate-600 transition hover:border-blue-300 hover:text-blue-700"
+            >
+              <i className="fas fa-sync-alt mr-1.5"></i>
+              초기화
+            </button>
           </div>
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-auto p-4">
+      <div className="flex-1 min-h-0 overflow-auto p-3">
         <section className="rounded-lg border border-slate-200 bg-white">
           <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
@@ -2482,8 +2479,8 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
             ))}
           </div>
 
-          <div className="grid grid-cols-1 gap-4 border-t border-slate-100 p-4 xl:grid-cols-[minmax(0,1.15fr)_280px_minmax(260px,0.85fr)]">
-            <section className="min-w-0">
+          <div className="grid grid-cols-1 gap-4 border-t border-slate-100 bg-slate-50/70 p-4 xl:grid-cols-[minmax(360px,1.25fr)_minmax(300px,0.82fr)_minmax(320px,0.92fr)]">
+            <section className="min-w-0 rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-100">
               <div className="flex items-center justify-between">
                 <h4 className="text-sm font-black text-slate-900">
                   단원별 평균 정답률
@@ -2539,7 +2536,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
               </div>
             </section>
 
-            <section className="min-w-0">
+            <section className="min-w-0 rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-100">
               <div className="flex items-center justify-between">
                 <h4 className="text-sm font-black text-slate-900">
                   문항 유형별 정답률
@@ -2584,7 +2581,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
               </div>
             </section>
 
-            <section className="min-w-0">
+            <section className="min-w-0 rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-100">
               <div className="flex items-center justify-between">
                 <h4 className="text-sm font-black text-slate-900">
                   학습 활용 제안 Top 3
@@ -2848,7 +2845,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                 </tbody>
               </table>
             </div>
-            {!loading && filteredQuestions.length > 0 && (
+            {!loading && filteredQuestions.length > QUESTION_PAGE_SIZE && (
               <div className="flex flex-col gap-3 border-t border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-xs font-bold text-slate-500">
                   {Math.min(
