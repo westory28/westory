@@ -1517,7 +1517,7 @@ const QuizLogTab: React.FC = () => {
   }, [bigFilter, bigOptions, midFilter, midOptions]);
 
   return (
-    <div className="h-full overflow-y-auto bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6">
+    <div className="min-h-[760px] bg-white rounded-xl shadow-sm border border-gray-200 p-4 lg:p-6">
       <div className="mb-6 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <div>
           <h2 className="text-2xl font-extrabold text-gray-900">응시 현황</h2>

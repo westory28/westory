@@ -2199,7 +2199,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   };
 
   return (
-    <div className="h-full flex flex-col bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
+    <div className="min-h-[760px] flex flex-col bg-slate-50 rounded-xl border border-slate-200 overflow-hidden">
       {!canEdit && (
         <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
           읽기 전용 권한입니다. 문제 수정은 관리자만 가능합니다.
@@ -2370,7 +2370,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-auto p-4">
+      <div className="flex-1 p-4">
         <section className="rounded-lg border border-slate-200 bg-white">
           <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
             <div>
