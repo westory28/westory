@@ -83,6 +83,26 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     tokens: [{ key: "assignmentTitle", label: "과제 이름" }],
   },
   {
+    key: "history_classroom_exemption_granted",
+    label: "역사교실 면제권 부여",
+    audience: "students",
+    description:
+      "교사가 역사교실 면제권을 학생에게 부여했을 때 학생에게 안내합니다.",
+    triggerLabel: "역사교실 면제권을 학생에게 부여했을 때",
+    recipientLabel: "부여 대상 학생",
+    status: "connected",
+    defaultEnabled: true,
+    defaultPriority: "normal",
+    titleTemplate: "역사교실 면제권이 부여되었습니다",
+    bodyTemplate: "역사교실 면제권이 부여되었습니다. 사유: {reason}",
+    targetUrl: "/student/history-classroom",
+    targetLabel: "학생 역사교실 화면",
+    tokens: [
+      { key: "reason", label: "부여 사유" },
+      { key: "scopeLabel", label: "부여 학급" },
+    ],
+  },
+  {
     key: "history_classroom_exemption_reviewed",
     label: "역사교실 면제권 처리 결과",
     audience: "students",

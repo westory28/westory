@@ -714,6 +714,7 @@ const NOTIFICATION_EVENT_AUDIENCE = {
   history_classroom_assigned: 'students',
   history_classroom_passed: 'teachers',
   history_classroom_submitted: 'teachers',
+  history_classroom_exemption_granted: 'students',
   history_classroom_exemption_requested: 'teachers',
   history_classroom_exemption_reviewed: 'students',
   history_dictionary_requested: 'teachers',
@@ -3766,6 +3767,42 @@ const createHistoryClassroomExemptionReviewedNotification = async (year, semeste
   });
 };
 
+const createHistoryClassroomExemptionGrantedNotifications = async (year, semester, grants) => {
+  const grantItems = Array.isArray(grants) ? grants : [];
+  const results = [];
+
+  await runInChunks(grantItems, 20, async (grant) => {
+    const uid = sanitizeHistoryClassroomText(grant?.uid, 160);
+    const exemptionId = sanitizeHistoryClassroomText(grant?.exemptionId, 160);
+    if (!uid || !exemptionId) return;
+
+    const reason = sanitizeHistoryClassroomText(grant?.reason, 160);
+    const scopeLabel = sanitizeHistoryClassroomText(grant?.grantScopeLabel, 40);
+    const body = reason
+      ? `역사교실 면제권이 부여되었습니다. 사유: ${reason}`
+      : '역사교실 면제권이 부여되었습니다.';
+
+    const [result] = await createUserNotifications(year, semester, [uid], {
+      type: 'history_classroom_exemption_granted',
+      title: '역사교실 면제권이 부여되었습니다',
+      body,
+      targetUrl: '/student/history-classroom',
+      entityType: 'history_classroom_exemption',
+      entityId: exemptionId,
+      actorUid: grant?.actorUid,
+      priority: 'normal',
+      dedupeKey: `history_classroom_exemption_granted:${year}:${semester}:${exemptionId}`,
+      templateValues: {
+        reason,
+        scopeLabel,
+      },
+    });
+    if (result) results.push(result);
+  });
+
+  return results;
+};
+
 exports.grantHistoryClassroomExemptions = onCall({ region: REGION }, async (request) => {
   const manager = await assertQuizManager(request);
   const { year, semester } = assertYearSemester(request.data);
@@ -3787,10 +3824,18 @@ exports.grantHistoryClassroomExemptions = onCall({ region: REGION }, async (requ
   const collectionPath = getHistoryClassroomExemptionCollectionPath(year, semester);
   const batch = db.batch();
   const exemptionIds = [];
+  const notificationGrants = [];
   recipients.forEach(({ uid, profile }) => {
     const exemptionRef = db.collection(collectionPath).doc();
     const snapshot = getHistoryClassroomProfileSnapshot(uid, profile);
     exemptionIds.push(exemptionRef.id);
+    notificationGrants.push({
+      uid,
+      exemptionId: exemptionRef.id,
+      reason,
+      grantScopeLabel,
+      actorUid: manager.uid,
+    });
     batch.set(exemptionRef, {
       ...snapshot,
       reason,
@@ -3810,10 +3855,16 @@ exports.grantHistoryClassroomExemptions = onCall({ region: REGION }, async (requ
     });
   });
   await batch.commit();
+  const notificationResults = await createHistoryClassroomExemptionGrantedNotifications(
+    year,
+    semester,
+    notificationGrants,
+  );
 
   return {
     createdCount: exemptionIds.length,
     recipientCount: recipients.length,
+    notificationCreatedCount: notificationResults.filter((result) => result.created).length,
     exemptionIds,
     collectionPath,
   };
