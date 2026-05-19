@@ -104,8 +104,7 @@ interface ExemptionStudentSummary {
   requestedCount: number;
   usedCount: number;
   totalCount: number;
-  latestGrantedAt: unknown;
-  latestReason: string;
+  items: HistoryClassroomExemption[];
 }
 
 type DashboardIconName =
@@ -544,6 +543,13 @@ const getExemptionRequestStatusClassName = (
   return "border-amber-200 bg-amber-50 text-amber-700";
 };
 
+const formatExemptionStatusLabel = (status: string) => {
+  if (status === "requested") return "사용 요청";
+  if (status === "used") return "사용됨";
+  if (status === "revoked") return "회수";
+  return "보유";
+};
+
 const formatResultSubmittedAtLabel = (value: unknown) => {
   const timestampMs = getTimestampMs(value);
   if (!timestampMs) return "제출 시간 없음";
@@ -707,6 +713,8 @@ const ManageHistoryClassroom: React.FC = () => {
   const [exemptionModalTab, setExemptionModalTab] =
     useState<ExemptionModalTab>("grant");
   const [highlightedExemptionRequestId, setHighlightedExemptionRequestId] =
+    useState("");
+  const [expandedExemptionStudentKey, setExpandedExemptionStudentKey] =
     useState("");
   const [exemptionGrantMode, setExemptionGrantMode] =
     useState<ExemptionGrantMode>("students");
@@ -1375,8 +1383,7 @@ const ManageHistoryClassroom: React.FC = () => {
           requestedCount: 0,
           usedCount: 0,
           totalCount: 0,
-          latestGrantedAt: null,
-          latestReason: "",
+          items: [],
         } satisfies ExemptionStudentSummary);
 
       const status = String(exemption.status || "").trim();
@@ -1388,13 +1395,11 @@ const ManageHistoryClassroom: React.FC = () => {
       } else {
         existing.availableCount += 1;
       }
-
-      const currentMs = getTimestampMs(existing.latestGrantedAt) || 0;
-      const exemptionMs = getTimestampMs(exemption.createdAt) || 0;
-      if (exemptionMs >= currentMs) {
-        existing.latestGrantedAt = exemption.createdAt;
-        existing.latestReason = exemption.reason;
-      }
+      existing.items = [...existing.items, exemption].sort(
+        (a, b) =>
+          (getTimestampMs(b.createdAt) || 0) -
+          (getTimestampMs(a.createdAt) || 0),
+      );
       rowsByStudent.set(key, existing);
     });
 
@@ -4262,54 +4267,101 @@ const ManageHistoryClassroom: React.FC = () => {
                         총 {activeExemptionCount}개
                       </div>
                     </div>
-                    <div className="mt-3 min-h-0 flex-1 space-y-1.5 overflow-auto overscroll-contain pr-1 [-webkit-overflow-scrolling:touch]">
-                      <div className="sticky top-0 z-10 grid min-w-[42rem] grid-cols-[minmax(4.5rem,0.7fr)_minmax(6rem,1fr)_minmax(3.25rem,0.45fr)_minmax(4.75rem,0.55fr)_minmax(3.75rem,0.5fr)_minmax(5.75rem,0.75fr)] items-center gap-2 border-b border-slate-200 bg-white px-3 pb-1.5 text-[11px] font-bold text-slate-400">
+                    <div
+                      className="mt-3 max-h-[min(58vh,34rem)] min-h-0 flex-1 space-y-1.5 overflow-auto pr-1 [-webkit-overflow-scrolling:touch]"
+                      onWheel={(event) => {
+                        const target = event.currentTarget;
+                        const canScrollDown =
+                          event.deltaY > 0 &&
+                          target.scrollTop + target.clientHeight <
+                            target.scrollHeight;
+                        const canScrollUp =
+                          event.deltaY < 0 && target.scrollTop > 0;
+                        if (canScrollDown || canScrollUp) {
+                          target.scrollTop += event.deltaY;
+                          event.preventDefault();
+                        }
+                      }}
+                    >
+                      <div className="sticky top-0 z-10 grid min-w-[34rem] grid-cols-[minmax(4.5rem,0.7fr)_minmax(7rem,1fr)_minmax(4rem,0.45fr)_minmax(4.75rem,0.55fr)_minmax(4rem,0.5fr)] items-center gap-2 border-b border-slate-200 bg-white px-3 pb-1.5 text-[11px] font-bold text-slate-400">
                         <div>학급</div>
                         <div>학생</div>
                         <div className="text-center">보유</div>
                         <div className="text-center">사용 요청</div>
                         <div className="text-center">사용됨</div>
-                        <div className="text-center">최근 부여</div>
                       </div>
-                      {grantedExemptionStudentRows.map((row) => (
-                        <div
-                          key={row.key}
-                          className="min-w-[42rem] rounded-xl border border-slate-200 bg-white px-3 py-2"
-                        >
-                          <div className="grid grid-cols-[minmax(4.5rem,0.7fr)_minmax(6rem,1fr)_minmax(3.25rem,0.45fr)_minmax(4.75rem,0.55fr)_minmax(3.75rem,0.5fr)_minmax(5.75rem,0.75fr)] items-center gap-2">
-                            <div className="truncate text-xs font-bold text-slate-500">
-                              {row.grade && row.className
-                                ? `${row.grade}-${row.className}`
-                                : "-"}
-                            </div>
-                            <div className="min-w-0">
-                              <div className="truncate text-sm font-black text-slate-900">
-                                {row.studentName}
+                      {grantedExemptionStudentRows.map((row) => {
+                        const expanded = expandedExemptionStudentKey === row.key;
+                        return (
+                          <div
+                            key={row.key}
+                            className={`min-w-[34rem] rounded-xl border bg-white px-3 py-2 transition ${
+                              expanded
+                                ? "border-blue-200 ring-2 ring-blue-50"
+                                : "border-slate-200 hover:border-blue-100 hover:bg-blue-50/30"
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExpandedExemptionStudentKey((current) =>
+                                  current === row.key ? "" : row.key,
+                                )
+                              }
+                              className="grid w-full grid-cols-[minmax(4.5rem,0.7fr)_minmax(7rem,1fr)_minmax(4rem,0.45fr)_minmax(4.75rem,0.55fr)_minmax(4rem,0.5fr)] items-center gap-2 text-left"
+                              aria-expanded={expanded}
+                            >
+                              <div className="truncate text-xs font-bold text-slate-500">
+                                {row.grade && row.className
+                                  ? `${row.grade}-${row.className}`
+                                  : "-"}
                               </div>
-                              <div className="mt-0.5 truncate text-[11px] font-semibold text-slate-500">
-                                {row.number ? `${row.number}번` : "번호 없음"}
+                              <div className="min-w-0">
+                                <div className="truncate text-sm font-black text-slate-900">
+                                  {row.studentName}
+                                </div>
+                                <div className="mt-0.5 truncate text-[11px] font-semibold text-slate-500">
+                                  {row.number ? `${row.number}번` : "번호 없음"}
+                                </div>
                               </div>
-                            </div>
-                            <div className="text-center text-sm font-black text-blue-700">
-                              {row.availableCount}
-                            </div>
-                            <div className="text-center text-sm font-black text-amber-700">
-                              {row.requestedCount}
-                            </div>
-                            <div className="text-center text-sm font-black text-slate-600">
-                              {row.usedCount}
-                            </div>
-                            <div className="truncate text-center text-[11px] font-semibold text-slate-500">
-                              {formatDateTimeLabel(row.latestGrantedAt)}
-                            </div>
+                              <div className="text-center text-xl font-black leading-none text-blue-700">
+                                {row.availableCount}
+                              </div>
+                              <div className="text-center text-base font-black text-amber-700">
+                                {row.requestedCount}
+                              </div>
+                              <div className="text-center text-base font-black text-slate-600">
+                                {row.usedCount}
+                              </div>
+                            </button>
+                            {expanded && (
+                              <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50 p-3">
+                                <div className="mb-2 text-xs font-black text-slate-500">
+                                  부여 상세
+                                </div>
+                                <div className="space-y-1.5">
+                                  {row.items.map((item) => (
+                                    <div
+                                      key={item.id}
+                                      className="grid grid-cols-[5rem_minmax(7rem,0.7fr)_minmax(10rem,1fr)] gap-2 rounded-lg bg-white px-3 py-2 text-xs"
+                                    >
+                                      <div className="font-black text-blue-700">
+                                        {formatExemptionStatusLabel(item.status)}
+                                      </div>
+                                      <div className="font-semibold text-slate-500">
+                                        {formatDateTimeLabel(item.createdAt)}
+                                      </div>
+                                      <div className="min-w-0 truncate font-semibold text-slate-600">
+                                        {item.reason || "부여 사유 없음"}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
-                          {row.latestReason && (
-                            <div className="mt-1 truncate text-[11px] font-semibold text-slate-400">
-                              최근 사유: {row.latestReason}
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                     {!grantedExemptionStudentRows.length && (
                       <div className="rounded-2xl border border-dashed border-slate-200 px-4 py-12 text-center text-sm font-semibold text-slate-400">
