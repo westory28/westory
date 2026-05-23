@@ -4,7 +4,7 @@ import {
   ref,
   uploadBytes,
 } from "firebase/storage";
-import { storage } from "./firebase";
+import { getFirebaseStorage } from "./firebase";
 import type { SystemConfig } from "../types";
 
 type ConfigLike = Pick<SystemConfig, "year" | "semester"> | null | undefined;
@@ -178,6 +178,7 @@ export const uploadNoticeImage = async ({
 }): Promise<NoticeImageUploadResult> => {
   const compressed = await compressNoticeImage(file);
   const storagePath = getNoticeImageStoragePath(config, noticeId);
+  const storage = await getFirebaseStorage();
   const storageRef = ref(storage, storagePath);
   await uploadBytes(storageRef, compressed.blob, {
     contentType: compressed.mimeType,
@@ -197,6 +198,7 @@ export const tryDeleteNoticeImage = async (storagePath?: string | null) => {
   const normalizedPath = String(storagePath || "").trim();
   if (!normalizedPath) return false;
   try {
+    const storage = await getFirebaseStorage();
     await deleteObject(ref(storage, normalizedPath));
     return true;
   } catch (error) {

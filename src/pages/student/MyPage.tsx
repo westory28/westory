@@ -11,23 +11,11 @@ import {
   setDoc,
   where,
 } from "firebase/firestore";
-import {
-  BarElement,
-  CategoryScale,
-  Chart as ChartJS,
-  Filler,
-  Legend,
-  LineElement,
-  LinearScale,
-  PointElement,
-  Title,
-  Tooltip,
-} from "chart.js";
-import { Bar, Line } from "react-chartjs-2";
 import PointRankBadge from "../../components/common/PointRankBadge";
 import { useAuth } from "../../contexts/AuthContext";
 import { subscribePointsUpdated } from "../../lib/appEvents";
 import { db } from "../../lib/firebase";
+import { lazyWithRetry } from "../../lib/lazyWithRetry";
 import {
   getPointPolicy,
   getPointRankManualAdjustEarnedPointsByUid,
@@ -58,16 +46,9 @@ import {
 } from "../../lib/studentProgressSummary";
 import type { PointPolicy, PointWallet } from "../../types";
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler,
+const LazyChart = lazyWithRetry(
+  () => import("../../components/common/LazyChart"),
+  "student-my-page-chart",
 );
 
 type MainMenu = "profile" | "score" | "wrong_note";
@@ -1857,44 +1838,53 @@ const MyPage: React.FC = () => {
                   </div>
                   <div className="h-72">
                     {subjectInsights.length > 0 ? (
-                      <Bar
-                        data={totalStackChartData}
-                        plugins={[stackHoverGuidePlugin]}
-                        options={{
-                          responsive: true,
-                          maintainAspectRatio: false,
-                          interaction: { mode: "index", intersect: false },
-                          scales: {
-                            y: { beginAtZero: true, max: 100, stacked: true },
-                            x: { stacked: true },
-                          },
-                          plugins: {
-                            legend: { display: false },
-                            tooltip: {
-                              enabled: true,
-                              filter: (ctx: any) =>
-                                Number(ctx?.parsed?.y || 0) > 0,
-                              callbacks: {
-                                label: (ctx: any) => {
-                                  const dataIndex = ctx.dataIndex || 0;
-                                  const ds = ctx.dataset || {};
-                                  const itemType = getTypeLabel(
-                                    (ds.itemTypes?.[dataIndex] ||
-                                      "other") as any,
-                                  );
-                                  const raw = Number(
-                                    ds.rawScores?.[dataIndex] || 0,
-                                  ).toFixed(1);
-                                  const max = Number(
-                                    ds.maxScores?.[dataIndex] || 0,
-                                  ).toFixed(1);
-                                  return `[${itemType}] ${ctx.dataset.label}: ${raw} / ${max}점`;
+                      <React.Suspense
+                        fallback={
+                          <div className="flex h-full items-center justify-center text-sm font-semibold text-gray-400">
+                            그래프를 준비하는 중입니다.
+                          </div>
+                        }
+                      >
+                        <LazyChart
+                          type="bar"
+                          data={totalStackChartData}
+                          plugins={[stackHoverGuidePlugin]}
+                          options={{
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            interaction: { mode: "index", intersect: false },
+                            scales: {
+                              y: { beginAtZero: true, max: 100, stacked: true },
+                              x: { stacked: true },
+                            },
+                            plugins: {
+                              legend: { display: false },
+                              tooltip: {
+                                enabled: true,
+                                filter: (ctx: any) =>
+                                  Number(ctx?.parsed?.y || 0) > 0,
+                                callbacks: {
+                                  label: (ctx: any) => {
+                                    const dataIndex = ctx.dataIndex || 0;
+                                    const ds = ctx.dataset || {};
+                                    const itemType = getTypeLabel(
+                                      (ds.itemTypes?.[dataIndex] ||
+                                        "other") as any,
+                                    );
+                                    const raw = Number(
+                                      ds.rawScores?.[dataIndex] || 0,
+                                    ).toFixed(1);
+                                    const max = Number(
+                                      ds.maxScores?.[dataIndex] || 0,
+                                    ).toFixed(1);
+                                    return `[${itemType}] ${ctx.dataset.label}: ${raw} / ${max}점`;
+                                  },
                                 },
                               },
                             },
-                          },
-                        }}
-                      />
+                          }}
+                        />
+                      </React.Suspense>
                     ) : (
                       <div className="text-gray-400 py-8 text-center">
                         아직 성적 데이터가 없습니다.
@@ -2006,21 +1996,30 @@ const MyPage: React.FC = () => {
                           <div className="grid grid-cols-1 gap-3 items-start">
                             <div className="h-56">
                               {gapBarData && (
-                                <Bar
-                                  data={gapBarData}
-                                  options={{
-                                    indexAxis: "y" as const,
-                                    responsive: true,
-                                    maintainAspectRatio: false,
-                                    scales: {
-                                      x: { beginAtZero: true, max: 100 },
-                                    },
-                                    plugins: {
-                                      legend: { display: false },
-                                      tooltip: { enabled: true },
-                                    },
-                                  }}
-                                />
+                                <React.Suspense
+                                  fallback={
+                                    <div className="flex h-full items-center justify-center text-sm font-semibold text-gray-400">
+                                      그래프를 준비하는 중입니다.
+                                    </div>
+                                  }
+                                >
+                                  <LazyChart
+                                    type="bar"
+                                    data={gapBarData}
+                                    options={{
+                                      indexAxis: "y" as const,
+                                      responsive: true,
+                                      maintainAspectRatio: false,
+                                      scales: {
+                                        x: { beginAtZero: true, max: 100 },
+                                      },
+                                      plugins: {
+                                        legend: { display: false },
+                                        tooltip: { enabled: true },
+                                      },
+                                    }}
+                                  />
+                                </React.Suspense>
                               )}
                             </div>
                           </div>
@@ -2056,15 +2055,24 @@ const MyPage: React.FC = () => {
                 </h2>
                 <div className="h-72">
                   {scoreChartData ? (
-                    <Bar
-                      data={scoreChartData}
-                      options={{
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: { y: { beginAtZero: true, max: 100 } },
-                        plugins: { legend: { display: false } },
-                      }}
-                    />
+                    <React.Suspense
+                      fallback={
+                        <div className="flex h-full items-center justify-center text-sm font-semibold text-gray-400">
+                          그래프를 준비하는 중입니다.
+                        </div>
+                      }
+                    >
+                      <LazyChart
+                        type="bar"
+                        data={scoreChartData}
+                        options={{
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          scales: { y: { beginAtZero: true, max: 100 } },
+                          plugins: { legend: { display: false } },
+                        }}
+                      />
+                    </React.Suspense>
                   ) : (
                     <div className="text-gray-400 py-8 text-center">
                       아직 성적 데이터가 없습니다.
@@ -2480,15 +2488,24 @@ const MyPage: React.FC = () => {
                   </h3>
                   <div className="h-64">
                     {quizLineData ? (
-                      <Line
-                        data={quizLineData}
-                        options={{
-                          responsive: true,
-                          maintainAspectRatio: false,
-                          scales: { y: { beginAtZero: true, max: 100 } },
-                          plugins: { legend: { display: false } },
-                        }}
-                      />
+                      <React.Suspense
+                        fallback={
+                          <div className="flex h-full items-center justify-center text-sm font-semibold text-gray-400">
+                            그래프를 준비하는 중입니다.
+                          </div>
+                        }
+                      >
+                        <LazyChart
+                          type="line"
+                          data={quizLineData}
+                          options={{
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: { y: { beginAtZero: true, max: 100 } },
+                            plugins: { legend: { display: false } },
+                          }}
+                        />
+                      </React.Suspense>
                     ) : (
                       <div className="text-gray-400 py-8 text-center">
                         응시 기록이 아직 없습니다.

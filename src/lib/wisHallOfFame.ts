@@ -1,7 +1,6 @@
 import defaultPodiumImage from "../assets/wis-hall-of-fame-podium.svg";
 import { doc, getDoc } from "firebase/firestore";
-import { httpsCallable } from "firebase/functions";
-import { db, functions } from "./firebase";
+import { db, getHttpsCallable } from "./firebase";
 import { getYearSemester } from "./semesterScope";
 import { readLocalOnly, writeLocalOnly } from "./safeStorage";
 import type {
@@ -585,7 +584,7 @@ export const ensureWisHallOfFameSnapshot = async (
     throw new Error("Hall of fame requires current year/semester config.");
   }
   const { year, semester } = targetYearSemester;
-  const callable = httpsCallable(functions, "ensureWisHallOfFame");
+  const callable = await getHttpsCallable("ensureWisHallOfFame");
   const result = await callable({
     year,
     semester,
@@ -615,7 +614,7 @@ export const saveWisHallOfFameConfig = async (
     throw new Error("Hall of fame requires current year/semester config.");
   }
   const { year, semester } = targetYearSemester;
-  const callable = httpsCallable(functions, "saveWisHallOfFameConfig");
+  const callable = await getHttpsCallable("saveWisHallOfFameConfig");
   const result = await callable({
     year,
     semester,

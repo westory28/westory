@@ -6,7 +6,7 @@ import type {
   TextItem,
 } from "pdfjs-dist/types/src/display/api";
 import { getDownloadURL, ref } from "firebase/storage";
-import { storage } from "../../lib/firebase";
+import { getFirebaseStorage } from "../../lib/firebase";
 import {
   DEFAULT_PDF_ERA_TAGS,
   DEFAULT_PDF_REGION_TAGS,
@@ -438,6 +438,7 @@ const PdfMapViewer: React.FC<PdfMapViewerProps> = ({
           return;
         }
         if (storagePath) {
+          const storage = await getFirebaseStorage();
           const downloadUrl = await withTimeout(
             getDownloadURL(ref(storage, storagePath)),
             30000,

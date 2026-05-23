@@ -1,5 +1,4 @@
 ﻿import React from "react";
-import LessonWorksheetStage from "../../../components/common/LessonWorksheetStage";
 import StorageImage from "../../../components/common/StorageImage";
 import {
   getLessonPdfExtractionHelpText,
@@ -19,7 +18,16 @@ import type {
   LessonWorksheetPageImage,
   LessonWorksheetTextRegion,
 } from "../../../lib/lessonWorksheet";
-import LessonContent from "../../student/lesson/components/LessonContent";
+import { lazyWithRetry } from "../../../lib/lazyWithRetry";
+
+const LessonWorksheetStage = lazyWithRetry(
+  () => import("../../../components/common/LessonWorksheetStage"),
+  "teacher-lesson-worksheet-stage",
+);
+const LessonContent = lazyWithRetry(
+  () => import("../../student/lesson/components/LessonContent"),
+  "teacher-lesson-student-preview",
+);
 
 export type LessonEditorTab = "pdf" | "student-preview";
 
@@ -1321,29 +1329,37 @@ export function LessonPdfSection({
             className={`flex flex-col ${isLibraryPanelOpen ? "xl:flex-row" : ""}`}
           >
             <div className="min-w-0 flex-1 p-2 md:p-3">
-              <LessonWorksheetStage
-                mode="teacher-edit"
-                pageImages={worksheetPageImages}
-                blanks={worksheetBlanks}
-                textRegions={worksheetTextRegions}
-                teacherTool={worksheetTool}
-                selectedBlankId={activeBlankId}
-                footnoteAnchors={worksheetFootnoteAnchors}
-                selectedFootnoteAnchorId={activeFootnoteAnchorId}
-                pendingBlank={draftBlank}
-                onSelectBlank={onSelectBlank}
-                onDeleteBlank={onDeleteBlank}
-                onSelectFootnoteAnchor={onSelectFootnoteAnchor}
-                onDeleteFootnoteAnchor={onDeleteFootnoteAnchor}
-                onActivateFootnoteAnchor={onActivateFootnoteAnchor}
-                footnoteTitles={footnoteTitles}
-                teacherCurrentPage={teacherCurrentPage}
-                onTeacherCurrentPageChange={setTeacherCurrentPage}
-                onCreateBlankFromSelection={onCreateBlankFromSelection}
-                onCreateFootnoteAnchorFromSelection={
-                  onCreateFootnoteAnchorFromSelection
+              <React.Suspense
+                fallback={
+                  <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center text-sm font-semibold text-gray-500">
+                    학습지 편집 도구를 준비하는 중입니다.
+                  </div>
                 }
-              />
+              >
+                <LessonWorksheetStage
+                  mode="teacher-edit"
+                  pageImages={worksheetPageImages}
+                  blanks={worksheetBlanks}
+                  textRegions={worksheetTextRegions}
+                  teacherTool={worksheetTool}
+                  selectedBlankId={activeBlankId}
+                  footnoteAnchors={worksheetFootnoteAnchors}
+                  selectedFootnoteAnchorId={activeFootnoteAnchorId}
+                  pendingBlank={draftBlank}
+                  onSelectBlank={onSelectBlank}
+                  onDeleteBlank={onDeleteBlank}
+                  onSelectFootnoteAnchor={onSelectFootnoteAnchor}
+                  onDeleteFootnoteAnchor={onDeleteFootnoteAnchor}
+                  onActivateFootnoteAnchor={onActivateFootnoteAnchor}
+                  footnoteTitles={footnoteTitles}
+                  teacherCurrentPage={teacherCurrentPage}
+                  onTeacherCurrentPageChange={setTeacherCurrentPage}
+                  onCreateBlankFromSelection={onCreateBlankFromSelection}
+                  onCreateFootnoteAnchorFromSelection={
+                    onCreateFootnoteAnchorFromSelection
+                  }
+                />
+              </React.Suspense>
             </div>
             {isLibraryPanelOpen && (
               <aside
@@ -1807,13 +1823,21 @@ export function LessonPreviewLauncher({
         </button>
       </div>
       <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <LessonContent
-          unitId={unitId}
-          fallbackTitle={fallbackTitle}
-          lessonOverride={lesson}
-          disablePersistence
-          allowHiddenAccess
-        />
+        <React.Suspense
+          fallback={
+            <div className="p-8 text-center text-sm font-semibold text-gray-500">
+              학생 미리보기를 준비하는 중입니다.
+            </div>
+          }
+        >
+          <LessonContent
+            unitId={unitId}
+            fallbackTitle={fallbackTitle}
+            lessonOverride={lesson}
+            disablePersistence
+            allowHiddenAccess
+          />
+        </React.Suspense>
       </div>
     </section>
   );

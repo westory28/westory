@@ -9,8 +9,7 @@ import {
   where,
   type Unsubscribe,
 } from "firebase/firestore";
-import { httpsCallable } from "firebase/functions";
-import { db, functions } from "./firebase";
+import { db, getHttpsCallable } from "./firebase";
 import { getYearSemester } from "./semesterScope";
 import type {
   HistoryDictionaryRequest,
@@ -313,8 +312,7 @@ export const loadTeacherStudentHistoryDictionaryWords = async (
   config?: ConfigLike,
 ) => {
   const { year, semester } = getYearSemester(config);
-  const callable = httpsCallable(
-    functions,
+  const callable = await getHttpsCallable(
     "listStudentHistoryDictionaryWordsForTeacher",
   );
   const result = await callable({ year, semester });
@@ -366,7 +364,7 @@ export const requestHistoryDictionaryTerm = async (
   },
 ) => {
   const { year, semester } = getYearSemester(config);
-  const callable = httpsCallable(functions, "requestHistoryDictionaryTerm");
+  const callable = await getHttpsCallable("requestHistoryDictionaryTerm");
   await callable({
     year,
     semester,
@@ -377,7 +375,7 @@ export const requestHistoryDictionaryTerm = async (
 };
 
 export const saveStudentHistoryDictionaryWord = async (termId: string) => {
-  const callable = httpsCallable(functions, "saveStudentHistoryDictionaryWord");
+  const callable = await getHttpsCallable("saveStudentHistoryDictionaryWord");
   await callable({ termId });
 };
 
@@ -387,10 +385,7 @@ export const saveStudentHistoryDictionaryEntry = async (input: {
   definition: string;
 }) => {
   const { year, semester } = getYearSemester(input.config);
-  const callable = httpsCallable(
-    functions,
-    "saveStudentHistoryDictionaryEntry",
-  );
+  const callable = await getHttpsCallable("saveStudentHistoryDictionaryEntry");
   const result = await callable({
     year,
     semester,
@@ -413,10 +408,7 @@ export const deleteStudentHistoryDictionaryWord = async (
   termId: string,
 ) => {
   const { year, semester } = getYearSemester(config);
-  const callable = httpsCallable(
-    functions,
-    "deleteStudentHistoryDictionaryWord",
-  );
+  const callable = await getHttpsCallable("deleteStudentHistoryDictionaryWord");
   const result = await callable({
     year,
     semester,
@@ -447,8 +439,7 @@ export const deleteStudentHistoryDictionaryWordByTeacher = async (
   },
 ) => {
   const { year, semester } = getYearSemester(config);
-  const callable = httpsCallable(
-    functions,
+  const callable = await getHttpsCallable(
     "deleteStudentHistoryDictionaryWordByTeacher",
   );
   const result = await callable({
@@ -485,8 +476,7 @@ export const updateStudentHistoryDictionaryWordByTeacher = async (
   },
 ) => {
   const { year, semester } = getYearSemester(config);
-  const callable = httpsCallable(
-    functions,
+  const callable = await getHttpsCallable(
     "updateStudentHistoryDictionaryWordByTeacher",
   );
   const result = await callable({
@@ -517,7 +507,7 @@ export const saveHistoryDictionaryTerm = async (
   },
 ) => {
   const { year, semester } = getYearSemester(config);
-  const callable = httpsCallable(functions, "saveHistoryDictionaryTerm");
+  const callable = await getHttpsCallable("saveHistoryDictionaryTerm");
   await callable({
     year,
     semester,
@@ -544,7 +534,7 @@ export const saveHistoryDictionaryTermsBulk = async (
   },
 ) => {
   const { year, semester } = getYearSemester(config);
-  const callable = httpsCallable(functions, "saveHistoryDictionaryTermsBulk");
+  const callable = await getHttpsCallable("saveHistoryDictionaryTermsBulk");
   const result = await callable({
     year,
     semester,
@@ -570,8 +560,7 @@ export const approveHistoryDictionaryTermForRequests = async (
   },
 ) => {
   const { year, semester } = getYearSemester(config);
-  const callable = httpsCallable(
-    functions,
+  const callable = await getHttpsCallable(
     "approveHistoryDictionaryTermForRequests",
   );
   await callable({

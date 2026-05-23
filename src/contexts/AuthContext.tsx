@@ -105,8 +105,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         if (user) {
           firstUserDocReadyRef.current = null;
           void loadAuthedSystemConfig(user);
-          setLoading(false);
-          window.clearTimeout(loadingGuard);
           const userRef = doc(db, "users", user.uid);
           unsubscribeUserDoc = onSnapshot(
             userRef,
@@ -155,12 +153,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                   };
                   setUserData(bootstrapUser);
                 }
+                setLoading(false);
+                window.clearTimeout(loadingGuard);
               } catch (e) {
                 console.error("Failed to sync user data", e);
+                setLoading(false);
+                window.clearTimeout(loadingGuard);
               }
             },
             (e) => {
               console.error("Failed to subscribe user data", e);
+              setLoading(false);
+              window.clearTimeout(loadingGuard);
             },
           );
         } else {

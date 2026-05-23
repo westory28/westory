@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { getDownloadURL, ref } from "firebase/storage";
-import { storage } from "../../lib/firebase";
+import { getFirebaseStorage } from "../../lib/firebase";
 
 interface StorageImageProps {
   path: string;
@@ -48,7 +48,8 @@ const StorageImage: React.FC<StorageImageProps> = ({
     setUrl("");
     setFailed(false);
 
-    getDownloadURL(ref(storage, path))
+    getFirebaseStorage()
+      .then((storage) => getDownloadURL(ref(storage, path)))
       .then((downloadUrl) => {
         if (!active) return;
         storageUrlCache.set(path, downloadUrl);

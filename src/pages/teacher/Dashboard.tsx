@@ -1,13 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import FullCalendar from "@fullcalendar/react";
+import type FullCalendar from "@fullcalendar/react";
 import { useAuth } from "../../contexts/AuthContext";
 import { CalendarEvent } from "../../types";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import TeacherNoticeBoard from "./components/TeacherNoticeBoard";
-import TeacherCalendarSection from "./components/TeacherCalendarSection";
 import SearchModal from "../student/components/SearchModal"; // Reuse search modal
 import EventModal from "./components/EventModal";
+import { lazyWithRetry } from "../../lib/lazyWithRetry";
 import { useScheduleCategories } from "../../lib/scheduleCategories";
 import { getYearSemester } from "../../lib/semesterScope";
 import ScheduleEventDetailModal from "../../components/common/ScheduleEventDetailModal";
@@ -17,6 +17,11 @@ import {
   getKoreanPublicHolidays,
   mergeEventsWithKoreanPublicHolidays,
 } from "../../lib/koreanPublicHolidays";
+
+const TeacherCalendarSection = lazyWithRetry(
+  () => import("./components/TeacherCalendarSection"),
+  "teacher-calendar-section",
+);
 
 const getVisibleCalendarEvents = (
   events: CalendarEvent[],
@@ -180,19 +185,27 @@ const TeacherDashboard: React.FC = () => {
 
         {/* 2. Calendar (Mobile: Order 2 / Desktop: Order 1, Left Full Height) */}
         <div className="teacher-dashboard-calendar order-2 md:order-1 md:col-span-3 md:row-span-2">
-          <TeacherCalendarSection
-            events={visibleEvents}
-            onDateClick={handleDateClick}
-            onDateDoubleClick={handleAddEvent}
-            onEventClick={handleEventClick}
-            onAddEvent={handleAddEvent}
-            onSearchClick={() => setIsSearchOpen(true)}
-            calendarRef={calendarRef}
-            filterClass={effectiveFilterClass}
-            availableClassTargets={availableClassTargets}
-            onFilterChange={setFilterClass}
-            selectedDate={selectedDate}
-          />
+          <React.Suspense
+            fallback={
+              <div className="flex min-h-[420px] items-center justify-center rounded-2xl border border-gray-200 bg-white text-sm font-semibold text-gray-500 shadow-sm">
+                학사 일정을 준비하는 중입니다.
+              </div>
+            }
+          >
+            <TeacherCalendarSection
+              events={visibleEvents}
+              onDateClick={handleDateClick}
+              onDateDoubleClick={handleAddEvent}
+              onEventClick={handleEventClick}
+              onAddEvent={handleAddEvent}
+              onSearchClick={() => setIsSearchOpen(true)}
+              calendarRef={calendarRef}
+              filterClass={effectiveFilterClass}
+              availableClassTargets={availableClassTargets}
+              onFilterChange={setFilterClass}
+              selectedDate={selectedDate}
+            />
+          </React.Suspense>
         </div>
 
         {/* 3. Wis Ranking (Mobile: Order 3 / Desktop: Order 3, Right Bottom) */}

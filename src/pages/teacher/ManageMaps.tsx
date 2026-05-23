@@ -18,9 +18,9 @@ import {
 import { InlineLoading } from "../../components/common/LoadingState";
 import MapSidebar from "../../components/common/MapSidebar";
 import MapViewer from "../../components/common/MapViewer";
-import PdfMapViewer from "../../components/common/PdfMapViewer";
 import { useAuth } from "../../contexts/AuthContext";
-import { db, storage } from "../../lib/firebase";
+import { db, getFirebaseStorage } from "../../lib/firebase";
+import { lazyWithRetry } from "../../lib/lazyWithRetry";
 import {
   DEFAULT_GOOGLE_MAP_RESOURCE,
   DEFAULT_PDF_TAG_SECTIONS,
@@ -35,11 +35,7 @@ import {
   type PdfMapRegion,
   type PdfTagSection,
 } from "../../lib/mapResources";
-import {
-  getPdfPageImageExtension,
-  processPdfMapFile,
-  type ProcessedPdfMap,
-} from "../../lib/pdfMapProcessor";
+import type { ProcessedPdfMap } from "../../lib/pdfMapProcessor";
 import { getSemesterCollectionPath } from "../../lib/semesterScope";
 import { canWriteLessonManagement } from "../../lib/permissions";
 
@@ -56,6 +52,11 @@ interface PendingPdfUpload {
   pageImages: PdfMapPageImage[];
   regions: PdfMapRegion[];
 }
+
+const PdfMapViewer = lazyWithRetry(
+  () => import("../../components/common/PdfMapViewer"),
+  "manage-maps-pdf-map-viewer",
+);
 
 const createDraft = (): StoredMapResource => ({
   id: "",
@@ -628,6 +629,7 @@ const ManageMaps: React.FC = () => {
   const buildPendingPdfUpload = async (
     file: File,
   ): Promise<PendingPdfUpload> => {
+    const { processPdfMapFile } = await import("../../lib/pdfMapProcessor");
     const processed = await processPdfMapFile(file);
     return {
       id: `${file.name}-${file.size}-${file.lastModified}`,
@@ -839,11 +841,14 @@ const ManageMaps: React.FC = () => {
 
   const uploadProcessedPdfPages = async (
     resourceId: string,
-    processed: Awaited<ReturnType<typeof processPdfMapFile>>,
+    processed: ProcessedPdfMap,
     previousPages: Array<{ page?: number }> = [],
   ) => {
     const uploadedPages = [];
     const uploadedPagePaths = new Set<string>();
+    const storage = await getFirebaseStorage();
+    const { getPdfPageImageExtension } =
+      await import("../../lib/pdfMapProcessor");
 
     for (const page of processed.pageImages) {
       const pageExtension = getPdfPageImageExtension(page.blob);
@@ -966,6 +971,7 @@ const ManageMaps: React.FC = () => {
     const extension = targetFile.name.includes(".")
       ? `.${targetFile.name.split(".").pop()}`
       : "";
+    const storage = await getFirebaseStorage();
     const objectRef = ref(
       storage,
       `map-resources/${resourceId}/${Date.now()}${extension}`,
@@ -986,8 +992,11 @@ const ManageMaps: React.FC = () => {
     );
 
     if (draft.type === "pdf") {
-      const processed =
-        processedOverride || (await processPdfMapFile(targetFile));
+      let processed = processedOverride;
+      if (!processed) {
+        const { processPdfMapFile } = await import("../../lib/pdfMapProcessor");
+        processed = await processPdfMapFile(targetFile);
+      }
       const uploadedPages = await uploadProcessedPdfPages(
         resourceId,
         processed,
@@ -1266,6 +1275,7 @@ const ManageMaps: React.FC = () => {
     setSaving(true);
 
     try {
+      const { processPdfMapFile } = await import("../../lib/pdfMapProcessor");
       const processed = await processPdfMapFile(sourceFile);
       const uploadedPages = await uploadProcessedPdfPages(
         draft.id,
@@ -2099,16 +2109,24 @@ const ManageMaps: React.FC = () => {
                 {draft.type === "pdf" ? (
                   settingsPdfPreviewUrl ? (
                     <div className="rounded-3xl border border-gray-200 bg-white p-4 shadow-sm">
-                      <PdfMapViewer
-                        fileUrl={settingsPdfPreviewUrl}
-                        storagePath={
-                          selectedFile ? undefined : draft.storagePath
+                      <React.Suspense
+                        fallback={
+                          <InlineLoading message="PDF 지도를 준비하는 중입니다." />
                         }
-                        title={draft.title || selectedFile?.name || "PDF 지도"}
-                        pageImages={draft.pdfPageImages || []}
-                        regions={draft.pdfRegions || []}
-                        tagSections={currentPdfTagSections}
-                      />
+                      >
+                        <PdfMapViewer
+                          fileUrl={settingsPdfPreviewUrl}
+                          storagePath={
+                            selectedFile ? undefined : draft.storagePath
+                          }
+                          title={
+                            draft.title || selectedFile?.name || "PDF 지도"
+                          }
+                          pageImages={draft.pdfPageImages || []}
+                          regions={draft.pdfRegions || []}
+                          tagSections={currentPdfTagSections}
+                        />
+                      </React.Suspense>
                     </div>
                   ) : (
                     <div className="rounded-3xl border border-dashed border-gray-300 bg-white px-6 py-16 text-center text-sm text-gray-500">

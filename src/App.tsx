@@ -11,7 +11,8 @@ import MainLayout from "./components/layout/MainLayout";
 import { AppToastProvider } from "./components/common/AppToastProvider";
 import { InlineLoading, PageLoading } from "./components/common/LoadingState";
 import { lazyWithRetry } from "./lib/lazyWithRetry";
-import Login from "./pages/Login";
+
+const Login = lazyWithRetry(() => import("./pages/Login"), "login");
 
 const StudentDashboard = lazyWithRetry(
   () => import("./pages/student/Dashboard"),
@@ -265,27 +266,24 @@ const App: React.FC = () => {
                 />
                 <Route
                   path="/teacher/dashboard"
-                  element={
-                    <MainLayout>
-                      <TeacherDashboard />
-                    </MainLayout>
-                  }
+                  element={renderWithLayout(
+                    <TeacherDashboard />,
+                    "교사 첫 화면을 준비하는 중입니다.",
+                  )}
                 />
                 <Route
                   path="/teacher/students"
-                  element={
-                    <MainLayout>
-                      <StudentList />
-                    </MainLayout>
-                  }
+                  element={renderWithLayout(
+                    <StudentList />,
+                    "학생 명부를 준비하는 중입니다.",
+                  )}
                 />
                 <Route
                   path="/teacher/quiz"
-                  element={
-                    <MainLayout>
-                      <ManageQuiz />
-                    </MainLayout>
-                  }
+                  element={renderWithLayout(
+                    <ManageQuiz />,
+                    "퀴즈 관리 화면을 준비하는 중입니다.",
+                  )}
                 />
                 <Route
                   path="/teacher/quiz/history2"
@@ -297,83 +295,73 @@ const App: React.FC = () => {
                 />
                 <Route
                   path="/teacher/quiz/history-classroom"
-                  element={
-                    <MainLayout>
-                      <ManageHistoryClassroom />
-                    </MainLayout>
-                  }
+                  element={renderWithLayout(
+                    <ManageHistoryClassroom />,
+                    "역사교실 관리 화면을 준비하는 중입니다.",
+                  )}
                 />
                 <Route
                   path="/teacher/exam"
-                  element={
-                    <MainLayout>
-                      <ManageExam />
-                    </MainLayout>
-                  }
+                  element={renderWithLayout(
+                    <ManageExam />,
+                    "평가 관리 화면을 준비하는 중입니다.",
+                  )}
                 />
                 <Route
                   path="/teacher/settings"
-                  element={
-                    <MainLayout>
-                      <Settings />
-                    </MainLayout>
-                  }
+                  element={renderWithLayout(
+                    <Settings />,
+                    "설정 화면을 준비하는 중입니다.",
+                  )}
                 />
                 <Route
                   path="/teacher/points"
-                  element={
-                    <MainLayout>
-                      <ManagePoints />
-                    </MainLayout>
-                  }
+                  element={renderWithLayout(
+                    <ManagePoints />,
+                    "위스 관리 화면을 준비하는 중입니다.",
+                  )}
                 />
                 <Route
                   path="/teacher/schedule"
-                  element={
-                    <MainLayout>
-                      <ManageSchedule />
-                    </MainLayout>
-                  }
+                  element={renderWithLayout(
+                    <ManageSchedule />,
+                    "일정 관리 화면을 준비하는 중입니다.",
+                  )}
                 />
                 <Route
                   path="/teacher/lesson"
-                  element={
-                    <MainLayout>
-                      <ManageLesson />
-                    </MainLayout>
-                  }
+                  element={renderWithLayout(
+                    <ManageLesson />,
+                    "수업자료 관리 화면을 준비하는 중입니다.",
+                  )}
                 />
                 <Route
                   path="/teacher/lesson/history-dictionary"
-                  element={
-                    <MainLayout>
-                      <ManageHistoryDictionary />
-                    </MainLayout>
-                  }
+                  element={renderWithLayout(
+                    <ManageHistoryDictionary />,
+                    "역사 사전 관리 화면을 준비하는 중입니다.",
+                  )}
                 />
                 <Route
                   path="/teacher/lesson/maps"
-                  element={
-                    <MainLayout>
-                      <ManageMaps />
-                    </MainLayout>
-                  }
+                  element={renderWithLayout(
+                    <ManageMaps />,
+                    "역사 지도 관리 화면을 준비하는 중입니다.",
+                  )}
                 />
                 <Route
                   path="/teacher/lesson/source-archive"
-                  element={
-                    <MainLayout>
-                      <ManageSourceArchive />
-                    </MainLayout>
-                  }
+                  element={renderWithLayout(
+                    <ManageSourceArchive />,
+                    "사료 보관함을 준비하는 중입니다.",
+                  )}
                 />
                 <Route
                   path="/teacher/lesson/think-cloud"
-                  element={
-                    <MainLayout>
-                      <ManageThinkCloud />
-                    </MainLayout>
-                  }
+                  element={renderWithLayout(
+                    <ManageThinkCloud />,
+                    "생각 구름 관리 화면을 준비하는 중입니다.",
+                  )}
                 />
                 <Route
                   path="/student/mypage"
@@ -405,19 +393,17 @@ const App: React.FC = () => {
                 />
                 <Route
                   path="/developer-log"
-                  element={
-                    <MainLayout>
-                      <DeveloperLog />
-                    </MainLayout>
-                  }
+                  element={renderWithLayout(
+                    <DeveloperLog />,
+                    "개발자 일지를 준비하는 중입니다.",
+                  )}
                 />
                 <Route
                   path="/developer-log/:postId"
-                  element={
-                    <MainLayout>
-                      <DeveloperLog />
-                    </MainLayout>
-                  }
+                  element={renderWithLayout(
+                    <DeveloperLog />,
+                    "개발자 일지를 준비하는 중입니다.",
+                  )}
                 />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>

@@ -8,8 +8,7 @@ import {
   query,
   type Unsubscribe,
 } from "firebase/firestore";
-import { httpsCallable } from "firebase/functions";
-import { db, functions } from "./firebase";
+import { db, getHttpsCallable } from "./firebase";
 import { getSemesterCollectionPath, getYearSemester } from "./semesterScope";
 import type {
   SystemConfig,
@@ -159,13 +158,13 @@ export const loadNotifications = async (
 
 export const markNotificationsRead = async (config: ConfigLike) => {
   const { year, semester } = getYearSemester(config);
-  const callable = httpsCallable(functions, "markNotificationsRead");
+  const callable = await getHttpsCallable("markNotificationsRead");
   await callable({ year, semester });
 };
 
 export const clearNotifications = async (config: ConfigLike) => {
   const { year, semester } = getYearSemester(config);
-  const callable = httpsCallable(functions, "clearNotifications");
+  const callable = await getHttpsCallable("clearNotifications");
   await callable({ year, semester });
 };
 
@@ -174,7 +173,7 @@ export const createManagedNotifications = async (
   input: ManagedNotificationInput,
 ) => {
   const { year, semester } = getYearSemester(config);
-  const callable = httpsCallable(functions, "createManagedNotifications");
+  const callable = await getHttpsCallable("createManagedNotifications");
   await callable({
     year,
     semester,
@@ -193,7 +192,7 @@ export const notifyHistoryClassroomSubmitted = async (
   },
 ) => {
   const { year, semester } = getYearSemester(config);
-  const callable = httpsCallable(functions, "notifyHistoryClassroomSubmitted");
+  const callable = await getHttpsCallable("notifyHistoryClassroomSubmitted");
   await callable({
     year,
     semester,

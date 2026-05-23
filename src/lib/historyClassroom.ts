@@ -1,6 +1,5 @@
-import { httpsCallable } from "firebase/functions";
 import type { SystemConfig } from "../types";
-import { functions } from "./firebase";
+import { getHttpsCallable } from "./firebase";
 import type { MapResource } from "./mapResources";
 import { getYearSemester } from "./semesterScope";
 import {
@@ -514,8 +513,7 @@ export const createHistoryClassroomExemptionRequest = async (
   },
 ) => {
   const { year, semester } = getYearSemester(config);
-  const callable = httpsCallable(
-    functions,
+  const callable = await getHttpsCallable(
     "createHistoryClassroomExemptionRequest",
   );
   await callable({
@@ -538,7 +536,7 @@ export const grantHistoryClassroomExemptions = async (
   },
 ) => {
   const { year, semester } = getYearSemester(config);
-  const callable = httpsCallable(functions, "grantHistoryClassroomExemptions");
+  const callable = await getHttpsCallable("grantHistoryClassroomExemptions");
   await callable({
     year,
     semester,
@@ -559,8 +557,7 @@ export const reviewHistoryClassroomExemptionRequest = async (
   },
 ) => {
   const { year, semester } = getYearSemester(config);
-  const callable = httpsCallable(
-    functions,
+  const callable = await getHttpsCallable(
     "reviewHistoryClassroomExemptionRequest",
   );
   await callable({

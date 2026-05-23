@@ -6,8 +6,7 @@ import {
   query,
   where,
 } from "firebase/firestore";
-import { httpsCallable } from "firebase/functions";
-import { db, functions } from "./firebase";
+import { db, getHttpsCallable } from "./firebase";
 import { getSemesterDocPath, getYearSemester } from "./semesterScope";
 import { readSiteSettingDoc } from "./siteSettings";
 import type { SystemConfig, UserData } from "../types";
@@ -620,7 +619,7 @@ export const resetAssessmentAttemptsByClass = async ({
   classId,
 }: ResetAssessmentAttemptsByClassParams) => {
   const { year, semester } = getYearSemester(config);
-  const callable = httpsCallable<
+  const callable = await getHttpsCallable<
     {
       year: string;
       semester: string;
@@ -629,7 +628,7 @@ export const resetAssessmentAttemptsByClass = async ({
       classId: string;
     },
     ResetAssessmentAttemptsByClassResult
-  >(functions, "resetAssessmentAttemptsByClass");
+  >("resetAssessmentAttemptsByClass");
 
   const result = await callable({
     year,

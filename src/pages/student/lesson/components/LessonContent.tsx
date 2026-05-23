@@ -9,7 +9,6 @@ import {
   serverTimestamp,
   setDoc,
 } from "firebase/firestore";
-import LessonWorksheetStage from "../../../../components/common/LessonWorksheetStage";
 import { useAuth } from "../../../../contexts/AuthContext";
 import { notifyPointsUpdated } from "../../../../lib/appEvents";
 import { db } from "../../../../lib/firebase";
@@ -27,6 +26,12 @@ import { claimPointActivityReward } from "../../../../lib/points";
 import { emitSessionActivity } from "../../../../lib/sessionActivity";
 import { getSemesterCollectionPath } from "../../../../lib/semesterScope";
 import { readStudentLesson } from "../../../../lib/studentLessonReadCache";
+import { lazyWithRetry } from "../../../../lib/lazyWithRetry";
+
+const LessonWorksheetStage = lazyWithRetry(
+  () => import("../../../../components/common/LessonWorksheetStage"),
+  "student-lesson-worksheet-stage",
+);
 
 type AnswerStatus = "" | "correct" | "wrong";
 type SaveCompletionPopupState = {
@@ -908,28 +913,36 @@ const LessonContent: React.FC<LessonContentProps> = ({
 
         <div ref={contentRef} className="space-y-6">
           {!!worksheet.pageImages.length && (
-            <LessonWorksheetStage
-              pageImages={worksheet.pageImages}
-              blanks={worksheet.blanks}
-              textRegions={worksheet.textRegions}
-              footnoteAnchors={worksheet.footnoteAnchors}
-              selectedFootnoteAnchorId={activeWorksheetFootnoteAnchorId}
-              footnoteTitles={Object.fromEntries(
-                footnotes.map((footnote) => [
-                  footnote.id,
-                  footnote.title || footnote.label || "각주",
-                ]),
-              )}
-              onActivateFootnoteAnchor={openWorksheetFootnoteAnchor}
-              mode="student-solve"
-              studentCurrentPage={resolvedWorksheetPage}
-              onStudentCurrentPageChange={setActiveWorksheetPage}
-              hideStudentPageNavigator={canPersist}
-              studentAnswers={studentAnswers}
-              onStudentAnswerChange={handleWorksheetAnswerChange}
-              annotationEnabled={false}
-              showPageLabel={false}
-            />
+            <React.Suspense
+              fallback={
+                <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center text-sm font-semibold text-gray-500">
+                  학습지를 준비하는 중입니다.
+                </div>
+              }
+            >
+              <LessonWorksheetStage
+                pageImages={worksheet.pageImages}
+                blanks={worksheet.blanks}
+                textRegions={worksheet.textRegions}
+                footnoteAnchors={worksheet.footnoteAnchors}
+                selectedFootnoteAnchorId={activeWorksheetFootnoteAnchorId}
+                footnoteTitles={Object.fromEntries(
+                  footnotes.map((footnote) => [
+                    footnote.id,
+                    footnote.title || footnote.label || "각주",
+                  ]),
+                )}
+                onActivateFootnoteAnchor={openWorksheetFootnoteAnchor}
+                mode="student-solve"
+                studentCurrentPage={resolvedWorksheetPage}
+                onStudentCurrentPageChange={setActiveWorksheetPage}
+                hideStudentPageNavigator={canPersist}
+                studentAnswers={studentAnswers}
+                onStudentAnswerChange={handleWorksheetAnswerChange}
+                annotationEnabled={false}
+                showPageLabel={false}
+              />
+            </React.Suspense>
           )}
 
           {!!bodyHtml && (

@@ -6,12 +6,12 @@ import {
 import Header from "../common/Header";
 import Footer from "../common/Footer";
 import { PageLoading } from "../common/LoadingState";
-import StudentHistoryDictionaryController from "../common/StudentHistoryDictionaryController";
-import StudentRankPromotionController from "../common/StudentRankPromotionController";
 import { useAuth } from "../../contexts/AuthContext";
 import { useLocation, useNavigate } from "react-router-dom";
 import { markLoginPerf, measureLoginPerf } from "../../lib/loginPerf";
 import { readStorage } from "../../lib/safeStorage";
+import { runAfterNextPaint } from "../../lib/browserTasks";
+import { lazyWithRetry } from "../../lib/lazyWithRetry";
 import {
   canAccessTeacherPath,
   canAccessTeacherPortal,
@@ -20,11 +20,23 @@ import {
 
 const ROLE_SESSION_KEY = "westoryPortalRole";
 
+const StudentHistoryDictionaryController = lazyWithRetry(
+  () => import("../common/StudentHistoryDictionaryController"),
+  "student-history-dictionary-controller",
+);
+const StudentRankPromotionController = lazyWithRetry(
+  () => import("../common/StudentRankPromotionController"),
+  "student-rank-promotion-controller",
+);
+
 const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { currentUser, userData, loading } = useAuth();
   const { showToast } = useAppToast();
   const navigate = useNavigate();
   const location = useLocation();
+  const isStudentRoute = location.pathname.startsWith("/student");
+  const [studentEnhancementsReady, setStudentEnhancementsReady] =
+    React.useState(false);
 
   useEffect(() => {
     if (!loading && !currentUser) {
@@ -93,14 +105,24 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     };
   }, [showToast]);
 
+  useEffect(() => {
+    setStudentEnhancementsReady(false);
+    if (!currentUser || loading || !isStudentRoute) return undefined;
+    return runAfterNextPaint(() => setStudentEnhancementsReady(true));
+  }, [currentUser?.uid, isStudentRoute, loading]);
+
   if (loading)
     return <PageLoading message="로그인 상태를 확인하는 중입니다." />;
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
       <Header />
-      <StudentRankPromotionController />
-      <StudentHistoryDictionaryController />
+      {studentEnhancementsReady && (
+        <React.Suspense fallback={null}>
+          <StudentRankPromotionController />
+          <StudentHistoryDictionaryController />
+        </React.Suspense>
+      )}
       <main className="flex-1 w-full min-h-0">{children}</main>
       <Footer />
     </div>

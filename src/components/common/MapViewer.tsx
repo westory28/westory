@@ -4,7 +4,12 @@ import {
   getGoogleMapsEmbedUrl,
   getGoogleMapsExternalUrl,
 } from "../../lib/mapResources";
-import PdfMapViewer from "./PdfMapViewer";
+import { lazyWithRetry } from "../../lib/lazyWithRetry";
+
+const PdfMapViewer = lazyWithRetry(
+  () => import("./PdfMapViewer"),
+  "pdf-map-viewer",
+);
 
 interface MapViewerProps {
   item: MapResource | null;
@@ -148,15 +153,23 @@ const MapViewer: React.FC<MapViewerProps> = ({
       )}
 
       {item.type === "pdf" && item.fileUrl && (
-        <PdfMapViewer
-          fileUrl={item.fileUrl}
-          storagePath={item.storagePath}
-          title={item.title}
-          pageImages={item.pdfPageImages}
-          regions={item.pdfRegions}
-          tagSections={item.pdfTagSections}
-          onModalTagClick={onModalTagClick}
-        />
+        <React.Suspense
+          fallback={
+            <div className="rounded-2xl border border-gray-200 bg-white p-8 text-center text-sm font-semibold text-gray-500">
+              PDF 지도를 준비하는 중입니다.
+            </div>
+          }
+        >
+          <PdfMapViewer
+            fileUrl={item.fileUrl}
+            storagePath={item.storagePath}
+            title={item.title}
+            pageImages={item.pdfPageImages}
+            regions={item.pdfRegions}
+            tagSections={item.pdfTagSections}
+            onModalTagClick={onModalTagClick}
+          />
+        </React.Suspense>
       )}
     </>
   );

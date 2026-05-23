@@ -1,6 +1,5 @@
 ﻿import React, { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import NotificationBell from "./NotificationBell";
 import PointRankBadge from "./PointRankBadge";
 import { useAppToast } from "./AppToastProvider";
 import { useAuth } from "../../contexts/AuthContext";
@@ -10,22 +9,16 @@ import {
   sanitizeMenuConfig,
   type MenuConfig,
 } from "../../constants/menus";
-import { runWhenIdle } from "../../lib/browserTasks";
+import { runAfterNextPaint, runWhenIdle } from "../../lib/browserTasks";
+import { lazyWithRetry } from "../../lib/lazyWithRetry";
 import { getDefaultProfileEmojiValue } from "../../lib/profileEmojis";
-import {
-  invalidateStudentRankPromotionSnapshotCache,
-  loadStudentRankPromotionSnapshot,
-} from "../../lib/pointRankPromotion";
 import {
   readLocalOnly,
   removeStorage,
   writeLocalOnly,
 } from "../../lib/safeStorage";
 import { SESSION_ACTIVITY_EVENT } from "../../lib/sessionActivity";
-import {
-  getPointRankDefaultEmojiValue,
-  type PointRankDisplay,
-} from "../../lib/pointRanks";
+import type { PointRankDisplay } from "../../lib/pointRanks";
 import {
   canAccessTeacherPortal,
   canManageSettings,
@@ -40,6 +33,11 @@ import { readSiteSettingDoc } from "../../lib/siteSettings";
 const SESSION_DURATION_SECONDS = 60 * 60;
 const SESSION_EXPIRY_KEY = "sessionExpiry";
 const ROLE_SESSION_KEY = "westoryPortalRole";
+
+const NotificationBell = lazyWithRetry(
+  () => import("./NotificationBell"),
+  "notification-bell",
+);
 
 const formatCountdown = (seconds: number) => {
   const safe = Math.max(0, seconds);
@@ -435,6 +433,14 @@ const Header: React.FC = () => {
       }
 
       try {
+        const [
+          { loadStudentRankPromotionSnapshot },
+          { getPointRankDefaultEmojiValue },
+        ] = await Promise.all([
+          import("../../lib/pointRankPromotion"),
+          import("../../lib/pointRanks"),
+        ]);
+        if (cancelled) return;
         const snapshot = await loadStudentRankPromotionSnapshot(
           config,
           currentUser.uid,
@@ -456,14 +462,23 @@ const Header: React.FC = () => {
     };
 
     const triggerRankLoad = () => {
-      invalidateStudentRankPromotionSnapshotCache(config, currentUser?.uid);
-      void loadStudentHeaderRank();
+      void import("../../lib/pointRankPromotion")
+        .then(({ invalidateStudentRankPromotionSnapshotCache }) => {
+          invalidateStudentRankPromotionSnapshotCache(config, currentUser?.uid);
+          void loadStudentHeaderRank();
+        })
+        .catch((error) => {
+          console.error("Failed to refresh student header rank:", error);
+        });
     };
 
-    void loadStudentHeaderRank();
+    const cancelInitialLoad = runAfterNextPaint(() => {
+      void loadStudentHeaderRank();
+    });
     window.addEventListener("westory:points-updated", triggerRankLoad);
     return () => {
       cancelled = true;
+      cancelInitialLoad();
       window.removeEventListener("westory:points-updated", triggerRankLoad);
     };
   }, [config?.year, config?.semester, currentUser?.uid, isTeacherPortal]);
@@ -577,10 +592,12 @@ const Header: React.FC = () => {
               )}
             </Link>
 
-            <NotificationBell
-              className="hidden lg:block"
-              onUnreadCountChange={setMobileUnreadCount}
-            />
+            <React.Suspense fallback={null}>
+              <NotificationBell
+                className="hidden lg:block"
+                onUnreadCountChange={setMobileUnreadCount}
+              />
+            </React.Suspense>
 
             <div className="hidden lg:flex items-center gap-1 md:gap-2 px-3 py-1 bg-stone-100 rounded-full border border-stone-200">
               <i className="fas fa-stopwatch text-stone-400 text-xs"></i>
@@ -652,7 +669,9 @@ const Header: React.FC = () => {
                         : "새 알림 없음"}
                     </strong>
                   </div>
-                  <NotificationBell className="mobile-menu-notification" />
+                  <React.Suspense fallback={null}>
+                    <NotificationBell className="mobile-menu-notification" />
+                  </React.Suspense>
                 </div>
                 <button
                   type="button"

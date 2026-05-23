@@ -4,7 +4,7 @@ import {
   ref,
   uploadBytes,
 } from "firebase/storage";
-import { storage } from "./firebase";
+import { getFirebaseStorage } from "./firebase";
 
 export interface DeveloperLogImageUploadResult {
   imageUrl: string;
@@ -155,6 +155,7 @@ export const uploadDeveloperLogImage = async ({
 }): Promise<DeveloperLogImageUploadResult> => {
   const compressed = await compressDeveloperLogImage(file);
   const storagePath = getStoragePath(postId);
+  const storage = await getFirebaseStorage();
   const storageRef = ref(storage, storagePath);
   await uploadBytes(storageRef, compressed.blob, {
     contentType: compressed.mimeType,
@@ -177,6 +178,7 @@ export const tryDeleteDeveloperLogImage = async (
   const normalizedPath = String(storagePath || "").trim();
   if (!normalizedPath) return false;
   try {
+    const storage = await getFirebaseStorage();
     await deleteObject(ref(storage, normalizedPath));
     return true;
   } catch (error) {

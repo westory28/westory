@@ -15,14 +15,13 @@ import {
   setDoc,
   where,
 } from "firebase/firestore";
-import { httpsCallable } from "firebase/functions";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import HistoryClassroomAssignmentView from "../../../components/common/HistoryClassroomAssignmentView";
 import { PageLoading } from "../../../components/common/LoadingState";
 import { useAuth } from "../../../contexts/AuthContext";
 import { notifyPointsUpdated } from "../../../lib/appEvents";
-import { db, functions } from "../../../lib/firebase";
+import { db, getHttpsCallable } from "../../../lib/firebase";
 import {
   getHistoryClassroomAssignedStudentUids,
   getHistoryClassroomRemainingMs,
@@ -294,7 +293,7 @@ const submitHistoryClassroomResultViaFunction = async (input: {
   status: "passed" | "failed" | "cancelled";
   cancellationReason: string;
 }) => {
-  const callable = httpsCallable(functions, "submitHistoryClassroomResult");
+  const callable = await getHttpsCallable("submitHistoryClassroomResult");
   const response = await callable(input);
   return response.data as {
     resultId: string;

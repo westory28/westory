@@ -5,7 +5,7 @@ import {
   uploadBytes,
 } from "firebase/storage";
 
-import { storage } from "./firebase";
+import { getFirebaseStorage } from "./firebase";
 import { getSemesterCollectionPath } from "./semesterScope";
 
 export const getLessonFootnoteAssetPath = (
@@ -30,6 +30,7 @@ export const uploadLessonFootnoteAsset = async (params: {
     params.footnoteId,
     params.file.name,
   );
+  const storage = await getFirebaseStorage();
   const storageRef = ref(storage, storagePath);
   const extension =
     params.file.name.split(".").pop()?.trim().toLowerCase() || "png";
@@ -50,6 +51,7 @@ export const tryDeleteLessonFootnoteAsset = async (
 ) => {
   if (!storagePath) return false;
   try {
+    const storage = await getFirebaseStorage();
     await deleteObject(ref(storage, storagePath));
     return true;
   } catch (error) {

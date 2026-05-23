@@ -2,7 +2,7 @@
 import { useCallback } from "react";
 import { LoadingOverlay } from "../../components/common/LoadingState";
 import { useAuth } from "../../contexts/AuthContext";
-import { db, storage } from "../../lib/firebase";
+import { db, getFirebaseStorage } from "../../lib/firebase";
 import {
   collection,
   doc,
@@ -27,11 +27,8 @@ import {
   getSemesterCollectionPath,
   getSemesterDocPath,
 } from "../../lib/semesterScope";
-import {
-  getPdfPageImageExtension,
-  processPdfMapFile,
-  type ProcessedPdfMap,
-} from "../../lib/pdfMapProcessor";
+import { lazyWithRetry } from "../../lib/lazyWithRetry";
+import { type ProcessedPdfMap } from "../../lib/pdfMapProcessor";
 import {
   clampRatio,
   normalizeWorksheetBlanks,
@@ -87,7 +84,6 @@ import {
 import { emitSessionActivity } from "../../lib/sessionActivity";
 import type { SourceArchiveAsset } from "../../types";
 import TeacherPresentationLauncher from "./components/TeacherPresentationLauncher";
-import TeacherLessonPresentation from "./components/TeacherLessonPresentation";
 import LessonSourceArchivePickerModal from "./components/LessonSourceArchivePickerModal";
 import {
   LessonBodyEditor,
@@ -100,6 +96,11 @@ import {
 } from "./components/LessonEditorPanels";
 
 type TreeNode = LessonTreeNode;
+
+const TeacherLessonPresentation = lazyWithRetry(
+  () => import("./components/TeacherLessonPresentation"),
+  "teacher-lesson-presentation",
+);
 
 const TABS: Array<{ id: LessonEditorTab; label: string; icon: string }> = [
   { id: "pdf", label: "PDF 편집", icon: "fa-file-pdf" },
@@ -1499,6 +1500,7 @@ const ManageLesson: React.FC = () => {
         },
         { merge: true },
       );
+      const storage = await getFirebaseStorage();
       await runPdfExtractionStepWithTimeout(
         uploadBytes(
           ref(storage, pendingUploadPath),
@@ -2473,6 +2475,7 @@ const ManageLesson: React.FC = () => {
     setPdfBusy(true);
     setScreenBusyMessage("PDF 페이지를 준비하는 중입니다...");
     try {
+      const { processPdfMapFile } = await import("../../lib/pdfMapProcessor");
       const processed = await processPdfMapFile(targetFile);
       const nextPageImages = processed.pageImages.map((page) => ({
         page: page.page,
@@ -2642,6 +2645,9 @@ const ManageLesson: React.FC = () => {
     const pendingUploadPath = `${basePath}/incoming/${uploadToken}.pdf`;
     const pageImages: LessonWorksheetPageImage[] = [];
     const uploadedPagePaths = new Set<string>();
+    const storage = await getFirebaseStorage();
+    const { getPdfPageImageExtension } =
+      await import("../../lib/pdfMapProcessor");
     for (const page of preparedPdf.pageImages) {
       const pageExtension = getPdfPageImageExtension(page.blob);
       const pagePath = `${basePath}/page-${page.page}.${pageExtension}`;
@@ -3391,6 +3397,7 @@ const ManageLesson: React.FC = () => {
       await setDoc(lessonDocRef, payload, { merge: true });
       if (uploadedWorksheet.pendingIncomingUpload) {
         try {
+          const storage = await getFirebaseStorage();
           await uploadBytes(
             ref(storage, uploadedWorksheet.pendingIncomingUpload.storagePath),
             uploadedWorksheet.pendingIncomingUpload.file,
@@ -3487,6 +3494,7 @@ const ManageLesson: React.FC = () => {
         );
       }
       if (savedLessonState.pdfStoragePath && !savedDraft.pdfStoragePath) {
+        const storage = await getFirebaseStorage();
         const folderRef = ref(
           storage,
           `${getSemesterCollectionPath(config, "lesson_pdfs")}/${selectedNodeId}`,
@@ -4067,16 +4075,24 @@ const ManageLesson: React.FC = () => {
               cachedSummary={cachedTeacherPreviewSummary}
               onSelectClass={handleTeacherPreviewClassChange}
             />
-            <TeacherLessonPresentation
-              key={`${lessonDraft.unitId || "lesson"}-${teacherPreviewClassId || "preview-default"}`}
-              lesson={lessonDraft}
-              fallbackTitle={selectedNodeTitle}
-              fullscreenPreview
-              classId={teacherPreviewClassId}
-              classLabel={resolvedTeacherPreviewClassLabel}
-              onRuntimeStatusChange={handleTeacherPreviewRuntimeStatusChange}
-              onClosePreview={handleTeacherPreviewClose}
-            />
+            <React.Suspense
+              fallback={
+                <div className="rounded-2xl border border-slate-700 bg-slate-900/80 p-6 text-center text-sm font-semibold text-slate-100">
+                  교사용 수업 화면을 준비하는 중입니다.
+                </div>
+              }
+            >
+              <TeacherLessonPresentation
+                key={`${lessonDraft.unitId || "lesson"}-${teacherPreviewClassId || "preview-default"}`}
+                lesson={lessonDraft}
+                fallbackTitle={selectedNodeTitle}
+                fullscreenPreview
+                classId={teacherPreviewClassId}
+                classLabel={resolvedTeacherPreviewClassLabel}
+                onRuntimeStatusChange={handleTeacherPreviewRuntimeStatusChange}
+                onClosePreview={handleTeacherPreviewClose}
+              />
+            </React.Suspense>
           </div>
         </div>
       )}

@@ -11,8 +11,7 @@ import {
   setDoc,
   where,
 } from "firebase/firestore";
-import { httpsCallable } from "firebase/functions";
-import { db, functions } from "./firebase";
+import { db, getHttpsCallable } from "./firebase";
 import {
   buildPointRankPolicySavePayload,
   buildPointRankEarnedPointsByUid,
@@ -1156,7 +1155,7 @@ export const adjustPoints = async ({
     throw new Error("Point delta must be a non-zero finite number.");
   }
   const { year, semester } = getYearSemester(config);
-  const callable = httpsCallable(functions, "adjustTeacherPoints");
+  const callable = await getHttpsCallable("adjustTeacherPoints");
   const result = await callable({
     year,
     semester,
@@ -1291,7 +1290,7 @@ export const reviewPointOrder = async ({
   memo,
 }: ReviewPointOrderInput) => {
   const { year, semester } = getYearSemester(config);
-  const callable = httpsCallable(functions, "reviewTeacherPointOrder");
+  const callable = await getHttpsCallable("reviewTeacherPointOrder");
   const result = await callable({
     year,
     semester,
@@ -1315,7 +1314,7 @@ export const updatePointAdjustment = async ({
   nextDelta,
 }: UpdatePointAdjustmentInput) => {
   const { year, semester } = getYearSemester(config);
-  const callable = httpsCallable(functions, "updateTeacherPointAdjustment");
+  const callable = await getHttpsCallable("updateTeacherPointAdjustment");
   const result = await callable({
     year,
     semester,
@@ -1337,7 +1336,7 @@ export const updateStudentProfileIcon = async ({
   emojiId,
 }: UpdateStudentProfileIconInput) => {
   const { year, semester } = getYearSemester(config);
-  const callable = httpsCallable(functions, "updateStudentProfileIcon");
+  const callable = await getHttpsCallable("updateStudentProfileIcon");
   const result = await callable({
     year,
     semester,
@@ -1354,7 +1353,7 @@ export const rebuildPointWalletRankTotals = async ({
   dryRun = false,
 }: RebuildPointWalletRankTotalsInput) => {
   const { year, semester } = getYearSemester(config);
-  const callable = httpsCallable(functions, "rebuildPointWalletRankTotals");
+  const callable = await getHttpsCallable("rebuildPointWalletRankTotals");
   const result = await callable({
     year,
     semester,
@@ -1372,7 +1371,7 @@ export const claimPointActivityReward = async ({
   score,
 }: ClaimPointActivityInput) => {
   const { year, semester } = getYearSemester(config);
-  const callable = httpsCallable(functions, "applyPointActivityReward");
+  const callable = await getHttpsCallable("applyPointActivityReward");
   const result = await callable({
     year,
     semester,
@@ -1458,7 +1457,7 @@ export const createSecurePurchaseRequest = async ({
   requestKey,
 }: SecurePurchaseRequestInput) => {
   const { year, semester } = getYearSemester(config);
-  const callable = httpsCallable(functions, "createPointPurchaseRequest");
+  const callable = await getHttpsCallable("createPointPurchaseRequest");
   const result = await callable({
     year,
     semester,

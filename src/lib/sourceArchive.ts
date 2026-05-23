@@ -8,9 +8,8 @@ import {
   setDoc,
   type Unsubscribe,
 } from "firebase/firestore";
-import { httpsCallable } from "firebase/functions";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { db, functions, storage } from "./firebase";
+import { db, getFirebaseStorage, getHttpsCallable } from "./firebase";
 import type {
   SourceArchiveAsset,
   SourceArchiveAssetType,
@@ -637,6 +636,7 @@ export const getSourceArchiveDownloadUrl = async (storagePath: string) => {
   if (!normalizedPath) {
     throw new Error("다운로드할 파일 경로가 없습니다.");
   }
+  const storage = await getFirebaseStorage();
   return getDownloadURL(ref(storage, normalizedPath));
 };
 
@@ -889,6 +889,7 @@ export const saveSourceArchiveAsset = async (params: {
   }
 
   try {
+    const storage = await getFirebaseStorage();
     await uploadBytes(ref(storage, incomingUploadPath), assetUpload.blob, {
       contentType: assetUpload.mimeType,
       cacheControl: "private,no-store,max-age=0",
@@ -948,7 +949,7 @@ export const saveSourceArchiveAsset = async (params: {
 };
 
 export const deleteSourceArchiveAsset = async (assetId: string) => {
-  const callable = httpsCallable(functions, "deleteSourceArchiveAsset");
+  const callable = await getHttpsCallable("deleteSourceArchiveAsset");
   const result = await callable({ assetId: normalizeText(assetId) });
   return result.data as {
     assetId: string;

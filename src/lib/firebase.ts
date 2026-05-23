@@ -9,8 +9,8 @@ import {
 } from "firebase/auth";
 import type { Analytics } from "firebase/analytics";
 import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
-import { connectFunctionsEmulator, getFunctions } from "firebase/functions";
-import { getStorage } from "firebase/storage";
+import type { Functions, HttpsCallable } from "firebase/functions";
+import type { FirebaseStorage } from "firebase/storage";
 import { markLoginPerf } from "./loginPerf";
 
 const isLocalQaHost = (host: string) =>
@@ -53,11 +53,26 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-const functions = getFunctions(app, "asia-northeast3");
-const storage = getStorage(app, `gs://${firebaseConfig.storageBucket}`);
 let analytics: Analytics | null = null;
 let firestoreEmulatorConnected = false;
 let functionsEmulatorConnected = false;
+let functionsPromise: Promise<Functions> | null = null;
+let storagePromise: Promise<FirebaseStorage> | null = null;
+
+const useFirebaseEmulators =
+  import.meta.env.VITE_USE_FIREBASE_EMULATORS === "true" ||
+  Boolean(import.meta.env.VITE_FIRESTORE_EMULATOR_HOST) ||
+  Boolean(import.meta.env.VITE_FUNCTIONS_EMULATOR_HOST);
+const emulatorHost =
+  import.meta.env.VITE_FIRESTORE_EMULATOR_HOST || "127.0.0.1";
+const emulatorPort = Number(
+  import.meta.env.VITE_FIRESTORE_EMULATOR_PORT || 8080,
+);
+const functionsEmulatorHost =
+  import.meta.env.VITE_FUNCTIONS_EMULATOR_HOST || emulatorHost;
+const functionsEmulatorPort = Number(
+  import.meta.env.VITE_FUNCTIONS_EMULATOR_PORT || 5001,
+);
 
 const isMobileBrowser = (): boolean => {
   if (typeof navigator === "undefined") return false;
@@ -100,20 +115,6 @@ void authPersistenceReady.then(() => {
 
 try {
   const isBrowser = typeof window !== "undefined";
-  const useFirebaseEmulators =
-    import.meta.env.VITE_USE_FIREBASE_EMULATORS === "true" ||
-    Boolean(import.meta.env.VITE_FIRESTORE_EMULATOR_HOST) ||
-    Boolean(import.meta.env.VITE_FUNCTIONS_EMULATOR_HOST);
-  const emulatorHost =
-    import.meta.env.VITE_FIRESTORE_EMULATOR_HOST || "127.0.0.1";
-  const emulatorPort = Number(
-    import.meta.env.VITE_FIRESTORE_EMULATOR_PORT || 8080,
-  );
-  const functionsEmulatorHost =
-    import.meta.env.VITE_FUNCTIONS_EMULATOR_HOST || emulatorHost;
-  const functionsEmulatorPort = Number(
-    import.meta.env.VITE_FUNCTIONS_EMULATOR_PORT || 5001,
-  );
 
   if (
     import.meta.env.DEV &&
@@ -124,21 +125,6 @@ try {
     firestoreEmulatorConnected = true;
     console.info(
       `[Firebase] Connected Firestore emulator at ${emulatorHost}:${emulatorPort}`,
-    );
-  }
-  if (
-    import.meta.env.DEV &&
-    useFirebaseEmulators &&
-    !functionsEmulatorConnected
-  ) {
-    connectFunctionsEmulator(
-      functions,
-      functionsEmulatorHost,
-      functionsEmulatorPort,
-    );
-    functionsEmulatorConnected = true;
-    console.info(
-      `[Firebase] Connected Functions emulator at ${functionsEmulatorHost}:${functionsEmulatorPort}`,
     );
   }
 
@@ -176,12 +162,67 @@ if (typeof window !== "undefined" && firebaseConfig.measurementId) {
   }, 0);
 }
 
+const getFirebaseFunctions = () => {
+  if (!functionsPromise) {
+    functionsPromise = import("firebase/functions")
+      .then(({ connectFunctionsEmulator, getFunctions }) => {
+        const functions = getFunctions(app, "asia-northeast3");
+        if (
+          import.meta.env.DEV &&
+          useFirebaseEmulators &&
+          !functionsEmulatorConnected
+        ) {
+          connectFunctionsEmulator(
+            functions,
+            functionsEmulatorHost,
+            functionsEmulatorPort,
+          );
+          functionsEmulatorConnected = true;
+          console.info(
+            `[Firebase] Connected Functions emulator at ${functionsEmulatorHost}:${functionsEmulatorPort}`,
+          );
+        }
+        return functions;
+      })
+      .catch((error) => {
+        functionsPromise = null;
+        throw error;
+      });
+  }
+  return functionsPromise;
+};
+
+const getHttpsCallable = async <RequestData = unknown, ResponseData = unknown>(
+  name: string,
+): Promise<HttpsCallable<RequestData, ResponseData>> => {
+  const [functions, { httpsCallable }] = await Promise.all([
+    getFirebaseFunctions(),
+    import("firebase/functions"),
+  ]);
+  return httpsCallable<RequestData, ResponseData>(functions, name);
+};
+
+const getFirebaseStorage = () => {
+  if (!storagePromise) {
+    storagePromise = import("firebase/storage")
+      .then(({ getStorage }) =>
+        getStorage(app, `gs://${firebaseConfig.storageBucket}`),
+      )
+      .catch((error) => {
+        storagePromise = null;
+        throw error;
+      });
+  }
+  return storagePromise;
+};
+
 export {
   app,
   auth,
   db,
-  functions,
-  storage,
+  getFirebaseFunctions,
+  getHttpsCallable,
+  getFirebaseStorage,
   analytics,
   authPersistenceReady,
   configuredAuthDomain,

@@ -13,13 +13,18 @@ import {
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { PageLoading } from "../../../components/common/LoadingState";
 import { useAuth } from "../../../contexts/AuthContext";
-import GradeChart from "./components/GradeChart";
 import ScoreCard from "./components/ScoreCard";
 import { getSemesterCollectionPath } from "../../../lib/semesterScope";
+import { lazyWithRetry } from "../../../lib/lazyWithRetry";
 import {
   getAchievementColor,
   getSubjectPriorityIndex,
 } from "../../../lib/studentScores";
+
+const GradeChart = lazyWithRetry(
+  () => import("./components/GradeChart"),
+  "student-score-grade-chart",
+);
 
 interface GradingPlan {
   id: string;
@@ -602,11 +607,19 @@ const ScoreDashboard: React.FC = () => {
               성취도 그래프
             </div>
             <div className="h-[300px]">
-              <GradeChart
-                labels={chartLabels}
-                data={chartData}
-                colors={chartColors}
-              />
+              <React.Suspense
+                fallback={
+                  <div className="flex h-full items-center justify-center text-sm font-semibold text-gray-400">
+                    그래프를 준비하는 중입니다.
+                  </div>
+                }
+              >
+                <GradeChart
+                  labels={chartLabels}
+                  data={chartData}
+                  colors={chartColors}
+                />
+              </React.Suspense>
             </div>
             <div className="mt-6 flex h-8 overflow-hidden rounded-lg text-xs font-bold text-white shadow-inner">
               <div className="flex flex-1 items-center justify-center bg-red-500">

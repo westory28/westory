@@ -7,7 +7,7 @@ import WisHallOfFameStudentPreview, {
   type HallOfFamePreviewView,
 } from "../../../../components/common/WisHallOfFameStudentPreview";
 import { useAppToast } from "../../../../components/common/AppToastProvider";
-import { storage } from "../../../../lib/firebase";
+import { getFirebaseStorage } from "../../../../lib/firebase";
 import { formatPointDateShortTime } from "../../../../lib/pointFormatters";
 import { invalidateSiteSettingDocCache } from "../../../../lib/siteSettings";
 import {
@@ -797,6 +797,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
             1600,
             0.84,
           );
+          const storage = await getFirebaseStorage();
           const imageRef = ref(
             storage,
             `${HALL_OF_FAME_PODIUM_STORAGE_DIR}/podium-${Date.now()}.jpg`,

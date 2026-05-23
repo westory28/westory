@@ -14,6 +14,12 @@ interface QuillEditorProps {
   toolbar?: any[];
 }
 
+const QUILL_SCRIPT_URL = "https://cdn.quilljs.com/1.3.6/quill.js";
+const QUILL_STYLE_URL = "https://cdn.quilljs.com/1.3.6/quill.snow.css";
+const QUILL_SCRIPT_ID = "westory-quill-script";
+const QUILL_STYLE_ID = "westory-quill-style";
+const QUILL_LOAD_TIMEOUT_MS = 6000;
+
 const DEFAULT_TOOLBAR = [
   [{ size: ["small", false, "large", "huge"] }],
   ["bold", "italic", "underline"],
@@ -23,6 +29,93 @@ const DEFAULT_TOOLBAR = [
 ];
 
 const normalize = (html: string) => (html || "").replace(/\s+/g, " ").trim();
+
+let quillLoadPromise: Promise<void> | null = null;
+
+const loadQuillStyle = () =>
+  new Promise<void>((resolve, reject) => {
+    if (typeof document === "undefined") {
+      resolve();
+      return;
+    }
+
+    const existing = document.getElementById(QUILL_STYLE_ID);
+    if (existing) {
+      resolve();
+      return;
+    }
+
+    const link = document.createElement("link");
+    link.id = QUILL_STYLE_ID;
+    link.rel = "stylesheet";
+    link.href = QUILL_STYLE_URL;
+    link.onload = () => resolve();
+    link.onerror = () => reject(new Error("Quill CSS load failed"));
+    document.head.appendChild(link);
+  });
+
+const loadQuillScript = () =>
+  new Promise<void>((resolve, reject) => {
+    if (typeof window === "undefined" || typeof document === "undefined") {
+      resolve();
+      return;
+    }
+    if (window.Quill) {
+      resolve();
+      return;
+    }
+
+    const existing = document.getElementById(
+      QUILL_SCRIPT_ID,
+    ) as HTMLScriptElement | null;
+    const script = existing || document.createElement("script");
+    let timeoutId: number | null = null;
+
+    const cleanup = () => {
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+      script.removeEventListener("load", handleLoad);
+      script.removeEventListener("error", handleError);
+    };
+    const handleLoad = () => {
+      cleanup();
+      window.Quill
+        ? resolve()
+        : reject(new Error("Quill did not initialize after script load"));
+    };
+    const handleError = () => {
+      cleanup();
+      reject(new Error("Quill script load failed"));
+    };
+
+    script.addEventListener("load", handleLoad);
+    script.addEventListener("error", handleError);
+    timeoutId = window.setTimeout(() => {
+      cleanup();
+      reject(new Error("Quill CDN load timeout"));
+    }, QUILL_LOAD_TIMEOUT_MS);
+
+    if (!existing) {
+      script.id = QUILL_SCRIPT_ID;
+      script.src = QUILL_SCRIPT_URL;
+      script.async = true;
+      document.head.appendChild(script);
+    }
+  });
+
+const ensureQuillLoaded = () => {
+  if (typeof window !== "undefined" && window.Quill) {
+    return Promise.resolve();
+  }
+  if (!quillLoadPromise) {
+    quillLoadPromise = Promise.all([loadQuillStyle(), loadQuillScript()])
+      .then(() => undefined)
+      .catch((error) => {
+        quillLoadPromise = null;
+        throw error;
+      });
+  }
+  return quillLoadPromise;
+};
 
 const QuillEditor: React.FC<QuillEditorProps> = ({
   value,
@@ -38,6 +131,7 @@ const QuillEditor: React.FC<QuillEditorProps> = ({
   const toolbarRef = useRef(toolbar);
   const placeholderRef = useRef(placeholder || "");
   const [ready, setReady] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   const applyOrderedListStart = () => {
     const quill = quillRef.current;
@@ -108,31 +202,9 @@ const QuillEditor: React.FC<QuillEditorProps> = ({
     let changeHandler: (() => void) | null = null;
     let startButton: HTMLButtonElement | null = null;
     let startClickHandler: ((event: MouseEvent) => void) | null = null;
+    setLoadFailed(false);
 
-    const waitForQuill = () =>
-      new Promise<void>((resolve, reject) => {
-        if (window.Quill) {
-          resolve();
-          return;
-        }
-
-        const startedAt = Date.now();
-        const check = () => {
-          if (window.Quill) {
-            resolve();
-            return;
-          }
-          if (Date.now() - startedAt > 6000) {
-            reject(new Error("Quill CDN load timeout"));
-            return;
-          }
-          window.setTimeout(check, 50);
-        };
-
-        check();
-      });
-
-    waitForQuill()
+    ensureQuillLoaded()
       .then(() => {
         if (canceled || !hostRef.current || quillRef.current) return;
 
@@ -179,6 +251,7 @@ const QuillEditor: React.FC<QuillEditorProps> = ({
       .catch((error) => {
         console.error("Failed to initialize Quill editor", error);
         setReady(false);
+        setLoadFailed(true);
       });
 
     return () => {
@@ -206,7 +279,7 @@ const QuillEditor: React.FC<QuillEditorProps> = ({
     syncingRef.current = false;
   }, [value]);
 
-  if (!ready && !window.Quill) {
+  if (loadFailed) {
     return (
       <textarea
         value={value}
@@ -221,6 +294,11 @@ const QuillEditor: React.FC<QuillEditorProps> = ({
   return (
     <div className="westory-quill bg-white rounded-xl border border-gray-200 overflow-hidden">
       <div ref={hostRef} style={{ minHeight }} />
+      {!ready && (
+        <div className="px-4 py-3 text-sm font-semibold text-gray-500">
+          편집기를 준비하는 중입니다.
+        </div>
+      )}
       <style>{`
                 .westory-quill .ql-toolbar .ql-start-number {
                     width: auto;

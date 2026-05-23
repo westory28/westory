@@ -10,8 +10,7 @@ import {
   serverTimestamp,
   setDoc,
 } from "firebase/firestore";
-import { httpsCallable } from "firebase/functions";
-import { db, functions } from "../../../lib/firebase";
+import { db, getHttpsCallable } from "../../../lib/firebase";
 import { useAuth } from "../../../contexts/AuthContext";
 import MatchingConnectionLines from "../../../components/common/MatchingConnectionLines";
 import { LoadingOverlay } from "../../../components/common/LoadingState";
@@ -2176,7 +2175,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       if (shouldRecalculateCorrections) {
         try {
           const { year, semester } = getYearSemester(config);
-          const recalculateCorrections = httpsCallable<
+          const recalculateCorrections = await getHttpsCallable<
             {
               year: string;
               semester: string;
@@ -2184,7 +2183,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
               questionId: number;
             },
             QuestionCorrectionResult
-          >(functions, "recalculateQuizResultsAfterQuestionCorrection");
+          >("recalculateQuizResultsAfterQuestionCorrection");
           const correction = await recalculateCorrections({
             year,
             semester,

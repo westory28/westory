@@ -10,13 +10,12 @@ import {
   serverTimestamp,
   setDoc,
 } from "firebase/firestore";
-import { httpsCallable } from "firebase/functions";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import HistoryClassroomAssignmentView from "../../components/common/HistoryClassroomAssignmentView";
 import LessonWorksheetStage from "../../components/common/LessonWorksheetStage";
 import { useAuth } from "../../contexts/AuthContext";
 import { cloneDefaultMenus, sanitizeMenuConfig } from "../../constants/menus";
-import { db, functions } from "../../lib/firebase";
+import { db, getHttpsCallable } from "../../lib/firebase";
 import {
   buildAnswerOptions,
   buildHistoryClassroomPublishWindow,
@@ -2426,8 +2425,7 @@ const ManageHistoryClassroom: React.FC = () => {
 
     setGrantingExemption(true);
     try {
-      const callable = httpsCallable(
-        functions,
+      const callable = await getHttpsCallable(
         "grantHistoryClassroomExemptions",
       );
       await callable({
@@ -2459,8 +2457,7 @@ const ManageHistoryClassroom: React.FC = () => {
     const { year, semester } = getYearSemester(config);
     setReviewingExemptionRequestId(requestId);
     try {
-      const callable = httpsCallable(
-        functions,
+      const callable = await getHttpsCallable(
         "reviewHistoryClassroomExemptionRequest",
       );
       await callable({
@@ -2522,8 +2519,7 @@ const ManageHistoryClassroom: React.FC = () => {
     const { year, semester } = getYearSemester(config);
     setRevokingExemptionStudentKey(row.key);
     try {
-      const callable = httpsCallable(
-        functions,
+      const callable = await getHttpsCallable(
         "revokeHistoryClassroomExemptions",
       );
       await callable({
@@ -2563,8 +2559,7 @@ const ManageHistoryClassroom: React.FC = () => {
     const { year, semester } = getYearSemester(config);
     setResettingGrantedExemptions(true);
     try {
-      const callable = httpsCallable(
-        functions,
+      const callable = await getHttpsCallable(
         "revokeHistoryClassroomExemptions",
       );
       for (

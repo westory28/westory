@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { storage } from "../../lib/firebase";
+import { getFirebaseStorage } from "../../lib/firebase";
 import { useSearchParams } from "react-router-dom";
 import { TEACHER_POINT_TAB_LABELS } from "../../constants/pointLabels";
 import { useAppToast } from "../../components/common/AppToastProvider";
@@ -1544,6 +1544,7 @@ const ManagePoints: React.FC = () => {
           targetSizeRatio: 1.03,
           minQuality: 0.58,
         });
+        const storage = await getFirebaseStorage();
         const imageRef = ref(
           storage,
           `${basePath}/image.${getProductImageExtension(compressedBlob)}`,
