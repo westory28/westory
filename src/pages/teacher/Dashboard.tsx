@@ -198,7 +198,10 @@ const TeacherDashboard: React.FC = () => {
         {/* 3. Wis Ranking (Mobile: Order 3 / Desktop: Order 3, Right Bottom) */}
         <div className="teacher-dashboard-ranking order-3 md:order-3 md:col-span-2 md:row-span-1">
           <div className="min-h-[260px] h-full">
-            <WisRankingPanel config={config} />
+            <WisRankingPanel
+              config={config}
+              hallOfFamePath="/teacher/points?tab=hall-of-fame"
+            />
           </div>
         </div>
       </div>

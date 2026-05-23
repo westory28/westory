@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { InlineLoading } from "./LoadingState";
 import PointRankBadge from "./PointRankBadge";
 import {
@@ -19,6 +20,7 @@ import type {
 
 interface WisRankingPanelProps {
   config: SystemConfig | null | undefined;
+  hallOfFamePath?: string;
 }
 
 const formatWis = (value: unknown) => {
@@ -54,7 +56,11 @@ const buildRankWallet = (entry: WisHallOfFameEntry): PointWallet => ({
   rankSnapshot: null,
 });
 
-const WisRankingPanel: React.FC<WisRankingPanelProps> = ({ config }) => {
+const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
+  config,
+  hallOfFamePath,
+}) => {
+  const navigate = useNavigate();
   const [entries, setEntries] = useState<WisHallOfFameEntry[]>([]);
   const [rankPolicy, setRankPolicy] = useState<
     PointPolicy["rankPolicy"] | null
@@ -101,10 +107,22 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({ config }) => {
   return (
     <div className="wis-ranking-panel flex h-full min-h-[260px] flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:min-h-0">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="wis-ranking-title flex items-center text-lg font-extrabold text-gray-900">
-          <i className="fas fa-trophy mr-2 text-blue-600"></i>
-          위스 순위
-        </h3>
+        {hallOfFamePath ? (
+          <button
+            type="button"
+            onClick={() => navigate(hallOfFamePath)}
+            className="wis-ranking-title flex items-center rounded-md bg-transparent p-0 text-left text-lg font-extrabold text-gray-900 transition hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+            aria-label="화랑의 전당으로 이동"
+          >
+            <i className="fas fa-trophy mr-2 text-blue-600"></i>
+            위스 순위
+          </button>
+        ) : (
+          <h3 className="wis-ranking-title flex items-center text-lg font-extrabold text-gray-900">
+            <i className="fas fa-trophy mr-2 text-blue-600"></i>
+            위스 순위
+          </h3>
+        )}
       </div>
 
       <div className="wis-ranking-list min-h-0 flex-1 space-y-2">
@@ -170,7 +188,7 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({ config }) => {
                     {entry.grade}학년 {entry.class}반
                   </span>
                   <span className="ml-auto shrink-0 text-xs font-black leading-snug text-blue-600">
-                    {formatWis(entry.currentBalance)}
+                    {formatWis(entry.cumulativeEarned)}
                   </span>
                 </div>
 
@@ -206,7 +224,7 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({ config }) => {
                   {entry.grade}학년 {entry.class}반
                 </div>
                 <div className="wis-ranking-score hidden text-right text-base font-black text-blue-600 sm:block max-[1120px]:text-[13px]">
-                  {formatWis(entry.currentBalance)}
+                  {formatWis(entry.cumulativeEarned)}
                 </div>
               </div>
             );

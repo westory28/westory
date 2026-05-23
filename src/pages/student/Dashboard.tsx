@@ -471,7 +471,10 @@ const StudentDashboard: React.FC = () => {
         </div>
 
         <div className="student-dashboard-ranking order-3 md:order-3 md:col-span-2 md:row-span-1">
-          <WisRankingPanel config={config} />
+          <WisRankingPanel
+            config={config}
+            hallOfFamePath="/student/points?tab=hall-of-fame"
+          />
         </div>
       </div>
 
