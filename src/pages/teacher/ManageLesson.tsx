@@ -10,6 +10,7 @@ import {
   getDocFromServer,
   getDocs,
   limit,
+  orderBy,
   query,
   serverTimestamp,
   setDoc,
@@ -54,6 +55,7 @@ import {
   type LessonFootnote,
   type NormalizedLessonData,
 } from "../../lib/lessonData";
+import { findLatestLessonTreeSelection } from "../../lib/lessonTreeSelection";
 import {
   buildFailedLessonPdfProcessingMeta,
   buildQueuedLessonPdfProcessingMeta,
@@ -2198,15 +2200,57 @@ const ManageLesson: React.FC = () => {
 
   const loadTree = async () => {
     try {
+      const applyLoadedTree = async (nextTree: TreeNode[]) => {
+        setTreeData(nextTree);
+        if (selectedNodeId) return;
+
+        const readRecentLessons = async (collectionPath: string) => {
+          const snap = await getDocs(
+            query(collection(db, collectionPath), orderBy("updatedAt", "desc")),
+          );
+          return snap.docs.map((docSnap) => docSnap.data() as LessonData);
+        };
+
+        const scopedLessons = await readRecentLessons(
+          getSemesterCollectionPath(config, "lessons"),
+        );
+        let latestSelection = findLatestLessonTreeSelection(
+          nextTree,
+          scopedLessons,
+        );
+
+        if (!latestSelection) {
+          const legacyLessons = await readRecentLessons("lessons");
+          latestSelection = findLatestLessonTreeSelection(nextTree, [
+            ...scopedLessons,
+            ...legacyLessons,
+          ]);
+        }
+
+        if (!latestSelection) return;
+        setExpandedIds(new Set(latestSelection.pathIds.slice(0, -1)));
+        setSelectedNodeId(latestSelection.node.id);
+        setSelectedNodeTitle(latestSelection.node.title);
+        setEditorTab("pdf");
+        void loadLessonContent(
+          latestSelection.node.id,
+          latestSelection.node.title,
+        );
+      };
+
       const scopedDoc = await getDoc(
         doc(db, getSemesterDocPath(config, "curriculum", "tree")),
       );
-      if (scopedDoc.exists() && scopedDoc.data().tree)
-        return setTreeData(scopedDoc.data().tree);
+      if (scopedDoc.exists() && scopedDoc.data().tree) {
+        await applyLoadedTree(scopedDoc.data().tree);
+        return;
+      }
       const legacyDoc = await getDoc(doc(db, "curriculum", "tree"));
-      if (legacyDoc.exists() && legacyDoc.data().tree)
-        return setTreeData(legacyDoc.data().tree);
-      setTreeData([
+      if (legacyDoc.exists() && legacyDoc.data().tree) {
+        await applyLoadedTree(legacyDoc.data().tree);
+        return;
+      }
+      await applyLoadedTree([
         { id: `root-${Date.now()}`, title: "수업 자료", children: [] },
       ]);
     } catch (error) {

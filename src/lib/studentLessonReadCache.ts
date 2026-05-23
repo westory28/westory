@@ -21,6 +21,10 @@ import {
   getYearSemester,
 } from "./semesterScope";
 import type { SystemConfig } from "../types";
+import {
+  findLatestLessonTreeSelection,
+  type LessonTreeSelectionTarget,
+} from "./lessonTreeSelection";
 
 type ConfigLike = Pick<SystemConfig, "year" | "semester"> | null | undefined;
 
@@ -42,6 +46,10 @@ const curriculumTreeCache = new Map<
   string,
   CacheEntry<StudentCurriculumTreeItem[]>
 >();
+const latestLessonSelectionCache = new Map<
+  string,
+  CacheEntry<LessonTreeSelectionTarget | null>
+>();
 const lessonCache = new Map<string, CacheEntry<Partial<LessonData> | null>>();
 const mapResourcesCache = new Map<string, CacheEntry<MapResource[]>>();
 
@@ -49,6 +57,9 @@ const getScopeKey = (config: ConfigLike) => {
   const { year, semester } = getYearSemester(config);
   return `${year}:${semester}`;
 };
+
+const getTreeCacheKey = (tree: StudentCurriculumTreeItem[]) =>
+  JSON.stringify(tree);
 
 const readCached = <T>(
   cache: Map<string, CacheEntry<T>>,
@@ -93,6 +104,45 @@ export const readStudentCurriculumTree = (config: ConfigLike) =>
 
     return [];
   });
+
+export const readStudentLatestLessonSelection = (
+  config: ConfigLike,
+  tree: StudentCurriculumTreeItem[],
+) =>
+  readCached(
+    latestLessonSelectionCache,
+    `${getScopeKey(config)}:${getTreeCacheKey(tree)}`,
+    async () => {
+      const readRecentLessons = async (collectionPath: string) => {
+        const snap = await getDocs(
+          query(collection(db, collectionPath), orderBy("updatedAt", "desc")),
+        );
+        return snap.docs.map(
+          (docSnap) => docSnap.data() as Partial<LessonData>,
+        );
+      };
+
+      const scopedLessons = await readRecentLessons(
+        getSemesterCollectionPath(config, "lessons"),
+      );
+      let latestSelection = findLatestLessonTreeSelection(tree, scopedLessons, {
+        visibleOnly: true,
+      });
+
+      if (!latestSelection) {
+        const legacyLessons = await readRecentLessons("lessons");
+        latestSelection = findLatestLessonTreeSelection(
+          tree,
+          [...scopedLessons, ...legacyLessons],
+          {
+            visibleOnly: true,
+          },
+        );
+      }
+
+      return latestSelection;
+    },
+  );
 
 export const readStudentLesson = (config: ConfigLike, unitId: string) =>
   readCached(lessonCache, `${getScopeKey(config)}:${unitId}`, async () => {

@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { InlineLoading } from "../../../../components/common/LoadingState";
 import { useAuth } from "../../../../contexts/AuthContext";
 import {
+  readStudentLatestLessonSelection,
   readStudentCurriculumTree,
   type StudentCurriculumTreeItem,
 } from "../../../../lib/studentLessonReadCache";
@@ -18,6 +19,19 @@ type TreeItem = StudentCurriculumTreeItem;
 const shouldShowUnitTitleHint = (title?: string) =>
   String(title || "").trim().length > 18;
 
+const findTopLevelIndexByUnitId = (
+  tree: TreeItem[],
+  unitId?: string | null,
+) => {
+  const targetUnitId = String(unitId || "").trim();
+  if (!targetUnitId) return -1;
+
+  const containsUnit = (item: TreeItem): boolean =>
+    item.id === targetUnitId || (item.children || []).some(containsUnit);
+
+  return tree.findIndex(containsUnit);
+};
+
 const LessonSidebar: React.FC<LessonSidebarProps> = ({
   isOpen,
   onClose,
@@ -27,10 +41,20 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
   const { config } = useAuth();
   const [tree, setTree] = useState<TreeItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [expandedGroups, setExpandedGroups] = useState<Set<number>>(
-    new Set([0]),
-  ); // Default open first group
+  const [expandedGroups, setExpandedGroups] = useState<Set<number>>(new Set());
   const [revealedUnitId, setRevealedUnitId] = useState<string | null>(null);
+  const selectedUnitIdRef = useRef(selectedUnitId);
+
+  useEffect(() => {
+    selectedUnitIdRef.current = selectedUnitId;
+  }, [selectedUnitId]);
+
+  useEffect(() => {
+    if (!selectedUnitId) return;
+    const topLevelIndex = findTopLevelIndexByUnitId(tree, selectedUnitId);
+    if (topLevelIndex < 0) return;
+    setExpandedGroups((prev) => new Set(prev).add(topLevelIndex));
+  }, [selectedUnitId, tree]);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,7 +62,24 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
       setLoading(true);
       try {
         const nextTree = await readStudentCurriculumTree(config);
-        if (!cancelled) setTree(nextTree);
+        if (cancelled) return;
+        setTree(nextTree);
+        if (selectedUnitIdRef.current) return;
+
+        const latestSelection = await readStudentLatestLessonSelection(
+          config,
+          nextTree,
+        );
+        if (cancelled || selectedUnitIdRef.current || !latestSelection) return;
+
+        const topLevelIndex = findTopLevelIndexByUnitId(
+          nextTree,
+          latestSelection.node.id,
+        );
+        if (topLevelIndex >= 0) {
+          setExpandedGroups(new Set([topLevelIndex]));
+        }
+        onSelectUnit(latestSelection.node.id, latestSelection.node.title);
       } catch (error) {
         console.error("Error fetching curriculum:", error);
       } finally {
@@ -50,7 +91,7 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [config]);
+  }, [config, onSelectUnit]);
 
   const toggleGroup = (index: number) => {
     const newSet = new Set(expandedGroups);
