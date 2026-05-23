@@ -1,90 +1,119 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore';
-import { InlineLoading } from './LoadingState';
-import { useAuth } from '../../contexts/AuthContext';
-import { db } from '../../lib/firebase';
+import React, { useState } from "react";
+import { Link } from "react-router-dom";
+import { doc, getDoc } from "firebase/firestore";
+import { InlineLoading } from "./LoadingState";
+import { useAuth } from "../../contexts/AuthContext";
+import { db } from "../../lib/firebase";
 
-type PolicyType = 'terms' | 'privacy';
+type PolicyType = "terms" | "privacy";
 
 const POLICY_TITLE: Record<PolicyType, string> = {
-    terms: '이용 약관',
-    privacy: '개인정보 처리 방침',
+  terms: "이용 약관",
+  privacy: "개인정보 처리 방침",
 };
 
-const FALLBACK_FOOTER_TEXT = 'Copyright © Westory. All rights reserved.';
+const FALLBACK_FOOTER_TEXT = "Copyright © Westory. All rights reserved.";
 
 const Footer: React.FC = () => {
-    const { interfaceConfig } = useAuth();
-    const [openPolicy, setOpenPolicy] = useState<PolicyType | null>(null);
-    const [loading, setLoading] = useState(false);
-    const [policyHtml, setPolicyHtml] = useState('');
+  const { interfaceConfig } = useAuth();
+  const [openPolicy, setOpenPolicy] = useState<PolicyType | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [policyHtml, setPolicyHtml] = useState("");
 
-    const footerText = String(interfaceConfig?.footerText || '').trim() || FALLBACK_FOOTER_TEXT;
+  const footerText =
+    String(interfaceConfig?.footerText || "").trim() || FALLBACK_FOOTER_TEXT;
 
-    const openPolicyModal = async (type: PolicyType) => {
-        setOpenPolicy(type);
-        setLoading(true);
-        setPolicyHtml('');
+  const openPolicyModal = async (type: PolicyType) => {
+    setOpenPolicy(type);
+    setLoading(true);
+    setPolicyHtml("");
 
-        try {
-            const snap = await getDoc(doc(db, 'site_settings', type));
-            if (snap.exists() && snap.data().text) {
-                setPolicyHtml(snap.data().text);
-            } else {
-                setPolicyHtml('<p class="text-center text-gray-400 py-8">등록된 내용이 없습니다.</p>');
-            }
-        } catch (error) {
-            console.error('Footer policy load error:', error);
-            setPolicyHtml('<p class="text-center text-red-400 py-8">내용을 불러오지 못했습니다.</p>');
-        } finally {
-            setLoading(false);
-        }
-    };
+    try {
+      const snap = await getDoc(doc(db, "site_settings", type));
+      if (snap.exists() && snap.data().text) {
+        setPolicyHtml(snap.data().text);
+      } else {
+        setPolicyHtml(
+          '<p class="text-center text-gray-400 py-8">등록된 내용이 없습니다.</p>',
+        );
+      }
+    } catch (error) {
+      console.error("Footer policy load error:", error);
+      setPolicyHtml(
+        '<p class="text-center text-red-400 py-8">내용을 불러오지 못했습니다.</p>',
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    return (
-        <>
-            <footer className="bg-white border-t border-stone-200 py-4 mt-auto">
-                <div className="container mx-auto text-center">
-                    <div className="flex items-center justify-center gap-2 mb-2">
-                        <button onClick={() => openPolicyModal('terms')} className="text-stone-400 hover:text-stone-600 text-xs font-medium transition">
-                            이용 약관
-                        </button>
-                        <span className="text-stone-300 text-xs">|</span>
-                        <button onClick={() => openPolicyModal('privacy')} className="text-stone-400 hover:text-stone-600 text-xs font-medium transition">
-                            개인정보 처리 방침
-                        </button>
-                        <span className="text-stone-300 text-xs">|</span>
-                        <Link to="/developer-log" className="text-stone-400 hover:text-stone-600 text-xs font-medium transition">
-                            개발자 일지
-                        </Link>
-                    </div>
-                    <p className="text-stone-400 text-xs font-bold">
-                        {footerText}
-                    </p>
-                </div>
-            </footer>
+  return (
+    <>
+      <footer className="bg-white border-t border-stone-200 py-4 mt-auto">
+        <div className="container mx-auto text-center">
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <button
+              onClick={() => openPolicyModal("terms")}
+              className="text-stone-400 hover:text-stone-600 text-xs font-medium transition"
+            >
+              이용 약관
+            </button>
+            <span className="text-stone-300 text-xs">|</span>
+            <button
+              onClick={() => openPolicyModal("privacy")}
+              className="text-stone-400 hover:text-stone-600 text-xs font-medium transition"
+            >
+              개인정보 처리 방침
+            </button>
+            <span className="text-stone-300 text-xs">|</span>
+            <Link
+              to="/developer-log"
+              className="text-stone-400 hover:text-stone-600 text-xs font-medium transition"
+            >
+              개발자 일지
+            </Link>
+          </div>
+          <p className="text-stone-400 text-xs font-bold">{footerText}</p>
+        </div>
+      </footer>
 
-            {openPolicy && (
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm" onClick={() => setOpenPolicy(null)}>
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl mx-4 max-h-[80vh] flex flex-col overflow-hidden" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-between p-5 border-b border-gray-100">
-                            <h2 className="text-lg font-bold text-gray-900">{POLICY_TITLE[openPolicy]}</h2>
-                            <button onClick={() => setOpenPolicy(null)} className="text-gray-400 hover:text-gray-700 text-xl transition">
-                                <i className="fas fa-times"></i>
-                            </button>
-                        </div>
-                        <div className="p-6 overflow-y-auto flex-1 text-sm text-gray-700 leading-relaxed">
-                            {loading ? (
-                                <InlineLoading message="약관을 불러오는 중입니다." showWarning />
-                            ) : (
-                                <div className="policy-rich-text" dangerouslySetInnerHTML={{ __html: policyHtml }} />
-                            )}
-                        </div>
-                    </div>
-                </div>
-            )}
-            <style>{`
+      {openPolicy && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm"
+          onClick={() => setOpenPolicy(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-xl mx-4 max-h-[80vh] flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-5 border-b border-gray-100">
+              <h2 className="text-lg font-bold text-gray-900">
+                {POLICY_TITLE[openPolicy]}
+              </h2>
+              <button
+                onClick={() => setOpenPolicy(null)}
+                className="text-gray-400 hover:text-gray-700 text-xl transition"
+              >
+                <i className="fas fa-times"></i>
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto flex-1 text-sm text-gray-700 leading-relaxed">
+              {loading ? (
+                <InlineLoading
+                  message="약관을 불러오는 중입니다."
+                  showWarning
+                />
+              ) : (
+                <div
+                  className="policy-rich-text"
+                  dangerouslySetInnerHTML={{ __html: policyHtml }}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      <style>{`
                 .policy-rich-text {
                     color: #374151;
                     line-height: 1.8;
@@ -117,8 +146,8 @@ const Footer: React.FC = () => {
                 .policy-rich-text .ql-indent-2 { padding-left: 4em; }
                 .policy-rich-text .ql-indent-3 { padding-left: 6em; }
             `}</style>
-        </>
-    );
+    </>
+  );
 };
 
 export default Footer;

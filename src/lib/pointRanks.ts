@@ -1104,7 +1104,11 @@ export const getPointRankNewlyUnlockedEmojiEntries = ({
   const resolvedPolicy = resolvePointRankPolicy(rankPolicy);
   const previousEmojiIds = new Set(
     getPointRankAllowedEmojiIds(resolvedPolicy, previousTierCode)
-      .map((emojiId) => String(emojiId || '').trim().toLowerCase())
+      .map((emojiId) =>
+        String(emojiId || "")
+          .trim()
+          .toLowerCase(),
+      )
       .filter(Boolean),
   );
   const previousEmojiValues = new Set(
@@ -1113,7 +1117,9 @@ export const getPointRankNewlyUnlockedEmojiEntries = ({
         getProfileEmojiEntryById(emojiId, resolvedPolicy.emojiRegistry),
       )
       .filter((entry) => Boolean(entry))
-      .map((entry) => normalizeProfileEmojiValue(entry?.value || entry?.emoji || "")),
+      .map((entry) =>
+        normalizeProfileEmojiValue(entry?.value || entry?.emoji || ""),
+      ),
   );
   const seenEmojiIds = new Set(previousEmojiIds);
   const seenEmojiValues = new Set(previousEmojiValues);
@@ -1123,10 +1129,15 @@ export const getPointRankNewlyUnlockedEmojiEntries = ({
     )
     .filter((entry): entry is PointRankEmojiRegistryEntry => {
       if (!entry) return false;
-      const normalizedEmojiId = String(entry.id || '').trim().toLowerCase();
-      const normalizedEmojiValue = normalizeProfileEmojiValue(entry.value || entry.emoji);
+      const normalizedEmojiId = String(entry.id || "")
+        .trim()
+        .toLowerCase();
+      const normalizedEmojiValue = normalizeProfileEmojiValue(
+        entry.value || entry.emoji,
+      );
       if (!normalizedEmojiValue) return false;
-      if (normalizedEmojiId && seenEmojiIds.has(normalizedEmojiId)) return false;
+      if (normalizedEmojiId && seenEmojiIds.has(normalizedEmojiId))
+        return false;
       if (seenEmojiValues.has(normalizedEmojiValue)) return false;
       if (normalizedEmojiId) {
         seenEmojiIds.add(normalizedEmojiId);

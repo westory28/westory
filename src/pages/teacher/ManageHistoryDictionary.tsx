@@ -216,9 +216,7 @@ const ManageHistoryDictionary: React.FC = () => {
   const termListRef = useRef<HTMLDivElement>(null);
   const termSectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const studentWordListRef = useRef<HTMLDivElement>(null);
-  const studentWordSectionRefs = useRef<Record<string, HTMLElement | null>>(
-    {},
-  );
+  const studentWordSectionRefs = useRef<Record<string, HTMLElement | null>>({});
   const [requests, setRequests] = useState<HistoryDictionaryRequest[]>([]);
   const [notificationRequests, setNotificationRequests] = useState<
     HistoryDictionaryRequest[]
@@ -1141,7 +1139,9 @@ const ManageHistoryDictionary: React.FC = () => {
       `"${selectedStudentWord.word}" 학생 등록 단어를 삭제할까요?\n내용이 부족하거나 부적절한 단어라면 학생 단어장에서 삭제되고, 지급된 역사 사전 위스가 있으면 함께 회수됩니다.`,
     );
     if (!confirmed) return;
-    setBusyMessage("학생 등록 단어를 삭제하고 지급된 위스를 확인하는 중입니다.");
+    setBusyMessage(
+      "학생 등록 단어를 삭제하고 지급된 위스를 확인하는 중입니다.",
+    );
     try {
       const result = await deleteStudentHistoryDictionaryWordByTeacher(config, {
         uid: selectedStudentWord.uid,

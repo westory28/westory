@@ -150,7 +150,9 @@ const NoticeOrderModal: React.FC<NoticeOrderModalProps> = ({
                       {getCategoryLabel(item.category)}
                     </div>
                     <div className="mt-1 truncate text-xs font-bold text-gray-500">
-                      {item.targetType === "class" ? `${item.targetClass}반 대상` : "전체 공통"}
+                      {item.targetType === "class"
+                        ? `${item.targetClass}반 대상`
+                        : "전체 공통"}
                     </div>
                   </div>
                   <div className="flex justify-end gap-1">

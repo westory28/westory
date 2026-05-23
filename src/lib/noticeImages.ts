@@ -1,4 +1,9 @@
-import { deleteObject, getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import {
+  deleteObject,
+  getDownloadURL,
+  ref,
+  uploadBytes,
+} from "firebase/storage";
 import { storage } from "./firebase";
 import type { SystemConfig } from "../types";
 
@@ -17,7 +22,9 @@ const MAX_NOTICE_IMAGE_WIDTH = 1200;
 const MAX_NOTICE_IMAGE_HEIGHT = 800;
 const TARGET_NOTICE_IMAGE_BYTES = 460 * 1024;
 const MAX_NOTICE_IMAGE_BYTES = 680 * 1024;
-const NOTICE_IMAGE_QUALITY_STEPS = [0.9, 0.84, 0.78, 0.72, 0.66, 0.6, 0.54, 0.48];
+const NOTICE_IMAGE_QUALITY_STEPS = [
+  0.9, 0.84, 0.78, 0.72, 0.66, 0.6, 0.54, 0.48,
+];
 const NOTICE_IMAGE_SIZE_STEPS = [1, 0.875, 0.75, 0.625];
 
 const loadImageElement = (file: File) =>
@@ -131,13 +138,17 @@ export const compressNoticeImage = async (file: File) => {
       };
 
       if (blob.size <= TARGET_NOTICE_IMAGE_BYTES) {
-        if (!targetCandidate || getCandidateScore(candidate) > getCandidateScore(targetCandidate)) {
+        if (
+          !targetCandidate ||
+          getCandidateScore(candidate) > getCandidateScore(targetCandidate)
+        ) {
           targetCandidate = candidate;
         }
       }
       if (
-        blob.size <= MAX_NOTICE_IMAGE_BYTES
-        && (!fallback || getCandidateScore(candidate) > getCandidateScore(fallback))
+        blob.size <= MAX_NOTICE_IMAGE_BYTES &&
+        (!fallback ||
+          getCandidateScore(candidate) > getCandidateScore(fallback))
       ) {
         fallback = candidate;
       }
@@ -151,7 +162,9 @@ export const compressNoticeImage = async (file: File) => {
     return fallback;
   }
 
-  throw new Error("이미지를 더 작게 줄일 수 없습니다. 더 단순한 이미지를 사용해 주세요.");
+  throw new Error(
+    "이미지를 더 작게 줄일 수 없습니다. 더 단순한 이미지를 사용해 주세요.",
+  );
 };
 
 export const uploadNoticeImage = async ({

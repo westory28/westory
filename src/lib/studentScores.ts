@@ -89,7 +89,9 @@ const classifyBreakdownType = (name: string): ScoreItemType => {
   if (/정기|지필|중간|기말|시험|서술|omr|exam|midterm|final/.test(key)) {
     return "exam";
   }
-  if (/수행|과제|발표|실험|프로젝트|실습|performance|project|assignment/.test(key)) {
+  if (
+    /수행|과제|발표|실험|프로젝트|실습|performance|project|assignment/.test(key)
+  ) {
     return "performance";
   }
   return "other";
@@ -157,7 +159,9 @@ export const sortScoreRows = (
     return sorted;
   }
   if (sortMode === "latest") {
-    sorted.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+    sorted.sort(
+      (a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0),
+    );
     return sorted;
   }
   sorted.sort(
@@ -181,7 +185,9 @@ export const buildScoreRows = (
 ): ScoreRow[] => {
   const filteredPlans = plans.filter((plan) => {
     const yearMatch =
-      !options.year || !plan.academicYear || String(plan.academicYear) === options.year;
+      !options.year ||
+      !plan.academicYear ||
+      String(plan.academicYear) === options.year;
     const semesterMatch =
       !options.semester ||
       !plan.semester ||
@@ -198,13 +204,16 @@ export const buildScoreRows = (
     const breakdown = items.map((item, idx) => {
       const key = getScoreKey(plan.id, idx);
       const rawValue = scores?.[key];
-      const entered = rawValue !== undefined && rawValue !== null && rawValue !== "";
+      const entered =
+        rawValue !== undefined && rawValue !== null && rawValue !== "";
       const score = Number(rawValue);
       const maxScore = Number(item.maxScore || 0);
       const ratio = Number(item.ratio || 0);
       const safeScore = Number.isFinite(score) ? score : 0;
       const weighted =
-        entered && maxScore > 0 ? Number(((safeScore / maxScore) * ratio).toFixed(1)) : 0;
+        entered && maxScore > 0
+          ? Number(((safeScore / maxScore) * ratio).toFixed(1))
+          : 0;
       const name = String(item.name || `${idx + 1}번 항목`);
 
       return {
@@ -256,7 +265,10 @@ export const buildSubjectScoreInsights = (
     let missingPerformanceCount = 0;
 
     row.breakdown.forEach((item) => {
-      const left = Math.max(0, Number(item.ratio || 0) - Number(item.weighted || 0));
+      const left = Math.max(
+        0,
+        Number(item.ratio || 0) - Number(item.weighted || 0),
+      );
       if (item.type === "exam") {
         examCurrent += item.weighted;
         examRemain += left;

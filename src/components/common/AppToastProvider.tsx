@@ -32,7 +32,9 @@ const AppToastContext = createContext<AppToastContextValue | undefined>(
 );
 
 const normalizeToastText = (value: unknown) =>
-  String(value ?? "").replace(/\s+/g, " ").trim();
+  String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
 
 const TOAST_TONE_CLASSNAME: Record<ToastTone, string> = {
   success: "border-emerald-200 bg-emerald-50 text-emerald-900",
@@ -117,9 +119,12 @@ export const AppToastProvider: React.FC<{ children: React.ReactNode }> = ({
     if (toasts.length === 0) return undefined;
 
     const timers = toasts.map((toast) =>
-      window.setTimeout(() => {
-        dismissToast(toast.id);
-      }, Math.max(2200, toast.durationMs || 3600)),
+      window.setTimeout(
+        () => {
+          dismissToast(toast.id);
+        },
+        Math.max(2200, toast.durationMs || 3600),
+      ),
     );
 
     return () => {

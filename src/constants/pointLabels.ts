@@ -310,8 +310,7 @@ export const POINT_POLICY_FIELD_HELPERS: Record<
   lessonView: "수업 자료를 충분히 확인하고 저장까지 마쳤을 때 지급됩니다.",
   thinkCloudEnabled:
     "생각모아 제출 위스를 별도로 운영합니다. 실제 중복 제한은 최근 지급 시점 기준 24시간마다 1회입니다.",
-  thinkCloudAmount:
-    "생각모아 응답 제출이 완료되면 적립되는 기본 위스입니다.",
+  thinkCloudAmount: "생각모아 응답 제출이 완료되면 적립되는 기본 위스입니다.",
   thinkCloudMaxClaims:
     "학생당 누적 최대 인정 횟수입니다. 24시간 제한과 함께 서버에서 강제됩니다.",
   mapTagEnabled:
@@ -328,8 +327,7 @@ export const POINT_POLICY_FIELD_HELPERS: Record<
     "공백을 제외한 뜻풀이 글자 수가 이 기준 이상일 때만 지급합니다.",
   historyClassroomEnabled:
     "역사교실 제출 완료 시 기본 위스를 적립합니다. 최근 지급 시점 기준 24시간마다 1회만 기본 지급됩니다.",
-  historyClassroomAmount:
-    "역사교실 제출 완료 시 기본으로 적립할 위스입니다.",
+  historyClassroomAmount: "역사교실 제출 완료 시 기본으로 적립할 위스입니다.",
   historyClassroomBonusEnabled:
     "기본 지급과 별도로 정답률 기준을 넘긴 시도에 성과 보너스를 지급합니다.",
   historyClassroomBonusThreshold:
@@ -353,10 +351,8 @@ export const POINT_POLICY_FIELD_HELPERS: Record<
   quizBonusThreshold:
     "기본값은 100점이며, 기준 점수 이상부터 보너스를 지급합니다.",
   quizBonusAmount: "문제 풀이 기본 위스와 별도로 추가 지급할 위스입니다.",
-  manualAdjustEnabled:
-    "끄면 교사의 직접 지급/환수 기능이 서버에서 차단됩니다.",
-  allowNegativeBalance:
-    "켜면 보유 위스보다 많이 환수하는 운영도 허용합니다.",
+  manualAdjustEnabled: "끄면 교사의 직접 지급/환수 기능이 서버에서 차단됩니다.",
+  allowNegativeBalance: "켜면 보유 위스보다 많이 환수하는 운영도 허용합니다.",
 };
 
 export const POINT_HISTORY_FILTER_LABELS = {

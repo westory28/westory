@@ -1,5 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { collection, doc, getDoc, getDocs, orderBy, query } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  orderBy,
+  query,
+} from "firebase/firestore";
 import { PageLoading } from "../../../components/common/LoadingState";
 import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
@@ -88,7 +95,8 @@ const hasFinalConsonant = (value: string) => {
 const withParticle = (value: string, pair: "은/는" | "이/가") => {
   const safeValue = String(value || "").trim();
   if (!safeValue) return safeValue;
-  if (pair === "은/는") return `${safeValue}${hasFinalConsonant(safeValue) ? "은" : "는"}`;
+  if (pair === "은/는")
+    return `${safeValue}${hasFinalConsonant(safeValue) ? "은" : "는"}`;
   return `${safeValue}${hasFinalConsonant(safeValue) ? "이" : "가"}`;
 };
 
@@ -97,7 +105,9 @@ const readDraftScores = (uid: string, year: string, semester: string) => {
     const raw = localStorage.getItem(`scoreDraft:${uid}:${year}:${semester}`);
     if (!raw) return {};
     const parsed = JSON.parse(raw) as { scores?: Record<string, unknown> };
-    return parsed?.scores && typeof parsed.scores === "object" ? parsed.scores : {};
+    return parsed?.scores && typeof parsed.scores === "object"
+      ? parsed.scores
+      : {};
   } catch (error) {
     console.error("Failed to load score report draft scores:", error);
     return {};
@@ -184,7 +194,9 @@ const ContributionPopover: React.FC<{
               }`}
             >
               <span className="flex items-center gap-2 font-bold text-slate-700">
-                <span className={`h-2.5 w-2.5 rounded-full ${categoryMeta[type].dotClass}`} />
+                <span
+                  className={`h-2.5 w-2.5 rounded-full ${categoryMeta[type].dotClass}`}
+                />
                 {categoryMeta[type].label}
               </span>
               <span className="font-extrabold text-slate-900">
@@ -196,7 +208,9 @@ const ContributionPopover: React.FC<{
       </div>
       <div className="mt-3 flex items-end justify-between border-t border-slate-100 pt-3">
         <span className="font-bold text-slate-500">현재 점수</span>
-        <span className="text-xl font-black text-slate-900">{formatScore(row.total)}</span>
+        <span className="text-xl font-black text-slate-900">
+          {formatScore(row.total)}
+        </span>
       </div>
     </div>
   );
@@ -238,13 +252,18 @@ const ScoreReport: React.FC = () => {
         getDoc(doc(db, "users", user.uid, "academic_records", scoreDocId)),
         getDocs(
           query(
-            collection(db, getSemesterCollectionPath({ year, semester }, "grading_plans")),
+            collection(
+              db,
+              getSemesterCollectionPath({ year, semester }, "grading_plans"),
+            ),
             orderBy("createdAt", "desc"),
           ),
         ),
       ]);
 
-      const savedScores = scoreSnap.exists() ? scoreSnap.data().scores || {} : {};
+      const savedScores = scoreSnap.exists()
+        ? scoreSnap.data().scores || {}
+        : {};
       const draftScores = readDraftScores(user.uid, year, semester);
       const plans: GradingPlanLike[] = [];
       plansSnap.forEach((planDoc) => {
@@ -252,13 +271,17 @@ const ScoreReport: React.FC = () => {
       });
 
       setRows(
-        buildScoreRows(plans, { ...savedScores, ...draftScores }, {
-          year,
-          semester,
-          grade,
-          filterByGrade: true,
-          sortMode,
-        }),
+        buildScoreRows(
+          plans,
+          { ...savedScores, ...draftScores },
+          {
+            year,
+            semester,
+            grade,
+            filterByGrade: true,
+            sortMode,
+          },
+        ),
       );
     } finally {
       setLoading(false);
@@ -283,8 +306,10 @@ const ScoreReport: React.FC = () => {
   const scoreAverage =
     enteredAnalyses.length > 0
       ? Math.round(
-          enteredAnalyses.reduce((sum, analysis) => sum + analysis.row.total, 0) /
-            enteredAnalyses.length,
+          enteredAnalyses.reduce(
+            (sum, analysis) => sum + analysis.row.total,
+            0,
+          ) / enteredAnalyses.length,
         )
       : 0;
   const strongestAnalysis =
@@ -304,15 +329,18 @@ const ScoreReport: React.FC = () => {
     },
     { exam: 0, performance: 0, other: 0, total: 0 },
   );
-  const examShare = totalContribution.total > 0
-    ? (totalContribution.exam / totalContribution.total) * 100
-    : 0;
-  const performanceShare = totalContribution.total > 0
-    ? (totalContribution.performance / totalContribution.total) * 100
-    : 0;
-  const otherShare = totalContribution.total > 0
-    ? (totalContribution.other / totalContribution.total) * 100
-    : 0;
+  const examShare =
+    totalContribution.total > 0
+      ? (totalContribution.exam / totalContribution.total) * 100
+      : 0;
+  const performanceShare =
+    totalContribution.total > 0
+      ? (totalContribution.performance / totalContribution.total) * 100
+      : 0;
+  const otherShare =
+    totalContribution.total > 0
+      ? (totalContribution.other / totalContribution.total) * 100
+      : 0;
   const dominantOverallType =
     scoreTypes
       .map((type) => [type, totalContribution[type]] as const)
@@ -340,7 +368,8 @@ const ScoreReport: React.FC = () => {
       : "입력 과목을 늘리면 비교 분석이 더 정확해집니다.",
   ];
 
-  if (loading) return <PageLoading message="성적 리포트를 불러오는 중입니다." />;
+  if (loading)
+    return <PageLoading message="성적 리포트를 불러오는 중입니다." />;
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-6 lg:px-6">
@@ -373,7 +402,9 @@ const ScoreReport: React.FC = () => {
             정렬
             <select
               value={sortMode}
-              onChange={(event) => setSortMode(event.target.value as ScoreSortMode)}
+              onChange={(event) =>
+                setSortMode(event.target.value as ScoreSortMode)
+              }
               className="h-11 min-w-40 rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-800"
             >
               <option value="importance">중요도순</option>
@@ -386,7 +417,10 @@ const ScoreReport: React.FC = () => {
             onClick={() => window.print()}
             className="inline-flex h-11 items-center justify-center gap-2 rounded-lg border border-blue-300 bg-white px-4 text-sm font-extrabold text-blue-700 transition hover:bg-blue-50"
           >
-            <i className="fas fa-file-arrow-down text-xs" aria-hidden="true"></i>
+            <i
+              className="fas fa-file-arrow-down text-xs"
+              aria-hidden="true"
+            ></i>
             리포트 저장
           </button>
         </div>
@@ -396,15 +430,23 @@ const ScoreReport: React.FC = () => {
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_14px_34px_rgba(15,23,42,0.06)] lg:p-6">
           <div className="flex flex-col gap-4 border-b border-slate-100 pb-5 lg:flex-row lg:items-start lg:justify-between">
             <div>
-              <h1 className="text-2xl font-black text-slate-900">교과별 성적 분석</h1>
+              <h1 className="text-2xl font-black text-slate-900">
+                교과별 성적 분석
+              </h1>
               <p className="mt-2 text-sm font-bold leading-6 text-slate-500">
-                정기시험과 수행평가의 반영 비율을 한눈에 비교하고, 과목별 현재 점수를 확인하세요.
+                정기시험과 수행평가의 반영 비율을 한눈에 비교하고, 과목별 현재
+                점수를 확인하세요.
               </p>
             </div>
             <div className="flex flex-wrap gap-3">
               {scoreTypes.map((type) => (
-                <span key={type} className="inline-flex items-center gap-2 text-sm font-bold text-slate-600">
-                  <span className={`h-3 w-3 rounded-full ${categoryMeta[type].dotClass}`} />
+                <span
+                  key={type}
+                  className="inline-flex items-center gap-2 text-sm font-bold text-slate-600"
+                >
+                  <span
+                    className={`h-3 w-3 rounded-full ${categoryMeta[type].dotClass}`}
+                  />
                   {categoryMeta[type].label}
                 </span>
               ))}
@@ -414,7 +456,8 @@ const ScoreReport: React.FC = () => {
           <div className="mt-4 overflow-hidden rounded-xl border border-slate-100">
             {analyses.length === 0 ? (
               <div className="bg-slate-50 px-4 py-16 text-center text-sm font-bold text-slate-400">
-                등록된 평가 반영 비율이 없습니다. 교사가 반영 비율을 등록하면 리포트가 표시됩니다.
+                등록된 평가 반영 비율이 없습니다. 교사가 반영 비율을 등록하면
+                리포트가 표시됩니다.
               </div>
             ) : (
               analyses.map((analysis) => {
@@ -454,14 +497,21 @@ const ScoreReport: React.FC = () => {
                               role="button"
                               tabIndex={0}
                               aria-label={`${row.subject} ${categoryMeta[type].label} ${formatScore(value)}`}
-                              onMouseEnter={() => setActivePoint({ rowId: row.id, type })}
-                              onFocus={() => setActivePoint({ rowId: row.id, type })}
+                              onMouseEnter={() =>
+                                setActivePoint({ rowId: row.id, type })
+                              }
+                              onFocus={() =>
+                                setActivePoint({ rowId: row.id, type })
+                              }
                               onClick={(event) => {
                                 event.stopPropagation();
                                 setActivePoint({ rowId: row.id, type });
                               }}
                               onKeyDown={(event) => {
-                                if (event.key === "Enter" || event.key === " ") {
+                                if (
+                                  event.key === "Enter" ||
+                                  event.key === " "
+                                ) {
                                   event.preventDefault();
                                   event.stopPropagation();
                                   setActivePoint({ rowId: row.id, type });
@@ -473,7 +523,10 @@ const ScoreReport: React.FC = () => {
                           );
                         })}
                         {emptyWidth > 0 && (
-                          <span className="bg-slate-200" style={{ width: `${emptyWidth}%` }} />
+                          <span
+                            className="bg-slate-200"
+                            style={{ width: `${emptyWidth}%` }}
+                          />
                         )}
                       </span>
                       {isActive && (
@@ -487,7 +540,9 @@ const ScoreReport: React.FC = () => {
                     <span className="text-right text-xl font-black text-blue-600">
                       {formatScore(row.total)}
                     </span>
-                    <span className="text-right text-2xl text-slate-300">›</span>
+                    <span className="text-right text-2xl text-slate-300">
+                      ›
+                    </span>
                   </div>
                 );
               })
@@ -496,7 +551,8 @@ const ScoreReport: React.FC = () => {
 
           <p className="mt-4 flex items-start gap-2 text-xs font-bold leading-5 text-slate-400">
             <i className="fas fa-circle-info mt-0.5" aria-hidden="true"></i>
-            PC에서는 막대에 마우스를 올리고, 모바일과 태블릿에서는 막대를 터치하면 반영 점수와 비율을 확인할 수 있습니다.
+            PC에서는 막대에 마우스를 올리고, 모바일과 태블릿에서는 막대를
+            터치하면 반영 점수와 비율을 확인할 수 있습니다.
           </p>
         </section>
 
@@ -505,12 +561,20 @@ const ScoreReport: React.FC = () => {
 
           <div className="grid grid-cols-2 gap-3">
             <section className="rounded-xl border border-slate-200 p-4">
-              <div className="text-sm font-extrabold text-slate-500">현재 평균</div>
-              <div className="mt-2 text-4xl font-black text-blue-600">{scoreAverage}점</div>
-              <p className="mt-2 text-xs font-bold text-slate-500">입력 과목 평균 점수</p>
+              <div className="text-sm font-extrabold text-slate-500">
+                현재 평균
+              </div>
+              <div className="mt-2 text-4xl font-black text-blue-600">
+                {scoreAverage}점
+              </div>
+              <p className="mt-2 text-xs font-bold text-slate-500">
+                입력 과목 평균 점수
+              </p>
             </section>
             <section className="rounded-xl border border-slate-200 p-4">
-              <div className="text-sm font-extrabold text-slate-500">강점 과목</div>
+              <div className="text-sm font-extrabold text-slate-500">
+                강점 과목
+              </div>
               <div className="mt-2 truncate text-2xl font-black text-emerald-600">
                 {strongestAnalysis?.row.subject || "-"}
               </div>
@@ -521,7 +585,9 @@ const ScoreReport: React.FC = () => {
               </p>
             </section>
             <section className="rounded-xl border border-slate-200 p-4">
-              <div className="text-sm font-extrabold text-slate-500">보완 필요</div>
+              <div className="text-sm font-extrabold text-slate-500">
+                보완 필요
+              </div>
               <div className="mt-2 truncate text-2xl font-black text-orange-600">
                 {focusAnalysis?.row.subject || "-"}
               </div>
@@ -532,7 +598,9 @@ const ScoreReport: React.FC = () => {
               </p>
             </section>
             <section className="rounded-xl border border-slate-200 p-4">
-              <div className="text-sm font-extrabold text-slate-500">정기/수행 비중</div>
+              <div className="text-sm font-extrabold text-slate-500">
+                정기/수행 비중
+              </div>
               <div className="mt-3 flex items-center gap-4">
                 <div
                   className="h-20 w-20 shrink-0 rounded-full"
@@ -569,7 +637,10 @@ const ScoreReport: React.FC = () => {
             <h3 className="text-base font-black text-slate-900">리포트 요약</h3>
             <ul className="mt-3 space-y-2">
               {summaryItems.map((item) => (
-                <li key={item} className="flex gap-2 text-sm font-bold leading-6 text-slate-600">
+                <li
+                  key={item}
+                  className="flex gap-2 text-sm font-bold leading-6 text-slate-600"
+                >
                   <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-blue-500" />
                   {item}
                 </li>
@@ -578,10 +649,15 @@ const ScoreReport: React.FC = () => {
           </section>
 
           <section className="rounded-xl border border-slate-200 p-4">
-            <h3 className="text-base font-black text-slate-900">추천 학습 전략</h3>
+            <h3 className="text-base font-black text-slate-900">
+              추천 학습 전략
+            </h3>
             <ul className="mt-3 space-y-2">
               {strategyItems.map((item) => (
-                <li key={item} className="flex gap-2 text-sm font-bold leading-6 text-slate-600">
+                <li
+                  key={item}
+                  className="flex gap-2 text-sm font-bold leading-6 text-slate-600"
+                >
                   <span className="mt-1 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[10px] text-white">
                     <i className="fas fa-check" aria-hidden="true"></i>
                   </span>
@@ -597,7 +673,9 @@ const ScoreReport: React.FC = () => {
                 <i className="fas fa-star" aria-hidden="true"></i>
               </span>
               <div>
-                <h3 className="text-base font-black text-orange-700">이번 주 포인트</h3>
+                <h3 className="text-base font-black text-orange-700">
+                  이번 주 포인트
+                </h3>
                 <p className="mt-1 text-sm font-bold leading-6 text-slate-700">
                   {getActionText(focusAnalysis)}
                 </p>

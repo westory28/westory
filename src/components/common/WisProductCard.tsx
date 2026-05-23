@@ -146,7 +146,11 @@ const WisProductCard: React.FC<WisProductCardProps> = ({
               event.stopPropagation();
               onAction?.();
             }}
-            disabled={(actionRequiresEligibility && !canRequest) || actionBusy || actionDisabled}
+            disabled={
+              (actionRequiresEligibility && !canRequest) ||
+              actionBusy ||
+              actionDisabled
+            }
             className="mt-4 w-full rounded-xl bg-blue-600 px-3 py-2.5 text-[13px] font-bold text-white transition hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 sm:px-4 sm:text-sm"
           >
             {actionBusy ? "처리 중..." : actionLabel}

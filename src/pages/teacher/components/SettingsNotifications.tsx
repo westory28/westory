@@ -114,7 +114,8 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     defaultEnabled: true,
     defaultPriority: "normal",
     titleTemplate: "역사교실 면제권 처리",
-    bodyTemplate: "{assignmentTitle} 면제권 사용 요청이 {statusLabel} 처리되었습니다.",
+    bodyTemplate:
+      "{assignmentTitle} 면제권 사용 요청이 {statusLabel} 처리되었습니다.",
     targetUrl: "/student/history-classroom",
     targetLabel: "학생 역사교실 화면",
     tokens: [
@@ -264,7 +265,8 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     defaultEnabled: true,
     defaultPriority: "high",
     titleTemplate: "역사교실 면제권 사용 요청",
-    bodyTemplate: "{studentName} 학생이 {assignmentTitle} 면제권 사용을 요청했습니다.",
+    bodyTemplate:
+      "{studentName} 학생이 {assignmentTitle} 면제권 사용을 요청했습니다.",
     targetUrl: "/teacher/quiz/history-classroom?panel=exemption-requests",
     targetLabel: "교사 역사교실 관리 화면",
     tokens: [

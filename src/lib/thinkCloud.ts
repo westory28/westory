@@ -1,142 +1,161 @@
-import type { SystemConfig } from '../types';
-import { getSemesterCollectionPath, getSemesterDocPath } from './semesterScope';
+import type { SystemConfig } from "../types";
+import { getSemesterCollectionPath, getSemesterDocPath } from "./semesterScope";
 
-export type ThinkCloudInputMode = 'word' | 'sentence';
-export type ThinkCloudSessionStatus = 'draft' | 'active' | 'paused' | 'closed';
+export type ThinkCloudInputMode = "word" | "sentence";
+export type ThinkCloudSessionStatus = "draft" | "active" | "paused" | "closed";
 
 export interface ThinkCloudOptions {
-    allowDuplicateWord: boolean;
-    allowDuplicateByStudent: boolean;
-    inputMode: ThinkCloudInputMode;
-    anonymous: boolean;
-    maxLength: number;
-    profanityFilter: boolean;
+  allowDuplicateWord: boolean;
+  allowDuplicateByStudent: boolean;
+  inputMode: ThinkCloudInputMode;
+  anonymous: boolean;
+  maxLength: number;
+  profanityFilter: boolean;
 }
 
 export interface ThinkCloudSession {
-    title: string;
-    description: string;
-    targetGrade: string;
-    targetClass: string;
-    targetGradeLabel?: string;
-    targetClassLabel?: string;
-    status: ThinkCloudSessionStatus;
-    options: ThinkCloudOptions;
-    createdBy: string;
-    createdByName: string;
-    createdAt?: unknown;
-    activatedAt?: unknown;
-    closedAt?: unknown;
+  title: string;
+  description: string;
+  targetGrade: string;
+  targetClass: string;
+  targetGradeLabel?: string;
+  targetClassLabel?: string;
+  status: ThinkCloudSessionStatus;
+  options: ThinkCloudOptions;
+  createdBy: string;
+  createdByName: string;
+  createdAt?: unknown;
+  activatedAt?: unknown;
+  closedAt?: unknown;
 }
 
 export interface ThinkCloudResponse {
-    uid: string;
-    displayName: string;
-    textRaw: string;
-    textNormalized: string;
-    createdAt?: unknown;
+  uid: string;
+  displayName: string;
+  textRaw: string;
+  textNormalized: string;
+  createdAt?: unknown;
 }
 
-export const THINK_CLOUD_STATE_DOC_ID = 'current';
-export const THINK_CLOUD_SESSION_COLLECTION = 'think_cloud_sessions';
-export const THINK_CLOUD_STATE_COLLECTION = 'think_cloud_state';
+export const THINK_CLOUD_STATE_DOC_ID = "current";
+export const THINK_CLOUD_SESSION_COLLECTION = "think_cloud_sessions";
+export const THINK_CLOUD_STATE_COLLECTION = "think_cloud_state";
 
 export const DEFAULT_THINK_CLOUD_OPTIONS: ThinkCloudOptions = {
-    allowDuplicateWord: true,
-    allowDuplicateByStudent: false,
-    inputMode: 'word',
-    anonymous: true,
-    maxLength: 20,
-    profanityFilter: true,
+  allowDuplicateWord: true,
+  allowDuplicateByStudent: false,
+  inputMode: "word",
+  anonymous: true,
+  maxLength: 20,
+  profanityFilter: true,
 };
 
 export const normalizeThinkCloudOptions = (raw: unknown): ThinkCloudOptions => {
-    const source = (raw && typeof raw === 'object') ? (raw as Record<string, unknown>) : {};
-    const legacyAllowDuplicatePerUser = source.allowDuplicatePerUser === true;
-    return {
-        allowDuplicateWord: typeof source.allowDuplicateWord === 'boolean'
-            ? source.allowDuplicateWord
-            : true,
-        allowDuplicateByStudent: typeof source.allowDuplicateByStudent === 'boolean'
-            ? source.allowDuplicateByStudent
-            : legacyAllowDuplicatePerUser,
-        inputMode: source.inputMode === 'sentence' ? 'sentence' : 'word',
-        anonymous: typeof source.anonymous === 'boolean' ? source.anonymous : true,
-        maxLength: (() => {
-            const value = Number(source.maxLength);
-            if (!Number.isFinite(value)) return 20;
-            return Math.max(5, Math.min(100, Math.floor(value)));
-        })(),
-        profanityFilter: typeof source.profanityFilter === 'boolean' ? source.profanityFilter : true,
-    };
+  const source =
+    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const legacyAllowDuplicatePerUser = source.allowDuplicatePerUser === true;
+  return {
+    allowDuplicateWord:
+      typeof source.allowDuplicateWord === "boolean"
+        ? source.allowDuplicateWord
+        : true,
+    allowDuplicateByStudent:
+      typeof source.allowDuplicateByStudent === "boolean"
+        ? source.allowDuplicateByStudent
+        : legacyAllowDuplicatePerUser,
+    inputMode: source.inputMode === "sentence" ? "sentence" : "word",
+    anonymous: typeof source.anonymous === "boolean" ? source.anonymous : true,
+    maxLength: (() => {
+      const value = Number(source.maxLength);
+      if (!Number.isFinite(value)) return 20;
+      return Math.max(5, Math.min(100, Math.floor(value)));
+    })(),
+    profanityFilter:
+      typeof source.profanityFilter === "boolean"
+        ? source.profanityFilter
+        : true,
+  };
 };
 
-const toSafeSpace = (value: string) => value.replace(/\s+/g, ' ').trim();
+const toSafeSpace = (value: string) => value.replace(/\s+/g, " ").trim();
 
-export const normalizeResponseText = (value: string, mode: ThinkCloudInputMode) => {
-    const compact = toSafeSpace(value).toLowerCase();
-    if (mode === 'word') {
-        return compact.replace(/\s+/g, '');
-    }
-    return compact;
+export const normalizeResponseText = (
+  value: string,
+  mode: ThinkCloudInputMode,
+) => {
+  const compact = toSafeSpace(value).toLowerCase();
+  if (mode === "word") {
+    return compact.replace(/\s+/g, "");
+  }
+  return compact;
 };
 
-export const getInputValidationError = (value: string, options: ThinkCloudOptions) => {
-    const trimmed = toSafeSpace(value);
-    if (!trimmed) {
-        return '내용을 입력해 주세요.';
-    }
-    if (trimmed.length > options.maxLength) {
-        return `최대 ${options.maxLength}자까지 입력할 수 있습니다.`;
-    }
-    if (options.inputMode === 'word' && /\s/.test(trimmed)) {
-        return '단어 1개만 입력해 주세요.';
-    }
-    return null;
+export const getInputValidationError = (
+  value: string,
+  options: ThinkCloudOptions,
+) => {
+  const trimmed = toSafeSpace(value);
+  if (!trimmed) {
+    return "내용을 입력해 주세요.";
+  }
+  if (trimmed.length > options.maxLength) {
+    return `최대 ${options.maxLength}자까지 입력할 수 있습니다.`;
+  }
+  if (options.inputMode === "word" && /\s/.test(trimmed)) {
+    return "단어 1개만 입력해 주세요.";
+  }
+  return null;
 };
 
-export const buildThinkCloudStateDocPath = (config: SystemConfig | null | undefined) =>
-    getSemesterDocPath(config, THINK_CLOUD_STATE_COLLECTION, THINK_CLOUD_STATE_DOC_ID);
+export const buildThinkCloudStateDocPath = (
+  config: SystemConfig | null | undefined,
+) =>
+  getSemesterDocPath(
+    config,
+    THINK_CLOUD_STATE_COLLECTION,
+    THINK_CLOUD_STATE_DOC_ID,
+  );
 
-export const buildThinkCloudSessionCollectionPath = (config: SystemConfig | null | undefined) =>
-    getSemesterCollectionPath(config, THINK_CLOUD_SESSION_COLLECTION);
+export const buildThinkCloudSessionCollectionPath = (
+  config: SystemConfig | null | undefined,
+) => getSemesterCollectionPath(config, THINK_CLOUD_SESSION_COLLECTION);
 
 export const buildThinkCloudResponsesCollectionPath = (
-    config: SystemConfig | null | undefined,
-    sessionId: string,
+  config: SystemConfig | null | undefined,
+  sessionId: string,
 ) => `${buildThinkCloudSessionCollectionPath(config)}/${sessionId}/responses`;
 
 export const createResponseDedupeId = (uid: string, normalizedText: string) => {
-    let hash = 0;
-    for (let i = 0; i < normalizedText.length; i += 1) {
-        hash = (hash * 31 + normalizedText.charCodeAt(i)) | 0;
-    }
-    const hex = Math.abs(hash).toString(16);
-    return `${uid}_${hex}`;
+  let hash = 0;
+  for (let i = 0; i < normalizedText.length; i += 1) {
+    hash = (hash * 31 + normalizedText.charCodeAt(i)) | 0;
+  }
+  const hex = Math.abs(hash).toString(16);
+  return `${uid}_${hex}`;
 };
 
 export const normalizeSchoolField = (value: unknown): string => {
-    const raw = String(value ?? '').trim();
-    if (!raw) return '';
-    const digits = raw.match(/\d+/)?.[0] || '';
-    if (!digits) return raw;
-    const parsed = Number(digits);
-    if (!Number.isFinite(parsed) || parsed <= 0) return '';
-    return String(parsed);
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  const digits = raw.match(/\d+/)?.[0] || "";
+  if (!digits) return raw;
+  const parsed = Number(digits);
+  if (!Number.isFinite(parsed) || parsed <= 0) return "";
+  return String(parsed);
 };
 
 export const formatGradeLabel = (value: string, label?: string) => {
-    const safeLabel = String(label || '').trim();
-    if (safeLabel) return safeLabel;
-    const safe = String(value || '').trim();
-    if (!safe) return '';
-    return /^\d+$/.test(safe) ? `${safe}학년` : safe;
+  const safeLabel = String(label || "").trim();
+  if (safeLabel) return safeLabel;
+  const safe = String(value || "").trim();
+  if (!safe) return "";
+  return /^\d+$/.test(safe) ? `${safe}학년` : safe;
 };
 
 export const formatClassLabel = (value: string, label?: string) => {
-    const safeLabel = String(label || '').trim();
-    if (safeLabel) return safeLabel;
-    const safe = String(value || '').trim();
-    if (!safe) return '';
-    return /^\d+$/.test(safe) ? `${safe}반` : safe;
+  const safeLabel = String(label || "").trim();
+  if (safeLabel) return safeLabel;
+  const safe = String(value || "").trim();
+  if (!safe) return "";
+  return /^\d+$/.test(safe) ? `${safe}반` : safe;
 };

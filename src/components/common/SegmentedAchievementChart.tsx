@@ -21,7 +21,10 @@ const getSegmentId = (row: ScoreRow, item: ScoreBreakdownItem): SegmentRef => ({
   itemKey: item.key,
 });
 
-const formatPoint = (value: number) => `${Number(value || 0).toFixed(1).replace(/\.0$/, "")}점`;
+const formatPoint = (value: number) =>
+  `${Number(value || 0)
+    .toFixed(1)
+    .replace(/\.0$/, "")}점`;
 
 const SegmentedAchievementChart: React.FC<SegmentedAchievementChartProps> = ({
   rows,
@@ -45,12 +48,19 @@ const SegmentedAchievementChart: React.FC<SegmentedAchievementChartProps> = ({
   return (
     <div className="space-y-5">
       {visibleRows.map((row) => {
-        const filledItems = row.breakdown.filter((item) => item.entered && item.weighted > 0);
+        const filledItems = row.breakdown.filter(
+          (item) => item.entered && item.weighted > 0,
+        );
         const remaining = Math.max(0, 100 - row.total);
 
         return (
-          <div key={row.id} className="grid gap-2 sm:grid-cols-[74px_1fr_54px] sm:items-center">
-            <div className="text-sm font-extrabold text-slate-700">{row.subject}</div>
+          <div
+            key={row.id}
+            className="grid gap-2 sm:grid-cols-[74px_1fr_54px] sm:items-center"
+          >
+            <div className="text-sm font-extrabold text-slate-700">
+              {row.subject}
+            </div>
             <div className="relative">
               <div className="flex h-7 w-full gap-[3px] rounded-lg bg-slate-100 p-[3px] ring-1 ring-slate-200">
                 {filledItems.map((item) => {
@@ -73,7 +83,9 @@ const SegmentedAchievementChart: React.FC<SegmentedAchievementChartProps> = ({
                       onMouseEnter={() => setActiveSegment(segment)}
                       onMouseLeave={() => setActiveSegment(null)}
                       className={`relative h-full rounded-[5px] bg-blue-600 transition ${
-                        active ? "z-20 -translate-y-0.5 bg-blue-700 shadow-md" : "hover:bg-blue-700"
+                        active
+                          ? "z-20 -translate-y-0.5 bg-blue-700 shadow-md"
+                          : "hover:bg-blue-700"
                       }`}
                       style={{ flex: `0 0 ${width}%` }}
                     >
@@ -84,7 +96,8 @@ const SegmentedAchievementChart: React.FC<SegmentedAchievementChartProps> = ({
                           </span>
                           <span className="block truncate">{item.name}</span>
                           <span className="block text-slate-500">
-                            원점수 {formatPoint(item.score)} / {formatPoint(item.maxScore)}
+                            원점수 {formatPoint(item.score)} /{" "}
+                            {formatPoint(item.maxScore)}
                           </span>
                           <span className="block text-slate-900">
                             반영 {formatPoint(item.weighted)}
@@ -107,7 +120,9 @@ const SegmentedAchievementChart: React.FC<SegmentedAchievementChartProps> = ({
                 <span>PC는 마우스 올림, 모바일은 터치</span>
               </div>
             </div>
-            <div className="text-right text-sm font-black text-blue-700">{formatPoint(row.total)}</div>
+            <div className="text-right text-sm font-black text-blue-700">
+              {formatPoint(row.total)}
+            </div>
           </div>
         );
       })}

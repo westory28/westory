@@ -604,7 +604,11 @@ export const getTeacherPresentationClassSummaryText = (
 export const getTeacherPresentationClassOptionStatusText = (
   summary?: Pick<
     TeacherPresentationClassSummary,
-    "runtimeState" | "hasUnsavedChanges" | "updatedAt" | "lastUsedAt" | "hasSavedState"
+    | "runtimeState"
+    | "hasUnsavedChanges"
+    | "updatedAt"
+    | "lastUsedAt"
+    | "hasSavedState"
   > | null,
 ) => {
   if (!summary) {

@@ -382,7 +382,9 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
                   누적 획득 위스
                 </div>
                 <div className="mt-1 whitespace-nowrap text-lg font-extrabold text-emerald-600">
-                  {formatWisAmount(getPointWalletCumulativeEarned(selectedWallet))}
+                  {formatWisAmount(
+                    getPointWalletCumulativeEarned(selectedWallet),
+                  )}
                 </div>
               </div>
               <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">

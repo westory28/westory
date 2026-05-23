@@ -45,7 +45,8 @@ const TeacherPresentationLauncher: React.FC<
   onSelectClass,
 }) => {
   const selectedBadge = getTeacherPresentationRuntimeBadge(selectedSummary);
-  const selectedClassNumber = selectedSummary?.className || selectedClassId.split("-")[1] || "";
+  const selectedClassNumber =
+    selectedSummary?.className || selectedClassId.split("-")[1] || "";
   const helperMessage =
     optionLoadState === "error" && cachedSummary
       ? "반 목록을 모두 불러오지 못해 마지막으로 사용한 반만 표시하고 있습니다."
@@ -63,7 +64,9 @@ const TeacherPresentationLauncher: React.FC<
             현재 선택 반
           </div>
           <div className="mt-1 truncate text-base font-bold text-slate-900">
-            {selectedClassNumber ? `3학년 ${selectedClassNumber}반` : selectedClassLabel}
+            {selectedClassNumber
+              ? `3학년 ${selectedClassNumber}반`
+              : selectedClassLabel}
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <div
@@ -98,9 +101,8 @@ const TeacherPresentationLauncher: React.FC<
               <option value="preview-default">반 선택</option>
             )}
             {classOptions.map((option) => {
-              const optionStatus = getTeacherPresentationClassOptionStatusText(
-                option,
-              );
+              const optionStatus =
+                getTeacherPresentationClassOptionStatusText(option);
               const optionLabel = option.className
                 ? `${option.className}반`
                 : option.classLabel;

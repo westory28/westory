@@ -1,13 +1,13 @@
-import React, { useEffect, useState } from 'react';
-import { getDownloadURL, ref } from 'firebase/storage';
-import { storage } from '../../lib/firebase';
+import React, { useEffect, useState } from "react";
+import { getDownloadURL, ref } from "firebase/storage";
+import { storage } from "../../lib/firebase";
 
 interface StorageImageProps {
   path: string;
   alt: string;
   className?: string;
   style?: React.CSSProperties;
-  loading?: 'lazy' | 'eager';
+  loading?: "lazy" | "eager";
   width?: number;
   height?: number;
   fallback?: React.ReactNode;
@@ -20,17 +20,19 @@ const StorageImage: React.FC<StorageImageProps> = ({
   alt,
   className,
   style,
-  loading = 'lazy',
+  loading = "lazy",
   width,
   height,
   fallback = <div className="h-full w-full animate-pulse bg-gray-100" />,
 }) => {
-  const [url, setUrl] = useState(() => (path ? storageUrlCache.get(path) || '' : ''));
+  const [url, setUrl] = useState(() =>
+    path ? storageUrlCache.get(path) || "" : "",
+  );
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     if (!path) {
-      setUrl('');
+      setUrl("");
       setFailed(false);
       return;
     }
@@ -43,7 +45,7 @@ const StorageImage: React.FC<StorageImageProps> = ({
     }
 
     let active = true;
-    setUrl('');
+    setUrl("");
     setFailed(false);
 
     getDownloadURL(ref(storage, path))

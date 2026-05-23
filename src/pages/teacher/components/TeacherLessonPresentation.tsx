@@ -273,12 +273,7 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
           "Failed to save teacher presentation annotations:",
           error,
         );
-        syncRuntimeSummary(
-          "error",
-          lastSavedAtRef.current,
-          nextPage,
-          true,
-        );
+        syncRuntimeSummary("error", lastSavedAtRef.current, nextPage, true);
         updateStatus("error", currentClassLabelRef.current);
         return false;
       }
@@ -354,9 +349,8 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
       lastSavedAtRef.current = restoredAt;
       lastSavedPageRef.current = restoredPage;
       setLastSavedAt(restoredAt);
-      lastSavedSnapshotRef.current = serializePresentationSnapshot(
-        restoredAnnotations,
-      );
+      lastSavedSnapshotRef.current =
+        serializePresentationSnapshot(restoredAnnotations);
       setRestoreMessage(nextMessage);
       updateStatus(nextState, classContext.classLabel, restoredAt);
       syncRuntimeSummary(
@@ -416,7 +410,9 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
             hasClassDocument: false,
           })
         ) {
-          const legacySnapshot = await getDoc(doc(db, legacyPresentationDocPath));
+          const legacySnapshot = await getDoc(
+            doc(db, legacyPresentationDocPath),
+          );
           if (cancelled || localInteractionSinceRestoreRef.current) return;
           if (legacySnapshot.exists()) {
             const legacyData = legacySnapshot.data() as {
@@ -510,11 +506,7 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
             : "idle"
           : "dirty";
 
-      updateStatus(
-        nextState,
-        classContext.classLabel,
-        lastSavedAtRef.current,
-      );
+      updateStatus(nextState, classContext.classLabel, lastSavedAtRef.current);
       syncRuntimeSummary(
         nextState,
         lastSavedAtRef.current,
@@ -581,7 +573,9 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
   };
 
   const handleOpenWorksheetFootnoteAnchor = (anchorId: string) => {
-    const anchor = worksheet.footnoteAnchors.find((item) => item.id === anchorId);
+    const anchor = worksheet.footnoteAnchors.find(
+      (item) => item.id === anchorId,
+    );
     if (!anchor) return;
     const footnote = footnoteByIdMap.get(anchor.footnoteId);
     if (!footnote) return;
@@ -645,7 +639,8 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
                 현재 반 {classContext.classLabel}
               </div>
               <div className="inline-flex rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-500 ring-1 ring-slate-200">
-                현재 페이지 {currentPage ?? worksheet.pageImages[0]?.page ?? "-"}
+                현재 페이지{" "}
+                {currentPage ?? worksheet.pageImages[0]?.page ?? "-"}
               </div>
               {lastSavedAt && (
                 <div className="inline-flex rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-500 ring-1 ring-slate-200">
@@ -654,8 +649,8 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
               )}
             </div>
             <p className="mt-2 text-xs text-slate-500">
-              학생에게 보이지 않는 개인 수업 메모입니다. 변경 후 저장 버튼을 눌러
-              보관하세요. 현재 반 기준으로 저장됩니다.
+              학생에게 보이지 않는 개인 수업 메모입니다. 변경 후 저장 버튼을
+              눌러 보관하세요. 현재 반 기준으로 저장됩니다.
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <div

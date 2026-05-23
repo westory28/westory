@@ -85,9 +85,7 @@ export const normalizeQuizSubmissionDoc = (
   raw: Partial<QuizSubmissionDoc> | null | undefined,
 ): QuizSubmissionDoc => {
   const source =
-    raw && typeof raw === "object"
-      ? raw
-      : ({} as Partial<QuizSubmissionDoc>);
+    raw && typeof raw === "object" ? raw : ({} as Partial<QuizSubmissionDoc>);
 
   return {
     id,
@@ -131,9 +129,7 @@ export const normalizeQuizSubmissionDoc = (
             Object.entries(source.orderOptionMap).map(([key, value]) => [
               String(key || "").trim(),
               Array.isArray(value)
-                ? value
-                    .map((item) => String(item || "").trim())
-                    .filter(Boolean)
+                ? value.map((item) => String(item || "").trim()).filter(Boolean)
                 : [],
             ]),
           )

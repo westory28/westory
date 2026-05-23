@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import WisHallOfFameStudentPreview, {
   type HallOfFamePreviewView,
-} from '../../../../components/common/WisHallOfFameStudentPreview';
+} from "../../../../components/common/WisHallOfFameStudentPreview";
 import type {
   HallOfFameInterfaceConfig,
   WisHallOfFameSnapshot,
-} from '../../../../types';
+} from "../../../../types";
 
 interface StudentPointHallOfFameTabProps {
   snapshot: WisHallOfFameSnapshot | null;
@@ -14,10 +14,13 @@ interface StudentPointHallOfFameTabProps {
   currentClass?: string;
 }
 
-const StudentPointHallOfFameTab: React.FC<
-  StudentPointHallOfFameTabProps
-> = ({ snapshot, hallOfFameConfig, currentGrade, currentClass }) => {
-  const [activeView, setActiveView] = useState<HallOfFamePreviewView>('grade');
+const StudentPointHallOfFameTab: React.FC<StudentPointHallOfFameTabProps> = ({
+  snapshot,
+  hallOfFameConfig,
+  currentGrade,
+  currentClass,
+}) => {
+  const [activeView, setActiveView] = useState<HallOfFamePreviewView>("grade");
 
   return (
     <WisHallOfFameStudentPreview

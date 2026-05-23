@@ -125,10 +125,7 @@ export const loadNotifications = async (
   ]);
 
   const personalItems = snapshot.docs.map((item) =>
-    normalizeNotification(
-      item.id,
-      item.data() as Partial<WestoryNotification>,
-    ),
+    normalizeNotification(item.id, item.data() as Partial<WestoryNotification>),
   );
   const lastBroadcastReadMs = timestampMs(options?.lastBroadcastReadAt);
   const broadcastClearedMs = timestampMs(options?.broadcastClearedAt);
@@ -150,7 +147,9 @@ export const loadNotifications = async (
     })
     .filter((item) => {
       const createdMs = timestampMs(item.createdAt);
-      return !broadcastClearedMs || !createdMs || createdMs > broadcastClearedMs;
+      return (
+        !broadcastClearedMs || !createdMs || createdMs > broadcastClearedMs
+      );
     });
 
   return [...personalItems, ...broadcastItems]

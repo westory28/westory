@@ -1,947 +1,1562 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { db } from '../../../lib/firebase';
-import { collection, deleteDoc, doc, getDocs, query, serverTimestamp, setDoc, where } from 'firebase/firestore';
-import { useAuth } from '../../../contexts/AuthContext';
-import { LoadingOverlay } from '../../../components/common/LoadingState';
-import { getSemesterCollectionPath, getSemesterDocPath } from '../../../lib/semesterScope';
-import { QUIZ_MATCHING_IMAGE_OPTIONS, QUIZ_QUESTION_IMAGE_OPTIONS, optimizeQuizImageDataUrl, optimizeQuizImageFile } from '../../../lib/quizImageCompression';
+﻿import React, { useEffect, useMemo, useRef, useState } from "react";
+import { db } from "../../../lib/firebase";
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDocs,
+  query,
+  serverTimestamp,
+  setDoc,
+  where,
+} from "firebase/firestore";
+import { useAuth } from "../../../contexts/AuthContext";
+import { LoadingOverlay } from "../../../components/common/LoadingState";
+import {
+  getSemesterCollectionPath,
+  getSemesterDocPath,
+} from "../../../lib/semesterScope";
+import {
+  QUIZ_MATCHING_IMAGE_OPTIONS,
+  QUIZ_QUESTION_IMAGE_OPTIONS,
+  optimizeQuizImageDataUrl,
+  optimizeQuizImageFile,
+} from "../../../lib/quizImageCompression";
 
 interface TreeUnit {
-    id: string;
-    title: string;
-    children?: TreeUnit[];
+  id: string;
+  title: string;
+  children?: TreeUnit[];
 }
 
-type QuestionType = 'choice' | 'ox' | 'word' | 'order' | 'matching';
+type QuestionType = "choice" | "ox" | "word" | "order" | "matching";
 
 interface MatchingPair {
-    left: string;
-    right: string;
-    rightImage?: string | null;
+  left: string;
+  right: string;
+  rightImage?: string | null;
 }
 
 interface Question {
-    id: number;
-    unitId: string;
-    subUnitId?: string | null;
-    category: string;
-    type: QuestionType;
-    question: string;
-    options?: string[];
-    answer: string;
-    matchingPairs?: MatchingPair[];
-    explanation?: string;
-    image?: string | null;
-    hintEnabled?: boolean;
-    hint?: string;
-    refBig?: string;
-    refMid?: string;
-    refSmall?: string;
+  id: number;
+  unitId: string;
+  subUnitId?: string | null;
+  category: string;
+  type: QuestionType;
+  question: string;
+  options?: string[];
+  answer: string;
+  matchingPairs?: MatchingPair[];
+  explanation?: string;
+  image?: string | null;
+  hintEnabled?: boolean;
+  hint?: string;
+  refBig?: string;
+  refMid?: string;
+  refSmall?: string;
 }
 
 interface QuizEditorProps {
-    node: { id: string; title: string };
-    type: 'special' | 'normal';
-    parentTitle?: string;
-    treeData: TreeUnit[];
-    canEdit: boolean;
-    onOpenSettings: (category: string) => void;
+  node: { id: string; title: string };
+  type: "special" | "normal";
+  parentTitle?: string;
+  treeData: TreeUnit[];
+  canEdit: boolean;
+  onOpenSettings: (category: string) => void;
 }
 
 interface CascadingFilter {
-    big: string;
-    mid: string;
-    small: string;
+  big: string;
+  mid: string;
+  small: string;
 }
 
-const ORDER_DELIMITER = '||';
-const MATCHING_PAIR_DELIMITER = '=>';
+const ORDER_DELIMITER = "||";
+const MATCHING_PAIR_DELIMITER = "=>";
 const DEFAULT_OPTION_COUNT = 4;
-const createDefaultOptionItems = () => Array.from({ length: DEFAULT_OPTION_COUNT }, () => '');
-const createDefaultMatchingPairs = () => Array.from({ length: 3 }, () => ({ left: '', right: '', rightImage: null }));
+const createDefaultOptionItems = () =>
+  Array.from({ length: DEFAULT_OPTION_COUNT }, () => "");
+const createDefaultMatchingPairs = () =>
+  Array.from({ length: 3 }, () => ({ left: "", right: "", rightImage: null }));
 const TYPE_LABEL: Record<QuestionType, string> = {
-    choice: '객관식',
-    ox: 'O/X',
-    word: '단답형',
-    order: '순서 나열형',
-    matching: '단어 연결하기',
+  choice: "객관식",
+  ox: "O/X",
+  word: "단답형",
+  order: "순서 나열형",
+  matching: "단어 연결하기",
 };
 
 const shuffle = <T,>(input: T[]): T[] => {
-    const list = [...input];
-    for (let i = list.length - 1; i > 0; i -= 1) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [list[i], list[j]] = [list[j], list[i]];
-    }
-    return list;
+  const list = [...input];
+  for (let i = list.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [list[i], list[j]] = [list[j], list[i]];
+  }
+  return list;
 };
 
-const QuizEditor: React.FC<QuizEditorProps> = ({ node, type, parentTitle, treeData, canEdit, onOpenSettings }) => {
-    const { config } = useAuth();
-    const [questions, setQuestions] = useState<Question[]>([]);
-    const [category, setCategory] = useState<string>('diagnostic');
-    const [loading, setLoading] = useState(false);
-    const [epFilter, setEpFilter] = useState<CascadingFilter>({ big: '', mid: '', small: '' });
-    const [epSource, setEpSource] = useState<CascadingFilter>({ big: '', mid: '', small: '' });
+const QuizEditor: React.FC<QuizEditorProps> = ({
+  node,
+  type,
+  parentTitle,
+  treeData,
+  canEdit,
+  onOpenSettings,
+}) => {
+  const { config } = useAuth();
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [category, setCategory] = useState<string>("diagnostic");
+  const [loading, setLoading] = useState(false);
+  const [epFilter, setEpFilter] = useState<CascadingFilter>({
+    big: "",
+    mid: "",
+    small: "",
+  });
+  const [epSource, setEpSource] = useState<CascadingFilter>({
+    big: "",
+    mid: "",
+    small: "",
+  });
 
-    const [formType, setFormType] = useState<QuestionType>('choice');
-    const [formText, setFormText] = useState('');
-    const [formExp, setFormExp] = useState('');
-    const [formImage, setFormImage] = useState<string | null>(null);
-    const [formSubUnit, setFormSubUnit] = useState('');
-    const [choiceOptions, setChoiceOptions] = useState<string[]>(createDefaultOptionItems());
-    const [choiceAnswerIndex, setChoiceAnswerIndex] = useState<number | null>(null);
-    const [oxAnswer, setOxAnswer] = useState<'O' | 'X' | ''>('');
-    const [wordAnswer, setWordAnswer] = useState('');
-    const [orderItems, setOrderItems] = useState<string[]>(createDefaultOptionItems());
-    const [matchingPairs, setMatchingPairs] = useState<MatchingPair[]>(createDefaultMatchingPairs());
-    const [hintEnabled, setHintEnabled] = useState(false);
-    const [hintText, setHintText] = useState('');
+  const [formType, setFormType] = useState<QuestionType>("choice");
+  const [formText, setFormText] = useState("");
+  const [formExp, setFormExp] = useState("");
+  const [formImage, setFormImage] = useState<string | null>(null);
+  const [formSubUnit, setFormSubUnit] = useState("");
+  const [choiceOptions, setChoiceOptions] = useState<string[]>(
+    createDefaultOptionItems(),
+  );
+  const [choiceAnswerIndex, setChoiceAnswerIndex] = useState<number | null>(
+    null,
+  );
+  const [oxAnswer, setOxAnswer] = useState<"O" | "X" | "">("");
+  const [wordAnswer, setWordAnswer] = useState("");
+  const [orderItems, setOrderItems] = useState<string[]>(
+    createDefaultOptionItems(),
+  );
+  const [matchingPairs, setMatchingPairs] = useState<MatchingPair[]>(
+    createDefaultMatchingPairs(),
+  );
+  const [hintEnabled, setHintEnabled] = useState(false);
+  const [hintText, setHintText] = useState("");
 
-    const [previewOpen, setPreviewOpen] = useState(false);
-    const [previewChoiceAnswer, setPreviewChoiceAnswer] = useState('');
-    const [previewOxAnswer, setPreviewOxAnswer] = useState('');
-    const [previewWordAnswer, setPreviewWordAnswer] = useState('');
-    const [previewOrderPool, setPreviewOrderPool] = useState<string[]>([]);
-    const [previewOrderAnswer, setPreviewOrderAnswer] = useState<string[]>([]);
-    const [previewMatchingOptions, setPreviewMatchingOptions] = useState<MatchingPair[]>([]);
-    const [previewMatchingAnswer, setPreviewMatchingAnswer] = useState<Record<string, string>>({});
-    const [previewMatchingActiveLeft, setPreviewMatchingActiveLeft] = useState('');
-    const [editingQuestionId, setEditingQuestionId] = useState<number | null>(null);
-    const [isComposerOpen, setIsComposerOpen] = useState(false);
-    const [savingQuestion, setSavingQuestion] = useState(false);
-    const [optimizingImageCount, setOptimizingImageCount] = useState(0);
-    const optimizingImage = optimizingImageCount > 0;
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewChoiceAnswer, setPreviewChoiceAnswer] = useState("");
+  const [previewOxAnswer, setPreviewOxAnswer] = useState("");
+  const [previewWordAnswer, setPreviewWordAnswer] = useState("");
+  const [previewOrderPool, setPreviewOrderPool] = useState<string[]>([]);
+  const [previewOrderAnswer, setPreviewOrderAnswer] = useState<string[]>([]);
+  const [previewMatchingOptions, setPreviewMatchingOptions] = useState<
+    MatchingPair[]
+  >([]);
+  const [previewMatchingAnswer, setPreviewMatchingAnswer] = useState<
+    Record<string, string>
+  >({});
+  const [previewMatchingActiveLeft, setPreviewMatchingActiveLeft] =
+    useState("");
+  const [editingQuestionId, setEditingQuestionId] = useState<number | null>(
+    null,
+  );
+  const [isComposerOpen, setIsComposerOpen] = useState(false);
+  const [savingQuestion, setSavingQuestion] = useState(false);
+  const [optimizingImageCount, setOptimizingImageCount] = useState(0);
+  const optimizingImage = optimizingImageCount > 0;
 
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const savingQuestionRef = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const savingQuestionRef = useRef(false);
 
-    useEffect(() => {
-        if (type === 'special') {
-            setCategory('exam_prep');
-        } else {
-            setCategory('diagnostic');
-        }
-        setEpFilter({ big: '', mid: '', small: '' });
-        setEpSource({ big: '', mid: '', small: '' });
-        void fetchQuestions();
-    }, [config, node, type]);
+  useEffect(() => {
+    if (type === "special") {
+      setCategory("exam_prep");
+    } else {
+      setCategory("diagnostic");
+    }
+    setEpFilter({ big: "", mid: "", small: "" });
+    setEpSource({ big: "", mid: "", small: "" });
+    void fetchQuestions();
+  }, [config, node, type]);
 
-    const fetchQuestions = async () => {
-        setLoading(true);
-        try {
-            const scopedRef = collection(db, getSemesterCollectionPath(config, 'quiz_questions'));
-            const snap = await getDocs(query(scopedRef, where('unitId', '==', node.id)));
-            const list: Question[] = [];
-            snap.forEach((d) => {
-                list.push({ id: parseInt(d.id, 10), ...(d.data() as Omit<Question, 'id'>) });
-            });
-            setQuestions(list);
-        } catch (error) {
-            console.error(error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const allBigUnits = useMemo(() => treeData, [treeData]);
-    const filterMidUnits = useMemo(() => allBigUnits.find((big) => big.id === epFilter.big)?.children || [], [allBigUnits, epFilter.big]);
-    const filterSmallUnits = useMemo(() => filterMidUnits.find((mid) => mid.id === epFilter.mid)?.children || [], [filterMidUnits, epFilter.mid]);
-    const sourceMidUnits = useMemo(() => allBigUnits.find((big) => big.id === epSource.big)?.children || [], [allBigUnits, epSource.big]);
-    const sourceSmallUnits = useMemo(() => sourceMidUnits.find((mid) => mid.id === epSource.mid)?.children || [], [sourceMidUnits, epSource.mid]);
-    const normalSubUnits = useMemo(
-        () => treeData.find((big) => big.title === parentTitle)?.children?.find((mid) => mid.id === node.id)?.children || [],
-        [treeData, parentTitle, node.id],
-    );
-    const findNodeTitle = (targetId?: string | null) => {
-        if (!targetId) return '';
-        for (const big of treeData) {
-            if (big.id === targetId) return big.title;
-            for (const mid of big.children || []) {
-                if (mid.id === targetId) return mid.title;
-                for (const small of mid.children || []) {
-                    if (small.id === targetId) return small.title;
-                }
-            }
-        }
-        return '';
-    };
-    const getQuestionSubUnitLabel = (question: Question) => {
-        if (type === 'special') {
-            const sourceId = question.refSmall || question.refMid || question.refBig || question.subUnitId || '';
-            return findNodeTitle(sourceId) || '소단원 전체';
-        }
-        return findNodeTitle(question.subUnitId || '') || '소단원 전체';
-    };
-
-    const filteredQuestions = useMemo(() => {
-        const list = questions.filter((q) => {
-            if (q.category !== category) return false;
-            if (type !== 'special') return true;
-            if (epFilter.big && q.refBig !== epFilter.big) return false;
-            if (epFilter.mid && q.refMid !== epFilter.mid) return false;
-            if (epFilter.small && q.refSmall !== epFilter.small) return false;
-            return true;
+  const fetchQuestions = async () => {
+    setLoading(true);
+    try {
+      const scopedRef = collection(
+        db,
+        getSemesterCollectionPath(config, "quiz_questions"),
+      );
+      const snap = await getDocs(
+        query(scopedRef, where("unitId", "==", node.id)),
+      );
+      const list: Question[] = [];
+      snap.forEach((d) => {
+        list.push({
+          id: parseInt(d.id, 10),
+          ...(d.data() as Omit<Question, "id">),
         });
-        return list.sort((a, b) => a.id - b.id);
-    }, [category, epFilter.big, epFilter.mid, epFilter.small, questions, type]);
+      });
+      setQuestions(list);
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    const trimList = (values: string[]) => values.map((v) => v.trim()).filter(Boolean);
-    const trimMatchingPairs = (values: MatchingPair[]) =>
-        values
-            .map((pair) => ({
-                left: pair.left.trim(),
-                right: pair.right.trim(),
-                rightImage: pair.rightImage || null,
-            }))
-            .filter((pair) => pair.left && pair.right);
-    const encodeMatchingAnswer = (values: MatchingPair[]) =>
-        trimMatchingPairs(values).map((pair) => `${pair.left}${MATCHING_PAIR_DELIMITER}${pair.right}`).join(ORDER_DELIMITER);
-    const parseMatchingAnswer = (question: Question): MatchingPair[] => {
-        if (Array.isArray(question.matchingPairs) && question.matchingPairs.length > 0) {
-            return question.matchingPairs.map((pair) => ({
-                left: String(pair.left || ''),
-                right: String(pair.right || ''),
-                rightImage: pair.rightImage || null,
-            }));
+  const allBigUnits = useMemo(() => treeData, [treeData]);
+  const filterMidUnits = useMemo(
+    () => allBigUnits.find((big) => big.id === epFilter.big)?.children || [],
+    [allBigUnits, epFilter.big],
+  );
+  const filterSmallUnits = useMemo(
+    () => filterMidUnits.find((mid) => mid.id === epFilter.mid)?.children || [],
+    [filterMidUnits, epFilter.mid],
+  );
+  const sourceMidUnits = useMemo(
+    () => allBigUnits.find((big) => big.id === epSource.big)?.children || [],
+    [allBigUnits, epSource.big],
+  );
+  const sourceSmallUnits = useMemo(
+    () => sourceMidUnits.find((mid) => mid.id === epSource.mid)?.children || [],
+    [sourceMidUnits, epSource.mid],
+  );
+  const normalSubUnits = useMemo(
+    () =>
+      treeData
+        .find((big) => big.title === parentTitle)
+        ?.children?.find((mid) => mid.id === node.id)?.children || [],
+    [treeData, parentTitle, node.id],
+  );
+  const findNodeTitle = (targetId?: string | null) => {
+    if (!targetId) return "";
+    for (const big of treeData) {
+      if (big.id === targetId) return big.title;
+      for (const mid of big.children || []) {
+        if (mid.id === targetId) return mid.title;
+        for (const small of mid.children || []) {
+          if (small.id === targetId) return small.title;
         }
-        return String(question.answer || '')
+      }
+    }
+    return "";
+  };
+  const getQuestionSubUnitLabel = (question: Question) => {
+    if (type === "special") {
+      const sourceId =
+        question.refSmall ||
+        question.refMid ||
+        question.refBig ||
+        question.subUnitId ||
+        "";
+      return findNodeTitle(sourceId) || "소단원 전체";
+    }
+    return findNodeTitle(question.subUnitId || "") || "소단원 전체";
+  };
+
+  const filteredQuestions = useMemo(() => {
+    const list = questions.filter((q) => {
+      if (q.category !== category) return false;
+      if (type !== "special") return true;
+      if (epFilter.big && q.refBig !== epFilter.big) return false;
+      if (epFilter.mid && q.refMid !== epFilter.mid) return false;
+      if (epFilter.small && q.refSmall !== epFilter.small) return false;
+      return true;
+    });
+    return list.sort((a, b) => a.id - b.id);
+  }, [category, epFilter.big, epFilter.mid, epFilter.small, questions, type]);
+
+  const trimList = (values: string[]) =>
+    values.map((v) => v.trim()).filter(Boolean);
+  const trimMatchingPairs = (values: MatchingPair[]) =>
+    values
+      .map((pair) => ({
+        left: pair.left.trim(),
+        right: pair.right.trim(),
+        rightImage: pair.rightImage || null,
+      }))
+      .filter((pair) => pair.left && pair.right);
+  const encodeMatchingAnswer = (values: MatchingPair[]) =>
+    trimMatchingPairs(values)
+      .map((pair) => `${pair.left}${MATCHING_PAIR_DELIMITER}${pair.right}`)
+      .join(ORDER_DELIMITER);
+  const parseMatchingAnswer = (question: Question): MatchingPair[] => {
+    if (
+      Array.isArray(question.matchingPairs) &&
+      question.matchingPairs.length > 0
+    ) {
+      return question.matchingPairs.map((pair) => ({
+        left: String(pair.left || ""),
+        right: String(pair.right || ""),
+        rightImage: pair.rightImage || null,
+      }));
+    }
+    return String(question.answer || "")
+      .split(ORDER_DELIMITER)
+      .map((item) => {
+        const [left = "", right = ""] = item.split(MATCHING_PAIR_DELIMITER);
+        return { left, right, rightImage: null };
+      })
+      .filter((pair) => pair.left || pair.right);
+  };
+  const resetPreview = () => {
+    setPreviewChoiceAnswer("");
+    setPreviewOxAnswer("");
+    setPreviewWordAnswer("");
+    setPreviewOrderAnswer([]);
+    setPreviewMatchingAnswer({});
+    setPreviewMatchingActiveLeft("");
+  };
+
+  const resetForm = () => {
+    setEditingQuestionId(null);
+    setFormText("");
+    setFormExp("");
+    setFormImage(null);
+    setChoiceOptions(createDefaultOptionItems());
+    setChoiceAnswerIndex(null);
+    setOxAnswer("");
+    setWordAnswer("");
+    setOrderItems(createDefaultOptionItems());
+    setMatchingPairs(createDefaultMatchingPairs());
+    setHintEnabled(false);
+    setHintText("");
+    setPreviewOpen(false);
+    resetPreview();
+    if (type !== "special") setFormSubUnit("");
+    else setEpSource({ big: "", mid: "", small: "" });
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setOptimizingImageCount((prev) => prev + 1);
+    try {
+      setFormImage(
+        await optimizeQuizImageFile(file, QUIZ_QUESTION_IMAGE_OPTIONS),
+      );
+    } catch (error) {
+      console.error("Quiz image optimization failed", error);
+      alert(
+        error instanceof Error
+          ? error.message
+          : "이미지 용량을 줄이지 못했습니다.",
+      );
+    } finally {
+      setOptimizingImageCount((prev) => Math.max(0, prev - 1));
+      e.currentTarget.value = "";
+    }
+  };
+
+  const handleMatchingImageSelect = (
+    index: number,
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setOptimizingImageCount((prev) => prev + 1);
+    optimizeQuizImageFile(file, QUIZ_MATCHING_IMAGE_OPTIONS)
+      .then((rightImage) => {
+        setMatchingPairs((prev) =>
+          prev.map((pair, pairIndex) =>
+            pairIndex === index ? { ...pair, rightImage } : pair,
+          ),
+        );
+      })
+      .catch((error) => {
+        console.error("Quiz matching image optimization failed", error);
+        alert(
+          error instanceof Error
+            ? error.message
+            : "이미지 용량을 줄이지 못했습니다.",
+        );
+      })
+      .finally(() => {
+        setOptimizingImageCount((prev) => Math.max(0, prev - 1));
+        e.currentTarget.value = "";
+      });
+  };
+
+  const optimizeMatchingPairImages = async (pairs: MatchingPair[]) =>
+    Promise.all(
+      pairs.map(async (pair) => ({
+        ...pair,
+        rightImage: await optimizeQuizImageDataUrl(
+          pair.rightImage,
+          QUIZ_MATCHING_IMAGE_OPTIONS,
+        ),
+      })),
+    );
+
+  const handleTypeChange = (nextType: QuestionType) => {
+    setFormType(nextType);
+    setPreviewOpen(false);
+    resetPreview();
+    if (nextType === "choice" && trimList(choiceOptions).length === 0) {
+      setChoiceOptions(createDefaultOptionItems());
+    }
+    if (nextType === "order" && trimList(orderItems).length === 0) {
+      setOrderItems(createDefaultOptionItems());
+    }
+    if (
+      nextType === "matching" &&
+      trimMatchingPairs(matchingPairs).length === 0
+    ) {
+      setMatchingPairs(createDefaultMatchingPairs());
+    }
+  };
+
+  const handleVerticalFocus = (e: React.KeyboardEvent<HTMLElement>) => {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    const current = e.currentTarget as HTMLElement;
+    const fields = Array.from(
+      document.querySelectorAll<HTMLElement>(".quiz-compose-field"),
+    ).filter((el) => el.offsetParent !== null && !el.hasAttribute("disabled"));
+    const currentIndex = fields.indexOf(current);
+    if (currentIndex < 0) return;
+    const nextIndex =
+      e.key === "ArrowDown" ? currentIndex + 1 : currentIndex - 1;
+    if (nextIndex < 0 || nextIndex >= fields.length) return;
+    e.preventDefault();
+    fields[nextIndex].focus();
+  };
+
+  const openCreateComposer = () => {
+    resetForm();
+    setIsComposerOpen(true);
+  };
+
+  const closeComposer = () => {
+    if (optimizingImage || savingQuestion) return;
+    setIsComposerOpen(false);
+    resetForm();
+  };
+
+  const startEdit = (question: Question) => {
+    setEditingQuestionId(question.id);
+    setIsComposerOpen(true);
+    setFormType(question.type);
+    setFormText(question.question || "");
+    setFormExp(question.explanation || "");
+    setFormImage(question.image || null);
+    setPreviewOpen(false);
+    resetPreview();
+    setHintEnabled(!!(question.hintEnabled && question.hint));
+    setHintText(question.hint || "");
+
+    if (type === "normal") {
+      setFormSubUnit(question.subUnitId || "");
+    } else {
+      setEpSource({
+        big: question.refBig || "",
+        mid: question.refMid || "",
+        small: question.refSmall || "",
+      });
+    }
+
+    if (question.type === "choice") {
+      const options = (question.options || []).filter(Boolean);
+      const normalizedOptions =
+        options.length >= 2 ? options : createDefaultOptionItems();
+      setChoiceOptions(normalizedOptions);
+      const answerIndex = normalizedOptions.findIndex(
+        (opt) => opt.trim() === String(question.answer).trim(),
+      );
+      setChoiceAnswerIndex(answerIndex >= 0 ? answerIndex : null);
+      setOxAnswer("");
+      setWordAnswer("");
+      setOrderItems(createDefaultOptionItems());
+      setMatchingPairs(createDefaultMatchingPairs());
+      return;
+    }
+
+    if (question.type === "ox") {
+      setChoiceOptions(createDefaultOptionItems());
+      setChoiceAnswerIndex(null);
+      setOxAnswer(
+        question.answer === "O" || question.answer === "X"
+          ? question.answer
+          : "",
+      );
+      setWordAnswer("");
+      setOrderItems(createDefaultOptionItems());
+      setMatchingPairs(createDefaultMatchingPairs());
+      return;
+    }
+
+    if (question.type === "word") {
+      setChoiceOptions(createDefaultOptionItems());
+      setChoiceAnswerIndex(null);
+      setOxAnswer("");
+      setWordAnswer(String(question.answer || ""));
+      setOrderItems(createDefaultOptionItems());
+      setMatchingPairs(createDefaultMatchingPairs());
+      return;
+    }
+
+    if (question.type === "matching") {
+      const pairs = parseMatchingAnswer(question);
+      setChoiceOptions(createDefaultOptionItems());
+      setChoiceAnswerIndex(null);
+      setOxAnswer("");
+      setWordAnswer("");
+      setOrderItems(createDefaultOptionItems());
+      setMatchingPairs(
+        pairs.length >= 2 ? pairs : createDefaultMatchingPairs(),
+      );
+      return;
+    }
+
+    const orderOptions =
+      question.options && question.options.length > 0
+        ? question.options
+        : String(question.answer || "")
             .split(ORDER_DELIMITER)
-            .map((item) => {
-                const [left = '', right = ''] = item.split(MATCHING_PAIR_DELIMITER);
-                return { left, right, rightImage: null };
-            })
-            .filter((pair) => pair.left || pair.right);
-    };
-    const resetPreview = () => {
-        setPreviewChoiceAnswer('');
-        setPreviewOxAnswer('');
-        setPreviewWordAnswer('');
-        setPreviewOrderAnswer([]);
-        setPreviewMatchingAnswer({});
-        setPreviewMatchingActiveLeft('');
-    };
-
-    const resetForm = () => {
-        setEditingQuestionId(null);
-        setFormText('');
-        setFormExp('');
-        setFormImage(null);
-        setChoiceOptions(createDefaultOptionItems());
-        setChoiceAnswerIndex(null);
-        setOxAnswer('');
-        setWordAnswer('');
-        setOrderItems(createDefaultOptionItems());
-        setMatchingPairs(createDefaultMatchingPairs());
-        setHintEnabled(false);
-        setHintText('');
-        setPreviewOpen(false);
-        resetPreview();
-        if (type !== 'special') setFormSubUnit('');
-        else setEpSource({ big: '', mid: '', small: '' });
-        if (fileInputRef.current) fileInputRef.current.value = '';
-    };
-
-    const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        setOptimizingImageCount((prev) => prev + 1);
-        try {
-            setFormImage(await optimizeQuizImageFile(file, QUIZ_QUESTION_IMAGE_OPTIONS));
-        } catch (error) {
-            console.error('Quiz image optimization failed', error);
-            alert(error instanceof Error ? error.message : '이미지 용량을 줄이지 못했습니다.');
-        } finally {
-            setOptimizingImageCount((prev) => Math.max(0, prev - 1));
-            e.currentTarget.value = '';
-        }
-    };
-
-    const handleMatchingImageSelect = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        setOptimizingImageCount((prev) => prev + 1);
-        optimizeQuizImageFile(file, QUIZ_MATCHING_IMAGE_OPTIONS)
-            .then((rightImage) => {
-                setMatchingPairs((prev) => prev.map((pair, pairIndex) => (
-                    pairIndex === index ? { ...pair, rightImage } : pair
-                )));
-            })
-            .catch((error) => {
-                console.error('Quiz matching image optimization failed', error);
-                alert(error instanceof Error ? error.message : '이미지 용량을 줄이지 못했습니다.');
-            })
-            .finally(() => {
-                setOptimizingImageCount((prev) => Math.max(0, prev - 1));
-                e.currentTarget.value = '';
-            });
-    };
-
-    const optimizeMatchingPairImages = async (pairs: MatchingPair[]) => Promise.all(
-        pairs.map(async (pair) => ({
-            ...pair,
-            rightImage: await optimizeQuizImageDataUrl(pair.rightImage, QUIZ_MATCHING_IMAGE_OPTIONS),
-        })),
+            .filter(Boolean);
+    setChoiceOptions(createDefaultOptionItems());
+    setChoiceAnswerIndex(null);
+    setOxAnswer("");
+    setWordAnswer("");
+    setOrderItems(
+      orderOptions.length >= 2 ? orderOptions : createDefaultOptionItems(),
     );
+    setMatchingPairs(createDefaultMatchingPairs());
+  };
 
-    const handleTypeChange = (nextType: QuestionType) => {
-        setFormType(nextType);
-        setPreviewOpen(false);
-        resetPreview();
-        if (nextType === 'choice' && trimList(choiceOptions).length === 0) {
-            setChoiceOptions(createDefaultOptionItems());
-        }
-        if (nextType === 'order' && trimList(orderItems).length === 0) {
-            setOrderItems(createDefaultOptionItems());
-        }
-        if (nextType === 'matching' && trimMatchingPairs(matchingPairs).length === 0) {
-            setMatchingPairs(createDefaultMatchingPairs());
-        }
-    };
+  const addChoiceOption = () => setChoiceOptions((prev) => [...prev, ""]);
+  const removeChoiceOption = (index: number) => {
+    if (choiceOptions.length <= 2) return;
+    setChoiceOptions((prev) => prev.filter((_, i) => i !== index));
+    if (choiceAnswerIndex === index) setChoiceAnswerIndex(null);
+    if (choiceAnswerIndex !== null && choiceAnswerIndex > index)
+      setChoiceAnswerIndex(choiceAnswerIndex - 1);
+  };
+  const moveOrderItem = (index: number, direction: "up" | "down") => {
+    setOrderItems((prev) => {
+      const target = direction === "up" ? index - 1 : index + 1;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  };
+  const addMatchingPair = () =>
+    setMatchingPairs((prev) => [
+      ...prev,
+      { left: "", right: "", rightImage: null },
+    ]);
+  const removeMatchingPair = (index: number) => {
+    if (matchingPairs.length <= 2) return;
+    setMatchingPairs((prev) =>
+      prev.filter((_, pairIndex) => pairIndex !== index),
+    );
+  };
 
-    const handleVerticalFocus = (e: React.KeyboardEvent<HTMLElement>) => {
-        if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-        const current = e.currentTarget as HTMLElement;
-        const fields = Array.from(document.querySelectorAll<HTMLElement>('.quiz-compose-field'))
-            .filter((el) => el.offsetParent !== null && !el.hasAttribute('disabled'));
-        const currentIndex = fields.indexOf(current);
-        if (currentIndex < 0) return;
-        const nextIndex = e.key === 'ArrowDown' ? currentIndex + 1 : currentIndex - 1;
-        if (nextIndex < 0 || nextIndex >= fields.length) return;
-        e.preventDefault();
-        fields[nextIndex].focus();
-    };
+  const openPreview = () => {
+    const opening = !previewOpen;
+    setPreviewOpen(opening);
+    resetPreview();
+    if (opening && formType === "order")
+      setPreviewOrderPool(shuffle(trimList(orderItems)));
+    if (opening && formType === "matching")
+      setPreviewMatchingOptions(shuffle(trimMatchingPairs(matchingPairs)));
+  };
 
-    const openCreateComposer = () => {
-        resetForm();
-        setIsComposerOpen(true);
-    };
+  const buildQuestionPayload = (): {
+    answer: string;
+    options: string[];
+    matchingPairs?: MatchingPair[];
+  } | null => {
+    if (!formText.trim()) {
+      alert("문제 내용을 입력하세요.");
+      return null;
+    }
+    if (hintEnabled && !hintText.trim()) {
+      alert("힌트 제공을 선택한 경우 힌트 내용을 입력하세요.");
+      return null;
+    }
+    if (formType === "choice") {
+      const options = trimList(choiceOptions);
+      if (options.length < 2)
+        return (alert("객관식 보기는 최소 2개 이상 필요합니다."), null);
+      if (choiceAnswerIndex === null)
+        return (alert("객관식 정답 보기를 선택하세요."), null);
+      const answer = choiceOptions[choiceAnswerIndex]?.trim() || "";
+      if (!answer)
+        return (alert("정답으로 선택한 보기에 내용을 입력하세요."), null);
+      return { answer, options };
+    }
+    if (formType === "ox") {
+      if (!oxAnswer) return (alert("O/X 정답을 선택하세요."), null);
+      return { answer: oxAnswer, options: ["O", "X"] };
+    }
+    if (formType === "word") {
+      if (!wordAnswer.trim()) return (alert("단답형 정답을 입력하세요."), null);
+      return { answer: wordAnswer.trim(), options: [] };
+    }
+    if (formType === "matching") {
+      const pairs = trimMatchingPairs(matchingPairs);
+      if (pairs.length < 2)
+        return (alert("단어 연결하기 항목은 최소 2쌍 이상 필요합니다."), null);
+      return {
+        answer: encodeMatchingAnswer(pairs),
+        options: pairs.map((pair) => pair.right),
+        matchingPairs: pairs,
+      };
+    }
+    const options = trimList(orderItems);
+    if (options.length < 2)
+      return (alert("순서 나열형 항목은 최소 2개 이상 필요합니다."), null);
+    return { answer: options.join(ORDER_DELIMITER), options };
+  };
 
-    const closeComposer = () => {
-        if (optimizingImage || savingQuestion) return;
-        setIsComposerOpen(false);
-        resetForm();
-    };
+  const handleAdd = async () => {
+    if (!canEdit) return;
+    if (savingQuestionRef.current) return;
+    if (optimizingImage) {
+      alert("이미지 용량을 줄이는 중입니다. 잠시 후 다시 저장해 주세요.");
+      return;
+    }
+    const payload = buildQuestionPayload();
+    if (!payload) return;
+    const targetId = editingQuestionId ?? Date.now();
+    savingQuestionRef.current = true;
+    setSavingQuestion(true);
+    try {
+      const optimizedImage = await optimizeQuizImageDataUrl(
+        formImage,
+        QUIZ_QUESTION_IMAGE_OPTIONS,
+      );
+      const optimizedMatchingPairs =
+        formType === "matching"
+          ? await optimizeMatchingPairImages(payload.matchingPairs || [])
+          : [];
+      const newQuestion: Question = {
+        id: targetId,
+        unitId: node.id,
+        subUnitId:
+          type === "special"
+            ? epSource.small || epSource.mid || epSource.big || null
+            : formSubUnit || null,
+        category,
+        type: formType,
+        question: formText.trim(),
+        answer: payload.answer,
+        options: payload.options,
+        matchingPairs: optimizedMatchingPairs,
+        explanation: formExp.trim(),
+        image: optimizedImage,
+        hintEnabled,
+        hint: hintEnabled ? hintText.trim() : "",
+        ...(type === "special" && epSource.big ? { refBig: epSource.big } : {}),
+        ...(type === "special" && epSource.mid ? { refMid: epSource.mid } : {}),
+        ...(type === "special" && epSource.small
+          ? { refSmall: epSource.small }
+          : {}),
+      };
+      await setDoc(
+        doc(db, getSemesterDocPath(config, "quiz_questions", String(targetId))),
+        {
+          ...newQuestion,
+          updatedAt: serverTimestamp(),
+          ...(editingQuestionId ? {} : { createdAt: serverTimestamp() }),
+        },
+        { merge: true },
+      );
+      setQuestions((prev) =>
+        editingQuestionId
+          ? prev.map((q) => (q.id === targetId ? newQuestion : q))
+          : [...prev, newQuestion],
+      );
+      resetForm();
+      setIsComposerOpen(false);
+    } catch (error: any) {
+      console.error("Add question failed", error);
+      const code = error?.code ? ` (${error.code})` : "";
+      alert(`문제 등록에 실패했습니다${code}.`);
+    } finally {
+      savingQuestionRef.current = false;
+      setSavingQuestion(false);
+    }
+  };
 
-    const startEdit = (question: Question) => {
-        setEditingQuestionId(question.id);
-        setIsComposerOpen(true);
-        setFormType(question.type);
-        setFormText(question.question || '');
-        setFormExp(question.explanation || '');
-        setFormImage(question.image || null);
-        setPreviewOpen(false);
-        resetPreview();
-        setHintEnabled(!!(question.hintEnabled && question.hint));
-        setHintText(question.hint || '');
+  const handleDelete = async (id: number) => {
+    if (!canEdit) return;
+    if (!window.confirm("이 문제를 삭제하시겠습니까?")) return;
+    try {
+      await deleteDoc(
+        doc(db, getSemesterDocPath(config, "quiz_questions", String(id))),
+      );
+      setQuestions((prev) => prev.filter((q) => q.id !== id));
+    } catch (error) {
+      console.error("Delete question failed", error);
+      alert("현재 학기 문제를 삭제하지 못했습니다.");
+    }
+  };
 
-        if (type === 'normal') {
-            setFormSubUnit(question.subUnitId || '');
-        } else {
-            setEpSource({
-                big: question.refBig || '',
-                mid: question.refMid || '',
-                small: question.refSmall || '',
-            });
-        }
+  const formatAnswer = (question: Question) => {
+    if (question.type === "order")
+      return question.answer.split(ORDER_DELIMITER).join(" -> ");
+    if (question.type === "matching") {
+      const pairs = parseMatchingAnswer(question);
+      return pairs.map((pair) => `${pair.left} - ${pair.right}`).join(", ");
+    }
+    return question.answer;
+  };
 
-        if (question.type === 'choice') {
-            const options = (question.options || []).filter(Boolean);
-            const normalizedOptions = options.length >= 2 ? options : createDefaultOptionItems();
-            setChoiceOptions(normalizedOptions);
-            const answerIndex = normalizedOptions.findIndex((opt) => opt.trim() === String(question.answer).trim());
-            setChoiceAnswerIndex(answerIndex >= 0 ? answerIndex : null);
-            setOxAnswer('');
-            setWordAnswer('');
-            setOrderItems(createDefaultOptionItems());
-            setMatchingPairs(createDefaultMatchingPairs());
-            return;
-        }
+  const categoryLabel =
+    category === "diagnostic"
+      ? "진단평가"
+      : category === "formative"
+        ? "형성평가"
+        : "학기 시험 대비";
 
-        if (question.type === 'ox') {
-            setChoiceOptions(createDefaultOptionItems());
-            setChoiceAnswerIndex(null);
-            setOxAnswer(question.answer === 'O' || question.answer === 'X' ? question.answer : '');
-            setWordAnswer('');
-            setOrderItems(createDefaultOptionItems());
-            setMatchingPairs(createDefaultMatchingPairs());
-            return;
-        }
-
-        if (question.type === 'word') {
-            setChoiceOptions(createDefaultOptionItems());
-            setChoiceAnswerIndex(null);
-            setOxAnswer('');
-            setWordAnswer(String(question.answer || ''));
-            setOrderItems(createDefaultOptionItems());
-            setMatchingPairs(createDefaultMatchingPairs());
-            return;
-        }
-
-        if (question.type === 'matching') {
-            const pairs = parseMatchingAnswer(question);
-            setChoiceOptions(createDefaultOptionItems());
-            setChoiceAnswerIndex(null);
-            setOxAnswer('');
-            setWordAnswer('');
-            setOrderItems(createDefaultOptionItems());
-            setMatchingPairs(pairs.length >= 2 ? pairs : createDefaultMatchingPairs());
-            return;
-        }
-
-        const orderOptions = (question.options && question.options.length > 0)
-            ? question.options
-            : String(question.answer || '')
-                .split(ORDER_DELIMITER)
-                .filter(Boolean);
-        setChoiceOptions(createDefaultOptionItems());
-        setChoiceAnswerIndex(null);
-        setOxAnswer('');
-        setWordAnswer('');
-        setOrderItems(orderOptions.length >= 2 ? orderOptions : createDefaultOptionItems());
-        setMatchingPairs(createDefaultMatchingPairs());
-    };
-
-    const addChoiceOption = () => setChoiceOptions((prev) => [...prev, '']);
-    const removeChoiceOption = (index: number) => {
-        if (choiceOptions.length <= 2) return;
-        setChoiceOptions((prev) => prev.filter((_, i) => i !== index));
-        if (choiceAnswerIndex === index) setChoiceAnswerIndex(null);
-        if (choiceAnswerIndex !== null && choiceAnswerIndex > index) setChoiceAnswerIndex(choiceAnswerIndex - 1);
-    };
-    const moveOrderItem = (index: number, direction: 'up' | 'down') => {
-        setOrderItems((prev) => {
-            const target = direction === 'up' ? index - 1 : index + 1;
-            if (target < 0 || target >= prev.length) return prev;
-            const next = [...prev];
-            [next[index], next[target]] = [next[target], next[index]];
-            return next;
-        });
-    };
-    const addMatchingPair = () => setMatchingPairs((prev) => [...prev, { left: '', right: '', rightImage: null }]);
-    const removeMatchingPair = (index: number) => {
-        if (matchingPairs.length <= 2) return;
-        setMatchingPairs((prev) => prev.filter((_, pairIndex) => pairIndex !== index));
-    };
-
-    const openPreview = () => {
-        const opening = !previewOpen;
-        setPreviewOpen(opening);
-        resetPreview();
-        if (opening && formType === 'order') setPreviewOrderPool(shuffle(trimList(orderItems)));
-        if (opening && formType === 'matching') setPreviewMatchingOptions(shuffle(trimMatchingPairs(matchingPairs)));
-    };
-
-    const buildQuestionPayload = (): { answer: string; options: string[]; matchingPairs?: MatchingPair[] } | null => {
-        if (!formText.trim()) {
-            alert('문제 내용을 입력하세요.');
-            return null;
-        }
-        if (hintEnabled && !hintText.trim()) {
-            alert('힌트 제공을 선택한 경우 힌트 내용을 입력하세요.');
-            return null;
-        }
-        if (formType === 'choice') {
-            const options = trimList(choiceOptions);
-            if (options.length < 2) return alert('객관식 보기는 최소 2개 이상 필요합니다.'), null;
-            if (choiceAnswerIndex === null) return alert('객관식 정답 보기를 선택하세요.'), null;
-            const answer = choiceOptions[choiceAnswerIndex]?.trim() || '';
-            if (!answer) return alert('정답으로 선택한 보기에 내용을 입력하세요.'), null;
-            return { answer, options };
-        }
-        if (formType === 'ox') {
-            if (!oxAnswer) return alert('O/X 정답을 선택하세요.'), null;
-            return { answer: oxAnswer, options: ['O', 'X'] };
-        }
-        if (formType === 'word') {
-            if (!wordAnswer.trim()) return alert('단답형 정답을 입력하세요.'), null;
-            return { answer: wordAnswer.trim(), options: [] };
-        }
-        if (formType === 'matching') {
-            const pairs = trimMatchingPairs(matchingPairs);
-            if (pairs.length < 2) return alert('단어 연결하기 항목은 최소 2쌍 이상 필요합니다.'), null;
-            return { answer: encodeMatchingAnswer(pairs), options: pairs.map((pair) => pair.right), matchingPairs: pairs };
-        }
-        const options = trimList(orderItems);
-        if (options.length < 2) return alert('순서 나열형 항목은 최소 2개 이상 필요합니다.'), null;
-        return { answer: options.join(ORDER_DELIMITER), options };
-    };
-
-    const handleAdd = async () => {
-        if (!canEdit) return;
-        if (savingQuestionRef.current) return;
-        if (optimizingImage) {
-            alert('이미지 용량을 줄이는 중입니다. 잠시 후 다시 저장해 주세요.');
-            return;
-        }
-        const payload = buildQuestionPayload();
-        if (!payload) return;
-        const targetId = editingQuestionId ?? Date.now();
-        savingQuestionRef.current = true;
-        setSavingQuestion(true);
-        try {
-            const optimizedImage = await optimizeQuizImageDataUrl(formImage, QUIZ_QUESTION_IMAGE_OPTIONS);
-            const optimizedMatchingPairs = formType === 'matching'
-                ? await optimizeMatchingPairImages(payload.matchingPairs || [])
-                : [];
-            const newQuestion: Question = {
-                id: targetId,
-                unitId: node.id,
-                subUnitId: type === 'special' ? (epSource.small || epSource.mid || epSource.big || null) : (formSubUnit || null),
-                category,
-                type: formType,
-                question: formText.trim(),
-                answer: payload.answer,
-                options: payload.options,
-                matchingPairs: optimizedMatchingPairs,
-                explanation: formExp.trim(),
-                image: optimizedImage,
-                hintEnabled,
-                hint: hintEnabled ? hintText.trim() : '',
-                ...(type === 'special' && epSource.big ? { refBig: epSource.big } : {}),
-                ...(type === 'special' && epSource.mid ? { refMid: epSource.mid } : {}),
-                ...(type === 'special' && epSource.small ? { refSmall: epSource.small } : {}),
-            };
-            await setDoc(
-                doc(db, getSemesterDocPath(config, 'quiz_questions', String(targetId))),
-                {
-                    ...newQuestion,
-                    updatedAt: serverTimestamp(),
-                    ...(editingQuestionId ? {} : { createdAt: serverTimestamp() }),
-                },
-                { merge: true },
-            );
-            setQuestions((prev) => (
-                editingQuestionId
-                    ? prev.map((q) => (q.id === targetId ? newQuestion : q))
-                    : [...prev, newQuestion]
-            ));
-            resetForm();
-            setIsComposerOpen(false);
-        } catch (error: any) {
-            console.error('Add question failed', error);
-            const code = error?.code ? ` (${error.code})` : '';
-            alert(`문제 등록에 실패했습니다${code}.`);
-        } finally {
-            savingQuestionRef.current = false;
-            setSavingQuestion(false);
-        }
-    };
-
-    const handleDelete = async (id: number) => {
-        if (!canEdit) return;
-        if (!window.confirm('이 문제를 삭제하시겠습니까?')) return;
-        try {
-            await deleteDoc(doc(db, getSemesterDocPath(config, 'quiz_questions', String(id))));
-            setQuestions((prev) => prev.filter((q) => q.id !== id));
-        } catch (error) {
-            console.error('Delete question failed', error);
-            alert('현재 학기 문제를 삭제하지 못했습니다.');
-        }
-    };
-
-    const formatAnswer = (question: Question) => {
-        if (question.type === 'order') return question.answer.split(ORDER_DELIMITER).join(' -> ');
-        if (question.type === 'matching') {
-            const pairs = parseMatchingAnswer(question);
-            return pairs.map((pair) => `${pair.left} - ${pair.right}`).join(', ');
-        }
-        return question.answer;
-    };
-
-    const categoryLabel = category === 'diagnostic' ? '진단평가' : category === 'formative' ? '형성평가' : '학기 시험 대비';
-
-    return (
-        <div className="flex h-full min-h-0 flex-col bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="p-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
-                <div>
-                    <div className="text-xs text-gray-500 font-bold mb-1">{type === 'special' ? '학기 시험 대비' : `${parentTitle} > ${node.title}`}</div>
-                    <div className="flex items-center gap-2">
-                        <h2 className="text-xl font-bold text-gray-800">{node.title}</h2>
-                        {canEdit && (
-                            <button onClick={() => onOpenSettings(category)} className="text-gray-400 hover:text-blue-600 transition p-1" title="평가 설정">
-                                <i className="fas fa-cog"></i>
-                            </button>
-                        )}
-                    </div>
-                </div>
-                {canEdit && (
-                    <button
-                        type="button"
-                        onClick={openCreateComposer}
-                        className="bg-blue-600 text-white font-bold px-4 py-2.5 rounded-full shadow hover:bg-blue-700 transition flex items-center gap-2"
-                    >
-                        <i className="fas fa-plus"></i>
-                        <span>문제 등록</span>
-                    </button>
-                )}
-            </div>
-
-            {type !== 'special' && (
-                <div className="flex border-b border-gray-200 px-4 pt-2">
-                    {['diagnostic', 'formative'].map((cat) => (
-                        <button
-                            key={cat}
-                            onClick={() => setCategory(cat)}
-                            className={`py-2 px-4 font-bold text-sm border-b-2 transition ${category === cat ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}
-                        >
-                            {cat === 'diagnostic' ? '진단평가' : '형성평가'}
-                        </button>
-                    ))}
-                </div>
+  return (
+    <div className="flex h-full min-h-0 flex-col bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div className="p-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
+        <div>
+          <div className="text-xs text-gray-500 font-bold mb-1">
+            {type === "special"
+              ? "학기 시험 대비"
+              : `${parentTitle} > ${node.title}`}
+          </div>
+          <div className="flex items-center gap-2">
+            <h2 className="text-xl font-bold text-gray-800">{node.title}</h2>
+            {canEdit && (
+              <button
+                onClick={() => onOpenSettings(category)}
+                className="text-gray-400 hover:text-blue-600 transition p-1"
+                title="평가 설정"
+              >
+                <i className="fas fa-cog"></i>
+              </button>
             )}
-
-            {type === 'special' && (
-                <div className="bg-blue-50 border-b border-blue-100 px-4 py-3">
-                    <div className="flex flex-wrap items-center gap-2 text-sm">
-                        <span className="font-bold text-blue-800 mr-1">단원 필터</span>
-                        <select value={epFilter.big} onChange={(e) => setEpFilter({ big: e.target.value, mid: '', small: '' })} className="border border-blue-200 rounded px-2 py-1 text-xs w-28 bg-white">
-                            <option value="">대단원 전체</option>
-                            {allBigUnits.map((big) => <option key={big.id} value={big.id}>{big.title}</option>)}
-                        </select>
-                        <select value={epFilter.mid} onChange={(e) => setEpFilter((prev) => ({ ...prev, mid: e.target.value, small: '' }))} className="border border-blue-200 rounded px-2 py-1 text-xs w-28 bg-white">
-                            <option value="">중단원 전체</option>
-                            {filterMidUnits.map((mid) => <option key={mid.id} value={mid.id}>{mid.title}</option>)}
-                        </select>
-                        <select value={epFilter.small} onChange={(e) => setEpFilter((prev) => ({ ...prev, small: e.target.value }))} className="border border-blue-200 rounded px-2 py-1 text-xs w-28 bg-white">
-                            <option value="">소단원 전체</option>
-                            {filterSmallUnits.map((small) => <option key={small.id} value={small.id}>{small.title}</option>)}
-                        </select>
-                        <button onClick={() => setEpFilter({ big: '', mid: '', small: '' })} className="ml-auto text-xs text-blue-400 hover:text-blue-600" title="필터 초기화">
-                            <i className="fas fa-sync-alt"></i>
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            <div className="flex-1 min-h-0 overflow-hidden p-6 bg-gray-50">
-                <div className="h-full min-h-0 flex flex-col">
-                    <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-4">
-                        {loading ? (
-                            <div className="text-center p-10 text-gray-400">문제를 불러오는 중...</div>
-                        ) : filteredQuestions.length === 0 ? (
-                            <div className="text-center p-10 text-gray-400 border-2 border-dashed border-gray-200 rounded-lg">등록된 문제가 없습니다.</div>
-                        ) : (
-                            filteredQuestions.map((q, idx) => (
-                                <div key={q.id} className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-                                    <div className="flex justify-between items-start mb-2">
-                                        <span className="bg-gray-100 text-gray-600 text-[10px] font-bold px-2 py-1 rounded">
-                                            Q{idx + 1} | {TYPE_LABEL[q.type] || q.type} | {getQuestionSubUnitLabel(q)}
-                                        </span>
-                                        {canEdit && (
-                                            <div className="flex items-center gap-2">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => startEdit(q)}
-                                                    className="text-gray-300 hover:text-blue-500"
-                                                    title="문제 수정"
-                                                >
-                                                    <i className="fas fa-pen"></i>
-                                                </button>
-                                                <button onClick={() => void handleDelete(q.id)} className="text-gray-300 hover:text-red-500" title="문제 삭제"><i className="fas fa-trash"></i></button>
-                                            </div>
-                                        )}
-                                    </div>
-                                    <p className="font-bold text-gray-800 mb-1 text-sm">{q.question}</p>
-                                    {q.image && (
-                                        <div className="mb-2">
-                                            <img src={q.image} alt="문항 첨부 이미지" className="max-h-44 rounded border border-gray-200" />
-                                        </div>
-                                    )}
-                                    <p className="text-xs text-gray-500">
-                                        <span className="text-blue-600 font-bold mr-2">정답: {formatAnswer(q)}</span>
-                                        {q.options && q.options.length > 0 ? `(${q.options.join(', ')})` : ''}
-                                    </p>
-                                    {!!(q.hintEnabled && q.hint) && (
-                                        <p className="text-xs text-amber-600 font-bold mt-1">
-                                            <i className="fas fa-lightbulb mr-1"></i>힌트 제공
-                                        </p>
-                                    )}
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </div>
-
-                {isComposerOpen && (
-                    <div className="fixed inset-0 z-50">
-                        <button
-                            type="button"
-                            className="absolute inset-0 bg-black/45"
-                            onClick={closeComposer}
-                            aria-label="문제 등록 팝업 닫기"
-                        />
-                        <div className="absolute inset-0 flex items-center justify-center p-4">
-                            <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl border border-gray-200 p-5">
-                                <div className="flex items-start justify-between mb-4">
-                                    <div>
-                                        <h3 className="font-bold text-gray-800 text-lg flex items-center">
-                                            <i className={`fas ${editingQuestionId ? 'fa-pen' : 'fa-plus-circle'} text-blue-500 mr-2`}></i>
-                                            {editingQuestionId ? '문제 수정' : '새 문제 등록'}
-                                        </h3>
-                                        <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                                            <span className="px-2 py-1 rounded bg-gray-100 text-gray-700 font-bold">중단원: {node.title}</span>
-                                            <span className="px-2 py-1 rounded bg-blue-100 text-blue-700 font-bold">{categoryLabel}</span>
-                                        </div>
-                                    </div>
-                                    <button type="button" onClick={closeComposer} className="text-gray-400 hover:text-gray-700">
-                                        <i className="fas fa-times text-lg"></i>
-                                    </button>
-                                </div>
-
-                                <div className="space-y-4">
-                        <div className={`grid gap-3 ${type === 'normal' ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                            <select value={formType} onChange={(e) => handleTypeChange(e.target.value as QuestionType)} onKeyDown={handleVerticalFocus} className="quiz-compose-field border p-2 rounded text-sm bg-gray-50">
-                                <option value="choice">객관식</option>
-                                <option value="ox">O/X</option>
-                                <option value="word">단답형</option>
-                                <option value="order">순서 나열형</option>
-                                <option value="matching">단어 연결하기</option>
-                            </select>
-                            {type === 'normal' && (
-                                <select value={formSubUnit} onChange={(e) => setFormSubUnit(e.target.value)} onKeyDown={handleVerticalFocus} className="quiz-compose-field border p-2 rounded text-sm bg-gray-50">
-                                    <option value="">소단원 전체</option>
-                                    {normalSubUnits.map((sub) => <option key={sub.id} value={sub.id}>{sub.title}</option>)}
-                                </select>
-                            )}
-                        </div>
-
-                        {type === 'special' && (
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 bg-blue-50 p-2 rounded border border-blue-100">
-                                <select value={epSource.big} onChange={(e) => setEpSource({ big: e.target.value, mid: '', small: '' })} onKeyDown={handleVerticalFocus} className="quiz-compose-field border border-blue-200 rounded p-1.5 text-xs bg-white">
-                                    <option value="">대단원 선택</option>
-                                    {allBigUnits.map((big) => <option key={big.id} value={big.id}>{big.title}</option>)}
-                                </select>
-                                <select value={epSource.mid} onChange={(e) => setEpSource((prev) => ({ ...prev, mid: e.target.value, small: '' }))} onKeyDown={handleVerticalFocus} className="quiz-compose-field border border-blue-200 rounded p-1.5 text-xs bg-white">
-                                    <option value="">중단원 선택</option>
-                                    {sourceMidUnits.map((mid) => <option key={mid.id} value={mid.id}>{mid.title}</option>)}
-                                </select>
-                                <select value={epSource.small} onChange={(e) => setEpSource((prev) => ({ ...prev, small: e.target.value }))} onKeyDown={handleVerticalFocus} className="quiz-compose-field border border-blue-200 rounded p-1.5 text-xs bg-white">
-                                    <option value="">소단원 선택</option>
-                                    {sourceSmallUnits.map((small) => <option key={small.id} value={small.id}>{small.title}</option>)}
-                                </select>
-                            </div>
-                        )}
-
-                        <input type="text" placeholder="문제 내용을 입력하세요" value={formText} onChange={(e) => setFormText(e.target.value)} onKeyDown={handleVerticalFocus} className="quiz-compose-field w-full border p-2 rounded text-sm" />
-
-                        <label className="inline-flex items-center gap-2 text-xs font-bold text-gray-500 cursor-pointer hover:text-blue-600 bg-gray-100 px-3 py-1 rounded transition w-fit">
-                            <i className="fas fa-image"></i> 이미지 첨부
-                            <input type="file" className="hidden" accept="image/*" ref={fileInputRef} onChange={handleImageSelect} />
-                        </label>
-                        {optimizingImage && (
-                            <p className="text-xs font-bold text-blue-600">이미지 용량을 줄이는 중...</p>
-                        )}
-                        {formImage && (
-                            <div className="relative border rounded p-2 bg-gray-50">
-                                <img src={formImage} alt="문항 첨부 이미지" className="max-h-44 mx-auto rounded" />
-                                <button type="button" onClick={() => setFormImage(null)} className="absolute top-2 right-2 text-xs px-2 py-1 rounded bg-white border text-gray-500 hover:text-red-500">
-                                    제거
-                                </button>
-                            </div>
-                        )}
-
-                        {formType === 'choice' && (
-                            <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 space-y-2">
-                                <div className="flex items-center justify-between">
-                                    <p className="text-xs font-bold text-gray-600">객관식 보기</p>
-                                    <button type="button" onClick={addChoiceOption} className="text-xs font-bold text-blue-600 hover:text-blue-700"><i className="fas fa-plus mr-1"></i>보기 추가</button>
-                                </div>
-                                {choiceOptions.map((option, index) => (
-                                    <div key={`choice-option-${index}`} className="flex items-center gap-2">
-                                        <span className="w-7 h-7 rounded-full bg-gray-200 text-gray-700 text-xs font-bold flex items-center justify-center">{index + 1}</span>
-                                        <input type="text" value={option} onChange={(e) => setChoiceOptions((prev) => prev.map((opt, i) => (i === index ? e.target.value : opt)))} onKeyDown={handleVerticalFocus} placeholder={`${index + 1}번 보기`} className="quiz-compose-field flex-1 border rounded p-2 text-sm bg-white" />
-                                        <button type="button" onClick={() => setChoiceAnswerIndex(index)} className={`text-xs px-2 py-1 rounded border ${choiceAnswerIndex === index ? 'border-blue-500 bg-blue-100 text-blue-700 font-bold' : 'border-gray-300 text-gray-500'}`}>정답</button>
-                                        <button type="button" onClick={() => removeChoiceOption(index)} className="text-gray-400 hover:text-red-500 px-1"><i className="fas fa-times"></i></button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-
-                        {formType === 'ox' && (
-                            <div className="grid grid-cols-2 gap-2">
-                                {(['O', 'X'] as const).map((value) => (
-                                    <button key={value} type="button" onClick={() => setOxAnswer(value)} onKeyDown={handleVerticalFocus} className={`quiz-compose-field py-3 rounded-lg border-2 font-bold transition ${oxAnswer === value ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-500 hover:border-blue-300'}`}>{value}</button>
-                                ))}
-                            </div>
-                        )}
-
-                        {formType === 'word' && <input type="text" value={wordAnswer} onChange={(e) => setWordAnswer(e.target.value)} onKeyDown={handleVerticalFocus} placeholder="단답형 정답 입력" className="quiz-compose-field w-full border rounded p-2 text-sm bg-white" />}
-
-                        {formType === 'order' && (
-                            <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 space-y-2">
-                                <div className="flex items-center justify-between">
-                                    <p className="text-xs font-bold text-gray-600">순서 항목 (위에서 아래 순서가 정답)</p>
-                                    <button type="button" onClick={() => setOrderItems((prev) => [...prev, ''])} className="text-xs font-bold text-blue-600 hover:text-blue-700"><i className="fas fa-plus mr-1"></i>항목 추가</button>
-                                </div>
-                                {orderItems.map((item, index) => (
-                                    <div key={`order-item-${index}`} className="flex items-center gap-2">
-                                        <span className="w-7 h-7 rounded-full bg-gray-200 text-gray-700 text-xs font-bold flex items-center justify-center">{index + 1}</span>
-                                        <input type="text" value={item} onChange={(e) => setOrderItems((prev) => prev.map((v, i) => (i === index ? e.target.value : v)))} onKeyDown={handleVerticalFocus} className="quiz-compose-field flex-1 border rounded p-2 text-sm bg-white" />
-                                        <button type="button" onClick={() => moveOrderItem(index, 'up')} className="text-gray-400 hover:text-blue-600 px-1"><i className="fas fa-arrow-up"></i></button>
-                                        <button type="button" onClick={() => moveOrderItem(index, 'down')} className="text-gray-400 hover:text-blue-600 px-1"><i className="fas fa-arrow-down"></i></button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-
-                        {formType === 'matching' && (
-                            <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <p className="text-xs font-bold text-gray-600">단어 연결 쌍 (왼쪽 단서와 오른쪽 정답)</p>
-                                    <button type="button" onClick={addMatchingPair} className="text-xs font-bold text-blue-600 hover:text-blue-700"><i className="fas fa-plus mr-1"></i>쌍 추가</button>
-                                </div>
-                                {matchingPairs.map((pair, index) => (
-                                    <div key={`matching-pair-${index}`} className="grid grid-cols-[28px_minmax(0,1fr)_minmax(0,1fr)_28px] gap-2 rounded-lg border border-gray-200 bg-white p-2">
-                                        <span className="mt-1 flex h-7 w-7 items-center justify-center rounded-full bg-gray-200 text-xs font-bold text-gray-700">{index + 1}</span>
-                                        <input type="text" value={pair.left} onChange={(e) => setMatchingPairs((prev) => prev.map((item, pairIndex) => (pairIndex === index ? { ...item, left: e.target.value } : item)))} onKeyDown={handleVerticalFocus} placeholder="왼쪽 단서" className="quiz-compose-field min-w-0 rounded border p-2 text-sm" />
-                                        <div className="min-w-0 space-y-2">
-                                            <input type="text" value={pair.right} onChange={(e) => setMatchingPairs((prev) => prev.map((item, pairIndex) => (pairIndex === index ? { ...item, right: e.target.value } : item)))} onKeyDown={handleVerticalFocus} placeholder="오른쪽 단어" className="quiz-compose-field w-full rounded border p-2 text-sm" />
-                                            <label className="inline-flex cursor-pointer items-center gap-1 rounded border border-blue-100 bg-blue-50 px-2 py-1 text-[11px] font-bold text-blue-700 hover:bg-blue-100">
-                                                <i className="fas fa-image"></i> 우측 그림
-                                                <input type="file" className="hidden" accept="image/*" onChange={(e) => handleMatchingImageSelect(index, e)} />
-                                            </label>
-                                            {pair.rightImage && (
-                                                <div className="relative w-fit">
-                                                    <img src={pair.rightImage} alt="오른쪽 보기 이미지" className="h-16 max-w-[120px] rounded border border-gray-200 object-contain" />
-                                                    <button type="button" onClick={() => setMatchingPairs((prev) => prev.map((item, pairIndex) => (pairIndex === index ? { ...item, rightImage: null } : item)))} className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full border bg-white text-[10px] text-gray-500 hover:text-red-500">
-                                                        <i className="fas fa-times"></i>
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
-                                        <button type="button" onClick={() => removeMatchingPair(index)} className="mt-1 text-gray-400 hover:text-red-500"><i className="fas fa-times"></i></button>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-
-                        <textarea placeholder="해설 (선택)" value={formExp} onChange={(e) => setFormExp(e.target.value)} onKeyDown={handleVerticalFocus} className="quiz-compose-field w-full border p-2 rounded text-sm h-16 resize-none" />
-
-                        <div className="border border-gray-200 rounded-lg p-3 bg-amber-50">
-                            <label className="inline-flex items-center gap-2 text-sm font-bold text-amber-800 cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={hintEnabled}
-                                        onChange={(e) => setHintEnabled(e.target.checked)}
-                                    />
-                                힌트 제공
-                            </label>
-                            {hintEnabled && (
-                                <textarea
-                                    placeholder="학생에게 보여줄 힌트를 입력하세요"
-                                    value={hintText}
-                                    onChange={(e) => setHintText(e.target.value)}
-                                    onKeyDown={handleVerticalFocus}
-                                    className="quiz-compose-field mt-2 w-full border p-2 rounded text-sm h-16 resize-none bg-white"
-                                />
-                            )}
-                        </div>
-
-                        {previewOpen && (
-                            <div className="border border-blue-200 rounded-xl p-4 bg-blue-50 space-y-3">
-                                <div className="text-sm font-bold text-blue-800">학생 화면 미리보기</div>
-                                <div className="bg-white rounded-lg border border-blue-100 p-4">
-                                    <h4 className="font-bold text-gray-800 mb-4">{formText || '문제 문구를 입력하면 여기 표시됩니다.'}</h4>
-                                    {formImage && (
-                                        <div className="mb-4">
-                                            <img src={formImage} alt="문항 첨부 이미지 미리보기" className="max-h-48 mx-auto rounded-lg border border-gray-100" />
-                                        </div>
-                                    )}
-                                    {formType === 'choice' && trimList(choiceOptions).map((opt, index) => (
-                                        <button key={`preview-choice-${index}`} type="button" onClick={() => setPreviewChoiceAnswer(opt)} className={`w-full border-2 rounded-lg p-3 text-left transition flex items-center gap-2 mb-2 ${previewChoiceAnswer === opt ? 'border-blue-500 bg-blue-50 text-blue-800 font-bold' : 'border-gray-200 hover:border-blue-300'}`}>
-                                            <span className={`w-6 h-6 rounded-full text-xs flex items-center justify-center ${previewChoiceAnswer === opt ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-500'}`}>{index + 1}</span>
-                                            <span>{opt}</span>
-                                        </button>
-                                    ))}
-                                    {formType === 'ox' && (
-                                        <div className="grid grid-cols-2 gap-2">
-                                            {(['O', 'X'] as const).map((opt) => <button key={`preview-ox-${opt}`} type="button" onClick={() => setPreviewOxAnswer(opt)} className={`border-2 rounded-lg py-3 font-bold transition ${previewOxAnswer === opt ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 hover:border-blue-300'}`}>{opt}</button>)}
-                                        </div>
-                                    )}
-                                    {formType === 'word' && <input type="text" value={previewWordAnswer} onChange={(e) => setPreviewWordAnswer(e.target.value)} placeholder="정답 입력 칸 미리보기" className="w-full border-b-2 border-gray-300 p-2 text-center text-sm focus:border-blue-500 outline-none" />}
-                                    {formType === 'order' && (
-                                        <div className="space-y-2">
-                                            <div className="flex flex-wrap gap-2">
-                                                {previewOrderPool.map((item) => <button key={`preview-order-pool-${item}`} type="button" onClick={() => !previewOrderAnswer.includes(item) && setPreviewOrderAnswer((prev) => [...prev, item])} className={`px-3 py-2 rounded border-2 text-sm transition ${previewOrderAnswer.includes(item) ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 hover:border-blue-300'}`}>{item}</button>)}
-                                            </div>
-                                            <div className="min-h-[96px] rounded border border-dashed border-blue-300 bg-white p-3">
-                                                <div className="flex flex-col items-start gap-1">
-                                                    {previewOrderAnswer.map((item, index, list) => (
-                                                        <React.Fragment key={`preview-order-selected-${index}-${item}`}>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setPreviewOrderAnswer((prev) => prev.filter((_, i) => i !== index))}
-                                                                className="inline-flex max-w-full items-start gap-2 rounded bg-blue-100 px-3 py-2 text-left text-xs font-bold text-blue-700"
-                                                            >
-                                                                <span className="shrink-0">{index + 1}.</span>
-                                                                <span className="min-w-0 break-words">{item}</span>
-                                                            </button>
-                                                            {index < list.length - 1 && (
-                                                                <span aria-hidden="true" className="ml-5 text-sm font-bold leading-none text-blue-500">
-                                                                    ↓
-                                                                </span>
-                                                            )}
-                                                        </React.Fragment>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-                                    {formType === 'matching' && (
-                                        <div className="grid gap-3 md:grid-cols-2">
-                                            <div className="space-y-2">
-                                                {trimMatchingPairs(matchingPairs).map((pair, index) => (
-                                                    <button key={`preview-matching-left-${pair.left}-${index}`} type="button" onClick={() => setPreviewMatchingActiveLeft(pair.left)} className={`w-full rounded-lg border-2 p-3 text-left text-sm font-bold transition ${previewMatchingActiveLeft === pair.left ? 'border-blue-500 bg-blue-50 text-blue-800' : 'border-gray-200 hover:border-blue-300'}`}>
-                                                        {pair.left}
-                                                        {previewMatchingAnswer[pair.left] && <span className="ml-2 text-xs text-blue-600">→ {previewMatchingAnswer[pair.left]}</span>}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                            <div className="space-y-2">
-                                                {previewMatchingOptions.map((pair, index) => {
-                                                    const used = Object.values(previewMatchingAnswer).includes(pair.right);
-                                                    return (
-                                                        <button key={`preview-matching-right-${pair.right}-${index}`} type="button" onClick={() => previewMatchingActiveLeft && setPreviewMatchingAnswer((prev) => ({ ...prev, [previewMatchingActiveLeft]: pair.right }))} className={`flex w-full items-center gap-3 rounded-lg border-2 p-3 text-left text-sm font-bold transition ${used ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 hover:border-blue-300'}`}>
-                                                            {pair.rightImage && <img src={pair.rightImage} alt="" className="h-12 w-12 rounded border border-gray-100 object-contain" />}
-                                                            <span>{pair.right}</span>
-                                                        </button>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-
-                        <div className={`grid gap-2 ${editingQuestionId ? 'grid-cols-3' : 'grid-cols-2'}`}>
-                            <button type="button" onClick={openPreview} className={`font-bold py-2 rounded transition border ${previewOpen ? 'bg-white text-blue-700 border-blue-500' : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400 hover:text-blue-700'}`}>{previewOpen ? '미리보기 닫기' : '미리보기'}</button>
-                            <button type="button" onClick={() => void handleAdd()} disabled={savingQuestion || optimizingImage} className="bg-blue-600 text-white font-bold py-2 rounded hover:bg-blue-700 transition disabled:bg-blue-300">{optimizingImage ? '이미지 줄이는 중...' : savingQuestion ? '저장 중...' : editingQuestionId ? '수정 저장' : '등록'}</button>
-                            {editingQuestionId && (
-                                <button
-                                    type="button"
-                                    onClick={closeComposer}
-                                    className="bg-gray-100 text-gray-700 font-bold py-2 rounded hover:bg-gray-200 transition"
-                                >
-                                    취소
-                                </button>
-                            )}
-                        </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                )}
-                {savingQuestion && (
-                    <LoadingOverlay
-                        message={editingQuestionId ? '문제를 저장하는 중입니다.' : '문제를 등록하는 중입니다.'}
-                        detail="서버 저장이 끝날 때까지 잠시만 기다려 주세요."
-                    />
-                )}
-            </div>
+          </div>
         </div>
-    );
+        {canEdit && (
+          <button
+            type="button"
+            onClick={openCreateComposer}
+            className="bg-blue-600 text-white font-bold px-4 py-2.5 rounded-full shadow hover:bg-blue-700 transition flex items-center gap-2"
+          >
+            <i className="fas fa-plus"></i>
+            <span>문제 등록</span>
+          </button>
+        )}
+      </div>
+
+      {type !== "special" && (
+        <div className="flex border-b border-gray-200 px-4 pt-2">
+          {["diagnostic", "formative"].map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setCategory(cat)}
+              className={`py-2 px-4 font-bold text-sm border-b-2 transition ${category === cat ? "border-blue-500 text-blue-600" : "border-transparent text-gray-400 hover:text-gray-600"}`}
+            >
+              {cat === "diagnostic" ? "진단평가" : "형성평가"}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {type === "special" && (
+        <div className="bg-blue-50 border-b border-blue-100 px-4 py-3">
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="font-bold text-blue-800 mr-1">단원 필터</span>
+            <select
+              value={epFilter.big}
+              onChange={(e) =>
+                setEpFilter({ big: e.target.value, mid: "", small: "" })
+              }
+              className="border border-blue-200 rounded px-2 py-1 text-xs w-28 bg-white"
+            >
+              <option value="">대단원 전체</option>
+              {allBigUnits.map((big) => (
+                <option key={big.id} value={big.id}>
+                  {big.title}
+                </option>
+              ))}
+            </select>
+            <select
+              value={epFilter.mid}
+              onChange={(e) =>
+                setEpFilter((prev) => ({
+                  ...prev,
+                  mid: e.target.value,
+                  small: "",
+                }))
+              }
+              className="border border-blue-200 rounded px-2 py-1 text-xs w-28 bg-white"
+            >
+              <option value="">중단원 전체</option>
+              {filterMidUnits.map((mid) => (
+                <option key={mid.id} value={mid.id}>
+                  {mid.title}
+                </option>
+              ))}
+            </select>
+            <select
+              value={epFilter.small}
+              onChange={(e) =>
+                setEpFilter((prev) => ({ ...prev, small: e.target.value }))
+              }
+              className="border border-blue-200 rounded px-2 py-1 text-xs w-28 bg-white"
+            >
+              <option value="">소단원 전체</option>
+              {filterSmallUnits.map((small) => (
+                <option key={small.id} value={small.id}>
+                  {small.title}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={() => setEpFilter({ big: "", mid: "", small: "" })}
+              className="ml-auto text-xs text-blue-400 hover:text-blue-600"
+              title="필터 초기화"
+            >
+              <i className="fas fa-sync-alt"></i>
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="flex-1 min-h-0 overflow-hidden p-6 bg-gray-50">
+        <div className="h-full min-h-0 flex flex-col">
+          <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-4">
+            {loading ? (
+              <div className="text-center p-10 text-gray-400">
+                문제를 불러오는 중...
+              </div>
+            ) : filteredQuestions.length === 0 ? (
+              <div className="text-center p-10 text-gray-400 border-2 border-dashed border-gray-200 rounded-lg">
+                등록된 문제가 없습니다.
+              </div>
+            ) : (
+              filteredQuestions.map((q, idx) => (
+                <div
+                  key={q.id}
+                  className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm"
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="bg-gray-100 text-gray-600 text-[10px] font-bold px-2 py-1 rounded">
+                      Q{idx + 1} | {TYPE_LABEL[q.type] || q.type} |{" "}
+                      {getQuestionSubUnitLabel(q)}
+                    </span>
+                    {canEdit && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => startEdit(q)}
+                          className="text-gray-300 hover:text-blue-500"
+                          title="문제 수정"
+                        >
+                          <i className="fas fa-pen"></i>
+                        </button>
+                        <button
+                          onClick={() => void handleDelete(q.id)}
+                          className="text-gray-300 hover:text-red-500"
+                          title="문제 삭제"
+                        >
+                          <i className="fas fa-trash"></i>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <p className="font-bold text-gray-800 mb-1 text-sm">
+                    {q.question}
+                  </p>
+                  {q.image && (
+                    <div className="mb-2">
+                      <img
+                        src={q.image}
+                        alt="문항 첨부 이미지"
+                        className="max-h-44 rounded border border-gray-200"
+                      />
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-500">
+                    <span className="text-blue-600 font-bold mr-2">
+                      정답: {formatAnswer(q)}
+                    </span>
+                    {q.options && q.options.length > 0
+                      ? `(${q.options.join(", ")})`
+                      : ""}
+                  </p>
+                  {!!(q.hintEnabled && q.hint) && (
+                    <p className="text-xs text-amber-600 font-bold mt-1">
+                      <i className="fas fa-lightbulb mr-1"></i>힌트 제공
+                    </p>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {isComposerOpen && (
+          <div className="fixed inset-0 z-50">
+            <button
+              type="button"
+              className="absolute inset-0 bg-black/45"
+              onClick={closeComposer}
+              aria-label="문제 등록 팝업 닫기"
+            />
+            <div className="absolute inset-0 flex items-center justify-center p-4">
+              <div className="w-full max-w-3xl max-h-[90vh] overflow-y-auto bg-white rounded-2xl shadow-2xl border border-gray-200 p-5">
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <h3 className="font-bold text-gray-800 text-lg flex items-center">
+                      <i
+                        className={`fas ${editingQuestionId ? "fa-pen" : "fa-plus-circle"} text-blue-500 mr-2`}
+                      ></i>
+                      {editingQuestionId ? "문제 수정" : "새 문제 등록"}
+                    </h3>
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                      <span className="px-2 py-1 rounded bg-gray-100 text-gray-700 font-bold">
+                        중단원: {node.title}
+                      </span>
+                      <span className="px-2 py-1 rounded bg-blue-100 text-blue-700 font-bold">
+                        {categoryLabel}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={closeComposer}
+                    className="text-gray-400 hover:text-gray-700"
+                  >
+                    <i className="fas fa-times text-lg"></i>
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <div
+                    className={`grid gap-3 ${type === "normal" ? "grid-cols-2" : "grid-cols-1"}`}
+                  >
+                    <select
+                      value={formType}
+                      onChange={(e) =>
+                        handleTypeChange(e.target.value as QuestionType)
+                      }
+                      onKeyDown={handleVerticalFocus}
+                      className="quiz-compose-field border p-2 rounded text-sm bg-gray-50"
+                    >
+                      <option value="choice">객관식</option>
+                      <option value="ox">O/X</option>
+                      <option value="word">단답형</option>
+                      <option value="order">순서 나열형</option>
+                      <option value="matching">단어 연결하기</option>
+                    </select>
+                    {type === "normal" && (
+                      <select
+                        value={formSubUnit}
+                        onChange={(e) => setFormSubUnit(e.target.value)}
+                        onKeyDown={handleVerticalFocus}
+                        className="quiz-compose-field border p-2 rounded text-sm bg-gray-50"
+                      >
+                        <option value="">소단원 전체</option>
+                        {normalSubUnits.map((sub) => (
+                          <option key={sub.id} value={sub.id}>
+                            {sub.title}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+
+                  {type === "special" && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 bg-blue-50 p-2 rounded border border-blue-100">
+                      <select
+                        value={epSource.big}
+                        onChange={(e) =>
+                          setEpSource({
+                            big: e.target.value,
+                            mid: "",
+                            small: "",
+                          })
+                        }
+                        onKeyDown={handleVerticalFocus}
+                        className="quiz-compose-field border border-blue-200 rounded p-1.5 text-xs bg-white"
+                      >
+                        <option value="">대단원 선택</option>
+                        {allBigUnits.map((big) => (
+                          <option key={big.id} value={big.id}>
+                            {big.title}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={epSource.mid}
+                        onChange={(e) =>
+                          setEpSource((prev) => ({
+                            ...prev,
+                            mid: e.target.value,
+                            small: "",
+                          }))
+                        }
+                        onKeyDown={handleVerticalFocus}
+                        className="quiz-compose-field border border-blue-200 rounded p-1.5 text-xs bg-white"
+                      >
+                        <option value="">중단원 선택</option>
+                        {sourceMidUnits.map((mid) => (
+                          <option key={mid.id} value={mid.id}>
+                            {mid.title}
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        value={epSource.small}
+                        onChange={(e) =>
+                          setEpSource((prev) => ({
+                            ...prev,
+                            small: e.target.value,
+                          }))
+                        }
+                        onKeyDown={handleVerticalFocus}
+                        className="quiz-compose-field border border-blue-200 rounded p-1.5 text-xs bg-white"
+                      >
+                        <option value="">소단원 선택</option>
+                        {sourceSmallUnits.map((small) => (
+                          <option key={small.id} value={small.id}>
+                            {small.title}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  <input
+                    type="text"
+                    placeholder="문제 내용을 입력하세요"
+                    value={formText}
+                    onChange={(e) => setFormText(e.target.value)}
+                    onKeyDown={handleVerticalFocus}
+                    className="quiz-compose-field w-full border p-2 rounded text-sm"
+                  />
+
+                  <label className="inline-flex items-center gap-2 text-xs font-bold text-gray-500 cursor-pointer hover:text-blue-600 bg-gray-100 px-3 py-1 rounded transition w-fit">
+                    <i className="fas fa-image"></i> 이미지 첨부
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept="image/*"
+                      ref={fileInputRef}
+                      onChange={handleImageSelect}
+                    />
+                  </label>
+                  {optimizingImage && (
+                    <p className="text-xs font-bold text-blue-600">
+                      이미지 용량을 줄이는 중...
+                    </p>
+                  )}
+                  {formImage && (
+                    <div className="relative border rounded p-2 bg-gray-50">
+                      <img
+                        src={formImage}
+                        alt="문항 첨부 이미지"
+                        className="max-h-44 mx-auto rounded"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setFormImage(null)}
+                        className="absolute top-2 right-2 text-xs px-2 py-1 rounded bg-white border text-gray-500 hover:text-red-500"
+                      >
+                        제거
+                      </button>
+                    </div>
+                  )}
+
+                  {formType === "choice" && (
+                    <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-bold text-gray-600">
+                          객관식 보기
+                        </p>
+                        <button
+                          type="button"
+                          onClick={addChoiceOption}
+                          className="text-xs font-bold text-blue-600 hover:text-blue-700"
+                        >
+                          <i className="fas fa-plus mr-1"></i>보기 추가
+                        </button>
+                      </div>
+                      {choiceOptions.map((option, index) => (
+                        <div
+                          key={`choice-option-${index}`}
+                          className="flex items-center gap-2"
+                        >
+                          <span className="w-7 h-7 rounded-full bg-gray-200 text-gray-700 text-xs font-bold flex items-center justify-center">
+                            {index + 1}
+                          </span>
+                          <input
+                            type="text"
+                            value={option}
+                            onChange={(e) =>
+                              setChoiceOptions((prev) =>
+                                prev.map((opt, i) =>
+                                  i === index ? e.target.value : opt,
+                                ),
+                              )
+                            }
+                            onKeyDown={handleVerticalFocus}
+                            placeholder={`${index + 1}번 보기`}
+                            className="quiz-compose-field flex-1 border rounded p-2 text-sm bg-white"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setChoiceAnswerIndex(index)}
+                            className={`text-xs px-2 py-1 rounded border ${choiceAnswerIndex === index ? "border-blue-500 bg-blue-100 text-blue-700 font-bold" : "border-gray-300 text-gray-500"}`}
+                          >
+                            정답
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeChoiceOption(index)}
+                            className="text-gray-400 hover:text-red-500 px-1"
+                          >
+                            <i className="fas fa-times"></i>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {formType === "ox" && (
+                    <div className="grid grid-cols-2 gap-2">
+                      {(["O", "X"] as const).map((value) => (
+                        <button
+                          key={value}
+                          type="button"
+                          onClick={() => setOxAnswer(value)}
+                          onKeyDown={handleVerticalFocus}
+                          className={`quiz-compose-field py-3 rounded-lg border-2 font-bold transition ${oxAnswer === value ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 bg-white text-gray-500 hover:border-blue-300"}`}
+                        >
+                          {value}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {formType === "word" && (
+                    <input
+                      type="text"
+                      value={wordAnswer}
+                      onChange={(e) => setWordAnswer(e.target.value)}
+                      onKeyDown={handleVerticalFocus}
+                      placeholder="단답형 정답 입력"
+                      className="quiz-compose-field w-full border rounded p-2 text-sm bg-white"
+                    />
+                  )}
+
+                  {formType === "order" && (
+                    <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-bold text-gray-600">
+                          순서 항목 (위에서 아래 순서가 정답)
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setOrderItems((prev) => [...prev, ""])}
+                          className="text-xs font-bold text-blue-600 hover:text-blue-700"
+                        >
+                          <i className="fas fa-plus mr-1"></i>항목 추가
+                        </button>
+                      </div>
+                      {orderItems.map((item, index) => (
+                        <div
+                          key={`order-item-${index}`}
+                          className="flex items-center gap-2"
+                        >
+                          <span className="w-7 h-7 rounded-full bg-gray-200 text-gray-700 text-xs font-bold flex items-center justify-center">
+                            {index + 1}
+                          </span>
+                          <input
+                            type="text"
+                            value={item}
+                            onChange={(e) =>
+                              setOrderItems((prev) =>
+                                prev.map((v, i) =>
+                                  i === index ? e.target.value : v,
+                                ),
+                              )
+                            }
+                            onKeyDown={handleVerticalFocus}
+                            className="quiz-compose-field flex-1 border rounded p-2 text-sm bg-white"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => moveOrderItem(index, "up")}
+                            className="text-gray-400 hover:text-blue-600 px-1"
+                          >
+                            <i className="fas fa-arrow-up"></i>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => moveOrderItem(index, "down")}
+                            className="text-gray-400 hover:text-blue-600 px-1"
+                          >
+                            <i className="fas fa-arrow-down"></i>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {formType === "matching" && (
+                    <div className="border border-gray-200 rounded-lg p-3 bg-gray-50 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-bold text-gray-600">
+                          단어 연결 쌍 (왼쪽 단서와 오른쪽 정답)
+                        </p>
+                        <button
+                          type="button"
+                          onClick={addMatchingPair}
+                          className="text-xs font-bold text-blue-600 hover:text-blue-700"
+                        >
+                          <i className="fas fa-plus mr-1"></i>쌍 추가
+                        </button>
+                      </div>
+                      {matchingPairs.map((pair, index) => (
+                        <div
+                          key={`matching-pair-${index}`}
+                          className="grid grid-cols-[28px_minmax(0,1fr)_minmax(0,1fr)_28px] gap-2 rounded-lg border border-gray-200 bg-white p-2"
+                        >
+                          <span className="mt-1 flex h-7 w-7 items-center justify-center rounded-full bg-gray-200 text-xs font-bold text-gray-700">
+                            {index + 1}
+                          </span>
+                          <input
+                            type="text"
+                            value={pair.left}
+                            onChange={(e) =>
+                              setMatchingPairs((prev) =>
+                                prev.map((item, pairIndex) =>
+                                  pairIndex === index
+                                    ? { ...item, left: e.target.value }
+                                    : item,
+                                ),
+                              )
+                            }
+                            onKeyDown={handleVerticalFocus}
+                            placeholder="왼쪽 단서"
+                            className="quiz-compose-field min-w-0 rounded border p-2 text-sm"
+                          />
+                          <div className="min-w-0 space-y-2">
+                            <input
+                              type="text"
+                              value={pair.right}
+                              onChange={(e) =>
+                                setMatchingPairs((prev) =>
+                                  prev.map((item, pairIndex) =>
+                                    pairIndex === index
+                                      ? { ...item, right: e.target.value }
+                                      : item,
+                                  ),
+                                )
+                              }
+                              onKeyDown={handleVerticalFocus}
+                              placeholder="오른쪽 단어"
+                              className="quiz-compose-field w-full rounded border p-2 text-sm"
+                            />
+                            <label className="inline-flex cursor-pointer items-center gap-1 rounded border border-blue-100 bg-blue-50 px-2 py-1 text-[11px] font-bold text-blue-700 hover:bg-blue-100">
+                              <i className="fas fa-image"></i> 우측 그림
+                              <input
+                                type="file"
+                                className="hidden"
+                                accept="image/*"
+                                onChange={(e) =>
+                                  handleMatchingImageSelect(index, e)
+                                }
+                              />
+                            </label>
+                            {pair.rightImage && (
+                              <div className="relative w-fit">
+                                <img
+                                  src={pair.rightImage}
+                                  alt="오른쪽 보기 이미지"
+                                  className="h-16 max-w-[120px] rounded border border-gray-200 object-contain"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setMatchingPairs((prev) =>
+                                      prev.map((item, pairIndex) =>
+                                        pairIndex === index
+                                          ? { ...item, rightImage: null }
+                                          : item,
+                                      ),
+                                    )
+                                  }
+                                  className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full border bg-white text-[10px] text-gray-500 hover:text-red-500"
+                                >
+                                  <i className="fas fa-times"></i>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => removeMatchingPair(index)}
+                            className="mt-1 text-gray-400 hover:text-red-500"
+                          >
+                            <i className="fas fa-times"></i>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <textarea
+                    placeholder="해설 (선택)"
+                    value={formExp}
+                    onChange={(e) => setFormExp(e.target.value)}
+                    onKeyDown={handleVerticalFocus}
+                    className="quiz-compose-field w-full border p-2 rounded text-sm h-16 resize-none"
+                  />
+
+                  <div className="border border-gray-200 rounded-lg p-3 bg-amber-50">
+                    <label className="inline-flex items-center gap-2 text-sm font-bold text-amber-800 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={hintEnabled}
+                        onChange={(e) => setHintEnabled(e.target.checked)}
+                      />
+                      힌트 제공
+                    </label>
+                    {hintEnabled && (
+                      <textarea
+                        placeholder="학생에게 보여줄 힌트를 입력하세요"
+                        value={hintText}
+                        onChange={(e) => setHintText(e.target.value)}
+                        onKeyDown={handleVerticalFocus}
+                        className="quiz-compose-field mt-2 w-full border p-2 rounded text-sm h-16 resize-none bg-white"
+                      />
+                    )}
+                  </div>
+
+                  {previewOpen && (
+                    <div className="border border-blue-200 rounded-xl p-4 bg-blue-50 space-y-3">
+                      <div className="text-sm font-bold text-blue-800">
+                        학생 화면 미리보기
+                      </div>
+                      <div className="bg-white rounded-lg border border-blue-100 p-4">
+                        <h4 className="font-bold text-gray-800 mb-4">
+                          {formText || "문제 문구를 입력하면 여기 표시됩니다."}
+                        </h4>
+                        {formImage && (
+                          <div className="mb-4">
+                            <img
+                              src={formImage}
+                              alt="문항 첨부 이미지 미리보기"
+                              className="max-h-48 mx-auto rounded-lg border border-gray-100"
+                            />
+                          </div>
+                        )}
+                        {formType === "choice" &&
+                          trimList(choiceOptions).map((opt, index) => (
+                            <button
+                              key={`preview-choice-${index}`}
+                              type="button"
+                              onClick={() => setPreviewChoiceAnswer(opt)}
+                              className={`w-full border-2 rounded-lg p-3 text-left transition flex items-center gap-2 mb-2 ${previewChoiceAnswer === opt ? "border-blue-500 bg-blue-50 text-blue-800 font-bold" : "border-gray-200 hover:border-blue-300"}`}
+                            >
+                              <span
+                                className={`w-6 h-6 rounded-full text-xs flex items-center justify-center ${previewChoiceAnswer === opt ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-500"}`}
+                              >
+                                {index + 1}
+                              </span>
+                              <span>{opt}</span>
+                            </button>
+                          ))}
+                        {formType === "ox" && (
+                          <div className="grid grid-cols-2 gap-2">
+                            {(["O", "X"] as const).map((opt) => (
+                              <button
+                                key={`preview-ox-${opt}`}
+                                type="button"
+                                onClick={() => setPreviewOxAnswer(opt)}
+                                className={`border-2 rounded-lg py-3 font-bold transition ${previewOxAnswer === opt ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 hover:border-blue-300"}`}
+                              >
+                                {opt}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {formType === "word" && (
+                          <input
+                            type="text"
+                            value={previewWordAnswer}
+                            onChange={(e) =>
+                              setPreviewWordAnswer(e.target.value)
+                            }
+                            placeholder="정답 입력 칸 미리보기"
+                            className="w-full border-b-2 border-gray-300 p-2 text-center text-sm focus:border-blue-500 outline-none"
+                          />
+                        )}
+                        {formType === "order" && (
+                          <div className="space-y-2">
+                            <div className="flex flex-wrap gap-2">
+                              {previewOrderPool.map((item) => (
+                                <button
+                                  key={`preview-order-pool-${item}`}
+                                  type="button"
+                                  onClick={() =>
+                                    !previewOrderAnswer.includes(item) &&
+                                    setPreviewOrderAnswer((prev) => [
+                                      ...prev,
+                                      item,
+                                    ])
+                                  }
+                                  className={`px-3 py-2 rounded border-2 text-sm transition ${previewOrderAnswer.includes(item) ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 hover:border-blue-300"}`}
+                                >
+                                  {item}
+                                </button>
+                              ))}
+                            </div>
+                            <div className="min-h-[96px] rounded border border-dashed border-blue-300 bg-white p-3">
+                              <div className="flex flex-col items-start gap-1">
+                                {previewOrderAnswer.map((item, index, list) => (
+                                  <React.Fragment
+                                    key={`preview-order-selected-${index}-${item}`}
+                                  >
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setPreviewOrderAnswer((prev) =>
+                                          prev.filter((_, i) => i !== index),
+                                        )
+                                      }
+                                      className="inline-flex max-w-full items-start gap-2 rounded bg-blue-100 px-3 py-2 text-left text-xs font-bold text-blue-700"
+                                    >
+                                      <span className="shrink-0">
+                                        {index + 1}.
+                                      </span>
+                                      <span className="min-w-0 break-words">
+                                        {item}
+                                      </span>
+                                    </button>
+                                    {index < list.length - 1 && (
+                                      <span
+                                        aria-hidden="true"
+                                        className="ml-5 text-sm font-bold leading-none text-blue-500"
+                                      >
+                                        ↓
+                                      </span>
+                                    )}
+                                  </React.Fragment>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        {formType === "matching" && (
+                          <div className="grid gap-3 md:grid-cols-2">
+                            <div className="space-y-2">
+                              {trimMatchingPairs(matchingPairs).map(
+                                (pair, index) => (
+                                  <button
+                                    key={`preview-matching-left-${pair.left}-${index}`}
+                                    type="button"
+                                    onClick={() =>
+                                      setPreviewMatchingActiveLeft(pair.left)
+                                    }
+                                    className={`w-full rounded-lg border-2 p-3 text-left text-sm font-bold transition ${previewMatchingActiveLeft === pair.left ? "border-blue-500 bg-blue-50 text-blue-800" : "border-gray-200 hover:border-blue-300"}`}
+                                  >
+                                    {pair.left}
+                                    {previewMatchingAnswer[pair.left] && (
+                                      <span className="ml-2 text-xs text-blue-600">
+                                        → {previewMatchingAnswer[pair.left]}
+                                      </span>
+                                    )}
+                                  </button>
+                                ),
+                              )}
+                            </div>
+                            <div className="space-y-2">
+                              {previewMatchingOptions.map((pair, index) => {
+                                const used = Object.values(
+                                  previewMatchingAnswer,
+                                ).includes(pair.right);
+                                return (
+                                  <button
+                                    key={`preview-matching-right-${pair.right}-${index}`}
+                                    type="button"
+                                    onClick={() =>
+                                      previewMatchingActiveLeft &&
+                                      setPreviewMatchingAnswer((prev) => ({
+                                        ...prev,
+                                        [previewMatchingActiveLeft]: pair.right,
+                                      }))
+                                    }
+                                    className={`flex w-full items-center gap-3 rounded-lg border-2 p-3 text-left text-sm font-bold transition ${used ? "border-blue-500 bg-blue-50 text-blue-700" : "border-gray-200 hover:border-blue-300"}`}
+                                  >
+                                    {pair.rightImage && (
+                                      <img
+                                        src={pair.rightImage}
+                                        alt=""
+                                        className="h-12 w-12 rounded border border-gray-100 object-contain"
+                                      />
+                                    )}
+                                    <span>{pair.right}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  <div
+                    className={`grid gap-2 ${editingQuestionId ? "grid-cols-3" : "grid-cols-2"}`}
+                  >
+                    <button
+                      type="button"
+                      onClick={openPreview}
+                      className={`font-bold py-2 rounded transition border ${previewOpen ? "bg-white text-blue-700 border-blue-500" : "bg-white text-gray-600 border-gray-300 hover:border-blue-400 hover:text-blue-700"}`}
+                    >
+                      {previewOpen ? "미리보기 닫기" : "미리보기"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleAdd()}
+                      disabled={savingQuestion || optimizingImage}
+                      className="bg-blue-600 text-white font-bold py-2 rounded hover:bg-blue-700 transition disabled:bg-blue-300"
+                    >
+                      {optimizingImage
+                        ? "이미지 줄이는 중..."
+                        : savingQuestion
+                          ? "저장 중..."
+                          : editingQuestionId
+                            ? "수정 저장"
+                            : "등록"}
+                    </button>
+                    {editingQuestionId && (
+                      <button
+                        type="button"
+                        onClick={closeComposer}
+                        className="bg-gray-100 text-gray-700 font-bold py-2 rounded hover:bg-gray-200 transition"
+                      >
+                        취소
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {savingQuestion && (
+          <LoadingOverlay
+            message={
+              editingQuestionId
+                ? "문제를 저장하는 중입니다."
+                : "문제를 등록하는 중입니다."
+            }
+            detail="서버 저장이 끝날 때까지 잠시만 기다려 주세요."
+          />
+        )}
+      </div>
+    </div>
+  );
 };
 
 export default QuizEditor;

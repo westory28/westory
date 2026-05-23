@@ -1,897 +1,1081 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from "react";
 import {
-    addDoc,
-    collection,
-    deleteDoc,
-    doc,
-    getDoc,
-    getDocs,
-    onSnapshot,
-    query,
-    serverTimestamp,
-    setDoc,
-    updateDoc,
-    where,
-    writeBatch,
-} from 'firebase/firestore';
-import { useAuth } from '../../contexts/AuthContext';
-import { db } from '../../lib/firebase';
-import WordCloudView from '../../components/common/WordCloudView';
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  onSnapshot,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where,
+  writeBatch,
+} from "firebase/firestore";
+import { useAuth } from "../../contexts/AuthContext";
+import { db } from "../../lib/firebase";
+import WordCloudView from "../../components/common/WordCloudView";
 import {
-    buildThinkCloudResponsesCollectionPath,
-    buildThinkCloudSessionCollectionPath,
-    buildThinkCloudStateDocPath,
-    DEFAULT_THINK_CLOUD_OPTIONS,
-    formatClassLabel,
-    formatGradeLabel,
-    normalizeThinkCloudOptions,
-    type ThinkCloudOptions,
-    type ThinkCloudResponse,
-    type ThinkCloudSession,
-} from '../../lib/thinkCloud';
-import { canWriteLessonManagement } from '../../lib/permissions';
+  buildThinkCloudResponsesCollectionPath,
+  buildThinkCloudSessionCollectionPath,
+  buildThinkCloudStateDocPath,
+  DEFAULT_THINK_CLOUD_OPTIONS,
+  formatClassLabel,
+  formatGradeLabel,
+  normalizeThinkCloudOptions,
+  type ThinkCloudOptions,
+  type ThinkCloudResponse,
+  type ThinkCloudSession,
+} from "../../lib/thinkCloud";
+import { canWriteLessonManagement } from "../../lib/permissions";
 
 type SessionWithId = ThinkCloudSession & { id: string };
 type SchoolOption = { value: string; label: string };
 type StudentRosterItem = {
-    uid: string;
-    name: string;
-    number: string;
+  uid: string;
+  name: string;
+  number: string;
 };
 
 const defaultGradeOptions: SchoolOption[] = [
-    { value: '1', label: '1학년' },
-    { value: '2', label: '2학년' },
-    { value: '3', label: '3학년' },
+  { value: "1", label: "1학년" },
+  { value: "2", label: "2학년" },
+  { value: "3", label: "3학년" },
 ];
 
-const defaultClassOptions: SchoolOption[] = Array.from({ length: 12 }, (_, i) => ({
+const defaultClassOptions: SchoolOption[] = Array.from(
+  { length: 12 },
+  (_, i) => ({
     value: String(i + 1),
     label: `${i + 1}반`,
-}));
+  }),
+);
 
 const ManageThinkCloud: React.FC = () => {
-    const { config, currentUser, userData } = useAuth();
-    const [activeSessionId, setActiveSessionId] = useState('');
-    const [sessions, setSessions] = useState<SessionWithId[]>([]);
-    const [selectedSessionId, setSelectedSessionId] = useState('');
-    const [responses, setResponses] = useState<Array<ThinkCloudResponse & { id: string }>>([]);
-    const [loadingAction, setLoadingAction] = useState(false);
-    const [message, setMessage] = useState('');
-    const [isCreateMode, setIsCreateMode] = useState(false);
-    const [cloudModalOpen, setCloudModalOpen] = useState(false);
-    const [classStudents, setClassStudents] = useState<StudentRosterItem[]>([]);
-    const [gradeOptions, setGradeOptions] = useState<SchoolOption[]>(defaultGradeOptions);
-    const [classOptions, setClassOptions] = useState<SchoolOption[]>(defaultClassOptions);
-    const [targetGrade, setTargetGrade] = useState(defaultGradeOptions[0].value);
-    const [targetClass, setTargetClass] = useState(defaultClassOptions[0].value);
-    const [filterGrade, setFilterGrade] = useState('all');
-    const [filterClass, setFilterClass] = useState('all');
+  const { config, currentUser, userData } = useAuth();
+  const [activeSessionId, setActiveSessionId] = useState("");
+  const [sessions, setSessions] = useState<SessionWithId[]>([]);
+  const [selectedSessionId, setSelectedSessionId] = useState("");
+  const [responses, setResponses] = useState<
+    Array<ThinkCloudResponse & { id: string }>
+  >([]);
+  const [loadingAction, setLoadingAction] = useState(false);
+  const [message, setMessage] = useState("");
+  const [isCreateMode, setIsCreateMode] = useState(false);
+  const [cloudModalOpen, setCloudModalOpen] = useState(false);
+  const [classStudents, setClassStudents] = useState<StudentRosterItem[]>([]);
+  const [gradeOptions, setGradeOptions] =
+    useState<SchoolOption[]>(defaultGradeOptions);
+  const [classOptions, setClassOptions] =
+    useState<SchoolOption[]>(defaultClassOptions);
+  const [targetGrade, setTargetGrade] = useState(defaultGradeOptions[0].value);
+  const [targetClass, setTargetClass] = useState(defaultClassOptions[0].value);
+  const [filterGrade, setFilterGrade] = useState("all");
+  const [filterClass, setFilterClass] = useState("all");
 
-    const [title, setTitle] = useState('');
-    const [description, setDescription] = useState('');
-    const [options, setOptions] = useState<ThinkCloudOptions>(DEFAULT_THINK_CLOUD_OPTIONS);
-    const canEdit = canWriteLessonManagement(userData, currentUser?.email || '');
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [options, setOptions] = useState<ThinkCloudOptions>(
+    DEFAULT_THINK_CLOUD_OPTIONS,
+  );
+  const canEdit = canWriteLessonManagement(userData, currentUser?.email || "");
 
-    const selectedSession = useMemo(
-        () => sessions.find((session) => session.id === selectedSessionId) || null,
-        [sessions, selectedSessionId],
+  const selectedSession = useMemo(
+    () => sessions.find((session) => session.id === selectedSessionId) || null,
+    [sessions, selectedSessionId],
+  );
+
+  const filteredSessions = useMemo(
+    () =>
+      sessions.filter((session) => {
+        if (filterGrade !== "all" && session.targetGrade !== filterGrade)
+          return false;
+        if (filterClass !== "all" && session.targetClass !== filterClass)
+          return false;
+        return true;
+      }),
+    [sessions, filterGrade, filterClass],
+  );
+
+  useEffect(() => {
+    const stateRef = doc(db, buildThinkCloudStateDocPath(config));
+    const unsubscribe = onSnapshot(stateRef, (snap) => {
+      if (!snap.exists()) {
+        setActiveSessionId("");
+        return;
+      }
+      setActiveSessionId(String(snap.data().activeSessionId || "").trim());
+    });
+    return () => unsubscribe();
+  }, [config]);
+
+  useEffect(() => {
+    const sessionsRef = collection(
+      db,
+      buildThinkCloudSessionCollectionPath(config),
     );
+    const unsubscribe = onSnapshot(sessionsRef, (snap) => {
+      const loaded = snap.docs.map((item) => {
+        const raw = item.data() as ThinkCloudSession;
+        return {
+          ...raw,
+          id: item.id,
+          options: normalizeThinkCloudOptions(raw.options),
+        };
+      });
+      loaded.sort((a, b) => {
+        const ta = Number(
+          (a.createdAt as { seconds?: number } | undefined)?.seconds || 0,
+        );
+        const tb = Number(
+          (b.createdAt as { seconds?: number } | undefined)?.seconds || 0,
+        );
+        return tb - ta;
+      });
+      setSessions(loaded);
+      if (!selectedSessionId && loaded.length > 0) {
+        setSelectedSessionId(loaded[0].id);
+      }
+      if (
+        selectedSessionId &&
+        !loaded.some((item) => item.id === selectedSessionId)
+      ) {
+        setSelectedSessionId(loaded.length > 0 ? loaded[0].id : "");
+      }
+    });
+    return () => unsubscribe();
+  }, [config, selectedSessionId]);
 
-    const filteredSessions = useMemo(
-        () => sessions.filter((session) => {
-            if (filterGrade !== 'all' && session.targetGrade !== filterGrade) return false;
-            if (filterClass !== 'all' && session.targetClass !== filterClass) return false;
-            return true;
-        }),
-        [sessions, filterGrade, filterClass],
+  useEffect(() => {
+    if (!selectedSessionId) {
+      setResponses([]);
+      return;
+    }
+    const responsesRef = collection(
+      db,
+      buildThinkCloudResponsesCollectionPath(config, selectedSessionId),
     );
-
-    useEffect(() => {
-        const stateRef = doc(db, buildThinkCloudStateDocPath(config));
-        const unsubscribe = onSnapshot(stateRef, (snap) => {
-            if (!snap.exists()) {
-                setActiveSessionId('');
-                return;
-            }
-            setActiveSessionId(String(snap.data().activeSessionId || '').trim());
-        });
-        return () => unsubscribe();
-    }, [config]);
-
-    useEffect(() => {
-        const sessionsRef = collection(db, buildThinkCloudSessionCollectionPath(config));
-        const unsubscribe = onSnapshot(sessionsRef, (snap) => {
-            const loaded = snap.docs.map((item) => {
-                const raw = item.data() as ThinkCloudSession;
-                return {
-                    ...raw,
-                    id: item.id,
-                    options: normalizeThinkCloudOptions(raw.options),
-                };
-            });
-            loaded.sort((a, b) => {
-                const ta = Number((a.createdAt as { seconds?: number } | undefined)?.seconds || 0);
-                const tb = Number((b.createdAt as { seconds?: number } | undefined)?.seconds || 0);
-                return tb - ta;
-            });
-            setSessions(loaded);
-            if (!selectedSessionId && loaded.length > 0) {
-                setSelectedSessionId(loaded[0].id);
-            }
-            if (selectedSessionId && !loaded.some((item) => item.id === selectedSessionId)) {
-                setSelectedSessionId(loaded.length > 0 ? loaded[0].id : '');
-            }
-        });
-        return () => unsubscribe();
-    }, [config, selectedSessionId]);
-
-    useEffect(() => {
-        if (!selectedSessionId) {
-            setResponses([]);
-            return;
-        }
-        const responsesRef = collection(db, buildThinkCloudResponsesCollectionPath(config, selectedSessionId));
-        const unsubscribe = onSnapshot(responsesRef, (snap) => {
-            const loaded = snap.docs.map((item) => ({
-                id: item.id,
-                ...(item.data() as ThinkCloudResponse),
-            }));
-            loaded.sort((a, b) => {
-                const ta = Number((a.createdAt as { seconds?: number } | undefined)?.seconds || 0);
-                const tb = Number((b.createdAt as { seconds?: number } | undefined)?.seconds || 0);
-                return tb - ta;
-            });
-            setResponses(loaded);
-        });
-        return () => unsubscribe();
-    }, [config, selectedSessionId]);
-
-    useEffect(() => {
-        if (!selectedSession || !selectedSession.targetGrade || !selectedSession.targetClass) {
-            setClassStudents([]);
-            return;
-        }
-
-        const q = query(
-            collection(db, 'users'),
-            where('grade', '==', selectedSession.targetGrade),
-            where('class', '==', selectedSession.targetClass),
+    const unsubscribe = onSnapshot(responsesRef, (snap) => {
+      const loaded = snap.docs.map((item) => ({
+        id: item.id,
+        ...(item.data() as ThinkCloudResponse),
+      }));
+      loaded.sort((a, b) => {
+        const ta = Number(
+          (a.createdAt as { seconds?: number } | undefined)?.seconds || 0,
         );
-        const unsubscribe = onSnapshot(q, (snap) => {
-            const loaded: StudentRosterItem[] = [];
-            snap.forEach((item) => {
-                const data = item.data() as {
-                    role?: string;
-                    name?: string;
-                    number?: string;
-                    uid?: string;
-                };
-                if (data.role === 'teacher') return;
-                const uid = String(data.uid || item.id).trim();
-                if (!uid) return;
-                loaded.push({
-                    uid,
-                    name: String(data.name || '').trim() || '이름없음',
-                    number: String(data.number || '').trim(),
-                });
-            });
-            loaded.sort((a, b) => {
-                const an = Number.parseInt(a.number, 10);
-                const bn = Number.parseInt(b.number, 10);
-                const aValid = Number.isFinite(an) && an > 0;
-                const bValid = Number.isFinite(bn) && bn > 0;
-                if (aValid && bValid) return an - bn;
-                if (aValid) return -1;
-                if (bValid) return 1;
-                return a.name.localeCompare(b.name);
-            });
-            setClassStudents(loaded);
-        });
-
-        return () => unsubscribe();
-    }, [selectedSession]);
-
-    const cloudEntries = useMemo(() => {
-        const buckets = new Map<string, { count: number; submitters: Set<string> }>();
-        for (const item of responses) {
-            const key = item.textNormalized || '';
-            if (!key) continue;
-            const current = buckets.get(key) || { count: 0, submitters: new Set<string>() };
-            current.count += 1;
-            const name = String(item.displayName || '').trim();
-            if (name) current.submitters.add(name);
-            buckets.set(key, current);
-        }
-        return Array.from(buckets.entries())
-            .map(([text, info]) => ({
-                text,
-                count: info.count,
-                submitters: Array.from(info.submitters),
-            }))
-            .sort((a, b) => b.count - a.count || a.text.localeCompare(b.text))
-            .slice(0, 50);
-    }, [responses]);
-
-    const pendingStudents = useMemo(() => {
-        const submitted = new Set(
-            responses
-                .map((item) => String(item.uid || '').trim())
-                .filter((uid) => uid.length > 0),
+        const tb = Number(
+          (b.createdAt as { seconds?: number } | undefined)?.seconds || 0,
         );
-        return classStudents.filter((student) => !submitted.has(student.uid));
-    }, [classStudents, responses]);
+        return tb - ta;
+      });
+      setResponses(loaded);
+    });
+    return () => unsubscribe();
+  }, [config, selectedSessionId]);
 
-    const resetCreateForm = () => {
-        setTitle('');
-        setDescription('');
-        setOptions(DEFAULT_THINK_CLOUD_OPTIONS);
-        setTargetGrade(gradeOptions[0]?.value || '1');
-        setTargetClass(classOptions[0]?.value || '1');
-    };
+  useEffect(() => {
+    if (
+      !selectedSession ||
+      !selectedSession.targetGrade ||
+      !selectedSession.targetClass
+    ) {
+      setClassStudents([]);
+      return;
+    }
 
-    useEffect(() => {
-        const loadSchoolConfig = async () => {
-            try {
-                const schoolSnap = await getDoc(doc(db, 'site_settings', 'school_config'));
-                if (!schoolSnap.exists()) return;
-                const data = schoolSnap.data() as {
-                    grades?: Array<{ value?: string; label?: string }>;
-                    classes?: Array<{ value?: string; label?: string }>;
-                };
+    const q = query(
+      collection(db, "users"),
+      where("grade", "==", selectedSession.targetGrade),
+      where("class", "==", selectedSession.targetClass),
+    );
+    const unsubscribe = onSnapshot(q, (snap) => {
+      const loaded: StudentRosterItem[] = [];
+      snap.forEach((item) => {
+        const data = item.data() as {
+          role?: string;
+          name?: string;
+          number?: string;
+          uid?: string;
+        };
+        if (data.role === "teacher") return;
+        const uid = String(data.uid || item.id).trim();
+        if (!uid) return;
+        loaded.push({
+          uid,
+          name: String(data.name || "").trim() || "이름없음",
+          number: String(data.number || "").trim(),
+        });
+      });
+      loaded.sort((a, b) => {
+        const an = Number.parseInt(a.number, 10);
+        const bn = Number.parseInt(b.number, 10);
+        const aValid = Number.isFinite(an) && an > 0;
+        const bValid = Number.isFinite(bn) && bn > 0;
+        if (aValid && bValid) return an - bn;
+        if (aValid) return -1;
+        if (bValid) return 1;
+        return a.name.localeCompare(b.name);
+      });
+      setClassStudents(loaded);
+    });
 
-                if (Array.isArray(data.grades) && data.grades.length > 0) {
-                    const nextGrades = data.grades
-                        .map((item) => ({
-                            value: String(item.value || '').trim(),
-                            label: String(item.label || '').trim(),
-                        }))
-                        .filter((item) => item.value && item.label);
-                    if (nextGrades.length > 0) setGradeOptions(nextGrades);
-                }
+    return () => unsubscribe();
+  }, [selectedSession]);
 
-                if (Array.isArray(data.classes) && data.classes.length > 0) {
-                    const nextClasses = data.classes
-                        .map((item) => ({
-                            value: String(item.value || '').trim(),
-                            label: String(item.label || '').trim(),
-                        }))
-                        .filter((item) => item.value && item.label);
-                    if (nextClasses.length > 0) setClassOptions(nextClasses);
-                }
-            } catch (error) {
-                console.warn('Failed to load school options for think cloud:', error);
-            }
+  const cloudEntries = useMemo(() => {
+    const buckets = new Map<
+      string,
+      { count: number; submitters: Set<string> }
+    >();
+    for (const item of responses) {
+      const key = item.textNormalized || "";
+      if (!key) continue;
+      const current = buckets.get(key) || {
+        count: 0,
+        submitters: new Set<string>(),
+      };
+      current.count += 1;
+      const name = String(item.displayName || "").trim();
+      if (name) current.submitters.add(name);
+      buckets.set(key, current);
+    }
+    return Array.from(buckets.entries())
+      .map(([text, info]) => ({
+        text,
+        count: info.count,
+        submitters: Array.from(info.submitters),
+      }))
+      .sort((a, b) => b.count - a.count || a.text.localeCompare(b.text))
+      .slice(0, 50);
+  }, [responses]);
+
+  const pendingStudents = useMemo(() => {
+    const submitted = new Set(
+      responses
+        .map((item) => String(item.uid || "").trim())
+        .filter((uid) => uid.length > 0),
+    );
+    return classStudents.filter((student) => !submitted.has(student.uid));
+  }, [classStudents, responses]);
+
+  const resetCreateForm = () => {
+    setTitle("");
+    setDescription("");
+    setOptions(DEFAULT_THINK_CLOUD_OPTIONS);
+    setTargetGrade(gradeOptions[0]?.value || "1");
+    setTargetClass(classOptions[0]?.value || "1");
+  };
+
+  useEffect(() => {
+    const loadSchoolConfig = async () => {
+      try {
+        const schoolSnap = await getDoc(
+          doc(db, "site_settings", "school_config"),
+        );
+        if (!schoolSnap.exists()) return;
+        const data = schoolSnap.data() as {
+          grades?: Array<{ value?: string; label?: string }>;
+          classes?: Array<{ value?: string; label?: string }>;
         };
 
-        void loadSchoolConfig();
-    }, []);
-
-    useEffect(() => {
-        if (!gradeOptions.some((item) => item.value === targetGrade)) {
-            setTargetGrade(gradeOptions[0]?.value || '1');
+        if (Array.isArray(data.grades) && data.grades.length > 0) {
+          const nextGrades = data.grades
+            .map((item) => ({
+              value: String(item.value || "").trim(),
+              label: String(item.label || "").trim(),
+            }))
+            .filter((item) => item.value && item.label);
+          if (nextGrades.length > 0) setGradeOptions(nextGrades);
         }
-    }, [gradeOptions, targetGrade]);
 
-    useEffect(() => {
-        if (!classOptions.some((item) => item.value === targetClass)) {
-            setTargetClass(classOptions[0]?.value || '1');
+        if (Array.isArray(data.classes) && data.classes.length > 0) {
+          const nextClasses = data.classes
+            .map((item) => ({
+              value: String(item.value || "").trim(),
+              label: String(item.label || "").trim(),
+            }))
+            .filter((item) => item.value && item.label);
+          if (nextClasses.length > 0) setClassOptions(nextClasses);
         }
-    }, [classOptions, targetClass]);
-
-    useEffect(() => {
-        if (filterGrade !== 'all' && !gradeOptions.some((item) => item.value === filterGrade)) {
-            setFilterGrade('all');
-        }
-    }, [filterGrade, gradeOptions]);
-
-    useEffect(() => {
-        if (filterClass !== 'all' && !classOptions.some((item) => item.value === filterClass)) {
-            setFilterClass('all');
-        }
-    }, [filterClass, classOptions]);
-
-    useEffect(() => {
-        if (isCreateMode) return;
-        if (!selectedSessionId && filteredSessions.length > 0) {
-            setSelectedSessionId(filteredSessions[0].id);
-            return;
-        }
-        if (selectedSessionId && !filteredSessions.some((session) => session.id === selectedSessionId)) {
-            setSelectedSessionId(filteredSessions[0]?.id || '');
-        }
-    }, [filteredSessions, isCreateMode, selectedSessionId]);
-
-    const selectSession = (id: string) => {
-        setIsCreateMode(false);
-        setSelectedSessionId(id);
-        setMessage('');
+      } catch (error) {
+        console.warn("Failed to load school options for think cloud:", error);
+      }
     };
 
-    const openCreateMode = () => {
-        setIsCreateMode(true);
-        setSelectedSessionId('');
-        setMessage('');
-        resetCreateForm();
-    };
+    void loadSchoolConfig();
+  }, []);
 
-    const handleStartSession = async () => {
-        if (!canEdit) return;
-        const safeTitle = title.trim();
-        if (!safeTitle) {
-            setMessage('주제를 입력해 주세요.');
-            return;
-        }
-        if (!targetGrade || !targetClass) {
-            setMessage('학년과 반을 선택해 주세요.');
-            return;
-        }
-        if (!currentUser) return;
+  useEffect(() => {
+    if (!gradeOptions.some((item) => item.value === targetGrade)) {
+      setTargetGrade(gradeOptions[0]?.value || "1");
+    }
+  }, [gradeOptions, targetGrade]);
 
-        setLoadingAction(true);
-        setMessage('');
-        try {
-            const stateRef = doc(db, buildThinkCloudStateDocPath(config));
-            const stateSnap = await getDoc(stateRef);
-            const previousSessionId = stateSnap.exists() ? String(stateSnap.data().activeSessionId || '').trim() : '';
+  useEffect(() => {
+    if (!classOptions.some((item) => item.value === targetClass)) {
+      setTargetClass(classOptions[0]?.value || "1");
+    }
+  }, [classOptions, targetClass]);
 
-            if (previousSessionId) {
-                const previousRef = doc(db, buildThinkCloudSessionCollectionPath(config), previousSessionId);
-                await updateDoc(previousRef, {
-                    status: 'closed',
-                    closedAt: serverTimestamp(),
-                });
-            }
+  useEffect(() => {
+    if (
+      filterGrade !== "all" &&
+      !gradeOptions.some((item) => item.value === filterGrade)
+    ) {
+      setFilterGrade("all");
+    }
+  }, [filterGrade, gradeOptions]);
 
-            const payload: ThinkCloudSession = {
-                title: safeTitle,
-                description: description.trim(),
-                targetGrade,
-                targetClass,
-                targetGradeLabel: gradeOptions.find((item) => item.value === targetGrade)?.label || '',
-                targetClassLabel: classOptions.find((item) => item.value === targetClass)?.label || '',
-                status: 'active',
-                options,
-                createdBy: currentUser.uid,
-                createdByName: (userData?.name || '교사').trim() || '교사',
-                createdAt: serverTimestamp(),
-                activatedAt: serverTimestamp(),
-            };
+  useEffect(() => {
+    if (
+      filterClass !== "all" &&
+      !classOptions.some((item) => item.value === filterClass)
+    ) {
+      setFilterClass("all");
+    }
+  }, [filterClass, classOptions]);
 
-            const added = await addDoc(collection(db, buildThinkCloudSessionCollectionPath(config)), payload);
-            await setDoc(stateRef, {
-                activeSessionId: added.id,
-                updatedAt: serverTimestamp(),
-            });
-            setMessage('새 생각모아 세션을 시작했습니다.');
-            setIsCreateMode(false);
-            setSelectedSessionId(added.id);
-        } catch (error) {
-            console.error('Failed to start think cloud session:', error);
-            setMessage('세션 시작에 실패했습니다.');
-        } finally {
-            setLoadingAction(false);
-        }
-    };
+  useEffect(() => {
+    if (isCreateMode) return;
+    if (!selectedSessionId && filteredSessions.length > 0) {
+      setSelectedSessionId(filteredSessions[0].id);
+      return;
+    }
+    if (
+      selectedSessionId &&
+      !filteredSessions.some((session) => session.id === selectedSessionId)
+    ) {
+      setSelectedSessionId(filteredSessions[0]?.id || "");
+    }
+  }, [filteredSessions, isCreateMode, selectedSessionId]);
 
-    const handleCloseSession = async () => {
-        if (!canEdit) return;
-        if (!selectedSessionId) return;
-        setLoadingAction(true);
-        setMessage('');
-        try {
-            const sessionRef = doc(db, buildThinkCloudSessionCollectionPath(config), selectedSessionId);
-            await updateDoc(sessionRef, {
-                status: 'closed',
-                closedAt: serverTimestamp(),
-            });
+  const selectSession = (id: string) => {
+    setIsCreateMode(false);
+    setSelectedSessionId(id);
+    setMessage("");
+  };
 
-            if (selectedSessionId === activeSessionId) {
-                await setDoc(doc(db, buildThinkCloudStateDocPath(config)), {
-                    activeSessionId: '',
-                    updatedAt: serverTimestamp(),
-                });
-            }
-            setMessage('선택한 세션을 종료했습니다.');
-        } catch (error) {
-            console.error('Failed to close think cloud session:', error);
-            setMessage('세션 종료에 실패했습니다.');
-        } finally {
-            setLoadingAction(false);
-        }
-    };
+  const openCreateMode = () => {
+    setIsCreateMode(true);
+    setSelectedSessionId("");
+    setMessage("");
+    resetCreateForm();
+  };
 
-    const handlePauseSession = async () => {
-        if (!canEdit) return;
-        if (!selectedSessionId) return;
-        setLoadingAction(true);
-        setMessage('');
-        try {
-            const sessionRef = doc(db, buildThinkCloudSessionCollectionPath(config), selectedSessionId);
-            await updateDoc(sessionRef, { status: 'paused' });
-            if (selectedSessionId === activeSessionId) {
-                await setDoc(doc(db, buildThinkCloudStateDocPath(config)), {
-                    activeSessionId: '',
-                    updatedAt: serverTimestamp(),
-                });
-            }
-            setMessage('선택한 세션을 일시 정지했습니다.');
-        } catch (error) {
-            console.error('Failed to pause think cloud session:', error);
-            setMessage('일시 정지에 실패했습니다.');
-        } finally {
-            setLoadingAction(false);
-        }
-    };
+  const handleStartSession = async () => {
+    if (!canEdit) return;
+    const safeTitle = title.trim();
+    if (!safeTitle) {
+      setMessage("주제를 입력해 주세요.");
+      return;
+    }
+    if (!targetGrade || !targetClass) {
+      setMessage("학년과 반을 선택해 주세요.");
+      return;
+    }
+    if (!currentUser) return;
 
-    const handleResumeSession = async () => {
-        if (!canEdit) return;
-        if (!selectedSessionId) return;
-        setLoadingAction(true);
-        setMessage('');
-        try {
-            if (activeSessionId && activeSessionId !== selectedSessionId) {
-                const previousRef = doc(db, buildThinkCloudSessionCollectionPath(config), activeSessionId);
-                await updateDoc(previousRef, { status: 'paused' });
-            }
+    setLoadingAction(true);
+    setMessage("");
+    try {
+      const stateRef = doc(db, buildThinkCloudStateDocPath(config));
+      const stateSnap = await getDoc(stateRef);
+      const previousSessionId = stateSnap.exists()
+        ? String(stateSnap.data().activeSessionId || "").trim()
+        : "";
 
-            const sessionRef = doc(db, buildThinkCloudSessionCollectionPath(config), selectedSessionId);
-            await updateDoc(sessionRef, {
-                status: 'active',
-                activatedAt: serverTimestamp(),
-            });
-            await setDoc(doc(db, buildThinkCloudStateDocPath(config)), {
-                activeSessionId: selectedSessionId,
-                updatedAt: serverTimestamp(),
-            });
-            setMessage('선택한 세션을 재개했습니다.');
-        } catch (error) {
-            console.error('Failed to resume think cloud session:', error);
-            setMessage('재개에 실패했습니다.');
-        } finally {
-            setLoadingAction(false);
-        }
-    };
-
-    const handleDeleteSession = async () => {
-        if (!canEdit) return;
-        if (!selectedSessionId) return;
-        const confirmed = window.confirm('선택한 주제를 삭제할까요? 해당 주제의 응답도 함께 삭제됩니다.');
-        if (!confirmed) return;
-
-        setLoadingAction(true);
-        setMessage('');
-        try {
-            const responsesRef = collection(db, buildThinkCloudResponsesCollectionPath(config, selectedSessionId));
-            const responsesSnap = await getDocs(responsesRef);
-            if (!responsesSnap.empty) {
-                const batch = writeBatch(db);
-                responsesSnap.docs.forEach((item) => {
-                    batch.delete(item.ref);
-                });
-                await batch.commit();
-            }
-
-            const sessionRef = doc(db, buildThinkCloudSessionCollectionPath(config), selectedSessionId);
-            await deleteDoc(sessionRef);
-
-            if (selectedSessionId === activeSessionId) {
-                await setDoc(doc(db, buildThinkCloudStateDocPath(config)), {
-                    activeSessionId: '',
-                    updatedAt: serverTimestamp(),
-                });
-            }
-
-            setSelectedSessionId('');
-            setMessage('선택한 주제를 삭제했습니다.');
-        } catch (error) {
-            console.error('Failed to delete think cloud session:', error);
-            setMessage('삭제에 실패했습니다.');
-        } finally {
-            setLoadingAction(false);
-        }
-    };
-
-    const renderCreatePanel = () => (
-        <section className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-            <div className="border-b border-gray-100 pb-4 mb-6">
-                <h2 className="text-lg font-extrabold text-gray-900">새 생각모아 주제</h2>
-                <p className="text-sm text-gray-500 mt-1">주제와 옵션을 설정한 뒤 세션을 시작하세요.</p>
-            </div>
-
-                <div className="space-y-6">
-                <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">주제</label>
-                    <input
-                        value={title}
-                        onChange={(e) => setTitle(e.target.value)}
-                        placeholder="예: 조선 후기 사회 변화를 한 단어로 표현해 보세요"
-                        className="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:ring-2 focus:ring-blue-500 font-bold text-gray-800 outline-none"
-                    />
-                </div>
-
-                <div>
-                    <label className="block text-sm font-bold text-gray-700 mb-2">설명</label>
-                    <textarea
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                        rows={3}
-                        placeholder="학생 안내 문구를 입력해 주세요."
-                        className="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:ring-2 focus:ring-blue-500 font-bold text-gray-800 outline-none resize-y"
-                    />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                        <span className="font-bold text-gray-700">학년</span>
-                        <select
-                            value={targetGrade}
-                            onChange={(e) => setTargetGrade(e.target.value)}
-                            className="border border-gray-300 rounded-lg px-3 py-1.5 font-bold bg-white"
-                        >
-                            {gradeOptions.map((grade) => (
-                                <option key={grade.value} value={grade.value}>{grade.label}</option>
-                            ))}
-                        </select>
-                    </label>
-
-                    <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                        <span className="font-bold text-gray-700">반</span>
-                        <select
-                            value={targetClass}
-                            onChange={(e) => setTargetClass(e.target.value)}
-                            className="border border-gray-300 rounded-lg px-3 py-1.5 font-bold bg-white"
-                        >
-                            {classOptions.map((cls) => (
-                                <option key={cls.value} value={cls.value}>{cls.label}</option>
-                            ))}
-                        </select>
-                    </label>
-
-                    <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                        <span className="font-bold text-gray-700">중복 단어 제출 허용</span>
-                        <input
-                            type="checkbox"
-                            checked={options.allowDuplicateWord}
-                            onChange={(e) => setOptions((prev) => ({ ...prev, allowDuplicateWord: e.target.checked }))}
-                            className="w-5 h-5"
-                        />
-                    </label>
-
-                    <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                        <span className="font-bold text-gray-700">동일 학생 중복 제출 허용</span>
-                        <input
-                            type="checkbox"
-                            checked={options.allowDuplicateByStudent}
-                            onChange={(e) => setOptions((prev) => ({ ...prev, allowDuplicateByStudent: e.target.checked }))}
-                            className="w-5 h-5"
-                        />
-                    </label>
-
-                    <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                        <span className="font-bold text-gray-700">익명 표시</span>
-                        <input
-                            type="checkbox"
-                            checked={options.anonymous}
-                            onChange={(e) => setOptions((prev) => ({ ...prev, anonymous: e.target.checked }))}
-                            className="w-5 h-5"
-                        />
-                    </label>
-
-                    <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                        <span className="font-bold text-gray-700">금칙어 필터</span>
-                        <input
-                            type="checkbox"
-                            checked={options.profanityFilter}
-                            onChange={(e) => setOptions((prev) => ({ ...prev, profanityFilter: e.target.checked }))}
-                            className="w-5 h-5"
-                        />
-                    </label>
-
-                    <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
-                        <span className="font-bold text-gray-700">입력 형식</span>
-                        <select
-                            value={options.inputMode}
-                            onChange={(e) => setOptions((prev) => ({ ...prev, inputMode: e.target.value as ThinkCloudOptions['inputMode'] }))}
-                            className="border border-gray-300 rounded-lg px-3 py-1.5 font-bold bg-white"
-                        >
-                            <option value="word">단어 1개</option>
-                            <option value="sentence">짧은 문장</option>
-                        </select>
-                    </label>
-
-                    <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 md:col-span-2">
-                        <span className="font-bold text-gray-700">최대 입력 길이</span>
-                        <input
-                            type="number"
-                            min={5}
-                            max={100}
-                            value={options.maxLength}
-                            onChange={(e) => {
-                                const parsed = Number.parseInt(e.target.value, 10);
-                                const next = Number.isFinite(parsed) ? Math.max(5, Math.min(100, parsed)) : 20;
-                                setOptions((prev) => ({ ...prev, maxLength: next }));
-                            }}
-                            className="w-24 border border-gray-300 rounded-lg px-3 py-1.5 font-bold text-right bg-white"
-                        />
-                    </label>
-                </div>
-
-                <div className="text-right">
-                    <button
-                        onClick={() => void handleStartSession()}
-                        disabled={loadingAction}
-                        className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition disabled:opacity-60"
-                    >
-                        {loadingAction ? '처리 중...' : '세션 시작'}
-                    </button>
-                </div>
-            </div>
-        </section>
-    );
-
-    const renderDetailPanel = () => {
-        if (!selectedSession) {
-            return (
-                <section className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-                    <p className="text-gray-500 font-bold">좌측에서 주제를 선택하거나 새 주제를 추가해 주세요.</p>
-                </section>
-            );
-        }
-
-        const isActive = selectedSession.id === activeSessionId && selectedSession.status === 'active';
-        const isPaused = selectedSession.status === 'paused';
-
-        return (
-            <section className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-                <div className="border-b border-gray-100 pb-4 mb-6 flex items-start justify-between gap-3">
-                    <div>
-                        <h2 className="text-lg font-extrabold text-gray-900">{selectedSession.title}</h2>
-                        <p className="text-sm text-gray-500 mt-1">{selectedSession.description || '설명 없음'}</p>
-                    </div>
-                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : isPaused ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-gray-50 text-gray-600 border-gray-200'}`}>
-                        {isActive ? '진행 중' : isPaused ? '일시 정지' : '종료됨'}
-                    </span>
-                </div>
-
-                <div className="flex flex-wrap gap-2 mb-4 text-xs font-bold">
-                    <span className="px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
-                        대상 {formatGradeLabel(selectedSession.targetGrade, selectedSession.targetGradeLabel)} {formatClassLabel(selectedSession.targetClass, selectedSession.targetClassLabel)}
-                    </span>
-                    <span className="px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                        {selectedSession.options.inputMode === 'word' ? '단어 1개 입력' : '짧은 문장 입력'}
-                    </span>
-                    <span className="px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
-                        최대 {selectedSession.options.maxLength}자
-                    </span>
-                    <span className="px-2 py-1 rounded-full bg-gray-50 text-gray-700 border border-gray-200">
-                        {selectedSession.options.allowDuplicateWord ? '중복 단어 제출 허용' : '중복 단어 제출 제한'}
-                    </span>
-                    <span className="px-2 py-1 rounded-full bg-gray-50 text-gray-700 border border-gray-200">
-                        {selectedSession.options.allowDuplicateByStudent ? '동일 학생 중복 제출 허용' : '동일 학생 중복 제출 제한'}
-                    </span>
-                    <span className="px-2 py-1 rounded-full bg-gray-50 text-gray-700 border border-gray-200">
-                        {selectedSession.options.anonymous ? '익명 표시' : '이름 표시'}
-                    </span>
-                </div>
-
-                <div className="mb-3 flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
-                    <h3 className="font-bold text-gray-800">{'\uC2E4\uC2DC\uAC04 \uC9D1\uACC4'}</h3>
-                    <div className="flex flex-1 flex-col gap-2 lg:items-end">
-                        <span className="text-sm font-bold text-gray-500">{'\uC751\uB2F5 '}{responses.length}{'\uAC1C'}</span>
-                        {pendingStudents.length > 0 ? (
-                            <div className="flex flex-wrap gap-2 lg:justify-end">
-                                {pendingStudents.map((student) => (
-                                    <span
-                                        key={student.uid}
-                                        className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700"
-                                        title={student.name}
-                                    >
-                                        {student.name}
-                                    </span>
-                                ))}
-                            </div>
-                        ) : (
-                            <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
-                                {'\uC804\uC6D0 \uC81C\uCD9C \uC644\uB8CC'}
-                            </span>
-                        )}
-                    </div>
-                </div>
-
-                {cloudEntries.length === 0 ? (
-                    <p className="text-sm text-gray-500 font-bold">아직 제출된 응답이 없습니다.</p>
-                ) : (
-                    <button
-                        type="button"
-                        onClick={() => setCloudModalOpen(true)}
-                        className="w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-2xl"
-                        title="클릭해서 크게 보기"
-                    >
-                        <WordCloudView entries={cloudEntries} showSubmitters={!selectedSession.options.anonymous} />
-                    </button>
-                )}
-
-                <div className="mt-6 flex flex-wrap justify-end gap-2">
-                    <button
-                        onClick={() => void handlePauseSession()}
-                        disabled={!isActive || loadingAction}
-                        className="bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 px-5 rounded-lg disabled:opacity-50"
-                    >
-                        {loadingAction ? '처리 중...' : '일시 정지'}
-                    </button>
-                    <button
-                        onClick={() => void handleResumeSession()}
-                        disabled={isActive || selectedSession.status === 'closed' || loadingAction}
-                        className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-5 rounded-lg disabled:opacity-50"
-                    >
-                        {loadingAction ? '처리 중...' : '재개'}
-                    </button>
-                    <button
-                        onClick={() => void handleCloseSession()}
-                        disabled={!isActive || loadingAction}
-                        className="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2.5 px-5 rounded-lg disabled:opacity-50"
-                    >
-                        {loadingAction ? '처리 중...' : '이 세션 종료'}
-                    </button>
-                    <button
-                        onClick={() => void handleDeleteSession()}
-                        disabled={loadingAction}
-                        className="bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-5 rounded-lg disabled:opacity-50"
-                    >
-                        {loadingAction ? '처리 중...' : '주제 삭제'}
-                    </button>
-                </div>
-
-            </section>
+      if (previousSessionId) {
+        const previousRef = doc(
+          db,
+          buildThinkCloudSessionCollectionPath(config),
+          previousSessionId,
         );
-    };
+        await updateDoc(previousRef, {
+          status: "closed",
+          closedAt: serverTimestamp(),
+        });
+      }
+
+      const payload: ThinkCloudSession = {
+        title: safeTitle,
+        description: description.trim(),
+        targetGrade,
+        targetClass,
+        targetGradeLabel:
+          gradeOptions.find((item) => item.value === targetGrade)?.label || "",
+        targetClassLabel:
+          classOptions.find((item) => item.value === targetClass)?.label || "",
+        status: "active",
+        options,
+        createdBy: currentUser.uid,
+        createdByName: (userData?.name || "교사").trim() || "교사",
+        createdAt: serverTimestamp(),
+        activatedAt: serverTimestamp(),
+      };
+
+      const added = await addDoc(
+        collection(db, buildThinkCloudSessionCollectionPath(config)),
+        payload,
+      );
+      await setDoc(stateRef, {
+        activeSessionId: added.id,
+        updatedAt: serverTimestamp(),
+      });
+      setMessage("새 생각모아 세션을 시작했습니다.");
+      setIsCreateMode(false);
+      setSelectedSessionId(added.id);
+    } catch (error) {
+      console.error("Failed to start think cloud session:", error);
+      setMessage("세션 시작에 실패했습니다.");
+    } finally {
+      setLoadingAction(false);
+    }
+  };
+
+  const handleCloseSession = async () => {
+    if (!canEdit) return;
+    if (!selectedSessionId) return;
+    setLoadingAction(true);
+    setMessage("");
+    try {
+      const sessionRef = doc(
+        db,
+        buildThinkCloudSessionCollectionPath(config),
+        selectedSessionId,
+      );
+      await updateDoc(sessionRef, {
+        status: "closed",
+        closedAt: serverTimestamp(),
+      });
+
+      if (selectedSessionId === activeSessionId) {
+        await setDoc(doc(db, buildThinkCloudStateDocPath(config)), {
+          activeSessionId: "",
+          updatedAt: serverTimestamp(),
+        });
+      }
+      setMessage("선택한 세션을 종료했습니다.");
+    } catch (error) {
+      console.error("Failed to close think cloud session:", error);
+      setMessage("세션 종료에 실패했습니다.");
+    } finally {
+      setLoadingAction(false);
+    }
+  };
+
+  const handlePauseSession = async () => {
+    if (!canEdit) return;
+    if (!selectedSessionId) return;
+    setLoadingAction(true);
+    setMessage("");
+    try {
+      const sessionRef = doc(
+        db,
+        buildThinkCloudSessionCollectionPath(config),
+        selectedSessionId,
+      );
+      await updateDoc(sessionRef, { status: "paused" });
+      if (selectedSessionId === activeSessionId) {
+        await setDoc(doc(db, buildThinkCloudStateDocPath(config)), {
+          activeSessionId: "",
+          updatedAt: serverTimestamp(),
+        });
+      }
+      setMessage("선택한 세션을 일시 정지했습니다.");
+    } catch (error) {
+      console.error("Failed to pause think cloud session:", error);
+      setMessage("일시 정지에 실패했습니다.");
+    } finally {
+      setLoadingAction(false);
+    }
+  };
+
+  const handleResumeSession = async () => {
+    if (!canEdit) return;
+    if (!selectedSessionId) return;
+    setLoadingAction(true);
+    setMessage("");
+    try {
+      if (activeSessionId && activeSessionId !== selectedSessionId) {
+        const previousRef = doc(
+          db,
+          buildThinkCloudSessionCollectionPath(config),
+          activeSessionId,
+        );
+        await updateDoc(previousRef, { status: "paused" });
+      }
+
+      const sessionRef = doc(
+        db,
+        buildThinkCloudSessionCollectionPath(config),
+        selectedSessionId,
+      );
+      await updateDoc(sessionRef, {
+        status: "active",
+        activatedAt: serverTimestamp(),
+      });
+      await setDoc(doc(db, buildThinkCloudStateDocPath(config)), {
+        activeSessionId: selectedSessionId,
+        updatedAt: serverTimestamp(),
+      });
+      setMessage("선택한 세션을 재개했습니다.");
+    } catch (error) {
+      console.error("Failed to resume think cloud session:", error);
+      setMessage("재개에 실패했습니다.");
+    } finally {
+      setLoadingAction(false);
+    }
+  };
+
+  const handleDeleteSession = async () => {
+    if (!canEdit) return;
+    if (!selectedSessionId) return;
+    const confirmed = window.confirm(
+      "선택한 주제를 삭제할까요? 해당 주제의 응답도 함께 삭제됩니다.",
+    );
+    if (!confirmed) return;
+
+    setLoadingAction(true);
+    setMessage("");
+    try {
+      const responsesRef = collection(
+        db,
+        buildThinkCloudResponsesCollectionPath(config, selectedSessionId),
+      );
+      const responsesSnap = await getDocs(responsesRef);
+      if (!responsesSnap.empty) {
+        const batch = writeBatch(db);
+        responsesSnap.docs.forEach((item) => {
+          batch.delete(item.ref);
+        });
+        await batch.commit();
+      }
+
+      const sessionRef = doc(
+        db,
+        buildThinkCloudSessionCollectionPath(config),
+        selectedSessionId,
+      );
+      await deleteDoc(sessionRef);
+
+      if (selectedSessionId === activeSessionId) {
+        await setDoc(doc(db, buildThinkCloudStateDocPath(config)), {
+          activeSessionId: "",
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      setSelectedSessionId("");
+      setMessage("선택한 주제를 삭제했습니다.");
+    } catch (error) {
+      console.error("Failed to delete think cloud session:", error);
+      setMessage("삭제에 실패했습니다.");
+    } finally {
+      setLoadingAction(false);
+    }
+  };
+
+  const renderCreatePanel = () => (
+    <section className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+      <div className="border-b border-gray-100 pb-4 mb-6">
+        <h2 className="text-lg font-extrabold text-gray-900">
+          새 생각모아 주제
+        </h2>
+        <p className="text-sm text-gray-500 mt-1">
+          주제와 옵션을 설정한 뒤 세션을 시작하세요.
+        </p>
+      </div>
+
+      <div className="space-y-6">
+        <div>
+          <label className="block text-sm font-bold text-gray-700 mb-2">
+            주제
+          </label>
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="예: 조선 후기 사회 변화를 한 단어로 표현해 보세요"
+            className="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:ring-2 focus:ring-blue-500 font-bold text-gray-800 outline-none"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-bold text-gray-700 mb-2">
+            설명
+          </label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={3}
+            placeholder="학생 안내 문구를 입력해 주세요."
+            className="w-full border border-gray-300 rounded-lg p-3 bg-gray-50 focus:ring-2 focus:ring-blue-500 font-bold text-gray-800 outline-none resize-y"
+          />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <span className="font-bold text-gray-700">학년</span>
+            <select
+              value={targetGrade}
+              onChange={(e) => setTargetGrade(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-1.5 font-bold bg-white"
+            >
+              {gradeOptions.map((grade) => (
+                <option key={grade.value} value={grade.value}>
+                  {grade.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <span className="font-bold text-gray-700">반</span>
+            <select
+              value={targetClass}
+              onChange={(e) => setTargetClass(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-1.5 font-bold bg-white"
+            >
+              {classOptions.map((cls) => (
+                <option key={cls.value} value={cls.value}>
+                  {cls.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <span className="font-bold text-gray-700">중복 단어 제출 허용</span>
+            <input
+              type="checkbox"
+              checked={options.allowDuplicateWord}
+              onChange={(e) =>
+                setOptions((prev) => ({
+                  ...prev,
+                  allowDuplicateWord: e.target.checked,
+                }))
+              }
+              className="w-5 h-5"
+            />
+          </label>
+
+          <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <span className="font-bold text-gray-700">
+              동일 학생 중복 제출 허용
+            </span>
+            <input
+              type="checkbox"
+              checked={options.allowDuplicateByStudent}
+              onChange={(e) =>
+                setOptions((prev) => ({
+                  ...prev,
+                  allowDuplicateByStudent: e.target.checked,
+                }))
+              }
+              className="w-5 h-5"
+            />
+          </label>
+
+          <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <span className="font-bold text-gray-700">익명 표시</span>
+            <input
+              type="checkbox"
+              checked={options.anonymous}
+              onChange={(e) =>
+                setOptions((prev) => ({ ...prev, anonymous: e.target.checked }))
+              }
+              className="w-5 h-5"
+            />
+          </label>
+
+          <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <span className="font-bold text-gray-700">금칙어 필터</span>
+            <input
+              type="checkbox"
+              checked={options.profanityFilter}
+              onChange={(e) =>
+                setOptions((prev) => ({
+                  ...prev,
+                  profanityFilter: e.target.checked,
+                }))
+              }
+              className="w-5 h-5"
+            />
+          </label>
+
+          <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <span className="font-bold text-gray-700">입력 형식</span>
+            <select
+              value={options.inputMode}
+              onChange={(e) =>
+                setOptions((prev) => ({
+                  ...prev,
+                  inputMode: e.target.value as ThinkCloudOptions["inputMode"],
+                }))
+              }
+              className="border border-gray-300 rounded-lg px-3 py-1.5 font-bold bg-white"
+            >
+              <option value="word">단어 1개</option>
+              <option value="sentence">짧은 문장</option>
+            </select>
+          </label>
+
+          <label className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 md:col-span-2">
+            <span className="font-bold text-gray-700">최대 입력 길이</span>
+            <input
+              type="number"
+              min={5}
+              max={100}
+              value={options.maxLength}
+              onChange={(e) => {
+                const parsed = Number.parseInt(e.target.value, 10);
+                const next = Number.isFinite(parsed)
+                  ? Math.max(5, Math.min(100, parsed))
+                  : 20;
+                setOptions((prev) => ({ ...prev, maxLength: next }));
+              }}
+              className="w-24 border border-gray-300 rounded-lg px-3 py-1.5 font-bold text-right bg-white"
+            />
+          </label>
+        </div>
+
+        <div className="text-right">
+          <button
+            onClick={() => void handleStartSession()}
+            disabled={loadingAction}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition disabled:opacity-60"
+          >
+            {loadingAction ? "처리 중..." : "세션 시작"}
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+
+  const renderDetailPanel = () => {
+    if (!selectedSession) {
+      return (
+        <section className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+          <p className="text-gray-500 font-bold">
+            좌측에서 주제를 선택하거나 새 주제를 추가해 주세요.
+          </p>
+        </section>
+      );
+    }
+
+    const isActive =
+      selectedSession.id === activeSessionId &&
+      selectedSession.status === "active";
+    const isPaused = selectedSession.status === "paused";
 
     return (
-        <div className="min-h-screen bg-gray-50 flex flex-col">
-            <main className="flex flex-col lg:flex-row flex-1 p-6 lg:p-8 gap-6 max-w-7xl mx-auto w-full">
-                <aside className="w-full lg:w-72 shrink-0">
-                    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                        <div className="p-5 border-b border-gray-100">
-                            <h1 className="text-xl font-extrabold text-gray-800 flex items-center gap-2">
-                                <i className="fas fa-cloud text-blue-500"></i> 생각모아
-                            </h1>
-                        </div>
-
-                        <div className="border-b border-gray-100 p-4">
-                            <div className="grid grid-cols-2 gap-2">
-                                <select
-                                    value={filterGrade}
-                                    onChange={(e) => setFilterGrade(e.target.value)}
-                                    className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-bold text-gray-700 outline-none"
-                                >
-                                    <option value="all">전체 학년</option>
-                                    {gradeOptions.map((grade) => (
-                                        <option key={grade.value} value={grade.value}>{grade.label}</option>
-                                    ))}
-                                </select>
-                                <select
-                                    value={filterClass}
-                                    onChange={(e) => setFilterClass(e.target.value)}
-                                    className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-bold text-gray-700 outline-none"
-                                >
-                                    <option value="all">전체 반</option>
-                                    {classOptions.map((cls) => (
-                                        <option key={cls.value} value={cls.value}>{cls.label}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
-
-                        <nav className="max-h-[60vh] overflow-y-auto">
-                            {filteredSessions.length === 0 && (
-                                <p className="p-4 text-sm font-bold text-gray-500">저장된 주제가 없습니다.</p>
-                            )}
-                            {filteredSessions.map((session) => {
-                                const isSelected = !isCreateMode && selectedSessionId === session.id;
-                                const isActive = session.id === activeSessionId && session.status === 'active';
-                                return (
-                                    <button
-                                        key={session.id}
-                                        onClick={() => selectSession(session.id)}
-                                        className={`w-full px-4 py-3 text-left border-l-4 transition ${isSelected ? 'bg-blue-50 text-blue-700 border-blue-600' : 'text-gray-700 border-transparent hover:bg-gray-50'}`}
-                                    >
-                                        <div className="flex items-center justify-between gap-2">
-                                            <p className="font-bold truncate">{session.title}</p>
-                                            {isActive && <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold">LIVE</span>}
-                                        </div>
-                                        <p className="text-xs text-gray-500 mt-1 truncate">
-                                            {formatGradeLabel(session.targetGrade, session.targetGradeLabel)} {formatClassLabel(session.targetClass, session.targetClassLabel)} · {session.description || '설명 없음'}
-                                        </p>
-                                    </button>
-                                );
-                            })}
-                        </nav>
-                    </div>
-                </aside>
-
-                <div className="flex-1">
-                    <div className="mb-4 justify-end hidden lg:flex">
-                        <button
-                            onClick={openCreateMode}
-                            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-5 rounded-lg shadow-sm"
-                        >
-                            + 새 주제
-                        </button>
-                    </div>
-                    {isCreateMode ? renderCreatePanel() : renderDetailPanel()}
-                    {message && <p className="mt-3 text-sm font-bold text-blue-700">{message}</p>}
-                </div>
-            </main>
-
-            <button
-                onClick={openCreateMode}
-                className="lg:hidden fixed bottom-6 right-6 z-[60] w-14 h-14 rounded-full bg-blue-600 text-white shadow-xl hover:bg-blue-700"
-                aria-label="새 주제 추가"
-                title="새 주제"
-            >
-                <i className="fas fa-plus text-lg"></i>
-            </button>
-
-            {cloudModalOpen && (
-                <div
-                    className="fixed inset-0 z-[70] bg-white"
-                    onClick={() => setCloudModalOpen(false)}
-                >
-                    <div
-                        className="flex h-full w-full flex-col overflow-hidden"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 md:px-8 md:py-5">
-                            <div className="min-w-0">
-                                <h3 className="text-xl font-extrabold text-gray-900 md:text-2xl">
-                                    생각모아 워드클라우드 대형 보기
-                                </h3>
-                                <div className="mt-2 text-sm font-bold text-gray-600 md:text-base">
-                                    TV 출력용 모드입니다. 응답 {responses.length}개
-                                </div>
-                                <div className="mt-3 flex flex-wrap gap-2">
-                                    {pendingStudents.length > 0 ? (
-                                        pendingStudents.map((student) => (
-                                            <span
-                                                key={student.uid}
-                                                className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700 md:text-sm"
-                                                title={student.name}
-                                            >
-                                                {student.name}
-                                            </span>
-                                        ))
-                                    ) : (
-                                        <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 md:text-sm">
-                                            전원 제출 완료
-                                        </span>
-                                    )}
-                                </div>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => setCloudModalOpen(false)}
-                                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-500 transition hover:bg-gray-100 hover:text-gray-800"
-                                aria-label="닫기"
-                            >
-                                <i className="fas fa-times text-lg"></i>
-                            </button>
-                        </div>
-                        <div className="flex-1 overflow-hidden px-4 pb-4 pt-4 md:px-8 md:pb-8 md:pt-6">
-                            <div className="flex h-full w-full items-center justify-center">
-                                <WordCloudView
-                                    entries={cloudEntries}
-                                    showSubmitters={!!selectedSession && !selectedSession.options.anonymous}
-                                    variant="default"
-                                    className="h-full"
-                                />
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
+      <section className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+        <div className="border-b border-gray-100 pb-4 mb-6 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-extrabold text-gray-900">
+              {selectedSession.title}
+            </h2>
+            <p className="text-sm text-gray-500 mt-1">
+              {selectedSession.description || "설명 없음"}
+            </p>
+          </div>
+          <span
+            className={`text-xs font-bold px-2.5 py-1 rounded-full border ${isActive ? "bg-emerald-50 text-emerald-700 border-emerald-200" : isPaused ? "bg-amber-50 text-amber-700 border-amber-200" : "bg-gray-50 text-gray-600 border-gray-200"}`}
+          >
+            {isActive ? "진행 중" : isPaused ? "일시 정지" : "종료됨"}
+          </span>
         </div>
+
+        <div className="flex flex-wrap gap-2 mb-4 text-xs font-bold">
+          <span className="px-2 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+            대상{" "}
+            {formatGradeLabel(
+              selectedSession.targetGrade,
+              selectedSession.targetGradeLabel,
+            )}{" "}
+            {formatClassLabel(
+              selectedSession.targetClass,
+              selectedSession.targetClassLabel,
+            )}
+          </span>
+          <span className="px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+            {selectedSession.options.inputMode === "word"
+              ? "단어 1개 입력"
+              : "짧은 문장 입력"}
+          </span>
+          <span className="px-2 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+            최대 {selectedSession.options.maxLength}자
+          </span>
+          <span className="px-2 py-1 rounded-full bg-gray-50 text-gray-700 border border-gray-200">
+            {selectedSession.options.allowDuplicateWord
+              ? "중복 단어 제출 허용"
+              : "중복 단어 제출 제한"}
+          </span>
+          <span className="px-2 py-1 rounded-full bg-gray-50 text-gray-700 border border-gray-200">
+            {selectedSession.options.allowDuplicateByStudent
+              ? "동일 학생 중복 제출 허용"
+              : "동일 학생 중복 제출 제한"}
+          </span>
+          <span className="px-2 py-1 rounded-full bg-gray-50 text-gray-700 border border-gray-200">
+            {selectedSession.options.anonymous ? "익명 표시" : "이름 표시"}
+          </span>
+        </div>
+
+        <div className="mb-3 flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+          <h3 className="font-bold text-gray-800">
+            {"\uC2E4\uC2DC\uAC04 \uC9D1\uACC4"}
+          </h3>
+          <div className="flex flex-1 flex-col gap-2 lg:items-end">
+            <span className="text-sm font-bold text-gray-500">
+              {"\uC751\uB2F5 "}
+              {responses.length}
+              {"\uAC1C"}
+            </span>
+            {pendingStudents.length > 0 ? (
+              <div className="flex flex-wrap gap-2 lg:justify-end">
+                {pendingStudents.map((student) => (
+                  <span
+                    key={student.uid}
+                    className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700"
+                    title={student.name}
+                  >
+                    {student.name}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+                {"\uC804\uC6D0 \uC81C\uCD9C \uC644\uB8CC"}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {cloudEntries.length === 0 ? (
+          <p className="text-sm text-gray-500 font-bold">
+            아직 제출된 응답이 없습니다.
+          </p>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setCloudModalOpen(true)}
+            className="w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-2xl"
+            title="클릭해서 크게 보기"
+          >
+            <WordCloudView
+              entries={cloudEntries}
+              showSubmitters={!selectedSession.options.anonymous}
+            />
+          </button>
+        )}
+
+        <div className="mt-6 flex flex-wrap justify-end gap-2">
+          <button
+            onClick={() => void handlePauseSession()}
+            disabled={!isActive || loadingAction}
+            className="bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 px-5 rounded-lg disabled:opacity-50"
+          >
+            {loadingAction ? "처리 중..." : "일시 정지"}
+          </button>
+          <button
+            onClick={() => void handleResumeSession()}
+            disabled={
+              isActive || selectedSession.status === "closed" || loadingAction
+            }
+            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-5 rounded-lg disabled:opacity-50"
+          >
+            {loadingAction ? "처리 중..." : "재개"}
+          </button>
+          <button
+            onClick={() => void handleCloseSession()}
+            disabled={!isActive || loadingAction}
+            className="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2.5 px-5 rounded-lg disabled:opacity-50"
+          >
+            {loadingAction ? "처리 중..." : "이 세션 종료"}
+          </button>
+          <button
+            onClick={() => void handleDeleteSession()}
+            disabled={loadingAction}
+            className="bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-5 rounded-lg disabled:opacity-50"
+          >
+            {loadingAction ? "처리 중..." : "주제 삭제"}
+          </button>
+        </div>
+      </section>
     );
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      <main className="flex flex-col lg:flex-row flex-1 p-6 lg:p-8 gap-6 max-w-7xl mx-auto w-full">
+        <aside className="w-full lg:w-72 shrink-0">
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="p-5 border-b border-gray-100">
+              <h1 className="text-xl font-extrabold text-gray-800 flex items-center gap-2">
+                <i className="fas fa-cloud text-blue-500"></i> 생각모아
+              </h1>
+            </div>
+
+            <div className="border-b border-gray-100 p-4">
+              <div className="grid grid-cols-2 gap-2">
+                <select
+                  value={filterGrade}
+                  onChange={(e) => setFilterGrade(e.target.value)}
+                  className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-bold text-gray-700 outline-none"
+                >
+                  <option value="all">전체 학년</option>
+                  {gradeOptions.map((grade) => (
+                    <option key={grade.value} value={grade.value}>
+                      {grade.label}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={filterClass}
+                  onChange={(e) => setFilterClass(e.target.value)}
+                  className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-bold text-gray-700 outline-none"
+                >
+                  <option value="all">전체 반</option>
+                  {classOptions.map((cls) => (
+                    <option key={cls.value} value={cls.value}>
+                      {cls.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <nav className="max-h-[60vh] overflow-y-auto">
+              {filteredSessions.length === 0 && (
+                <p className="p-4 text-sm font-bold text-gray-500">
+                  저장된 주제가 없습니다.
+                </p>
+              )}
+              {filteredSessions.map((session) => {
+                const isSelected =
+                  !isCreateMode && selectedSessionId === session.id;
+                const isActive =
+                  session.id === activeSessionId && session.status === "active";
+                return (
+                  <button
+                    key={session.id}
+                    onClick={() => selectSession(session.id)}
+                    className={`w-full px-4 py-3 text-left border-l-4 transition ${isSelected ? "bg-blue-50 text-blue-700 border-blue-600" : "text-gray-700 border-transparent hover:bg-gray-50"}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-bold truncate">{session.title}</p>
+                      {isActive && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-bold">
+                          LIVE
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1 truncate">
+                      {formatGradeLabel(
+                        session.targetGrade,
+                        session.targetGradeLabel,
+                      )}{" "}
+                      {formatClassLabel(
+                        session.targetClass,
+                        session.targetClassLabel,
+                      )}{" "}
+                      · {session.description || "설명 없음"}
+                    </p>
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+        </aside>
+
+        <div className="flex-1">
+          <div className="mb-4 justify-end hidden lg:flex">
+            <button
+              onClick={openCreateMode}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-5 rounded-lg shadow-sm"
+            >
+              + 새 주제
+            </button>
+          </div>
+          {isCreateMode ? renderCreatePanel() : renderDetailPanel()}
+          {message && (
+            <p className="mt-3 text-sm font-bold text-blue-700">{message}</p>
+          )}
+        </div>
+      </main>
+
+      <button
+        onClick={openCreateMode}
+        className="lg:hidden fixed bottom-6 right-6 z-[60] w-14 h-14 rounded-full bg-blue-600 text-white shadow-xl hover:bg-blue-700"
+        aria-label="새 주제 추가"
+        title="새 주제"
+      >
+        <i className="fas fa-plus text-lg"></i>
+      </button>
+
+      {cloudModalOpen && (
+        <div
+          className="fixed inset-0 z-[70] bg-white"
+          onClick={() => setCloudModalOpen(false)}
+        >
+          <div
+            className="flex h-full w-full flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4 md:px-8 md:py-5">
+              <div className="min-w-0">
+                <h3 className="text-xl font-extrabold text-gray-900 md:text-2xl">
+                  생각모아 워드클라우드 대형 보기
+                </h3>
+                <div className="mt-2 text-sm font-bold text-gray-600 md:text-base">
+                  TV 출력용 모드입니다. 응답 {responses.length}개
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {pendingStudents.length > 0 ? (
+                    pendingStudents.map((student) => (
+                      <span
+                        key={student.uid}
+                        className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700 md:text-sm"
+                        title={student.name}
+                      >
+                        {student.name}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 md:text-sm">
+                      전원 제출 완료
+                    </span>
+                  )}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCloudModalOpen(false)}
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-gray-500 transition hover:bg-gray-100 hover:text-gray-800"
+                aria-label="닫기"
+              >
+                <i className="fas fa-times text-lg"></i>
+              </button>
+            </div>
+            <div className="flex-1 overflow-hidden px-4 pb-4 pt-4 md:px-8 md:pb-8 md:pt-6">
+              <div className="flex h-full w-full items-center justify-center">
+                <WordCloudView
+                  entries={cloudEntries}
+                  showSubmitters={
+                    !!selectedSession && !selectedSession.options.anonymous
+                  }
+                  variant="default"
+                  className="h-full"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 export default ManageThinkCloud;

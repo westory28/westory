@@ -208,7 +208,10 @@ const QuizRunner: React.FC = () => {
     value.split(ORDER_DELIMITER).filter(Boolean);
 
   const parseMatchingPairs = (question: Question): MatchingPair[] => {
-    if (Array.isArray(question.matchingPairs) && question.matchingPairs.length) {
+    if (
+      Array.isArray(question.matchingPairs) &&
+      question.matchingPairs.length
+    ) {
       return question.matchingPairs
         .map((pair) => ({
           left: String(pair.left || "").trim(),
@@ -1172,9 +1175,7 @@ const QuizRunner: React.FC = () => {
   );
 
   if (view === "loading") {
-    return (
-      <PageLoading message="퀴즈를 준비하는 중입니다." />
-    );
+    return <PageLoading message="퀴즈를 준비하는 중입니다." />;
   }
 
   if (view === "intro") {
@@ -1435,26 +1436,28 @@ const QuizRunner: React.FC = () => {
                     선택한 순서 (클릭하면 제거)
                   </div>
                   <div className="flex flex-col items-start gap-1">
-                    {parseOrderAnswer(currentAnswer).map((item, index, list) => (
-                      <React.Fragment key={`${item}-${index}`}>
-                        <button
-                          type="button"
-                          onClick={() => removeOrderSelection(index)}
-                          className="inline-flex max-w-full items-start gap-2 rounded-lg bg-blue-600 px-3 py-2 text-left text-sm font-bold text-white shadow-sm"
-                        >
-                          <span className="shrink-0">{index + 1}.</span>
-                          <span className="min-w-0 break-words">{item}</span>
-                        </button>
-                        {index < list.length - 1 && (
-                          <span
-                            aria-hidden="true"
-                            className="ml-5 text-base font-bold leading-none text-blue-500"
+                    {parseOrderAnswer(currentAnswer).map(
+                      (item, index, list) => (
+                        <React.Fragment key={`${item}-${index}`}>
+                          <button
+                            type="button"
+                            onClick={() => removeOrderSelection(index)}
+                            className="inline-flex max-w-full items-start gap-2 rounded-lg bg-blue-600 px-3 py-2 text-left text-sm font-bold text-white shadow-sm"
                           >
-                            ↓
-                          </span>
-                        )}
-                      </React.Fragment>
-                    ))}
+                            <span className="shrink-0">{index + 1}.</span>
+                            <span className="min-w-0 break-words">{item}</span>
+                          </button>
+                          {index < list.length - 1 && (
+                            <span
+                              aria-hidden="true"
+                              className="ml-5 text-base font-bold leading-none text-blue-500"
+                            >
+                              ↓
+                            </span>
+                          )}
+                        </React.Fragment>
+                      ),
+                    )}
                   </div>
                 </div>
               </div>

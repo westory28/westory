@@ -105,8 +105,10 @@ const LessonFootnoteDialog: React.FC<LessonFootnoteDialogProps> = ({
             {!hasDescription &&
             !(primaryType === "youtube" && youtubeEmbedUrl) &&
             !(primaryType === "image" && footnote.imageUrl) &&
-            !(primaryType === "sourceArchiveImage" &&
-              footnote.sourceArchiveImagePath) ? (
+            !(
+              primaryType === "sourceArchiveImage" &&
+              footnote.sourceArchiveImagePath
+            ) ? (
               <div className="rounded-2xl bg-slate-50 px-4 py-5 text-sm text-slate-500">
                 아직 등록된 각주 내용이 없습니다.
               </div>

@@ -387,7 +387,9 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
               const primaryEntry = entriesForSlot[0];
               const rankLabel = buildRankLabel(safeEntries, primaryEntry);
               const tieCountLabel =
-                entriesForSlot.length > 1 ? ` · ${entriesForSlot.length}명` : "";
+                entriesForSlot.length > 1
+                  ? ` · ${entriesForSlot.length}명`
+                  : "";
               const displayedEntry =
                 entriesForSlot.length === 1
                   ? primaryEntry
@@ -426,7 +428,9 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                         {`${rankLabel}${tieCountLabel}`}
                       </button>
                     ) : (
-                      <div className={badgeClassName}>{`${rankLabel}${tieCountLabel}`}</div>
+                      <div
+                        className={badgeClassName}
+                      >{`${rankLabel}${tieCountLabel}`}</div>
                     )}
 
                     {entriesForSlot.length === 1 ? (
@@ -444,7 +448,8 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                             {primaryEntry.grade}학년 {primaryEntry.class}반
                           </div>
                           <div className="mt-1 whitespace-normal break-keep text-[10px] font-black leading-[1.28] text-white [text-shadow:0_1px_3px_rgba(15,23,42,0.72)] sm:text-[13px] lg:text-[14px]">
-                            {primaryEntry.displayName || primaryEntry.studentName}
+                            {primaryEntry.displayName ||
+                              primaryEntry.studentName}
                           </div>
                         </div>
 
@@ -467,22 +472,28 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                                 type="button"
                                 onClick={() =>
                                   setActiveEntryKey((previousValue) =>
-                                    previousValue === entryKey ? null : entryKey,
+                                    previousValue === entryKey
+                                      ? null
+                                      : entryKey,
                                   )
                                 }
-                                onMouseEnter={() => setHoveredEntryKey(entryKey)}
+                                onMouseEnter={() =>
+                                  setHoveredEntryKey(entryKey)
+                                }
                                 onMouseLeave={() =>
                                   setHoveredEntryKey((previousValue) =>
-                                    previousValue === entryKey ? null : previousValue,
+                                    previousValue === entryKey
+                                      ? null
+                                      : previousValue,
                                   )
                                 }
                                 aria-label={`${rankLabel} ${entry.displayName || entry.studentName} 정보 보기`}
                                 className={`relative leading-none drop-shadow-[0_12px_18px_rgba(15,23,42,0.24)] transition-transform ${
                                   tone.emojiClassName
-                                } ${
-                                  index === 0 ? "" : "-ml-3.5 sm:-ml-4.5"
-                                } ${
-                                  isActive || isHovered ? "z-20 -translate-y-1 scale-105" : "z-10 hover:-translate-y-0.5"
+                                } ${index === 0 ? "" : "-ml-3.5 sm:-ml-4.5"} ${
+                                  isActive || isHovered
+                                    ? "z-20 -translate-y-1 scale-105"
+                                    : "z-10 hover:-translate-y-0.5"
                                 }`}
                               >
                                 <span
@@ -504,15 +515,18 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                             className={`relative z-20 mt-1.5 w-[min(12.5rem,calc(100vw-2rem))] max-w-[12.5rem] rounded-[1.2rem] border px-2.5 py-2.5 backdrop-blur-xl sm:px-3 sm:py-2.75 ${tone.nameClassName} ${getInfoCardAlignClassName(slotKey, resolvedDeviceMode)}`}
                           >
                             <div className="whitespace-nowrap text-[8px] font-bold uppercase tracking-[0.12em] text-white/80 [text-shadow:0_1px_2px_rgba(15,23,42,0.46)] sm:text-[9px]">
-                              {displayedEntry.grade}학년 {displayedEntry.class}반
+                              {displayedEntry.grade}학년 {displayedEntry.class}
+                              반
                             </div>
                             <div className="mt-1 whitespace-normal break-keep text-[10px] font-black leading-[1.28] text-white [text-shadow:0_1px_3px_rgba(15,23,42,0.72)] sm:text-[13px] lg:text-[14px]">
-                              {displayedEntry.displayName || displayedEntry.studentName}
+                              {displayedEntry.displayName ||
+                                displayedEntry.studentName}
                             </div>
                             <div
                               className={`mt-2 inline-flex min-h-[2rem] max-w-full shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-2.25 py-1 text-[9px] font-black leading-none backdrop-blur shadow-[0_14px_30px_rgba(15,23,42,0.2)] sm:min-h-[2.2rem] sm:px-2.75 sm:text-[13px] ${tone.scoreClassName}`}
                             >
-                              누적 {formatWisAmount(displayedEntry.cumulativeEarned)}
+                              누적{" "}
+                              {formatWisAmount(displayedEntry.cumulativeEarned)}
                             </div>
                           </div>
                         )}

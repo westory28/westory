@@ -448,7 +448,8 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                                             {unit.latestUpdatedAtText || "-"}
                                           </div>
                                           <div className="text-center text-xs font-semibold text-gray-500">
-                                            {unit.correctCount}/{unit.blankCount}
+                                            {unit.correctCount}/
+                                            {unit.blankCount}
                                           </div>
                                           <div className="text-center text-sm font-black text-gray-900">
                                             {accuracy}%

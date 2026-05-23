@@ -39,9 +39,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   exam_prep: "학기 시험 대비",
 };
 
-const createDefaultFormState = (
-  classIds: string[],
-): QuizSettingsFormState => ({
+const createDefaultFormState = (classIds: string[]): QuizSettingsFormState => ({
   active: false,
   questionCount: 10,
   randomOrder: true,
@@ -161,7 +159,10 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
         await Promise.all([
           getAssessmentVisibilityOptionsFromSchoolConfig(),
           getDoc(
-            doc(db, getSemesterDocPath(config, "assessment_config", "settings")),
+            doc(
+              db,
+              getSemesterDocPath(config, "assessment_config", "settings"),
+            ),
           ),
           getDoc(
             doc(db, getSemesterDocPath(config, "assessment_config", "status")),
@@ -329,14 +330,20 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
             role="switch"
             aria-checked={checked}
             aria-label={`${target.fullLabel} 공개 전환`}
-            title={checked ? `${target.fullLabel} 공개 중` : `${target.fullLabel} 비공개`}
+            title={
+              checked
+                ? `${target.fullLabel} 공개 중`
+                : `${target.fullLabel} 비공개`
+            }
             onClick={() => handleToggleClass(target.id)}
             disabled={!toggleEnabled}
             className={`inline-flex h-7 w-12 shrink-0 box-border items-center rounded-full border p-0.5 transition ${toggleClassName} disabled:cursor-not-allowed disabled:opacity-70`}
           >
             <span
               className={`flex h-full w-full items-center rounded-full ${
-                checked ? "justify-end bg-white/25" : "justify-start bg-gray-200"
+                checked
+                  ? "justify-end bg-white/25"
+                  : "justify-start bg-gray-200"
               }`}
             >
               <span className="h-5 w-5 rounded-full bg-white shadow-sm" />
@@ -345,7 +352,9 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
           <button
             type="button"
             onClick={() =>
-              setConfirmResetClassId((prev) => (prev === target.id ? "" : target.id))
+              setConfirmResetClassId((prev) =>
+                prev === target.id ? "" : target.id,
+              )
             }
             disabled={!canEdit || Boolean(resettingClassId) || Boolean(saving)}
             className="inline-flex h-6 shrink-0 items-center rounded-full border border-rose-200 bg-white px-2 py-0.5 text-[10px] font-bold leading-none text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
@@ -360,7 +369,8 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
               {target.fullLabel} 응시 기록을 초기화합니다.
             </div>
             <p className="mt-1 text-[10px] leading-4 text-rose-700">
-              응시 기록, 제출 상태, 사용한 힌트, 해당 평가 포인트 거래를 정리합니다.
+              응시 기록, 제출 상태, 사용한 힌트, 해당 평가 포인트 거래를
+              정리합니다.
             </p>
             <div className="mt-2 flex flex-wrap justify-end gap-1.5">
               <button
@@ -450,7 +460,9 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                     role="switch"
                     aria-checked={settings.active}
                     aria-label="전체 공개 전환"
-                    title={settings.active ? "전체 공개 켜짐" : "전체 공개 꺼짐"}
+                    title={
+                      settings.active ? "전체 공개 켜짐" : "전체 공개 꺼짐"
+                    }
                     onClick={() =>
                       canEdit &&
                       setSettings((prev) => ({
@@ -484,9 +496,8 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                       onClick={() =>
                         setSettings((prev) => ({
                           ...prev,
-                          visibleClassIds: buildOrderedVisibleClassIds(
-                            availableTargetIds,
-                          ),
+                          visibleClassIds:
+                            buildOrderedVisibleClassIds(availableTargetIds),
                         }))
                       }
                       disabled={!canEdit || allVisibilityTargets.length === 0}
@@ -594,7 +605,8 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
 
                 {!settings.active && allVisibilityTargets.length > 0 && (
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600">
-                    전체 공개를 켜면 현재 저장된 학급 선택 상태가 그대로 반영됩니다.
+                    전체 공개를 켜면 현재 저장된 학급 선택 상태가 그대로
+                    반영됩니다.
                   </div>
                 )}
               </section>

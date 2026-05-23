@@ -1,4 +1,11 @@
-import { collection, doc, getDoc, getDocs, query, where } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  where,
+} from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { db, functions } from "./firebase";
 import { getSemesterDocPath, getYearSemester } from "./semesterScope";
@@ -143,17 +150,13 @@ const isTestClassId = (classId: string) => {
 const formatGradeLabel = (gradeValue: string, label?: string) => {
   const normalizedLabel = String(label ?? "").trim();
   if (normalizedLabel) return normalizedLabel;
-  return /^\d+$/.test(gradeValue)
-    ? `${gradeValue}\uD559\uB144`
-    : gradeValue;
+  return /^\d+$/.test(gradeValue) ? `${gradeValue}\uD559\uB144` : gradeValue;
 };
 
 const formatClassLabel = (classValue: string, label?: string) => {
   const normalizedLabel = String(label ?? "").trim();
   if (normalizedLabel) return normalizedLabel;
-  return /^\d+$/.test(classValue)
-    ? `${classValue}\uBC18`
-    : classValue;
+  return /^\d+$/.test(classValue) ? `${classValue}\uBC18` : classValue;
 };
 
 export const buildAssessmentClassId = (grade: unknown, className: unknown) => {
@@ -256,9 +259,7 @@ const normalizeSchoolOptions = (
 const loadRosterProfilesForGrades = async (gradeValues: string[]) => {
   const normalizedGrades = Array.from(
     new Set(
-      gradeValues
-        .map((value) => normalizeSchoolToken(value))
-        .filter(Boolean),
+      gradeValues.map((value) => normalizeSchoolToken(value)).filter(Boolean),
     ),
   );
   if (!normalizedGrades.length) return new Map<string, UserProfileShape[]>();
@@ -367,9 +368,7 @@ const normalizeAssessmentTimeLimitSeconds = (value: unknown) => {
 export const getAssessmentConfigKey = (unitId: string, category: string) =>
   `${String(unitId || "").trim()}_${String(category || "").trim()}`;
 
-export const getStudentGradeClassId = (
-  userData?: Partial<UserData> | null,
-) => {
+export const getStudentGradeClassId = (userData?: Partial<UserData> | null) => {
   const profileLike = (userData || {}) as Partial<UserData> & {
     studentGrade?: string | number;
     studentClass?: string | number;
@@ -382,9 +381,8 @@ export const getStudentGradeClassId = (
 };
 
 export const getGrade3ClassIdsFromSchoolConfig = async () => {
-  const schoolConfig = await readSiteSettingDoc<SchoolConfigShape>(
-    "school_config",
-  );
+  const schoolConfig =
+    await readSiteSettingDoc<SchoolConfigShape>("school_config");
   const configuredClassIds = normalizeGrade3ClassIds(
     (schoolConfig?.classes || [])
       .filter((item) => !isTestOption(item?.value, item?.label))
@@ -422,17 +420,17 @@ export const getGrade3ClassIdsFromSchoolConfig = async () => {
 
 export const getAssessmentVisibilityOptionsFromSchoolConfig =
   async (): Promise<AssessmentVisibilityOptions> => {
-    const schoolConfig = await readSiteSettingDoc<SchoolConfigShape>(
-      "school_config",
-    );
+    const schoolConfig =
+      await readSiteSettingDoc<SchoolConfigShape>("school_config");
     const gradeOptions = normalizeSchoolOptions(schoolConfig?.grades, "grade");
     const classOptions = normalizeSchoolOptions(schoolConfig?.classes, "class");
 
-    const defaultGradeOption =
-      gradeOptions.find((option) => option.value === "3") || {
-        value: "3",
-        label: `3\uD559\uB144`,
-      };
+    const defaultGradeOption = gradeOptions.find(
+      (option) => option.value === "3",
+    ) || {
+      value: "3",
+      label: `3\uD559\uB144`,
+    };
     const testGradeOptions = gradeOptions.filter(
       (option) =>
         option.value !== defaultGradeOption.value &&
@@ -568,7 +566,10 @@ export const readAssessmentConfigMap = async (
     ? (statusSnap.data() as Record<string, unknown>)
     : {};
   Object.entries(statusData).forEach(([key, active]) => {
-    normalized[key] = normalizeAssessmentConfigEntry({ active }, grade3ClassIds);
+    normalized[key] = normalizeAssessmentConfigEntry(
+      { active },
+      grade3ClassIds,
+    );
   });
 
   const settingsData = settingsSnap.exists()
@@ -607,7 +608,10 @@ export const isAssessmentVisibleToStudent = (
 export const createDefaultAssessmentConfigEntry = (
   grade3ClassIds: string[] = [],
 ) =>
-  normalizeAssessmentConfigEntry(DEFAULT_ASSESSMENT_CONFIG_ENTRY, grade3ClassIds);
+  normalizeAssessmentConfigEntry(
+    DEFAULT_ASSESSMENT_CONFIG_ENTRY,
+    grade3ClassIds,
+  );
 
 export const resetAssessmentAttemptsByClass = async ({
   config,

@@ -1,397 +1,511 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { collection, documentId, getDocs, orderBy, query, where } from 'firebase/firestore';
-import { db } from '../../../lib/firebase';
-import { useAuth } from '../../../contexts/AuthContext';
-import { getSemesterCollectionPath } from '../../../lib/semesterScope';
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  collection,
+  documentId,
+  getDocs,
+  orderBy,
+  query,
+  where,
+} from "firebase/firestore";
+import { db } from "../../../lib/firebase";
+import { useAuth } from "../../../contexts/AuthContext";
+import { getSemesterCollectionPath } from "../../../lib/semesterScope";
 
-type HistoryReadScope = 'current' | 'history';
-type HistorySource = 'current' | 'legacy';
+type HistoryReadScope = "current" | "history";
+type HistorySource = "current" | "legacy";
 
 interface StudentHistoryModalProps {
-    isOpen: boolean;
-    onClose: () => void;
-    studentId: string;
-    studentName: string;
-    readScope?: HistoryReadScope;
-    launchContextLabel?: string;
+  isOpen: boolean;
+  onClose: () => void;
+  studentId: string;
+  studentName: string;
+  readScope?: HistoryReadScope;
+  launchContextLabel?: string;
 }
 
 interface QuizResultDetail {
-    id?: string | number;
-    correct?: boolean;
-    u?: string;
+  id?: string | number;
+  correct?: boolean;
+  u?: string;
 }
 
 interface QuizResultRecord {
-    id: string;
-    uid?: string;
-    score?: number;
-    category?: string;
-    unitId?: string;
-    timeString?: string;
-    timestamp?: { seconds?: number };
-    details?: QuizResultDetail[];
+  id: string;
+  uid?: string;
+  score?: number;
+  category?: string;
+  unitId?: string;
+  timeString?: string;
+  timestamp?: { seconds?: number };
+  details?: QuizResultDetail[];
 }
 
 interface QuestionDoc {
-    question?: string;
-    answer?: string;
-    explanation?: string;
+  question?: string;
+  answer?: string;
+  explanation?: string;
 }
 
 interface ResolvedDetail extends QuizResultDetail {
-    questionText: string;
-    answerText: string;
-    explanationText: string;
+  questionText: string;
+  answerText: string;
+  explanationText: string;
 }
 
 interface HistoryGroup {
-    date: string;
-    records: QuizResultRecord[];
+  date: string;
+  records: QuizResultRecord[];
 }
 
 const BATCH_SIZE = 10;
 
 const chunk = <T,>(arr: T[], size: number): T[][] =>
-    Array.from({ length: Math.ceil(arr.length / size) }, (_, i) => arr.slice(i * size, i * size + size));
+  Array.from({ length: Math.ceil(arr.length / size) }, (_, i) =>
+    arr.slice(i * size, i * size + size),
+  );
 
 const getCategoryLabel = (category?: string): string => {
-    if (category === 'diagnostic') return '진단평가';
-    if (category === 'formative') return '형성평가';
-    if (category === 'exam_prep') return '학기 시험 대비';
-    return '기타';
+  if (category === "diagnostic") return "진단평가";
+  if (category === "formative") return "형성평가";
+  if (category === "exam_prep") return "학기 시험 대비";
+  return "기타";
 };
 
 const getDateKey = (record: QuizResultRecord): string => {
-    if (record.timestamp?.seconds) {
-        return new Date(record.timestamp.seconds * 1000).toLocaleDateString('ko-KR');
-    }
-    if (record.timeString) {
-        const parsed = new Date(record.timeString);
-        if (!Number.isNaN(parsed.getTime())) return parsed.toLocaleDateString('ko-KR');
-        return String(record.timeString).split(' ')[0];
-    }
-    return '날짜 미상';
+  if (record.timestamp?.seconds) {
+    return new Date(record.timestamp.seconds * 1000).toLocaleDateString(
+      "ko-KR",
+    );
+  }
+  if (record.timeString) {
+    const parsed = new Date(record.timeString);
+    if (!Number.isNaN(parsed.getTime()))
+      return parsed.toLocaleDateString("ko-KR");
+    return String(record.timeString).split(" ")[0];
+  }
+  return "날짜 미상";
 };
 
 const getTimeText = (record: QuizResultRecord): string => {
-    if (record.timestamp?.seconds) {
-        return new Date(record.timestamp.seconds * 1000).toLocaleString('ko-KR');
-    }
-    return record.timeString || '-';
+  if (record.timestamp?.seconds) {
+    return new Date(record.timestamp.seconds * 1000).toLocaleString("ko-KR");
+  }
+  return record.timeString || "-";
 };
 
 const StudentHistoryModal: React.FC<StudentHistoryModalProps> = ({
-    isOpen,
-    onClose,
-    studentId,
-    studentName,
-    readScope = 'current',
-    launchContextLabel,
+  isOpen,
+  onClose,
+  studentId,
+  studentName,
+  readScope = "current",
+  launchContextLabel,
 }) => {
-    const { config } = useAuth();
-    const allowLegacyLookup = readScope === 'history';
-    const [loading, setLoading] = useState(false);
-    const [source, setSource] = useState<HistorySource>('current');
-    const [groups, setGroups] = useState<HistoryGroup[]>([]);
-    const [questionMap, setQuestionMap] = useState<Record<string, QuestionDoc>>({});
-    const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
-    const [expandedRecords, setExpandedRecords] = useState<Set<string>>(new Set());
-    const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(new Set());
+  const { config } = useAuth();
+  const allowLegacyLookup = readScope === "history";
+  const [loading, setLoading] = useState(false);
+  const [source, setSource] = useState<HistorySource>("current");
+  const [groups, setGroups] = useState<HistoryGroup[]>([]);
+  const [questionMap, setQuestionMap] = useState<Record<string, QuestionDoc>>(
+    {},
+  );
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
+  const [expandedRecords, setExpandedRecords] = useState<Set<string>>(
+    new Set(),
+  );
+  const [expandedQuestions, setExpandedQuestions] = useState<Set<string>>(
+    new Set(),
+  );
 
-    useEffect(() => {
-        if (!isOpen) return;
-        setSource('current');
-    }, [isOpen, studentId, readScope]);
+  useEffect(() => {
+    if (!isOpen) return;
+    setSource("current");
+  }, [isOpen, studentId, readScope]);
 
-    useEffect(() => {
-        if (!isOpen || !studentId) return;
-        void fetchHistory(allowLegacyLookup ? source : 'current');
-    }, [allowLegacyLookup, config, isOpen, source, studentId]);
+  useEffect(() => {
+    if (!isOpen || !studentId) return;
+    void fetchHistory(allowLegacyLookup ? source : "current");
+  }, [allowLegacyLookup, config, isOpen, source, studentId]);
 
-    const fetchHistory = async (selectedSource: HistorySource) => {
-        setLoading(true);
-        setGroups([]);
-        setQuestionMap({});
-        setExpandedDates(new Set());
-        setExpandedRecords(new Set());
-        setExpandedQuestions(new Set());
+  const fetchHistory = async (selectedSource: HistorySource) => {
+    setLoading(true);
+    setGroups([]);
+    setQuestionMap({});
+    setExpandedDates(new Set());
+    setExpandedRecords(new Set());
+    setExpandedQuestions(new Set());
 
-        const resultCollectionPath =
-            selectedSource === 'legacy' ? 'quiz_results' : getSemesterCollectionPath(config, 'quiz_results');
-        const questionCollectionPath =
-            selectedSource === 'legacy' ? 'quiz_questions' : getSemesterCollectionPath(config, 'quiz_questions');
+    const resultCollectionPath =
+      selectedSource === "legacy"
+        ? "quiz_results"
+        : getSemesterCollectionPath(config, "quiz_results");
+    const questionCollectionPath =
+      selectedSource === "legacy"
+        ? "quiz_questions"
+        : getSemesterCollectionPath(config, "quiz_questions");
 
-        try {
-            const resultSnap = await getDocs(
-                query(collection(db, resultCollectionPath), where('uid', '==', studentId), orderBy('timestamp', 'desc')),
-            );
+    try {
+      const resultSnap = await getDocs(
+        query(
+          collection(db, resultCollectionPath),
+          where("uid", "==", studentId),
+          orderBy("timestamp", "desc"),
+        ),
+      );
 
-            const records: QuizResultRecord[] = [];
-            resultSnap.forEach((doc) => {
-                records.push({ id: doc.id, ...(doc.data() as Omit<QuizResultRecord, 'id'>) });
-            });
-
-            const grouped: Record<string, QuizResultRecord[]> = {};
-            records.forEach((record) => {
-                const date = getDateKey(record);
-                if (!grouped[date]) grouped[date] = [];
-                grouped[date].push(record);
-            });
-
-            const groupedList = Object.keys(grouped).map((date) => ({ date, records: grouped[date] }));
-            setGroups(groupedList);
-
-            const allQuestionIds = Array.from(
-                new Set(
-                    records.flatMap((record) =>
-                        (record.details || [])
-                            .map((detail) => String(detail.id || '').trim())
-                            .filter((id) => id.length > 0),
-                    ),
-                ),
-            );
-
-            if (allQuestionIds.length === 0) return;
-
-            const resolvedQuestionMap: Record<string, QuestionDoc> = {};
-            await Promise.all(
-                chunk(allQuestionIds, BATCH_SIZE).map(async (ids) => {
-                    const questionSnap = await getDocs(
-                        query(collection(db, questionCollectionPath), where(documentId(), 'in', ids)),
-                    );
-                    questionSnap.forEach((doc) => {
-                        resolvedQuestionMap[doc.id] = doc.data() as QuestionDoc;
-                    });
-                }),
-            );
-
-            setQuestionMap(resolvedQuestionMap);
-        } catch (error) {
-            console.error('Error fetching student history:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const resolvedGroups = useMemo(
-        () =>
-            groups.map((group) => ({
-                ...group,
-                records: group.records.map((record) => ({
-                    ...record,
-                    resolvedDetails: (record.details || []).map((detail, idx) => {
-                        const qid = String(detail.id || '').trim();
-                        const question = qid ? questionMap[qid] : undefined;
-                        const no = idx + 1;
-                        return {
-                            ...detail,
-                            questionText: question?.question || `Q${no} 문항 정보 없음`,
-                            answerText: question?.answer ? String(question.answer) : '-',
-                            explanationText: question?.explanation || '해설이 등록되지 않았습니다.',
-                        } as ResolvedDetail;
-                    }),
-                })),
-            })),
-        [groups, questionMap],
-    );
-
-    const toggleDate = (date: string) => {
-        setExpandedDates((prev) => {
-            const next = new Set(prev);
-            if (next.has(date)) next.delete(date);
-            else next.add(date);
-            return next;
+      const records: QuizResultRecord[] = [];
+      resultSnap.forEach((doc) => {
+        records.push({
+          id: doc.id,
+          ...(doc.data() as Omit<QuizResultRecord, "id">),
         });
-    };
+      });
 
-    const toggleRecord = (recordId: string) => {
-        setExpandedRecords((prev) => {
-            const next = new Set(prev);
-            if (next.has(recordId)) next.delete(recordId);
-            else next.add(recordId);
-            return next;
-        });
-    };
+      const grouped: Record<string, QuizResultRecord[]> = {};
+      records.forEach((record) => {
+        const date = getDateKey(record);
+        if (!grouped[date]) grouped[date] = [];
+        grouped[date].push(record);
+      });
 
-    const toggleQuestion = (key: string) => {
-        setExpandedQuestions((prev) => {
-            const next = new Set(prev);
-            if (next.has(key)) next.delete(key);
-            else next.add(key);
-            return next;
-        });
-    };
+      const groupedList = Object.keys(grouped).map((date) => ({
+        date,
+        records: grouped[date],
+      }));
+      setGroups(groupedList);
 
-    const activeSource = allowLegacyLookup ? source : 'current';
-    const scopeBadgeLabel = allowLegacyLookup
-        ? (activeSource === 'legacy' ? '이전 기록 조회 중' : '현재 학기 조회 중')
-        : '현재 학기 전용';
-    const scopeDescription = allowLegacyLookup
-        ? (activeSource === 'legacy'
-            ? `${launchContextLabel ? `${launchContextLabel}에서 연 ` : ''}기록 조회 창입니다. 이전 기록만 따로 확인하고 있습니다.`
-            : `${launchContextLabel ? `${launchContextLabel}에서 연 ` : ''}기록 조회 창입니다. 현재 학기 기록을 먼저 보여 주며, 필요하면 이전 기록으로 전환할 수 있습니다.`)
-        : `${launchContextLabel ? `${launchContextLabel}에서 연 ` : ''}현재 학기 기록만 확인합니다.`;
-    const loadingText = activeSource === 'legacy' ? '이전 기록을 불러오는 중...' : '현재 학기 기록을 불러오는 중...';
-    const emptyTitle = activeSource === 'legacy' ? '이전 기록이 없습니다.' : '현재 학기 응시 기록이 없습니다.';
-    const emptyDescription = activeSource === 'legacy'
-        ? '이 학생의 이전 학기 누적 응시 기록은 아직 확인되지 않았습니다.'
-        : allowLegacyLookup
-            ? '현재 운영 학기에는 아직 응시 기록이 없습니다. 과거 기록을 보려면 상단에서 이전 기록을 선택해 주세요.'
-            : '현재 운영 학기 기준으로 아직 응시 기록이 없습니다.';
+      const allQuestionIds = Array.from(
+        new Set(
+          records.flatMap((record) =>
+            (record.details || [])
+              .map((detail) => String(detail.id || "").trim())
+              .filter((id) => id.length > 0),
+          ),
+        ),
+      );
 
-    if (!isOpen) return null;
+      if (allQuestionIds.length === 0) return;
 
-    return (
-        <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
-            onClick={onClose}
-            role="button"
-            tabIndex={-1}
-        >
-            <div
-                className="bg-white rounded-xl shadow-2xl z-10 w-full max-w-4xl p-6 max-h-[88vh] flex flex-col animate-fadeScale"
-                onClick={(e) => e.stopPropagation()}
-            >
-                <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-4">
-                    <div>
-                        <h3 className="font-bold text-xl text-gray-800">{studentName} 응시 기록</h3>
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                            <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-bold text-blue-700">
-                                {scopeBadgeLabel}
-                            </span>
-                            {launchContextLabel && (
-                                <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-bold text-gray-600">
-                                    {launchContextLabel}
-                                </span>
-                            )}
-                        </div>
-                        <p className="mt-2 text-xs text-gray-500">날짜별 응시 기록을 접고 펼쳐서 오답 상세까지 확인할 수 있습니다.</p>
-                        <p className="mt-1 text-xs text-gray-400">{scopeDescription}</p>
-                    </div>
-                    <button type="button" onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition">
-                        <i className="fas fa-times text-gray-400 hover:text-gray-600 text-xl"></i>
-                    </button>
-                </div>
+      const resolvedQuestionMap: Record<string, QuestionDoc> = {};
+      await Promise.all(
+        chunk(allQuestionIds, BATCH_SIZE).map(async (ids) => {
+          const questionSnap = await getDocs(
+            query(
+              collection(db, questionCollectionPath),
+              where(documentId(), "in", ids),
+            ),
+          );
+          questionSnap.forEach((doc) => {
+            resolvedQuestionMap[doc.id] = doc.data() as QuestionDoc;
+          });
+        }),
+      );
 
-                {allowLegacyLookup && (
-                    <div className="mb-4 flex gap-2">
-                        {(['current', 'legacy'] as HistorySource[]).map((item) => (
-                            <button
-                                key={item}
-                                type="button"
-                                onClick={() => setSource(item)}
-                                className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
-                                    source === item
-                                        ? 'bg-blue-600 text-white shadow-sm'
-                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                }`}
-                            >
-                                {item === 'current' ? '현재 학기 기록' : '이전 기록'}
-                            </button>
-                        ))}
-                    </div>
-                )}
+      setQuestionMap(resolvedQuestionMap);
+    } catch (error) {
+      console.error("Error fetching student history:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-                <div className="overflow-y-auto flex-1 pr-1">
-                    {loading ? (
-                        <div className="flex items-center justify-center py-16 text-gray-500">
-                            {loadingText}
-                        </div>
-                    ) : resolvedGroups.length === 0 ? (
-                        <div className="text-center py-20 text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
-                            <div className="text-sm font-bold text-gray-500">{emptyTitle}</div>
-                            <p className="mx-auto mt-2 max-w-md text-xs leading-5 text-gray-400">{emptyDescription}</p>
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                            {resolvedGroups.map((group) => (
-                                <div key={group.date} className="border border-gray-200 rounded-xl overflow-hidden">
-                                    <button
-                                        type="button"
-                                        className="w-full bg-gray-50 px-4 py-3 font-bold text-gray-700 flex justify-between items-center hover:bg-gray-100 transition"
-                                        onClick={() => toggleDate(group.date)}
-                                    >
-                                        <span>{group.date} 응시 ({group.records.length}건)</span>
-                                        <i className={`fas fa-chevron-down text-gray-400 transition-transform ${expandedDates.has(group.date) ? 'rotate-180' : ''}`}></i>
-                                    </button>
+  const resolvedGroups = useMemo(
+    () =>
+      groups.map((group) => ({
+        ...group,
+        records: group.records.map((record) => ({
+          ...record,
+          resolvedDetails: (record.details || []).map((detail, idx) => {
+            const qid = String(detail.id || "").trim();
+            const question = qid ? questionMap[qid] : undefined;
+            const no = idx + 1;
+            return {
+              ...detail,
+              questionText: question?.question || `Q${no} 문항 정보 없음`,
+              answerText: question?.answer ? String(question.answer) : "-",
+              explanationText:
+                question?.explanation || "해설이 등록되지 않았습니다.",
+            } as ResolvedDetail;
+          }),
+        })),
+      })),
+    [groups, questionMap],
+  );
 
-                                    {expandedDates.has(group.date) && (
-                                        <div className="bg-white p-3 space-y-3 border-t border-gray-100">
-                                            {group.records.map((record, rIdx) => {
-                                                const recordKey = record.id || `${group.date}_${rIdx}`;
-                                                const isRecordExpanded = expandedRecords.has(recordKey);
-                                                const details = (record as QuizResultRecord & { resolvedDetails?: ResolvedDetail[] }).resolvedDetails || [];
-                                                const wrongCount = details.filter((detail) => !detail.correct).length;
+  const toggleDate = (date: string) => {
+    setExpandedDates((prev) => {
+      const next = new Set(prev);
+      if (next.has(date)) next.delete(date);
+      else next.add(date);
+      return next;
+    });
+  };
 
-                                                return (
-                                                    <div key={recordKey} className="border border-gray-200 rounded-lg overflow-hidden">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => toggleRecord(recordKey)}
-                                                            className="w-full px-4 py-3 bg-white hover:bg-gray-50 text-left flex items-center justify-between"
-                                                        >
-                                                            <div className="min-w-0">
-                                                                <div className="flex items-center gap-2 flex-wrap">
-                                                                    <span className={`font-bold ${Number(record.score || 0) >= 80 ? 'text-blue-600' : Number(record.score || 0) >= 60 ? 'text-green-600' : 'text-red-500'}`}>
-                                                                        {record.score ?? 0}점
-                                                                    </span>
-                                                                    <span className="text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-700">{getCategoryLabel(record.category)}</span>
-                                                                    <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600">오답 {wrongCount}개</span>
-                                                                </div>
-                                                                <div className="text-xs text-gray-500 mt-1">{getTimeText(record)}</div>
-                                                            </div>
-                                                            <i className={`fas fa-chevron-down text-gray-400 transition-transform ${isRecordExpanded ? 'rotate-180' : ''}`}></i>
-                                                        </button>
+  const toggleRecord = (recordId: string) => {
+    setExpandedRecords((prev) => {
+      const next = new Set(prev);
+      if (next.has(recordId)) next.delete(recordId);
+      else next.add(recordId);
+      return next;
+    });
+  };
 
-                                                        {isRecordExpanded && (
-                                                            <div className="border-t border-gray-100 px-3 py-3 bg-gray-50 space-y-2">
-                                                                {details.length === 0 && (
-                                                                    <div className="text-sm text-gray-500 px-2 py-1">문항 상세 정보가 없습니다.</div>
-                                                                )}
-                                                                {details.map((detail, qIdx) => {
-                                                                    const qKey = `${recordKey}_${qIdx}`;
-                                                                    const open = expandedQuestions.has(qKey);
-                                                                    const wrong = !detail.correct;
-                                                                    return (
-                                                                        <div key={qKey} className={`rounded-lg border ${wrong ? 'border-red-200 bg-red-50' : 'border-green-200 bg-green-50'}`}>
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() => toggleQuestion(qKey)}
-                                                                                className="w-full px-3 py-2 text-left flex items-start gap-2 justify-between"
-                                                                            >
-                                                                                <div className="min-w-0">
-                                                                                    <div className={`text-xs font-bold mb-1 ${wrong ? 'text-red-600' : 'text-green-700'}`}>Q{qIdx + 1} {wrong ? '오답' : '정답'}</div>
-                                                                                    <div className="text-sm text-gray-800 line-clamp-1">{detail.questionText}</div>
-                                                                                </div>
-                                                                                <i className={`fas fa-chevron-down text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`}></i>
-                                                                            </button>
-                                                                            {open && (
-                                                                                <div className="px-3 pb-3 text-sm text-gray-700 space-y-1">
-                                                                                    <div className="font-semibold text-gray-900">{detail.questionText}</div>
-                                                                                    <div>학생 답: <span className={`font-semibold ${wrong ? 'text-red-600' : 'text-green-700'}`}>{detail.u || '(미입력)'}</span></div>
-                                                                                    <div>정답: <span className="font-semibold text-blue-700">{detail.answerText}</span></div>
-                                                                                    <div className="text-gray-600">해설: {detail.explanationText}</div>
-                                                                                </div>
-                                                                            )}
-                                                                        </div>
-                                                                    );
-                                                                })}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
+  const toggleQuestion = (key: string) => {
+    setExpandedQuestions((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const activeSource = allowLegacyLookup ? source : "current";
+  const scopeBadgeLabel = allowLegacyLookup
+    ? activeSource === "legacy"
+      ? "이전 기록 조회 중"
+      : "현재 학기 조회 중"
+    : "현재 학기 전용";
+  const scopeDescription = allowLegacyLookup
+    ? activeSource === "legacy"
+      ? `${launchContextLabel ? `${launchContextLabel}에서 연 ` : ""}기록 조회 창입니다. 이전 기록만 따로 확인하고 있습니다.`
+      : `${launchContextLabel ? `${launchContextLabel}에서 연 ` : ""}기록 조회 창입니다. 현재 학기 기록을 먼저 보여 주며, 필요하면 이전 기록으로 전환할 수 있습니다.`
+    : `${launchContextLabel ? `${launchContextLabel}에서 연 ` : ""}현재 학기 기록만 확인합니다.`;
+  const loadingText =
+    activeSource === "legacy"
+      ? "이전 기록을 불러오는 중..."
+      : "현재 학기 기록을 불러오는 중...";
+  const emptyTitle =
+    activeSource === "legacy"
+      ? "이전 기록이 없습니다."
+      : "현재 학기 응시 기록이 없습니다.";
+  const emptyDescription =
+    activeSource === "legacy"
+      ? "이 학생의 이전 학기 누적 응시 기록은 아직 확인되지 않았습니다."
+      : allowLegacyLookup
+        ? "현재 운영 학기에는 아직 응시 기록이 없습니다. 과거 기록을 보려면 상단에서 이전 기록을 선택해 주세요."
+        : "현재 운영 학기 기준으로 아직 응시 기록이 없습니다.";
+
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4"
+      onClick={onClose}
+      role="button"
+      tabIndex={-1}
+    >
+      <div
+        className="bg-white rounded-xl shadow-2xl z-10 w-full max-w-4xl p-6 max-h-[88vh] flex flex-col animate-fadeScale"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-4">
+          <div>
+            <h3 className="font-bold text-xl text-gray-800">
+              {studentName} 응시 기록
+            </h3>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-bold text-blue-700">
+                {scopeBadgeLabel}
+              </span>
+              {launchContextLabel && (
+                <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-[11px] font-bold text-gray-600">
+                  {launchContextLabel}
+                </span>
+              )}
             </div>
+            <p className="mt-2 text-xs text-gray-500">
+              날짜별 응시 기록을 접고 펼쳐서 오답 상세까지 확인할 수 있습니다.
+            </p>
+            <p className="mt-1 text-xs text-gray-400">{scopeDescription}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 hover:bg-gray-100 rounded-full transition"
+          >
+            <i className="fas fa-times text-gray-400 hover:text-gray-600 text-xl"></i>
+          </button>
         </div>
-    );
+
+        {allowLegacyLookup && (
+          <div className="mb-4 flex gap-2">
+            {(["current", "legacy"] as HistorySource[]).map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setSource(item)}
+                className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
+                  source === item
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                {item === "current" ? "현재 학기 기록" : "이전 기록"}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="overflow-y-auto flex-1 pr-1">
+          {loading ? (
+            <div className="flex items-center justify-center py-16 text-gray-500">
+              {loadingText}
+            </div>
+          ) : resolvedGroups.length === 0 ? (
+            <div className="text-center py-20 text-gray-400 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+              <div className="text-sm font-bold text-gray-500">
+                {emptyTitle}
+              </div>
+              <p className="mx-auto mt-2 max-w-md text-xs leading-5 text-gray-400">
+                {emptyDescription}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {resolvedGroups.map((group) => (
+                <div
+                  key={group.date}
+                  className="border border-gray-200 rounded-xl overflow-hidden"
+                >
+                  <button
+                    type="button"
+                    className="w-full bg-gray-50 px-4 py-3 font-bold text-gray-700 flex justify-between items-center hover:bg-gray-100 transition"
+                    onClick={() => toggleDate(group.date)}
+                  >
+                    <span>
+                      {group.date} 응시 ({group.records.length}건)
+                    </span>
+                    <i
+                      className={`fas fa-chevron-down text-gray-400 transition-transform ${expandedDates.has(group.date) ? "rotate-180" : ""}`}
+                    ></i>
+                  </button>
+
+                  {expandedDates.has(group.date) && (
+                    <div className="bg-white p-3 space-y-3 border-t border-gray-100">
+                      {group.records.map((record, rIdx) => {
+                        const recordKey = record.id || `${group.date}_${rIdx}`;
+                        const isRecordExpanded = expandedRecords.has(recordKey);
+                        const details =
+                          (
+                            record as QuizResultRecord & {
+                              resolvedDetails?: ResolvedDetail[];
+                            }
+                          ).resolvedDetails || [];
+                        const wrongCount = details.filter(
+                          (detail) => !detail.correct,
+                        ).length;
+
+                        return (
+                          <div
+                            key={recordKey}
+                            className="border border-gray-200 rounded-lg overflow-hidden"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => toggleRecord(recordKey)}
+                              className="w-full px-4 py-3 bg-white hover:bg-gray-50 text-left flex items-center justify-between"
+                            >
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span
+                                    className={`font-bold ${Number(record.score || 0) >= 80 ? "text-blue-600" : Number(record.score || 0) >= 60 ? "text-green-600" : "text-red-500"}`}
+                                  >
+                                    {record.score ?? 0}점
+                                  </span>
+                                  <span className="text-xs px-2 py-0.5 rounded bg-blue-50 text-blue-700">
+                                    {getCategoryLabel(record.category)}
+                                  </span>
+                                  <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600">
+                                    오답 {wrongCount}개
+                                  </span>
+                                </div>
+                                <div className="text-xs text-gray-500 mt-1">
+                                  {getTimeText(record)}
+                                </div>
+                              </div>
+                              <i
+                                className={`fas fa-chevron-down text-gray-400 transition-transform ${isRecordExpanded ? "rotate-180" : ""}`}
+                              ></i>
+                            </button>
+
+                            {isRecordExpanded && (
+                              <div className="border-t border-gray-100 px-3 py-3 bg-gray-50 space-y-2">
+                                {details.length === 0 && (
+                                  <div className="text-sm text-gray-500 px-2 py-1">
+                                    문항 상세 정보가 없습니다.
+                                  </div>
+                                )}
+                                {details.map((detail, qIdx) => {
+                                  const qKey = `${recordKey}_${qIdx}`;
+                                  const open = expandedQuestions.has(qKey);
+                                  const wrong = !detail.correct;
+                                  return (
+                                    <div
+                                      key={qKey}
+                                      className={`rounded-lg border ${wrong ? "border-red-200 bg-red-50" : "border-green-200 bg-green-50"}`}
+                                    >
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleQuestion(qKey)}
+                                        className="w-full px-3 py-2 text-left flex items-start gap-2 justify-between"
+                                      >
+                                        <div className="min-w-0">
+                                          <div
+                                            className={`text-xs font-bold mb-1 ${wrong ? "text-red-600" : "text-green-700"}`}
+                                          >
+                                            Q{qIdx + 1}{" "}
+                                            {wrong ? "오답" : "정답"}
+                                          </div>
+                                          <div className="text-sm text-gray-800 line-clamp-1">
+                                            {detail.questionText}
+                                          </div>
+                                        </div>
+                                        <i
+                                          className={`fas fa-chevron-down text-gray-400 transition-transform ${open ? "rotate-180" : ""}`}
+                                        ></i>
+                                      </button>
+                                      {open && (
+                                        <div className="px-3 pb-3 text-sm text-gray-700 space-y-1">
+                                          <div className="font-semibold text-gray-900">
+                                            {detail.questionText}
+                                          </div>
+                                          <div>
+                                            학생 답:{" "}
+                                            <span
+                                              className={`font-semibold ${wrong ? "text-red-600" : "text-green-700"}`}
+                                            >
+                                              {detail.u || "(미입력)"}
+                                            </span>
+                                          </div>
+                                          <div>
+                                            정답:{" "}
+                                            <span className="font-semibold text-blue-700">
+                                              {detail.answerText}
+                                            </span>
+                                          </div>
+                                          <div className="text-gray-600">
+                                            해설: {detail.explanationText}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default StudentHistoryModal;

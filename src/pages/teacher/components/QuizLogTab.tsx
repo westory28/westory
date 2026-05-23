@@ -235,13 +235,11 @@ const findRecentClassFocus = (logs: Log[]): RecentClassFocus | null => {
         name: log.studentName,
       });
       const timestampMs = getTimestampMs(log.timestamp);
-      const current =
-        byClass.get(classOnly) ||
-        {
-          studentKeys: new Set<string>(),
-          latestMs: 0,
-          thresholdMs: 0,
-        };
+      const current = byClass.get(classOnly) || {
+        studentKeys: new Set<string>(),
+        latestMs: 0,
+        thresholdMs: 0,
+      };
       const previousSize = current.studentKeys.size;
       current.studentKeys.add(studentKey);
       current.latestMs = Math.max(current.latestMs, timestampMs);
@@ -266,7 +264,8 @@ const findRecentClassFocus = (logs: Log[]): RecentClassFocus | null => {
         thresholdMs: item.thresholdMs,
       }))
       .sort((a, b) => {
-        if (a.thresholdMs !== b.thresholdMs) return b.thresholdMs - a.thresholdMs;
+        if (a.thresholdMs !== b.thresholdMs)
+          return b.thresholdMs - a.thresholdMs;
         if (a.latestMs !== b.latestMs) return b.latestMs - a.latestMs;
         return Number(a.classOnly) - Number(b.classOnly);
       })[0] || null
@@ -296,28 +295,28 @@ const findRecentCategoryFocus = (logs: Log[], classOnly?: string): string => {
       number: log.studentNumber,
       name: log.studentName,
     });
-    const current =
-      byCategory.get(category) ||
-      {
-        studentKeys: new Set<string>(),
-        attemptCount: 0,
-        latestMs: 0,
-      };
+    const current = byCategory.get(category) || {
+      studentKeys: new Set<string>(),
+      attemptCount: 0,
+      latestMs: 0,
+    };
     current.studentKeys.add(studentKey);
     current.attemptCount += 1;
-    current.latestMs = Math.max(current.latestMs, getTimestampMs(log.timestamp));
+    current.latestMs = Math.max(
+      current.latestMs,
+      getTimestampMs(log.timestamp),
+    );
     byCategory.set(category, current);
   });
 
   return (
-    Array.from(byCategory.entries())
-      .sort(([, a], [, b]) => {
-        if (a.attemptCount !== b.attemptCount)
-          return b.attemptCount - a.attemptCount;
-        if (a.studentKeys.size !== b.studentKeys.size)
-          return b.studentKeys.size - a.studentKeys.size;
-        return b.latestMs - a.latestMs;
-      })[0]?.[0] || ""
+    Array.from(byCategory.entries()).sort(([, a], [, b]) => {
+      if (a.attemptCount !== b.attemptCount)
+        return b.attemptCount - a.attemptCount;
+      if (a.studentKeys.size !== b.studentKeys.size)
+        return b.studentKeys.size - a.studentKeys.size;
+      return b.latestMs - a.latestMs;
+    })[0]?.[0] || ""
   );
 };
 
@@ -989,15 +988,13 @@ const QuizLogTab: React.FC = () => {
         if (countedUnitKeys.has(key)) return;
         countedUnitKeys.add(key);
 
-        const existing =
-          unitStats.get(key) ||
-          {
-            bigId: meta.bigId,
-            midId: meta.midId,
-            studentKeys: new Set<string>(),
-            attemptCount: 0,
-            latestMs: 0,
-          };
+        const existing = unitStats.get(key) || {
+          bigId: meta.bigId,
+          midId: meta.midId,
+          studentKeys: new Set<string>(),
+          attemptCount: 0,
+          latestMs: 0,
+        };
 
         existing.studentKeys.add(studentKey);
         existing.attemptCount += 1;
@@ -1089,13 +1086,11 @@ const QuizLogTab: React.FC = () => {
     canonicalLogs.forEach((log) => {
       if (log.classOnly && log.classOnly !== "-") classes.add(log.classOnly);
     });
-    return Array.from(classes).sort(
-      (a, b) => {
-        if (recentClassFocus?.classOnly === a) return -1;
-        if (recentClassFocus?.classOnly === b) return 1;
-        return Number(a) - Number(b) || a.localeCompare(b);
-      },
-    );
+    return Array.from(classes).sort((a, b) => {
+      if (recentClassFocus?.classOnly === a) return -1;
+      if (recentClassFocus?.classOnly === b) return 1;
+      return Number(a) - Number(b) || a.localeCompare(b);
+    });
   }, [allStudentProfiles, canonicalLogs, recentClassFocus]);
 
   const buildStudentSummaries = (sourceLogs: Log[], selectedClass: string) => {
@@ -1527,77 +1522,77 @@ const QuizLogTab: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-[minmax(180px,1.25fr)_minmax(180px,1.25fr)_110px_minmax(128px,0.75fr)_108px]">
-            <select
-              value={bigFilter}
-              onChange={(event) => {
-                userTouchedUnitFilterRef.current = true;
-                setBigFilter(event.target.value);
-                setMidFilter("");
-              }}
-              className="min-w-0 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-bold text-gray-700"
-              aria-label="대단원 필터"
-            >
-              <option value="">대단원 전체</option>
-              {bigOptions.map((big) => (
-                <option key={big.id} value={big.id}>
-                  {big.title}
-                </option>
-              ))}
-            </select>
-            <select
-              value={midFilter}
-              onChange={(event) => {
-                userTouchedUnitFilterRef.current = true;
-                setMidFilter(event.target.value);
-              }}
-              className="min-w-0 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-bold text-gray-700"
-              aria-label="중단원 필터"
-            >
-              <option value="">중단원 전체</option>
-              {midOptions.map((mid) => (
-                <option key={mid.id} value={mid.id}>
-                  {mid.title}
-                </option>
-              ))}
-            </select>
-            <select
-              value={classFilter}
-              onChange={(event) => {
-                userTouchedClassFilterRef.current = true;
-                setClassFilter(event.target.value);
-              }}
-              className="min-w-0 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-bold text-gray-700"
-              aria-label="반 필터"
-            >
-              <option value="">반 전체</option>
-              {classOptions.map((classOnly) => (
-                <option key={classOnly} value={classOnly}>
-                  {classOnly}반
-                </option>
-              ))}
-            </select>
-            <select
-              value={categoryFilter}
-              onChange={(event) => {
-                userTouchedCategoryFilterRef.current = true;
-                setCategoryFilter(event.target.value);
-              }}
-              className="min-w-0 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-bold text-gray-700"
-              aria-label="평가유형 필터"
-            >
-              <option value="">평가유형 전체</option>
-              <option value="diagnostic">진단</option>
-              <option value="formative">형성</option>
-              <option value="exam_prep">시험 대비</option>
-            </select>
-            <button
-              type="button"
-              onClick={reload}
-              className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-blue-600 px-3 py-2 text-[13px] font-bold text-white shadow-sm transition hover:bg-blue-700"
-            >
-              <i className="fas fa-sync-alt text-xs" aria-hidden="true"></i>
-              새로고침
-            </button>
+          <select
+            value={bigFilter}
+            onChange={(event) => {
+              userTouchedUnitFilterRef.current = true;
+              setBigFilter(event.target.value);
+              setMidFilter("");
+            }}
+            className="min-w-0 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-bold text-gray-700"
+            aria-label="대단원 필터"
+          >
+            <option value="">대단원 전체</option>
+            {bigOptions.map((big) => (
+              <option key={big.id} value={big.id}>
+                {big.title}
+              </option>
+            ))}
+          </select>
+          <select
+            value={midFilter}
+            onChange={(event) => {
+              userTouchedUnitFilterRef.current = true;
+              setMidFilter(event.target.value);
+            }}
+            className="min-w-0 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-bold text-gray-700"
+            aria-label="중단원 필터"
+          >
+            <option value="">중단원 전체</option>
+            {midOptions.map((mid) => (
+              <option key={mid.id} value={mid.id}>
+                {mid.title}
+              </option>
+            ))}
+          </select>
+          <select
+            value={classFilter}
+            onChange={(event) => {
+              userTouchedClassFilterRef.current = true;
+              setClassFilter(event.target.value);
+            }}
+            className="min-w-0 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-bold text-gray-700"
+            aria-label="반 필터"
+          >
+            <option value="">반 전체</option>
+            {classOptions.map((classOnly) => (
+              <option key={classOnly} value={classOnly}>
+                {classOnly}반
+              </option>
+            ))}
+          </select>
+          <select
+            value={categoryFilter}
+            onChange={(event) => {
+              userTouchedCategoryFilterRef.current = true;
+              setCategoryFilter(event.target.value);
+            }}
+            className="min-w-0 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-bold text-gray-700"
+            aria-label="평가유형 필터"
+          >
+            <option value="">평가유형 전체</option>
+            <option value="diagnostic">진단</option>
+            <option value="formative">형성</option>
+            <option value="exam_prep">시험 대비</option>
+          </select>
+          <button
+            type="button"
+            onClick={reload}
+            className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-blue-600 px-3 py-2 text-[13px] font-bold text-white shadow-sm transition hover:bg-blue-700"
+          >
+            <i className="fas fa-sync-alt text-xs" aria-hidden="true"></i>
+            새로고침
+          </button>
         </div>
       </div>
 

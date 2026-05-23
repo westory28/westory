@@ -419,9 +419,6 @@ export const normalizeWorksheetFootnoteAnchors = (
       ),
     }))
     .filter(
-      (item) =>
-        item.footnoteId &&
-        item.widthRatio > 0 &&
-        item.heightRatio > 0,
+      (item) => item.footnoteId && item.widthRatio > 0 && item.heightRatio > 0,
     );
 };
