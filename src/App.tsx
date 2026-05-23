@@ -9,7 +9,6 @@ import {
 import { AuthProvider } from "./contexts/AuthContext";
 import MainLayout from "./components/layout/MainLayout";
 import { AppToastProvider } from "./components/common/AppToastProvider";
-import { InlineLoading, PageLoading } from "./components/common/LoadingState";
 import { lazyWithRetry } from "./lib/lazyWithRetry";
 
 const Login = lazyWithRetry(() => import("./pages/Login"), "login");
@@ -146,17 +145,13 @@ const LegacyRouteRedirect: React.FC<{ to: string }> = ({ to }) => {
   return <Navigate to={`${to}${location.search}`} replace />;
 };
 
-const RouteContentFallback: React.FC<{ message: string }> = ({ message }) => (
-  <div className="mx-auto w-full max-w-7xl px-4 py-6">
-    <InlineLoading message={message} />
-  </div>
+const RouteContentFallback: React.FC = () => (
+  <div className="min-h-[12rem]" aria-hidden="true" />
 );
 
-const renderWithLayout = (children: React.ReactNode, message: string) => (
+const renderWithLayout = (children: React.ReactNode, _message?: string) => (
   <MainLayout>
-    <Suspense fallback={<RouteContentFallback message={message} />}>
-      {children}
-    </Suspense>
+    <Suspense fallback={<RouteContentFallback />}>{children}</Suspense>
   </MainLayout>
 );
 
@@ -173,9 +168,7 @@ const App: React.FC = () => {
     <AuthProvider>
       <AppToastProvider>
         <Router>
-          <Suspense
-            fallback={<PageLoading message="화면을 준비하는 중입니다." />}
-          >
+          <Suspense fallback={<RouteContentFallback />}>
             <div className="bg-gray-50 min-h-screen text-gray-900 font-sans">
               <Routes>
                 <Route path="/" element={<Login />} />
