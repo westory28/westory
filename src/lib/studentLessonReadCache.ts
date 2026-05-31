@@ -46,6 +46,18 @@ const curriculumTreeCache = new Map<
   string,
   CacheEntry<StudentCurriculumTreeItem[]>
 >();
+const visibleCurriculumTreeCache = new Map<
+  string,
+  CacheEntry<StudentCurriculumTreeItem[]>
+>();
+const effectiveLessonsCache = new Map<
+  string,
+  CacheEntry<{
+    scopedLatestLessons: Partial<LessonData>[];
+    legacyLatestLessons: Partial<LessonData>[];
+    visibleUnitIds: Set<string>;
+  }>
+>();
 const latestLessonSelectionCache = new Map<
   string,
   CacheEntry<LessonTreeSelectionTarget | null>
@@ -82,8 +94,37 @@ const getLessonUnitIds = (lessons: Partial<LessonData>[]) =>
     lessons.map((lesson) => String(lesson.unitId || "").trim()).filter(Boolean),
   );
 
+const isStudentVisibleLesson = (lesson: Partial<LessonData>) =>
+  lesson.isVisibleToStudents !== false;
+
 const pickStudentLesson = (lessons: Partial<LessonData>[]) =>
   sortLessonsByRecency(lessons)[0] || null;
+
+const readLessonCollection = async (collectionPath: string) => {
+  const snap = await getDocs(collection(db, collectionPath));
+  return snap.docs.map((docSnap) => docSnap.data() as Partial<LessonData>);
+};
+
+const filterTreeByVisibleLessons = (
+  tree: StudentCurriculumTreeItem[],
+  visibleUnitIds: Set<string>,
+): StudentCurriculumTreeItem[] =>
+  tree
+    .map((item) => {
+      const children = filterTreeByVisibleLessons(
+        item.children || [],
+        visibleUnitIds,
+      );
+      if (children.length > 0) return { ...item, children };
+
+      const unitId = String(item.id || "").trim();
+      if (!(item.children || []).length && visibleUnitIds.has(unitId)) {
+        return item;
+      }
+
+      return null;
+    })
+    .filter((item): item is StudentCurriculumTreeItem => Boolean(item));
 
 const readCached = <T>(
   cache: Map<string, CacheEntry<T>>,
@@ -129,6 +170,37 @@ export const readStudentCurriculumTree = (config: ConfigLike) =>
     return [];
   });
 
+const readEffectiveStudentLessons = (config: ConfigLike) =>
+  readCached(effectiveLessonsCache, getScopeKey(config), async () => {
+    const scopedLatestLessons = getLatestLessonsByUnitId(
+      await readLessonCollection(getSemesterCollectionPath(config, "lessons")),
+    );
+    const scopedUnitIds = getLessonUnitIds(scopedLatestLessons);
+    const legacyLatestLessons = getLatestLessonsByUnitId(
+      await readLessonCollection("lessons"),
+    ).filter(
+      (lesson) => !scopedUnitIds.has(String(lesson.unitId || "").trim()),
+    );
+    const effectiveLessons = [...scopedLatestLessons, ...legacyLatestLessons];
+
+    return {
+      scopedLatestLessons,
+      legacyLatestLessons,
+      visibleUnitIds: getLessonUnitIds(
+        effectiveLessons.filter(isStudentVisibleLesson),
+      ),
+    };
+  });
+
+export const readStudentVisibleCurriculumTree = (config: ConfigLike) =>
+  readCached(visibleCurriculumTreeCache, getScopeKey(config), async () => {
+    const [tree, { visibleUnitIds }] = await Promise.all([
+      readStudentCurriculumTree(config),
+      readEffectiveStudentLessons(config),
+    ]);
+    return filterTreeByVisibleLessons(tree, visibleUnitIds);
+  });
+
 export const readStudentLatestLessonSelection = (
   config: ConfigLike,
   tree: StudentCurriculumTreeItem[],
@@ -137,19 +209,8 @@ export const readStudentLatestLessonSelection = (
     latestLessonSelectionCache,
     `${getScopeKey(config)}:${getTreeCacheKey(tree)}`,
     async () => {
-      const readRecentLessons = async (collectionPath: string) => {
-        const snap = await getDocs(
-          query(collection(db, collectionPath), orderBy("updatedAt", "desc")),
-        );
-        return snap.docs.map(
-          (docSnap) => docSnap.data() as Partial<LessonData>,
-        );
-      };
-
-      const scopedLessons = await readRecentLessons(
-        getSemesterCollectionPath(config, "lessons"),
-      );
-      const scopedLatestLessons = getLatestLessonsByUnitId(scopedLessons);
+      const { scopedLatestLessons, legacyLatestLessons } =
+        await readEffectiveStudentLessons(config);
       let latestSelection = findLatestLessonTreeSelection(
         tree,
         scopedLatestLessons,
@@ -159,13 +220,6 @@ export const readStudentLatestLessonSelection = (
       );
 
       if (!latestSelection) {
-        const legacyLessons = await readRecentLessons("lessons");
-        const scopedUnitIds = getLessonUnitIds(scopedLatestLessons);
-        const legacyLatestLessons = getLatestLessonsByUnitId(
-          legacyLessons,
-        ).filter(
-          (lesson) => !scopedUnitIds.has(String(lesson.unitId || "").trim()),
-        );
         latestSelection = findLatestLessonTreeSelection(
           tree,
           [...scopedLatestLessons, ...legacyLatestLessons],

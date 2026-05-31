@@ -3,7 +3,7 @@ import { InlineLoading } from "../../../../components/common/LoadingState";
 import { useAuth } from "../../../../contexts/AuthContext";
 import {
   readStudentLatestLessonSelection,
-  readStudentCurriculumTree,
+  readStudentVisibleCurriculumTree,
   type StudentCurriculumTreeItem,
 } from "../../../../lib/studentLessonReadCache";
 
@@ -61,7 +61,7 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
     const fetchTree = async () => {
       setLoading(true);
       try {
-        const nextTree = await readStudentCurriculumTree(config);
+        const nextTree = await readStudentVisibleCurriculumTree(config);
         if (cancelled) return;
         setTree(nextTree);
         if (selectedUnitIdRef.current) return;
@@ -153,7 +153,7 @@ const LessonSidebar: React.FC<LessonSidebarProps> = ({
           )}
           {!loading && tree.length === 0 && (
             <div className="p-4 text-center text-gray-400 text-sm">
-              등록된 목차가 없습니다.
+              공개된 수업 자료가 없습니다.
             </div>
           )}
 
