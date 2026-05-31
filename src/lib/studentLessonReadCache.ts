@@ -3,7 +3,6 @@ import {
   doc,
   getDoc,
   getDocs,
-  limit,
   orderBy,
   query,
   where,
@@ -23,6 +22,7 @@ import {
 import type { SystemConfig } from "../types";
 import {
   findLatestLessonTreeSelection,
+  getLessonTreeMetaTimestampMs,
   type LessonTreeSelectionTarget,
 } from "./lessonTreeSelection";
 
@@ -60,6 +60,30 @@ const getScopeKey = (config: ConfigLike) => {
 
 const getTreeCacheKey = (tree: StudentCurriculumTreeItem[]) =>
   JSON.stringify(tree);
+
+const sortLessonsByRecency = (lessons: Partial<LessonData>[]) =>
+  [...lessons].sort(
+    (left, right) =>
+      getLessonTreeMetaTimestampMs(right) - getLessonTreeMetaTimestampMs(left),
+  );
+
+const getLatestLessonsByUnitId = (lessons: Partial<LessonData>[]) => {
+  const latestByUnitId = new Map<string, Partial<LessonData>>();
+  for (const lesson of sortLessonsByRecency(lessons)) {
+    const unitId = String(lesson.unitId || "").trim();
+    if (!unitId || latestByUnitId.has(unitId)) continue;
+    latestByUnitId.set(unitId, lesson);
+  }
+  return Array.from(latestByUnitId.values());
+};
+
+const getLessonUnitIds = (lessons: Partial<LessonData>[]) =>
+  new Set(
+    lessons.map((lesson) => String(lesson.unitId || "").trim()).filter(Boolean),
+  );
+
+const pickStudentLesson = (lessons: Partial<LessonData>[]) =>
+  sortLessonsByRecency(lessons)[0] || null;
 
 const readCached = <T>(
   cache: Map<string, CacheEntry<T>>,
@@ -125,15 +149,26 @@ export const readStudentLatestLessonSelection = (
       const scopedLessons = await readRecentLessons(
         getSemesterCollectionPath(config, "lessons"),
       );
-      let latestSelection = findLatestLessonTreeSelection(tree, scopedLessons, {
-        visibleOnly: true,
-      });
+      const scopedLatestLessons = getLatestLessonsByUnitId(scopedLessons);
+      let latestSelection = findLatestLessonTreeSelection(
+        tree,
+        scopedLatestLessons,
+        {
+          visibleOnly: true,
+        },
+      );
 
       if (!latestSelection) {
         const legacyLessons = await readRecentLessons("lessons");
+        const scopedUnitIds = getLessonUnitIds(scopedLatestLessons);
+        const legacyLatestLessons = getLatestLessonsByUnitId(
+          legacyLessons,
+        ).filter(
+          (lesson) => !scopedUnitIds.has(String(lesson.unitId || "").trim()),
+        );
         latestSelection = findLatestLessonTreeSelection(
           tree,
-          [...scopedLessons, ...legacyLessons],
+          [...scopedLatestLessons, ...legacyLatestLessons],
           {
             visibleOnly: true,
           },
@@ -149,20 +184,19 @@ export const readStudentLesson = (config: ConfigLike, unitId: string) =>
     const semesterQuery = query(
       collection(db, getSemesterCollectionPath(config, "lessons")),
       where("unitId", "==", unitId),
-      limit(1),
     );
     let snap = await getDocs(semesterQuery);
     if (snap.empty) {
       snap = await getDocs(
-        query(
-          collection(db, "lessons"),
-          where("unitId", "==", unitId),
-          limit(1),
-        ),
+        query(collection(db, "lessons"), where("unitId", "==", unitId)),
       );
     }
 
-    return snap.empty ? null : (snap.docs[0].data() as Partial<LessonData>);
+    return snap.empty
+      ? null
+      : pickStudentLesson(
+          snap.docs.map((docSnap) => docSnap.data() as Partial<LessonData>),
+        );
   });
 
 export const readStudentMapResources = (config: ConfigLike) =>
