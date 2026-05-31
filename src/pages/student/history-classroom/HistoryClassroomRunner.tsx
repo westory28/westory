@@ -1344,13 +1344,34 @@ const HistoryClassroomRunner: React.FC = () => {
       if (networkOfflineRef.current) return;
       void handleForcedCancel("pagehide");
     };
+    const handleBeforeUnload = () => {
+      if (!assignment || !userData?.uid) return;
+      if (submittingRef.current || completedRef.current) return;
+      if (isScreenRotationGraceActive()) return;
+      if (networkOfflineRef.current) return;
+
+      const cooldownMinutes = getExitCooldownMinutes(assignment);
+      if (cooldownMinutes <= 0) {
+        clearCooldownLock(assignment.id, userData.uid);
+        return;
+      }
+
+      writeCooldownLock(
+        assignment.id,
+        userData.uid,
+        Date.now() + cooldownMinutes * 60 * 1000,
+        "beforeunload",
+      );
+    };
 
     document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("beforeunload", handleBeforeUnload);
     window.addEventListener("pagehide", handlePageHide);
 
     return () => {
       clearVisibilityCancelTimer();
       document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
       window.removeEventListener("pagehide", handlePageHide);
     };
   }, [

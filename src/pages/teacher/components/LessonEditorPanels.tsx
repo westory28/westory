@@ -218,9 +218,7 @@ const getFootnoteDisplayName = (footnote: LessonFootnote, index?: number) =>
   (typeof index === "number" ? `각주 ${index + 1}` : "각주");
 
 function blankBadgeLabel(blank: LessonWorksheetBlank) {
-  return (
-    blank.answer?.trim() || blank.prompt?.trim() || `p.${blank.page + 1} 빈칸`
-  );
+  return blank.answer?.trim() || blank.prompt?.trim() || `p.${blank.page} 빈칸`;
 }
 
 function pdfStatusBadgeClass(
@@ -1167,7 +1165,7 @@ export function LessonPdfSection({
                 )}
                 {teacherCurrentPage != null && (
                   <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">
-                    p.{teacherCurrentPage + 1}
+                    p.{teacherCurrentPage}
                   </span>
                 )}
                 <span
@@ -1417,7 +1415,7 @@ export function LessonPdfSection({
                     </span>
                     {teacherCurrentPage != null && (
                       <span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">
-                        현재 p.{teacherCurrentPage + 1}
+                        현재 p.{teacherCurrentPage}
                       </span>
                     )}
                   </div>
@@ -1692,7 +1690,7 @@ function FootnoteFloatingListItem({
             </span>
             {primaryAnchorPage != null && (
               <span className="inline-flex items-center whitespace-nowrap rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-500 ring-1 ring-slate-200">
-                p.{primaryAnchorPage + 1}
+                p.{primaryAnchorPage}
               </span>
             )}
           </div>
@@ -1766,7 +1764,7 @@ function BlankFloatingListItem({
               빈칸 {index + 1}
             </strong>
             <span className="inline-flex items-center whitespace-nowrap rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
-              p.{blank.page + 1}
+              p.{blank.page}
             </span>
             {selected && (
               <span className="inline-flex items-center whitespace-nowrap rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-semibold text-blue-700">

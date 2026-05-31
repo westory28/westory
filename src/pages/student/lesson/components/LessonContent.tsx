@@ -455,6 +455,15 @@ const LessonContent: React.FC<LessonContentProps> = ({
       return `<p${String(attrs).replace(classMatch[0], `class=${classMatch[1]}${Array.from(merged).join(" ")}${classMatch[1]}`)}>${inner}</p>`;
     });
 
+  const escapeHtmlText = (value: string) =>
+    String(value || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
+  const escapeHtmlAttribute = (value: string) =>
+    escapeHtmlText(value).replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
   const renderContent = (
     html: string,
     footnoteNumberMap: Map<string, number>,
@@ -469,14 +478,14 @@ const LessonContent: React.FC<LessonContentProps> = ({
           const anchorKey = sanitizeLessonFootnoteAnchorKey(token.slice(3));
           const footnote = footnoteMap.get(anchorKey);
           if (!footnote) {
-            return `<span class="lesson-footnote-missing" data-anchor-key="${anchorKey}"></span>`;
+            return `<span class="lesson-footnote-missing" data-anchor-key="${escapeHtmlAttribute(anchorKey)}"></span>`;
           }
           const footnoteNumber = footnoteNumberMap.get(anchorKey) || 0;
           const label =
             footnote.label?.trim() ||
             footnote.title?.trim() ||
             `참고 ${footnoteNumber || ""}`;
-          return `<button type="button" class="lesson-footnote-trigger" data-anchor-key="${anchorKey}" aria-label="${label} 보기"><span class="lesson-footnote-trigger__badge">${footnoteNumber || "i"}</span><span class="lesson-footnote-trigger__label">${label}</span></button>`;
+          return `<button type="button" class="lesson-footnote-trigger" data-anchor-key="${escapeHtmlAttribute(anchorKey)}" aria-label="${escapeHtmlAttribute(`${label} 보기`)}"><span class="lesson-footnote-trigger__badge">${footnoteNumber || "i"}</span><span class="lesson-footnote-trigger__label">${escapeHtmlText(label)}</span></button>`;
         }
         const answer = token;
         const width = getInlineBlankWidth(answer);
@@ -485,7 +494,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
           EMPTY_BLANK_LABEL.length,
         );
         const index = blankIndex++;
-        return `<input type="text" class="cloze-input" data-answer="${answer}" data-blank-index="${index}" placeholder="${EMPTY_BLANK_LABEL}" autocomplete="off" style="width:${width}px; --blank-font-size:${fontSize}px;" />`;
+        return `<input type="text" class="cloze-input" data-answer="${escapeHtmlAttribute(answer)}" data-blank-index="${index}" placeholder="${escapeHtmlAttribute(EMPTY_BLANK_LABEL)}" autocomplete="off" style="width:${width}px; --blank-font-size:${fontSize}px;" />`;
       },
     );
   };

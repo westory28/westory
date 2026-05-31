@@ -14,7 +14,10 @@ import { useAppToast } from "../../../components/common/AppToastProvider";
 import { PageLoading } from "../../../components/common/LoadingState";
 import { useAuth } from "../../../contexts/AuthContext";
 import ScoreCard from "./components/ScoreCard";
-import { getSemesterCollectionPath } from "../../../lib/semesterScope";
+import {
+  getSemesterCollectionPath,
+  getYearSemester,
+} from "../../../lib/semesterScope";
 import { lazyWithRetry } from "../../../lib/lazyWithRetry";
 import {
   getAchievementColor,
@@ -58,6 +61,8 @@ const getWarningAgreementErrorMessage = (error: unknown) => {
 const ScoreDashboard: React.FC = () => {
   const { userData, currentUser, config } = useAuth();
   const { showToast } = useAppToast();
+  const { year: activeYear, semester: activeSemester } =
+    getYearSemester(config);
   const [loading, setLoading] = useState(true);
   const [plans, setPlans] = useState<GradingPlan[]>([]);
   const [userScores, setUserScores] = useState<{ [key: string]: string }>({});
@@ -72,7 +77,7 @@ const ScoreDashboard: React.FC = () => {
   const hasHydratedUserDoc = userData?.uid === currentUser?.uid;
 
   // Filters
-  const [semester, setSemester] = useState(config?.semester || "1");
+  const [semester, setSemester] = useState(activeSemester);
   const [grade, setGrade] = useState(userData?.grade || "1");
   const [sortMode, setSortMode] = useState("importance");
 
@@ -80,9 +85,8 @@ const ScoreDashboard: React.FC = () => {
   const didInitDefaultsRef = useRef(false);
 
   const getDraftKey = (targetSemester: string) => {
-    const year = config?.year || "2025";
     const uid = currentUser?.uid || userData?.uid || "anonymous";
-    return `scoreDraft:${uid}:${year}:${targetSemester}`;
+    return `scoreDraft:${uid}:${activeYear}:${targetSemester}`;
   };
 
   const persistDraftScores = (
@@ -128,11 +132,11 @@ const ScoreDashboard: React.FC = () => {
 
   useEffect(() => {
     if (!userData || didInitDefaultsRef.current) return;
-    setSemester(config?.semester || "1");
+    setSemester(activeSemester);
     setGrade(userData.grade || "1");
     setSortMode("importance");
     didInitDefaultsRef.current = true;
-  }, [userData, config]);
+  }, [userData, activeSemester]);
 
   useEffect(() => {
     setWarningAcknowledgedLocal(false);
@@ -144,7 +148,7 @@ const ScoreDashboard: React.FC = () => {
       return;
     }
     setLoading(false);
-  }, [currentUser?.uid, config?.year, semester]);
+  }, [currentUser?.uid, activeYear, semester]);
 
   useEffect(() => {
     if (!currentUser?.uid || !hasHydratedUserDoc) {
@@ -193,12 +197,11 @@ const ScoreDashboard: React.FC = () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [semester, userScores]);
+  }, [activeYear, currentUser?.uid, semester, userData?.uid, userScores]);
 
   const fetchData = async (targetSemester: string = semester) => {
     setLoading(true);
     try {
-      const activeYear = config?.year || "2025";
       // 1. Fetch Plans
       const snap = await getDocs(
         query(
@@ -289,8 +292,7 @@ const ScoreDashboard: React.FC = () => {
     options?: { announce?: boolean },
   ) => {
     if (!currentUser?.uid) return;
-    const year = config?.year || "2025";
-    const scoreDocId = `${year}_${targetSemester}`;
+    const scoreDocId = `${activeYear}_${targetSemester}`;
     const sanitizedScores = sanitizeScores(scoresToSave);
     try {
       await setDoc(
@@ -308,7 +310,7 @@ const ScoreDashboard: React.FC = () => {
         showToast({
           tone: "success",
           title: "성적 계산기가 저장되었습니다.",
-          message: `${year}학년도 ${targetSemester}학기 입력값이 반영되었습니다.`,
+          message: `${activeYear}학년도 ${targetSemester}학기 입력값이 반영되었습니다.`,
         });
       }
     } catch (e) {
@@ -424,14 +426,12 @@ const ScoreDashboard: React.FC = () => {
 
   // Processing for Display
   const getFilteredAndSortedPlans = () => {
-    const year = config?.year || "2025";
-
     let filtered = plans.filter((p) => {
       const pGrade = p.targetGrade || "2";
       const pYear = p.academicYear;
       const pSem = p.semester;
       // Filter logic matches existing dashboard
-      const yearMatch = !pYear || pYear === year;
+      const yearMatch = !pYear || pYear === activeYear;
       const semesterMatch = !pSem || pSem === semester;
       return String(pGrade) === grade && yearMatch && semesterMatch;
     });
