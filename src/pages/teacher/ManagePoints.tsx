@@ -496,6 +496,9 @@ const ManagePoints: React.FC = () => {
   const [selectedOrderId, setSelectedOrderId] = useState("");
   const [orderMemo, setOrderMemo] = useState("");
   const [orderFeedback, setOrderFeedback] = useState("");
+  const [orderSavingOrderId, setOrderSavingOrderId] = useState("");
+  const [orderSavingStatus, setOrderSavingStatus] =
+    useState<PointOrderStatus | null>(null);
   const [selectedEditableTransactionId, setSelectedEditableTransactionId] =
     useState("");
   const [adjustmentDraftValue, setAdjustmentDraftValue] = useState("");
@@ -1681,12 +1684,16 @@ const ManagePoints: React.FC = () => {
   };
 
   const handleSaveOrder = async (nextStatus: PointOrderStatus) => {
-    if (!selectedOrder || !canManage) return;
+    if (!selectedOrder || !canManage || orderSavingStatus) return;
 
+    const orderId = selectedOrder.id;
     try {
+      setOrderSavingOrderId(orderId);
+      setOrderSavingStatus(nextStatus);
+      setOrderFeedback("구매 요청 상태를 반영하는 중입니다.");
       await reviewPointOrder({
         config,
-        orderId: selectedOrder.id,
+        orderId,
         nextStatus,
         actor,
         memo: orderMemo,
@@ -1696,6 +1703,9 @@ const ManagePoints: React.FC = () => {
     } catch (error: any) {
       console.error("Failed to review point order:", error);
       setOrderFeedback(error?.message || "요청 상태 변경에 실패했습니다.");
+    } finally {
+      setOrderSavingOrderId("");
+      setOrderSavingStatus(null);
     }
   };
 
@@ -2014,6 +2024,8 @@ const ManagePoints: React.FC = () => {
               selectedOrder={selectedOrder}
               orderMemo={orderMemo}
               orderFeedback={orderFeedback}
+              orderSavingOrderId={orderSavingOrderId}
+              orderSavingStatus={orderSavingStatus}
               canManage={canManage}
               onFilterChange={setOrderFilter}
               onSelectOrder={setSelectedOrderId}

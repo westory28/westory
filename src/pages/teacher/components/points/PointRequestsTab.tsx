@@ -17,6 +17,8 @@ interface PointRequestsTabProps {
   selectedOrder: PointOrder | null;
   orderMemo: string;
   orderFeedback: string;
+  orderSavingOrderId: string;
+  orderSavingStatus: PointOrderStatus | null;
   canManage: boolean;
   onFilterChange: (value: "all" | PointOrderStatus) => void;
   onSelectOrder: (orderId: string) => void;
@@ -29,6 +31,14 @@ const PURCHASE_FLOW_STEPS = [
   { key: "approved", label: "승인" },
   { key: "fulfilled", label: "지급" },
 ] as const;
+
+const ORDER_SAVING_LABELS: Record<PointOrderStatus, string> = {
+  requested: "승인 취소 중...",
+  approved: "승인 중...",
+  rejected: "반려 중...",
+  fulfilled: "지급 처리 중...",
+  cancelled: "취소 처리 중...",
+};
 
 const getOrderStepIndex = (status?: PointOrderStatus | null) => {
   if (status === "fulfilled") return 2;
@@ -47,6 +57,43 @@ const getOrderStatusToneClass = (status: PointOrderStatus) => {
     return "border-rose-200 bg-rose-50 text-rose-700";
   return "border-blue-200 bg-blue-50 text-blue-700";
 };
+
+const OrderActionContent: React.FC<{
+  isSaving: boolean;
+  idleLabel: string;
+  savingLabel: string;
+}> = ({ isSaving, idleLabel, savingLabel }) => (
+  <span className="inline-flex items-center justify-center gap-2">
+    {isSaving && (
+      <span
+        className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+        aria-hidden="true"
+      />
+    )}
+    <span>{isSaving ? savingLabel : idleLabel}</span>
+  </span>
+);
+
+const isSelectedOrderSaving = (
+  selectedOrder: PointOrder | null,
+  orderSavingOrderId: string,
+  orderSavingStatus: PointOrderStatus | null,
+) =>
+  Boolean(
+    selectedOrder &&
+    orderSavingOrderId === selectedOrder.id &&
+    orderSavingStatus,
+  );
+
+const isApprovalToggleSaving = (
+  selectedOrder: PointOrder | null,
+  orderSavingOrderId: string,
+  orderSavingStatus: PointOrderStatus | null,
+) =>
+  isSelectedOrderSaving(selectedOrder, orderSavingOrderId, orderSavingStatus) &&
+  ((selectedOrder?.status === "approved" &&
+    orderSavingStatus === "requested") ||
+    (selectedOrder?.status !== "approved" && orderSavingStatus === "approved"));
 
 const OrderProcessStepper: React.FC<{
   status?: PointOrderStatus | null;
@@ -130,6 +177,8 @@ const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
   selectedOrder,
   orderMemo,
   orderFeedback,
+  orderSavingOrderId,
+  orderSavingStatus,
   canManage,
   onFilterChange,
   onSelectOrder,
@@ -203,9 +252,15 @@ const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
                 </td>
                 <td className="p-4 text-center">
                   <span
-                    className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${getOrderStatusToneClass(order.status)}`}
+                    className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${
+                      orderSavingOrderId === order.id
+                        ? "border-amber-200 bg-amber-50 text-amber-700"
+                        : getOrderStatusToneClass(order.status)
+                    }`}
                   >
-                    {POINT_ORDER_STATUS_LABELS[order.status] || order.status}
+                    {orderSavingOrderId === order.id
+                      ? "처리 중"
+                      : POINT_ORDER_STATUS_LABELS[order.status] || order.status}
                   </span>
                 </td>
               </tr>
@@ -266,6 +321,8 @@ const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
           />
           {!!orderFeedback && (
             <div
+              role="status"
+              aria-live="polite"
               className={`mt-4 rounded-lg px-4 py-3 text-sm font-bold ${getPointFeedbackToneClass(orderFeedback)}`}
             >
               {orderFeedback}
@@ -276,6 +333,7 @@ const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
               type="button"
               disabled={
                 !canManage ||
+                Boolean(orderSavingStatus) ||
                 !["requested", "approved"].includes(selectedOrder.status)
               }
               onClick={() =>
@@ -287,31 +345,87 @@ const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
               }
               className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-bold text-white disabled:bg-blue-300"
             >
-              {selectedOrder.status === "approved" ? "승인 취소" : "승인"}
+              <OrderActionContent
+                isSaving={isApprovalToggleSaving(
+                  selectedOrder,
+                  orderSavingOrderId,
+                  orderSavingStatus,
+                )}
+                idleLabel={
+                  selectedOrder.status === "approved" ? "승인 취소" : "승인"
+                }
+                savingLabel={
+                  orderSavingStatus
+                    ? ORDER_SAVING_LABELS[orderSavingStatus]
+                    : "처리 중..."
+                }
+              />
             </button>
             <button
               type="button"
-              disabled={!canManage || selectedOrder.status !== "requested"}
+              disabled={
+                !canManage ||
+                Boolean(orderSavingStatus) ||
+                selectedOrder.status !== "requested"
+              }
               onClick={() => onSaveOrder("rejected")}
               className="rounded-lg bg-rose-500 px-4 py-2.5 text-sm font-bold text-white disabled:bg-rose-300"
             >
-              반려
+              <OrderActionContent
+                isSaving={
+                  isSelectedOrderSaving(
+                    selectedOrder,
+                    orderSavingOrderId,
+                    orderSavingStatus,
+                  ) && orderSavingStatus === "rejected"
+                }
+                idleLabel="반려"
+                savingLabel={ORDER_SAVING_LABELS.rejected}
+              />
             </button>
             <button
               type="button"
-              disabled={!canManage || selectedOrder.status !== "approved"}
+              disabled={
+                !canManage ||
+                Boolean(orderSavingStatus) ||
+                selectedOrder.status !== "approved"
+              }
               onClick={() => onSaveOrder("fulfilled")}
               className="rounded-lg border border-emerald-500 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 disabled:border-emerald-200 disabled:text-emerald-300"
             >
-              지급 완료
+              <OrderActionContent
+                isSaving={
+                  isSelectedOrderSaving(
+                    selectedOrder,
+                    orderSavingOrderId,
+                    orderSavingStatus,
+                  ) && orderSavingStatus === "fulfilled"
+                }
+                idleLabel="지급 완료"
+                savingLabel={ORDER_SAVING_LABELS.fulfilled}
+              />
             </button>
             <button
               type="button"
-              disabled={!canManage || selectedOrder.status !== "requested"}
+              disabled={
+                !canManage ||
+                Boolean(orderSavingStatus) ||
+                selectedOrder.status !== "requested"
+              }
               onClick={() => onSaveOrder("cancelled")}
               className="rounded-lg border border-gray-300 bg-gray-50 px-4 py-2.5 text-sm font-bold text-gray-700 disabled:text-gray-300"
             >
-              요청 취소 처리
+              <OrderActionContent
+                isSaving={
+                  isSelectedOrderSaving(
+                    selectedOrder,
+                    orderSavingOrderId,
+                    orderSavingStatus,
+                  ) && orderSavingStatus === "cancelled"
+                }
+                idleLabel="요청 취소 처리"
+                savingLabel={ORDER_SAVING_LABELS.cancelled}
+              />
             </button>
           </div>
         </>
