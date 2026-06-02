@@ -15,6 +15,7 @@ interface ToastInput {
   message?: string;
   tone?: ToastTone;
   durationMs?: number;
+  persistent?: boolean;
 }
 
 interface ToastItem extends ToastInput {
@@ -110,6 +111,7 @@ export const AppToastProvider: React.FC<{ children: React.ReactNode }> = ({
       message: normalizeToastText(input.message),
       tone: input.tone || "info",
       durationMs: input.durationMs,
+      persistent: input.persistent,
     };
     setToasts((prev) => [...prev, nextToast].slice(-4));
     return id;
@@ -118,14 +120,16 @@ export const AppToastProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     if (toasts.length === 0) return undefined;
 
-    const timers = toasts.map((toast) =>
-      window.setTimeout(
-        () => {
-          dismissToast(toast.id);
-        },
-        Math.max(2200, toast.durationMs || 3600),
-      ),
-    );
+    const timers = toasts
+      .filter((toast) => !toast.persistent && toast.durationMs !== 0)
+      .map((toast) =>
+        window.setTimeout(
+          () => {
+            dismissToast(toast.id);
+          },
+          Math.max(2200, toast.durationMs || 3600),
+        ),
+      );
 
     return () => {
       timers.forEach((timer) => window.clearTimeout(timer));

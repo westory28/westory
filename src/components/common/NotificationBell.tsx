@@ -99,6 +99,9 @@ const getNotificationTargetUrl = (notification: WestoryNotification) => {
   return targetUrl;
 };
 
+const getRealtimeToastKey = (notification: WestoryNotification) =>
+  `${notification.broadcast ? "broadcast" : "personal"}:${notification.id}`;
+
 const NotificationBell: React.FC<NotificationBellProps> = ({
   className = "",
   buttonClassName = "",
@@ -113,6 +116,11 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
   const [inbox, setInbox] = useState<WestoryNotificationInbox | null>(null);
   const [clearing, setClearing] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const realtimeToastStateRef = useRef({
+    initialized: false,
+    unreadCount: 0,
+  });
+  const shownRealtimeToastKeysRef = useRef<Set<string>>(new Set());
 
   const displayUnreadCount = unreadCount > 99 ? "99+" : String(unreadCount);
   const hasNotifications = notifications.length > 0;
@@ -135,6 +143,83 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
   useEffect(() => {
     onUnreadCountChange?.(unreadCount);
   }, [onUnreadCountChange, unreadCount]);
+
+  useEffect(() => {
+    if (!currentUser?.uid || !config) {
+      realtimeToastStateRef.current = {
+        initialized: false,
+        unreadCount: 0,
+      };
+      shownRealtimeToastKeysRef.current.clear();
+      return undefined;
+    }
+
+    const previousState = realtimeToastStateRef.current;
+    if (!previousState.initialized) {
+      realtimeToastStateRef.current = {
+        initialized: true,
+        unreadCount,
+      };
+      return undefined;
+    }
+
+    realtimeToastStateRef.current = {
+      initialized: true,
+      unreadCount,
+    };
+
+    if (unreadCount <= previousState.unreadCount) return undefined;
+
+    let cancelled = false;
+
+    const showLatestRealtimeNotification = async () => {
+      try {
+        const nextNotifications = await loadNotifications(
+          config,
+          currentUser.uid,
+          {
+            includeBroadcasts,
+            lastBroadcastReadAt: inbox?.lastBroadcastReadAt,
+            broadcastClearedAt: inbox?.broadcastClearedAt,
+          },
+        );
+        if (cancelled) return;
+
+        const notification =
+          nextNotifications.find((item) => !item.readAt) ||
+          nextNotifications[0];
+        if (!notification) return;
+
+        const toastKey = getRealtimeToastKey(notification);
+        if (shownRealtimeToastKeysRef.current.has(toastKey)) return;
+        shownRealtimeToastKeysRef.current.add(toastKey);
+
+        showToast({
+          tone: notification.priority === "high" ? "warning" : "info",
+          title: notification.title || "새 알림",
+          message: getNotificationBodyText(notification),
+          persistent: true,
+        });
+      } catch (error) {
+        console.error("Failed to show realtime notification toast:", error);
+      }
+    };
+
+    void showLatestRealtimeNotification();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    config?.semester,
+    config?.year,
+    currentUser?.uid,
+    includeBroadcasts,
+    inbox?.broadcastClearedAt,
+    inbox?.lastBroadcastReadAt,
+    showToast,
+    unreadCount,
+  ]);
 
   useEffect(() => {
     if (!open || !currentUser?.uid || !config) return undefined;
