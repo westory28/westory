@@ -755,7 +755,11 @@
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
   .fc
   .fc-daygrid-day-events {
+  box-sizing: border-box;
   display: block;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
   min-height: 0;
   flex: 1 1 auto;
   margin-top: 0.25rem;
@@ -802,6 +806,9 @@
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
   .fc
   .fc-daygrid-event-harness-abs.student-calendar-event-harness--single {
+  box-sizing: border-box !important;
+  inline-size: 100% !important;
+  max-inline-size: 100% !important;
   width: 100% !important;
   max-width: 100% !important;
   min-width: 0 !important;
@@ -856,6 +863,9 @@
   .fc
   .fc-daygrid-event.student-calendar-single-event
   .fc-event-title-container {
+  box-sizing: border-box;
+  inline-size: 100%;
+  max-inline-size: 100%;
   min-width: 0;
   width: 100%;
   max-width: 100%;
@@ -886,6 +896,9 @@
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
   .fc
   .fc-daygrid-event.student-calendar-single-event {
+  box-sizing: border-box !important;
+  inline-size: 100% !important;
+  max-inline-size: 100% !important;
   width: 100% !important;
   max-width: 100% !important;
   min-width: 0 !important;

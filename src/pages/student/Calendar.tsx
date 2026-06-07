@@ -397,8 +397,18 @@ const Calendar = () => {
                 .fc-toolbar-title { font-size: 1.25em !important; font-weight: 700; color: #1f2937; }
                 .fc-button { background-color: #2563eb !important; border-color: #2563eb !important; font-weight: 600 !important; }
                 .fc-daygrid-event { cursor: pointer; border-radius: 4px; padding: 2px 4px; font-size: 0.8rem; font-weight: 600; border: none; }
+                .fc-daygrid-day-events {
+                    box-sizing: border-box;
+                    min-width: 0;
+                    width: 100%;
+                    max-width: 100%;
+                    overflow: visible;
+                }
                 .fc-daygrid-event-harness.student-calendar-page-event-harness--single,
                 .fc-daygrid-event-harness-abs.student-calendar-page-event-harness--single {
+                    box-sizing: border-box !important;
+                    inline-size: 100% !important;
+                    max-inline-size: 100% !important;
                     width: 100% !important;
                     max-width: 100% !important;
                     min-width: 0 !important;
@@ -420,6 +430,9 @@ const Calendar = () => {
                 .fc-daygrid-event.student-calendar-page-single-event .fc-event-main,
                 .fc-daygrid-event.student-calendar-page-single-event .fc-event-main-frame,
                 .fc-daygrid-event.student-calendar-page-single-event .fc-event-title-container {
+                    box-sizing: border-box;
+                    inline-size: 100%;
+                    max-inline-size: 100%;
                     min-width: 0;
                     width: 100%;
                     max-width: 100%;
