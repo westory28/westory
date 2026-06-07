@@ -121,6 +121,37 @@ const getAssessmentConfig = (
   };
 };
 
+const getRosterTimestampSeconds = (value: unknown) => {
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "seconds" in value &&
+    typeof (value as { seconds?: unknown }).seconds === "number"
+  ) {
+    return (value as { seconds: number }).seconds;
+  }
+  return 0;
+};
+
+const getRosterAssessmentOrder = (roster: PerformanceScoreRoster) => {
+  const order = Number(roster.assessmentOrder || 0);
+  if (Number.isFinite(order) && order > 0) return order;
+
+  const text = `${roster.title || ""} ${roster.sourceFileName || ""}`;
+  if (text.includes("고조선") || text.includes("8조법")) return 1;
+  if (text.includes("삼국") || text.includes("무덤")) return 2;
+  return 999;
+};
+
+const sortPerformanceScoreRosters = (items: PerformanceScoreRoster[]) =>
+  [...items].sort(
+    (a, b) =>
+      getRosterAssessmentOrder(a) - getRosterAssessmentOrder(b) ||
+      String(a.title || "").localeCompare(String(b.title || ""), "ko") ||
+      getRosterTimestampSeconds(b.createdAt) -
+        getRosterTimestampSeconds(a.createdAt),
+  );
+
 const getItemLabel = (item: { name: string; shortName?: string }) =>
   item.shortName || item.name;
 
@@ -602,7 +633,7 @@ const PerformanceScoreManager: React.FC = () => {
           items: Array.isArray(data.items) ? data.items : [],
         };
       });
-      setRosters(loaded);
+      setRosters(sortPerformanceScoreRosters(loaded));
     } catch (error) {
       console.error("Failed to load performance score rosters:", error);
     } finally {
