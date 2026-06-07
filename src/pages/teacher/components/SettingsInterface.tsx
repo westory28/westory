@@ -91,6 +91,18 @@ const SettingsInterface: React.FC = () => {
   const getSitemapHeaderClass = (index: number) =>
     SITEMAP_HEADER_COLORS[index % SITEMAP_HEADER_COLORS.length];
 
+  const getPortalLabel = (portal: PortalType) =>
+    portal === "student" ? "학생 대시보드" : "교사 대시보드";
+
+  const getPortalMenuStats = (portal: PortalType) => {
+    const children = menuConfig[portal].flatMap((item) => item.children || []);
+    return {
+      parentCount: menuConfig[portal].length,
+      childCount: children.length,
+      hiddenCount: children.filter((child) => child.hidden).length,
+    };
+  };
+
   useEffect(() => {
     const loadSettings = async () => {
       try {
@@ -586,113 +598,169 @@ const SettingsInterface: React.FC = () => {
         )}
 
         {activeTab === "sitemap" && (
-          <div className="space-y-6 pb-24">
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => setActivePortal("student")}
-                className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activePortal === "student" ? "bg-emerald-600 text-white shadow" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-              >
-                학생 대시보드 메뉴
-              </button>
-              <button
-                onClick={() => setActivePortal("teacher")}
-                className={`px-4 py-2 rounded-lg text-sm font-bold transition ${activePortal === "teacher" ? "bg-indigo-600 text-white shadow" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-              >
-                교사 대시보드 메뉴
-              </button>
+          <div className="space-y-5 pb-24">
+            <section className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                <div>
+                  <h3 className="flex items-center gap-2 text-base font-extrabold text-gray-900">
+                    <i className="fas fa-sitemap text-blue-500"></i>
+                    사이트맵 메뉴 관리
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    선택한 대시보드의 상위/하위 메뉴를 확인하고 바로 편집합니다.
+                  </p>
+                </div>
+                <div
+                  role="tablist"
+                  aria-label="사이트맵 미리보기 대상"
+                  className="inline-flex rounded-xl bg-gray-100 p-1"
+                >
+                  {(["student", "teacher"] as PortalType[]).map((portal) => {
+                    const stats = getPortalMenuStats(portal);
+                    return (
+                      <button
+                        key={`sitemap-portal-tab-${portal}`}
+                        type="button"
+                        role="tab"
+                        aria-selected={activePortal === portal}
+                        onClick={() => setActivePortal(portal)}
+                        className={`min-w-[136px] rounded-lg px-4 py-2 text-sm font-bold transition ${
+                          activePortal === portal
+                            ? "bg-blue-600 text-white shadow-sm"
+                            : "text-gray-600 hover:bg-white hover:text-gray-900"
+                        }`}
+                      >
+                        {getPortalLabel(portal)}
+                        <span
+                          className={`ml-2 text-xs font-semibold ${
+                            activePortal === portal
+                              ? "text-blue-100"
+                              : "text-gray-400"
+                          }`}
+                        >
+                          {stats.parentCount}개
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="mt-4 grid grid-cols-1 gap-2 text-sm md:grid-cols-3">
+                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                  <span className="text-gray-500">상위 메뉴</span>
+                  <strong className="ml-2 text-gray-900">
+                    {getPortalMenuStats(activePortal).parentCount}개
+                  </strong>
+                </div>
+                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                  <span className="text-gray-500">하위 메뉴</span>
+                  <strong className="ml-2 text-gray-900">
+                    {getPortalMenuStats(activePortal).childCount}개
+                  </strong>
+                </div>
+                <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                  <span className="text-gray-500">숨김 메뉴</span>
+                  <strong className="ml-2 text-gray-900">
+                    {getPortalMenuStats(activePortal).hiddenCount}개
+                  </strong>
+                </div>
+              </div>
+            </section>
+
+            <div className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+              <i className="fas fa-info-circle mr-1"></i>
+              이름 변경, 순서 이동, 삭제, 숨김 설정 후 우측 하단 저장 버튼을
+              눌러 반영합니다.
             </div>
 
-            <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-sm text-blue-700">
-              <i className="fas fa-sitemap mr-1"></i>
-              사이트맵 구조로 상위/하위 메뉴를 정리합니다. 이름 변경, 순서 이동,
-              삭제 후 저장을 눌러주세요.
-            </div>
-
-            <div className="border border-gray-200 rounded-xl p-4 bg-white space-y-5">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-bold text-gray-700">
-                  전체 사이트맵 미리보기
-                </h4>
-                <span className="text-xs text-gray-400">
-                  현재 편집 상태 기준
+            <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h4 className="text-sm font-extrabold text-gray-900">
+                    {getPortalLabel(activePortal)} 미리보기
+                  </h4>
+                  <p className="mt-1 text-xs text-gray-500">
+                    현재 편집 상태 기준으로 선택한 대시보드만 표시합니다.
+                  </p>
+                </div>
+                <span className="inline-flex w-fit items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-600">
+                  상위 {getPortalMenuStats(activePortal).parentCount}개
                 </span>
               </div>
 
-              {(["student", "teacher"] as PortalType[]).map((portal) => (
-                <div key={`sitemap-preview-${portal}`} className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${portal === "student" ? "bg-emerald-100 text-emerald-700" : "bg-indigo-100 text-indigo-700"}`}
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {menuConfig[activePortal].map((item, idx) => (
+                  <div
+                    key={`preview-${activePortal}-${item.url}-${idx}`}
+                    className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm"
+                  >
+                    <div
+                      className={`px-3 py-2.5 text-sm font-bold text-white ${getSitemapHeaderClass(idx)}`}
                     >
-                      {portal === "student" ? "학생 대시보드" : "교사 대시보드"}
-                    </span>
-                    <span className="text-xs text-gray-500">
-                      상위 {menuConfig[portal].length}개
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-                    {menuConfig[portal].map((item, idx) => (
-                      <div
-                        key={`preview-${portal}-${item.url}-${idx}`}
-                        className="border border-gray-200 rounded-lg overflow-hidden bg-gray-50"
-                      >
-                        <div
-                          className={`px-3 py-2.5 text-white text-sm font-bold ${getSitemapHeaderClass(idx)}`}
-                        >
-                          {item.name}
-                        </div>
-                        <div className="p-3 bg-white min-h-[110px]">
-                          {item.children && item.children.length > 0 ? (
-                            <ul className="space-y-1.5">
-                              {item.children.map((child, childIdx) => (
-                                <li
-                                  key={`preview-child-${child.url}-${childIdx}`}
-                                  className="flex items-center justify-between gap-2 border-b border-dashed border-gray-200 pb-1 text-sm"
+                      {item.name}
+                    </div>
+                    <div className="min-h-[118px] bg-white p-3">
+                      {item.children && item.children.length > 0 ? (
+                        <ul className="space-y-1.5">
+                          {item.children.map((child, childIdx) => (
+                            <li
+                              key={`preview-child-${child.url}-${childIdx}`}
+                              className="flex items-center justify-between gap-2 border-b border-dashed border-gray-200 pb-1 text-sm"
+                            >
+                              <span
+                                className={`min-w-0 flex-1 ${child.hidden ? "text-gray-400 line-through" : "text-gray-700"}`}
+                              >
+                                • {child.name}
+                              </span>
+                              {activePortal === "student" && (
+                                <button
+                                  type="button"
+                                  aria-label={`${child.name} ${child.hidden ? "숨김 해제" : "숨기기"}`}
+                                  aria-pressed={child.hidden}
+                                  onClick={() =>
+                                    toggleChildHidden(
+                                      activePortal,
+                                      idx,
+                                      childIdx,
+                                    )
+                                  }
+                                  className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold transition ${child.hidden ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"}`}
                                 >
-                                  <span
-                                    className={`min-w-0 flex-1 ${child.hidden ? "text-gray-400 line-through" : "text-gray-700"}`}
-                                  >
-                                    • {child.name}
-                                  </span>
-                                  {portal === "student" && (
-                                    <button
-                                      type="button"
-                                      aria-label={`${child.name} ${child.hidden ? "숨김 해제" : "숨기기"}`}
-                                      aria-pressed={child.hidden}
-                                      onClick={() =>
-                                        toggleChildHidden(portal, idx, childIdx)
-                                      }
-                                      className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold transition ${child.hidden ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"}`}
-                                    >
-                                      {child.hidden ? "숨김 해제" : "숨기기"}
-                                    </button>
-                                  )}
-                                  {portal !== "student" && child.hidden && (
-                                    <span className="shrink-0 rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-semibold text-gray-600">
-                                      숨김
-                                    </span>
-                                  )}
-                                </li>
-                              ))}
-                            </ul>
-                          ) : (
-                            <p className="text-sm text-gray-400">
-                              하위 메뉴 없음
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                                  {child.hidden ? "숨김 해제" : "숨기기"}
+                                </button>
+                              )}
+                              {activePortal !== "student" && child.hidden && (
+                                <span className="shrink-0 rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-semibold text-gray-600">
+                                  숨김
+                                </span>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-sm text-gray-400">하위 메뉴 없음</p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
 
-            <div className="border border-gray-200 rounded-xl p-4 bg-gray-50">
-              <h4 className="text-sm font-bold text-gray-700 mb-3">
-                상위 메뉴 추가
-              </h4>
+            <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+              <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h4 className="text-sm font-extrabold text-gray-900">
+                    상위 메뉴 추가
+                  </h4>
+                  <p className="mt-1 text-xs text-gray-500">
+                    {getPortalLabel(activePortal)}에 새 상위 메뉴를 추가합니다.
+                  </p>
+                </div>
+                <span className="inline-flex w-fit items-center rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-600">
+                  {getPortalLabel(activePortal)}
+                </span>
+              </div>
               <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr_auto] gap-2">
                 <input
                   type="text"
@@ -722,7 +790,20 @@ const SettingsInterface: React.FC = () => {
               </div>
             </div>
 
-            <div className="space-y-4">
+            <div className="space-y-4 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+              <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h4 className="text-sm font-extrabold text-gray-900">
+                    {getPortalLabel(activePortal)} 메뉴 편집
+                  </h4>
+                  <p className="mt-1 text-xs text-gray-500">
+                    순서, 이름, 하위 메뉴를 조정합니다.
+                  </p>
+                </div>
+                <span className="inline-flex w-fit items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-bold text-gray-600">
+                  상위 {getPortalMenuStats(activePortal).parentCount}개
+                </span>
+              </div>
               {menuConfig[activePortal].map((item, parentIndex) => (
                 <div
                   key={`${activePortal}-${item.url}-${parentIndex}`}
