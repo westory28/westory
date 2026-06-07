@@ -2316,7 +2316,7 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
 };
 
 const PerformanceScoreManager: React.FC = () => {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { config, currentUser } = useAuth();
   const { showToast } = useAppToast();
   const { confirm } = useAppDialog();
@@ -3211,6 +3211,14 @@ const PerformanceScoreManager: React.FC = () => {
   const openObjectionModal = () => {
     setObjectionModalOpen(true);
     void loadPerformanceScoreObjections();
+  };
+
+  const closeObjectionModal = () => {
+    setObjectionModalOpen(false);
+    if (searchParams.get("panel") !== "objections") return;
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("panel");
+    setSearchParams(nextParams, { replace: true });
   };
 
   useEffect(() => {
@@ -5629,7 +5637,7 @@ const PerformanceScoreManager: React.FC = () => {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setObjectionModalOpen(false)}
+                  onClick={closeObjectionModal}
                   className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50"
                   aria-label="이의 목록 창 닫기"
                 >
@@ -5855,7 +5863,7 @@ const PerformanceScoreManager: React.FC = () => {
             <div className="flex justify-end border-t border-slate-200 px-5 py-4">
               <button
                 type="button"
-                onClick={() => setObjectionModalOpen(false)}
+                onClick={closeObjectionModal}
                 className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 transition hover:bg-slate-50"
               >
                 닫기
