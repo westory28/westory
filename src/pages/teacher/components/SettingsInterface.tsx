@@ -586,7 +586,7 @@ const SettingsInterface: React.FC = () => {
         )}
 
         {activeTab === "sitemap" && (
-          <div className="space-y-6">
+          <div className="space-y-6 pb-24">
             <div className="flex flex-wrap gap-2">
               <button
                 onClick={() => setActivePortal("student")}
@@ -915,12 +915,12 @@ const SettingsInterface: React.FC = () => {
               ))}
             </div>
 
-            <div className="text-right">
+            <div className="fixed bottom-4 left-4 right-4 z-40 flex justify-end sm:bottom-6 sm:left-auto sm:right-6">
               <button
                 type="button"
                 onClick={() => void saveMenuConfig()}
                 disabled={savingMenu}
-                className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition"
+                className="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white font-bold py-3 px-8 rounded-xl shadow-xl transition sm:w-auto"
               >
                 <i className="fas fa-save mr-2"></i>
                 {savingMenu ? "저장 중..." : "사이트맵 저장"}
