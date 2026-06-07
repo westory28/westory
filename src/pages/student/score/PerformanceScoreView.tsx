@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Bar } from "react-chartjs-2";
 import {
   BarElement,
@@ -7,7 +7,7 @@ import {
   LinearScale,
   Tooltip,
 } from "chart.js";
-import { doc, serverTimestamp, setDoc } from "firebase/firestore";
+import { doc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { PageLoading } from "../../../components/common/LoadingState";
 import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
@@ -18,6 +18,7 @@ import {
   formatPerformanceScore,
   getPerformanceScorePercent,
   loadUserPerformanceScoreRecords,
+  normalizeSchoolValue,
   normalizeStudentName,
   type PerformanceScoreRecord,
 } from "../../../lib/performanceScores";
@@ -56,26 +57,17 @@ const getItemLabel = (
   index: number,
 ) => item.shortName || getPerformanceScoreItemShortName(item.name, index);
 
-const createSignatureImageDataUrl = (signatureName: string) => {
-  const canvas = document.createElement("canvas");
-  canvas.width = 360;
-  canvas.height = 96;
-  const context = canvas.getContext("2d");
-  if (!context) return "";
+const SIGNATURE_CANVAS_WIDTH = 900;
+const SIGNATURE_CANVAS_HEIGHT = 260;
+const SIGNATURE_IMAGE_MAX_LENGTH = 110000;
 
-  context.clearRect(0, 0, canvas.width, canvas.height);
-  context.fillStyle = "#0f172a";
-  context.font = "700 42px 'Noto Sans KR', 'Malgun Gothic', sans-serif";
-  context.textAlign = "center";
-  context.textBaseline = "middle";
-  context.fillText(signatureName, canvas.width / 2, 48);
+const getDataUrlStoredLength = (dataUrl: string) => dataUrl.length;
 
-  context.fillStyle = "#64748b";
-  context.font = "700 12px 'Noto Sans KR', 'Malgun Gothic', sans-serif";
-  context.fillText("점수 확인", canvas.width / 2, 78);
+const getRecordScoreId = (record: PerformanceScoreRecord) =>
+  record.id || record.rosterId || "";
 
-  return canvas.toDataURL("image/png");
-};
+const isRecordConfirmed = (record: PerformanceScoreRecord) =>
+  Boolean(record.signatureImage || record.confirmation?.signatureImage);
 
 const PerformanceScoreView: React.FC = () => {
   const { currentUser, userData, config } = useAuth();
@@ -84,9 +76,16 @@ const PerformanceScoreView: React.FC = () => {
   const [records, setRecords] = useState<PerformanceScoreRecord[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [signatureModalOpen, setSignatureModalOpen] = useState(false);
-  const [signatureName, setSignatureName] = useState("");
+  const [signatureConsent, setSignatureConsent] = useState(false);
+  const [signatureDrawn, setSignatureDrawn] = useState(false);
+  const [signatureReviewStep, setSignatureReviewStep] = useState<
+    "sign" | "review"
+  >("sign");
   const [signatureError, setSignatureError] = useState("");
   const [confirming, setConfirming] = useState(false);
+  const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const drawingRef = useRef(false);
+  const lastPointRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     if (!currentUser?.uid) {
@@ -122,22 +121,6 @@ const PerformanceScoreView: React.FC = () => {
       records.find((record) => record.id === selectedId) || records[0] || null,
     [records, selectedId],
   );
-
-  useEffect(() => {
-    if (!selectedRecord) return;
-    setSignatureName(
-      selectedRecord.signatureName ||
-        selectedRecord.studentName ||
-        userData?.name ||
-        "",
-    );
-    setSignatureError("");
-  }, [
-    selectedRecord?.id,
-    selectedRecord?.signatureName,
-    selectedRecord?.studentName,
-    userData?.name,
-  ]);
 
   const percent = selectedRecord
     ? getPerformanceScorePercent(
@@ -180,81 +163,235 @@ const PerformanceScoreView: React.FC = () => {
     : { labels: [], datasets: [] };
 
   const expectedSignatureName =
-    selectedRecord?.studentName || userData?.name || "";
-  const selectedScoreId = selectedRecord?.id || selectedRecord?.rosterId || "";
+    userData?.name || selectedRecord?.studentName || "";
   const confirmedAt = selectedRecord?.signedAt;
-  const hasConfirmation = Boolean(selectedRecord?.signatureName);
+  const hasConfirmation = selectedRecord
+    ? isRecordConfirmed(selectedRecord)
+    : false;
+  const confirmedRecordCount = records.filter(isRecordConfirmed).length;
+  const allScoresConfirmed =
+    records.length > 0 && confirmedRecordCount === records.length;
 
-  const submitSignatureConfirmation = async () => {
-    if (!currentUser?.uid || !selectedRecord || !selectedScoreId) return;
-    const trimmedName = signatureName.trim();
-    if (!trimmedName) {
-      setSignatureError("서명할 이름을 입력해 주세요.");
+  const getStudentIdentityError = () => {
+    if (!currentUser?.uid) return "로그인한 학생 정보를 확인하지 못했습니다.";
+    if (!records.length) return "확인할 수행평가 점수가 없습니다.";
+    if (!expectedSignatureName.trim()) {
+      return "학생 이름을 확인하지 못했습니다. 마이페이지의 이름 정보를 확인해 주세요.";
+    }
+
+    const expectedNameKey = normalizeStudentName(expectedSignatureName);
+    const expectedGrade = normalizeSchoolValue(userData?.grade);
+    const expectedClass = normalizeSchoolValue(userData?.class);
+    const expectedNumber = normalizeSchoolValue(userData?.number);
+
+    for (const record of records) {
+      const scoreId = getRecordScoreId(record);
+      if (!scoreId) {
+        return `${record.title} 점수 문서의 식별자를 확인하지 못했습니다.`;
+      }
+      if (!record.uid || record.uid !== currentUser.uid) {
+        return `${record.title} 점수 문서의 학생 정보가 현재 로그인 학생과 일치하지 않습니다.`;
+      }
+      if (!record.rosterId || record.rosterId !== scoreId) {
+        return `${record.title} 점수 문서의 평가 식별자가 일치하지 않습니다.`;
+      }
+      if (
+        record.studentName &&
+        normalizeStudentName(record.studentName) !== expectedNameKey
+      ) {
+        return `${record.title} 점수표 이름(${record.studentName})이 현재 학생 이름(${expectedSignatureName})과 일치하지 않습니다.`;
+      }
+      if (
+        expectedGrade &&
+        record.grade &&
+        normalizeSchoolValue(record.grade) !== expectedGrade
+      ) {
+        return `${record.title} 점수표 학년이 현재 학생 정보와 일치하지 않습니다.`;
+      }
+      if (
+        expectedClass &&
+        record.class &&
+        normalizeSchoolValue(record.class) !== expectedClass
+      ) {
+        return `${record.title} 점수표 반이 현재 학생 정보와 일치하지 않습니다.`;
+      }
+      if (
+        expectedNumber &&
+        record.number &&
+        normalizeSchoolValue(record.number) !== expectedNumber
+      ) {
+        return `${record.title} 점수표 번호가 현재 학생 정보와 일치하지 않습니다.`;
+      }
+    }
+
+    return "";
+  };
+
+  const getSignatureCanvasPoint = (
+    event: React.PointerEvent<HTMLCanvasElement>,
+  ) => {
+    const canvas = signatureCanvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: ((event.clientX - rect.left) / rect.width) * canvas.width,
+      y: ((event.clientY - rect.top) / rect.height) * canvas.height,
+    };
+  };
+
+  const drawSignaturePoint = (point: { x: number; y: number }) => {
+    const canvas = signatureCanvasRef.current;
+    const context = canvas?.getContext("2d");
+    if (!canvas || !context) return;
+    context.strokeStyle = "#111827";
+    context.fillStyle = "#111827";
+    context.lineWidth = 7;
+    context.lineCap = "round";
+    context.lineJoin = "round";
+
+    const lastPoint = lastPointRef.current;
+    if (!lastPoint) {
+      context.beginPath();
+      context.arc(point.x, point.y, 2.5, 0, Math.PI * 2);
+      context.fill();
+      lastPointRef.current = point;
       return;
     }
-    if (trimmedName.length > 20) {
-      setSignatureError("서명 이름은 20자 이내로 입력해 주세요.");
+
+    context.beginPath();
+    context.moveTo(lastPoint.x, lastPoint.y);
+    context.lineTo(point.x, point.y);
+    context.stroke();
+    lastPointRef.current = point;
+  };
+
+  const clearSignatureCanvas = () => {
+    const canvas = signatureCanvasRef.current;
+    const context = canvas?.getContext("2d");
+    if (canvas && context) {
+      context.clearRect(0, 0, canvas.width, canvas.height);
+    }
+    drawingRef.current = false;
+    lastPointRef.current = null;
+    setSignatureDrawn(false);
+    setSignatureReviewStep("sign");
+    setSignatureError("");
+  };
+
+  const openSignatureModal = () => {
+    setSignatureConsent(false);
+    setSignatureDrawn(false);
+    setSignatureReviewStep("sign");
+    setSignatureError("");
+    setSignatureModalOpen(true);
+    window.setTimeout(() => clearSignatureCanvas(), 0);
+  };
+
+  const closeSignatureModal = () => {
+    if (confirming) return;
+    setSignatureModalOpen(false);
+  };
+
+  const getSignatureImageDataUrl = () => {
+    const canvas = signatureCanvasRef.current;
+    if (!canvas || !signatureDrawn) return "";
+    return canvas.toDataURL("image/png");
+  };
+
+  const moveToSignatureReview = () => {
+    const identityError = getStudentIdentityError();
+    if (identityError) {
+      setSignatureError(identityError);
       return;
     }
-    if (
-      expectedSignatureName &&
-      normalizeStudentName(trimmedName) !==
-        normalizeStudentName(expectedSignatureName)
-    ) {
+    if (!signatureConsent) {
+      setSignatureError("점수 확인과 이의 없음 안내에 동의해 주세요.");
+      return;
+    }
+    const signatureImage = getSignatureImageDataUrl();
+    if (!signatureImage) {
+      setSignatureError("서명 칸에 성을 포함한 이름을 정자로 써 주세요.");
+      return;
+    }
+    if (getDataUrlStoredLength(signatureImage) > SIGNATURE_IMAGE_MAX_LENGTH) {
       setSignatureError(
-        `점수표의 이름(${expectedSignatureName})과 같게 입력해 주세요.`,
+        "서명 이미지 용량이 큽니다. 지우고 이름을 조금 더 간단히 다시 써 주세요.",
       );
       return;
     }
+    setSignatureError("");
+    setSignatureReviewStep("review");
+  };
 
-    const signatureImage = createSignatureImageDataUrl(trimmedName);
+  const submitSignatureConfirmation = async () => {
+    if (!currentUser?.uid) return;
+    const identityError = getStudentIdentityError();
+    if (identityError) {
+      setSignatureError(identityError);
+      return;
+    }
+    if (!signatureConsent || signatureReviewStep !== "review") {
+      setSignatureError("최종 확인 내용을 다시 확인해 주세요.");
+      return;
+    }
+
+    const signatureImage = getSignatureImageDataUrl();
     if (!signatureImage) {
-      setSignatureError("서명 이미지를 만들지 못했습니다. 다시 시도해 주세요.");
+      setSignatureError("서명 칸에 성을 포함한 이름을 정자로 써 주세요.");
+      setSignatureReviewStep("sign");
+      return;
+    }
+    if (getDataUrlStoredLength(signatureImage) > SIGNATURE_IMAGE_MAX_LENGTH) {
+      setSignatureError(
+        "서명 이미지 용량이 큽니다. 지우고 이름을 조금 더 간단히 다시 써 주세요.",
+      );
+      setSignatureReviewStep("sign");
       return;
     }
 
     setConfirming(true);
     setSignatureError("");
     try {
-      const confirmationRef = doc(
-        db,
-        "users",
-        currentUser.uid,
-        PERFORMANCE_SCORE_USER_COLLECTION,
-        selectedScoreId,
-        PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
-        currentUser.uid,
-      );
-      await setDoc(confirmationRef, {
-        uid: currentUser.uid,
-        rosterId: selectedRecord.rosterId,
-        signatureName: trimmedName,
-        signatureImage,
-        confirmedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+      const batch = writeBatch(db);
+      records.forEach((record) => {
+        const scoreId = getRecordScoreId(record);
+        const confirmationRef = doc(
+          db,
+          "users",
+          currentUser.uid,
+          PERFORMANCE_SCORE_USER_COLLECTION,
+          scoreId,
+          PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
+          currentUser.uid,
+        );
+        batch.set(confirmationRef, {
+          uid: currentUser.uid,
+          rosterId: record.rosterId,
+          signatureName: expectedSignatureName.trim(),
+          signatureImage,
+          confirmedAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
       });
+      await batch.commit();
 
       const localConfirmedAt = new Date();
       setRecords((current) =>
-        current.map((record) =>
-          (record.id || record.rosterId) === selectedScoreId
-            ? {
-                ...record,
-                signatureName: trimmedName,
-                signatureImage,
-                signedAt: localConfirmedAt,
-                confirmation: {
-                  id: currentUser.uid,
-                  uid: currentUser.uid,
-                  rosterId: selectedRecord.rosterId,
-                  signatureName: trimmedName,
-                  signatureImage,
-                  confirmedAt: localConfirmedAt,
-                  updatedAt: localConfirmedAt,
-                },
-              }
-            : record,
-        ),
+        current.map((record) => ({
+          ...record,
+          signatureName: expectedSignatureName.trim(),
+          signatureImage,
+          signedAt: localConfirmedAt,
+          confirmation: {
+            id: currentUser.uid,
+            uid: currentUser.uid,
+            rosterId: record.rosterId,
+            signatureName: expectedSignatureName.trim(),
+            signatureImage,
+            confirmedAt: localConfirmedAt,
+            updatedAt: localConfirmedAt,
+          },
+        })),
       );
       setSignatureModalOpen(false);
     } catch (error) {
@@ -329,9 +466,25 @@ const PerformanceScoreView: React.FC = () => {
               평가요소별 점수, 감점 요인과 평가 근거만 표시됩니다.
             </p>
           </div>
-          <div className="rounded-full bg-blue-50 px-4 py-2 text-sm font-black text-blue-700">
-            {userData?.grade || "-"}학년 {userData?.class || "-"}반{" "}
-            {userData?.number || "-"}번
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="rounded-full bg-blue-50 px-4 py-2 text-sm font-black text-blue-700">
+              {userData?.grade || "-"}학년 {userData?.class || "-"}반{" "}
+              {userData?.number || "-"}번
+            </div>
+            {selectedRecord &&
+              (allScoresConfirmed ? (
+                <span className="inline-flex h-11 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-4 text-sm font-black text-blue-800">
+                  점수 확인 완료 {confirmedRecordCount}/{records.length}
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={openSignatureModal}
+                  className="inline-flex h-11 items-center justify-center rounded-lg bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700"
+                >
+                  점수 확인 및 서명
+                </button>
+              ))}
           </div>
         </div>
       </div>
@@ -419,13 +572,9 @@ const PerformanceScoreView: React.FC = () => {
                       {confirmedAt ? ` · ${formatDateTime(confirmedAt)}` : ""}
                     </span>
                   ) : (
-                    <button
-                      type="button"
-                      onClick={() => setSignatureModalOpen(true)}
-                      className="inline-flex h-10 items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-black text-white shadow-sm transition hover:bg-blue-700"
-                    >
-                      점수 확인 및 서명
-                    </button>
+                    <span className="inline-flex items-center justify-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-black text-slate-500">
+                      상단에서 전체 점수 확인 필요
+                    </span>
                   )}
                 </div>
               </div>
@@ -539,20 +688,20 @@ const PerformanceScoreView: React.FC = () => {
 
       {signatureModalOpen && selectedRecord && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
-          <section className="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl">
-            <div className="flex items-start justify-between gap-4">
+          <section className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
               <div>
                 <h3 className="text-lg font-black text-slate-900">
-                  점수 확인 서명
+                  수행평가 점수 확인 및 서명
                 </h3>
                 <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
-                  점수와 평가 근거를 확인했고 이의가 없으면 본인 이름을 입력해
-                  주세요.
+                  모든 차시의 점수를 확인한 뒤, 성을 포함한 이름을 정자로 직접
+                  써 주세요.
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => setSignatureModalOpen(false)}
+                onClick={closeSignatureModal}
                 disabled={confirming}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 disabled:opacity-40"
                 aria-label="서명 창 닫기"
@@ -561,56 +710,263 @@ const PerformanceScoreView: React.FC = () => {
               </button>
             </div>
 
-            <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 px-3 py-3">
-              <div className="text-sm font-black text-blue-900">
-                {selectedRecord.title}
-              </div>
-              <div className="mt-1 text-sm font-bold text-blue-700">
-                {formatPerformanceScore(selectedRecord.totalScore)} /{" "}
-                {formatPerformanceScore(selectedRecord.totalMaxScore)}점
-              </div>
+            <div className="overflow-y-auto px-5 py-4">
+              {signatureReviewStep === "sign" ? (
+                <div className="space-y-4">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {records.map((record) => (
+                      <div
+                        key={getRecordScoreId(record)}
+                        className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3"
+                      >
+                        <div className="truncate text-sm font-black text-blue-950">
+                          {record.title}
+                        </div>
+                        <div className="mt-2 text-lg font-black text-blue-700">
+                          {formatPerformanceScore(record.totalScore)}
+                          <span className="ml-1 text-sm text-blue-300">
+                            / {formatPerformanceScore(record.totalMaxScore)}점
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
+                    <p className="text-sm font-bold leading-7 text-slate-700">
+                      위 수행평가 점수와 평가 근거를 확인했으며, 점수에 문제가
+                      없고 해당 점수에 대해 이의를 제기하지 않을 것에
+                      동의합니까?
+                    </p>
+                    <label className="mt-3 flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-3">
+                      <input
+                        type="checkbox"
+                        checked={signatureConsent}
+                        onChange={(event) => {
+                          const checked = event.target.checked;
+                          setSignatureConsent(checked);
+                          setSignatureError("");
+                          if (!checked) clearSignatureCanvas();
+                        }}
+                        disabled={confirming}
+                        className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-sm font-black text-slate-800">
+                        동의합니다
+                      </span>
+                    </label>
+                  </div>
+
+                  <div>
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <div>
+                        <h4 className="text-sm font-black text-slate-800">
+                          서명 그리기
+                        </h4>
+                        <p className="mt-1 text-xs font-bold leading-5 text-slate-500">
+                          성을 포함한 이름을 정자로 적어 주세요. 배경의 흐린
+                          이름은 안내용이며 저장되지 않습니다.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={clearSignatureCanvas}
+                        disabled={confirming || !signatureConsent}
+                        className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        지우기
+                      </button>
+                    </div>
+                    <div
+                      className={`relative overflow-hidden rounded-xl border border-blue-200 bg-blue-50 ${
+                        signatureConsent ? "" : "opacity-60"
+                      }`}
+                    >
+                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-4 text-center text-6xl font-black text-slate-400/35 sm:text-7xl">
+                        {expectedSignatureName || "홍길동"}
+                      </div>
+                      {!signatureConsent && (
+                        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-white/55 text-sm font-black text-slate-500">
+                          동의합니다를 체크하면 서명 칸이 활성화됩니다.
+                        </div>
+                      )}
+                      <canvas
+                        ref={signatureCanvasRef}
+                        width={SIGNATURE_CANVAS_WIDTH}
+                        height={SIGNATURE_CANVAS_HEIGHT}
+                        className="relative z-10 h-64 w-full touch-none cursor-crosshair bg-transparent"
+                        onPointerDown={(event) => {
+                          if (!signatureConsent || confirming) return;
+                          const point = getSignatureCanvasPoint(event);
+                          if (!point) return;
+                          event.currentTarget.setPointerCapture(
+                            event.pointerId,
+                          );
+                          drawingRef.current = true;
+                          lastPointRef.current = null;
+                          drawSignaturePoint(point);
+                          setSignatureDrawn(true);
+                          setSignatureError("");
+                        }}
+                        onPointerMove={(event) => {
+                          if (!drawingRef.current || !signatureConsent) return;
+                          const point = getSignatureCanvasPoint(event);
+                          if (point) drawSignaturePoint(point);
+                        }}
+                        onPointerUp={() => {
+                          drawingRef.current = false;
+                          lastPointRef.current = null;
+                        }}
+                        onPointerCancel={() => {
+                          drawingRef.current = false;
+                          lastPointRef.current = null;
+                        }}
+                        onPointerLeave={() => {
+                          drawingRef.current = false;
+                          lastPointRef.current = null;
+                        }}
+                        aria-label="점수 확인 서명 그리기 칸"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-4">
+                    <h4 className="text-base font-black text-blue-950">
+                      최종 확인
+                    </h4>
+                    <p className="mt-2 text-sm font-bold leading-7 text-slate-700">
+                      아래 영역별 점수와 동의, 서명 작성 여부를 한 번 더 확인해
+                      주세요. 제출하면 현재 점수 확인 서명이 담당 교사용
+                      일람표의 본인 비고란에 반영됩니다.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-lg border border-slate-200 px-4 py-3">
+                      <div className="text-xs font-black text-slate-500">
+                        학생 확인
+                      </div>
+                      <div className="mt-1 text-sm font-black text-slate-900">
+                        {expectedSignatureName || "-"} ·{" "}
+                        {userData?.grade || "-"}학년 {userData?.class || "-"}반{" "}
+                        {userData?.number || "-"}번
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 px-4 py-3">
+                      <div className="text-xs font-black text-slate-500">
+                        동의 여부
+                      </div>
+                      <div className="mt-1 text-sm font-black text-blue-700">
+                        {signatureConsent ? "동의 완료" : "동의 필요"}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-slate-200 px-4 py-3">
+                      <div className="text-xs font-black text-slate-500">
+                        서명 여부
+                      </div>
+                      <div className="mt-1 text-sm font-black text-blue-700">
+                        {signatureDrawn ? "서명 작성 완료" : "서명 필요"}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    {records.map((record) => (
+                      <div
+                        key={`${getRecordScoreId(record)}-review`}
+                        className="rounded-xl border border-slate-200"
+                      >
+                        <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="font-black text-slate-900">
+                            {record.title}
+                          </div>
+                          <div className="text-sm font-black text-blue-700">
+                            {formatPerformanceScore(record.totalScore)} /{" "}
+                            {formatPerformanceScore(record.totalMaxScore)}점
+                          </div>
+                        </div>
+                        <div className="grid gap-2 px-4 py-3 md:grid-cols-2">
+                          {(record.items || []).map((item, index) => (
+                            <div
+                              key={`${record.rosterId}-${item.name}-${index}`}
+                              className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-xs font-bold"
+                            >
+                              <span className="truncate text-slate-600">
+                                {getItemLabel(item, index)}
+                              </span>
+                              <span className="shrink-0 text-slate-900">
+                                {item.scoreEntered === false
+                                  ? "-"
+                                  : formatPerformanceScore(item.score)}
+                                <span className="text-slate-400">
+                                  {" "}
+                                  / {formatPerformanceScore(item.maxScore)}
+                                </span>
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold leading-7 text-rose-700">
+                    정말로 성적을 확정짓겠습니까? 제출 후에는 담당 교사에게 점수
+                    확인 및 이의 없음 서명으로 전달됩니다.
+                  </div>
+                </div>
+              )}
+
+              {signatureError && (
+                <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold leading-6 text-rose-700">
+                  {signatureError}
+                </div>
+              )}
             </div>
 
-            <label className="mt-4 block">
-              <span className="text-xs font-black text-slate-600">
-                서명 이름
-              </span>
-              <input
-                type="text"
-                value={signatureName}
-                onChange={(event) => {
-                  setSignatureName(event.target.value);
-                  setSignatureError("");
-                }}
-                disabled={confirming}
-                className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-100"
-                placeholder={expectedSignatureName || "본인 이름"}
-              />
-            </label>
-
-            {signatureError && (
-              <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold leading-6 text-rose-700">
-                {signatureError}
-              </div>
-            )}
-
-            <div className="mt-5 flex justify-end gap-2">
+            <div className="flex flex-col gap-2 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-end">
               <button
                 type="button"
-                onClick={() => setSignatureModalOpen(false)}
+                onClick={closeSignatureModal}
                 disabled={confirming}
-                className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:opacity-40"
+                className="inline-flex h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:opacity-40"
               >
                 취소
               </button>
-              <button
-                type="button"
-                onClick={() => void submitSignatureConfirmation()}
-                disabled={confirming}
-                className="inline-flex h-10 items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:bg-slate-300"
-              >
-                {confirming ? "저장 중..." : "이의 없음 서명"}
-              </button>
+              {signatureReviewStep === "review" && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSignatureReviewStep("sign");
+                    setSignatureError("");
+                  }}
+                  disabled={confirming}
+                  className="inline-flex h-11 items-center justify-center rounded-lg border border-blue-200 bg-white px-5 text-sm font-black text-blue-700 transition hover:bg-blue-50 disabled:opacity-40"
+                >
+                  서명 수정
+                </button>
+              )}
+              {signatureReviewStep === "sign" ? (
+                <button
+                  type="button"
+                  onClick={moveToSignatureReview}
+                  disabled={confirming}
+                  className="inline-flex h-11 items-center justify-center rounded-lg bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:bg-slate-300"
+                >
+                  확인 내용 검토
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void submitSignatureConfirmation()}
+                  disabled={confirming}
+                  className="inline-flex h-11 items-center justify-center rounded-lg bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:bg-slate-300"
+                >
+                  {confirming ? "제출 중..." : "제출하기"}
+                </button>
+              )}
             </div>
           </section>
         </div>
