@@ -82,6 +82,7 @@ const PerformanceScoreView: React.FC = () => {
   const [signatureReviewStep, setSignatureReviewStep] = useState<
     "sign" | "review"
   >("sign");
+  const [signatureImageDraft, setSignatureImageDraft] = useState("");
   const [signatureError, setSignatureError] = useState("");
   const [confirming, setConfirming] = useState(false);
   const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -297,6 +298,7 @@ const PerformanceScoreView: React.FC = () => {
     drawingRef.current = false;
     signatureDrawnRef.current = false;
     lastPointRef.current = null;
+    setSignatureImageDraft("");
     setSignatureDrawn(false);
     setSignatureReviewStep("sign");
     setSignatureError("");
@@ -311,6 +313,7 @@ const PerformanceScoreView: React.FC = () => {
     }
     setSignatureConsent(false);
     signatureDrawnRef.current = false;
+    setSignatureImageDraft("");
     setSignatureDrawn(false);
     setSignatureReviewStep("sign");
     setSignatureError("");
@@ -351,6 +354,7 @@ const PerformanceScoreView: React.FC = () => {
       return;
     }
     setSignatureError("");
+    setSignatureImageDraft(signatureImage);
     setSignatureReviewStep("review");
   };
 
@@ -381,7 +385,7 @@ const PerformanceScoreView: React.FC = () => {
       return;
     }
 
-    const signatureImage = getSignatureImageDataUrl();
+    const signatureImage = signatureImageDraft || getSignatureImageDataUrl();
     if (!signatureImage) {
       setSignatureError("서명 칸에 본인 이름을 직접 써 주세요.");
       setSignatureReviewStep("sign");
@@ -444,6 +448,7 @@ const PerformanceScoreView: React.FC = () => {
         ),
       );
       setSignatureModalOpen(false);
+      setSignatureImageDraft("");
     } catch (error) {
       console.error("Failed to confirm performance score:", error);
       setSignatureError(
@@ -867,6 +872,7 @@ const PerformanceScoreView: React.FC = () => {
                           );
                           drawingRef.current = true;
                           signatureDrawnRef.current = true;
+                          setSignatureImageDraft("");
                           lastPointRef.current = null;
                           drawSignaturePoint(point);
                           setSignatureDrawn(true);
@@ -1003,6 +1009,9 @@ const PerformanceScoreView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
+                    setSignatureImageDraft("");
+                    signatureDrawnRef.current = false;
+                    setSignatureDrawn(false);
                     setSignatureReviewStep("sign");
                     setSignatureError("");
                   }}
