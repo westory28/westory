@@ -299,6 +299,29 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     ],
   },
   {
+    key: "performance_score_objection_reviewed",
+    label: "수행평가 이의 처리 결과",
+    audience: "students",
+    description:
+      "교사가 수행평가 점수 이의 제기를 수용하거나 반려했을 때 학생에게 안내합니다.",
+    triggerLabel: "교사가 수행평가 이의 제기를 처리했을 때",
+    recipientLabel: "이의 제기 학생",
+    status: "connected",
+    defaultEnabled: true,
+    defaultPriority: "high",
+    titleTemplate: "수행평가 이의 제기 처리",
+    bodyTemplate:
+      "{scoreTitle} 이의 제기가 {statusLabel}되었습니다. {changedScoreLabel} {reviewMemo}",
+    targetUrl: "/student/score/performance",
+    targetLabel: "학생 내 수행평가 점수 화면",
+    tokens: [
+      { key: "scoreTitle", label: "수행평가명" },
+      { key: "statusLabel", label: "처리 결과" },
+      { key: "changedScoreLabel", label: "변경 후 점수" },
+      { key: "reviewMemo", label: "처리 메모" },
+    ],
+  },
+  {
     key: "point_order_requested",
     label: "위스 상점 신청",
     audience: "teachers",

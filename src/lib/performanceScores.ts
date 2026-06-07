@@ -14,6 +14,9 @@ export const PERFORMANCE_SCORE_USER_COLLECTION = "performance_scores";
 
 export const PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION = "confirmations";
 
+export const PERFORMANCE_SCORE_OBJECTIONS_COLLECTION =
+  "performance_score_objections";
+
 export interface PerformanceScoreItem {
   name: string;
   shortName?: string;
@@ -50,6 +53,8 @@ export interface PerformanceScoreRecord {
   signatureImage?: string;
   signedAt?: unknown;
   confirmation?: PerformanceScoreConfirmation | null;
+  isTransferred?: boolean;
+  transferStatus?: "transferred";
 }
 
 export interface PerformanceScoreConfirmation {
@@ -76,6 +81,8 @@ export interface PerformanceScoreRosterRow {
   evidence?: string;
   matchStatus: "matched" | "name-mismatch" | "unmatched";
   matchMessage: string;
+  isTransferred?: boolean;
+  transferStatus?: "transferred";
 }
 
 export interface PerformanceScoreRoster {

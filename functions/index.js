@@ -712,6 +712,7 @@ const getBroadcastNotificationsPath = (year, semester) => `${getSemesterRoot(yea
 const NOTIFICATION_CONFIG_PATH = 'site_settings/notification_config';
 const PERFORMANCE_SCORE_USER_COLLECTION = 'performance_scores';
 const PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION = 'confirmations';
+const PERFORMANCE_SCORE_OBJECTIONS_COLLECTION = 'performance_score_objections';
 const NOTIFICATION_EVENT_AUDIENCE = {
   history_classroom_assigned: 'students',
   history_classroom_passed: 'teachers',
@@ -720,6 +721,7 @@ const NOTIFICATION_EVENT_AUDIENCE = {
   history_classroom_exemption_requested: 'teachers',
   history_classroom_exemption_reviewed: 'students',
   performance_score_objection_requested: 'teachers',
+  performance_score_objection_reviewed: 'students',
   history_dictionary_requested: 'teachers',
   history_dictionary_resolved: 'students',
   history_dictionary_rejected: 'students',
@@ -1782,6 +1784,22 @@ const assertQuizManager = async (request) => {
   return { uid, email, profile };
 };
 
+const assertPerformanceScoreManager = async (request) => {
+  const { uid, email } = assertAllowedWestoryUser(request);
+  if (email === ADMIN_EMAIL) {
+    return { uid, email, profile: null };
+  }
+
+  const { profile } = await getUserProfile(uid);
+  if (String(profile?.role || '').trim() !== 'teacher') {
+    throw new HttpsError(
+      'permission-denied',
+      'teacher permission is required.',
+    );
+  }
+  return { uid, email, profile };
+};
+
 const assertNotificationManager = async (request) => {
   const { uid, email } = assertAllowedWestoryUser(request);
   if (email === ADMIN_EMAIL) {
@@ -2026,6 +2044,140 @@ const loadStudentPerformanceScoreForNotification = async (uid, year, semester, s
   return { id: scoreSnap.id, data: scoreData };
 };
 
+const getPerformanceScoreObjectionPath = (year, semester, objectionId) =>
+  `${getSemesterRoot(year, semester)}/${PERFORMANCE_SCORE_OBJECTIONS_COLLECTION}/${objectionId}`;
+
+const buildPerformanceScoreObjectionId = (year, semester, uid, scoreId) => {
+  const hash = crypto
+    .createHash('sha1')
+    .update(`${year}:${semester}:${uid}:${scoreId}`)
+    .digest('hex')
+    .slice(0, 32);
+  return `pso_${hash}`;
+};
+
+const toNullablePerformanceScoreNumber = (value) => {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? Number(numericValue.toFixed(2)) : null;
+};
+
+const formatPerformanceScoreLabel = (score, maxScore) => {
+  const safeScore = toNullablePerformanceScoreNumber(score);
+  const safeMaxScore = toNullablePerformanceScoreNumber(maxScore);
+  if (safeScore === null && safeMaxScore === null) return '';
+  if (safeMaxScore === null || safeMaxScore <= 0) return `${safeScore ?? 0}점`;
+  return `${safeScore ?? 0} / ${safeMaxScore}점`;
+};
+
+const buildPerformanceScoreObjectionItems = (items) =>
+  (Array.isArray(items) ? items : []).slice(0, 20).map((item, index) => ({
+    name: sanitizeNotificationText(item?.name, 120, `평가요소 ${index + 1}`),
+    shortName: sanitizeNotificationText(item?.shortName, 60),
+    score: toNullablePerformanceScoreNumber(item?.score),
+    maxScore: toNullablePerformanceScoreNumber(item?.maxScore),
+    scoreEntered: item?.scoreEntered === false ? false : true,
+  }));
+
+const savePerformanceScoreObjections = async (year, semester, input) => {
+  const actorUid = sanitizeNotificationText(input.actorUid, 160);
+  const objectionReason = sanitizeNotificationText(input.reason, 300);
+  const profile = input.profile || {};
+  const records = Array.isArray(input.records) ? input.records : [];
+  if (!actorUid || !objectionReason || records.length === 0) {
+    return { objectionIds: [], scoreIds: [], skippedProcessedCount: 0 };
+  }
+
+  const refs = records.map((record) => {
+    const scoreId = sanitizeNotificationText(record?.id, 160);
+    const objectionId = buildPerformanceScoreObjectionId(year, semester, actorUid, scoreId);
+    return {
+      objectionId,
+      scoreId,
+      record,
+      ref: db.doc(getPerformanceScoreObjectionPath(year, semester, objectionId)),
+    };
+  });
+  const existingSnaps = await Promise.all(refs.map((item) => item.ref.get()));
+  const batch = db.batch();
+  const savedItems = [];
+  let skippedProcessedCount = 0;
+
+  refs.forEach((item, index) => {
+    const data = item.record?.data || {};
+    const existing = existingSnaps[index];
+    const existingStatus = sanitizeNotificationText(existing.data()?.status, 40);
+    if (existing.exists && existingStatus && existingStatus !== 'pending') {
+      skippedProcessedCount += 1;
+      return;
+    }
+    const studentName = sanitizeNotificationText(
+      profile.studentName || profile.name || profile.displayName || data.studentName,
+      40,
+      '학생',
+    );
+    const grade = sanitizeNotificationText(
+      profile.studentGrade || profile.grade || data.grade,
+      12,
+    );
+    const className = sanitizeNotificationText(
+      profile.studentClass || profile.class || data.class,
+      12,
+    );
+    const number = sanitizeNotificationText(
+      profile.studentNumber || profile.number || data.number,
+      12,
+    );
+    const totalScore = toNullablePerformanceScoreNumber(data.totalScore);
+    const totalMaxScore = toNullablePerformanceScoreNumber(data.totalMaxScore);
+    const payload = {
+      uid: actorUid,
+      studentName,
+      grade,
+      class: className,
+      number,
+      scoreId: sanitizeNotificationText(item.record?.id, 160),
+      rosterId: sanitizeNotificationText(data.rosterId || item.record?.id, 160),
+      scoreTitle: sanitizeNotificationText(data.title, 120, '수행평가'),
+      subject: sanitizeNotificationText(data.subject, 80),
+      assessmentOrder: Number.isFinite(Number(data.assessmentOrder))
+        ? Number(data.assessmentOrder)
+        : null,
+      academicYear: year,
+      semester,
+      totalScore,
+      totalMaxScore,
+      scoreLabel: formatPerformanceScoreLabel(totalScore, totalMaxScore),
+      items: buildPerformanceScoreObjectionItems(data.items),
+      reason: objectionReason,
+      status: 'pending',
+      reviewedAt: null,
+      reviewedBy: '',
+      reviewedByName: '',
+      reviewMemo: '',
+      changedTotalScore: null,
+      changedScoreLabel: '',
+      uploadedBy: sanitizeNotificationText(data.uploadedBy, 160),
+      uploadedByEmail: sanitizeNotificationText(data.uploadedByEmail, 160),
+      updatedAt: FieldValue.serverTimestamp(),
+      requestedAt: FieldValue.serverTimestamp(),
+    };
+    if (!existing.exists) {
+      payload.createdAt = FieldValue.serverTimestamp();
+    }
+    batch.set(item.ref, payload, { merge: true });
+    savedItems.push(item);
+  });
+
+  if (savedItems.length > 0) {
+    await batch.commit();
+  }
+  return {
+    objectionIds: savedItems.map((item) => item.objectionId),
+    scoreIds: savedItems.map((item) => item.scoreId).filter(Boolean),
+    skippedProcessedCount,
+  };
+};
+
 const createPerformanceScoreObjectionRequestedNotifications = async (year, semester, input) => {
   const actorUid = sanitizeNotificationText(input.actorUid, 160);
   const scoreIds = uniqueNonEmptyStrings(input.scoreIds, 20);
@@ -2078,6 +2230,40 @@ const createPerformanceScoreObjectionRequestedNotifications = async (year, semes
       scoreTitle: titleLabel,
       scoreCount: scoreIds.length,
       reason: objectionReason,
+    },
+  });
+};
+
+const createPerformanceScoreObjectionReviewedNotification = async (year, semester, input) => {
+  const objectionId = sanitizeNotificationText(input.objectionId, 160);
+  const recipientUid = sanitizeNotificationText(input.recipientUid, 160);
+  if (!objectionId || !recipientUid) return { created: false, recipientUid };
+
+  const accepted = input.status === 'accepted';
+  const scoreTitle = sanitizeNotificationText(input.scoreTitle, 120, '수행평가');
+  const reviewMemo = sanitizeNotificationText(input.reviewMemo, 240);
+  const changedScoreLabel = sanitizeNotificationText(input.changedScoreLabel, 80);
+  const statusLabel = accepted ? '수용' : '반려';
+  const scoreMessage = accepted && changedScoreLabel
+    ? ` 변경 후 점수: ${changedScoreLabel}`
+    : '';
+  const memoMessage = reviewMemo ? ` 처리 메모: ${reviewMemo}` : '';
+
+  return createUserNotification(year, semester, recipientUid, {
+    type: 'performance_score_objection_reviewed',
+    title: '수행평가 이의 제기 처리',
+    body: `${scoreTitle} 이의 제기가 ${statusLabel}되었습니다.${scoreMessage}${memoMessage}`,
+    targetUrl: '/student/score/performance',
+    entityType: 'performance_score_objection',
+    entityId: objectionId,
+    actorUid: input.actorUid,
+    priority: accepted ? 'normal' : 'high',
+    dedupeKey: `performance_score_objection_reviewed:${year}:${semester}:${objectionId}:${input.status}:${changedScoreLabel}:${reviewMemo}`,
+    templateValues: {
+      scoreTitle,
+      statusLabel,
+      changedScoreLabel,
+      reviewMemo,
     },
   });
 };
@@ -4481,18 +4667,136 @@ exports.notifyPerformanceScoreObjectionRequested = onCall({ region: REGION }, as
       loadStudentPerformanceScoreForNotification(uid, year, semester, scoreId),
     ),
   );
+  const objectionSaveResult = await savePerformanceScoreObjections(year, semester, {
+    actorUid: uid,
+    profile,
+    records,
+    reason,
+  });
+  const savedScoreIds = new Set(objectionSaveResult.scoreIds);
+  const savedRecords = records.filter((record) => savedScoreIds.has(record.id));
+  if (savedRecords.length === 0) {
+    return {
+      objectionIds: [],
+      objectionSavedCount: 0,
+      objectionSkippedProcessedCount: objectionSaveResult.skippedProcessedCount,
+      createdCount: 0,
+      skippedCount: 0,
+      recipientCount: 0,
+    };
+  }
   const notificationResults = await createPerformanceScoreObjectionRequestedNotifications(year, semester, {
     actorUid: uid,
     profile,
-    scoreIds,
-    records,
+    scoreIds: objectionSaveResult.scoreIds,
+    records: savedRecords,
     reason,
   });
 
   return {
+    objectionIds: objectionSaveResult.objectionIds,
+    objectionSavedCount: objectionSaveResult.objectionIds.length,
+    objectionSkippedProcessedCount: objectionSaveResult.skippedProcessedCount,
     createdCount: notificationResults.filter((result) => result.created).length,
     skippedCount: notificationResults.filter((result) => result.skipped).length,
     recipientCount: notificationResults.length,
+  };
+});
+
+exports.reviewPerformanceScoreObjection = onCall({ region: REGION }, async (request) => {
+  const manager = await assertPerformanceScoreManager(request);
+  const { year, semester } = assertYearSemester(request.data);
+  const objectionId = sanitizeNotificationText(request.data?.objectionId, 160);
+  const action = String(request.data?.status || '').trim();
+  const reviewMemo = sanitizeNotificationText(request.data?.reviewMemo, 240);
+  if (!objectionId) {
+    throw new HttpsError('invalid-argument', 'objectionId is required.');
+  }
+  if (action !== 'accepted' && action !== 'rejected') {
+    throw new HttpsError('invalid-argument', 'status must be accepted or rejected.');
+  }
+
+  const objectionRef = db.doc(getPerformanceScoreObjectionPath(year, semester, objectionId));
+  const objectionSnap = await objectionRef.get();
+  if (!objectionSnap.exists) {
+    throw new HttpsError('not-found', 'Performance score objection does not exist.');
+  }
+
+  const objection = objectionSnap.data() || {};
+  if (String(objection.status || 'pending').trim() !== 'pending') {
+    throw new HttpsError('failed-precondition', 'Performance score objection has already been reviewed.');
+  }
+  const recipientUid = sanitizeNotificationText(objection.uid, 160);
+  if (!recipientUid) {
+    throw new HttpsError('failed-precondition', 'Objection student uid is missing.');
+  }
+  const scoreId = sanitizeNotificationText(objection.scoreId || objection.rosterId, 160);
+  if (!scoreId) {
+    throw new HttpsError('failed-precondition', 'Objection score id is missing.');
+  }
+
+  let changedTotalScore = null;
+  let changedScoreLabel = '';
+  if (action === 'accepted') {
+    changedTotalScore = toNullablePerformanceScoreNumber(request.data?.changedTotalScore);
+    if (changedTotalScore === null) {
+      throw new HttpsError('invalid-argument', 'changedTotalScore is required when accepting an objection.');
+    }
+    const scoreRef = db.doc(`users/${recipientUid}/${PERFORMANCE_SCORE_USER_COLLECTION}/${scoreId}`);
+    const scoreSnap = await scoreRef.get();
+    if (!scoreSnap.exists) {
+      throw new HttpsError('failed-precondition', 'Accepted score must be saved before reviewing an objection.');
+    }
+    const scoreData = scoreSnap.data() || {};
+    if (
+      String(scoreData.uid || '').trim() !== recipientUid
+      || String(scoreData.rosterId || scoreId).trim() !== scoreId
+      || String(scoreData.academicYear || '').trim() !== year
+      || String(scoreData.semester || '').trim() !== semester
+    ) {
+      throw new HttpsError('failed-precondition', 'Saved performance score does not match this objection.');
+    }
+    const savedTotalScore = toNullablePerformanceScoreNumber(scoreData.totalScore);
+    if (savedTotalScore === null || savedTotalScore !== changedTotalScore) {
+      throw new HttpsError('failed-precondition', 'Accepted score must match the saved performance score.');
+    }
+    const maxScore = toNullablePerformanceScoreNumber(scoreData.totalMaxScore ?? objection.totalMaxScore);
+    if (changedTotalScore < 0 || (maxScore !== null && maxScore > 0 && changedTotalScore > maxScore)) {
+      throw new HttpsError('invalid-argument', 'changedTotalScore is outside the valid score range.');
+    }
+    changedScoreLabel = formatPerformanceScoreLabel(savedTotalScore, maxScore);
+  }
+
+  const reviewerName = sanitizeNotificationText(
+    manager.profile?.teacherName || manager.profile?.displayName || manager.profile?.name || manager.email,
+    80,
+    '교사',
+  );
+  await objectionRef.set({
+    status: action,
+    reviewedAt: FieldValue.serverTimestamp(),
+    reviewedBy: manager.uid,
+    reviewedByName: reviewerName,
+    reviewMemo,
+    changedTotalScore,
+    changedScoreLabel,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  const notificationResult = await createPerformanceScoreObjectionReviewedNotification(year, semester, {
+    objectionId,
+    recipientUid,
+    scoreTitle: objection.scoreTitle,
+    status: action,
+    changedScoreLabel,
+    reviewMemo,
+    actorUid: manager.uid,
+  });
+
+  return {
+    status: action,
+    notificationCreated: notificationResult.created === true,
+    recipientUid,
   };
 });
 

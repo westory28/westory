@@ -4,8 +4,10 @@ import {
   BarElement,
   CategoryScale,
   Chart as ChartJS,
+  type ChartOptions,
   LinearScale,
   Tooltip,
+  type TooltipItem,
 } from "chart.js";
 import { doc, getDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { PageLoading } from "../../../components/common/LoadingState";
@@ -556,12 +558,34 @@ const PerformanceScoreView: React.FC = () => {
         reason,
       });
       if (
+        result.objectionSavedCount <= 0 &&
+        result.objectionSkippedProcessedCount > 0
+      ) {
+        setObjectionError(
+          "이미 처리된 이의 제기입니다. 최신 점수를 확인한 뒤 추가 확인이 필요하면 담당 교사에게 직접 문의해 주세요.",
+        );
+        return;
+      }
+      if (
         result.recipientCount <= 0 ||
         (result.skippedCount || 0) >= result.recipientCount
       ) {
-        setObjectionError(
-          "교사 알림 설정 때문에 이의 제기 알림을 생성하지 못했습니다. 담당 교사에게 직접 알려 주세요.",
-        );
+        if (result.objectionSavedCount > 0) {
+          setObjectionModalOpen(false);
+          setSignatureModalOpen(false);
+          setObjectionReason("");
+          showToast({
+            title: "이의 목록에 접수했습니다.",
+            message:
+              "교사 알림 설정 때문에 새 알림은 생성되지 않았습니다. 필요하면 담당 교사에게 직접 알려 주세요.",
+            tone: "warning",
+            durationMs: 5200,
+          });
+        } else {
+          setObjectionError(
+            "교사 알림 설정 때문에 이의 제기를 전달하지 못했습니다. 담당 교사에게 직접 알려 주세요.",
+          );
+        }
         return;
       }
       setObjectionModalOpen(false);
@@ -734,7 +758,7 @@ const PerformanceScoreView: React.FC = () => {
     }
   };
 
-  const chartOptions = {
+  const chartOptions: ChartOptions<"bar"> = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
@@ -750,12 +774,9 @@ const PerformanceScoreView: React.FC = () => {
       },
       tooltip: {
         callbacks: {
-          label: (context: {
-            dataset: { label?: string };
-            parsed: { y: number };
-          }) =>
+          label: (context: TooltipItem<"bar">) =>
             `${context.dataset.label || "점수"}: ${formatPerformanceScore(
-              context.parsed.y,
+              context.parsed.y ?? 0,
             )}점`,
         },
       },

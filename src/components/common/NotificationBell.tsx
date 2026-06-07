@@ -78,8 +78,24 @@ const getNotificationTargetUrl = (notification: WestoryNotification) => {
     return targetUrl;
   }
   if (notification.type === "performance_score_objection_requested") {
-    if (!targetUrl || targetUrl === "/teacher/exam") {
-      return "/teacher/exam?tab=performance";
+    if (
+      !targetUrl ||
+      targetUrl === "/teacher/exam" ||
+      targetUrl === "/teacher/exam?tab=performance"
+    ) {
+      return "/teacher/exam?tab=performance&panel=objections";
+    }
+    if (
+      targetUrl.startsWith("/teacher/exam?") &&
+      !targetUrl.includes("panel=")
+    ) {
+      return `${targetUrl}&panel=objections`;
+    }
+    return targetUrl;
+  }
+  if (notification.type === "performance_score_objection_reviewed") {
+    if (!targetUrl || targetUrl === "/student/score") {
+      return "/student/score/performance";
     }
     return targetUrl;
   }

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   collection,
   deleteField,
@@ -249,6 +250,29 @@ const getFirestoreWriteErrorMessage = (error: unknown) => {
   return `권한, 네트워크 상태, Firestore rules 배포 상태를 확인한 뒤 다시 시도해 주세요.${message}`;
 };
 
+const getObjectionReviewErrorMessage = (error: unknown) => {
+  const code =
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof (error as { code?: unknown }).code === "string"
+      ? (error as { code: string }).code
+      : "";
+  if (code === "functions/failed-precondition") {
+    return "이미 처리된 이의이거나, 입력한 변경 후 총점이 아직 학생 점수표에 저장된 총점과 일치하지 않습니다. 점수표를 먼저 수정·저장한 뒤 이의 목록을 새로고침해 다시 처리해 주세요.";
+  }
+  if (code === "functions/permission-denied") {
+    return "수행평가 이의 처리 권한이 없습니다. 교사 계정과 권한 설정을 확인해 주세요.";
+  }
+  if (
+    code === "functions/unavailable" ||
+    code === "functions/deadline-exceeded"
+  ) {
+    return "서버 연결이 불안정합니다. 잠시 후 다시 시도해 주세요.";
+  }
+  return "권한, 네트워크 상태, 저장된 점수표 상태를 확인한 뒤 다시 시도해 주세요.";
+};
+
 const createBatchQueue = () => {
   const batches: Array<ReturnType<typeof writeBatch>> = [];
   let activeBatch = writeBatch(db);
@@ -480,7 +504,52 @@ type ScoreListRecord = PerformanceScoreRecord & {
   localKey?: string;
   rosterRowNumber?: number;
   isManual?: boolean;
+  isTransferred?: boolean;
+  transferStatus?: "transferred";
 };
+
+type TransferScoreMeta = {
+  isTransferred?: boolean;
+  transferStatus?: string;
+};
+
+const TRANSFERRED_LABEL = "전출";
+
+type PerformanceScoreObjectionStatus = "pending" | "accepted" | "rejected";
+
+interface PerformanceScoreObjectionItem {
+  name: string;
+  shortName?: string;
+  score: number | null;
+  maxScore: number | null;
+  scoreEntered?: boolean;
+}
+
+interface PerformanceScoreObjection {
+  id: string;
+  uid: string;
+  studentName: string;
+  grade: string;
+  class: string;
+  number: string;
+  scoreId: string;
+  rosterId: string;
+  scoreTitle: string;
+  subject: string;
+  assessmentOrder?: number | null;
+  totalScore: number | null;
+  totalMaxScore: number | null;
+  scoreLabel: string;
+  items: PerformanceScoreObjectionItem[];
+  reason: string;
+  status: PerformanceScoreObjectionStatus;
+  requestedAt?: unknown;
+  reviewedAt?: unknown;
+  reviewedByName?: string;
+  reviewMemo?: string;
+  changedTotalScore?: number | null;
+  changedScoreLabel?: string;
+}
 
 const SCORE_DISTRIBUTION_BUCKETS = [
   { label: "60% 미만", min: 0, max: 60 },
@@ -494,6 +563,148 @@ const getFiniteNumber = (value: unknown) => {
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 };
+
+const isTransferredScoreRecord = (
+  record?: (PerformanceScoreRecord & TransferScoreMeta) | null,
+) => Boolean(record?.isTransferred || record?.transferStatus === "transferred");
+
+const isTransferredRosterRow = (
+  row?: (PerformanceScoreRosterRow & TransferScoreMeta) | null,
+) => Boolean(row?.isTransferred || row?.transferStatus === "transferred");
+
+const getTimestampMillis = (value: unknown) => {
+  if (!value) return 0;
+  if (typeof (value as { toMillis?: () => number }).toMillis === "function") {
+    return (value as { toMillis: () => number }).toMillis();
+  }
+  if (typeof (value as { toDate?: () => Date }).toDate === "function") {
+    return (value as { toDate: () => Date }).toDate().getTime();
+  }
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "seconds" in value &&
+    typeof (value as { seconds?: unknown }).seconds === "number"
+  ) {
+    return (value as { seconds: number }).seconds * 1000;
+  }
+  if (value instanceof Date) return value.getTime();
+  return 0;
+};
+
+const formatObjectionDate = (value: unknown) => {
+  const millis = getTimestampMillis(value);
+  if (!millis) return "-";
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(millis));
+};
+
+const normalizeObjectionStatus = (
+  value: unknown,
+): PerformanceScoreObjectionStatus => {
+  const status = String(value || "").trim();
+  if (status === "accepted" || status === "rejected") return status;
+  return "pending";
+};
+
+const getObjectionStatusMeta = (status: PerformanceScoreObjectionStatus) => {
+  if (status === "accepted") {
+    return {
+      label: "수용",
+      badgeClass: "bg-emerald-50 text-emerald-700",
+      rowClass: "bg-white",
+    };
+  }
+  if (status === "rejected") {
+    return {
+      label: "반려",
+      badgeClass: "bg-rose-50 text-rose-700",
+      rowClass: "bg-white",
+    };
+  }
+  return {
+    label: "대기",
+    badgeClass: "bg-amber-50 text-amber-700",
+    rowClass: "bg-amber-50/20",
+  };
+};
+
+const normalizeObjectionItems = (
+  items: unknown,
+): PerformanceScoreObjectionItem[] =>
+  (Array.isArray(items) ? items : []).map((item, index) => {
+    const source = (item || {}) as Record<string, unknown>;
+    return {
+      name: toText(source.name) || `평가요소 ${index + 1}`,
+      shortName: toText(source.shortName),
+      score: getFiniteNumber(source.score),
+      maxScore: getFiniteNumber(source.maxScore),
+      scoreEntered: source.scoreEntered === false ? false : true,
+    };
+  });
+
+const getObjectionScoreLabel = (
+  score: number | null,
+  maxScore: number | null,
+) => {
+  if (score === null && maxScore === null) return "-";
+  if (maxScore === null || maxScore <= 0) {
+    return `${formatPerformanceScore(score || 0)}점`;
+  }
+  return `${formatPerformanceScore(score || 0)} / ${formatPerformanceScore(maxScore)}점`;
+};
+
+const normalizePerformanceScoreObjection = (
+  id: string,
+  data: Record<string, unknown>,
+): PerformanceScoreObjection => {
+  const totalScore = getFiniteNumber(data.totalScore);
+  const totalMaxScore = getFiniteNumber(data.totalMaxScore);
+  return {
+    id,
+    uid: toText(data.uid),
+    studentName: toText(data.studentName) || "학생",
+    grade: normalizeSchoolValue(data.grade),
+    class: normalizeSchoolValue(data.class),
+    number: normalizeSchoolValue(data.number),
+    scoreId: toText(data.scoreId),
+    rosterId: toText(data.rosterId),
+    scoreTitle: toText(data.scoreTitle) || "수행평가",
+    subject: toText(data.subject),
+    assessmentOrder: getFiniteNumber(data.assessmentOrder),
+    totalScore,
+    totalMaxScore,
+    scoreLabel:
+      toText(data.scoreLabel) ||
+      getObjectionScoreLabel(totalScore, totalMaxScore),
+    items: normalizeObjectionItems(data.items),
+    reason: toText(data.reason),
+    status: normalizeObjectionStatus(data.status),
+    requestedAt: data.requestedAt,
+    reviewedAt: data.reviewedAt,
+    reviewedByName: toText(data.reviewedByName),
+    reviewMemo: toText(data.reviewMemo),
+    changedTotalScore: getFiniteNumber(data.changedTotalScore),
+    changedScoreLabel: toText(data.changedScoreLabel),
+  };
+};
+
+const sortPerformanceScoreObjections = (
+  objections: PerformanceScoreObjection[],
+) =>
+  [...objections].sort(
+    (a, b) =>
+      (a.status === "pending" ? 0 : 1) - (b.status === "pending" ? 0 : 1) ||
+      getTimestampMillis(b.requestedAt) - getTimestampMillis(a.requestedAt) ||
+      Number(a.grade) - Number(b.grade) ||
+      Number(a.class) - Number(b.class) ||
+      Number(a.number) - Number(b.number) ||
+      a.studentName.localeCompare(b.studentName, "ko"),
+  );
 
 const getEnteredItemScore = (
   item?: PerformanceScoreRecord["items"][number],
@@ -797,6 +1008,7 @@ const buildNormalCurvePath = (
 };
 
 const rosterRowHasScore = (row: PerformanceScoreRosterRow) => {
+  if (isTransferredRosterRow(row)) return true;
   const itemScores = Array.isArray(row.items) ? row.items : [];
   if (itemScores.some((item) => getEnteredItemScore(item) !== null)) {
     return true;
@@ -810,7 +1022,8 @@ const buildRecordFromRosterRow = (
   row: PerformanceScoreRosterRow,
 ): PerformanceScoreRecord => {
   const hasScore = rosterRowHasScore(row);
-  return {
+  const transferred = isTransferredRosterRow(row);
+  const record = {
     id: roster.id,
     rosterId: roster.id,
     title: roster.title,
@@ -825,13 +1038,32 @@ const buildRecordFromRosterRow = (
     number: row.number,
     studentName: row.studentName,
     uid: row.uid,
-    items: Array.isArray(row.items) ? row.items : [],
-    totalScore: hasScore ? Number(row.totalScore || 0) : Number.NaN,
+    items: transferred
+      ? (roster.items || []).map((item) => ({
+          name: item.name,
+          ...(item.shortName ? { shortName: item.shortName } : {}),
+          maxScore: getFiniteNumber(item.maxScore) ?? 0,
+          ...(item.ratio !== undefined ? { ratio: item.ratio } : {}),
+          score: 0,
+          scoreEntered: false,
+        }))
+      : Array.isArray(row.items)
+        ? row.items
+        : [],
+    totalScore:
+      hasScore && !transferred ? Number(row.totalScore || 0) : Number.NaN,
     totalMaxScore: row.totalMaxScore || roster.totalMaxScore || 0,
-    feedback: row.feedback || "",
-    evidence: row.evidence || row.feedback || "",
+    feedback: transferred ? TRANSFERRED_LABEL : row.feedback || "",
+    evidence: transferred
+      ? TRANSFERRED_LABEL
+      : row.evidence || row.feedback || "",
     sourceFileName: roster.sourceFileName,
-  };
+  } as PerformanceScoreRecord & TransferScoreMeta;
+  if (transferred) {
+    record.isTransferred = true;
+    record.transferStatus = "transferred";
+  }
+  return record;
 };
 
 const cloneScoreListRecords = (records: ScoreListRecord[]) =>
@@ -858,6 +1090,7 @@ const isManualScoreListRecord = (record: PerformanceScoreRecord) => !record.uid;
 
 const isEmptyManualScoreListRecord = (record: PerformanceScoreRecord) =>
   isManualScoreListRecord(record) &&
+  !isTransferredScoreRecord(record) &&
   !normalizeSchoolValue(record.number) &&
   !normalizeStudentName(record.studentName) &&
   getEnteredTotalScore(record) === null &&
@@ -939,17 +1172,19 @@ const getRecordItemsForRoster = (
     const existing = record.items?.[index];
     const existingScore = getFiniteNumber(existing?.score);
     const existingMaxScore = getFiniteNumber(existing?.maxScore);
+    const shortName = existing?.shortName || item.shortName;
+    const ratio = existing?.ratio ?? item.ratio;
     return {
       name: existing?.name || item.name,
-      shortName: existing?.shortName || item.shortName,
       score: existingScore === null ? 0 : roundScore(existingScore),
       maxScore:
         existingMaxScore === null
           ? roundScore(Number(item.maxScore || 0))
           : roundScore(existingMaxScore),
-      ratio: existing?.ratio ?? item.ratio,
       scoreEntered:
         existing?.scoreEntered === false ? false : existingScore !== null,
+      ...(shortName ? { shortName } : {}),
+      ...(ratio !== undefined ? { ratio } : {}),
     };
   });
 
@@ -970,6 +1205,7 @@ const serializeScoreRecordForEdit = (
     totalMaxScore: getRecordTotalMaxScore(record),
     feedback: String(record.feedback || ""),
     evidence: String(record.evidence || record.feedback || ""),
+    isTransferred: isTransferredScoreRecord(record),
   });
 };
 
@@ -983,24 +1219,58 @@ const buildRosterRowFromScoreRecord = (
   record: PerformanceScoreRecord,
   roster: PerformanceScoreRoster,
 ): PerformanceScoreRosterRow => {
-  const items = getRecordItemsForRoster(record, roster);
+  const transferred = isTransferredScoreRecord(record);
+  const items = getRecordItemsForRoster(record, roster).map((item) =>
+    transferred
+      ? {
+          ...item,
+          score: 0,
+          scoreEntered: false,
+        }
+      : item,
+  );
   const totalScore = getEnteredItemsTotalScore(items);
-  return {
-    ...row,
-    uid: record.uid || row.uid,
-    grade: record.grade || row.grade,
-    class: record.class || row.class,
-    number: record.number || row.number,
-    studentName: record.studentName || row.studentName,
+  const matchStatus = transferred
+    ? "unmatched"
+    : row.matchStatus || (record.uid ? "matched" : "unmatched");
+  const matchMessage = transferred
+    ? "전출 학생입니다."
+    : row.matchMessage ||
+      (record.uid ? "학생 문서와 연결된 점수입니다." : "수동 추가 학생입니다.");
+  const transferMeta: Pick<
+    PerformanceScoreRosterRow,
+    "isTransferred" | "transferStatus"
+  > = transferred
+    ? {
+        isTransferred: true,
+        transferStatus: "transferred",
+      }
+    : {};
+  const nextRow: PerformanceScoreRosterRow = {
+    rowNumber: Number(row.rowNumber) || 0,
+    uid: record.uid || row.uid || "",
+    grade: record.grade || row.grade || "",
+    class: record.class || row.class || "",
+    number: record.number || row.number || "",
+    studentName: record.studentName || row.studentName || "",
     items,
-    totalScore: totalScore ?? 0,
+    totalScore: transferred ? 0 : (totalScore ?? 0),
     totalMaxScore:
       getRecordTotalMaxScore(record) ||
       roster.totalMaxScore ||
-      row.totalMaxScore,
-    feedback: String(record.feedback || "").slice(0, 1000),
-    evidence: String(record.evidence || record.feedback || "").slice(0, 1000),
+      row.totalMaxScore ||
+      0,
+    feedback: transferred
+      ? TRANSFERRED_LABEL
+      : String(record.feedback || "").slice(0, 1000),
+    evidence: transferred
+      ? TRANSFERRED_LABEL
+      : String(record.evidence || record.feedback || "").slice(0, 1000),
+    matchStatus,
+    matchMessage,
+    ...transferMeta,
   };
+  return nextRow;
 };
 
 const CLASS_SHEET_COLUMNS = [
@@ -1096,10 +1366,33 @@ const saveBlobAsFile = (blob: Blob, fileName: string) => {
 };
 
 const getScoreNumber = (record?: PerformanceScoreRecord) => {
-  if (!record) return null;
+  if (!record || isTransferredScoreRecord(record)) return null;
   const score = Number(record.totalScore);
   return Number.isFinite(score) ? roundScore(score) : null;
 };
+
+const getClassSheetScoreCellValue = (record?: PerformanceScoreRecord) =>
+  isTransferredScoreRecord(record) ? TRANSFERRED_LABEL : getScoreNumber(record);
+
+const getClassSheetTotalScoreCellValue = (student: ClassSheetStudent) => {
+  if (
+    isTransferredScoreRecord(student.firstRecord) ||
+    isTransferredScoreRecord(student.secondRecord)
+  ) {
+    return "";
+  }
+  const firstScore = getScoreNumber(student.firstRecord);
+  const secondScore = getScoreNumber(student.secondRecord);
+  return firstScore !== null || secondScore !== null
+    ? roundScore((firstScore ?? 0) + (secondScore ?? 0))
+    : "";
+};
+
+const getClassSheetStudentName = (student: ClassSheetStudent) =>
+  isTransferredScoreRecord(student.firstRecord) ||
+  isTransferredScoreRecord(student.secondRecord)
+    ? `${student.studentName || "(이름 없음)"} [${TRANSFERRED_LABEL}]`
+    : student.studentName || "(이름 없음)";
 
 const getConfirmedSignatureRecord = (
   student: ClassSheetStudent,
@@ -1264,17 +1557,14 @@ const buildClassSummaryWorkbook = (params: {
 
   params.students.forEach((student, index) => {
     const excelRowNumber = 7 + index;
-    const firstScore = getScoreNumber(student.firstRecord);
-    const secondScore = getScoreNumber(student.secondRecord);
-    const totalScore =
-      (firstScore ?? 0) + (secondScore ?? 0) > 0
-        ? roundScore((firstScore ?? 0) + (secondScore ?? 0))
-        : "";
+    const firstScore = getClassSheetScoreCellValue(student.firstRecord);
+    const secondScore = getClassSheetScoreCellValue(student.secondRecord);
+    const totalScore = getClassSheetTotalScoreCellValue(student);
     const row = makeExcelRow(18);
     setExcelCell(row, 1, `${student.class}/${student.number}`, {
       columnSpan: 2,
     });
-    setExcelCell(row, 3, student.studentName);
+    setExcelCell(row, 3, getClassSheetStudentName(student));
     setExcelCell(row, 4, firstScore ?? "", { columnSpan: 2 });
     setExcelCell(row, 6, secondScore ?? "");
     setExcelCell(row, 7, totalScore, { columnSpan: 2 });
@@ -1917,12 +2207,9 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
   }> = [];
   for (const [index, student] of params.students.entries()) {
     const row = CLASS_SHEET_STUDENT_START_ROW + index;
-    const firstScore = getScoreNumber(student.firstRecord);
-    const secondScore = getScoreNumber(student.secondRecord);
-    const totalScore =
-      firstScore !== null || secondScore !== null
-        ? roundScore((firstScore ?? 0) + (secondScore ?? 0))
-        : "";
+    const firstScore = getClassSheetScoreCellValue(student.firstRecord);
+    const secondScore = getClassSheetScoreCellValue(student.secondRecord);
+    const totalScore = getClassSheetTotalScoreCellValue(student);
     setWorksheetCellValue(
       worksheet,
       row,
@@ -1930,7 +2217,7 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
       `${student.class}/${student.number}`,
     );
     setWorksheetCellValue(worksheet, row, 3, "");
-    setWorksheetCellValue(worksheet, row, 4, student.studentName);
+    setWorksheetCellValue(worksheet, row, 4, getClassSheetStudentName(student));
     setWorksheetCellValue(worksheet, row, 5, firstScore ?? "");
     setWorksheetCellValue(worksheet, row, 7, secondScore ?? "");
     setWorksheetCellValue(worksheet, row, 8, totalScore);
@@ -2029,6 +2316,7 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
 };
 
 const PerformanceScoreManager: React.FC = () => {
+  const [searchParams] = useSearchParams();
   const { config, currentUser } = useAuth();
   const { showToast } = useAppToast();
   const { confirm } = useAppDialog();
@@ -2076,6 +2364,13 @@ const PerformanceScoreManager: React.FC = () => {
   const [scoreStatsLoadedRosterId, setScoreStatsLoadedRosterId] = useState("");
   const [scoreStatsLoading, setScoreStatsLoading] = useState(false);
   const [scoreStatsClassFilter, setScoreStatsClassFilter] = useState("");
+  const [objectionModalOpen, setObjectionModalOpen] = useState(false);
+  const [objections, setObjections] = useState<PerformanceScoreObjection[]>([]);
+  const [objectionsLoading, setObjectionsLoading] = useState(false);
+  const [objectionsLoaded, setObjectionsLoaded] = useState(false);
+  const [objectionsAutoLoadAttempted, setObjectionsAutoLoadAttempted] =
+    useState(false);
+  const [objectionReviewingId, setObjectionReviewingId] = useState("");
   const [scoreListSort, setScoreListSort] = useState<
     SortState<ScoreListSortKey>
   >({ key: "number", direction: "asc" });
@@ -2149,6 +2444,12 @@ const PerformanceScoreManager: React.FC = () => {
   }, [scoreListLoadedRosterId]);
 
   useEffect(() => {
+    setObjections([]);
+    setObjectionsLoaded(false);
+    setObjectionsAutoLoadAttempted(false);
+  }, [year, semester]);
+
+  useEffect(() => {
     setClassSheetPreviewStudents([]);
     setClassSheetPreviewLoadedKey("");
   }, [
@@ -2170,6 +2471,10 @@ const PerformanceScoreManager: React.FC = () => {
   const rosterCollectionPath = getSemesterCollectionPath(
     { year, semester },
     PERFORMANCE_SCORE_ROSTERS_COLLECTION,
+  );
+  const objectionCollectionPath = getSemesterCollectionPath(
+    { year, semester },
+    PERFORMANCE_SCORE_OBJECTIONS_COLLECTION,
   );
 
   const parsedSummary = useMemo(() => {
@@ -2549,6 +2854,15 @@ const PerformanceScoreManager: React.FC = () => {
     scoreStatsSourceRecords,
     selectedScoreRoster,
   ]);
+  const objectionSummary = useMemo(
+    () => ({
+      total: objections.length,
+      pending: objections.filter((item) => item.status === "pending").length,
+      accepted: objections.filter((item) => item.status === "accepted").length,
+      rejected: objections.filter((item) => item.status === "rejected").length,
+    }),
+    [objections],
+  );
   const summaryExportRosters = useMemo(() => {
     return {
       firstRoster:
@@ -2862,6 +3176,185 @@ const PerformanceScoreManager: React.FC = () => {
     }
   };
 
+  const loadPerformanceScoreObjections = async () => {
+    if (objectionsLoading) return;
+    setObjectionsLoading(true);
+    try {
+      const snap = await getDocs(
+        query(
+          collection(db, objectionCollectionPath),
+          orderBy("requestedAt", "desc"),
+        ),
+      );
+      const loaded = snap.docs.map((item) =>
+        normalizePerformanceScoreObjection(
+          item.id,
+          item.data() as Record<string, unknown>,
+        ),
+      );
+      setObjections(sortPerformanceScoreObjections(loaded));
+      setObjectionsLoaded(true);
+    } catch (error) {
+      console.error("Failed to load performance score objections:", error);
+      setObjections([]);
+      setObjectionsLoaded(false);
+      showToast({
+        tone: "error",
+        title: "이의 목록을 불러오지 못했습니다.",
+        message: "권한과 네트워크 상태를 확인한 뒤 다시 조회해 주세요.",
+      });
+    } finally {
+      setObjectionsLoading(false);
+    }
+  };
+
+  const openObjectionModal = () => {
+    setObjectionModalOpen(true);
+    void loadPerformanceScoreObjections();
+  };
+
+  useEffect(() => {
+    if (objectionsAutoLoadAttempted || objectionsLoaded || objectionsLoading) {
+      return;
+    }
+    setObjectionsAutoLoadAttempted(true);
+    void loadPerformanceScoreObjections();
+  }, [
+    objectionsAutoLoadAttempted,
+    objectionsLoaded,
+    objectionsLoading,
+    objectionCollectionPath,
+  ]);
+
+  useEffect(() => {
+    if (searchParams.get("panel") !== "objections" || objectionModalOpen) {
+      return;
+    }
+    setObjectionModalOpen(true);
+    void loadPerformanceScoreObjections();
+  }, [searchParams, objectionModalOpen]);
+
+  const handleReviewObjection = async (
+    objection: PerformanceScoreObjection,
+    status: "accepted" | "rejected",
+  ) => {
+    if (objectionReviewingId) return;
+
+    let changedTotalScore: number | null = null;
+    let changedScoreLabel = "";
+    let reviewMemo = "";
+    if (status === "accepted") {
+      const defaultScore =
+        objection.changedTotalScore ?? objection.totalScore ?? "";
+      const rawScore = window.prompt(
+        [
+          `${objection.studentName} 학생의 ${objection.scoreTitle} 이의 제기를 수용합니다.`,
+          `현재 점수: ${objection.scoreLabel}`,
+          "수용 전 점수표에서 실제 점수를 수정·저장한 뒤, 학생 화면에 반영된 변경 후 총점을 입력해 주세요.",
+        ].join("\n"),
+        String(defaultScore),
+      );
+      if (rawScore === null) return;
+      changedTotalScore = getFiniteNumber(rawScore.replace(/,/g, "").trim());
+      if (changedTotalScore === null) {
+        showToast({
+          tone: "warning",
+          title: "변경 후 점수를 확인해 주세요.",
+          message: "수용 처리에는 학생에게 안내할 변경 후 총점이 필요합니다.",
+        });
+        return;
+      }
+      if (
+        changedTotalScore < 0 ||
+        (objection.totalMaxScore !== null &&
+          objection.totalMaxScore > 0 &&
+          changedTotalScore > objection.totalMaxScore)
+      ) {
+        showToast({
+          tone: "warning",
+          title: "점수 범위를 확인해 주세요.",
+          message: `변경 후 점수는 0점 이상 ${formatPerformanceScore(
+            objection.totalMaxScore || 0,
+          )}점 이하로 입력해야 합니다.`,
+        });
+        return;
+      }
+      changedScoreLabel = getObjectionScoreLabel(
+        changedTotalScore,
+        objection.totalMaxScore,
+      );
+      const memo = window.prompt(
+        "학생에게 함께 보낼 처리 메모가 있으면 입력해 주세요.",
+        objection.reviewMemo || "",
+      );
+      if (memo === null) return;
+      reviewMemo = memo.trim().slice(0, 240);
+    } else {
+      const memo = window.prompt(
+        "학생에게 전달할 반려 사유를 입력해 주세요.",
+        objection.reviewMemo || "",
+      );
+      if (memo === null) return;
+      reviewMemo = memo.trim().slice(0, 240);
+      if (!reviewMemo) {
+        showToast({
+          tone: "warning",
+          title: "반려 사유를 입력해 주세요.",
+          message:
+            "학생이 처리 결과를 이해할 수 있도록 반려 사유가 필요합니다.",
+        });
+        return;
+      }
+    }
+
+    const confirmed = await confirm({
+      title:
+        status === "accepted"
+          ? "이의 제기를 수용할까요?"
+          : "이의 제기를 반려할까요?",
+      message:
+        status === "accepted"
+          ? `${objection.studentName} 학생에게 ${objection.scoreTitle} 이의 제기가 수용되었고 변경 후 점수가 ${changedScoreLabel}이라고 알립니다. 입력한 총점이 저장된 학생 점수와 일치할 때만 처리됩니다.`
+          : `${objection.studentName} 학생에게 ${objection.scoreTitle} 이의 제기가 반려되었다고 알립니다.`,
+      confirmLabel:
+        status === "accepted" ? "수용 알림 보내기" : "반려 알림 보내기",
+      tone: status === "accepted" ? "info" : "danger",
+    });
+    if (!confirmed) return;
+
+    setObjectionReviewingId(objection.id);
+    try {
+      const result = await reviewPerformanceScoreObjection(config, {
+        objectionId: objection.id,
+        status,
+        changedTotalScore,
+        reviewMemo,
+      });
+      await loadPerformanceScoreObjections();
+      showToast({
+        tone: "success",
+        title:
+          status === "accepted"
+            ? "이의 제기를 수용했습니다."
+            : "이의 제기를 반려했습니다.",
+        message: result.notificationCreated
+          ? status === "accepted"
+            ? `학생에게 변경 후 점수 ${changedScoreLabel} 안내를 보냈습니다.`
+            : "학생에게 반려 알림을 보냈습니다."
+          : "처리 상태는 저장했지만 알림 설정 때문에 학생 알림은 새로 생성되지 않았습니다.",
+      });
+    } catch (error) {
+      console.error("Failed to review performance score objection:", error);
+      showToast({
+        tone: "error",
+        title: "이의 제기 처리에 실패했습니다.",
+        message: getObjectionReviewErrorMessage(error),
+      });
+    } finally {
+      setObjectionReviewingId("");
+    }
+  };
+
   const startScoreEdit = () => {
     if (!selectedScoreRoster || !scoreListReady || scoreListLoading) return;
     setScoreEditOriginalRecords(cloneScoreListRecords(scoreListRecords));
@@ -2919,6 +3412,33 @@ const PerformanceScoreManager: React.FC = () => {
             }
           : record,
       ),
+    );
+  };
+
+  const updateScoreListTransferred = (recordKey: string, checked: boolean) => {
+    setScoreListRecords((current) =>
+      current.map((record) => {
+        if (
+          getScoreListRecordKey(record) !== recordKey ||
+          !isManualScoreListRecord(record)
+        ) {
+          return record;
+        }
+        const items = (record.items || []).map((item) => ({
+          ...item,
+          score: 0,
+          scoreEntered: false,
+        }));
+        return {
+          ...record,
+          items: checked ? items : record.items,
+          totalScore: checked ? Number.NaN : record.totalScore,
+          feedback: checked ? TRANSFERRED_LABEL : "",
+          evidence: checked ? TRANSFERRED_LABEL : "",
+          isTransferred: checked,
+          transferStatus: checked ? "transferred" : undefined,
+        };
+      }),
     );
   };
 
@@ -3012,7 +3532,9 @@ const PerformanceScoreManager: React.FC = () => {
     }
 
     const unscoredManualRecord = manualRecordsToSave.find(
-      (record) => getEnteredTotalScore(record) === null,
+      (record) =>
+        !isTransferredScoreRecord(record) &&
+        getEnteredTotalScore(record) === null,
     );
     if (unscoredManualRecord) {
       showToast({
@@ -3043,18 +3565,20 @@ const PerformanceScoreManager: React.FC = () => {
       return;
     }
 
-    const invalidRecord = scoreListRecords.find((record) =>
-      (getRecordItemsForRoster(record, selectedScoreRoster) || []).some(
-        (item) => {
-          const score = getEnteredItemScore(item);
-          const maxScore = getFiniteNumber(item.maxScore);
-          return (
-            score !== null &&
-            (score < 0 ||
-              (maxScore !== null && maxScore > 0 && score > maxScore))
-          );
-        },
-      ),
+    const invalidRecord = scoreListRecords.find(
+      (record) =>
+        !isTransferredScoreRecord(record) &&
+        (getRecordItemsForRoster(record, selectedScoreRoster) || []).some(
+          (item) => {
+            const score = getEnteredItemScore(item);
+            const maxScore = getFiniteNumber(item.maxScore);
+            return (
+              score !== null &&
+              (score < 0 ||
+                (maxScore !== null && maxScore > 0 && score > maxScore))
+            );
+          },
+        ),
     );
     if (invalidRecord) {
       showToast({
@@ -3162,6 +3686,10 @@ const PerformanceScoreManager: React.FC = () => {
             .filter(Boolean),
         ),
       ).sort(compareSchoolValue);
+      const nextTargetClass =
+        updatedClassList.length === 1
+          ? updatedClassList[0]
+          : selectedScoreRoster.targetClass || "";
       const savedRowCount = updatedRows.filter((row) =>
         rosterRowHasScore(row),
       ).length;
@@ -3170,10 +3698,7 @@ const PerformanceScoreManager: React.FC = () => {
       batchQueue.update(doc(db, rosterCollectionPath, selectedScoreRoster.id), {
         rows: updatedRows,
         classes: updatedClassList,
-        targetClass:
-          updatedClassList.length === 1
-            ? updatedClassList[0]
-            : selectedScoreRoster.targetClass,
+        targetClass: nextTargetClass,
         rowCount: updatedRows.length,
         matchedCount: savedRowCount,
         unmatchedCount: Math.max(0, updatedRows.length - savedRowCount),
@@ -3235,7 +3760,9 @@ const PerformanceScoreManager: React.FC = () => {
           items,
           totalScore,
           totalMaxScore:
-            getRecordTotalMaxScore(record) || selectedScoreRoster.totalMaxScore,
+            getRecordTotalMaxScore(record) ||
+            selectedScoreRoster.totalMaxScore ||
+            0,
           feedback: String(record.feedback || "").slice(0, 1000),
           evidence: String(record.evidence || record.feedback || "").slice(
             0,
@@ -3260,33 +3787,34 @@ const PerformanceScoreManager: React.FC = () => {
       const changedKeys = new Set(
         changedRecords.map((record) => getScoreListRecordKey(record)),
       );
-      const normalizedRecords = persistableScoreListRecords.map((record) => {
-        const recordKey = getScoreListRecordKey(record);
-        const rowNumber = rowNumberByRecordKey.get(recordKey);
-        const keyedRecord =
-          !record.uid && rowNumber
-            ? {
-                ...record,
-                localKey: `row:${selectedScoreRoster.id}:${rowNumber}`,
-                rosterRowNumber: rowNumber,
-                isManual: true,
-              }
-            : record;
-        if (!changedKeys.has(recordKey)) return keyedRecord;
-        const hasScore = getEnteredTotalScore(record) !== null;
-        const cleared = clearRecordSignature(record) || record;
-        return {
-          ...keyedRecord,
-          ...cleared,
-          localKey: keyedRecord.localKey,
-          rosterRowNumber: keyedRecord.rosterRowNumber,
-          isManual: keyedRecord.isManual,
-          scoreSource:
-            keyedRecord.uid && hasScore ? "student-doc" : "roster-row",
-          scoreDocumentExists: Boolean(keyedRecord.uid && hasScore),
-          updatedAt: new Date(),
-        };
-      });
+      const normalizedRecords: ScoreListRecord[] =
+        persistableScoreListRecords.map((record) => {
+          const recordKey = getScoreListRecordKey(record);
+          const rowNumber = rowNumberByRecordKey.get(recordKey);
+          const keyedRecord =
+            !record.uid && rowNumber
+              ? {
+                  ...record,
+                  localKey: `row:${selectedScoreRoster.id}:${rowNumber}`,
+                  rosterRowNumber: rowNumber,
+                  isManual: true,
+                }
+              : record;
+          if (!changedKeys.has(recordKey)) return keyedRecord;
+          const hasScore = getEnteredTotalScore(record) !== null;
+          const cleared = clearRecordSignature(record) || record;
+          return {
+            ...keyedRecord,
+            ...cleared,
+            localKey: keyedRecord.localKey,
+            rosterRowNumber: keyedRecord.rosterRowNumber,
+            isManual: keyedRecord.isManual,
+            scoreSource:
+              keyedRecord.uid && hasScore ? "student-doc" : "roster-row",
+            scoreDocumentExists: Boolean(keyedRecord.uid && hasScore),
+            updatedAt: new Date(),
+          };
+        });
 
       setScoreListRecords(normalizedRecords);
       setScoreEditOriginalRecords(cloneScoreListRecords(normalizedRecords));
@@ -3303,10 +3831,7 @@ const PerformanceScoreManager: React.FC = () => {
                   ...roster,
                   rows: updatedRows,
                   classes: updatedClassList,
-                  targetClass:
-                    updatedClassList.length === 1
-                      ? updatedClassList[0]
-                      : roster.targetClass,
+                  targetClass: nextTargetClass,
                   rowCount: updatedRows.length,
                   matchedCount: savedRowCount,
                   unmatchedCount: Math.max(
@@ -5066,6 +5591,280 @@ const PerformanceScoreManager: React.FC = () => {
         </div>
       )}
 
+      {objectionModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="performance-score-objections-title"
+            className="flex max-h-[92vh] w-full max-w-7xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
+          >
+            <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0">
+                <h3
+                  id="performance-score-objections-title"
+                  className="text-lg font-black text-slate-900"
+                >
+                  수행평가 이의 목록
+                </h3>
+                <p className="mt-1 text-sm font-semibold text-slate-500">
+                  학생이 제출한 이의 제기 항목과 점수, 사유, 처리 상태를
+                  확인합니다.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void loadPerformanceScoreObjections()}
+                  disabled={objectionsLoading || Boolean(objectionReviewingId)}
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <i
+                    className={`fas fa-sync-alt text-xs ${
+                      objectionsLoading ? "animate-spin" : ""
+                    }`}
+                    aria-hidden="true"
+                  />
+                  새로고침
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setObjectionModalOpen(false)}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50"
+                  aria-label="이의 목록 창 닫기"
+                >
+                  <i className="fas fa-times" aria-hidden="true"></i>
+                </button>
+              </div>
+            </div>
+
+            <div className="overflow-y-auto px-5 py-4">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {[
+                  {
+                    label: "전체 이의",
+                    value: objectionSummary.total,
+                    className: "bg-slate-50 text-slate-900",
+                  },
+                  {
+                    label: "처리 대기",
+                    value: objectionSummary.pending,
+                    className: "bg-amber-50 text-amber-800",
+                  },
+                  {
+                    label: "수용",
+                    value: objectionSummary.accepted,
+                    className: "bg-emerald-50 text-emerald-800",
+                  },
+                  {
+                    label: "반려",
+                    value: objectionSummary.rejected,
+                    className: "bg-rose-50 text-rose-800",
+                  },
+                ].map((item) => (
+                  <div
+                    key={item.label}
+                    className={`rounded-lg px-4 py-3 ${item.className}`}
+                  >
+                    <div className="text-xs font-black opacity-80">
+                      {item.label}
+                    </div>
+                    <div className="mt-1 text-2xl font-black">
+                      {item.value}건
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
+                {objectionsLoading ? (
+                  <InlineLoading message="수행평가 이의 목록을 불러오는 중입니다." />
+                ) : objectionsLoaded && objections.length === 0 ? (
+                  <div className="bg-slate-50 px-4 py-12 text-center text-sm font-bold text-slate-400">
+                    제출된 수행평가 이의 제기가 없습니다.
+                  </div>
+                ) : !objectionsLoaded ? (
+                  <div className="bg-slate-50 px-4 py-12 text-center text-sm font-bold text-slate-400">
+                    새로고침을 누르면 제출된 이의 제기 목록을 조회합니다.
+                  </div>
+                ) : (
+                  <table className="w-full min-w-[1180px] table-fixed text-left text-sm">
+                    <colgroup>
+                      <col className="w-[90px]" />
+                      <col className="w-[150px]" />
+                      <col className="w-[210px]" />
+                      <col className="w-[130px]" />
+                      <col className="w-[240px]" />
+                      <col className="w-[270px]" />
+                      <col className="w-[150px]" />
+                      <col className="w-[170px]" />
+                    </colgroup>
+                    <thead className="bg-slate-50 text-xs font-black text-slate-500">
+                      <tr>
+                        <th className="px-4 py-3">상태</th>
+                        <th className="px-4 py-3">학생</th>
+                        <th className="px-4 py-3">수행평가 항목</th>
+                        <th className="px-4 py-3">해당 점수</th>
+                        <th className="px-4 py-3">영역별 점수</th>
+                        <th className="px-4 py-3">이의 제기 사유</th>
+                        <th className="px-4 py-3">요청/처리</th>
+                        <th className="px-4 py-3 text-center">처리</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {objections.map((objection) => {
+                        const statusMeta = getObjectionStatusMeta(
+                          objection.status,
+                        );
+                        const reviewing = objectionReviewingId === objection.id;
+                        return (
+                          <tr
+                            key={objection.id}
+                            className={statusMeta.rowClass}
+                          >
+                            <td className="px-4 py-4 align-top">
+                              <span
+                                className={`inline-flex rounded-full px-3 py-1 text-xs font-black ${statusMeta.badgeClass}`}
+                              >
+                                {statusMeta.label}
+                              </span>
+                            </td>
+                            <td className="px-4 py-4 align-top">
+                              <div className="font-black text-slate-900">
+                                {objection.studentName}
+                              </div>
+                              <div className="mt-1 text-xs font-bold text-slate-500">
+                                {objection.grade || "-"}학년{" "}
+                                {objection.class || "-"}반{" "}
+                                {objection.number || "-"}번
+                              </div>
+                            </td>
+                            <td className="px-4 py-4 align-top">
+                              <div className="font-black text-slate-900">
+                                {objection.scoreTitle}
+                              </div>
+                              <div className="mt-1 text-xs font-bold text-slate-500">
+                                {objection.subject || "과목 정보 없음"}
+                              </div>
+                            </td>
+                            <td className="px-4 py-4 align-top">
+                              <div className="font-black text-blue-700">
+                                {objection.scoreLabel}
+                              </div>
+                              {objection.status === "accepted" &&
+                                objection.changedScoreLabel && (
+                                  <div className="mt-1 text-xs font-bold text-emerald-700">
+                                    변경 후 {objection.changedScoreLabel}
+                                  </div>
+                                )}
+                            </td>
+                            <td className="px-4 py-4 align-top">
+                              <div className="flex flex-wrap gap-1.5">
+                                {objection.items.length === 0 ? (
+                                  <span className="text-xs font-bold text-slate-400">
+                                    영역별 점수 없음
+                                  </span>
+                                ) : (
+                                  objection.items.map((item, itemIndex) => (
+                                    <span
+                                      key={`${objection.id}-${itemIndex}`}
+                                      className="rounded-md bg-slate-50 px-2 py-1 text-[11px] font-bold text-slate-600"
+                                    >
+                                      {getItemLabel(item)}{" "}
+                                      {item.scoreEntered === false
+                                        ? "미입력"
+                                        : getObjectionScoreLabel(
+                                            item.score,
+                                            item.maxScore,
+                                          ).replace("점", "")}
+                                    </span>
+                                  ))
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-4 py-4 align-top">
+                              <p className="whitespace-pre-wrap break-words font-semibold leading-6 text-slate-700">
+                                {objection.reason || "사유 없음"}
+                              </p>
+                              {objection.reviewMemo && (
+                                <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs font-bold leading-5 text-slate-500">
+                                  처리 메모: {objection.reviewMemo}
+                                </p>
+                              )}
+                            </td>
+                            <td className="px-4 py-4 align-top text-xs font-bold leading-5 text-slate-500">
+                              <div>
+                                요청{" "}
+                                {formatObjectionDate(objection.requestedAt)}
+                              </div>
+                              {objection.status !== "pending" && (
+                                <div className="mt-1">
+                                  처리{" "}
+                                  {formatObjectionDate(objection.reviewedAt)}
+                                  {objection.reviewedByName
+                                    ? ` · ${objection.reviewedByName}`
+                                    : ""}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-4 py-4 align-top">
+                              {objection.status === "pending" ? (
+                                <div className="flex justify-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      void handleReviewObjection(
+                                        objection,
+                                        "rejected",
+                                      )
+                                    }
+                                    disabled={Boolean(objectionReviewingId)}
+                                    className="inline-flex h-8 items-center justify-center rounded-lg border border-rose-200 bg-white px-3 text-xs font-black text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    반려
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      void handleReviewObjection(
+                                        objection,
+                                        "accepted",
+                                      )
+                                    }
+                                    disabled={Boolean(objectionReviewingId)}
+                                    className="inline-flex h-8 items-center justify-center rounded-lg bg-blue-600 px-3 text-xs font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                                  >
+                                    {reviewing ? "처리 중" : "수용"}
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="text-center text-xs font-black text-slate-400">
+                                  처리 완료
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end border-t border-slate-200 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setObjectionModalOpen(false)}
+                className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+              >
+                닫기
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
       {classSheetModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
           <section className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
@@ -5787,6 +6586,25 @@ const PerformanceScoreManager: React.FC = () => {
             </button>
             <button
               type="button"
+              onClick={openObjectionModal}
+              disabled={objectionsLoading || scoreEditing || savingScoreEdits}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white px-4 text-sm font-black text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <i
+                className={`fas fa-circle-question text-xs ${
+                  objectionsLoading ? "animate-spin" : ""
+                }`}
+                aria-hidden="true"
+              />
+              이의 목록
+              {objectionSummary.pending > 0 && (
+                <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-black text-rose-600">
+                  {objectionSummary.pending}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
               onClick={() => setUploadModalOpen(true)}
               disabled={parsing || scoreEditing || savingScoreEdits}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
@@ -5946,7 +6764,9 @@ const PerformanceScoreManager: React.FC = () => {
                       · 명단 {scoreListRecords.length}명 · 저장{" "}
                       {
                         scoreListRecords.filter(
-                          (record) => getEnteredTotalScore(record) !== null,
+                          (record) =>
+                            isTransferredScoreRecord(record) ||
+                            getEnteredTotalScore(record) !== null,
                         ).length
                       }
                       명 · 만점{" "}
@@ -6042,6 +6862,8 @@ const PerformanceScoreManager: React.FC = () => {
                         sortedFilteredScoreListRecords.map((record) => {
                           const recordKey = getScoreListRecordKey(record);
                           const manualRecord = isManualScoreListRecord(record);
+                          const transferredRecord =
+                            isTransferredScoreRecord(record);
                           const editableItems = selectedScoreRoster
                             ? getRecordItemsForRoster(
                                 record,
@@ -6121,23 +6943,49 @@ const PerformanceScoreManager: React.FC = () => {
                               </td>
                               <td className="whitespace-nowrap px-3 py-3 font-black text-slate-900">
                                 {scoreEditing && manualRecord ? (
-                                  <input
-                                    type="text"
-                                    value={record.studentName || ""}
-                                    onChange={(event) =>
-                                      updateScoreListIdentity(
-                                        recordKey,
-                                        "studentName",
-                                        event.target.value,
-                                      )
-                                    }
-                                    disabled={savingScoreEdits}
-                                    aria-label="수동 추가 학생 이름"
-                                    className="h-9 w-28 rounded-lg border border-slate-200 px-2 text-sm font-bold text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-50"
-                                    placeholder="이름"
-                                  />
+                                  <div className="flex min-w-36 flex-col gap-1.5">
+                                    <input
+                                      type="text"
+                                      value={record.studentName || ""}
+                                      onChange={(event) =>
+                                        updateScoreListIdentity(
+                                          recordKey,
+                                          "studentName",
+                                          event.target.value,
+                                        )
+                                      }
+                                      disabled={savingScoreEdits}
+                                      aria-label="수동 추가 학생 이름"
+                                      className="h-9 w-32 rounded-lg border border-slate-200 px-2 text-sm font-bold text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-50"
+                                      placeholder="이름"
+                                    />
+                                    <label className="inline-flex items-center gap-1.5 text-[11px] font-black text-rose-600">
+                                      <input
+                                        type="checkbox"
+                                        checked={transferredRecord}
+                                        onChange={(event) =>
+                                          updateScoreListTransferred(
+                                            recordKey,
+                                            event.target.checked,
+                                          )
+                                        }
+                                        disabled={savingScoreEdits}
+                                        className="h-3.5 w-3.5 rounded border-slate-300 text-rose-600 focus:ring-rose-200"
+                                      />
+                                      전출 학생
+                                    </label>
+                                  </div>
                                 ) : (
-                                  record.studentName || "(이름 없음)"
+                                  <div className="flex items-center gap-1.5">
+                                    <span>
+                                      {record.studentName || "(이름 없음)"}
+                                    </span>
+                                    {transferredRecord && (
+                                      <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-black text-rose-600">
+                                        [{TRANSFERRED_LABEL}]
+                                      </span>
+                                    )}
+                                  </div>
                                 )}
                               </td>
                               {(selectedScoreRoster?.items || []).map(
@@ -6150,7 +6998,11 @@ const PerformanceScoreManager: React.FC = () => {
                                       key={`${recordKey}-${item.name}-${index}`}
                                       className="whitespace-nowrap px-3 py-3 text-right font-bold text-slate-700"
                                     >
-                                      {scoreEditing ? (
+                                      {transferredRecord ? (
+                                        <span className="inline-flex rounded-full bg-rose-50 px-2.5 py-1 text-xs font-black text-rose-600">
+                                          {TRANSFERRED_LABEL}
+                                        </span>
+                                      ) : scoreEditing ? (
                                         <div className="flex items-center justify-end gap-1.5">
                                           <input
                                             type="number"
@@ -6203,22 +7055,36 @@ const PerformanceScoreManager: React.FC = () => {
                                 },
                               )}
                               <td className="whitespace-nowrap px-3 py-3 text-right">
-                                <div className="font-black text-blue-700">
-                                  {formatPerformanceScore(
-                                    enteredTotalScore ?? Number.NaN,
-                                  )}{" "}
-                                  /{" "}
-                                  {formatPerformanceScore(record.totalMaxScore)}
-                                </div>
-                                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100">
-                                  <div
-                                    className="h-full rounded-full bg-blue-500"
-                                    style={{ width: `${percent}%` }}
-                                  />
-                                </div>
+                                {transferredRecord ? (
+                                  <span className="inline-flex rounded-full bg-rose-50 px-2.5 py-1 text-xs font-black text-rose-600">
+                                    {TRANSFERRED_LABEL}
+                                  </span>
+                                ) : (
+                                  <>
+                                    <div className="font-black text-blue-700">
+                                      {formatPerformanceScore(
+                                        enteredTotalScore ?? Number.NaN,
+                                      )}{" "}
+                                      /{" "}
+                                      {formatPerformanceScore(
+                                        record.totalMaxScore,
+                                      )}
+                                    </div>
+                                    <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                                      <div
+                                        className="h-full rounded-full bg-blue-500"
+                                        style={{ width: `${percent}%` }}
+                                      />
+                                    </div>
+                                  </>
+                                )}
                               </td>
                               <td className="px-3 py-3">
-                                {scoreEditing ? (
+                                {transferredRecord ? (
+                                  <div className="max-w-[360px] text-xs font-black leading-5 text-rose-600">
+                                    {TRANSFERRED_LABEL}
+                                  </div>
+                                ) : scoreEditing ? (
                                   <textarea
                                     value={
                                       record.evidence || record.feedback || ""

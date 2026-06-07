@@ -210,6 +210,14 @@ service cloud.firestore {
       return isAdmin() || isTeacherRole();
     }
 
+    function canReadPerformanceScoreObjection(data) {
+      return canUseWestory()
+        && (
+          data.uid == request.auth.uid
+          || canManagePerformanceScores()
+        );
+    }
+
     function isValidPerformanceScoreConfirmation(userId, scoreId, confirmationId) {
       return canUseWestory()
         && isOwnUser(userId)
@@ -943,6 +951,11 @@ service cloud.firestore {
 
       match /performance_score_rosters/{docId} {
         allow read, write: if canManagePerformanceScores();
+      }
+
+      match /performance_score_objections/{docId} {
+        allow read: if canReadPerformanceScoreObjection(resource.data);
+        allow create, update, delete: if false;
       }
 
       match /quiz_results/{resultId} {

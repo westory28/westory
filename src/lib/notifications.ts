@@ -210,6 +210,9 @@ export const notifyPerformanceScoreObjectionRequested = async (
     reason: string;
   },
 ): Promise<{
+  objectionIds: string[];
+  objectionSavedCount: number;
+  objectionSkippedProcessedCount: number;
   createdCount: number;
   recipientCount: number;
   skippedCount?: number;
@@ -223,6 +226,9 @@ export const notifyPerformanceScoreObjectionRequested = async (
       reason: string;
     },
     {
+      objectionIds?: string[];
+      objectionSavedCount?: number;
+      objectionSkippedProcessedCount?: number;
       createdCount?: number;
       recipientCount?: number;
       skippedCount?: number;
@@ -235,8 +241,61 @@ export const notifyPerformanceScoreObjectionRequested = async (
     reason: input.reason,
   });
   return {
+    objectionIds: Array.isArray(result.data?.objectionIds)
+      ? result.data.objectionIds.map((value) => String(value || ""))
+      : [],
+    objectionSavedCount: Number(result.data?.objectionSavedCount || 0),
+    objectionSkippedProcessedCount: Number(
+      result.data?.objectionSkippedProcessedCount || 0,
+    ),
     createdCount: Number(result.data?.createdCount || 0),
     recipientCount: Number(result.data?.recipientCount || 0),
     skippedCount: Number(result.data?.skippedCount || 0),
+  };
+};
+
+export const reviewPerformanceScoreObjection = async (
+  config: ConfigLike,
+  input: {
+    objectionId: string;
+    status: "accepted" | "rejected";
+    changedTotalScore?: number | null;
+    reviewMemo?: string;
+  },
+): Promise<{
+  status: "accepted" | "rejected";
+  notificationCreated: boolean;
+  recipientUid: string;
+}> => {
+  const { year, semester } = getYearSemester(config);
+  const callable = await getHttpsCallable<
+    {
+      year: string;
+      semester: string;
+      objectionId: string;
+      status: "accepted" | "rejected";
+      changedTotalScore?: number | null;
+      reviewMemo?: string;
+    },
+    {
+      status?: "accepted" | "rejected";
+      notificationCreated?: boolean;
+      recipientUid?: string;
+    }
+  >("reviewPerformanceScoreObjection");
+  const result = await callable({
+    year,
+    semester,
+    objectionId: input.objectionId,
+    status: input.status,
+    ...(input.status === "accepted"
+      ? { changedTotalScore: input.changedTotalScore ?? null }
+      : {}),
+    reviewMemo: String(input.reviewMemo || "").slice(0, 240),
+  });
+  return {
+    status: result.data?.status || input.status,
+    notificationCreated: result.data?.notificationCreated === true,
+    recipientUid: String(result.data?.recipientUid || ""),
   };
 };
