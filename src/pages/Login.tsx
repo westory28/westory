@@ -123,6 +123,45 @@ const normalizeEmail = (value: unknown): string =>
     .toLowerCase();
 const hasOwnField = (value: object | null | undefined, key: string): boolean =>
   !!value && Object.prototype.hasOwnProperty.call(value, key);
+const DAY_IN_MS = 24 * 60 * 60 * 1000;
+
+const getDdayCount = (dateKey: string): number | null => {
+  const match = String(dateKey || "")
+    .trim()
+    .match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const targetDate = new Date(year, month - 1, day);
+  if (
+    targetDate.getFullYear() !== year ||
+    targetDate.getMonth() !== month - 1 ||
+    targetDate.getDate() !== day
+  ) {
+    return null;
+  }
+
+  const today = new Date();
+  const targetUtc = Date.UTC(year, month - 1, day);
+  const todayUtc = Date.UTC(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+  );
+
+  return Math.round((targetUtc - todayUtc) / DAY_IN_MS);
+};
+
+const formatDdayCount = (count: number): string => {
+  if (count > 0) return `D-${count}`;
+  if (count < 0) return `D+${Math.abs(count)}`;
+  return "D-Day";
+};
+
+const formatDdayDate = (dateKey: string): string =>
+  String(dateKey || "").replace(/-/g, ".");
 
 const isAllowedLoginEmail = (email: unknown): boolean => {
   const normalizedEmail = normalizeEmail(email);
@@ -574,6 +613,12 @@ const Login: React.FC = () => {
   const { currentUser, userData, interfaceConfig, loading } = useAuth();
   const navigate = useNavigate();
   const restrictedInAppBrowser = isRestrictedInAppBrowser();
+  const ddayTitle = String(interfaceConfig?.ddayTitle || "").trim();
+  const ddayDate = String(interfaceConfig?.ddayDate || "").trim();
+  const ddayCount =
+    interfaceConfig?.ddayEnabled && ddayTitle && ddayDate
+      ? getDdayCount(ddayDate)
+      : null;
 
   const [authBusy, setAuthBusy] = useState(false);
   const [loginNotice, setLoginNotice] = useState("");
@@ -1806,6 +1851,28 @@ const Login: React.FC = () => {
         <p className="text-gray-500 text-xl font-medium mb-8">
           {interfaceConfig?.mainSubtitle || "우리가 써 내려가는 이야기"}
         </p>
+
+        {ddayCount !== null && (
+          <div
+            className="mb-6 w-full max-w-sm rounded-lg border border-blue-100 bg-white px-5 py-4 shadow-sm"
+            aria-label={`${ddayTitle} ${formatDdayCount(ddayCount)}`}
+          >
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0 text-left">
+                <p className="text-xs font-bold text-blue-600">D-Day</p>
+                <p className="mt-1 truncate text-base font-extrabold text-gray-900">
+                  {ddayTitle}
+                </p>
+                <p className="mt-1 text-xs font-medium text-gray-500">
+                  목표일 {formatDdayDate(ddayDate)}
+                </p>
+              </div>
+              <span className="shrink-0 rounded-lg bg-blue-600 px-4 py-2 text-lg font-black text-white shadow-sm">
+                {formatDdayCount(ddayCount)}
+              </span>
+            </div>
+          </div>
+        )}
 
         {restrictedInAppBrowser && (
           <div className="w-full max-w-sm mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-left shadow-sm">

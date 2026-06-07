@@ -572,23 +572,6 @@ const SettingsInterface: React.FC = () => {
               </div>
             </div>
 
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-900">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <div className="font-bold">
-                    화랑의 전당 설정 위치가 이동되었습니다.
-                  </div>
-                  <p className="mt-1 text-amber-800/90">
-                    시상대 배경, 공개 범위, 미리보기, 배치 편집은 이제 교사
-                    대시보드의 위스 관리 안에서 바로 조정할 수 있습니다.
-                  </p>
-                </div>
-                <span className="inline-flex items-center rounded-full bg-white px-3 py-1 text-xs font-bold text-amber-800 shadow-sm">
-                  위스 관리 &gt; 화랑의 전당 관리
-                </span>
-              </div>
-            </div>
-
             <div className="text-right pb-2">
               <button
                 onClick={() => void saveInterfaceConfig()}
