@@ -51,6 +51,8 @@ type ParsedScoreRow = ParsedPerformanceScoreRow;
 type ParsedUpload = ParsedPerformanceScoreUpload;
 
 type AssessmentPresetKey = "auto" | "first" | "second";
+type UploadAssessmentPresetKey = Exclude<AssessmentPresetKey, "auto">;
+type PreviewPageItem = number | { key: string; label: string };
 
 const DEFAULT_GRADE_OPTIONS = ["1", "2", "3"];
 const DEFAULT_CLASS_OPTIONS = Array.from({ length: 12 }, (_, index) =>
@@ -60,7 +62,7 @@ const PREVIEW_PAGE_SIZE = 20;
 const FIRESTORE_BATCH_WRITE_LIMIT = 450;
 
 const ASSESSMENT_PRESETS: Record<
-  Exclude<AssessmentPresetKey, "auto">,
+  UploadAssessmentPresetKey,
   { title: string; subject: string; assessmentOrder: number }
 > = {
   first: {
@@ -74,6 +76,23 @@ const ASSESSMENT_PRESETS: Record<
     assessmentOrder: 2,
   },
 };
+
+const UPLOAD_ASSESSMENT_OPTIONS: Array<{
+  key: UploadAssessmentPresetKey;
+  label: string;
+  description: string;
+}> = [
+  {
+    key: "first",
+    label: "1차 수행: 고조선 8조법 4컷 만화",
+    description: "20점 만점, 법 조항 서사와 당대 생활상 중심",
+  },
+  {
+    key: "second",
+    label: "2차 수행: 삼국 시대 인물의 무덤 평점",
+    description: "30점 만점, 업적·과오와 평점 근거 중심",
+  },
+];
 
 const toText = (value: unknown) =>
   String(value ?? "")
@@ -102,6 +121,66 @@ const getAssessmentConfig = (
 
 const getItemLabel = (item: { name: string; shortName?: string }) =>
   item.shortName || item.name;
+
+const getPreviewPageItems = (
+  currentPage: number,
+  totalPages: number,
+): PreviewPageItem[] => {
+  if (totalPages <= 15) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const visiblePages = new Set<number>([1, totalPages]);
+  for (let page = currentPage - 2; page <= currentPage + 2; page += 1) {
+    if (page > 1 && page < totalPages) {
+      visiblePages.add(page);
+    }
+  }
+
+  const sortedPages = Array.from(visiblePages).sort((a, b) => a - b);
+  return sortedPages.flatMap((page, index) => {
+    const previousPage = sortedPages[index - 1];
+    if (index > 0 && page - previousPage > 1) {
+      return [{ key: `gap-${previousPage}-${page}`, label: "..." }, page];
+    }
+    return [page];
+  });
+};
+
+const getRowDisplayName = (row: ParsedScoreRow) =>
+  `${row.class || "-"}반 ${row.number || "-"}번 ${row.studentName || "(이름 없음)"}`;
+
+const formatRowsForConfirm = (rows: ParsedScoreRow[], limit = 80) => {
+  const listedRows = rows.slice(0, limit);
+  const names = listedRows
+    .map((row, index) => `${index + 1}. ${getRowDisplayName(row)}`)
+    .join("\n");
+  const remaining = rows.length - listedRows.length;
+  return remaining > 0 ? `${names}\n... 외 ${remaining}명` : names;
+};
+
+const getFirestoreWriteErrorMessage = (error: unknown) => {
+  const code =
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof (error as { code?: unknown }).code === "string"
+      ? (error as { code: string }).code
+      : "";
+  const message =
+    error instanceof Error && error.message ? ` (${error.message})` : "";
+
+  if (code === "permission-denied") {
+    return `Firestore 권한이 거부되었습니다. 운영 Firestore rules 배포 상태를 확인해 주세요.${message}`;
+  }
+  if (code === "unavailable" || code === "deadline-exceeded") {
+    return `Firestore 연결이 불안정합니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.${message}`;
+  }
+  if (code) {
+    return `Firestore 저장 오류가 발생했습니다: ${code}${message}`;
+  }
+  return `권한, 네트워크 상태, Firestore rules 배포 상태를 확인한 뒤 다시 시도해 주세요.${message}`;
+};
 
 const createBatchQueue = () => {
   const batches: Array<ReturnType<typeof writeBatch>> = [];
@@ -275,6 +354,9 @@ const PerformanceScoreManager: React.FC = () => {
   const [previewPage, setPreviewPage] = useState(1);
   const [assessmentPreset, setAssessmentPreset] =
     useState<AssessmentPresetKey>("auto");
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [uploadAssessmentPreset, setUploadAssessmentPreset] =
+    useState<UploadAssessmentPresetKey>("first");
 
   useEffect(() => {
     setTitle(`${year}학년도 ${semester}학기 수행평가 점수`);
@@ -344,7 +426,7 @@ const PerformanceScoreManager: React.FC = () => {
     1,
     Math.ceil(filteredPreviewRows.length / PREVIEW_PAGE_SIZE),
   );
-  const safePreviewPage = Math.min(previewPage, previewTotalPages);
+  const safePreviewPage = Math.min(Math.max(1, previewPage), previewTotalPages);
   const previewStartIndex = (safePreviewPage - 1) * PREVIEW_PAGE_SIZE;
   const previewRows = filteredPreviewRows.slice(
     previewStartIndex,
@@ -356,6 +438,10 @@ const PerformanceScoreManager: React.FC = () => {
         filteredPreviewRows.length,
       )}`
     : "0";
+  const previewPageItems = useMemo(
+    () => getPreviewPageItems(safePreviewPage, previewTotalPages),
+    [safePreviewPage, previewTotalPages],
+  );
 
   const loadStudents = async () => {
     setStudentsLoading(true);
@@ -431,26 +517,37 @@ const PerformanceScoreManager: React.FC = () => {
         fallbackClass,
       });
       const detectedPreset = getDefaultAssessmentPreset(parsedUpload);
+      const selectedPreset = uploadAssessmentPreset;
       const assessmentConfig = getAssessmentConfig(
         parsedUpload,
-        detectedPreset,
+        selectedPreset,
       );
       setTitle(assessmentConfig.title || parsedUpload.title);
       if (assessmentConfig.subject) {
         setSubject(assessmentConfig.subject);
       }
       const matchedRows = matchRowsToStudents(parsedUpload.rows, students);
-      setAssessmentPreset(detectedPreset);
+      setAssessmentPreset(selectedPreset);
       setPreviewClassFilter("all");
       setPreviewPage(1);
       setParsed({
         ...parsedUpload,
+        title: assessmentConfig.title || parsedUpload.title,
+        subject: assessmentConfig.subject || parsedUpload.subject,
+        assessmentOrder: assessmentConfig.assessmentOrder,
         rows: matchedRows,
       });
+      setUploadModalOpen(false);
       showToast({
-        tone: "success",
+        tone:
+          detectedPreset !== "auto" && detectedPreset !== selectedPreset
+            ? "warning"
+            : "success",
         title: "수행평가 명단을 인식했습니다.",
-        message: `${matchedRows.length}개 행을 확인했습니다. 저장 전 미연결 학생을 점검해 주세요.`,
+        message:
+          detectedPreset !== "auto" && detectedPreset !== selectedPreset
+            ? `${matchedRows.length}개 행을 선택한 수행평가 기준으로 불러왔습니다. 파일명과 선택한 수행평가가 맞는지 확인해 주세요.`
+            : `${matchedRows.length}개 행을 확인했습니다. 저장 전 미연결 학생을 점검해 주세요.`,
       });
     } catch (error) {
       console.error("Failed to parse performance score workbook:", error);
@@ -534,6 +631,7 @@ const PerformanceScoreManager: React.FC = () => {
     }
 
     const connectedBlankScoreCount = linkedRows.length - saveableRows.length;
+    const unmatchedRows = parsed.rows.filter((row) => !row.uid);
     const skippedMessages = [
       parsedSummary.unmatchedCount > 0
         ? `미연결 학생 ${parsedSummary.unmatchedCount}명`
@@ -548,7 +646,17 @@ const PerformanceScoreManager: React.FC = () => {
     if (
       skippedMessages.length > 0 &&
       !window.confirm(
-        `확인 사항: ${skippedMessages.join(", ")}. 점수가 입력된 연결 학생 ${saveableRows.length}명만 저장됩니다. 계속할까요?`,
+        [
+          `확인 사항: ${skippedMessages.join(", ")}`,
+          `점수가 입력된 연결 학생 ${saveableRows.length}명만 저장됩니다.`,
+          unmatchedRows.length > 0 ? "" : "",
+          unmatchedRows.length > 0 ? "미연결 학생 명단:" : "",
+          unmatchedRows.length > 0 ? formatRowsForConfirm(unmatchedRows) : "",
+          "",
+          "정말 저장할까요?",
+        ]
+          .filter((line) => line !== "")
+          .join("\n"),
       )
     ) {
       return;
@@ -654,7 +762,7 @@ const PerformanceScoreManager: React.FC = () => {
       showToast({
         tone: "error",
         title: "점수 저장에 실패했습니다.",
-        message: "권한과 네트워크 상태를 확인한 뒤 다시 시도해 주세요.",
+        message: getFirestoreWriteErrorMessage(error),
       });
     } finally {
       setSaving(false);
@@ -798,23 +906,116 @@ const PerformanceScoreManager: React.FC = () => {
               엑셀 파일 업로드
             </div>
             <p className="mt-1 text-xs font-bold leading-5 text-blue-700">
-              학년, 반, 번호, 이름, 총점, 평가요소별 점수, 선생님 작성 피드백을
-              자동으로 인식합니다.
+              수행평가를 먼저 선택한 뒤 해당 점수표 파일을 업로드합니다.
             </p>
           </div>
-          <label className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700">
+          <button
+            type="button"
+            onClick={() => setUploadModalOpen(true)}
+            disabled={parsing}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
             <i className="fas fa-file-arrow-up text-xs" aria-hidden="true"></i>
-            {parsing ? "인식 중..." : "점수표 선택"}
-            <input
-              type="file"
-              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-              className="sr-only"
-              onChange={(event) => void handleUpload(event)}
-              disabled={parsing}
-            />
-          </label>
+            {parsing ? "인식 중..." : "점수표 업로드"}
+          </button>
         </div>
       </section>
+
+      {uploadModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
+          <section className="w-full max-w-2xl overflow-hidden rounded-xl bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+              <div>
+                <h3 className="text-lg font-black text-slate-900">
+                  수행평가 점수표 업로드
+                </h3>
+                <p className="mt-1 text-sm font-semibold text-slate-500">
+                  업로드할 수행평가를 선택한 뒤 엑셀 파일을 골라 주세요.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setUploadModalOpen(false)}
+                disabled={parsing}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="업로드 창 닫기"
+              >
+                <i className="fas fa-times" aria-hidden="true"></i>
+              </button>
+            </div>
+
+            <div className="px-5 py-5">
+              <label className="block">
+                <span className="text-xs font-black text-slate-600">
+                  수행평가 선택
+                </span>
+                <select
+                  value={uploadAssessmentPreset}
+                  onChange={(event) =>
+                    setUploadAssessmentPreset(
+                      event.target.value as UploadAssessmentPresetKey,
+                    )
+                  }
+                  disabled={parsing}
+                  className="mt-1 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-100"
+                >
+                  {UPLOAD_ASSESSMENT_OPTIONS.map((option) => (
+                    <option key={option.key} value={option.key}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                {UPLOAD_ASSESSMENT_OPTIONS.map((option) => {
+                  const selected = uploadAssessmentPreset === option.key;
+                  return (
+                    <button
+                      key={option.key}
+                      type="button"
+                      onClick={() => setUploadAssessmentPreset(option.key)}
+                      disabled={parsing}
+                      className={`rounded-lg border px-4 py-4 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                        selected
+                          ? "border-blue-300 bg-blue-50"
+                          : "border-slate-200 bg-white hover:bg-slate-50"
+                      }`}
+                    >
+                      <div className="text-sm font-black text-slate-900">
+                        {option.label}
+                      </div>
+                      <div className="mt-1 text-xs font-bold leading-5 text-slate-500">
+                        {option.description}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <label className="mt-5 flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-blue-200 bg-blue-50 px-4 py-8 text-center transition hover:bg-blue-100">
+                <i
+                  className="fas fa-file-excel mb-3 text-2xl text-blue-600"
+                  aria-hidden="true"
+                ></i>
+                <span className="text-sm font-black text-blue-900">
+                  {parsing ? "파일 인식 중..." : "엑셀 파일 선택"}
+                </span>
+                <span className="mt-1 text-xs font-bold text-blue-700">
+                  .xlsx 파일을 선택하면 미리보기 화면으로 이동합니다.
+                </span>
+                <input
+                  type="file"
+                  accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  className="sr-only"
+                  onChange={(event) => void handleUpload(event)}
+                  disabled={parsing}
+                />
+              </label>
+            </div>
+          </section>
+        </div>
+      )}
 
       {parsed && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
@@ -882,13 +1083,11 @@ const PerformanceScoreManager: React.FC = () => {
                     }
                     className="mt-1 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50"
                   >
-                    <option value="auto">파일명 자동 인식</option>
-                    <option value="first">
-                      1차 수행: 고조선 8조법 4컷 만화
-                    </option>
-                    <option value="second">
-                      2차 수행: 삼국 시대 인물의 무덤 평점
-                    </option>
+                    {UPLOAD_ASSESSMENT_OPTIONS.map((option) => (
+                      <option key={option.key} value={option.key}>
+                        {option.label}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 <label className="block">
@@ -950,29 +1149,33 @@ const PerformanceScoreManager: React.FC = () => {
                   {previewRangeLabel} / {filteredPreviewRows.length}명 표시 ·{" "}
                   {safePreviewPage} / {previewTotalPages}쪽
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setPreviewPage((current) => Math.max(1, current - 1))
-                    }
-                    disabled={safePreviewPage <= 1}
-                    className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    이전
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setPreviewPage((current) =>
-                        Math.min(previewTotalPages, current + 1),
-                      )
-                    }
-                    disabled={safePreviewPage >= previewTotalPages}
-                    className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                  >
-                    다음
-                  </button>
+                <div className="flex flex-wrap items-center justify-end gap-1.5">
+                  {previewPageItems.map((item) =>
+                    typeof item === "number" ? (
+                      <button
+                        key={item}
+                        type="button"
+                        onClick={() => setPreviewPage(item)}
+                        className={`inline-flex h-9 min-w-9 items-center justify-center rounded-lg border px-3 text-xs font-black transition ${
+                          item === safePreviewPage
+                            ? "border-blue-600 bg-blue-600 text-white"
+                            : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                        }`}
+                        aria-current={
+                          item === safePreviewPage ? "page" : undefined
+                        }
+                      >
+                        {item}
+                      </button>
+                    ) : (
+                      <span
+                        key={item.key}
+                        className="inline-flex h-9 min-w-9 items-center justify-center px-2 text-xs font-black text-slate-400"
+                      >
+                        {item.label}
+                      </span>
+                    ),
+                  )}
                 </div>
               </div>
 
