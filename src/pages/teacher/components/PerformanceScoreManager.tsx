@@ -6852,6 +6852,11 @@ const PerformanceScoreManager: React.FC = () => {
                         <th className="whitespace-nowrap px-3 py-3">
                           감점 요인 및 평가 근거
                         </th>
+                        {scoreEditing && (
+                          <th className="w-28 whitespace-nowrap px-3 py-3 text-right">
+                            전출
+                          </th>
+                        )}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -6859,7 +6864,8 @@ const PerformanceScoreManager: React.FC = () => {
                         <tr>
                           <td
                             colSpan={
-                              (selectedScoreRoster?.items.length || 0) + 6
+                              (selectedScoreRoster?.items.length || 0) +
+                              (scoreEditing ? 7 : 6)
                             }
                             className="px-4 py-10 text-center text-sm font-bold text-slate-400"
                           >
@@ -6951,7 +6957,7 @@ const PerformanceScoreManager: React.FC = () => {
                               </td>
                               <td className="whitespace-nowrap px-3 py-3 font-black text-slate-900">
                                 {scoreEditing && manualRecord ? (
-                                  <div className="flex min-w-36 flex-col gap-1.5">
+                                  <div className="flex min-w-36 items-center">
                                     <input
                                       type="text"
                                       value={record.studentName || ""}
@@ -6967,21 +6973,6 @@ const PerformanceScoreManager: React.FC = () => {
                                       className="h-9 w-32 rounded-lg border border-slate-200 px-2 text-sm font-bold text-slate-900 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-50"
                                       placeholder="이름"
                                     />
-                                    <label className="inline-flex items-center gap-1.5 text-[11px] font-black text-rose-600">
-                                      <input
-                                        type="checkbox"
-                                        checked={transferredRecord}
-                                        onChange={(event) =>
-                                          updateScoreListTransferred(
-                                            recordKey,
-                                            event.target.checked,
-                                          )
-                                        }
-                                        disabled={savingScoreEdits}
-                                        className="h-3.5 w-3.5 rounded border-slate-300 text-rose-600 focus:ring-rose-200"
-                                      />
-                                      전출 학생
-                                    </label>
                                   </div>
                                 ) : (
                                   <div className="flex items-center gap-1.5">
@@ -7114,6 +7105,36 @@ const PerformanceScoreManager: React.FC = () => {
                                   </div>
                                 )}
                               </td>
+                              {scoreEditing && (
+                                <td className="whitespace-nowrap px-3 py-3 text-right">
+                                  {manualRecord ? (
+                                    <label className="inline-flex items-center justify-end gap-1.5 text-[11px] font-black text-rose-600">
+                                      <input
+                                        type="checkbox"
+                                        checked={transferredRecord}
+                                        onChange={(event) =>
+                                          updateScoreListTransferred(
+                                            recordKey,
+                                            event.target.checked,
+                                          )
+                                        }
+                                        disabled={savingScoreEdits}
+                                        aria-label={`${record.studentName || "수동 추가 학생"} 전출 학생 여부`}
+                                        className="h-3.5 w-3.5 rounded border-slate-300 text-rose-600 focus:ring-rose-200"
+                                      />
+                                      전출 학생
+                                    </label>
+                                  ) : transferredRecord ? (
+                                    <span className="inline-flex rounded-full bg-rose-50 px-2.5 py-1 text-xs font-black text-rose-600">
+                                      {TRANSFERRED_LABEL}
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs font-bold text-slate-300">
+                                      -
+                                    </span>
+                                  )}
+                                </td>
+                              )}
                             </tr>
                           );
                         })
