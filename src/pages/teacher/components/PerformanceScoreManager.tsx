@@ -75,11 +75,12 @@ const CLASS_SHEET_STUDENT_END_ROW = 38;
 const CLASS_SHEET_SUMMARY_START_ROW = 39;
 const CLASS_SHEET_TEMPLATE_COLUMN_COUNT = 13;
 const CLASS_SHEET_SIGNATURE_START_COLUMN = 9;
-const CLASS_SHEET_SIGNATURE_HORIZONTAL_PADDING = 0.05;
-const CLASS_SHEET_SIGNATURE_VERTICAL_PADDING = 0.02;
+const CLASS_SHEET_SIGNATURE_HORIZONTAL_PADDING = 0;
+const CLASS_SHEET_SIGNATURE_VERTICAL_PADDING = 0;
 const CLASS_SHEET_SIGNATURE_IMAGE_MAX_WIDTH = 64;
 const CLASS_SHEET_SIGNATURE_IMAGE_MAX_HEIGHT = 18;
 const CLASS_SHEET_SIGNATURE_CANVAS_SCALE = 2;
+const CLASS_SHEET_SIGNATURE_ALPHA_THRESHOLD = 8;
 const CLASS_SHEET_SIGNATURE_COLUMN_PIXEL_WIDTH = 64;
 const CLASS_SHEET_SIGNATURE_ROW_PIXEL_HEIGHT = 19;
 const XLSX_MIME_TYPE =
@@ -1059,7 +1060,7 @@ const trimClassSheetSignatureImage = async (dataUrl: string) => {
     for (let y = 0; y < height; y += 1) {
       for (let x = 0; x < width; x += 1) {
         const alpha = pixels[(y * width + x) * 4 + 3];
-        if (alpha <= 8) continue;
+        if (alpha <= CLASS_SHEET_SIGNATURE_ALPHA_THRESHOLD) continue;
         minX = Math.min(minX, x);
         minY = Math.min(minY, y);
         maxX = Math.max(maxX, x);
@@ -1068,15 +1069,6 @@ const trimClassSheetSignatureImage = async (dataUrl: string) => {
     }
 
     if (maxX < 0 || maxY < 0) return dataUrl;
-    const padding = Math.max(
-      4,
-      Math.ceil(Math.max(maxX - minX, maxY - minY) * 0.04),
-    );
-    minX = Math.max(0, minX - padding);
-    minY = Math.max(0, minY - padding);
-    maxX = Math.min(width - 1, maxX + padding);
-    maxY = Math.min(height - 1, maxY + padding);
-
     const croppedWidth = maxX - minX + 1;
     const croppedHeight = maxY - minY + 1;
     const croppedCanvas = document.createElement("canvas");
@@ -1096,12 +1088,8 @@ const trimClassSheetSignatureImage = async (dataUrl: string) => {
       croppedHeight,
     );
 
-    const outputWidth =
-      CLASS_SHEET_SIGNATURE_IMAGE_MAX_WIDTH *
-      CLASS_SHEET_SIGNATURE_CANVAS_SCALE;
-    const outputHeight =
-      CLASS_SHEET_SIGNATURE_IMAGE_MAX_HEIGHT *
-      CLASS_SHEET_SIGNATURE_CANVAS_SCALE;
+    const outputWidth = croppedWidth * CLASS_SHEET_SIGNATURE_CANVAS_SCALE;
+    const outputHeight = croppedHeight * CLASS_SHEET_SIGNATURE_CANVAS_SCALE;
     const outputCanvas = document.createElement("canvas");
     outputCanvas.width = outputWidth;
     outputCanvas.height = outputHeight;
@@ -1110,15 +1098,8 @@ const trimClassSheetSignatureImage = async (dataUrl: string) => {
 
     outputContext.imageSmoothingEnabled = true;
     outputContext.imageSmoothingQuality = "high";
-    const outputPadding = 2 * CLASS_SHEET_SIGNATURE_CANVAS_SCALE;
-    const scale = Math.min(
-      (outputWidth - outputPadding * 2) / croppedWidth,
-      (outputHeight - outputPadding * 2) / croppedHeight,
-    );
-    const drawWidth = croppedWidth * scale;
-    const drawHeight = croppedHeight * scale;
-    const drawX = (outputWidth - drawWidth) / 2;
-    const drawY = (outputHeight - drawHeight) / 2;
+    const drawWidth = outputWidth;
+    const drawHeight = outputHeight;
 
     outputContext.globalCompositeOperation = "source-over";
     outputContext.globalAlpha = 0.72;
@@ -1130,14 +1111,14 @@ const trimClassSheetSignatureImage = async (dataUrl: string) => {
     ].forEach(([offsetX, offsetY]) => {
       outputContext.drawImage(
         croppedCanvas,
-        drawX + offsetX,
-        drawY + offsetY,
+        offsetX,
+        offsetY,
         drawWidth,
         drawHeight,
       );
     });
     outputContext.globalAlpha = 1;
-    outputContext.drawImage(croppedCanvas, drawX, drawY, drawWidth, drawHeight);
+    outputContext.drawImage(croppedCanvas, 0, 0, drawWidth, drawHeight);
 
     return outputCanvas.toDataURL("image/png");
   } catch {

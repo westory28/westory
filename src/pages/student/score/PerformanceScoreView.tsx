@@ -62,6 +62,7 @@ const SIGNATURE_CANVAS_MAX_WIDTH = 660;
 const SIGNATURE_CANVAS_HEIGHT = 220;
 const SIGNATURE_STROKE_WIDTH = 14;
 const SIGNATURE_DOT_RADIUS = 5;
+const SIGNATURE_ALPHA_THRESHOLD = 8;
 const SIGNATURE_IMAGE_MAX_LENGTH = 110000;
 
 const getDataUrlStoredLength = (dataUrl: string) => dataUrl.length;
@@ -355,7 +356,50 @@ const PerformanceScoreView: React.FC = () => {
   const getSignatureImageDataUrl = () => {
     const canvas = signatureCanvasRef.current;
     if (!canvas || (!signatureDrawnRef.current && !signatureDrawn)) return "";
-    return canvas.toDataURL("image/png");
+    const context = canvas.getContext("2d");
+    if (!context) return "";
+
+    const { width, height } = canvas;
+    const pixels = context.getImageData(0, 0, width, height).data;
+    let minX = width;
+    let minY = height;
+    let maxX = -1;
+    let maxY = -1;
+
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const alpha = pixels[(y * width + x) * 4 + 3];
+        if (alpha <= SIGNATURE_ALPHA_THRESHOLD) continue;
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
+    }
+
+    if (maxX < 0 || maxY < 0) return "";
+
+    const croppedWidth = maxX - minX + 1;
+    const croppedHeight = maxY - minY + 1;
+    const croppedCanvas = document.createElement("canvas");
+    croppedCanvas.width = croppedWidth;
+    croppedCanvas.height = croppedHeight;
+    const croppedContext = croppedCanvas.getContext("2d");
+    if (!croppedContext) return canvas.toDataURL("image/png");
+
+    croppedContext.drawImage(
+      canvas,
+      minX,
+      minY,
+      croppedWidth,
+      croppedHeight,
+      0,
+      0,
+      croppedWidth,
+      croppedHeight,
+    );
+
+    return croppedCanvas.toDataURL("image/png");
   };
 
   const moveToSignatureReview = () => {
