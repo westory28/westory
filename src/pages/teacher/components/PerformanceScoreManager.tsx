@@ -2978,7 +2978,17 @@ const PerformanceScoreManager: React.FC = () => {
                   </div>
 
                   <div className="overflow-x-auto rounded-xl border border-slate-200">
-                    <table className="w-full min-w-[1020px] text-left text-sm">
+                    <table className="w-full min-w-[1100px] table-fixed text-left text-sm">
+                      <colgroup>
+                        <col className="w-24" />
+                        <col className="w-20" />
+                        <col className="w-40" />
+                        <col className="w-28" />
+                        <col className="w-28" />
+                        <col className="w-20" />
+                        <col className="w-12" />
+                        <col className="w-[300px]" />
+                      </colgroup>
                       <thead className="bg-slate-50 text-xs font-black text-slate-500">
                         <tr>
                           <th className="px-3 py-3 text-center">상태</th>
@@ -2986,15 +2996,16 @@ const PerformanceScoreManager: React.FC = () => {
                           <th className="px-3 py-3">이름</th>
                           <th className="px-3 py-3 text-right">1차</th>
                           <th className="px-3 py-3 text-right">2차</th>
-                          <th className="w-20 px-3 py-3 text-right">합계</th>
-                          <th className="w-[320px] px-8 py-3">서명 현황</th>
+                          <th className="px-3 py-3 text-right">합계</th>
+                          <th aria-hidden="true"></th>
+                          <th className="px-3 py-3 text-center">서명 현황</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 bg-white">
                         {classSheetPreviewStudents.length === 0 ? (
                           <tr>
                             <td
-                              colSpan={7}
+                              colSpan={8}
                               className="px-4 py-10 text-center text-sm font-bold text-slate-400"
                             >
                               선택한 학급에 저장된 점수가 없습니다.
@@ -3092,14 +3103,15 @@ const PerformanceScoreManager: React.FC = () => {
                                     )}
                                   </span>
                                 </td>
-                                <td className="w-20 whitespace-nowrap px-3 py-3 text-right font-black text-blue-700">
+                                <td className="whitespace-nowrap px-3 py-3 text-right font-black text-blue-700">
                                   {totalScore === null
                                     ? "-"
                                     : formatPerformanceScore(totalScore)}
                                 </td>
-                                <td className="w-[320px] px-8 py-3">
+                                <td aria-hidden="true"></td>
+                                <td className="px-3 py-3 text-center">
                                   {signatureDisplayRecord && signatureImage ? (
-                                    <div className="flex min-w-[230px] items-center gap-2 whitespace-nowrap">
+                                    <div className="mx-auto flex w-fit min-w-[230px] items-center justify-center gap-2 whitespace-nowrap">
                                       <div className="flex h-8 w-20 shrink-0 items-center justify-center overflow-hidden rounded-md border border-blue-100 bg-blue-50 px-1.5">
                                         <img
                                           src={signatureImage}
@@ -3141,7 +3153,7 @@ const PerformanceScoreManager: React.FC = () => {
                                       </button>
                                     </div>
                                   ) : (
-                                    <div className="text-xs font-bold leading-5 text-slate-500">
+                                    <div className="mx-auto w-fit text-center text-xs font-bold leading-5 text-slate-500">
                                       {missingLabels.length
                                         ? `${missingLabels.join(", ")} 없음`
                                         : "학생 점수 확인 서명 전"}
