@@ -842,18 +842,18 @@ const PerformanceScoreView: React.FC = () => {
       ) : (
         <div className="flex flex-col gap-6 lg:flex-row lg:gap-8">
           <aside className="w-full shrink-0 lg:w-72">
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm lg:sticky lg:top-24">
-              <div className="border-b border-slate-100 px-4 py-4">
-                <h2 className="flex items-center gap-2 text-sm font-black text-slate-700">
+            <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm lg:sticky lg:top-8">
+              <div className="border-b border-gray-100 p-4 sm:p-6">
+                <h2 className="flex items-center gap-2 text-lg font-extrabold text-gray-800 sm:text-xl">
                   <i
-                    className="fas fa-clipboard-list text-blue-600"
+                    className="fas fa-clipboard-list text-gray-400"
                     aria-hidden="true"
                   ></i>
                   점수 목록
                 </h2>
               </div>
               <nav
-                className="flex gap-2 overflow-x-auto p-3 lg:flex-col lg:overflow-visible"
+                className="flex gap-2 overflow-x-auto p-3 lg:flex-col lg:gap-0 lg:overflow-visible lg:p-0"
                 aria-label="수행평가 점수 목록"
               >
                 {records.map((record) => {
@@ -865,25 +865,36 @@ const PerformanceScoreView: React.FC = () => {
                       key={record.id || record.rosterId}
                       type="button"
                       onClick={() => setSelectedId(record.id || "")}
-                      className={`min-w-[15rem] rounded-lg border px-3 py-3 text-left transition lg:min-w-0 ${
+                      aria-current={active ? "true" : undefined}
+                      className={`flex min-w-[15rem] items-start gap-3 rounded-xl border p-3 text-left transition-colors lg:min-w-0 lg:rounded-none lg:border-0 lg:border-l-4 lg:p-4 ${
                         active
-                          ? "border-blue-300 bg-blue-50 shadow-sm"
-                          : "border-slate-200 bg-white hover:bg-slate-50"
+                          ? "border-blue-200 bg-blue-50 text-blue-600 lg:border-blue-600"
+                          : "border-gray-200 text-slate-600 hover:bg-gray-50 lg:border-transparent"
                       }`}
                     >
-                      <div className="whitespace-normal break-keep text-sm font-black leading-5 text-slate-900">
-                        {record.title}
+                      <div className="w-6 shrink-0 text-center">
+                        <i
+                          className="fas fa-clipboard-check text-sm"
+                          aria-hidden="true"
+                        ></i>
                       </div>
-                      <div className="mt-2 flex items-center justify-between gap-3">
-                        <span className="text-xs font-bold text-slate-500">
-                          획득 {formatPerformanceScore(record.totalScore)} /{" "}
-                          {formatPerformanceScore(record.totalMaxScore)}
-                        </span>
-                        {record.signatureName && (
-                          <span className="text-xs font-black text-blue-700">
-                            확인 완료
+                      <div className="min-w-0 flex-1">
+                        <div className="whitespace-normal break-keep text-sm font-bold leading-5">
+                          {record.title}
+                        </div>
+                        <div
+                          className={`mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold ${
+                            active ? "text-blue-500" : "text-slate-500"
+                          }`}
+                        >
+                          <span>
+                            획득 {formatPerformanceScore(record.totalScore)} /{" "}
+                            {formatPerformanceScore(record.totalMaxScore)}
                           </span>
-                        )}
+                          {record.signatureName && (
+                            <span className="text-blue-700">확인 완료</span>
+                          )}
+                        </div>
                       </div>
                     </button>
                   );
