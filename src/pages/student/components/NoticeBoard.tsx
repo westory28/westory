@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { InlineLoading } from "../../../components/common/LoadingState";
 import { db } from "../../../lib/firebase";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -25,9 +25,11 @@ const NoticeBoard: React.FC = () => {
   const [notices, setNotices] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
-  const [slideIndex, setSlideIndex] = useState(0);
-  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [incomingIndex, setIncomingIndex] = useState<number | null>(null);
+  const [slideDirection, setSlideDirection] = useState<1 | -1>(1);
+  const [isSliding, setIsSliding] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
+  const slideFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
     const { year, semester } = getYearSemester(config);
@@ -52,74 +54,93 @@ const NoticeBoard: React.FC = () => {
   }, [config?.year, config?.semester, userData?.class, userData?.grade]);
 
   useEffect(() => {
+    if (slideFrameRef.current !== null) {
+      window.cancelAnimationFrame(slideFrameRef.current);
+      slideFrameRef.current = null;
+    }
     setActiveIndex(0);
-    setSlideIndex(notices.length > 1 ? 1 : 0);
-    setIsTransitioning(false);
+    setIncomingIndex(null);
+    setIsSliding(false);
     setIsPaused(false);
   }, [notices.length]);
 
   const activeNotice = notices[activeIndex] || notices[0] || null;
+  const incomingNotice =
+    incomingIndex === null ? null : notices[incomingIndex] || null;
   const showCarousel = notices.length > 1;
-  const carouselItems = useMemo(() => {
-    if (!showCarousel) return notices;
+  const selectedIndex = incomingIndex ?? activeIndex;
 
-    const firstNotice = notices[0];
-    const lastNotice = notices[notices.length - 1];
+  const finishSlide = useCallback(() => {
+    if (incomingIndex !== null) {
+      setActiveIndex(incomingIndex);
+    }
+    setIncomingIndex(null);
+    setIsSliding(false);
+  }, [incomingIndex]);
 
-    if (!firstNotice || !lastNotice) return notices;
+  const startSlide = useCallback(
+    (nextIndex: number, direction: 1 | -1) => {
+      if (!showCarousel || isSliding || incomingIndex !== null) return;
+      const normalizedIndex = (nextIndex + notices.length) % notices.length;
+      if (normalizedIndex === activeIndex) return;
 
-    return [lastNotice, ...notices, firstNotice];
-  }, [notices, showCarousel]);
+      if (slideFrameRef.current !== null) {
+        window.cancelAnimationFrame(slideFrameRef.current);
+      }
 
-  const finishTransition = useCallback(() => {
-    setIsTransitioning(false);
-    setSlideIndex((current) => {
-      if (notices.length <= 1) return 0;
-      if (current === notices.length + 1) return 1;
-      if (current === 0) return notices.length;
-      return current;
-    });
-  }, [notices.length]);
+      setSlideDirection(direction);
+      setIncomingIndex(normalizedIndex);
+      setIsSliding(false);
+      slideFrameRef.current = window.requestAnimationFrame(() => {
+        slideFrameRef.current = window.requestAnimationFrame(() => {
+          setIsSliding(true);
+          slideFrameRef.current = null;
+        });
+      });
+    },
+    [activeIndex, incomingIndex, isSliding, notices.length, showCarousel],
+  );
 
   const move = useCallback(
     (direction: -1 | 1) => {
-      if (isTransitioning) return;
-
-      setActiveIndex((prev) => {
-        if (notices.length <= 1) return 0;
-        return (prev + direction + notices.length) % notices.length;
-      });
-      setIsTransitioning(true);
-      setSlideIndex((prev) => prev + direction);
+      startSlide(activeIndex + direction, direction);
     },
-    [isTransitioning, notices.length],
+    [activeIndex, startSlide],
   );
 
   const selectNotice = (index: number) => {
-    if (!showCarousel || index === activeIndex || isTransitioning) return;
-
-    setActiveIndex(index);
-    setIsTransitioning(true);
-    setSlideIndex(index + 1);
+    if (!showCarousel || index === selectedIndex) return;
+    startSlide(index, index > activeIndex ? 1 : -1);
   };
 
   useEffect(() => {
-    if (!isTransitioning) return undefined;
+    if (!isSliding || incomingIndex === null) return undefined;
 
-    const timerId = window.setTimeout(finishTransition, 760);
+    const timerId = window.setTimeout(finishSlide, 900);
 
     return () => window.clearTimeout(timerId);
-  }, [finishTransition, isTransitioning]);
+  }, [finishSlide, incomingIndex, isSliding]);
+
+  useEffect(
+    () => () => {
+      if (slideFrameRef.current !== null) {
+        window.cancelAnimationFrame(slideFrameRef.current);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
-    if (!showCarousel || isPaused || isTransitioning) return undefined;
+    if (!showCarousel || isPaused || isSliding || incomingIndex !== null) {
+      return undefined;
+    }
 
     const timerId = window.setInterval(() => {
       move(1);
     }, 5000);
 
     return () => window.clearInterval(timerId);
-  }, [isPaused, isTransitioning, move, showCarousel]);
+  }, [incomingIndex, isPaused, isSliding, move, showCarousel]);
 
   return (
     <div className="flex h-full min-h-[260px] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:min-h-0">
@@ -148,32 +169,52 @@ const NoticeBoard: React.FC = () => {
         {!loading && activeNotice && (
           <div className="flex h-full flex-col">
             <div className="relative aspect-[16/9] w-full flex-none overflow-hidden rounded-xl bg-gray-100">
-              <div
-                className={`flex h-full w-full will-change-transform motion-reduce:transition-none ${
-                  isTransitioning
-                    ? "transition-transform duration-700 ease-in-out"
-                    : ""
-                }`}
-                style={{
-                  transform: `translate3d(-${slideIndex * 100}%, 0, 0)`,
-                }}
-                onTransitionEnd={(event) => {
-                  if (event.target === event.currentTarget) {
-                    finishTransition();
-                  }
-                }}
-              >
-                {carouselItems.map((notice, index) => (
-                  <img
-                    key={`${notice.id}-${index}`}
-                    src={notice.imageUrl}
-                    alt="알림장"
-                    loading="lazy"
-                    decoding="async"
-                    className="h-full w-full shrink-0 object-cover object-center"
-                  />
-                ))}
-              </div>
+              {activeNotice && (
+                <img
+                  key={`active-${activeNotice.id}`}
+                  src={activeNotice.imageUrl}
+                  alt="알림장"
+                  loading="eager"
+                  decoding="async"
+                  className={`absolute inset-0 h-full w-full object-cover object-center will-change-transform ${
+                    isSliding
+                      ? slideDirection === 1
+                        ? "-translate-x-full"
+                        : "translate-x-full"
+                      : "translate-x-0"
+                  }`}
+                  style={{
+                    transition: incomingNotice
+                      ? "transform 820ms cubic-bezier(0.22, 1, 0.36, 1)"
+                      : "none",
+                  }}
+                />
+              )}
+              {incomingNotice && (
+                <img
+                  key={`incoming-${incomingNotice.id}`}
+                  src={incomingNotice.imageUrl}
+                  alt="알림장"
+                  loading="eager"
+                  decoding="async"
+                  className={`absolute inset-0 h-full w-full object-cover object-center will-change-transform ${
+                    isSliding
+                      ? "translate-x-0"
+                      : slideDirection === 1
+                        ? "translate-x-full"
+                        : "-translate-x-full"
+                  }`}
+                  style={{
+                    transition:
+                      "transform 820ms cubic-bezier(0.22, 1, 0.36, 1)",
+                  }}
+                  onTransitionEnd={(event) => {
+                    if (event.target === event.currentTarget) {
+                      finishSlide();
+                    }
+                  }}
+                />
+              )}
               <span className="absolute right-4 top-4 rounded-full bg-blue-600 px-3 py-1 text-xs font-extrabold text-white shadow-sm">
                 {getCategoryLabel(activeNotice.category)}
               </span>
@@ -222,7 +263,7 @@ const NoticeBoard: React.FC = () => {
                       type="button"
                       onClick={() => selectNotice(index)}
                       className={`h-2.5 rounded-full transition ${
-                        activeIndex === index
+                        selectedIndex === index
                           ? "w-6 bg-blue-600"
                           : "w-2.5 bg-gray-200"
                       }`}
