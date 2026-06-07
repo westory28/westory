@@ -879,9 +879,7 @@ const getRecordItemsForRoster = (
           : roundScore(existingMaxScore),
       ratio: existing?.ratio ?? item.ratio,
       scoreEntered:
-        existing?.scoreEntered === false
-          ? false
-          : existingScore !== null,
+        existing?.scoreEntered === false ? false : existingScore !== null,
     };
   });
 
@@ -894,8 +892,7 @@ const serializeScoreRecordForEdit = (
     rosterId: record.rosterId || record.id || "",
     items: (record.items || []).map((item) => ({
       name: item.name || "",
-      score:
-        item.scoreEntered === false ? null : getEnteredItemScore(item),
+      score: item.scoreEntered === false ? null : getEnteredItemScore(item),
       maxScore: getFiniteNumber(item.maxScore) ?? 0,
       scoreEntered: item.scoreEntered !== false,
     })),
@@ -928,7 +925,9 @@ const buildRosterRowFromScoreRecord = (
     items,
     totalScore: totalScore ?? 0,
     totalMaxScore:
-      getRecordTotalMaxScore(record) || roster.totalMaxScore || row.totalMaxScore,
+      getRecordTotalMaxScore(record) ||
+      roster.totalMaxScore ||
+      row.totalMaxScore,
     feedback: String(record.feedback || "").slice(0, 1000),
     evidence: String(record.evidence || record.feedback || "").slice(0, 1000),
   };
@@ -1990,9 +1989,9 @@ const PerformanceScoreManager: React.FC = () => {
   const [scoreListClassFilter, setScoreListClassFilter] = useState("all");
   const [scoreListClassPage, setScoreListClassPage] = useState(1);
   const [scoreListSearch, setScoreListSearch] = useState("");
-  const [scoreListRecords, setScoreListRecords] = useState<
-    ScoreListRecord[]
-  >([]);
+  const [scoreListRecords, setScoreListRecords] = useState<ScoreListRecord[]>(
+    [],
+  );
   const [scoreListLoading, setScoreListLoading] = useState(false);
   const [scoreListLoadError, setScoreListLoadError] = useState("");
   const [scoreEditing, setScoreEditing] = useState(false);
@@ -2628,9 +2627,7 @@ const PerformanceScoreManager: React.FC = () => {
       setScoreListRecords([]);
       setScoreEditing(false);
       setScoreEditOriginalRecords([]);
-      setScoreListLoadError(
-        "저장된 수행평가 점수표를 불러오지 못했습니다.",
-      );
+      setScoreListLoadError("저장된 수행평가 점수표를 불러오지 못했습니다.");
       showToast({
         tone: "error",
         title: "저장된 점수표를 불러오지 못했습니다.",
@@ -2864,7 +2861,10 @@ const PerformanceScoreManager: React.FC = () => {
       ]),
     );
     const changedRecords = scoreListRecords.filter((record) =>
-      hasScoreRecordChanged(originalByKey.get(getScoreListRecordKey(record)), record),
+      hasScoreRecordChanged(
+        originalByKey.get(getScoreListRecordKey(record)),
+        record,
+      ),
     );
 
     if (!changedRecords.length) {
@@ -2885,7 +2885,8 @@ const PerformanceScoreManager: React.FC = () => {
           const maxScore = getFiniteNumber(item.maxScore);
           return (
             score !== null &&
-            (score < 0 || (maxScore !== null && maxScore > 0 && score > maxScore))
+            (score < 0 ||
+              (maxScore !== null && maxScore > 0 && score > maxScore))
           );
         },
       ),
@@ -2903,9 +2904,9 @@ const PerformanceScoreManager: React.FC = () => {
       const original = originalByKey.get(getScoreListRecordKey(record));
       return Boolean(
         record.signatureImage ||
-          record.confirmation?.signatureImage ||
-          original?.signatureImage ||
-          original?.confirmation?.signatureImage,
+        record.confirmation?.signatureImage ||
+        original?.signatureImage ||
+        original?.confirmation?.signatureImage,
       );
     }).length;
 
@@ -2944,15 +2945,12 @@ const PerformanceScoreManager: React.FC = () => {
       ).length;
       const batchQueue = createBatchQueue();
 
-      batchQueue.update(
-        doc(db, rosterCollectionPath, selectedScoreRoster.id),
-        {
-          rows: updatedRows,
-          matchedCount: savedRowCount,
-          unmatchedCount: Math.max(0, updatedRows.length - savedRowCount),
-          updatedAt: timestamp,
-        },
-      );
+      batchQueue.update(doc(db, rosterCollectionPath, selectedScoreRoster.id), {
+        rows: updatedRows,
+        matchedCount: savedRowCount,
+        unmatchedCount: Math.max(0, updatedRows.length - savedRowCount),
+        updatedAt: timestamp,
+      });
 
       changedRecords.forEach((record) => {
         if (!record.uid) return;
@@ -2976,9 +2974,9 @@ const PerformanceScoreManager: React.FC = () => {
         const original = originalByKey.get(getScoreListRecordKey(record));
         const hadSignature = Boolean(
           record.signatureImage ||
-            record.confirmation?.signatureImage ||
-            original?.signatureImage ||
-            original?.confirmation?.signatureImage,
+          record.confirmation?.signatureImage ||
+          original?.signatureImage ||
+          original?.confirmation?.signatureImage,
         );
         const items = getRecordItemsForRoster(record, selectedScoreRoster);
         const totalScore = getEnteredItemsTotalScore(items);
@@ -3016,12 +3014,14 @@ const PerformanceScoreManager: React.FC = () => {
             1000,
           ),
           sourceFileName: selectedScoreRoster.sourceFileName,
-          uploadedBy: record.uploadedBy || selectedScoreRoster.uploadedBy || editedBy,
+          uploadedBy:
+            record.uploadedBy || selectedScoreRoster.uploadedBy || editedBy,
           uploadedByEmail:
             record.uploadedByEmail ||
             selectedScoreRoster.uploadedByEmail ||
             editedByEmail,
-          uploadedAt: record.uploadedAt || selectedScoreRoster.createdAt || timestamp,
+          uploadedAt:
+            record.uploadedAt || selectedScoreRoster.createdAt || timestamp,
           updatedAt: timestamp,
         };
         batchQueue.set(scoreRef, payload);
@@ -3130,7 +3130,9 @@ const PerformanceScoreManager: React.FC = () => {
           });
           return;
         }
-        loaded.push(buildRecordFromRosterRow(roster, row));
+        if (rosterRowHasScore(row)) {
+          loaded.push(buildRecordFromRosterRow(roster, row));
+        }
       });
     }
     const withConfirmations = await Promise.all(
@@ -4176,7 +4178,7 @@ const PerformanceScoreManager: React.FC = () => {
                               setUploadModalOpen(false);
                             }}
                             disabled={scoreEditing || savingScoreEdits}
-                            className="inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-blue-200 bg-white px-3 text-xs font-black text-blue-700 transition hover:bg-blue-50"
+                            className="inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-blue-200 bg-white px-3 text-xs font-black text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             <i className="fas fa-list" aria-hidden="true"></i>
                             선택
@@ -5529,7 +5531,7 @@ const PerformanceScoreManager: React.FC = () => {
             <button
               type="button"
               onClick={() => setUploadModalOpen(true)}
-              disabled={parsing}
+              disabled={parsing || scoreEditing || savingScoreEdits}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
               <i
@@ -5541,7 +5543,12 @@ const PerformanceScoreManager: React.FC = () => {
             <button
               type="button"
               onClick={() => setClassSheetModalOpen(true)}
-              disabled={rostersLoading || rosters.length === 0}
+              disabled={
+                rostersLoading ||
+                rosters.length === 0 ||
+                scoreEditing ||
+                savingScoreEdits
+              }
               className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white px-4 text-sm font-black text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <i className="fas fa-file-download text-xs" aria-hidden="true" />
@@ -5781,7 +5788,8 @@ const PerformanceScoreManager: React.FC = () => {
                             record.totalScore,
                             record.totalMaxScore,
                           );
-                          const enteredTotalScore = getEnteredTotalScore(record);
+                          const enteredTotalScore =
+                            getEnteredTotalScore(record);
                           return (
                             <tr key={`${record.uid}-${record.rosterId}`}>
                               <td className="whitespace-nowrap px-3 py-3 font-bold text-slate-600">
@@ -5876,7 +5884,9 @@ const PerformanceScoreManager: React.FC = () => {
                               <td className="px-3 py-3">
                                 {scoreEditing ? (
                                   <textarea
-                                    value={record.evidence || record.feedback || ""}
+                                    value={
+                                      record.evidence || record.feedback || ""
+                                    }
                                     onChange={(event) =>
                                       updateScoreListEvidence(
                                         recordKey,
