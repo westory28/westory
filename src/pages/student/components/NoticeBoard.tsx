@@ -215,7 +215,7 @@ const NoticeBoard: React.FC = () => {
                   }}
                 />
               )}
-              <span className="absolute right-4 top-4 rounded-full bg-blue-600 px-3 py-1 text-xs font-extrabold text-white shadow-sm">
+              <span className="absolute bottom-4 left-4 rounded-full bg-blue-600 px-3 py-1 text-xs font-extrabold text-white shadow-sm">
                 {getCategoryLabel(activeNotice.category)}
               </span>
             </div>
