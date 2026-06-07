@@ -66,6 +66,12 @@ const DEFAULT_CLASS_OPTIONS = Array.from({ length: 12 }, (_, index) =>
 );
 const PREVIEW_PAGE_SIZE = 20;
 const FIRESTORE_BATCH_WRITE_LIMIT = 450;
+const CLASS_SHEET_TEMPLATE_URL = `${import.meta.env.BASE_URL}templates/performance-score-class-sheet-template.xlsx`;
+const CLASS_SHEET_STUDENT_START_ROW = 7;
+const CLASS_SHEET_STUDENT_END_ROW = 38;
+const CLASS_SHEET_SUMMARY_START_ROW = 39;
+const XLSX_MIME_TYPE =
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 const ASSESSMENT_PRESETS: Record<
   UploadAssessmentPresetKey,
@@ -399,12 +405,13 @@ const CLASS_SHEET_COLUMNS = [
   { width: 18 },
 ];
 
-const getTodayLabel = () =>
-  new Date().toLocaleDateString("ko-KR", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
+const getTodayLabel = () => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${year}.${month}.${day}.`;
+};
 
 const excelCell = (
   value: string | number,
@@ -727,6 +734,200 @@ const buildClassSummaryWorkbook = (params: {
   return { rows, images };
 };
 
+const setWorksheetCellValue = (
+  worksheet: { getCell: (row: number, column: number) => { value: unknown } },
+  row: number,
+  column: number,
+  value: string | number | null,
+) => {
+  worksheet.getCell(row, column).value = value;
+};
+
+const buildClassSummaryWorkbookFromTemplate = async (params: {
+  year: string;
+  semester: string;
+  grade: string;
+  classValue: string;
+  subject: string;
+  teacherName: string;
+  firstRoster?: PerformanceScoreRoster;
+  secondRoster?: PerformanceScoreRoster;
+  students: ClassSheetStudent[];
+}) => {
+  if (
+    params.students.length >
+    CLASS_SHEET_STUDENT_END_ROW - CLASS_SHEET_STUDENT_START_ROW + 1
+  ) {
+    throw new Error("class-sheet-template-capacity-exceeded");
+  }
+
+  const ExcelJS = await import("exceljs");
+  const workbook = new ExcelJS.Workbook();
+  const response = await fetch(CLASS_SHEET_TEMPLATE_URL);
+  if (!response.ok) {
+    throw new Error(`class-sheet-template-not-found:${response.status}`);
+  }
+  await workbook.xlsx.load(await response.arrayBuffer());
+  const worksheet = workbook.worksheets[0];
+  if (!worksheet) throw new Error("class-sheet-template-empty");
+
+  setWorksheetCellValue(worksheet, 1, 12, getTodayLabel());
+  setWorksheetCellValue(worksheet, 2, 6, "수행평가 강의실별 일람표");
+  setWorksheetCellValue(
+    worksheet,
+    3,
+    2,
+    `${params.year}학년도   ${params.semester}학기   주간   ${params.grade}학년   ${params.classValue} 강의실`,
+  );
+  setWorksheetCellValue(
+    worksheet,
+    4,
+    2,
+    `교과목 : ${params.subject || "역사"}`,
+  );
+  setWorksheetCellValue(
+    worksheet,
+    4,
+    10,
+    `교과담당교사 (${params.teacherName || "방재석"}) 인`,
+  );
+  setWorksheetCellValue(
+    worksheet,
+    6,
+    5,
+    `${params.firstRoster?.title || "고조선 8조법 4컷 만화 그리기"}\n(만점 ${formatPerformanceScore(
+      params.firstRoster?.totalMaxScore || 20,
+    )})`,
+  );
+  setWorksheetCellValue(
+    worksheet,
+    6,
+    7,
+    `${params.secondRoster?.title || "삼국 시대 인물의 무덤에 평점 남기기"}\n(만점 ${formatPerformanceScore(
+      params.secondRoster?.totalMaxScore || 30,
+    )})`,
+  );
+
+  for (
+    let row = CLASS_SHEET_STUDENT_START_ROW;
+    row <= CLASS_SHEET_STUDENT_END_ROW;
+    row += 1
+  ) {
+    [2, 3, 4, 5, 7, 8, 10].forEach((column) =>
+      setWorksheetCellValue(worksheet, row, column, null),
+    );
+  }
+
+  const imagesToAdd: Array<{
+    row: number;
+    base64: string;
+    title: string;
+    description: string;
+  }> = [];
+  params.students.forEach((student, index) => {
+    const row = CLASS_SHEET_STUDENT_START_ROW + index;
+    const firstScore = getScoreNumber(student.firstRecord);
+    const secondScore = getScoreNumber(student.secondRecord);
+    const totalScore =
+      firstScore !== null || secondScore !== null
+        ? roundScore((firstScore ?? 0) + (secondScore ?? 0))
+        : "";
+    setWorksheetCellValue(
+      worksheet,
+      row,
+      2,
+      `${student.class}/${student.number}`,
+    );
+    setWorksheetCellValue(worksheet, row, 3, "");
+    setWorksheetCellValue(worksheet, row, 4, student.studentName);
+    setWorksheetCellValue(worksheet, row, 5, firstScore ?? "");
+    setWorksheetCellValue(worksheet, row, 7, secondScore ?? "");
+    setWorksheetCellValue(worksheet, row, 8, totalScore);
+
+    const signatureRecord = getConfirmedSignatureRecord(student, {
+      requireFirst: Boolean(params.firstRoster),
+      requireSecond: Boolean(params.secondRoster),
+    });
+    const signatureImage =
+      signatureRecord?.signatureImage ||
+      signatureRecord?.confirmation?.signatureImage ||
+      "";
+    if (signatureImage) {
+      imagesToAdd.push({
+        row,
+        base64: signatureImage.includes(",")
+          ? signatureImage.split(",")[1]
+          : signatureImage,
+        title: `${student.studentName} 서명`,
+        description: `${student.studentName} 수행평가 점수 확인 서명`,
+      });
+    }
+  });
+
+  const firstScores = params.students
+    .map((student) => getScoreNumber(student.firstRecord))
+    .filter((score): score is number => score !== null);
+  const secondScores = params.students
+    .map((student) => getScoreNumber(student.secondRecord))
+    .filter((score): score is number => score !== null);
+  const firstSum = roundScore(
+    firstScores.reduce((sum, score) => sum + score, 0),
+  );
+  const secondSum = roundScore(
+    secondScores.reduce((sum, score) => sum + score, 0),
+  );
+  const summaryRow = CLASS_SHEET_SUMMARY_START_ROW;
+  setWorksheetCellValue(worksheet, summaryRow, 5, `${firstScores.length} 명`);
+  setWorksheetCellValue(worksheet, summaryRow, 7, `${secondScores.length} 명`);
+  setWorksheetCellValue(worksheet, summaryRow + 1, 5, firstSum);
+  setWorksheetCellValue(worksheet, summaryRow + 1, 7, secondSum);
+  setWorksheetCellValue(
+    worksheet,
+    summaryRow + 1,
+    8,
+    roundScore(firstSum + secondSum),
+  );
+  setWorksheetCellValue(
+    worksheet,
+    summaryRow + 2,
+    5,
+    firstScores.length ? roundScore(firstSum / firstScores.length) : "",
+  );
+  setWorksheetCellValue(
+    worksheet,
+    summaryRow + 2,
+    7,
+    secondScores.length ? roundScore(secondSum / secondScores.length) : "",
+  );
+  setWorksheetCellValue(
+    worksheet,
+    summaryRow + 2,
+    8,
+    firstScores.length || secondScores.length
+      ? roundScore(
+          (firstSum + secondSum) /
+            Math.max(firstScores.length, secondScores.length, 1),
+        )
+      : "",
+  );
+
+  imagesToAdd.forEach((image) => {
+    const imageId = workbook.addImage({
+      base64: image.base64,
+      extension: "png",
+    });
+    worksheet.addImage(imageId, {
+      tl: { col: 9.2, row: image.row - 0.85 },
+      ext: { width: 76, height: 22 },
+      editAs: "oneCell",
+      hyperlinks: undefined,
+    });
+  });
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return new Blob([buffer], { type: XLSX_MIME_TYPE });
+};
+
 const PerformanceScoreManager: React.FC = () => {
   const { config, currentUser } = useAuth();
   const { showToast } = useAppToast();
@@ -761,8 +962,19 @@ const PerformanceScoreManager: React.FC = () => {
     PerformanceScoreRecord[]
   >([]);
   const [scoreListLoading, setScoreListLoading] = useState(false);
+  const [classSheetModalOpen, setClassSheetModalOpen] = useState(false);
   const [classSheetFirstRosterId, setClassSheetFirstRosterId] = useState("");
   const [classSheetSecondRosterId, setClassSheetSecondRosterId] = useState("");
+  const [classSheetGradeFilter, setClassSheetGradeFilter] =
+    useState(targetGrade);
+  const [classSheetClassFilter, setClassSheetClassFilter] = useState("");
+  const [classSheetPreviewStudents, setClassSheetPreviewStudents] = useState<
+    ClassSheetStudent[]
+  >([]);
+  const [classSheetPreviewLoading, setClassSheetPreviewLoading] =
+    useState(false);
+  const [classSheetPreviewLoadedKey, setClassSheetPreviewLoadedKey] =
+    useState("");
   const [exportingClassSheet, setExportingClassSheet] = useState(false);
 
   useEffect(() => {
@@ -808,6 +1020,16 @@ const PerformanceScoreManager: React.FC = () => {
     scoreListGradeFilter,
     scoreListLoadedRosterId,
     scoreListSearch,
+  ]);
+
+  useEffect(() => {
+    setClassSheetPreviewStudents([]);
+    setClassSheetPreviewLoadedKey("");
+  }, [
+    classSheetFirstRosterId,
+    classSheetSecondRosterId,
+    classSheetGradeFilter,
+    classSheetClassFilter,
   ]);
 
   const firstAssessmentRosterOptions = useMemo(
@@ -999,15 +1221,6 @@ const PerformanceScoreManager: React.FC = () => {
         normalizeSchoolValue(activeScoreListClass),
     );
   }, [activeScoreListClass, scoreListBaseRecords, scoreListReady]);
-  const scoreListConfirmationSummary = useMemo(() => {
-    const signedCount = filteredScoreListRecords.filter(
-      (record) => record.signatureImage || record.confirmation?.signatureImage,
-    ).length;
-    return {
-      signedCount,
-      unsignedCount: Math.max(0, filteredScoreListRecords.length - signedCount),
-    };
-  }, [filteredScoreListRecords]);
   const summaryExportRosters = useMemo(() => {
     return {
       firstRoster:
@@ -1018,6 +1231,90 @@ const PerformanceScoreManager: React.FC = () => {
         undefined,
     };
   }, [classSheetFirstRosterId, classSheetSecondRosterId, rosters]);
+  const classSheetGradeOptions = useMemo(() => {
+    const values = new Set<string>();
+    if (targetGrade) values.add(targetGrade);
+    [summaryExportRosters.firstRoster, summaryExportRosters.secondRoster]
+      .filter(Boolean)
+      .forEach((roster) => {
+        if (roster?.targetGrade) values.add(roster.targetGrade);
+        (roster?.rows || []).forEach((row) => {
+          if (row.grade) values.add(row.grade);
+        });
+      });
+    return Array.from(values).sort(
+      (a, b) => Number(a) - Number(b) || a.localeCompare(b, "ko"),
+    );
+  }, [summaryExportRosters, targetGrade]);
+  const classSheetClassOptions = useMemo(() => {
+    const values = new Set<string>();
+    [summaryExportRosters.firstRoster, summaryExportRosters.secondRoster]
+      .filter(Boolean)
+      .forEach((roster) => {
+        (roster?.classes || []).forEach((classValue) => {
+          if (classValue) values.add(classValue);
+        });
+        (roster?.rows || []).forEach((row) => {
+          if (row.class) values.add(row.class);
+        });
+      });
+    return Array.from(values).sort(
+      (a, b) => Number(a) - Number(b) || a.localeCompare(b, "ko"),
+    );
+  }, [summaryExportRosters]);
+  const classSheetSelectionKey = [
+    classSheetFirstRosterId,
+    classSheetSecondRosterId,
+    classSheetGradeFilter,
+    classSheetClassFilter,
+  ].join("|");
+  const classSheetPreviewReady =
+    !!classSheetPreviewLoadedKey &&
+    classSheetPreviewLoadedKey === classSheetSelectionKey;
+  const classSheetSignatureRequirements = useMemo(
+    () => ({
+      requireFirst: Boolean(summaryExportRosters.firstRoster),
+      requireSecond: Boolean(summaryExportRosters.secondRoster),
+    }),
+    [summaryExportRosters],
+  );
+  const classSheetStatusSummary = useMemo(() => {
+    const firstScoredCount = classSheetPreviewStudents.filter(
+      (student) => student.firstRecord,
+    ).length;
+    const secondScoredCount = classSheetPreviewStudents.filter(
+      (student) => student.secondRecord,
+    ).length;
+    const signedCount = classSheetPreviewStudents.filter((student) =>
+      getConfirmedSignatureRecord(student, classSheetSignatureRequirements),
+    ).length;
+    return {
+      totalCount: classSheetPreviewStudents.length,
+      firstScoredCount,
+      secondScoredCount,
+      signedCount,
+      unsignedCount: Math.max(
+        0,
+        classSheetPreviewStudents.length - signedCount,
+      ),
+    };
+  }, [classSheetPreviewStudents, classSheetSignatureRequirements]);
+
+  useEffect(() => {
+    setClassSheetGradeFilter((current) =>
+      current && classSheetGradeOptions.includes(current)
+        ? current
+        : classSheetGradeOptions[0] || targetGrade,
+    );
+  }, [classSheetGradeOptions, targetGrade]);
+
+  useEffect(() => {
+    setClassSheetClassFilter((current) =>
+      current && classSheetClassOptions.includes(current)
+        ? current
+        : classSheetClassOptions[0] || "",
+    );
+  }, [classSheetClassOptions]);
 
   const loadStudents = async () => {
     setStudentsLoading(true);
@@ -1129,19 +1426,8 @@ const PerformanceScoreManager: React.FC = () => {
           });
         });
       }
-      const withConfirmations = await Promise.all(
-        loaded.map(async (record) =>
-          applyPerformanceScoreConfirmation(
-            record,
-            await loadPerformanceScoreConfirmation(
-              record.uid,
-              selectedScoreRoster.id,
-            ),
-          ),
-        ),
-      );
       setScoreListRecords(
-        sortPerformanceScoreRecords(withConfirmations).sort(
+        sortPerformanceScoreRecords(loaded).sort(
           (a, b) =>
             Number(a.grade) - Number(b.grade) ||
             Number(a.class) - Number(b.class) ||
@@ -1249,10 +1535,7 @@ const PerformanceScoreManager: React.FC = () => {
     );
   };
 
-  const downloadClassSummarySheet = async () => {
-    if (!selectedScoreRoster || !activeScoreListClass || exportingClassSheet) {
-      return;
-    }
+  const ensureClassSheetSelection = () => {
     if (
       !summaryExportRosters.firstRoster ||
       !summaryExportRosters.secondRoster
@@ -1261,69 +1544,109 @@ const PerformanceScoreManager: React.FC = () => {
         tone: "warning",
         title: "일람표 점수표를 선택해 주세요.",
         message:
-          "1차와 2차 수행평가 점수표를 모두 선택해야 다운로드할 수 있습니다.",
+          "1차와 2차 수행평가 점수표를 모두 선택해야 확인할 수 있습니다.",
       });
-      return;
+      return false;
     }
-    const exportGrade =
-      scoreListGradeFilter !== "all"
-        ? scoreListGradeFilter
-        : selectedScoreRoster.targetGrade ||
-          filteredScoreListRecords[0]?.grade ||
-          targetGrade;
+    if (!classSheetClassFilter) {
+      showToast({
+        tone: "warning",
+        title: "반을 선택해 주세요.",
+        message: "일람표는 학급별로 생성합니다.",
+      });
+      return false;
+    }
+    return true;
+  };
+
+  const loadClassSheetStudentsForSelection = async () => {
+    const [firstRecords, secondRecords] = await Promise.all([
+      loadRosterRecordsForClass(
+        summaryExportRosters.firstRoster,
+        classSheetClassFilter,
+        classSheetGradeFilter,
+      ),
+      loadRosterRecordsForClass(
+        summaryExportRosters.secondRoster,
+        classSheetClassFilter,
+        classSheetGradeFilter,
+      ),
+    ]);
+
+    const studentMap = new Map<string, ClassSheetStudent>();
+    const addRecord = (
+      record: PerformanceScoreRecord,
+      slot: "firstRecord" | "secondRecord",
+    ) => {
+      const key =
+        record.uid ||
+        buildStudentLookupKey(record.grade, record.class, record.number);
+      const current = studentMap.get(key) || {
+        uid: record.uid,
+        grade: record.grade,
+        class: record.class,
+        number: record.number,
+        studentName: record.studentName,
+      };
+      studentMap.set(key, {
+        ...current,
+        uid: current.uid || record.uid,
+        grade: current.grade || record.grade,
+        class: current.class || record.class,
+        number: current.number || record.number,
+        studentName: current.studentName || record.studentName,
+        [slot]: record,
+      });
+    };
+    firstRecords.forEach((record) => addRecord(record, "firstRecord"));
+    secondRecords.forEach((record) => addRecord(record, "secondRecord"));
+
+    return Array.from(studentMap.values()).sort(
+      (a, b) =>
+        Number(a.grade) - Number(b.grade) ||
+        Number(a.class) - Number(b.class) ||
+        Number(a.number) - Number(b.number) ||
+        String(a.studentName || "").localeCompare(
+          String(b.studentName || ""),
+          "ko",
+        ),
+    );
+  };
+
+  const refreshClassSheetPreview = async () => {
+    if (!ensureClassSheetSelection() || classSheetPreviewLoading) return;
+    setClassSheetPreviewLoading(true);
+    try {
+      const studentsForSheet = await loadClassSheetStudentsForSelection();
+      setClassSheetPreviewStudents(studentsForSheet);
+      setClassSheetPreviewLoadedKey(classSheetSelectionKey);
+      if (!studentsForSheet.length) {
+        showToast({
+          tone: "warning",
+          title: "조회할 학생 점수가 없습니다.",
+          message: "선택한 학년과 반에 저장된 수행평가 점수가 없습니다.",
+        });
+      }
+    } catch (error) {
+      console.error("Failed to load class sheet status:", error);
+      showToast({
+        tone: "error",
+        title: "일람표 현황을 불러오지 못했습니다.",
+        message: "점수와 서명 기록을 다시 확인한 뒤 시도해 주세요.",
+      });
+    } finally {
+      setClassSheetPreviewLoading(false);
+    }
+  };
+
+  const downloadClassSummarySheet = async () => {
+    if (!ensureClassSheetSelection() || exportingClassSheet) return;
+    const exportGrade = classSheetGradeFilter || targetGrade;
     setExportingClassSheet(true);
     try {
-      const [firstRecords, secondRecords] = await Promise.all([
-        loadRosterRecordsForClass(
-          summaryExportRosters.firstRoster,
-          activeScoreListClass,
-          exportGrade,
-        ),
-        loadRosterRecordsForClass(
-          summaryExportRosters.secondRoster,
-          activeScoreListClass,
-          exportGrade,
-        ),
-      ]);
-
-      const studentMap = new Map<string, ClassSheetStudent>();
-      const addRecord = (
-        record: PerformanceScoreRecord,
-        slot: "firstRecord" | "secondRecord",
-      ) => {
-        const key =
-          record.uid ||
-          buildStudentLookupKey(record.grade, record.class, record.number);
-        const current = studentMap.get(key) || {
-          uid: record.uid,
-          grade: record.grade,
-          class: record.class,
-          number: record.number,
-          studentName: record.studentName,
-        };
-        studentMap.set(key, {
-          ...current,
-          uid: current.uid || record.uid,
-          grade: current.grade || record.grade,
-          class: current.class || record.class,
-          number: current.number || record.number,
-          studentName: current.studentName || record.studentName,
-          [slot]: record,
-        });
-      };
-      firstRecords.forEach((record) => addRecord(record, "firstRecord"));
-      secondRecords.forEach((record) => addRecord(record, "secondRecord"));
-
-      const studentsForSheet = Array.from(studentMap.values()).sort(
-        (a, b) =>
-          Number(a.grade) - Number(b.grade) ||
-          Number(a.class) - Number(b.class) ||
-          Number(a.number) - Number(b.number) ||
-          String(a.studentName || "").localeCompare(
-            String(b.studentName || ""),
-            "ko",
-          ),
-      );
+      const studentsForSheet = await loadClassSheetStudentsForSelection();
+      setClassSheetPreviewStudents(studentsForSheet);
+      setClassSheetPreviewLoadedKey(classSheetSelectionKey);
 
       if (!studentsForSheet.length) {
         showToast({
@@ -1334,13 +1657,12 @@ const PerformanceScoreManager: React.FC = () => {
         return;
       }
 
-      const requiredSignatureAssessments = {
-        requireFirst: Boolean(summaryExportRosters.firstRoster),
-        requireSecond: Boolean(summaryExportRosters.secondRoster),
-      };
       const unsignedStudents = studentsForSheet.filter(
         (student) =>
-          !getConfirmedSignatureRecord(student, requiredSignatureAssessments),
+          !getConfirmedSignatureRecord(
+            student,
+            classSheetSignatureRequirements,
+          ),
       );
       if (unsignedStudents.length > 0) {
         const unsignedList = unsignedStudents
@@ -1352,7 +1674,7 @@ const PerformanceScoreManager: React.FC = () => {
           .join("\n");
         const remaining = unsignedStudents.length - 50;
         const message = [
-          `${activeScoreListClass}반 서명 미완료 학생 ${unsignedStudents.length}명이 있습니다.`,
+          `${classSheetClassFilter}반 서명 미완료 학생 ${unsignedStudents.length}명이 있습니다.`,
           "그래도 일람표를 다운로드할까요?",
           "",
           unsignedList,
@@ -1363,45 +1685,55 @@ const PerformanceScoreManager: React.FC = () => {
         if (!window.confirm(message)) return;
       }
 
-      const { default: writeXlsxFile } =
-        await import("write-excel-file/browser");
-      const { rows, images } = buildClassSummaryWorkbook({
+      const exportParams = {
         year,
         semester,
         grade: exportGrade,
-        classValue: activeScoreListClass,
+        classValue: classSheetClassFilter,
         subject:
           summaryExportRosters.firstRoster?.subject ||
           summaryExportRosters.secondRoster?.subject ||
-          selectedScoreRoster.subject ||
+          selectedScoreRoster?.subject ||
           "역사",
         teacherName: currentUser?.displayName || "방재석",
         firstRoster: summaryExportRosters.firstRoster,
         secondRoster: summaryExportRosters.secondRoster,
         students: studentsForSheet,
-      });
-      const blob = await writeXlsxFile(
-        rows as never,
-        {
-          sheet: "sheet1",
-          columns: CLASS_SHEET_COLUMNS,
-          images: images as never,
-          orientation: "landscape",
-          showGridLines: false,
-        },
-        {
-          fontFamily: "Noto Sans KR",
-          fontSize: 10,
-        },
-      ).toBlob();
+      };
+      let blob: Blob;
+      try {
+        blob = await buildClassSummaryWorkbookFromTemplate(exportParams);
+      } catch (templateError) {
+        console.warn(
+          "Failed to use class sheet template. Falling back to generated workbook:",
+          templateError,
+        );
+        const { default: writeXlsxFile } =
+          await import("write-excel-file/browser");
+        const { rows, images } = buildClassSummaryWorkbook(exportParams);
+        blob = await writeXlsxFile(
+          rows as never,
+          {
+            sheet: "sheet1",
+            columns: CLASS_SHEET_COLUMNS,
+            images: images as never,
+            orientation: "landscape",
+            showGridLines: false,
+          },
+          {
+            fontFamily: "Noto Sans KR",
+            fontSize: 10,
+          },
+        ).toBlob();
+      }
       saveBlobAsFile(
         blob,
-        `${year}학년도 ${semester}학기 ${exportGrade}학년 역사과 수행평가 일람표 ${activeScoreListClass}반.xlsx`,
+        `${year}학년도 ${semester}학기 ${exportGrade}학년 역사과 수행평가 일람표 ${classSheetClassFilter}반.xlsx`,
       );
       showToast({
         tone: "success",
         title: "일람표를 다운로드했습니다.",
-        message: `${activeScoreListClass}반 ${studentsForSheet.length}명의 점수와 서명 상태를 반영했습니다.`,
+        message: `${classSheetClassFilter}반 ${studentsForSheet.length}명의 점수와 서명 상태를 반영했습니다.`,
       });
     } catch (error) {
       console.error("Failed to export performance score class sheet:", error);
@@ -2000,6 +2332,359 @@ const PerformanceScoreManager: React.FC = () => {
         </div>
       )}
 
+      {classSheetModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
+          <section className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+            <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <h3 className="text-lg font-black text-slate-900">
+                  일람표 다운로드
+                </h3>
+                <p className="mt-1 text-sm font-semibold text-slate-500">
+                  수행평가 강의실별 일람표 양식으로 학급별 점수와 서명을
+                  확인합니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setClassSheetModalOpen(false)}
+                disabled={classSheetPreviewLoading || exportingClassSheet}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="일람표 다운로드 창 닫기"
+              >
+                <i className="fas fa-times" aria-hidden="true"></i>
+              </button>
+            </div>
+
+            <div className="overflow-y-auto px-5 py-4">
+              <div className="grid gap-3 lg:grid-cols-[1fr_1fr_130px_130px_auto]">
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-black text-slate-500">
+                    1차 점수표
+                  </span>
+                  <select
+                    value={classSheetFirstRosterId}
+                    onChange={(event) =>
+                      setClassSheetFirstRosterId(event.target.value)
+                    }
+                    className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
+                  >
+                    {firstAssessmentRosterOptions.length === 0 ? (
+                      <option value="">1차 점수표 없음</option>
+                    ) : (
+                      firstAssessmentRosterOptions.map((roster) => (
+                        <option key={roster.id} value={roster.id}>
+                          {roster.title}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-black text-slate-500">
+                    2차 점수표
+                  </span>
+                  <select
+                    value={classSheetSecondRosterId}
+                    onChange={(event) =>
+                      setClassSheetSecondRosterId(event.target.value)
+                    }
+                    className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
+                  >
+                    {secondAssessmentRosterOptions.length === 0 ? (
+                      <option value="">2차 점수표 없음</option>
+                    ) : (
+                      secondAssessmentRosterOptions.map((roster) => (
+                        <option key={roster.id} value={roster.id}>
+                          {roster.title}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-black text-slate-500">
+                    학년
+                  </span>
+                  <select
+                    value={classSheetGradeFilter}
+                    onChange={(event) =>
+                      setClassSheetGradeFilter(event.target.value)
+                    }
+                    className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
+                  >
+                    {(classSheetGradeOptions.length
+                      ? classSheetGradeOptions
+                      : DEFAULT_GRADE_OPTIONS
+                    ).map((grade) => (
+                      <option key={grade} value={grade}>
+                        {grade}학년
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-black text-slate-500">
+                    반
+                  </span>
+                  <select
+                    value={classSheetClassFilter}
+                    onChange={(event) =>
+                      setClassSheetClassFilter(event.target.value)
+                    }
+                    className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
+                  >
+                    {classSheetClassOptions.length === 0 ? (
+                      <option value="">반 없음</option>
+                    ) : (
+                      classSheetClassOptions.map((classValue) => (
+                        <option key={classValue} value={classValue}>
+                          {classValue}반
+                        </option>
+                      ))
+                    )}
+                  </select>
+                </label>
+                <div className="flex items-end">
+                  <button
+                    type="button"
+                    onClick={() => void refreshClassSheetPreview()}
+                    disabled={
+                      classSheetPreviewLoading ||
+                      exportingClassSheet ||
+                      !classSheetClassFilter
+                    }
+                    className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 lg:w-auto"
+                  >
+                    <i
+                      className={`fas fa-search text-xs ${classSheetPreviewLoading ? "animate-spin" : ""}`}
+                      aria-hidden="true"
+                    ></i>
+                    {classSheetPreviewLoading ? "조회 중" : "현황 조회"}
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-3 grid gap-2 text-xs font-bold text-slate-500 md:grid-cols-2">
+                <div className="truncate rounded-lg bg-slate-50 px-3 py-2">
+                  1차 원본:{" "}
+                  {summaryExportRosters.firstRoster?.sourceFileName || "-"}
+                </div>
+                <div className="truncate rounded-lg bg-slate-50 px-3 py-2">
+                  2차 원본:{" "}
+                  {summaryExportRosters.secondRoster?.sourceFileName || "-"}
+                </div>
+              </div>
+
+              {classSheetPreviewReady ? (
+                <div className="mt-4 space-y-4">
+                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                    {[
+                      {
+                        label: "학급 인원",
+                        value: `${classSheetStatusSummary.totalCount}명`,
+                        tone: "bg-slate-50 text-slate-700",
+                      },
+                      {
+                        label: "1차 점수",
+                        value: `${classSheetStatusSummary.firstScoredCount}명`,
+                        tone: "bg-blue-50 text-blue-700",
+                      },
+                      {
+                        label: "2차 점수",
+                        value: `${classSheetStatusSummary.secondScoredCount}명`,
+                        tone: "bg-blue-50 text-blue-700",
+                      },
+                      {
+                        label: "서명 완료",
+                        value: `${classSheetStatusSummary.signedCount}명`,
+                        tone: "bg-emerald-50 text-emerald-700",
+                      },
+                      {
+                        label: "서명 미완료",
+                        value: `${classSheetStatusSummary.unsignedCount}명`,
+                        tone: "bg-rose-50 text-rose-700",
+                      },
+                    ].map((item) => (
+                      <div
+                        key={item.label}
+                        className={`rounded-lg px-3 py-3 ${item.tone}`}
+                      >
+                        <div className="text-[11px] font-black">
+                          {item.label}
+                        </div>
+                        <div className="mt-1 text-lg font-black">
+                          {item.value}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="overflow-x-auto rounded-xl border border-slate-200">
+                    <table className="w-full min-w-[920px] text-left text-sm">
+                      <thead className="bg-slate-50 text-xs font-black text-slate-500">
+                        <tr>
+                          <th className="px-3 py-3 text-center">상태</th>
+                          <th className="px-3 py-3 text-center">번호</th>
+                          <th className="px-3 py-3">이름</th>
+                          <th className="px-3 py-3 text-right">1차</th>
+                          <th className="px-3 py-3 text-right">2차</th>
+                          <th className="px-3 py-3 text-right">합계</th>
+                          <th className="px-3 py-3">서명 현황</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 bg-white">
+                        {classSheetPreviewStudents.length === 0 ? (
+                          <tr>
+                            <td
+                              colSpan={7}
+                              className="px-4 py-10 text-center text-sm font-bold text-slate-400"
+                            >
+                              선택한 학급에 저장된 점수가 없습니다.
+                            </td>
+                          </tr>
+                        ) : (
+                          classSheetPreviewStudents.map((student) => {
+                            const firstScore = getScoreNumber(
+                              student.firstRecord,
+                            );
+                            const secondScore = getScoreNumber(
+                              student.secondRecord,
+                            );
+                            const totalScore =
+                              firstScore !== null || secondScore !== null
+                                ? roundScore(
+                                    (firstScore ?? 0) + (secondScore ?? 0),
+                                  )
+                                : null;
+                            const signatureRecord = getConfirmedSignatureRecord(
+                              student,
+                              classSheetSignatureRequirements,
+                            );
+                            const missingLabels = [
+                              !student.firstRecord ? "1차 점수" : "",
+                              !student.secondRecord ? "2차 점수" : "",
+                            ].filter(Boolean);
+                            const statusLabel = missingLabels.length
+                              ? "점수 누락"
+                              : signatureRecord
+                                ? "확인 완료"
+                                : "서명 필요";
+                            const statusClass = missingLabels.length
+                              ? "bg-amber-50 text-amber-700"
+                              : signatureRecord
+                                ? "bg-emerald-50 text-emerald-700"
+                                : "bg-rose-50 text-rose-700";
+                            return (
+                              <tr
+                                key={`${student.uid}-${student.class}-${student.number}`}
+                              >
+                                <td className="px-3 py-3 text-center">
+                                  <span
+                                    className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-black ${statusClass}`}
+                                  >
+                                    {statusLabel}
+                                  </span>
+                                </td>
+                                <td className="whitespace-nowrap px-3 py-3 text-center font-bold text-slate-600">
+                                  {student.number}번
+                                </td>
+                                <td className="whitespace-nowrap px-3 py-3 font-black text-slate-900">
+                                  {student.studentName || "(이름 없음)"}
+                                </td>
+                                <td className="whitespace-nowrap px-3 py-3 text-right font-bold text-slate-700">
+                                  {firstScore === null
+                                    ? "-"
+                                    : formatPerformanceScore(firstScore)}
+                                  <span className="ml-1 text-slate-400">
+                                    /{" "}
+                                    {formatPerformanceScore(
+                                      summaryExportRosters.firstRoster
+                                        ?.totalMaxScore,
+                                    )}
+                                  </span>
+                                </td>
+                                <td className="whitespace-nowrap px-3 py-3 text-right font-bold text-slate-700">
+                                  {secondScore === null
+                                    ? "-"
+                                    : formatPerformanceScore(secondScore)}
+                                  <span className="ml-1 text-slate-400">
+                                    /{" "}
+                                    {formatPerformanceScore(
+                                      summaryExportRosters.secondRoster
+                                        ?.totalMaxScore,
+                                    )}
+                                  </span>
+                                </td>
+                                <td className="whitespace-nowrap px-3 py-3 text-right font-black text-blue-700">
+                                  {totalScore === null
+                                    ? "-"
+                                    : formatPerformanceScore(totalScore)}
+                                </td>
+                                <td className="px-3 py-3">
+                                  {signatureRecord ? (
+                                    <div className="text-xs font-bold leading-5 text-slate-600">
+                                      <span className="font-black text-emerald-700">
+                                        서명 완료
+                                      </span>
+                                      <span className="ml-2 text-slate-500">
+                                        {signatureRecord.signatureName}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <div className="text-xs font-bold leading-5 text-slate-500">
+                                      {missingLabels.length
+                                        ? `${missingLabels.join(", ")} 없음`
+                                        : "학생 점수 확인 서명 전"}
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm font-bold text-slate-400">
+                  학년과 반을 선택한 뒤 현황 조회를 누르면 점수와 서명 현황이
+                  표시됩니다.
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-3 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setClassSheetModalOpen(false)}
+                disabled={classSheetPreviewLoading || exportingClassSheet}
+                className="inline-flex h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                닫기
+              </button>
+              <button
+                type="button"
+                onClick={() => void downloadClassSummarySheet()}
+                disabled={
+                  classSheetPreviewLoading ||
+                  exportingClassSheet ||
+                  !classSheetClassFilter
+                }
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                <i
+                  className={`fas fa-file-excel text-xs ${exportingClassSheet ? "animate-pulse" : ""}`}
+                  aria-hidden="true"
+                ></i>
+                {exportingClassSheet ? "생성 중" : "일람표 다운로드"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
       {parsed && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
           <section className="flex max-h-[92vh] w-full max-w-7xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
@@ -2299,6 +2984,15 @@ const PerformanceScoreManager: React.FC = () => {
               ></i>
               {parsing ? "인식 중..." : "점수표 업로드"}
             </button>
+            <button
+              type="button"
+              onClick={() => setClassSheetModalOpen(true)}
+              disabled={rostersLoading || rosters.length === 0}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white px-4 text-sm font-black text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <i className="fas fa-file-download text-xs" aria-hidden="true" />
+              일람표 다운로드
+            </button>
           </div>
         </div>
 
@@ -2423,8 +3117,7 @@ const PerformanceScoreManager: React.FC = () => {
                       {formatPerformanceScore(
                         selectedScoreRoster?.totalMaxScore,
                       )}
-                      점 · 확인 {scoreListConfirmationSummary.signedCount}명 ·
-                      미확인 {scoreListConfirmationSummary.unsignedCount}명
+                      점
                     </p>
                   </div>
                   <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -2433,74 +3126,8 @@ const PerformanceScoreManager: React.FC = () => {
                     </span>
                   </div>
                 </div>
-                <div className="grid gap-3 border-b border-slate-100 bg-slate-50/60 px-4 py-3 lg:grid-cols-[1fr_1fr_auto]">
-                  <label className="block">
-                    <span className="mb-1.5 block text-[11px] font-black text-slate-500">
-                      일람표 1차 점수표
-                    </span>
-                    <select
-                      value={classSheetFirstRosterId}
-                      onChange={(event) =>
-                        setClassSheetFirstRosterId(event.target.value)
-                      }
-                      className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
-                    >
-                      {firstAssessmentRosterOptions.length === 0 ? (
-                        <option value="">1차 점수표 없음</option>
-                      ) : (
-                        firstAssessmentRosterOptions.map((roster) => (
-                          <option key={roster.id} value={roster.id}>
-                            {roster.title} · {roster.sourceFileName}
-                          </option>
-                        ))
-                      )}
-                    </select>
-                  </label>
-                  <label className="block">
-                    <span className="mb-1.5 block text-[11px] font-black text-slate-500">
-                      일람표 2차 점수표
-                    </span>
-                    <select
-                      value={classSheetSecondRosterId}
-                      onChange={(event) =>
-                        setClassSheetSecondRosterId(event.target.value)
-                      }
-                      className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
-                    >
-                      {secondAssessmentRosterOptions.length === 0 ? (
-                        <option value="">2차 점수표 없음</option>
-                      ) : (
-                        secondAssessmentRosterOptions.map((roster) => (
-                          <option key={roster.id} value={roster.id}>
-                            {roster.title} · {roster.sourceFileName}
-                          </option>
-                        ))
-                      )}
-                    </select>
-                  </label>
-                  <div className="flex items-end">
-                    <button
-                      type="button"
-                      onClick={() => void downloadClassSummarySheet()}
-                      disabled={
-                        exportingClassSheet ||
-                        !activeScoreListClass ||
-                        filteredScoreListRecords.length === 0 ||
-                        !summaryExportRosters.firstRoster ||
-                        !summaryExportRosters.secondRoster
-                      }
-                      className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white px-4 text-xs font-black text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50 lg:w-auto"
-                    >
-                      <i
-                        className={`fas fa-file-excel ${exportingClassSheet ? "animate-pulse" : ""}`}
-                        aria-hidden="true"
-                      ></i>
-                      {exportingClassSheet ? "생성 중" : "일람표 다운로드"}
-                    </button>
-                  </div>
-                </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[1180px] text-left text-sm">
+                  <table className="w-full min-w-[1080px] text-left text-sm">
                     <thead className="bg-slate-50 text-xs font-black text-slate-500">
                       <tr>
                         <th className="whitespace-nowrap px-3 py-3">학년</th>
@@ -2520,9 +3147,6 @@ const PerformanceScoreManager: React.FC = () => {
                         <th className="whitespace-nowrap px-3 py-3 text-right">
                           총점
                         </th>
-                        <th className="whitespace-nowrap px-3 py-3 text-center">
-                          확인
-                        </th>
                         <th className="whitespace-nowrap px-3 py-3">
                           감점 요인 및 평가 근거
                         </th>
@@ -2533,7 +3157,7 @@ const PerformanceScoreManager: React.FC = () => {
                         <tr>
                           <td
                             colSpan={
-                              (selectedScoreRoster?.items.length || 0) + 7
+                              (selectedScoreRoster?.items.length || 0) + 6
                             }
                             className="px-4 py-10 text-center text-sm font-bold text-slate-400"
                           >
@@ -2594,22 +3218,6 @@ const PerformanceScoreManager: React.FC = () => {
                                     style={{ width: `${percent}%` }}
                                   />
                                 </div>
-                              </td>
-                              <td className="whitespace-nowrap px-3 py-3 text-center">
-                                {record.signatureName ? (
-                                  <div>
-                                    <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-black text-blue-700">
-                                      확인 완료
-                                    </span>
-                                    <div className="mt-1 text-[11px] font-bold text-slate-400">
-                                      {record.signatureName}
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black text-slate-500">
-                                    미확인
-                                  </span>
-                                )}
                               </td>
                               <td className="px-3 py-3">
                                 <div className="max-w-[360px] text-xs font-semibold leading-5 text-slate-600">

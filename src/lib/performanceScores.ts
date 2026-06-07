@@ -216,23 +216,28 @@ export const loadPerformanceScoreConfirmation = async (
   scoreId: string,
 ) => {
   if (!uid || !scoreId) return null;
-  const snap = await getDoc(
-    doc(
-      db,
-      "users",
-      uid,
-      PERFORMANCE_SCORE_USER_COLLECTION,
-      scoreId,
-      PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
-      uid,
-    ),
-  );
-  if (!snap.exists()) return null;
-  const data = snap.data() as PerformanceScoreConfirmation;
-  return {
-    id: snap.id,
-    ...data,
-  };
+  try {
+    const snap = await getDoc(
+      doc(
+        db,
+        "users",
+        uid,
+        PERFORMANCE_SCORE_USER_COLLECTION,
+        scoreId,
+        PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
+        uid,
+      ),
+    );
+    if (!snap.exists()) return null;
+    const data = snap.data() as PerformanceScoreConfirmation;
+    return {
+      id: snap.id,
+      ...data,
+    };
+  } catch (error) {
+    console.warn("Failed to load performance score confirmation:", error);
+    return null;
+  }
 };
 
 export const applyPerformanceScoreConfirmation = (

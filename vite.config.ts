@@ -71,6 +71,8 @@ export default defineConfig(({ mode }) => {
             if (
               includesPackage("read-excel-file") ||
               includesPackage("write-excel-file") ||
+              includesPackage("exceljs") ||
+              includesPackage("jszip") ||
               includesPackage("fflate")
             ) {
               return "vendor-excel";
