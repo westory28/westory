@@ -22,13 +22,17 @@ import {
 } from "../../../lib/semesterScope";
 import {
   PERFORMANCE_SCORE_ROSTERS_COLLECTION,
+  PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
   PERFORMANCE_SCORE_USER_COLLECTION,
+  applyPerformanceScoreConfirmation,
   buildStudentLookupKey,
   buildStudentNameLookupKey,
   formatPerformanceScore,
   getPerformanceScorePercent,
+  loadPerformanceScoreConfirmation,
   normalizeSchoolValue,
   normalizeStudentName,
+  roundScore,
   sortPerformanceScoreRecords,
   type PerformanceScoreRecord,
   type PerformanceScoreRoster,
@@ -366,6 +370,363 @@ const getMatchLabel = (status: PerformanceScoreRosterRow["matchStatus"]) => {
   return "미연결";
 };
 
+interface ClassSheetStudent {
+  uid: string;
+  grade: string;
+  class: string;
+  number: string;
+  studentName: string;
+  firstRecord?: PerformanceScoreRecord;
+  secondRecord?: PerformanceScoreRecord;
+}
+
+const CLASS_SHEET_COLUMNS = [
+  { width: 2.3 },
+  { width: 7 },
+  { width: 2 },
+  { width: 8 },
+  { width: 1 },
+  { width: 9 },
+  { width: 10 },
+  { width: 7 },
+  { width: 1.5 },
+  { width: 4 },
+  { width: 2 },
+  { width: 2 },
+  { width: 2 },
+  { width: 4 },
+  { width: 23 },
+  { width: 18 },
+];
+
+const getTodayLabel = () =>
+  new Date().toLocaleDateString("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+
+const excelCell = (
+  value: string | number,
+  options: Record<string, unknown> = {},
+) => ({
+  value,
+  type: typeof value === "number" ? Number : String,
+  align: "center",
+  alignVertical: "center",
+  fontSize: 10,
+  borderColor: "#111827",
+  borderStyle: "thin",
+  ...options,
+});
+
+const plainExcelCell = (
+  value: string | number,
+  options: Record<string, unknown> = {},
+) => ({
+  value,
+  type: typeof value === "number" ? Number : String,
+  align: "center",
+  alignVertical: "center",
+  fontSize: 10,
+  ...options,
+});
+
+const makeExcelRow = (height?: number) => {
+  const row = Array.from({ length: 16 }, () => null) as Array<unknown>;
+  if (height) {
+    row[0] = plainExcelCell("", { height });
+  }
+  return row;
+};
+
+const setExcelCell = (
+  row: Array<unknown>,
+  columnIndex: number,
+  value: string | number,
+  options: Record<string, unknown> = {},
+) => {
+  row[columnIndex] = excelCell(value, options);
+};
+
+const dataUrlToBlob = (dataUrl: string) => {
+  const [meta, base64] = dataUrl.split(",");
+  const contentType = /data:([^;]+)/.exec(meta || "")?.[1] || "image/png";
+  const binary = window.atob(base64 || "");
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return new Blob([bytes], { type: contentType });
+};
+
+const saveBlobAsFile = (blob: Blob, fileName: string) => {
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
+};
+
+const getScoreNumber = (record?: PerformanceScoreRecord) => {
+  if (!record) return null;
+  const score = Number(record.totalScore);
+  return Number.isFinite(score) ? roundScore(score) : null;
+};
+
+const getConfirmedSignatureRecord = (
+  student: ClassSheetStudent,
+  expected: { requireFirst?: boolean; requireSecond?: boolean } = {},
+) => {
+  const requiredRecords: PerformanceScoreRecord[] = [];
+  if (expected.requireFirst) {
+    if (!student.firstRecord) return null;
+    requiredRecords.push(student.firstRecord);
+  } else if (student.firstRecord) {
+    requiredRecords.push(student.firstRecord);
+  }
+  if (expected.requireSecond) {
+    if (!student.secondRecord) return null;
+    requiredRecords.push(student.secondRecord);
+  } else if (student.secondRecord) {
+    requiredRecords.push(student.secondRecord);
+  }
+  if (!requiredRecords.length) return null;
+  const allConfirmed = requiredRecords.every(
+    (record) => record.signatureImage || record.confirmation?.signatureImage,
+  );
+  if (!allConfirmed) return null;
+  return (
+    [...requiredRecords]
+      .reverse()
+      .find(
+        (record) =>
+          record.signatureImage || record.confirmation?.signatureImage,
+      ) || null
+  );
+};
+
+const buildClassSummaryWorkbook = (params: {
+  year: string;
+  semester: string;
+  grade: string;
+  classValue: string;
+  subject: string;
+  teacherName: string;
+  firstRoster?: PerformanceScoreRoster;
+  secondRoster?: PerformanceScoreRoster;
+  students: ClassSheetStudent[];
+}) => {
+  const rows: unknown[][] = [];
+
+  const row1 = makeExcelRow(18.85);
+  row1[11] = plainExcelCell(getTodayLabel(), {
+    columnSpan: 5,
+    fontSize: 10,
+  });
+  rows.push(row1);
+
+  const row2 = makeExcelRow(28.05);
+  row2[5] = plainExcelCell("수행평가 강의실별 일람표", {
+    columnSpan: 10,
+    fontSize: 15,
+    fontWeight: "bold",
+  });
+  rows.push(row2);
+
+  const row3 = makeExcelRow(16.55);
+  row3[1] = plainExcelCell(
+    `${params.year}학년도   ${params.semester}학기   주간   ${params.grade}학년   ${params.classValue} 강의실`,
+    { columnSpan: 15, fontWeight: "bold" },
+  );
+  rows.push(row3);
+
+  const row4 = makeExcelRow(14.1);
+  row4[1] = plainExcelCell(`교과목 : ${params.subject || "역사"}`, {
+    columnSpan: 8,
+    align: "left",
+  });
+  row4[9] = plainExcelCell(
+    `교과담당교사 (${params.teacherName || "방재석"}) 인`,
+    { columnSpan: 7 },
+  );
+  rows.push(row4);
+
+  rows.push(makeExcelRow(6));
+
+  const header = makeExcelRow(42.45);
+  setExcelCell(header, 1, "반/번호", {
+    columnSpan: 2,
+    fontWeight: "bold",
+    backgroundColor: "#f1f5f9",
+    wrap: true,
+  });
+  setExcelCell(header, 3, "성명", {
+    fontWeight: "bold",
+    backgroundColor: "#f1f5f9",
+  });
+  setExcelCell(
+    header,
+    4,
+    `${params.firstRoster?.title || "고조선 8조법 4컷 만화 그리기"}\n(만점 ${formatPerformanceScore(
+      params.firstRoster?.totalMaxScore || 20,
+    )})`,
+    {
+      columnSpan: 2,
+      fontWeight: "bold",
+      backgroundColor: "#f1f5f9",
+      wrap: true,
+    },
+  );
+  setExcelCell(
+    header,
+    6,
+    `${params.secondRoster?.title || "삼국 시대 인물의 무덤에 평점 남기기"}\n(만점 ${formatPerformanceScore(
+      params.secondRoster?.totalMaxScore || 30,
+    )})`,
+    {
+      fontWeight: "bold",
+      backgroundColor: "#f1f5f9",
+      wrap: true,
+    },
+  );
+  setExcelCell(header, 7, "합계", {
+    columnSpan: 2,
+    fontWeight: "bold",
+    backgroundColor: "#f1f5f9",
+  });
+  setExcelCell(header, 9, "비고", {
+    columnSpan: 4,
+    fontWeight: "bold",
+    backgroundColor: "#f1f5f9",
+  });
+  rows.push(header);
+
+  const images: Array<{
+    content: Blob;
+    contentType: string;
+    width: number;
+    height: number;
+    dpi: number;
+    anchor: { row: number; column: number };
+    offsetX: number;
+    offsetY: number;
+    title: string;
+    description: string;
+  }> = [];
+
+  params.students.forEach((student, index) => {
+    const excelRowNumber = 7 + index;
+    const firstScore = getScoreNumber(student.firstRecord);
+    const secondScore = getScoreNumber(student.secondRecord);
+    const totalScore =
+      (firstScore ?? 0) + (secondScore ?? 0) > 0
+        ? roundScore((firstScore ?? 0) + (secondScore ?? 0))
+        : "";
+    const row = makeExcelRow(18);
+    setExcelCell(row, 1, `${student.class}/${student.number}`, {
+      columnSpan: 2,
+    });
+    setExcelCell(row, 3, student.studentName);
+    setExcelCell(row, 4, firstScore ?? "", { columnSpan: 2 });
+    setExcelCell(row, 6, secondScore ?? "");
+    setExcelCell(row, 7, totalScore, { columnSpan: 2 });
+    setExcelCell(row, 9, "", { columnSpan: 4 });
+    rows.push(row);
+
+    const signatureRecord = getConfirmedSignatureRecord(student, {
+      requireFirst: Boolean(params.firstRoster),
+      requireSecond: Boolean(params.secondRoster),
+    });
+    const signatureImage =
+      signatureRecord?.signatureImage ||
+      signatureRecord?.confirmation?.signatureImage ||
+      "";
+    if (signatureImage) {
+      images.push({
+        content: dataUrlToBlob(signatureImage),
+        contentType: "image/png",
+        width: 76,
+        height: 22,
+        dpi: 96,
+        anchor: { row: excelRowNumber, column: 10 },
+        offsetX: 18,
+        offsetY: 0,
+        title: `${student.studentName} 서명`,
+        description: `${student.studentName} 수행평가 점수 확인 서명`,
+      });
+    }
+  });
+
+  const firstScores = params.students
+    .map((student) => getScoreNumber(student.firstRecord))
+    .filter((score): score is number => score !== null);
+  const secondScores = params.students
+    .map((student) => getScoreNumber(student.secondRecord))
+    .filter((score): score is number => score !== null);
+  const firstSum = roundScore(
+    firstScores.reduce((sum, score) => sum + score, 0),
+  );
+  const secondSum = roundScore(
+    secondScores.reduce((sum, score) => sum + score, 0),
+  );
+
+  const countRow = makeExcelRow(18);
+  setExcelCell(countRow, 1, "응시생수", {
+    columnSpan: 3,
+    fontWeight: "bold",
+  });
+  setExcelCell(countRow, 4, `${firstScores.length} 명`, { columnSpan: 2 });
+  setExcelCell(countRow, 6, `${secondScores.length} 명`);
+  rows.push(countRow);
+
+  const sumRow = makeExcelRow(18);
+  setExcelCell(sumRow, 1, "총점", { columnSpan: 3, fontWeight: "bold" });
+  setExcelCell(sumRow, 4, firstSum, { columnSpan: 2 });
+  setExcelCell(sumRow, 6, secondSum);
+  setExcelCell(sumRow, 7, roundScore(firstSum + secondSum), { columnSpan: 2 });
+  rows.push(sumRow);
+
+  const averageRow = makeExcelRow(18);
+  setExcelCell(averageRow, 1, "평균", { columnSpan: 3, fontWeight: "bold" });
+  setExcelCell(
+    averageRow,
+    4,
+    firstScores.length ? roundScore(firstSum / firstScores.length) : "",
+    {
+      columnSpan: 2,
+    },
+  );
+  setExcelCell(
+    averageRow,
+    6,
+    secondScores.length ? roundScore(secondSum / secondScores.length) : "",
+  );
+  const totalAverage =
+    firstScores.length || secondScores.length
+      ? roundScore(
+          (firstSum + secondSum) /
+            Math.max(firstScores.length, secondScores.length, 1),
+        )
+      : "";
+  setExcelCell(averageRow, 7, totalAverage, { columnSpan: 2 });
+  rows.push(averageRow);
+
+  rows.push(makeExcelRow(120));
+
+  const footer = makeExcelRow(18);
+  footer[8] = plainExcelCell(1, { columnSpan: 2 });
+  footer[10] = plainExcelCell("/", { columnSpan: 2 });
+  footer[12] = plainExcelCell(1, { columnSpan: 2 });
+  footer[14] = plainExcelCell("용신중학교", { columnSpan: 2 });
+  rows.push(footer);
+
+  return { rows, images };
+};
+
 const PerformanceScoreManager: React.FC = () => {
   const { config, currentUser } = useAuth();
   const { showToast } = useAppToast();
@@ -400,6 +761,9 @@ const PerformanceScoreManager: React.FC = () => {
     PerformanceScoreRecord[]
   >([]);
   const [scoreListLoading, setScoreListLoading] = useState(false);
+  const [classSheetFirstRosterId, setClassSheetFirstRosterId] = useState("");
+  const [classSheetSecondRosterId, setClassSheetSecondRosterId] = useState("");
+  const [exportingClassSheet, setExportingClassSheet] = useState(false);
 
   useEffect(() => {
     setTitle(`${year}학년도 ${semester}학기 수행평가 점수`);
@@ -445,6 +809,15 @@ const PerformanceScoreManager: React.FC = () => {
     scoreListLoadedRosterId,
     scoreListSearch,
   ]);
+
+  const firstAssessmentRosterOptions = useMemo(
+    () => rosters.filter((roster) => getRosterAssessmentOrder(roster) === 1),
+    [rosters],
+  );
+  const secondAssessmentRosterOptions = useMemo(
+    () => rosters.filter((roster) => getRosterAssessmentOrder(roster) === 2),
+    [rosters],
+  );
 
   const rosterCollectionPath = getSemesterCollectionPath(
     { year, semester },
@@ -518,6 +891,43 @@ const PerformanceScoreManager: React.FC = () => {
     () => rosters.find((roster) => roster.id === scoreListRosterId) || null,
     [rosters, scoreListRosterId],
   );
+
+  useEffect(() => {
+    setClassSheetFirstRosterId((current) => {
+      if (
+        current &&
+        firstAssessmentRosterOptions.some((roster) => roster.id === current)
+      ) {
+        return current;
+      }
+      if (
+        selectedScoreRoster &&
+        getRosterAssessmentOrder(selectedScoreRoster) === 1
+      ) {
+        return selectedScoreRoster.id;
+      }
+      return firstAssessmentRosterOptions[0]?.id || "";
+    });
+  }, [firstAssessmentRosterOptions, selectedScoreRoster]);
+
+  useEffect(() => {
+    setClassSheetSecondRosterId((current) => {
+      if (
+        current &&
+        secondAssessmentRosterOptions.some((roster) => roster.id === current)
+      ) {
+        return current;
+      }
+      if (
+        selectedScoreRoster &&
+        getRosterAssessmentOrder(selectedScoreRoster) === 2
+      ) {
+        return selectedScoreRoster.id;
+      }
+      return secondAssessmentRosterOptions[0]?.id || "";
+    });
+  }, [secondAssessmentRosterOptions, selectedScoreRoster]);
+
   const scoreListGradeOptions = useMemo(() => {
     const values = new Set<string>();
     rosters.forEach((roster) => {
@@ -589,6 +999,25 @@ const PerformanceScoreManager: React.FC = () => {
         normalizeSchoolValue(activeScoreListClass),
     );
   }, [activeScoreListClass, scoreListBaseRecords, scoreListReady]);
+  const scoreListConfirmationSummary = useMemo(() => {
+    const signedCount = filteredScoreListRecords.filter(
+      (record) => record.signatureImage || record.confirmation?.signatureImage,
+    ).length;
+    return {
+      signedCount,
+      unsignedCount: Math.max(0, filteredScoreListRecords.length - signedCount),
+    };
+  }, [filteredScoreListRecords]);
+  const summaryExportRosters = useMemo(() => {
+    return {
+      firstRoster:
+        rosters.find((roster) => roster.id === classSheetFirstRosterId) ||
+        undefined,
+      secondRoster:
+        rosters.find((roster) => roster.id === classSheetSecondRosterId) ||
+        undefined,
+    };
+  }, [classSheetFirstRosterId, classSheetSecondRosterId, rosters]);
 
   const loadStudents = async () => {
     setStudentsLoading(true);
@@ -700,8 +1129,19 @@ const PerformanceScoreManager: React.FC = () => {
           });
         });
       }
+      const withConfirmations = await Promise.all(
+        loaded.map(async (record) =>
+          applyPerformanceScoreConfirmation(
+            record,
+            await loadPerformanceScoreConfirmation(
+              record.uid,
+              selectedScoreRoster.id,
+            ),
+          ),
+        ),
+      );
       setScoreListRecords(
-        sortPerformanceScoreRecords(loaded).sort(
+        sortPerformanceScoreRecords(withConfirmations).sort(
           (a, b) =>
             Number(a.grade) - Number(b.grade) ||
             Number(a.class) - Number(b.class) ||
@@ -722,6 +1162,256 @@ const PerformanceScoreManager: React.FC = () => {
       });
     } finally {
       setScoreListLoading(false);
+    }
+  };
+
+  const loadRosterRecordsForClass = async (
+    roster: PerformanceScoreRoster | undefined,
+    classValue: string,
+    gradeValue: string,
+  ) => {
+    if (!roster) return [];
+    const linkedRows = (roster.rows || []).filter(
+      (row) =>
+        row.uid &&
+        normalizeSchoolValue(row.class) === normalizeSchoolValue(classValue) &&
+        (!gradeValue ||
+          normalizeSchoolValue(row.grade) === normalizeSchoolValue(gradeValue)),
+    );
+    const loaded: PerformanceScoreRecord[] = [];
+    for (let index = 0; index < linkedRows.length; index += 40) {
+      const chunk = linkedRows.slice(index, index + 40);
+      const snaps = await Promise.all(
+        chunk.map((row) =>
+          getDoc(
+            doc(
+              db,
+              "users",
+              row.uid,
+              PERFORMANCE_SCORE_USER_COLLECTION,
+              roster.id,
+            ),
+          ),
+        ),
+      );
+      snaps.forEach((snap, rowIndex) => {
+        const row = chunk[rowIndex];
+        if (snap.exists()) {
+          const data = snap.data() as PerformanceScoreRecord;
+          loaded.push({
+            id: snap.id,
+            ...data,
+            items: Array.isArray(data.items) ? data.items : [],
+          });
+          return;
+        }
+        loaded.push({
+          id: roster.id,
+          rosterId: roster.id,
+          title: roster.title,
+          subject: roster.subject,
+          ...(roster.assessmentOrder
+            ? { assessmentOrder: roster.assessmentOrder }
+            : {}),
+          academicYear: roster.academicYear,
+          semester: roster.semester,
+          grade: row.grade,
+          class: row.class,
+          number: row.number,
+          studentName: row.studentName,
+          uid: row.uid,
+          items: Array.isArray(row.items) ? row.items : [],
+          totalScore: row.totalScore || 0,
+          totalMaxScore: row.totalMaxScore || roster.totalMaxScore || 0,
+          feedback: row.feedback || "",
+          evidence: row.evidence || row.feedback || "",
+          sourceFileName: roster.sourceFileName,
+        });
+      });
+    }
+    const withConfirmations = await Promise.all(
+      loaded.map(async (record) =>
+        applyPerformanceScoreConfirmation(
+          record,
+          await loadPerformanceScoreConfirmation(record.uid, roster.id),
+        ),
+      ),
+    );
+    return sortPerformanceScoreRecords(withConfirmations).sort(
+      (a, b) =>
+        Number(a.grade) - Number(b.grade) ||
+        Number(a.class) - Number(b.class) ||
+        Number(a.number) - Number(b.number) ||
+        String(a.studentName || "").localeCompare(
+          String(b.studentName || ""),
+          "ko",
+        ),
+    );
+  };
+
+  const downloadClassSummarySheet = async () => {
+    if (!selectedScoreRoster || !activeScoreListClass || exportingClassSheet) {
+      return;
+    }
+    if (
+      !summaryExportRosters.firstRoster ||
+      !summaryExportRosters.secondRoster
+    ) {
+      showToast({
+        tone: "warning",
+        title: "일람표 점수표를 선택해 주세요.",
+        message:
+          "1차와 2차 수행평가 점수표를 모두 선택해야 다운로드할 수 있습니다.",
+      });
+      return;
+    }
+    const exportGrade =
+      scoreListGradeFilter !== "all"
+        ? scoreListGradeFilter
+        : selectedScoreRoster.targetGrade ||
+          filteredScoreListRecords[0]?.grade ||
+          targetGrade;
+    setExportingClassSheet(true);
+    try {
+      const [firstRecords, secondRecords] = await Promise.all([
+        loadRosterRecordsForClass(
+          summaryExportRosters.firstRoster,
+          activeScoreListClass,
+          exportGrade,
+        ),
+        loadRosterRecordsForClass(
+          summaryExportRosters.secondRoster,
+          activeScoreListClass,
+          exportGrade,
+        ),
+      ]);
+
+      const studentMap = new Map<string, ClassSheetStudent>();
+      const addRecord = (
+        record: PerformanceScoreRecord,
+        slot: "firstRecord" | "secondRecord",
+      ) => {
+        const key =
+          record.uid ||
+          buildStudentLookupKey(record.grade, record.class, record.number);
+        const current = studentMap.get(key) || {
+          uid: record.uid,
+          grade: record.grade,
+          class: record.class,
+          number: record.number,
+          studentName: record.studentName,
+        };
+        studentMap.set(key, {
+          ...current,
+          uid: current.uid || record.uid,
+          grade: current.grade || record.grade,
+          class: current.class || record.class,
+          number: current.number || record.number,
+          studentName: current.studentName || record.studentName,
+          [slot]: record,
+        });
+      };
+      firstRecords.forEach((record) => addRecord(record, "firstRecord"));
+      secondRecords.forEach((record) => addRecord(record, "secondRecord"));
+
+      const studentsForSheet = Array.from(studentMap.values()).sort(
+        (a, b) =>
+          Number(a.grade) - Number(b.grade) ||
+          Number(a.class) - Number(b.class) ||
+          Number(a.number) - Number(b.number) ||
+          String(a.studentName || "").localeCompare(
+            String(b.studentName || ""),
+            "ko",
+          ),
+      );
+
+      if (!studentsForSheet.length) {
+        showToast({
+          tone: "warning",
+          title: "다운로드할 학생 점수가 없습니다.",
+          message: "현재 선택한 학년과 반에 저장된 수행평가 점수가 없습니다.",
+        });
+        return;
+      }
+
+      const requiredSignatureAssessments = {
+        requireFirst: Boolean(summaryExportRosters.firstRoster),
+        requireSecond: Boolean(summaryExportRosters.secondRoster),
+      };
+      const unsignedStudents = studentsForSheet.filter(
+        (student) =>
+          !getConfirmedSignatureRecord(student, requiredSignatureAssessments),
+      );
+      if (unsignedStudents.length > 0) {
+        const unsignedList = unsignedStudents
+          .slice(0, 50)
+          .map(
+            (student, index) =>
+              `${index + 1}. ${student.class}반 ${student.number}번 ${student.studentName}`,
+          )
+          .join("\n");
+        const remaining = unsignedStudents.length - 50;
+        const message = [
+          `${activeScoreListClass}반 서명 미완료 학생 ${unsignedStudents.length}명이 있습니다.`,
+          "그래도 일람표를 다운로드할까요?",
+          "",
+          unsignedList,
+          remaining > 0 ? `... 외 ${remaining}명` : "",
+        ]
+          .filter(Boolean)
+          .join("\n");
+        if (!window.confirm(message)) return;
+      }
+
+      const { default: writeXlsxFile } =
+        await import("write-excel-file/browser");
+      const { rows, images } = buildClassSummaryWorkbook({
+        year,
+        semester,
+        grade: exportGrade,
+        classValue: activeScoreListClass,
+        subject:
+          summaryExportRosters.firstRoster?.subject ||
+          summaryExportRosters.secondRoster?.subject ||
+          selectedScoreRoster.subject ||
+          "역사",
+        teacherName: currentUser?.displayName || "방재석",
+        firstRoster: summaryExportRosters.firstRoster,
+        secondRoster: summaryExportRosters.secondRoster,
+        students: studentsForSheet,
+      });
+      const blob = await writeXlsxFile(
+        rows as never,
+        {
+          sheet: "sheet1",
+          columns: CLASS_SHEET_COLUMNS,
+          images: images as never,
+          orientation: "landscape",
+          showGridLines: false,
+        },
+        {
+          fontFamily: "Noto Sans KR",
+          fontSize: 10,
+        },
+      ).toBlob();
+      saveBlobAsFile(
+        blob,
+        `${year}학년도 ${semester}학기 ${exportGrade}학년 역사과 수행평가 일람표 ${activeScoreListClass}반.xlsx`,
+      );
+      showToast({
+        tone: "success",
+        title: "일람표를 다운로드했습니다.",
+        message: `${activeScoreListClass}반 ${studentsForSheet.length}명의 점수와 서명 상태를 반영했습니다.`,
+      });
+    } catch (error) {
+      console.error("Failed to export performance score class sheet:", error);
+      showToast({
+        tone: "error",
+        title: "일람표 다운로드에 실패했습니다.",
+        message: "점수와 서명 기록을 다시 조회한 뒤 시도해 주세요.",
+      });
+    } finally {
+      setExportingClassSheet(false);
     }
   };
 
@@ -1048,6 +1738,17 @@ const PerformanceScoreManager: React.FC = () => {
       (roster.rows || [])
         .filter((row) => row.uid)
         .forEach((row) => {
+          batchQueue.delete(
+            doc(
+              db,
+              "users",
+              row.uid,
+              PERFORMANCE_SCORE_USER_COLLECTION,
+              roster.id,
+              PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
+              row.uid,
+            ),
+          );
           batchQueue.delete(
             doc(
               db,
@@ -1709,7 +2410,7 @@ const PerformanceScoreManager: React.FC = () => {
 
             {scoreListReady ? (
               <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-                <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
                   <div className="min-w-0">
                     <h4 className="truncate text-base font-black text-slate-900">
                       {selectedScoreRoster?.title}
@@ -1722,15 +2423,84 @@ const PerformanceScoreManager: React.FC = () => {
                       {formatPerformanceScore(
                         selectedScoreRoster?.totalMaxScore,
                       )}
-                      점
+                      점 · 확인 {scoreListConfirmationSummary.signedCount}명 ·
+                      미확인 {scoreListConfirmationSummary.unsignedCount}명
                     </p>
                   </div>
-                  <span className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
-                    {selectedScoreRoster?.sourceFileName}
-                  </span>
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
+                    <span className="inline-flex max-w-[360px] items-center truncate rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
+                      {selectedScoreRoster?.sourceFileName}
+                    </span>
+                  </div>
+                </div>
+                <div className="grid gap-3 border-b border-slate-100 bg-slate-50/60 px-4 py-3 lg:grid-cols-[1fr_1fr_auto]">
+                  <label className="block">
+                    <span className="mb-1.5 block text-[11px] font-black text-slate-500">
+                      일람표 1차 점수표
+                    </span>
+                    <select
+                      value={classSheetFirstRosterId}
+                      onChange={(event) =>
+                        setClassSheetFirstRosterId(event.target.value)
+                      }
+                      className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
+                    >
+                      {firstAssessmentRosterOptions.length === 0 ? (
+                        <option value="">1차 점수표 없음</option>
+                      ) : (
+                        firstAssessmentRosterOptions.map((roster) => (
+                          <option key={roster.id} value={roster.id}>
+                            {roster.title} · {roster.sourceFileName}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="mb-1.5 block text-[11px] font-black text-slate-500">
+                      일람표 2차 점수표
+                    </span>
+                    <select
+                      value={classSheetSecondRosterId}
+                      onChange={(event) =>
+                        setClassSheetSecondRosterId(event.target.value)
+                      }
+                      className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
+                    >
+                      {secondAssessmentRosterOptions.length === 0 ? (
+                        <option value="">2차 점수표 없음</option>
+                      ) : (
+                        secondAssessmentRosterOptions.map((roster) => (
+                          <option key={roster.id} value={roster.id}>
+                            {roster.title} · {roster.sourceFileName}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </label>
+                  <div className="flex items-end">
+                    <button
+                      type="button"
+                      onClick={() => void downloadClassSummarySheet()}
+                      disabled={
+                        exportingClassSheet ||
+                        !activeScoreListClass ||
+                        filteredScoreListRecords.length === 0 ||
+                        !summaryExportRosters.firstRoster ||
+                        !summaryExportRosters.secondRoster
+                      }
+                      className="inline-flex h-10 w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white px-4 text-xs font-black text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50 lg:w-auto"
+                    >
+                      <i
+                        className={`fas fa-file-excel ${exportingClassSheet ? "animate-pulse" : ""}`}
+                        aria-hidden="true"
+                      ></i>
+                      {exportingClassSheet ? "생성 중" : "일람표 다운로드"}
+                    </button>
+                  </div>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[1080px] text-left text-sm">
+                  <table className="w-full min-w-[1180px] text-left text-sm">
                     <thead className="bg-slate-50 text-xs font-black text-slate-500">
                       <tr>
                         <th className="whitespace-nowrap px-3 py-3">학년</th>
@@ -1750,6 +2520,9 @@ const PerformanceScoreManager: React.FC = () => {
                         <th className="whitespace-nowrap px-3 py-3 text-right">
                           총점
                         </th>
+                        <th className="whitespace-nowrap px-3 py-3 text-center">
+                          확인
+                        </th>
                         <th className="whitespace-nowrap px-3 py-3">
                           감점 요인 및 평가 근거
                         </th>
@@ -1760,7 +2533,7 @@ const PerformanceScoreManager: React.FC = () => {
                         <tr>
                           <td
                             colSpan={
-                              (selectedScoreRoster?.items.length || 0) + 6
+                              (selectedScoreRoster?.items.length || 0) + 7
                             }
                             className="px-4 py-10 text-center text-sm font-bold text-slate-400"
                           >
@@ -1821,6 +2594,22 @@ const PerformanceScoreManager: React.FC = () => {
                                     style={{ width: `${percent}%` }}
                                   />
                                 </div>
+                              </td>
+                              <td className="whitespace-nowrap px-3 py-3 text-center">
+                                {record.signatureName ? (
+                                  <div>
+                                    <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-black text-blue-700">
+                                      확인 완료
+                                    </span>
+                                    <div className="mt-1 text-[11px] font-bold text-slate-400">
+                                      {record.signatureName}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black text-slate-500">
+                                    미확인
+                                  </span>
+                                )}
                               </td>
                               <td className="px-3 py-3">
                                 <div className="max-w-[360px] text-xs font-semibold leading-5 text-slate-600">

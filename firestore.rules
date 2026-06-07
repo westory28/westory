@@ -210,6 +210,34 @@ service cloud.firestore {
       return isAdmin() || isTeacherRole();
     }
 
+    function isValidPerformanceScoreConfirmation(userId, scoreId, confirmationId) {
+      return canUseWestory()
+        && isOwnUser(userId)
+        && confirmationId == request.auth.uid
+        && exists(/databases/$(database)/documents/users/$(userId)/performance_scores/$(scoreId))
+        && get(/databases/$(database)/documents/users/$(userId)/performance_scores/$(scoreId)).data.uid == request.auth.uid
+        && get(/databases/$(database)/documents/users/$(userId)/performance_scores/$(scoreId)).data.rosterId == scoreId
+        && request.resource.data.keys().hasOnly([
+          'uid',
+          'rosterId',
+          'signatureName',
+          'signatureImage',
+          'confirmedAt',
+          'updatedAt'
+        ])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.rosterId == scoreId
+        && request.resource.data.signatureName is string
+        && request.resource.data.signatureName.size() > 0
+        && request.resource.data.signatureName.size() <= 20
+        && request.resource.data.signatureImage is string
+        && request.resource.data.signatureImage.size() > 0
+        && request.resource.data.signatureImage.size() <= 120000
+        && request.resource.data.signatureImage.matches('^data:image/png;base64,[A-Za-z0-9+/=]+$')
+        && request.resource.data.confirmedAt == request.time
+        && request.resource.data.updatedAt == request.time;
+    }
+
     function changedUserKeys() {
       return request.resource.data.diff(resource.data).affectedKeys();
     }
@@ -562,6 +590,12 @@ service cloud.firestore {
       match /performance_scores/{scoreId} {
         allow read: if canUseWestory() && (isOwnUser(userId) || canManagePerformanceScores());
         allow create, update, delete: if canManagePerformanceScores();
+
+        match /confirmations/{confirmationId} {
+          allow read: if canUseWestory() && (isOwnUser(userId) || canManagePerformanceScores());
+          allow create, update: if isValidPerformanceScoreConfirmation(userId, scoreId, confirmationId);
+          allow delete: if canManagePerformanceScores();
+        }
       }
 
       match /attendance/{recordId} {

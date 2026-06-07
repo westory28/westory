@@ -1,9 +1,18 @@
-import { collection, getDocs, orderBy, query } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  orderBy,
+  query,
+} from "firebase/firestore";
 import { db } from "./firebase";
 
 export const PERFORMANCE_SCORE_ROSTERS_COLLECTION = "performance_score_rosters";
 
 export const PERFORMANCE_SCORE_USER_COLLECTION = "performance_scores";
+
+export const PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION = "confirmations";
 
 export interface PerformanceScoreItem {
   name: string;
@@ -38,7 +47,19 @@ export interface PerformanceScoreRecord {
   uploadedAt?: unknown;
   updatedAt?: unknown;
   signatureName?: string;
+  signatureImage?: string;
   signedAt?: unknown;
+  confirmation?: PerformanceScoreConfirmation | null;
+}
+
+export interface PerformanceScoreConfirmation {
+  id?: string;
+  uid: string;
+  rosterId: string;
+  signatureName: string;
+  signatureImage: string;
+  confirmedAt?: unknown;
+  updatedAt?: unknown;
 }
 
 export interface PerformanceScoreRosterRow {
@@ -176,8 +197,54 @@ export const loadUserPerformanceScoreRecords = async (
       ...record,
       items: Array.isArray(record.items) ? record.items : [],
     }));
-  return sortPerformanceScoreRecords(loaded);
+  const withConfirmations = await Promise.all(
+    loaded.map(async (record) =>
+      applyPerformanceScoreConfirmation(
+        record,
+        await loadPerformanceScoreConfirmation(
+          uid,
+          record.id || record.rosterId,
+        ),
+      ),
+    ),
+  );
+  return sortPerformanceScoreRecords(withConfirmations);
 };
+
+export const loadPerformanceScoreConfirmation = async (
+  uid: string,
+  scoreId: string,
+) => {
+  if (!uid || !scoreId) return null;
+  const snap = await getDoc(
+    doc(
+      db,
+      "users",
+      uid,
+      PERFORMANCE_SCORE_USER_COLLECTION,
+      scoreId,
+      PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
+      uid,
+    ),
+  );
+  if (!snap.exists()) return null;
+  const data = snap.data() as PerformanceScoreConfirmation;
+  return {
+    id: snap.id,
+    ...data,
+  };
+};
+
+export const applyPerformanceScoreConfirmation = (
+  record: PerformanceScoreRecord,
+  confirmation: PerformanceScoreConfirmation | null,
+): PerformanceScoreRecord => ({
+  ...record,
+  confirmation,
+  signatureName: confirmation?.signatureName || record.signatureName,
+  signatureImage: confirmation?.signatureImage || record.signatureImage,
+  signedAt: confirmation?.confirmedAt || record.signedAt,
+});
 
 export const buildStudentLookupKey = (
   grade: unknown,

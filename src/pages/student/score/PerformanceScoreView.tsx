@@ -7,13 +7,18 @@ import {
   LinearScale,
   Tooltip,
 } from "chart.js";
+import { doc, serverTimestamp, setDoc } from "firebase/firestore";
 import { PageLoading } from "../../../components/common/LoadingState";
 import { useAuth } from "../../../contexts/AuthContext";
+import { db } from "../../../lib/firebase";
 import { getYearSemester } from "../../../lib/semesterScope";
 import {
+  PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
+  PERFORMANCE_SCORE_USER_COLLECTION,
   formatPerformanceScore,
   getPerformanceScorePercent,
   loadUserPerformanceScoreRecords,
+  normalizeStudentName,
   type PerformanceScoreRecord,
 } from "../../../lib/performanceScores";
 import { getPerformanceScoreItemShortName } from "../../../lib/performanceScoreWorkbook";
@@ -21,6 +26,13 @@ import { getPerformanceScoreItemShortName } from "../../../lib/performanceScoreW
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
 const formatDateTime = (value: unknown) => {
+  if (value instanceof Date) {
+    return value.toLocaleDateString("ko-KR", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  }
   const seconds =
     typeof value === "object" &&
     value !== null &&
@@ -44,12 +56,37 @@ const getItemLabel = (
   index: number,
 ) => item.shortName || getPerformanceScoreItemShortName(item.name, index);
 
+const createSignatureImageDataUrl = (signatureName: string) => {
+  const canvas = document.createElement("canvas");
+  canvas.width = 360;
+  canvas.height = 96;
+  const context = canvas.getContext("2d");
+  if (!context) return "";
+
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.fillStyle = "#0f172a";
+  context.font = "700 42px 'Noto Sans KR', 'Malgun Gothic', sans-serif";
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText(signatureName, canvas.width / 2, 48);
+
+  context.fillStyle = "#64748b";
+  context.font = "700 12px 'Noto Sans KR', 'Malgun Gothic', sans-serif";
+  context.fillText("점수 확인", canvas.width / 2, 78);
+
+  return canvas.toDataURL("image/png");
+};
+
 const PerformanceScoreView: React.FC = () => {
   const { currentUser, userData, config } = useAuth();
   const { year, semester } = getYearSemester(config);
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState<PerformanceScoreRecord[]>([]);
   const [selectedId, setSelectedId] = useState("");
+  const [signatureModalOpen, setSignatureModalOpen] = useState(false);
+  const [signatureName, setSignatureName] = useState("");
+  const [signatureError, setSignatureError] = useState("");
+  const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
     if (!currentUser?.uid) {
@@ -85,6 +122,22 @@ const PerformanceScoreView: React.FC = () => {
       records.find((record) => record.id === selectedId) || records[0] || null,
     [records, selectedId],
   );
+
+  useEffect(() => {
+    if (!selectedRecord) return;
+    setSignatureName(
+      selectedRecord.signatureName ||
+        selectedRecord.studentName ||
+        userData?.name ||
+        "",
+    );
+    setSignatureError("");
+  }, [
+    selectedRecord?.id,
+    selectedRecord?.signatureName,
+    selectedRecord?.studentName,
+    userData?.name,
+  ]);
 
   const percent = selectedRecord
     ? getPerformanceScorePercent(
@@ -125,6 +178,94 @@ const PerformanceScoreView: React.FC = () => {
         ],
       }
     : { labels: [], datasets: [] };
+
+  const expectedSignatureName =
+    selectedRecord?.studentName || userData?.name || "";
+  const selectedScoreId = selectedRecord?.id || selectedRecord?.rosterId || "";
+  const confirmedAt = selectedRecord?.signedAt;
+  const hasConfirmation = Boolean(selectedRecord?.signatureName);
+
+  const submitSignatureConfirmation = async () => {
+    if (!currentUser?.uid || !selectedRecord || !selectedScoreId) return;
+    const trimmedName = signatureName.trim();
+    if (!trimmedName) {
+      setSignatureError("서명할 이름을 입력해 주세요.");
+      return;
+    }
+    if (trimmedName.length > 20) {
+      setSignatureError("서명 이름은 20자 이내로 입력해 주세요.");
+      return;
+    }
+    if (
+      expectedSignatureName &&
+      normalizeStudentName(trimmedName) !==
+        normalizeStudentName(expectedSignatureName)
+    ) {
+      setSignatureError(
+        `점수표의 이름(${expectedSignatureName})과 같게 입력해 주세요.`,
+      );
+      return;
+    }
+
+    const signatureImage = createSignatureImageDataUrl(trimmedName);
+    if (!signatureImage) {
+      setSignatureError("서명 이미지를 만들지 못했습니다. 다시 시도해 주세요.");
+      return;
+    }
+
+    setConfirming(true);
+    setSignatureError("");
+    try {
+      const confirmationRef = doc(
+        db,
+        "users",
+        currentUser.uid,
+        PERFORMANCE_SCORE_USER_COLLECTION,
+        selectedScoreId,
+        PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
+        currentUser.uid,
+      );
+      await setDoc(confirmationRef, {
+        uid: currentUser.uid,
+        rosterId: selectedRecord.rosterId,
+        signatureName: trimmedName,
+        signatureImage,
+        confirmedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      const localConfirmedAt = new Date();
+      setRecords((current) =>
+        current.map((record) =>
+          (record.id || record.rosterId) === selectedScoreId
+            ? {
+                ...record,
+                signatureName: trimmedName,
+                signatureImage,
+                signedAt: localConfirmedAt,
+                confirmation: {
+                  id: currentUser.uid,
+                  uid: currentUser.uid,
+                  rosterId: selectedRecord.rosterId,
+                  signatureName: trimmedName,
+                  signatureImage,
+                  confirmedAt: localConfirmedAt,
+                  updatedAt: localConfirmedAt,
+                },
+              }
+            : record,
+        ),
+      );
+      setSignatureModalOpen(false);
+    } catch (error) {
+      console.error("Failed to confirm performance score:", error);
+      setSignatureError(
+        "점수 확인 서명을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      );
+    } finally {
+      setConfirming(false);
+    }
+  };
 
   const chartOptions = {
     responsive: true,
@@ -211,10 +352,6 @@ const PerformanceScoreView: React.FC = () => {
             <h2 className="text-sm font-black text-slate-500">점수 목록</h2>
             <div className="mt-3 space-y-2">
               {records.map((record) => {
-                const recordPercent = getPerformanceScorePercent(
-                  record.totalScore,
-                  record.totalMaxScore,
-                );
                 const active =
                   record.id === selectedRecord.id ||
                   (!selectedRecord.id && record.id === records[0]?.id);
@@ -234,12 +371,14 @@ const PerformanceScoreView: React.FC = () => {
                     </div>
                     <div className="mt-2 flex items-center justify-between gap-3">
                       <span className="text-xs font-bold text-slate-500">
-                        {formatPerformanceScore(record.totalScore)} /{" "}
+                        획득 {formatPerformanceScore(record.totalScore)} /{" "}
                         {formatPerformanceScore(record.totalMaxScore)}
                       </span>
-                      <span className="text-xs font-black text-blue-700">
-                        {formatPerformanceScore(recordPercent)}%
-                      </span>
+                      {record.signatureName && (
+                        <span className="text-xs font-black text-blue-700">
+                          확인 완료
+                        </span>
+                      )}
                     </div>
                   </button>
                 );
@@ -262,9 +401,9 @@ const PerformanceScoreView: React.FC = () => {
                   </p>
                 )}
               </div>
-              <div className="text-right">
+              <div className="text-left lg:text-right">
                 <div className="text-sm font-black text-slate-500">
-                  총점 / 만점
+                  획득 점수 / 만점
                 </div>
                 <div className="mt-1 text-4xl font-black text-blue-600">
                   {formatPerformanceScore(selectedRecord.totalScore)}
@@ -273,28 +412,49 @@ const PerformanceScoreView: React.FC = () => {
                     / {formatPerformanceScore(selectedRecord.totalMaxScore)}
                   </span>
                 </div>
+                <div className="mt-3 flex flex-wrap gap-2 lg:justify-end">
+                  {hasConfirmation ? (
+                    <span className="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-black text-blue-800">
+                      확인 완료
+                      {confirmedAt ? ` · ${formatDateTime(confirmedAt)}` : ""}
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setSignatureModalOpen(true)}
+                      className="inline-flex h-10 items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-black text-white shadow-sm transition hover:bg-blue-700"
+                    >
+                      점수 확인 및 서명
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
             <div className="mt-5 grid gap-5 xl:grid-cols-[220px_minmax(0,1fr)]">
-              <div className="flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-slate-50 p-5">
-                <div
-                  className="flex h-36 w-36 items-center justify-center rounded-full"
-                  style={{
-                    background: `conic-gradient(#2563eb 0 ${percent}%, #e2e8f0 ${percent}% 100%)`,
-                  }}
-                  aria-label={`총점 비율 ${formatPerformanceScore(percent)}퍼센트`}
-                >
-                  <div className="flex h-24 w-24 flex-col items-center justify-center rounded-full bg-white">
-                    <span className="text-3xl font-black text-slate-900">
-                      {formatPerformanceScore(percent)}
-                    </span>
-                    <span className="text-xs font-black text-slate-400">%</span>
-                  </div>
+              <div className="flex flex-col justify-center rounded-xl border border-blue-100 bg-blue-50 p-5">
+                <div className="text-sm font-black text-blue-800">
+                  내 획득 점수
                 </div>
-                <p className="mt-4 text-center text-sm font-bold leading-6 text-slate-500">
-                  만점 {formatPerformanceScore(selectedRecord.totalMaxScore)}점
-                  기준
+                <div className="mt-3 text-5xl font-black text-blue-700">
+                  {formatPerformanceScore(selectedRecord.totalScore)}
+                  <span className="ml-1 text-2xl text-blue-300">
+                    / {formatPerformanceScore(selectedRecord.totalMaxScore)}
+                  </span>
+                </div>
+                <div className="mt-5 h-3 overflow-hidden rounded-full bg-white">
+                  <div
+                    className="h-full rounded-full bg-blue-600"
+                    style={{ width: `${percent}%` }}
+                    aria-label={`획득 점수 ${formatPerformanceScore(
+                      selectedRecord.totalScore,
+                    )}점, 만점 ${formatPerformanceScore(
+                      selectedRecord.totalMaxScore,
+                    )}점`}
+                  />
+                </div>
+                <p className="mt-3 text-sm font-bold leading-6 text-blue-900/70">
+                  만점 기준 중 실제로 획득한 점수를 중심으로 표시합니다.
                 </p>
               </div>
 
@@ -309,6 +469,16 @@ const PerformanceScoreView: React.FC = () => {
                   </div>
                 )}
               </div>
+            </div>
+
+            <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-4">
+              <h3 className="text-base font-black text-blue-900">
+                감점 요인 및 평가 근거
+              </h3>
+              <p className="mt-2 whitespace-pre-wrap text-sm font-bold leading-7 text-slate-700">
+                {evidenceText ||
+                  "아직 입력된 평가 근거가 없습니다. 필요한 경우 수업 시간이나 상담 시간에 교사에게 확인하세요."}
+              </p>
             </div>
 
             <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
@@ -352,7 +522,7 @@ const PerformanceScoreView: React.FC = () => {
                         <>
                           {formatPerformanceScore(item.score)}점
                           <span className="ml-1 text-xs text-slate-400">
-                            ({formatPerformanceScore(itemPercent)}%)
+                            / {formatPerformanceScore(item.maxScore)}점
                           </span>
                         </>
                       ) : (
@@ -363,15 +533,84 @@ const PerformanceScoreView: React.FC = () => {
                 );
               })}
             </div>
+          </section>
+        </div>
+      )}
 
-            <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-4">
-              <h3 className="text-base font-black text-amber-900">
-                감점 요인 및 평가 근거
-              </h3>
-              <p className="mt-2 whitespace-pre-wrap text-sm font-bold leading-7 text-slate-700">
-                {evidenceText ||
-                  "아직 입력된 평가 근거가 없습니다. 필요한 경우 수업 시간이나 상담 시간에 교사에게 확인하세요."}
-              </p>
+      {signatureModalOpen && selectedRecord && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
+          <section className="w-full max-w-md rounded-xl bg-white p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-black text-slate-900">
+                  점수 확인 서명
+                </h3>
+                <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
+                  점수와 평가 근거를 확인했고 이의가 없으면 본인 이름을 입력해
+                  주세요.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSignatureModalOpen(false)}
+                disabled={confirming}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 disabled:opacity-40"
+                aria-label="서명 창 닫기"
+              >
+                <i className="fas fa-times" aria-hidden="true"></i>
+              </button>
+            </div>
+
+            <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 px-3 py-3">
+              <div className="text-sm font-black text-blue-900">
+                {selectedRecord.title}
+              </div>
+              <div className="mt-1 text-sm font-bold text-blue-700">
+                {formatPerformanceScore(selectedRecord.totalScore)} /{" "}
+                {formatPerformanceScore(selectedRecord.totalMaxScore)}점
+              </div>
+            </div>
+
+            <label className="mt-4 block">
+              <span className="text-xs font-black text-slate-600">
+                서명 이름
+              </span>
+              <input
+                type="text"
+                value={signatureName}
+                onChange={(event) => {
+                  setSignatureName(event.target.value);
+                  setSignatureError("");
+                }}
+                disabled={confirming}
+                className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-100"
+                placeholder={expectedSignatureName || "본인 이름"}
+              />
+            </label>
+
+            {signatureError && (
+              <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold leading-6 text-rose-700">
+                {signatureError}
+              </div>
+            )}
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setSignatureModalOpen(false)}
+                disabled={confirming}
+                className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:opacity-40"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={() => void submitSignatureConfirmation()}
+                disabled={confirming}
+                className="inline-flex h-10 items-center justify-center rounded-lg bg-blue-600 px-4 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:bg-slate-300"
+              >
+                {confirming ? "저장 중..." : "이의 없음 서명"}
+              </button>
             </div>
           </section>
         </div>
