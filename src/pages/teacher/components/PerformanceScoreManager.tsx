@@ -75,10 +75,11 @@ const CLASS_SHEET_STUDENT_END_ROW = 38;
 const CLASS_SHEET_SUMMARY_START_ROW = 39;
 const CLASS_SHEET_TEMPLATE_COLUMN_COUNT = 13;
 const CLASS_SHEET_SIGNATURE_START_COLUMN = 9;
-const CLASS_SHEET_SIGNATURE_HORIZONTAL_PADDING = 0.12;
-const CLASS_SHEET_SIGNATURE_VERTICAL_PADDING = 0.08;
-const CLASS_SHEET_SIGNATURE_IMAGE_MAX_WIDTH = 58;
-const CLASS_SHEET_SIGNATURE_IMAGE_MAX_HEIGHT = 14;
+const CLASS_SHEET_SIGNATURE_HORIZONTAL_PADDING = 0.05;
+const CLASS_SHEET_SIGNATURE_VERTICAL_PADDING = 0.02;
+const CLASS_SHEET_SIGNATURE_IMAGE_MAX_WIDTH = 64;
+const CLASS_SHEET_SIGNATURE_IMAGE_MAX_HEIGHT = 18;
+const CLASS_SHEET_SIGNATURE_CANVAS_SCALE = 2;
 const CLASS_SHEET_SIGNATURE_COLUMN_PIXEL_WIDTH = 64;
 const CLASS_SHEET_SIGNATURE_ROW_PIXEL_HEIGHT = 19;
 const XLSX_MIME_TYPE =
@@ -1094,7 +1095,51 @@ const trimClassSheetSignatureImage = async (dataUrl: string) => {
       croppedWidth,
       croppedHeight,
     );
-    return croppedCanvas.toDataURL("image/png");
+
+    const outputWidth =
+      CLASS_SHEET_SIGNATURE_IMAGE_MAX_WIDTH *
+      CLASS_SHEET_SIGNATURE_CANVAS_SCALE;
+    const outputHeight =
+      CLASS_SHEET_SIGNATURE_IMAGE_MAX_HEIGHT *
+      CLASS_SHEET_SIGNATURE_CANVAS_SCALE;
+    const outputCanvas = document.createElement("canvas");
+    outputCanvas.width = outputWidth;
+    outputCanvas.height = outputHeight;
+    const outputContext = outputCanvas.getContext("2d");
+    if (!outputContext) return croppedCanvas.toDataURL("image/png");
+
+    outputContext.imageSmoothingEnabled = true;
+    outputContext.imageSmoothingQuality = "high";
+    const outputPadding = 2 * CLASS_SHEET_SIGNATURE_CANVAS_SCALE;
+    const scale = Math.min(
+      (outputWidth - outputPadding * 2) / croppedWidth,
+      (outputHeight - outputPadding * 2) / croppedHeight,
+    );
+    const drawWidth = croppedWidth * scale;
+    const drawHeight = croppedHeight * scale;
+    const drawX = (outputWidth - drawWidth) / 2;
+    const drawY = (outputHeight - drawHeight) / 2;
+
+    outputContext.globalCompositeOperation = "source-over";
+    outputContext.globalAlpha = 0.72;
+    [
+      [-1, 0],
+      [1, 0],
+      [0, -1],
+      [0, 1],
+    ].forEach(([offsetX, offsetY]) => {
+      outputContext.drawImage(
+        croppedCanvas,
+        drawX + offsetX,
+        drawY + offsetY,
+        drawWidth,
+        drawHeight,
+      );
+    });
+    outputContext.globalAlpha = 1;
+    outputContext.drawImage(croppedCanvas, drawX, drawY, drawWidth, drawHeight);
+
+    return outputCanvas.toDataURL("image/png");
   } catch {
     return dataUrl;
   }
@@ -1142,23 +1187,6 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
     10,
     `교과담당교사 (${params.teacherName || "방재석"}) 인`,
   );
-  setWorksheetCellValue(
-    worksheet,
-    6,
-    5,
-    `${params.firstRoster?.title || "고조선 8조법 4컷 만화 그리기"}\n(만점 ${formatPerformanceScore(
-      params.firstRoster?.totalMaxScore || 20,
-    )})`,
-  );
-  setWorksheetCellValue(
-    worksheet,
-    6,
-    7,
-    `${params.secondRoster?.title || "삼국 시대 인물의 무덤에 평점 남기기"}\n(만점 ${formatPerformanceScore(
-      params.secondRoster?.totalMaxScore || 30,
-    )})`,
-  );
-
   for (
     let row = CLASS_SHEET_STUDENT_START_ROW;
     row <= studentEndRow;

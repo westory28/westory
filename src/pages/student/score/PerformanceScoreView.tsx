@@ -60,6 +60,8 @@ const getItemLabel = (
 const SIGNATURE_CANVAS_MIN_WIDTH = 420;
 const SIGNATURE_CANVAS_MAX_WIDTH = 660;
 const SIGNATURE_CANVAS_HEIGHT = 220;
+const SIGNATURE_STROKE_WIDTH = 14;
+const SIGNATURE_DOT_RADIUS = 5;
 const SIGNATURE_IMAGE_MAX_LENGTH = 110000;
 
 const getDataUrlStoredLength = (dataUrl: string) => dataUrl.length;
@@ -293,14 +295,14 @@ const PerformanceScoreView: React.FC = () => {
     if (!canvas || !context) return;
     context.strokeStyle = "#111827";
     context.fillStyle = "#111827";
-    context.lineWidth = 7;
+    context.lineWidth = SIGNATURE_STROKE_WIDTH;
     context.lineCap = "round";
     context.lineJoin = "round";
 
     const lastPoint = lastPointRef.current;
     if (!lastPoint) {
       context.beginPath();
-      context.arc(point.x, point.y, 2.5, 0, Math.PI * 2);
+      context.arc(point.x, point.y, SIGNATURE_DOT_RADIUS, 0, Math.PI * 2);
       context.fill();
       lastPointRef.current = point;
       return;
