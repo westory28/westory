@@ -77,8 +77,10 @@ const CLASS_SHEET_TEMPLATE_COLUMN_COUNT = 13;
 const CLASS_SHEET_SIGNATURE_START_COLUMN = 9;
 const CLASS_SHEET_SIGNATURE_HORIZONTAL_PADDING = 0.12;
 const CLASS_SHEET_SIGNATURE_VERTICAL_PADDING = 0.08;
-const CLASS_SHEET_SIGNATURE_IMAGE_WIDTH = 58;
-const CLASS_SHEET_SIGNATURE_IMAGE_HEIGHT = 14;
+const CLASS_SHEET_SIGNATURE_IMAGE_MAX_WIDTH = 58;
+const CLASS_SHEET_SIGNATURE_IMAGE_MAX_HEIGHT = 14;
+const CLASS_SHEET_SIGNATURE_COLUMN_PIXEL_WIDTH = 64;
+const CLASS_SHEET_SIGNATURE_ROW_PIXEL_HEIGHT = 19;
 const XLSX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -927,20 +929,6 @@ const fetchClassSheetTemplate = async () => {
   throw new Error(`class-sheet-template-not-found:${errors.join(", ")}`);
 };
 
-const getClassSheetSignatureImagePosition = (row: number) => ({
-  tl: {
-    col:
-      CLASS_SHEET_SIGNATURE_START_COLUMN +
-      CLASS_SHEET_SIGNATURE_HORIZONTAL_PADDING,
-    row: row - 1 + CLASS_SHEET_SIGNATURE_VERTICAL_PADDING,
-  },
-  ext: {
-    width: CLASS_SHEET_SIGNATURE_IMAGE_WIDTH,
-    height: CLASS_SHEET_SIGNATURE_IMAGE_HEIGHT,
-  },
-  editAs: "oneCell",
-});
-
 const normalizeClassSheetSignatureImage = (signatureImage: string) => {
   const trimmed = String(signatureImage || "").trim();
   if (!trimmed) return "";
@@ -949,6 +937,167 @@ const normalizeClassSheetSignatureImage = (signatureImage: string) => {
     return `data:image/png;base64,${trimmed}`;
   }
   return "";
+};
+
+const getClassSheetSignatureBase64Payload = (dataUrl: string) =>
+  (dataUrl.includes(",") ? dataUrl.split(",")[1] : dataUrl).replace(/\s/g, "");
+
+const decodeClassSheetSignatureHeader = (dataUrl: string) => {
+  if (typeof window === "undefined" || typeof window.atob !== "function") {
+    return "";
+  }
+  try {
+    return window.atob(
+      getClassSheetSignatureBase64Payload(dataUrl).slice(0, 96),
+    );
+  } catch {
+    return "";
+  }
+};
+
+const getClassSheetSignaturePngDimensions = (dataUrl: string) => {
+  const header = decodeClassSheetSignatureHeader(dataUrl);
+  if (header.length < 24) return null;
+  const signature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  if (signature.some((code, index) => header.charCodeAt(index) !== code)) {
+    return null;
+  }
+  const readUInt32 = (offset: number) =>
+    header.charCodeAt(offset) * 0x1000000 +
+    header.charCodeAt(offset + 1) * 0x10000 +
+    header.charCodeAt(offset + 2) * 0x100 +
+    header.charCodeAt(offset + 3);
+  const width = readUInt32(16);
+  const height = readUInt32(20);
+  return width > 0 && height > 0 ? { width, height } : null;
+};
+
+const getClassSheetSignatureImageSize = (dataUrl: string) => {
+  const dimensions = getClassSheetSignaturePngDimensions(dataUrl);
+  const sourceWidth =
+    dimensions?.width || CLASS_SHEET_SIGNATURE_IMAGE_MAX_WIDTH;
+  const sourceHeight =
+    dimensions?.height || CLASS_SHEET_SIGNATURE_IMAGE_MAX_HEIGHT;
+  const ratio = sourceWidth / sourceHeight;
+  const maxRatio =
+    CLASS_SHEET_SIGNATURE_IMAGE_MAX_WIDTH /
+    CLASS_SHEET_SIGNATURE_IMAGE_MAX_HEIGHT;
+
+  if (!Number.isFinite(ratio) || ratio <= 0) {
+    return {
+      width: CLASS_SHEET_SIGNATURE_IMAGE_MAX_WIDTH,
+      height: CLASS_SHEET_SIGNATURE_IMAGE_MAX_HEIGHT,
+    };
+  }
+
+  if (ratio > maxRatio) {
+    return {
+      width: CLASS_SHEET_SIGNATURE_IMAGE_MAX_WIDTH,
+      height: Math.max(1, CLASS_SHEET_SIGNATURE_IMAGE_MAX_WIDTH / ratio),
+    };
+  }
+
+  return {
+    width: Math.max(1, CLASS_SHEET_SIGNATURE_IMAGE_MAX_HEIGHT * ratio),
+    height: CLASS_SHEET_SIGNATURE_IMAGE_MAX_HEIGHT,
+  };
+};
+
+const getClassSheetSignatureImagePosition = (row: number, dataUrl: string) => {
+  const size = getClassSheetSignatureImageSize(dataUrl);
+  const horizontalCenterOffset =
+    Math.max(0, CLASS_SHEET_SIGNATURE_IMAGE_MAX_WIDTH - size.width) /
+    2 /
+    CLASS_SHEET_SIGNATURE_COLUMN_PIXEL_WIDTH;
+  const verticalCenterOffset =
+    Math.max(0, CLASS_SHEET_SIGNATURE_IMAGE_MAX_HEIGHT - size.height) /
+    2 /
+    CLASS_SHEET_SIGNATURE_ROW_PIXEL_HEIGHT;
+
+  return {
+    tl: {
+      col:
+        CLASS_SHEET_SIGNATURE_START_COLUMN +
+        CLASS_SHEET_SIGNATURE_HORIZONTAL_PADDING +
+        horizontalCenterOffset,
+      row:
+        row - 1 + CLASS_SHEET_SIGNATURE_VERTICAL_PADDING + verticalCenterOffset,
+    },
+    ext: size,
+    editAs: "oneCell",
+  };
+};
+
+const trimClassSheetSignatureImage = async (dataUrl: string) => {
+  if (typeof document === "undefined") return dataUrl;
+
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const element = new Image();
+      element.onload = () => resolve(element);
+      element.onerror = () => reject(new Error("signature-image-load-failed"));
+      element.src = dataUrl;
+    });
+    const width = image.naturalWidth || image.width;
+    const height = image.naturalHeight || image.height;
+    if (!width || !height) return dataUrl;
+
+    const sourceCanvas = document.createElement("canvas");
+    sourceCanvas.width = width;
+    sourceCanvas.height = height;
+    const sourceContext = sourceCanvas.getContext("2d");
+    if (!sourceContext) return dataUrl;
+    sourceContext.drawImage(image, 0, 0, width, height);
+
+    const pixels = sourceContext.getImageData(0, 0, width, height).data;
+    let minX = width;
+    let minY = height;
+    let maxX = -1;
+    let maxY = -1;
+
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const alpha = pixels[(y * width + x) * 4 + 3];
+        if (alpha <= 8) continue;
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
+    }
+
+    if (maxX < 0 || maxY < 0) return dataUrl;
+    const padding = Math.max(
+      4,
+      Math.ceil(Math.max(maxX - minX, maxY - minY) * 0.04),
+    );
+    minX = Math.max(0, minX - padding);
+    minY = Math.max(0, minY - padding);
+    maxX = Math.min(width - 1, maxX + padding);
+    maxY = Math.min(height - 1, maxY + padding);
+
+    const croppedWidth = maxX - minX + 1;
+    const croppedHeight = maxY - minY + 1;
+    const croppedCanvas = document.createElement("canvas");
+    croppedCanvas.width = croppedWidth;
+    croppedCanvas.height = croppedHeight;
+    const croppedContext = croppedCanvas.getContext("2d");
+    if (!croppedContext) return dataUrl;
+    croppedContext.drawImage(
+      sourceCanvas,
+      minX,
+      minY,
+      croppedWidth,
+      croppedHeight,
+      0,
+      0,
+      croppedWidth,
+      croppedHeight,
+    );
+    return croppedCanvas.toDataURL("image/png");
+  } catch {
+    return dataUrl;
+  }
 };
 
 const buildClassSummaryWorkbookFromTemplate = async (params: {
@@ -1026,7 +1175,7 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
     title: string;
     description: string;
   }> = [];
-  params.students.forEach((student, index) => {
+  for (const [index, student] of params.students.entries()) {
     const row = CLASS_SHEET_STUDENT_START_ROW + index;
     const firstScore = getScoreNumber(student.firstRecord);
     const secondScore = getScoreNumber(student.secondRecord);
@@ -1057,9 +1206,12 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
     const signatureImageDataUrl =
       normalizeClassSheetSignatureImage(signatureImage);
     if (signatureImageDataUrl) {
+      const trimmedSignatureImageDataUrl = await trimClassSheetSignatureImage(
+        signatureImageDataUrl,
+      );
       imagesToAdd.push({
         row,
-        dataUrl: signatureImageDataUrl,
+        dataUrl: trimmedSignatureImageDataUrl,
         title: `${student.studentName} 서명`,
         description: `${student.studentName} 수행평가 점수 확인 서명`,
       });
@@ -1069,7 +1221,7 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
         studentName: student.studentName,
       });
     }
-  });
+  }
 
   const firstScores = params.students
     .map((student) => getScoreNumber(student.firstRecord))
@@ -1124,7 +1276,7 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
       extension: "png",
     });
     worksheet.addImage(imageId, {
-      ...getClassSheetSignatureImagePosition(image.row),
+      ...getClassSheetSignatureImagePosition(image.row, image.dataUrl),
     });
   });
 
