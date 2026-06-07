@@ -710,6 +710,8 @@ const getNotificationInboxPath = (year, semester, uid) => `${getSemesterRoot(yea
 const getNotificationItemsPath = (year, semester, uid) => `${getNotificationInboxPath(year, semester, uid)}/items`;
 const getBroadcastNotificationsPath = (year, semester) => `${getSemesterRoot(year, semester)}/broadcast_notifications`;
 const NOTIFICATION_CONFIG_PATH = 'site_settings/notification_config';
+const PERFORMANCE_SCORE_USER_COLLECTION = 'performance_scores';
+const PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION = 'confirmations';
 const NOTIFICATION_EVENT_AUDIENCE = {
   history_classroom_assigned: 'students',
   history_classroom_passed: 'teachers',
@@ -717,6 +719,7 @@ const NOTIFICATION_EVENT_AUDIENCE = {
   history_classroom_exemption_granted: 'students',
   history_classroom_exemption_requested: 'teachers',
   history_classroom_exemption_reviewed: 'students',
+  performance_score_objection_requested: 'teachers',
   history_dictionary_requested: 'teachers',
   history_dictionary_resolved: 'students',
   history_dictionary_rejected: 'students',
@@ -1959,6 +1962,124 @@ const resolveTeacherNotificationRecipientUids = async () => {
     ...teacherSnap.docs.map((docSnap) => docSnap.id),
     ...quizStaffSnap.docs.map((docSnap) => docSnap.id),
   ]);
+};
+
+const resolvePerformanceScoreNotificationRecipientUids = async (preferredTeacherUids = []) => {
+  const adminUids = await getAdminRecipientUids();
+  const preferredUids = uniqueNonEmptyStrings(preferredTeacherUids, 50);
+  if (preferredUids.length > 0) {
+    const preferredSnaps = await Promise.all(
+      preferredUids.map((uid) => db.doc(`users/${uid}`).get().catch(() => null)),
+    );
+    const verifiedTeacherUids = preferredSnaps
+      .filter((snap) => snap?.exists && String(snap.data()?.role || '').trim() === 'teacher')
+      .map((snap) => snap.id);
+    if (verifiedTeacherUids.length > 0) {
+      return uniqueNonEmptyStrings([...adminUids, ...verifiedTeacherUids]);
+    }
+  }
+
+  const teacherSnap = await db.collection('users').where('role', '==', 'teacher').get();
+  return uniqueNonEmptyStrings([
+    ...adminUids,
+    ...teacherSnap.docs.map((docSnap) => docSnap.id),
+  ]);
+};
+
+const hasCompletePerformanceScoreSignatureData = (data) =>
+  typeof data?.signatureImage === 'string'
+  && data.signatureImage.trim().length > 0
+  && typeof data?.signatureName === 'string'
+  && data.signatureName.trim().length > 0;
+
+const loadStudentPerformanceScoreForNotification = async (uid, year, semester, scoreId) => {
+  const scoreRef = db.doc(`users/${uid}/${PERFORMANCE_SCORE_USER_COLLECTION}/${scoreId}`);
+  const scoreSnap = await scoreRef.get();
+  if (!scoreSnap.exists) {
+    throw new HttpsError('not-found', 'Performance score does not exist.');
+  }
+
+  const scoreData = scoreSnap.data() || {};
+  if (String(scoreData.uid || '').trim() !== uid) {
+    throw new HttpsError('permission-denied', 'Performance score belongs to another user.');
+  }
+  if (String(scoreData.rosterId || '').trim() !== scoreId) {
+    throw new HttpsError('invalid-argument', 'Performance score id does not match roster id.');
+  }
+  if (
+    String(scoreData.academicYear || '').trim() !== year
+    || String(scoreData.semester || '').trim() !== semester
+  ) {
+    throw new HttpsError('invalid-argument', 'Performance score is outside the requested semester.');
+  }
+  if (hasCompletePerformanceScoreSignatureData(scoreData)) {
+    throw new HttpsError('failed-precondition', 'Performance score is already confirmed.');
+  }
+
+  const confirmationSnap = await db
+    .doc(`users/${uid}/${PERFORMANCE_SCORE_USER_COLLECTION}/${scoreId}/${PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION}/${uid}`)
+    .get();
+  if (confirmationSnap.exists && hasCompletePerformanceScoreSignatureData(confirmationSnap.data() || {})) {
+    throw new HttpsError('failed-precondition', 'Performance score confirmation already exists.');
+  }
+
+  return { id: scoreSnap.id, data: scoreData };
+};
+
+const createPerformanceScoreObjectionRequestedNotifications = async (year, semester, input) => {
+  const actorUid = sanitizeNotificationText(input.actorUid, 160);
+  const scoreIds = uniqueNonEmptyStrings(input.scoreIds, 20);
+  const sortedScoreIds = [...scoreIds].sort();
+  const objectionReason = sanitizeNotificationText(input.reason, 300);
+  if (!actorUid || scoreIds.length === 0) return [];
+
+  const profile = input.profile || {};
+  const records = Array.isArray(input.records) ? input.records : [];
+  const firstRecord = records[0]?.data || {};
+  const studentName = sanitizeNotificationText(
+    profile.name || firstRecord.studentName,
+    40,
+    '학생',
+  );
+  const grade = sanitizeNotificationText(profile.grade || firstRecord.grade, 12);
+  const className = sanitizeNotificationText(profile.class || firstRecord.class, 12);
+  const number = sanitizeNotificationText(profile.number || firstRecord.number, 12);
+  const scoreTitles = uniqueNonEmptyStrings(
+    records.map((record) => sanitizeNotificationText(record?.data?.title, 80, '수행평가')),
+    20,
+  );
+  const titleLabel = scoreTitles.length > 1
+    ? `${scoreTitles[0]} 외 ${scoreTitles.length - 1}건`
+    : scoreTitles[0] || '수행평가';
+  const studentScopeLabel = [grade && `${grade}학년`, className && `${className}반`, number && `${number}번`]
+    .filter(Boolean)
+    .join(' ');
+  const objectionHash = crypto
+    .createHash('sha1')
+    .update(`${year}:${semester}:${actorUid}:${sortedScoreIds.join('|')}`)
+    .digest('hex');
+  const recipients = await resolvePerformanceScoreNotificationRecipientUids(
+    records.map((record) => record?.data?.uploadedBy),
+  );
+
+  return createUserNotifications(year, semester, recipients, {
+    type: 'performance_score_objection_requested',
+    title: '수행평가 점수 이의 제기',
+    body: `${studentName} 학생이 ${titleLabel} 점수에 이의를 제기했습니다. 사유: ${objectionReason}`,
+    targetUrl: '/teacher/exam?tab=performance',
+    entityType: 'performance_score_objection',
+    entityId: objectionHash,
+    actorUid,
+    priority: 'high',
+    dedupeKey: `performance_score_objection_requested:${year}:${semester}:${actorUid}:${sortedScoreIds.join('|')}`,
+    templateValues: {
+      studentName,
+      studentScope: studentScopeLabel,
+      scoreTitle: titleLabel,
+      scoreCount: scoreIds.length,
+      reason: objectionReason,
+    },
+  });
 };
 
 const createHistoryClassroomPassedNotifications = async (year, semester, input) => {
@@ -4334,6 +4455,45 @@ exports.notifyHistoryClassroomSubmitted = onCall({ region: REGION }, async (requ
     recipientCount: notificationResults.length,
   };
 
+});
+
+exports.notifyPerformanceScoreObjectionRequested = onCall({ region: REGION }, async (request) => {
+  const { uid } = assertAllowedWestoryUser(request);
+  const { year, semester } = assertYearSemester(request.data);
+  const scoreIds = uniqueNonEmptyStrings(request.data?.scoreIds, 20).map((scoreId) =>
+    sanitizeNotificationText(scoreId, 160),
+  ).filter(Boolean);
+  const reason = sanitizeNotificationText(request.data?.reason, 300);
+  if (scoreIds.length === 0) {
+    throw new HttpsError('invalid-argument', 'scoreIds are required.');
+  }
+  if (!reason) {
+    throw new HttpsError('invalid-argument', 'reason is required.');
+  }
+
+  const { profile } = await getUserProfile(uid);
+  if (String(profile?.role || '').trim() !== 'student') {
+    throw new HttpsError('permission-denied', 'Only students can request performance score objections.');
+  }
+
+  const records = await Promise.all(
+    scoreIds.map((scoreId) =>
+      loadStudentPerformanceScoreForNotification(uid, year, semester, scoreId),
+    ),
+  );
+  const notificationResults = await createPerformanceScoreObjectionRequestedNotifications(year, semester, {
+    actorUid: uid,
+    profile,
+    scoreIds,
+    records,
+    reason,
+  });
+
+  return {
+    createdCount: notificationResults.filter((result) => result.created).length,
+    skippedCount: notificationResults.filter((result) => result.skipped).length,
+    recipientCount: notificationResults.length,
+  };
 });
 
 exports.saveWisHallOfFameConfig = onCall({ region: REGION }, async (request) => {

@@ -275,6 +275,30 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     ],
   },
   {
+    key: "performance_score_objection_requested",
+    label: "수행평가 점수 이의 제기",
+    audience: "teachers",
+    description:
+      "학생이 수행평가 점수 확인 전에 이의 제기를 요청했을 때 담당 교사에게 안내합니다.",
+    triggerLabel: "학생이 수행평가 점수 이의를 제기했을 때",
+    recipientLabel: "점수표 업로드 교사·관리자",
+    status: "connected",
+    defaultEnabled: true,
+    defaultPriority: "high",
+    titleTemplate: "수행평가 점수 이의 제기",
+    bodyTemplate:
+      "{studentName} 학생이 {scoreTitle} 점수에 이의를 제기했습니다. 사유: {reason}",
+    targetUrl: "/teacher/exam?tab=performance",
+    targetLabel: "교사 수행평가 점수 관리 화면",
+    tokens: [
+      { key: "studentName", label: "학생 이름" },
+      { key: "studentScope", label: "학생 학급" },
+      { key: "scoreTitle", label: "수행평가명" },
+      { key: "scoreCount", label: "선택 평가 수" },
+      { key: "reason", label: "이의 제기 사유" },
+    ],
+  },
+  {
     key: "point_order_requested",
     label: "위스 상점 신청",
     audience: "teachers",

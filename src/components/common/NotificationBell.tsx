@@ -42,6 +42,7 @@ const formatNotificationTime = (value: unknown) => {
 const getNotificationIconClassName = (type: WestoryNotification["type"]) => {
   if (type.startsWith("history_classroom")) return "fas fa-landmark";
   if (type.startsWith("history_dictionary")) return "fas fa-book-open";
+  if (type.startsWith("performance_score")) return "fas fa-clipboard-check";
   if (type.startsWith("point_order")) return "fas fa-store";
   if (type.startsWith("lesson")) return "fas fa-file-lines";
   if (type.startsWith("question")) return "fas fa-circle-question";
@@ -73,6 +74,12 @@ const getNotificationTargetUrl = (notification: WestoryNotification) => {
   if (notification.type === "point_order_requested") {
     if (!targetUrl || targetUrl === "/teacher/points") {
       return "/teacher/points?tab=requests";
+    }
+    return targetUrl;
+  }
+  if (notification.type === "performance_score_objection_requested") {
+    if (!targetUrl || targetUrl === "/teacher/exam") {
+      return "/teacher/exam?tab=performance";
     }
     return targetUrl;
   }

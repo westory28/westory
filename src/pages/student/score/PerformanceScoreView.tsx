@@ -9,8 +9,10 @@ import {
 } from "chart.js";
 import { doc, getDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { PageLoading } from "../../../components/common/LoadingState";
+import { useAppToast } from "../../../components/common/AppToastProvider";
 import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
+import { notifyPerformanceScoreObjectionRequested } from "../../../lib/notifications";
 import { getYearSemester } from "../../../lib/semesterScope";
 import {
   PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
@@ -97,8 +99,29 @@ const getSignatureSaveErrorMessage = (error: unknown) => {
   return "점수 확인 서명을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.";
 };
 
+const getPerformanceScoreObjectionErrorMessage = (error: unknown) => {
+  const code =
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof (error as { code?: unknown }).code === "string"
+      ? (error as { code: string }).code
+      : "";
+  if (code === "permission-denied") {
+    return "이의 제기 요청 권한이 거부되었습니다. 로그인 학생 정보를 다시 확인해 주세요.";
+  }
+  if (code === "failed-precondition") {
+    return "이미 확인 서명이 완료된 점수는 이의 제기 요청을 보낼 수 없습니다.";
+  }
+  if (code === "unavailable" || code === "deadline-exceeded") {
+    return "이의 제기 알림 서버 연결이 불안정합니다. 잠시 후 다시 시도해 주세요.";
+  }
+  return "이의 제기 알림을 보내지 못했습니다. 잠시 후 다시 시도해 주세요.";
+};
+
 const PerformanceScoreView: React.FC = () => {
   const { currentUser, userData, config } = useAuth();
+  const { showToast } = useAppToast();
   const { year, semester } = getYearSemester(config);
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState<PerformanceScoreRecord[]>([]);
@@ -112,6 +135,13 @@ const PerformanceScoreView: React.FC = () => {
   const [signatureImageDraft, setSignatureImageDraft] = useState("");
   const [signatureError, setSignatureError] = useState("");
   const [confirming, setConfirming] = useState(false);
+  const [objectionModalOpen, setObjectionModalOpen] = useState(false);
+  const [objecting, setObjecting] = useState(false);
+  const [objectionError, setObjectionError] = useState("");
+  const [objectionSelectedIds, setObjectionSelectedIds] = useState<string[]>(
+    [],
+  );
+  const [objectionReason, setObjectionReason] = useState("");
   const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const signatureDrawnRef = useRef(false);
   const drawingRef = useRef(false);
@@ -222,10 +252,12 @@ const PerformanceScoreView: React.FC = () => {
   const confirmedRecordCount = records.filter(isRecordConfirmed).length;
   const allScoresConfirmed =
     records.length > 0 && confirmedRecordCount === records.length;
+  const pendingRecords = records.filter((record) => !isRecordConfirmed(record));
+  const signatureActionPending = confirming || objecting;
 
-  const getStudentIdentityError = () => {
+  const getStudentIdentityError = (targetRecords = records) => {
     if (!currentUser?.uid) return "로그인한 학생 정보를 확인하지 못했습니다.";
-    if (!records.length) return "확인할 수행평가 점수가 없습니다.";
+    if (!targetRecords.length) return "확인할 수행평가 점수가 없습니다.";
     if (!expectedSignatureName.trim()) {
       return "학생 이름을 확인하지 못했습니다. 마이페이지의 이름 정보를 확인해 주세요.";
     }
@@ -235,7 +267,7 @@ const PerformanceScoreView: React.FC = () => {
     const expectedClass = normalizeSchoolValue(userData?.class);
     const expectedNumber = normalizeSchoolValue(userData?.number);
 
-    for (const record of records) {
+    for (const record of targetRecords) {
       const scoreId = getRecordScoreId(record);
       if (!scoreId) {
         return `${record.title} 점수 문서의 식별자를 확인하지 못했습니다.`;
@@ -349,8 +381,54 @@ const PerformanceScoreView: React.FC = () => {
   };
 
   const closeSignatureModal = () => {
-    if (confirming) return;
+    if (signatureActionPending) return;
     setSignatureModalOpen(false);
+  };
+
+  const getDefaultObjectionScoreIds = () => {
+    const selectedScoreId = selectedRecord
+      ? getRecordScoreId(selectedRecord)
+      : "";
+    if (
+      selectedScoreId &&
+      selectedRecord &&
+      !isRecordConfirmed(selectedRecord)
+    ) {
+      return [selectedScoreId];
+    }
+    const firstPendingId = pendingRecords[0]
+      ? getRecordScoreId(pendingRecords[0])
+      : "";
+    return firstPendingId ? [firstPendingId] : [];
+  };
+
+  const openObjectionModal = () => {
+    if (allScoresConfirmed) {
+      showToast({
+        title: "이의 제기 불가",
+        message:
+          "이미 점수 확인과 서명이 완료되었습니다. 제출 후에는 담당 교사의 반려 없이 이의를 제기할 수 없습니다.",
+        tone: "warning",
+      });
+      return;
+    }
+    if (pendingRecords.length === 0) {
+      showToast({
+        title: "이의 제기 불가",
+        message: "이의 제기할 수행평가 점수가 없습니다.",
+        tone: "warning",
+      });
+      return;
+    }
+    setObjectionReason("");
+    setObjectionError("");
+    setObjectionSelectedIds(getDefaultObjectionScoreIds());
+    setObjectionModalOpen(true);
+  };
+
+  const closeObjectionModal = () => {
+    if (objecting) return;
+    setObjectionModalOpen(false);
   };
 
   const getSignatureImageDataUrl = () => {
@@ -428,8 +506,94 @@ const PerformanceScoreView: React.FC = () => {
     setSignatureReviewStep("review");
   };
 
+  const toggleObjectionScore = (scoreId: string, checked: boolean) => {
+    if (!scoreId) return;
+    setObjectionError("");
+    setObjectionSelectedIds((current) => {
+      const next = new Set(current);
+      if (checked) {
+        next.add(scoreId);
+      } else {
+        next.delete(scoreId);
+      }
+      return Array.from(next);
+    });
+  };
+
+  const submitPerformanceScoreObjection = async () => {
+    if (!currentUser?.uid || signatureActionPending) return;
+    const validScoreIds = new Set(pendingRecords.map(getRecordScoreId));
+    const selectedScoreIds = Array.from(new Set(objectionSelectedIds)).filter(
+      (scoreId) => scoreId && validScoreIds.has(scoreId),
+    );
+    if (selectedScoreIds.length === 0) {
+      setObjectionError("이의 제기할 수행평가를 선택해 주세요.");
+      return;
+    }
+    const selectedRecords = pendingRecords.filter((record) =>
+      selectedScoreIds.includes(getRecordScoreId(record)),
+    );
+    const identityError = getStudentIdentityError(selectedRecords);
+    if (identityError) {
+      setObjectionError(identityError);
+      return;
+    }
+    const reason = objectionReason.replace(/\s+/g, " ").trim();
+    if (!reason) {
+      setObjectionError("이의 제기 사유를 입력해 주세요.");
+      return;
+    }
+    if (reason.length > 300) {
+      setObjectionError("이의 제기 사유는 300자 이내로 입력해 주세요.");
+      return;
+    }
+
+    setObjecting(true);
+    setObjectionError("");
+    try {
+      const result = await notifyPerformanceScoreObjectionRequested(config, {
+        scoreIds: selectedScoreIds,
+        reason,
+      });
+      if (
+        result.recipientCount <= 0 ||
+        (result.skippedCount || 0) >= result.recipientCount
+      ) {
+        setObjectionError(
+          "교사 알림 설정 때문에 이의 제기 알림을 생성하지 못했습니다. 담당 교사에게 직접 알려 주세요.",
+        );
+        return;
+      }
+      setObjectionModalOpen(false);
+      setSignatureModalOpen(false);
+      setObjectionReason("");
+      if (result.createdCount > 0) {
+        showToast({
+          title: "이의 제기를 전달했습니다.",
+          message:
+            "선택한 수행평가와 사유가 담당 교사에게 알림으로 전송되었습니다.",
+          tone: "warning",
+          durationMs: 4800,
+        });
+      } else {
+        showToast({
+          title: "이미 이의 제기가 전달되어 있습니다.",
+          message:
+            "같은 수행평가에 대한 기존 알림이 있어 새 알림은 만들지 않았습니다.",
+          tone: "info",
+          durationMs: 4600,
+        });
+      }
+    } catch (error) {
+      console.error("Failed to request performance score objection:", error);
+      setObjectionError(getPerformanceScoreObjectionErrorMessage(error));
+    } finally {
+      setObjecting(false);
+    }
+  };
+
   const submitSignatureConfirmation = async () => {
-    if (!currentUser?.uid) return;
+    if (!currentUser?.uid || objecting) return;
     if (allScoresConfirmed) {
       setSignatureError(
         "이미 점수 확인과 서명이 완료되었습니다. 담당 교사가 반려한 경우에만 다시 서명할 수 있습니다.",
@@ -620,10 +784,10 @@ const PerformanceScoreView: React.FC = () => {
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl px-4 py-6 lg:px-6">
+    <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-10">
       <div className="mb-5 rounded-xl border border-slate-200 bg-white px-5 py-5 shadow-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div>
+          <div className="min-w-0 break-keep">
             <h1 className="text-2xl font-black text-slate-900">
               내 수행평가 점수
             </h1>
@@ -632,36 +796,41 @@ const PerformanceScoreView: React.FC = () => {
               평가요소별 점수, 감점 요인과 평가 근거만 표시됩니다.
             </p>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="rounded-full bg-blue-50 px-4 py-2 text-sm font-black text-blue-700">
-              {userData?.grade || "-"}학년 {userData?.class || "-"}반{" "}
-              {userData?.number || "-"}번
-            </div>
+          <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
             {selectedRecord &&
               (allScoresConfirmed ? (
                 <button
                   type="button"
                   disabled
                   aria-disabled="true"
-                  className="inline-flex h-11 cursor-not-allowed items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-4 text-sm font-black text-blue-800 opacity-80"
+                  className="inline-flex min-h-11 cursor-not-allowed items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-black leading-5 text-blue-800 opacity-80"
                 >
                   점수 확인 완료 {confirmedRecordCount}/{records.length}
                 </button>
               ) : (
-                <button
-                  type="button"
-                  onClick={openSignatureModal}
-                  className="inline-flex h-11 items-center justify-center rounded-lg bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700"
-                >
-                  점수 확인 및 서명
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={openObjectionModal}
+                    className="inline-flex min-h-11 items-center justify-center rounded-lg border border-rose-200 bg-white px-5 py-2 text-sm font-black leading-5 text-rose-700 transition hover:bg-rose-50"
+                  >
+                    이의 제기
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openSignatureModal}
+                    className="inline-flex min-h-11 items-center justify-center rounded-lg bg-blue-600 px-5 py-2 text-sm font-black leading-5 text-white shadow-sm transition hover:bg-blue-700"
+                  >
+                    점수 확인 및 서명하기
+                  </button>
+                </>
               ))}
           </div>
         </div>
       </div>
 
       {!selectedRecord ? (
-        <div className="rounded-xl border border-dashed border-slate-200 bg-white px-4 py-16 text-center shadow-sm">
+        <div className="break-keep rounded-xl border border-dashed border-slate-200 bg-white px-4 py-16 text-center shadow-sm">
           <div className="text-lg font-black text-slate-700">
             아직 등록된 수행평가 점수가 없습니다.
           </div>
@@ -671,52 +840,65 @@ const PerformanceScoreView: React.FC = () => {
           </p>
         </div>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
-          <aside className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="text-sm font-black text-slate-500">점수 목록</h2>
-            <div className="mt-3 space-y-2">
-              {records.map((record) => {
-                const active =
-                  record.id === selectedRecord.id ||
-                  (!selectedRecord.id && record.id === records[0]?.id);
-                return (
-                  <button
-                    key={record.id || record.rosterId}
-                    type="button"
-                    onClick={() => setSelectedId(record.id || "")}
-                    className={`w-full rounded-lg border px-3 py-3 text-left transition ${
-                      active
-                        ? "border-blue-300 bg-blue-50"
-                        : "border-slate-200 bg-white hover:bg-slate-50"
-                    }`}
-                  >
-                    <div className="truncate text-sm font-black text-slate-900">
-                      {record.title}
-                    </div>
-                    <div className="mt-2 flex items-center justify-between gap-3">
-                      <span className="text-xs font-bold text-slate-500">
-                        획득 {formatPerformanceScore(record.totalScore)} /{" "}
-                        {formatPerformanceScore(record.totalMaxScore)}
-                      </span>
-                      {record.signatureName && (
-                        <span className="text-xs font-black text-blue-700">
-                          확인 완료
+        <div className="flex flex-col gap-6 lg:flex-row lg:gap-8">
+          <aside className="w-full shrink-0 lg:w-72">
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm lg:sticky lg:top-24">
+              <div className="border-b border-slate-100 px-4 py-4">
+                <h2 className="flex items-center gap-2 text-sm font-black text-slate-700">
+                  <i
+                    className="fas fa-clipboard-list text-blue-600"
+                    aria-hidden="true"
+                  ></i>
+                  점수 목록
+                </h2>
+              </div>
+              <nav
+                className="flex gap-2 overflow-x-auto p-3 lg:flex-col lg:overflow-visible"
+                aria-label="수행평가 점수 목록"
+              >
+                {records.map((record) => {
+                  const active =
+                    record.id === selectedRecord.id ||
+                    (!selectedRecord.id && record.id === records[0]?.id);
+                  return (
+                    <button
+                      key={record.id || record.rosterId}
+                      type="button"
+                      onClick={() => setSelectedId(record.id || "")}
+                      className={`min-w-[15rem] rounded-lg border px-3 py-3 text-left transition lg:min-w-0 ${
+                        active
+                          ? "border-blue-300 bg-blue-50 shadow-sm"
+                          : "border-slate-200 bg-white hover:bg-slate-50"
+                      }`}
+                    >
+                      <div className="whitespace-normal break-keep text-sm font-black leading-5 text-slate-900">
+                        {record.title}
+                      </div>
+                      <div className="mt-2 flex items-center justify-between gap-3">
+                        <span className="text-xs font-bold text-slate-500">
+                          획득 {formatPerformanceScore(record.totalScore)} /{" "}
+                          {formatPerformanceScore(record.totalMaxScore)}
                         </span>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
+                        {record.signatureName && (
+                          <span className="text-xs font-black text-blue-700">
+                            확인 완료
+                          </span>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </nav>
             </div>
           </aside>
 
-          <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <section className="min-w-0 flex-1 break-keep rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex flex-col gap-4 border-b border-slate-100 pb-5 lg:flex-row lg:items-start lg:justify-between">
-              <div>
+              <div className="min-w-0">
                 <div className="text-sm font-black text-blue-700">
                   {selectedRecord.subject || "수행평가"}
                 </div>
-                <h2 className="mt-1 text-2xl font-black text-slate-900">
+                <h2 className="mt-1 whitespace-normal break-keep text-2xl font-black leading-tight text-slate-900">
                   {selectedRecord.title}
                 </h2>
                 {getRecordDate(selectedRecord) && (
@@ -751,7 +933,7 @@ const PerformanceScoreView: React.FC = () => {
               </div>
             </div>
 
-            <div className="mt-5 grid gap-5 xl:grid-cols-[220px_minmax(0,1fr)]">
+            <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(240px,280px)_minmax(0,1fr)]">
               <div className="flex flex-col justify-center rounded-xl border border-blue-100 bg-blue-50 p-5">
                 <div className="text-sm font-black text-blue-800">
                   내 획득 점수
@@ -773,8 +955,8 @@ const PerformanceScoreView: React.FC = () => {
                     )}점`}
                   />
                 </div>
-                <p className="mt-3 text-sm font-bold leading-6 text-blue-900/70">
-                  만점 기준 중 실제로 획득한 점수를 중심으로 표시합니다.
+                <p className="mt-3 whitespace-normal break-keep text-sm font-bold leading-6 text-blue-900/70">
+                  실제 획득한 점수를 중심으로 표시합니다.
                 </p>
               </div>
 
@@ -782,10 +964,9 @@ const PerformanceScoreView: React.FC = () => {
                 {chartItems.length > 0 ? (
                   <Bar data={chartData} options={chartOptions} />
                 ) : (
-                  <div className="flex h-full items-center justify-center text-center text-sm font-bold leading-6 text-slate-400">
-                    평가요소별 세부 점수는 제공되지 않았습니다.
-                    <br />
-                    총점과 평가 근거를 확인해 주세요.
+                  <div className="flex h-full items-center justify-center px-4 text-center text-sm font-bold leading-6 text-slate-400">
+                    평가요소별 세부 점수는 제공되지 않았습니다. 총점과 평가
+                    근거를 확인해 주세요.
                   </div>
                 )}
               </div>
@@ -795,7 +976,7 @@ const PerformanceScoreView: React.FC = () => {
               <h3 className="text-base font-black text-blue-900">
                 감점 요인 및 평가 근거
               </h3>
-              <p className="mt-2 whitespace-pre-wrap text-sm font-bold leading-7 text-slate-700">
+              <p className="mt-2 whitespace-pre-wrap break-keep text-sm font-bold leading-7 text-slate-700">
                 {evidenceText ||
                   "아직 입력된 평가 근거가 없습니다. 필요한 경우 수업 시간이나 상담 시간에 교사에게 확인하세요."}
               </p>
@@ -812,11 +993,11 @@ const PerformanceScoreView: React.FC = () => {
                 return (
                   <div
                     key={`${item.name}-${item.maxScore}-${index}`}
-                    className="grid gap-3 border-b border-slate-100 px-4 py-4 last:border-b-0 sm:grid-cols-[160px_minmax(0,1fr)_120px]"
+                    className="grid gap-3 border-b border-slate-100 px-4 py-4 last:border-b-0 sm:grid-cols-[minmax(150px,190px)_minmax(0,1fr)_auto]"
                   >
                     <div className="min-w-0">
                       <div
-                        className="truncate text-sm font-black text-slate-900"
+                        className="whitespace-normal break-keep text-sm font-black leading-5 text-slate-900"
                         title={item.name}
                       >
                         {itemLabel}
@@ -857,11 +1038,132 @@ const PerformanceScoreView: React.FC = () => {
         </div>
       )}
 
+      {objectionModalOpen && selectedRecord && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
+          <section className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+              <div className="min-w-0 break-keep">
+                <h3 className="text-lg font-black text-slate-900">
+                  수행평가 이의 제기
+                </h3>
+                <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
+                  이의가 있는 수행평가를 선택하고 사유를 입력해 주세요. 이의
+                  제기를 보내면 서명은 저장되지 않고 담당 교사에게 알림이
+                  전송됩니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeObjectionModal}
+                disabled={objecting}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 disabled:opacity-40"
+                aria-label="이의 제기 창 닫기"
+              >
+                <i className="fas fa-times" aria-hidden="true"></i>
+              </button>
+            </div>
+
+            <div className="overflow-y-auto px-5 py-4">
+              <fieldset>
+                <legend className="text-sm font-black text-slate-800">
+                  이의 제기 대상
+                </legend>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {pendingRecords.map((record) => {
+                    const scoreId = getRecordScoreId(record);
+                    const checked = objectionSelectedIds.includes(scoreId);
+                    return (
+                      <label
+                        key={`objection-${scoreId}`}
+                        className={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-3 transition ${
+                          checked
+                            ? "border-rose-200 bg-rose-50"
+                            : "border-slate-200 bg-white hover:bg-slate-50"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(event) =>
+                            toggleObjectionScore(scoreId, event.target.checked)
+                          }
+                          disabled={objecting}
+                          className="mt-1 h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+                        />
+                        <span className="min-w-0">
+                          <span className="block whitespace-normal break-keep text-sm font-black leading-5 text-slate-900">
+                            {record.title}
+                          </span>
+                          <span className="mt-1 block text-xs font-bold text-slate-500">
+                            획득 {formatPerformanceScore(record.totalScore)} /{" "}
+                            {formatPerformanceScore(record.totalMaxScore)}점
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </fieldset>
+
+              <div className="mt-5">
+                <label
+                  htmlFor="performance-score-objection-reason"
+                  className="text-sm font-black text-slate-800"
+                >
+                  이의 제기 사유
+                </label>
+                <textarea
+                  id="performance-score-objection-reason"
+                  value={objectionReason}
+                  onChange={(event) => {
+                    setObjectionReason(event.target.value);
+                    setObjectionError("");
+                  }}
+                  disabled={objecting}
+                  maxLength={300}
+                  rows={5}
+                  className="mt-2 w-full resize-none rounded-lg border border-slate-200 px-3 py-3 text-sm font-semibold leading-6 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-rose-300 focus:ring-2 focus:ring-rose-100 disabled:bg-slate-50"
+                  placeholder="예: 두 번째 평가요소 점수가 제가 받은 피드백과 다른 것 같아 확인을 요청합니다."
+                />
+                <div className="mt-1 text-right text-xs font-bold text-slate-400">
+                  {objectionReason.length}/300
+                </div>
+              </div>
+
+              {objectionError && (
+                <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold leading-6 text-rose-700">
+                  {objectionError}
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-end">
+              <button
+                type="button"
+                onClick={closeObjectionModal}
+                disabled={objecting}
+                className="inline-flex h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:opacity-40"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={() => void submitPerformanceScoreObjection()}
+                disabled={objecting}
+                className="inline-flex h-11 items-center justify-center rounded-lg bg-rose-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-rose-700 disabled:bg-slate-300"
+              >
+                {objecting ? "전송 중..." : "이의 제기 알림 보내기"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
       {signatureModalOpen && selectedRecord && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
           <section className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
             <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
-              <div>
+              <div className="min-w-0 break-keep">
                 <h3 className="text-lg font-black text-slate-900">
                   수행평가 점수 확인 및 서명
                 </h3>
@@ -873,8 +1175,8 @@ const PerformanceScoreView: React.FC = () => {
               <button
                 type="button"
                 onClick={closeSignatureModal}
-                disabled={confirming}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 disabled:opacity-40"
+                disabled={signatureActionPending}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 disabled:opacity-40"
                 aria-label="서명 창 닫기"
               >
                 <i className="fas fa-times" aria-hidden="true"></i>
@@ -890,7 +1192,7 @@ const PerformanceScoreView: React.FC = () => {
                         key={getRecordScoreId(record)}
                         className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3"
                       >
-                        <div className="truncate text-sm font-black text-blue-950">
+                        <div className="whitespace-normal break-keep text-sm font-black leading-5 text-blue-950">
                           {record.title}
                         </div>
                         <div className="mt-2 text-lg font-black text-blue-700">
@@ -904,7 +1206,7 @@ const PerformanceScoreView: React.FC = () => {
                   </div>
 
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
-                    <p className="text-sm font-bold leading-7 text-slate-700">
+                    <p className="break-keep text-sm font-bold leading-7 text-slate-700">
                       위 수행평가 점수와 평가 근거를 확인했으며, 점수에 문제가
                       없고 해당 점수에 대해 이의를 제기하지 않을 것에
                       동의합니까?
@@ -919,7 +1221,7 @@ const PerformanceScoreView: React.FC = () => {
                           setSignatureError("");
                           if (!checked) clearSignatureCanvas();
                         }}
-                        disabled={confirming}
+                        disabled={signatureActionPending}
                         className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                       />
                       <span className="text-sm font-black text-slate-800">
@@ -942,7 +1244,7 @@ const PerformanceScoreView: React.FC = () => {
                       <button
                         type="button"
                         onClick={clearSignatureCanvas}
-                        disabled={confirming || !signatureConsent}
+                        disabled={signatureActionPending || !signatureConsent}
                         className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
                       >
                         지우기
@@ -975,7 +1277,8 @@ const PerformanceScoreView: React.FC = () => {
                         height={SIGNATURE_CANVAS_HEIGHT}
                         className="relative z-10 h-52 w-full touch-none cursor-crosshair bg-transparent"
                         onPointerDown={(event) => {
-                          if (!signatureConsent || confirming) return;
+                          if (!signatureConsent || signatureActionPending)
+                            return;
                           const point = getSignatureCanvasPoint(event);
                           if (!point) return;
                           event.currentTarget.setPointerCapture(
@@ -1060,7 +1363,7 @@ const PerformanceScoreView: React.FC = () => {
                         className="rounded-xl border border-slate-200"
                       >
                         <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                          <div className="font-black text-slate-900">
+                          <div className="whitespace-normal break-keep font-black text-slate-900">
                             {record.title}
                           </div>
                           <div className="text-sm font-black text-blue-700">
@@ -1074,7 +1377,7 @@ const PerformanceScoreView: React.FC = () => {
                               key={`${record.rosterId}-${item.name}-${index}`}
                               className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-xs font-bold"
                             >
-                              <span className="truncate text-slate-600">
+                              <span className="whitespace-normal break-keep text-slate-600">
                                 {getItemLabel(item, index)}
                               </span>
                               <span className="shrink-0 text-slate-900">
@@ -1111,7 +1414,7 @@ const PerformanceScoreView: React.FC = () => {
               <button
                 type="button"
                 onClick={closeSignatureModal}
-                disabled={confirming}
+                disabled={signatureActionPending}
                 className="inline-flex h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:opacity-40"
               >
                 취소
@@ -1126,7 +1429,7 @@ const PerformanceScoreView: React.FC = () => {
                     setSignatureReviewStep("sign");
                     setSignatureError("");
                   }}
-                  disabled={confirming}
+                  disabled={signatureActionPending}
                   className="inline-flex h-11 items-center justify-center rounded-lg border border-blue-200 bg-white px-5 text-sm font-black text-blue-700 transition hover:bg-blue-50 disabled:opacity-40"
                 >
                   서명 수정
@@ -1136,7 +1439,7 @@ const PerformanceScoreView: React.FC = () => {
                 <button
                   type="button"
                   onClick={moveToSignatureReview}
-                  disabled={confirming}
+                  disabled={signatureActionPending}
                   className="inline-flex h-11 items-center justify-center rounded-lg bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:bg-slate-300"
                 >
                   확인 내용 검토
@@ -1145,7 +1448,7 @@ const PerformanceScoreView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => void submitSignatureConfirmation()}
-                  disabled={confirming}
+                  disabled={signatureActionPending}
                   className="inline-flex h-11 items-center justify-center rounded-lg bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:bg-slate-300"
                 >
                   {confirming ? "제출 중..." : "제출하기"}

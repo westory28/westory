@@ -205,6 +205,7 @@ export type WestoryNotificationType =
   | "history_classroom_submitted"
   | "history_classroom_exemption_requested"
   | "history_classroom_exemption_reviewed"
+  | "performance_score_objection_requested"
   | "history_dictionary_requested"
   | "history_dictionary_resolved"
   | "history_dictionary_rejected"

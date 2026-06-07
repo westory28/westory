@@ -202,3 +202,41 @@ export const notifyHistoryClassroomSubmitted = async (
     percent: input.percent,
   });
 };
+
+export const notifyPerformanceScoreObjectionRequested = async (
+  config: ConfigLike,
+  input: {
+    scoreIds: string[];
+    reason: string;
+  },
+): Promise<{
+  createdCount: number;
+  recipientCount: number;
+  skippedCount?: number;
+}> => {
+  const { year, semester } = getYearSemester(config);
+  const callable = await getHttpsCallable<
+    {
+      year: string;
+      semester: string;
+      scoreIds: string[];
+      reason: string;
+    },
+    {
+      createdCount?: number;
+      recipientCount?: number;
+      skippedCount?: number;
+    }
+  >("notifyPerformanceScoreObjectionRequested");
+  const result = await callable({
+    year,
+    semester,
+    scoreIds: Array.from(new Set(input.scoreIds || [])).filter(Boolean),
+    reason: input.reason,
+  });
+  return {
+    createdCount: Number(result.data?.createdCount || 0),
+    recipientCount: Number(result.data?.recipientCount || 0),
+    skippedCount: Number(result.data?.skippedCount || 0),
+  };
+};
