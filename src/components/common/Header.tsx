@@ -3,13 +3,12 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import PointRankBadge from "./PointRankBadge";
 import { useAppToast } from "./AppToastProvider";
 import { useAuth } from "../../contexts/AuthContext";
+import { MENUS } from "../../constants/menus";
 import {
-  MENUS,
-  cloneDefaultMenus,
-  sanitizeMenuConfig,
-  type MenuConfig,
-} from "../../constants/menus";
-import { runAfterNextPaint, runWhenIdle } from "../../lib/browserTasks";
+  getStudentRouteAccess,
+  getStudentVisibleMenuItems,
+} from "../../lib/studentMenuAccess";
+import { runAfterNextPaint } from "../../lib/browserTasks";
 import { lazyWithRetry } from "../../lib/lazyWithRetry";
 import { getDefaultProfileEmojiValue } from "../../lib/profileEmojis";
 import {
@@ -28,7 +27,6 @@ import {
   canReadStudentList,
   getDefaultTeacherRoute,
 } from "../../lib/permissions";
-import { readSiteSettingDoc } from "../../lib/siteSettings";
 
 const SESSION_DURATION_SECONDS = 60 * 60;
 const SESSION_EXPIRY_KEY = "sessionExpiry";
@@ -104,7 +102,15 @@ const getDesktopSubmenuChildren = (
 };
 
 const Header: React.FC = () => {
-  const { currentUser, userData, logout, config } = useAuth();
+  const {
+    currentUser,
+    userData,
+    logout,
+    config,
+    configReady,
+    menuConfig,
+    menuConfigReady,
+  } = useAuth();
   const { showToast } = useAppToast();
   const location = useLocation();
   const navigate = useNavigate();
@@ -112,9 +118,6 @@ const Header: React.FC = () => {
   const [sessionExpiry, setSessionExpiry] = useState<number | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState(
     SESSION_DURATION_SECONDS,
-  );
-  const [menuConfig, setMenuConfig] = useState<MenuConfig>(() =>
-    cloneDefaultMenus(),
   );
   const [studentRank, setStudentRank] = useState<PointRankDisplay | null>(null);
   const [profileFallbackIcon, setProfileFallbackIcon] = useState(
@@ -139,7 +142,21 @@ const Header: React.FC = () => {
         : "student";
 
   const isTeacherPortal = portal === "teacher";
-  const baseMenuItems = menuConfig[portal] || MENUS[portal] || [];
+  const canRenderStudentMenu =
+    portal !== "student" ||
+    (menuConfigReady &&
+      configReady &&
+      getStudentRouteAccess(
+        { pathname: location.pathname, search: location.search },
+        config,
+        menuConfig,
+      ).allowed);
+  const baseMenuItems =
+    portal === "student"
+      ? canRenderStudentMenu && menuConfig
+        ? getStudentVisibleMenuItems(menuConfig.student || [], config)
+        : []
+      : menuConfig?.teacher || MENUS.teacher || [];
   const menuItems =
     portal === "teacher"
       ? baseMenuItems.filter((item) => {
@@ -323,33 +340,6 @@ const Header: React.FC = () => {
         previousHtmlOverscroll;
     };
   }, [mobileMenuOpen]);
-
-  useEffect(() => {
-    const loadMenuConfig = async () => {
-      try {
-        const data = await readSiteSettingDoc<MenuConfig>("menu_config");
-        if (data) {
-          setMenuConfig(sanitizeMenuConfig(data));
-          return;
-        }
-      } catch (error) {
-        console.error("Failed to load menu config:", error);
-      }
-
-      setMenuConfig(cloneDefaultMenus());
-    };
-
-    const triggerLoad = () => {
-      void loadMenuConfig();
-    };
-    const cancel = runWhenIdle(triggerLoad, 600);
-    window.addEventListener("westory:menu-config-updated", triggerLoad);
-
-    return () => {
-      cancel();
-      window.removeEventListener("westory:menu-config-updated", triggerLoad);
-    };
-  }, []);
 
   useEffect(() => {
     if (!currentUser) return;

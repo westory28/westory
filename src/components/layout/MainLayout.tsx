@@ -13,12 +13,17 @@ import { readStorage } from "../../lib/safeStorage";
 import { runAfterNextPaint } from "../../lib/browserTasks";
 import { lazyWithRetry } from "../../lib/lazyWithRetry";
 import {
+  getStudentRouteAccess,
+  isStudentVisibilityControlledPath,
+} from "../../lib/studentMenuAccess";
+import {
   canAccessTeacherPath,
   canAccessTeacherPortal,
   getDefaultTeacherRoute,
 } from "../../lib/permissions";
 
 const ROLE_SESSION_KEY = "westoryPortalRole";
+const VISIBILITY_SETTINGS_FRESH_MS = 5000;
 
 const StudentHistoryDictionaryController = lazyWithRetry(
   () => import("../common/StudentHistoryDictionaryController"),
@@ -30,13 +35,64 @@ const StudentRankPromotionController = lazyWithRetry(
 );
 
 const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { currentUser, userData, loading } = useAuth();
+  const {
+    currentUser,
+    userData,
+    loading,
+    config,
+    configReady,
+    menuConfig,
+    menuConfigReady,
+    settingsLoadedAt,
+    refreshConfig,
+    refreshMenuConfig,
+  } = useAuth();
   const { showToast } = useAppToast();
   const navigate = useNavigate();
   const location = useLocation();
   const isStudentRoute = location.pathname.startsWith("/student");
+  const isVisibilityControlledStudentRoute = isStudentVisibilityControlledPath(
+    location.pathname,
+  );
+  const studentVisibilityRouteKey = `${location.pathname}${location.search}`;
+  const [studentVisibilityRefreshing, setStudentVisibilityRefreshing] =
+    React.useState(false);
+  const [
+    studentVisibilityCheckedRouteKey,
+    setStudentVisibilityCheckedRouteKey,
+  ] = React.useState("");
   const [studentEnhancementsReady, setStudentEnhancementsReady] =
     React.useState(false);
+  const studentVisibilityRouteVerified =
+    !isVisibilityControlledStudentRoute ||
+    studentVisibilityCheckedRouteKey === studentVisibilityRouteKey;
+  const studentAccessReady =
+    !isStudentRoute ||
+    (!isVisibilityControlledStudentRoute && configReady && menuConfigReady) ||
+    (configReady &&
+      menuConfigReady &&
+      studentVisibilityRouteVerified &&
+      !studentVisibilityRefreshing);
+  const studentRouteAccess = React.useMemo(
+    () =>
+      studentAccessReady
+        ? getStudentRouteAccess(
+            {
+              pathname: location.pathname,
+              search: location.search,
+            },
+            config,
+            menuConfig,
+          )
+        : { allowed: true as const },
+    [
+      config,
+      location.pathname,
+      location.search,
+      menuConfig,
+      studentAccessReady,
+    ],
+  );
 
   useEffect(() => {
     if (!loading && !currentUser) {
@@ -78,6 +134,84 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }, [currentUser, userData, loading, location.pathname, navigate]);
 
   useEffect(() => {
+    if (
+      loading ||
+      !currentUser ||
+      !isStudentRoute ||
+      !isVisibilityControlledStudentRoute ||
+      !configReady ||
+      !menuConfigReady
+    ) {
+      return undefined;
+    }
+
+    const routeKey = studentVisibilityRouteKey;
+    let cancelled = false;
+
+    if (
+      settingsLoadedAt > 0 &&
+      Date.now() - settingsLoadedAt <= VISIBILITY_SETTINGS_FRESH_MS
+    ) {
+      setStudentVisibilityCheckedRouteKey(routeKey);
+      setStudentVisibilityRefreshing(false);
+      return undefined;
+    }
+
+    setStudentVisibilityRefreshing(true);
+
+    void Promise.all([refreshConfig(), refreshMenuConfig()]).finally(() => {
+      if (!cancelled) {
+        setStudentVisibilityCheckedRouteKey(routeKey);
+        setStudentVisibilityRefreshing(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    configReady,
+    currentUser,
+    isStudentRoute,
+    isVisibilityControlledStudentRoute,
+    loading,
+    location.pathname,
+    location.search,
+    menuConfigReady,
+    refreshConfig,
+    refreshMenuConfig,
+    settingsLoadedAt,
+    studentVisibilityRouteKey,
+  ]);
+
+  useEffect(() => {
+    if (
+      loading ||
+      !currentUser ||
+      !isStudentRoute ||
+      !studentAccessReady ||
+      studentRouteAccess.allowed
+    ) {
+      return;
+    }
+
+    showToast({
+      tone: "warning",
+      title: "현재 학생에게 공개되지 않은 메뉴입니다.",
+      message: "학생 첫 화면으로 이동합니다.",
+    });
+    navigate(studentRouteAccess.redirectTo, { replace: true });
+  }, [
+    currentUser,
+    isStudentRoute,
+    loading,
+    navigate,
+    showToast,
+    studentAccessReady,
+    studentRouteAccess,
+  ]);
+
+  useEffect(() => {
     if (loading || !currentUser) return;
 
     markLoginPerf("westory-main-layout-ready", {
@@ -113,6 +247,19 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   if (loading)
     return <PageLoading message="로그인 상태를 확인하는 중입니다." />;
+
+  if (currentUser && isStudentRoute && !studentAccessReady) {
+    return <PageLoading message="학생 공개 설정을 확인하는 중입니다." />;
+  }
+
+  if (
+    currentUser &&
+    isStudentRoute &&
+    studentAccessReady &&
+    !studentRouteAccess.allowed
+  ) {
+    return <PageLoading message="학생 공개 설정을 반영하는 중입니다." />;
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">

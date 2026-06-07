@@ -1,5 +1,6 @@
 import React, {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useRef,
@@ -9,13 +10,22 @@ import { User, onAuthStateChanged, signOut } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
 import { auth, authPersistenceReady, db } from "../lib/firebase";
 import { SystemConfig, InterfaceConfig, UserData } from "../types";
+import {
+  cloneDefaultMenus,
+  sanitizeMenuConfig,
+  type MenuConfig,
+} from "../constants/menus";
 import { normalizeStaffPermissions } from "../lib/permissions";
 import { markLoginPerf, measureLoginPerf } from "../lib/loginPerf";
 import {
   invalidateSiteSettingDocCache,
+  readFreshSiteSettingDoc,
   readSiteSettingDoc,
 } from "../lib/siteSettings";
-import { subscribeSystemConfigUpdated } from "../lib/appEvents";
+import {
+  subscribeMenuConfigUpdated,
+  subscribeSystemConfigUpdated,
+} from "../lib/appEvents";
 
 interface AuthContextType {
   // Backward-compatible alias for legacy pages.
@@ -25,14 +35,40 @@ interface AuthContextType {
   // Backward-compatible alias for legacy pages.
   userConfig: SystemConfig | null;
   config: SystemConfig | null;
+  configReady: boolean;
+  menuConfig: MenuConfig | null;
+  menuConfigReady: boolean;
+  settingsLoadedAt: number;
   interfaceConfig: InterfaceConfig | null;
   loading: boolean;
   logout: () => Promise<void>;
   refreshConfig: () => Promise<void>;
+  refreshMenuConfig: () => Promise<void>;
   refreshInterfaceConfig: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const DEFAULT_SYSTEM_CONFIG: SystemConfig = {
+  year: "2026",
+  semester: "1",
+  showQuiz: true,
+  showScore: true,
+  showLesson: true,
+};
+
+const normalizeSystemConfig = (raw: SystemConfig | null): SystemConfig => {
+  const year = String(raw?.year || "").trim();
+  const semester = String(raw?.semester || "").trim();
+
+  return {
+    year: /^\d{4}$/.test(year) ? year : DEFAULT_SYSTEM_CONFIG.year,
+    semester: semester === "2" ? "2" : DEFAULT_SYSTEM_CONFIG.semester,
+    showQuiz: raw?.showQuiz !== false,
+    showScore: raw?.showScore !== false,
+    showLesson: raw?.showLesson !== false,
+  };
+};
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -40,12 +76,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [userData, setUserData] = useState<UserData | null>(null);
   const [config, setConfig] = useState<SystemConfig | null>(null);
+  const [configReady, setConfigReady] = useState(false);
+  const [configLoadedAt, setConfigLoadedAt] = useState(0);
+  const [menuConfig, setMenuConfig] = useState<MenuConfig | null>(null);
+  const [menuConfigReady, setMenuConfigReady] = useState(false);
+  const [menuConfigLoadedAt, setMenuConfigLoadedAt] = useState(0);
   const [interfaceConfig, setInterfaceConfig] =
     useState<InterfaceConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const firstUserDocReadyRef = useRef<string | null>(null);
 
-  const loadPublicInterfaceConfig = async () => {
+  const loadPublicInterfaceConfig = useCallback(async () => {
     try {
       const data =
         await readSiteSettingDoc<InterfaceConfig>("interface_config");
@@ -54,30 +95,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     } catch (e) {
       console.error("Failed to load interface config", e);
     }
-  };
+  }, []);
 
-  const loadAuthedSystemConfig = async (user: User | null = currentUser) => {
+  const loadAuthedSystemConfig = useCallback(async (user: User | null) => {
     if (!user) {
       setConfig(null);
+      setConfigReady(false);
+      setConfigLoadedAt(0);
       return;
     }
 
     try {
-      const data = await readSiteSettingDoc<SystemConfig>("config");
-      setConfig(data);
+      const data = await readFreshSiteSettingDoc<SystemConfig>("config");
+      setConfig(normalizeSystemConfig(data));
+      setConfigReady(true);
+      setConfigLoadedAt(Date.now());
       markLoginPerf("westory-auth-config-ready");
     } catch (e) {
       console.error("Failed to load system config", e);
+      setConfig(null);
+      setConfigReady(true);
+      setConfigLoadedAt(Date.now());
     }
-  };
+  }, []);
+
+  const loadAuthedMenuConfig = useCallback(async (user: User | null) => {
+    if (!user) {
+      setMenuConfig(null);
+      setMenuConfigReady(false);
+      setMenuConfigLoadedAt(0);
+      return;
+    }
+
+    try {
+      const data = await readFreshSiteSettingDoc<MenuConfig>("menu_config");
+      setMenuConfig(data ? sanitizeMenuConfig(data) : cloneDefaultMenus());
+      setMenuConfigReady(true);
+      setMenuConfigLoadedAt(Date.now());
+    } catch (e) {
+      console.error("Failed to load menu config", e);
+      setMenuConfig(null);
+      setMenuConfigReady(true);
+      setMenuConfigLoadedAt(Date.now());
+    }
+  }, []);
 
   useEffect(() => {
     void loadPublicInterfaceConfig();
-  }, []);
+  }, [loadPublicInterfaceConfig]);
 
   useEffect(() => {
     let unsubscribe: () => void = () => undefined;
     let unsubscribeUserDoc: (() => void) | null = null;
+    let visibilitySettingsReady: Promise<void> | null = null;
     const loadingGuard = window.setTimeout(() => {
       setLoading(false);
     }, 15000);
@@ -104,7 +174,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         }
         if (user) {
           firstUserDocReadyRef.current = null;
-          void loadAuthedSystemConfig(user);
+          setConfigReady(false);
+          setMenuConfigReady(false);
+          visibilitySettingsReady = Promise.all([
+            loadAuthedSystemConfig(user),
+            loadAuthedMenuConfig(user),
+          ]).then(() => undefined);
           const userRef = doc(db, "users", user.uid);
           unsubscribeUserDoc = onSnapshot(
             userRef,
@@ -153,6 +228,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                   };
                   setUserData(bootstrapUser);
                 }
+                await visibilitySettingsReady;
                 setLoading(false);
                 window.clearTimeout(loadingGuard);
               } catch (e) {
@@ -171,6 +247,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           firstUserDocReadyRef.current = null;
           setUserData(null);
           setConfig(null);
+          setConfigReady(false);
+          setConfigLoadedAt(0);
+          setMenuConfig(null);
+          setMenuConfigReady(false);
+          setMenuConfigLoadedAt(0);
+          visibilitySettingsReady = null;
           setLoading(false);
           window.clearTimeout(loadingGuard);
         }
@@ -189,22 +271,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       }
       unsubscribe();
     };
-  }, []);
+  }, [loadAuthedMenuConfig, loadAuthedSystemConfig]);
 
   useEffect(() => {
-    if (currentUser && !config) {
+    if (!loading && currentUser && !configReady) {
       void loadAuthedSystemConfig(currentUser);
+    }
+    if (!loading && currentUser && !menuConfigReady) {
+      void loadAuthedMenuConfig(currentUser);
     }
     if (!interfaceConfig) {
       void loadPublicInterfaceConfig();
     }
-  }, [currentUser, config, interfaceConfig]);
+  }, [
+    configReady,
+    currentUser,
+    interfaceConfig,
+    loadAuthedMenuConfig,
+    loadAuthedSystemConfig,
+    loadPublicInterfaceConfig,
+    menuConfigReady,
+  ]);
 
   useEffect(
     () =>
       subscribeSystemConfigUpdated(() => {
         if (auth.currentUser) {
+          invalidateSiteSettingDocCache("config");
           void loadAuthedSystemConfig(auth.currentUser);
+        }
+      }),
+    [],
+  );
+
+  useEffect(
+    () =>
+      subscribeMenuConfigUpdated(() => {
+        if (auth.currentUser) {
+          invalidateSiteSettingDocCache("menu_config");
+          void loadAuthedMenuConfig(auth.currentUser);
         }
       }),
     [],
@@ -214,14 +319,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     await signOut(auth);
   };
 
-  const refreshConfig = async () => {
+  const refreshConfig = useCallback(async () => {
+    invalidateSiteSettingDocCache("config");
     await loadAuthedSystemConfig(currentUser);
-  };
+  }, [currentUser, loadAuthedSystemConfig]);
 
-  const refreshInterfaceConfig = async () => {
+  const refreshMenuConfig = useCallback(async () => {
+    invalidateSiteSettingDocCache("menu_config");
+    await loadAuthedMenuConfig(currentUser);
+  }, [currentUser, loadAuthedMenuConfig]);
+
+  const refreshInterfaceConfig = useCallback(async () => {
     invalidateSiteSettingDocCache("interface_config");
     await loadPublicInterfaceConfig();
-  };
+  }, [loadPublicInterfaceConfig]);
+
+  const settingsLoadedAt =
+    configReady && menuConfigReady
+      ? Math.min(configLoadedAt || 0, menuConfigLoadedAt || 0)
+      : 0;
 
   const value = {
     user: currentUser,
@@ -229,10 +345,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     userData,
     userConfig: config,
     config,
+    configReady,
+    menuConfig,
+    menuConfigReady,
+    settingsLoadedAt,
     interfaceConfig,
     loading,
     logout,
     refreshConfig,
+    refreshMenuConfig,
     refreshInterfaceConfig,
   };
 

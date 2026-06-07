@@ -582,6 +582,8 @@ const SettingsGeneral: React.FC = () => {
           year,
           semester,
           availableSemesters: nextRegistry,
+          updatedAt: serverTimestamp(),
+          updatedBy: currentUser?.email || currentUser?.uid || "",
         },
         { merge: true },
       );

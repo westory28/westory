@@ -1,4 +1,4 @@
-import { doc, getDoc } from "firebase/firestore";
+import { doc, getDoc, getDocFromServer } from "firebase/firestore";
 import { db } from "./firebase";
 
 const SITE_SETTINGS_CACHE_TTL_MS = 30_000;
@@ -57,4 +57,19 @@ export const readSiteSettingDoc = async <T>(
   });
 
   return promise as Promise<T | null>;
+};
+
+export const readFreshSiteSettingDoc = async <T>(
+  docId: string,
+): Promise<T | null> => {
+  siteSettingCache.delete(docId);
+
+  const snapshot = await getDocFromServer(doc(db, "site_settings", docId));
+  const value = snapshot.exists() ? (snapshot.data() as T) : null;
+  siteSettingCache.set(docId, {
+    expiresAt: Date.now() + SITE_SETTINGS_CACHE_TTL_MS,
+    hasValue: true,
+    value,
+  });
+  return value;
 };
