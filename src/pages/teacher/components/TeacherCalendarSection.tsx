@@ -65,6 +65,14 @@ const getInclusiveSpanDays = (start?: string, end?: string) => {
   return diffDays + 1;
 };
 
+const getVisibleWeekCount = (start: Date, end: Date) => {
+  const diffDays = Math.round(
+    (end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000),
+  );
+  if (!Number.isFinite(diffDays) || diffDays <= 0) return 6;
+  return Math.min(6, Math.max(4, Math.ceil(diffDays / 7)));
+};
+
 const ChevronLeftIcon = () => (
   <svg
     viewBox="0 0 20 20"
@@ -209,6 +217,7 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
     start: string;
     end: string;
   }>({ start: "", end: "" });
+  const [calendarWeekCount, setCalendarWeekCount] = useState(6);
   const [morePopover, setMorePopover] = useState<{
     date: string;
     anchorRect: ScheduleMorePopoverAnchor;
@@ -382,12 +391,10 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
       return [];
 
     const filtered = events
-      .filter(
-        (event) => {
-          const dateKey = toDateKey(event.start);
-          return dateKey >= visibleRange.start && dateKey < visibleRange.end;
-        },
-      )
+      .filter((event) => {
+        const dateKey = toDateKey(event.start);
+        return dateKey >= visibleRange.start && dateKey < visibleRange.end;
+      })
       .sort(compareCalendarSchedule);
 
     const grouped = new Map<string, CalendarEvent[]>();
@@ -559,6 +566,9 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
       <div
         className={`calendar-wrapper student-calendar-shell__body ${currentViewType === "listMonth" ? "custom-list-active" : ""}`}
         data-calendar-view={currentViewType}
+        data-calendar-week-count={
+          currentViewType === "dayGridMonth" ? calendarWeekCount : undefined
+        }
       >
         <FullCalendar
           ref={calendarRef}
@@ -579,6 +589,7 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
             setMorePopover(null);
             setCurrentViewType(arg.view.type as CalendarViewType);
             setCurrentTitle(arg.view.title);
+            setCalendarWeekCount(getVisibleWeekCount(arg.start, arg.end));
             setVisibleRange({
               start: toLocalYmd(arg.start),
               end: toLocalYmd(arg.end),
@@ -713,7 +724,7 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
           eventDisplay="block"
           dayMaxEvents={2}
           moreLinkClick={handleMoreLinkClick}
-          fixedWeekCount
+          fixedWeekCount={false}
           showNonCurrentDates={false}
           dayCellClassNames={(arg) => {
             const dateStr = toLocalYmd(arg.date);

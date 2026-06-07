@@ -604,6 +604,27 @@
   height: calc(100% / 6) !important;
 }
 
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"][data-calendar-week-count="4"]
+  .fc
+  .fc-daygrid-body
+  tr {
+  height: 25% !important;
+}
+
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"][data-calendar-week-count="5"]
+  .fc
+  .fc-daygrid-body
+  tr {
+  height: 20% !important;
+}
+
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"][data-calendar-week-count="6"]
+  .fc
+  .fc-daygrid-body
+  tr {
+  height: calc(100% / 6) !important;
+}
+
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
   .fc
   .fc-daygrid-body
