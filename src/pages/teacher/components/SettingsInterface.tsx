@@ -648,11 +648,28 @@ const SettingsInterface: React.FC = () => {
                               {item.children.map((child, childIdx) => (
                                 <li
                                   key={`preview-child-${child.url}-${childIdx}`}
-                                  className={`text-sm border-b border-dashed border-gray-200 pb-1 ${child.hidden ? "text-gray-400 line-through" : "text-gray-700"}`}
+                                  className="flex items-center justify-between gap-2 border-b border-dashed border-gray-200 pb-1 text-sm"
                                 >
-                                  • {child.name}
-                                  {child.hidden && (
-                                    <span className="ml-2 inline-flex items-center rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-semibold text-gray-600">
+                                  <span
+                                    className={`min-w-0 flex-1 ${child.hidden ? "text-gray-400 line-through" : "text-gray-700"}`}
+                                  >
+                                    • {child.name}
+                                  </span>
+                                  {portal === "student" && (
+                                    <button
+                                      type="button"
+                                      aria-label={`${child.name} ${child.hidden ? "숨김 해제" : "숨기기"}`}
+                                      aria-pressed={child.hidden}
+                                      onClick={() =>
+                                        toggleChildHidden(portal, idx, childIdx)
+                                      }
+                                      className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold transition ${child.hidden ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"}`}
+                                    >
+                                      {child.hidden ? "숨김 해제" : "숨기기"}
+                                    </button>
+                                  )}
+                                  {portal !== "student" && child.hidden && (
+                                    <span className="shrink-0 rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-semibold text-gray-600">
                                       숨김
                                     </span>
                                   )}
