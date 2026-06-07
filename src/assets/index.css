@@ -749,7 +749,7 @@
   flex: 1 1 auto;
   margin-top: 0.25rem;
   padding: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
@@ -804,7 +804,8 @@
   .fc
   .fc-daygrid-event-harness-abs.student-calendar-event-harness--range {
   min-width: 0 !important;
-  overflow: hidden !important;
+  max-width: none !important;
+  overflow: visible !important;
 }
 
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
