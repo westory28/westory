@@ -67,7 +67,8 @@ const DEFAULT_CLASS_OPTIONS = Array.from({ length: 12 }, (_, index) =>
 );
 const PREVIEW_PAGE_SIZE = 20;
 const FIRESTORE_BATCH_WRITE_LIMIT = 450;
-const CLASS_SHEET_TEMPLATE_URL = `${import.meta.env.BASE_URL}templates/performance-score-class-sheet-template.xlsx`;
+const CLASS_SHEET_TEMPLATE_PATH =
+  "templates/performance-score-class-sheet-template.xlsx";
 const CLASS_SHEET_STUDENT_START_ROW = 7;
 const CLASS_SHEET_STUDENT_END_ROW = 38;
 const CLASS_SHEET_SUMMARY_START_ROW = 39;
@@ -776,6 +777,43 @@ const setWorksheetCellValue = (
   worksheet.getCell(row, column).value = value;
 };
 
+const joinUrlPath = (base: string, path: string) =>
+  `${base.replace(/\/?$/, "/")}${path.replace(/^\/+/, "")}`;
+
+const getClassSheetTemplateUrls = () => {
+  const basePath = joinUrlPath(
+    import.meta.env.BASE_URL || "/",
+    CLASS_SHEET_TEMPLATE_PATH,
+  );
+  const rootPath = `/${CLASS_SHEET_TEMPLATE_PATH}`;
+
+  if (typeof window === "undefined") {
+    return Array.from(new Set([basePath, rootPath]));
+  }
+
+  return Array.from(
+    new Set(
+      [rootPath, basePath].map(
+        (path) => new URL(path, window.location.origin).href,
+      ),
+    ),
+  );
+};
+
+const fetchClassSheetTemplate = async () => {
+  const errors: string[] = [];
+  for (const url of getClassSheetTemplateUrls()) {
+    try {
+      const response = await fetch(url, { cache: "no-cache" });
+      if (response.ok) return response;
+      errors.push(`${url}: ${response.status}`);
+    } catch (error) {
+      errors.push(`${url}: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+  throw new Error(`class-sheet-template-not-found:${errors.join(", ")}`);
+};
+
 const getClassSheetSignatureImageRange = (row: number) => ({
   tl: {
     col:
@@ -811,10 +849,7 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
 
   const ExcelJS = await import("exceljs");
   const workbook = new ExcelJS.Workbook();
-  const response = await fetch(CLASS_SHEET_TEMPLATE_URL);
-  if (!response.ok) {
-    throw new Error(`class-sheet-template-not-found:${response.status}`);
-  }
+  const response = await fetchClassSheetTemplate();
   await workbook.xlsx.load(await response.arrayBuffer());
   const worksheet = workbook.worksheets[0];
   if (!worksheet) throw new Error("class-sheet-template-empty");
