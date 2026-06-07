@@ -9,6 +9,7 @@ import {
 import { AuthProvider } from "./contexts/AuthContext";
 import MainLayout from "./components/layout/MainLayout";
 import { AppToastProvider } from "./components/common/AppToastProvider";
+import { AppDialogProvider } from "./components/common/AppDialogProvider";
 import { lazyWithRetry } from "./lib/lazyWithRetry";
 
 const Login = lazyWithRetry(() => import("./pages/Login"), "login");
@@ -154,9 +155,11 @@ const RouteContentFallback: React.FC = () => (
 );
 
 const renderWithLayout = (children: React.ReactNode, _message?: string) => (
-  <MainLayout>
-    <Suspense fallback={<RouteContentFallback />}>{children}</Suspense>
-  </MainLayout>
+  <AppDialogProvider>
+    <MainLayout>
+      <Suspense fallback={<RouteContentFallback />}>{children}</Suspense>
+    </MainLayout>
+  </AppDialogProvider>
 );
 
 const App: React.FC = () => {

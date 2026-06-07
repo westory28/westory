@@ -11,6 +11,7 @@ import type {
   WestoryNotification,
   WestoryNotificationInbox,
 } from "../../types";
+import { useAppDialog } from "./AppDialogProvider";
 import { useAppToast } from "./AppToastProvider";
 
 interface NotificationBellProps {
@@ -110,6 +111,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
   const navigate = useNavigate();
   const { currentUser, config, userData } = useAuth();
   const { showToast } = useAppToast();
+  const { confirm } = useAppDialog();
   const [open, setOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState<WestoryNotification[]>([]);
@@ -291,7 +293,13 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
 
   const handleClear = async () => {
     if (!config || clearing || !hasNotifications) return;
-    if (!window.confirm("알림 목록을 모두 삭제할까요?")) return;
+    const confirmed = await confirm({
+      tone: "danger",
+      title: "알림 목록을 모두 삭제할까요?",
+      message: "삭제 후에는 현재 알림 목록에서 다시 볼 수 없습니다.",
+      confirmLabel: "모두 삭제",
+    });
+    if (!confirmed) return;
 
     setClearing(true);
     try {
