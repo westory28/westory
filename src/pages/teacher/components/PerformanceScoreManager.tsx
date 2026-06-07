@@ -363,6 +363,7 @@ const PerformanceScoreManager: React.FC = () => {
   const [scoreListLoadedRosterId, setScoreListLoadedRosterId] = useState("");
   const [scoreListGradeFilter, setScoreListGradeFilter] = useState("all");
   const [scoreListClassFilter, setScoreListClassFilter] = useState("all");
+  const [scoreListClassPage, setScoreListClassPage] = useState(1);
   const [scoreListSearch, setScoreListSearch] = useState("");
   const [scoreListRecords, setScoreListRecords] = useState<
     PerformanceScoreRecord[]
@@ -404,6 +405,15 @@ const PerformanceScoreManager: React.FC = () => {
   useEffect(() => {
     setPreviewPage(1);
   }, [previewClassFilter, parsed?.sourceFileName]);
+
+  useEffect(() => {
+    setScoreListClassPage(1);
+  }, [
+    scoreListClassFilter,
+    scoreListGradeFilter,
+    scoreListLoadedRosterId,
+    scoreListSearch,
+  ]);
 
   const rosterCollectionPath = getSemesterCollectionPath(
     { year, semester },
@@ -503,7 +513,7 @@ const PerformanceScoreManager: React.FC = () => {
   }, [selectedScoreRoster]);
   const scoreListReady =
     !!selectedScoreRoster && scoreListLoadedRosterId === selectedScoreRoster.id;
-  const filteredScoreListRecords = useMemo(() => {
+  const scoreListBaseRecords = useMemo(() => {
     if (!scoreListReady) return [];
     const searchKey = normalizeStudentName(scoreListSearch).toLocaleLowerCase();
     return scoreListRecords.filter((record) => {
@@ -511,23 +521,43 @@ const PerformanceScoreManager: React.FC = () => {
         scoreListGradeFilter === "all" ||
         normalizeSchoolValue(record.grade) ===
           normalizeSchoolValue(scoreListGradeFilter);
-      const classMatched =
-        scoreListClassFilter === "all" ||
-        normalizeSchoolValue(record.class) ===
-          normalizeSchoolValue(scoreListClassFilter);
       const identityKey = normalizeStudentName(
         `${record.studentName} ${record.class}반 ${record.number}번`,
       ).toLocaleLowerCase();
       const searchMatched = !searchKey || identityKey.includes(searchKey);
-      return gradeMatched && classMatched && searchMatched;
+      return gradeMatched && searchMatched;
     });
-  }, [
-    scoreListClassFilter,
-    scoreListGradeFilter,
-    scoreListReady,
-    scoreListRecords,
-    scoreListSearch,
-  ]);
+  }, [scoreListGradeFilter, scoreListReady, scoreListRecords, scoreListSearch]);
+  const scoreListClassPageOptions = useMemo(() => {
+    if (scoreListClassFilter !== "all") return [scoreListClassFilter];
+    const values = new Set<string>();
+    scoreListBaseRecords.forEach((record) => {
+      if (record.class) values.add(record.class);
+    });
+    return Array.from(values).sort(
+      (a, b) => Number(a) - Number(b) || a.localeCompare(b, "ko"),
+    );
+  }, [scoreListBaseRecords, scoreListClassFilter]);
+  const scoreListClassTotalPages = Math.max(
+    1,
+    scoreListClassPageOptions.length,
+  );
+  const safeScoreListClassPage = Math.min(
+    Math.max(1, scoreListClassPage),
+    scoreListClassTotalPages,
+  );
+  const activeScoreListClass =
+    scoreListClassFilter !== "all"
+      ? scoreListClassFilter
+      : scoreListClassPageOptions[safeScoreListClassPage - 1] || "";
+  const filteredScoreListRecords = useMemo(() => {
+    if (!scoreListReady || !activeScoreListClass) return [];
+    return scoreListBaseRecords.filter(
+      (record) =>
+        normalizeSchoolValue(record.class) ===
+        normalizeSchoolValue(activeScoreListClass),
+    );
+  }, [activeScoreListClass, scoreListBaseRecords, scoreListReady]);
 
   const loadStudents = async () => {
     setStudentsLoading(true);
@@ -802,6 +832,9 @@ const PerformanceScoreManager: React.FC = () => {
 
     const connectedBlankScoreCount = linkedRows.length - saveableRows.length;
     const unmatchedRows = parsed.rows.filter((row) => !row.uid);
+    const warningRows = parsed.rows.filter(
+      (row) => row.matchStatus === "name-mismatch",
+    );
     const skippedMessages = [
       parsedSummary.unmatchedCount > 0
         ? `미연결 학생 ${parsedSummary.unmatchedCount}명`
@@ -822,6 +855,9 @@ const PerformanceScoreManager: React.FC = () => {
           unmatchedRows.length > 0 ? "" : "",
           unmatchedRows.length > 0 ? "미연결 학생 명단:" : "",
           unmatchedRows.length > 0 ? formatRowsForConfirm(unmatchedRows) : "",
+          warningRows.length > 0 ? "" : "",
+          warningRows.length > 0 ? "이름 확인 필요 학생 명단:" : "",
+          warningRows.length > 0 ? formatRowsForConfirm(warningRows) : "",
           "",
           "정말 저장할까요?",
         ]
@@ -1016,110 +1052,6 @@ const PerformanceScoreManager: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-xl border border-slate-200 bg-white p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <h2 className="text-xl font-black text-slate-900">
-              수행평가 점수 관리
-            </h2>
-            <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
-              최종 점수표를 업로드하면 총점, 평가요소별 점수, 감점 요인과 평가
-              근거를 학생별 개인 점수 문서로 저장합니다.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => void loadStudents()}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
-          >
-            <i
-              className={`fas fa-sync-alt text-xs ${studentsLoading ? "animate-spin" : ""}`}
-              aria-hidden="true"
-            ></i>
-            명단 새로고침
-          </button>
-        </div>
-
-        <div className="mt-5 grid gap-4 lg:grid-cols-[1.2fr_0.8fr_0.8fr_0.8fr]">
-          <label className="block">
-            <span className="text-xs font-black text-slate-600">평가명</span>
-            <input
-              type="text"
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50"
-            />
-          </label>
-          <label className="block">
-            <span className="text-xs font-black text-slate-600">
-              과목 또는 영역
-            </span>
-            <input
-              type="text"
-              value={subject}
-              onChange={(event) => setSubject(event.target.value)}
-              placeholder="예: 역사"
-              className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50"
-            />
-          </label>
-          <label className="block">
-            <span className="text-xs font-black text-slate-600">대상 학년</span>
-            <select
-              value={targetGrade}
-              onChange={(event) => setTargetGrade(event.target.value)}
-              className="mt-1 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50"
-            >
-              {DEFAULT_GRADE_OPTIONS.map((grade) => (
-                <option key={grade} value={grade}>
-                  {grade}학년
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block">
-            <span className="text-xs font-black text-slate-600">기본 반</span>
-            <select
-              value={fallbackClass}
-              onChange={(event) => setFallbackClass(event.target.value)}
-              className="mt-1 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50"
-            >
-              <option value="">파일에서 인식</option>
-              {DEFAULT_CLASS_OPTIONS.map((classValue) => (
-                <option key={classValue} value={classValue}>
-                  {classValue}반
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        {studentLoadError && (
-          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold leading-6 text-amber-800">
-            {studentLoadError}
-          </div>
-        )}
-
-        <div className="mt-5 flex flex-col gap-3 rounded-xl border border-dashed border-blue-200 bg-blue-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <div className="text-sm font-black text-blue-900">
-              엑셀 파일 업로드
-            </div>
-            <p className="mt-1 text-xs font-bold leading-5 text-blue-700">
-              수행평가를 먼저 선택한 뒤 해당 점수표 파일을 업로드합니다.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setUploadModalOpen(true)}
-            disabled={parsing}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-          >
-            <i className="fas fa-file-arrow-up text-xs" aria-hidden="true"></i>
-            {parsing ? "인식 중..." : "점수표 업로드"}
-          </button>
-        </div>
-      </section>
-
       {uploadModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
           <section className="w-full max-w-2xl overflow-hidden rounded-xl bg-white shadow-2xl">
@@ -1143,7 +1075,7 @@ const PerformanceScoreManager: React.FC = () => {
               </button>
             </div>
 
-            <div className="px-5 py-5">
+            <div className="max-h-[78vh] overflow-y-auto px-5 py-5">
               <label className="block">
                 <span className="text-xs font-black text-slate-600">
                   수행평가 선택
@@ -1165,6 +1097,44 @@ const PerformanceScoreManager: React.FC = () => {
                   ))}
                 </select>
               </label>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                <label className="block">
+                  <span className="text-xs font-black text-slate-600">
+                    대상 학년
+                  </span>
+                  <select
+                    value={targetGrade}
+                    onChange={(event) => setTargetGrade(event.target.value)}
+                    disabled={parsing}
+                    className="mt-1 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-100"
+                  >
+                    {DEFAULT_GRADE_OPTIONS.map((grade) => (
+                      <option key={grade} value={grade}>
+                        {grade}학년
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="text-xs font-black text-slate-600">
+                    기본 반
+                  </span>
+                  <select
+                    value={fallbackClass}
+                    onChange={(event) => setFallbackClass(event.target.value)}
+                    disabled={parsing}
+                    className="mt-1 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-100"
+                  >
+                    <option value="">파일에서 인식</option>
+                    {DEFAULT_CLASS_OPTIONS.map((classValue) => (
+                      <option key={classValue} value={classValue}>
+                        {classValue}반
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
 
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 {UPLOAD_ASSESSMENT_OPTIONS.map((option) => {
@@ -1211,6 +1181,88 @@ const PerformanceScoreManager: React.FC = () => {
                   disabled={parsing}
                 />
               </label>
+
+              <div className="mt-5 border-t border-slate-200 pt-4">
+                <div className="flex items-center justify-between gap-3">
+                  <h4 className="text-sm font-black text-slate-800">
+                    업로드 기록
+                  </h4>
+                  <span className="text-xs font-bold text-slate-400">
+                    {rosters.length}개
+                  </span>
+                </div>
+                {rostersLoading ? (
+                  <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm font-bold text-slate-400">
+                    업로드 기록을 불러오는 중입니다.
+                  </div>
+                ) : rosters.length === 0 ? (
+                  <div className="mt-3 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm font-bold text-slate-400">
+                    아직 저장된 업로드 기록이 없습니다.
+                  </div>
+                ) : (
+                  <div className="mt-3 space-y-2">
+                    {rosters.map((roster) => (
+                      <div
+                        key={roster.id}
+                        className={`flex flex-col gap-3 rounded-lg border px-3 py-3 sm:flex-row sm:items-center sm:justify-between ${
+                          scoreListRosterId === roster.id
+                            ? "border-blue-200 bg-blue-50/60"
+                            : "border-slate-200 bg-white"
+                        }`}
+                      >
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h5 className="truncate text-sm font-black text-slate-900">
+                              {roster.title}
+                            </h5>
+                            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-black text-blue-700">
+                              {roster.targetGrade}학년
+                            </span>
+                            {roster.classes?.length > 0 && (
+                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-black text-slate-600">
+                                {roster.classes.join(", ")}반
+                              </span>
+                            )}
+                          </div>
+                          <div className="mt-1 flex flex-wrap gap-2 text-[11px] font-bold text-slate-500">
+                            <span>저장 {roster.matchedCount}명</span>
+                            <span>전체 {roster.rowCount}명</span>
+                            <span>
+                              만점{" "}
+                              {formatPerformanceScore(roster.totalMaxScore)}점
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setScoreListRosterId(roster.id);
+                              setScoreListClassFilter("all");
+                              setUploadModalOpen(false);
+                            }}
+                            className="inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-blue-200 bg-white px-3 text-xs font-black text-blue-700 transition hover:bg-blue-50"
+                          >
+                            <i className="fas fa-list" aria-hidden="true"></i>
+                            선택
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void deleteRoster(roster)}
+                            disabled={deletingRosterId === roster.id}
+                            className="inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-rose-200 bg-white px-3 text-xs font-black text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <i className="fas fa-trash" aria-hidden="true"></i>
+                            {deletingRosterId === roster.id
+                              ? "삭제 중"
+                              : "삭제"}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </section>
         </div>
@@ -1482,16 +1534,47 @@ const PerformanceScoreManager: React.FC = () => {
       )}
 
       <section className="rounded-xl border border-slate-200 bg-white p-5">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <h3 className="text-lg font-black text-slate-900">
-              저장된 수행평가 점수
-            </h3>
-            <p className="mt-1 text-sm font-semibold text-slate-500">
-              {year}학년도 {semester}학기 업로드 기록입니다.
+            <h2 className="text-xl font-black text-slate-900">
+              수행평가 점수 관리
+            </h2>
+            <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
+              평가명을 선택해 학생별 점수와 평가 근거를 조회합니다.
             </p>
           </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void loadStudents()}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
+            >
+              <i
+                className={`fas fa-sync-alt text-xs ${studentsLoading ? "animate-spin" : ""}`}
+                aria-hidden="true"
+              ></i>
+              명단 새로고침
+            </button>
+            <button
+              type="button"
+              onClick={() => setUploadModalOpen(true)}
+              disabled={parsing}
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              <i
+                className="fas fa-file-arrow-up text-xs"
+                aria-hidden="true"
+              ></i>
+              {parsing ? "인식 중..." : "점수표 업로드"}
+            </button>
+          </div>
         </div>
+
+        {studentLoadError && (
+          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold leading-6 text-amber-800">
+            {studentLoadError}
+          </div>
+        )}
 
         {rostersLoading ? (
           <InlineLoading message="저장된 점수를 불러오는 중입니다." />
@@ -1601,8 +1684,10 @@ const PerformanceScoreManager: React.FC = () => {
                       {selectedScoreRoster?.title}
                     </h4>
                     <p className="mt-1 text-xs font-bold text-slate-500">
-                      {filteredScoreListRecords.length}명 표시 · 저장{" "}
-                      {scoreListRecords.length}명 · 만점{" "}
+                      {activeScoreListClass
+                        ? `${activeScoreListClass}반 ${filteredScoreListRecords.length}명 표시`
+                        : `${filteredScoreListRecords.length}명 표시`}{" "}
+                      · 저장 {scoreListRecords.length}명 · 만점{" "}
                       {formatPerformanceScore(
                         selectedScoreRoster?.totalMaxScore,
                       )}
@@ -1718,6 +1803,34 @@ const PerformanceScoreManager: React.FC = () => {
                     </tbody>
                   </table>
                 </div>
+                {scoreListClassFilter === "all" &&
+                  scoreListClassPageOptions.length > 1 && (
+                    <div className="flex flex-wrap items-center justify-center gap-1.5 border-t border-slate-100 px-4 py-3">
+                      {scoreListClassPageOptions.map((classValue, index) => {
+                        const page = index + 1;
+                        return (
+                          <button
+                            key={classValue}
+                            type="button"
+                            onClick={() => setScoreListClassPage(page)}
+                            className={`inline-flex h-9 min-w-9 items-center justify-center rounded-lg border px-3 text-xs font-black transition ${
+                              page === safeScoreListClassPage
+                                ? "border-blue-600 bg-blue-600 text-white"
+                                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                            }`}
+                            aria-current={
+                              page === safeScoreListClassPage
+                                ? "page"
+                                : undefined
+                            }
+                            title={`${classValue}반`}
+                          >
+                            {classValue}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
               </div>
             ) : (
               <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm font-bold text-slate-400">
@@ -1725,78 +1838,6 @@ const PerformanceScoreManager: React.FC = () => {
                 표시됩니다.
               </div>
             )}
-
-            <div className="space-y-3">
-              <h4 className="text-sm font-black text-slate-700">업로드 기록</h4>
-              {rosters.map((roster) => (
-                <div
-                  key={roster.id}
-                  className={`flex flex-col gap-4 rounded-xl border px-4 py-4 lg:flex-row lg:items-center lg:justify-between ${
-                    scoreListRosterId === roster.id
-                      ? "border-blue-200 bg-blue-50/40"
-                      : "border-slate-200 bg-white"
-                  }`}
-                >
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h4 className="truncate text-base font-black text-slate-900">
-                        {roster.title}
-                      </h4>
-                      <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-black text-blue-700">
-                        {roster.targetGrade}학년
-                      </span>
-                      {roster.classes?.length > 0 && (
-                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black text-slate-600">
-                          {roster.classes.join(", ")}반
-                        </span>
-                      )}
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-3 text-xs font-bold text-slate-500">
-                      <span>원본: {roster.sourceFileName}</span>
-                      <span>
-                        저장 {roster.matchedCount}명 / 전체 {roster.rowCount}명
-                      </span>
-                      <span>
-                        만점 {formatPerformanceScore(roster.totalMaxScore)}점
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="h-2 w-32 overflow-hidden rounded-full bg-slate-100">
-                      <div
-                        className="h-full rounded-full bg-blue-500"
-                        style={{
-                          width: `${getPerformanceScorePercent(
-                            roster.matchedCount,
-                            roster.rowCount || 1,
-                          )}%`,
-                        }}
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setScoreListRosterId(roster.id);
-                        setScoreListClassFilter("all");
-                      }}
-                      className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white px-3 text-xs font-black text-blue-700 transition hover:bg-blue-50"
-                    >
-                      <i className="fas fa-list" aria-hidden="true"></i>
-                      선택
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void deleteRoster(roster)}
-                      disabled={deletingRosterId === roster.id}
-                      className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-rose-200 bg-white px-3 text-xs font-black text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <i className="fas fa-trash" aria-hidden="true"></i>
-                      {deletingRosterId === roster.id ? "삭제 중" : "삭제"}
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
         )}
       </section>
