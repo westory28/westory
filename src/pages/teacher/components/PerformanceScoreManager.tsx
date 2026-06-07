@@ -441,25 +441,36 @@ const PerformanceScoreManager: React.FC = () => {
       : rows.filter((row) => row.class === previewClassFilter);
   }, [parsed, previewClassFilter]);
 
-  const previewTotalPages = Math.max(
-    1,
-    Math.ceil(filteredPreviewRows.length / PREVIEW_PAGE_SIZE),
-  );
-  const safePreviewPage = Math.min(Math.max(1, previewPage), previewTotalPages);
-  const previewStartIndex = (safePreviewPage - 1) * PREVIEW_PAGE_SIZE;
-  const previewRows = filteredPreviewRows.slice(
-    previewStartIndex,
-    previewStartIndex + PREVIEW_PAGE_SIZE,
-  );
-  const previewRangeLabel = filteredPreviewRows.length
-    ? `${previewStartIndex + 1}-${Math.min(
+  const previewClassFiltered = previewClassFilter !== "all";
+  const previewTotalPages = previewClassFiltered
+    ? 1
+    : Math.max(1, Math.ceil(filteredPreviewRows.length / PREVIEW_PAGE_SIZE));
+  const safePreviewPage = previewClassFiltered
+    ? 1
+    : Math.min(Math.max(1, previewPage), previewTotalPages);
+  const previewStartIndex = previewClassFiltered
+    ? 0
+    : (safePreviewPage - 1) * PREVIEW_PAGE_SIZE;
+  const previewRows = previewClassFiltered
+    ? filteredPreviewRows
+    : filteredPreviewRows.slice(
+        previewStartIndex,
         previewStartIndex + PREVIEW_PAGE_SIZE,
-        filteredPreviewRows.length,
-      )}`
+      );
+  const previewRangeLabel = filteredPreviewRows.length
+    ? previewClassFiltered
+      ? `1-${filteredPreviewRows.length}`
+      : `${previewStartIndex + 1}-${Math.min(
+          previewStartIndex + PREVIEW_PAGE_SIZE,
+          filteredPreviewRows.length,
+        )}`
     : "0";
   const previewPageItems = useMemo(
-    () => getPreviewPageItems(safePreviewPage, previewTotalPages),
-    [safePreviewPage, previewTotalPages],
+    () =>
+      previewClassFiltered
+        ? []
+        : getPreviewPageItems(safePreviewPage, previewTotalPages),
+    [previewClassFiltered, safePreviewPage, previewTotalPages],
   );
 
   const selectedScoreRoster = useMemo(
@@ -1334,37 +1345,40 @@ const PerformanceScoreManager: React.FC = () => {
 
               <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="text-sm font-bold text-slate-500">
-                  {previewRangeLabel} / {filteredPreviewRows.length}명 표시 ·{" "}
-                  {safePreviewPage} / {previewTotalPages}쪽
+                  {previewClassFiltered
+                    ? `${previewRangeLabel} / ${filteredPreviewRows.length}명 전체 표시`
+                    : `${previewRangeLabel} / ${filteredPreviewRows.length}명 표시 · ${safePreviewPage} / ${previewTotalPages}쪽`}
                 </div>
-                <div className="flex flex-wrap items-center justify-end gap-1.5">
-                  {previewPageItems.map((item) =>
-                    typeof item === "number" ? (
-                      <button
-                        key={item}
-                        type="button"
-                        onClick={() => setPreviewPage(item)}
-                        className={`inline-flex h-9 min-w-9 items-center justify-center rounded-lg border px-3 text-xs font-black transition ${
-                          item === safePreviewPage
-                            ? "border-blue-600 bg-blue-600 text-white"
-                            : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
-                        }`}
-                        aria-current={
-                          item === safePreviewPage ? "page" : undefined
-                        }
-                      >
-                        {item}
-                      </button>
-                    ) : (
-                      <span
-                        key={item.key}
-                        className="inline-flex h-9 min-w-9 items-center justify-center px-2 text-xs font-black text-slate-400"
-                      >
-                        {item.label}
-                      </span>
-                    ),
-                  )}
-                </div>
+                {!previewClassFiltered && (
+                  <div className="flex flex-wrap items-center justify-end gap-1.5">
+                    {previewPageItems.map((item) =>
+                      typeof item === "number" ? (
+                        <button
+                          key={item}
+                          type="button"
+                          onClick={() => setPreviewPage(item)}
+                          className={`inline-flex h-9 min-w-9 items-center justify-center rounded-lg border px-3 text-xs font-black transition ${
+                            item === safePreviewPage
+                              ? "border-blue-600 bg-blue-600 text-white"
+                              : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                          }`}
+                          aria-current={
+                            item === safePreviewPage ? "page" : undefined
+                          }
+                        >
+                          {item}
+                        </button>
+                      ) : (
+                        <span
+                          key={item.key}
+                          className="inline-flex h-9 min-w-9 items-center justify-center px-2 text-xs font-black text-slate-400"
+                        >
+                          {item.label}
+                        </span>
+                      ),
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200">
