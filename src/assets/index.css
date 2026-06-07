@@ -634,15 +634,22 @@
   align-items: flex-start;
   justify-content: flex-start;
   padding: 0 !important;
+  min-width: 0;
+  max-width: 100%;
   min-height: 0;
+  overflow: hidden;
 }
 
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
   .fc
   .fc-daygrid-day-number {
+  box-sizing: border-box;
   padding: 0 !important;
   display: block;
+  min-width: 0;
   width: 100%;
+  max-width: 100%;
+  overflow: hidden;
   text-align: left;
   text-decoration: none !important;
   white-space: nowrap;
@@ -654,9 +661,12 @@
   display: flex;
   align-items: flex-start;
   gap: 0.35rem;
+  min-width: 0;
   width: 100%;
+  max-width: 100%;
   min-height: 2.1rem;
   padding: 0.42rem 0.46rem 0;
+  overflow: hidden;
 }
 
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
@@ -674,6 +684,7 @@
   display: block;
   flex: 1 1 auto;
   min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
