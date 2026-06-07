@@ -463,6 +463,20 @@ interface ItemScoreSummary {
   difference: number | null;
 }
 
+interface NormalCurveSummary {
+  count: number;
+  mean: number | null;
+  standardDeviation: number | null;
+  points: Array<{ x: number; y: number }>;
+}
+
+type ScoreListRecordSource = "student-doc" | "roster-row";
+
+type ScoreListRecord = PerformanceScoreRecord & {
+  scoreSource?: ScoreListRecordSource;
+  scoreDocumentExists?: boolean;
+};
+
 const SCORE_DISTRIBUTION_BUCKETS = [
   { label: "60% 미만", min: 0, max: 60 },
   { label: "60~69%", min: 60, max: 70 },
@@ -498,6 +512,15 @@ const getEnteredTotalScore = (record: PerformanceScoreRecord) => {
     return roundScore(enteredItemScores.reduce((sum, score) => sum + score, 0));
   }
   return null;
+};
+
+const getEnteredItemsTotalScore = (items: PerformanceScoreRecord["items"]) => {
+  const enteredScores = (items || [])
+    .map((item) => getEnteredItemScore(item))
+    .filter((score): score is number => score !== null);
+  return enteredScores.length
+    ? roundScore(enteredScores.reduce((sum, score) => sum + score, 0))
+    : null;
 };
 
 const getRecordTotalMaxScore = (record: PerformanceScoreRecord) => {
@@ -697,6 +720,219 @@ const sortClassScoreSummaries = (
       );
     })
     .map(({ summary }) => summary);
+
+const getRecordTotalScores = (records: PerformanceScoreRecord[]) =>
+  records
+    .map((record) => getEnteredTotalScore(record))
+    .filter((score): score is number => score !== null);
+
+const buildNormalCurveSummary = (
+  records: PerformanceScoreRecord[],
+  maxScore: number,
+): NormalCurveSummary => {
+  const scores = getRecordTotalScores(records);
+  if (scores.length < 2 || maxScore <= 0) {
+    return {
+      count: scores.length,
+      mean: scores.length === 1 ? scores[0] : null,
+      standardDeviation: null,
+      points: [],
+    };
+  }
+
+  const mean = scores.reduce((sum, score) => sum + score, 0) / scores.length;
+  const variance =
+    scores.reduce((sum, score) => sum + (score - mean) ** 2, 0) / scores.length;
+  const standardDeviation = Math.sqrt(variance);
+  if (!Number.isFinite(standardDeviation) || standardDeviation <= 0) {
+    return {
+      count: scores.length,
+      mean: roundScore(mean),
+      standardDeviation: null,
+      points: [],
+    };
+  }
+
+  const pointCount = 72;
+  const points = Array.from({ length: pointCount }, (_, index) => {
+    const x = (maxScore * index) / (pointCount - 1);
+    const y =
+      (1 / (standardDeviation * Math.sqrt(2 * Math.PI))) *
+      Math.exp(-0.5 * ((x - mean) / standardDeviation) ** 2);
+    return { x, y };
+  });
+
+  return {
+    count: scores.length,
+    mean: roundScore(mean),
+    standardDeviation: roundScore(standardDeviation),
+    points,
+  };
+};
+
+const buildNormalCurvePath = (
+  curve: NormalCurveSummary,
+  maxScore: number,
+  maxDensity: number,
+  width: number,
+  height: number,
+) => {
+  if (!curve.points.length || maxScore <= 0 || maxDensity <= 0) return "";
+  const paddingX = 10;
+  const paddingY = 14;
+  const graphWidth = width - paddingX * 2;
+  const graphHeight = height - paddingY * 2;
+  return curve.points
+    .map((point, index) => {
+      const x = paddingX + (point.x / maxScore) * graphWidth;
+      const y = height - paddingY - (point.y / maxDensity) * graphHeight;
+      return `${index === 0 ? "M" : "L"} ${x.toFixed(2)} ${y.toFixed(2)}`;
+    })
+    .join(" ");
+};
+
+const rosterRowHasScore = (row: PerformanceScoreRosterRow) => {
+  const itemScores = Array.isArray(row.items) ? row.items : [];
+  if (itemScores.some((item) => getEnteredItemScore(item) !== null)) {
+    return true;
+  }
+  const totalScore = getFiniteNumber(row.totalScore);
+  return totalScore !== null && totalScore > 0;
+};
+
+const buildRecordFromRosterRow = (
+  roster: PerformanceScoreRoster,
+  row: PerformanceScoreRosterRow,
+): PerformanceScoreRecord => {
+  const hasScore = rosterRowHasScore(row);
+  return {
+    id: roster.id,
+    rosterId: roster.id,
+    title: roster.title,
+    subject: roster.subject,
+    ...(roster.assessmentOrder
+      ? { assessmentOrder: roster.assessmentOrder }
+      : {}),
+    academicYear: roster.academicYear,
+    semester: roster.semester,
+    grade: row.grade,
+    class: row.class,
+    number: row.number,
+    studentName: row.studentName,
+    uid: row.uid,
+    items: Array.isArray(row.items) ? row.items : [],
+    totalScore: hasScore ? Number(row.totalScore || 0) : Number.NaN,
+    totalMaxScore: row.totalMaxScore || roster.totalMaxScore || 0,
+    feedback: row.feedback || "",
+    evidence: row.evidence || row.feedback || "",
+    sourceFileName: roster.sourceFileName,
+  };
+};
+
+const cloneScoreListRecords = (records: ScoreListRecord[]) =>
+  records.map((record) => ({
+    ...record,
+    items: (record.items || []).map((item) => ({ ...item })),
+    confirmation: record.confirmation
+      ? { ...record.confirmation }
+      : record.confirmation,
+  }));
+
+const getScoreListRecordKey = (record: PerformanceScoreRecord) =>
+  `${record.uid || ""}:${record.id || record.rosterId || ""}`;
+
+const buildScoreListRecordFromRosterRow = (
+  roster: PerformanceScoreRoster,
+  row: PerformanceScoreRosterRow,
+): ScoreListRecord => ({
+  ...buildRecordFromRosterRow(roster, row),
+  scoreSource: "roster-row",
+  scoreDocumentExists: false,
+});
+
+const buildScoreListRecordFromDocument = (
+  id: string,
+  data: PerformanceScoreRecord,
+): ScoreListRecord => ({
+  id,
+  ...data,
+  items: Array.isArray(data.items) ? data.items : [],
+  scoreSource: "student-doc",
+  scoreDocumentExists: true,
+});
+
+const getRecordItemsForRoster = (
+  record: PerformanceScoreRecord,
+  roster: PerformanceScoreRoster,
+) =>
+  (roster.items || []).map((item, index) => {
+    const existing = record.items?.[index];
+    const existingScore = getFiniteNumber(existing?.score);
+    const existingMaxScore = getFiniteNumber(existing?.maxScore);
+    return {
+      name: existing?.name || item.name,
+      shortName: existing?.shortName || item.shortName,
+      score: existingScore === null ? 0 : roundScore(existingScore),
+      maxScore:
+        existingMaxScore === null
+          ? roundScore(Number(item.maxScore || 0))
+          : roundScore(existingMaxScore),
+      ratio: existing?.ratio ?? item.ratio,
+      scoreEntered:
+        existing?.scoreEntered === false
+          ? false
+          : existingScore !== null,
+    };
+  });
+
+const serializeScoreRecordForEdit = (
+  record: PerformanceScoreRecord | undefined,
+) => {
+  if (!record) return "";
+  return JSON.stringify({
+    uid: record.uid || "",
+    rosterId: record.rosterId || record.id || "",
+    items: (record.items || []).map((item) => ({
+      name: item.name || "",
+      score:
+        item.scoreEntered === false ? null : getEnteredItemScore(item),
+      maxScore: getFiniteNumber(item.maxScore) ?? 0,
+      scoreEntered: item.scoreEntered !== false,
+    })),
+    totalScore: getEnteredTotalScore(record),
+    totalMaxScore: getRecordTotalMaxScore(record),
+    feedback: String(record.feedback || ""),
+    evidence: String(record.evidence || record.feedback || ""),
+  });
+};
+
+const hasScoreRecordChanged = (
+  before: PerformanceScoreRecord | undefined,
+  after: PerformanceScoreRecord,
+) => serializeScoreRecordForEdit(before) !== serializeScoreRecordForEdit(after);
+
+const buildRosterRowFromScoreRecord = (
+  row: PerformanceScoreRosterRow,
+  record: PerformanceScoreRecord,
+  roster: PerformanceScoreRoster,
+): PerformanceScoreRosterRow => {
+  const items = getRecordItemsForRoster(record, roster);
+  const totalScore = getEnteredItemsTotalScore(items);
+  return {
+    ...row,
+    uid: record.uid || row.uid,
+    grade: record.grade || row.grade,
+    class: record.class || row.class,
+    number: record.number || row.number,
+    studentName: record.studentName || row.studentName,
+    items,
+    totalScore: totalScore ?? 0,
+    totalMaxScore:
+      getRecordTotalMaxScore(record) || roster.totalMaxScore || row.totalMaxScore,
+    feedback: String(record.feedback || "").slice(0, 1000),
+    evidence: String(record.evidence || record.feedback || "").slice(0, 1000),
+  };
+};
 
 const CLASS_SHEET_COLUMNS = [
   { width: 2.3 },
@@ -1755,10 +1991,22 @@ const PerformanceScoreManager: React.FC = () => {
   const [scoreListClassPage, setScoreListClassPage] = useState(1);
   const [scoreListSearch, setScoreListSearch] = useState("");
   const [scoreListRecords, setScoreListRecords] = useState<
-    PerformanceScoreRecord[]
+    ScoreListRecord[]
   >([]);
   const [scoreListLoading, setScoreListLoading] = useState(false);
+  const [scoreListLoadError, setScoreListLoadError] = useState("");
+  const [scoreEditing, setScoreEditing] = useState(false);
+  const [scoreEditOriginalRecords, setScoreEditOriginalRecords] = useState<
+    ScoreListRecord[]
+  >([]);
+  const [savingScoreEdits, setSavingScoreEdits] = useState(false);
   const [scoreStatsModalOpen, setScoreStatsModalOpen] = useState(false);
+  const [scoreStatsRecords, setScoreStatsRecords] = useState<
+    PerformanceScoreRecord[]
+  >([]);
+  const [scoreStatsLoadedRosterId, setScoreStatsLoadedRosterId] = useState("");
+  const [scoreStatsLoading, setScoreStatsLoading] = useState(false);
+  const [scoreStatsClassFilter, setScoreStatsClassFilter] = useState("");
   const [scoreListSort, setScoreListSort] = useState<
     SortState<ScoreListSortKey>
   >({ key: "number", direction: "asc" });
@@ -1829,7 +2077,6 @@ const PerformanceScoreManager: React.FC = () => {
   useEffect(() => {
     setScoreListSort({ key: "number", direction: "asc" });
     setClassStatsSort({ key: "class", direction: "asc" });
-    setScoreStatsModalOpen(false);
   }, [scoreListLoadedRosterId]);
 
   useEffect(() => {
@@ -2035,19 +2282,96 @@ const PerformanceScoreManager: React.FC = () => {
     () => sortScoreListRecords(filteredScoreListRecords, scoreListSort),
     [filteredScoreListRecords, scoreListSort],
   );
+  const scoreStatsFallbackRecords = useMemo(() => {
+    if (!selectedScoreRoster) return [];
+    return (selectedScoreRoster.rows || [])
+      .filter((row) => row.uid)
+      .map((row) => buildRecordFromRosterRow(selectedScoreRoster, row));
+  }, [selectedScoreRoster]);
+  const scoreStatsRecordsReady =
+    !!selectedScoreRoster &&
+    scoreStatsLoadedRosterId === selectedScoreRoster.id;
+  const scoreStatsSourceRecords = useMemo(() => {
+    if (scoreStatsRecordsReady) return scoreStatsRecords;
+    if (
+      scoreListReady &&
+      selectedScoreRoster &&
+      scoreListLoadedRosterId === selectedScoreRoster.id &&
+      scoreListRecords.length > 0
+    ) {
+      return scoreListRecords;
+    }
+    return scoreStatsFallbackRecords;
+  }, [
+    scoreListLoadedRosterId,
+    scoreListReady,
+    scoreListRecords,
+    scoreStatsFallbackRecords,
+    scoreStatsRecords,
+    scoreStatsRecordsReady,
+    selectedScoreRoster,
+  ]);
+  const scoreStatsClassOptions = useMemo(() => {
+    const values = new Set<string>();
+    (selectedScoreRoster?.classes || []).forEach((classValue) => {
+      const normalized = normalizeSchoolValue(classValue);
+      if (normalized) values.add(normalized);
+    });
+    (selectedScoreRoster?.rows || []).forEach((row) => {
+      const normalized = normalizeSchoolValue(row.class);
+      if (normalized) values.add(normalized);
+    });
+    scoreStatsSourceRecords.forEach((record) => {
+      const normalized = normalizeSchoolValue(record.class);
+      if (normalized) values.add(normalized);
+    });
+    return Array.from(values).sort(compareSchoolValue);
+  }, [scoreStatsSourceRecords, selectedScoreRoster]);
+  const scoreStatsClassOptionsKey = scoreStatsClassOptions.join("|");
+
+  useEffect(() => {
+    setScoreStatsClassFilter((current) => {
+      if (current && scoreStatsClassOptions.includes(current)) return current;
+      if (
+        scoreListClassFilter !== "all" &&
+        scoreStatsClassOptions.includes(scoreListClassFilter)
+      ) {
+        return scoreListClassFilter;
+      }
+      if (
+        activeScoreListClass &&
+        scoreStatsClassOptions.includes(activeScoreListClass)
+      ) {
+        return activeScoreListClass;
+      }
+      return scoreStatsClassOptions[0] || "";
+    });
+  }, [activeScoreListClass, scoreListClassFilter, scoreStatsClassOptionsKey]);
+
+  const scoreStatsSelectedRecords = useMemo(() => {
+    if (!scoreStatsClassFilter) return [];
+    return scoreStatsSourceRecords.filter(
+      (record) =>
+        normalizeSchoolValue(record.class) ===
+        normalizeSchoolValue(scoreStatsClassFilter),
+    );
+  }, [scoreStatsClassFilter, scoreStatsSourceRecords]);
   const scoreStats = useMemo(() => {
     const totalMaxScore = getSummaryMaxScore(
-      scoreListBaseRecords,
+      scoreStatsSourceRecords,
       selectedScoreRoster?.totalMaxScore,
     );
-    const overall = buildScoreSummary(scoreListBaseRecords, totalMaxScore);
-    const selected = buildScoreSummary(filteredScoreListRecords, totalMaxScore);
+    const overall = buildScoreSummary(scoreStatsSourceRecords, totalMaxScore);
+    const selected = buildScoreSummary(
+      scoreStatsSelectedRecords,
+      totalMaxScore,
+    );
     const selectedDifference =
       selected.average !== null && overall.average !== null
         ? roundScore(selected.average - overall.average)
         : null;
     const byClass = new Map<string, PerformanceScoreRecord[]>();
-    scoreListBaseRecords.forEach((record) => {
+    scoreStatsSourceRecords.forEach((record) => {
       const classValue = normalizeSchoolValue(record.class);
       if (!classValue) return;
       byClass.set(classValue, [...(byClass.get(classValue) || []), record]);
@@ -2077,12 +2401,12 @@ const PerformanceScoreManager: React.FC = () => {
         getFiniteNumber(item.maxScore) || 0,
       );
       const itemOverall = buildItemScoreSummary(
-        scoreListBaseRecords,
+        scoreStatsSourceRecords,
         index,
         itemMaxScore,
       );
       const itemSelected = buildItemScoreSummary(
-        filteredScoreListRecords,
+        scoreStatsSelectedRecords,
         index,
         itemMaxScore,
       );
@@ -2112,8 +2436,8 @@ const PerformanceScoreManager: React.FC = () => {
       }).length;
     const distribution = SCORE_DISTRIBUTION_BUCKETS.map((bucket) => ({
       ...bucket,
-      overallCount: getBucketCount(scoreListBaseRecords, bucket),
-      selectedCount: getBucketCount(filteredScoreListRecords, bucket),
+      overallCount: getBucketCount(scoreStatsSourceRecords, bucket),
+      selectedCount: getBucketCount(scoreStatsSelectedRecords, bucket),
     }));
     const maxDistributionCount = Math.max(
       1,
@@ -2121,6 +2445,19 @@ const PerformanceScoreManager: React.FC = () => {
         bucket.overallCount,
         bucket.selectedCount,
       ]),
+    );
+    const overallCurve = buildNormalCurveSummary(
+      scoreStatsSourceRecords,
+      totalMaxScore,
+    );
+    const selectedCurve = buildNormalCurveSummary(
+      scoreStatsSelectedRecords,
+      totalMaxScore,
+    );
+    const maxCurveDensity = Math.max(
+      0,
+      ...overallCurve.points.map((point) => point.y),
+      ...selectedCurve.points.map((point) => point.y),
     );
     return {
       totalMaxScore,
@@ -2131,11 +2468,16 @@ const PerformanceScoreManager: React.FC = () => {
       itemSummaries,
       distribution,
       maxDistributionCount,
+      normalCurve: {
+        overall: overallCurve,
+        selected: selectedCurve,
+        maxDensity: maxCurveDensity,
+      },
     };
   }, [
     classStatsSort,
-    filteredScoreListRecords,
-    scoreListBaseRecords,
+    scoreStatsSelectedRecords,
+    scoreStatsSourceRecords,
     selectedScoreRoster,
   ]);
   const summaryExportRosters = useMemo(() => {
@@ -2277,16 +2619,111 @@ const PerformanceScoreManager: React.FC = () => {
         };
       });
       setRosters(sortPerformanceScoreRosters(loaded));
+      setScoreListLoadError("");
     } catch (error) {
       console.error("Failed to load performance score rosters:", error);
+      setRosters([]);
+      setScoreListRosterId("");
+      setScoreListLoadedRosterId("");
+      setScoreListRecords([]);
+      setScoreEditing(false);
+      setScoreEditOriginalRecords([]);
+      setScoreListLoadError(
+        "저장된 수행평가 점수표를 불러오지 못했습니다.",
+      );
+      showToast({
+        tone: "error",
+        title: "저장된 점수표를 불러오지 못했습니다.",
+        message: "권한과 네트워크 상태를 확인한 뒤 다시 시도해 주세요.",
+      });
     } finally {
       setRostersLoading(false);
     }
   };
 
-  const loadScoreListRecords = async () => {
-    if (!selectedScoreRoster || scoreListLoading) return;
+  const loadScoreListRecords = async (
+    rosterOverride?: PerformanceScoreRoster,
+    options: { startEdit?: boolean } = {},
+  ) => {
+    const roster = rosterOverride || selectedScoreRoster;
+    if (!roster || scoreListLoading || savingScoreEdits) return;
     setScoreListLoading(true);
+    setScoreListLoadError("");
+    setScoreEditing(false);
+    setScoreEditOriginalRecords([]);
+    setScoreListLoadedRosterId("");
+    setScoreListRecords([]);
+    try {
+      const linkedRows = (roster.rows || []).filter((row) => row.uid);
+      const loaded: ScoreListRecord[] = [];
+      for (let index = 0; index < linkedRows.length; index += 40) {
+        const chunk = linkedRows.slice(index, index + 40);
+        const snaps = await Promise.all(
+          chunk.map((row) =>
+            getDoc(
+              doc(
+                db,
+                "users",
+                row.uid,
+                PERFORMANCE_SCORE_USER_COLLECTION,
+                roster.id,
+              ),
+            ),
+          ),
+        );
+        snaps.forEach((snap, rowIndex) => {
+          const row = chunk[rowIndex];
+          if (snap.exists()) {
+            const data = snap.data() as PerformanceScoreRecord;
+            loaded.push(buildScoreListRecordFromDocument(snap.id, data));
+            return;
+          }
+          loaded.push(buildScoreListRecordFromRosterRow(roster, row));
+        });
+      }
+      const sortedLoaded = sortPerformanceScoreRecords(loaded).sort(
+        (a, b) =>
+          Number(a.grade) - Number(b.grade) ||
+          Number(a.class) - Number(b.class) ||
+          Number(a.number) - Number(b.number) ||
+          String(a.studentName || "").localeCompare(
+            String(b.studentName || ""),
+            "ko",
+          ),
+      );
+      setScoreListRecords(sortedLoaded);
+      setScoreListLoadedRosterId(roster.id);
+      if (options.startEdit) {
+        setScoreEditOriginalRecords(cloneScoreListRecords(sortedLoaded));
+        setScoreEditing(true);
+      }
+    } catch (error) {
+      console.error("Failed to load performance score list:", error);
+      setScoreListLoadedRosterId("");
+      setScoreListRecords([]);
+      setScoreEditing(false);
+      setScoreEditOriginalRecords([]);
+      setScoreListLoadError("점수 목록을 불러오지 못했습니다.");
+      showToast({
+        tone: "error",
+        title: "점수 목록을 불러오지 못했습니다.",
+        message: "권한과 네트워크 상태를 확인한 뒤 다시 조회해 주세요.",
+      });
+    } finally {
+      setScoreListLoading(false);
+    }
+  };
+
+  const loadScoreStatsRecords = async () => {
+    if (!selectedScoreRoster || scoreStatsLoading) return;
+    if (
+      scoreStatsLoadedRosterId === selectedScoreRoster.id &&
+      scoreStatsRecords.length > 0
+    ) {
+      return;
+    }
+
+    setScoreStatsLoading(true);
     try {
       const linkedRows = (selectedScoreRoster.rows || []).filter(
         (row) => row.uid,
@@ -2318,32 +2755,12 @@ const PerformanceScoreManager: React.FC = () => {
             });
             return;
           }
-          loaded.push({
-            id: selectedScoreRoster.id,
-            rosterId: selectedScoreRoster.id,
-            title: selectedScoreRoster.title,
-            subject: selectedScoreRoster.subject,
-            ...(selectedScoreRoster.assessmentOrder
-              ? { assessmentOrder: selectedScoreRoster.assessmentOrder }
-              : {}),
-            academicYear: selectedScoreRoster.academicYear,
-            semester: selectedScoreRoster.semester,
-            grade: row.grade,
-            class: row.class,
-            number: row.number,
-            studentName: row.studentName,
-            uid: row.uid,
-            items: Array.isArray(row.items) ? row.items : [],
-            totalScore: row.totalScore || 0,
-            totalMaxScore:
-              row.totalMaxScore || selectedScoreRoster.totalMaxScore || 0,
-            feedback: row.feedback || "",
-            evidence: row.evidence || row.feedback || "",
-            sourceFileName: selectedScoreRoster.sourceFileName,
-          });
+          if (rosterRowHasScore(row)) {
+            loaded.push(buildRecordFromRosterRow(selectedScoreRoster, row));
+          }
         });
       }
-      setScoreListRecords(
+      setScoreStatsRecords(
         sortPerformanceScoreRecords(loaded).sort(
           (a, b) =>
             Number(a.grade) - Number(b.grade) ||
@@ -2355,16 +2772,321 @@ const PerformanceScoreManager: React.FC = () => {
             ),
         ),
       );
-      setScoreListLoadedRosterId(selectedScoreRoster.id);
+      setScoreStatsLoadedRosterId(selectedScoreRoster.id);
     } catch (error) {
-      console.error("Failed to load performance score list:", error);
+      console.error("Failed to load performance score statistics:", error);
       showToast({
         tone: "error",
-        title: "점수 목록을 불러오지 못했습니다.",
-        message: "권한과 네트워크 상태를 확인한 뒤 다시 조회해 주세요.",
+        title: "통계 데이터를 불러오지 못했습니다.",
+        message: "권한과 네트워크 상태를 확인한 뒤 다시 열어 주세요.",
       });
     } finally {
-      setScoreListLoading(false);
+      setScoreStatsLoading(false);
+    }
+  };
+
+  const startScoreEdit = () => {
+    if (!selectedScoreRoster || !scoreListReady || scoreListLoading) return;
+    setScoreEditOriginalRecords(cloneScoreListRecords(scoreListRecords));
+    setScoreEditing(true);
+  };
+
+  const cancelScoreEdit = () => {
+    setScoreListRecords(cloneScoreListRecords(scoreEditOriginalRecords));
+    setScoreEditOriginalRecords([]);
+    setScoreEditing(false);
+  };
+
+  const updateScoreListItemScore = (
+    recordKey: string,
+    itemIndex: number,
+    value: string,
+  ) => {
+    if (!selectedScoreRoster) return;
+    const trimmedValue = value.trim();
+    const parsedScore =
+      trimmedValue === "" ? null : getFiniteNumber(trimmedValue);
+
+    setScoreListRecords((current) =>
+      current.map((record) => {
+        if (getScoreListRecordKey(record) !== recordKey) return record;
+        const items = getRecordItemsForRoster(record, selectedScoreRoster);
+        const currentItem = items[itemIndex];
+        if (!currentItem) return record;
+        const nextItems = items.map((item, index) =>
+          index === itemIndex
+            ? {
+                ...item,
+                score: parsedScore === null ? 0 : roundScore(parsedScore),
+                scoreEntered: parsedScore !== null,
+              }
+            : item,
+        );
+        const nextTotalScore = getEnteredItemsTotalScore(nextItems);
+        return {
+          ...record,
+          items: nextItems,
+          totalScore: nextTotalScore ?? Number.NaN,
+        };
+      }),
+    );
+  };
+
+  const updateScoreListEvidence = (recordKey: string, value: string) => {
+    const evidence = value.slice(0, 1000);
+    setScoreListRecords((current) =>
+      current.map((record) =>
+        getScoreListRecordKey(record) === recordKey
+          ? {
+              ...record,
+              feedback: evidence,
+              evidence,
+            }
+          : record,
+      ),
+    );
+  };
+
+  const saveScoreListEdits = async () => {
+    if (
+      !selectedScoreRoster ||
+      !scoreListReady ||
+      !scoreEditing ||
+      savingScoreEdits
+    ) {
+      return;
+    }
+
+    const originalByKey = new Map(
+      scoreEditOriginalRecords.map((record) => [
+        getScoreListRecordKey(record),
+        record,
+      ]),
+    );
+    const changedRecords = scoreListRecords.filter((record) =>
+      hasScoreRecordChanged(originalByKey.get(getScoreListRecordKey(record)), record),
+    );
+
+    if (!changedRecords.length) {
+      setScoreEditing(false);
+      setScoreEditOriginalRecords([]);
+      showToast({
+        tone: "success",
+        title: "수정할 변경 사항이 없습니다.",
+        message: "현재 DB 점수표와 동일합니다.",
+      });
+      return;
+    }
+
+    const invalidRecord = scoreListRecords.find((record) =>
+      (getRecordItemsForRoster(record, selectedScoreRoster) || []).some(
+        (item) => {
+          const score = getEnteredItemScore(item);
+          const maxScore = getFiniteNumber(item.maxScore);
+          return (
+            score !== null &&
+            (score < 0 || (maxScore !== null && maxScore > 0 && score > maxScore))
+          );
+        },
+      ),
+    );
+    if (invalidRecord) {
+      showToast({
+        tone: "warning",
+        title: "점수 범위를 확인해 주세요.",
+        message: `${invalidRecord.class}반 ${invalidRecord.number}번 ${invalidRecord.studentName} 학생의 점수가 허용 범위를 벗어났습니다.`,
+      });
+      return;
+    }
+
+    const signedChangedCount = changedRecords.filter((record) => {
+      const original = originalByKey.get(getScoreListRecordKey(record));
+      return Boolean(
+        record.signatureImage ||
+          record.confirmation?.signatureImage ||
+          original?.signatureImage ||
+          original?.confirmation?.signatureImage,
+      );
+    }).length;
+
+    if (
+      signedChangedCount > 0 &&
+      !window.confirm(
+        [
+          `이미 점수 확인 서명이 완료된 학생 ${signedChangedCount}명의 점수 또는 근거가 변경됩니다.`,
+          "변경된 학생의 기존 확인 서명은 자동으로 반려되어 학생이 다시 확인할 수 있게 됩니다.",
+          "",
+          "계속 저장할까요?",
+        ].join("\n"),
+      )
+    ) {
+      return;
+    }
+
+    setSavingScoreEdits(true);
+    try {
+      const timestamp = serverTimestamp();
+      const editedBy = currentUser?.uid || "";
+      const editedByEmail = currentUser?.email || "";
+      const recordByUid = new Map(
+        scoreListRecords
+          .filter((record) => record.uid)
+          .map((record) => [record.uid, record]),
+      );
+      const updatedRows = (selectedScoreRoster.rows || []).map((row) => {
+        const record = row.uid ? recordByUid.get(row.uid) : undefined;
+        return record
+          ? buildRosterRowFromScoreRecord(row, record, selectedScoreRoster)
+          : row;
+      });
+      const savedRowCount = updatedRows.filter(
+        (row) => row.uid && rosterRowHasScore(row),
+      ).length;
+      const batchQueue = createBatchQueue();
+
+      batchQueue.update(
+        doc(db, rosterCollectionPath, selectedScoreRoster.id),
+        {
+          rows: updatedRows,
+          matchedCount: savedRowCount,
+          unmatchedCount: Math.max(0, updatedRows.length - savedRowCount),
+          updatedAt: timestamp,
+        },
+      );
+
+      changedRecords.forEach((record) => {
+        if (!record.uid) return;
+        const scoreId = selectedScoreRoster.id;
+        const scoreRef = doc(
+          db,
+          "users",
+          record.uid,
+          PERFORMANCE_SCORE_USER_COLLECTION,
+          scoreId,
+        );
+        const confirmationRef = doc(
+          db,
+          "users",
+          record.uid,
+          PERFORMANCE_SCORE_USER_COLLECTION,
+          scoreId,
+          PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
+          record.uid,
+        );
+        const original = originalByKey.get(getScoreListRecordKey(record));
+        const hadSignature = Boolean(
+          record.signatureImage ||
+            record.confirmation?.signatureImage ||
+            original?.signatureImage ||
+            original?.confirmation?.signatureImage,
+        );
+        const items = getRecordItemsForRoster(record, selectedScoreRoster);
+        const totalScore = getEnteredItemsTotalScore(items);
+
+        if (hadSignature) {
+          batchQueue.delete(confirmationRef);
+        }
+
+        if (totalScore === null) {
+          batchQueue.delete(scoreRef);
+          return;
+        }
+
+        const payload: PerformanceScoreRecord = {
+          rosterId: scoreId,
+          title: selectedScoreRoster.title,
+          subject: selectedScoreRoster.subject,
+          ...(selectedScoreRoster.assessmentOrder
+            ? { assessmentOrder: selectedScoreRoster.assessmentOrder }
+            : {}),
+          academicYear: selectedScoreRoster.academicYear || year,
+          semester: selectedScoreRoster.semester || semester,
+          grade: record.grade,
+          class: record.class,
+          number: record.number,
+          studentName: record.studentName,
+          uid: record.uid,
+          items,
+          totalScore,
+          totalMaxScore:
+            getRecordTotalMaxScore(record) || selectedScoreRoster.totalMaxScore,
+          feedback: String(record.feedback || "").slice(0, 1000),
+          evidence: String(record.evidence || record.feedback || "").slice(
+            0,
+            1000,
+          ),
+          sourceFileName: selectedScoreRoster.sourceFileName,
+          uploadedBy: record.uploadedBy || selectedScoreRoster.uploadedBy || editedBy,
+          uploadedByEmail:
+            record.uploadedByEmail ||
+            selectedScoreRoster.uploadedByEmail ||
+            editedByEmail,
+          uploadedAt: record.uploadedAt || selectedScoreRoster.createdAt || timestamp,
+          updatedAt: timestamp,
+        };
+        batchQueue.set(scoreRef, payload);
+      });
+
+      await batchQueue.commit();
+
+      const changedKeys = new Set(
+        changedRecords.map((record) => getScoreListRecordKey(record)),
+      );
+      const normalizedRecords = scoreListRecords.map((record) => {
+        if (!changedKeys.has(getScoreListRecordKey(record))) return record;
+        const hasScore = getEnteredTotalScore(record) !== null;
+        const cleared = clearRecordSignature(record) || record;
+        return {
+          ...cleared,
+          scoreSource: hasScore ? "student-doc" : "roster-row",
+          scoreDocumentExists: hasScore,
+          updatedAt: new Date(),
+        };
+      });
+
+      setScoreListRecords(normalizedRecords);
+      setScoreEditOriginalRecords(cloneScoreListRecords(normalizedRecords));
+      setScoreEditing(false);
+      setScoreStatsRecords([]);
+      setScoreStatsLoadedRosterId("");
+      setClassSheetPreviewStudents([]);
+      setClassSheetPreviewLoadedKey("");
+      setRosters((current) =>
+        sortPerformanceScoreRosters(
+          current.map((roster) =>
+            roster.id === selectedScoreRoster.id
+              ? {
+                  ...roster,
+                  rows: updatedRows,
+                  matchedCount: savedRowCount,
+                  unmatchedCount: Math.max(
+                    0,
+                    updatedRows.length - savedRowCount,
+                  ),
+                  updatedAt: new Date(),
+                }
+              : roster,
+          ),
+        ),
+      );
+      await loadRosters();
+      showToast({
+        tone: "success",
+        title: "수행평가 점수표를 수정했습니다.",
+        message:
+          signedChangedCount > 0
+            ? "변경된 점수와 근거를 DB에 저장하고 기존 확인 서명을 반려했습니다."
+            : "변경된 점수와 근거를 DB에 저장했습니다.",
+      });
+    } catch (error) {
+      console.error("Failed to update performance scores:", error);
+      showToast({
+        tone: "error",
+        title: "점수표 수정에 실패했습니다.",
+        message: getFirestoreWriteErrorMessage(error),
+      });
+    } finally {
+      setSavingScoreEdits(false);
     }
   };
 
@@ -2408,28 +3130,7 @@ const PerformanceScoreManager: React.FC = () => {
           });
           return;
         }
-        loaded.push({
-          id: roster.id,
-          rosterId: roster.id,
-          title: roster.title,
-          subject: roster.subject,
-          ...(roster.assessmentOrder
-            ? { assessmentOrder: roster.assessmentOrder }
-            : {}),
-          academicYear: roster.academicYear,
-          semester: roster.semester,
-          grade: row.grade,
-          class: row.class,
-          number: row.number,
-          studentName: row.studentName,
-          uid: row.uid,
-          items: Array.isArray(row.items) ? row.items : [],
-          totalScore: row.totalScore || 0,
-          totalMaxScore: row.totalMaxScore || roster.totalMaxScore || 0,
-          feedback: row.feedback || "",
-          evidence: row.evidence || row.feedback || "",
-          sourceFileName: roster.sourceFileName,
-        });
+        loaded.push(buildRecordFromRosterRow(roster, row));
       });
     }
     const withConfirmations = await Promise.all(
@@ -2959,8 +3660,11 @@ const PerformanceScoreManager: React.FC = () => {
           class: row.class,
           number: row.number,
           studentName: row.studentName,
+          items: Array.isArray(_items) ? _items : [],
           totalScore: row.totalScore,
           totalMaxScore: row.totalMaxScore,
+          feedback: _feedback || "",
+          evidence: _evidence || _feedback || "",
           matchStatus: row.matchStatus,
           matchMessage: row.matchMessage,
         }),
@@ -2993,7 +3697,7 @@ const PerformanceScoreManager: React.FC = () => {
         updatedAt: timestamp,
       } satisfies Omit<PerformanceScoreRoster, "id">);
 
-      const savedScoreRecords: PerformanceScoreRecord[] = [];
+      const savedScoreRecords: ScoreListRecord[] = [];
       saveableRows.forEach((row) => {
         const userScoreRef = doc(
           db,
@@ -3029,6 +3733,8 @@ const PerformanceScoreManager: React.FC = () => {
         savedScoreRecords.push({
           id: rosterId,
           ...payload,
+          scoreSource: "student-doc",
+          scoreDocumentExists: true,
         });
       });
 
@@ -3036,6 +3742,9 @@ const PerformanceScoreManager: React.FC = () => {
       setParsed(null);
       setScoreListRosterId(rosterId);
       setScoreListLoadedRosterId(rosterId);
+      setScoreListLoadError("");
+      setScoreEditing(false);
+      setScoreEditOriginalRecords([]);
       setScoreListGradeFilter("all");
       setScoreListClassFilter("all");
       setScoreListSearch("");
@@ -3070,7 +3779,7 @@ const PerformanceScoreManager: React.FC = () => {
   };
 
   const deleteRoster = async (roster: PerformanceScoreRoster) => {
-    if (deletingRosterId) return;
+    if (deletingRosterId || scoreEditing || savingScoreEdits) return;
     if (
       !window.confirm(
         `${roster.title} 업로드 기록과 학생별 점수 문서를 삭제할까요?`,
@@ -3111,7 +3820,15 @@ const PerformanceScoreManager: React.FC = () => {
       if (scoreListRosterId === roster.id) {
         setScoreListLoadedRosterId("");
         setScoreListRecords([]);
+        setScoreEditing(false);
+        setScoreEditOriginalRecords([]);
       }
+      if (scoreStatsLoadedRosterId === roster.id) {
+        setScoreStatsRecords([]);
+        setScoreStatsLoadedRosterId("");
+      }
+      setClassSheetPreviewStudents([]);
+      setClassSheetPreviewLoadedKey("");
       await loadRosters();
       showToast({
         tone: "success",
@@ -3130,11 +3847,38 @@ const PerformanceScoreManager: React.FC = () => {
     }
   };
 
-  const selectedScoreClassLabel = activeScoreListClass
-    ? `${activeScoreListClass}반`
+  const selectScoreRoster = (rosterId: string) => {
+    setScoreListRosterId(rosterId);
+    setScoreListLoadedRosterId("");
+    setScoreListRecords([]);
+    setScoreListLoadError("");
+    setScoreEditing(false);
+    setScoreEditOriginalRecords([]);
+    setScoreListClassFilter("all");
+    setScoreListClassPage(1);
+  };
+
+  const openRosterForEditing = async (roster: PerformanceScoreRoster) => {
+    if (scoreListLoading || scoreEditing || savingScoreEdits) return;
+    setScoreListRosterId(roster.id);
+    setScoreListClassFilter("all");
+    setScoreListClassPage(1);
+    setScoreListSearch("");
+    setUploadModalOpen(false);
+    await loadScoreListRecords(roster, { startEdit: true });
+  };
+
+  const openScoreStatsModal = () => {
+    if (!selectedScoreRoster) return;
+    setScoreStatsModalOpen(true);
+    void loadScoreStatsRecords();
+  };
+
+  const selectedScoreClassLabel = scoreStatsClassFilter
+    ? `${scoreStatsClassFilter}반`
     : "선택 학급";
   const scoreStatsButtonDisabled =
-    !scoreListReady || scoreListLoading || scoreListRecords.length === 0;
+    rostersLoading || !selectedScoreRoster || scoreEditing || savingScoreEdits;
 
   const toggleScoreListSort = (key: ScoreListSortKey) => {
     setScoreListSort((current) =>
@@ -3428,10 +4172,10 @@ const PerformanceScoreManager: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => {
-                              setScoreListRosterId(roster.id);
-                              setScoreListClassFilter("all");
+                              selectScoreRoster(roster.id);
                               setUploadModalOpen(false);
                             }}
+                            disabled={scoreEditing || savingScoreEdits}
                             className="inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-blue-200 bg-white px-3 text-xs font-black text-blue-700 transition hover:bg-blue-50"
                           >
                             <i className="fas fa-list" aria-hidden="true"></i>
@@ -3439,8 +4183,28 @@ const PerformanceScoreManager: React.FC = () => {
                           </button>
                           <button
                             type="button"
+                            onClick={() => void openRosterForEditing(roster)}
+                            disabled={
+                              scoreListLoading ||
+                              scoreEditing ||
+                              savingScoreEdits
+                            }
+                            className="inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-emerald-200 bg-white px-3 text-xs font-black text-emerald-700 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <i
+                              className="fas fa-pen-to-square"
+                              aria-hidden="true"
+                            ></i>
+                            수정
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => void deleteRoster(roster)}
-                            disabled={deletingRosterId === roster.id}
+                            disabled={
+                              deletingRosterId === roster.id ||
+                              scoreEditing ||
+                              savingScoreEdits
+                            }
                             className="inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-rose-200 bg-white px-3 text-xs font-black text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             <i className="fas fa-trash" aria-hidden="true"></i>
@@ -3492,13 +4256,53 @@ const PerformanceScoreManager: React.FC = () => {
             </div>
 
             <div className="overflow-y-auto px-5 py-4">
-              {!scoreListReady ? (
+              {!selectedScoreRoster ? (
                 <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-12 text-center text-sm font-bold text-slate-400">
-                  평가명과 조건을 선택한 뒤 조회를 누르면 통계를 확인할 수
-                  있습니다.
+                  저장된 수행평가 점수표가 있으면 통계를 확인할 수 있습니다.
                 </div>
               ) : (
                 <div className="space-y-5">
+                  <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-4 lg:grid-cols-[1fr_220px]">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-black text-slate-900">
+                        {selectedScoreRoster.title}
+                      </div>
+                      <div className="mt-1 text-xs font-bold text-slate-500">
+                        전체 {scoreStats.overall.count}명 산출 · 반별 비교 기준
+                        · 개별 학생 점수는 표시하지 않습니다.
+                      </div>
+                    </div>
+                    <label className="block">
+                      <span className="mb-1.5 block text-xs font-black text-slate-500">
+                        자세히 볼 반
+                      </span>
+                      <select
+                        value={scoreStatsClassFilter}
+                        onChange={(event) =>
+                          setScoreStatsClassFilter(event.target.value)
+                        }
+                        className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
+                      >
+                        {scoreStatsClassOptions.length === 0 ? (
+                          <option value="">반 정보 없음</option>
+                        ) : (
+                          scoreStatsClassOptions.map((classValue) => (
+                            <option key={classValue} value={classValue}>
+                              {classValue}반
+                            </option>
+                          ))
+                        )}
+                      </select>
+                    </label>
+                  </div>
+
+                  {scoreStatsLoading && (
+                    <div className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-700">
+                      통계용 점수 데이터를 불러오는 중입니다. 불러오기 전에는
+                      업로드 기록에 남은 범위에서 먼저 계산됩니다.
+                    </div>
+                  )}
+
                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                     <div className="rounded-lg bg-slate-50 px-4 py-3">
                       <div className="text-xs font-black text-slate-500">
@@ -3558,302 +4362,434 @@ const PerformanceScoreManager: React.FC = () => {
                     </div>
                   </div>
 
-                  <section className="rounded-xl border border-slate-200 bg-white p-4">
-                    <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-                      <div>
+                  <div className="grid gap-5 xl:grid-cols-2">
+                    <section className="rounded-xl border border-slate-200 bg-white p-4">
+                      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                        <div>
+                          <h4 className="text-sm font-black text-slate-900">
+                            전체 평균과 선택 학급 평균
+                          </h4>
+                          <p className="mt-1 text-xs font-bold text-slate-500">
+                            막대 길이는 총점 만점 대비 평균 달성률입니다.
+                          </p>
+                        </div>
+                        <span className="text-xs font-black text-slate-400">
+                          만점{" "}
+                          {formatPerformanceScore(scoreStats.totalMaxScore)}점
+                        </span>
+                      </div>
+                      <div className="mt-4 space-y-3">
+                        {[
+                          {
+                            label: "전체",
+                            summary: scoreStats.overall,
+                            barClass: "bg-slate-500",
+                          },
+                          {
+                            label: selectedScoreClassLabel,
+                            summary: scoreStats.selected,
+                            barClass: "bg-blue-600",
+                          },
+                        ].map((item) => {
+                          const width = Math.min(
+                            100,
+                            Math.max(
+                              item.summary.count > 0 ? 4 : 0,
+                              item.summary.percent || 0,
+                            ),
+                          );
+                          return (
+                            <div
+                              key={item.label}
+                              className="grid gap-2 sm:grid-cols-[120px_1fr_130px]"
+                            >
+                              <div className="text-sm font-black text-slate-700">
+                                {item.label}
+                              </div>
+                              <div className="h-7 overflow-hidden rounded-lg bg-slate-100">
+                                <div
+                                  className={`h-full rounded-lg ${item.barClass}`}
+                                  style={{ width: `${width}%` }}
+                                />
+                              </div>
+                              <div className="text-right text-sm font-black text-slate-800">
+                                {formatScoreStat(item.summary.average)}
+                                <span className="ml-1 text-xs text-slate-400">
+                                  {formatPercentStat(item.summary.percent)}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </section>
+
+                    <section className="rounded-xl border border-slate-200 bg-white p-4">
+                      <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <h4 className="text-sm font-black text-slate-900">
+                            정규분포 곡선
+                          </h4>
+                          <p className="mt-1 text-xs font-bold text-slate-500">
+                            전체와 {selectedScoreClassLabel}의 총점 분포를
+                            평균과 표준편차로 근사합니다.
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-right text-[11px] font-bold text-slate-500">
+                          <div>
+                            전체 평균{" "}
+                            {formatScoreStat(
+                              scoreStats.normalCurve.overall.mean,
+                            )}
+                          </div>
+                          <div>
+                            선택 평균{" "}
+                            {formatScoreStat(
+                              scoreStats.normalCurve.selected.mean,
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-4 rounded-lg border border-slate-100 bg-slate-50 px-3 py-3">
+                        {scoreStats.normalCurve.maxDensity > 0 ? (
+                          <svg
+                            viewBox="0 0 420 180"
+                            className="h-48 w-full"
+                            role="img"
+                            aria-label="전체와 선택 학급의 정규분포 곡선"
+                          >
+                            <line
+                              x1="10"
+                              y1="166"
+                              x2="410"
+                              y2="166"
+                              stroke="#cbd5e1"
+                              strokeWidth="1"
+                            />
+                            {[0, 0.5, 1].map((ratio) => (
+                              <g key={ratio}>
+                                <line
+                                  x1={10 + ratio * 400}
+                                  y1="162"
+                                  x2={10 + ratio * 400}
+                                  y2="170"
+                                  stroke="#cbd5e1"
+                                  strokeWidth="1"
+                                />
+                                <text
+                                  x={10 + ratio * 400}
+                                  y="178"
+                                  textAnchor="middle"
+                                  className="fill-slate-500 text-[10px] font-bold"
+                                >
+                                  {formatPerformanceScore(
+                                    scoreStats.totalMaxScore * ratio,
+                                  )}
+                                </text>
+                              </g>
+                            ))}
+                            <path
+                              d={buildNormalCurvePath(
+                                scoreStats.normalCurve.overall,
+                                scoreStats.totalMaxScore,
+                                scoreStats.normalCurve.maxDensity,
+                                420,
+                                180,
+                              )}
+                              fill="none"
+                              stroke="#64748b"
+                              strokeWidth="3"
+                              strokeLinecap="round"
+                            />
+                            <path
+                              d={buildNormalCurvePath(
+                                scoreStats.normalCurve.selected,
+                                scoreStats.totalMaxScore,
+                                scoreStats.normalCurve.maxDensity,
+                                420,
+                                180,
+                              )}
+                              fill="none"
+                              stroke="#2563eb"
+                              strokeWidth="3"
+                              strokeLinecap="round"
+                            />
+                          </svg>
+                        ) : (
+                          <div className="flex h-48 items-center justify-center text-center text-sm font-bold leading-6 text-slate-400">
+                            정규분포 곡선을 그리려면 같은 반에 서로 다른 점수의
+                            산출 대상이 2명 이상 필요합니다.
+                          </div>
+                        )}
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-3 text-[11px] font-black">
+                        <span className="inline-flex items-center gap-1 text-slate-600">
+                          <span className="h-2 w-5 rounded-full bg-slate-500" />
+                          전체
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-blue-700">
+                          <span className="h-2 w-5 rounded-full bg-blue-600" />
+                          {selectedScoreClassLabel}
+                        </span>
+                        <span className="text-slate-400">
+                          표준편차 전체{" "}
+                          {formatScoreStat(
+                            scoreStats.normalCurve.overall.standardDeviation,
+                          )}{" "}
+                          · 선택{" "}
+                          {formatScoreStat(
+                            scoreStats.normalCurve.selected.standardDeviation,
+                          )}
+                        </span>
+                      </div>
+                    </section>
+
+                    <section className="rounded-xl border border-slate-200 bg-white">
+                      <div className="border-b border-slate-100 px-4 py-3">
                         <h4 className="text-sm font-black text-slate-900">
-                          전체 평균과 선택 학급 평균
+                          학급별 평균 비교
                         </h4>
                         <p className="mt-1 text-xs font-bold text-slate-500">
-                          막대 길이는 총점 만점 대비 평균 달성률입니다.
+                          헤더를 누르면 해당 기준으로 오름차순과 내림차순을
+                          전환합니다.
                         </p>
                       </div>
-                      <span className="text-xs font-black text-slate-400">
-                        만점 {formatPerformanceScore(scoreStats.totalMaxScore)}
-                        점
-                      </span>
-                    </div>
-                    <div className="mt-4 space-y-3">
-                      {[
-                        {
-                          label: "전체",
-                          summary: scoreStats.overall,
-                          barClass: "bg-slate-500",
-                        },
-                        {
-                          label: selectedScoreClassLabel,
-                          summary: scoreStats.selected,
-                          barClass: "bg-blue-600",
-                        },
-                      ].map((item) => {
-                        const width = Math.min(
-                          100,
-                          Math.max(
-                            item.summary.count > 0 ? 4 : 0,
-                            item.summary.percent || 0,
-                          ),
-                        );
-                        return (
-                          <div
-                            key={item.label}
-                            className="grid gap-2 sm:grid-cols-[120px_1fr_130px]"
-                          >
-                            <div className="text-sm font-black text-slate-700">
-                              {item.label}
-                            </div>
-                            <div className="h-7 overflow-hidden rounded-lg bg-slate-100">
-                              <div
-                                className={`h-full rounded-lg ${item.barClass}`}
-                                style={{ width: `${width}%` }}
-                              />
-                            </div>
-                            <div className="text-right text-sm font-black text-slate-800">
-                              {formatScoreStat(item.summary.average)}
-                              <span className="ml-1 text-xs text-slate-400">
-                                {formatPercentStat(item.summary.percent)}
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </section>
-
-                  <section className="rounded-xl border border-slate-200 bg-white">
-                    <div className="border-b border-slate-100 px-4 py-3">
-                      <h4 className="text-sm font-black text-slate-900">
-                        학급별 평균 비교
-                      </h4>
-                      <p className="mt-1 text-xs font-bold text-slate-500">
-                        헤더를 누르면 해당 기준으로 오름차순과 내림차순을
-                        전환합니다.
-                      </p>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full min-w-[820px] text-left text-sm">
-                        <thead className="bg-slate-50 text-xs font-black text-slate-500">
-                          <tr>
-                            {renderClassStatsHeader("class", "반")}
-                            {renderClassStatsHeader(
-                              "count",
-                              "산출 인원",
-                              "right",
-                            )}
-                            {renderClassStatsHeader("average", "평균", "right")}
-                            {renderClassStatsHeader(
-                              "percent",
-                              "달성률",
-                              "right",
-                            )}
-                            {renderClassStatsHeader("max", "최고", "right")}
-                            {renderClassStatsHeader("min", "최저", "right")}
-                            {renderClassStatsHeader(
-                              "difference",
-                              "전체 평균 대비",
-                              "right",
-                            )}
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {scoreStats.classSummaries.length === 0 ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[560px] text-left text-sm">
+                          <thead className="bg-slate-50 text-xs font-black text-slate-500">
                             <tr>
-                              <td
-                                colSpan={7}
-                                className="px-4 py-10 text-center text-sm font-bold text-slate-400"
-                              >
-                                비교할 학급 통계가 없습니다.
-                              </td>
+                              {renderClassStatsHeader("class", "반")}
+                              {renderClassStatsHeader(
+                                "count",
+                                "산출 인원",
+                                "right",
+                              )}
+                              {renderClassStatsHeader(
+                                "average",
+                                "평균",
+                                "right",
+                              )}
+                              {renderClassStatsHeader(
+                                "percent",
+                                "달성률",
+                                "right",
+                              )}
+                              {renderClassStatsHeader(
+                                "difference",
+                                "전체 평균 대비",
+                                "right",
+                              )}
                             </tr>
-                          ) : (
-                            scoreStats.classSummaries.map((summary) => {
-                              const selected =
-                                normalizeSchoolValue(summary.classValue) ===
-                                normalizeSchoolValue(activeScoreListClass);
-                              return (
-                                <tr
-                                  key={summary.classValue}
-                                  className={selected ? "bg-blue-50/50" : ""}
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {scoreStats.classSummaries.length === 0 ? (
+                              <tr>
+                                <td
+                                  colSpan={5}
+                                  className="px-4 py-10 text-center text-sm font-bold text-slate-400"
                                 >
-                                  <td className="whitespace-nowrap px-3 py-3 font-black text-slate-900">
-                                    {summary.classValue}반
-                                    {selected && (
-                                      <span className="ml-2 rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-black text-white">
-                                        선택
-                                      </span>
-                                    )}
+                                  비교할 학급 통계가 없습니다.
+                                </td>
+                              </tr>
+                            ) : (
+                              scoreStats.classSummaries.map((summary) => {
+                                const selected =
+                                  normalizeSchoolValue(summary.classValue) ===
+                                  normalizeSchoolValue(scoreStatsClassFilter);
+                                return (
+                                  <tr
+                                    key={summary.classValue}
+                                    className={selected ? "bg-blue-50/50" : ""}
+                                  >
+                                    <td className="whitespace-nowrap px-3 py-3">
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setScoreStatsClassFilter(
+                                            summary.classValue,
+                                          )
+                                        }
+                                        className="font-black text-slate-900 transition hover:text-blue-700"
+                                      >
+                                        {summary.classValue}반
+                                      </button>
+                                      {selected && (
+                                        <span className="ml-2 rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-black text-white">
+                                          선택
+                                        </span>
+                                      )}
+                                    </td>
+                                    <td className="whitespace-nowrap px-3 py-3 text-right font-bold text-slate-700">
+                                      {summary.count}명
+                                    </td>
+                                    <td className="whitespace-nowrap px-3 py-3 text-right font-black text-slate-900">
+                                      {formatScoreStat(summary.average)}
+                                    </td>
+                                    <td className="whitespace-nowrap px-3 py-3 text-right font-bold text-slate-700">
+                                      {formatPercentStat(summary.percent)}
+                                    </td>
+                                    <td
+                                      className={`whitespace-nowrap px-3 py-3 text-right font-black ${getDifferenceTextClass(
+                                        summary.difference,
+                                      )}`}
+                                    >
+                                      {formatDifferenceStat(summary.difference)}
+                                    </td>
+                                  </tr>
+                                );
+                              })
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </section>
+
+                    <section className="rounded-xl border border-slate-200 bg-white">
+                      <div className="border-b border-slate-100 px-4 py-3">
+                        <h4 className="text-sm font-black text-slate-900">
+                          평가 요소별 평균 비교
+                        </h4>
+                        <p className="mt-1 text-xs font-bold text-slate-500">
+                          각 평가 요소는 해당 요소 점수가 입력된 학생만 평균에
+                          포함합니다.
+                        </p>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full min-w-[680px] text-left text-sm">
+                          <thead className="bg-slate-50 text-xs font-black text-slate-500">
+                            <tr>
+                              <th className="px-3 py-3">평가 요소</th>
+                              <th className="px-3 py-3 text-right">만점</th>
+                              <th className="px-3 py-3 text-right">
+                                전체 평균
+                              </th>
+                              <th className="px-3 py-3 text-right">
+                                {selectedScoreClassLabel} 평균
+                              </th>
+                              <th className="px-3 py-3 text-right">
+                                전체 대비
+                              </th>
+                              <th className="px-3 py-3 text-right">
+                                선택 학급 달성률
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {scoreStats.itemSummaries.length === 0 ? (
+                              <tr>
+                                <td
+                                  colSpan={6}
+                                  className="px-4 py-10 text-center text-sm font-bold text-slate-400"
+                                >
+                                  평가 요소 정보가 없습니다.
+                                </td>
+                              </tr>
+                            ) : (
+                              scoreStats.itemSummaries.map((item) => (
+                                <tr key={`${item.name}-${item.index}`}>
+                                  <td className="px-3 py-3">
+                                    <div
+                                      className="max-w-[280px] truncate font-black text-slate-900"
+                                      title={item.name}
+                                    >
+                                      {item.label}
+                                    </div>
+                                    <div className="mt-1 text-[11px] font-bold text-slate-400">
+                                      전체 {item.overall.count}명 · 선택{" "}
+                                      {item.selected.count}명 산출
+                                    </div>
                                   </td>
                                   <td className="whitespace-nowrap px-3 py-3 text-right font-bold text-slate-700">
-                                    {summary.count}명
-                                  </td>
-                                  <td className="whitespace-nowrap px-3 py-3 text-right font-black text-slate-900">
-                                    {formatScoreStat(summary.average)}
+                                    {formatPerformanceScore(item.maxScore)}
                                   </td>
                                   <td className="whitespace-nowrap px-3 py-3 text-right font-bold text-slate-700">
-                                    {formatPercentStat(summary.percent)}
+                                    {formatScoreStat(item.overall.average)}
                                   </td>
-                                  <td className="whitespace-nowrap px-3 py-3 text-right font-bold text-slate-700">
-                                    {formatScoreStat(summary.max)}
-                                  </td>
-                                  <td className="whitespace-nowrap px-3 py-3 text-right font-bold text-slate-700">
-                                    {formatScoreStat(summary.min)}
+                                  <td className="whitespace-nowrap px-3 py-3 text-right font-black text-blue-700">
+                                    {formatScoreStat(item.selected.average)}
                                   </td>
                                   <td
                                     className={`whitespace-nowrap px-3 py-3 text-right font-black ${getDifferenceTextClass(
-                                      summary.difference,
+                                      item.difference,
                                     )}`}
                                   >
-                                    {formatDifferenceStat(summary.difference)}
+                                    {formatDifferenceStat(item.difference)}
+                                  </td>
+                                  <td className="whitespace-nowrap px-3 py-3 text-right font-bold text-slate-700">
+                                    {formatPercentStat(item.selected.percent)}
                                   </td>
                                 </tr>
-                              );
-                            })
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </section>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </section>
 
-                  <section className="rounded-xl border border-slate-200 bg-white">
-                    <div className="border-b border-slate-100 px-4 py-3">
-                      <h4 className="text-sm font-black text-slate-900">
-                        평가 요소별 평균 비교
-                      </h4>
-                      <p className="mt-1 text-xs font-bold text-slate-500">
-                        각 평가 요소는 해당 요소 점수가 입력된 학생만 평균에
-                        포함합니다.
-                      </p>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full min-w-[860px] text-left text-sm">
-                        <thead className="bg-slate-50 text-xs font-black text-slate-500">
-                          <tr>
-                            <th className="px-3 py-3">평가 요소</th>
-                            <th className="px-3 py-3 text-right">만점</th>
-                            <th className="px-3 py-3 text-right">전체 평균</th>
-                            <th className="px-3 py-3 text-right">
-                              {selectedScoreClassLabel} 평균
-                            </th>
-                            <th className="px-3 py-3 text-right">전체 대비</th>
-                            <th className="px-3 py-3 text-right">
-                              선택 학급 달성률
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                          {scoreStats.itemSummaries.length === 0 ? (
-                            <tr>
-                              <td
-                                colSpan={6}
-                                className="px-4 py-10 text-center text-sm font-bold text-slate-400"
-                              >
-                                평가 요소 정보가 없습니다.
-                              </td>
-                            </tr>
-                          ) : (
-                            scoreStats.itemSummaries.map((item) => (
-                              <tr key={`${item.name}-${item.index}`}>
-                                <td className="px-3 py-3">
-                                  <div
-                                    className="max-w-[280px] truncate font-black text-slate-900"
-                                    title={item.name}
-                                  >
-                                    {item.label}
-                                  </div>
-                                  <div className="mt-1 text-[11px] font-bold text-slate-400">
-                                    전체 {item.overall.count}명 · 선택{" "}
-                                    {item.selected.count}명 산출
-                                  </div>
-                                </td>
-                                <td className="whitespace-nowrap px-3 py-3 text-right font-bold text-slate-700">
-                                  {formatPerformanceScore(item.maxScore)}
-                                </td>
-                                <td className="whitespace-nowrap px-3 py-3 text-right font-bold text-slate-700">
-                                  {formatScoreStat(item.overall.average)}
-                                </td>
-                                <td className="whitespace-nowrap px-3 py-3 text-right font-black text-blue-700">
-                                  {formatScoreStat(item.selected.average)}
-                                </td>
-                                <td
-                                  className={`whitespace-nowrap px-3 py-3 text-right font-black ${getDifferenceTextClass(
-                                    item.difference,
-                                  )}`}
-                                >
-                                  {formatDifferenceStat(item.difference)}
-                                </td>
-                                <td className="whitespace-nowrap px-3 py-3 text-right font-bold text-slate-700">
-                                  {formatPercentStat(item.selected.percent)}
-                                </td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </section>
-
-                  <section className="rounded-xl border border-slate-200 bg-white p-4">
-                    <div>
-                      <h4 className="text-sm font-black text-slate-900">
-                        총점 달성률 분포
-                      </h4>
-                      <p className="mt-1 text-xs font-bold text-slate-500">
-                        전체와 {selectedScoreClassLabel}의 점수대별 학생 수를
-                        비교합니다.
-                      </p>
-                    </div>
-                    <div className="mt-4 space-y-4">
-                      {scoreStats.distribution.map((bucket) => {
-                        const overallWidth =
-                          (bucket.overallCount /
-                            scoreStats.maxDistributionCount) *
-                          100;
-                        const selectedWidth =
-                          (bucket.selectedCount /
-                            scoreStats.maxDistributionCount) *
-                          100;
-                        return (
-                          <div
-                            key={bucket.label}
-                            className="grid gap-2 md:grid-cols-[90px_1fr]"
-                          >
-                            <div className="text-xs font-black text-slate-600">
-                              {bucket.label}
-                            </div>
-                            <div className="space-y-1.5">
-                              <div className="grid grid-cols-[64px_1fr_48px] items-center gap-2">
-                                <span className="text-[11px] font-black text-slate-500">
-                                  전체
-                                </span>
-                                <div className="h-4 rounded-full bg-slate-100">
-                                  <div
-                                    className="h-4 rounded-full bg-slate-500"
-                                    style={{ width: `${overallWidth}%` }}
-                                  />
-                                </div>
-                                <span className="text-right text-[11px] font-black text-slate-600">
-                                  {bucket.overallCount}명
-                                </span>
+                    <section className="rounded-xl border border-slate-200 bg-white p-4">
+                      <div>
+                        <h4 className="text-sm font-black text-slate-900">
+                          총점 달성률 분포
+                        </h4>
+                        <p className="mt-1 text-xs font-bold text-slate-500">
+                          전체와 {selectedScoreClassLabel}의 점수대별 학생 수를
+                          비교합니다.
+                        </p>
+                      </div>
+                      <div className="mt-4 space-y-4">
+                        {scoreStats.distribution.map((bucket) => {
+                          const overallWidth =
+                            (bucket.overallCount /
+                              scoreStats.maxDistributionCount) *
+                            100;
+                          const selectedWidth =
+                            (bucket.selectedCount /
+                              scoreStats.maxDistributionCount) *
+                            100;
+                          return (
+                            <div
+                              key={bucket.label}
+                              className="grid gap-2 md:grid-cols-[90px_1fr]"
+                            >
+                              <div className="text-xs font-black text-slate-600">
+                                {bucket.label}
                               </div>
-                              <div className="grid grid-cols-[64px_1fr_48px] items-center gap-2">
-                                <span className="text-[11px] font-black text-blue-700">
-                                  선택
-                                </span>
-                                <div className="h-4 rounded-full bg-blue-50">
-                                  <div
-                                    className="h-4 rounded-full bg-blue-600"
-                                    style={{ width: `${selectedWidth}%` }}
-                                  />
+                              <div className="space-y-1.5">
+                                <div className="grid grid-cols-[64px_1fr_48px] items-center gap-2">
+                                  <span className="text-[11px] font-black text-slate-500">
+                                    전체
+                                  </span>
+                                  <div className="h-4 rounded-full bg-slate-100">
+                                    <div
+                                      className="h-4 rounded-full bg-slate-500"
+                                      style={{ width: `${overallWidth}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-right text-[11px] font-black text-slate-600">
+                                    {bucket.overallCount}명
+                                  </span>
                                 </div>
-                                <span className="text-right text-[11px] font-black text-blue-700">
-                                  {bucket.selectedCount}명
-                                </span>
+                                <div className="grid grid-cols-[64px_1fr_48px] items-center gap-2">
+                                  <span className="text-[11px] font-black text-blue-700">
+                                    선택
+                                  </span>
+                                  <div className="h-4 rounded-full bg-blue-50">
+                                    <div
+                                      className="h-4 rounded-full bg-blue-600"
+                                      style={{ width: `${selectedWidth}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-right text-[11px] font-black text-blue-700">
+                                    {bucket.selectedCount}명
+                                  </span>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </section>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  </div>
                 </div>
               )}
             </div>
@@ -4578,12 +5514,12 @@ const PerformanceScoreManager: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => setScoreStatsModalOpen(true)}
+              onClick={openScoreStatsModal}
               disabled={scoreStatsButtonDisabled}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white px-4 text-sm font-black text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
               title={
                 scoreStatsButtonDisabled
-                  ? "점수 목록을 조회한 뒤 통계를 확인할 수 있습니다."
+                  ? "저장된 수행평가 점수표가 있어야 통계를 확인할 수 있습니다."
                   : "수행평가 통계 보기"
               }
             >
@@ -4637,9 +5573,9 @@ const PerformanceScoreManager: React.FC = () => {
                   <select
                     value={scoreListRosterId}
                     onChange={(event) => {
-                      setScoreListRosterId(event.target.value);
-                      setScoreListClassFilter("all");
+                      selectScoreRoster(event.target.value);
                     }}
+                    disabled={scoreEditing || savingScoreEdits}
                     className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
                   >
                     {rosters.map((roster) => (
@@ -4708,7 +5644,12 @@ const PerformanceScoreManager: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => void loadScoreListRecords()}
-                  disabled={!selectedScoreRoster || scoreListLoading}
+                  disabled={
+                    !selectedScoreRoster ||
+                    scoreListLoading ||
+                    scoreEditing ||
+                    savingScoreEdits
+                  }
                   className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 xl:mt-6"
                 >
                   <i
@@ -4719,6 +5660,13 @@ const PerformanceScoreManager: React.FC = () => {
                 </button>
               </div>
             </div>
+
+            {scoreListLoadError && (
+              <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold leading-6 text-rose-700">
+                {scoreListLoadError} 다시 조회하기 전에는 점수 수정이
+                비활성화됩니다.
+              </div>
+            )}
 
             {scoreListReady ? (
               <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -4731,7 +5679,13 @@ const PerformanceScoreManager: React.FC = () => {
                       {activeScoreListClass
                         ? `${activeScoreListClass}반 ${filteredScoreListRecords.length}명 표시`
                         : `${filteredScoreListRecords.length}명 표시`}{" "}
-                      · 저장 {scoreListRecords.length}명 · 만점{" "}
+                      · 명단 {scoreListRecords.length}명 · 저장{" "}
+                      {
+                        scoreListRecords.filter(
+                          (record) => getEnteredTotalScore(record) !== null,
+                        ).length
+                      }
+                      명 · 만점{" "}
                       {formatPerformanceScore(
                         selectedScoreRoster?.totalMaxScore,
                       )}
@@ -4742,6 +5696,43 @@ const PerformanceScoreManager: React.FC = () => {
                     <span className="inline-flex max-w-[360px] items-center truncate rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
                       {selectedScoreRoster?.sourceFileName}
                     </span>
+                    {scoreEditing ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={cancelScoreEdit}
+                          disabled={savingScoreEdits}
+                          className="inline-flex h-9 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          취소
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void saveScoreListEdits()}
+                          disabled={savingScoreEdits}
+                          className="inline-flex h-9 items-center justify-center gap-1 rounded-lg bg-blue-600 px-3 text-xs font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                        >
+                          <i
+                            className={`fas fa-save ${savingScoreEdits ? "animate-pulse" : ""}`}
+                            aria-hidden="true"
+                          ></i>
+                          {savingScoreEdits ? "저장 중" : "변경 저장"}
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={startScoreEdit}
+                        disabled={scoreListLoading || savingScoreEdits}
+                        className="inline-flex h-9 items-center justify-center gap-1 rounded-lg border border-emerald-200 bg-white px-3 text-xs font-black text-emerald-700 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <i
+                          className="fas fa-pen-to-square"
+                          aria-hidden="true"
+                        ></i>
+                        점수 수정
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="overflow-x-auto">
@@ -4779,10 +5770,18 @@ const PerformanceScoreManager: React.FC = () => {
                         </tr>
                       ) : (
                         sortedFilteredScoreListRecords.map((record) => {
+                          const recordKey = getScoreListRecordKey(record);
+                          const editableItems = selectedScoreRoster
+                            ? getRecordItemsForRoster(
+                                record,
+                                selectedScoreRoster,
+                              )
+                            : record.items || [];
                           const percent = getPerformanceScorePercent(
                             record.totalScore,
                             record.totalMaxScore,
                           );
+                          const enteredTotalScore = getEnteredTotalScore(record);
                           return (
                             <tr key={`${record.uid}-${record.rosterId}`}>
                               <td className="whitespace-nowrap px-3 py-3 font-bold text-slate-600">
@@ -4799,30 +5798,72 @@ const PerformanceScoreManager: React.FC = () => {
                               </td>
                               {(selectedScoreRoster?.items || []).map(
                                 (item, index) => {
-                                  const scoreItem = record.items?.[index];
+                                  const scoreItem = editableItems[index];
+                                  const itemScore =
+                                    getEnteredItemScore(scoreItem);
                                   return (
                                     <td
                                       key={`${record.uid}-${item.name}-${index}`}
                                       className="whitespace-nowrap px-3 py-3 text-right font-bold text-slate-700"
                                     >
-                                      {scoreItem?.scoreEntered === false
-                                        ? "-"
-                                        : formatPerformanceScore(
-                                            scoreItem?.score,
-                                          )}
-                                      <span className="ml-1 text-slate-400">
-                                        /{" "}
-                                        {formatPerformanceScore(
-                                          scoreItem?.maxScore ?? item.maxScore,
-                                        )}
-                                      </span>
+                                      {scoreEditing ? (
+                                        <div className="flex items-center justify-end gap-1.5">
+                                          <input
+                                            type="number"
+                                            min={0}
+                                            max={
+                                              getFiniteNumber(item.maxScore) ??
+                                              undefined
+                                            }
+                                            step="0.1"
+                                            value={
+                                              itemScore === null
+                                                ? ""
+                                                : String(itemScore)
+                                            }
+                                            onChange={(event) =>
+                                              updateScoreListItemScore(
+                                                recordKey,
+                                                index,
+                                                event.target.value,
+                                              )
+                                            }
+                                            disabled={savingScoreEdits}
+                                            aria-label={`${record.studentName} ${getItemLabel(item)} 점수`}
+                                            className="h-9 w-20 rounded-lg border border-slate-200 px-2 text-right text-sm font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-50"
+                                          />
+                                          <span className="text-slate-400">
+                                            /{" "}
+                                            {formatPerformanceScore(
+                                              scoreItem?.maxScore ??
+                                                item.maxScore,
+                                            )}
+                                          </span>
+                                        </div>
+                                      ) : (
+                                        <>
+                                          {itemScore === null
+                                            ? "-"
+                                            : formatPerformanceScore(itemScore)}
+                                          <span className="ml-1 text-slate-400">
+                                            /{" "}
+                                            {formatPerformanceScore(
+                                              scoreItem?.maxScore ??
+                                                item.maxScore,
+                                            )}
+                                          </span>
+                                        </>
+                                      )}
                                     </td>
                                   );
                                 },
                               )}
                               <td className="whitespace-nowrap px-3 py-3 text-right">
                                 <div className="font-black text-blue-700">
-                                  {formatPerformanceScore(record.totalScore)} /{" "}
+                                  {formatPerformanceScore(
+                                    enteredTotalScore ?? Number.NaN,
+                                  )}{" "}
+                                  /{" "}
                                   {formatPerformanceScore(record.totalMaxScore)}
                                 </div>
                                 <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100">
@@ -4833,9 +5874,25 @@ const PerformanceScoreManager: React.FC = () => {
                                 </div>
                               </td>
                               <td className="px-3 py-3">
-                                <div className="max-w-[360px] text-xs font-semibold leading-5 text-slate-600">
-                                  {record.evidence || record.feedback || "-"}
-                                </div>
+                                {scoreEditing ? (
+                                  <textarea
+                                    value={record.evidence || record.feedback || ""}
+                                    onChange={(event) =>
+                                      updateScoreListEvidence(
+                                        recordKey,
+                                        event.target.value,
+                                      )
+                                    }
+                                    rows={2}
+                                    disabled={savingScoreEdits}
+                                    className="w-full min-w-72 resize-y rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold leading-5 text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-50"
+                                    placeholder="학생에게 보여줄 감점 요인 또는 평가 근거"
+                                  />
+                                ) : (
+                                  <div className="max-w-[360px] text-xs font-semibold leading-5 text-slate-600">
+                                    {record.evidence || record.feedback || "-"}
+                                  </div>
+                                )}
                               </td>
                             </tr>
                           );
