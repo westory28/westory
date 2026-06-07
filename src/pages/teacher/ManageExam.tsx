@@ -1,20 +1,27 @@
 import React, { useEffect, useState } from "react";
 import ExamGradingPlan from "./components/ExamGradingPlan";
 import ExamOmrConfig from "./components/ExamOmrConfig";
+import PerformanceScoreManager from "./components/PerformanceScoreManager";
 import { useSearchParams } from "react-router-dom";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import { cloneDefaultMenus, sanitizeMenuConfig } from "../../constants/menus";
 
 const ManageExam: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<"preview" | "omr">("preview");
+  const [activeTab, setActiveTab] = useState<"preview" | "omr" | "performance">(
+    "preview",
+  );
   const [tabLabels, setTabLabels] = useState({
     preview: "평가 반영 비율",
     omr: "정기시험 답안",
+    performance: "수행평가 점수 관리",
   });
   const [searchParams] = useSearchParams();
   useEffect(() => {
-    setActiveTab(searchParams.get("tab") === "omr" ? "omr" : "preview");
+    const tab = searchParams.get("tab");
+    setActiveTab(
+      tab === "omr" ? "omr" : tab === "performance" ? "performance" : "preview",
+    );
   }, [searchParams]);
 
   useEffect(() => {
@@ -34,10 +41,22 @@ const ManageExam: React.FC = () => {
         const omrLabel =
           children.find((child) => child.url === "/teacher/exam?tab=omr")
             ?.name || "정기시험 답안";
-        setTabLabels({ preview: previewLabel, omr: omrLabel });
+        const performanceLabel =
+          children.find(
+            (child) => child.url === "/teacher/exam?tab=performance",
+          )?.name || "수행평가 점수 관리";
+        setTabLabels({
+          preview: previewLabel,
+          omr: omrLabel,
+          performance: performanceLabel,
+        });
       } catch (error) {
         console.error("Failed to load exam menu labels:", error);
-        setTabLabels({ preview: "평가 반영 비율", omr: "정기시험 답안" });
+        setTabLabels({
+          preview: "평가 반영 비율",
+          omr: "정기시험 답안",
+          performance: "수행평가 점수 관리",
+        });
       }
     };
 
@@ -68,11 +87,22 @@ const ManageExam: React.FC = () => {
           >
             {tabLabels.omr}
           </button>
+          <button
+            onClick={() => setActiveTab("performance")}
+            className={`py-3 px-6 font-bold text-sm border-b-2 transition whitespace-nowrap ${
+              activeTab === "performance"
+                ? "border-blue-500 text-blue-600"
+                : "border-transparent text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            {tabLabels.performance}
+          </button>
         </div>
 
         <div className="relative min-h-[500px] flex-1 overflow-hidden rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:p-6">
           {activeTab === "preview" && <ExamGradingPlan />}
           {activeTab === "omr" && <ExamOmrConfig />}
+          {activeTab === "performance" && <PerformanceScoreManager />}
         </div>
       </main>
     </div>

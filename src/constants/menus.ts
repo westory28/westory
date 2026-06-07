@@ -37,12 +37,13 @@ export const MENUS: MenuConfig = {
       ],
     },
     {
-      name: "성적",
+      name: "점수",
       url: "/student/score",
       icon: "M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z",
       children: [
         { name: "성적 계산기", url: "/student/score" },
         { name: "나의 성적 리포트", url: "/student/score/report" },
+        { name: "내 수행평가 점수", url: "/student/score/performance" },
         { name: "정기 시험 답안", url: "/student/history" },
       ],
     },
@@ -95,6 +96,7 @@ export const MENUS: MenuConfig = {
       children: [
         { name: "평가 반영 비율", url: "/teacher/exam" },
         { name: "정기시험 답안", url: "/teacher/exam?tab=omr" },
+        { name: "수행평가 점수 관리", url: "/teacher/exam?tab=performance" },
       ],
     },
     {

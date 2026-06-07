@@ -98,7 +98,8 @@ const getDesktopSubmenuChildren = (
   return children.filter(
     (child) =>
       child.resolvedUrl === "/student/score" ||
-      child.resolvedUrl === "/student/score/report",
+      child.resolvedUrl === "/student/score/report" ||
+      child.resolvedUrl === "/student/score/performance",
   );
 };
 

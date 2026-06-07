@@ -206,6 +206,10 @@ service cloud.firestore {
       return canUseWestory() && targetUid == request.auth.uid;
     }
 
+    function canManagePerformanceScores() {
+      return isAdmin() || isTeacherRole();
+    }
+
     function changedUserKeys() {
       return request.resource.data.diff(resource.data).affectedKeys();
     }
@@ -539,8 +543,8 @@ service cloud.firestore {
 
     // 사용자 기본 문서 권한
     match /users/{userId} {
-      allow get: if canUseWestory() && (isOwnUser(userId) || isAdmin() || hasPermission('student_list_read'));
-      allow list: if isAdmin() || hasPermission('student_list_read');
+      allow get: if canUseWestory() && (isOwnUser(userId) || isAdmin() || isTeacherRole() || hasPermission('student_list_read'));
+      allow list: if isAdmin() || isTeacherRole() || hasPermission('student_list_read');
       allow create: if isAdmin() || isValidOwnStudentCreate(userId);
       allow update: if isAdmin() || isValidOwnStudentUpdate(userId);
       allow delete: if isAdmin();
@@ -553,6 +557,11 @@ service cloud.firestore {
           && request.resource.data.scores is map
           && request.resource.data.scores.keys().size() <= 500;
         allow delete: if canUseWestory() && (isOwnUser(userId) || isAdmin());
+      }
+
+      match /performance_scores/{scoreId} {
+        allow read: if canUseWestory() && (isOwnUser(userId) || canManagePerformanceScores());
+        allow create, update, delete: if canManagePerformanceScores();
       }
 
       match /attendance/{recordId} {
@@ -721,6 +730,10 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /performance_score_rosters/{docId} {
+      allow read, write: if canManagePerformanceScores();
+    }
+
     match /quiz_results/{resultId} {
       allow read: if canReadQuizResult(resource.data);
       allow create: if isValidQuizResultCreate();
@@ -872,6 +885,10 @@ service cloud.firestore {
       match /exam_config/{docId} {
         allow read: if canUseWestory();
         allow write: if isAdmin();
+      }
+
+      match /performance_score_rosters/{docId} {
+        allow read, write: if canManagePerformanceScores();
       }
 
       match /quiz_results/{resultId} {

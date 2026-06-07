@@ -57,6 +57,10 @@ const StudentScoreReport = lazyWithRetry(
   () => import("./pages/student/score/ScoreReport"),
   "student-score-report",
 );
+const StudentPerformanceScoreView = lazyWithRetry(
+  () => import("./pages/student/score/PerformanceScoreView"),
+  "student-performance-score-view",
+);
 const TeacherDashboard = lazyWithRetry(
   () => import("./pages/teacher/Dashboard"),
   "teacher-dashboard",
@@ -255,6 +259,13 @@ const App: React.FC = () => {
                   element={renderWithLayout(
                     <StudentScoreReport />,
                     "성적표를 준비하는 중입니다.",
+                  )}
+                />
+                <Route
+                  path="/student/score/performance"
+                  element={renderWithLayout(
+                    <StudentPerformanceScoreView />,
+                    "수행평가 점수를 준비하는 중입니다.",
                   )}
                 />
                 <Route
