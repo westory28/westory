@@ -2769,17 +2769,17 @@ const PerformanceScoreManager: React.FC = () => {
                                 </td>
                                 <td className="px-3 py-3">
                                   {signatureDisplayRecord && signatureImage ? (
-                                    <div className="flex min-w-[250px] flex-wrap items-center gap-3">
-                                      <div className="flex h-12 w-36 items-center justify-center overflow-hidden rounded-lg border border-blue-100 bg-blue-50 px-2">
+                                    <div className="flex min-w-[190px] items-center gap-2 whitespace-nowrap">
+                                      <div className="flex h-8 w-20 shrink-0 items-center justify-center overflow-hidden rounded-md border border-blue-100 bg-blue-50 px-1.5">
                                         <img
                                           src={signatureImage}
                                           alt={`${student.studentName} 서명`}
-                                          className="max-h-10 max-w-full object-contain"
+                                          className="max-h-6 max-w-full object-contain"
                                         />
                                       </div>
-                                      <div className="min-w-0 flex-1">
+                                      <div className="min-w-0">
                                         <div
-                                          className={`text-xs font-black ${
+                                          className={`text-[11px] font-black leading-4 ${
                                             signatureRecord
                                               ? "text-emerald-700"
                                               : "text-amber-700"
@@ -2789,7 +2789,7 @@ const PerformanceScoreManager: React.FC = () => {
                                             ? "서명 완료"
                                             : "부분 서명"}
                                         </div>
-                                        <div className="mt-1 truncate text-xs font-bold text-slate-500">
+                                        <div className="max-w-[3.5rem] truncate text-[11px] font-bold leading-4 text-slate-500">
                                           {signatureName}
                                         </div>
                                       </div>
@@ -2803,7 +2803,7 @@ const PerformanceScoreManager: React.FC = () => {
                                         disabled={
                                           rejectingSignatureKey === studentKey
                                         }
-                                        className="inline-flex h-8 shrink-0 items-center justify-center rounded-lg border border-rose-200 bg-white px-3 text-xs font-black text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                        className="inline-flex h-7 w-16 shrink-0 items-center justify-center rounded-md border border-rose-200 bg-white text-[11px] font-black text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40"
                                       >
                                         {rejectingSignatureKey === studentKey
                                           ? "반려 중..."
