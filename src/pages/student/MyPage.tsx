@@ -36,6 +36,12 @@ import {
   needsPointRankLegacyFallback,
 } from "../../lib/pointRanks";
 import { formatWisAmount } from "../../lib/pointFormatters";
+import {
+  formatPerformanceScore,
+  getPerformanceScorePercent,
+  loadUserPerformanceScoreRecords,
+  type PerformanceScoreRecord,
+} from "../../lib/performanceScores";
 import { getDefaultProfileEmojiValue } from "../../lib/profileEmojis";
 import { getSemesterCollectionPath } from "../../lib/semesterScope";
 import {
@@ -305,6 +311,11 @@ const MyPage: React.FC = () => {
 
   const [scoreRows, setScoreRows] = useState<ScoreRow[]>([]);
   const [scoreChartData, setScoreChartData] = useState<any>(null);
+  const [performanceScores, setPerformanceScores] = useState<
+    PerformanceScoreRecord[]
+  >([]);
+  const [performanceScoresLoading, setPerformanceScoresLoading] =
+    useState(false);
 
   const [trendPoints, setTrendPoints] = useState<TrendPoint[]>([]);
   const [quizLineData, setQuizLineData] = useState<any>(null);
@@ -338,6 +349,7 @@ const MyPage: React.FC = () => {
       loadProfileAndEmoji(),
       loadPointRankState(),
       loadScoreData(),
+      loadPerformanceScoreData(),
       loadQuizData(titles, quizResults),
       loadProgressSummary(quizResults),
     ]);
@@ -541,6 +553,23 @@ const MyPage: React.FC = () => {
           }
         : null,
     );
+  };
+
+  const loadPerformanceScoreData = async () => {
+    if (!user || !config) return;
+    setPerformanceScoresLoading(true);
+    try {
+      const year = String(config.year || "2026");
+      const semester = String(config.semester || "1");
+      setPerformanceScores(
+        await loadUserPerformanceScoreRecords(user.uid, { year, semester }),
+      );
+    } catch (error) {
+      console.error("Failed to load my performance scores:", error);
+      setPerformanceScores([]);
+    } finally {
+      setPerformanceScoresLoading(false);
+    }
   };
 
   const loadQuizData = async (
@@ -1117,6 +1146,7 @@ const MyPage: React.FC = () => {
 
   const leftMenus: Array<{ key: MainMenu; title: string; icon: string }> = [
     { key: "profile", title: "나의 기본 정보", icon: "fa-id-card" },
+    { key: "score", title: "나의 성적표", icon: "fa-chart-column" },
     { key: "wrong_note", title: "오답 노트", icon: "fa-book-open" },
   ];
   const profileGradeValue = normalizeClassValue(
@@ -1588,6 +1618,88 @@ const MyPage: React.FC = () => {
                     </section>
                   ))}
                 </div>
+
+                <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
+                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <h3 className="text-xl font-black text-slate-900">
+                        내 수행평가 점수
+                      </h3>
+                      <p className="mt-1 text-sm font-bold text-slate-500">
+                        교사가 확정해 업로드한 수행평가 점수와 피드백입니다.
+                      </p>
+                    </div>
+                    <Link
+                      to="/student/score/performance"
+                      className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 text-sm font-extrabold text-blue-700 transition hover:bg-blue-100"
+                    >
+                      자세히 보기
+                      <i className="fas fa-chevron-right text-xs"></i>
+                    </Link>
+                  </div>
+                  <div className="mt-5 grid gap-3 lg:grid-cols-2">
+                    {performanceScoresLoading ? (
+                      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm font-bold text-slate-400 lg:col-span-2">
+                        수행평가 점수를 불러오는 중입니다.
+                      </div>
+                    ) : performanceScores.length === 0 ? (
+                      <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm font-bold text-slate-400 lg:col-span-2">
+                        아직 확인할 수행평가 점수가 없습니다.
+                      </div>
+                    ) : (
+                      performanceScores.slice(0, 4).map((record) => {
+                        const percent = getPerformanceScorePercent(
+                          record.totalScore,
+                          record.totalMaxScore,
+                        );
+                        return (
+                          <article
+                            key={record.id || record.rosterId}
+                            className="rounded-xl border border-slate-200 px-4 py-4"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <h4 className="truncate text-base font-black text-slate-900">
+                                  {record.title}
+                                </h4>
+                                <p className="mt-1 text-xs font-bold text-slate-400">
+                                  {record.subject || "과목"} · {record.class}반{" "}
+                                  {record.number}번
+                                </p>
+                              </div>
+                              <div className="shrink-0 text-right">
+                                <div className="text-lg font-black text-blue-600">
+                                  {formatPerformanceScore(record.totalScore)}
+                                  <span className="text-sm text-slate-400">
+                                    {" "}
+                                    /{" "}
+                                    {formatPerformanceScore(
+                                      record.totalMaxScore,
+                                    )}
+                                  </span>
+                                </div>
+                                <div className="text-xs font-black text-blue-500">
+                                  {formatPerformanceScore(percent)}%
+                                </div>
+                              </div>
+                            </div>
+                            <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100">
+                              <div
+                                className="h-full rounded-full bg-blue-600"
+                                style={{ width: `${percent}%` }}
+                              />
+                            </div>
+                            <p className="mt-3 line-clamp-2 text-xs font-semibold leading-5 text-slate-500">
+                              {record.evidence ||
+                                record.feedback ||
+                                "등록된 피드백이 없습니다."}
+                            </p>
+                          </article>
+                        );
+                      })
+                    )}
+                  </div>
+                </section>
 
                 <div className="grid gap-5 xl:grid-cols-[1.25fr_0.9fr]">
                   <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">

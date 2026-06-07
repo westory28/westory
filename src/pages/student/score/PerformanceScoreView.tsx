@@ -7,15 +7,13 @@ import {
   LinearScale,
   Tooltip,
 } from "chart.js";
-import { collection, getDocs, orderBy, query } from "firebase/firestore";
 import { PageLoading } from "../../../components/common/LoadingState";
 import { useAuth } from "../../../contexts/AuthContext";
-import { db } from "../../../lib/firebase";
 import { getYearSemester } from "../../../lib/semesterScope";
 import {
-  PERFORMANCE_SCORE_USER_COLLECTION,
   formatPerformanceScore,
   getPerformanceScorePercent,
+  loadUserPerformanceScoreRecords,
   type PerformanceScoreRecord,
 } from "../../../lib/performanceScores";
 import { getPerformanceScoreItemShortName } from "../../../lib/performanceScoreWorkbook";
@@ -65,35 +63,10 @@ const PerformanceScoreView: React.FC = () => {
     if (!currentUser?.uid) return;
     setLoading(true);
     try {
-      const snap = await getDocs(
-        query(
-          collection(
-            db,
-            "users",
-            currentUser.uid,
-            PERFORMANCE_SCORE_USER_COLLECTION,
-          ),
-          orderBy("updatedAt", "desc"),
-        ),
-      );
-      const loaded = snap.docs
-        .map(
-          (item) =>
-            ({
-              id: item.id,
-              ...item.data(),
-            }) as PerformanceScoreRecord,
-        )
-        .filter(
-          (record) =>
-            String(record.academicYear || "") === year &&
-            String(record.semester || "") === semester,
-        )
-        .sort(
-          (a, b) =>
-            (a.assessmentOrder ?? 999) - (b.assessmentOrder ?? 999) ||
-            String(a.title || "").localeCompare(String(b.title || ""), "ko"),
-        );
+      const loaded = await loadUserPerformanceScoreRecords(currentUser.uid, {
+        year,
+        semester,
+      });
       setRecords(loaded);
       setSelectedId((current) =>
         loaded.some((record) => record.id === current)

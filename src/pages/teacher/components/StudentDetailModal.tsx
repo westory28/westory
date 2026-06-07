@@ -8,6 +8,12 @@ import {
   loadStudentProgressSummary,
   type StudentProgressSummary,
 } from "../../../lib/studentProgressSummary";
+import {
+  formatPerformanceScore,
+  getPerformanceScorePercent,
+  loadUserPerformanceScoreRecords,
+  type PerformanceScoreRecord,
+} from "../../../lib/performanceScores";
 
 interface Student {
   id: string;
@@ -18,7 +24,7 @@ interface Student {
   email: string;
 }
 
-type DetailTab = "summary" | "profile";
+type DetailTab = "summary" | "profile" | "performance";
 type SummaryPanel = "overview" | "lesson" | "quiz";
 
 interface StudentDetailModalProps {
@@ -44,6 +50,11 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   const [activeTab, setActiveTab] = useState<DetailTab>(initialTab);
   const [summary, setSummary] = useState<StudentProgressSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const [performanceScores, setPerformanceScores] = useState<
+    PerformanceScoreRecord[]
+  >([]);
+  const [performanceScoresLoading, setPerformanceScoresLoading] =
+    useState(false);
   const [summaryPanel, setSummaryPanel] = useState<SummaryPanel>("overview");
   const [quizUnitFilter, setQuizUnitFilter] = useState("all");
   const [quizCategoryFilter, setQuizCategoryFilter] = useState("all");
@@ -91,6 +102,33 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
       cancelled = true;
     };
   }, [config, isOpen, student?.id]);
+
+  useEffect(() => {
+    if (!isOpen || !student?.id) return;
+    let cancelled = false;
+    const loadPerformanceScores = async () => {
+      setPerformanceScoresLoading(true);
+      try {
+        const year = String(config?.year || "2026");
+        const semester = String(config?.semester || "1");
+        const records = await loadUserPerformanceScoreRecords(student.id, {
+          year,
+          semester,
+        });
+        if (!cancelled) setPerformanceScores(records);
+      } catch (error) {
+        console.error("Failed to load student performance scores:", error);
+        if (!cancelled) setPerformanceScores([]);
+      } finally {
+        if (!cancelled) setPerformanceScoresLoading(false);
+      }
+    };
+
+    void loadPerformanceScores();
+    return () => {
+      cancelled = true;
+    };
+  }, [config?.semester, config?.year, isOpen, student?.id]);
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target;
@@ -239,6 +277,11 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                 key: "summary" as const,
                 label: "학습 현황",
                 icon: "fa-chart-line",
+              },
+              {
+                key: "performance" as const,
+                label: "수행평가",
+                icon: "fa-chart-column",
               },
               {
                 key: "profile" as const,
@@ -620,6 +663,89 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                     </section>
                   </div>
                 </>
+              )}
+            </div>
+          )}
+
+          {activeTab === "performance" && (
+            <div className="space-y-4">
+              {performanceScoresLoading ? (
+                <div className="rounded-xl border border-gray-200 bg-white px-4 py-8 text-center text-sm font-bold text-gray-400">
+                  수행평가 점수를 불러오는 중...
+                </div>
+              ) : performanceScores.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-gray-200 bg-white px-4 py-10 text-center text-sm font-bold text-gray-400">
+                  저장된 수행평가 점수가 없습니다.
+                </div>
+              ) : (
+                performanceScores.map((record) => {
+                  const percent = getPerformanceScorePercent(
+                    record.totalScore,
+                    record.totalMaxScore,
+                  );
+                  return (
+                    <section
+                      key={record.id || record.rosterId}
+                      className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
+                    >
+                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div className="min-w-0">
+                          <h4 className="truncate text-lg font-extrabold text-gray-900">
+                            {record.title}
+                          </h4>
+                          <p className="mt-1 text-xs font-bold text-gray-400">
+                            {record.subject || "과목"} · {record.academicYear}
+                            학년도 {record.semester}학기
+                          </p>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <div className="text-2xl font-black text-blue-600">
+                            {formatPerformanceScore(record.totalScore)}
+                            <span className="text-base text-gray-400">
+                              {" "}
+                              / {formatPerformanceScore(record.totalMaxScore)}
+                            </span>
+                          </div>
+                          <div className="text-xs font-black text-blue-500">
+                            {formatPerformanceScore(percent)}%
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-4 h-2 overflow-hidden rounded-full bg-gray-100">
+                        <div
+                          className="h-full rounded-full bg-blue-600"
+                          style={{ width: `${percent}%` }}
+                        />
+                      </div>
+                      <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                        {(record.items || []).map((item, index) => (
+                          <div
+                            key={`${record.rosterId}-${item.name}-${index}`}
+                            className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2"
+                          >
+                            <div className="truncate text-xs font-black text-gray-500">
+                              {item.shortName || item.name}
+                            </div>
+                            <div className="mt-1 text-sm font-black text-gray-800">
+                              {item.scoreEntered === false
+                                ? "-"
+                                : formatPerformanceScore(item.score)}
+                              <span className="text-xs text-gray-400">
+                                {" "}
+                                / {formatPerformanceScore(item.maxScore)}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm font-semibold leading-6 text-gray-700">
+                        {record.evidence ||
+                          record.feedback ||
+                          "등록된 피드백이 없습니다."}
+                      </div>
+                    </section>
+                  );
+                })
               )}
             </div>
           )}

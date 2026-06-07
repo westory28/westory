@@ -1,3 +1,6 @@
+import { collection, getDocs, orderBy, query } from "firebase/firestore";
+import { db } from "./firebase";
+
 export const PERFORMANCE_SCORE_ROSTERS_COLLECTION = "performance_score_rosters";
 
 export const PERFORMANCE_SCORE_USER_COLLECTION = "performance_scores";
@@ -121,6 +124,59 @@ export const formatPerformanceScore = (value: unknown) => {
   if (score === null) return "-";
   const rounded = roundScore(score);
   return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2);
+};
+
+const getTimestampSeconds = (value: unknown) => {
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "seconds" in value &&
+    typeof (value as { seconds?: unknown }).seconds === "number"
+  ) {
+    return (value as { seconds: number }).seconds;
+  }
+  return 0;
+};
+
+export const sortPerformanceScoreRecords = (
+  records: PerformanceScoreRecord[],
+) =>
+  [...records].sort(
+    (a, b) =>
+      (a.assessmentOrder ?? 999) - (b.assessmentOrder ?? 999) ||
+      String(a.title || "").localeCompare(String(b.title || ""), "ko") ||
+      getTimestampSeconds(b.updatedAt) - getTimestampSeconds(a.updatedAt),
+  );
+
+export const loadUserPerformanceScoreRecords = async (
+  uid: string,
+  scope?: { year?: string; semester?: string },
+) => {
+  if (!uid) return [];
+  const snap = await getDocs(
+    query(
+      collection(db, "users", uid, PERFORMANCE_SCORE_USER_COLLECTION),
+      orderBy("updatedAt", "desc"),
+    ),
+  );
+  const loaded = snap.docs
+    .map(
+      (item) =>
+        ({
+          id: item.id,
+          ...item.data(),
+        }) as PerformanceScoreRecord,
+    )
+    .filter(
+      (record) =>
+        (!scope?.year || String(record.academicYear || "") === scope.year) &&
+        (!scope?.semester || String(record.semester || "") === scope.semester),
+    )
+    .map((record) => ({
+      ...record,
+      items: Array.isArray(record.items) ? record.items : [],
+    }));
+  return sortPerformanceScoreRecords(loaded);
 };
 
 export const buildStudentLookupKey = (

@@ -4,6 +4,7 @@ import {
   doc,
   type DocumentData,
   type DocumentReference,
+  getDoc,
   getDocs,
   orderBy,
   query,
@@ -28,6 +29,7 @@ import {
   getPerformanceScorePercent,
   normalizeSchoolValue,
   normalizeStudentName,
+  sortPerformanceScoreRecords,
   type PerformanceScoreRecord,
   type PerformanceScoreRoster,
   type PerformanceScoreRosterRow,
@@ -357,6 +359,15 @@ const PerformanceScoreManager: React.FC = () => {
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [uploadAssessmentPreset, setUploadAssessmentPreset] =
     useState<UploadAssessmentPresetKey>("first");
+  const [scoreListRosterId, setScoreListRosterId] = useState("");
+  const [scoreListLoadedRosterId, setScoreListLoadedRosterId] = useState("");
+  const [scoreListGradeFilter, setScoreListGradeFilter] = useState("all");
+  const [scoreListClassFilter, setScoreListClassFilter] = useState("all");
+  const [scoreListSearch, setScoreListSearch] = useState("");
+  const [scoreListRecords, setScoreListRecords] = useState<
+    PerformanceScoreRecord[]
+  >([]);
+  const [scoreListLoading, setScoreListLoading] = useState(false);
 
   useEffect(() => {
     setTitle(`${year}학년도 ${semester}학기 수행평가 점수`);
@@ -369,6 +380,14 @@ const PerformanceScoreManager: React.FC = () => {
   useEffect(() => {
     void loadRosters();
   }, [year, semester]);
+
+  useEffect(() => {
+    setScoreListRosterId((current) =>
+      current && rosters.some((roster) => roster.id === current)
+        ? current
+        : rosters[0]?.id || "",
+    );
+  }, [rosters]);
 
   useEffect(() => {
     if (!parsed || students.length === 0) return;
@@ -443,6 +462,62 @@ const PerformanceScoreManager: React.FC = () => {
     [safePreviewPage, previewTotalPages],
   );
 
+  const selectedScoreRoster = useMemo(
+    () => rosters.find((roster) => roster.id === scoreListRosterId) || null,
+    [rosters, scoreListRosterId],
+  );
+  const scoreListGradeOptions = useMemo(() => {
+    const values = new Set<string>();
+    rosters.forEach((roster) => {
+      if (roster.targetGrade) values.add(roster.targetGrade);
+      (roster.rows || []).forEach((row) => {
+        if (row.grade) values.add(row.grade);
+      });
+    });
+    return Array.from(values).sort(
+      (a, b) => Number(a) - Number(b) || a.localeCompare(b, "ko"),
+    );
+  }, [rosters]);
+  const scoreListClassOptions = useMemo(() => {
+    const values = new Set<string>();
+    (selectedScoreRoster?.classes || []).forEach((classValue) => {
+      if (classValue) values.add(classValue);
+    });
+    (selectedScoreRoster?.rows || []).forEach((row) => {
+      if (row.class) values.add(row.class);
+    });
+    return Array.from(values).sort(
+      (a, b) => Number(a) - Number(b) || a.localeCompare(b, "ko"),
+    );
+  }, [selectedScoreRoster]);
+  const scoreListReady =
+    !!selectedScoreRoster && scoreListLoadedRosterId === selectedScoreRoster.id;
+  const filteredScoreListRecords = useMemo(() => {
+    if (!scoreListReady) return [];
+    const searchKey = normalizeStudentName(scoreListSearch).toLocaleLowerCase();
+    return scoreListRecords.filter((record) => {
+      const gradeMatched =
+        scoreListGradeFilter === "all" ||
+        normalizeSchoolValue(record.grade) ===
+          normalizeSchoolValue(scoreListGradeFilter);
+      const classMatched =
+        scoreListClassFilter === "all" ||
+        normalizeSchoolValue(record.class) ===
+          normalizeSchoolValue(scoreListClassFilter);
+      const identityKey = normalizeStudentName(
+        `${record.studentName} ${record.class}반 ${record.number}번`,
+      ).toLocaleLowerCase();
+      const searchMatched = !searchKey || identityKey.includes(searchKey);
+      return gradeMatched && classMatched && searchMatched;
+    });
+  }, [
+    scoreListClassFilter,
+    scoreListGradeFilter,
+    scoreListReady,
+    scoreListRecords,
+    scoreListSearch,
+  ]);
+
   const loadStudents = async () => {
     setStudentsLoading(true);
     setStudentLoadError("");
@@ -491,6 +566,90 @@ const PerformanceScoreManager: React.FC = () => {
       console.error("Failed to load performance score rosters:", error);
     } finally {
       setRostersLoading(false);
+    }
+  };
+
+  const loadScoreListRecords = async () => {
+    if (!selectedScoreRoster || scoreListLoading) return;
+    setScoreListLoading(true);
+    try {
+      const linkedRows = (selectedScoreRoster.rows || []).filter(
+        (row) => row.uid,
+      );
+      const loaded: PerformanceScoreRecord[] = [];
+      for (let index = 0; index < linkedRows.length; index += 40) {
+        const chunk = linkedRows.slice(index, index + 40);
+        const snaps = await Promise.all(
+          chunk.map((row) =>
+            getDoc(
+              doc(
+                db,
+                "users",
+                row.uid,
+                PERFORMANCE_SCORE_USER_COLLECTION,
+                selectedScoreRoster.id,
+              ),
+            ),
+          ),
+        );
+        snaps.forEach((snap, rowIndex) => {
+          const row = chunk[rowIndex];
+          if (snap.exists()) {
+            const data = snap.data() as PerformanceScoreRecord;
+            loaded.push({
+              id: snap.id,
+              ...data,
+              items: Array.isArray(data.items) ? data.items : [],
+            });
+            return;
+          }
+          loaded.push({
+            id: selectedScoreRoster.id,
+            rosterId: selectedScoreRoster.id,
+            title: selectedScoreRoster.title,
+            subject: selectedScoreRoster.subject,
+            ...(selectedScoreRoster.assessmentOrder
+              ? { assessmentOrder: selectedScoreRoster.assessmentOrder }
+              : {}),
+            academicYear: selectedScoreRoster.academicYear,
+            semester: selectedScoreRoster.semester,
+            grade: row.grade,
+            class: row.class,
+            number: row.number,
+            studentName: row.studentName,
+            uid: row.uid,
+            items: Array.isArray(row.items) ? row.items : [],
+            totalScore: row.totalScore || 0,
+            totalMaxScore:
+              row.totalMaxScore || selectedScoreRoster.totalMaxScore || 0,
+            feedback: row.feedback || "",
+            evidence: row.evidence || row.feedback || "",
+            sourceFileName: selectedScoreRoster.sourceFileName,
+          });
+        });
+      }
+      setScoreListRecords(
+        sortPerformanceScoreRecords(loaded).sort(
+          (a, b) =>
+            Number(a.grade) - Number(b.grade) ||
+            Number(a.class) - Number(b.class) ||
+            Number(a.number) - Number(b.number) ||
+            String(a.studentName || "").localeCompare(
+              String(b.studentName || ""),
+              "ko",
+            ),
+        ),
+      );
+      setScoreListLoadedRosterId(selectedScoreRoster.id);
+    } catch (error) {
+      console.error("Failed to load performance score list:", error);
+      showToast({
+        tone: "error",
+        title: "점수 목록을 불러오지 못했습니다.",
+        message: "권한과 네트워크 상태를 확인한 뒤 다시 조회해 주세요.",
+      });
+    } finally {
+      setScoreListLoading(false);
     }
   };
 
@@ -718,6 +877,7 @@ const PerformanceScoreManager: React.FC = () => {
         updatedAt: timestamp,
       } satisfies Omit<PerformanceScoreRoster, "id">);
 
+      const savedScoreRecords: PerformanceScoreRecord[] = [];
       saveableRows.forEach((row) => {
         const userScoreRef = doc(
           db,
@@ -743,14 +903,38 @@ const PerformanceScoreManager: React.FC = () => {
           totalMaxScore: row.totalMaxScore,
           feedback: row.feedback,
           evidence: row.evidence || row.feedback,
+          sourceFileName: parsed.sourceFileName,
+          uploadedBy: currentUser?.uid || "",
+          uploadedByEmail: currentUser?.email || "",
           uploadedAt: timestamp,
           updatedAt: timestamp,
         };
         batchQueue.set(userScoreRef, payload);
+        savedScoreRecords.push({
+          id: rosterId,
+          ...payload,
+        });
       });
 
       await batchQueue.commit();
       setParsed(null);
+      setScoreListRosterId(rosterId);
+      setScoreListLoadedRosterId(rosterId);
+      setScoreListGradeFilter("all");
+      setScoreListClassFilter("all");
+      setScoreListSearch("");
+      setScoreListRecords(
+        sortPerformanceScoreRecords(savedScoreRecords).sort(
+          (a, b) =>
+            Number(a.grade) - Number(b.grade) ||
+            Number(a.class) - Number(b.class) ||
+            Number(a.number) - Number(b.number) ||
+            String(a.studentName || "").localeCompare(
+              String(b.studentName || ""),
+              "ko",
+            ),
+        ),
+      );
       await loadRosters();
       showToast({
         tone: "success",
@@ -797,6 +981,10 @@ const PerformanceScoreManager: React.FC = () => {
           );
         });
       await batchQueue.commit();
+      if (scoreListRosterId === roster.id) {
+        setScoreListLoadedRosterId("");
+        setScoreListRecords([]);
+      }
       await loadRosters();
       showToast({
         tone: "success",
@@ -1298,60 +1486,303 @@ const PerformanceScoreManager: React.FC = () => {
             아직 저장된 수행평가 점수 명단이 없습니다.
           </div>
         ) : (
-          <div className="mt-4 space-y-3">
-            {rosters.map((roster) => (
-              <div
-                key={roster.id}
-                className="flex flex-col gap-4 rounded-xl border border-slate-200 px-4 py-4 lg:flex-row lg:items-center lg:justify-between"
-              >
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h4 className="truncate text-base font-black text-slate-900">
-                      {roster.title}
-                    </h4>
-                    <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-black text-blue-700">
-                      {roster.targetGrade}학년
-                    </span>
-                    {roster.classes?.length > 0 && (
-                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black text-slate-600">
-                        {roster.classes.join(", ")}반
-                      </span>
-                    )}
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-3 text-xs font-bold text-slate-500">
-                    <span>원본: {roster.sourceFileName}</span>
-                    <span>
-                      저장 {roster.matchedCount}명 / 전체 {roster.rowCount}명
-                    </span>
-                    <span>
-                      만점 {formatPerformanceScore(roster.totalMaxScore)}점
-                    </span>
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="h-2 w-32 overflow-hidden rounded-full bg-slate-100">
-                    <div
-                      className="h-full rounded-full bg-blue-500"
-                      style={{
-                        width: `${getPerformanceScorePercent(
-                          roster.matchedCount,
-                          roster.rowCount || 1,
-                        )}%`,
-                      }}
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void deleteRoster(roster)}
-                    disabled={deletingRosterId === roster.id}
-                    className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-rose-200 bg-white px-3 text-xs font-black text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+          <div className="mt-5 space-y-5">
+            <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+              <div className="grid gap-3 xl:grid-cols-[1.1fr_0.65fr_0.65fr_1fr_auto]">
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-black text-slate-500">
+                    평가명
+                  </span>
+                  <select
+                    value={scoreListRosterId}
+                    onChange={(event) => {
+                      setScoreListRosterId(event.target.value);
+                      setScoreListClassFilter("all");
+                    }}
+                    className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
                   >
-                    <i className="fas fa-trash" aria-hidden="true"></i>
-                    {deletingRosterId === roster.id ? "삭제 중" : "삭제"}
-                  </button>
+                    {rosters.map((roster) => (
+                      <option key={roster.id} value={roster.id}>
+                        {roster.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-black text-slate-500">
+                    학년
+                  </span>
+                  <select
+                    value={scoreListGradeFilter}
+                    onChange={(event) =>
+                      setScoreListGradeFilter(event.target.value)
+                    }
+                    className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
+                  >
+                    <option value="all">전체 학년</option>
+                    {(scoreListGradeOptions.length
+                      ? scoreListGradeOptions
+                      : DEFAULT_GRADE_OPTIONS
+                    ).map((grade) => (
+                      <option key={grade} value={grade}>
+                        {grade}학년
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-black text-slate-500">
+                    반
+                  </span>
+                  <select
+                    value={scoreListClassFilter}
+                    onChange={(event) =>
+                      setScoreListClassFilter(event.target.value)
+                    }
+                    className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
+                  >
+                    <option value="all">전체 반</option>
+                    {(scoreListClassOptions.length
+                      ? scoreListClassOptions
+                      : DEFAULT_CLASS_OPTIONS
+                    ).map((classValue) => (
+                      <option key={classValue} value={classValue}>
+                        {classValue}반
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-black text-slate-500">
+                    학생 이름 검색
+                  </span>
+                  <input
+                    type="search"
+                    value={scoreListSearch}
+                    onChange={(event) => setScoreListSearch(event.target.value)}
+                    placeholder="이름, 반, 번호"
+                    className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => void loadScoreListRecords()}
+                  disabled={!selectedScoreRoster || scoreListLoading}
+                  className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 xl:mt-6"
+                >
+                  <i
+                    className={`fas fa-search text-xs ${scoreListLoading ? "animate-spin" : ""}`}
+                    aria-hidden="true"
+                  ></i>
+                  {scoreListLoading ? "조회 중" : "조회"}
+                </button>
+              </div>
+            </div>
+
+            {scoreListReady ? (
+              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <h4 className="truncate text-base font-black text-slate-900">
+                      {selectedScoreRoster?.title}
+                    </h4>
+                    <p className="mt-1 text-xs font-bold text-slate-500">
+                      {filteredScoreListRecords.length}명 표시 · 저장{" "}
+                      {scoreListRecords.length}명 · 만점{" "}
+                      {formatPerformanceScore(
+                        selectedScoreRoster?.totalMaxScore,
+                      )}
+                      점
+                    </p>
+                  </div>
+                  <span className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
+                    {selectedScoreRoster?.sourceFileName}
+                  </span>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[1080px] text-left text-sm">
+                    <thead className="bg-slate-50 text-xs font-black text-slate-500">
+                      <tr>
+                        <th className="whitespace-nowrap px-3 py-3">학년</th>
+                        <th className="whitespace-nowrap px-3 py-3">반</th>
+                        <th className="whitespace-nowrap px-3 py-3">번호</th>
+                        <th className="whitespace-nowrap px-3 py-3">이름</th>
+                        {(selectedScoreRoster?.items || []).map(
+                          (item, index) => (
+                            <th
+                              key={`${item.name}-${index}`}
+                              className="whitespace-nowrap px-3 py-3 text-right"
+                            >
+                              {getItemLabel(item)}
+                            </th>
+                          ),
+                        )}
+                        <th className="whitespace-nowrap px-3 py-3 text-right">
+                          총점
+                        </th>
+                        <th className="whitespace-nowrap px-3 py-3">
+                          감점 요인 및 평가 근거
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredScoreListRecords.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={
+                              (selectedScoreRoster?.items.length || 0) + 6
+                            }
+                            className="px-4 py-10 text-center text-sm font-bold text-slate-400"
+                          >
+                            조건에 맞는 학생 점수가 없습니다.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredScoreListRecords.map((record) => {
+                          const percent = getPerformanceScorePercent(
+                            record.totalScore,
+                            record.totalMaxScore,
+                          );
+                          return (
+                            <tr key={`${record.uid}-${record.rosterId}`}>
+                              <td className="whitespace-nowrap px-3 py-3 font-bold text-slate-600">
+                                {record.grade}학년
+                              </td>
+                              <td className="whitespace-nowrap px-3 py-3 font-bold text-slate-600">
+                                {record.class}반
+                              </td>
+                              <td className="whitespace-nowrap px-3 py-3 font-bold text-slate-600">
+                                {record.number}번
+                              </td>
+                              <td className="whitespace-nowrap px-3 py-3 font-black text-slate-900">
+                                {record.studentName || "(이름 없음)"}
+                              </td>
+                              {(selectedScoreRoster?.items || []).map(
+                                (item, index) => {
+                                  const scoreItem = record.items?.[index];
+                                  return (
+                                    <td
+                                      key={`${record.uid}-${item.name}-${index}`}
+                                      className="whitespace-nowrap px-3 py-3 text-right font-bold text-slate-700"
+                                    >
+                                      {scoreItem?.scoreEntered === false
+                                        ? "-"
+                                        : formatPerformanceScore(
+                                            scoreItem?.score,
+                                          )}
+                                      <span className="ml-1 text-slate-400">
+                                        /{" "}
+                                        {formatPerformanceScore(
+                                          scoreItem?.maxScore ?? item.maxScore,
+                                        )}
+                                      </span>
+                                    </td>
+                                  );
+                                },
+                              )}
+                              <td className="whitespace-nowrap px-3 py-3 text-right">
+                                <div className="font-black text-blue-700">
+                                  {formatPerformanceScore(record.totalScore)} /{" "}
+                                  {formatPerformanceScore(record.totalMaxScore)}
+                                </div>
+                                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                                  <div
+                                    className="h-full rounded-full bg-blue-500"
+                                    style={{ width: `${percent}%` }}
+                                  />
+                                </div>
+                              </td>
+                              <td className="px-3 py-3">
+                                <div className="max-w-[360px] text-xs font-semibold leading-5 text-slate-600">
+                                  {record.evidence || record.feedback || "-"}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
-            ))}
+            ) : (
+              <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm font-bold text-slate-400">
+                평가명과 조건을 선택한 뒤 조회를 누르면 학생별 점수 목록이
+                표시됩니다.
+              </div>
+            )}
+
+            <div className="space-y-3">
+              <h4 className="text-sm font-black text-slate-700">업로드 기록</h4>
+              {rosters.map((roster) => (
+                <div
+                  key={roster.id}
+                  className={`flex flex-col gap-4 rounded-xl border px-4 py-4 lg:flex-row lg:items-center lg:justify-between ${
+                    scoreListRosterId === roster.id
+                      ? "border-blue-200 bg-blue-50/40"
+                      : "border-slate-200 bg-white"
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h4 className="truncate text-base font-black text-slate-900">
+                        {roster.title}
+                      </h4>
+                      <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-black text-blue-700">
+                        {roster.targetGrade}학년
+                      </span>
+                      {roster.classes?.length > 0 && (
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-black text-slate-600">
+                          {roster.classes.join(", ")}반
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-3 text-xs font-bold text-slate-500">
+                      <span>원본: {roster.sourceFileName}</span>
+                      <span>
+                        저장 {roster.matchedCount}명 / 전체 {roster.rowCount}명
+                      </span>
+                      <span>
+                        만점 {formatPerformanceScore(roster.totalMaxScore)}점
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="h-2 w-32 overflow-hidden rounded-full bg-slate-100">
+                      <div
+                        className="h-full rounded-full bg-blue-500"
+                        style={{
+                          width: `${getPerformanceScorePercent(
+                            roster.matchedCount,
+                            roster.rowCount || 1,
+                          )}%`,
+                        }}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setScoreListRosterId(roster.id);
+                        setScoreListClassFilter("all");
+                      }}
+                      className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white px-3 text-xs font-black text-blue-700 transition hover:bg-blue-50"
+                    >
+                      <i className="fas fa-list" aria-hidden="true"></i>
+                      선택
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void deleteRoster(roster)}
+                      disabled={deletingRosterId === roster.id}
+                      className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-rose-200 bg-white px-3 text-xs font-black text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <i className="fas fa-trash" aria-hidden="true"></i>
+                      {deletingRosterId === roster.id ? "삭제 중" : "삭제"}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </section>
