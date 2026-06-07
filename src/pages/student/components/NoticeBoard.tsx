@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { InlineLoading } from "../../../components/common/LoadingState";
 import { db } from "../../../lib/firebase";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -25,6 +25,8 @@ const NoticeBoard: React.FC = () => {
   const [notices, setNotices] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [slideIndex, setSlideIndex] = useState(0);
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
 
   useEffect(() => {
@@ -51,28 +53,73 @@ const NoticeBoard: React.FC = () => {
 
   useEffect(() => {
     setActiveIndex(0);
+    setSlideIndex(notices.length > 1 ? 1 : 0);
+    setIsTransitioning(false);
     setIsPaused(false);
   }, [notices.length]);
 
   const activeNotice = notices[activeIndex] || notices[0] || null;
   const showCarousel = notices.length > 1;
+  const carouselItems = useMemo(() => {
+    if (!showCarousel) return notices;
 
-  const move = (direction: -1 | 1) => {
-    setActiveIndex((prev) => {
+    const firstNotice = notices[0];
+    const lastNotice = notices[notices.length - 1];
+
+    if (!firstNotice || !lastNotice) return notices;
+
+    return [lastNotice, ...notices, firstNotice];
+  }, [notices, showCarousel]);
+
+  const finishTransition = useCallback(() => {
+    setIsTransitioning(false);
+    setSlideIndex((current) => {
       if (notices.length <= 1) return 0;
-      return (prev + direction + notices.length) % notices.length;
+      if (current === notices.length + 1) return 1;
+      if (current === 0) return notices.length;
+      return current;
     });
+  }, [notices.length]);
+
+  const move = useCallback(
+    (direction: -1 | 1) => {
+      if (isTransitioning) return;
+
+      setActiveIndex((prev) => {
+        if (notices.length <= 1) return 0;
+        return (prev + direction + notices.length) % notices.length;
+      });
+      setIsTransitioning(true);
+      setSlideIndex((prev) => prev + direction);
+    },
+    [isTransitioning, notices.length],
+  );
+
+  const selectNotice = (index: number) => {
+    if (!showCarousel || index === activeIndex || isTransitioning) return;
+
+    setActiveIndex(index);
+    setIsTransitioning(true);
+    setSlideIndex(index + 1);
   };
 
   useEffect(() => {
-    if (!showCarousel || isPaused) return undefined;
+    if (!isTransitioning) return undefined;
+
+    const timerId = window.setTimeout(finishTransition, 760);
+
+    return () => window.clearTimeout(timerId);
+  }, [finishTransition, isTransitioning]);
+
+  useEffect(() => {
+    if (!showCarousel || isPaused || isTransitioning) return undefined;
 
     const timerId = window.setInterval(() => {
       move(1);
     }, 5000);
 
     return () => window.clearInterval(timerId);
-  }, [showCarousel, isPaused, notices.length]);
+  }, [isPaused, isTransitioning, move, showCarousel]);
 
   return (
     <div className="flex h-full min-h-[260px] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:min-h-0">
@@ -102,19 +149,28 @@ const NoticeBoard: React.FC = () => {
           <div className="flex h-full flex-col">
             <div className="relative aspect-[16/9] w-full flex-none overflow-hidden rounded-xl bg-gray-100">
               <div
-                className="flex h-full w-full transition-transform duration-500 ease-out will-change-transform motion-reduce:transition-none"
+                className={`flex h-full w-full will-change-transform motion-reduce:transition-none ${
+                  isTransitioning
+                    ? "transition-transform duration-700 ease-in-out"
+                    : ""
+                }`}
                 style={{
-                  transform: `translateX(-${activeIndex * 100}%)`,
+                  transform: `translate3d(-${slideIndex * 100}%, 0, 0)`,
+                }}
+                onTransitionEnd={(event) => {
+                  if (event.target === event.currentTarget) {
+                    finishTransition();
+                  }
                 }}
               >
-                {notices.map((notice) => (
+                {carouselItems.map((notice, index) => (
                   <img
-                    key={notice.id}
+                    key={`${notice.id}-${index}`}
                     src={notice.imageUrl}
                     alt="알림장"
                     loading="lazy"
                     decoding="async"
-                    className="h-full w-full shrink-0 object-cover"
+                    className="h-full w-full shrink-0 object-contain object-center"
                   />
                 ))}
               </div>
@@ -124,20 +180,20 @@ const NoticeBoard: React.FC = () => {
             </div>
 
             {showCarousel && (
-              <div className="mt-4 flex items-center gap-3">
-                <div className="inline-flex shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+              <div className="relative mt-3 flex min-h-8 items-center justify-center">
+                <div className="absolute left-0 top-1/2 inline-flex -translate-y-1/2 shrink-0 overflow-hidden rounded-md border border-gray-200 bg-white shadow-sm">
                   <button
                     type="button"
                     onClick={() => move(-1)}
-                    className="inline-flex h-9 w-9 items-center justify-center text-blue-700 transition hover:bg-blue-50"
+                    className="inline-flex h-8 w-8 items-center justify-center text-blue-700 transition hover:bg-blue-50"
                     aria-label="이전 알림"
                   >
-                    <i className="fas fa-chevron-left text-xs"></i>
+                    <i className="fas fa-chevron-left text-[10px]"></i>
                   </button>
                   <button
                     type="button"
                     onClick={() => setIsPaused((prev) => !prev)}
-                    className="inline-flex h-9 w-9 items-center justify-center border-x border-gray-200 text-blue-700 transition hover:bg-blue-50"
+                    className="inline-flex h-8 w-8 items-center justify-center border-x border-gray-200 text-blue-700 transition hover:bg-blue-50"
                     aria-label={
                       isPaused
                         ? "알림 자동 넘김 재생"
@@ -146,25 +202,25 @@ const NoticeBoard: React.FC = () => {
                     title={isPaused ? "재생" : "일시정지"}
                   >
                     <i
-                      className={`fas ${isPaused ? "fa-play" : "fa-pause"} text-xs`}
+                      className={`fas ${isPaused ? "fa-play" : "fa-pause"} text-[10px]`}
                     ></i>
                   </button>
                   <button
                     type="button"
                     onClick={() => move(1)}
-                    className="inline-flex h-9 w-9 items-center justify-center text-blue-700 transition hover:bg-blue-50"
+                    className="inline-flex h-8 w-8 items-center justify-center text-blue-700 transition hover:bg-blue-50"
                     aria-label="다음 알림"
                   >
-                    <i className="fas fa-chevron-right text-xs"></i>
+                    <i className="fas fa-chevron-right text-[10px]"></i>
                   </button>
                 </div>
 
-                <div className="ml-5 flex items-center gap-1.5">
+                <div className="flex items-center justify-center gap-1.5">
                   {notices.map((notice, index) => (
                     <button
                       key={`${notice.id}-dot`}
                       type="button"
-                      onClick={() => setActiveIndex(index)}
+                      onClick={() => selectNotice(index)}
                       className={`h-2.5 rounded-full transition ${
                         activeIndex === index
                           ? "w-6 bg-blue-600"
