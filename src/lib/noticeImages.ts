@@ -18,8 +18,13 @@ export interface NoticeImageUploadResult {
   imageMimeType: string;
 }
 
-const MAX_NOTICE_IMAGE_WIDTH = 1200;
-const MAX_NOTICE_IMAGE_HEIGHT = 800;
+export const NOTICE_IMAGE_RECOMMENDED_WIDTH = 1200;
+export const NOTICE_IMAGE_RECOMMENDED_HEIGHT = 675;
+
+const NOTICE_IMAGE_ASPECT_RATIO =
+  NOTICE_IMAGE_RECOMMENDED_WIDTH / NOTICE_IMAGE_RECOMMENDED_HEIGHT;
+const MAX_NOTICE_IMAGE_WIDTH = NOTICE_IMAGE_RECOMMENDED_WIDTH;
+const MAX_NOTICE_IMAGE_HEIGHT = NOTICE_IMAGE_RECOMMENDED_HEIGHT;
 const TARGET_NOTICE_IMAGE_BYTES = 460 * 1024;
 const MAX_NOTICE_IMAGE_BYTES = 680 * 1024;
 const NOTICE_IMAGE_QUALITY_STEPS = [
@@ -73,11 +78,42 @@ const getNoticeImageStoragePath = (config: ConfigLike, noticeId: string) => {
   return `years/${year}/semesters/${semester}/notice_images/${safeNoticeId}/notice-${Date.now()}.webp`;
 };
 
-const drawNoticeImageCanvas = (
-  source: HTMLImageElement,
-  width: number,
-  height: number,
+const getNoticeImageCenterCrop = (
+  sourceWidth: number,
+  sourceHeight: number,
 ) => {
+  const sourceRatio = sourceWidth / sourceHeight;
+
+  if (sourceRatio > NOTICE_IMAGE_ASPECT_RATIO) {
+    const width = sourceHeight * NOTICE_IMAGE_ASPECT_RATIO;
+    return {
+      sx: (sourceWidth - width) / 2,
+      sy: 0,
+      sw: width,
+      sh: sourceHeight,
+    };
+  }
+
+  const height = sourceWidth / NOTICE_IMAGE_ASPECT_RATIO;
+  return {
+    sx: 0,
+    sy: (sourceHeight - height) / 2,
+    sw: sourceWidth,
+    sh: height,
+  };
+};
+
+const drawNoticeImageCanvas = ({
+  source,
+  width,
+  height,
+  crop,
+}: {
+  source: HTMLImageElement;
+  width: number;
+  height: number;
+  crop: ReturnType<typeof getNoticeImageCenterCrop>;
+}) => {
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -90,7 +126,17 @@ const drawNoticeImageCanvas = (
   context.imageSmoothingQuality = "high";
   context.fillStyle = "#ffffff";
   context.fillRect(0, 0, width, height);
-  context.drawImage(source, 0, 0, width, height);
+  context.drawImage(
+    source,
+    crop.sx,
+    crop.sy,
+    crop.sw,
+    crop.sh,
+    0,
+    0,
+    width,
+    height,
+  );
   return canvas;
 };
 
@@ -100,13 +146,16 @@ export const compressNoticeImage = async (file: File) => {
   }
 
   const source = await loadImageElement(file);
+  const crop = getNoticeImageCenterCrop(
+    source.naturalWidth,
+    source.naturalHeight,
+  );
   const scale = Math.min(
     1,
-    MAX_NOTICE_IMAGE_WIDTH / source.naturalWidth,
-    MAX_NOTICE_IMAGE_HEIGHT / source.naturalHeight,
+    MAX_NOTICE_IMAGE_WIDTH / crop.sw,
+    MAX_NOTICE_IMAGE_HEIGHT / crop.sh,
   );
-  const width = Math.max(1, Math.round(source.naturalWidth * scale));
-  const height = Math.max(1, Math.round(source.naturalHeight * scale));
+  const width = Math.max(1, Math.round(crop.sw * scale));
 
   type CompressionCandidate = {
     blob: Blob;
@@ -123,8 +172,16 @@ export const compressNoticeImage = async (file: File) => {
 
   for (const sizeStep of NOTICE_IMAGE_SIZE_STEPS) {
     const nextWidth = Math.max(1, Math.round(width * sizeStep));
-    const nextHeight = Math.max(1, Math.round(height * sizeStep));
-    const canvas = drawNoticeImageCanvas(source, nextWidth, nextHeight);
+    const nextHeight = Math.max(
+      1,
+      Math.round(nextWidth / NOTICE_IMAGE_ASPECT_RATIO),
+    );
+    const canvas = drawNoticeImageCanvas({
+      source,
+      width: nextWidth,
+      height: nextHeight,
+      crop,
+    });
 
     for (const quality of NOTICE_IMAGE_QUALITY_STEPS) {
       const blob = await canvasToBlob(canvas, "image/webp", quality);

@@ -11,6 +11,8 @@ import { useAppToast } from "../../../components/common/AppToastProvider";
 import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
 import {
+  NOTICE_IMAGE_RECOMMENDED_HEIGHT,
+  NOTICE_IMAGE_RECOMMENDED_WIDTH,
   uploadNoticeImage,
   tryDeleteNoticeImage,
 } from "../../../lib/noticeImages";
@@ -272,6 +274,15 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
               <span className="mb-2 block text-sm font-extrabold text-gray-800">
                 알림장 이미지
               </span>
+              <p className="mb-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-bold leading-relaxed text-blue-800">
+                학생 대시보드 배너 최적 크기는{" "}
+                <strong>
+                  {NOTICE_IMAGE_RECOMMENDED_WIDTH} x{" "}
+                  {NOTICE_IMAGE_RECOMMENDED_HEIGHT}px
+                </strong>
+                입니다. 이 16:9 비율이면 양옆 여백 없이 보이며, 새 이미지는 저장
+                시 가운데 기준으로 16:9에 맞춰 보정됩니다.
+              </p>
               <input
                 id={fileInputId}
                 type="file"
@@ -303,10 +314,10 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
                 <img
                   src={previewUrl}
                   alt="알림장 미리보기"
-                  className="aspect-[3/2] w-full object-contain"
+                  className="aspect-[16/9] w-full object-cover"
                 />
               ) : (
-                <div className="flex aspect-[3/2] items-center justify-center text-sm font-bold text-gray-400">
+                <div className="flex aspect-[16/9] items-center justify-center text-sm font-bold text-gray-400">
                   이미지를 선택해 주세요.
                 </div>
               )}

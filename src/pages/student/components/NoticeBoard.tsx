@@ -170,7 +170,7 @@ const NoticeBoard: React.FC = () => {
                     alt="알림장"
                     loading="lazy"
                     decoding="async"
-                    className="h-full w-full shrink-0 object-contain object-center"
+                    className="h-full w-full shrink-0 object-cover object-center"
                   />
                 ))}
               </div>
