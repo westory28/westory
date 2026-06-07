@@ -74,8 +74,8 @@ const CLASS_SHEET_STUDENT_START_ROW = 7;
 const CLASS_SHEET_STUDENT_END_ROW = 38;
 const CLASS_SHEET_SUMMARY_START_ROW = 39;
 const CLASS_SHEET_TEMPLATE_COLUMN_COUNT = 13;
-const CLASS_SHEET_SIGNATURE_START_COLUMN = 9;
-const CLASS_SHEET_SIGNATURE_HORIZONTAL_PADDING = 0;
+const CLASS_SHEET_SIGNATURE_START_COLUMN_INDEX = 10;
+const CLASS_SHEET_SIGNATURE_END_COLUMN_INDEX = 13;
 const CLASS_SHEET_SIGNATURE_VERTICAL_PADDING = 0;
 const CLASS_SHEET_SIGNATURE_IMAGE_MAX_WIDTH = 64;
 const CLASS_SHEET_SIGNATURE_IMAGE_MAX_HEIGHT = 18;
@@ -83,6 +83,10 @@ const CLASS_SHEET_SIGNATURE_CANVAS_SCALE = 2;
 const CLASS_SHEET_SIGNATURE_ALPHA_THRESHOLD = 8;
 const CLASS_SHEET_SIGNATURE_COLUMN_PIXEL_WIDTH = 64;
 const CLASS_SHEET_SIGNATURE_ROW_PIXEL_HEIGHT = 19;
+const CLASS_SHEET_FOOTER_PAGE_START_COLUMN = 9;
+const CLASS_SHEET_FOOTER_PAGE_END_COLUMN = 14;
+const CLASS_SHEET_FOOTER_SCHOOL_START_COLUMN = 15;
+const CLASS_SHEET_FOOTER_SCHOOL_END_COLUMN = 16;
 const XLSX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -894,6 +898,65 @@ const resizeClassSheetStudentRows = (
   return { studentEndRow, summaryStartRow };
 };
 
+const resetClassSheetFooter = (
+  worksheet: {
+    getCell: (
+      row: number,
+      column: number,
+    ) => { value: unknown; alignment?: unknown };
+    mergeCells: (
+      startRow: number,
+      startColumn: number,
+      endRow: number,
+      endColumn: number,
+    ) => void;
+    unMergeCells?: (range: string) => void;
+  },
+  footerRow: number,
+) => {
+  [
+    `I${footerRow}:J${footerRow}`,
+    `K${footerRow}:L${footerRow}`,
+    `M${footerRow}:N${footerRow}`,
+    `O${footerRow}:P${footerRow}`,
+    `I${footerRow}:N${footerRow}`,
+  ].forEach((range) => unmergeWorksheetRange(worksheet, range));
+  for (
+    let column = CLASS_SHEET_FOOTER_PAGE_START_COLUMN;
+    column <= CLASS_SHEET_FOOTER_SCHOOL_END_COLUMN;
+    column += 1
+  ) {
+    setWorksheetCellValue(worksheet, footerRow, column, null);
+  }
+
+  worksheet.mergeCells(
+    footerRow,
+    CLASS_SHEET_FOOTER_PAGE_START_COLUMN,
+    footerRow,
+    CLASS_SHEET_FOOTER_PAGE_END_COLUMN,
+  );
+  worksheet.mergeCells(
+    footerRow,
+    CLASS_SHEET_FOOTER_SCHOOL_START_COLUMN,
+    footerRow,
+    CLASS_SHEET_FOOTER_SCHOOL_END_COLUMN,
+  );
+
+  const pageCell = worksheet.getCell(
+    footerRow,
+    CLASS_SHEET_FOOTER_PAGE_START_COLUMN,
+  );
+  pageCell.value = "1 / 1";
+  pageCell.alignment = { horizontal: "center", vertical: "middle" };
+
+  const schoolCell = worksheet.getCell(
+    footerRow,
+    CLASS_SHEET_FOOTER_SCHOOL_START_COLUMN,
+  );
+  schoolCell.value = "용신중학교";
+  schoolCell.alignment = { horizontal: "right", vertical: "middle" };
+};
+
 const joinUrlPath = (base: string, path: string) =>
   `${base.replace(/\/?$/, "/")}${path.replace(/^\/+/, "")}`;
 
@@ -974,43 +1037,93 @@ const getClassSheetSignaturePngDimensions = (dataUrl: string) => {
   return width > 0 && height > 0 ? { width, height } : null;
 };
 
-const getClassSheetSignatureImageSize = (dataUrl: string) => {
+const getClassSheetColumnPixelWidth = (width?: number) => {
+  if (!Number.isFinite(width) || !width || width <= 0) {
+    return CLASS_SHEET_SIGNATURE_COLUMN_PIXEL_WIDTH;
+  }
+  return Math.max(1, Math.round(width * 7 + 5));
+};
+
+const getClassSheetSignatureCellPixelWidth = (worksheet: {
+  getColumn: (column: number) => { width?: number };
+}) => {
+  let width = 0;
+  for (
+    let column = CLASS_SHEET_SIGNATURE_START_COLUMN_INDEX;
+    column <= CLASS_SHEET_SIGNATURE_END_COLUMN_INDEX;
+    column += 1
+  ) {
+    width += getClassSheetColumnPixelWidth(worksheet.getColumn(column).width);
+  }
+  return width || CLASS_SHEET_SIGNATURE_IMAGE_MAX_WIDTH;
+};
+
+const getClassSheetColumnPositionByPixelOffset = (
+  worksheet: { getColumn: (column: number) => { width?: number } },
+  startColumn: number,
+  endColumn: number,
+  pixelOffset: number,
+) => {
+  let remainingOffset = Math.max(0, pixelOffset);
+  for (let column = startColumn; column <= endColumn; column += 1) {
+    const columnWidth = getClassSheetColumnPixelWidth(
+      worksheet.getColumn(column).width,
+    );
+    if (remainingOffset <= columnWidth) {
+      return column - 1 + remainingOffset / columnWidth;
+    }
+    remainingOffset -= columnWidth;
+  }
+  return endColumn - 1;
+};
+
+const getClassSheetSignatureImageSize = (
+  dataUrl: string,
+  maxWidth = CLASS_SHEET_SIGNATURE_IMAGE_MAX_WIDTH,
+  maxHeight = CLASS_SHEET_SIGNATURE_IMAGE_MAX_HEIGHT,
+) => {
   const dimensions = getClassSheetSignaturePngDimensions(dataUrl);
-  const sourceWidth =
-    dimensions?.width || CLASS_SHEET_SIGNATURE_IMAGE_MAX_WIDTH;
-  const sourceHeight =
-    dimensions?.height || CLASS_SHEET_SIGNATURE_IMAGE_MAX_HEIGHT;
+  const sourceWidth = dimensions?.width || maxWidth;
+  const sourceHeight = dimensions?.height || maxHeight;
   const ratio = sourceWidth / sourceHeight;
-  const maxRatio =
-    CLASS_SHEET_SIGNATURE_IMAGE_MAX_WIDTH /
-    CLASS_SHEET_SIGNATURE_IMAGE_MAX_HEIGHT;
+  const maxRatio = maxWidth / maxHeight;
 
   if (!Number.isFinite(ratio) || ratio <= 0) {
     return {
-      width: CLASS_SHEET_SIGNATURE_IMAGE_MAX_WIDTH,
-      height: CLASS_SHEET_SIGNATURE_IMAGE_MAX_HEIGHT,
+      width: maxWidth,
+      height: maxHeight,
     };
   }
 
   if (ratio > maxRatio) {
     return {
-      width: CLASS_SHEET_SIGNATURE_IMAGE_MAX_WIDTH,
-      height: Math.max(1, CLASS_SHEET_SIGNATURE_IMAGE_MAX_WIDTH / ratio),
+      width: maxWidth,
+      height: Math.max(1, maxWidth / ratio),
     };
   }
 
   return {
-    width: Math.max(1, CLASS_SHEET_SIGNATURE_IMAGE_MAX_HEIGHT * ratio),
-    height: CLASS_SHEET_SIGNATURE_IMAGE_MAX_HEIGHT,
+    width: Math.max(1, maxHeight * ratio),
+    height: maxHeight,
   };
 };
 
-const getClassSheetSignatureImagePosition = (row: number, dataUrl: string) => {
-  const size = getClassSheetSignatureImageSize(dataUrl);
-  const horizontalCenterOffset =
-    Math.max(0, CLASS_SHEET_SIGNATURE_IMAGE_MAX_WIDTH - size.width) /
-    2 /
-    CLASS_SHEET_SIGNATURE_COLUMN_PIXEL_WIDTH;
+const getClassSheetSignatureImagePosition = (
+  worksheet: { getColumn: (column: number) => { width?: number } },
+  row: number,
+  dataUrl: string,
+) => {
+  const cellWidth = getClassSheetSignatureCellPixelWidth(worksheet);
+  const maxWidth = Math.min(
+    CLASS_SHEET_SIGNATURE_IMAGE_MAX_WIDTH,
+    Math.max(1, cellWidth - 2),
+  );
+  const size = getClassSheetSignatureImageSize(
+    dataUrl,
+    maxWidth,
+    CLASS_SHEET_SIGNATURE_IMAGE_MAX_HEIGHT,
+  );
+  const horizontalCenterOffset = Math.max(0, cellWidth - size.width) / 2;
   const verticalCenterOffset =
     Math.max(0, CLASS_SHEET_SIGNATURE_IMAGE_MAX_HEIGHT - size.height) /
     2 /
@@ -1018,10 +1131,12 @@ const getClassSheetSignatureImagePosition = (row: number, dataUrl: string) => {
 
   return {
     tl: {
-      col:
-        CLASS_SHEET_SIGNATURE_START_COLUMN +
-        CLASS_SHEET_SIGNATURE_HORIZONTAL_PADDING +
+      col: getClassSheetColumnPositionByPixelOffset(
+        worksheet,
+        CLASS_SHEET_SIGNATURE_START_COLUMN_INDEX,
+        CLASS_SHEET_SIGNATURE_END_COLUMN_INDEX,
         horizontalCenterOffset,
+      ),
       row:
         row - 1 + CLASS_SHEET_SIGNATURE_VERTICAL_PADDING + verticalCenterOffset,
     },
@@ -1147,6 +1262,7 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
     worksheet,
     params.students.length,
   );
+  resetClassSheetFooter(worksheet, summaryStartRow + 4);
 
   setWorksheetCellValue(worksheet, 1, 12, getTodayLabel());
   setWorksheetCellValue(worksheet, 2, 6, "수행평가 강의실별 일람표");
@@ -1285,7 +1401,11 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
       extension: "png",
     });
     worksheet.addImage(imageId, {
-      ...getClassSheetSignatureImagePosition(image.row, image.dataUrl),
+      ...getClassSheetSignatureImagePosition(
+        worksheet,
+        image.row,
+        image.dataUrl,
+      ),
     });
   });
 
