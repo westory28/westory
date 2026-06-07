@@ -57,8 +57,9 @@ const getItemLabel = (
   index: number,
 ) => item.shortName || getPerformanceScoreItemShortName(item.name, index);
 
-const SIGNATURE_CANVAS_WIDTH = 900;
-const SIGNATURE_CANVAS_HEIGHT = 260;
+const SIGNATURE_CANVAS_MIN_WIDTH = 420;
+const SIGNATURE_CANVAS_MAX_WIDTH = 660;
+const SIGNATURE_CANVAS_HEIGHT = 220;
 const SIGNATURE_IMAGE_MAX_LENGTH = 110000;
 
 const getDataUrlStoredLength = (dataUrl: string) => dataUrl.length;
@@ -84,6 +85,7 @@ const PerformanceScoreView: React.FC = () => {
   const [signatureError, setSignatureError] = useState("");
   const [confirming, setConfirming] = useState(false);
   const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const signatureDrawnRef = useRef(false);
   const drawingRef = useRef(false);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
 
@@ -166,6 +168,25 @@ const PerformanceScoreView: React.FC = () => {
     userData?.name || selectedRecord?.studentName || "";
   const signatureGuideName =
     selectedRecord?.studentName || expectedSignatureName;
+  const signatureGuideText = signatureGuideName.trim() || "홍길동";
+  const signatureGuideLength = Math.max(
+    2,
+    Array.from(signatureGuideText).length,
+  );
+  const signatureCanvasWidth = Math.min(
+    SIGNATURE_CANVAS_MAX_WIDTH,
+    Math.max(SIGNATURE_CANVAS_MIN_WIDTH, signatureGuideLength * 130 + 120),
+  );
+  const signatureGuideFontSize = Math.min(
+    140,
+    Math.max(110, (signatureCanvasWidth / signatureGuideLength) * 0.78),
+  );
+  const signatureGuideLetterSpacing =
+    signatureGuideLength <= 3
+      ? "0.18em"
+      : signatureGuideLength <= 4
+        ? "0.12em"
+        : "0.06em";
   const confirmedAt = selectedRecord?.signedAt;
   const hasConfirmation = selectedRecord
     ? isRecordConfirmed(selectedRecord)
@@ -274,6 +295,7 @@ const PerformanceScoreView: React.FC = () => {
       context.clearRect(0, 0, canvas.width, canvas.height);
     }
     drawingRef.current = false;
+    signatureDrawnRef.current = false;
     lastPointRef.current = null;
     setSignatureDrawn(false);
     setSignatureReviewStep("sign");
@@ -288,6 +310,7 @@ const PerformanceScoreView: React.FC = () => {
       return;
     }
     setSignatureConsent(false);
+    signatureDrawnRef.current = false;
     setSignatureDrawn(false);
     setSignatureReviewStep("sign");
     setSignatureError("");
@@ -302,7 +325,7 @@ const PerformanceScoreView: React.FC = () => {
 
   const getSignatureImageDataUrl = () => {
     const canvas = signatureCanvasRef.current;
-    if (!canvas || !signatureDrawn) return "";
+    if (!canvas || (!signatureDrawnRef.current && !signatureDrawn)) return "";
     return canvas.toDataURL("image/png");
   };
 
@@ -318,7 +341,7 @@ const PerformanceScoreView: React.FC = () => {
     }
     const signatureImage = getSignatureImageDataUrl();
     if (!signatureImage) {
-      setSignatureError("서명 칸에 성을 포함한 이름을 정자로 써 주세요.");
+      setSignatureError("서명 칸에 본인 이름을 직접 써 주세요.");
       return;
     }
     if (getDataUrlStoredLength(signatureImage) > SIGNATURE_IMAGE_MAX_LENGTH) {
@@ -360,7 +383,7 @@ const PerformanceScoreView: React.FC = () => {
 
     const signatureImage = getSignatureImageDataUrl();
     if (!signatureImage) {
-      setSignatureError("서명 칸에 성을 포함한 이름을 정자로 써 주세요.");
+      setSignatureError("서명 칸에 본인 이름을 직접 써 주세요.");
       setSignatureReviewStep("sign");
       return;
     }
@@ -727,8 +750,8 @@ const PerformanceScoreView: React.FC = () => {
                   수행평가 점수 확인 및 서명
                 </h3>
                 <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
-                  모든 차시의 점수를 확인한 뒤, 성을 포함한 이름을 정자로 직접
-                  써 주세요.
+                  모든 차시의 점수를 확인한 뒤, 성을 포함한 이름을 직접 써
+                  주세요.
                 </p>
               </div>
               <button
@@ -796,7 +819,7 @@ const PerformanceScoreView: React.FC = () => {
                           서명 그리기
                         </h4>
                         <p className="mt-1 text-xs font-bold leading-5 text-slate-500">
-                          성을 포함한 이름을 정자로 적어 주세요. 배경의 흐린
+                          성을 포함한 이름을 직접 적어 주세요. 배경의 흐린
                           이름은 안내용이며 저장되지 않습니다.
                         </p>
                       </div>
@@ -810,12 +833,20 @@ const PerformanceScoreView: React.FC = () => {
                       </button>
                     </div>
                     <div
-                      className={`relative overflow-hidden rounded-xl border border-blue-200 bg-blue-50 ${
+                      className={`relative mx-auto overflow-hidden rounded-xl border border-blue-200 bg-blue-50 ${
                         signatureConsent ? "" : "opacity-60"
                       }`}
+                      style={{ width: signatureCanvasWidth, maxWidth: "100%" }}
                     >
-                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-3 text-center text-[5rem] font-black leading-none text-blue-950/10 sm:text-[8rem]">
-                        {signatureGuideName || "홍길동"}
+                      <div
+                        className="pointer-events-none absolute inset-0 flex items-center justify-center px-2 text-center font-black leading-none"
+                        style={{
+                          color: "rgba(30, 58, 138, 0.09)",
+                          fontSize: signatureGuideFontSize,
+                          letterSpacing: signatureGuideLetterSpacing,
+                        }}
+                      >
+                        {signatureGuideText}
                       </div>
                       {!signatureConsent && (
                         <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-white/55 text-sm font-black text-slate-500">
@@ -824,9 +855,9 @@ const PerformanceScoreView: React.FC = () => {
                       )}
                       <canvas
                         ref={signatureCanvasRef}
-                        width={SIGNATURE_CANVAS_WIDTH}
+                        width={signatureCanvasWidth}
                         height={SIGNATURE_CANVAS_HEIGHT}
-                        className="relative z-10 h-64 w-full touch-none cursor-crosshair bg-transparent"
+                        className="relative z-10 h-52 w-full touch-none cursor-crosshair bg-transparent"
                         onPointerDown={(event) => {
                           if (!signatureConsent || confirming) return;
                           const point = getSignatureCanvasPoint(event);
@@ -835,6 +866,7 @@ const PerformanceScoreView: React.FC = () => {
                             event.pointerId,
                           );
                           drawingRef.current = true;
+                          signatureDrawnRef.current = true;
                           lastPointRef.current = null;
                           drawSignaturePoint(point);
                           setSignatureDrawn(true);
