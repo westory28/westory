@@ -44,6 +44,7 @@ interface StudentProfile {
 
 interface ParsedScoreRow extends PerformanceScoreRosterRow {
   rowKey: string;
+  enteredScoreCount: number;
 }
 
 interface ParsedUpload {
@@ -53,10 +54,12 @@ interface ParsedUpload {
   rows: ParsedScoreRow[];
   totalMaxScore: number;
   detectedClasses: string[];
+  detectedSubject: string;
 }
 
 interface ColumnIndexes {
   sequenceIndex: number;
+  subjectIndex: number;
   gradeIndex: number;
   classIndex: number;
   numberIndex: number;
@@ -91,6 +94,7 @@ const toDisplayHeader = (value: unknown) =>
 const isMetadataColumn = (index: number, indexes: ColumnIndexes) =>
   [
     indexes.sequenceIndex,
+    indexes.subjectIndex,
     indexes.gradeIndex,
     indexes.classIndex,
     indexes.numberIndex,
@@ -133,6 +137,9 @@ const findWorkbookHeaderRow = (rows: unknown[][]) => {
 
 const resolveColumnIndexes = (headers: string[]): ColumnIndexes => {
   const sequenceIndex = findColumnIndex(headers, (header) => header === "순번");
+  const subjectIndex = findColumnIndex(headers, (header) =>
+    /^(과목|교과|교과목|영역)$/.test(header),
+  );
   const gradeIndex = findColumnIndex(headers, (header) =>
     /^(학년|대상학년)$/.test(header),
   );
@@ -162,6 +169,7 @@ const resolveColumnIndexes = (headers: string[]): ColumnIndexes => {
 
   return {
     sequenceIndex,
+    subjectIndex,
     gradeIndex,
     classIndex,
     numberIndex,
@@ -178,16 +186,16 @@ const getCell = (row: unknown[], index: number) =>
 const getCellText = (row: unknown[], index: number) =>
   toText(getCell(row, index));
 
-const parseMaxScoreFromHeader = (header: string) => {
+const parseMaxScoreFromHeader = (header: unknown) => {
   const normalized = toDisplayHeader(header);
-  const explicit = normalized.match(/만점\s*([0-9]+(?:\.[0-9]+)?)/);
+  const explicit = normalized.match(/만점\s*[\(:：]?\s*([0-9]+(?:\.[0-9]+)?)/);
   if (explicit?.[1]) {
     return toFiniteScore(explicit[1]) || 0;
   }
   return 0;
 };
 
-const parseRatioFromHeader = (header: string) => {
+const parseRatioFromHeader = (header: unknown) => {
   const normalized = toDisplayHeader(header);
   const explicit = normalized.match(/([0-9]+(?:\.[0-9]+)?)\s*%/);
   if (explicit?.[1]) {
@@ -206,6 +214,14 @@ const cleanScoreItemName = (header: string, index: number) => {
     .trim();
   return cleaned || `수행평가 ${index + 1}`;
 };
+
+const hasScoreMarker = (value: unknown) => {
+  const key = toHeaderKey(value);
+  return key === "점수" || key === "득점" || key.includes("점수");
+};
+
+const hasMaxScoreMarker = (value: unknown) =>
+  toHeaderKey(value).includes("만점") || parseMaxScoreFromHeader(value) > 0;
 
 const readWorkbookRows = async (file: File) => {
   const { default: readXlsxFile } = await import("read-excel-file/browser");
@@ -233,22 +249,27 @@ const parsePerformanceScoreWorkbook = (
 
   const headerRowIndex = findWorkbookHeaderRow(rows);
   if (headerRowIndex < 0) {
-    throw new Error("성명, 번호, 합계가 포함된 헤더 행을 찾지 못했습니다.");
+    throw new Error("성명과 번호가 포함된 헤더 행을 찾지 못했습니다.");
   }
 
   const rawHeaders = rows[headerRowIndex] || [];
   const headers = rawHeaders.map(toHeaderKey);
   const displayHeaders = rawHeaders.map(toDisplayHeader);
+  const maxScoreRow = rows[headerRowIndex + 1] || [];
+  const scoreMarkerRow = rows[headerRowIndex + 2] || [];
   const indexes = resolveColumnIndexes(headers);
   if (indexes.nameIndex < 0) {
     throw new Error("학생 이름을 나타내는 성명 또는 이름 컬럼이 필요합니다.");
   }
 
   const candidateRows = rows
+    .map((row, rowIndex) => ({ row, rowIndex }))
     .slice(headerRowIndex + 1)
     .slice(0, MAX_UPLOAD_ROWS)
-    .filter((row) => row.some((cell) => String(cell ?? "").trim().length > 0));
-  const numericRows = candidateRows.filter((row) => {
+    .filter(({ row }) =>
+      row.some((cell) => String(cell ?? "").trim().length > 0),
+    );
+  const numericRows = candidateRows.filter(({ row }) => {
     const name = getCellText(row, indexes.nameIndex);
     const total = toFiniteScore(getCell(row, indexes.totalIndex));
     return Boolean(name) || total !== null;
@@ -259,11 +280,20 @@ const parsePerformanceScoreWorkbook = (
   }
 
   let scoreColumnIndexes = displayHeaders
-    .map((header, index) => ({ header, index }))
+    .map((header, index) => ({
+      header,
+      index,
+      maxHeader: toDisplayHeader(getCell(maxScoreRow, index)),
+      scoreMarker: getCell(scoreMarkerRow, index),
+    }))
     .filter(({ header, index }) => {
       if (!header || isMetadataColumn(index, indexes)) return false;
-      return numericRows.some(
-        (row) => toFiniteScore(getCell(row, index)) !== null,
+      return (
+        hasScoreMarker(getCell(scoreMarkerRow, index)) ||
+        hasMaxScoreMarker(getCell(maxScoreRow, index)) ||
+        numericRows.some(
+          ({ row }) => toFiniteScore(getCell(row, index)) !== null,
+        )
       );
     });
 
@@ -272,6 +302,8 @@ const parsePerformanceScoreWorkbook = (
       {
         header: displayHeaders[indexes.totalIndex] || "수행평가 합계",
         index: indexes.totalIndex,
+        maxHeader: "",
+        scoreMarker: "",
       },
     ];
   }
@@ -280,65 +312,89 @@ const parsePerformanceScoreWorkbook = (
     throw new Error("점수로 인식할 수 있는 수행평가 컬럼이 없습니다.");
   }
 
-  const items = scoreColumnIndexes.map(({ header, index }, itemIndex) => {
-    const observedMax = numericRows.reduce((max, row) => {
-      const value = toFiniteScore(getCell(row, index));
-      return value === null ? max : Math.max(max, value);
-    }, 0);
-    return {
-      name: cleanScoreItemName(header, itemIndex),
-      maxScore: roundScore(parseMaxScoreFromHeader(header) || observedMax),
-      ratio: parseRatioFromHeader(header),
-    };
-  });
+  const items = scoreColumnIndexes.map(
+    ({ header, maxHeader, index }, itemIndex) => {
+      const observedMax = numericRows.reduce((max, row) => {
+        const value = toFiniteScore(getCell(row.row, index));
+        return value === null ? max : Math.max(max, value);
+      }, 0);
+      return {
+        name: cleanScoreItemName(header, itemIndex),
+        maxScore: roundScore(
+          parseMaxScoreFromHeader(header) ||
+            parseMaxScoreFromHeader(maxHeader) ||
+            observedMax,
+        ),
+        ratio: parseRatioFromHeader(header) || parseRatioFromHeader(maxHeader),
+      };
+    },
+  );
   const totalMaxScore = roundScore(
     items.reduce((sum, item) => sum + Number(item.maxScore || 0), 0),
   );
+  const detectedSubject =
+    indexes.subjectIndex >= 0
+      ? toText(
+          numericRows
+            .map(({ row }) => getCell(row, indexes.subjectIndex))
+            .find((value) => toText(value).length > 0) || "",
+        )
+      : "";
 
-  const rowsWithScores: ParsedScoreRow[] = numericRows.map((row, index) => {
-    const rowGrade =
-      getCellText(row, indexes.gradeIndex) || params.targetGrade.trim();
-    const rowClass =
-      getCellText(row, indexes.classIndex) || params.fallbackClass.trim();
-    const rowNumber = getCellText(row, indexes.numberIndex);
-    const studentName = getCellText(row, indexes.nameIndex);
-    const rowItems = scoreColumnIndexes.map(
-      ({ index: columnIndex }, itemIndex) => {
-        const score = toFiniteScore(getCell(row, columnIndex)) || 0;
-        const item = items[itemIndex];
-        return {
-          name: item.name,
-          score: roundScore(score),
-          maxScore: roundScore(Number(item.maxScore || 0)),
-          ratio: item.ratio,
-        };
-      },
-    );
-    const parsedTotal = toFiniteScore(getCell(row, indexes.totalIndex));
-    const calculatedTotal = rowItems.reduce(
-      (sum, item) => sum + Number(item.score || 0),
-      0,
-    );
-    const feedbackSourceIndex =
-      indexes.feedbackIndex >= 0 ? indexes.feedbackIndex : indexes.remarkIndex;
-    const feedback = getCellText(row, feedbackSourceIndex).slice(0, 700);
+  const rowsWithScores: ParsedScoreRow[] = numericRows.map(
+    ({ row, rowIndex }) => {
+      const rowGrade =
+        getCellText(row, indexes.gradeIndex) || params.targetGrade.trim();
+      const rowClass =
+        getCellText(row, indexes.classIndex) || params.fallbackClass.trim();
+      const rowNumber = getCellText(row, indexes.numberIndex);
+      const studentName = getCellText(row, indexes.nameIndex);
+      const enteredScoreCount = scoreColumnIndexes.reduce(
+        (count, { index: columnIndex }) =>
+          toFiniteScore(getCell(row, columnIndex)) === null ? count : count + 1,
+        0,
+      );
+      const rowItems = scoreColumnIndexes.map(
+        ({ index: columnIndex }, itemIndex) => {
+          const score = toFiniteScore(getCell(row, columnIndex));
+          const item = items[itemIndex];
+          return {
+            name: item.name,
+            score: roundScore(score ?? 0),
+            maxScore: roundScore(Number(item.maxScore || 0)),
+            ratio: item.ratio,
+          };
+        },
+      );
+      const parsedTotal = toFiniteScore(getCell(row, indexes.totalIndex));
+      const calculatedTotal = rowItems.reduce(
+        (sum, item) => sum + Number(item.score || 0),
+        0,
+      );
+      const feedbackSourceIndex =
+        indexes.feedbackIndex >= 0
+          ? indexes.feedbackIndex
+          : indexes.remarkIndex;
+      const feedback = getCellText(row, feedbackSourceIndex).slice(0, 700);
 
-    return {
-      rowKey: `row-${headerRowIndex + index + 2}-${studentName}-${rowNumber}`,
-      rowNumber: headerRowIndex + index + 2,
-      uid: "",
-      grade: normalizeSchoolValue(rowGrade),
-      class: normalizeSchoolValue(rowClass),
-      number: normalizeSchoolValue(rowNumber),
-      studentName,
-      items: rowItems,
-      totalScore: roundScore(parsedTotal ?? calculatedTotal),
-      totalMaxScore,
-      feedback,
-      matchStatus: "unmatched",
-      matchMessage: "학생 명단과 아직 연결되지 않았습니다.",
-    };
-  });
+      return {
+        rowKey: `row-${rowIndex + 1}-${studentName}-${rowNumber}`,
+        rowNumber: rowIndex + 1,
+        enteredScoreCount,
+        uid: "",
+        grade: normalizeSchoolValue(rowGrade),
+        class: normalizeSchoolValue(rowClass),
+        number: normalizeSchoolValue(rowNumber),
+        studentName,
+        items: rowItems,
+        totalScore: roundScore(parsedTotal ?? calculatedTotal),
+        totalMaxScore,
+        feedback,
+        matchStatus: "unmatched",
+        matchMessage: "학생 명단과 아직 연결되지 않았습니다.",
+      };
+    },
+  );
 
   return {
     sourceFileName: params.fileName,
@@ -346,6 +402,7 @@ const parsePerformanceScoreWorkbook = (
     items,
     rows: rowsWithScores,
     totalMaxScore,
+    detectedSubject,
     detectedClasses: Array.from(
       new Set(rowsWithScores.map((row) => row.class).filter(Boolean)),
     ).sort((a, b) => Number(a) - Number(b) || a.localeCompare(b, "ko")),
@@ -500,12 +557,22 @@ const PerformanceScoreManager: React.FC = () => {
   const parsedSummary = useMemo(() => {
     const rows = parsed?.rows || [];
     const matchedCount = rows.filter((row) => row.uid).length;
+    const scoredCount = rows.filter((row) => row.enteredScoreCount > 0).length;
+    const saveableCount = rows.filter(
+      (row) => row.uid && row.enteredScoreCount > 0,
+    ).length;
+    const blankScoreCount = rows.filter(
+      (row) => row.enteredScoreCount === 0,
+    ).length;
     const warningCount = rows.filter(
       (row) => row.matchStatus === "name-mismatch",
     ).length;
     return {
       rowCount: rows.length,
       matchedCount,
+      scoredCount,
+      saveableCount,
+      blankScoreCount,
       unmatchedCount: rows.length - matchedCount,
       warningCount,
     };
@@ -584,6 +651,9 @@ const PerformanceScoreManager: React.FC = () => {
         targetGrade,
         fallbackClass,
       });
+      if (!subject.trim() && parsedUpload.detectedSubject) {
+        setSubject(parsedUpload.detectedSubject);
+      }
       const matchedRows = matchRowsToStudents(parsedUpload.rows, students);
       setParsed({
         ...parsedUpload,
@@ -636,8 +706,8 @@ const PerformanceScoreManager: React.FC = () => {
       return;
     }
 
-    const matchedRows = parsed.rows.filter((row) => row.uid);
-    if (!matchedRows.length) {
+    const linkedRows = parsed.rows.filter((row) => row.uid);
+    if (!linkedRows.length) {
       showToast({
         tone: "warning",
         title: "연결된 학생이 없습니다.",
@@ -646,10 +716,29 @@ const PerformanceScoreManager: React.FC = () => {
       return;
     }
 
+    const saveableRows = linkedRows.filter((row) => row.enteredScoreCount > 0);
+    if (!saveableRows.length) {
+      showToast({
+        tone: "warning",
+        title: "점수가 입력된 학생 행이 없습니다.",
+        message: "점수 칸에 입력된 값이 있는 연결 학생만 저장할 수 있습니다.",
+      });
+      return;
+    }
+
+    const connectedBlankScoreCount = linkedRows.length - saveableRows.length;
+    const skippedMessages = [
+      parsedSummary.unmatchedCount > 0
+        ? `미연결 학생 ${parsedSummary.unmatchedCount}명`
+        : "",
+      connectedBlankScoreCount > 0
+        ? `점수가 비어 있는 연결 학생 ${connectedBlankScoreCount}명`
+        : "",
+    ].filter(Boolean);
     if (
-      parsedSummary.unmatchedCount > 0 &&
+      skippedMessages.length > 0 &&
       !window.confirm(
-        `미연결 학생 ${parsedSummary.unmatchedCount}명은 저장되지 않습니다. 연결된 ${matchedRows.length}명만 저장할까요?`,
+        `${skippedMessages.join(", ")}은 저장되지 않습니다. 점수가 입력된 연결 학생 ${saveableRows.length}명만 저장할까요?`,
       )
     ) {
       return;
@@ -657,11 +746,13 @@ const PerformanceScoreManager: React.FC = () => {
 
     setSaving(true);
     try {
+      const safeSubject = subject.trim() || parsed.detectedSubject;
       const rosterRef = doc(collection(db, rosterCollectionPath));
       const rosterId = rosterRef.id;
       const timestamp = serverTimestamp();
       const rosterRows: PerformanceScoreRosterRow[] = parsed.rows.map(
-        ({ rowKey: _rowKey, ...row }) => row,
+        ({ rowKey: _rowKey, enteredScoreCount: _enteredScoreCount, ...row }) =>
+          row,
       );
       const classList = Array.from(
         new Set(parsed.rows.map((row) => row.class).filter(Boolean)),
@@ -670,7 +761,7 @@ const PerformanceScoreManager: React.FC = () => {
       const batch = writeBatch(db);
       batch.set(rosterRef, {
         title: safeTitle,
-        subject: subject.trim(),
+        subject: safeSubject,
         academicYear: year,
         semester,
         targetGrade,
@@ -680,8 +771,8 @@ const PerformanceScoreManager: React.FC = () => {
         items: parsed.items,
         totalMaxScore: parsed.totalMaxScore,
         rowCount: parsed.rows.length,
-        matchedCount: matchedRows.length,
-        unmatchedCount: parsed.rows.length - matchedRows.length,
+        matchedCount: saveableRows.length,
+        unmatchedCount: parsed.rows.length - saveableRows.length,
         sourceFileName: parsed.sourceFileName,
         rows: rosterRows,
         uploadedBy: currentUser?.uid || "",
@@ -690,7 +781,7 @@ const PerformanceScoreManager: React.FC = () => {
         updatedAt: timestamp,
       } satisfies Omit<PerformanceScoreRoster, "id">);
 
-      matchedRows.forEach((row) => {
+      saveableRows.forEach((row) => {
         const userScoreRef = doc(
           db,
           "users",
@@ -701,7 +792,7 @@ const PerformanceScoreManager: React.FC = () => {
         const payload: PerformanceScoreRecord = {
           rosterId,
           title: safeTitle,
-          subject: subject.trim(),
+          subject: safeSubject,
           academicYear: year,
           semester,
           grade: row.grade,
@@ -728,7 +819,7 @@ const PerformanceScoreManager: React.FC = () => {
       showToast({
         tone: "success",
         title: "수행평가 점수를 저장했습니다.",
-        message: `${matchedRows.length}명의 학생 화면에 본인 점수만 표시됩니다.`,
+        message: `${saveableRows.length}명의 학생 화면에 본인 점수만 표시됩니다.`,
       });
     } catch (error) {
       console.error("Failed to save performance scores:", error);
@@ -879,7 +970,7 @@ const PerformanceScoreManager: React.FC = () => {
               엑셀 파일 업로드
             </div>
             <p className="mt-1 text-xs font-bold leading-5 text-blue-700">
-              성명, 반, 번호, 수행평가 점수, 합계, 피드백 컬럼을 자동으로
+              성명, 반, 번호, 수행평가 항목명, 만점 행, 점수 행을 자동으로
               인식합니다.
             </p>
           </div>
@@ -918,6 +1009,14 @@ const PerformanceScoreManager: React.FC = () => {
               <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700">
                 연결 {parsedSummary.matchedCount}명
               </span>
+              <span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-black text-blue-700">
+                점수 입력 {parsedSummary.scoredCount}명
+              </span>
+              {parsedSummary.blankScoreCount > 0 && (
+                <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-600">
+                  점수 빈칸 {parsedSummary.blankScoreCount}명
+                </span>
+              )}
               {parsedSummary.warningCount > 0 && (
                 <span className="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-black text-amber-700">
                   확인 {parsedSummary.warningCount}명
@@ -1035,7 +1134,7 @@ const PerformanceScoreManager: React.FC = () => {
             <button
               type="button"
               onClick={() => void saveParsedScores()}
-              disabled={saving || parsedSummary.matchedCount === 0}
+              disabled={saving || parsedSummary.saveableCount === 0}
               className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
               <i className="fas fa-save text-xs" aria-hidden="true"></i>
