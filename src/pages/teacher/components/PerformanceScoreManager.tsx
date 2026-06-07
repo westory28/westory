@@ -78,7 +78,13 @@ const CLASS_SHEET_STUDENT_END_ROW = 38;
 const CLASS_SHEET_SUMMARY_START_ROW = 39;
 const CLASS_SHEET_TEMPLATE_COLUMN_COUNT = 13;
 const CLASS_SHEET_STUDENT_NAME_COLUMN = 4;
-const CLASS_SHEET_STUDENT_NAME_COLUMN_MIN_WIDTH = 13.5;
+const CLASS_SHEET_STUDENT_NAME_COLUMN_FALLBACK_WIDTH = 7.5;
+const CLASS_SHEET_STUDENT_NAME_COLUMN_MAX_EXPANDED_WIDTH = 18;
+const CLASS_SHEET_RIGHT_SPACER_COLUMNS = [
+  { column: 16, minWidth: 8 },
+  { column: 15, minWidth: 12 },
+  { column: 14, minWidth: 1 },
+];
 const CLASS_SHEET_SIGNATURE_START_COLUMN_INDEX = 10;
 const CLASS_SHEET_SIGNATURE_END_COLUMN_INDEX = 13;
 const CLASS_SHEET_SIGNATURE_VERTICAL_PADDING = 0;
@@ -594,12 +600,10 @@ const getTimestampMillis = (value: unknown) => {
   return 0;
 };
 
-const formatObjectionDate = (value: unknown) => {
+const formatObjectionTime = (value: unknown) => {
   const millis = getTimestampMillis(value);
   if (!millis) return "-";
   return new Intl.DateTimeFormat("ko-KR", {
-    month: "2-digit",
-    day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
   }).format(new Date(millis));
@@ -1396,6 +1400,41 @@ const getClassSheetStudentName = (student: ClassSheetStudent) =>
     ? `${student.studentName || "(이름 없음)"} [${TRANSFERRED_LABEL}]`
     : student.studentName || "(이름 없음)";
 
+const getClassSheetStudentNameWidthUnits = (value: string) =>
+  Array.from(value).reduce(
+    (sum, character) => sum + (character.charCodeAt(0) <= 0x007f ? 1 : 2),
+    0,
+  );
+
+const getExpandedClassSheetStudentNameColumnWidth = (
+  students: ClassSheetStudent[],
+  currentWidth: number,
+) => {
+  const safeCurrentWidth =
+    currentWidth || CLASS_SHEET_STUDENT_NAME_COLUMN_FALLBACK_WIDTH;
+  const hasTransferredStudent = students.some(
+    (student) =>
+      isTransferredScoreRecord(student.firstRecord) ||
+      isTransferredScoreRecord(student.secondRecord),
+  );
+  const maxNameWidth = students.reduce(
+    (max, student) =>
+      Math.max(
+        max,
+        getClassSheetStudentNameWidthUnits(getClassSheetStudentName(student)),
+      ),
+    0,
+  );
+  if (!hasTransferredStudent && maxNameWidth <= safeCurrentWidth) return null;
+  return Math.max(
+    safeCurrentWidth,
+    Math.min(
+      CLASS_SHEET_STUDENT_NAME_COLUMN_MAX_EXPANDED_WIDTH,
+      Math.ceil(maxNameWidth + 1),
+    ),
+  );
+};
+
 const getConfirmedSignatureRecord = (
   student: ClassSheetStudent,
   expected: { requireFirst?: boolean; requireSecond?: boolean } = {},
@@ -1681,17 +1720,36 @@ const setClassSheetStudentNameCell = (
   },
   row: number,
   value: string,
+  preventWrap: boolean,
 ) => {
   const cell = worksheet.getCell(row, CLASS_SHEET_STUDENT_NAME_COLUMN);
+  cell.value = value;
+  if (!preventWrap) return;
   const currentAlignment =
     cell.alignment && typeof cell.alignment === "object" ? cell.alignment : {};
-  cell.value = value;
   cell.alignment = {
     ...(currentAlignment as Record<string, unknown>),
     horizontal: "center",
     vertical: "middle",
     wrapText: false,
   };
+};
+
+const shrinkClassSheetRightSpacerColumns = (
+  worksheet: { getColumn: (column: number) => { width?: number } },
+  widthDelta: number,
+) => {
+  let remainingDelta = Math.max(0, widthDelta);
+  CLASS_SHEET_RIGHT_SPACER_COLUMNS.forEach(({ column, minWidth }) => {
+    if (remainingDelta <= 0) return;
+    const worksheetColumn = worksheet.getColumn(column);
+    const currentWidth = Number(worksheetColumn.width || 0);
+    const shrinkableWidth = Math.max(0, currentWidth - minWidth);
+    const nextShrink = Math.min(remainingDelta, shrinkableWidth);
+    if (nextShrink <= 0) return;
+    worksheetColumn.width = Number((currentWidth - nextShrink).toFixed(3));
+    remainingDelta = Number((remainingDelta - nextShrink).toFixed(3));
+  });
 };
 
 const cloneWorksheetStyle = (style: unknown) =>
@@ -2190,10 +2248,24 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
   const studentNameColumn = worksheet.getColumn(
     CLASS_SHEET_STUDENT_NAME_COLUMN,
   );
-  studentNameColumn.width = Math.max(
-    Number(studentNameColumn.width || 0),
-    CLASS_SHEET_STUDENT_NAME_COLUMN_MIN_WIDTH,
-  );
+  const studentNameColumnWidth =
+    Number(studentNameColumn.width || 0) ||
+    CLASS_SHEET_STUDENT_NAME_COLUMN_FALLBACK_WIDTH;
+  const expandedStudentNameColumnWidth =
+    getExpandedClassSheetStudentNameColumnWidth(
+      params.students,
+      studentNameColumnWidth,
+    );
+  const shouldExpandStudentNameColumn =
+    expandedStudentNameColumnWidth !== null &&
+    expandedStudentNameColumnWidth > studentNameColumnWidth;
+  if (shouldExpandStudentNameColumn) {
+    studentNameColumn.width = expandedStudentNameColumnWidth;
+    shrinkClassSheetRightSpacerColumns(
+      worksheet,
+      expandedStudentNameColumnWidth - studentNameColumnWidth,
+    );
+  }
   const { studentEndRow, summaryStartRow } = resizeClassSheetStudentRows(
     worksheet,
     params.students.length,
@@ -2252,6 +2324,7 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
       worksheet,
       row,
       getClassSheetStudentName(student),
+      shouldExpandStudentNameColumn,
     );
     setWorksheetCellValue(worksheet, row, 5, firstScore ?? "");
     setWorksheetCellValue(worksheet, row, 7, secondScore ?? "");
@@ -5640,7 +5713,7 @@ const PerformanceScoreManager: React.FC = () => {
             role="dialog"
             aria-modal="true"
             aria-labelledby="performance-score-objections-title"
-            className="flex max-h-[92vh] w-full max-w-7xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
+            className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
           >
             <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
@@ -5731,27 +5804,23 @@ const PerformanceScoreManager: React.FC = () => {
                     새로고침을 누르면 제출된 이의 제기 목록을 조회합니다.
                   </div>
                 ) : (
-                  <table className="w-full min-w-[1180px] table-fixed text-left text-sm">
+                  <table className="w-full min-w-[920px] table-fixed text-left text-sm">
                     <colgroup>
-                      <col className="w-[90px]" />
                       <col className="w-[150px]" />
                       <col className="w-[210px]" />
                       <col className="w-[130px]" />
-                      <col className="w-[240px]" />
-                      <col className="w-[270px]" />
-                      <col className="w-[150px]" />
-                      <col className="w-[170px]" />
+                      <col className="w-[280px]" />
+                      <col className="w-[110px]" />
+                      <col className="w-[130px]" />
                     </colgroup>
                     <thead className="bg-slate-50 text-xs font-black text-slate-500">
                       <tr>
-                        <th className="px-4 py-3">상태</th>
                         <th className="px-4 py-3">학생</th>
                         <th className="px-4 py-3">수행평가 항목</th>
                         <th className="px-4 py-3">해당 점수</th>
-                        <th className="px-4 py-3">영역별 점수</th>
                         <th className="px-4 py-3">이의 제기 사유</th>
-                        <th className="px-4 py-3">요청/처리</th>
-                        <th className="px-4 py-3 text-center">처리</th>
+                        <th className="px-4 py-3">시간</th>
+                        <th className="px-4 py-3 text-center">상태/처리</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -5765,13 +5834,6 @@ const PerformanceScoreManager: React.FC = () => {
                             key={objection.id}
                             className={statusMeta.rowClass}
                           >
-                            <td className="px-4 py-4 align-top">
-                              <span
-                                className={`inline-flex rounded-full px-3 py-1 text-xs font-black ${statusMeta.badgeClass}`}
-                              >
-                                {statusMeta.label}
-                              </span>
-                            </td>
                             <td className="px-4 py-4 align-top">
                               <div className="font-black text-slate-900">
                                 {objection.studentName}
@@ -5802,30 +5864,6 @@ const PerformanceScoreManager: React.FC = () => {
                                 )}
                             </td>
                             <td className="px-4 py-4 align-top">
-                              <div className="flex flex-wrap gap-1.5">
-                                {objection.items.length === 0 ? (
-                                  <span className="text-xs font-bold text-slate-400">
-                                    영역별 점수 없음
-                                  </span>
-                                ) : (
-                                  objection.items.map((item, itemIndex) => (
-                                    <span
-                                      key={`${objection.id}-${itemIndex}`}
-                                      className="rounded-md bg-slate-50 px-2 py-1 text-[11px] font-bold text-slate-600"
-                                    >
-                                      {getItemLabel(item)}{" "}
-                                      {item.scoreEntered === false
-                                        ? "미입력"
-                                        : getObjectionScoreLabel(
-                                            item.score,
-                                            item.maxScore,
-                                          ).replace("점", "")}
-                                    </span>
-                                  ))
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-4 py-4 align-top">
                               <p className="whitespace-pre-wrap break-words font-semibold leading-6 text-slate-700">
                                 {objection.reason || "사유 없음"}
                               </p>
@@ -5838,21 +5876,18 @@ const PerformanceScoreManager: React.FC = () => {
                             <td className="px-4 py-4 align-top text-xs font-bold leading-5 text-slate-500">
                               <div>
                                 요청{" "}
-                                {formatObjectionDate(objection.requestedAt)}
+                                {formatObjectionTime(objection.requestedAt)}
                               </div>
                               {objection.status !== "pending" && (
                                 <div className="mt-1">
                                   처리{" "}
-                                  {formatObjectionDate(objection.reviewedAt)}
-                                  {objection.reviewedByName
-                                    ? ` · ${objection.reviewedByName}`
-                                    : ""}
+                                  {formatObjectionTime(objection.reviewedAt)}
                                 </div>
                               )}
                             </td>
                             <td className="px-4 py-4 align-top">
                               {objection.status === "pending" ? (
-                                <div className="flex justify-center gap-2">
+                                <div className="flex justify-center gap-1.5">
                                   <button
                                     type="button"
                                     onClick={() =>
@@ -5862,7 +5897,7 @@ const PerformanceScoreManager: React.FC = () => {
                                       )
                                     }
                                     disabled={Boolean(objectionReviewingId)}
-                                    className="inline-flex h-8 items-center justify-center rounded-lg border border-rose-200 bg-white px-3 text-xs font-black text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                    className="inline-flex h-8 items-center justify-center rounded-lg border border-rose-200 bg-white px-2.5 text-xs font-black text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
                                   >
                                     반려
                                   </button>
@@ -5875,14 +5910,18 @@ const PerformanceScoreManager: React.FC = () => {
                                       )
                                     }
                                     disabled={Boolean(objectionReviewingId)}
-                                    className="inline-flex h-8 items-center justify-center rounded-lg bg-blue-600 px-3 text-xs font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                                    className="inline-flex h-8 items-center justify-center rounded-lg bg-blue-600 px-2.5 text-xs font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                                   >
                                     {reviewing ? "처리 중" : "수용"}
                                   </button>
                                 </div>
                               ) : (
-                                <div className="text-center text-xs font-black text-slate-400">
-                                  처리 완료
+                                <div className="flex justify-center">
+                                  <span
+                                    className={`inline-flex rounded-full px-3 py-1 text-xs font-black ${statusMeta.badgeClass}`}
+                                  >
+                                    {statusMeta.label}
+                                  </span>
                                 </div>
                               )}
                             </td>
