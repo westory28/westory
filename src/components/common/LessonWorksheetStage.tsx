@@ -400,6 +400,8 @@ const resolveBlankRenderRect = (
 ) => {
   const blankCenterX = blank.leftRatio + blank.widthRatio / 2;
   const blankCenterY = blank.topRatio + blank.heightRatio / 2;
+  const blankPixelWidth = blank.widthRatio * pageImage.width;
+  const blankPixelHeight = blank.heightRatio * pageImage.height;
   const normalizedAnswer = normalizeBlankText(blank.answer);
   const expandedRegions = expandRegionsForSelection(pageRegions, pageImage);
   const candidates = normalizedAnswer
@@ -413,14 +415,34 @@ const resolveBlankRenderRect = (
       .map((region) => {
         const bounds = getTightTextRegionBounds(region, pageImage);
         if (!bounds) return null;
-        const dx = bounds.leftRatio + bounds.widthRatio / 2 - blankCenterX;
-        const dy = bounds.topRatio + bounds.heightRatio / 2 - blankCenterY;
-        return { bounds, distance: Math.hypot(dx, dy) };
+        const candidateCenterX = bounds.leftRatio + bounds.widthRatio / 2;
+        const candidateCenterY = bounds.topRatio + bounds.heightRatio / 2;
+        const dx = candidateCenterX - blankCenterX;
+        const dy = candidateCenterY - blankCenterY;
+        const pixelDistance = Math.hypot(
+          dx * pageImage.width,
+          dy * pageImage.height,
+        );
+        const maxSnapDistance = Math.max(
+          80,
+          blankPixelWidth * 3,
+          blankPixelHeight * 3,
+          bounds.width * 3,
+          bounds.height * 3,
+        );
+        return {
+          bounds,
+          distance: Math.hypot(dx, dy),
+          pixelDistance,
+          maxSnapDistance,
+        };
       })
       .filter((item): item is NonNullable<typeof item> => Boolean(item))
       .sort((a, b) => a.distance - b.distance)[0];
 
-    if (nearest) return nearest.bounds;
+    if (nearest && nearest.pixelDistance <= nearest.maxSnapDistance) {
+      return nearest.bounds;
+    }
   }
 
   return {
