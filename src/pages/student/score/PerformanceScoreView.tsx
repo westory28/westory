@@ -18,6 +18,7 @@ import {
   getPerformanceScorePercent,
   type PerformanceScoreRecord,
 } from "../../../lib/performanceScores";
+import { getPerformanceScoreItemShortName } from "../../../lib/performanceScoreWorkbook";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
@@ -39,6 +40,11 @@ const formatDateTime = (value: unknown) => {
 
 const getRecordDate = (record: PerformanceScoreRecord) =>
   formatDateTime(record.updatedAt) || formatDateTime(record.uploadedAt);
+
+const getItemLabel = (
+  item: { name: string; shortName?: string },
+  index: number,
+) => item.shortName || getPerformanceScoreItemShortName(item.name, index);
 
 const PerformanceScoreView: React.FC = () => {
   const { currentUser, userData, config } = useAuth();
@@ -127,7 +133,7 @@ const PerformanceScoreView: React.FC = () => {
 
   const chartData = selectedRecord
     ? {
-        labels: chartItems.map((item) => item.name),
+        labels: chartItems.map((item, index) => getItemLabel(item, index)),
         datasets: [
           {
             label: "획득 점수",
@@ -339,14 +345,18 @@ const PerformanceScoreView: React.FC = () => {
                   item.score,
                   item.maxScore,
                 );
+                const itemLabel = getItemLabel(item, index);
                 return (
                   <div
                     key={`${item.name}-${item.maxScore}-${index}`}
                     className="grid gap-3 border-b border-slate-100 px-4 py-4 last:border-b-0 sm:grid-cols-[160px_minmax(0,1fr)_120px]"
                   >
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-black text-slate-900">
-                        {item.name}
+                      <div
+                        className="truncate text-sm font-black text-slate-900"
+                        title={item.name}
+                      >
+                        {itemLabel}
                       </div>
                       <div className="mt-1 text-xs font-bold text-slate-400">
                         {formatPerformanceScore(item.maxScore)}점 만점

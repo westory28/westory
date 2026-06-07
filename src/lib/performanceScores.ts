@@ -4,6 +4,7 @@ export const PERFORMANCE_SCORE_USER_COLLECTION = "performance_scores";
 
 export interface PerformanceScoreItem {
   name: string;
+  shortName?: string;
   score: number;
   maxScore: number;
   ratio?: number;
@@ -44,10 +45,10 @@ export interface PerformanceScoreRosterRow {
   class: string;
   number: string;
   studentName: string;
-  items: PerformanceScoreItem[];
-  totalScore: number;
-  totalMaxScore: number;
-  feedback: string;
+  items?: PerformanceScoreItem[];
+  totalScore?: number;
+  totalMaxScore?: number;
+  feedback?: string;
   evidence?: string;
   matchStatus: "matched" | "name-mismatch" | "unmatched";
   matchMessage: string;
@@ -63,7 +64,9 @@ export interface PerformanceScoreRoster {
   targetGrade: string;
   targetClass: string;
   classes: string[];
-  items: Array<Pick<PerformanceScoreItem, "name" | "maxScore" | "ratio">>;
+  items: Array<
+    Pick<PerformanceScoreItem, "name" | "shortName" | "maxScore" | "ratio">
+  >;
   totalMaxScore: number;
   rowCount: number;
   matchedCount: number;

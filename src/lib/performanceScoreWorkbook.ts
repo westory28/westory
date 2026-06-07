@@ -9,6 +9,10 @@ import {
 export interface ParsedPerformanceScoreRow extends PerformanceScoreRosterRow {
   rowKey: string;
   enteredScoreCount: number;
+  items: PerformanceScoreItem[];
+  totalScore: number;
+  totalMaxScore: number;
+  feedback: string;
 }
 
 export interface ParsedPerformanceScoreUpload {
@@ -17,7 +21,9 @@ export interface ParsedPerformanceScoreUpload {
   title: string;
   subject: string;
   assessmentOrder?: number;
-  items: Array<Pick<PerformanceScoreItem, "name" | "maxScore" | "ratio">>;
+  items: Array<
+    Pick<PerformanceScoreItem, "name" | "shortName" | "maxScore" | "ratio">
+  >;
   rows: ParsedPerformanceScoreRow[];
   totalMaxScore: number;
   detectedClasses: string[];
@@ -167,6 +173,26 @@ const inferAssessmentOrder = (title: string) => {
 const inferSubject = (title: string) =>
   /고조선|8조법|삼국|역사/.test(title) ? "역사" : "";
 
+export const getPerformanceScoreItemShortName = (
+  name: unknown,
+  fallbackIndex = 0,
+) => {
+  const normalized = toHeaderKey(name);
+  if (/범죄행위|형벌결과|만화서사/.test(normalized)) return "법 조항 서사";
+  if (/유물|생활모습|배경/.test(normalized)) return "당대 생활상";
+  if (/사건발생|갈등|재판|판결|인과관계|4컷/.test(normalized))
+    return "서사 표현";
+  if (/심리|계급적입장|말풍선/.test(normalized)) return "말풍선 표현";
+  if (/비유적|평점제목|제목/.test(normalized)) return "비유 제목";
+  if (/업적|과오|객관적사실/.test(normalized)) return "업적·과오";
+  if (/별점|평점.*근거|역사적맥락/.test(normalized)) return "평점 근거";
+  if (/대중매체|이미지|주체적인역사적평가/.test(normalized)) return "매체 비교";
+  if (/정치적선택|사회와타인의삶|비판적으로성찰/.test(normalized))
+    return "비판적 성찰";
+  if (/온라인지도|리뷰|정제된언어|형식/.test(normalized)) return "리뷰 형식";
+  return toText(name) || `요소 ${fallbackIndex + 1}`;
+};
+
 const sortSchoolValues = (values: string[]) =>
   values.sort((a, b) => Number(a) - Number(b) || a.localeCompare(b, "ko"));
 
@@ -257,8 +283,9 @@ export const parsePerformanceScoreWorkbook = (
     },
   );
 
-  const items = scoreColumns.map((column) => ({
+  const items = scoreColumns.map((column, index) => ({
     name: column.header,
+    shortName: getPerformanceScoreItemShortName(column.header, index),
     maxScore: column.maxScore,
   }));
   const observedTotalMax = scoreRows.reduce((max, { row }) => {
@@ -288,6 +315,7 @@ export const parsePerformanceScoreWorkbook = (
         const item = items[itemIndex];
         return {
           name: item.name,
+          shortName: item.shortName,
           score: roundScore(score ?? 0),
           maxScore: roundScore(Number(item.maxScore || 0)),
           scoreEntered: score !== null,

@@ -2,10 +2,13 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   collection,
   doc,
+  type DocumentData,
+  type DocumentReference,
   getDocs,
   orderBy,
   query,
   serverTimestamp,
+  type WithFieldValue,
   writeBatch,
 } from "firebase/firestore";
 import { InlineLoading } from "../../../components/common/LoadingState";
@@ -47,15 +50,99 @@ interface StudentProfile {
 type ParsedScoreRow = ParsedPerformanceScoreRow;
 type ParsedUpload = ParsedPerformanceScoreUpload;
 
+type AssessmentPresetKey = "auto" | "first" | "second";
+
 const DEFAULT_GRADE_OPTIONS = ["1", "2", "3"];
 const DEFAULT_CLASS_OPTIONS = Array.from({ length: 12 }, (_, index) =>
   String(index + 1),
 );
+const PREVIEW_PAGE_SIZE = 20;
+const FIRESTORE_BATCH_WRITE_LIMIT = 450;
+
+const ASSESSMENT_PRESETS: Record<
+  Exclude<AssessmentPresetKey, "auto">,
+  { title: string; subject: string; assessmentOrder: number }
+> = {
+  first: {
+    title: "고조선 8조법 4컷 만화 그리기",
+    subject: "역사",
+    assessmentOrder: 1,
+  },
+  second: {
+    title: "삼국 시대 인물의 무덤에 평점 남기기",
+    subject: "역사",
+    assessmentOrder: 2,
+  },
+};
 
 const toText = (value: unknown) =>
   String(value ?? "")
     .replace(/\s+/g, " ")
     .trim();
+
+const getDefaultAssessmentPreset = (
+  upload: ParsedUpload,
+): AssessmentPresetKey => {
+  if (upload.assessmentOrder === 1) return "first";
+  if (upload.assessmentOrder === 2) return "second";
+  return "auto";
+};
+
+const getAssessmentConfig = (
+  upload: ParsedUpload,
+  preset: AssessmentPresetKey,
+) => {
+  if (preset !== "auto") return ASSESSMENT_PRESETS[preset];
+  return {
+    title: upload.title,
+    subject: upload.subject,
+    assessmentOrder: upload.assessmentOrder,
+  };
+};
+
+const getItemLabel = (item: { name: string; shortName?: string }) =>
+  item.shortName || item.name;
+
+const createBatchQueue = () => {
+  const batches: Array<ReturnType<typeof writeBatch>> = [];
+  let activeBatch = writeBatch(db);
+  let activeWriteCount = 0;
+
+  const rotateIfFull = () => {
+    if (activeWriteCount < FIRESTORE_BATCH_WRITE_LIMIT) return;
+    batches.push(activeBatch);
+    activeBatch = writeBatch(db);
+    activeWriteCount = 0;
+  };
+
+  const queueWrite = () => {
+    activeWriteCount += 1;
+  };
+
+  return {
+    set(
+      ref: DocumentReference<DocumentData>,
+      data: WithFieldValue<DocumentData>,
+    ) {
+      rotateIfFull();
+      activeBatch.set(ref, data);
+      queueWrite();
+    },
+    delete(ref: DocumentReference<DocumentData>) {
+      rotateIfFull();
+      activeBatch.delete(ref);
+      queueWrite();
+    },
+    async commit() {
+      if (activeWriteCount > 0) {
+        batches.push(activeBatch);
+      }
+      for (const batch of batches) {
+        await batch.commit();
+      }
+    },
+  };
+};
 
 const readWorkbookRows = async (file: File) => {
   const { default: readXlsxFile } = await import("read-excel-file/browser");
@@ -184,6 +271,10 @@ const PerformanceScoreManager: React.FC = () => {
   const [rosters, setRosters] = useState<PerformanceScoreRoster[]>([]);
   const [rostersLoading, setRostersLoading] = useState(true);
   const [deletingRosterId, setDeletingRosterId] = useState("");
+  const [previewClassFilter, setPreviewClassFilter] = useState("all");
+  const [previewPage, setPreviewPage] = useState(1);
+  const [assessmentPreset, setAssessmentPreset] =
+    useState<AssessmentPresetKey>("auto");
 
   useEffect(() => {
     setTitle(`${year}학년도 ${semester}학기 수행평가 점수`);
@@ -208,6 +299,10 @@ const PerformanceScoreManager: React.FC = () => {
         : current,
     );
   }, [students.length]);
+
+  useEffect(() => {
+    setPreviewPage(1);
+  }, [previewClassFilter, parsed?.sourceFileName]);
 
   const rosterCollectionPath = getSemesterCollectionPath(
     { year, semester },
@@ -237,6 +332,30 @@ const PerformanceScoreManager: React.FC = () => {
       warningCount,
     };
   }, [parsed]);
+
+  const filteredPreviewRows = useMemo(() => {
+    const rows = parsed?.rows || [];
+    return previewClassFilter === "all"
+      ? rows
+      : rows.filter((row) => row.class === previewClassFilter);
+  }, [parsed, previewClassFilter]);
+
+  const previewTotalPages = Math.max(
+    1,
+    Math.ceil(filteredPreviewRows.length / PREVIEW_PAGE_SIZE),
+  );
+  const safePreviewPage = Math.min(previewPage, previewTotalPages);
+  const previewStartIndex = (safePreviewPage - 1) * PREVIEW_PAGE_SIZE;
+  const previewRows = filteredPreviewRows.slice(
+    previewStartIndex,
+    previewStartIndex + PREVIEW_PAGE_SIZE,
+  );
+  const previewRangeLabel = filteredPreviewRows.length
+    ? `${previewStartIndex + 1}-${Math.min(
+        previewStartIndex + PREVIEW_PAGE_SIZE,
+        filteredPreviewRows.length,
+      )}`
+    : "0";
 
   const loadStudents = async () => {
     setStudentsLoading(true);
@@ -311,14 +430,19 @@ const PerformanceScoreManager: React.FC = () => {
         targetGrade,
         fallbackClass,
       });
-      const defaultTitle = `${year}학년도 ${semester}학기 수행평가 점수`;
-      if (!title.trim() || title.trim() === defaultTitle) {
-        setTitle(parsedUpload.title);
-      }
-      if (!subject.trim() && parsedUpload.subject) {
-        setSubject(parsedUpload.subject);
+      const detectedPreset = getDefaultAssessmentPreset(parsedUpload);
+      const assessmentConfig = getAssessmentConfig(
+        parsedUpload,
+        detectedPreset,
+      );
+      setTitle(assessmentConfig.title || parsedUpload.title);
+      if (assessmentConfig.subject) {
+        setSubject(assessmentConfig.subject);
       }
       const matchedRows = matchRowsToStudents(parsedUpload.rows, students);
+      setAssessmentPreset(detectedPreset);
+      setPreviewClassFilter("all");
+      setPreviewPage(1);
       setParsed({
         ...parsedUpload,
         rows: matchedRows,
@@ -362,9 +486,24 @@ const PerformanceScoreManager: React.FC = () => {
     );
   };
 
+  const updateAssessmentPreset = (preset: AssessmentPresetKey) => {
+    setAssessmentPreset(preset);
+    if (!parsed) return;
+    const config = getAssessmentConfig(parsed, preset);
+    if (config.title) setTitle(config.title);
+    if (config.subject) setSubject(config.subject);
+    setParsed({
+      ...parsed,
+      title: config.title || parsed.title,
+      subject: config.subject || parsed.subject,
+      assessmentOrder: config.assessmentOrder,
+    });
+  };
+
   const saveParsedScores = async () => {
     if (!parsed || saving) return;
-    const safeTitle = title.trim();
+    const assessmentConfig = getAssessmentConfig(parsed, assessmentPreset);
+    const safeTitle = title.trim() || assessmentConfig.title;
     if (!safeTitle) {
       showToast({
         tone: "warning",
@@ -417,25 +556,41 @@ const PerformanceScoreManager: React.FC = () => {
 
     setSaving(true);
     try {
-      const safeSubject = subject.trim() || parsed.subject;
+      const safeSubject = subject.trim() || assessmentConfig.subject;
+      const assessmentOrder = assessmentConfig.assessmentOrder;
       const rosterRef = doc(collection(db, rosterCollectionPath));
       const rosterId = rosterRef.id;
       const timestamp = serverTimestamp();
       const rosterRows: PerformanceScoreRosterRow[] = parsed.rows.map(
-        ({ rowKey: _rowKey, enteredScoreCount: _enteredScoreCount, ...row }) =>
-          row,
+        ({
+          rowKey: _rowKey,
+          enteredScoreCount: _enteredScoreCount,
+          items: _items,
+          feedback: _feedback,
+          evidence: _evidence,
+          ...row
+        }) => ({
+          rowNumber: row.rowNumber,
+          uid: row.uid,
+          grade: row.grade,
+          class: row.class,
+          number: row.number,
+          studentName: row.studentName,
+          totalScore: row.totalScore,
+          totalMaxScore: row.totalMaxScore,
+          matchStatus: row.matchStatus,
+          matchMessage: row.matchMessage,
+        }),
       );
       const classList = Array.from(
         new Set(parsed.rows.map((row) => row.class).filter(Boolean)),
       ).sort((a, b) => Number(a) - Number(b) || a.localeCompare(b, "ko"));
 
-      const batch = writeBatch(db);
-      batch.set(rosterRef, {
+      const batchQueue = createBatchQueue();
+      batchQueue.set(rosterRef, {
         title: safeTitle,
         subject: safeSubject,
-        ...(parsed.assessmentOrder
-          ? { assessmentOrder: parsed.assessmentOrder }
-          : {}),
+        ...(assessmentOrder ? { assessmentOrder } : {}),
         academicYear: year,
         semester,
         targetGrade,
@@ -467,9 +622,7 @@ const PerformanceScoreManager: React.FC = () => {
           rosterId,
           title: safeTitle,
           subject: safeSubject,
-          ...(parsed.assessmentOrder
-            ? { assessmentOrder: parsed.assessmentOrder }
-            : {}),
+          ...(assessmentOrder ? { assessmentOrder } : {}),
           academicYear: year,
           semester,
           grade: row.grade,
@@ -485,10 +638,10 @@ const PerformanceScoreManager: React.FC = () => {
           uploadedAt: timestamp,
           updatedAt: timestamp,
         };
-        batch.set(userScoreRef, payload);
+        batchQueue.set(userScoreRef, payload);
       });
 
-      await batch.commit();
+      await batchQueue.commit();
       setParsed(null);
       await loadRosters();
       showToast({
@@ -520,12 +673,12 @@ const PerformanceScoreManager: React.FC = () => {
 
     setDeletingRosterId(roster.id);
     try {
-      const batch = writeBatch(db);
-      batch.delete(doc(db, rosterCollectionPath, roster.id));
+      const batchQueue = createBatchQueue();
+      batchQueue.delete(doc(db, rosterCollectionPath, roster.id));
       (roster.rows || [])
         .filter((row) => row.uid)
         .forEach((row) => {
-          batch.delete(
+          batchQueue.delete(
             doc(
               db,
               "users",
@@ -535,7 +688,7 @@ const PerformanceScoreManager: React.FC = () => {
             ),
           );
         });
-      await batch.commit();
+      await batchQueue.commit();
       await loadRosters();
       showToast({
         tone: "success",
@@ -664,161 +817,263 @@ const PerformanceScoreManager: React.FC = () => {
       </section>
 
       {parsed && (
-        <section className="rounded-xl border border-slate-200 bg-white p-5">
-          <div className="flex flex-col gap-4 border-b border-slate-100 pb-4 lg:flex-row lg:items-start lg:justify-between">
-            <div>
-              <h3 className="text-lg font-black text-slate-900">
-                업로드 미리보기
-              </h3>
-              <p className="mt-1 text-sm font-semibold text-slate-500">
-                {parsed.sourceFileName} · 헤더 {parsed.headerRowNumber}행 ·{" "}
-                {parsed.detectedClasses.length
-                  ? `${parsed.detectedClasses.join(", ")}반`
-                  : "반 정보 없음"}
-              </p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
+          <section className="flex max-h-[92vh] w-full max-w-7xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+            <div className="flex flex-col gap-4 border-b border-slate-200 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0">
+                <h3 className="text-lg font-black text-slate-900">
+                  업로드 미리보기
+                </h3>
+                <p className="mt-1 truncate text-sm font-semibold text-slate-500">
+                  {parsed.sourceFileName} · 헤더 {parsed.headerRowNumber}행 ·{" "}
+                  {parsed.detectedClasses.length
+                    ? `${parsed.detectedClasses.join(", ")}반`
+                    : "반 정보 없음"}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-700">
+                  총 {parsedSummary.rowCount}명
+                </span>
+                <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700">
+                  연결 {parsedSummary.matchedCount}명
+                </span>
+                <span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-black text-blue-700">
+                  점수 입력 {parsedSummary.scoredCount}명
+                </span>
+                {parsedSummary.blankScoreCount > 0 && (
+                  <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-600">
+                    점수 빈칸 {parsedSummary.blankScoreCount}명
+                  </span>
+                )}
+                {parsedSummary.warningCount > 0 && (
+                  <span className="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-black text-amber-700">
+                    확인 {parsedSummary.warningCount}명
+                  </span>
+                )}
+                {parsedSummary.unmatchedCount > 0 && (
+                  <span className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-black text-rose-700">
+                    미연결 {parsedSummary.unmatchedCount}명
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setParsed(null)}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50"
+                  aria-label="미리보기 닫기"
+                >
+                  <i className="fas fa-times" aria-hidden="true"></i>
+                </button>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-700">
-                총 {parsedSummary.rowCount}명
-              </span>
-              <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700">
-                연결 {parsedSummary.matchedCount}명
-              </span>
-              <span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-black text-blue-700">
-                점수 입력 {parsedSummary.scoredCount}명
-              </span>
-              {parsedSummary.blankScoreCount > 0 && (
-                <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-600">
-                  점수 빈칸 {parsedSummary.blankScoreCount}명
-                </span>
-              )}
-              {parsedSummary.warningCount > 0 && (
-                <span className="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-black text-amber-700">
-                  확인 {parsedSummary.warningCount}명
-                </span>
-              )}
-              {parsedSummary.unmatchedCount > 0 && (
-                <span className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-black text-rose-700">
-                  미연결 {parsedSummary.unmatchedCount}명
-                </span>
-              )}
-            </div>
-          </div>
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {parsed.items.map((item, index) => (
-              <div
-                key={`${item.name}-${index}`}
-                className="rounded-lg border border-slate-200 px-3 py-3"
-              >
-                <div className="truncate text-sm font-black text-slate-800">
-                  {item.name}
+            <div className="overflow-y-auto px-5 py-4">
+              <div className="grid gap-3 lg:grid-cols-[1fr_220px_180px]">
+                <label className="block">
+                  <span className="text-xs font-black text-slate-600">
+                    수행평가 선택
+                  </span>
+                  <select
+                    value={assessmentPreset}
+                    onChange={(event) =>
+                      updateAssessmentPreset(
+                        event.target.value as AssessmentPresetKey,
+                      )
+                    }
+                    className="mt-1 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50"
+                  >
+                    <option value="auto">파일명 자동 인식</option>
+                    <option value="first">
+                      1차 수행: 고조선 8조법 4컷 만화
+                    </option>
+                    <option value="second">
+                      2차 수행: 삼국 시대 인물의 무덤 평점
+                    </option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="text-xs font-black text-slate-600">
+                    평가명
+                  </span>
+                  <input
+                    type="text"
+                    value={title}
+                    onChange={(event) => setTitle(event.target.value)}
+                    className="mt-1 h-11 w-full rounded-lg border border-slate-300 px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50"
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-xs font-black text-slate-600">
+                    반 필터
+                  </span>
+                  <select
+                    value={previewClassFilter}
+                    onChange={(event) =>
+                      setPreviewClassFilter(event.target.value)
+                    }
+                    className="mt-1 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50"
+                  >
+                    <option value="all">전체 반</option>
+                    {parsed.detectedClasses.map((classValue) => (
+                      <option key={classValue} value={classValue}>
+                        {classValue}반
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {parsed.items.map((item, index) => (
+                  <div
+                    key={`${item.name}-${index}`}
+                    className="rounded-lg border border-slate-200 px-3 py-3"
+                  >
+                    <div
+                      className="truncate text-sm font-black text-slate-800"
+                      title={item.name}
+                    >
+                      {getItemLabel(item)}
+                    </div>
+                    <div className="mt-1 text-xs font-bold text-slate-500">
+                      {formatPerformanceScore(item.maxScore)}점 만점
+                      {item.ratio
+                        ? ` · ${formatPerformanceScore(item.ratio)}%`
+                        : ""}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-sm font-bold text-slate-500">
+                  {previewRangeLabel} / {filteredPreviewRows.length}명 표시 ·{" "}
+                  {safePreviewPage} / {previewTotalPages}쪽
                 </div>
-                <div className="mt-1 text-xs font-bold text-slate-500">
-                  {formatPerformanceScore(item.maxScore)}점 만점
-                  {item.ratio
-                    ? ` · ${formatPerformanceScore(item.ratio)}%`
-                    : ""}
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPreviewPage((current) => Math.max(1, current - 1))
+                    }
+                    disabled={safePreviewPage <= 1}
+                    className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    이전
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPreviewPage((current) =>
+                        Math.min(previewTotalPages, current + 1),
+                      )
+                    }
+                    disabled={safePreviewPage >= previewTotalPages}
+                    className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    다음
+                  </button>
                 </div>
               </div>
-            ))}
-          </div>
 
-          <div className="mt-5 overflow-x-auto rounded-xl border border-slate-200">
-            <table className="min-w-[1120px] w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs font-black text-slate-500">
-                <tr>
-                  <th className="px-3 py-3 text-center">상태</th>
-                  <th className="px-3 py-3 text-center">반</th>
-                  <th className="px-3 py-3 text-center">번호</th>
-                  <th className="px-3 py-3">이름</th>
-                  {parsed.items.map((item, index) => (
-                    <th
-                      key={`${item.name}-${index}-head`}
-                      className="px-3 py-3 text-right"
-                    >
-                      {item.name}
-                    </th>
-                  ))}
-                  <th className="px-3 py-3 text-right">총점</th>
-                  <th className="w-80 px-3 py-3">감점 요인 및 평가 근거</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 bg-white">
-                {parsed.rows.map((row) => (
-                  <tr key={row.rowKey} className="align-top">
-                    <td className="px-3 py-3 text-center">
-                      <span
-                        title={row.matchMessage}
-                        className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-black ${getMatchBadgeClass(row.matchStatus)}`}
-                      >
-                        {getMatchLabel(row.matchStatus)}
-                      </span>
-                    </td>
-                    <td className="px-3 py-3 text-center font-bold text-slate-700">
-                      {row.class || "-"}
-                    </td>
-                    <td className="px-3 py-3 text-center font-bold text-slate-700">
-                      {row.number || "-"}
-                    </td>
-                    <td className="px-3 py-3">
-                      <div className="font-black text-slate-900">
-                        {row.studentName || "(이름 없음)"}
-                      </div>
-                      <div className="mt-1 text-[11px] font-bold text-slate-400">
-                        {row.matchMessage}
-                      </div>
-                    </td>
-                    {row.items.map((item, index) => (
-                      <td
-                        key={`${row.rowKey}-${item.name}-${index}`}
-                        className="px-3 py-3 text-right font-bold text-slate-700"
-                      >
-                        {item.scoreEntered === false
-                          ? "-"
-                          : formatPerformanceScore(item.score)}
-                      </td>
+              <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full min-w-[1120px] text-left text-sm">
+                  <thead className="bg-slate-50 text-xs font-black text-slate-500">
+                    <tr>
+                      <th className="px-3 py-3 text-center">상태</th>
+                      <th className="px-3 py-3 text-center">반</th>
+                      <th className="px-3 py-3 text-center">번호</th>
+                      <th className="px-3 py-3">이름</th>
+                      {parsed.items.map((item, index) => (
+                        <th
+                          key={`${item.name}-${index}-head`}
+                          className="px-3 py-3 text-right"
+                          title={item.name}
+                        >
+                          {getItemLabel(item)}
+                        </th>
+                      ))}
+                      <th className="px-3 py-3 text-right">총점</th>
+                      <th className="w-80 px-3 py-3">감점 요인 및 평가 근거</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {previewRows.map((row) => (
+                      <tr key={row.rowKey} className="align-top">
+                        <td className="px-3 py-3 text-center">
+                          <span
+                            title={row.matchMessage}
+                            className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-black ${getMatchBadgeClass(row.matchStatus)}`}
+                          >
+                            {getMatchLabel(row.matchStatus)}
+                          </span>
+                        </td>
+                        <td className="px-3 py-3 text-center font-bold text-slate-700">
+                          {row.class || "-"}
+                        </td>
+                        <td className="px-3 py-3 text-center font-bold text-slate-700">
+                          {row.number || "-"}
+                        </td>
+                        <td className="px-3 py-3">
+                          <div className="font-black text-slate-900">
+                            {row.studentName || "(이름 없음)"}
+                          </div>
+                          <div className="mt-1 truncate text-[11px] font-bold text-slate-400">
+                            {row.matchMessage}
+                          </div>
+                        </td>
+                        {row.items.map((item, index) => (
+                          <td
+                            key={`${row.rowKey}-${item.name}-${index}`}
+                            className="px-3 py-3 text-right font-bold text-slate-700"
+                          >
+                            {item.scoreEntered === false
+                              ? "-"
+                              : formatPerformanceScore(item.score)}
+                          </td>
+                        ))}
+                        <td className="whitespace-nowrap px-3 py-3 text-right font-black text-blue-700">
+                          {formatPerformanceScore(row.totalScore)} /{" "}
+                          {formatPerformanceScore(row.totalMaxScore)}
+                        </td>
+                        <td className="px-3 py-2">
+                          <textarea
+                            value={row.feedback}
+                            onChange={(event) =>
+                              updateFeedback(row.rowKey, event.target.value)
+                            }
+                            rows={2}
+                            className="w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold leading-5 text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
+                            placeholder="학생에게 보여줄 감점 요인 또는 평가 근거"
+                          />
+                        </td>
+                      </tr>
                     ))}
-                    <td className="px-3 py-3 text-right font-black text-blue-700">
-                      {formatPerformanceScore(row.totalScore)} /{" "}
-                      {formatPerformanceScore(row.totalMaxScore)}
-                    </td>
-                    <td className="px-3 py-2">
-                      <textarea
-                        value={row.feedback}
-                        onChange={(event) =>
-                          updateFeedback(row.rowKey, event.target.value)
-                        }
-                        rows={2}
-                        className="w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold leading-5 text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
-                        placeholder="학생에게 보여줄 감점 요인 또는 평가 근거"
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                  </tbody>
+                </table>
+              </div>
+            </div>
 
-          <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-            <button
-              type="button"
-              onClick={() => setParsed(null)}
-              className="inline-flex h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 transition hover:bg-slate-50"
-            >
-              취소
-            </button>
-            <button
-              type="button"
-              onClick={() => void saveParsedScores()}
-              disabled={saving || parsedSummary.saveableCount === 0}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-            >
-              <i className="fas fa-save text-xs" aria-hidden="true"></i>
-              {saving ? "저장 중..." : "학생별 점수 저장"}
-            </button>
-          </div>
-        </section>
+            <div className="flex flex-col gap-3 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setParsed(null)}
+                className="inline-flex h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={() => void saveParsedScores()}
+                disabled={saving || parsedSummary.saveableCount === 0}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                <i className="fas fa-save text-xs" aria-hidden="true"></i>
+                {saving ? "저장 중..." : "학생별 점수 저장"}
+              </button>
+            </div>
+          </section>
+        </div>
       )}
 
       <section className="rounded-xl border border-slate-200 bg-white p-5">
