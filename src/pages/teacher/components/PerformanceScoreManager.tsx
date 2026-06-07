@@ -73,9 +73,10 @@ const CLASS_SHEET_STUDENT_START_ROW = 7;
 const CLASS_SHEET_STUDENT_END_ROW = 38;
 const CLASS_SHEET_SUMMARY_START_ROW = 39;
 const CLASS_SHEET_SIGNATURE_START_COLUMN = 9;
-const CLASS_SHEET_SIGNATURE_END_COLUMN = 13;
-const CLASS_SHEET_SIGNATURE_HORIZONTAL_PADDING = 0.05;
+const CLASS_SHEET_SIGNATURE_HORIZONTAL_PADDING = 0.12;
 const CLASS_SHEET_SIGNATURE_VERTICAL_PADDING = 0.08;
+const CLASS_SHEET_SIGNATURE_IMAGE_WIDTH = 58;
+const CLASS_SHEET_SIGNATURE_IMAGE_HEIGHT = 14;
 const XLSX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -814,20 +815,29 @@ const fetchClassSheetTemplate = async () => {
   throw new Error(`class-sheet-template-not-found:${errors.join(", ")}`);
 };
 
-const getClassSheetSignatureImageRange = (row: number) => ({
+const getClassSheetSignatureImagePosition = (row: number) => ({
   tl: {
     col:
       CLASS_SHEET_SIGNATURE_START_COLUMN +
       CLASS_SHEET_SIGNATURE_HORIZONTAL_PADDING,
     row: row - 1 + CLASS_SHEET_SIGNATURE_VERTICAL_PADDING,
   },
-  br: {
-    col:
-      CLASS_SHEET_SIGNATURE_END_COLUMN -
-      CLASS_SHEET_SIGNATURE_HORIZONTAL_PADDING,
-    row: row - CLASS_SHEET_SIGNATURE_VERTICAL_PADDING,
+  ext: {
+    width: CLASS_SHEET_SIGNATURE_IMAGE_WIDTH,
+    height: CLASS_SHEET_SIGNATURE_IMAGE_HEIGHT,
   },
+  editAs: "oneCell",
 });
+
+const normalizeClassSheetSignatureImage = (signatureImage: string) => {
+  const trimmed = String(signatureImage || "").trim();
+  if (!trimmed) return "";
+  if (/^data:image\/png;base64,/i.test(trimmed)) return trimmed;
+  if (/^[A-Za-z0-9+/]+=*$/.test(trimmed)) {
+    return `data:image/png;base64,${trimmed}`;
+  }
+  return "";
+};
 
 const buildClassSummaryWorkbookFromTemplate = async (params: {
   year: string;
@@ -903,7 +913,7 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
 
   const imagesToAdd: Array<{
     row: number;
-    base64: string;
+    dataUrl: string;
     title: string;
     description: string;
   }> = [];
@@ -935,14 +945,19 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
       signatureRecord?.signatureImage ||
       signatureRecord?.confirmation?.signatureImage ||
       "";
-    if (signatureImage) {
+    const signatureImageDataUrl =
+      normalizeClassSheetSignatureImage(signatureImage);
+    if (signatureImageDataUrl) {
       imagesToAdd.push({
         row,
-        base64: signatureImage.includes(",")
-          ? signatureImage.split(",")[1]
-          : signatureImage,
+        dataUrl: signatureImageDataUrl,
         title: `${student.studentName} 서명`,
         description: `${student.studentName} 수행평가 점수 확인 서명`,
+      });
+    } else if (signatureImage) {
+      console.warn("Skipping invalid class sheet signature image:", {
+        row,
+        studentName: student.studentName,
       });
     }
   });
@@ -996,11 +1011,11 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
 
   imagesToAdd.forEach((image) => {
     const imageId = workbook.addImage({
-      base64: image.base64,
+      base64: image.dataUrl,
       extension: "png",
     });
     worksheet.addImage(imageId, {
-      ...getClassSheetSignatureImageRange(image.row),
+      ...getClassSheetSignatureImagePosition(image.row),
     });
   });
 
@@ -1796,7 +1811,10 @@ const PerformanceScoreManager: React.FC = () => {
       showToast({
         tone: "error",
         title: "일람표 다운로드에 실패했습니다.",
-        message: "원본 일람표 양식과 점수, 서명 기록을 다시 확인해 주세요.",
+        message:
+          error instanceof Error
+            ? `원본 일람표 양식과 서명 기록을 다시 확인해 주세요. (${error.message})`
+            : "원본 일람표 양식과 점수, 서명 기록을 다시 확인해 주세요.",
       });
     } finally {
       setExportingClassSheet(false);
