@@ -77,6 +77,8 @@ const CLASS_SHEET_STUDENT_START_ROW = 7;
 const CLASS_SHEET_STUDENT_END_ROW = 38;
 const CLASS_SHEET_SUMMARY_START_ROW = 39;
 const CLASS_SHEET_TEMPLATE_COLUMN_COUNT = 13;
+const CLASS_SHEET_STUDENT_NAME_COLUMN = 4;
+const CLASS_SHEET_STUDENT_NAME_COLUMN_MIN_WIDTH = 13.5;
 const CLASS_SHEET_SIGNATURE_START_COLUMN_INDEX = 10;
 const CLASS_SHEET_SIGNATURE_END_COLUMN_INDEX = 13;
 const CLASS_SHEET_SIGNATURE_VERTICAL_PADDING = 0;
@@ -1670,6 +1672,28 @@ const setWorksheetCellValue = (
   worksheet.getCell(row, column).value = value;
 };
 
+const setClassSheetStudentNameCell = (
+  worksheet: {
+    getCell: (
+      row: number,
+      column: number,
+    ) => { value: unknown; alignment?: unknown };
+  },
+  row: number,
+  value: string,
+) => {
+  const cell = worksheet.getCell(row, CLASS_SHEET_STUDENT_NAME_COLUMN);
+  const currentAlignment =
+    cell.alignment && typeof cell.alignment === "object" ? cell.alignment : {};
+  cell.value = value;
+  cell.alignment = {
+    ...(currentAlignment as Record<string, unknown>),
+    horizontal: "center",
+    vertical: "middle",
+    wrapText: false,
+  };
+};
+
 const cloneWorksheetStyle = (style: unknown) =>
   JSON.parse(JSON.stringify(style || {}));
 
@@ -2163,6 +2187,13 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
   await workbook.xlsx.load(await response.arrayBuffer());
   const worksheet = workbook.worksheets[0];
   if (!worksheet) throw new Error("class-sheet-template-empty");
+  const studentNameColumn = worksheet.getColumn(
+    CLASS_SHEET_STUDENT_NAME_COLUMN,
+  );
+  studentNameColumn.width = Math.max(
+    Number(studentNameColumn.width || 0),
+    CLASS_SHEET_STUDENT_NAME_COLUMN_MIN_WIDTH,
+  );
   const { studentEndRow, summaryStartRow } = resizeClassSheetStudentRows(
     worksheet,
     params.students.length,
@@ -2217,7 +2248,11 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
       `${student.class}/${student.number}`,
     );
     setWorksheetCellValue(worksheet, row, 3, "");
-    setWorksheetCellValue(worksheet, row, 4, getClassSheetStudentName(student));
+    setClassSheetStudentNameCell(
+      worksheet,
+      row,
+      getClassSheetStudentName(student),
+    );
     setWorksheetCellValue(worksheet, row, 5, firstScore ?? "");
     setWorksheetCellValue(worksheet, row, 7, secondScore ?? "");
     setWorksheetCellValue(worksheet, row, 8, totalScore);
@@ -6003,17 +6038,6 @@ const PerformanceScoreManager: React.FC = () => {
                     ></i>
                     {classSheetPreviewLoading ? "조회 중" : "현황 조회"}
                   </button>
-                </div>
-              </div>
-
-              <div className="mt-3 grid gap-2 text-xs font-bold text-slate-500 md:grid-cols-2">
-                <div className="truncate rounded-lg bg-slate-50 px-3 py-2">
-                  1차 원본:{" "}
-                  {summaryExportRosters.firstRoster?.sourceFileName || "-"}
-                </div>
-                <div className="truncate rounded-lg bg-slate-50 px-3 py-2">
-                  2차 원본:{" "}
-                  {summaryExportRosters.secondRoster?.sourceFileName || "-"}
                 </div>
               </div>
 
