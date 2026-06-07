@@ -243,6 +243,20 @@ service cloud.firestore {
         && isValidPerformanceScoreConfirmation(userId, scoreId, confirmationId);
     }
 
+    function hasCompletePerformanceScoreSignature(data) {
+      return data.signatureImage is string
+        && data.signatureImage.size() > 0
+        && data.signatureName is string
+        && data.signatureName.size() > 0;
+    }
+
+    function canRepairPerformanceScoreConfirmation(userId, scoreId, confirmationId) {
+      return isValidPerformanceScoreConfirmation(userId, scoreId, confirmationId)
+        && resource.data.uid == request.auth.uid
+        && resource.data.rosterId == scoreId
+        && !hasCompletePerformanceScoreSignature(resource.data);
+    }
+
     function changedUserKeys() {
       return request.resource.data.diff(resource.data).affectedKeys();
     }
@@ -599,7 +613,7 @@ service cloud.firestore {
         match /confirmations/{confirmationId} {
           allow read: if canUseWestory() && (isOwnUser(userId) || canManagePerformanceScores());
           allow create: if canCreatePerformanceScoreConfirmation(userId, scoreId, confirmationId);
-          allow update: if false;
+          allow update: if canRepairPerformanceScoreConfirmation(userId, scoreId, confirmationId);
           allow delete: if canManagePerformanceScores();
         }
       }

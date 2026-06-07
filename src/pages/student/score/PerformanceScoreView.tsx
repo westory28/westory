@@ -7,7 +7,7 @@ import {
   LinearScale,
   Tooltip,
 } from "chart.js";
-import { doc, serverTimestamp, writeBatch } from "firebase/firestore";
+import { doc, getDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { PageLoading } from "../../../components/common/LoadingState";
 import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
@@ -69,6 +69,30 @@ const getRecordScoreId = (record: PerformanceScoreRecord) =>
 
 const isRecordConfirmed = (record: PerformanceScoreRecord) =>
   Boolean(record.signatureImage || record.confirmation?.signatureImage);
+
+const hasStoredSignatureImage = (data: unknown) =>
+  typeof data === "object" &&
+  data !== null &&
+  "signatureImage" in data &&
+  typeof (data as { signatureImage?: unknown }).signatureImage === "string" &&
+  Boolean((data as { signatureImage: string }).signatureImage);
+
+const getSignatureSaveErrorMessage = (error: unknown) => {
+  const code =
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof (error as { code?: unknown }).code === "string"
+      ? (error as { code: string }).code
+      : "";
+  if (code === "permission-denied") {
+    return "서명 저장 권한이 거부되었습니다. 이미 제출된 서명이 있거나 담당 교사의 반려 처리가 필요한 상태일 수 있습니다.";
+  }
+  if (code === "unavailable" || code === "deadline-exceeded") {
+    return "서명 저장 서버 연결이 불안정합니다. 잠시 후 다시 시도해 주세요.";
+  }
+  return "점수 확인 서명을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.";
+};
 
 const PerformanceScoreView: React.FC = () => {
   const { currentUser, userData, config } = useAuth();
@@ -384,6 +408,13 @@ const PerformanceScoreView: React.FC = () => {
       );
       return;
     }
+    const signatureName = expectedSignatureName.trim();
+    if (!signatureName || signatureName.length > 20) {
+      setSignatureError(
+        "학생 이름 정보를 확인하지 못했습니다. 마이페이지의 이름 정보를 확인해 주세요.",
+      );
+      return;
+    }
 
     const signatureImage = signatureImageDraft || getSignatureImageDataUrl();
     if (!signatureImage) {
@@ -402,58 +433,89 @@ const PerformanceScoreView: React.FC = () => {
     setConfirming(true);
     setSignatureError("");
     try {
-      const batch = writeBatch(db);
-      recordsToConfirm.forEach((record) => {
-        const scoreId = getRecordScoreId(record);
-        const confirmationRef = doc(
-          db,
-          "users",
-          currentUser.uid,
-          PERFORMANCE_SCORE_USER_COLLECTION,
-          scoreId,
-          PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
-          currentUser.uid,
-        );
-        batch.set(confirmationRef, {
-          uid: currentUser.uid,
-          rosterId: record.rosterId,
-          signatureName: expectedSignatureName.trim(),
-          signatureImage,
-          confirmedAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-      });
-      await batch.commit();
+      const saveTargets = await Promise.all(
+        recordsToConfirm.map(async (record) => {
+          const scoreId = getRecordScoreId(record);
+          const ref = doc(
+            db,
+            "users",
+            currentUser.uid,
+            PERFORMANCE_SCORE_USER_COLLECTION,
+            scoreId,
+            PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
+            currentUser.uid,
+          );
+          const snap = await getDoc(ref);
+          return {
+            record,
+            scoreId,
+            ref,
+            alreadyConfirmed:
+              snap.exists() && hasStoredSignatureImage(snap.data()),
+          };
+        }),
+      );
+      const targetsToWrite = saveTargets.filter(
+        (target) => !target.alreadyConfirmed,
+      );
 
+      if (targetsToWrite.length > 0) {
+        const batch = writeBatch(db);
+        targetsToWrite.forEach(({ record, ref }) => {
+          batch.set(ref, {
+            uid: currentUser.uid,
+            rosterId: record.rosterId,
+            signatureName,
+            signatureImage,
+            confirmedAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        });
+        await batch.commit();
+      }
+
+      const writtenScoreIds = new Set(
+        targetsToWrite.map((target) => target.scoreId),
+      );
+      const alreadyConfirmedScoreIds = new Set(
+        saveTargets
+          .filter((target) => target.alreadyConfirmed)
+          .map((target) => target.scoreId),
+      );
       const localConfirmedAt = new Date();
       setRecords((current) =>
-        current.map((record) =>
-          isRecordConfirmed(record)
-            ? record
-            : {
+        current.map((record) => {
+          const scoreId = getRecordScoreId(record);
+          if (
+            alreadyConfirmedScoreIds.has(scoreId) ||
+            isRecordConfirmed(record)
+          ) {
+            return record;
+          }
+          return writtenScoreIds.has(scoreId)
+            ? {
                 ...record,
-                signatureName: expectedSignatureName.trim(),
+                signatureName,
                 signatureImage,
                 signedAt: localConfirmedAt,
                 confirmation: {
                   id: currentUser.uid,
                   uid: currentUser.uid,
                   rosterId: record.rosterId,
-                  signatureName: expectedSignatureName.trim(),
+                  signatureName,
                   signatureImage,
                   confirmedAt: localConfirmedAt,
                   updatedAt: localConfirmedAt,
                 },
-              },
-        ),
+              }
+            : record;
+        }),
       );
       setSignatureModalOpen(false);
       setSignatureImageDraft("");
     } catch (error) {
       console.error("Failed to confirm performance score:", error);
-      setSignatureError(
-        "점수 확인 서명을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.",
-      );
+      setSignatureError(getSignatureSaveErrorMessage(error));
     } finally {
       setConfirming(false);
     }
