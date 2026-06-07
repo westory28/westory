@@ -79,12 +79,17 @@ const CLASS_SHEET_SIGNATURE_END_COLUMN_INDEX = 13;
 const CLASS_SHEET_SIGNATURE_VERTICAL_PADDING = 0;
 const CLASS_SHEET_SIGNATURE_IMAGE_MAX_WIDTH = 64;
 const CLASS_SHEET_SIGNATURE_IMAGE_MAX_HEIGHT = 18;
+const CLASS_SHEET_SIGNATURE_CELL_HORIZONTAL_PADDING = 8;
 const CLASS_SHEET_SIGNATURE_CANVAS_SCALE = 2;
 const CLASS_SHEET_SIGNATURE_ALPHA_THRESHOLD = 8;
 const CLASS_SHEET_SIGNATURE_COLUMN_PIXEL_WIDTH = 64;
 const CLASS_SHEET_SIGNATURE_ROW_PIXEL_HEIGHT = 19;
-const CLASS_SHEET_FOOTER_PAGE_START_COLUMN = 9;
-const CLASS_SHEET_FOOTER_PAGE_END_COLUMN = 14;
+const CLASS_SHEET_FOOTER_PAGE_FIRST_START_COLUMN = 9;
+const CLASS_SHEET_FOOTER_PAGE_FIRST_END_COLUMN = 10;
+const CLASS_SHEET_FOOTER_PAGE_SLASH_START_COLUMN = 11;
+const CLASS_SHEET_FOOTER_PAGE_SLASH_END_COLUMN = 12;
+const CLASS_SHEET_FOOTER_PAGE_LAST_START_COLUMN = 13;
+const CLASS_SHEET_FOOTER_PAGE_LAST_END_COLUMN = 14;
 const CLASS_SHEET_FOOTER_SCHOOL_START_COLUMN = 15;
 const CLASS_SHEET_FOOTER_SCHOOL_END_COLUMN = 16;
 const XLSX_MIME_TYPE =
@@ -915,14 +920,14 @@ const resetClassSheetFooter = (
   footerRow: number,
 ) => {
   [
+    `I${footerRow}:N${footerRow}`,
     `I${footerRow}:J${footerRow}`,
     `K${footerRow}:L${footerRow}`,
     `M${footerRow}:N${footerRow}`,
     `O${footerRow}:P${footerRow}`,
-    `I${footerRow}:N${footerRow}`,
   ].forEach((range) => unmergeWorksheetRange(worksheet, range));
   for (
-    let column = CLASS_SHEET_FOOTER_PAGE_START_COLUMN;
+    let column = CLASS_SHEET_FOOTER_PAGE_FIRST_START_COLUMN;
     column <= CLASS_SHEET_FOOTER_SCHOOL_END_COLUMN;
     column += 1
   ) {
@@ -931,9 +936,21 @@ const resetClassSheetFooter = (
 
   worksheet.mergeCells(
     footerRow,
-    CLASS_SHEET_FOOTER_PAGE_START_COLUMN,
+    CLASS_SHEET_FOOTER_PAGE_FIRST_START_COLUMN,
     footerRow,
-    CLASS_SHEET_FOOTER_PAGE_END_COLUMN,
+    CLASS_SHEET_FOOTER_PAGE_FIRST_END_COLUMN,
+  );
+  worksheet.mergeCells(
+    footerRow,
+    CLASS_SHEET_FOOTER_PAGE_SLASH_START_COLUMN,
+    footerRow,
+    CLASS_SHEET_FOOTER_PAGE_SLASH_END_COLUMN,
+  );
+  worksheet.mergeCells(
+    footerRow,
+    CLASS_SHEET_FOOTER_PAGE_LAST_START_COLUMN,
+    footerRow,
+    CLASS_SHEET_FOOTER_PAGE_LAST_END_COLUMN,
   );
   worksheet.mergeCells(
     footerRow,
@@ -942,19 +959,30 @@ const resetClassSheetFooter = (
     CLASS_SHEET_FOOTER_SCHOOL_END_COLUMN,
   );
 
-  const pageCell = worksheet.getCell(
-    footerRow,
-    CLASS_SHEET_FOOTER_PAGE_START_COLUMN,
-  );
-  pageCell.value = "1 / 1";
-  pageCell.alignment = { horizontal: "center", vertical: "middle" };
+  [
+    { column: CLASS_SHEET_FOOTER_PAGE_FIRST_START_COLUMN, value: 1 },
+    { column: CLASS_SHEET_FOOTER_PAGE_SLASH_START_COLUMN, value: "/" },
+    { column: CLASS_SHEET_FOOTER_PAGE_LAST_START_COLUMN, value: 1 },
+  ].forEach(({ column, value }) => {
+    const cell = worksheet.getCell(footerRow, column);
+    cell.value = value;
+    cell.alignment = {
+      horizontal: "center",
+      vertical: "middle",
+      wrapText: true,
+    };
+  });
 
   const schoolCell = worksheet.getCell(
     footerRow,
     CLASS_SHEET_FOOTER_SCHOOL_START_COLUMN,
   );
   schoolCell.value = "용신중학교";
-  schoolCell.alignment = { horizontal: "right", vertical: "middle" };
+  schoolCell.alignment = {
+    horizontal: "right",
+    vertical: "middle",
+    wrapText: true,
+  };
 };
 
 const joinUrlPath = (base: string, path: string) =>
@@ -1116,7 +1144,7 @@ const getClassSheetSignatureImagePosition = (
   const cellWidth = getClassSheetSignatureCellPixelWidth(worksheet);
   const maxWidth = Math.min(
     CLASS_SHEET_SIGNATURE_IMAGE_MAX_WIDTH,
-    Math.max(1, cellWidth - 2),
+    Math.max(1, cellWidth - CLASS_SHEET_SIGNATURE_CELL_HORIZONTAL_PADDING * 2),
   );
   const size = getClassSheetSignatureImageSize(
     dataUrl,
