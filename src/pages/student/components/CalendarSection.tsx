@@ -725,7 +725,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             if (attendanceDateSet.has(dateStr)) classes.push("is-attended");
             return classes;
           }}
-          fixedWeekCount
+          fixedWeekCount={false}
         />
 
         {morePopover && (

@@ -402,7 +402,7 @@ const ManageSchedule = () => {
               expandRows
               eventDisplay="block"
               dayMaxEvents={2}
-              fixedWeekCount
+              fixedWeekCount={false}
               showNonCurrentDates={false}
               dayCellClassNames={(arg) => {
                 const dateStr = toLocalYmd(arg.date);

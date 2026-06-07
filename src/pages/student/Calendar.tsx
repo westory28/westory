@@ -316,6 +316,7 @@ const Calendar = () => {
                 );
               }}
               height="auto" // Allow it to grow
+              fixedWeekCount={false}
               dayCellClassNames={(arg) => {
                 const dateStr = toLocalYmd(arg.date);
                 const classes: string[] = [];

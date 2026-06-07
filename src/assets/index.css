@@ -592,7 +592,8 @@
   .fc
   .fc-daygrid-body
   tbody {
-  display: table-row-group;
+  display: flex;
+  flex-direction: column;
   height: 100%;
 }
 
@@ -600,39 +601,22 @@
   .fc
   .fc-daygrid-body
   tr {
-  display: table-row;
-  height: calc(100% / 6) !important;
-}
-
-.student-calendar-shell__body[data-calendar-view="dayGridMonth"][data-calendar-week-count="4"]
-  .fc
-  .fc-daygrid-body
-  tr {
-  height: 25% !important;
-}
-
-.student-calendar-shell__body[data-calendar-view="dayGridMonth"][data-calendar-week-count="5"]
-  .fc
-  .fc-daygrid-body
-  tr {
-  height: 20% !important;
-}
-
-.student-calendar-shell__body[data-calendar-view="dayGridMonth"][data-calendar-week-count="6"]
-  .fc
-  .fc-daygrid-body
-  tr {
-  height: calc(100% / 6) !important;
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+  height: auto !important;
 }
 
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
   .fc
   .fc-daygrid-body
   td {
-  display: table-cell;
+  display: block;
+  flex: 1 1 0;
   vertical-align: top;
   min-width: 0;
-  height: auto;
+  height: 100%;
+  width: auto !important;
 }
 
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
