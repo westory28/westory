@@ -82,6 +82,11 @@ const PerformanceScoreView: React.FC = () => {
           (record) =>
             String(record.academicYear || "") === year &&
             String(record.semester || "") === semester,
+        )
+        .sort(
+          (a, b) =>
+            (a.assessmentOrder ?? 999) - (b.assessmentOrder ?? 999) ||
+            String(a.title || "").localeCompare(String(b.title || ""), "ko"),
         );
       setRecords(loaded);
       setSelectedId((current) =>
@@ -108,24 +113,32 @@ const PerformanceScoreView: React.FC = () => {
         selectedRecord.totalMaxScore,
       )
     : 0;
+  const selectedItems = Array.isArray(selectedRecord?.items)
+    ? selectedRecord.items
+    : [];
+  const chartItems = selectedItems.filter(
+    (item) => item.scoreEntered !== false,
+  );
+  const evidenceText =
+    selectedRecord?.evidence || selectedRecord?.feedback || "";
   const chartMaxScore = selectedRecord
-    ? Math.max(10, ...selectedRecord.items.map((item) => item.maxScore || 0))
+    ? Math.max(10, ...chartItems.map((item) => item.maxScore || 0))
     : 50;
 
   const chartData = selectedRecord
     ? {
-        labels: selectedRecord.items.map((item) => item.name),
+        labels: chartItems.map((item) => item.name),
         datasets: [
           {
             label: "획득 점수",
-            data: selectedRecord.items.map((item) => item.score),
+            data: chartItems.map((item) => item.score),
             backgroundColor: "#2563eb",
             borderRadius: 6,
             barPercentage: 0.55,
           },
           {
             label: "만점 기준",
-            data: selectedRecord.items.map((item) => item.maxScore),
+            data: chartItems.map((item) => item.maxScore),
             backgroundColor: "#cbd5e1",
             borderRadius: 6,
             barPercentage: 0.55,
@@ -192,8 +205,8 @@ const PerformanceScoreView: React.FC = () => {
               내 수행평가 점수
             </h1>
             <p className="mt-2 text-sm font-bold leading-6 text-slate-500">
-              {year}학년도 {semester}학기 기준으로 교사가 입력한 내 점수와
-              피드백만 표시됩니다.
+              {year}학년도 {semester}학기 기준으로 교사가 입력한 내 총점,
+              평가요소별 점수, 감점 요인과 평가 근거만 표시됩니다.
             </p>
           </div>
           <div className="rounded-full bg-blue-50 px-4 py-2 text-sm font-black text-blue-700">
@@ -307,12 +320,21 @@ const PerformanceScoreView: React.FC = () => {
               </div>
 
               <div className="h-72 rounded-xl border border-slate-200 p-4">
-                <Bar data={chartData} options={chartOptions} />
+                {chartItems.length > 0 ? (
+                  <Bar data={chartData} options={chartOptions} />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-center text-sm font-bold leading-6 text-slate-400">
+                    평가요소별 세부 점수는 제공되지 않았습니다.
+                    <br />
+                    총점과 평가 근거를 확인해 주세요.
+                  </div>
+                )}
               </div>
             </div>
 
             <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
-              {selectedRecord.items.map((item, index) => {
+              {selectedItems.map((item, index) => {
+                const scoreEntered = item.scoreEntered !== false;
                 const itemPercent = getPerformanceScorePercent(
                   item.score,
                   item.maxScore,
@@ -333,16 +355,26 @@ const PerformanceScoreView: React.FC = () => {
                     <div className="flex items-center">
                       <div className="h-3 w-full overflow-hidden rounded-full bg-slate-100">
                         <div
-                          className="h-full rounded-full bg-blue-500"
-                          style={{ width: `${itemPercent}%` }}
+                          className={`h-full rounded-full ${
+                            scoreEntered ? "bg-blue-500" : "bg-slate-300"
+                          }`}
+                          style={{
+                            width: scoreEntered ? `${itemPercent}%` : "0%",
+                          }}
                         />
                       </div>
                     </div>
                     <div className="text-right text-sm font-black text-slate-800">
-                      {formatPerformanceScore(item.score)}점
-                      <span className="ml-1 text-xs text-slate-400">
-                        ({formatPerformanceScore(itemPercent)}%)
-                      </span>
+                      {scoreEntered ? (
+                        <>
+                          {formatPerformanceScore(item.score)}점
+                          <span className="ml-1 text-xs text-slate-400">
+                            ({formatPerformanceScore(itemPercent)}%)
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-xs text-slate-400">미입력</span>
+                      )}
                     </div>
                   </div>
                 );
@@ -351,11 +383,11 @@ const PerformanceScoreView: React.FC = () => {
 
             <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-4">
               <h3 className="text-base font-black text-amber-900">
-                교사 피드백
+                감점 요인 및 평가 근거
               </h3>
               <p className="mt-2 whitespace-pre-wrap text-sm font-bold leading-7 text-slate-700">
-                {selectedRecord.feedback ||
-                  "아직 입력된 피드백이 없습니다. 필요한 경우 수업 시간이나 상담 시간에 교사에게 확인하세요."}
+                {evidenceText ||
+                  "아직 입력된 평가 근거가 없습니다. 필요한 경우 수업 시간이나 상담 시간에 교사에게 확인하세요."}
               </p>
             </div>
           </section>

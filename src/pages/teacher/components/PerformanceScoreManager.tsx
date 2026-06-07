@@ -25,13 +25,15 @@ import {
   getPerformanceScorePercent,
   normalizeSchoolValue,
   normalizeStudentName,
-  roundScore,
-  toFiniteScore,
-  type PerformanceScoreItem,
   type PerformanceScoreRecord,
   type PerformanceScoreRoster,
   type PerformanceScoreRosterRow,
 } from "../../../lib/performanceScores";
+import {
+  parsePerformanceScoreWorkbook,
+  type ParsedPerformanceScoreRow,
+  type ParsedPerformanceScoreUpload,
+} from "../../../lib/performanceScoreWorkbook";
 
 interface StudentProfile {
   uid: string;
@@ -42,34 +44,9 @@ interface StudentProfile {
   email: string;
 }
 
-interface ParsedScoreRow extends PerformanceScoreRosterRow {
-  rowKey: string;
-  enteredScoreCount: number;
-}
+type ParsedScoreRow = ParsedPerformanceScoreRow;
+type ParsedUpload = ParsedPerformanceScoreUpload;
 
-interface ParsedUpload {
-  sourceFileName: string;
-  headerRowNumber: number;
-  items: Array<Pick<PerformanceScoreItem, "name" | "maxScore" | "ratio">>;
-  rows: ParsedScoreRow[];
-  totalMaxScore: number;
-  detectedClasses: string[];
-  detectedSubject: string;
-}
-
-interface ColumnIndexes {
-  sequenceIndex: number;
-  subjectIndex: number;
-  gradeIndex: number;
-  classIndex: number;
-  numberIndex: number;
-  nameIndex: number;
-  totalIndex: number;
-  feedbackIndex: number;
-  remarkIndex: number;
-}
-
-const MAX_UPLOAD_ROWS = 160;
 const DEFAULT_GRADE_OPTIONS = ["1", "2", "3"];
 const DEFAULT_CLASS_OPTIONS = Array.from({ length: 12 }, (_, index) =>
   String(index + 1),
@@ -79,149 +56,6 @@ const toText = (value: unknown) =>
   String(value ?? "")
     .replace(/\s+/g, " ")
     .trim();
-
-const toHeaderKey = (value: unknown) =>
-  toText(value).replace(/\s+/g, "").toLowerCase();
-
-const toDisplayHeader = (value: unknown) =>
-  String(value ?? "")
-    .replace(/\r/g, "\n")
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .join(" ");
-
-const isMetadataColumn = (index: number, indexes: ColumnIndexes) =>
-  [
-    indexes.sequenceIndex,
-    indexes.subjectIndex,
-    indexes.gradeIndex,
-    indexes.classIndex,
-    indexes.numberIndex,
-    indexes.nameIndex,
-    indexes.totalIndex,
-    indexes.feedbackIndex,
-    indexes.remarkIndex,
-  ].includes(index);
-
-const findColumnIndex = (
-  headers: string[],
-  predicate: (header: string) => boolean,
-) => headers.findIndex((header) => predicate(header));
-
-const findWorkbookHeaderRow = (rows: unknown[][]) => {
-  const scanLimit = Math.min(rows.length, 15);
-  for (let rowIndex = 0; rowIndex < scanLimit; rowIndex += 1) {
-    const headers = (rows[rowIndex] || []).map(toHeaderKey);
-    const nameIndex = findColumnIndex(
-      headers,
-      (header) =>
-        /^(성명|이름|학생명|학생이름)$/.test(header) || header.includes("성명"),
-    );
-    const numberIndex = findColumnIndex(
-      headers,
-      (header) =>
-        header !== "순번" &&
-        /^(번호|번|출석번호|학번)$/.test(header.replace(/학생/g, "")),
-    );
-    const totalIndex = findColumnIndex(headers, (header) =>
-      /^(합계|총점|총합|계)$/.test(header),
-    );
-
-    if (nameIndex >= 0 && (numberIndex >= 0 || totalIndex >= 0)) {
-      return rowIndex;
-    }
-  }
-  return -1;
-};
-
-const resolveColumnIndexes = (headers: string[]): ColumnIndexes => {
-  const sequenceIndex = findColumnIndex(headers, (header) => header === "순번");
-  const subjectIndex = findColumnIndex(headers, (header) =>
-    /^(과목|교과|교과목|영역)$/.test(header),
-  );
-  const gradeIndex = findColumnIndex(headers, (header) =>
-    /^(학년|대상학년)$/.test(header),
-  );
-  const classIndex = findColumnIndex(headers, (header) =>
-    /^(반|학급|학급명|반명)$/.test(header),
-  );
-  const numberIndex = findColumnIndex(
-    headers,
-    (header) =>
-      header !== "순번" &&
-      /^(번호|번|출석번호|학번)$/.test(header.replace(/학생/g, "")),
-  );
-  const nameIndex = findColumnIndex(
-    headers,
-    (header) =>
-      /^(성명|이름|학생명|학생이름)$/.test(header) || header.includes("성명"),
-  );
-  const totalIndex = findColumnIndex(headers, (header) =>
-    /^(합계|총점|총합|계)$/.test(header),
-  );
-  const feedbackIndex = findColumnIndex(headers, (header) =>
-    /(피드백|교사의견|평가의견|의견|코멘트|comment|feedback)/.test(header),
-  );
-  const remarkIndex = findColumnIndex(headers, (header) =>
-    /^(비고|메모|특기사항)$/.test(header),
-  );
-
-  return {
-    sequenceIndex,
-    subjectIndex,
-    gradeIndex,
-    classIndex,
-    numberIndex,
-    nameIndex,
-    totalIndex,
-    feedbackIndex,
-    remarkIndex,
-  };
-};
-
-const getCell = (row: unknown[], index: number) =>
-  index >= 0 ? row[index] : "";
-
-const getCellText = (row: unknown[], index: number) =>
-  toText(getCell(row, index));
-
-const parseMaxScoreFromHeader = (header: unknown) => {
-  const normalized = toDisplayHeader(header);
-  const explicit = normalized.match(/만점\s*[\(:：]?\s*([0-9]+(?:\.[0-9]+)?)/);
-  if (explicit?.[1]) {
-    return toFiniteScore(explicit[1]) || 0;
-  }
-  return 0;
-};
-
-const parseRatioFromHeader = (header: unknown) => {
-  const normalized = toDisplayHeader(header);
-  const explicit = normalized.match(/([0-9]+(?:\.[0-9]+)?)\s*%/);
-  if (explicit?.[1]) {
-    return toFiniteScore(explicit[1]) || undefined;
-  }
-  return undefined;
-};
-
-const cleanScoreItemName = (header: string, index: number) => {
-  const cleaned = toDisplayHeader(header)
-    .replace(/\([^)]*만점[^)]*\)/g, "")
-    .replace(/만점\s*[0-9]+(?:\.[0-9]+)?/g, "")
-    .replace(/[0-9]+(?:\.[0-9]+)?\s*%/g, "")
-    .replace(/[(),]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  return cleaned || `수행평가 ${index + 1}`;
-};
-
-const hasScoreMarker = (value: unknown) => {
-  const key = toHeaderKey(value);
-  return key === "점수" || key === "득점" || key.includes("점수");
-};
-
-const hasMaxScoreMarker = (value: unknown) =>
-  toHeaderKey(value).includes("만점") || parseMaxScoreFromHeader(value) > 0;
 
 const readWorkbookRows = async (file: File) => {
   const { default: readXlsxFile } = await import("read-excel-file/browser");
@@ -233,180 +67,6 @@ const readWorkbookRows = async (file: File) => {
     Array.isArray((workbookRows[0] as { data?: unknown }).data)
     ? ((workbookRows[0] as { data: unknown[][] }).data as unknown[][])
     : (workbookRows as unknown[][]);
-};
-
-const parsePerformanceScoreWorkbook = (
-  rows: unknown[][],
-  params: {
-    fileName: string;
-    targetGrade: string;
-    fallbackClass: string;
-  },
-): ParsedUpload => {
-  if (!Array.isArray(rows) || rows.length === 0) {
-    throw new Error("첫 번째 시트를 찾을 수 없습니다.");
-  }
-
-  const headerRowIndex = findWorkbookHeaderRow(rows);
-  if (headerRowIndex < 0) {
-    throw new Error("성명과 번호가 포함된 헤더 행을 찾지 못했습니다.");
-  }
-
-  const rawHeaders = rows[headerRowIndex] || [];
-  const headers = rawHeaders.map(toHeaderKey);
-  const displayHeaders = rawHeaders.map(toDisplayHeader);
-  const maxScoreRow = rows[headerRowIndex + 1] || [];
-  const scoreMarkerRow = rows[headerRowIndex + 2] || [];
-  const indexes = resolveColumnIndexes(headers);
-  if (indexes.nameIndex < 0) {
-    throw new Error("학생 이름을 나타내는 성명 또는 이름 컬럼이 필요합니다.");
-  }
-
-  const candidateRows = rows
-    .map((row, rowIndex) => ({ row, rowIndex }))
-    .slice(headerRowIndex + 1)
-    .slice(0, MAX_UPLOAD_ROWS)
-    .filter(({ row }) =>
-      row.some((cell) => String(cell ?? "").trim().length > 0),
-    );
-  const numericRows = candidateRows.filter(({ row }) => {
-    const name = getCellText(row, indexes.nameIndex);
-    const total = toFiniteScore(getCell(row, indexes.totalIndex));
-    return Boolean(name) || total !== null;
-  });
-
-  if (!numericRows.length) {
-    throw new Error("등록할 학생 점수 행을 찾지 못했습니다.");
-  }
-
-  let scoreColumnIndexes = displayHeaders
-    .map((header, index) => ({
-      header,
-      index,
-      maxHeader: toDisplayHeader(getCell(maxScoreRow, index)),
-      scoreMarker: getCell(scoreMarkerRow, index),
-    }))
-    .filter(({ header, index }) => {
-      if (!header || isMetadataColumn(index, indexes)) return false;
-      return (
-        hasScoreMarker(getCell(scoreMarkerRow, index)) ||
-        hasMaxScoreMarker(getCell(maxScoreRow, index)) ||
-        numericRows.some(
-          ({ row }) => toFiniteScore(getCell(row, index)) !== null,
-        )
-      );
-    });
-
-  if (!scoreColumnIndexes.length && indexes.totalIndex >= 0) {
-    scoreColumnIndexes = [
-      {
-        header: displayHeaders[indexes.totalIndex] || "수행평가 합계",
-        index: indexes.totalIndex,
-        maxHeader: "",
-        scoreMarker: "",
-      },
-    ];
-  }
-
-  if (!scoreColumnIndexes.length) {
-    throw new Error("점수로 인식할 수 있는 수행평가 컬럼이 없습니다.");
-  }
-
-  const items = scoreColumnIndexes.map(
-    ({ header, maxHeader, index }, itemIndex) => {
-      const observedMax = numericRows.reduce((max, row) => {
-        const value = toFiniteScore(getCell(row.row, index));
-        return value === null ? max : Math.max(max, value);
-      }, 0);
-      return {
-        name: cleanScoreItemName(header, itemIndex),
-        maxScore: roundScore(
-          parseMaxScoreFromHeader(header) ||
-            parseMaxScoreFromHeader(maxHeader) ||
-            observedMax,
-        ),
-        ratio: parseRatioFromHeader(header) || parseRatioFromHeader(maxHeader),
-      };
-    },
-  );
-  const totalMaxScore = roundScore(
-    items.reduce((sum, item) => sum + Number(item.maxScore || 0), 0),
-  );
-  const detectedSubject =
-    indexes.subjectIndex >= 0
-      ? toText(
-          numericRows
-            .map(({ row }) => getCell(row, indexes.subjectIndex))
-            .find((value) => toText(value).length > 0) || "",
-        )
-      : "";
-
-  const rowsWithScores: ParsedScoreRow[] = numericRows.map(
-    ({ row, rowIndex }) => {
-      const rowGrade =
-        getCellText(row, indexes.gradeIndex) || params.targetGrade.trim();
-      const rowClass =
-        getCellText(row, indexes.classIndex) || params.fallbackClass.trim();
-      const rowNumber = getCellText(row, indexes.numberIndex);
-      const studentName = getCellText(row, indexes.nameIndex);
-      const enteredScoreCount = scoreColumnIndexes.reduce(
-        (count, { index: columnIndex }) =>
-          toFiniteScore(getCell(row, columnIndex)) === null ? count : count + 1,
-        0,
-      );
-      const rowItems = scoreColumnIndexes.map(
-        ({ index: columnIndex }, itemIndex) => {
-          const score = toFiniteScore(getCell(row, columnIndex));
-          const item = items[itemIndex];
-          return {
-            name: item.name,
-            score: roundScore(score ?? 0),
-            maxScore: roundScore(Number(item.maxScore || 0)),
-            ratio: item.ratio,
-          };
-        },
-      );
-      const parsedTotal = toFiniteScore(getCell(row, indexes.totalIndex));
-      const calculatedTotal = rowItems.reduce(
-        (sum, item) => sum + Number(item.score || 0),
-        0,
-      );
-      const feedbackSourceIndex =
-        indexes.feedbackIndex >= 0
-          ? indexes.feedbackIndex
-          : indexes.remarkIndex;
-      const feedback = getCellText(row, feedbackSourceIndex).slice(0, 700);
-
-      return {
-        rowKey: `row-${rowIndex + 1}-${studentName}-${rowNumber}`,
-        rowNumber: rowIndex + 1,
-        enteredScoreCount,
-        uid: "",
-        grade: normalizeSchoolValue(rowGrade),
-        class: normalizeSchoolValue(rowClass),
-        number: normalizeSchoolValue(rowNumber),
-        studentName,
-        items: rowItems,
-        totalScore: roundScore(parsedTotal ?? calculatedTotal),
-        totalMaxScore,
-        feedback,
-        matchStatus: "unmatched",
-        matchMessage: "학생 명단과 아직 연결되지 않았습니다.",
-      };
-    },
-  );
-
-  return {
-    sourceFileName: params.fileName,
-    headerRowNumber: headerRowIndex + 1,
-    items,
-    rows: rowsWithScores,
-    totalMaxScore,
-    detectedSubject,
-    detectedClasses: Array.from(
-      new Set(rowsWithScores.map((row) => row.class).filter(Boolean)),
-    ).sort((a, b) => Number(a) - Number(b) || a.localeCompare(b, "ko")),
-  };
 };
 
 const normalizeStudentProfile = (
@@ -651,8 +311,12 @@ const PerformanceScoreManager: React.FC = () => {
         targetGrade,
         fallbackClass,
       });
-      if (!subject.trim() && parsedUpload.detectedSubject) {
-        setSubject(parsedUpload.detectedSubject);
+      const defaultTitle = `${year}학년도 ${semester}학기 수행평가 점수`;
+      if (!title.trim() || title.trim() === defaultTitle) {
+        setTitle(parsedUpload.title);
+      }
+      if (!subject.trim() && parsedUpload.subject) {
+        setSubject(parsedUpload.subject);
       }
       const matchedRows = matchRowsToStudents(parsedUpload.rows, students);
       setParsed({
@@ -686,7 +350,11 @@ const PerformanceScoreManager: React.FC = () => {
             ...current,
             rows: current.rows.map((row) =>
               row.rowKey === rowKey
-                ? { ...row, feedback: feedback.slice(0, 700) }
+                ? {
+                    ...row,
+                    feedback: feedback.slice(0, 1000),
+                    evidence: feedback.slice(0, 1000),
+                  }
                 : row,
             ),
           }
@@ -734,11 +402,14 @@ const PerformanceScoreManager: React.FC = () => {
       connectedBlankScoreCount > 0
         ? `점수가 비어 있는 연결 학생 ${connectedBlankScoreCount}명`
         : "",
+      parsedSummary.warningCount > 0
+        ? `이름 확인이 필요한 연결 학생 ${parsedSummary.warningCount}명`
+        : "",
     ].filter(Boolean);
     if (
       skippedMessages.length > 0 &&
       !window.confirm(
-        `${skippedMessages.join(", ")}은 저장되지 않습니다. 점수가 입력된 연결 학생 ${saveableRows.length}명만 저장할까요?`,
+        `확인 사항: ${skippedMessages.join(", ")}. 점수가 입력된 연결 학생 ${saveableRows.length}명만 저장됩니다. 계속할까요?`,
       )
     ) {
       return;
@@ -746,7 +417,7 @@ const PerformanceScoreManager: React.FC = () => {
 
     setSaving(true);
     try {
-      const safeSubject = subject.trim() || parsed.detectedSubject;
+      const safeSubject = subject.trim() || parsed.subject;
       const rosterRef = doc(collection(db, rosterCollectionPath));
       const rosterId = rosterRef.id;
       const timestamp = serverTimestamp();
@@ -762,6 +433,9 @@ const PerformanceScoreManager: React.FC = () => {
       batch.set(rosterRef, {
         title: safeTitle,
         subject: safeSubject,
+        ...(parsed.assessmentOrder
+          ? { assessmentOrder: parsed.assessmentOrder }
+          : {}),
         academicYear: year,
         semester,
         targetGrade,
@@ -793,6 +467,9 @@ const PerformanceScoreManager: React.FC = () => {
           rosterId,
           title: safeTitle,
           subject: safeSubject,
+          ...(parsed.assessmentOrder
+            ? { assessmentOrder: parsed.assessmentOrder }
+            : {}),
           academicYear: year,
           semester,
           grade: row.grade,
@@ -804,9 +481,7 @@ const PerformanceScoreManager: React.FC = () => {
           totalScore: row.totalScore,
           totalMaxScore: row.totalMaxScore,
           feedback: row.feedback,
-          sourceFileName: parsed.sourceFileName,
-          uploadedBy: currentUser?.uid || "",
-          uploadedByEmail: currentUser?.email || "",
+          evidence: row.evidence || row.feedback,
           uploadedAt: timestamp,
           updatedAt: timestamp,
         };
@@ -888,8 +563,8 @@ const PerformanceScoreManager: React.FC = () => {
               수행평가 점수 관리
             </h2>
             <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
-              학급별 점수 일람표를 업로드하면 학생 명단과 연결해 학생별 개인
-              점수 문서로 저장합니다.
+              최종 점수표를 업로드하면 총점, 평가요소별 점수, 감점 요인과 평가
+              근거를 학생별 개인 점수 문서로 저장합니다.
             </p>
           </div>
           <button
@@ -970,13 +645,13 @@ const PerformanceScoreManager: React.FC = () => {
               엑셀 파일 업로드
             </div>
             <p className="mt-1 text-xs font-bold leading-5 text-blue-700">
-              성명, 반, 번호, 수행평가 항목명, 만점 행, 점수 행을 자동으로
-              인식합니다.
+              학년, 반, 번호, 이름, 총점, 평가요소별 점수, 선생님 작성 피드백을
+              자동으로 인식합니다.
             </p>
           </div>
           <label className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700">
             <i className="fas fa-file-arrow-up text-xs" aria-hidden="true"></i>
-            {parsing ? "인식 중..." : "명단 선택"}
+            {parsing ? "인식 중..." : "점수표 선택"}
             <input
               type="file"
               accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -1050,7 +725,7 @@ const PerformanceScoreManager: React.FC = () => {
           </div>
 
           <div className="mt-5 overflow-x-auto rounded-xl border border-slate-200">
-            <table className="min-w-[980px] w-full text-left text-sm">
+            <table className="min-w-[1120px] w-full text-left text-sm">
               <thead className="bg-slate-50 text-xs font-black text-slate-500">
                 <tr>
                   <th className="px-3 py-3 text-center">상태</th>
@@ -1065,8 +740,8 @@ const PerformanceScoreManager: React.FC = () => {
                       {item.name}
                     </th>
                   ))}
-                  <th className="px-3 py-3 text-right">합계</th>
-                  <th className="w-72 px-3 py-3">교사 피드백</th>
+                  <th className="px-3 py-3 text-right">총점</th>
+                  <th className="w-80 px-3 py-3">감점 요인 및 평가 근거</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
@@ -1099,7 +774,9 @@ const PerformanceScoreManager: React.FC = () => {
                         key={`${row.rowKey}-${item.name}-${index}`}
                         className="px-3 py-3 text-right font-bold text-slate-700"
                       >
-                        {formatPerformanceScore(item.score)}
+                        {item.scoreEntered === false
+                          ? "-"
+                          : formatPerformanceScore(item.score)}
                       </td>
                     ))}
                     <td className="px-3 py-3 text-right font-black text-blue-700">
@@ -1114,7 +791,7 @@ const PerformanceScoreManager: React.FC = () => {
                         }
                         rows={2}
                         className="w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold leading-5 text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
-                        placeholder="학생에게 보여줄 피드백"
+                        placeholder="학생에게 보여줄 감점 요인 또는 평가 근거"
                       />
                     </td>
                   </tr>

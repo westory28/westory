@@ -7,6 +7,7 @@ export interface PerformanceScoreItem {
   score: number;
   maxScore: number;
   ratio?: number;
+  scoreEntered?: boolean;
 }
 
 export interface PerformanceScoreRecord {
@@ -14,6 +15,7 @@ export interface PerformanceScoreRecord {
   rosterId: string;
   title: string;
   subject: string;
+  assessmentOrder?: number;
   academicYear: string;
   semester: string;
   grade: string;
@@ -25,9 +27,10 @@ export interface PerformanceScoreRecord {
   totalScore: number;
   totalMaxScore: number;
   feedback: string;
-  sourceFileName: string;
-  uploadedBy: string;
-  uploadedByEmail: string;
+  evidence?: string;
+  sourceFileName?: string;
+  uploadedBy?: string;
+  uploadedByEmail?: string;
   uploadedAt?: unknown;
   updatedAt?: unknown;
   signatureName?: string;
@@ -45,6 +48,7 @@ export interface PerformanceScoreRosterRow {
   totalScore: number;
   totalMaxScore: number;
   feedback: string;
+  evidence?: string;
   matchStatus: "matched" | "name-mismatch" | "unmatched";
   matchMessage: string;
 }
@@ -53,6 +57,7 @@ export interface PerformanceScoreRoster {
   id: string;
   title: string;
   subject: string;
+  assessmentOrder?: number;
   academicYear: string;
   semester: string;
   targetGrade: string;
@@ -100,14 +105,18 @@ export const roundScore = (value: number) => {
 };
 
 export const getPerformanceScorePercent = (score: number, maxScore: number) => {
-  if (!Number.isFinite(score) || !Number.isFinite(maxScore) || maxScore <= 0) {
+  const safeScore = toFiniteScore(score);
+  const safeMaxScore = toFiniteScore(maxScore);
+  if (safeScore === null || safeMaxScore === null || safeMaxScore <= 0) {
     return 0;
   }
-  return Math.max(0, Math.min(100, (score / maxScore) * 100));
+  return Math.max(0, Math.min(100, (safeScore / safeMaxScore) * 100));
 };
 
-export const formatPerformanceScore = (value: number) => {
-  const rounded = roundScore(value);
+export const formatPerformanceScore = (value: unknown) => {
+  const score = toFiniteScore(value);
+  if (score === null) return "-";
+  const rounded = roundScore(score);
   return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2);
 };
 
