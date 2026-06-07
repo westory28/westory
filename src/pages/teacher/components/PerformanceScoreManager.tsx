@@ -71,6 +71,10 @@ const CLASS_SHEET_TEMPLATE_URL = `${import.meta.env.BASE_URL}templates/performan
 const CLASS_SHEET_STUDENT_START_ROW = 7;
 const CLASS_SHEET_STUDENT_END_ROW = 38;
 const CLASS_SHEET_SUMMARY_START_ROW = 39;
+const CLASS_SHEET_SIGNATURE_START_COLUMN = 9;
+const CLASS_SHEET_SIGNATURE_END_COLUMN = 13;
+const CLASS_SHEET_SIGNATURE_HORIZONTAL_PADDING = 0.05;
+const CLASS_SHEET_SIGNATURE_VERTICAL_PADDING = 0.08;
 const XLSX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
@@ -772,6 +776,21 @@ const setWorksheetCellValue = (
   worksheet.getCell(row, column).value = value;
 };
 
+const getClassSheetSignatureImageRange = (row: number) => ({
+  tl: {
+    col:
+      CLASS_SHEET_SIGNATURE_START_COLUMN +
+      CLASS_SHEET_SIGNATURE_HORIZONTAL_PADDING,
+    row: row - 1 + CLASS_SHEET_SIGNATURE_VERTICAL_PADDING,
+  },
+  br: {
+    col:
+      CLASS_SHEET_SIGNATURE_END_COLUMN -
+      CLASS_SHEET_SIGNATURE_HORIZONTAL_PADDING,
+    row: row - CLASS_SHEET_SIGNATURE_VERTICAL_PADDING,
+  },
+});
+
 const buildClassSummaryWorkbookFromTemplate = async (params: {
   year: string;
   semester: string;
@@ -946,10 +965,7 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
       extension: "png",
     });
     worksheet.addImage(imageId, {
-      tl: { col: 9.2, row: image.row - 0.85 },
-      ext: { width: 76, height: 22 },
-      editAs: "oneCell",
-      hyperlinks: undefined,
+      ...getClassSheetSignatureImageRange(image.row),
     });
   });
 
@@ -1730,32 +1746,7 @@ const PerformanceScoreManager: React.FC = () => {
         secondRoster: summaryExportRosters.secondRoster,
         students: studentsForSheet,
       };
-      let blob: Blob;
-      try {
-        blob = await buildClassSummaryWorkbookFromTemplate(exportParams);
-      } catch (templateError) {
-        console.warn(
-          "Failed to use class sheet template. Falling back to generated workbook:",
-          templateError,
-        );
-        const { default: writeXlsxFile } =
-          await import("write-excel-file/browser");
-        const { rows, images } = buildClassSummaryWorkbook(exportParams);
-        blob = await writeXlsxFile(
-          rows as never,
-          {
-            sheet: "sheet1",
-            columns: CLASS_SHEET_COLUMNS,
-            images: images as never,
-            orientation: "landscape",
-            showGridLines: false,
-          },
-          {
-            fontFamily: "Noto Sans KR",
-            fontSize: 10,
-          },
-        ).toBlob();
-      }
+      const blob = await buildClassSummaryWorkbookFromTemplate(exportParams);
       saveBlobAsFile(
         blob,
         `${year}학년도 ${semester}학기 ${exportGrade}학년 역사과 수행평가 일람표 ${classSheetClassFilter}반.xlsx`,
@@ -1770,7 +1761,7 @@ const PerformanceScoreManager: React.FC = () => {
       showToast({
         tone: "error",
         title: "일람표 다운로드에 실패했습니다.",
-        message: "점수와 서명 기록을 다시 조회한 뒤 시도해 주세요.",
+        message: "원본 일람표 양식과 점수, 서명 기록을 다시 확인해 주세요.",
       });
     } finally {
       setExportingClassSheet(false);
