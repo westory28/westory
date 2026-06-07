@@ -513,6 +513,9 @@ const PerformanceScoreView: React.FC = () => {
       );
       setSignatureModalOpen(false);
       setSignatureImageDraft("");
+      window.setTimeout(() => {
+        window.alert("서명이 완료되었습니다.");
+      }, 0);
     } catch (error) {
       console.error("Failed to confirm performance score:", error);
       setSignatureError(getSignatureSaveErrorMessage(error));
