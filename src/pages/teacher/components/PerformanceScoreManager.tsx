@@ -73,6 +73,7 @@ const CLASS_SHEET_TEMPLATE_PATH =
 const CLASS_SHEET_STUDENT_START_ROW = 7;
 const CLASS_SHEET_STUDENT_END_ROW = 38;
 const CLASS_SHEET_SUMMARY_START_ROW = 39;
+const CLASS_SHEET_TEMPLATE_COLUMN_COUNT = 13;
 const CLASS_SHEET_SIGNATURE_START_COLUMN = 9;
 const CLASS_SHEET_SIGNATURE_HORIZONTAL_PADDING = 0.12;
 const CLASS_SHEET_SIGNATURE_VERTICAL_PADDING = 0.08;
@@ -779,6 +780,116 @@ const setWorksheetCellValue = (
   worksheet.getCell(row, column).value = value;
 };
 
+const cloneWorksheetStyle = (style: unknown) =>
+  JSON.parse(JSON.stringify(style || {}));
+
+const unmergeWorksheetRange = (
+  worksheet: { unMergeCells?: (range: string) => void },
+  range: string,
+) => {
+  try {
+    worksheet.unMergeCells?.(range);
+  } catch {
+    // The range may already be unmerged after ExcelJS row insertion.
+  }
+};
+
+const resetWorksheetRowMerge = (
+  worksheet: {
+    mergeCells: (
+      startRow: number,
+      startColumn: number,
+      endRow: number,
+      endColumn: number,
+    ) => void;
+    unMergeCells?: (range: string) => void;
+  },
+  row: number,
+  startColumn: number,
+  endColumn: number,
+  range: string,
+) => {
+  unmergeWorksheetRange(worksheet, range);
+  worksheet.mergeCells(row, startColumn, row, endColumn);
+};
+
+const resizeClassSheetStudentRows = (
+  worksheet: {
+    getRow: (row: number) => {
+      height?: number;
+      getCell: (column: number) => { style: unknown };
+    };
+    insertRows: (row: number, values: unknown[], style?: string) => void;
+    spliceRows: (start: number, count: number) => void;
+    mergeCells: (
+      startRow: number,
+      startColumn: number,
+      endRow: number,
+      endColumn: number,
+    ) => void;
+    unMergeCells?: (range: string) => void;
+  },
+  studentCount: number,
+) => {
+  const templateCapacity =
+    CLASS_SHEET_STUDENT_END_ROW - CLASS_SHEET_STUDENT_START_ROW + 1;
+  const rowDelta = studentCount - templateCapacity;
+
+  const sourceRow = worksheet.getRow(CLASS_SHEET_STUDENT_END_ROW);
+
+  if (rowDelta > 0) {
+    worksheet.insertRows(
+      CLASS_SHEET_SUMMARY_START_ROW,
+      Array.from({ length: rowDelta }, () => []),
+      "i",
+    );
+
+    for (let index = 0; index < rowDelta; index += 1) {
+      const row = CLASS_SHEET_SUMMARY_START_ROW + index;
+      const targetRow = worksheet.getRow(row);
+      targetRow.height = sourceRow.height;
+      for (
+        let column = 1;
+        column <= CLASS_SHEET_TEMPLATE_COLUMN_COUNT;
+        column += 1
+      ) {
+        targetRow.getCell(column).style = cloneWorksheetStyle(
+          sourceRow.getCell(column).style,
+        );
+      }
+    }
+  } else if (rowDelta < 0) {
+    worksheet.spliceRows(
+      CLASS_SHEET_STUDENT_START_ROW + studentCount,
+      Math.abs(rowDelta),
+    );
+  }
+
+  const studentEndRow = CLASS_SHEET_STUDENT_START_ROW + studentCount - 1;
+  const summaryStartRow = CLASS_SHEET_SUMMARY_START_ROW + rowDelta;
+
+  for (
+    let row = CLASS_SHEET_STUDENT_START_ROW;
+    row <= studentEndRow;
+    row += 1
+  ) {
+    unmergeWorksheetRange(worksheet, `B${row}:D${row}`);
+    resetWorksheetRowMerge(worksheet, row, 5, 6, `E${row}:F${row}`);
+    resetWorksheetRowMerge(worksheet, row, 8, 9, `H${row}:I${row}`);
+    resetWorksheetRowMerge(worksheet, row, 10, 13, `J${row}:M${row}`);
+  }
+
+  for (let index = 0; index < 3; index += 1) {
+    const row = summaryStartRow + index;
+    resetWorksheetRowMerge(worksheet, row, 2, 4, `B${row}:D${row}`);
+    resetWorksheetRowMerge(worksheet, row, 5, 6, `E${row}:F${row}`);
+    resetWorksheetRowMerge(worksheet, row, 8, 9, `H${row}:I${row}`);
+    resetWorksheetRowMerge(worksheet, row, 10, 13, `J${row}:M${row}`);
+  }
+
+  return { studentEndRow, summaryStartRow };
+};
+
 const joinUrlPath = (base: string, path: string) =>
   `${base.replace(/\/?$/, "/")}${path.replace(/^\/+/, "")}`;
 
@@ -851,19 +962,16 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
   secondRoster?: PerformanceScoreRoster;
   students: ClassSheetStudent[];
 }) => {
-  if (
-    params.students.length >
-    CLASS_SHEET_STUDENT_END_ROW - CLASS_SHEET_STUDENT_START_ROW + 1
-  ) {
-    throw new Error("class-sheet-template-capacity-exceeded");
-  }
-
   const ExcelJS = await import("exceljs");
   const workbook = new ExcelJS.Workbook();
   const response = await fetchClassSheetTemplate();
   await workbook.xlsx.load(await response.arrayBuffer());
   const worksheet = workbook.worksheets[0];
   if (!worksheet) throw new Error("class-sheet-template-empty");
+  const { studentEndRow, summaryStartRow } = resizeClassSheetStudentRows(
+    worksheet,
+    params.students.length,
+  );
 
   setWorksheetCellValue(worksheet, 1, 12, getTodayLabel());
   setWorksheetCellValue(worksheet, 2, 6, "수행평가 강의실별 일람표");
@@ -904,7 +1012,7 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
 
   for (
     let row = CLASS_SHEET_STUDENT_START_ROW;
-    row <= CLASS_SHEET_STUDENT_END_ROW;
+    row <= studentEndRow;
     row += 1
   ) {
     [2, 3, 4, 5, 7, 8, 10].forEach((column) =>
@@ -975,7 +1083,7 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
   const secondSum = roundScore(
     secondScores.reduce((sum, score) => sum + score, 0),
   );
-  const summaryRow = CLASS_SHEET_SUMMARY_START_ROW;
+  const summaryRow = summaryStartRow;
   setWorksheetCellValue(worksheet, summaryRow, 5, `${firstScores.length} 명`);
   setWorksheetCellValue(worksheet, summaryRow, 7, `${secondScores.length} 명`);
   setWorksheetCellValue(worksheet, summaryRow + 1, 5, firstSum);
@@ -2718,7 +2826,7 @@ const PerformanceScoreManager: React.FC = () => {
                   </div>
 
                   <div className="overflow-x-auto rounded-xl border border-slate-200">
-                    <table className="w-full min-w-[920px] text-left text-sm">
+                    <table className="w-full min-w-[1020px] text-left text-sm">
                       <thead className="bg-slate-50 text-xs font-black text-slate-500">
                         <tr>
                           <th className="px-3 py-3 text-center">상태</th>
@@ -2726,8 +2834,8 @@ const PerformanceScoreManager: React.FC = () => {
                           <th className="px-3 py-3">이름</th>
                           <th className="px-3 py-3 text-right">1차</th>
                           <th className="px-3 py-3 text-right">2차</th>
-                          <th className="px-3 py-3 text-right">합계</th>
-                          <th className="px-3 py-3">서명 현황</th>
+                          <th className="w-20 px-3 py-3 text-right">합계</th>
+                          <th className="w-[320px] px-8 py-3">서명 현황</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 bg-white">
@@ -2832,14 +2940,14 @@ const PerformanceScoreManager: React.FC = () => {
                                     )}
                                   </span>
                                 </td>
-                                <td className="whitespace-nowrap px-3 py-3 text-right font-black text-blue-700">
+                                <td className="w-20 whitespace-nowrap px-3 py-3 text-right font-black text-blue-700">
                                   {totalScore === null
                                     ? "-"
                                     : formatPerformanceScore(totalScore)}
                                 </td>
-                                <td className="px-3 py-3">
+                                <td className="w-[320px] px-8 py-3">
                                   {signatureDisplayRecord && signatureImage ? (
-                                    <div className="flex min-w-[190px] items-center gap-2 whitespace-nowrap">
+                                    <div className="flex min-w-[230px] items-center gap-2 whitespace-nowrap">
                                       <div className="flex h-8 w-20 shrink-0 items-center justify-center overflow-hidden rounded-md border border-blue-100 bg-blue-50 px-1.5">
                                         <img
                                           src={signatureImage}
