@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   collection,
+  deleteField,
   doc,
   type DocumentData,
   type DocumentReference,
@@ -253,6 +254,14 @@ const createBatchQueue = () => {
     delete(ref: DocumentReference<DocumentData>) {
       rotateIfFull();
       activeBatch.delete(ref);
+      queueWrite();
+    },
+    update(
+      ref: DocumentReference<DocumentData>,
+      data: WithFieldValue<DocumentData>,
+    ) {
+      rotateIfFull();
+      activeBatch.update(ref, data);
       queueWrite();
     },
     async commit() {
@@ -515,6 +524,26 @@ const getConfirmedSignatureRecord = (
       ) || null
   );
 };
+
+const getClassSheetStudentKey = (student: ClassSheetStudent) =>
+  student.uid ||
+  buildStudentLookupKey(student.grade, student.class, student.number);
+
+const getRecordScoreId = (record?: PerformanceScoreRecord) =>
+  record?.id || record?.rosterId || "";
+
+const clearRecordSignature = (
+  record?: PerformanceScoreRecord,
+): PerformanceScoreRecord | undefined =>
+  record
+    ? {
+        ...record,
+        signatureName: undefined,
+        signatureImage: undefined,
+        signedAt: undefined,
+        confirmation: null,
+      }
+    : undefined;
 
 const buildClassSummaryWorkbook = (params: {
   year: string;
@@ -975,6 +1004,7 @@ const PerformanceScoreManager: React.FC = () => {
     useState(false);
   const [classSheetPreviewLoadedKey, setClassSheetPreviewLoadedKey] =
     useState("");
+  const [rejectingSignatureKey, setRejectingSignatureKey] = useState("");
   const [exportingClassSheet, setExportingClassSheet] = useState(false);
 
   useEffect(() => {
@@ -1744,6 +1774,112 @@ const PerformanceScoreManager: React.FC = () => {
       });
     } finally {
       setExportingClassSheet(false);
+    }
+  };
+
+  const rejectClassSheetSignature = async (student: ClassSheetStudent) => {
+    if (rejectingSignatureKey) return;
+    if (!student.uid) {
+      showToast({
+        tone: "warning",
+        title: "학생 계정 연결을 확인해 주세요.",
+        message: "서명 반려는 위스토리 학생 계정과 연결된 명단만 가능합니다.",
+      });
+      return;
+    }
+
+    const recordsToReject = [
+      summaryExportRosters.firstRoster ? student.firstRecord : undefined,
+      summaryExportRosters.secondRoster ? student.secondRecord : undefined,
+    ].filter((record): record is PerformanceScoreRecord =>
+      Boolean(record && getRecordScoreId(record)),
+    );
+    const signedRecords = recordsToReject.filter(
+      (record) => record.signatureImage || record.confirmation?.signatureImage,
+    );
+
+    if (!signedRecords.length) {
+      showToast({
+        tone: "warning",
+        title: "반려할 서명이 없습니다.",
+        message: "이미 서명 미완료 상태인 학생입니다.",
+      });
+      return;
+    }
+
+    const scoreTitles = signedRecords
+      .map((record, index) => `${index + 1}. ${record.title}`)
+      .join("\n");
+    const confirmed = window.confirm(
+      [
+        `${student.class}반 ${student.number}번 ${student.studentName} 학생의 점수 확인 서명을 반려할까요?`,
+        "학생 점수는 유지되고, 확인 서명만 삭제됩니다.",
+        "반려 후에만 학생이 다시 서명할 수 있습니다.",
+        "",
+        scoreTitles,
+      ].join("\n"),
+    );
+    if (!confirmed) return;
+
+    const studentKey = getClassSheetStudentKey(student);
+    setRejectingSignatureKey(studentKey);
+    try {
+      const batchQueue = createBatchQueue();
+      signedRecords.forEach((record) => {
+        const scoreId = getRecordScoreId(record);
+        batchQueue.update(
+          doc(
+            db,
+            "users",
+            student.uid,
+            PERFORMANCE_SCORE_USER_COLLECTION,
+            scoreId,
+          ),
+          {
+            signatureName: deleteField(),
+            signatureImage: deleteField(),
+            signedAt: deleteField(),
+          },
+        );
+        batchQueue.delete(
+          doc(
+            db,
+            "users",
+            student.uid,
+            PERFORMANCE_SCORE_USER_COLLECTION,
+            scoreId,
+            PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
+            student.uid,
+          ),
+        );
+      });
+      await batchQueue.commit();
+
+      setClassSheetPreviewStudents((current) =>
+        current.map((item) =>
+          getClassSheetStudentKey(item) === studentKey
+            ? {
+                ...item,
+                firstRecord: clearRecordSignature(item.firstRecord),
+                secondRecord: clearRecordSignature(item.secondRecord),
+              }
+            : item,
+        ),
+      );
+      showToast({
+        tone: "success",
+        title: "서명을 반려했습니다.",
+        message: `${student.studentName} 학생은 다시 점수 확인 및 서명을 진행할 수 있습니다.`,
+      });
+    } catch (error) {
+      console.error("Failed to reject performance score signature:", error);
+      showToast({
+        tone: "error",
+        title: "서명 반려에 실패했습니다.",
+        message: getFirestoreWriteErrorMessage(error),
+      });
+    } finally {
+      setRejectingSignatureKey("");
     }
   };
 
@@ -2561,6 +2697,25 @@ const PerformanceScoreManager: React.FC = () => {
                               student,
                               classSheetSignatureRequirements,
                             );
+                            const signatureDisplayRecord =
+                              signatureRecord ||
+                              [student.secondRecord, student.firstRecord].find(
+                                (record) =>
+                                  record?.signatureImage ||
+                                  record?.confirmation?.signatureImage,
+                              ) ||
+                              null;
+                            const signatureImage =
+                              signatureDisplayRecord?.signatureImage ||
+                              signatureDisplayRecord?.confirmation
+                                ?.signatureImage ||
+                              "";
+                            const signatureName =
+                              signatureDisplayRecord?.signatureName ||
+                              signatureDisplayRecord?.confirmation
+                                ?.signatureName ||
+                              student.studentName;
+                            const studentKey = getClassSheetStudentKey(student);
                             const missingLabels = [
                               !student.firstRecord ? "1차 점수" : "",
                               !student.secondRecord ? "2차 점수" : "",
@@ -2622,14 +2777,49 @@ const PerformanceScoreManager: React.FC = () => {
                                     : formatPerformanceScore(totalScore)}
                                 </td>
                                 <td className="px-3 py-3">
-                                  {signatureRecord ? (
-                                    <div className="text-xs font-bold leading-5 text-slate-600">
-                                      <span className="font-black text-emerald-700">
-                                        서명 완료
-                                      </span>
-                                      <span className="ml-2 text-slate-500">
-                                        {signatureRecord.signatureName}
-                                      </span>
+                                  {signatureDisplayRecord && signatureImage ? (
+                                    <div className="flex min-w-[250px] flex-col gap-2">
+                                      <div className="flex items-center gap-3">
+                                        <div className="flex h-12 w-36 items-center justify-center overflow-hidden rounded-lg border border-blue-100 bg-blue-50 px-2">
+                                          <img
+                                            src={signatureImage}
+                                            alt={`${student.studentName} 서명`}
+                                            className="max-h-10 max-w-full object-contain"
+                                          />
+                                        </div>
+                                        <div className="min-w-0">
+                                          <div
+                                            className={`text-xs font-black ${
+                                              signatureRecord
+                                                ? "text-emerald-700"
+                                                : "text-amber-700"
+                                            }`}
+                                          >
+                                            {signatureRecord
+                                              ? "서명 완료"
+                                              : "부분 서명"}
+                                          </div>
+                                          <div className="mt-1 truncate text-xs font-bold text-slate-500">
+                                            {signatureName}
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          void rejectClassSheetSignature(
+                                            student,
+                                          )
+                                        }
+                                        disabled={
+                                          rejectingSignatureKey === studentKey
+                                        }
+                                        className="inline-flex h-8 w-fit items-center justify-center rounded-lg border border-rose-200 bg-white px-3 text-xs font-black text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                      >
+                                        {rejectingSignatureKey === studentKey
+                                          ? "반려 중..."
+                                          : "반려"}
+                                      </button>
                                     </div>
                                   ) : (
                                     <div className="text-xs font-bold leading-5 text-slate-500">

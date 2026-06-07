@@ -238,6 +238,11 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time;
     }
 
+    function canCreatePerformanceScoreConfirmation(userId, scoreId, confirmationId) {
+      return !exists(/databases/$(database)/documents/users/$(userId)/performance_scores/$(scoreId)/confirmations/$(confirmationId))
+        && isValidPerformanceScoreConfirmation(userId, scoreId, confirmationId);
+    }
+
     function changedUserKeys() {
       return request.resource.data.diff(resource.data).affectedKeys();
     }
@@ -593,7 +598,8 @@ service cloud.firestore {
 
         match /confirmations/{confirmationId} {
           allow read: if canUseWestory() && (isOwnUser(userId) || canManagePerformanceScores());
-          allow create, update: if isValidPerformanceScoreConfirmation(userId, scoreId, confirmationId);
+          allow create: if canCreatePerformanceScoreConfirmation(userId, scoreId, confirmationId);
+          allow update: if false;
           allow delete: if canManagePerformanceScores();
         }
       }

@@ -164,6 +164,8 @@ const PerformanceScoreView: React.FC = () => {
 
   const expectedSignatureName =
     userData?.name || selectedRecord?.studentName || "";
+  const signatureGuideName =
+    selectedRecord?.studentName || expectedSignatureName;
   const confirmedAt = selectedRecord?.signedAt;
   const hasConfirmation = selectedRecord
     ? isRecordConfirmed(selectedRecord)
@@ -279,6 +281,12 @@ const PerformanceScoreView: React.FC = () => {
   };
 
   const openSignatureModal = () => {
+    if (allScoresConfirmed) {
+      setSignatureError(
+        "이미 점수 확인과 서명이 완료되었습니다. 재서명은 담당 교사가 반려한 경우에만 가능합니다.",
+      );
+      return;
+    }
     setSignatureConsent(false);
     setSignatureDrawn(false);
     setSignatureReviewStep("sign");
@@ -325,6 +333,12 @@ const PerformanceScoreView: React.FC = () => {
 
   const submitSignatureConfirmation = async () => {
     if (!currentUser?.uid) return;
+    if (allScoresConfirmed) {
+      setSignatureError(
+        "이미 점수 확인과 서명이 완료되었습니다. 담당 교사가 반려한 경우에만 다시 서명할 수 있습니다.",
+      );
+      return;
+    }
     const identityError = getStudentIdentityError();
     if (identityError) {
       setSignatureError(identityError);
@@ -332,6 +346,15 @@ const PerformanceScoreView: React.FC = () => {
     }
     if (!signatureConsent || signatureReviewStep !== "review") {
       setSignatureError("최종 확인 내용을 다시 확인해 주세요.");
+      return;
+    }
+    const recordsToConfirm = records.filter(
+      (record) => !isRecordConfirmed(record),
+    );
+    if (!recordsToConfirm.length) {
+      setSignatureError(
+        "이미 점수 확인과 서명이 완료되었습니다. 담당 교사가 반려한 경우에만 다시 서명할 수 있습니다.",
+      );
       return;
     }
 
@@ -353,7 +376,7 @@ const PerformanceScoreView: React.FC = () => {
     setSignatureError("");
     try {
       const batch = writeBatch(db);
-      records.forEach((record) => {
+      recordsToConfirm.forEach((record) => {
         const scoreId = getRecordScoreId(record);
         const confirmationRef = doc(
           db,
@@ -377,21 +400,25 @@ const PerformanceScoreView: React.FC = () => {
 
       const localConfirmedAt = new Date();
       setRecords((current) =>
-        current.map((record) => ({
-          ...record,
-          signatureName: expectedSignatureName.trim(),
-          signatureImage,
-          signedAt: localConfirmedAt,
-          confirmation: {
-            id: currentUser.uid,
-            uid: currentUser.uid,
-            rosterId: record.rosterId,
-            signatureName: expectedSignatureName.trim(),
-            signatureImage,
-            confirmedAt: localConfirmedAt,
-            updatedAt: localConfirmedAt,
-          },
-        })),
+        current.map((record) =>
+          isRecordConfirmed(record)
+            ? record
+            : {
+                ...record,
+                signatureName: expectedSignatureName.trim(),
+                signatureImage,
+                signedAt: localConfirmedAt,
+                confirmation: {
+                  id: currentUser.uid,
+                  uid: currentUser.uid,
+                  rosterId: record.rosterId,
+                  signatureName: expectedSignatureName.trim(),
+                  signatureImage,
+                  confirmedAt: localConfirmedAt,
+                  updatedAt: localConfirmedAt,
+                },
+              },
+        ),
       );
       setSignatureModalOpen(false);
     } catch (error) {
@@ -473,9 +500,14 @@ const PerformanceScoreView: React.FC = () => {
             </div>
             {selectedRecord &&
               (allScoresConfirmed ? (
-                <span className="inline-flex h-11 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-4 text-sm font-black text-blue-800">
+                <button
+                  type="button"
+                  disabled
+                  aria-disabled="true"
+                  className="inline-flex h-11 cursor-not-allowed items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-4 text-sm font-black text-blue-800 opacity-80"
+                >
                   점수 확인 완료 {confirmedRecordCount}/{records.length}
-                </span>
+                </button>
               ) : (
                 <button
                   type="button"
@@ -782,8 +814,8 @@ const PerformanceScoreView: React.FC = () => {
                         signatureConsent ? "" : "opacity-60"
                       }`}
                     >
-                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-4 text-center text-6xl font-black text-slate-400/35 sm:text-7xl">
-                        {expectedSignatureName || "홍길동"}
+                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-3 text-center text-[5rem] font-black leading-none text-blue-950/10 sm:text-[8rem]">
+                        {signatureGuideName || "홍길동"}
                       </div>
                       {!signatureConsent && (
                         <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-white/55 text-sm font-black text-slate-500">
