@@ -76,9 +76,17 @@ const ManageSchedule = () => {
     return new Date(date.getTime() - offset).toISOString().split("T")[0];
   };
 
+  const toDateKey = (value?: string) =>
+    String(value || "")
+      .split("T")[0]
+      .trim();
+
   const toExclusiveEnd = (start?: string, end?: string) => {
-    if (!start || !end || end <= start) return undefined;
-    const endDate = new Date(`${end}T00:00:00`);
+    const startDateKey = toDateKey(start);
+    const endDateKey = toDateKey(end);
+    if (!startDateKey || !endDateKey || endDateKey <= startDateKey)
+      return undefined;
+    const endDate = new Date(`${endDateKey}T00:00:00`);
     endDate.setDate(endDate.getDate() + 1);
     return toLocalYmd(endDate);
   };
@@ -159,8 +167,9 @@ const ManageSchedule = () => {
           return {
             id: event.id,
             title: event.title,
-            start: event.start,
+            start: toDateKey(event.start) || event.start,
             end: toExclusiveEnd(event.start, event.end),
+            allDay: true,
             backgroundColor: isHoliday
               ? "#ef4444"
               : colorMap[event.eventType] || "#6b7280",

@@ -263,8 +263,9 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
       return {
         id: event.id,
         title: event.title,
-        start: event.start,
+        start: toDateKey(event.start) || event.start,
         end: toExclusiveEnd(event.start, event.end),
+        allDay: true,
         backgroundColor: isHoliday ? "#ef4444" : meta.color,
         borderColor: isHoliday ? "#ef4444" : meta.color,
         textColor: isHoliday ? "#ffffff" : undefined,

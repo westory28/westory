@@ -35,18 +35,26 @@ interface TeacherCalendarSectionProps {
 type SchoolOption = { value: string; label: string };
 type CalendarViewType = "dayGridMonth" | "listMonth";
 
+const toDateKey = (value?: string) =>
+  String(value || "")
+    .split("T")[0]
+    .trim();
+
 const toExclusiveEnd = (start?: string, end?: string) => {
-  if (!start || !end || end <= start) return undefined;
-  const endDate = new Date(`${end}T00:00:00`);
+  const startDateKey = toDateKey(start);
+  const endDateKey = toDateKey(end);
+  if (!startDateKey || !endDateKey || endDateKey <= startDateKey)
+    return undefined;
+  const endDate = new Date(`${endDateKey}T00:00:00`);
   endDate.setDate(endDate.getDate() + 1);
   const offset = endDate.getTimezoneOffset() * 60000;
   return new Date(endDate.getTime() - offset).toISOString().split("T")[0];
 };
 
 const getInclusiveSpanDays = (start?: string, end?: string) => {
-  const startDateKey = String(start || "").split("T")[0];
+  const startDateKey = toDateKey(start);
   if (!startDateKey) return 1;
-  const endDateKey = String(end || "").split("T")[0];
+  const endDateKey = toDateKey(end);
   const resolvedEndDateKey =
     endDateKey && endDateKey > startDateKey ? endDateKey : startDateKey;
   const startDate = new Date(`${startDateKey}T00:00:00`);
@@ -217,11 +225,13 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
       const isHoliday = event.eventType === "holiday";
       const inclusiveSpanDays = getInclusiveSpanDays(event.start, event.end);
       const isMultiDayRange = inclusiveSpanDays > 1;
+      const startDateKey = toDateKey(event.start);
       return {
         id: event.id,
         title: event.title,
-        start: event.start,
+        start: startDateKey || event.start,
         end: toExclusiveEnd(event.start, event.end),
+        allDay: true,
         backgroundColor: isHoliday ? "#ef4444" : meta.color,
         borderColor: isHoliday ? "#ef4444" : meta.color,
         textColor: isHoliday ? "#ffffff" : undefined,
@@ -245,7 +255,7 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
   const holidayDateSet = useMemo(() => {
     const set = new Set<string>();
     events.forEach((event) => {
-      if (event.eventType === "holiday") set.add(event.start);
+      if (event.eventType === "holiday") set.add(toDateKey(event.start));
     });
     return set;
   }, [events]);
@@ -373,14 +383,16 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
 
     const filtered = events
       .filter(
-        (event) =>
-          event.start >= visibleRange.start && event.start < visibleRange.end,
+        (event) => {
+          const dateKey = toDateKey(event.start);
+          return dateKey >= visibleRange.start && dateKey < visibleRange.end;
+        },
       )
       .sort(compareCalendarSchedule);
 
     const grouped = new Map<string, CalendarEvent[]>();
     filtered.forEach((event) => {
-      const key = event.start;
+      const key = toDateKey(event.start);
       const current = grouped.get(key) || [];
       current.push(event);
       grouped.set(key, current);
