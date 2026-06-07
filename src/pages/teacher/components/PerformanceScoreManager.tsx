@@ -14,6 +14,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { InlineLoading } from "../../../components/common/LoadingState";
+import { useAppDialog } from "../../../components/common/AppDialogProvider";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
@@ -1026,6 +1027,7 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
 const PerformanceScoreManager: React.FC = () => {
   const { config, currentUser } = useAuth();
   const { showToast } = useAppToast();
+  const { confirm } = useAppDialog();
   const { year, semester } = getYearSemester(config);
   const [title, setTitle] = useState("");
   const [subject, setSubject] = useState("");
@@ -1761,24 +1763,39 @@ const PerformanceScoreManager: React.FC = () => {
           ),
       );
       if (unsignedStudents.length > 0) {
-        const unsignedList = unsignedStudents
-          .slice(0, 50)
-          .map(
-            (student, index) =>
-              `${index + 1}. ${student.class}반 ${student.number}번 ${student.studentName}`,
-          )
-          .join("\n");
+        const visibleUnsignedStudents = unsignedStudents.slice(0, 50);
         const remaining = unsignedStudents.length - 50;
-        const message = [
-          `${classSheetClassFilter}반 서명 미완료 학생 ${unsignedStudents.length}명이 있습니다.`,
-          "그래도 일람표를 다운로드할까요?",
-          "",
-          unsignedList,
-          remaining > 0 ? `... 외 ${remaining}명` : "",
-        ]
-          .filter(Boolean)
-          .join("\n");
-        if (!window.confirm(message)) return;
+        const confirmed = await confirm({
+          tone: "warning",
+          title: `${classSheetClassFilter}반 서명 미완료 학생이 있습니다.`,
+          message: (
+            <div className="space-y-3">
+              <p>
+                서명 미완료 학생 {unsignedStudents.length}명이 있습니다. 그래도
+                일람표를 다운로드할까요?
+              </p>
+              <div className="max-h-64 overflow-y-auto rounded-lg border border-amber-100 bg-amber-50/70 px-3 py-2">
+                <ol className="space-y-1 text-sm font-bold text-amber-950">
+                  {visibleUnsignedStudents.map((student, index) => (
+                    <li
+                      key={`${student.class}-${student.number}-${student.uid || student.studentName}`}
+                    >
+                      {index + 1}. {student.class}반 {student.number}번{" "}
+                      {student.studentName}
+                    </li>
+                  ))}
+                </ol>
+                {remaining > 0 && (
+                  <div className="mt-2 text-xs font-black text-amber-700">
+                    외 {remaining}명
+                  </div>
+                )}
+              </div>
+            </div>
+          ),
+          confirmLabel: "그래도 다운로드",
+        });
+        if (!confirmed) return;
       }
 
       const exportParams = {
