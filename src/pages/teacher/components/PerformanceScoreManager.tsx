@@ -5770,7 +5770,7 @@ const PerformanceScoreManager: React.FC = () => {
             role="dialog"
             aria-modal="true"
             aria-labelledby="performance-score-objections-title"
-            className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
+            className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
           >
             <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
