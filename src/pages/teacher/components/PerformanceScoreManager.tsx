@@ -1226,6 +1226,13 @@ const buildScoreListRecordFromRosterRow = (
   scoreDocumentExists: false,
 });
 
+const buildScoreListRecordsFromRosterRows = (roster: PerformanceScoreRoster) =>
+  sortStudentIdentityRows(
+    (roster.rows || [])
+      .filter((row) => rosterRowHasScore(row))
+      .map((row) => buildScoreListRecordFromRosterRow(roster, row)),
+  );
+
 const buildScoreListRecordFromDocument = (
   id: string,
   data: PerformanceScoreRecord,
@@ -3652,14 +3659,13 @@ const PerformanceScoreManager: React.FC = () => {
           });
           return;
         }
-        const [firstRecords, secondRecords] = await Promise.all([
-          loadScoreRecordsForRoster(firstRoster),
-          loadScoreRecordsForRoster(secondRoster),
-        ]);
-        const summaryStudents = buildScoreListSummaryStudents(
-          firstRecords,
-          secondRecords,
-        );
+        const summaryStudents =
+          scoreListSummaryReady && scoreListSummaryStudents.length > 0
+            ? scoreListSummaryStudents
+            : buildScoreListSummaryStudents(
+                buildScoreListRecordsFromRosterRows(firstRoster),
+                buildScoreListRecordsFromRosterRows(secondRoster),
+              );
         const combinedStatsRecords = buildCombinedScoreStatsRecords(
           summaryStudents,
           {
@@ -3671,6 +3677,7 @@ const PerformanceScoreManager: React.FC = () => {
           },
         );
         setScoreListSummaryStudents(summaryStudents);
+        setScoreListLoadedRosterId(SCORE_LIST_ALL_ROSTERS_VALUE);
         setScoreStatsRecords(combinedStatsRecords);
         setScoreStatsLoadedRosterId(SCORE_LIST_ALL_ROSTERS_VALUE);
         return;
