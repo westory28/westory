@@ -109,6 +109,8 @@ const CLASS_SHEET_FOOTER_SCHOOL_END_COLUMN = 16;
 const XLSX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const SCORE_LIST_ALL_ROSTERS_VALUE = "__all_performance_scores__";
+const SCORE_LIST_FIRST_SUMMARY_LABEL = "고조선 8조법";
+const SCORE_LIST_SECOND_SUMMARY_LABEL = "삼국 시대";
 
 const ASSESSMENT_PRESETS: Record<
   UploadAssessmentPresetKey,
@@ -1458,15 +1460,39 @@ const getClassSheetSummaryScore = (
   record?: PerformanceScoreRecord,
 ) => (isClassSheetTransferredStudent(student) ? null : getScoreNumber(record));
 
-const getScoreListSummaryScoreLabel = (record?: PerformanceScoreRecord) => {
+const getScoreListSummaryTotalOnlyLabel = (
+  record?: PerformanceScoreRecord,
+  forceTransferred = false,
+) => {
+  if (forceTransferred || isTransferredScoreRecord(record)) {
+    return TRANSFERRED_LABEL;
+  }
   if (!record) return "-";
-  if (isTransferredScoreRecord(record)) return TRANSFERRED_LABEL;
   const score = getEnteredTotalScore(record);
-  if (score === null) return "-";
-  const maxScore = getRecordTotalMaxScore(record);
-  return maxScore > 0
-    ? `${formatPerformanceScore(score)} / ${formatPerformanceScore(maxScore)}`
-    : `${formatPerformanceScore(score)}점`;
+  return score === null ? "-" : formatPerformanceScore(score);
+};
+
+const getScoreListCombinedTotalScore = (student: ClassSheetStudent) => {
+  if (isClassSheetTransferredStudent(student)) return null;
+  const firstScore = getEnteredTotalScore(student.firstRecord);
+  const secondScore = getEnteredTotalScore(student.secondRecord);
+  return firstScore !== null || secondScore !== null
+    ? roundScore((firstScore ?? 0) + (secondScore ?? 0))
+    : null;
+};
+
+const getScoreListCombinedTotalLabel = (student: ClassSheetStudent) => {
+  if (isClassSheetTransferredStudent(student)) return TRANSFERRED_LABEL;
+  const totalScore = getScoreListCombinedTotalScore(student);
+  return totalScore === null ? "-" : formatPerformanceScore(totalScore);
+};
+
+const formatScoreListSummaryAssessmentLabel = (
+  label: string,
+  maxScore?: number | null,
+) => {
+  const formattedMaxScore = formatPerformanceScore(maxScore);
+  return formattedMaxScore === "-" ? label : `${label}(${formattedMaxScore})`;
 };
 
 const getClassSheetTotalScoreCellValue = (student: ClassSheetStudent) => {
@@ -2563,7 +2589,9 @@ const PerformanceScoreManager: React.FC = () => {
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [uploadAssessmentPreset, setUploadAssessmentPreset] =
     useState<UploadAssessmentPresetKey>("first");
-  const [scoreListRosterId, setScoreListRosterId] = useState("");
+  const [scoreListRosterId, setScoreListRosterId] = useState(
+    SCORE_LIST_ALL_ROSTERS_VALUE,
+  );
   const [scoreListLoadedRosterId, setScoreListLoadedRosterId] = useState("");
   const [scoreListGradeFilter, setScoreListGradeFilter] = useState("all");
   const [scoreListClassFilter, setScoreListClassFilter] = useState("all");
@@ -2631,13 +2659,15 @@ const PerformanceScoreManager: React.FC = () => {
   }, [year, semester]);
 
   useEffect(() => {
-    setScoreListRosterId((current) =>
-      current === SCORE_LIST_ALL_ROSTERS_VALUE && rosters.length > 0
-        ? current
-        : current && rosters.some((roster) => roster.id === current)
-          ? current
-          : rosters[0]?.id || "",
-    );
+    setScoreListRosterId((current) => {
+      if (
+        current === SCORE_LIST_ALL_ROSTERS_VALUE ||
+        (current && rosters.some((roster) => roster.id === current))
+      ) {
+        return current;
+      }
+      return rosters.length > 0 ? SCORE_LIST_ALL_ROSTERS_VALUE : "";
+    });
   }, [rosters]);
 
   useEffect(() => {
@@ -2779,6 +2809,32 @@ const PerformanceScoreManager: React.FC = () => {
       secondRoster: secondAssessmentRosterOptions[0],
     }),
     [firstAssessmentRosterOptions, secondAssessmentRosterOptions],
+  );
+  const firstScoreListSummaryMaxScore = getFiniteNumber(
+    scoreListSummaryRosters.firstRoster?.totalMaxScore,
+  );
+  const secondScoreListSummaryMaxScore = getFiniteNumber(
+    scoreListSummaryRosters.secondRoster?.totalMaxScore,
+  );
+  const combinedScoreListSummaryMaxScore =
+    firstScoreListSummaryMaxScore !== null ||
+    secondScoreListSummaryMaxScore !== null
+      ? roundScore(
+          (firstScoreListSummaryMaxScore ?? 0) +
+            (secondScoreListSummaryMaxScore ?? 0),
+        )
+      : null;
+  const firstScoreListSummaryHeader = formatScoreListSummaryAssessmentLabel(
+    SCORE_LIST_FIRST_SUMMARY_LABEL,
+    firstScoreListSummaryMaxScore,
+  );
+  const secondScoreListSummaryHeader = formatScoreListSummaryAssessmentLabel(
+    SCORE_LIST_SECOND_SUMMARY_LABEL,
+    secondScoreListSummaryMaxScore,
+  );
+  const combinedScoreListSummaryHeader = formatScoreListSummaryAssessmentLabel(
+    "수행평가 총점",
+    combinedScoreListSummaryMaxScore,
   );
 
   useEffect(() => {
@@ -7132,25 +7188,13 @@ const PerformanceScoreManager: React.FC = () => {
                         ? `${activeScoreListClass}반 ${filteredScoreListSummaryStudents.length}명 표시`
                         : `${filteredScoreListSummaryStudents.length}명 표시`}{" "}
                       · 명단 {scoreListSummaryStudents.length}명 ·{" "}
-                      {scoreListSummaryRosters.firstRoster?.title ||
-                        "고조선 8조법"}{" "}
-                      만점{" "}
-                      {formatPerformanceScore(
-                        scoreListSummaryRosters.firstRoster?.totalMaxScore,
-                      )}
-                      점 ·{" "}
-                      {scoreListSummaryRosters.secondRoster?.title ||
-                        "삼국 시대 무덤"}{" "}
-                      만점{" "}
-                      {formatPerformanceScore(
-                        scoreListSummaryRosters.secondRoster?.totalMaxScore,
-                      )}
-                      점
+                      {firstScoreListSummaryHeader} ·{" "}
+                      {secondScoreListSummaryHeader}
                     </p>
                   </div>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[760px] text-left text-sm">
+                  <table className="w-full min-w-[880px] text-left text-sm">
                     <thead className="bg-slate-50 text-xs font-black text-slate-500">
                       <tr>
                         <th className="whitespace-nowrap px-3 py-3">학년</th>
@@ -7158,10 +7202,13 @@ const PerformanceScoreManager: React.FC = () => {
                         <th className="whitespace-nowrap px-3 py-3">번호</th>
                         <th className="whitespace-nowrap px-3 py-3">이름</th>
                         <th className="whitespace-nowrap px-3 py-3 text-right">
-                          고조선 8조법 총점
+                          {firstScoreListSummaryHeader}
                         </th>
                         <th className="whitespace-nowrap px-3 py-3 text-right">
-                          삼국 시대 무덤 총점
+                          {secondScoreListSummaryHeader}
+                        </th>
+                        <th className="whitespace-nowrap px-3 py-3 text-right">
+                          {combinedScoreListSummaryHeader}
                         </th>
                       </tr>
                     </thead>
@@ -7169,7 +7216,7 @@ const PerformanceScoreManager: React.FC = () => {
                       {filteredScoreListSummaryStudents.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={6}
+                            colSpan={7}
                             className="px-4 py-10 text-center text-sm font-bold text-slate-400"
                           >
                             조건에 맞는 학생 점수가 없습니다.
@@ -7178,12 +7225,16 @@ const PerformanceScoreManager: React.FC = () => {
                       ) : (
                         filteredScoreListSummaryStudents.map((student) => {
                           const studentKey = getClassSheetStudentKey(student);
-                          const firstTransferred = isTransferredScoreRecord(
+                          const transferredStudent =
+                            isClassSheetTransferredStudent(student);
+                          const firstRecordAvailable = Boolean(
                             student.firstRecord,
                           );
-                          const secondTransferred = isTransferredScoreRecord(
+                          const secondRecordAvailable = Boolean(
                             student.secondRecord,
                           );
+                          const combinedTotalScore =
+                            getScoreListCombinedTotalScore(student);
                           return (
                             <tr key={studentKey}>
                               <td className="whitespace-nowrap px-3 py-3 font-bold text-slate-600">
@@ -7200,29 +7251,42 @@ const PerformanceScoreManager: React.FC = () => {
                               </td>
                               <td
                                 className={`whitespace-nowrap px-3 py-3 text-right font-black ${
-                                  firstTransferred
+                                  transferredStudent
                                     ? "text-rose-600"
-                                    : student.firstRecord
+                                    : firstRecordAvailable
                                       ? "text-blue-700"
                                       : "text-slate-400"
                                 }`}
                               >
-                                {getScoreListSummaryScoreLabel(
+                                {getScoreListSummaryTotalOnlyLabel(
                                   student.firstRecord,
+                                  transferredStudent,
                                 )}
                               </td>
                               <td
                                 className={`whitespace-nowrap px-3 py-3 text-right font-black ${
-                                  secondTransferred
+                                  transferredStudent
                                     ? "text-rose-600"
-                                    : student.secondRecord
+                                    : secondRecordAvailable
                                       ? "text-blue-700"
                                       : "text-slate-400"
                                 }`}
                               >
-                                {getScoreListSummaryScoreLabel(
+                                {getScoreListSummaryTotalOnlyLabel(
                                   student.secondRecord,
+                                  transferredStudent,
                                 )}
+                              </td>
+                              <td
+                                className={`whitespace-nowrap px-3 py-3 text-right text-xl font-black ${
+                                  transferredStudent
+                                    ? "text-rose-600"
+                                    : combinedTotalScore !== null
+                                      ? "text-blue-700"
+                                      : "text-slate-400"
+                                }`}
+                              >
+                                {getScoreListCombinedTotalLabel(student)}
                               </td>
                             </tr>
                           );
