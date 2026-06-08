@@ -6160,6 +6160,9 @@ const PerformanceScoreManager: React.FC = () => {
                           </tr>
                         ) : (
                           classSheetPreviewStudents.map((student) => {
+                            const transferredStudent =
+                              isTransferredScoreRecord(student.firstRecord) ||
+                              isTransferredScoreRecord(student.secondRecord);
                             const firstScore = getScoreNumber(
                               student.firstRecord,
                             );
@@ -6225,30 +6228,51 @@ const PerformanceScoreManager: React.FC = () => {
                                 </td>
                                 <td className="whitespace-nowrap px-3 py-3 font-black text-slate-900">
                                   {student.studentName || "(이름 없음)"}
+                                  {transferredStudent && (
+                                    <span className="ml-1 text-xs font-black text-rose-600">
+                                      [{TRANSFERRED_LABEL}]
+                                    </span>
+                                  )}
                                 </td>
                                 <td className="whitespace-nowrap px-3 py-3 text-right font-bold text-slate-700">
-                                  {firstScore === null
-                                    ? "-"
-                                    : formatPerformanceScore(firstScore)}
-                                  <span className="ml-1 text-slate-400">
-                                    /{" "}
-                                    {formatPerformanceScore(
-                                      summaryExportRosters.firstRoster
-                                        ?.totalMaxScore,
-                                    )}
-                                  </span>
+                                  {transferredStudent ? (
+                                    <span className="font-black text-rose-600">
+                                      {TRANSFERRED_LABEL}
+                                    </span>
+                                  ) : (
+                                    <>
+                                      {firstScore === null
+                                        ? "-"
+                                        : formatPerformanceScore(firstScore)}
+                                      <span className="ml-1 text-slate-400">
+                                        /{" "}
+                                        {formatPerformanceScore(
+                                          summaryExportRosters.firstRoster
+                                            ?.totalMaxScore,
+                                        )}
+                                      </span>
+                                    </>
+                                  )}
                                 </td>
                                 <td className="whitespace-nowrap px-3 py-3 text-right font-bold text-slate-700">
-                                  {secondScore === null
-                                    ? "-"
-                                    : formatPerformanceScore(secondScore)}
-                                  <span className="ml-1 text-slate-400">
-                                    /{" "}
-                                    {formatPerformanceScore(
-                                      summaryExportRosters.secondRoster
-                                        ?.totalMaxScore,
-                                    )}
-                                  </span>
+                                  {transferredStudent ? (
+                                    <span className="font-black text-rose-600">
+                                      {TRANSFERRED_LABEL}
+                                    </span>
+                                  ) : (
+                                    <>
+                                      {secondScore === null
+                                        ? "-"
+                                        : formatPerformanceScore(secondScore)}
+                                      <span className="ml-1 text-slate-400">
+                                        /{" "}
+                                        {formatPerformanceScore(
+                                          summaryExportRosters.secondRoster
+                                            ?.totalMaxScore,
+                                        )}
+                                      </span>
+                                    </>
+                                  )}
                                 </td>
                                 <td className="whitespace-nowrap px-3 py-3 text-right font-black text-blue-700">
                                   {totalScore === null
