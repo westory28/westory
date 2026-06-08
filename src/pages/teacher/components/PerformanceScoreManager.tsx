@@ -108,6 +108,7 @@ const CLASS_SHEET_FOOTER_SCHOOL_START_COLUMN = 15;
 const CLASS_SHEET_FOOTER_SCHOOL_END_COLUMN = 16;
 const XLSX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const SCORE_LIST_ALL_ROSTERS_VALUE = "__all_performance_scores__";
 
 const ASSESSMENT_PRESETS: Record<
   UploadAssessmentPresetKey,
@@ -846,6 +847,63 @@ const compareSchoolValue = (a: unknown, b: unknown) => {
   });
 };
 
+const sortStudentIdentityRows = <
+  T extends {
+    grade: string;
+    class: string;
+    number: string;
+    studentName: string;
+  },
+>(
+  rows: T[],
+) =>
+  [...rows].sort(
+    (a, b) =>
+      compareSchoolValue(a.grade, b.grade) ||
+      compareSchoolValue(a.class, b.class) ||
+      compareSchoolValue(a.number, b.number) ||
+      String(a.studentName || "").localeCompare(
+        String(b.studentName || ""),
+        "ko",
+        { numeric: true },
+      ),
+  );
+
+const buildScoreListSummaryStudents = (
+  firstRecords: PerformanceScoreRecord[],
+  secondRecords: PerformanceScoreRecord[],
+) => {
+  const studentMap = new Map<string, ClassSheetStudent>();
+  const addRecord = (
+    record: PerformanceScoreRecord,
+    slot: "firstRecord" | "secondRecord",
+  ) => {
+    const key =
+      record.uid ||
+      buildStudentLookupKey(record.grade, record.class, record.number);
+    const current = studentMap.get(key) || {
+      uid: record.uid,
+      grade: record.grade,
+      class: record.class,
+      number: record.number,
+      studentName: record.studentName,
+    };
+    studentMap.set(key, {
+      ...current,
+      uid: current.uid || record.uid,
+      grade: current.grade || record.grade,
+      class: current.class || record.class,
+      number: current.number || record.number,
+      studentName: current.studentName || record.studentName,
+      [slot]: record,
+    });
+  };
+
+  firstRecords.forEach((record) => addRecord(record, "firstRecord"));
+  secondRecords.forEach((record) => addRecord(record, "secondRecord"));
+  return sortStudentIdentityRows(Array.from(studentMap.values()));
+};
+
 const compareNullableNumber = (a: number | null, b: number | null) => {
   if (a === null && b === null) return 0;
   if (a === null) return 1;
@@ -1382,6 +1440,17 @@ const getScoreNumber = (record?: PerformanceScoreRecord) => {
 
 const getClassSheetScoreCellValue = (record?: PerformanceScoreRecord) =>
   isTransferredScoreRecord(record) ? TRANSFERRED_LABEL : getScoreNumber(record);
+
+const getScoreListSummaryScoreLabel = (record?: PerformanceScoreRecord) => {
+  if (!record) return "-";
+  if (isTransferredScoreRecord(record)) return TRANSFERRED_LABEL;
+  const score = getEnteredTotalScore(record);
+  if (score === null) return "-";
+  const maxScore = getRecordTotalMaxScore(record);
+  return maxScore > 0
+    ? `${formatPerformanceScore(score)} / ${formatPerformanceScore(maxScore)}`
+    : `${formatPerformanceScore(score)}점`;
+};
 
 const getClassSheetTotalScoreCellValue = (student: ClassSheetStudent) => {
   if (
@@ -2461,6 +2530,9 @@ const PerformanceScoreManager: React.FC = () => {
   const [scoreListRecords, setScoreListRecords] = useState<ScoreListRecord[]>(
     [],
   );
+  const [scoreListSummaryStudents, setScoreListSummaryStudents] = useState<
+    ClassSheetStudent[]
+  >([]);
   const [scoreListLoading, setScoreListLoading] = useState(false);
   const [scoreListLoadError, setScoreListLoadError] = useState("");
   const [scoreEditing, setScoreEditing] = useState(false);
@@ -2518,9 +2590,11 @@ const PerformanceScoreManager: React.FC = () => {
 
   useEffect(() => {
     setScoreListRosterId((current) =>
-      current && rosters.some((roster) => roster.id === current)
+      current === SCORE_LIST_ALL_ROSTERS_VALUE && rosters.length > 0
         ? current
-        : rosters[0]?.id || "",
+        : current && rosters.some((roster) => roster.id === current)
+          ? current
+          : rosters[0]?.id || "",
     );
   }, [rosters]);
 
@@ -2655,6 +2729,15 @@ const PerformanceScoreManager: React.FC = () => {
     () => rosters.find((roster) => roster.id === scoreListRosterId) || null,
     [rosters, scoreListRosterId],
   );
+  const scoreListAllSelected =
+    scoreListRosterId === SCORE_LIST_ALL_ROSTERS_VALUE;
+  const scoreListSummaryRosters = useMemo(
+    () => ({
+      firstRoster: firstAssessmentRosterOptions[0],
+      secondRoster: secondAssessmentRosterOptions[0],
+    }),
+    [firstAssessmentRosterOptions, secondAssessmentRosterOptions],
+  );
 
   useEffect(() => {
     setClassSheetFirstRosterId((current) => {
@@ -2706,18 +2789,31 @@ const PerformanceScoreManager: React.FC = () => {
   }, [rosters]);
   const scoreListClassOptions = useMemo(() => {
     const values = new Set<string>();
-    (selectedScoreRoster?.classes || []).forEach((classValue) => {
-      if (classValue) values.add(classValue);
-    });
-    (selectedScoreRoster?.rows || []).forEach((row) => {
-      if (row.class) values.add(row.class);
+    const sourceRosters = scoreListAllSelected
+      ? [
+          scoreListSummaryRosters.firstRoster,
+          scoreListSummaryRosters.secondRoster,
+        ]
+      : [selectedScoreRoster];
+    sourceRosters.filter(Boolean).forEach((roster) => {
+      (roster?.classes || []).forEach((classValue) => {
+        if (classValue) values.add(classValue);
+      });
+      (roster?.rows || []).forEach((row) => {
+        if (row.class) values.add(row.class);
+      });
     });
     return Array.from(values).sort(
       (a, b) => Number(a) - Number(b) || a.localeCompare(b, "ko"),
     );
-  }, [selectedScoreRoster]);
+  }, [scoreListAllSelected, scoreListSummaryRosters, selectedScoreRoster]);
   const scoreListReady =
-    !!selectedScoreRoster && scoreListLoadedRosterId === selectedScoreRoster.id;
+    !scoreListAllSelected &&
+    !!selectedScoreRoster &&
+    scoreListLoadedRosterId === selectedScoreRoster.id;
+  const scoreListSummaryReady =
+    scoreListAllSelected &&
+    scoreListLoadedRosterId === SCORE_LIST_ALL_ROSTERS_VALUE;
   const scoreListBaseRecords = useMemo(() => {
     if (!scoreListReady) return [];
     const searchKey = normalizeStudentName(scoreListSearch).toLocaleLowerCase();
@@ -2733,16 +2829,44 @@ const PerformanceScoreManager: React.FC = () => {
       return gradeMatched && searchMatched;
     });
   }, [scoreListGradeFilter, scoreListReady, scoreListRecords, scoreListSearch]);
+  const scoreListSummaryBaseStudents = useMemo(() => {
+    if (!scoreListSummaryReady) return [];
+    const searchKey = normalizeStudentName(scoreListSearch).toLocaleLowerCase();
+    return scoreListSummaryStudents.filter((student) => {
+      const gradeMatched =
+        scoreListGradeFilter === "all" ||
+        normalizeSchoolValue(student.grade) ===
+          normalizeSchoolValue(scoreListGradeFilter);
+      const identityKey = normalizeStudentName(
+        `${student.studentName} ${student.class}반 ${student.number}번`,
+      ).toLocaleLowerCase();
+      const searchMatched = !searchKey || identityKey.includes(searchKey);
+      return gradeMatched && searchMatched;
+    });
+  }, [
+    scoreListGradeFilter,
+    scoreListSearch,
+    scoreListSummaryReady,
+    scoreListSummaryStudents,
+  ]);
   const scoreListClassPageOptions = useMemo(() => {
     if (scoreListClassFilter !== "all") return [scoreListClassFilter];
     const values = new Set<string>();
-    scoreListBaseRecords.forEach((record) => {
+    const sourceRows = scoreListSummaryReady
+      ? scoreListSummaryBaseStudents
+      : scoreListBaseRecords;
+    sourceRows.forEach((record) => {
       if (record.class) values.add(record.class);
     });
     return Array.from(values).sort(
       (a, b) => Number(a) - Number(b) || a.localeCompare(b, "ko"),
     );
-  }, [scoreListBaseRecords, scoreListClassFilter]);
+  }, [
+    scoreListBaseRecords,
+    scoreListClassFilter,
+    scoreListSummaryBaseStudents,
+    scoreListSummaryReady,
+  ]);
   const scoreListClassTotalPages = Math.max(
     1,
     scoreListClassPageOptions.length,
@@ -2763,6 +2887,18 @@ const PerformanceScoreManager: React.FC = () => {
         normalizeSchoolValue(activeScoreListClass),
     );
   }, [activeScoreListClass, scoreListBaseRecords, scoreListReady]);
+  const filteredScoreListSummaryStudents = useMemo(() => {
+    if (!scoreListSummaryReady || !activeScoreListClass) return [];
+    return scoreListSummaryBaseStudents.filter(
+      (student) =>
+        normalizeSchoolValue(student.class) ===
+        normalizeSchoolValue(activeScoreListClass),
+    );
+  }, [
+    activeScoreListClass,
+    scoreListSummaryBaseStudents,
+    scoreListSummaryReady,
+  ]);
   const sortedFilteredScoreListRecords = useMemo(
     () => sortScoreListRecords(filteredScoreListRecords, scoreListSort),
     [filteredScoreListRecords, scoreListSort],
@@ -3120,6 +3256,7 @@ const PerformanceScoreManager: React.FC = () => {
       setScoreListRosterId("");
       setScoreListLoadedRosterId("");
       setScoreListRecords([]);
+      setScoreListSummaryStudents([]);
       setScoreEditing(false);
       setScoreEditOriginalRecords([]);
       setScoreListLoadError("저장된 수행평가 점수표를 불러오지 못했습니다.");
@@ -3133,62 +3270,91 @@ const PerformanceScoreManager: React.FC = () => {
     }
   };
 
+  const loadScoreRecordsForRoster = async (roster: PerformanceScoreRoster) => {
+    const rosterRows = roster.rows || [];
+    const linkedRows = rosterRows.filter((row) => row.uid);
+    const loaded: ScoreListRecord[] = [];
+    for (let index = 0; index < linkedRows.length; index += 40) {
+      const chunk = linkedRows.slice(index, index + 40);
+      const snaps = await Promise.all(
+        chunk.map((row) =>
+          getDoc(
+            doc(
+              db,
+              "users",
+              row.uid,
+              PERFORMANCE_SCORE_USER_COLLECTION,
+              roster.id,
+            ),
+          ),
+        ),
+      );
+      snaps.forEach((snap, rowIndex) => {
+        const row = chunk[rowIndex];
+        if (snap.exists()) {
+          const data = snap.data() as PerformanceScoreRecord;
+          loaded.push(buildScoreListRecordFromDocument(snap.id, data));
+          return;
+        }
+        loaded.push(buildScoreListRecordFromRosterRow(roster, row));
+      });
+    }
+    rosterRows
+      .filter((row) => !row.uid && rosterRowHasScore(row))
+      .forEach((row) => {
+        loaded.push(buildScoreListRecordFromRosterRow(roster, row));
+      });
+    return sortStudentIdentityRows(loaded);
+  };
+
   const loadScoreListRecords = async (
     rosterOverride?: PerformanceScoreRoster,
     options: { startEdit?: boolean } = {},
   ) => {
     const roster = rosterOverride || selectedScoreRoster;
-    if (!roster || scoreListLoading || savingScoreEdits) return;
+    const loadingAllScores = !rosterOverride && scoreListAllSelected;
+    if (
+      scoreListLoading ||
+      savingScoreEdits ||
+      (!loadingAllScores && !roster)
+    ) {
+      return;
+    }
     setScoreListLoading(true);
     setScoreListLoadError("");
     setScoreEditing(false);
     setScoreEditOriginalRecords([]);
     setScoreListLoadedRosterId("");
     setScoreListRecords([]);
+    setScoreListSummaryStudents([]);
     try {
-      const rosterRows = roster.rows || [];
-      const linkedRows = rosterRows.filter((row) => row.uid);
-      const loaded: ScoreListRecord[] = [];
-      for (let index = 0; index < linkedRows.length; index += 40) {
-        const chunk = linkedRows.slice(index, index + 40);
-        const snaps = await Promise.all(
-          chunk.map((row) =>
-            getDoc(
-              doc(
-                db,
-                "users",
-                row.uid,
-                PERFORMANCE_SCORE_USER_COLLECTION,
-                roster.id,
-              ),
-            ),
-          ),
+      if (loadingAllScores) {
+        const { firstRoster, secondRoster } = scoreListSummaryRosters;
+        if (!firstRoster || !secondRoster) {
+          setScoreListLoadError(
+            "전체 조회는 고조선 8조법과 삼국 시대 무덤 수행평가 점수표가 모두 필요합니다.",
+          );
+          showToast({
+            tone: "warning",
+            title: "전체 조회를 할 수 없습니다.",
+            message:
+              "고조선 8조법과 삼국 시대 무덤 수행평가 점수표를 모두 업로드한 뒤 다시 조회해 주세요.",
+          });
+          return;
+        }
+        const [firstRecords, secondRecords] = await Promise.all([
+          loadScoreRecordsForRoster(firstRoster),
+          loadScoreRecordsForRoster(secondRoster),
+        ]);
+        setScoreListSummaryStudents(
+          buildScoreListSummaryStudents(firstRecords, secondRecords),
         );
-        snaps.forEach((snap, rowIndex) => {
-          const row = chunk[rowIndex];
-          if (snap.exists()) {
-            const data = snap.data() as PerformanceScoreRecord;
-            loaded.push(buildScoreListRecordFromDocument(snap.id, data));
-            return;
-          }
-          loaded.push(buildScoreListRecordFromRosterRow(roster, row));
-        });
+        setScoreListLoadedRosterId(SCORE_LIST_ALL_ROSTERS_VALUE);
+        return;
       }
-      rosterRows
-        .filter((row) => !row.uid && rosterRowHasScore(row))
-        .forEach((row) => {
-          loaded.push(buildScoreListRecordFromRosterRow(roster, row));
-        });
-      const sortedLoaded = sortPerformanceScoreRecords(loaded).sort(
-        (a, b) =>
-          Number(a.grade) - Number(b.grade) ||
-          Number(a.class) - Number(b.class) ||
-          Number(a.number) - Number(b.number) ||
-          String(a.studentName || "").localeCompare(
-            String(b.studentName || ""),
-            "ko",
-          ),
-      );
+
+      if (!roster) return;
+      const sortedLoaded = await loadScoreRecordsForRoster(roster);
       setScoreListRecords(sortedLoaded);
       setScoreListLoadedRosterId(roster.id);
       if (options.startEdit) {
@@ -3199,6 +3365,7 @@ const PerformanceScoreManager: React.FC = () => {
       console.error("Failed to load performance score list:", error);
       setScoreListLoadedRosterId("");
       setScoreListRecords([]);
+      setScoreListSummaryStudents([]);
       setScoreEditing(false);
       setScoreEditOriginalRecords([]);
       setScoreListLoadError("점수 목록을 불러오지 못했습니다.");
@@ -4697,18 +4864,8 @@ const PerformanceScoreManager: React.FC = () => {
       setScoreListGradeFilter("all");
       setScoreListClassFilter("all");
       setScoreListSearch("");
-      setScoreListRecords(
-        sortPerformanceScoreRecords(savedScoreRecords).sort(
-          (a, b) =>
-            Number(a.grade) - Number(b.grade) ||
-            Number(a.class) - Number(b.class) ||
-            Number(a.number) - Number(b.number) ||
-            String(a.studentName || "").localeCompare(
-              String(b.studentName || ""),
-              "ko",
-            ),
-        ),
-      );
+      setScoreListSummaryStudents([]);
+      setScoreListRecords(sortStudentIdentityRows(savedScoreRecords));
       await loadRosters();
       showToast({
         tone: "success",
@@ -4766,9 +4923,10 @@ const PerformanceScoreManager: React.FC = () => {
           );
         });
       await batchQueue.commit();
-      if (scoreListRosterId === roster.id) {
+      if (scoreListRosterId === roster.id || scoreListAllSelected) {
         setScoreListLoadedRosterId("");
         setScoreListRecords([]);
+        setScoreListSummaryStudents([]);
         setScoreEditing(false);
         setScoreEditOriginalRecords([]);
       }
@@ -4800,6 +4958,7 @@ const PerformanceScoreManager: React.FC = () => {
     setScoreListRosterId(rosterId);
     setScoreListLoadedRosterId("");
     setScoreListRecords([]);
+    setScoreListSummaryStudents([]);
     setScoreListLoadError("");
     setScoreEditing(false);
     setScoreEditOriginalRecords([]);
@@ -4810,6 +4969,7 @@ const PerformanceScoreManager: React.FC = () => {
   const openRosterForEditing = async (roster: PerformanceScoreRoster) => {
     if (scoreListLoading || scoreEditing || savingScoreEdits) return;
     setScoreListRosterId(roster.id);
+    setScoreListSummaryStudents([]);
     setScoreListClassFilter("all");
     setScoreListClassPage(1);
     setScoreListSearch("");
@@ -6728,9 +6888,11 @@ const PerformanceScoreManager: React.FC = () => {
               disabled={scoreStatsButtonDisabled}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white px-4 text-sm font-black text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
               title={
-                scoreStatsButtonDisabled
-                  ? "저장된 수행평가 점수표가 있어야 통계를 확인할 수 있습니다."
-                  : "수행평가 통계 보기"
+                scoreListAllSelected
+                  ? "전체 조회에서는 개별 수행평가 통계가 비활성화됩니다."
+                  : scoreStatsButtonDisabled
+                    ? "저장된 수행평가 점수표가 있어야 통계를 확인할 수 있습니다."
+                    : "수행평가 통계 보기"
               }
             >
               <i className="fas fa-chart-column text-xs" aria-hidden="true" />
@@ -6812,6 +6974,7 @@ const PerformanceScoreManager: React.FC = () => {
                     disabled={scoreEditing || savingScoreEdits}
                     className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
                   >
+                    <option value={SCORE_LIST_ALL_ROSTERS_VALUE}>전체</option>
                     {rosters.map((roster) => (
                       <option key={roster.id} value={roster.id}>
                         {roster.title}
@@ -6879,7 +7042,7 @@ const PerformanceScoreManager: React.FC = () => {
                   type="button"
                   onClick={() => void loadScoreListRecords()}
                   disabled={
-                    !selectedScoreRoster ||
+                    (!scoreListAllSelected && !selectedScoreRoster) ||
                     scoreListLoading ||
                     scoreEditing ||
                     savingScoreEdits
@@ -6897,12 +7060,153 @@ const PerformanceScoreManager: React.FC = () => {
 
             {scoreListLoadError && (
               <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold leading-6 text-rose-700">
-                {scoreListLoadError} 다시 조회하기 전에는 점수 수정이
-                비활성화됩니다.
+                {scoreListLoadError}
+                {!scoreListAllSelected &&
+                  " 다시 조회하기 전에는 점수 수정이 비활성화됩니다."}
               </div>
             )}
 
-            {scoreListReady ? (
+            {scoreListSummaryReady ? (
+              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="min-w-0">
+                    <h4 className="truncate text-base font-black text-slate-900">
+                      전체 수행평가 총점
+                    </h4>
+                    <p className="mt-1 text-xs font-bold text-slate-500">
+                      {activeScoreListClass
+                        ? `${activeScoreListClass}반 ${filteredScoreListSummaryStudents.length}명 표시`
+                        : `${filteredScoreListSummaryStudents.length}명 표시`}{" "}
+                      · 명단 {scoreListSummaryStudents.length}명 ·{" "}
+                      {scoreListSummaryRosters.firstRoster?.title ||
+                        "고조선 8조법"}{" "}
+                      만점{" "}
+                      {formatPerformanceScore(
+                        scoreListSummaryRosters.firstRoster?.totalMaxScore,
+                      )}
+                      점 ·{" "}
+                      {scoreListSummaryRosters.secondRoster?.title ||
+                        "삼국 시대 무덤"}{" "}
+                      만점{" "}
+                      {formatPerformanceScore(
+                        scoreListSummaryRosters.secondRoster?.totalMaxScore,
+                      )}
+                      점
+                    </p>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[760px] text-left text-sm">
+                    <thead className="bg-slate-50 text-xs font-black text-slate-500">
+                      <tr>
+                        <th className="whitespace-nowrap px-3 py-3">학년</th>
+                        <th className="whitespace-nowrap px-3 py-3">반</th>
+                        <th className="whitespace-nowrap px-3 py-3">번호</th>
+                        <th className="whitespace-nowrap px-3 py-3">이름</th>
+                        <th className="whitespace-nowrap px-3 py-3 text-right">
+                          고조선 8조법 총점
+                        </th>
+                        <th className="whitespace-nowrap px-3 py-3 text-right">
+                          삼국 시대 무덤 총점
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {filteredScoreListSummaryStudents.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={6}
+                            className="px-4 py-10 text-center text-sm font-bold text-slate-400"
+                          >
+                            조건에 맞는 학생 점수가 없습니다.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredScoreListSummaryStudents.map((student) => {
+                          const studentKey = getClassSheetStudentKey(student);
+                          const firstTransferred = isTransferredScoreRecord(
+                            student.firstRecord,
+                          );
+                          const secondTransferred = isTransferredScoreRecord(
+                            student.secondRecord,
+                          );
+                          return (
+                            <tr key={studentKey}>
+                              <td className="whitespace-nowrap px-3 py-3 font-bold text-slate-600">
+                                {student.grade}학년
+                              </td>
+                              <td className="whitespace-nowrap px-3 py-3 font-bold text-slate-600">
+                                {student.class}반
+                              </td>
+                              <td className="whitespace-nowrap px-3 py-3 font-bold text-slate-600">
+                                {student.number}번
+                              </td>
+                              <td className="whitespace-nowrap px-3 py-3 font-black text-slate-900">
+                                {student.studentName || "(이름 없음)"}
+                              </td>
+                              <td
+                                className={`whitespace-nowrap px-3 py-3 text-right font-black ${
+                                  firstTransferred
+                                    ? "text-rose-600"
+                                    : student.firstRecord
+                                      ? "text-blue-700"
+                                      : "text-slate-400"
+                                }`}
+                              >
+                                {getScoreListSummaryScoreLabel(
+                                  student.firstRecord,
+                                )}
+                              </td>
+                              <td
+                                className={`whitespace-nowrap px-3 py-3 text-right font-black ${
+                                  secondTransferred
+                                    ? "text-rose-600"
+                                    : student.secondRecord
+                                      ? "text-blue-700"
+                                      : "text-slate-400"
+                                }`}
+                              >
+                                {getScoreListSummaryScoreLabel(
+                                  student.secondRecord,
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                {scoreListClassFilter === "all" &&
+                  scoreListClassPageOptions.length > 1 && (
+                    <div className="flex flex-wrap items-center justify-center gap-1.5 border-t border-slate-100 px-4 py-3">
+                      {scoreListClassPageOptions.map((classValue, index) => {
+                        const page = index + 1;
+                        return (
+                          <button
+                            key={classValue}
+                            type="button"
+                            onClick={() => setScoreListClassPage(page)}
+                            className={`inline-flex h-9 min-w-9 items-center justify-center rounded-lg border px-3 text-xs font-black transition ${
+                              page === safeScoreListClassPage
+                                ? "border-blue-600 bg-blue-600 text-white"
+                                : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                            }`}
+                            aria-current={
+                              page === safeScoreListClassPage
+                                ? "page"
+                                : undefined
+                            }
+                            title={`${classValue}반`}
+                          >
+                            {classValue}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+              </div>
+            ) : scoreListReady ? (
               <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
                 <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
                   <div className="min-w-0">
