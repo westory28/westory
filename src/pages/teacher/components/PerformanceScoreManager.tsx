@@ -14,7 +14,10 @@ import {
   type WithFieldValue,
   writeBatch,
 } from "firebase/firestore";
-import { InlineLoading } from "../../../components/common/LoadingState";
+import {
+  InlineLoading,
+  LoadingOverlay,
+} from "../../../components/common/LoadingState";
 import { useAppDialog } from "../../../components/common/AppDialogProvider";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -4932,7 +4935,15 @@ const PerformanceScoreManager: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" aria-busy={savingScoreEdits || undefined}>
+      {savingScoreEdits && (
+        <LoadingOverlay
+          message="수행평가 점수표를 저장하는 중입니다."
+          detail="학생 점수와 전출 여부를 DB에 반영하고 있습니다."
+          warning="저장이 완료될 때까지 다른 버튼을 누르지 마세요."
+          zIndexClassName="z-[240]"
+        />
+      )}
       {uploadModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
           <section className="w-full max-w-2xl overflow-hidden rounded-xl bg-white shadow-2xl">
