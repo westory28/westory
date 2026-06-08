@@ -1485,8 +1485,12 @@ const getScoreListSummaryTotalOnlyLabel = (
 
 const getScoreListCombinedTotalScore = (student: ClassSheetStudent) => {
   if (isClassSheetTransferredStudent(student)) return null;
-  const firstScore = getEnteredTotalScore(student.firstRecord);
-  const secondScore = getEnteredTotalScore(student.secondRecord);
+  const firstScore = student.firstRecord
+    ? getEnteredTotalScore(student.firstRecord)
+    : null;
+  const secondScore = student.secondRecord
+    ? getEnteredTotalScore(student.secondRecord)
+    : null;
   return firstScore !== null || secondScore !== null
     ? roundScore((firstScore ?? 0) + (secondScore ?? 0))
     : null;
