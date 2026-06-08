@@ -6970,6 +6970,11 @@ const PerformanceScoreManager: React.FC = () => {
                   <table className="w-full min-w-[1080px] text-left text-sm">
                     <thead className="bg-slate-50 text-xs font-black text-slate-500">
                       <tr>
+                        {scoreEditing && (
+                          <th className="w-14 whitespace-nowrap px-3 py-3 text-center">
+                            전출
+                          </th>
+                        )}
                         {renderScoreListHeader("grade", "학년")}
                         {renderScoreListHeader("class", "반")}
                         {renderScoreListHeader("number", "번호")}
@@ -6985,11 +6990,6 @@ const PerformanceScoreManager: React.FC = () => {
                         <th className="whitespace-nowrap px-3 py-3">
                           감점 요인 및 평가 근거
                         </th>
-                        {scoreEditing && (
-                          <th className="w-28 whitespace-nowrap px-3 py-3 text-right">
-                            전출
-                          </th>
-                        )}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -7025,6 +7025,23 @@ const PerformanceScoreManager: React.FC = () => {
                             getEnteredTotalScore(record);
                           return (
                             <tr key={recordKey}>
+                              {scoreEditing && (
+                                <td className="whitespace-nowrap px-3 py-3 text-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={transferredRecord}
+                                    onChange={(event) =>
+                                      updateScoreListTransferred(
+                                        recordKey,
+                                        event.target.checked,
+                                      )
+                                    }
+                                    disabled={savingScoreEdits}
+                                    aria-label={`${record.studentName || "수동 추가 학생"} 전출 학생 여부`}
+                                    className="h-3.5 w-3.5 rounded border-slate-300 text-rose-600 focus:ring-rose-200"
+                                  />
+                                </td>
+                              )}
                               <td className="whitespace-nowrap px-3 py-3 font-bold text-slate-600">
                                 {scoreEditing && manualRecord ? (
                                   <input
@@ -7238,26 +7255,6 @@ const PerformanceScoreManager: React.FC = () => {
                                   </div>
                                 )}
                               </td>
-                              {scoreEditing && (
-                                <td className="whitespace-nowrap px-3 py-3 text-right">
-                                  <label className="inline-flex items-center justify-end gap-1.5 text-[11px] font-black text-rose-600">
-                                    <input
-                                      type="checkbox"
-                                      checked={transferredRecord}
-                                      onChange={(event) =>
-                                        updateScoreListTransferred(
-                                          recordKey,
-                                          event.target.checked,
-                                        )
-                                      }
-                                      disabled={savingScoreEdits}
-                                      aria-label={`${record.studentName || "수동 추가 학생"} 전출 학생 여부`}
-                                      className="h-3.5 w-3.5 rounded border-slate-300 text-rose-600 focus:ring-rose-200"
-                                    />
-                                    전출 학생
-                                  </label>
-                                </td>
-                              )}
                             </tr>
                           );
                         })
