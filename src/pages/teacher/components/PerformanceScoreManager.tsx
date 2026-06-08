@@ -84,9 +84,17 @@ const CLASS_SHEET_STUDENT_END_ROW = 38;
 const CLASS_SHEET_SUMMARY_START_ROW = 39;
 const CLASS_SHEET_TEMPLATE_COLUMN_COUNT = 13;
 const CLASS_SHEET_STUDENT_NAME_COLUMN = 4;
-const CLASS_SHEET_STUDENT_NAME_COLUMN_FALLBACK_WIDTH = 7.5;
+const CLASS_SHEET_STUDENT_NAME_COLUMN_WIDTH = 6.88;
+const CLASS_SHEET_STUDENT_NAME_COLUMN_FALLBACK_WIDTH =
+  CLASS_SHEET_STUDENT_NAME_COLUMN_WIDTH;
 const CLASS_SHEET_STUDENT_NAME_COLUMN_MAX_FIT_WIDTH = 13;
 const CLASS_SHEET_STUDENT_NAME_HEADER_ROW = CLASS_SHEET_STUDENT_START_ROW - 1;
+const CLASS_SHEET_INTERNAL_BORDER_START_ROW = 7;
+const CLASS_SHEET_INTERNAL_BORDER_END_ROW = 40;
+const CLASS_SHEET_INTERNAL_BORDER_START_COLUMN = 2;
+const CLASS_SHEET_INTERNAL_BORDER_END_COLUMN = 10;
+const CLASS_SHEET_SCORE_DIVIDER_LEFT_COLUMN = 6;
+const CLASS_SHEET_SCORE_DIVIDER_RIGHT_COLUMN = 7;
 const CLASS_SHEET_RIGHT_SPACER_COLUMNS = [
   { column: 16, minWidth: 8 },
   { column: 15, minWidth: 12 },
@@ -1497,7 +1505,7 @@ const getScoreListCombinedTotalScore = (student: ClassSheetStudent) => {
 };
 
 const getScoreListCombinedTotalLabel = (student: ClassSheetStudent) => {
-  if (isClassSheetTransferredStudent(student)) return TRANSFERRED_LABEL;
+  if (isClassSheetTransferredStudent(student)) return "-";
   const totalScore = getScoreListCombinedTotalScore(student);
   return totalScore === null ? "-" : formatPerformanceScore(totalScore);
 };
@@ -1584,9 +1592,7 @@ const getClassSheetTotalScoreCellValue = (student: ClassSheetStudent) => {
 };
 
 const getClassSheetStudentName = (student: ClassSheetStudent) =>
-  isClassSheetTransferredStudent(student)
-    ? `${student.studentName || "(이름 없음)"} [${TRANSFERRED_LABEL}]`
-    : student.studentName || "(이름 없음)";
+  student.studentName || "(이름 없음)";
 
 const getClassSheetStudentNameWidthUnits = (value: string) =>
   Array.from(value).reduce(
@@ -1965,6 +1971,109 @@ const centerClassSheetStudentNameHeader = (worksheet: {
     vertical: "middle",
     wrapText: false,
   };
+};
+
+type ClassSheetBorderSide = { style?: string; color?: unknown };
+type ClassSheetCellStyle = {
+  alignment?: unknown;
+  border?: {
+    left?: ClassSheetBorderSide;
+    right?: ClassSheetBorderSide;
+    top?: ClassSheetBorderSide;
+    bottom?: ClassSheetBorderSide;
+    diagonal?: unknown;
+  };
+};
+
+const CLASS_SHEET_HAIR_BORDER_SIDE: ClassSheetBorderSide = {
+  style: "hair",
+  color: { indexed: 0 },
+};
+
+const setClassSheetCellHorizontalAlignment = (
+  worksheet: {
+    getCell: (row: number, column: number) => ClassSheetCellStyle;
+  },
+  row: number,
+  column: number,
+  horizontal: "left" | "center" | "right",
+) => {
+  const cell = worksheet.getCell(row, column);
+  const currentAlignment =
+    cell.alignment && typeof cell.alignment === "object" ? cell.alignment : {};
+  cell.alignment = {
+    ...(currentAlignment as Record<string, unknown>),
+    horizontal,
+    vertical: "middle",
+  };
+};
+
+const setClassSheetCellBorder = (
+  worksheet: {
+    getCell: (row: number, column: number) => ClassSheetCellStyle;
+  },
+  row: number,
+  column: number,
+  border: ClassSheetCellStyle["border"],
+) => {
+  const cell = worksheet.getCell(row, column);
+  const currentBorder =
+    cell.border && typeof cell.border === "object" ? cell.border : {};
+  cell.border = {
+    ...(currentBorder as NonNullable<ClassSheetCellStyle["border"]>),
+    ...border,
+  };
+};
+
+const applyClassSheetNiceStyleAdjustments = (
+  worksheet: {
+    getCell: (row: number, column: number) => ClassSheetCellStyle;
+  },
+  tableEndRow: number,
+) => {
+  setClassSheetCellHorizontalAlignment(worksheet, 3, 2, "left");
+  setClassSheetCellHorizontalAlignment(worksheet, 4, 2, "left");
+
+  const endRow = Math.min(
+    CLASS_SHEET_INTERNAL_BORDER_END_ROW,
+    Math.max(CLASS_SHEET_INTERNAL_BORDER_START_ROW, tableEndRow),
+  );
+
+  for (
+    let row = CLASS_SHEET_INTERNAL_BORDER_START_ROW;
+    row <= endRow;
+    row += 1
+  ) {
+    for (
+      let column = CLASS_SHEET_INTERNAL_BORDER_START_COLUMN;
+      column <= CLASS_SHEET_INTERNAL_BORDER_END_COLUMN;
+      column += 1
+    ) {
+      if (row < endRow) {
+        setClassSheetCellBorder(worksheet, row, column, {
+          bottom: CLASS_SHEET_HAIR_BORDER_SIDE,
+        });
+      }
+      if (row > CLASS_SHEET_INTERNAL_BORDER_START_ROW) {
+        setClassSheetCellBorder(worksheet, row, column, {
+          top: CLASS_SHEET_HAIR_BORDER_SIDE,
+        });
+      }
+    }
+
+    setClassSheetCellBorder(
+      worksheet,
+      row,
+      CLASS_SHEET_SCORE_DIVIDER_LEFT_COLUMN,
+      { right: CLASS_SHEET_HAIR_BORDER_SIDE },
+    );
+    setClassSheetCellBorder(
+      worksheet,
+      row,
+      CLASS_SHEET_SCORE_DIVIDER_RIGHT_COLUMN,
+      { left: CLASS_SHEET_HAIR_BORDER_SIDE },
+    );
+  }
 };
 
 const shrinkClassSheetRightSpacerColumns = (
@@ -2486,24 +2595,7 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
     vertical: "middle",
     wrapText: false,
   };
-  const studentNameColumnWidth =
-    Number(studentNameColumn.width || 0) ||
-    CLASS_SHEET_STUDENT_NAME_COLUMN_FALLBACK_WIDTH;
-  const fittedStudentNameColumnWidth =
-    getFittedClassSheetStudentNameColumnWidth(
-      params.students,
-      studentNameColumnWidth,
-    );
-  const studentNameWidthDelta = getClassSheetStudentNameWidthDelta(
-    fittedStudentNameColumnWidth,
-    studentNameColumnWidth,
-  );
-  if (Math.abs(fittedStudentNameColumnWidth - studentNameColumnWidth) > 0.05) {
-    studentNameColumn.width = fittedStudentNameColumnWidth;
-  }
-  if (studentNameWidthDelta > 0) {
-    shrinkClassSheetRightSpacerColumns(worksheet, studentNameWidthDelta);
-  }
+  studentNameColumn.width = CLASS_SHEET_STUDENT_NAME_COLUMN_WIDTH;
   const { studentEndRow, summaryStartRow } = resizeClassSheetStudentRows(
     worksheet,
     params.students.length,
@@ -2531,6 +2623,7 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
     10,
     `교과담당교사 (${params.teacherName || "방재석"}) 인`,
   );
+  applyClassSheetNiceStyleAdjustments(worksheet, summaryStartRow + 1);
   for (
     let row = CLASS_SHEET_STUDENT_START_ROW;
     row <= studentEndRow;
@@ -6817,11 +6910,6 @@ const PerformanceScoreManager: React.FC = () => {
                                 </td>
                                 <td className="whitespace-nowrap px-3 py-3 font-black text-slate-900">
                                   {student.studentName || "(이름 없음)"}
-                                  {transferredStudent && (
-                                    <span className="ml-1 text-xs font-black text-rose-600">
-                                      [{TRANSFERRED_LABEL}]
-                                    </span>
-                                  )}
                                 </td>
                                 <td className="whitespace-nowrap px-3 py-3 text-right font-bold text-slate-700">
                                   {transferredStudent ? (
@@ -7820,11 +7908,6 @@ const PerformanceScoreManager: React.FC = () => {
                                     <span>
                                       {record.studentName || "(이름 없음)"}
                                     </span>
-                                    {transferredRecord && (
-                                      <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-black text-rose-600">
-                                        [{TRANSFERRED_LABEL}]
-                                      </span>
-                                    )}
                                   </div>
                                 )}
                               </td>
