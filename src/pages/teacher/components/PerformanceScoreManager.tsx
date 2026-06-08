@@ -82,7 +82,7 @@ const CLASS_SHEET_SUMMARY_START_ROW = 39;
 const CLASS_SHEET_TEMPLATE_COLUMN_COUNT = 13;
 const CLASS_SHEET_STUDENT_NAME_COLUMN = 4;
 const CLASS_SHEET_STUDENT_NAME_COLUMN_FALLBACK_WIDTH = 7.5;
-const CLASS_SHEET_STUDENT_NAME_COLUMN_MAX_EXPANDED_WIDTH = 18;
+const CLASS_SHEET_STUDENT_NAME_COLUMN_MAX_FIT_WIDTH = 24;
 const CLASS_SHEET_RIGHT_SPACER_COLUMNS = [
   { column: 16, minWidth: 8 },
   { column: 15, minWidth: 12 },
@@ -1441,6 +1441,23 @@ const getScoreNumber = (record?: PerformanceScoreRecord) => {
 const getClassSheetScoreCellValue = (record?: PerformanceScoreRecord) =>
   isTransferredScoreRecord(record) ? TRANSFERRED_LABEL : getScoreNumber(record);
 
+const isClassSheetTransferredStudent = (student: ClassSheetStudent) =>
+  isTransferredScoreRecord(student.firstRecord) ||
+  isTransferredScoreRecord(student.secondRecord);
+
+const getClassSheetStudentScoreCellValue = (
+  student: ClassSheetStudent,
+  record?: PerformanceScoreRecord,
+) =>
+  isClassSheetTransferredStudent(student)
+    ? TRANSFERRED_LABEL
+    : getClassSheetScoreCellValue(record);
+
+const getClassSheetSummaryScore = (
+  student: ClassSheetStudent,
+  record?: PerformanceScoreRecord,
+) => (isClassSheetTransferredStudent(student) ? null : getScoreNumber(record));
+
 const getScoreListSummaryScoreLabel = (record?: PerformanceScoreRecord) => {
   if (!record) return "-";
   if (isTransferredScoreRecord(record)) return TRANSFERRED_LABEL;
@@ -1453,10 +1470,7 @@ const getScoreListSummaryScoreLabel = (record?: PerformanceScoreRecord) => {
 };
 
 const getClassSheetTotalScoreCellValue = (student: ClassSheetStudent) => {
-  if (
-    isTransferredScoreRecord(student.firstRecord) ||
-    isTransferredScoreRecord(student.secondRecord)
-  ) {
+  if (isClassSheetTransferredStudent(student)) {
     return "";
   }
   const firstScore = getScoreNumber(student.firstRecord);
@@ -1467,8 +1481,7 @@ const getClassSheetTotalScoreCellValue = (student: ClassSheetStudent) => {
 };
 
 const getClassSheetStudentName = (student: ClassSheetStudent) =>
-  isTransferredScoreRecord(student.firstRecord) ||
-  isTransferredScoreRecord(student.secondRecord)
+  isClassSheetTransferredStudent(student)
     ? `${student.studentName || "(이름 없음)"} [${TRANSFERRED_LABEL}]`
     : student.studentName || "(이름 없음)";
 
@@ -1478,17 +1491,12 @@ const getClassSheetStudentNameWidthUnits = (value: string) =>
     0,
   );
 
-const getExpandedClassSheetStudentNameColumnWidth = (
+const getFittedClassSheetStudentNameColumnWidth = (
   students: ClassSheetStudent[],
   currentWidth: number,
 ) => {
   const safeCurrentWidth =
     currentWidth || CLASS_SHEET_STUDENT_NAME_COLUMN_FALLBACK_WIDTH;
-  const hasTransferredStudent = students.some(
-    (student) =>
-      isTransferredScoreRecord(student.firstRecord) ||
-      isTransferredScoreRecord(student.secondRecord),
-  );
   const maxNameWidth = students.reduce(
     (max, student) =>
       Math.max(
@@ -1497,20 +1505,42 @@ const getExpandedClassSheetStudentNameColumnWidth = (
       ),
     0,
   );
-  if (!hasTransferredStudent && maxNameWidth <= safeCurrentWidth) return null;
-  return Math.max(
-    safeCurrentWidth,
+  const fittedWidth = Math.max(
+    CLASS_SHEET_STUDENT_NAME_COLUMN_FALLBACK_WIDTH,
     Math.min(
-      CLASS_SHEET_STUDENT_NAME_COLUMN_MAX_EXPANDED_WIDTH,
-      Math.ceil(maxNameWidth + 1),
+      CLASS_SHEET_STUDENT_NAME_COLUMN_MAX_FIT_WIDTH,
+      Math.ceil(maxNameWidth * 1.05 + 1.5),
     ),
   );
+  return Math.abs(fittedWidth - safeCurrentWidth) > 0.05
+    ? fittedWidth
+    : safeCurrentWidth;
 };
+
+const getClassSheetStudentNameWidthDelta = (
+  nextWidth: number,
+  currentWidth: number,
+) =>
+  Math.max(
+    0,
+    nextWidth -
+      (currentWidth || CLASS_SHEET_STUDENT_NAME_COLUMN_FALLBACK_WIDTH),
+  );
 
 const getConfirmedSignatureRecord = (
   student: ClassSheetStudent,
   expected: { requireFirst?: boolean; requireSecond?: boolean } = {},
 ) => {
+  if (isClassSheetTransferredStudent(student)) {
+    return (
+      [student.secondRecord, student.firstRecord].find((record) =>
+        isTransferredScoreRecord(record),
+      ) ||
+      student.secondRecord ||
+      student.firstRecord ||
+      null
+    );
+  }
   const requiredRecords: PerformanceScoreRecord[] = [];
   if (expected.requireFirst) {
     if (!student.firstRecord) return null;
@@ -1670,14 +1700,23 @@ const buildClassSummaryWorkbook = (params: {
 
   params.students.forEach((student, index) => {
     const excelRowNumber = 7 + index;
-    const firstScore = getClassSheetScoreCellValue(student.firstRecord);
-    const secondScore = getClassSheetScoreCellValue(student.secondRecord);
+    const firstScore = getClassSheetStudentScoreCellValue(
+      student,
+      student.firstRecord,
+    );
+    const secondScore = getClassSheetStudentScoreCellValue(
+      student,
+      student.secondRecord,
+    );
     const totalScore = getClassSheetTotalScoreCellValue(student);
     const row = makeExcelRow(18);
     setExcelCell(row, 1, `${student.class}/${student.number}`, {
       columnSpan: 2,
     });
-    setExcelCell(row, 3, getClassSheetStudentName(student));
+    setExcelCell(row, 3, getClassSheetStudentName(student), {
+      align: "left",
+      wrap: false,
+    });
     setExcelCell(row, 4, firstScore ?? "", { columnSpan: 2 });
     setExcelCell(row, 6, secondScore ?? "");
     setExcelCell(row, 7, totalScore, { columnSpan: 2 });
@@ -1709,10 +1748,10 @@ const buildClassSummaryWorkbook = (params: {
   });
 
   const firstScores = params.students
-    .map((student) => getScoreNumber(student.firstRecord))
+    .map((student) => getClassSheetSummaryScore(student, student.firstRecord))
     .filter((score): score is number => score !== null);
   const secondScores = params.students
-    .map((student) => getScoreNumber(student.secondRecord))
+    .map((student) => getClassSheetSummaryScore(student, student.secondRecord))
     .filter((score): score is number => score !== null);
   const firstSum = roundScore(
     firstScores.reduce((sum, score) => sum + score, 0),
@@ -1792,16 +1831,14 @@ const setClassSheetStudentNameCell = (
   },
   row: number,
   value: string,
-  preventWrap: boolean,
 ) => {
   const cell = worksheet.getCell(row, CLASS_SHEET_STUDENT_NAME_COLUMN);
   cell.value = value;
-  if (!preventWrap) return;
   const currentAlignment =
     cell.alignment && typeof cell.alignment === "object" ? cell.alignment : {};
   cell.alignment = {
     ...(currentAlignment as Record<string, unknown>),
-    horizontal: "center",
+    horizontal: "left",
     vertical: "middle",
     wrapText: false,
   };
@@ -2323,20 +2360,20 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
   const studentNameColumnWidth =
     Number(studentNameColumn.width || 0) ||
     CLASS_SHEET_STUDENT_NAME_COLUMN_FALLBACK_WIDTH;
-  const expandedStudentNameColumnWidth =
-    getExpandedClassSheetStudentNameColumnWidth(
+  const fittedStudentNameColumnWidth =
+    getFittedClassSheetStudentNameColumnWidth(
       params.students,
       studentNameColumnWidth,
     );
-  const shouldExpandStudentNameColumn =
-    expandedStudentNameColumnWidth !== null &&
-    expandedStudentNameColumnWidth > studentNameColumnWidth;
-  if (shouldExpandStudentNameColumn) {
-    studentNameColumn.width = expandedStudentNameColumnWidth;
-    shrinkClassSheetRightSpacerColumns(
-      worksheet,
-      expandedStudentNameColumnWidth - studentNameColumnWidth,
-    );
+  const studentNameWidthDelta = getClassSheetStudentNameWidthDelta(
+    fittedStudentNameColumnWidth,
+    studentNameColumnWidth,
+  );
+  if (Math.abs(fittedStudentNameColumnWidth - studentNameColumnWidth) > 0.05) {
+    studentNameColumn.width = fittedStudentNameColumnWidth;
+  }
+  if (studentNameWidthDelta > 0) {
+    shrinkClassSheetRightSpacerColumns(worksheet, studentNameWidthDelta);
   }
   const { studentEndRow, summaryStartRow } = resizeClassSheetStudentRows(
     worksheet,
@@ -2382,8 +2419,14 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
   }> = [];
   for (const [index, student] of params.students.entries()) {
     const row = CLASS_SHEET_STUDENT_START_ROW + index;
-    const firstScore = getClassSheetScoreCellValue(student.firstRecord);
-    const secondScore = getClassSheetScoreCellValue(student.secondRecord);
+    const firstScore = getClassSheetStudentScoreCellValue(
+      student,
+      student.firstRecord,
+    );
+    const secondScore = getClassSheetStudentScoreCellValue(
+      student,
+      student.secondRecord,
+    );
     const totalScore = getClassSheetTotalScoreCellValue(student);
     setWorksheetCellValue(
       worksheet,
@@ -2396,7 +2439,6 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
       worksheet,
       row,
       getClassSheetStudentName(student),
-      shouldExpandStudentNameColumn,
     );
     setWorksheetCellValue(worksheet, row, 5, firstScore ?? "");
     setWorksheetCellValue(worksheet, row, 7, secondScore ?? "");
@@ -2431,10 +2473,10 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
   }
 
   const firstScores = params.students
-    .map((student) => getScoreNumber(student.firstRecord))
+    .map((student) => getClassSheetSummaryScore(student, student.firstRecord))
     .filter((score): score is number => score !== null);
   const secondScores = params.students
-    .map((student) => getScoreNumber(student.secondRecord))
+    .map((student) => getClassSheetSummaryScore(student, student.secondRecord))
     .filter((score): score is number => score !== null);
   const firstSum = roundScore(
     firstScores.reduce((sum, score) => sum + score, 0),
@@ -3169,10 +3211,12 @@ const PerformanceScoreManager: React.FC = () => {
   );
   const classSheetStatusSummary = useMemo(() => {
     const firstScoredCount = classSheetPreviewStudents.filter(
-      (student) => student.firstRecord,
+      (student) =>
+        getClassSheetSummaryScore(student, student.firstRecord) !== null,
     ).length;
     const secondScoredCount = classSheetPreviewStudents.filter(
-      (student) => student.secondRecord,
+      (student) =>
+        getClassSheetSummaryScore(student, student.secondRecord) !== null,
     ).length;
     const signedCount = classSheetPreviewStudents.filter((student) =>
       getConfirmedSignatureRecord(student, classSheetSignatureRequirements),
@@ -6378,8 +6422,7 @@ const PerformanceScoreManager: React.FC = () => {
                         ) : (
                           classSheetPreviewStudents.map((student) => {
                             const transferredStudent =
-                              isTransferredScoreRecord(student.firstRecord) ||
-                              isTransferredScoreRecord(student.secondRecord);
+                              isClassSheetTransferredStudent(student);
                             const firstScore = getScoreNumber(
                               student.firstRecord,
                             );
@@ -6387,7 +6430,8 @@ const PerformanceScoreManager: React.FC = () => {
                               student.secondRecord,
                             );
                             const totalScore =
-                              firstScore !== null || secondScore !== null
+                              !transferredStudent &&
+                              (firstScore !== null || secondScore !== null)
                                 ? roundScore(
                                     (firstScore ?? 0) + (secondScore ?? 0),
                                   )
@@ -6416,19 +6460,27 @@ const PerformanceScoreManager: React.FC = () => {
                               student.studentName;
                             const studentKey = getClassSheetStudentKey(student);
                             const missingLabels = [
-                              !student.firstRecord ? "1차 점수" : "",
-                              !student.secondRecord ? "2차 점수" : "",
+                              !transferredStudent && !student.firstRecord
+                                ? "1차 점수"
+                                : "",
+                              !transferredStudent && !student.secondRecord
+                                ? "2차 점수"
+                                : "",
                             ].filter(Boolean);
-                            const statusLabel = missingLabels.length
-                              ? "점수 누락"
-                              : signatureRecord
-                                ? "확인 완료"
-                                : "서명 필요";
-                            const statusClass = missingLabels.length
-                              ? "bg-amber-50 text-amber-700"
-                              : signatureRecord
-                                ? "bg-emerald-50 text-emerald-700"
-                                : "bg-rose-50 text-rose-700";
+                            const statusLabel = transferredStudent
+                              ? TRANSFERRED_LABEL
+                              : missingLabels.length
+                                ? "점수 누락"
+                                : signatureRecord
+                                  ? "확인 완료"
+                                  : "서명 필요";
+                            const statusClass = transferredStudent
+                              ? "bg-rose-50 text-rose-700"
+                              : missingLabels.length
+                                ? "bg-amber-50 text-amber-700"
+                                : signatureRecord
+                                  ? "bg-emerald-50 text-emerald-700"
+                                  : "bg-rose-50 text-rose-700";
                             return (
                               <tr
                                 key={`${student.uid}-${student.class}-${student.number}`}
@@ -6542,9 +6594,11 @@ const PerformanceScoreManager: React.FC = () => {
                                     </div>
                                   ) : (
                                     <div className="mx-auto w-fit text-center text-xs font-bold leading-5 text-slate-500">
-                                      {missingLabels.length
-                                        ? `${missingLabels.join(", ")} 없음`
-                                        : "학생 점수 확인 서명 전"}
+                                      {transferredStudent
+                                        ? "전출 학생"
+                                        : missingLabels.length
+                                          ? `${missingLabels.join(", ")} 없음`
+                                          : "학생 점수 확인 서명 전"}
                                     </div>
                                   )}
                                 </td>
