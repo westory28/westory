@@ -722,6 +722,7 @@ const NOTIFICATION_EVENT_AUDIENCE = {
   history_classroom_exemption_reviewed: 'students',
   performance_score_objection_requested: 'teachers',
   performance_score_objection_reviewed: 'students',
+  performance_score_signature_rejected: 'students',
   history_dictionary_requested: 'teachers',
   history_dictionary_resolved: 'students',
   history_dictionary_rejected: 'students',
@@ -3742,18 +3743,31 @@ exports.cleanupOldNotifications = onSchedule(
 );
 
 exports.createManagedNotifications = onCall({ region: REGION }, async (request) => {
-  const manager = await assertNotificationManager(request);
   const { year, semester } = assertYearSemester(request.data);
   const recipientMode = String(request.data?.recipientMode || 'explicit').trim();
   const type = sanitizeNotificationText(request.data?.type, 80, 'system_notice');
   const allowedTypes = new Set([
     'history_classroom_assigned',
     'lesson_worksheet_published',
+    'performance_score_signature_rejected',
     'question_replied',
     'system_notice',
   ]);
   if (!allowedTypes.has(type)) {
     throw new HttpsError('invalid-argument', 'Unsupported notification type.');
+  }
+  const isPerformanceScoreSignatureRejected = type === 'performance_score_signature_rejected';
+  const manager = isPerformanceScoreSignatureRejected
+    ? await assertPerformanceScoreManager(request)
+    : await assertNotificationManager(request);
+  if (isPerformanceScoreSignatureRejected) {
+    const recipientUids = uniqueNonEmptyStrings(request.data?.recipientUids, 2);
+    if (recipientMode !== 'explicit' || recipientUids.length !== 1) {
+      throw new HttpsError(
+        'invalid-argument',
+        'Performance score signature rejection notifications require exactly one explicit student recipient.',
+      );
+    }
   }
 
   if (recipientMode === 'all_students') {

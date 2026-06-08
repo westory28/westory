@@ -322,6 +322,29 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     ],
   },
   {
+    key: "performance_score_signature_rejected",
+    label: "수행평가 서명 반려",
+    audience: "students",
+    description:
+      "교사가 수행평가 점수 확인 서명을 반려했을 때 학생에게 다시 확인하도록 안내합니다.",
+    triggerLabel: "교사가 수행평가 점수 확인 서명을 반려했을 때",
+    recipientLabel: "서명 반려 학생",
+    status: "connected",
+    defaultEnabled: true,
+    defaultPriority: "high",
+    titleTemplate: "수행평가 서명 반려",
+    bodyTemplate:
+      "교사가 {scoreTitle} 점수 확인 서명을 반려했습니다. 점수를 다시 확인한 뒤 서명해 주세요.",
+    targetUrl: "/student/score/performance",
+    targetLabel: "학생 수행평가 점수 화면",
+    tokens: [
+      { key: "studentName", label: "학생 이름" },
+      { key: "studentScope", label: "학생 학급" },
+      { key: "scoreTitle", label: "수행평가명" },
+      { key: "scoreCount", label: "반려 평가 수" },
+    ],
+  },
+  {
     key: "point_order_requested",
     label: "위스 상점 신청",
     audience: "teachers",

@@ -50,7 +50,10 @@ import {
   type ParsedPerformanceScoreRow,
   type ParsedPerformanceScoreUpload,
 } from "../../../lib/performanceScoreWorkbook";
-import { reviewPerformanceScoreObjection } from "../../../lib/notifications";
+import {
+  createManagedNotifications,
+  reviewPerformanceScoreObjection,
+} from "../../../lib/notifications";
 
 interface StudentProfile {
   uid: string;
@@ -82,7 +85,8 @@ const CLASS_SHEET_SUMMARY_START_ROW = 39;
 const CLASS_SHEET_TEMPLATE_COLUMN_COUNT = 13;
 const CLASS_SHEET_STUDENT_NAME_COLUMN = 4;
 const CLASS_SHEET_STUDENT_NAME_COLUMN_FALLBACK_WIDTH = 7.5;
-const CLASS_SHEET_STUDENT_NAME_COLUMN_MAX_FIT_WIDTH = 24;
+const CLASS_SHEET_STUDENT_NAME_COLUMN_MAX_FIT_WIDTH = 13;
+const CLASS_SHEET_STUDENT_NAME_HEADER_ROW = CLASS_SHEET_STUDENT_START_ROW - 1;
 const CLASS_SHEET_RIGHT_SPACER_COLUMNS = [
   { column: 16, minWidth: 8 },
   { column: 15, minWidth: 12 },
@@ -1575,7 +1579,7 @@ const getClassSheetStudentName = (student: ClassSheetStudent) =>
 
 const getClassSheetStudentNameWidthUnits = (value: string) =>
   Array.from(value).reduce(
-    (sum, character) => sum + (character.charCodeAt(0) <= 0x007f ? 1 : 2),
+    (sum, character) => sum + (character.charCodeAt(0) <= 0x007f ? 0.85 : 1.35),
     0,
   );
 
@@ -1597,7 +1601,7 @@ const getFittedClassSheetStudentNameColumnWidth = (
     CLASS_SHEET_STUDENT_NAME_COLUMN_FALLBACK_WIDTH,
     Math.min(
       CLASS_SHEET_STUDENT_NAME_COLUMN_MAX_FIT_WIDTH,
-      Math.ceil(maxNameWidth * 1.05 + 1.5),
+      Math.ceil(maxNameWidth + 0.5),
     ),
   );
   return Math.abs(fittedWidth - safeCurrentWidth) > 0.05
@@ -1802,7 +1806,7 @@ const buildClassSummaryWorkbook = (params: {
       columnSpan: 2,
     });
     setExcelCell(row, 3, getClassSheetStudentName(student), {
-      align: "left",
+      align: "center",
       wrap: false,
     });
     setExcelCell(row, 4, firstScore ?? "", { columnSpan: 2 });
@@ -1926,7 +1930,27 @@ const setClassSheetStudentNameCell = (
     cell.alignment && typeof cell.alignment === "object" ? cell.alignment : {};
   cell.alignment = {
     ...(currentAlignment as Record<string, unknown>),
-    horizontal: "left",
+    horizontal: "center",
+    vertical: "middle",
+    wrapText: false,
+  };
+};
+
+const centerClassSheetStudentNameHeader = (worksheet: {
+  getCell: (
+    row: number,
+    column: number,
+  ) => { value: unknown; alignment?: unknown };
+}) => {
+  const cell = worksheet.getCell(
+    CLASS_SHEET_STUDENT_NAME_HEADER_ROW,
+    CLASS_SHEET_STUDENT_NAME_COLUMN,
+  );
+  const currentAlignment =
+    cell.alignment && typeof cell.alignment === "object" ? cell.alignment : {};
+  cell.alignment = {
+    ...(currentAlignment as Record<string, unknown>),
+    horizontal: "center",
     vertical: "middle",
     wrapText: false,
   };
@@ -2445,6 +2469,12 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
   const studentNameColumn = worksheet.getColumn(
     CLASS_SHEET_STUDENT_NAME_COLUMN,
   );
+  studentNameColumn.alignment = {
+    ...(studentNameColumn.alignment || {}),
+    horizontal: "center",
+    vertical: "middle",
+    wrapText: false,
+  };
   const studentNameColumnWidth =
     Number(studentNameColumn.width || 0) ||
     CLASS_SHEET_STUDENT_NAME_COLUMN_FALLBACK_WIDTH;
@@ -2468,6 +2498,7 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
     params.students.length,
   );
   resetClassSheetFooter(worksheet, summaryStartRow + 4);
+  centerClassSheetStudentNameHeader(worksheet);
 
   setWorksheetCellValue(worksheet, 1, 12, getTodayLabel());
   setWorksheetCellValue(worksheet, 2, 6, "수행평가 강의실별 일람표");
@@ -4808,6 +4839,56 @@ const PerformanceScoreManager: React.FC = () => {
       });
       await batchQueue.commit();
 
+      const rejectedScoreTitles = signedRecords
+        .map((record) => record.title)
+        .filter(Boolean);
+      const rejectedScoreTitle =
+        rejectedScoreTitles.length === 1
+          ? rejectedScoreTitles[0]
+          : `${rejectedScoreTitles.length}개 수행평가`;
+      const rejectedScoreIds = signedRecords
+        .map(getRecordScoreId)
+        .filter(Boolean);
+      const rejectedSignatureTokens = signedRecords
+        .map((record) => {
+          const scoreId = getRecordScoreId(record);
+          const signatureMillis = getTimestampMillis(
+            record.confirmation?.confirmedAt ||
+              record.signedAt ||
+              record.confirmation?.updatedAt ||
+              record.updatedAt,
+          );
+          return `${scoreId}:${signatureMillis}`;
+        })
+        .filter(Boolean)
+        .sort();
+      let notificationSent = false;
+      try {
+        const notificationResult = await createManagedNotifications(config, {
+          recipientUids: [student.uid],
+          type: "performance_score_signature_rejected",
+          title: "수행평가 서명 반려",
+          body: `교사가 ${rejectedScoreTitle} 점수 확인 서명을 반려했습니다. 점수를 다시 확인한 뒤 서명해 주세요.`,
+          targetUrl: "/student/score/performance",
+          entityType: "performance_score_signature",
+          entityId: rejectedScoreIds.join("|"),
+          priority: "high",
+          dedupeKey: `performance_score_signature_rejected:${year}:${semester}:${student.uid}:${rejectedSignatureTokens.join("|") || rejectedScoreIds.join("|")}`,
+          templateValues: {
+            studentName: student.studentName,
+            studentScope: `${student.class}반 ${student.number}번`,
+            scoreTitle: rejectedScoreTitle,
+            scoreCount: signedRecords.length,
+          },
+        });
+        notificationSent = notificationResult.createdCount > 0;
+      } catch (notificationError) {
+        console.warn(
+          "Failed to create performance score signature rejection notification:",
+          notificationError,
+        );
+      }
+
       setClassSheetPreviewStudents((current) =>
         current.map((item) =>
           getClassSheetStudentKey(item) === studentKey
@@ -4822,7 +4903,9 @@ const PerformanceScoreManager: React.FC = () => {
       showToast({
         tone: "success",
         title: "서명을 반려했습니다.",
-        message: `${student.studentName} 학생은 다시 점수 확인 및 서명을 진행할 수 있습니다.`,
+        message: notificationSent
+          ? `${student.studentName} 학생에게 서명 반려 알림을 보냈습니다.`
+          : `${student.studentName} 학생은 다시 점수 확인 및 서명을 진행할 수 있습니다. 알림은 전송하지 못했습니다.`,
       });
     } catch (error) {
       console.error("Failed to reject performance score signature:", error);

@@ -34,6 +34,12 @@ export interface ManagedNotificationInput {
   templateValues?: Record<string, string | number | boolean | null | undefined>;
 }
 
+export interface ManagedNotificationResult {
+  createdCount: number;
+  recipientCount: number;
+  broadcast?: boolean;
+}
+
 const NOTIFICATION_LIMIT = 10;
 
 const getNotificationInboxPath = (config: ConfigLike, uid: string) =>
@@ -171,15 +177,23 @@ export const clearNotifications = async (config: ConfigLike) => {
 export const createManagedNotifications = async (
   config: ConfigLike,
   input: ManagedNotificationInput,
-) => {
+): Promise<ManagedNotificationResult> => {
   const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable("createManagedNotifications");
-  await callable({
+  const callable = await getHttpsCallable<
+    ManagedNotificationInput & {
+      year: string;
+      semester: string;
+      recipientUids: string[];
+    },
+    ManagedNotificationResult
+  >("createManagedNotifications");
+  const result = await callable({
     year,
     semester,
     ...input,
     recipientUids: Array.from(new Set(input.recipientUids || [])),
   });
+  return result.data || { createdCount: 0, recipientCount: 0 };
 };
 
 export const notifyHistoryClassroomSubmitted = async (

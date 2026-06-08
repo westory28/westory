@@ -93,7 +93,10 @@ const getNotificationTargetUrl = (notification: WestoryNotification) => {
     }
     return targetUrl;
   }
-  if (notification.type === "performance_score_objection_reviewed") {
+  if (
+    notification.type === "performance_score_objection_reviewed" ||
+    notification.type === "performance_score_signature_rejected"
+  ) {
     if (!targetUrl || targetUrl === "/student/score") {
       return "/student/score/performance";
     }
