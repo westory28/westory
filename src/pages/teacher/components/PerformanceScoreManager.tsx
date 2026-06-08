@@ -3534,25 +3534,52 @@ const PerformanceScoreManager: React.FC = () => {
   const updateScoreListTransferred = (recordKey: string, checked: boolean) => {
     setScoreListRecords((current) =>
       current.map((record) => {
-        if (
-          getScoreListRecordKey(record) !== recordKey ||
-          !isManualScoreListRecord(record)
-        ) {
+        if (getScoreListRecordKey(record) !== recordKey) {
           return record;
         }
-        const items = (record.items || []).map((item) => ({
+        const original = scoreEditOriginalRecords.find(
+          (item) => getScoreListRecordKey(item) === recordKey,
+        );
+        const sourceItems =
+          original && !isTransferredScoreRecord(original)
+            ? original.items || []
+            : selectedScoreRoster
+              ? getRecordItemsForRoster(record, selectedScoreRoster)
+              : record.items || [];
+        const transferredItems = sourceItems.map((item) => ({
           ...item,
           score: 0,
           scoreEntered: false,
         }));
+        if (!checked) {
+          const restoredFromOriginal =
+            original && !isTransferredScoreRecord(original);
+          const restoredItems = restoredFromOriginal
+            ? sourceItems.map((item) => ({ ...item }))
+            : transferredItems;
+          const restoredTotalScore = restoredFromOriginal
+            ? original.totalScore
+            : (getEnteredItemsTotalScore(restoredItems) ?? Number.NaN);
+          return {
+            ...record,
+            items: restoredItems,
+            totalScore: restoredTotalScore,
+            feedback: restoredFromOriginal ? original.feedback || "" : "",
+            evidence: restoredFromOriginal
+              ? original.evidence || original.feedback || ""
+              : "",
+            isTransferred: false,
+            transferStatus: undefined,
+          };
+        }
         return {
           ...record,
-          items: checked ? items : record.items,
-          totalScore: checked ? Number.NaN : record.totalScore,
-          feedback: checked ? TRANSFERRED_LABEL : "",
-          evidence: checked ? TRANSFERRED_LABEL : "",
-          isTransferred: checked,
-          transferStatus: checked ? "transferred" : undefined,
+          items: transferredItems,
+          totalScore: Number.NaN,
+          feedback: TRANSFERRED_LABEL,
+          evidence: TRANSFERRED_LABEL,
+          isTransferred: true,
+          transferStatus: "transferred",
         };
       }),
     );
@@ -3847,14 +3874,24 @@ const PerformanceScoreManager: React.FC = () => {
           original?.signatureImage ||
           original?.confirmation?.signatureImage,
         );
-        const items = getRecordItemsForRoster(record, selectedScoreRoster);
-        const totalScore = getEnteredItemsTotalScore(items);
+        const transferred = isTransferredScoreRecord(record);
+        const items = getRecordItemsForRoster(record, selectedScoreRoster).map(
+          (item) =>
+            transferred
+              ? {
+                  ...item,
+                  score: 0,
+                  scoreEntered: false,
+                }
+              : item,
+        );
+        const totalScore = transferred ? 0 : getEnteredItemsTotalScore(items);
 
         if (hadSignature) {
           batchQueue.delete(confirmationRef);
         }
 
-        if (totalScore === null) {
+        if (!transferred && totalScore === null) {
           batchQueue.delete(scoreRef);
           return;
         }
@@ -3874,16 +3911,17 @@ const PerformanceScoreManager: React.FC = () => {
           studentName: record.studentName,
           uid: record.uid,
           items,
-          totalScore,
+          totalScore: totalScore ?? 0,
           totalMaxScore:
             getRecordTotalMaxScore(record) ||
             selectedScoreRoster.totalMaxScore ||
             0,
-          feedback: String(record.feedback || "").slice(0, 1000),
-          evidence: String(record.evidence || record.feedback || "").slice(
-            0,
-            1000,
-          ),
+          feedback: transferred
+            ? TRANSFERRED_LABEL
+            : String(record.feedback || "").slice(0, 1000),
+          evidence: transferred
+            ? TRANSFERRED_LABEL
+            : String(record.evidence || record.feedback || "").slice(0, 1000),
           sourceFileName: selectedScoreRoster.sourceFileName,
           uploadedBy:
             record.uploadedBy || selectedScoreRoster.uploadedBy || editedBy,
@@ -3894,6 +3932,12 @@ const PerformanceScoreManager: React.FC = () => {
           uploadedAt:
             record.uploadedAt || selectedScoreRoster.createdAt || timestamp,
           updatedAt: timestamp,
+          ...(transferred
+            ? {
+                isTransferred: true,
+                transferStatus: "transferred" as const,
+              }
+            : {}),
         };
         batchQueue.set(scoreRef, payload);
       });
@@ -3917,7 +3961,9 @@ const PerformanceScoreManager: React.FC = () => {
                 }
               : record;
           if (!changedKeys.has(recordKey)) return keyedRecord;
-          const hasScore = getEnteredTotalScore(record) !== null;
+          const hasScore =
+            isTransferredScoreRecord(record) ||
+            getEnteredTotalScore(record) !== null;
           const cleared = clearRecordSignature(record) || record;
           return {
             ...keyedRecord,
@@ -7112,7 +7158,7 @@ const PerformanceScoreManager: React.FC = () => {
                                             }
                                             disabled={savingScoreEdits}
                                             aria-label={`${record.studentName} ${getItemLabel(item)} 점수`}
-                                            className="h-9 w-20 rounded-lg border border-slate-200 px-2 text-right text-sm font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-50"
+                                            className="h-9 w-14 rounded-lg border border-slate-200 px-1.5 text-right text-sm font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-50"
                                           />
                                           <span className="text-slate-400">
                                             /{" "}
@@ -7194,32 +7240,22 @@ const PerformanceScoreManager: React.FC = () => {
                               </td>
                               {scoreEditing && (
                                 <td className="whitespace-nowrap px-3 py-3 text-right">
-                                  {manualRecord ? (
-                                    <label className="inline-flex items-center justify-end gap-1.5 text-[11px] font-black text-rose-600">
-                                      <input
-                                        type="checkbox"
-                                        checked={transferredRecord}
-                                        onChange={(event) =>
-                                          updateScoreListTransferred(
-                                            recordKey,
-                                            event.target.checked,
-                                          )
-                                        }
-                                        disabled={savingScoreEdits}
-                                        aria-label={`${record.studentName || "수동 추가 학생"} 전출 학생 여부`}
-                                        className="h-3.5 w-3.5 rounded border-slate-300 text-rose-600 focus:ring-rose-200"
-                                      />
-                                      전출 학생
-                                    </label>
-                                  ) : transferredRecord ? (
-                                    <span className="inline-flex rounded-full bg-rose-50 px-2.5 py-1 text-xs font-black text-rose-600">
-                                      {TRANSFERRED_LABEL}
-                                    </span>
-                                  ) : (
-                                    <span className="text-xs font-bold text-slate-300">
-                                      -
-                                    </span>
-                                  )}
+                                  <label className="inline-flex items-center justify-end gap-1.5 text-[11px] font-black text-rose-600">
+                                    <input
+                                      type="checkbox"
+                                      checked={transferredRecord}
+                                      onChange={(event) =>
+                                        updateScoreListTransferred(
+                                          recordKey,
+                                          event.target.checked,
+                                        )
+                                      }
+                                      disabled={savingScoreEdits}
+                                      aria-label={`${record.studentName || "수동 추가 학생"} 전출 학생 여부`}
+                                      className="h-3.5 w-3.5 rounded border-slate-300 text-rose-600 focus:ring-rose-200"
+                                    />
+                                    전출 학생
+                                  </label>
                                 </td>
                               )}
                             </tr>
