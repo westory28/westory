@@ -3608,42 +3608,57 @@ const PerformanceScoreManager: React.FC = () => {
     scoreListAllSelected &&
     scoreListLoadedRosterId === SCORE_LIST_ALL_ROSTERS_VALUE &&
     scoreListSummaryCacheReady;
+  const scoreListSearchKey = useMemo(
+    () => normalizeStudentName(scoreListSearch).toLocaleLowerCase(),
+    [scoreListSearch],
+  );
+  const scoreListSearchActive = scoreListSearchKey.length > 0;
   const scoreListBaseRecords = useMemo(() => {
     if (!scoreListReady) return [];
-    const searchKey = normalizeStudentName(scoreListSearch).toLocaleLowerCase();
     return scoreListRecords.filter((record) => {
       const gradeMatched =
+        scoreListSearchActive ||
         scoreListGradeFilter === "all" ||
         normalizeSchoolValue(record.grade) ===
           normalizeSchoolValue(scoreListGradeFilter);
       const identityKey = normalizeStudentName(
         `${record.studentName} ${record.class}반 ${record.number}번`,
       ).toLocaleLowerCase();
-      const searchMatched = !searchKey || identityKey.includes(searchKey);
+      const searchMatched =
+        !scoreListSearchActive || identityKey.includes(scoreListSearchKey);
       return gradeMatched && searchMatched;
     });
-  }, [scoreListGradeFilter, scoreListReady, scoreListRecords, scoreListSearch]);
+  }, [
+    scoreListGradeFilter,
+    scoreListReady,
+    scoreListRecords,
+    scoreListSearchActive,
+    scoreListSearchKey,
+  ]);
   const scoreListSummaryBaseStudents = useMemo(() => {
     if (!scoreListSummaryReady) return [];
-    const searchKey = normalizeStudentName(scoreListSearch).toLocaleLowerCase();
     return scoreListSummaryStudents.filter((student) => {
       const gradeMatched =
+        scoreListSearchActive ||
         scoreListGradeFilter === "all" ||
         normalizeSchoolValue(student.grade) ===
           normalizeSchoolValue(scoreListGradeFilter);
       const identityKey = normalizeStudentName(
         `${student.studentName} ${student.class}반 ${student.number}번`,
       ).toLocaleLowerCase();
-      const searchMatched = !searchKey || identityKey.includes(searchKey);
+      const searchMatched =
+        !scoreListSearchActive || identityKey.includes(scoreListSearchKey);
       return gradeMatched && searchMatched;
     });
   }, [
     scoreListGradeFilter,
-    scoreListSearch,
+    scoreListSearchActive,
+    scoreListSearchKey,
     scoreListSummaryReady,
     scoreListSummaryStudents,
   ]);
   const scoreListClassPageOptions = useMemo(() => {
+    if (scoreListSearchActive) return [];
     if (scoreListClassFilter !== "all") return [scoreListClassFilter];
     const values = new Set<string>();
     const sourceRows = scoreListSummaryReady
@@ -3658,6 +3673,7 @@ const PerformanceScoreManager: React.FC = () => {
   }, [
     scoreListBaseRecords,
     scoreListClassFilter,
+    scoreListSearchActive,
     scoreListSummaryBaseStudents,
     scoreListSummaryReady,
   ]);
@@ -3670,18 +3686,29 @@ const PerformanceScoreManager: React.FC = () => {
     scoreListClassTotalPages,
   );
   const activeScoreListClass =
-    scoreListClassFilter !== "all"
+    scoreListSearchActive
+      ? ""
+      : scoreListClassFilter !== "all"
       ? scoreListClassFilter
       : scoreListClassPageOptions[safeScoreListClassPage - 1] || "";
   const filteredScoreListRecords = useMemo(() => {
+    if (scoreListSearchActive) return scoreListReady ? scoreListBaseRecords : [];
     if (!scoreListReady || !activeScoreListClass) return [];
     return scoreListBaseRecords.filter(
       (record) =>
         normalizeSchoolValue(record.class) ===
         normalizeSchoolValue(activeScoreListClass),
     );
-  }, [activeScoreListClass, scoreListBaseRecords, scoreListReady]);
+  }, [
+    activeScoreListClass,
+    scoreListBaseRecords,
+    scoreListReady,
+    scoreListSearchActive,
+  ]);
   const filteredScoreListSummaryStudents = useMemo(() => {
+    if (scoreListSearchActive) {
+      return scoreListSummaryReady ? scoreListSummaryBaseStudents : [];
+    }
     if (!scoreListSummaryReady || !activeScoreListClass) return [];
     return scoreListSummaryBaseStudents.filter(
       (student) =>
@@ -3690,6 +3717,7 @@ const PerformanceScoreManager: React.FC = () => {
     );
   }, [
     activeScoreListClass,
+    scoreListSearchActive,
     scoreListSummaryBaseStudents,
     scoreListSummaryReady,
   ]);
