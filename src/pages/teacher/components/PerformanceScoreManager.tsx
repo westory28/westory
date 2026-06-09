@@ -610,6 +610,27 @@ const getFiniteNumber = (value: unknown) => {
   return Number.isFinite(number) ? number : null;
 };
 
+const sanitizeScoreIntegerInput = (value: string) => {
+  const normalized = value.replace(/,/g, "").trim();
+  if (!normalized) return "";
+  const integerPart = normalized.split(".")[0] ?? "";
+  const digits = integerPart.replace(/\D/g, "");
+  return digits.replace(/^0+(?=\d)/, "");
+};
+
+const parseScoreIntegerInput = (value: string) => {
+  const normalized = sanitizeScoreIntegerInput(value);
+  if (!normalized) return null;
+  const score = Number(normalized);
+  return Number.isFinite(score) ? score : null;
+};
+
+const toScoreEditInteger = (value: unknown) => {
+  const score = getFiniteNumber(value);
+  if (score === null || score < 0) return null;
+  return Math.trunc(score);
+};
+
 const formatScoreDistributionBucketLabel = (
   bucket: (typeof SCORE_DISTRIBUTION_BUCKETS)[number],
   maxScore: number,
@@ -1491,6 +1512,26 @@ const getRecordItemsForRoster = (
       ...(ratio !== undefined ? { ratio } : {}),
     };
   });
+
+const normalizeScoreRecordForIntegerEdit = (
+  record: ScoreListRecord,
+): ScoreListRecord => {
+  if (isTransferredScoreRecord(record)) return record;
+  const items = (record.items || []).map((item) => {
+    const score =
+      item.scoreEntered === false ? null : toScoreEditInteger(item.score);
+    return {
+      ...item,
+      score: score ?? 0,
+      scoreEntered: score !== null,
+    };
+  });
+  return {
+    ...record,
+    items,
+    totalScore: getEnteredItemsTotalScore(items) ?? Number.NaN,
+  };
+};
 
 const serializeScoreRecordForEdit = (
   record: PerformanceScoreRecord | undefined,
@@ -4541,6 +4582,9 @@ const PerformanceScoreManager: React.FC = () => {
   const startScoreEdit = () => {
     if (!selectedScoreRoster || !scoreListReady || scoreListLoading) return;
     setScoreEditOriginalRecords(cloneScoreListRecords(scoreListRecords));
+    setScoreListRecords((current) =>
+      current.map((record) => normalizeScoreRecordForIntegerEdit(record)),
+    );
     setScoreEditing(true);
   };
 
@@ -4658,9 +4702,7 @@ const PerformanceScoreManager: React.FC = () => {
     value: string,
   ) => {
     if (!selectedScoreRoster) return;
-    const trimmedValue = value.trim();
-    const parsedScore =
-      trimmedValue === "" ? null : getFiniteNumber(trimmedValue);
+    const parsedScore = parseScoreIntegerInput(value);
 
     setScoreListRecords((current) =>
       current.map((record) => {
@@ -4672,7 +4714,7 @@ const PerformanceScoreManager: React.FC = () => {
           index === itemIndex
             ? {
                 ...item,
-                score: parsedScore === null ? 0 : roundScore(parsedScore),
+                score: parsedScore === null ? 0 : parsedScore,
                 scoreEntered: parsedScore !== null,
               }
             : item,
@@ -4785,7 +4827,8 @@ const PerformanceScoreManager: React.FC = () => {
             const maxScore = getFiniteNumber(item.maxScore);
             return (
               score !== null &&
-              (score < 0 ||
+              (!Number.isInteger(score) ||
+                score < 0 ||
                 (maxScore !== null && maxScore > 0 && score > maxScore))
             );
           },
@@ -8753,23 +8796,25 @@ const PerformanceScoreManager: React.FC = () => {
                                       ) : scoreEditing ? (
                                         <div className="flex items-center justify-end gap-1.5">
                                           <input
-                                            type="number"
-                                            min={0}
-                                            max={
-                                              getFiniteNumber(item.maxScore) ??
-                                              undefined
-                                            }
-                                            step="0.1"
+                                            type="text"
+                                            inputMode="numeric"
+                                            pattern="[0-9]*"
                                             value={
                                               itemScore === null
                                                 ? ""
-                                                : String(itemScore)
+                                                : String(
+                                                    toScoreEditInteger(
+                                                      itemScore,
+                                                    ) ?? "",
+                                                  )
                                             }
                                             onChange={(event) =>
                                               updateScoreListItemScore(
                                                 recordKey,
                                                 index,
-                                                event.target.value,
+                                                sanitizeScoreIntegerInput(
+                                                  event.target.value,
+                                                ),
                                               )
                                             }
                                             disabled={savingScoreEdits}
