@@ -5,8 +5,18 @@ import {
   getDocs,
   orderBy,
   query,
+  serverTimestamp,
+  setDoc,
+  where,
 } from "firebase/firestore";
 import { db } from "./firebase";
+import {
+  getSemesterCollectionPath,
+  getSemesterDocPath,
+  getYearSemester,
+} from "./semesterScope";
+
+type ConfigLike = Parameters<typeof getYearSemester>[0];
 
 export const PERFORMANCE_SCORE_ROSTERS_COLLECTION = "performance_score_rosters";
 
@@ -16,6 +26,20 @@ export const PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION = "confirmations";
 
 export const PERFORMANCE_SCORE_OBJECTIONS_COLLECTION =
   "performance_score_objections";
+
+export const PERFORMANCE_SCORE_SETTINGS_DOC_ID = "performance_score";
+
+export const PERFORMANCE_SCORE_CONSENTS_COLLECTION =
+  "performance_score_consents";
+
+export const PERFORMANCE_SCORE_CONSENT_DOC_ID = "current";
+
+export const DEFAULT_PERFORMANCE_SCORE_WARNING_TEXT =
+  "다른 학생의 점수를 확인하거나 대리로 서명할 경우 학업성적관리규정 위반 학생 및 생활교육 대상자가 될 수 있습니다. 본인 점수만 확인하고 본인 이름으로만 서명해 주세요.";
+
+export const DEFAULT_PERFORMANCE_SCORE_WARNING_VERSION = "default-20260609";
+
+export const PERFORMANCE_SCORE_WARNING_MAX_LENGTH = 600;
 
 export interface PerformanceScoreItem {
   name: string;
@@ -65,6 +89,45 @@ export interface PerformanceScoreConfirmation {
   signatureImage: string;
   confirmedAt?: unknown;
   updatedAt?: unknown;
+}
+
+export interface PerformanceScoreSettings {
+  warningText: string;
+  warningVersion: string;
+  warningTextHash: string;
+  updatedAt?: unknown;
+  updatedBy?: string;
+}
+
+export interface PerformanceScoreWarningConsent {
+  id?: string;
+  uid: string;
+  academicYear: string;
+  semester: string;
+  acknowledged: boolean;
+  warningVersion: string;
+  warningTextHash: string;
+  acknowledgedAt?: unknown;
+  updatedAt?: unknown;
+}
+
+export type PerformanceScoreObjectionStatus =
+  | "pending"
+  | "accepted"
+  | "rejected";
+
+export interface PerformanceScoreObjection {
+  id: string;
+  uid: string;
+  scoreId: string;
+  rosterId?: string;
+  scoreTitle?: string;
+  status: PerformanceScoreObjectionStatus;
+  reason?: string;
+  requestedAt?: unknown;
+  reviewedAt?: unknown;
+  changedScoreLabel?: string;
+  reviewMemo?: string;
 }
 
 export interface PerformanceScoreRosterRow {
@@ -152,6 +215,219 @@ export const formatPerformanceScore = (value: unknown) => {
   if (score === null) return "-";
   const rounded = roundScore(score);
   return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2);
+};
+
+export const normalizePerformanceScoreWarningText = (value: unknown) => {
+  const text = String(value ?? "")
+    .replace(/\r\n/g, "\n")
+    .trim();
+  if (!text) return DEFAULT_PERFORMANCE_SCORE_WARNING_TEXT;
+  return text.slice(0, PERFORMANCE_SCORE_WARNING_MAX_LENGTH);
+};
+
+export const buildPerformanceScoreWarningHash = (value: unknown) => {
+  const text = normalizePerformanceScoreWarningText(value);
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+};
+
+export const buildPerformanceScoreWarningVersion = (value: unknown) =>
+  `warning-${buildPerformanceScoreWarningHash(value)}`;
+
+export const normalizePerformanceScoreSettings = (
+  data?: Record<string, unknown> | null,
+): PerformanceScoreSettings => {
+  if (!data) {
+    return {
+      warningText: DEFAULT_PERFORMANCE_SCORE_WARNING_TEXT,
+      warningVersion: DEFAULT_PERFORMANCE_SCORE_WARNING_VERSION,
+      warningTextHash: buildPerformanceScoreWarningHash(
+        DEFAULT_PERFORMANCE_SCORE_WARNING_TEXT,
+      ),
+    };
+  }
+  const warningText = normalizePerformanceScoreWarningText(data.warningText);
+  const warningTextHash =
+    typeof data.warningTextHash === "string" && data.warningTextHash.trim()
+      ? data.warningTextHash.trim().slice(0, 32)
+      : buildPerformanceScoreWarningHash(warningText);
+  return {
+    warningText,
+    warningVersion:
+      typeof data.warningVersion === "string" && data.warningVersion.trim()
+        ? data.warningVersion.trim().slice(0, 80)
+        : buildPerformanceScoreWarningVersion(warningText),
+    warningTextHash,
+    updatedAt: data.updatedAt,
+    updatedBy:
+      typeof data.updatedBy === "string" ? data.updatedBy.slice(0, 160) : "",
+  };
+};
+
+export const loadPerformanceScoreSettings = async (config: ConfigLike) => {
+  const snap = await getDoc(
+    doc(
+      db,
+      getSemesterDocPath(
+        config,
+        "assessment_config",
+        PERFORMANCE_SCORE_SETTINGS_DOC_ID,
+      ),
+    ),
+  );
+  return normalizePerformanceScoreSettings(
+    snap.exists() ? (snap.data() as Record<string, unknown>) : null,
+  );
+};
+
+export const savePerformanceScoreSettings = async (
+  config: ConfigLike,
+  input: { warningText: string; updatedBy?: string },
+) => {
+  const warningText = normalizePerformanceScoreWarningText(input.warningText);
+  const warningTextHash = buildPerformanceScoreWarningHash(warningText);
+  const warningVersion = buildPerformanceScoreWarningVersion(warningText);
+  await setDoc(
+    doc(
+      db,
+      getSemesterDocPath(
+        config,
+        "assessment_config",
+        PERFORMANCE_SCORE_SETTINGS_DOC_ID,
+      ),
+    ),
+    {
+      warningText,
+      warningVersion,
+      warningTextHash,
+      updatedBy: String(input.updatedBy || "").slice(0, 160),
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
+  return { warningText, warningVersion, warningTextHash };
+};
+
+export const loadPerformanceScoreWarningConsent = async (uid: string) => {
+  if (!uid) return null;
+  const snap = await getDoc(
+    doc(
+      db,
+      "users",
+      uid,
+      PERFORMANCE_SCORE_CONSENTS_COLLECTION,
+      PERFORMANCE_SCORE_CONSENT_DOC_ID,
+    ),
+  );
+  if (!snap.exists()) return null;
+  return {
+    id: snap.id,
+    ...(snap.data() as Omit<PerformanceScoreWarningConsent, "id">),
+  };
+};
+
+export const savePerformanceScoreWarningConsent = async (
+  uid: string,
+  config: ConfigLike,
+  settings: PerformanceScoreSettings,
+) => {
+  const { year, semester } = getYearSemester(config);
+  const warningTextHash =
+    settings.warningTextHash ||
+    buildPerformanceScoreWarningHash(settings.warningText);
+  const payload = {
+    uid,
+    academicYear: year,
+    semester,
+    acknowledged: true,
+    warningVersion: settings.warningVersion,
+    warningTextHash,
+    acknowledgedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+  await setDoc(
+    doc(
+      db,
+      "users",
+      uid,
+      PERFORMANCE_SCORE_CONSENTS_COLLECTION,
+      PERFORMANCE_SCORE_CONSENT_DOC_ID,
+    ),
+    payload,
+    { merge: true },
+  );
+  return {
+    id: PERFORMANCE_SCORE_CONSENT_DOC_ID,
+    ...payload,
+    acknowledgedAt: new Date(),
+    updatedAt: new Date(),
+  } satisfies PerformanceScoreWarningConsent;
+};
+
+export const isPerformanceScoreWarningConsentCurrent = (
+  consent: PerformanceScoreWarningConsent | null | undefined,
+  uid: string,
+  config: ConfigLike,
+  settings: PerformanceScoreSettings,
+) => {
+  const { year, semester } = getYearSemester(config);
+  return (
+    consent?.acknowledged === true &&
+    consent.uid === uid &&
+    consent.academicYear === year &&
+    consent.semester === semester &&
+    consent.warningVersion === settings.warningVersion &&
+    consent.warningTextHash ===
+      (settings.warningTextHash ||
+        buildPerformanceScoreWarningHash(settings.warningText))
+  );
+};
+
+const normalizePerformanceScoreObjectionStatus = (
+  value: unknown,
+): PerformanceScoreObjectionStatus => {
+  const status = String(value || "").trim();
+  if (status === "accepted" || status === "rejected") return status;
+  return "pending";
+};
+
+export const loadUserPerformanceScoreObjections = async (
+  config: ConfigLike,
+  uid: string,
+) => {
+  if (!uid) return [];
+  const snap = await getDocs(
+    query(
+      collection(
+        db,
+        getSemesterCollectionPath(
+          config,
+          PERFORMANCE_SCORE_OBJECTIONS_COLLECTION,
+        ),
+      ),
+      where("uid", "==", uid),
+    ),
+  );
+  return snap.docs.map((item) => {
+    const data = item.data() as Record<string, unknown>;
+    return {
+      id: item.id,
+      uid: String(data.uid || ""),
+      scoreId: String(data.scoreId || ""),
+      rosterId: String(data.rosterId || ""),
+      scoreTitle: String(data.scoreTitle || ""),
+      status: normalizePerformanceScoreObjectionStatus(data.status),
+      reason: String(data.reason || ""),
+      requestedAt: data.requestedAt,
+      reviewedAt: data.reviewedAt,
+      changedScoreLabel: String(data.changedScoreLabel || ""),
+      reviewMemo: String(data.reviewMemo || ""),
+    } satisfies PerformanceScoreObjection;
+  });
 };
 
 const getTimestampSeconds = (value: unknown) => {

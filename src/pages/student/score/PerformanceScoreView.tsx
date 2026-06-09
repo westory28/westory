@@ -21,10 +21,19 @@ import {
   PERFORMANCE_SCORE_USER_COLLECTION,
   formatPerformanceScore,
   getPerformanceScorePercent,
+  isPerformanceScoreWarningConsentCurrent,
+  loadPerformanceScoreSettings,
+  loadPerformanceScoreWarningConsent,
+  loadUserPerformanceScoreObjections,
   loadUserPerformanceScoreRecords,
   normalizeSchoolValue,
   normalizeStudentName,
+  normalizePerformanceScoreSettings,
+  savePerformanceScoreWarningConsent,
+  type PerformanceScoreObjection,
   type PerformanceScoreRecord,
+  type PerformanceScoreSettings,
+  type PerformanceScoreWarningConsent,
 } from "../../../lib/performanceScores";
 import { getPerformanceScoreItemShortName } from "../../../lib/performanceScoreWorkbook";
 
@@ -127,6 +136,14 @@ const PerformanceScoreView: React.FC = () => {
   const { year, semester } = getYearSemester(config);
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState<PerformanceScoreRecord[]>([]);
+  const [scoreSettings, setScoreSettings] = useState<PerformanceScoreSettings>(
+    () => normalizePerformanceScoreSettings(),
+  );
+  const [warningConsent, setWarningConsent] =
+    useState<PerformanceScoreWarningConsent | null>(null);
+  const [warningConsentChecked, setWarningConsentChecked] = useState(false);
+  const [warningConsentSaving, setWarningConsentSaving] = useState(false);
+  const [objections, setObjections] = useState<PerformanceScoreObjection[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [signatureModalOpen, setSignatureModalOpen] = useState(false);
   const [signatureConsent, setSignatureConsent] = useState(false);
@@ -161,11 +178,20 @@ const PerformanceScoreView: React.FC = () => {
     if (!currentUser?.uid) return;
     setLoading(true);
     try {
-      const loaded = await loadUserPerformanceScoreRecords(currentUser.uid, {
-        year,
-        semester,
-      });
+      const [loaded, settings, consent, loadedObjections] = await Promise.all([
+        loadUserPerformanceScoreRecords(currentUser.uid, {
+          year,
+          semester,
+        }),
+        loadPerformanceScoreSettings(config),
+        loadPerformanceScoreWarningConsent(currentUser.uid),
+        loadUserPerformanceScoreObjections(config, currentUser.uid),
+      ]);
       setRecords(loaded);
+      setScoreSettings(settings);
+      setWarningConsent(consent);
+      setObjections(loadedObjections);
+      setWarningConsentChecked(false);
       setSelectedId((current) =>
         loaded.some((record) => record.id === current)
           ? current
@@ -256,6 +282,47 @@ const PerformanceScoreView: React.FC = () => {
     records.length > 0 && confirmedRecordCount === records.length;
   const pendingRecords = records.filter((record) => !isRecordConfirmed(record));
   const signatureActionPending = confirming || objecting;
+  const warningConsentCurrent = currentUser?.uid
+    ? isPerformanceScoreWarningConsentCurrent(
+        warningConsent,
+        currentUser.uid,
+        config,
+        scoreSettings,
+      )
+    : false;
+  const pendingObjections = useMemo(
+    () => objections.filter((item) => item.status === "pending"),
+    [objections],
+  );
+  const pendingObjectionScoreIds = useMemo(() => {
+    const scoreIds = new Set<string>();
+    pendingObjections.forEach((item) => {
+      if (item.scoreId) scoreIds.add(item.scoreId);
+      if (item.rosterId) scoreIds.add(item.rosterId);
+    });
+    return scoreIds;
+  }, [pendingObjections]);
+  const hasPendingObjection = pendingObjectionScoreIds.size > 0;
+  const selectedRecordHasPendingObjection = selectedRecord
+    ? pendingObjectionScoreIds.has(getRecordScoreId(selectedRecord))
+    : false;
+  const signatureBlockedByPendingObjection =
+    hasPendingObjection && !allScoresConfirmed;
+  const pendingObjectionTitles = records
+    .filter((record) => pendingObjectionScoreIds.has(getRecordScoreId(record)))
+    .map((record) => record.title)
+    .filter(Boolean);
+  const signatureButtonDisabled =
+    !warningConsentCurrent ||
+    signatureBlockedByPendingObjection ||
+    signatureActionPending;
+  const signatureBlockedMessage = signatureBlockedByPendingObjection
+    ? `이의 제기 처리 대기 중인 수행평가가 있습니다${
+        pendingObjectionTitles.length
+          ? `: ${pendingObjectionTitles.join(", ")}`
+          : ""
+      }. 담당 교사가 수용 또는 반려 처리한 뒤 서명할 수 있습니다.`
+    : "";
 
   const getStudentIdentityError = (targetRecords = records) => {
     if (!currentUser?.uid) return "로그인한 학생 정보를 확인하지 못했습니다.";
@@ -366,6 +433,23 @@ const PerformanceScoreView: React.FC = () => {
   };
 
   const openSignatureModal = () => {
+    if (!warningConsentCurrent) {
+      showToast({
+        title: "안내 동의가 필요합니다.",
+        message: "경고 문구를 확인하고 동의를 저장한 뒤 서명할 수 있습니다.",
+        tone: "warning",
+      });
+      return;
+    }
+    if (signatureBlockedByPendingObjection) {
+      showToast({
+        title: "서명 대기 중",
+        message: signatureBlockedMessage,
+        tone: "warning",
+        durationMs: 5200,
+      });
+      return;
+    }
     if (allScoresConfirmed) {
       setSignatureError(
         "이미 점수 확인과 서명이 완료되었습니다. 재서명은 담당 교사가 반려한 경우에만 가능합니다.",
@@ -405,6 +489,15 @@ const PerformanceScoreView: React.FC = () => {
   };
 
   const openObjectionModal = () => {
+    if (!warningConsentCurrent) {
+      showToast({
+        title: "안내 동의가 필요합니다.",
+        message:
+          "경고 문구를 확인하고 동의를 저장한 뒤 이의 제기할 수 있습니다.",
+        tone: "warning",
+      });
+      return;
+    }
     if (allScoresConfirmed) {
       showToast({
         title: "이의 제기 불가",
@@ -431,6 +524,43 @@ const PerformanceScoreView: React.FC = () => {
   const closeObjectionModal = () => {
     if (objecting) return;
     setObjectionModalOpen(false);
+  };
+
+  const saveWarningConsent = async () => {
+    if (!currentUser?.uid || warningConsentSaving) return;
+    if (!warningConsentChecked) {
+      showToast({
+        title: "동의가 필요합니다.",
+        message: "안내 문구를 확인한 뒤 동의합니다를 체크해 주세요.",
+        tone: "warning",
+      });
+      return;
+    }
+    setWarningConsentSaving(true);
+    try {
+      const saved = await savePerformanceScoreWarningConsent(
+        currentUser.uid,
+        config,
+        scoreSettings,
+      );
+      setWarningConsent(saved);
+      setWarningConsentChecked(false);
+      showToast({
+        title: "동의 내용을 저장했습니다.",
+        message: "이제 내 수행평가 점수를 확인할 수 있습니다.",
+        tone: "success",
+      });
+    } catch (error) {
+      console.error("Failed to save performance score warning consent:", error);
+      showToast({
+        title: "동의 저장에 실패했습니다.",
+        message:
+          "네트워크와 로그인 상태를 확인한 뒤 다시 시도해 주세요. 저장 전에는 점수를 확인할 수 없습니다.",
+        tone: "error",
+      });
+    } finally {
+      setWarningConsentSaving(false);
+    }
   };
 
   const getSignatureImageDataUrl = () => {
@@ -524,6 +654,10 @@ const PerformanceScoreView: React.FC = () => {
 
   const submitPerformanceScoreObjection = async () => {
     if (!currentUser?.uid || signatureActionPending) return;
+    if (!warningConsentCurrent) {
+      setObjectionError("안내 문구 동의를 저장한 뒤 이의 제기할 수 있습니다.");
+      return;
+    }
     const validScoreIds = new Set(pendingRecords.map(getRecordScoreId));
     const selectedScoreIds = Array.from(new Set(objectionSelectedIds)).filter(
       (scoreId) => scoreId && validScoreIds.has(scoreId),
@@ -557,6 +691,11 @@ const PerformanceScoreView: React.FC = () => {
         scoreIds: selectedScoreIds,
         reason,
       });
+      if (result.objectionSavedCount > 0) {
+        setObjections(
+          await loadUserPerformanceScoreObjections(config, currentUser.uid),
+        );
+      }
       if (
         result.objectionSavedCount <= 0 &&
         result.objectionSkippedProcessedCount > 0
@@ -618,6 +757,14 @@ const PerformanceScoreView: React.FC = () => {
 
   const submitSignatureConfirmation = async () => {
     if (!currentUser?.uid || objecting) return;
+    if (!warningConsentCurrent) {
+      setSignatureError("안내 문구 동의를 저장한 뒤 서명할 수 있습니다.");
+      return;
+    }
+    if (signatureBlockedByPendingObjection) {
+      setSignatureError(signatureBlockedMessage);
+      return;
+    }
     if (allScoresConfirmed) {
       setSignatureError(
         "이미 점수 확인과 서명이 완료되었습니다. 담당 교사가 반려한 경우에만 다시 서명할 수 있습니다.",
@@ -804,6 +951,61 @@ const PerformanceScoreView: React.FC = () => {
     return <PageLoading message="내 수행평가 점수를 불러오는 중입니다." />;
   }
 
+  if (!warningConsentCurrent) {
+    return (
+      <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 lg:px-10">
+        <div className="rounded-xl border border-slate-200 bg-white px-5 py-5 shadow-sm">
+          <div className="break-keep">
+            <p className="text-sm font-black text-blue-700">
+              수행평가 점수 확인 전 안내
+            </p>
+            <h1 className="mt-1 text-2xl font-black text-slate-900">
+              내 수행평가 점수
+            </h1>
+            <p className="mt-2 text-sm font-bold leading-6 text-slate-500">
+              안내 문구에 동의한 학생만 점수 확인, 서명, 이의 제기를 진행할 수
+              있습니다.
+            </p>
+          </div>
+
+          <div className="mt-5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-4">
+            <h2 className="text-base font-black text-rose-800">
+              반드시 본인 점수만 확인하세요.
+            </h2>
+            <p className="mt-2 whitespace-pre-wrap break-keep text-sm font-bold leading-7 text-rose-700">
+              {scoreSettings.warningText}
+            </p>
+          </div>
+
+          <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
+            <input
+              type="checkbox"
+              checked={warningConsentChecked}
+              onChange={(event) =>
+                setWarningConsentChecked(event.target.checked)
+              }
+              disabled={warningConsentSaving}
+              className="mt-1 h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            />
+            <span className="break-keep text-sm font-black leading-6 text-slate-800">
+              위 안내를 확인했으며, 본인 점수만 확인하고 본인이 직접 서명할 것에
+              동의합니다.
+            </span>
+          </label>
+
+          <button
+            type="button"
+            onClick={() => void saveWarningConsent()}
+            disabled={!warningConsentChecked || warningConsentSaving}
+            className="mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-blue-600 px-5 py-2 text-sm font-black leading-5 text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 sm:w-auto"
+          >
+            {warningConsentSaving ? "저장 중..." : "동의 저장하고 점수 확인"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto w-full max-w-7xl px-4 py-5 sm:px-6 lg:px-10">
       <div className="mb-5 rounded-xl border border-slate-200 bg-white px-5 py-5 shadow-sm">
@@ -833,14 +1035,17 @@ const PerformanceScoreView: React.FC = () => {
                   <button
                     type="button"
                     onClick={openObjectionModal}
-                    className="inline-flex min-h-11 items-center justify-center rounded-lg border border-rose-200 bg-white px-5 py-2 text-sm font-black leading-5 text-rose-700 transition hover:bg-rose-50"
+                    disabled={signatureActionPending}
+                    className="inline-flex min-h-11 items-center justify-center rounded-lg border border-rose-200 bg-white px-5 py-2 text-sm font-black leading-5 text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     이의 제기
                   </button>
                   <button
                     type="button"
                     onClick={openSignatureModal}
-                    className="inline-flex min-h-11 items-center justify-center rounded-lg bg-blue-600 px-5 py-2 text-sm font-black leading-5 text-white shadow-sm transition hover:bg-blue-700"
+                    disabled={signatureButtonDisabled}
+                    title={signatureBlockedMessage || undefined}
+                    className="inline-flex min-h-11 items-center justify-center rounded-lg bg-blue-600 px-5 py-2 text-sm font-black leading-5 text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                   >
                     점수 확인 및 서명하기
                   </button>
@@ -848,6 +1053,11 @@ const PerformanceScoreView: React.FC = () => {
               ))}
           </div>
         </div>
+        {signatureBlockedByPendingObjection && (
+          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold leading-6 text-amber-800">
+            {signatureBlockedMessage}
+          </div>
+        )}
       </div>
 
       {!selectedRecord ? (
@@ -915,6 +1125,13 @@ const PerformanceScoreView: React.FC = () => {
                           {record.signatureName && (
                             <span className="text-blue-700">확인 완료</span>
                           )}
+                          {pendingObjectionScoreIds.has(
+                            getRecordScoreId(record),
+                          ) && (
+                            <span className="text-amber-700">
+                              이의 처리 대기
+                            </span>
+                          )}
                         </div>
                       </div>
                     </button>
@@ -951,7 +1168,11 @@ const PerformanceScoreView: React.FC = () => {
                   </span>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2 lg:justify-end">
-                  {hasConfirmation ? (
+                  {selectedRecordHasPendingObjection ? (
+                    <span className="inline-flex items-center justify-center rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-black text-amber-800">
+                      이의 제기 처리 대기
+                    </span>
+                  ) : hasConfirmation ? (
                     <span className="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-black text-blue-800">
                       확인 완료
                       {confirmedAt ? ` · ${formatDateTime(confirmedAt)}` : ""}

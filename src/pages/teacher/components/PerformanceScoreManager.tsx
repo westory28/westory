@@ -29,18 +29,25 @@ import {
 import {
   PERFORMANCE_SCORE_ROSTERS_COLLECTION,
   PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
+  DEFAULT_PERFORMANCE_SCORE_WARNING_TEXT,
   PERFORMANCE_SCORE_OBJECTIONS_COLLECTION,
+  PERFORMANCE_SCORE_WARNING_MAX_LENGTH,
   PERFORMANCE_SCORE_USER_COLLECTION,
   applyPerformanceScoreConfirmation,
   buildStudentLookupKey,
   buildStudentNameLookupKey,
   formatPerformanceScore,
   getPerformanceScorePercent,
+  loadPerformanceScoreSettings,
   loadPerformanceScoreConfirmation,
+  normalizePerformanceScoreSettings,
+  normalizePerformanceScoreWarningText,
   normalizeSchoolValue,
   normalizeStudentName,
   roundScore,
+  savePerformanceScoreSettings,
   sortPerformanceScoreRecords,
+  type PerformanceScoreSettings,
   type PerformanceScoreRecord,
   type PerformanceScoreRoster,
   type PerformanceScoreRosterRow,
@@ -2801,6 +2808,15 @@ const PerformanceScoreManager: React.FC = () => {
   const [rosters, setRosters] = useState<PerformanceScoreRoster[]>([]);
   const [rostersLoading, setRostersLoading] = useState(true);
   const [deletingRosterId, setDeletingRosterId] = useState("");
+  const [scoreWarningSettings, setScoreWarningSettings] =
+    useState<PerformanceScoreSettings>(() =>
+      normalizePerformanceScoreSettings(),
+    );
+  const [scoreWarningDraft, setScoreWarningDraft] = useState(
+    DEFAULT_PERFORMANCE_SCORE_WARNING_TEXT,
+  );
+  const [scoreWarningLoading, setScoreWarningLoading] = useState(true);
+  const [scoreWarningSaving, setScoreWarningSaving] = useState(false);
   const [previewClassFilter, setPreviewClassFilter] = useState("all");
   const [previewPage, setPreviewPage] = useState(1);
   const [assessmentPreset, setAssessmentPreset] =
@@ -2875,6 +2891,10 @@ const PerformanceScoreManager: React.FC = () => {
 
   useEffect(() => {
     void loadRosters();
+  }, [year, semester]);
+
+  useEffect(() => {
+    void loadScoreWarningSettings();
   }, [year, semester]);
 
   useEffect(() => {
@@ -3581,6 +3601,74 @@ const PerformanceScoreManager: React.FC = () => {
         : classSheetClassOptions[0] || "",
     );
   }, [classSheetClassOptions]);
+
+  const loadScoreWarningSettings = async () => {
+    setScoreWarningLoading(true);
+    try {
+      const settings = await loadPerformanceScoreSettings(config);
+      setScoreWarningSettings(settings);
+      setScoreWarningDraft(settings.warningText);
+    } catch (error) {
+      console.error(
+        "Failed to load performance score warning settings:",
+        error,
+      );
+      showToast({
+        tone: "error",
+        title: "경고 문구를 불러오지 못했습니다.",
+        message: "권한과 네트워크 상태를 확인한 뒤 다시 시도해 주세요.",
+      });
+    } finally {
+      setScoreWarningLoading(false);
+    }
+  };
+
+  const saveScoreWarningSettings = async () => {
+    if (scoreWarningSaving) return;
+    const normalizedText =
+      normalizePerformanceScoreWarningText(scoreWarningDraft);
+    if (scoreWarningDraft.length > PERFORMANCE_SCORE_WARNING_MAX_LENGTH) {
+      showToast({
+        tone: "warning",
+        title: "문구가 너무 깁니다.",
+        message: `${PERFORMANCE_SCORE_WARNING_MAX_LENGTH}자 이내로 줄여 주세요.`,
+      });
+      return;
+    }
+    setScoreWarningSaving(true);
+    try {
+      const saved = await savePerformanceScoreSettings(config, {
+        warningText: normalizedText,
+        updatedBy: currentUser?.uid,
+      });
+      const nextSettings = {
+        ...scoreWarningSettings,
+        ...saved,
+        updatedAt: new Date(),
+        updatedBy: currentUser?.uid || "",
+      };
+      setScoreWarningSettings(nextSettings);
+      setScoreWarningDraft(saved.warningText);
+      showToast({
+        tone: "success",
+        title: "경고 문구를 저장했습니다.",
+        message:
+          "학생은 이 문구에 동의해야 수행평가 점수 확인과 서명을 진행할 수 있습니다.",
+      });
+    } catch (error) {
+      console.error(
+        "Failed to save performance score warning settings:",
+        error,
+      );
+      showToast({
+        tone: "error",
+        title: "경고 문구 저장에 실패했습니다.",
+        message: "권한과 네트워크 상태를 확인한 뒤 다시 저장해 주세요.",
+      });
+    } finally {
+      setScoreWarningSaving(false);
+    }
+  };
 
   const loadStudents = async () => {
     setStudentsLoading(true);
@@ -7429,6 +7517,82 @@ const PerformanceScoreManager: React.FC = () => {
             {studentLoadError}
           </div>
         )}
+
+        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/70 p-4">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0 break-keep">
+              <h3 className="text-base font-black text-amber-900">
+                학생 점수 확인 경고 문구
+              </h3>
+              <p className="mt-1 text-sm font-bold leading-6 text-amber-800/80">
+                학생은 이 문구에 동의해야 내 수행평가 점수 확인, 서명, 이의
+                제기를 진행할 수 있습니다.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void loadScoreWarningSettings()}
+              disabled={scoreWarningLoading || scoreWarningSaving}
+              className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-amber-200 bg-white px-4 text-sm font-black text-amber-800 transition hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <i
+                className={`fas fa-sync-alt text-xs ${
+                  scoreWarningLoading ? "animate-spin" : ""
+                }`}
+                aria-hidden="true"
+              />
+              새로고침
+            </button>
+          </div>
+
+          <textarea
+            value={scoreWarningDraft}
+            onChange={(event) => setScoreWarningDraft(event.target.value)}
+            disabled={scoreWarningLoading || scoreWarningSaving}
+            maxLength={PERFORMANCE_SCORE_WARNING_MAX_LENGTH + 1}
+            rows={4}
+            className="mt-3 w-full resize-y rounded-lg border border-amber-200 bg-white px-3 py-3 text-sm font-bold leading-6 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-amber-400 focus:ring-2 focus:ring-amber-100 disabled:bg-slate-50"
+            placeholder={DEFAULT_PERFORMANCE_SCORE_WARNING_TEXT}
+          />
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div
+              className={`text-xs font-bold ${
+                scoreWarningDraft.length > PERFORMANCE_SCORE_WARNING_MAX_LENGTH
+                  ? "text-rose-600"
+                  : "text-amber-800/70"
+              }`}
+            >
+              {scoreWarningDraft.length}/{PERFORMANCE_SCORE_WARNING_MAX_LENGTH}
+              자 · 현재 버전 {scoreWarningSettings.warningVersion}
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+              <button
+                type="button"
+                onClick={() =>
+                  setScoreWarningDraft(DEFAULT_PERFORMANCE_SCORE_WARNING_TEXT)
+                }
+                disabled={scoreWarningLoading || scoreWarningSaving}
+                className="inline-flex h-10 items-center justify-center rounded-lg border border-amber-200 bg-white px-4 text-sm font-black text-amber-800 transition hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                기본 문구
+              </button>
+              <button
+                type="button"
+                onClick={() => void saveScoreWarningSettings()}
+                disabled={
+                  scoreWarningLoading ||
+                  scoreWarningSaving ||
+                  scoreWarningDraft.length >
+                    PERFORMANCE_SCORE_WARNING_MAX_LENGTH
+                }
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                <i className="fas fa-save text-xs" aria-hidden="true" />
+                {scoreWarningSaving ? "저장 중" : "문구 저장"}
+              </button>
+            </div>
+          </div>
+        </div>
 
         {rostersLoading ? (
           <InlineLoading message="저장된 점수를 불러오는 중입니다." />

@@ -218,13 +218,89 @@ service cloud.firestore {
         );
     }
 
+    function performanceScorePath(userId, scoreId) {
+      return /databases/$(database)/documents/users/$(userId)/performance_scores/$(scoreId);
+    }
+
+    function performanceScoreConsentPath(userId) {
+      return /databases/$(database)/documents/users/$(userId)/performance_score_consents/current;
+    }
+
+    function performanceScoreSettingsPath(year, semester) {
+      return /databases/$(database)/documents/years/$(year)/semesters/$(semester)/assessment_config/performance_score;
+    }
+
+    function isValidPerformanceScoreConsent(userId, consentId) {
+      return canUseWestory()
+        && isOwnUser(userId)
+        && consentId == 'current'
+        && request.resource.data.keys().hasOnly([
+          'uid',
+          'academicYear',
+          'semester',
+          'acknowledged',
+          'warningVersion',
+          'warningTextHash',
+          'acknowledgedAt',
+          'updatedAt'
+        ])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.academicYear is string
+        && request.resource.data.academicYear.size() > 0
+        && request.resource.data.academicYear.size() <= 8
+        && request.resource.data.semester is string
+        && request.resource.data.semester.size() > 0
+        && request.resource.data.semester.size() <= 8
+        && request.resource.data.acknowledged == true
+        && request.resource.data.warningVersion is string
+        && request.resource.data.warningVersion.size() > 0
+        && request.resource.data.warningVersion.size() <= 80
+        && request.resource.data.warningTextHash is string
+        && request.resource.data.warningTextHash.size() > 0
+        && request.resource.data.warningTextHash.size() <= 32
+        && request.resource.data.acknowledgedAt == request.time
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    function hasCurrentPerformanceScoreConsent(userId, scoreId) {
+      return exists(performanceScoreConsentPath(userId))
+        && hasMatchingPerformanceScoreConsent(userId, scoreId);
+    }
+
+    function hasMatchingPerformanceScoreConsent(userId, scoreId) {
+      let scoreData = get(performanceScorePath(userId, scoreId)).data;
+      let consentData = get(performanceScoreConsentPath(userId)).data;
+      let settingsPath = performanceScoreSettingsPath(scoreData.academicYear, scoreData.semester);
+      return consentData.uid == request.auth.uid
+        && consentData.acknowledged == true
+        && consentData.academicYear == scoreData.academicYear
+        && consentData.semester == scoreData.semester
+        && consentData.warningVersion is string
+        && consentData.warningTextHash is string
+        && (
+          (
+            exists(settingsPath)
+            && consentData.warningVersion == get(settingsPath).data.warningVersion
+            && (
+              !get(settingsPath).data.keys().hasAny(['warningTextHash'])
+              || consentData.warningTextHash == get(settingsPath).data.warningTextHash
+            )
+          )
+          || (
+            !exists(settingsPath)
+            && consentData.warningVersion == 'default-20260609'
+          )
+        );
+    }
+
     function isValidPerformanceScoreConfirmation(userId, scoreId, confirmationId) {
       return canUseWestory()
         && isOwnUser(userId)
         && confirmationId == request.auth.uid
-        && exists(/databases/$(database)/documents/users/$(userId)/performance_scores/$(scoreId))
-        && get(/databases/$(database)/documents/users/$(userId)/performance_scores/$(scoreId)).data.uid == request.auth.uid
-        && get(/databases/$(database)/documents/users/$(userId)/performance_scores/$(scoreId)).data.rosterId == scoreId
+        && exists(performanceScorePath(userId, scoreId))
+        && get(performanceScorePath(userId, scoreId)).data.uid == request.auth.uid
+        && get(performanceScorePath(userId, scoreId)).data.rosterId == scoreId
+        && hasCurrentPerformanceScoreConsent(userId, scoreId)
         && request.resource.data.keys().hasOnly([
           'uid',
           'rosterId',
@@ -612,6 +688,12 @@ service cloud.firestore {
           && request.resource.data.scores is map
           && request.resource.data.scores.keys().size() <= 500;
         allow delete: if canUseWestory() && (isOwnUser(userId) || isAdmin());
+      }
+
+      match /performance_score_consents/{consentId} {
+        allow read: if canUseWestory() && (isOwnUser(userId) || canManagePerformanceScores());
+        allow create, update: if isValidPerformanceScoreConsent(userId, consentId);
+        allow delete: if isAdmin();
       }
 
       match /performance_scores/{scoreId} {

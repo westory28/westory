@@ -1,28 +1,33 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { initializeApp, deleteApp } from 'firebase/app';
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import {
+  initializeTestEnvironment,
+  assertFails,
+  assertSucceeds,
+} from "@firebase/rules-unit-testing";
+import { initializeApp, deleteApp } from "firebase/app";
 import {
   connectAuthEmulator,
   createUserWithEmailAndPassword,
   getAuth,
-} from 'firebase/auth';
+} from "firebase/auth";
 import {
   connectFirestoreEmulator,
   doc,
   getDoc,
   getFirestore,
+  serverTimestamp,
   setDoc,
-} from 'firebase/firestore';
+} from "firebase/firestore";
 
-const projectId = 'demo-westory-score-warning';
-const rules = readFileSync(resolve('firestore.rules'), 'utf8');
-const authHost = 'http://127.0.0.1:9099';
-const firestoreHost = '127.0.0.1';
+const projectId = "demo-westory-score-warning";
+const rules = readFileSync(resolve("firestore.rules"), "utf8");
+const authHost = "http://127.0.0.1:9099";
+const firestoreHost = "127.0.0.1";
 const firestorePort = 8080;
 
 const firebaseConfig = {
-  apiKey: 'demo-api-key',
+  apiKey: "demo-api-key",
   authDomain: `${projectId}.firebaseapp.com`,
   projectId,
 };
@@ -39,7 +44,11 @@ const createClient = async (name, email, password) => {
   const db = getFirestore(app);
   connectFirestoreEmulator(db, firestoreHost, firestorePort);
 
-  const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+  const userCredential = await createUserWithEmailAndPassword(
+    auth,
+    email,
+    password,
+  );
   return {
     app,
     auth,
@@ -52,45 +61,45 @@ const createClient = async (name, email, password) => {
 const existingStudentDoc = (uid, email) => ({
   uid,
   email,
-  photoURL: '',
-  role: 'student',
+  photoURL: "",
+  role: "student",
   staffPermissions: [],
   teacherPortalEnabled: false,
-  name: '기존학생',
+  name: "기존학생",
   customNameConfirmed: true,
-  grade: '2',
-  class: '6',
-  number: '10',
+  grade: "2",
+  class: "6",
+  number: "10",
   privacyAgreed: true,
-  privacyAgreedAt: 'seed-privacy',
-  consentAgreedItems: ['privacy'],
-  profileIcon: '😀',
-  profileEmojiId: 'smile',
-  createdAt: 'seed-created',
-  updatedAt: 'seed-updated',
-  lastLogin: 'seed-login',
+  privacyAgreedAt: "seed-privacy",
+  consentAgreedItems: ["privacy"],
+  profileIcon: "😀",
+  profileEmojiId: "smile",
+  createdAt: "seed-created",
+  updatedAt: "seed-updated",
+  lastLogin: "seed-login",
 });
 
 const newStudentDoc = (uid, email) => ({
   uid,
   email,
-  photoURL: '',
-  role: 'student',
+  photoURL: "",
+  role: "student",
   staffPermissions: [],
   teacherPortalEnabled: false,
-  name: '신규학생',
-  grade: '1',
-  class: '2',
-  number: '3',
+  name: "신규학생",
+  grade: "1",
+  class: "2",
+  number: "3",
   privacyAgreed: true,
-  consentAgreedItems: ['privacy', 'score-warning'],
-  profileIcon: '😀',
-  profileEmojiId: 'smile',
+  consentAgreedItems: ["privacy", "score-warning"],
+  profileIcon: "😀",
+  profileEmojiId: "smile",
   scoreWarningAcknowledged: true,
-  scoreWarningAcknowledgedAt: 'seed-warning',
-  createdAt: 'seed-created',
-  updatedAt: 'seed-updated',
-  lastLogin: 'seed-login',
+  scoreWarningAcknowledgedAt: "seed-warning",
+  createdAt: "seed-created",
+  updatedAt: "seed-updated",
+  lastLogin: "seed-login",
 });
 
 const main = async () => {
@@ -105,51 +114,73 @@ const main = async () => {
 
   await testEnv.clearFirestore();
 
-  const existingStudent = await createClient('score-warning-existing', 'existing.student@yongshin-ms.ms.kr', 'Password!123');
-  const newStudent = await createClient('score-warning-new', 'new.student@yongshin-ms.ms.kr', 'Password!123');
-  const otherStudent = await createClient('score-warning-other', 'other.student@yongshin-ms.ms.kr', 'Password!123');
+  const existingStudent = await createClient(
+    "score-warning-existing",
+    "existing.student@yongshin-ms.ms.kr",
+    "Password!123",
+  );
+  const newStudent = await createClient(
+    "score-warning-new",
+    "new.student@yongshin-ms.ms.kr",
+    "Password!123",
+  );
+  const otherStudent = await createClient(
+    "score-warning-other",
+    "other.student@yongshin-ms.ms.kr",
+    "Password!123",
+  );
 
   await testEnv.withSecurityRulesDisabled(async (context) => {
     const adminDb = context.firestore();
     await setDoc(
-      doc(adminDb, 'users', existingStudent.user.uid),
+      doc(adminDb, "users", existingStudent.user.uid),
       existingStudentDoc(existingStudent.user.uid, existingStudent.email),
     );
     await setDoc(
-      doc(adminDb, 'users', otherStudent.user.uid),
+      doc(adminDb, "users", otherStudent.user.uid),
       existingStudentDoc(otherStudent.user.uid, otherStudent.email),
     );
   });
 
   await assertSucceeds(
     setDoc(
-      doc(existingStudent.db, 'users', existingStudent.user.uid),
+      doc(existingStudent.db, "users", existingStudent.user.uid),
       {
         scoreWarningAcknowledged: true,
-        scoreWarningAcknowledgedAt: 'warning-updated',
-        updatedAt: 'updated-now',
-        consentAgreedItems: ['privacy', 'score-warning'],
+        scoreWarningAcknowledgedAt: "warning-updated",
+        updatedAt: "updated-now",
+        consentAgreedItems: ["privacy", "score-warning"],
       },
       { merge: true },
     ),
   );
 
-  const updatedSnap = await getDoc(doc(existingStudent.db, 'users', existingStudent.user.uid));
+  const updatedSnap = await getDoc(
+    doc(existingStudent.db, "users", existingStudent.user.uid),
+  );
   const updatedData = updatedSnap.data() || {};
-  if (updatedData.profileEmojiId !== 'smile' || updatedData.scoreWarningAcknowledged !== true) {
-    throw new Error('Existing student update did not preserve profileEmojiId or warning fields.');
+  if (
+    updatedData.profileEmojiId !== "smile" ||
+    updatedData.scoreWarningAcknowledged !== true
+  ) {
+    throw new Error(
+      "Existing student update did not preserve profileEmojiId or warning fields.",
+    );
   }
 
   await assertSucceeds(
-    setDoc(doc(newStudent.db, 'users', newStudent.user.uid), newStudentDoc(newStudent.user.uid, newStudent.email)),
+    setDoc(
+      doc(newStudent.db, "users", newStudent.user.uid),
+      newStudentDoc(newStudent.user.uid, newStudent.email),
+    ),
   );
 
   await assertFails(
     setDoc(
-      doc(existingStudent.db, 'users', existingStudent.user.uid),
+      doc(existingStudent.db, "users", existingStudent.user.uid),
       {
         legacyExtra: true,
-        updatedAt: 'invalid-extra',
+        updatedAt: "invalid-extra",
       },
       { merge: true },
     ),
@@ -157,12 +188,148 @@ const main = async () => {
 
   await assertFails(
     setDoc(
-      doc(otherStudent.db, 'users', existingStudent.user.uid),
+      doc(otherStudent.db, "users", existingStudent.user.uid),
       {
         scoreWarningAcknowledged: true,
-        updatedAt: 'cross-user-update',
+        updatedAt: "cross-user-update",
       },
       { merge: true },
+    ),
+  );
+
+  const performanceYear = "2026";
+  const performanceSemester = "1";
+  const performanceScoreId = "performance-score-1";
+  const performanceScoreOtherSemesterId = "performance-score-2";
+  const warningVersion = "warning-test-version";
+  const warningTextHash = "abc12345";
+  const signaturePayload = {
+    uid: existingStudent.user.uid,
+    rosterId: performanceScoreId,
+    signatureName: "기존학생",
+    signatureImage: "data:image/png;base64,AAAA",
+    confirmedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    const adminDb = context.firestore();
+    await setDoc(
+      doc(
+        adminDb,
+        "years",
+        performanceYear,
+        "semesters",
+        performanceSemester,
+        "assessment_config",
+        "performance_score",
+      ),
+      {
+        warningText: "수행평가 점수 확인 경고",
+        warningVersion,
+        warningTextHash,
+        updatedAt: "seed-updated",
+      },
+    );
+    await setDoc(
+      doc(
+        adminDb,
+        "users",
+        existingStudent.user.uid,
+        "performance_scores",
+        performanceScoreId,
+      ),
+      {
+        uid: existingStudent.user.uid,
+        rosterId: performanceScoreId,
+        academicYear: performanceYear,
+        semester: performanceSemester,
+      },
+    );
+    await setDoc(
+      doc(
+        adminDb,
+        "users",
+        existingStudent.user.uid,
+        "performance_scores",
+        performanceScoreOtherSemesterId,
+      ),
+      {
+        uid: existingStudent.user.uid,
+        rosterId: performanceScoreOtherSemesterId,
+        academicYear: performanceYear,
+        semester: "2",
+      },
+    );
+  });
+
+  await assertFails(
+    setDoc(
+      doc(
+        existingStudent.db,
+        "users",
+        existingStudent.user.uid,
+        "performance_scores",
+        performanceScoreId,
+        "confirmations",
+        existingStudent.user.uid,
+      ),
+      signaturePayload,
+    ),
+  );
+
+  await assertSucceeds(
+    setDoc(
+      doc(
+        existingStudent.db,
+        "users",
+        existingStudent.user.uid,
+        "performance_score_consents",
+        "current",
+      ),
+      {
+        uid: existingStudent.user.uid,
+        academicYear: performanceYear,
+        semester: performanceSemester,
+        acknowledged: true,
+        warningVersion,
+        warningTextHash,
+        acknowledgedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+    ),
+  );
+
+  await assertSucceeds(
+    setDoc(
+      doc(
+        existingStudent.db,
+        "users",
+        existingStudent.user.uid,
+        "performance_scores",
+        performanceScoreId,
+        "confirmations",
+        existingStudent.user.uid,
+      ),
+      signaturePayload,
+    ),
+  );
+
+  await assertFails(
+    setDoc(
+      doc(
+        existingStudent.db,
+        "users",
+        existingStudent.user.uid,
+        "performance_scores",
+        performanceScoreOtherSemesterId,
+        "confirmations",
+        existingStudent.user.uid,
+      ),
+      {
+        ...signaturePayload,
+        rosterId: performanceScoreOtherSemesterId,
+      },
     ),
   );
 
@@ -171,10 +338,12 @@ const main = async () => {
       {
         projectId,
         checks: [
-          'existing student warning update with profileEmojiId passes',
-          'new student bootstrap create with profileEmojiId passes',
-          'unexpected extra key remains blocked',
-          'cross-user update remains blocked',
+          "existing student warning update with profileEmojiId passes",
+          "new student bootstrap create with profileEmojiId passes",
+          "unexpected extra key remains blocked",
+          "cross-user update remains blocked",
+          "performance score signature requires scoped warning consent",
+          "performance score consent does not authorize another semester",
         ],
       },
       null,
