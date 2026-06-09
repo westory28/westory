@@ -91,10 +91,11 @@ const CLASS_SHEET_STUDENT_NAME_COLUMN_MAX_FIT_WIDTH = 13;
 const CLASS_SHEET_STUDENT_NAME_HEADER_ROW = CLASS_SHEET_STUDENT_START_ROW - 1;
 const CLASS_SHEET_INTERNAL_HORIZONTAL_START_ROW = 7;
 const CLASS_SHEET_INTERNAL_HORIZONTAL_START_COLUMN = 2;
-const CLASS_SHEET_INTERNAL_HORIZONTAL_END_COLUMN = 10;
+const CLASS_SHEET_INTERNAL_HORIZONTAL_END_COLUMN =
+  CLASS_SHEET_TEMPLATE_COLUMN_COUNT;
 const CLASS_SHEET_INTERNAL_VERTICAL_START_ROW = 6;
-const CLASS_SHEET_INTERNAL_VERTICAL_START_COLUMN = 5;
-const CLASS_SHEET_INTERNAL_VERTICAL_END_COLUMN = 7;
+const CLASS_SHEET_INTERNAL_VERTICAL_LEFT_COLUMN = 5;
+const CLASS_SHEET_INTERNAL_VERTICAL_RIGHT_COLUMN = 7;
 const CLASS_SHEET_RIGHT_SPACER_COLUMNS = [
   { column: 16, minWidth: 8 },
   { column: 15, minWidth: 12 },
@@ -1975,6 +1976,7 @@ const centerClassSheetStudentNameHeader = (worksheet: {
 
 type ClassSheetBorderSide = { style?: string; color?: unknown };
 type ClassSheetCellStyle = {
+  style?: unknown;
   alignment?: unknown;
   border?: {
     left?: ClassSheetBorderSide;
@@ -1993,6 +1995,11 @@ const createClassSheetThinBorderSide = (): ClassSheetBorderSide => ({
 const cloneClassSheetBorder = (border: ClassSheetCellStyle["border"]) =>
   JSON.parse(JSON.stringify(border || {})) as NonNullable<
     ClassSheetCellStyle["border"]
+  >;
+
+const cloneClassSheetCellStyle = (style: ClassSheetCellStyle["style"]) =>
+  JSON.parse(JSON.stringify(style || {})) as NonNullable<
+    ClassSheetCellStyle["style"]
   >;
 
 const setClassSheetCellHorizontalAlignment = (
@@ -2022,6 +2029,7 @@ const setClassSheetCellBorder = (
   border: ClassSheetCellStyle["border"],
 ) => {
   const cell = worksheet.getCell(row, column);
+  cell.style = cloneClassSheetCellStyle(cell.style);
   cell.border = {
     ...cloneClassSheetBorder(cell.border),
     ...cloneClassSheetBorder(border),
@@ -2053,10 +2061,15 @@ const applyClassSheetNiceStyleAdjustments = (
       column <= CLASS_SHEET_INTERNAL_HORIZONTAL_END_COLUMN;
       column += 1
     ) {
+      const border: ClassSheetCellStyle["border"] = {};
+      if (row > CLASS_SHEET_INTERNAL_HORIZONTAL_START_ROW) {
+        border.top = createClassSheetThinBorderSide();
+      }
       if (row < horizontalEndRow) {
-        setClassSheetCellBorder(worksheet, row, column, {
-          bottom: createClassSheetThinBorderSide(),
-        });
+        border.bottom = createClassSheetThinBorderSide();
+      }
+      if (border.top || border.bottom) {
+        setClassSheetCellBorder(worksheet, row, column, border);
       }
     }
   }
@@ -2066,15 +2079,18 @@ const applyClassSheetNiceStyleAdjustments = (
     row <= Math.max(CLASS_SHEET_INTERNAL_VERTICAL_START_ROW, summaryEndRow);
     row += 1
   ) {
-    for (
-      let column = CLASS_SHEET_INTERNAL_VERTICAL_START_COLUMN;
-      column < CLASS_SHEET_INTERNAL_VERTICAL_END_COLUMN;
-      column += 1
-    ) {
-      setClassSheetCellBorder(worksheet, row, column, {
-        right: createClassSheetThinBorderSide(),
-      });
-    }
+    setClassSheetCellBorder(
+      worksheet,
+      row,
+      CLASS_SHEET_INTERNAL_VERTICAL_LEFT_COLUMN,
+      { right: createClassSheetThinBorderSide() },
+    );
+    setClassSheetCellBorder(
+      worksheet,
+      row,
+      CLASS_SHEET_INTERNAL_VERTICAL_RIGHT_COLUMN,
+      { left: createClassSheetThinBorderSide() },
+    );
   }
 };
 
