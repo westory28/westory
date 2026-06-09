@@ -1985,10 +1985,15 @@ type ClassSheetCellStyle = {
   };
 };
 
-const CLASS_SHEET_HAIR_BORDER_SIDE: ClassSheetBorderSide = {
-  style: "hair",
+const createClassSheetThinBorderSide = (): ClassSheetBorderSide => ({
+  style: "thin",
   color: { indexed: 0 },
-};
+});
+
+const cloneClassSheetBorder = (border: ClassSheetCellStyle["border"]) =>
+  JSON.parse(JSON.stringify(border || {})) as NonNullable<
+    ClassSheetCellStyle["border"]
+  >;
 
 const setClassSheetCellHorizontalAlignment = (
   worksheet: {
@@ -2017,11 +2022,9 @@ const setClassSheetCellBorder = (
   border: ClassSheetCellStyle["border"],
 ) => {
   const cell = worksheet.getCell(row, column);
-  const currentBorder =
-    cell.border && typeof cell.border === "object" ? cell.border : {};
   cell.border = {
-    ...(currentBorder as NonNullable<ClassSheetCellStyle["border"]>),
-    ...border,
+    ...cloneClassSheetBorder(cell.border),
+    ...cloneClassSheetBorder(border),
   };
 };
 
@@ -2051,12 +2054,7 @@ const applyClassSheetNiceStyleAdjustments = (
     ) {
       if (row < endRow) {
         setClassSheetCellBorder(worksheet, row, column, {
-          bottom: CLASS_SHEET_HAIR_BORDER_SIDE,
-        });
-      }
-      if (row > CLASS_SHEET_INTERNAL_BORDER_START_ROW) {
-        setClassSheetCellBorder(worksheet, row, column, {
-          top: CLASS_SHEET_HAIR_BORDER_SIDE,
+          bottom: createClassSheetThinBorderSide(),
         });
       }
     }
@@ -2065,13 +2063,13 @@ const applyClassSheetNiceStyleAdjustments = (
       worksheet,
       row,
       CLASS_SHEET_SCORE_DIVIDER_LEFT_COLUMN,
-      { right: CLASS_SHEET_HAIR_BORDER_SIDE },
+      { right: createClassSheetThinBorderSide() },
     );
     setClassSheetCellBorder(
       worksheet,
       row,
       CLASS_SHEET_SCORE_DIVIDER_RIGHT_COLUMN,
-      { left: CLASS_SHEET_HAIR_BORDER_SIDE },
+      { left: createClassSheetThinBorderSide() },
     );
   }
 };
