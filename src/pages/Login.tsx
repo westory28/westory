@@ -433,6 +433,11 @@ const isLocalAuthHost = (): boolean => {
 
 const shouldPreferRedirectLogin = (): boolean => {
   if (isLocalAuthHost()) return false;
+  if (typeof window !== "undefined" && window.location.protocol === "https:") {
+    // Some embedded desktop browsers do not preserve the popup opener state,
+    // which can leave Firebase's auth helper page open instead of returning.
+    return true;
+  }
   return isSafariBrowser() || isIOSDevice() || isAndroidDevice();
 };
 
