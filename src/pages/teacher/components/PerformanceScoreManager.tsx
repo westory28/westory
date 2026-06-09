@@ -89,12 +89,12 @@ const CLASS_SHEET_STUDENT_NAME_COLUMN_FALLBACK_WIDTH =
   CLASS_SHEET_STUDENT_NAME_COLUMN_WIDTH;
 const CLASS_SHEET_STUDENT_NAME_COLUMN_MAX_FIT_WIDTH = 13;
 const CLASS_SHEET_STUDENT_NAME_HEADER_ROW = CLASS_SHEET_STUDENT_START_ROW - 1;
-const CLASS_SHEET_INTERNAL_BORDER_START_ROW = 7;
-const CLASS_SHEET_INTERNAL_BORDER_END_ROW = 40;
-const CLASS_SHEET_INTERNAL_BORDER_START_COLUMN = 2;
-const CLASS_SHEET_INTERNAL_BORDER_END_COLUMN = 10;
-const CLASS_SHEET_SCORE_DIVIDER_LEFT_COLUMN = 6;
-const CLASS_SHEET_SCORE_DIVIDER_RIGHT_COLUMN = 7;
+const CLASS_SHEET_INTERNAL_HORIZONTAL_START_ROW = 7;
+const CLASS_SHEET_INTERNAL_HORIZONTAL_START_COLUMN = 2;
+const CLASS_SHEET_INTERNAL_HORIZONTAL_END_COLUMN = 10;
+const CLASS_SHEET_INTERNAL_VERTICAL_START_ROW = 6;
+const CLASS_SHEET_INTERNAL_VERTICAL_START_COLUMN = 5;
+const CLASS_SHEET_INTERNAL_VERTICAL_END_COLUMN = 7;
 const CLASS_SHEET_RIGHT_SPACER_COLUMNS = [
   { column: 16, minWidth: 8 },
   { column: 15, minWidth: 12 },
@@ -2032,45 +2032,49 @@ const applyClassSheetNiceStyleAdjustments = (
   worksheet: {
     getCell: (row: number, column: number) => ClassSheetCellStyle;
   },
-  tableEndRow: number,
+  studentEndRow: number,
+  summaryEndRow: number,
 ) => {
   setClassSheetCellHorizontalAlignment(worksheet, 3, 2, "left");
   setClassSheetCellHorizontalAlignment(worksheet, 4, 2, "left");
 
-  const endRow = Math.min(
-    CLASS_SHEET_INTERNAL_BORDER_END_ROW,
-    Math.max(CLASS_SHEET_INTERNAL_BORDER_START_ROW, tableEndRow),
+  const horizontalEndRow = Math.max(
+    CLASS_SHEET_INTERNAL_HORIZONTAL_START_ROW,
+    studentEndRow,
   );
 
   for (
-    let row = CLASS_SHEET_INTERNAL_BORDER_START_ROW;
-    row <= endRow;
+    let row = CLASS_SHEET_INTERNAL_HORIZONTAL_START_ROW;
+    row <= horizontalEndRow;
     row += 1
   ) {
     for (
-      let column = CLASS_SHEET_INTERNAL_BORDER_START_COLUMN;
-      column <= CLASS_SHEET_INTERNAL_BORDER_END_COLUMN;
+      let column = CLASS_SHEET_INTERNAL_HORIZONTAL_START_COLUMN;
+      column <= CLASS_SHEET_INTERNAL_HORIZONTAL_END_COLUMN;
       column += 1
     ) {
-      if (row < endRow) {
+      if (row < horizontalEndRow) {
         setClassSheetCellBorder(worksheet, row, column, {
           bottom: createClassSheetThinBorderSide(),
         });
       }
     }
+  }
 
-    setClassSheetCellBorder(
-      worksheet,
-      row,
-      CLASS_SHEET_SCORE_DIVIDER_LEFT_COLUMN,
-      { right: createClassSheetThinBorderSide() },
-    );
-    setClassSheetCellBorder(
-      worksheet,
-      row,
-      CLASS_SHEET_SCORE_DIVIDER_RIGHT_COLUMN,
-      { left: createClassSheetThinBorderSide() },
-    );
+  for (
+    let row = CLASS_SHEET_INTERNAL_VERTICAL_START_ROW;
+    row <= Math.max(CLASS_SHEET_INTERNAL_VERTICAL_START_ROW, summaryEndRow);
+    row += 1
+  ) {
+    for (
+      let column = CLASS_SHEET_INTERNAL_VERTICAL_START_COLUMN;
+      column < CLASS_SHEET_INTERNAL_VERTICAL_END_COLUMN;
+      column += 1
+    ) {
+      setClassSheetCellBorder(worksheet, row, column, {
+        right: createClassSheetThinBorderSide(),
+      });
+    }
   }
 };
 
@@ -2621,7 +2625,11 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
     10,
     `교과담당교사 (${params.teacherName || "방재석"}) 인`,
   );
-  applyClassSheetNiceStyleAdjustments(worksheet, summaryStartRow + 1);
+  applyClassSheetNiceStyleAdjustments(
+    worksheet,
+    studentEndRow,
+    summaryStartRow + 2,
+  );
   for (
     let row = CLASS_SHEET_STUDENT_START_ROW;
     row <= studentEndRow;
