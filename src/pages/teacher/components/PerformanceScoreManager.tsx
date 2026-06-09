@@ -2817,6 +2817,7 @@ const PerformanceScoreManager: React.FC = () => {
   );
   const [scoreWarningLoading, setScoreWarningLoading] = useState(true);
   const [scoreWarningSaving, setScoreWarningSaving] = useState(false);
+  const [scoreWarningModalOpen, setScoreWarningModalOpen] = useState(false);
   const [previewClassFilter, setPreviewClassFilter] = useState("all");
   const [previewPage, setPreviewPage] = useState(1);
   const [assessmentPreset, setAssessmentPreset] =
@@ -5670,6 +5671,110 @@ const PerformanceScoreManager: React.FC = () => {
           zIndexClassName="z-[240]"
         />
       )}
+
+      {scoreWarningModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="performance-score-warning-title"
+            className="flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+              <div className="min-w-0 break-keep">
+                <h3
+                  id="performance-score-warning-title"
+                  className="text-lg font-black text-slate-900"
+                >
+                  학생 점수 확인 경고 문구
+                </h3>
+                <p className="mt-1 text-sm font-semibold leading-6 text-slate-500">
+                  학생은 이 문구에 동의해야 내 수행평가 점수 확인, 서명, 이의
+                  제기를 진행할 수 있습니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setScoreWarningModalOpen(false)}
+                disabled={scoreWarningSaving}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="경고 문구 설정 닫기"
+              >
+                <i className="fas fa-times" aria-hidden="true"></i>
+              </button>
+            </div>
+
+            <div className="overflow-y-auto px-5 py-4">
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => void loadScoreWarningSettings()}
+                  disabled={scoreWarningLoading || scoreWarningSaving}
+                  className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <i
+                    className={`fas fa-sync-alt text-xs ${
+                      scoreWarningLoading ? "animate-spin" : ""
+                    }`}
+                    aria-hidden="true"
+                  />
+                  새로고침
+                </button>
+              </div>
+
+              <textarea
+                value={scoreWarningDraft}
+                onChange={(event) => setScoreWarningDraft(event.target.value)}
+                disabled={scoreWarningLoading || scoreWarningSaving}
+                maxLength={PERFORMANCE_SCORE_WARNING_MAX_LENGTH + 1}
+                rows={6}
+                className="mt-3 w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-3 text-sm font-bold leading-6 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-50"
+                placeholder={DEFAULT_PERFORMANCE_SCORE_WARNING_TEXT}
+              />
+              <div
+                className={`mt-2 text-xs font-bold ${
+                  scoreWarningDraft.length >
+                  PERFORMANCE_SCORE_WARNING_MAX_LENGTH
+                    ? "text-rose-600"
+                    : "text-slate-500"
+                }`}
+              >
+                {scoreWarningDraft.length}/
+                {PERFORMANCE_SCORE_WARNING_MAX_LENGTH}자 · 현재 버전{" "}
+                {scoreWarningSettings.warningVersion}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-end">
+              <button
+                type="button"
+                onClick={() =>
+                  setScoreWarningDraft(DEFAULT_PERFORMANCE_SCORE_WARNING_TEXT)
+                }
+                disabled={scoreWarningLoading || scoreWarningSaving}
+                className="inline-flex h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                기본 문구
+              </button>
+              <button
+                type="button"
+                onClick={() => void saveScoreWarningSettings()}
+                disabled={
+                  scoreWarningLoading ||
+                  scoreWarningSaving ||
+                  scoreWarningDraft.length >
+                    PERFORMANCE_SCORE_WARNING_MAX_LENGTH
+                }
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+              >
+                <i className="fas fa-save text-xs" aria-hidden="true" />
+                {scoreWarningSaving ? "저장 중" : "문구 저장"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
       {uploadModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
           <section className="w-full max-w-2xl overflow-hidden rounded-xl bg-white shadow-2xl">
@@ -7456,6 +7561,23 @@ const PerformanceScoreManager: React.FC = () => {
             </button>
             <button
               type="button"
+              onClick={() => setScoreWarningModalOpen(true)}
+              disabled={scoreWarningLoading || scoreWarningSaving}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-sm font-bold text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+              aria-label="학생 점수 확인 경고 문구 설정"
+              title="학생 점수 확인 경고 문구 설정"
+            >
+              <i
+                className={`fas fa-cog text-xs ${
+                  scoreWarningLoading || scoreWarningSaving
+                    ? "animate-spin"
+                    : ""
+                }`}
+                aria-hidden="true"
+              />
+            </button>
+            <button
+              type="button"
               onClick={openScoreStatsModal}
               disabled={scoreStatsButtonDisabled}
               className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white px-4 text-sm font-black text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
@@ -7517,82 +7639,6 @@ const PerformanceScoreManager: React.FC = () => {
             {studentLoadError}
           </div>
         )}
-
-        <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50/70 p-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0 break-keep">
-              <h3 className="text-base font-black text-amber-900">
-                학생 점수 확인 경고 문구
-              </h3>
-              <p className="mt-1 text-sm font-bold leading-6 text-amber-800/80">
-                학생은 이 문구에 동의해야 내 수행평가 점수 확인, 서명, 이의
-                제기를 진행할 수 있습니다.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => void loadScoreWarningSettings()}
-              disabled={scoreWarningLoading || scoreWarningSaving}
-              className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-amber-200 bg-white px-4 text-sm font-black text-amber-800 transition hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <i
-                className={`fas fa-sync-alt text-xs ${
-                  scoreWarningLoading ? "animate-spin" : ""
-                }`}
-                aria-hidden="true"
-              />
-              새로고침
-            </button>
-          </div>
-
-          <textarea
-            value={scoreWarningDraft}
-            onChange={(event) => setScoreWarningDraft(event.target.value)}
-            disabled={scoreWarningLoading || scoreWarningSaving}
-            maxLength={PERFORMANCE_SCORE_WARNING_MAX_LENGTH + 1}
-            rows={4}
-            className="mt-3 w-full resize-y rounded-lg border border-amber-200 bg-white px-3 py-3 text-sm font-bold leading-6 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-amber-400 focus:ring-2 focus:ring-amber-100 disabled:bg-slate-50"
-            placeholder={DEFAULT_PERFORMANCE_SCORE_WARNING_TEXT}
-          />
-          <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div
-              className={`text-xs font-bold ${
-                scoreWarningDraft.length > PERFORMANCE_SCORE_WARNING_MAX_LENGTH
-                  ? "text-rose-600"
-                  : "text-amber-800/70"
-              }`}
-            >
-              {scoreWarningDraft.length}/{PERFORMANCE_SCORE_WARNING_MAX_LENGTH}
-              자 · 현재 버전 {scoreWarningSettings.warningVersion}
-            </div>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-              <button
-                type="button"
-                onClick={() =>
-                  setScoreWarningDraft(DEFAULT_PERFORMANCE_SCORE_WARNING_TEXT)
-                }
-                disabled={scoreWarningLoading || scoreWarningSaving}
-                className="inline-flex h-10 items-center justify-center rounded-lg border border-amber-200 bg-white px-4 text-sm font-black text-amber-800 transition hover:bg-amber-50 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                기본 문구
-              </button>
-              <button
-                type="button"
-                onClick={() => void saveScoreWarningSettings()}
-                disabled={
-                  scoreWarningLoading ||
-                  scoreWarningSaving ||
-                  scoreWarningDraft.length >
-                    PERFORMANCE_SCORE_WARNING_MAX_LENGTH
-                }
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-              >
-                <i className="fas fa-save text-xs" aria-hidden="true" />
-                {scoreWarningSaving ? "저장 중" : "문구 저장"}
-              </button>
-            </div>
-          </div>
-        </div>
 
         {rostersLoading ? (
           <InlineLoading message="저장된 점수를 불러오는 중입니다." />
