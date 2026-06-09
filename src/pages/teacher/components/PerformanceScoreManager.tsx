@@ -1986,7 +1986,7 @@ type ClassSheetCellStyle = {
 };
 
 const createClassSheetThinBorderSide = (): ClassSheetBorderSide => ({
-  style: "thin",
+  style: "hair",
   color: { indexed: 0 },
 });
 
