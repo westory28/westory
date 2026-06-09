@@ -7431,7 +7431,7 @@ const PerformanceScoreManager: React.FC = () => {
 
       {classSheetModalOpen && (
         <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/45 px-4 py-6">
-          <section className="mx-auto flex w-full max-w-6xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+          <section className="mx-auto flex w-full max-w-7xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
             <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <h3 className="text-lg font-black text-slate-900">
@@ -7609,14 +7609,14 @@ const PerformanceScoreManager: React.FC = () => {
                   <div className="overflow-hidden rounded-xl border border-slate-200">
                     <table className="w-full table-fixed text-left text-sm">
                       <colgroup>
-                        <col className="w-[8%]" />
+                        <col className="w-[10%]" />
                         <col className="w-[7%]" />
                         <col className="w-[14%]" />
                         <col className="w-[10%]" />
                         <col className="w-[10%]" />
                         <col className="w-[8%]" />
                         <col className="w-[1%]" />
-                        <col className="w-[42%]" />
+                        <col className="w-[40%]" />
                       </colgroup>
                       <thead className="bg-slate-50 text-xs font-black text-slate-500">
                         <tr>
@@ -7706,9 +7706,9 @@ const PerformanceScoreManager: React.FC = () => {
                               <tr
                                 key={`${student.uid}-${student.class}-${student.number}`}
                               >
-                                <td className="px-3 py-3 text-center">
+                                <td className="whitespace-nowrap px-3 py-3 text-center">
                                   <span
-                                    className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-black ${statusClass}`}
+                                    className={`inline-flex min-w-[4.25rem] items-center justify-center whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-black ${statusClass}`}
                                   >
                                     {statusLabel}
                                   </span>
