@@ -144,6 +144,7 @@ export interface PerformanceScoreRosterRow {
   evidence?: string;
   matchStatus: "matched" | "name-mismatch" | "unmatched";
   matchMessage: string;
+  isManual?: boolean;
   isTransferred?: boolean;
   transferStatus?: "transferred";
 }
