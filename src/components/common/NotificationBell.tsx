@@ -5,6 +5,7 @@ import {
   clearNotifications,
   loadNotifications,
   markNotificationsRead,
+  subscribeBroadcastNotifications,
   subscribeNotificationInbox,
 } from "../../lib/notifications";
 import type {
@@ -39,12 +40,25 @@ const formatNotificationTime = (value: unknown) => {
   }).format(date);
 };
 
+const timestampMs = (value: unknown) => {
+  if (!value) return 0;
+  if (typeof (value as { toMillis?: () => number }).toMillis === "function") {
+    return (value as { toMillis: () => number }).toMillis();
+  }
+  if (typeof (value as { toDate?: () => Date }).toDate === "function") {
+    return (value as { toDate: () => Date }).toDate().getTime();
+  }
+  const seconds = Number((value as { seconds?: number }).seconds || 0);
+  return seconds > 0 ? seconds * 1000 : 0;
+};
+
 const getNotificationIconClassName = (type: WestoryNotification["type"]) => {
   if (type.startsWith("history_classroom")) return "fas fa-landmark";
   if (type.startsWith("history_dictionary")) return "fas fa-book-open";
   if (type.startsWith("performance_score")) return "fas fa-clipboard-check";
   if (type.startsWith("point_order")) return "fas fa-store";
   if (type.startsWith("lesson")) return "fas fa-file-lines";
+  if (type.startsWith("privacy_policy")) return "fas fa-user-shield";
   if (type.startsWith("question")) return "fas fa-circle-question";
   return "fas fa-circle-info";
 };
@@ -139,7 +153,10 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
   const { showToast } = useAppToast();
   const { confirm } = useAppDialog();
   const [open, setOpen] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [personalUnreadCount, setPersonalUnreadCount] = useState(0);
+  const [broadcastNotifications, setBroadcastNotifications] = useState<
+    WestoryNotification[]
+  >([]);
   const [notifications, setNotifications] = useState<WestoryNotification[]>([]);
   const [inbox, setInbox] = useState<WestoryNotificationInbox | null>(null);
   const [clearing, setClearing] = useState(false);
@@ -150,13 +167,49 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
   });
   const shownRealtimeToastKeysRef = useRef<Set<string>>(new Set());
 
+  const includeBroadcasts = String(userData?.role || "").trim() === "student";
+
+  const visibleBroadcastNotifications = useMemo(() => {
+    if (!includeBroadcasts) return [];
+    const lastBroadcastReadMs = timestampMs(inbox?.lastBroadcastReadAt);
+    const broadcastClearedMs = timestampMs(inbox?.broadcastClearedAt);
+    return broadcastNotifications
+      .map((notification) => {
+        const createdMs = timestampMs(notification.createdAt);
+        return {
+          ...notification,
+          recipientUid: currentUser?.uid || notification.recipientUid,
+          readAt:
+            createdMs > 0 && createdMs <= lastBroadcastReadMs
+              ? inbox?.lastBroadcastReadAt
+              : null,
+        };
+      })
+      .filter((notification) => {
+        const createdMs = timestampMs(notification.createdAt);
+        return (
+          !broadcastClearedMs || !createdMs || createdMs > broadcastClearedMs
+        );
+      });
+  }, [
+    broadcastNotifications,
+    currentUser?.uid,
+    includeBroadcasts,
+    inbox?.broadcastClearedAt,
+    inbox?.lastBroadcastReadAt,
+  ]);
+
+  const broadcastUnreadCount = visibleBroadcastNotifications.filter(
+    (notification) => !notification.readAt,
+  ).length;
+  const unreadCount = personalUnreadCount + broadcastUnreadCount;
   const displayUnreadCount = unreadCount > 99 ? "99+" : String(unreadCount);
   const hasNotifications = notifications.length > 0;
-  const includeBroadcasts = String(userData?.role || "").trim() === "student";
 
   useEffect(() => {
     if (!currentUser?.uid || !config) {
-      setUnreadCount(0);
+      setPersonalUnreadCount(0);
+      setBroadcastNotifications([]);
       setNotifications([]);
       setInbox(null);
       return undefined;
@@ -164,9 +217,18 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
 
     return subscribeNotificationInbox(config, currentUser.uid, (nextInbox) => {
       setInbox(nextInbox);
-      setUnreadCount(nextInbox.unreadCount);
+      setPersonalUnreadCount(nextInbox.unreadCount);
     });
   }, [config?.semester, config?.year, currentUser?.uid]);
+
+  useEffect(() => {
+    if (!includeBroadcasts || !currentUser?.uid || !config) {
+      setBroadcastNotifications([]);
+      return undefined;
+    }
+
+    return subscribeBroadcastNotifications(config, setBroadcastNotifications);
+  }, [config?.semester, config?.year, currentUser?.uid, includeBroadcasts]);
 
   useEffect(() => {
     onUnreadCountChange?.(unreadCount);
@@ -306,7 +368,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
     );
     if (unreadCount <= 0 && !hasUnreadBroadcast) return;
     void markNotificationsRead(config)
-      .then(() => setUnreadCount(0))
+      .then(() => setPersonalUnreadCount(0))
       .catch((error) => {
         console.error("Failed to mark notifications as read:", error);
       });
@@ -331,7 +393,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
     try {
       await clearNotifications(config);
       setNotifications([]);
-      setUnreadCount(0);
+      setPersonalUnreadCount(0);
     } catch (error) {
       console.error("Failed to clear notifications:", error);
       showToast({

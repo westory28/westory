@@ -214,6 +214,7 @@ export type WestoryNotificationType =
   | "point_order_requested"
   | "point_order_reviewed"
   | "lesson_worksheet_published"
+  | "privacy_policy_updated"
   | "question_created"
   | "question_replied"
   | "system_notice";

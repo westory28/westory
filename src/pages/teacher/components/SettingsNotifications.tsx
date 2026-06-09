@@ -66,6 +66,23 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     tokens: [{ key: "lessonTitle", label: "수업자료 이름" }],
   },
   {
+    key: "privacy_policy_updated",
+    label: "개인정보 처리 방침 변경",
+    audience: "students",
+    description:
+      "개인정보 처리 방침을 저장하면서 알림 보내기를 선택했을 때 전체 학생에게 안내합니다.",
+    triggerLabel: "개인정보 처리 방침 변경 알림을 보낼 때",
+    recipientLabel: "전체 학생",
+    status: "connected",
+    defaultEnabled: true,
+    defaultPriority: "high",
+    titleTemplate: "개인정보 처리 방침이 변경되었습니다",
+    bodyTemplate:
+      "Westory 개인정보 처리 방침이 업데이트되었습니다. 내용을 확인해 주세요.",
+    targetUrl: "/student/dashboard",
+    targetLabel: "학생 첫 화면",
+  },
+  {
     key: "history_classroom_assigned",
     label: "역사교실 과제 배정",
     audience: "students",

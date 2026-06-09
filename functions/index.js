@@ -729,6 +729,7 @@ const NOTIFICATION_EVENT_AUDIENCE = {
   point_order_requested: 'teachers',
   point_order_reviewed: 'students',
   lesson_worksheet_published: 'students',
+  privacy_policy_updated: 'students',
   question_created: 'teachers',
   question_replied: 'students',
   quiz_submitted: 'teachers',
@@ -3749,6 +3750,7 @@ exports.createManagedNotifications = onCall({ region: REGION }, async (request) 
   const allowedTypes = new Set([
     'history_classroom_assigned',
     'lesson_worksheet_published',
+    'privacy_policy_updated',
     'performance_score_signature_rejected',
     'question_replied',
     'system_notice',

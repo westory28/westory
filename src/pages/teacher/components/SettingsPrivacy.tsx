@@ -13,7 +13,9 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { useAppToast } from "../../../components/common/AppToastProvider";
+import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
+import { createManagedNotifications } from "../../../lib/notifications";
 import QuillEditor from "../../../components/common/QuillEditor";
 
 interface ConsentItem {
@@ -29,11 +31,14 @@ const defaultPrivacy = `<p><strong>[개인정보 처리 방침]</strong></p><p><
 
 const SettingsPrivacy: React.FC = () => {
   const { showToast } = useAppToast();
+  const { config } = useAuth();
   const [activeTab, setActiveTab] = useState<"terms" | "privacy" | "consent">(
     "terms",
   );
   const [termsText, setTermsText] = useState("");
   const [privacyText, setPrivacyText] = useState("");
+  const [privacySaving, setPrivacySaving] = useState(false);
+  const [notifyPrivacyChange, setNotifyPrivacyChange] = useState(false);
   const [consentItems, setConsentItems] = useState<ConsentItem[]>([]);
   const [expandedConsentId, setExpandedConsentId] = useState<string | null>(
     null,
@@ -91,11 +96,52 @@ const SettingsPrivacy: React.FC = () => {
   };
 
   const savePrivacy = async () => {
+    if (privacySaving) return;
+    setPrivacySaving(true);
     try {
       await setDoc(doc(db, "site_settings", "privacy"), {
         text: privacyText,
         updatedAt: serverTimestamp(),
       });
+
+      if (notifyPrivacyChange) {
+        try {
+          const result = await createManagedNotifications(config, {
+            recipientMode: "all_students",
+            type: "privacy_policy_updated",
+            title: "개인정보 처리 방침이 변경되었습니다",
+            body: "Westory 개인정보 처리 방침이 업데이트되었습니다. 내용을 확인해 주세요.",
+            targetUrl: "/student/dashboard",
+            entityType: "privacy_policy",
+            entityId: "site_settings/privacy",
+            priority: "high",
+            dedupeKey: `privacy_policy_updated:${Date.now()}`,
+          });
+
+          setNotifyPrivacyChange(false);
+          showToast({
+            tone: result.createdCount > 0 ? "success" : "warning",
+            title:
+              result.createdCount > 0
+                ? "개인정보 처리 방침을 저장하고 학생 알림을 보냈습니다."
+                : "개인정보 처리 방침을 저장했습니다.",
+            message:
+              result.createdCount > 0
+                ? "학생 알림함에 변경 안내가 표시됩니다."
+                : "알림 설정이 꺼져 있어 학생 알림은 생성되지 않았습니다.",
+          });
+        } catch (notificationError: any) {
+          showToast({
+            tone: "warning",
+            title: "개인정보 처리 방침은 저장했습니다.",
+            message:
+              notificationError?.message ||
+              "학생 알림 생성에 실패했습니다. 알림 설정과 Functions 배포 상태를 확인해 주세요.",
+          });
+        }
+        return;
+      }
+
       showToast({
         tone: "success",
         title: "개인정보 처리 방침을 저장했습니다.",
@@ -106,6 +152,8 @@ const SettingsPrivacy: React.FC = () => {
         title: "개인정보 처리 방침 저장에 실패했습니다.",
         message: error.message,
       });
+    } finally {
+      setPrivacySaving(false);
     }
   };
 
@@ -271,6 +319,7 @@ const SettingsPrivacy: React.FC = () => {
               value={termsText}
               onChange={setTermsText}
               minHeight={360}
+              maxHeight={520}
               placeholder="이용 약관 내용을 작성하세요."
               toolbar={[
                 [{ header: [1, 2, 3, false] }],
@@ -307,6 +356,7 @@ const SettingsPrivacy: React.FC = () => {
               value={privacyText}
               onChange={setPrivacyText}
               minHeight={360}
+              maxHeight={520}
               placeholder="개인정보 처리 방침 내용을 작성하세요."
               toolbar={[
                 [{ header: [1, 2, 3, false] }],
@@ -317,12 +367,23 @@ const SettingsPrivacy: React.FC = () => {
                 ["clean"],
               ]}
             />
-            <div className="text-right">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+              <label className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-bold text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={notifyPrivacyChange}
+                  disabled={privacySaving}
+                  onChange={(e) => setNotifyPrivacyChange(e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                저장 후 학생에게 알림 보내기
+              </label>
               <button
                 onClick={() => void savePrivacy()}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition"
+                disabled={privacySaving}
+                className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition"
               >
-                개인정보 처리 방침 저장
+                {privacySaving ? "저장 중..." : "개인정보 처리 방침 저장"}
               </button>
             </div>
           </div>
@@ -449,6 +510,7 @@ const SettingsPrivacy: React.FC = () => {
                             updateConsentItem(item.id, "text", html)
                           }
                           minHeight={220}
+                          maxHeight={360}
                           placeholder="동의 내용을 작성하세요."
                           toolbar={[
                             [{ header: [1, 2, false] }],

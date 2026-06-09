@@ -105,6 +105,27 @@ export const subscribeNotificationInbox = (
   });
 };
 
+export const subscribeBroadcastNotifications = (
+  config: ConfigLike,
+  onChange: (notifications: WestoryNotification[]) => void,
+): Unsubscribe => {
+  const broadcastQuery = query(
+    collection(db, getBroadcastNotificationCollectionPath(config)),
+    orderBy("createdAt", "desc"),
+    limit(NOTIFICATION_LIMIT),
+  );
+  return onSnapshot(broadcastQuery, (snapshot) => {
+    onChange(
+      snapshot.docs.map((item) =>
+        normalizeNotification(item.id, {
+          ...(item.data() as Partial<WestoryNotification>),
+          broadcast: true,
+        }),
+      ),
+    );
+  });
+};
+
 export const loadNotifications = async (
   config: ConfigLike,
   uid: string,

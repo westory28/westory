@@ -11,6 +11,7 @@ interface QuillEditorProps {
   onChange: (html: string) => void;
   placeholder?: string;
   minHeight?: number;
+  maxHeight?: number;
   toolbar?: any[];
 }
 
@@ -122,6 +123,7 @@ const QuillEditor: React.FC<QuillEditorProps> = ({
   onChange,
   placeholder,
   minHeight = 240,
+  maxHeight,
   toolbar = DEFAULT_TOOLBAR,
 }) => {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -279,20 +281,31 @@ const QuillEditor: React.FC<QuillEditorProps> = ({
     syncingRef.current = false;
   }, [value]);
 
+  const editorFrameStyle = {
+    "--westory-quill-min-height": `${minHeight}px`,
+    ...(maxHeight ? { "--westory-quill-max-height": `${maxHeight}px` } : {}),
+  } as React.CSSProperties;
+
   if (loadFailed) {
     return (
       <textarea
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full border border-gray-300 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-        style={{ minHeight }}
+        className="w-full resize-y border border-gray-300 rounded-xl p-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+        style={{
+          minHeight,
+          ...(maxHeight ? { maxHeight, overflowY: "auto" } : {}),
+        }}
         placeholder={placeholder}
       />
     );
   }
 
   return (
-    <div className="westory-quill bg-white rounded-xl border border-gray-200 overflow-hidden">
+    <div
+      className="westory-quill bg-white rounded-xl border border-gray-200 overflow-hidden"
+      style={editorFrameStyle}
+    >
       <div ref={hostRef} style={{ minHeight }} />
       {!ready && (
         <div className="px-4 py-3 text-sm font-semibold text-gray-500">
@@ -312,7 +325,13 @@ const QuillEditor: React.FC<QuillEditorProps> = ({
                 .westory-quill .ql-toolbar .ql-start-number:hover {
                     color: #1d4ed8;
                 }
+                .westory-quill .ql-container {
+                    min-height: var(--westory-quill-min-height);
+                }
                 .westory-quill .ql-editor {
+                    min-height: var(--westory-quill-min-height);
+                    max-height: var(--westory-quill-max-height, none);
+                    overflow-y: auto;
                     counter-reset: list-0 list-1 list-2 list-3 list-4 list-5 list-6 list-7 list-8 list-9;
                 }
                 .westory-quill .ql-editor li[data-list='bullet'] > .ql-ui:before {
