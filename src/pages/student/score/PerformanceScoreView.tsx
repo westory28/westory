@@ -73,6 +73,9 @@ const getItemLabel = (
 const SIGNATURE_CANVAS_MIN_WIDTH = 420;
 const SIGNATURE_CANVAS_MAX_WIDTH = 660;
 const SIGNATURE_CANVAS_HEIGHT = 220;
+const SIGNATURE_MOBILE_GUIDE_TARGET_WIDTH = 300;
+const SIGNATURE_MOBILE_GUIDE_FONT_MIN = 36;
+const SIGNATURE_MOBILE_GUIDE_FONT_MAX = 92;
 const SIGNATURE_STROKE_WIDTH = 14;
 const SIGNATURE_DOT_RADIUS = 5;
 const SIGNATURE_ALPHA_THRESHOLD = 8;
@@ -267,12 +270,25 @@ const PerformanceScoreView: React.FC = () => {
     140,
     Math.max(110, (signatureCanvasWidth / signatureGuideLength) * 0.78),
   );
+  const signatureMobileGuideFontSize = Math.min(
+    SIGNATURE_MOBILE_GUIDE_FONT_MAX,
+    Math.max(
+      SIGNATURE_MOBILE_GUIDE_FONT_MIN,
+      ((SIGNATURE_MOBILE_GUIDE_TARGET_WIDTH - 28) / signatureGuideLength) * 0.9,
+    ),
+  );
   const signatureGuideLetterSpacing =
     signatureGuideLength <= 3
       ? "0.18em"
       : signatureGuideLength <= 4
         ? "0.12em"
         : "0.06em";
+  const signatureMobileGuideLetterSpacing =
+    signatureGuideLength <= 3
+      ? "0.08em"
+      : signatureGuideLength <= 4
+        ? "0.04em"
+        : "0.01em";
   const confirmedAt = selectedRecord?.signedAt;
   const hasConfirmation = selectedRecord
     ? isRecordConfirmed(selectedRecord)
@@ -1413,9 +1429,9 @@ const PerformanceScoreView: React.FC = () => {
       )}
 
       {signatureModalOpen && selectedRecord && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
-          <section className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
-            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-3 py-3 sm:px-4 sm:py-6">
+          <section className="flex max-h-[96dvh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl sm:max-h-[92vh]">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-3 sm:px-5 sm:py-4">
               <div className="min-w-0 break-keep">
                 <h3 className="text-lg font-black text-slate-900">
                   수행평가 점수 확인 및 서명
@@ -1436,7 +1452,7 @@ const PerformanceScoreView: React.FC = () => {
               </button>
             </div>
 
-            <div className="overflow-y-auto px-5 py-4">
+            <div className="overflow-y-auto px-4 py-4 sm:px-5">
               {signatureReviewStep === "sign" ? (
                 <div className="space-y-4">
                   <div className="grid gap-3 md:grid-cols-2">
@@ -1513,11 +1529,25 @@ const PerformanceScoreView: React.FC = () => {
                         className="pointer-events-none absolute inset-0 flex items-center justify-center px-2 text-center font-black leading-none"
                         style={{
                           color: "rgba(30, 58, 138, 0.09)",
+                          fontSize: signatureMobileGuideFontSize,
+                          letterSpacing: signatureMobileGuideLetterSpacing,
+                        }}
+                      >
+                        <span className="whitespace-nowrap sm:hidden">
+                          {signatureGuideText}
+                        </span>
+                      </div>
+                      <div
+                        className="pointer-events-none absolute inset-0 hidden items-center justify-center px-2 text-center font-black leading-none sm:flex"
+                        style={{
+                          color: "rgba(30, 58, 138, 0.09)",
                           fontSize: signatureGuideFontSize,
                           letterSpacing: signatureGuideLetterSpacing,
                         }}
                       >
-                        {signatureGuideText}
+                        <span className="whitespace-nowrap">
+                          {signatureGuideText}
+                        </span>
                       </div>
                       {!signatureConsent && (
                         <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-white/55 text-sm font-black text-slate-500">
@@ -1528,7 +1558,7 @@ const PerformanceScoreView: React.FC = () => {
                         ref={signatureCanvasRef}
                         width={signatureCanvasWidth}
                         height={SIGNATURE_CANVAS_HEIGHT}
-                        className="relative z-10 h-52 w-full touch-none cursor-crosshair bg-transparent"
+                        className="relative z-10 h-40 w-full touch-none cursor-crosshair bg-transparent sm:h-52"
                         onPointerDown={(event) => {
                           if (!signatureConsent || signatureActionPending)
                             return;
@@ -1663,7 +1693,7 @@ const PerformanceScoreView: React.FC = () => {
               )}
             </div>
 
-            <div className="flex flex-col gap-2 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-end">
+            <div className="flex flex-col gap-2 border-t border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-end sm:px-5 sm:py-4">
               <button
                 type="button"
                 onClick={closeSignatureModal}
