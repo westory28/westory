@@ -7430,8 +7430,8 @@ const PerformanceScoreManager: React.FC = () => {
       )}
 
       {classSheetModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
-          <section className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/45 px-4 py-6">
+          <section className="mx-auto flex w-full max-w-6xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
             <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <h3 className="text-lg font-black text-slate-900">
@@ -7453,7 +7453,7 @@ const PerformanceScoreManager: React.FC = () => {
               </button>
             </div>
 
-            <div className="overflow-y-auto px-5 py-4">
+            <div className="px-5 py-4">
               <div className="grid gap-3 lg:grid-cols-[1fr_1fr_130px_130px_auto]">
                 <label className="block">
                   <span className="mb-1.5 block text-xs font-black text-slate-500">
@@ -7606,17 +7606,17 @@ const PerformanceScoreManager: React.FC = () => {
                     ))}
                   </div>
 
-                  <div className="overflow-x-auto rounded-xl border border-slate-200">
-                    <table className="w-full min-w-[1100px] table-fixed text-left text-sm">
+                  <div className="overflow-hidden rounded-xl border border-slate-200">
+                    <table className="w-full table-fixed text-left text-sm">
                       <colgroup>
-                        <col className="w-24" />
-                        <col className="w-20" />
-                        <col className="w-40" />
-                        <col className="w-28" />
-                        <col className="w-28" />
-                        <col className="w-20" />
-                        <col className="w-12" />
-                        <col className="w-[300px]" />
+                        <col className="w-[8%]" />
+                        <col className="w-[7%]" />
+                        <col className="w-[14%]" />
+                        <col className="w-[10%]" />
+                        <col className="w-[10%]" />
+                        <col className="w-[8%]" />
+                        <col className="w-[1%]" />
+                        <col className="w-[42%]" />
                       </colgroup>
                       <thead className="bg-slate-50 text-xs font-black text-slate-500">
                         <tr>
@@ -7767,7 +7767,7 @@ const PerformanceScoreManager: React.FC = () => {
                                 <td aria-hidden="true"></td>
                                 <td className="px-3 py-3 text-center">
                                   {signatureDisplayRecord && signatureImage ? (
-                                    <div className="mx-auto flex w-fit min-w-[230px] items-center justify-center gap-2 whitespace-nowrap">
+                                    <div className="mx-auto flex max-w-full flex-wrap items-center justify-center gap-2">
                                       <div className="flex h-8 w-20 shrink-0 items-center justify-center overflow-hidden rounded-md border border-blue-100 bg-blue-50 px-1.5">
                                         <img
                                           src={signatureImage}
