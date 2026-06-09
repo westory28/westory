@@ -358,7 +358,6 @@ export const savePerformanceScoreWarningConsent = async (
       PERFORMANCE_SCORE_CONSENT_DOC_ID,
     ),
     payload,
-    { merge: true },
   );
   return {
     id: PERFORMANCE_SCORE_CONSENT_DOC_ID,

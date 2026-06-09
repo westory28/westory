@@ -278,6 +278,30 @@ const main = async () => {
     ),
   );
 
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    const adminDb = context.firestore();
+    await setDoc(
+      doc(
+        adminDb,
+        "users",
+        existingStudent.user.uid,
+        "performance_score_consents",
+        "current",
+      ),
+      {
+        uid: existingStudent.user.uid,
+        academicYear: performanceYear,
+        semester: performanceSemester,
+        acknowledged: false,
+        warningVersion: "legacy-warning-version",
+        warningTextHash: "legacyhash",
+        legacyExtra: true,
+        acknowledgedAt: "legacy-acknowledged",
+        updatedAt: "legacy-updated",
+      },
+    );
+  });
+
   await assertSucceeds(
     setDoc(
       doc(
