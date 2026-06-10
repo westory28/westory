@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   addDoc,
@@ -157,6 +157,8 @@ const DeveloperLog: React.FC = () => {
     alt: string;
     label: string;
   } | null>(null);
+  const [activeCardImageIndex, setActiveCardImageIndex] = useState(0);
+  const cardSwipeStartRef = useRef<{ x: number; y: number } | null>(null);
   const [searchText, setSearchText] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<
     "all" | DeveloperLogCategory
@@ -268,6 +270,11 @@ const DeveloperLog: React.FC = () => {
     setNewImagePreviews(previews);
     return () => previews.forEach((url) => URL.revokeObjectURL(url));
   }, [newImageFiles]);
+
+  useEffect(() => {
+    setActiveCardImageIndex(0);
+    cardSwipeStartRef.current = null;
+  }, [mode, postId, previewOpen]);
 
   const filteredPosts = useMemo(() => {
     const keyword = searchText.replace(/\s+/g, " ").trim().toLowerCase();
@@ -590,136 +597,252 @@ const DeveloperLog: React.FC = () => {
     );
   };
 
-  const renderPostDetail = (post: DeveloperLogPost, preview = false) => (
-    <article className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-7 lg:p-8">
-      <div className="flex flex-col gap-4 border-b border-gray-200 pb-6 lg:flex-row lg:items-start lg:justify-between">
-        <div className="min-w-0">
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            {post.isPinned && (
-              <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
-                <i className="fas fa-thumbtack mr-1.5" aria-hidden="true"></i>
-                고정
+  const moveCardImage = (imageCount: number, direction: -1 | 1) => {
+    if (imageCount <= 1) return;
+    setActiveCardImageIndex(
+      (prev) => (prev + direction + imageCount) % imageCount,
+    );
+  };
+
+  const handleCardSwipeStart = (
+    event: React.PointerEvent,
+    imageCount: number,
+  ) => {
+    if (imageCount <= 1) return;
+    cardSwipeStartRef.current = { x: event.clientX, y: event.clientY };
+  };
+
+  const handleCardSwipeEnd = (
+    event: React.PointerEvent,
+    imageCount: number,
+  ) => {
+    const start = cardSwipeStartRef.current;
+    cardSwipeStartRef.current = null;
+    if (!start || imageCount <= 1) return;
+
+    const diffX = event.clientX - start.x;
+    const diffY = event.clientY - start.y;
+    if (Math.abs(diffX) < 48 || Math.abs(diffX) <= Math.abs(diffY) * 1.2) {
+      return;
+    }
+
+    moveCardImage(imageCount, diffX < 0 ? 1 : -1);
+  };
+
+  const renderPostDetail = (post: DeveloperLogPost, preview = false) => {
+    const imageCount = post.images.length;
+    const activeImageIndex =
+      imageCount > 0 ? Math.min(activeCardImageIndex, imageCount - 1) : 0;
+    const showCarouselControls = imageCount > 1;
+
+    return (
+      <article className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm sm:p-7 lg:p-8">
+        <div className="flex flex-col gap-4 border-b border-gray-200 pb-6 lg:flex-row lg:items-start lg:justify-between">
+          <div className="min-w-0">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              {post.isPinned && (
+                <span className="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
+                  <i className="fas fa-thumbtack mr-1.5" aria-hidden="true"></i>
+                  고정
+                </span>
+              )}
+              {renderCategoryBadge(post.category)}
+            </div>
+            <h1 className="break-keep text-2xl font-black leading-tight text-slate-950 sm:text-3xl">
+              {getDisplayTitle(post)}
+            </h1>
+            {post.summary && (
+              <p className="mt-3 max-w-3xl break-keep text-sm leading-6 text-slate-600 sm:text-base">
+                {post.summary}
+              </p>
+            )}
+            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm font-semibold text-slate-500">
+              <span>
+                <i className="fas fa-user mr-2" aria-hidden="true"></i>
+                {post.createdByName || "개발자"}
+              </span>
+              <span>
+                <i className="far fa-calendar-alt mr-2" aria-hidden="true"></i>
+                {formatDate(post.publishedAt)}
+              </span>
+              <span>
+                <i className="far fa-eye mr-2" aria-hidden="true"></i>
+                조회수 {post.viewCount}
+              </span>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-3">
+            {!preview && (
+              <span className="hidden text-sm font-semibold text-slate-500 sm:inline">
+                학생은 좋아요만 누를 수 있습니다.
               </span>
             )}
-            {renderCategoryBadge(post.category)}
-          </div>
-          <h1 className="break-keep text-2xl font-black leading-tight text-slate-950 sm:text-3xl">
-            {getDisplayTitle(post)}
-          </h1>
-          {post.summary && (
-            <p className="mt-3 max-w-3xl break-keep text-sm leading-6 text-slate-600 sm:text-base">
-              {post.summary}
-            </p>
-          )}
-          <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm font-semibold text-slate-500">
-            <span>
-              <i className="fas fa-user mr-2" aria-hidden="true"></i>
-              {post.createdByName || "개발자"}
-            </span>
-            <span>
-              <i className="far fa-calendar-alt mr-2" aria-hidden="true"></i>
-              {formatDate(post.publishedAt)}
-            </span>
-            <span>
-              <i className="far fa-eye mr-2" aria-hidden="true"></i>
-              조회수 {post.viewCount}
+            <button
+              type="button"
+              onClick={() => void toggleLike()}
+              disabled={preview}
+              className={`inline-flex h-11 items-center justify-center gap-2 rounded-full border px-5 text-sm font-black transition ${
+                liked
+                  ? "border-rose-200 bg-rose-50 text-rose-600"
+                  : "border-gray-200 bg-white text-blue-700 hover:border-blue-200 hover:bg-blue-50"
+              } ${preview ? "cursor-default opacity-80" : ""}`}
+            >
+              <i
+                className={liked ? "fas fa-heart" : "far fa-heart"}
+                aria-hidden="true"
+              ></i>
+              좋아요
+            </button>
+            <span className="min-w-8 text-center text-sm font-black text-slate-700">
+              {post.likeCount}
             </span>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-3">
-          {!preview && (
-            <span className="hidden text-sm font-semibold text-slate-500 sm:inline">
-              학생은 좋아요만 누를 수 있습니다.
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={() => void toggleLike()}
-            disabled={preview}
-            className={`inline-flex h-11 items-center justify-center gap-2 rounded-full border px-5 text-sm font-black transition ${
-              liked
-                ? "border-rose-200 bg-rose-50 text-rose-600"
-                : "border-gray-200 bg-white text-blue-700 hover:border-blue-200 hover:bg-blue-50"
-            } ${preview ? "cursor-default opacity-80" : ""}`}
-          >
-            <i
-              className={liked ? "fas fa-heart" : "far fa-heart"}
-              aria-hidden="true"
-            ></i>
-            좋아요
-          </button>
-          <span className="min-w-8 text-center text-sm font-black text-slate-700">
-            {post.likeCount}
-          </span>
-        </div>
-      </div>
 
-      <div className="grid gap-8 py-8 lg:grid-cols-[minmax(0,1fr)_minmax(280px,420px)]">
-        <div
-          className="developer-log-rich-text min-w-0"
-          dangerouslySetInnerHTML={{ __html: post.bodyHtml }}
-        />
-        <div className="space-y-4">
-          {post.images.length > 0 ? (
-            post.images.map((image, index) => (
-              <figure
-                key={image.imageStoragePath || image.imageUrl}
+        <div className="grid gap-8 py-8 lg:grid-cols-[minmax(0,1fr)_minmax(280px,420px)]">
+          <div
+            className="developer-log-rich-text min-w-0"
+            dangerouslySetInnerHTML={{ __html: post.bodyHtml }}
+          />
+          <div className="min-w-0">
+            {post.images.length > 0 ? (
+              <div
                 className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50"
+                aria-label="카드뉴스 이미지 슬라이드"
               >
-                <img
-                  src={image.imageUrl}
-                  alt={image.alt || `${post.title} 카드뉴스 ${index + 1}`}
-                  className="h-auto w-full object-contain"
-                  loading="lazy"
-                />
-              </figure>
-            ))
-          ) : (
-            <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-5 py-8 text-center text-sm font-semibold text-gray-400">
-              첨부된 카드뉴스 이미지가 없습니다.
-            </div>
-          )}
-        </div>
-      </div>
+                <div
+                  className="relative aspect-[4/5] touch-pan-y select-none overflow-hidden bg-gray-50"
+                  onPointerDown={(event) =>
+                    handleCardSwipeStart(event, imageCount)
+                  }
+                  onPointerUp={(event) => handleCardSwipeEnd(event, imageCount)}
+                  onPointerCancel={() => {
+                    cardSwipeStartRef.current = null;
+                  }}
+                  onPointerLeave={() => {
+                    cardSwipeStartRef.current = null;
+                  }}
+                >
+                  <div
+                    className="flex h-full transition-transform duration-500 ease-out motion-reduce:transition-none"
+                    style={{
+                      transform: `translateX(-${activeImageIndex * 100}%)`,
+                    }}
+                  >
+                    {post.images.map((image, index) => (
+                      <figure
+                        key={image.imageStoragePath || image.imageUrl}
+                        className="h-full w-full shrink-0"
+                      >
+                        <img
+                          src={image.imageUrl}
+                          alt={
+                            image.alt || `${post.title} 카드뉴스 ${index + 1}`
+                          }
+                          className="h-full w-full object-contain"
+                          loading={index === 0 ? "eager" : "lazy"}
+                          decoding="async"
+                        />
+                      </figure>
+                    ))}
+                  </div>
 
-      {!preview && (
-        <div className="flex flex-col gap-3 border-t border-gray-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
-          <button
-            type="button"
-            onClick={() => navigate("/developer-log")}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-gray-50"
-          >
-            <i className="fas fa-arrow-left" aria-hidden="true"></i>
-            목록으로
-          </button>
-          {canManage && (
-            <div className="flex items-center justify-end gap-2">
-              <span className="mr-2 hidden text-sm font-bold text-slate-500 sm:inline">
-                <i className="fas fa-lock mr-1.5" aria-hidden="true"></i>
-                개발자 전용
-              </span>
-              <button
-                type="button"
-                onClick={startEdit}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white px-4 text-sm font-black text-blue-700 transition hover:bg-blue-50"
-              >
-                <i className="fas fa-pen" aria-hidden="true"></i>
-                수정
-              </button>
-              <button
-                type="button"
-                onClick={() => void deletePost()}
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-4 text-sm font-black text-rose-600 transition hover:bg-rose-50"
-              >
-                <i className="fas fa-trash-alt" aria-hidden="true"></i>
-                삭제
-              </button>
-            </div>
-          )}
+                  {showCarouselControls && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => moveCardImage(imageCount, -1)}
+                        className="absolute left-3 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow transition hover:bg-white hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                        aria-label="이전 카드뉴스 이미지"
+                      >
+                        <i
+                          className="fas fa-chevron-left text-xs"
+                          aria-hidden="true"
+                        ></i>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveCardImage(imageCount, 1)}
+                        className="absolute right-3 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-slate-700 shadow transition hover:bg-white hover:text-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                        aria-label="다음 카드뉴스 이미지"
+                      >
+                        <i
+                          className="fas fa-chevron-right text-xs"
+                          aria-hidden="true"
+                        ></i>
+                      </button>
+                    </>
+                  )}
+                </div>
+
+                {showCarouselControls && (
+                  <div className="flex h-10 items-center justify-center gap-2 border-t border-gray-200 bg-white">
+                    {post.images.map((image, index) => (
+                      <button
+                        key={`${image.imageStoragePath || image.imageUrl}-dot`}
+                        type="button"
+                        onClick={() => setActiveCardImageIndex(index)}
+                        className={`h-2.5 w-2.5 rounded-full border transition ${
+                          activeImageIndex === index
+                            ? "border-blue-600 bg-blue-600"
+                            : "border-gray-300 bg-white hover:border-blue-300"
+                        }`}
+                        aria-label={`${index + 1}번째 카드뉴스 이미지 보기`}
+                        aria-current={
+                          activeImageIndex === index ? "true" : undefined
+                        }
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-5 py-8 text-center text-sm font-semibold text-gray-400">
+                첨부된 카드뉴스 이미지가 없습니다.
+              </div>
+            )}
+          </div>
         </div>
-      )}
-    </article>
-  );
+
+        {!preview && (
+          <div className="flex flex-col gap-3 border-t border-gray-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
+            <button
+              type="button"
+              onClick={() => navigate("/developer-log")}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-gray-50"
+            >
+              <i className="fas fa-arrow-left" aria-hidden="true"></i>
+              목록으로
+            </button>
+            {canManage && (
+              <div className="flex items-center justify-end gap-2">
+                <span className="mr-2 hidden text-sm font-bold text-slate-500 sm:inline">
+                  <i className="fas fa-lock mr-1.5" aria-hidden="true"></i>
+                  개발자 전용
+                </span>
+                <button
+                  type="button"
+                  onClick={startEdit}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-white px-4 text-sm font-black text-blue-700 transition hover:bg-blue-50"
+                >
+                  <i className="fas fa-pen" aria-hidden="true"></i>
+                  수정
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void deletePost()}
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-4 text-sm font-black text-rose-600 transition hover:bg-rose-50"
+                >
+                  <i className="fas fa-trash-alt" aria-hidden="true"></i>
+                  삭제
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </article>
+    );
+  };
 
   const renderEditor = () => {
     const draftPost = buildDraftPost(
