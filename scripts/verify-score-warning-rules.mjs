@@ -67,6 +67,13 @@ const existingStudentDoc = (uid, email) => ({
   teacherPortalEnabled: false,
   name: "기존학생",
   customNameConfirmed: true,
+  studentName: "Legacy Student",
+  studentGrade: "2",
+  studentClass: "6",
+  studentNumber: "10",
+  displayName: "Legacy Display",
+  nickname: "Legacy Nickname",
+  customName: "Legacy Custom",
   grade: "2",
   class: "6",
   number: "10",
@@ -161,10 +168,11 @@ const main = async () => {
   const updatedData = updatedSnap.data() || {};
   if (
     updatedData.profileEmojiId !== "smile" ||
+    updatedData.studentName !== "Legacy Student" ||
     updatedData.scoreWarningAcknowledged !== true
   ) {
     throw new Error(
-      "Existing student update did not preserve profileEmojiId or warning fields.",
+      "Existing student update did not preserve legacy profile fields or warning fields.",
     );
   }
 
@@ -363,6 +371,7 @@ const main = async () => {
         projectId,
         checks: [
           "existing student warning update with profileEmojiId passes",
+          "legacy student profile fields do not block warning acknowledgement",
           "new student bootstrap create with profileEmojiId passes",
           "unexpected extra key remains blocked",
           "cross-user update remains blocked",
