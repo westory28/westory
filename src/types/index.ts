@@ -13,6 +13,7 @@ export interface InterfaceConfig {
   ddayTitle: string;
   ddayDate: string;
   footerText?: string;
+  instagramUrl?: string;
   hallOfFame?: HallOfFameInterfaceConfig;
 }
 

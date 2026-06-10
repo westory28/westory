@@ -4,6 +4,7 @@ import { doc, getDoc } from "firebase/firestore";
 import { InlineLoading } from "./LoadingState";
 import { useAuth } from "../../contexts/AuthContext";
 import { db } from "../../lib/firebase";
+import { normalizeInstagramUrl } from "../../lib/socialLinks";
 
 type PolicyType = "terms" | "privacy";
 
@@ -22,6 +23,7 @@ const Footer: React.FC = () => {
 
   const footerText =
     String(interfaceConfig?.footerText || "").trim() || FALLBACK_FOOTER_TEXT;
+  const instagramUrl = normalizeInstagramUrl(interfaceConfig?.instagramUrl);
 
   const openPolicyModal = async (type: PolicyType) => {
     setOpenPolicy(type);
@@ -51,7 +53,7 @@ const Footer: React.FC = () => {
     <>
       <footer className="bg-white border-t border-stone-200 py-4 mt-auto">
         <div className="container mx-auto text-center">
-          <div className="flex items-center justify-center gap-2 mb-2">
+          <div className="flex flex-wrap items-center justify-center gap-2 mb-2">
             <button
               onClick={() => openPolicyModal("terms")}
               className="text-stone-400 hover:text-stone-600 text-xs font-medium transition"
@@ -72,6 +74,24 @@ const Footer: React.FC = () => {
             >
               개발자 일지
             </Link>
+            {instagramUrl && (
+              <>
+                <span className="text-stone-300 text-xs">|</span>
+                <a
+                  href={instagramUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="위스토리 공식 인스타그램"
+                  title="위스토리 공식 인스타그램"
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-full text-stone-400 transition hover:bg-pink-50 hover:text-pink-600"
+                >
+                  <i
+                    className="fa-brands fa-instagram text-base"
+                    aria-hidden="true"
+                  ></i>
+                </a>
+              </>
+            )}
           </div>
           <p className="text-stone-400 text-xs font-bold">{footerText}</p>
         </div>

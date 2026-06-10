@@ -12,6 +12,7 @@ import {
 import { useAuth } from "../../../contexts/AuthContext";
 import { notifyMenuConfigUpdated } from "../../../lib/appEvents";
 import { invalidateSiteSettingDocCache } from "../../../lib/siteSettings";
+import { normalizeInstagramUrl } from "../../../lib/socialLinks";
 import {
   DEFAULT_WIS_HALL_OF_FAME_PODIUM_POSITIONS,
   DEFAULT_WIS_HALL_OF_FAME_POSITION_PRESET,
@@ -27,6 +28,7 @@ const createDefaultInterfaceConfig = () => ({
   ddayTitle: "",
   ddayDate: "",
   footerText: "",
+  instagramUrl: "",
   hallOfFame: {
     podiumImageUrl: "",
     podiumStoragePath: "",
@@ -126,6 +128,7 @@ const SettingsInterface: React.FC = () => {
             ddayTitle: data.ddayTitle || "",
             ddayDate: data.ddayDate || "",
             footerText: data.footerText || "",
+            instagramUrl: data.instagramUrl || "",
             hallOfFame: resolvedHallOfFameConfig,
           });
         } else {
@@ -364,6 +367,17 @@ const SettingsInterface: React.FC = () => {
       return;
     }
 
+    const instagramUrl = normalizeInstagramUrl(config.instagramUrl);
+    if (config.instagramUrl.trim() && !instagramUrl) {
+      showToast({
+        tone: "warning",
+        title: "공식 인스타그램 링크를 확인해주세요.",
+        message:
+          "인스타그램 계정명 또는 instagram.com 링크만 입력할 수 있습니다.",
+      });
+      return;
+    }
+
     setSavingInterface(true);
     try {
       await setDoc(
@@ -377,10 +391,12 @@ const SettingsInterface: React.FC = () => {
           ddayTitle: config.ddayTitle.trim(),
           ddayDate: config.ddayDate,
           footerText: config.footerText.trim(),
+          instagramUrl,
           updatedAt: serverTimestamp(),
         },
         { merge: true },
       );
+      setConfig((prev) => ({ ...prev, instagramUrl }));
       invalidateSiteSettingDocCache("interface_config");
       await refreshInterfaceConfig();
       showToast({
@@ -510,18 +526,42 @@ const SettingsInterface: React.FC = () => {
                 </p>
               </div>
 
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-2">
-                  저작권 문구
-                </label>
-                <input
-                  type="text"
-                  name="footerText"
-                  value={config.footerText}
-                  onChange={handleConfigChange}
-                  placeholder="예: Copyright © 2026 ..."
-                  className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm"
-                />
+              <div className="space-y-5">
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">
+                    저작권 문구
+                  </label>
+                  <input
+                    type="text"
+                    name="footerText"
+                    value={config.footerText}
+                    onChange={handleConfigChange}
+                    placeholder="예: Copyright © 2026 ..."
+                    className="w-full border border-gray-300 rounded-lg p-3 focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">
+                    공식 인스타그램 링크
+                  </label>
+                  <div className="relative">
+                    <i
+                      className="fa-brands fa-instagram pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-pink-500"
+                      aria-hidden="true"
+                    ></i>
+                    <input
+                      type="text"
+                      name="instagramUrl"
+                      value={config.instagramUrl}
+                      onChange={handleConfigChange}
+                      placeholder="@westory 또는 https://www.instagram.com/westory/"
+                      className="w-full border border-gray-300 rounded-lg p-3 pl-10 focus:ring-2 focus:ring-blue-500 outline-none font-mono text-sm"
+                    />
+                  </div>
+                  <p className="mt-1 text-xs text-gray-400">
+                    비워두면 푸터 인스타그램 아이콘을 표시하지 않습니다.
+                  </p>
+                </div>
               </div>
             </div>
 
