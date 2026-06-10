@@ -23,6 +23,8 @@ import {
   normalizePlanItemType,
   type ScoreItemType,
 } from "../../../lib/studentScores";
+import { useAppDialog } from "../../../components/common/AppDialogProvider";
+import { useAppToast } from "../../../components/common/AppToastProvider";
 
 interface GradingItem {
   type: "정기" | "수행";
@@ -313,6 +315,8 @@ const normalizeKoreanKeyboardInput = (value: string) => {
 
 const ExamGradingPlan: React.FC = () => {
   const { userConfig } = useAuth();
+  const { confirm } = useAppDialog();
+  const { showToast } = useAppToast();
   const [plans, setPlans] = useState<GradingPlan[]>([]);
   const [loading, setLoading] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -397,7 +401,11 @@ const ExamGradingPlan: React.FC = () => {
 
   const handleSave = async () => {
     if (!subject) {
-      alert("과목명을 입력하세요.");
+      showToast({
+        tone: "warning",
+        title: "과목명을 입력해 주세요.",
+        message: "평가 반영 비율을 저장하려면 과목명이 필요합니다.",
+      });
       return;
     }
 
@@ -405,13 +413,21 @@ const ExamGradingPlan: React.FC = () => {
       (i) => i.name && i.maxScore > 0 && i.ratio > 0,
     );
     if (validItems.length === 0) {
-      alert("항목을 하나 이상 유효하게 입력하세요.");
+      showToast({
+        tone: "warning",
+        title: "평가 항목을 확인해 주세요.",
+        message: "이름, 만점, 반영 비율이 입력된 항목이 하나 이상 필요합니다.",
+      });
       return;
     }
 
     const totalRatio = validItems.reduce((sum, i) => sum + i.ratio, 0);
     if (totalRatio !== 100) {
-      alert(`비율 합계는 100%여야 합니다. (현재 ${totalRatio}%)`);
+      showToast({
+        tone: "warning",
+        title: "비율 합계를 확인해 주세요.",
+        message: `비율 합계는 100%여야 합니다. 현재 ${totalRatio}%입니다.`,
+      });
       return;
     }
 
@@ -430,7 +446,11 @@ const ExamGradingPlan: React.FC = () => {
           doc(db, getSemesterDocPath(userConfig, "grading_plans", editId)),
           data,
         );
-        alert("수정되었습니다.");
+        showToast({
+          tone: "success",
+          title: "수정되었습니다.",
+          message: "평가 반영 비율을 업데이트했습니다.",
+        });
       } else {
         await addDoc(
           collection(
@@ -442,13 +462,21 @@ const ExamGradingPlan: React.FC = () => {
             createdAt: serverTimestamp(),
           },
         );
-        alert("저장되었습니다.");
+        showToast({
+          tone: "success",
+          title: "저장되었습니다.",
+          message: "평가 반영 비율을 추가했습니다.",
+        });
       }
       resetForm();
       loadPlans();
     } catch (e) {
       console.error(e);
-      alert("저장 실패");
+      showToast({
+        tone: "error",
+        title: "저장에 실패했습니다.",
+        message: "잠시 후 다시 시도해 주세요.",
+      });
     }
   };
 
@@ -509,15 +537,31 @@ const ExamGradingPlan: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm("삭제하시겠습니까?")) {
-      try {
-        await deleteDoc(
-          doc(db, getSemesterDocPath(userConfig, "grading_plans", id)),
-        );
-        setPlans(plans.filter((p) => p.id !== id));
-      } catch (e) {
-        console.error(e);
-      }
+    const confirmed = await confirm({
+      title: "평가 반영 비율을 삭제할까요?",
+      message: "삭제한 항목은 다시 불러올 수 없습니다.",
+      confirmLabel: "삭제",
+      tone: "danger",
+    });
+    if (!confirmed) return;
+
+    try {
+      await deleteDoc(
+        doc(db, getSemesterDocPath(userConfig, "grading_plans", id)),
+      );
+      setPlans(plans.filter((p) => p.id !== id));
+      showToast({
+        tone: "success",
+        title: "삭제되었습니다.",
+        message: "평가 반영 비율 항목을 삭제했습니다.",
+      });
+    } catch (e) {
+      console.error(e);
+      showToast({
+        tone: "error",
+        title: "삭제에 실패했습니다.",
+        message: "잠시 후 다시 시도해 주세요.",
+      });
     }
   };
 

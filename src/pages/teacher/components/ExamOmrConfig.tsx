@@ -3,6 +3,7 @@ import { db } from "../../../lib/firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { useAuth } from "../../../contexts/AuthContext";
 import { getSemesterDocPath } from "../../../lib/semesterScope";
+import { useAppToast } from "../../../components/common/AppToastProvider";
 
 interface ObjectiveItem {
   score: number;
@@ -20,6 +21,7 @@ interface SubjectiveItem {
 
 const ExamOmrConfig: React.FC = () => {
   const { config } = useAuth();
+  const { showToast } = useAppToast();
   const [objective, setObjective] = useState<ObjectiveItem[]>([]);
   const [subjective, setSubjective] = useState<SubjectiveItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -59,10 +61,18 @@ const ExamOmrConfig: React.FC = () => {
           updatedAt: serverTimestamp(),
         },
       );
-      alert("저장되었습니다.");
+      showToast({
+        tone: "success",
+        title: "저장되었습니다.",
+        message: "정기시험 답안 설정을 업데이트했습니다.",
+      });
     } catch (e) {
       console.error(e);
-      alert("저장 실패");
+      showToast({
+        tone: "error",
+        title: "저장에 실패했습니다.",
+        message: "잠시 후 다시 시도해 주세요.",
+      });
     }
   };
 

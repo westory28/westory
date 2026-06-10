@@ -684,9 +684,8 @@ const formatObjectionTime = (value: unknown) => {
   }).format(new Date(millis));
 };
 
-const getSignatureSubmittedAtValue = (
-  record?: PerformanceScoreRecord | null,
-) => record?.confirmation?.confirmedAt || record?.signedAt || null;
+const getSignatureSubmittedAtValue = (record?: PerformanceScoreRecord | null) =>
+  record?.confirmation?.confirmedAt || record?.signedAt || null;
 
 const formatClassSheetSignatureSubmittedAt = (value: unknown) => {
   const millis = getTimestampMillis(value);
@@ -3202,7 +3201,7 @@ const PerformanceScoreManager: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { config, currentUser } = useAuth();
   const { showToast } = useAppToast();
-  const { confirm } = useAppDialog();
+  const { confirm, prompt: promptDialog } = useAppDialog();
   const { year, semester } = getYearSemester(config);
   const [title, setTitle] = useState("");
   const [subject, setSubject] = useState("");
@@ -3702,14 +3701,14 @@ const PerformanceScoreManager: React.FC = () => {
     Math.max(1, scoreListClassPage),
     scoreListClassTotalPages,
   );
-  const activeScoreListClass =
-    scoreListSearchActive
-      ? ""
-      : scoreListClassFilter !== "all"
+  const activeScoreListClass = scoreListSearchActive
+    ? ""
+    : scoreListClassFilter !== "all"
       ? scoreListClassFilter
       : scoreListClassPageOptions[safeScoreListClassPage - 1] || "";
   const filteredScoreListRecords = useMemo(() => {
-    if (scoreListSearchActive) return scoreListReady ? scoreListBaseRecords : [];
+    if (scoreListSearchActive)
+      return scoreListReady ? scoreListBaseRecords : [];
     if (!scoreListReady || !activeScoreListClass) return [];
     return scoreListBaseRecords.filter(
       (record) =>
@@ -4515,14 +4514,22 @@ const PerformanceScoreManager: React.FC = () => {
     if (status === "accepted") {
       const defaultScore =
         objection.changedTotalScore ?? objection.totalScore ?? "";
-      const rawScore = window.prompt(
-        [
+      const rawScore = await promptDialog({
+        title: "변경 후 점수 입력",
+        message: [
           `${objection.studentName} 학생의 ${objection.scoreTitle} 이의 제기를 수용합니다.`,
           `현재 점수: ${objection.scoreLabel}`,
           "수용 전 점수표에서 실제 점수를 수정·저장한 뒤, 학생 화면에 반영된 변경 후 총점을 입력해 주세요.",
         ].join("\n"),
-        String(defaultScore),
-      );
+        inputLabel: "변경 후 총점",
+        initialValue: String(defaultScore),
+        placeholder: "예: 29",
+        inputMode: "decimal",
+        confirmLabel: "점수 확인",
+        required: true,
+        requiredMessage: "변경 후 총점을 입력해 주세요.",
+        tone: "info",
+      });
       if (rawScore === null) return;
       changedTotalScore = getFiniteNumber(rawScore.replace(/,/g, "").trim());
       if (changedTotalScore === null) {
@@ -4552,17 +4559,33 @@ const PerformanceScoreManager: React.FC = () => {
         changedTotalScore,
         objection.totalMaxScore,
       );
-      const memo = window.prompt(
-        "학생에게 함께 보낼 처리 메모가 있으면 입력해 주세요.",
-        objection.reviewMemo || "",
-      );
+      const memo = await promptDialog({
+        title: "처리 메모 입력",
+        message: "학생에게 함께 보낼 처리 메모가 있으면 입력해 주세요.",
+        inputLabel: "처리 메모",
+        initialValue: objection.reviewMemo || "",
+        placeholder: "예: 확인 결과 총점이 수정되었습니다.",
+        confirmLabel: "메모 확인",
+        multiline: true,
+        maxLength: 240,
+        tone: "info",
+      });
       if (memo === null) return;
       reviewMemo = memo.trim().slice(0, 240);
     } else {
-      const memo = window.prompt(
-        "학생에게 전달할 반려 사유를 입력해 주세요.",
-        objection.reviewMemo || "",
-      );
+      const memo = await promptDialog({
+        title: "반려 사유 입력",
+        message: `${objection.studentName} 학생에게 전달할 ${objection.scoreTitle} 이의 반려 사유를 입력해 주세요.`,
+        inputLabel: "반려 사유",
+        initialValue: objection.reviewMemo || "",
+        placeholder: "예: 해당 부분은 채점 기준상 추가 점수 대상이 아닙니다.",
+        confirmLabel: "반려 사유 확인",
+        multiline: true,
+        maxLength: 240,
+        required: true,
+        requiredMessage: "반려 사유를 입력해 주세요.",
+        tone: "danger",
+      });
       if (memo === null) return;
       reviewMemo = memo.trim().slice(0, 240);
       if (!reviewMemo) {
@@ -4898,18 +4921,19 @@ const PerformanceScoreManager: React.FC = () => {
       );
     }).length;
 
-    if (
-      signedChangedCount > 0 &&
-      !window.confirm(
-        [
+    if (signedChangedCount > 0) {
+      const confirmed = await confirm({
+        title: "서명 완료 학생의 점수 변경",
+        message: [
           `이미 점수 확인 서명이 완료된 학생 ${signedChangedCount}명의 점수 또는 근거가 변경됩니다.`,
           "변경된 학생의 기존 확인 서명은 자동으로 반려되어 학생이 다시 확인할 수 있게 됩니다.",
           "",
           "계속 저장할까요?",
         ].join("\n"),
-      )
-    ) {
-      return;
+        confirmLabel: "계속 저장",
+        tone: "warning",
+      });
+      if (!confirmed) return;
     }
 
     setSavingScoreEdits(true);
@@ -5497,15 +5521,18 @@ const PerformanceScoreManager: React.FC = () => {
     const scoreTitles = signedRecords
       .map((record, index) => `${index + 1}. ${record.title}`)
       .join("\n");
-    const confirmed = window.confirm(
-      [
+    const confirmed = await confirm({
+      title: "점수 확인 서명을 반려할까요?",
+      message: [
         `${student.class}반 ${student.number}번 ${student.studentName} 학생의 점수 확인 서명을 반려할까요?`,
         "학생 점수는 유지되고, 확인 서명만 삭제됩니다.",
         "반려 후에만 학생이 다시 서명할 수 있습니다.",
         "",
         scoreTitles,
       ].join("\n"),
-    );
+      confirmLabel: "서명 반려",
+      tone: "danger",
+    });
     if (!confirmed) return;
 
     const studentKey = getClassSheetStudentKey(student);
@@ -5774,10 +5801,10 @@ const PerformanceScoreManager: React.FC = () => {
         ? `이름 확인이 필요한 연결 학생 ${parsedSummary.warningCount}명`
         : "",
     ].filter(Boolean);
-    if (
-      skippedMessages.length > 0 &&
-      !window.confirm(
-        [
+    if (skippedMessages.length > 0) {
+      const confirmed = await confirm({
+        title: "저장 전 확인이 필요합니다.",
+        message: [
           `확인 사항: ${skippedMessages.join(", ")}`,
           `점수가 입력된 연결 학생 ${saveableRows.length}명만 저장됩니다.`,
           unmatchedRows.length > 0 ? "" : "",
@@ -5791,9 +5818,10 @@ const PerformanceScoreManager: React.FC = () => {
         ]
           .filter((line) => line !== "")
           .join("\n"),
-      )
-    ) {
-      return;
+        confirmLabel: "입력된 학생만 저장",
+        tone: "warning",
+      });
+      if (!confirmed) return;
     }
 
     setSaving(true);
@@ -5929,13 +5957,13 @@ const PerformanceScoreManager: React.FC = () => {
 
   const deleteRoster = async (roster: PerformanceScoreRoster) => {
     if (deletingRosterId || scoreEditing || savingScoreEdits) return;
-    if (
-      !window.confirm(
-        `${roster.title} 업로드 기록과 학생별 점수 문서를 삭제할까요?`,
-      )
-    ) {
-      return;
-    }
+    const confirmed = await confirm({
+      title: "수행평가 점수표를 삭제할까요?",
+      message: `${roster.title} 업로드 기록과 학생별 점수 문서를 삭제합니다.`,
+      confirmLabel: "삭제",
+      tone: "danger",
+    });
+    if (!confirmed) return;
 
     setDeletingRosterId(roster.id);
     try {

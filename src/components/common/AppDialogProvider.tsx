@@ -19,15 +19,47 @@ export interface AppConfirmOptions {
   tone?: AppDialogTone;
 }
 
+export interface AppPromptOptions {
+  title: string;
+  message?: React.ReactNode;
+  inputLabel?: string;
+  initialValue?: string;
+  placeholder?: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  tone?: AppDialogTone;
+  multiline?: boolean;
+  maxLength?: number;
+  required?: boolean;
+  requiredMessage?: string;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
+}
+
 interface AppDialogContextValue {
   confirm: (options: AppConfirmOptions) => Promise<boolean>;
+  prompt: (options: AppPromptOptions) => Promise<string | null>;
 }
 
 interface ConfirmDialogState extends AppConfirmOptions {
+  kind: "confirm";
   confirmLabel: string;
   cancelLabel: string;
   tone: AppDialogTone;
 }
+
+interface PromptDialogState extends AppPromptOptions {
+  kind: "prompt";
+  inputLabel: string;
+  confirmLabel: string;
+  cancelLabel: string;
+  tone: AppDialogTone;
+}
+
+type DialogState = ConfirmDialogState | PromptDialogState;
+
+type DialogResolver =
+  | { kind: "confirm"; resolve: (value: boolean) => void }
+  | { kind: "prompt"; resolve: (value: string | null) => void };
 
 const AppDialogContext = createContext<AppDialogContextValue | undefined>(
   undefined,
@@ -74,57 +106,112 @@ const getFocusableElements = (container: HTMLElement | null) => {
 export const AppDialogProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const [dialog, setDialog] = useState<ConfirmDialogState | null>(null);
-  const resolverRef = useRef<((value: boolean) => void) | null>(null);
+  const [dialog, setDialog] = useState<DialogState | null>(null);
+  const [promptValue, setPromptValue] = useState("");
+  const [promptError, setPromptError] = useState("");
+  const resolverRef = useRef<DialogResolver | null>(null);
   const openerRef = useRef<HTMLElement | null>(null);
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
+  const promptInputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(
+    null,
+  );
   const titleId = useId();
   const messageId = useId();
+  const promptInputId = useId();
 
-  const closeDialog = useCallback((result: boolean) => {
+  const cancelPendingDialog = useCallback(() => {
+    const resolver = resolverRef.current;
+    resolverRef.current = null;
+    if (resolver?.kind === "confirm") {
+      resolver.resolve(false);
+    } else if (resolver?.kind === "prompt") {
+      resolver.resolve(null);
+    }
+  }, []);
+
+  const closeDialog = useCallback((result: boolean | string | null) => {
     const resolver = resolverRef.current;
     const opener = openerRef.current;
     resolverRef.current = null;
     openerRef.current = null;
     setDialog(null);
-    resolver?.(result);
+    setPromptError("");
+    if (resolver?.kind === "confirm") {
+      resolver.resolve(Boolean(result));
+    } else if (resolver?.kind === "prompt") {
+      resolver.resolve(typeof result === "string" ? result : null);
+    }
     window.setTimeout(() => {
       opener?.focus?.();
     }, 0);
   }, []);
 
-  const confirm = useCallback((options: AppConfirmOptions) => {
-    resolverRef.current?.(false);
-    openerRef.current =
-      document.activeElement instanceof HTMLElement
-        ? document.activeElement
-        : null;
+  const confirm = useCallback(
+    (options: AppConfirmOptions) => {
+      cancelPendingDialog();
+      openerRef.current =
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
 
-    return new Promise<boolean>((resolve) => {
-      resolverRef.current = resolve;
-      setDialog({
-        ...options,
-        title: String(options.title || "확인"),
-        confirmLabel: options.confirmLabel || "확인",
-        cancelLabel: options.cancelLabel || "취소",
-        tone: options.tone || "info",
+      return new Promise<boolean>((resolve) => {
+        resolverRef.current = { kind: "confirm", resolve };
+        setDialog({
+          ...options,
+          kind: "confirm",
+          title: String(options.title || "확인"),
+          confirmLabel: options.confirmLabel || "확인",
+          cancelLabel: options.cancelLabel || "취소",
+          tone: options.tone || "info",
+        });
       });
-    });
-  }, []);
+    },
+    [cancelPendingDialog],
+  );
+
+  const prompt = useCallback(
+    (options: AppPromptOptions) => {
+      cancelPendingDialog();
+      openerRef.current =
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
+      setPromptValue(options.initialValue || "");
+      setPromptError("");
+
+      return new Promise<string | null>((resolve) => {
+        resolverRef.current = { kind: "prompt", resolve };
+        setDialog({
+          ...options,
+          kind: "prompt",
+          title: String(options.title || "입력"),
+          inputLabel: options.inputLabel || "내용",
+          confirmLabel: options.confirmLabel || "확인",
+          cancelLabel: options.cancelLabel || "취소",
+          tone: options.tone || "info",
+        });
+      });
+    },
+    [cancelPendingDialog],
+  );
 
   useEffect(
     () => () => {
-      resolverRef.current?.(false);
-      resolverRef.current = null;
+      cancelPendingDialog();
     },
-    [],
+    [cancelPendingDialog],
   );
 
   useEffect(() => {
     if (!dialog) return undefined;
     const frame = window.requestAnimationFrame(() => {
-      cancelButtonRef.current?.focus();
+      if (dialog.kind === "prompt") {
+        promptInputRef.current?.focus();
+        promptInputRef.current?.select?.();
+      } else {
+        cancelButtonRef.current?.focus();
+      }
     });
     return () => window.cancelAnimationFrame(frame);
   }, [dialog]);
@@ -132,15 +219,16 @@ export const AppDialogProvider: React.FC<{ children: React.ReactNode }> = ({
   const value = useMemo<AppDialogContextValue>(
     () => ({
       confirm,
+      prompt,
     }),
-    [confirm],
+    [confirm, prompt],
   );
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (!dialog) return;
     if (event.key === "Escape") {
       event.preventDefault();
-      closeDialog(false);
+      closeDialog(dialog.kind === "prompt" ? null : false);
       return;
     }
 
@@ -160,6 +248,15 @@ export const AppDialogProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
+  const handlePromptConfirm = () => {
+    if (!dialog || dialog.kind !== "prompt") return;
+    if (dialog.required && !promptValue.trim()) {
+      setPromptError(dialog.requiredMessage || "내용을 입력해 주세요.");
+      return;
+    }
+    closeDialog(promptValue);
+  };
+
   const toneMeta = dialog ? TONE_META[dialog.tone] : TONE_META.info;
 
   return (
@@ -172,13 +269,13 @@ export const AppDialogProvider: React.FC<{ children: React.ReactNode }> = ({
         >
           <div
             ref={dialogRef}
-            role="alertdialog"
+            role={dialog.kind === "confirm" ? "alertdialog" : "dialog"}
             aria-modal="true"
             aria-labelledby={titleId}
             aria-describedby={dialog.message ? messageId : undefined}
-            className="w-full max-w-md overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"
+            className="flex max-h-[88vh] w-full max-w-md flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl"
           >
-            <div className="px-5 pt-5">
+            <div className="overflow-y-auto px-5 pt-5">
               <div
                 className={`inline-flex h-11 w-11 items-center justify-center rounded-xl border ${toneMeta.iconClassName}`}
                 aria-hidden="true"
@@ -203,19 +300,84 @@ export const AppDialogProvider: React.FC<{ children: React.ReactNode }> = ({
                   )}
                 </div>
               )}
+              {dialog.kind === "prompt" && (
+                <div className="mt-4">
+                  <label
+                    htmlFor={promptInputId}
+                    className="text-xs font-black text-slate-600"
+                  >
+                    {dialog.inputLabel}
+                  </label>
+                  {dialog.multiline ? (
+                    <textarea
+                      id={promptInputId}
+                      ref={(element) => {
+                        promptInputRef.current = element;
+                      }}
+                      value={promptValue}
+                      onChange={(event) => {
+                        setPromptValue(event.target.value);
+                        if (promptError) setPromptError("");
+                      }}
+                      rows={5}
+                      maxLength={dialog.maxLength}
+                      placeholder={dialog.placeholder}
+                      className="mt-2 min-h-28 w-full resize-y rounded-lg border border-slate-200 px-3 py-2 text-sm font-semibold leading-6 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    />
+                  ) : (
+                    <input
+                      id={promptInputId}
+                      ref={(element) => {
+                        promptInputRef.current = element;
+                      }}
+                      value={promptValue}
+                      onChange={(event) => {
+                        setPromptValue(event.target.value);
+                        if (promptError) setPromptError("");
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          handlePromptConfirm();
+                        }
+                      }}
+                      maxLength={dialog.maxLength}
+                      inputMode={dialog.inputMode}
+                      placeholder={dialog.placeholder}
+                      className="mt-2 h-11 w-full rounded-lg border border-slate-200 px-3 text-sm font-semibold text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    />
+                  )}
+                  {(promptError || dialog.maxLength) && (
+                    <div className="mt-2 flex items-center justify-between gap-3 text-xs font-bold">
+                      <p className="min-h-4 text-rose-600">{promptError}</p>
+                      {dialog.maxLength && (
+                        <p className="shrink-0 text-slate-400">
+                          {promptValue.length}/{dialog.maxLength}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <div className="mt-6 flex flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50 px-5 py-4 sm:flex-row sm:justify-end">
               <button
                 ref={cancelButtonRef}
                 type="button"
-                onClick={() => closeDialog(false)}
+                onClick={() =>
+                  closeDialog(dialog.kind === "prompt" ? null : false)
+                }
                 className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-100"
               >
                 {dialog.cancelLabel}
               </button>
               <button
                 type="button"
-                onClick={() => closeDialog(true)}
+                onClick={() =>
+                  dialog.kind === "prompt"
+                    ? handlePromptConfirm()
+                    : closeDialog(true)
+                }
                 className={`inline-flex h-10 items-center justify-center rounded-lg px-4 text-sm font-black shadow-sm transition ${toneMeta.confirmClassName}`}
               >
                 {dialog.confirmLabel}
