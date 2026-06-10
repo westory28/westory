@@ -684,6 +684,23 @@ const formatObjectionTime = (value: unknown) => {
   }).format(new Date(millis));
 };
 
+const getSignatureSubmittedAtValue = (
+  record?: PerformanceScoreRecord | null,
+) => record?.confirmation?.confirmedAt || record?.signedAt || null;
+
+const formatClassSheetSignatureSubmittedAt = (value: unknown) => {
+  const millis = getTimestampMillis(value);
+  if (!millis) return "";
+  return new Intl.DateTimeFormat("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(new Date(millis));
+};
+
 const normalizeObjectionStatus = (
   value: unknown,
 ): PerformanceScoreObjectionStatus => {
@@ -7745,11 +7762,16 @@ const PerformanceScoreManager: React.FC = () => {
                               signatureDisplayRecord?.confirmation
                                 ?.signatureImage ||
                               "";
-                            const signatureName =
-                              signatureDisplayRecord?.signatureName ||
-                              signatureDisplayRecord?.confirmation
-                                ?.signatureName ||
-                              student.studentName;
+                            const signatureSubmittedAtValue =
+                              getSignatureSubmittedAtValue(
+                                signatureDisplayRecord,
+                              );
+                            const signatureSubmittedAtMillis =
+                              getTimestampMillis(signatureSubmittedAtValue);
+                            const signatureSubmittedAtLabel =
+                              formatClassSheetSignatureSubmittedAt(
+                                signatureSubmittedAtValue,
+                              );
                             const studentKey = getClassSheetStudentKey(student);
                             const missingLabels = [
                               !transferredStudent && !student.firstRecord
@@ -7846,22 +7868,6 @@ const PerformanceScoreManager: React.FC = () => {
                                           className="max-h-6 max-w-full object-contain"
                                         />
                                       </div>
-                                      <div className="min-w-0">
-                                        <div
-                                          className={`text-[11px] font-black leading-4 ${
-                                            signatureRecord
-                                              ? "text-emerald-700"
-                                              : "text-amber-700"
-                                          }`}
-                                        >
-                                          {signatureRecord
-                                            ? "서명 완료"
-                                            : "부분 서명"}
-                                        </div>
-                                        <div className="max-w-[3.5rem] truncate text-[11px] font-bold leading-4 text-slate-500">
-                                          {signatureName}
-                                        </div>
-                                      </div>
                                       <button
                                         type="button"
                                         onClick={() =>
@@ -7872,12 +7878,27 @@ const PerformanceScoreManager: React.FC = () => {
                                         disabled={
                                           rejectingSignatureKey === studentKey
                                         }
-                                        className="inline-flex h-7 w-16 shrink-0 items-center justify-center rounded-md border border-rose-200 bg-white text-[11px] font-black text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40"
+                                        className="inline-flex h-7 shrink-0 items-center justify-center whitespace-nowrap rounded-md border border-rose-200 bg-white px-2 text-[11px] font-black text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-40"
                                       >
                                         {rejectingSignatureKey === studentKey
                                           ? "반려 중..."
                                           : "반려"}
                                       </button>
+                                      {signatureSubmittedAtLabel ? (
+                                        <time
+                                          dateTime={new Date(
+                                            signatureSubmittedAtMillis,
+                                          ).toISOString()}
+                                          title={`서명 제출 일시 ${signatureSubmittedAtLabel}`}
+                                          className="shrink-0 whitespace-nowrap text-[11px] font-bold leading-4 text-slate-500"
+                                        >
+                                          {signatureSubmittedAtLabel}
+                                        </time>
+                                      ) : (
+                                        <span className="shrink-0 whitespace-nowrap text-[11px] font-bold leading-4 text-slate-400">
+                                          일시 없음
+                                        </span>
+                                      )}
                                     </div>
                                   ) : (
                                     <div className="mx-auto w-fit text-center text-xs font-bold leading-5 text-slate-500">
