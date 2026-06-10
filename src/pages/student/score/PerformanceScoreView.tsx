@@ -39,14 +39,8 @@ import { getPerformanceScoreItemShortName } from "../../../lib/performanceScoreW
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip);
 
-const formatDateTime = (value: unknown) => {
-  if (value instanceof Date) {
-    return value.toLocaleDateString("ko-KR", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-  }
+const getTimestampMillis = (value: unknown) => {
+  if (value instanceof Date) return value.getTime();
   const seconds =
     typeof value === "object" &&
     value !== null &&
@@ -54,12 +48,28 @@ const formatDateTime = (value: unknown) => {
     typeof (value as { seconds?: unknown }).seconds === "number"
       ? (value as { seconds: number }).seconds
       : null;
-  if (!seconds) return "";
-  return new Date(seconds * 1000).toLocaleDateString("ko-KR", {
+  return seconds ? seconds * 1000 : 0;
+};
+
+const formatDateTime = (value: unknown) => {
+  const millis = getTimestampMillis(value);
+  if (!millis) return "";
+  return new Date(millis).toLocaleDateString("ko-KR", {
     year: "numeric",
     month: "long",
     day: "numeric",
   });
+};
+
+const formatDateTimeWithTime = (value: unknown) => {
+  const millis = getTimestampMillis(value);
+  if (!millis) return "";
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(millis));
 };
 
 const getRecordDate = (record: PerformanceScoreRecord) =>
@@ -133,6 +143,38 @@ const getPerformanceScoreObjectionErrorMessage = (error: unknown) => {
   return "이의 제기 알림을 보내지 못했습니다. 잠시 후 다시 시도해 주세요.";
 };
 
+const getObjectionStatusMeta = (
+  status: PerformanceScoreObjection["status"],
+) => {
+  if (status === "accepted") {
+    return {
+      label: "수용",
+      badgeClass: "border-emerald-200 bg-emerald-50 text-emerald-700",
+      panelClass: "border-emerald-100 bg-emerald-50 text-emerald-900",
+      responseLabel: "교사가 보낸 수용 사유",
+      emptyResponse:
+        "교사가 별도 수용 사유를 남기지 않았습니다. 변경 점수 안내를 확인해 주세요.",
+    };
+  }
+  if (status === "rejected") {
+    return {
+      label: "반려",
+      badgeClass: "border-rose-200 bg-rose-50 text-rose-700",
+      panelClass: "border-rose-100 bg-rose-50 text-rose-900",
+      responseLabel: "교사가 보낸 반려 사유",
+      emptyResponse:
+        "교사가 별도 반려 사유를 남기지 않았습니다. 필요하면 담당 교사에게 직접 확인해 주세요.",
+    };
+  }
+  return {
+    label: "처리 대기",
+    badgeClass: "border-amber-200 bg-amber-50 text-amber-700",
+    panelClass: "border-amber-100 bg-amber-50 text-amber-900",
+    responseLabel: "처리 상태",
+    emptyResponse: "담당 교사가 아직 이의 신청을 확인하는 중입니다.",
+  };
+};
+
 const PerformanceScoreView: React.FC = () => {
   const { currentUser, userData, config } = useAuth();
   const { showToast } = useAppToast();
@@ -158,6 +200,8 @@ const PerformanceScoreView: React.FC = () => {
   const [signatureError, setSignatureError] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [objectionModalOpen, setObjectionModalOpen] = useState(false);
+  const [objectionResultModalOpen, setObjectionResultModalOpen] =
+    useState(false);
   const [objecting, setObjecting] = useState(false);
   const [objectionError, setObjectionError] = useState("");
   const [objectionSelectedIds, setObjectionSelectedIds] = useState<string[]>(
@@ -310,6 +354,35 @@ const PerformanceScoreView: React.FC = () => {
     () => objections.filter((item) => item.status === "pending"),
     [objections],
   );
+  const sortedObjections = useMemo(
+    () =>
+      [...objections].sort(
+        (a, b) =>
+          Math.max(
+            getTimestampMillis(b.reviewedAt),
+            getTimestampMillis(b.requestedAt),
+          ) -
+            Math.max(
+              getTimestampMillis(a.reviewedAt),
+              getTimestampMillis(a.requestedAt),
+            ) ||
+          String(b.scoreTitle || "").localeCompare(
+            String(a.scoreTitle || ""),
+            "ko",
+          ),
+      ),
+    [objections],
+  );
+  const recordByScoreId = useMemo(() => {
+    const map = new Map<string, PerformanceScoreRecord>();
+    records.forEach((record) => {
+      const scoreId = getRecordScoreId(record);
+      if (scoreId) map.set(scoreId, record);
+      if (record.rosterId) map.set(record.rosterId, record);
+      if (record.id) map.set(record.id, record);
+    });
+    return map;
+  }, [records]);
   const pendingObjectionScoreIds = useMemo(() => {
     const scoreIds = new Set<string>();
     pendingObjections.forEach((item) => {
@@ -322,6 +395,9 @@ const PerformanceScoreView: React.FC = () => {
   const selectedRecordHasPendingObjection = selectedRecord
     ? pendingObjectionScoreIds.has(getRecordScoreId(selectedRecord))
     : false;
+  const hasObjectionHistory = sortedObjections.length > 0;
+  const canRequestObjection =
+    warningConsentCurrent && !allScoresConfirmed && pendingRecords.length > 0;
   const signatureBlockedByPendingObjection =
     hasPendingObjection && !allScoresConfirmed;
   const pendingObjectionTitles = records
@@ -514,32 +590,43 @@ const PerformanceScoreView: React.FC = () => {
       });
       return;
     }
-    if (allScoresConfirmed) {
+    if (!canRequestObjection) {
       showToast({
         title: "이의 제기 불가",
-        message:
-          "이미 점수 확인과 서명이 완료되었습니다. 제출 후에는 담당 교사의 반려 없이 이의를 제기할 수 없습니다.",
+        message: allScoresConfirmed
+          ? "이미 점수 확인과 서명이 완료되었습니다. 제출 후에는 담당 교사의 반려 없이 이의를 제기할 수 없습니다."
+          : "이의 제기할 수행평가 점수가 없습니다.",
         tone: "warning",
       });
       return;
     }
-    if (pendingRecords.length === 0) {
-      showToast({
-        title: "이의 제기 불가",
-        message: "이의 제기할 수행평가 점수가 없습니다.",
-        tone: "warning",
-      });
-      return;
-    }
+
     setObjectionReason("");
     setObjectionError("");
     setObjectionSelectedIds(getDefaultObjectionScoreIds());
     setObjectionModalOpen(true);
   };
 
+  const openObjectionResultModal = () => {
+    if (!hasObjectionHistory) {
+      showToast({
+        title: "이의 결과 없음",
+        message: "아직 제출한 수행평가 이의 제기가 없습니다.",
+        tone: "info",
+      });
+      return;
+    }
+
+    setObjectionResultModalOpen(true);
+  };
+
   const closeObjectionModal = () => {
     if (objecting) return;
     setObjectionModalOpen(false);
+  };
+
+  const closeObjectionResultModal = () => {
+    setObjectionResultModalOpen(false);
   };
 
   const saveWarningConsent = async () => {
@@ -708,9 +795,11 @@ const PerformanceScoreView: React.FC = () => {
         reason,
       });
       if (result.objectionSavedCount > 0) {
-        setObjections(
-          await loadUserPerformanceScoreObjections(config, currentUser.uid),
+        const latestObjections = await loadUserPerformanceScoreObjections(
+          config,
+          currentUser.uid,
         );
+        setObjections(latestObjections);
       }
       if (
         result.objectionSavedCount <= 0 &&
@@ -727,8 +816,10 @@ const PerformanceScoreView: React.FC = () => {
       ) {
         if (result.objectionSavedCount > 0) {
           setObjectionModalOpen(false);
+          setObjectionResultModalOpen(true);
           setSignatureModalOpen(false);
           setObjectionReason("");
+          setObjectionSelectedIds([]);
           showToast({
             title: "이의 목록에 접수했습니다.",
             message:
@@ -744,8 +835,10 @@ const PerformanceScoreView: React.FC = () => {
         return;
       }
       setObjectionModalOpen(false);
+      setObjectionResultModalOpen(result.objectionSavedCount > 0);
       setSignatureModalOpen(false);
       setObjectionReason("");
+      setObjectionSelectedIds([]);
       if (result.createdCount > 0) {
         showToast({
           title: "이의 제기를 전달했습니다.",
@@ -1038,14 +1131,25 @@ const PerformanceScoreView: React.FC = () => {
           <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
             {selectedRecord &&
               (allScoresConfirmed ? (
-                <button
-                  type="button"
-                  disabled
-                  aria-disabled="true"
-                  className="inline-flex min-h-11 cursor-not-allowed items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-black leading-5 text-blue-800 opacity-80"
-                >
-                  점수 확인 완료 {confirmedRecordCount}/{records.length}
-                </button>
+                <>
+                  {hasObjectionHistory && (
+                    <button
+                      type="button"
+                      onClick={openObjectionResultModal}
+                      className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-5 py-2 text-sm font-black leading-5 text-slate-700 transition hover:bg-slate-50"
+                    >
+                      이의 결과
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    disabled
+                    aria-disabled="true"
+                    className="inline-flex min-h-11 cursor-not-allowed items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-black leading-5 text-blue-800 opacity-80"
+                  >
+                    점수 확인 완료 {confirmedRecordCount}/{records.length}
+                  </button>
+                </>
               ) : (
                 <>
                   <button
@@ -1054,8 +1158,18 @@ const PerformanceScoreView: React.FC = () => {
                     disabled={signatureActionPending}
                     className="inline-flex min-h-11 items-center justify-center rounded-lg border border-rose-200 bg-white px-5 py-2 text-sm font-black leading-5 text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    이의 제기
+                    이의 신청
                   </button>
+                  {hasObjectionHistory && (
+                    <button
+                      type="button"
+                      onClick={openObjectionResultModal}
+                      disabled={signatureActionPending}
+                      className="inline-flex min-h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-5 py-2 text-sm font-black leading-5 text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      이의 결과
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={openSignatureModal}
@@ -1313,11 +1427,11 @@ const PerformanceScoreView: React.FC = () => {
             <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
               <div className="min-w-0 break-keep">
                 <h3 className="text-lg font-black text-slate-900">
-                  수행평가 이의 제기
+                  수행평가 이의 신청
                 </h3>
                 <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
                   이의가 있는 수행평가를 선택하고 사유를 입력해 주세요. 이의
-                  제기를 보내면 서명은 저장되지 않고 담당 교사에게 알림이
+                  신청을 보내면 서명은 저장되지 않고 담당 교사에게 알림이
                   전송됩니다.
                 </p>
               </div>
@@ -1326,7 +1440,7 @@ const PerformanceScoreView: React.FC = () => {
                 onClick={closeObjectionModal}
                 disabled={objecting}
                 className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 disabled:opacity-40"
-                aria-label="이의 제기 창 닫기"
+                aria-label="이의 신청 창 닫기"
               >
                 <i className="fas fa-times" aria-hidden="true"></i>
               </button>
@@ -1335,7 +1449,7 @@ const PerformanceScoreView: React.FC = () => {
             <div className="overflow-y-auto px-5 py-4">
               <fieldset>
                 <legend className="text-sm font-black text-slate-800">
-                  이의 제기 대상
+                  이의 신청 대상
                 </legend>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   {pendingRecords.map((record) => {
@@ -1379,7 +1493,7 @@ const PerformanceScoreView: React.FC = () => {
                   htmlFor="performance-score-objection-reason"
                   className="text-sm font-black text-slate-800"
                 >
-                  이의 제기 사유
+                  이의 신청 사유
                 </label>
                 <textarea
                   id="performance-score-objection-reason"
@@ -1421,7 +1535,128 @@ const PerformanceScoreView: React.FC = () => {
                 disabled={objecting}
                 className="inline-flex h-11 items-center justify-center rounded-lg bg-rose-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-rose-700 disabled:bg-slate-300"
               >
-                {objecting ? "전송 중..." : "이의 제기 알림 보내기"}
+                {objecting ? "전송 중..." : "이의 신청 보내기"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {objectionResultModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
+          <section className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+              <div className="min-w-0 break-keep">
+                <h3 className="text-lg font-black text-slate-900">
+                  수행평가 이의 결과
+                </h3>
+                <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
+                  내가 보낸 이의 신청과 담당 교사의 처리 결과를 확인합니다.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeObjectionResultModal}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50"
+                aria-label="이의 결과 창 닫기"
+              >
+                <i className="fas fa-times" aria-hidden="true"></i>
+              </button>
+            </div>
+
+            <div className="overflow-y-auto px-5 py-4">
+              {sortedObjections.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center">
+                  <div className="text-sm font-black text-slate-700">
+                    아직 이의 신청 내역이 없습니다.
+                  </div>
+                  <p className="mt-2 text-xs font-bold leading-5 text-slate-500">
+                    이의 신청을 보내면 이곳에서 처리 상태를 확인할 수 있습니다.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {sortedObjections.map((objection) => {
+                    const meta = getObjectionStatusMeta(objection.status);
+                    const record =
+                      recordByScoreId.get(objection.scoreId) ||
+                      recordByScoreId.get(objection.rosterId || "");
+                    const scoreTitle =
+                      objection.scoreTitle || record?.title || "수행평가";
+                    const teacherResponse = objection.reviewMemo?.trim() || "";
+                    const requestedAtLabel =
+                      formatDateTimeWithTime(objection.requestedAt) ||
+                      "신청 시간 없음";
+                    const reviewedAtLabel = formatDateTimeWithTime(
+                      objection.reviewedAt,
+                    );
+
+                    return (
+                      <article
+                        key={objection.id}
+                        className="rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-sm"
+                      >
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
+                            <div className="whitespace-normal break-keep text-base font-black leading-6 text-slate-900">
+                              {scoreTitle}
+                            </div>
+                            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs font-bold text-slate-500">
+                              <span>신청 {requestedAtLabel}</span>
+                              {reviewedAtLabel && (
+                                <span>처리 {reviewedAtLabel}</span>
+                              )}
+                            </div>
+                          </div>
+                          <span
+                            className={`inline-flex w-fit shrink-0 rounded-full border px-3 py-1 text-xs font-black ${meta.badgeClass}`}
+                          >
+                            {meta.label}
+                          </span>
+                        </div>
+
+                        <div className="mt-4 grid gap-3">
+                          <div className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-3">
+                            <div className="text-xs font-black text-slate-500">
+                              내가 보낸 이의 내용
+                            </div>
+                            <p className="mt-1 whitespace-pre-wrap break-words text-sm font-semibold leading-6 text-slate-800">
+                              {objection.reason || "이의 신청 사유 없음"}
+                            </p>
+                          </div>
+
+                          {objection.status === "accepted" &&
+                            objection.changedScoreLabel && (
+                              <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm font-black text-emerald-800">
+                                변경 후 점수: {objection.changedScoreLabel}
+                              </div>
+                            )}
+
+                          <div
+                            className={`rounded-lg border px-3 py-3 ${meta.panelClass}`}
+                          >
+                            <div className="text-xs font-black opacity-80">
+                              {meta.responseLabel}
+                            </div>
+                            <p className="mt-1 whitespace-pre-wrap break-words text-sm font-semibold leading-6">
+                              {teacherResponse || meta.emptyResponse}
+                            </p>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end border-t border-slate-200 px-5 py-4">
+              <button
+                type="button"
+                onClick={closeObjectionResultModal}
+                className="inline-flex h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+              >
+                닫기
               </button>
             </div>
           </section>
