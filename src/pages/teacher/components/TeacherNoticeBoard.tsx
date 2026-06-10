@@ -25,6 +25,7 @@ interface Notice {
   imageHeight?: number;
   imageByteSize?: number;
   noticeOrder?: number;
+  developerLogPostId?: string;
   createdAt: any;
   targetDate?: string;
 }
@@ -256,6 +257,12 @@ const TeacherNoticeBoard: React.FC = () => {
                 <i className="fas fa-hand-pointer text-gray-400"></i>
                 이미지 수정
               </button>
+              {activeNotice.developerLogPostId && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-extrabold text-blue-700">
+                  <i className="fas fa-link text-[10px]"></i>
+                  게시물 연동
+                </span>
+              )}
 
               <div className="ml-auto flex items-center gap-2">
                 <button

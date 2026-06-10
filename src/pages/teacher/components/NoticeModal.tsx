@@ -3,6 +3,10 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDocs,
+  limit,
+  orderBy,
+  query,
   serverTimestamp,
   setDoc,
   Timestamp,
@@ -16,6 +20,12 @@ import {
   uploadNoticeImage,
   tryDeleteNoticeImage,
 } from "../../../lib/noticeImages";
+import {
+  DEVELOPER_LOG_ITEMS_COLLECTION,
+  DEVELOPER_LOG_SETTINGS_DOC,
+  normalizeDeveloperLogPost,
+  type DeveloperLogPost,
+} from "../../../lib/developerLogs";
 
 interface NoticeModalProps {
   isOpen: boolean;
@@ -64,6 +74,11 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
   const [targetDate, setTargetDate] = useState("");
   const [publishAt, setPublishAt] = useState(getDefaultPublishAt);
   const [expiresAt, setExpiresAt] = useState("");
+  const [developerLogPostId, setDeveloperLogPostId] = useState("");
+  const [developerLogPosts, setDeveloperLogPosts] = useState<
+    DeveloperLogPost[]
+  >([]);
+  const [developerLogLoading, setDeveloperLogLoading] = useState(false);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState("");
   const [loading, setLoading] = useState(false);
@@ -83,6 +98,7 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
           getDefaultPublishAt(),
       );
       setExpiresAt(toLocalDateTimeInputValue(noticeData.expiresAt));
+      setDeveloperLogPostId(String(noticeData.developerLogPostId || ""));
       setPreviewUrl(noticeData.imageUrl || "");
       setImageFile(null);
       return;
@@ -95,9 +111,49 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
     setTargetDate("");
     setPublishAt(getDefaultPublishAt());
     setExpiresAt("");
+    setDeveloperLogPostId("");
     setPreviewUrl("");
     setImageFile(null);
   }, [isOpen, noticeData]);
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    let active = true;
+    setDeveloperLogLoading(true);
+
+    void getDocs(
+      query(
+        collection(
+          db,
+          "site_settings",
+          DEVELOPER_LOG_SETTINGS_DOC,
+          DEVELOPER_LOG_ITEMS_COLLECTION,
+        ),
+        orderBy("publishedAt", "desc"),
+        limit(80),
+      ),
+    )
+      .then((snapshot) => {
+        if (!active) return;
+        setDeveloperLogPosts(
+          snapshot.docs.map((item) =>
+            normalizeDeveloperLogPost(item.id, item.data()),
+          ),
+        );
+      })
+      .catch((error) => {
+        console.error("Failed to load developer logs for notice link:", error);
+        if (active) setDeveloperLogPosts([]);
+      })
+      .finally(() => {
+        if (active) setDeveloperLogLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     if (!imageFile) return undefined;
@@ -177,6 +233,7 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
         targetDate: category === "dday" && targetDate ? targetDate : null,
         publishAt: Timestamp.fromDate(publishDate),
         expiresAt: expireDate ? Timestamp.fromDate(expireDate) : null,
+        developerLogPostId: developerLogPostId || null,
         ...imagePayload,
         updatedAt: serverTimestamp(),
       };
@@ -250,7 +307,7 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
       onClick={onClose}
     >
       <div
-        className="relative w-full max-w-2xl overflow-hidden rounded-xl bg-white shadow-2xl"
+        className="relative flex max-h-[90vh] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-gray-100 px-6 py-5">
@@ -268,7 +325,7 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
           </button>
         </div>
 
-        <div className="grid gap-5 px-6 py-5 md:grid-cols-[minmax(0,1fr)_220px]">
+        <div className="grid min-h-0 gap-5 overflow-y-auto px-6 py-5 md:grid-cols-[minmax(0,1fr)_220px]">
           <div className="space-y-4">
             <div className="block">
               <span className="mb-2 block text-sm font-extrabold text-gray-800">
@@ -391,6 +448,40 @@ const NoticeModal: React.FC<NoticeModalProps> = ({
                 />
               </label>
             )}
+
+            <label className="block">
+              <span className="mb-1 block text-xs font-extrabold text-gray-700">
+                연동 게시물
+              </span>
+              <select
+                value={developerLogPostId}
+                onChange={(event) => setDeveloperLogPostId(event.target.value)}
+                disabled={developerLogLoading}
+                className="h-10 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm font-bold outline-none focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-400"
+              >
+                <option value="">
+                  {developerLogLoading ? "게시물 불러오는 중..." : "연동 없음"}
+                </option>
+                {developerLogPostId &&
+                  !developerLogPosts.some(
+                    (post) => post.id === developerLogPostId,
+                  ) && (
+                    <option value={developerLogPostId}>
+                      현재 연결된 게시물
+                    </option>
+                  )}
+                {developerLogPosts.map((post) => (
+                  <option key={post.id} value={post.id}>
+                    {post.version ? `[${post.version}] ` : ""}
+                    {post.title || "제목 없는 게시물"}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs font-semibold leading-5 text-gray-500">
+                선택하면 학생 대시보드 배너 클릭 시 해당 개발자 일지로
+                이동합니다.
+              </p>
+            </label>
 
             <div>
               <span className="mb-2 block text-sm font-extrabold text-gray-800">

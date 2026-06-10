@@ -57,7 +57,7 @@ const EMPTY_FORM: FormState = {
   images: [],
 };
 
-const MAX_CARD_IMAGE_COUNT = 6;
+const MAX_CARD_IMAGE_COUNT = 20;
 const VIEWED_STORAGE_PREFIX = "developerLogViewed:";
 
 const getDeveloperLogItemsCollection = () =>
@@ -152,6 +152,11 @@ const DeveloperLog: React.FC = () => {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [newImageFiles, setNewImageFiles] = useState<File[]>([]);
   const [newImagePreviews, setNewImagePreviews] = useState<string[]>([]);
+  const [expandedImage, setExpandedImage] = useState<{
+    src: string;
+    alt: string;
+    label: string;
+  } | null>(null);
   const [searchText, setSearchText] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<
     "all" | DeveloperLogCategory
@@ -298,6 +303,7 @@ const DeveloperLog: React.FC = () => {
     setForm(EMPTY_FORM);
     setNewImageFiles([]);
     setPreviewOpen(false);
+    setExpandedImage(null);
   };
 
   const startWrite = () => {
@@ -326,6 +332,7 @@ const DeveloperLog: React.FC = () => {
   const cancelEditor = () => {
     setPreviewOpen(false);
     setNewImageFiles([]);
+    setExpandedImage(null);
     if (selectedPost) {
       setMode("detail");
       return;
@@ -350,6 +357,13 @@ const DeveloperLog: React.FC = () => {
     }
 
     setNewImageFiles((prev) => [...prev, ...incoming.slice(0, remaining)]);
+    if (incoming.length > remaining) {
+      showToast({
+        tone: "info",
+        title: `${remaining}장만 추가했습니다.`,
+        message: `카드뉴스 이미지는 최대 ${MAX_CARD_IMAGE_COUNT}장까지 첨부할 수 있습니다.`,
+      });
+    }
   };
 
   const removeExistingImage = (storagePath: string) => {
@@ -371,6 +385,13 @@ const DeveloperLog: React.FC = () => {
     }
     if (!form.summary.trim() && !bodyText) {
       showToast({ tone: "warning", title: "요약 또는 본문을 입력해 주세요." });
+      return;
+    }
+    if (form.images.length + newImageFiles.length > MAX_CARD_IMAGE_COUNT) {
+      showToast({
+        tone: "warning",
+        title: `카드뉴스 이미지는 최대 ${MAX_CARD_IMAGE_COUNT}장까지 첨부할 수 있습니다.`,
+      });
       return;
     }
 
@@ -719,6 +740,7 @@ const DeveloperLog: React.FC = () => {
       }),
     );
     draftPost.images = [...form.images, ...previewImages];
+    const totalImageCount = draftPost.images.length;
 
     return (
       <div className="space-y-5">
@@ -882,66 +904,107 @@ const DeveloperLog: React.FC = () => {
                       이미지 선택
                     </span>
                     <span className="mt-1 text-xs font-semibold text-slate-500">
-                      업로드 시 WebP로 압축하고 1장당 700KB 이하로 맞춥니다.
+                      최대 {MAX_CARD_IMAGE_COUNT}장까지 업로드할 수 있으며, 저장
+                      시 WebP로 압축하고 1장당 700KB 이하로 맞춥니다.
                     </span>
                   </label>
 
                   {(form.images.length > 0 || newImagePreviews.length > 0) && (
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                      {form.images.map((image) => (
-                        <div
-                          key={image.imageStoragePath}
-                          className="relative overflow-hidden rounded-xl border border-gray-200 bg-gray-50"
-                        >
-                          <img
-                            src={image.imageUrl}
-                            alt={form.title || "기존 카드뉴스 이미지"}
-                            className="h-44 w-full object-contain"
-                          />
-                          <button
-                            type="button"
-                            onClick={() =>
-                              removeExistingImage(image.imageStoragePath)
-                            }
-                            className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-rose-600 shadow"
-                            aria-label="기존 이미지 제거"
+                    <div className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                      <div className="mb-3 flex items-center justify-between gap-3 text-xs font-black text-slate-500">
+                        <span>
+                          미리보기 목록 {totalImageCount}/{MAX_CARD_IMAGE_COUNT}
+                        </span>
+                        <span>썸네일을 누르면 크게 볼 수 있습니다.</span>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {form.images.map((image, index) => (
+                          <div
+                            key={image.imageStoragePath}
+                            className="relative h-20 w-20 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm"
                           >
-                            <i
-                              className="fas fa-times text-xs"
-                              aria-hidden="true"
-                            ></i>
-                          </button>
-                        </div>
-                      ))}
-                      {newImagePreviews.map((url, index) => (
-                        <div
-                          key={url}
-                          className="relative overflow-hidden rounded-xl border border-blue-200 bg-blue-50"
-                        >
-                          <img
-                            src={url}
-                            alt={`새 카드뉴스 이미지 ${index + 1}`}
-                            className="h-44 w-full object-contain"
-                          />
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setNewImageFiles((prev) =>
-                                prev.filter(
-                                  (_, itemIndex) => itemIndex !== index,
-                                ),
-                              )
-                            }
-                            className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-rose-600 shadow"
-                            aria-label="새 이미지 제거"
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExpandedImage({
+                                  src: image.imageUrl,
+                                  alt: form.title || "기존 카드뉴스 이미지",
+                                  label: `기존 카드뉴스 이미지 ${index + 1}`,
+                                })
+                              }
+                              className="block h-full w-full focus:outline-none focus:ring-2 focus:ring-blue-300"
+                              aria-label={`기존 카드뉴스 이미지 ${index + 1} 크게 보기`}
+                            >
+                              <img
+                                src={image.imageUrl}
+                                alt={form.title || "기존 카드뉴스 이미지"}
+                                className="h-full w-full object-contain"
+                              />
+                            </button>
+                            <span className="absolute bottom-1 left-1 rounded bg-slate-900/80 px-1.5 py-0.5 text-[10px] font-black text-white">
+                              {index + 1}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                removeExistingImage(image.imageStoragePath)
+                              }
+                              className="absolute right-1 top-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/95 text-rose-600 shadow"
+                              aria-label="기존 이미지 제거"
+                            >
+                              <i
+                                className="fas fa-times text-xs"
+                                aria-hidden="true"
+                              ></i>
+                            </button>
+                          </div>
+                        ))}
+                        {newImagePreviews.map((url, index) => (
+                          <div
+                            key={url}
+                            className="relative h-20 w-20 overflow-hidden rounded-lg border border-blue-200 bg-white shadow-sm"
                           >
-                            <i
-                              className="fas fa-times text-xs"
-                              aria-hidden="true"
-                            ></i>
-                          </button>
-                        </div>
-                      ))}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setExpandedImage({
+                                  src: url,
+                                  alt: `새 카드뉴스 이미지 ${index + 1}`,
+                                  label: `새 카드뉴스 이미지 ${form.images.length + index + 1}`,
+                                })
+                              }
+                              className="block h-full w-full focus:outline-none focus:ring-2 focus:ring-blue-300"
+                              aria-label={`새 카드뉴스 이미지 ${index + 1} 크게 보기`}
+                            >
+                              <img
+                                src={url}
+                                alt={`새 카드뉴스 이미지 ${index + 1}`}
+                                className="h-full w-full object-contain"
+                              />
+                            </button>
+                            <span className="absolute bottom-1 left-1 rounded bg-blue-600 px-1.5 py-0.5 text-[10px] font-black text-white">
+                              {form.images.length + index + 1}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setNewImageFiles((prev) =>
+                                  prev.filter(
+                                    (_, itemIndex) => itemIndex !== index,
+                                  ),
+                                )
+                              }
+                              className="absolute right-1 top-1 inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/95 text-rose-600 shadow"
+                              aria-label="새 이미지 제거"
+                            >
+                              <i
+                                className="fas fa-times text-xs"
+                                aria-hidden="true"
+                              ></i>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1196,6 +1259,41 @@ const DeveloperLog: React.FC = () => {
           </section>
         )}
       </div>
+      {expandedImage && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/75 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`${expandedImage.label} 크게 보기`}
+          onClick={() => setExpandedImage(null)}
+        >
+          <div
+            className="relative flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+              <div className="min-w-0 text-sm font-black text-slate-700">
+                {expandedImage.label}
+              </div>
+              <button
+                type="button"
+                onClick={() => setExpandedImage(null)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-500 transition hover:bg-gray-50 hover:text-slate-900"
+                aria-label="확대 이미지 닫기"
+              >
+                <i className="fas fa-times" aria-hidden="true"></i>
+              </button>
+            </div>
+            <div className="min-h-0 bg-gray-50 p-3">
+              <img
+                src={expandedImage.src}
+                alt={expandedImage.alt}
+                className="mx-auto max-h-[78vh] w-full object-contain"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

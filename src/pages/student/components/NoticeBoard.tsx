@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { InlineLoading } from "../../../components/common/LoadingState";
 import { db } from "../../../lib/firebase";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -22,6 +23,7 @@ const getCategoryLabel = (category?: string) => {
 
 const NoticeBoard: React.FC = () => {
   const { config, userData } = useAuth();
+  const navigate = useNavigate();
   const [notices, setNotices] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -113,6 +115,12 @@ const NoticeBoard: React.FC = () => {
     startSlide(index, index > activeIndex ? 1 : -1);
   };
 
+  const openLinkedPost = (notice: Notice | null) => {
+    const linkedPostId = String(notice?.developerLogPostId || "").trim();
+    if (!linkedPostId) return;
+    navigate(`/developer-log/${linkedPostId}`);
+  };
+
   useEffect(() => {
     if (!isSliding || incomingIndex === null) return undefined;
 
@@ -168,7 +176,21 @@ const NoticeBoard: React.FC = () => {
 
         {!loading && activeNotice && (
           <div className="flex h-full flex-col">
-            <div className="relative aspect-[16/9] w-full flex-none overflow-hidden rounded-xl bg-gray-100">
+            <button
+              type="button"
+              onClick={() => openLinkedPost(activeNotice)}
+              disabled={!activeNotice.developerLogPostId}
+              className={`relative aspect-[16/9] w-full flex-none overflow-hidden rounded-xl bg-gray-100 text-left focus:outline-none focus:ring-4 focus:ring-blue-100 ${
+                activeNotice.developerLogPostId
+                  ? "cursor-pointer transition hover:ring-4 hover:ring-blue-100"
+                  : "cursor-default"
+              }`}
+              aria-label={
+                activeNotice.developerLogPostId
+                  ? "연결된 개발자 일지 열기"
+                  : "알림장 이미지"
+              }
+            >
               {activeNotice && (
                 <img
                   key={`active-${activeNotice.id}`}
@@ -218,7 +240,12 @@ const NoticeBoard: React.FC = () => {
               <span className="absolute bottom-4 left-4 rounded-full bg-blue-600 px-3 py-1 text-xs font-extrabold text-white shadow-sm">
                 {getCategoryLabel(activeNotice.category)}
               </span>
-            </div>
+              {activeNotice.developerLogPostId && (
+                <span className="absolute bottom-4 right-4 rounded-full bg-slate-950/80 px-3 py-1 text-xs font-extrabold text-white shadow-sm">
+                  게시물 보기
+                </span>
+              )}
+            </button>
 
             {showCarousel && (
               <div className="relative mt-3 flex min-h-8 items-center justify-center">

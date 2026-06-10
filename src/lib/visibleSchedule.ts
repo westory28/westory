@@ -24,6 +24,7 @@ export interface VisibleNotice {
   imageByteSize?: number;
   imageMimeType?: string;
   noticeOrder?: number;
+  developerLogPostId?: string;
   createdAt: any;
   targetDate?: string;
   publishAt?: any;
