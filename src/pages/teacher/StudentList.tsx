@@ -36,6 +36,12 @@ interface SchoolGradeOption {
   label: string;
 }
 
+interface StudentPageGroup {
+  key: string;
+  label: string;
+  students: Student[];
+}
+
 const normalizeOptionText = (value: unknown) => String(value ?? "").trim();
 
 const findMatchingOption = <T extends SchoolGradeOption | SchoolClassOption>(
@@ -63,7 +69,6 @@ const toCanonicalOptionValue = <
   return findMatchingOption(normalized, options)?.value ?? normalized;
 };
 
-const STUDENTS_PER_PAGE = 50;
 const ADMIN_EMAIL = "westoria28@gmail.com";
 type StudentDetailInitialTab = "summary" | "profile" | "performance";
 
@@ -137,20 +142,6 @@ const StudentList: React.FC = () => {
     void fetchStudents();
     void loadSchoolConfig();
   }, []);
-
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredStudents.length / STUDENTS_PER_PAGE),
-  );
-  const pageStart = (currentPage - 1) * STUDENTS_PER_PAGE;
-  const pagedStudents = filteredStudents.slice(
-    pageStart,
-    pageStart + STUDENTS_PER_PAGE,
-  );
-
-  useEffect(() => {
-    if (currentPage > totalPages) setCurrentPage(totalPages);
-  }, [currentPage, totalPages]);
 
   const gradeOrderMap = useMemo(() => {
     return gradeOptions.reduce<Record<string, number>>((acc, item, index) => {
@@ -297,6 +288,47 @@ const StudentList: React.FC = () => {
     if (!normalized) return "-";
     return findMatchingOption(normalized, classOptions)?.label || normalized;
   };
+
+  const studentPageGroups = useMemo<StudentPageGroup[]>(() => {
+    const groups: StudentPageGroup[] = [];
+    const groupByClass = new Map<string, StudentPageGroup>();
+
+    filteredStudents.forEach((student) => {
+      const gradeValue = toCanonicalOptionValue(student.grade, gradeOptions);
+      const classValue = toCanonicalOptionValue(student.class, classOptions);
+      const key = `${gradeValue || "unknown-grade"}::${classValue || "unknown-class"}`;
+      const classLabel = getClassLabel(student.class);
+      const gradeLabel = getGradeLabel(student.grade);
+      const label =
+        gradeFilter === "all" && gradeLabel !== "-" && classLabel !== "-"
+          ? `${gradeLabel} ${classLabel}`
+          : classLabel !== "-"
+            ? classLabel
+            : gradeLabel !== "-"
+              ? `${gradeLabel} 반 미지정`
+              : "반 미지정";
+
+      const existing = groupByClass.get(key);
+      if (existing) {
+        existing.students.push(student);
+        return;
+      }
+
+      const nextGroup = { key, label, students: [student] };
+      groupByClass.set(key, nextGroup);
+      groups.push(nextGroup);
+    });
+
+    return groups;
+  }, [filteredStudents, gradeOptions, classOptions, gradeFilter]);
+
+  const totalPages = Math.max(1, studentPageGroups.length);
+  const currentPageGroup = studentPageGroups[currentPage - 1] ?? null;
+  const pagedStudents = currentPageGroup?.students ?? [];
+
+  useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(totalPages);
+  }, [currentPage, totalPages]);
 
   const applyFilters = () => {
     let result = normalizedStudents;
@@ -645,19 +677,29 @@ const StudentList: React.FC = () => {
             </table>
           </div>
 
-          {!loading && filteredStudents.length > STUDENTS_PER_PAGE && (
-            <div className="flex items-center justify-center gap-1.5 border-t border-gray-100 bg-white px-5 py-3">
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map(
-                (page) => (
-                  <button
-                    key={page}
-                    onClick={() => setCurrentPage(page)}
-                    className={`min-w-8 h-8 rounded-md px-2 text-xs font-bold transition ${currentPage === page ? "bg-blue-600 text-white shadow-sm" : "bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-blue-600"}`}
-                  >
-                    {page}
-                  </button>
-                ),
+          {!loading && studentPageGroups.length > 1 && (
+            <div className="flex flex-wrap items-center justify-center gap-2 border-t border-gray-100 bg-white px-5 py-3">
+              {currentPageGroup && (
+                <span className="mr-1 text-xs font-bold text-gray-500">
+                  현재 {currentPageGroup.label}
+                </span>
               )}
+              <div className="flex flex-wrap justify-center gap-1.5">
+                {studentPageGroups.map((group, index) => {
+                  const page = index + 1;
+                  return (
+                    <button
+                      key={group.key}
+                      onClick={() => setCurrentPage(page)}
+                      title={`${page}페이지: ${group.label}`}
+                      aria-label={`${page}페이지, ${group.label}`}
+                      className={`min-w-8 h-8 rounded-md px-2 text-xs font-bold transition ${currentPage === page ? "bg-blue-600 text-white shadow-sm" : "bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-blue-600"}`}
+                    >
+                      {page}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
