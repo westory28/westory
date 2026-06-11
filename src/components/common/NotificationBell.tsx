@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { doc, getDoc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
+import { db } from "../../lib/firebase";
 import {
   clearNotifications,
   loadNotifications,
@@ -14,6 +16,7 @@ import type {
 } from "../../types";
 import { useAppDialog } from "./AppDialogProvider";
 import { useAppToast } from "./AppToastProvider";
+import { InlineLoading } from "./LoadingState";
 
 interface NotificationBellProps {
   className?: string;
@@ -160,6 +163,9 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
   const [notifications, setNotifications] = useState<WestoryNotification[]>([]);
   const [inbox, setInbox] = useState<WestoryNotificationInbox | null>(null);
   const [clearing, setClearing] = useState(false);
+  const [privacyPolicyOpen, setPrivacyPolicyOpen] = useState(false);
+  const [privacyPolicyLoading, setPrivacyPolicyLoading] = useState(false);
+  const [privacyPolicyHtml, setPrivacyPolicyHtml] = useState("");
   const rootRef = useRef<HTMLDivElement | null>(null);
   const realtimeToastStateRef = useRef({
     initialized: false,
@@ -406,6 +412,31 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
     }
   };
 
+  const openPrivacyPolicyModal = async () => {
+    setOpen(false);
+    setPrivacyPolicyOpen(true);
+    setPrivacyPolicyLoading(true);
+    setPrivacyPolicyHtml("");
+
+    try {
+      const snap = await getDoc(doc(db, "site_settings", "privacy"));
+      const text = snap.exists()
+        ? String((snap.data() as { text?: unknown }).text || "").trim()
+        : "";
+      setPrivacyPolicyHtml(
+        text ||
+          '<p class="text-center text-gray-400 py-8">등록된 내용이 없습니다.</p>',
+      );
+    } catch (error) {
+      console.error("Privacy policy load error:", error);
+      setPrivacyPolicyHtml(
+        '<p class="text-center text-red-400 py-8">내용을 불러오지 못했습니다.</p>',
+      );
+    } finally {
+      setPrivacyPolicyLoading(false);
+    }
+  };
+
   if (!currentUser) return null;
 
   return (
@@ -464,8 +495,10 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
               const unread = !notification.readAt;
               const bodyText = getNotificationBodyText(notification);
               const targetUrl = getNotificationTargetUrl(notification);
+              const opensPrivacyPolicy =
+                notification.type === "privacy_policy_updated";
               const rowClassName = `flex w-full items-start gap-3 px-4 py-3 text-left ${
-                targetUrl
+                targetUrl || opensPrivacyPolicy
                   ? "transition hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
                   : ""
               }`;
@@ -504,11 +537,15 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
                     unread ? "bg-blue-50/60" : "bg-white"
                   }`}
                 >
-                  {targetUrl ? (
+                  {targetUrl || opensPrivacyPolicy ? (
                     <button
                       type="button"
                       className={rowClassName}
                       onClick={() => {
+                        if (opensPrivacyPolicy) {
+                          void openPrivacyPolicyModal();
+                          return;
+                        }
                         setOpen(false);
                         navigate(targetUrl);
                       }}
@@ -535,6 +572,51 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
               <i className="fas fa-trash-can" aria-hidden="true"></i>
               {clearing ? "삭제 중..." : "알림 목록 삭제"}
             </button>
+          </div>
+        </div>
+      )}
+
+      {privacyPolicyOpen && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm"
+          onClick={() => setPrivacyPolicyOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="notification-privacy-policy-title"
+            className="mx-4 flex max-h-[80vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-gray-100 p-5">
+              <h2
+                id="notification-privacy-policy-title"
+                className="text-lg font-bold text-gray-900"
+              >
+                개인정보 처리 방침
+              </h2>
+              <button
+                type="button"
+                onClick={() => setPrivacyPolicyOpen(false)}
+                className="text-xl text-gray-400 transition hover:text-gray-700"
+                aria-label="개인정보 처리 방침 닫기"
+              >
+                <i className="fas fa-times" aria-hidden="true"></i>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6 text-sm leading-relaxed text-gray-700">
+              {privacyPolicyLoading ? (
+                <InlineLoading
+                  message="개인정보 처리 방침을 불러오는 중입니다."
+                  showWarning
+                />
+              ) : (
+                <div
+                  className="policy-rich-text"
+                  dangerouslySetInnerHTML={{ __html: privacyPolicyHtml }}
+                />
+              )}
+            </div>
           </div>
         </div>
       )}
