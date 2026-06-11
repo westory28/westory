@@ -1915,9 +1915,10 @@ const syncManualScoreRowsAcrossAssessments = (
   rosters: PerformanceScoreRoster[],
   editedRecords: ScoreListRecord[],
   replacements: ManualScoreIdentityReplacement[] = [],
+  deletedRecords: ScoreListRecord[] = [],
 ) => {
   const syncGrades = new Set(
-    editedRecords
+    [...editedRecords, ...deletedRecords]
       .filter(hasSyncableManualScoreIdentity)
       .map((record) => normalizeSchoolValue(record.grade))
       .filter(Boolean),
@@ -1930,8 +1931,20 @@ const syncManualScoreRowsAcrossAssessments = (
       syncGrades.has(normalizeSchoolValue(row.grade)),
     );
   });
+  const deletedManualIdentityKeys = new Set(
+    deletedRecords
+      .map((record) =>
+        hasSyncableManualScoreIdentity(record)
+          ? getManualScoreStudentIdentityKey(record)
+          : "",
+      )
+      .filter(Boolean),
+  );
   const skippedManualIdentityKeys = new Set(
-    replacements.map((replacement) => replacement.beforeKey),
+    [
+      ...replacements.map((replacement) => replacement.beforeKey),
+      ...deletedManualIdentityKeys,
+    ],
   );
   const syncRecords = collectManualScoreSyncRecords(
     editedRecords,
@@ -1939,12 +1952,25 @@ const syncManualScoreRowsAcrossAssessments = (
   );
   const updates = new Map<string, PerformanceScoreRosterRow[]>();
 
-  if (!syncRecords.length && !replacements.length) return updates;
+  if (
+    !syncRecords.length &&
+    !replacements.length &&
+    !skippedManualIdentityKeys.size
+  ) {
+    return updates;
+  }
 
   targetRosters.forEach((roster) => {
     let rows = dedupeManualRosterRows(
       applyManualScoreIdentityReplacements(roster.rows || [], replacements),
     );
+    if (deletedManualIdentityKeys.size) {
+      rows = rows.filter((row) => {
+        if (!isManualRosterRow(row)) return true;
+        const key = getManualScoreStudentIdentityKey(row);
+        return !key || !deletedManualIdentityKeys.has(key);
+      });
+    }
     let nextRowNumber = rows.reduce(
       (max, row) => Math.max(max, Number(row.rowNumber) || 0),
       0,
@@ -3592,6 +3618,8 @@ const PerformanceScoreManager: React.FC = () => {
   const [scoreEditOriginalRecords, setScoreEditOriginalRecords] = useState<
     ScoreListRecord[]
   >([]);
+  const [selectedScoreListRecordKeys, setSelectedScoreListRecordKeys] =
+    useState<Set<string>>(() => new Set<string>());
   const [savingScoreEdits, setSavingScoreEdits] = useState(false);
   const [scoreStatsModalOpen, setScoreStatsModalOpen] = useState(false);
   const [scoreStatsRecords, setScoreStatsRecords] = useState<
@@ -3685,6 +3713,17 @@ const PerformanceScoreManager: React.FC = () => {
     scoreListLoadedRosterId,
     scoreListSearch,
   ]);
+
+  useEffect(() => {
+    setSelectedScoreListRecordKeys((current) => {
+      if (!scoreEditing) return current.size ? new Set<string>() : current;
+      const recordKeys = new Set(scoreListRecords.map(getScoreListRecordKey));
+      const next = new Set(
+        Array.from(current).filter((key) => recordKeys.has(key)),
+      );
+      return next.size === current.size ? current : next;
+    });
+  }, [scoreEditing, scoreListRecords]);
 
   useEffect(() => {
     setScoreListSort({ key: "number", direction: "asc" });
@@ -4081,6 +4120,21 @@ const PerformanceScoreManager: React.FC = () => {
     () => sortScoreListRecords(filteredScoreListRecords, scoreListSort),
     [filteredScoreListRecords, scoreListSort],
   );
+  const visibleScoreListRecordKeys = useMemo(
+    () => sortedFilteredScoreListRecords.map(getScoreListRecordKey),
+    [sortedFilteredScoreListRecords],
+  );
+  const selectedScoreListRecordCount = selectedScoreListRecordKeys.size;
+  const visibleScoreListRecordsSelected =
+    visibleScoreListRecordKeys.length > 0 &&
+    visibleScoreListRecordKeys.every((key) =>
+      selectedScoreListRecordKeys.has(key),
+    );
+  const visibleScoreListRecordsPartiallySelected =
+    !visibleScoreListRecordsSelected &&
+    visibleScoreListRecordKeys.some((key) =>
+      selectedScoreListRecordKeys.has(key),
+    );
   const scoreStatsFallbackRecords = useMemo(() => {
     if (scoreStatsAllSelected) {
       const summaryStudents = scoreListSummaryCacheReady
@@ -5011,6 +5065,7 @@ const PerformanceScoreManager: React.FC = () => {
     setScoreListRecords(cloneScoreListRecords(scoreEditOriginalRecords));
     setScoreEditOriginalRecords([]);
     setScoreEditing(false);
+    setSelectedScoreListRecordKeys(new Set<string>());
   };
 
   const addScoreListStudent = () => {
@@ -5037,6 +5092,60 @@ const PerformanceScoreManager: React.FC = () => {
     });
     setScoreListSearch("");
     setScoreListRecords((current) => [...current, manualRecord]);
+  };
+
+  const toggleScoreListRecordSelection = (
+    recordKey: string,
+    checked: boolean,
+  ) => {
+    if (!scoreEditing || savingScoreEdits) return;
+    setSelectedScoreListRecordKeys((current) => {
+      const next = new Set(current);
+      if (checked) {
+        next.add(recordKey);
+      } else {
+        next.delete(recordKey);
+      }
+      return next;
+    });
+  };
+
+  const toggleVisibleScoreListRecordSelection = (checked: boolean) => {
+    if (!scoreEditing || savingScoreEdits) return;
+    setSelectedScoreListRecordKeys((current) => {
+      const next = new Set(current);
+      visibleScoreListRecordKeys.forEach((key) => {
+        if (checked) {
+          next.add(key);
+        } else {
+          next.delete(key);
+        }
+      });
+      return next;
+    });
+  };
+
+  const removeSelectedScoreListStudents = async () => {
+    if (!scoreEditing || savingScoreEdits || selectedScoreListRecordCount === 0)
+      return;
+    const selectedKeys = new Set(selectedScoreListRecordKeys);
+    const selectedCount = selectedKeys.size;
+    const confirmed = await confirm({
+      title: "선택 학생 삭제",
+      message: [
+        `선택한 학생 ${selectedCount}명을 이 수행평가 점수표에서 삭제합니다.`,
+        "저장된 학생은 변경 저장을 눌러야 DB와 다른 수행평가 명단에 반영됩니다.",
+      ].join("\n"),
+      confirmLabel: "학생 삭제",
+      tone: "danger",
+    });
+    if (!confirmed) return;
+    setScoreListRecords((current) =>
+      current.filter(
+        (record) => !selectedKeys.has(getScoreListRecordKey(record)),
+      ),
+    );
+    setSelectedScoreListRecordKeys(new Set<string>());
   };
 
   const updateScoreListIdentity = (
@@ -5203,6 +5312,12 @@ const PerformanceScoreManager: React.FC = () => {
     const persistableScoreListRecords = scoreListRecords.filter(
       (record) => !isEmptyManualScoreListRecord(record),
     );
+    const persistableRecordKeys = new Set(
+      persistableScoreListRecords.map(getScoreListRecordKey),
+    );
+    const deletedRecords = scoreEditOriginalRecords.filter(
+      (record) => !persistableRecordKeys.has(getScoreListRecordKey(record)),
+    );
     const manualRecordsToSave = persistableScoreListRecords.filter((record) =>
       isManualScoreListRecord(record),
     );
@@ -5249,11 +5364,12 @@ const PerformanceScoreManager: React.FC = () => {
       originalByKey,
     );
 
-    if (!changedRecords.length) {
+    if (!changedRecords.length && !deletedRecords.length) {
       const cleanRecords = cloneScoreListRecords(persistableScoreListRecords);
       setScoreListRecords(cleanRecords);
       setScoreEditing(false);
       setScoreEditOriginalRecords([]);
+      setSelectedScoreListRecordKeys(new Set<string>());
       showToast({
         tone: "success",
         title: "수정할 변경 사항이 없습니다.",
@@ -5287,21 +5403,23 @@ const PerformanceScoreManager: React.FC = () => {
       return;
     }
 
-    const signedChangedCount = changedRecords.filter((record) => {
-      const original = originalByKey.get(getScoreListRecordKey(record));
-      return Boolean(
-        record.signatureImage ||
-        record.confirmation?.signatureImage ||
-        original?.signatureImage ||
-        original?.confirmation?.signatureImage,
-      );
-    }).length;
+    const signedChangedCount = [...changedRecords, ...deletedRecords].filter(
+      (record) => {
+        const original = originalByKey.get(getScoreListRecordKey(record));
+        return Boolean(
+          record.signatureImage ||
+            record.confirmation?.signatureImage ||
+            original?.signatureImage ||
+            original?.confirmation?.signatureImage,
+        );
+      },
+    ).length;
 
     if (signedChangedCount > 0) {
       const confirmed = await confirm({
         title: "서명 완료 학생의 점수 변경",
         message: [
-          `이미 점수 확인 서명이 완료된 학생 ${signedChangedCount}명의 점수 또는 근거가 변경됩니다.`,
+          `이미 점수 확인 서명이 완료된 학생 ${signedChangedCount}명의 점수, 근거 또는 명단 포함 여부가 변경됩니다.`,
           "변경된 학생의 기존 확인 서명은 자동으로 반려되어 학생이 다시 확인할 수 있게 됩니다.",
           "",
           "계속 저장할까요?",
@@ -5327,22 +5445,48 @@ const PerformanceScoreManager: React.FC = () => {
           .filter((record) => !record.uid && record.localKey)
           .map((record) => [record.localKey || "", record]),
       );
+      const deletedUidSet = new Set(
+        deletedRecords.map((record) => record.uid).filter(Boolean),
+      );
+      const deletedLocalKeySet = new Set(
+        deletedRecords
+          .filter((record) => !record.uid)
+          .map((record) => record.localKey || "")
+          .filter(Boolean),
+      );
+      const deletedManualIdentityKeys = new Set(
+        deletedRecords
+          .filter(hasSyncableManualScoreIdentity)
+          .map(getManualScoreStudentIdentityKey)
+          .filter(Boolean),
+      );
+      const shouldDeleteExistingRosterRow = (
+        row: PerformanceScoreRosterRow,
+      ) => {
+        if (row.uid && deletedUidSet.has(row.uid)) return true;
+        const rowLocalKey = getRosterRowLocalKey(selectedScoreRoster.id, row);
+        if (deletedLocalKeySet.has(rowLocalKey)) return true;
+        if (!isManualRosterRow(row)) return false;
+        const manualKey = getManualScoreStudentIdentityKey(row);
+        return Boolean(
+          manualKey && deletedManualIdentityKeys.has(manualKey),
+        );
+      };
       const usedRecordKeys = new Set<string>();
       const rowNumberByRecordKey = new Map<string, number>();
       const existingRows = selectedScoreRoster.rows || [];
-      const updatedExistingRows = existingRows.map((row) => {
+      const updatedExistingRows = existingRows.flatMap((row) => {
+        if (shouldDeleteExistingRosterRow(row)) return [];
         const record = row.uid
           ? recordByUid.get(row.uid)
           : recordByLocalKey.get(
               getRosterRowLocalKey(selectedScoreRoster.id, row),
             );
-        if (!record) return row;
+        if (!record) return [row];
         const recordKey = getScoreListRecordKey(record);
         usedRecordKeys.add(recordKey);
         rowNumberByRecordKey.set(recordKey, row.rowNumber);
-        return record
-          ? buildRosterRowFromScoreRecord(row, record, selectedScoreRoster)
-          : row;
+        return [buildRosterRowFromScoreRecord(row, record, selectedScoreRoster)];
       });
       let nextRowNumber = existingRows.reduce(
         (max, row) => Math.max(max, Number(row.rowNumber) || 0),
@@ -5391,6 +5535,7 @@ const PerformanceScoreManager: React.FC = () => {
         rostersWithEditedRows,
         persistableScoreListRecords,
         manualIdentityReplacements,
+        deletedRecords,
       );
       const finalUpdatedRows =
         syncedRosterRowsById.get(selectedScoreRoster.id) || updatedRows;
@@ -5426,6 +5571,29 @@ const PerformanceScoreManager: React.FC = () => {
           unmatchedCount: meta.unmatchedCount,
           updatedAt: timestamp,
         });
+      });
+
+      deletedRecords.forEach((record) => {
+        if (!record.uid) return;
+        const scoreId = selectedScoreRoster.id;
+        const scoreRef = doc(
+          db,
+          "users",
+          record.uid,
+          PERFORMANCE_SCORE_USER_COLLECTION,
+          scoreId,
+        );
+        const confirmationRef = doc(
+          db,
+          "users",
+          record.uid,
+          PERFORMANCE_SCORE_USER_COLLECTION,
+          scoreId,
+          PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
+          record.uid,
+        );
+        batchQueue.delete(confirmationRef);
+        batchQueue.delete(scoreRef);
       });
 
       changedRecords.forEach((record) => {
@@ -5569,6 +5737,7 @@ const PerformanceScoreManager: React.FC = () => {
       setScoreListRecords(normalizedRecords);
       setScoreEditOriginalRecords(cloneScoreListRecords(normalizedRecords));
       setScoreEditing(false);
+      setSelectedScoreListRecordKeys(new Set<string>());
       setScoreStatsRecords([]);
       setScoreStatsLoadedRosterId("");
       setClassSheetPreviewStudents([]);
@@ -9068,6 +9237,21 @@ const PerformanceScoreManager: React.FC = () => {
                         </button>
                         <button
                           type="button"
+                          onClick={() => void removeSelectedScoreListStudents()}
+                          disabled={
+                            savingScoreEdits ||
+                            selectedScoreListRecordCount === 0
+                          }
+                          className="inline-flex h-9 items-center justify-center gap-1 rounded-lg border border-rose-200 bg-white px-3 text-xs font-black text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          <i className="fas fa-trash-can" aria-hidden="true"></i>
+                          학생 삭제
+                          {selectedScoreListRecordCount > 0
+                            ? ` ${selectedScoreListRecordCount}`
+                            : ""}
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => void saveScoreListEdits()}
                           disabled={savingScoreEdits}
                           className="inline-flex h-9 items-center justify-center gap-1 rounded-lg bg-blue-600 px-3 text-xs font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
@@ -9096,9 +9280,37 @@ const PerformanceScoreManager: React.FC = () => {
                   </div>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[1120px] text-left text-sm">
+                  <table className="w-full min-w-[1180px] text-left text-sm">
                     <thead className="bg-slate-50 text-xs font-black text-slate-500">
                       <tr>
+                        {scoreEditing && (
+                          <th className="w-12 px-3 py-3 text-center">
+                            <input
+                              type="checkbox"
+                              checked={visibleScoreListRecordsSelected}
+                              onChange={(event) =>
+                                toggleVisibleScoreListRecordSelection(
+                                  event.target.checked,
+                                )
+                              }
+                              disabled={
+                                savingScoreEdits ||
+                                visibleScoreListRecordKeys.length === 0
+                              }
+                              aria-checked={
+                                visibleScoreListRecordsPartiallySelected
+                                  ? "mixed"
+                                  : visibleScoreListRecordsSelected
+                              }
+                              aria-label={
+                                visibleScoreListRecordsPartiallySelected
+                                  ? "현재 표시 학생 일부 선택됨"
+                                  : "현재 표시 학생 전체 선택"
+                              }
+                              className="h-4 w-4 rounded border-slate-300 text-blue-600 accent-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+                            />
+                          </th>
+                        )}
                         {renderScoreListHeader("grade", "학년")}
                         {renderScoreListHeader("class", "반")}
                         {renderScoreListHeader("number", "번호")}
@@ -9124,7 +9336,9 @@ const PerformanceScoreManager: React.FC = () => {
                         <tr>
                           <td
                             colSpan={
-                              (selectedScoreRoster?.items.length || 0) + 7
+                              (selectedScoreRoster?.items.length || 0) +
+                              7 +
+                              (scoreEditing ? 1 : 0)
                             }
                             className="px-4 py-10 text-center text-sm font-bold text-slate-400"
                           >
@@ -9155,8 +9369,27 @@ const PerformanceScoreManager: React.FC = () => {
                           );
                           const enteredTotalScore =
                             getEnteredTotalScore(record);
+                          const selected =
+                            selectedScoreListRecordKeys.has(recordKey);
                           return (
                             <tr key={recordKey}>
+                              {scoreEditing && (
+                                <td className="whitespace-nowrap px-3 py-3 text-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={selected}
+                                    onChange={(event) =>
+                                      toggleScoreListRecordSelection(
+                                        recordKey,
+                                        event.target.checked,
+                                      )
+                                    }
+                                    disabled={savingScoreEdits}
+                                    aria-label={`${record.studentName || "학생"} 선택`}
+                                    className="h-4 w-4 rounded border-slate-300 text-blue-600 accent-blue-600 disabled:cursor-not-allowed disabled:opacity-50"
+                                  />
+                                </td>
+                              )}
                               <td className="whitespace-nowrap px-3 py-3 font-bold text-slate-600">
                                 {scoreEditing && manualRecord ? (
                                   <input
