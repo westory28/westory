@@ -400,10 +400,14 @@ const normalizeStudentProfile = (
   email: toText(data.email),
 });
 
-const matchRowsToStudents = (
-  rows: ParsedScoreRow[],
+interface StudentMatchIndexes {
+  byNumber: Map<string, StudentProfile[]>;
+  byName: Map<string, StudentProfile[]>;
+}
+
+const buildStudentMatchIndexes = (
   students: StudentProfile[],
-): ParsedScoreRow[] => {
+): StudentMatchIndexes => {
   const byNumber = new Map<string, StudentProfile[]>();
   const byName = new Map<string, StudentProfile[]>();
 
@@ -416,6 +420,7 @@ const matchRowsToStudents = (
     if (student.grade && student.class && student.number) {
       byNumber.set(numberKey, [...(byNumber.get(numberKey) || []), student]);
     }
+
     const nameKey = buildStudentNameLookupKey(
       student.grade,
       student.class,
@@ -426,12 +431,23 @@ const matchRowsToStudents = (
     }
   });
 
+  return { byNumber, byName };
+};
+
+const getUniqueStudentMatch = (
+  values: StudentProfile[] | undefined,
+): StudentProfile | null => (values && values.length === 1 ? values[0] : null);
+
+const matchRowsToStudents = (
+  rows: ParsedScoreRow[],
+  students: StudentProfile[],
+): ParsedScoreRow[] => {
+  const { byNumber, byName } = buildStudentMatchIndexes(students);
+
   return rows.map((row) => {
-    const numberMatches = byNumber.get(
-      buildStudentLookupKey(row.grade, row.class, row.number),
+    const numberMatch = getUniqueStudentMatch(
+      byNumber.get(buildStudentLookupKey(row.grade, row.class, row.number)),
     );
-    const numberMatch =
-      numberMatches && numberMatches.length === 1 ? numberMatches[0] : null;
     if (numberMatch) {
       const sameName =
         !row.studentName ||
@@ -448,11 +464,11 @@ const matchRowsToStudents = (
       };
     }
 
-    const nameMatches = byName.get(
-      buildStudentNameLookupKey(row.grade, row.class, row.studentName),
+    const nameMatch = getUniqueStudentMatch(
+      byName.get(
+        buildStudentNameLookupKey(row.grade, row.class, row.studentName),
+      ),
     );
-    const nameMatch =
-      nameMatches && nameMatches.length === 1 ? nameMatches[0] : null;
     if (nameMatch) {
       return {
         ...row,
@@ -470,6 +486,72 @@ const matchRowsToStudents = (
       matchMessage: "학생 명단에서 같은 학년, 반, 번호를 찾지 못했습니다.",
     };
   });
+};
+
+const getRosterRowStudentRepair = (
+  row: PerformanceScoreRosterRow,
+  indexes: StudentMatchIndexes,
+) => {
+  if (!rosterRowHasScore(row)) return row;
+
+  const numberMatch = getUniqueStudentMatch(
+    indexes.byNumber.get(
+      buildStudentLookupKey(row.grade, row.class, row.number),
+    ),
+  );
+  if (numberMatch) {
+    const sameName =
+      !row.studentName ||
+      normalizeStudentName(row.studentName) ===
+        normalizeStudentName(numberMatch.name);
+    if (sameName && !row.uid) {
+      return {
+        ...row,
+        uid: numberMatch.uid,
+        studentName: row.studentName || numberMatch.name,
+        matchStatus: "matched" as const,
+        matchMessage: "학생 명단과 연결된 점수입니다.",
+      };
+    }
+  }
+
+  const nameMatch = getUniqueStudentMatch(
+    indexes.byName.get(
+      buildStudentNameLookupKey(row.grade, row.class, row.studentName),
+    ),
+  );
+  if (nameMatch && !row.uid && !row.number && !isManualRosterRow(row)) {
+    return {
+      ...row,
+      uid: nameMatch.uid,
+      number: nameMatch.number,
+      matchStatus: "name-mismatch" as const,
+      matchMessage: `이름으로 연결했습니다. 학생 명단 번호는 ${nameMatch.number || "-"}번입니다.`,
+    };
+  }
+
+  return row;
+};
+
+const repairRosterRowsWithStudentProfiles = (
+  rows: PerformanceScoreRosterRow[],
+  students: StudentProfile[],
+) => {
+  if (!rows.length || !students.length) return { rows, changed: false };
+  const indexes = buildStudentMatchIndexes(students);
+  let changed = false;
+  const repairedRows = rows.map((row) => {
+    const repaired = getRosterRowStudentRepair(row, indexes);
+    const rowChanged =
+      repaired.uid !== row.uid ||
+      repaired.number !== row.number ||
+      repaired.studentName !== row.studentName ||
+      repaired.matchStatus !== row.matchStatus ||
+      repaired.matchMessage !== row.matchMessage;
+    if (rowChanged) changed = true;
+    return repaired;
+  });
+  return { rows: changed ? repairedRows : rows, changed };
 };
 
 const getMatchBadgeClass = (
@@ -3786,6 +3868,7 @@ const PerformanceScoreManager: React.FC = () => {
     new Set<string>(),
   );
   const scoreDocumentSyncRunRef = useRef(0);
+  const rosterStudentLinkRepairKeyRef = useRef("");
   const [savingScoreEdits, setSavingScoreEdits] = useState(false);
   const [scoreStatsModalOpen, setScoreStatsModalOpen] = useState(false);
   const [scoreStatsRecords, setScoreStatsRecords] = useState<
@@ -3931,6 +4014,33 @@ const PerformanceScoreManager: React.FC = () => {
     { year, semester },
     PERFORMANCE_SCORE_OBJECTIONS_COLLECTION,
   );
+  const rosterStudentLinkRepairKey = useMemo(() => {
+    const studentKey = students
+      .map(
+        (student) =>
+          `${student.uid}:${student.grade}:${student.class}:${student.number}:${normalizeStudentName(
+            student.name,
+          )}`,
+      )
+      .sort()
+      .join("|");
+    const rosterKey = rosters
+      .map((roster) => {
+        const repairableRows = (roster.rows || [])
+          .filter((row) => rosterRowHasScore(row))
+          .map(
+            (row) =>
+              `${row.rowNumber}:${row.uid}:${row.grade}:${row.class}:${row.number}:${normalizeStudentName(
+                row.studentName,
+              )}`,
+          )
+          .join(",");
+        return `${roster.id}:${repairableRows}`;
+      })
+      .sort()
+      .join("|");
+    return `${year}:${semester}:${studentKey}:${rosterKey}`;
+  }, [rosters, semester, students, year]);
 
   const parsedSummary = useMemo(() => {
     const rows = parsed?.rows || [];
@@ -4973,6 +5083,87 @@ const PerformanceScoreManager: React.FC = () => {
       setRostersLoading(false);
     }
   };
+
+  const repairSavedRosterStudentLinks = async (
+    sourceRosters: PerformanceScoreRoster[],
+    expectedRepairKey: string,
+  ) => {
+    const studentSnapshot = students;
+    if (!studentSnapshot.length || !sourceRosters.length) return;
+
+    try {
+      const repairedRosters: PerformanceScoreRoster[] = [];
+
+      for (const roster of sourceRosters) {
+        const repairedRoster = await runTransaction(db, async (transaction) => {
+          const rosterRef = doc(db, rosterCollectionPath, roster.id);
+          const latestSnap = await transaction.get(rosterRef);
+          if (!latestSnap.exists()) return null;
+
+          const latestRoster = normalizePerformanceScoreRoster(
+            latestSnap.id,
+            latestSnap.data() as Omit<PerformanceScoreRoster, "id">,
+          );
+          const repaired = repairRosterRowsWithStudentProfiles(
+            latestRoster.rows || [],
+            studentSnapshot,
+          );
+          if (!repaired.changed) return null;
+
+          const meta = buildRosterRowsMeta(latestRoster, repaired.rows);
+          const nextRoster = {
+            ...latestRoster,
+            rows: repaired.rows,
+            classes: meta.classes,
+            targetClass: meta.targetClass,
+            rowCount: meta.rowCount,
+            matchedCount: meta.matchedCount,
+            unmatchedCount: meta.unmatchedCount,
+            updatedAt: new Date(),
+          };
+          transaction.update(rosterRef, {
+            rows: repaired.rows,
+            classes: meta.classes,
+            targetClass: meta.targetClass,
+            rowCount: meta.rowCount,
+            matchedCount: meta.matchedCount,
+            unmatchedCount: meta.unmatchedCount,
+            updatedAt: serverTimestamp(),
+          });
+          return nextRoster;
+        });
+        if (repairedRoster) repairedRosters.push(repairedRoster);
+      }
+
+      if (!repairedRosters.length) return;
+      if (rosterStudentLinkRepairKeyRef.current !== expectedRepairKey) return;
+
+      setRosters((current) => {
+        const byId = new Map(
+          repairedRosters.map((roster) => [roster.id, roster]),
+        );
+        return sortPerformanceScoreRosters(
+          current.map((roster) => byId.get(roster.id) || roster),
+        );
+      });
+
+      const syncRunId = scoreDocumentSyncRunRef.current + 1;
+      scoreDocumentSyncRunRef.current = syncRunId;
+      void syncMissingStudentScoreDocuments(repairedRosters, syncRunId);
+    } catch (error) {
+      console.error("Failed to repair performance score student links:", error);
+    }
+  };
+
+  useEffect(() => {
+    if (!students.length || !rosters.length || rostersLoading) return;
+    if (rosterStudentLinkRepairKeyRef.current === rosterStudentLinkRepairKey) {
+      return;
+    }
+    const currentRepairKey = rosterStudentLinkRepairKey;
+    rosterStudentLinkRepairKeyRef.current = currentRepairKey;
+    void repairSavedRosterStudentLinks(rosters, currentRepairKey);
+  }, [rosterStudentLinkRepairKey, rosters, rostersLoading, students.length]);
 
   const loadScoreRecordsForRoster = async (
     roster: PerformanceScoreRoster,
