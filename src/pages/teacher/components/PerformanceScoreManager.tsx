@@ -549,17 +549,31 @@ type ScoreListRecord = PerformanceScoreRecord & {
   localKey?: string;
   rosterRowNumber?: number;
   isManual?: boolean;
+  academicStatus?: string;
   isTransferred?: boolean;
   transferStatus?: "transferred";
 };
 
 type TransferScoreMeta = {
+  academicStatus?: string;
   isTransferred?: boolean;
   transferStatus?: string;
 };
 
 const TRANSFERRED_LABEL = "전출";
 const MANUAL_SCORE_ROW_MESSAGE = "수동 추가 학생입니다.";
+const ACADEMIC_STATUS_OPTIONS = [
+  "재입학",
+  "편입학",
+  "전입학",
+  TRANSFERRED_LABEL,
+  "면제",
+  "유예",
+  "취학",
+  "재취학",
+  "명예졸업",
+  "장기결석에 따른 정원 외 학적관리",
+];
 
 type PerformanceScoreObjectionStatus = "pending" | "accepted" | "rejected";
 type PerformanceScoreObjectionReviewAction = Extract<
@@ -1517,10 +1531,13 @@ const buildScoreListRecordFromRosterRow = (
   ...(isManualRosterRow(row) ? { isManual: true } : {}),
 });
 
+const shouldIncludeRosterRowInScoreList = (row: PerformanceScoreRosterRow) =>
+  Boolean(row.uid) || shouldShowRosterRowInScoreList(row);
+
 const buildScoreListRecordsFromRosterRows = (roster: PerformanceScoreRoster) =>
   sortStudentIdentityRows(
     (roster.rows || [])
-      .filter((row) => shouldShowRosterRowInScoreList(row))
+      .filter((row) => shouldIncludeRosterRowInScoreList(row))
       .map((row) => buildScoreListRecordFromRosterRow(roster, row)),
   );
 
@@ -4403,7 +4420,14 @@ const PerformanceScoreManager: React.FC = () => {
     }
   };
 
-  const loadScoreRecordsForRoster = async (roster: PerformanceScoreRoster) => {
+  const loadScoreRecordsForRoster = async (
+    roster: PerformanceScoreRoster,
+    options: { includeStudentDocuments?: boolean } = {},
+  ) => {
+    if (!options.includeStudentDocuments) {
+      return buildScoreListRecordsFromRosterRows(roster);
+    }
+
     const rosterRows = roster.rows || [];
     const linkedRows = rosterRows.filter((row) => row.uid);
     const loaded: ScoreListRecord[] = [];
@@ -4489,12 +4513,20 @@ const PerformanceScoreManager: React.FC = () => {
       }
 
       if (!roster) return;
-      const sortedLoaded = await loadScoreRecordsForRoster(roster);
-      setScoreListRecords(sortedLoaded);
+      const sortedLoaded = await loadScoreRecordsForRoster(roster, {
+        includeStudentDocuments: options.startEdit === true,
+      });
       setScoreListLoadedRosterId(roster.id);
       if (options.startEdit) {
         setScoreEditOriginalRecords(cloneScoreListRecords(sortedLoaded));
+        setScoreListRecords(
+          sortedLoaded.map((record) =>
+            normalizeScoreRecordForIntegerEdit(record),
+          ),
+        );
         setScoreEditing(true);
+      } else {
+        setScoreListRecords(sortedLoaded);
       }
     } catch (error) {
       console.error("Failed to load performance score list:", error);
@@ -4797,13 +4829,9 @@ const PerformanceScoreManager: React.FC = () => {
     }
   };
 
-  const startScoreEdit = () => {
+  const startScoreEdit = async () => {
     if (!selectedScoreRoster || !scoreListReady || scoreListLoading) return;
-    setScoreEditOriginalRecords(cloneScoreListRecords(scoreListRecords));
-    setScoreListRecords((current) =>
-      current.map((record) => normalizeScoreRecordForIntegerEdit(record)),
-    );
-    setScoreEditing(true);
+    await loadScoreListRecords(selectedScoreRoster, { startEdit: true });
   };
 
   const cancelScoreEdit = () => {
@@ -8856,7 +8884,7 @@ const PerformanceScoreManager: React.FC = () => {
                     ) : (
                       <button
                         type="button"
-                        onClick={startScoreEdit}
+                        onClick={() => void startScoreEdit()}
                         disabled={scoreListLoading || savingScoreEdits}
                         className="inline-flex h-9 items-center justify-center gap-1 rounded-lg border border-emerald-200 bg-white px-3 text-xs font-black text-emerald-700 transition hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
                       >
