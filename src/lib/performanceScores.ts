@@ -77,6 +77,7 @@ export interface PerformanceScoreRecord {
   signatureImage?: string;
   signedAt?: unknown;
   confirmation?: PerformanceScoreConfirmation | null;
+  academicStatus?: string;
   isTransferred?: boolean;
   transferStatus?: "transferred";
 }
@@ -144,6 +145,7 @@ export interface PerformanceScoreRosterRow {
   evidence?: string;
   matchStatus: "matched" | "name-mismatch" | "unmatched";
   matchMessage: string;
+  academicStatus?: string;
   isManual?: boolean;
   isTransferred?: boolean;
   transferStatus?: "transferred";

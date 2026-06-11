@@ -21,7 +21,7 @@ import {
 import { useAppDialog } from "../../../components/common/AppDialogProvider";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { useAuth } from "../../../contexts/AuthContext";
-import { db } from "../../../lib/firebase";
+import { db, getHttpsCallable } from "../../../lib/firebase";
 import {
   getSemesterCollectionPath,
   getYearSemester,
@@ -126,6 +126,12 @@ const CLASS_SHEET_FOOTER_PAGE_LAST_START_COLUMN = 13;
 const CLASS_SHEET_FOOTER_PAGE_LAST_END_COLUMN = 14;
 const CLASS_SHEET_FOOTER_SCHOOL_START_COLUMN = 15;
 const CLASS_SHEET_FOOTER_SCHOOL_END_COLUMN = 16;
+const CLASS_SHEET_PRINT_INFO_START_COLUMN = 8;
+const CLASS_SHEET_PRINT_INFO_END_COLUMN = 16;
+const CLASS_SHEET_PRINT_INFO_ROW_HEIGHT = 9;
+const CLASS_SHEET_PRINT_INFO_FONT_SIZE = 7;
+const CLASS_SHEET_SCHOOL_NAME = "용신중학교";
+const CLASS_SHEET_PRINT_INFO_FALLBACK_IP = "***.***.***.***";
 const XLSX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const SCORE_LIST_ALL_ROSTERS_VALUE = "__all_performance_scores__";
@@ -665,13 +671,45 @@ const formatScoreDistributionBucketLabel = (
   return `${formatPerformanceScore(lower)}~${formatPerformanceScore(upper)}점 미만`;
 };
 
+const normalizeAcademicStatus = (value: unknown) => {
+  const status = toText(value).slice(0, 80);
+  if (!status || status === "-") return "";
+  if (status === "transferred") return TRANSFERRED_LABEL;
+  return status;
+};
+
+const getAcademicStatusLabel = (
+  source?: (TransferScoreMeta & { academicStatus?: unknown }) | null,
+) => {
+  if (!source) return "";
+  const status = normalizeAcademicStatus(source.academicStatus);
+  if (status) return status;
+  return source.isTransferred || source.transferStatus === "transferred"
+    ? TRANSFERRED_LABEL
+    : "";
+};
+
+const getAcademicStatusRecordMeta = (status: string) => {
+  const academicStatus = normalizeAcademicStatus(status);
+  if (!academicStatus) return {};
+  return {
+    academicStatus,
+    ...(academicStatus === TRANSFERRED_LABEL
+      ? {
+          isTransferred: true,
+          transferStatus: "transferred" as const,
+        }
+      : {}),
+  };
+};
+
 const isTransferredScoreRecord = (
   record?: (PerformanceScoreRecord & TransferScoreMeta) | null,
-) => Boolean(record?.isTransferred || record?.transferStatus === "transferred");
+) => Boolean(getAcademicStatusLabel(record));
 
 const isTransferredRosterRow = (
   row?: (PerformanceScoreRosterRow & TransferScoreMeta) | null,
-) => Boolean(row?.isTransferred || row?.transferStatus === "transferred");
+) => Boolean(getAcademicStatusLabel(row));
 
 const getTimestampMillis = (value: unknown) => {
   if (!value) return 0;
@@ -922,9 +960,11 @@ const getScoreSyncIdentityKeys = (
   >,
 ) => {
   const uid = toText(source.uid);
-  if (uid) return [`uid:${uid}`];
+  const keys: string[] = [];
+  if (uid) keys.push(`uid:${uid}`);
   const manualKey = getManualScoreStudentIdentityKey(source);
-  return manualKey ? [manualKey] : [];
+  if (manualKey) keys.push(manualKey);
+  return keys;
 };
 
 const hasDisplayableScoreRecord = (record?: PerformanceScoreRecord) =>
@@ -951,7 +991,7 @@ const addRecordToClassSheetStudentMap = (
   record: PerformanceScoreRecord,
   slot: "firstRecord" | "secondRecord",
 ) => {
-  const aliases = getScoreStudentIdentityAliases(record);
+  const aliases = getScoreSyncIdentityKeys(record);
   const key =
     aliases.find((alias) => studentMap.has(alias)) ||
     aliases[0] ||
@@ -1395,7 +1435,8 @@ const buildRecordFromRosterRow = (
   row: PerformanceScoreRosterRow,
 ): PerformanceScoreRecord => {
   const hasScore = rosterRowHasScore(row);
-  const transferred = isTransferredRosterRow(row);
+  const academicStatus = getAcademicStatusLabel(row);
+  const hasAcademicStatus = Boolean(academicStatus);
   const record = {
     id: roster.id,
     rosterId: roster.id,
@@ -1411,7 +1452,7 @@ const buildRecordFromRosterRow = (
     number: row.number,
     studentName: row.studentName,
     uid: row.uid,
-    items: transferred
+    items: hasAcademicStatus
       ? (roster.items || []).map((item) => ({
           name: item.name,
           ...(item.shortName ? { shortName: item.shortName } : {}),
@@ -1424,18 +1465,15 @@ const buildRecordFromRosterRow = (
         ? row.items
         : [],
     totalScore:
-      hasScore && !transferred ? Number(row.totalScore || 0) : Number.NaN,
+      hasScore && !hasAcademicStatus
+        ? Number(row.totalScore || 0)
+        : Number.NaN,
     totalMaxScore: row.totalMaxScore || roster.totalMaxScore || 0,
-    feedback: transferred ? TRANSFERRED_LABEL : row.feedback || "",
-    evidence: transferred
-      ? TRANSFERRED_LABEL
-      : row.evidence || row.feedback || "",
+    feedback: row.feedback || "",
+    evidence: row.evidence || row.feedback || "",
     sourceFileName: roster.sourceFileName,
+    ...getAcademicStatusRecordMeta(academicStatus),
   } as PerformanceScoreRecord & TransferScoreMeta;
-  if (transferred) {
-    record.isTransferred = true;
-    record.transferStatus = "transferred";
-  }
   return record;
 };
 
@@ -1607,6 +1645,7 @@ const serializeScoreRecordForEdit = (
     class: normalizeSchoolValue(record.class),
     number: normalizeSchoolValue(record.number),
     studentName: normalizeStudentName(record.studentName),
+    academicStatus: getAcademicStatusLabel(record),
     items: (record.items || []).map((item) => ({
       name: item.name || "",
       score: item.scoreEntered === false ? null : getEnteredItemScore(item),
@@ -1631,12 +1670,13 @@ const buildRosterRowFromScoreRecord = (
   record: PerformanceScoreRecord,
   roster: PerformanceScoreRoster,
 ): PerformanceScoreRosterRow => {
-  const transferred = isTransferredScoreRecord(record);
+  const academicStatus = getAcademicStatusLabel(record);
+  const hasAcademicStatus = Boolean(academicStatus);
   const manual =
     !record.uid &&
     (Boolean((record as ScoreListRecord).isManual) || isManualRosterRow(row));
   const items = getRecordItemsForRoster(record, roster).map((item) =>
-    transferred
+    hasAcademicStatus
       ? {
           ...item,
           score: 0,
@@ -1645,24 +1685,15 @@ const buildRosterRowFromScoreRecord = (
       : item,
   );
   const totalScore = getEnteredItemsTotalScore(items);
-  const matchStatus = transferred
+  const matchStatus = hasAcademicStatus
     ? "unmatched"
     : row.matchStatus || (record.uid ? "matched" : "unmatched");
-  const matchMessage = transferred
-    ? "전출 학생입니다."
+  const matchMessage = hasAcademicStatus
+    ? `${academicStatus} 학생입니다.`
     : row.matchMessage ||
       (record.uid
         ? "학생 문서와 연결된 점수입니다."
         : MANUAL_SCORE_ROW_MESSAGE);
-  const transferMeta: Pick<
-    PerformanceScoreRosterRow,
-    "isTransferred" | "transferStatus"
-  > = transferred
-    ? {
-        isTransferred: true,
-        transferStatus: "transferred",
-      }
-    : {};
   const nextRow: PerformanceScoreRosterRow = {
     rowNumber: Number(row.rowNumber) || 0,
     uid: record.uid || row.uid || "",
@@ -1671,29 +1702,24 @@ const buildRosterRowFromScoreRecord = (
     number: record.number || row.number || "",
     studentName: record.studentName || row.studentName || "",
     items,
-    totalScore: transferred ? 0 : (totalScore ?? 0),
+    totalScore: hasAcademicStatus ? 0 : (totalScore ?? 0),
     totalMaxScore:
       getRecordTotalMaxScore(record) ||
       roster.totalMaxScore ||
       row.totalMaxScore ||
       0,
-    feedback: transferred
-      ? TRANSFERRED_LABEL
-      : String(record.feedback || "").slice(0, 1000),
-    evidence: transferred
-      ? TRANSFERRED_LABEL
-      : String(record.evidence || record.feedback || "").slice(0, 1000),
+    feedback: String(record.feedback || "").slice(0, 1000),
+    evidence: String(record.evidence || record.feedback || "").slice(0, 1000),
     matchStatus,
     matchMessage,
     ...(manual ? { isManual: true } : {}),
-    ...transferMeta,
+    ...getAcademicStatusRecordMeta(academicStatus),
   };
   return nextRow;
 };
 
 const hasSyncableManualScoreIdentity = (record: PerformanceScoreRecord) =>
   !record.uid &&
-  !isTransferredScoreRecord(record) &&
   Boolean((record as ScoreListRecord).isManual) &&
   Boolean(
     normalizeSchoolValue(record.grade) &&
@@ -1746,11 +1772,12 @@ const buildBlankManualRosterRowFromRecord = (
   })),
   totalScore: 0,
   totalMaxScore: roster.totalMaxScore || 0,
-  feedback: "",
-  evidence: "",
+  feedback: String(record.feedback || "").slice(0, 1000),
+  evidence: String(record.evidence || record.feedback || "").slice(0, 1000),
   matchStatus: "unmatched",
   matchMessage: MANUAL_SCORE_ROW_MESSAGE,
   isManual: true,
+  ...getAcademicStatusRecordMeta(getAcademicStatusLabel(record)),
 });
 
 const applyManualScoreIdentityReplacements = (
@@ -1969,6 +1996,50 @@ const getTodayLabel = () => {
   return `${year}.${month}.${day}.`;
 };
 
+const formatClassSheetPrintDateTime = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${year}.${month}.${day} ${hours}:${minutes}`;
+};
+
+const normalizeClassSheetPrintIp = (value: unknown) => {
+  const text = toText(value).slice(0, 80);
+  return text || CLASS_SHEET_PRINT_INFO_FALLBACK_IP;
+};
+
+const getClassSheetPrintInfoText = (params: {
+  schoolName?: string;
+  printedAt?: Date;
+  clientIp?: string;
+  teacherName?: string;
+}) =>
+  `${toText(params.schoolName) || CLASS_SHEET_SCHOOL_NAME}/${formatClassSheetPrintDateTime(
+    params.printedAt,
+  )}/${normalizeClassSheetPrintIp(params.clientIp)}/${
+    toText(params.teacherName) || "교사"
+  }`;
+
+const loadClassSheetPrintClientInfo = async () => {
+  try {
+    const getPrintClientInfo = await getHttpsCallable<
+      Record<string, never>,
+      { maskedIp?: unknown }
+    >("getPrintClientInfo");
+    const result = await getPrintClientInfo({});
+    return {
+      clientIp: normalizeClassSheetPrintIp(result.data?.maskedIp),
+    };
+  } catch (error) {
+    console.warn("Failed to load print client info:", error);
+    return {
+      clientIp: CLASS_SHEET_PRINT_INFO_FALLBACK_IP,
+    };
+  }
+};
+
 const excelCell = (
   value: string | number,
   options: Record<string, unknown> = {},
@@ -2041,18 +2112,21 @@ const getScoreNumber = (record?: PerformanceScoreRecord) => {
 };
 
 const getClassSheetScoreCellValue = (record?: PerformanceScoreRecord) =>
-  isTransferredScoreRecord(record) ? TRANSFERRED_LABEL : getScoreNumber(record);
+  getAcademicStatusLabel(record) || getScoreNumber(record);
+
+const getClassSheetAcademicStatusLabel = (student: ClassSheetStudent) =>
+  getAcademicStatusLabel(student.firstRecord) ||
+  getAcademicStatusLabel(student.secondRecord);
 
 const isClassSheetTransferredStudent = (student: ClassSheetStudent) =>
-  isTransferredScoreRecord(student.firstRecord) ||
-  isTransferredScoreRecord(student.secondRecord);
+  Boolean(getClassSheetAcademicStatusLabel(student));
 
 const getClassSheetStudentScoreCellValue = (
   student: ClassSheetStudent,
   record?: PerformanceScoreRecord,
 ) =>
   isClassSheetTransferredStudent(student)
-    ? TRANSFERRED_LABEL
+    ? getClassSheetAcademicStatusLabel(student)
     : getClassSheetScoreCellValue(record);
 
 const getClassSheetSummaryScore = (
@@ -2062,11 +2136,12 @@ const getClassSheetSummaryScore = (
 
 const getScoreListSummaryTotalOnlyLabel = (
   record?: PerformanceScoreRecord,
-  forceTransferred = false,
+  forceAcademicStatus = "",
 ) => {
-  if (forceTransferred || isTransferredScoreRecord(record)) {
-    return TRANSFERRED_LABEL;
-  }
+  const academicStatus =
+    normalizeAcademicStatus(forceAcademicStatus) ||
+    getAcademicStatusLabel(record);
+  if (academicStatus) return academicStatus;
   if (!record) return "-";
   const score = getEnteredTotalScore(record);
   return score === null ? "-" : formatPerformanceScore(score);
@@ -2086,7 +2161,8 @@ const getScoreListCombinedTotalScore = (student: ClassSheetStudent) => {
 };
 
 const getScoreListCombinedTotalLabel = (student: ClassSheetStudent) => {
-  if (isClassSheetTransferredStudent(student)) return "-";
+  const academicStatus = getClassSheetAcademicStatusLabel(student);
+  if (academicStatus) return academicStatus;
   const totalScore = getScoreListCombinedTotalScore(student);
   return totalScore === null ? "-" : formatPerformanceScore(totalScore);
 };
@@ -2260,6 +2336,7 @@ const getConfirmedSignatureRecord = (
 };
 
 const getClassSheetStudentKey = (student: ClassSheetStudent) =>
+  getScoreSyncIdentityKeys(student)[0] ||
   getScoreStudentPrimaryIdentityKey(student);
 
 const getRecordScoreId = (record?: PerformanceScoreRecord) =>
@@ -2285,6 +2362,9 @@ const buildClassSummaryWorkbook = (params: {
   classValue: string;
   subject: string;
   teacherName: string;
+  schoolName?: string;
+  printedAt?: Date;
+  clientIp?: string;
   firstRoster?: PerformanceScoreRoster;
   secondRoster?: PerformanceScoreRoster;
   students: ClassSheetStudent[];
@@ -2490,14 +2570,31 @@ const buildClassSummaryWorkbook = (params: {
   setExcelCell(averageRow, 7, totalAverage, { columnSpan: 2 });
   rows.push(averageRow);
 
-  rows.push(makeExcelRow(120));
+  rows.push(makeExcelRow(120 - CLASS_SHEET_PRINT_INFO_ROW_HEIGHT));
 
   const footer = makeExcelRow(18);
   footer[8] = plainExcelCell(1, { columnSpan: 2 });
   footer[10] = plainExcelCell("/", { columnSpan: 2 });
   footer[12] = plainExcelCell(1, { columnSpan: 2 });
-  footer[14] = plainExcelCell("용신중학교", { columnSpan: 2 });
+  footer[14] = plainExcelCell(params.schoolName || CLASS_SHEET_SCHOOL_NAME, {
+    columnSpan: 2,
+  });
   rows.push(footer);
+
+  const printInfoFooter = makeExcelRow(CLASS_SHEET_PRINT_INFO_ROW_HEIGHT);
+  printInfoFooter[CLASS_SHEET_PRINT_INFO_START_COLUMN - 1] = plainExcelCell(
+    getClassSheetPrintInfoText(params),
+    {
+      columnSpan:
+        CLASS_SHEET_PRINT_INFO_END_COLUMN -
+        CLASS_SHEET_PRINT_INFO_START_COLUMN +
+        1,
+      align: "right",
+      alignVertical: "top",
+      fontSize: CLASS_SHEET_PRINT_INFO_FONT_SIZE,
+    },
+  );
+  rows.push(printInfoFooter);
 
   return { rows, images };
 };
@@ -2815,6 +2912,7 @@ const resetClassSheetFooter = (
     unMergeCells?: (range: string) => void;
   },
   footerRow: number,
+  schoolName = CLASS_SHEET_SCHOOL_NAME,
 ) => {
   [
     `I${footerRow}:N${footerRow}`,
@@ -2874,11 +2972,73 @@ const resetClassSheetFooter = (
     footerRow,
     CLASS_SHEET_FOOTER_SCHOOL_START_COLUMN,
   );
-  schoolCell.value = "용신중학교";
+  schoolCell.value = schoolName;
   schoolCell.alignment = {
     horizontal: "right",
     vertical: "middle",
     wrapText: true,
+  };
+};
+
+const resetClassSheetPrintInfoFooter = (
+  worksheet: {
+    getCell: (
+      row: number,
+      column: number,
+    ) => {
+      value: unknown;
+      alignment?: unknown;
+      font?: unknown;
+    };
+    getRow: (row: number) => { height?: number };
+    mergeCells: (
+      startRow: number,
+      startColumn: number,
+      endRow: number,
+      endColumn: number,
+    ) => void;
+    unMergeCells?: (range: string) => void;
+  },
+  footerRow: number,
+  printInfoText: string,
+) => {
+  const printInfoRow = footerRow + 1;
+  const spacerRow = worksheet.getRow(footerRow - 1);
+  const spacerHeight = Number(spacerRow.height || 0);
+  if (spacerHeight > CLASS_SHEET_PRINT_INFO_ROW_HEIGHT) {
+    spacerRow.height = spacerHeight - CLASS_SHEET_PRINT_INFO_ROW_HEIGHT;
+  }
+
+  unmergeWorksheetRange(worksheet, `H${printInfoRow}:P${printInfoRow}`);
+  for (
+    let column = CLASS_SHEET_PRINT_INFO_START_COLUMN;
+    column <= CLASS_SHEET_PRINT_INFO_END_COLUMN;
+    column += 1
+  ) {
+    setWorksheetCellValue(worksheet, printInfoRow, column, null);
+  }
+
+  worksheet.getRow(printInfoRow).height = CLASS_SHEET_PRINT_INFO_ROW_HEIGHT;
+  worksheet.mergeCells(
+    printInfoRow,
+    CLASS_SHEET_PRINT_INFO_START_COLUMN,
+    printInfoRow,
+    CLASS_SHEET_PRINT_INFO_END_COLUMN,
+  );
+
+  const cell = worksheet.getCell(
+    printInfoRow,
+    CLASS_SHEET_PRINT_INFO_START_COLUMN,
+  );
+  cell.value = printInfoText;
+  cell.alignment = {
+    horizontal: "right",
+    vertical: "top",
+    shrinkToFit: true,
+    wrapText: false,
+  };
+  cell.font = {
+    size: CLASS_SHEET_PRINT_INFO_FONT_SIZE,
   };
 };
 
@@ -3173,6 +3333,9 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
   classValue: string;
   subject: string;
   teacherName: string;
+  schoolName?: string;
+  printedAt?: Date;
+  clientIp?: string;
   firstRoster?: PerformanceScoreRoster;
   secondRoster?: PerformanceScoreRoster;
   students: ClassSheetStudent[];
@@ -3197,7 +3360,17 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
     worksheet,
     params.students.length,
   );
-  resetClassSheetFooter(worksheet, summaryStartRow + 4);
+  const footerRow = summaryStartRow + 4;
+  resetClassSheetFooter(
+    worksheet,
+    footerRow,
+    params.schoolName || CLASS_SHEET_SCHOOL_NAME,
+  );
+  resetClassSheetPrintInfoFooter(
+    worksheet,
+    footerRow,
+    getClassSheetPrintInfoText(params),
+  );
   centerClassSheetStudentNameHeader(worksheet);
 
   setWorksheetCellValue(worksheet, 1, 12, getTodayLabel());
@@ -4888,55 +5061,47 @@ const PerformanceScoreManager: React.FC = () => {
     );
   };
 
-  const updateScoreListTransferred = (recordKey: string, checked: boolean) => {
+  const updateScoreListAcademicStatus = (
+    recordKey: string,
+    statusValue: string,
+  ) => {
+    const academicStatus = normalizeAcademicStatus(statusValue);
     setScoreListRecords((current) =>
       current.map((record) => {
-        if (getScoreListRecordKey(record) !== recordKey) {
-          return record;
-        }
-        const original = scoreEditOriginalRecords.find(
-          (item) => getScoreListRecordKey(item) === recordKey,
-        );
-        const sourceItems =
-          original && !isTransferredScoreRecord(original)
-            ? original.items || []
-            : selectedScoreRoster
-              ? getRecordItemsForRoster(record, selectedScoreRoster)
-              : record.items || [];
-        const transferredItems = sourceItems.map((item) => ({
-          ...item,
-          score: 0,
-          scoreEntered: false,
-        }));
-        if (!checked) {
+        if (getScoreListRecordKey(record) !== recordKey) return record;
+        const statusMeta = getAcademicStatusRecordMeta(academicStatus);
+        if (!academicStatus) {
+          const original = scoreEditOriginalRecords.find(
+            (item) => getScoreListRecordKey(item) === recordKey,
+          );
           const restoredFromOriginal =
             original && !isTransferredScoreRecord(original);
           const restoredItems = restoredFromOriginal
-            ? sourceItems.map((item) => ({ ...item }))
-            : transferredItems;
-          const restoredTotalScore = restoredFromOriginal
-            ? original.totalScore
-            : (getEnteredItemsTotalScore(restoredItems) ?? Number.NaN);
+            ? (original.items || []).map((item) => ({ ...item }))
+            : record.items || [];
           return {
             ...record,
             items: restoredItems,
-            totalScore: restoredTotalScore,
-            feedback: restoredFromOriginal ? original.feedback || "" : "",
-            evidence: restoredFromOriginal
-              ? original.evidence || original.feedback || ""
-              : "",
+            totalScore: restoredFromOriginal
+              ? original.totalScore
+              : (getEnteredItemsTotalScore(restoredItems) ?? Number.NaN),
+            academicStatus: undefined,
             isTransferred: false,
             transferStatus: undefined,
           };
         }
+        const items = selectedScoreRoster
+          ? getRecordItemsForRoster(record, selectedScoreRoster)
+          : record.items || [];
         return {
           ...record,
-          items: transferredItems,
+          items: items.map((item) => ({
+            ...item,
+            score: 0,
+            scoreEntered: false,
+          })),
           totalScore: Number.NaN,
-          feedback: TRANSFERRED_LABEL,
-          evidence: TRANSFERRED_LABEL,
-          isTransferred: true,
-          transferStatus: "transferred",
+          ...statusMeta,
         };
       }),
     );
@@ -4988,6 +5153,35 @@ const PerformanceScoreManager: React.FC = () => {
           : record,
       ),
     );
+  };
+
+  const editScoreListEvidence = async (recordKey: string) => {
+    const record = scoreListRecords.find(
+      (item) => getScoreListRecordKey(item) === recordKey,
+    );
+    if (!record) return;
+    const result = await promptDialog({
+      title: "사유 작성",
+      message: `${record.class}반 ${record.number}번 ${record.studentName || "학생"}의 감점 요인 또는 학적 변동 사유를 작성합니다.`,
+      inputLabel: "사유",
+      initialValue: String(record.evidence || record.feedback || ""),
+      placeholder: "학생에게 보여줄 사유를 입력하세요.",
+      confirmLabel: "사유 저장",
+      multiline: true,
+      maxLength: 1000,
+      tone: "info",
+    });
+    if (result === null) return;
+    updateScoreListEvidence(recordKey, result);
+  };
+
+  const showScoreListEvidence = async (record: PerformanceScoreRecord) => {
+    await confirm({
+      title: "사유",
+      message: String(record.evidence || record.feedback || "작성된 사유가 없습니다."),
+      confirmLabel: "닫기",
+      tone: "info",
+    });
   };
 
   const saveScoreListEdits = async () => {
@@ -5260,10 +5454,11 @@ const PerformanceScoreManager: React.FC = () => {
           original?.signatureImage ||
           original?.confirmation?.signatureImage,
         );
-        const transferred = isTransferredScoreRecord(record);
+        const academicStatus = getAcademicStatusLabel(record);
+        const hasAcademicStatus = Boolean(academicStatus);
         const items = getRecordItemsForRoster(record, selectedScoreRoster).map(
           (item) =>
-            transferred
+            hasAcademicStatus
               ? {
                   ...item,
                   score: 0,
@@ -5271,13 +5466,15 @@ const PerformanceScoreManager: React.FC = () => {
                 }
               : item,
         );
-        const totalScore = transferred ? 0 : getEnteredItemsTotalScore(items);
+        const totalScore = hasAcademicStatus
+          ? 0
+          : getEnteredItemsTotalScore(items);
 
         if (hadSignature) {
           batchQueue.delete(confirmationRef);
         }
 
-        if (!transferred && totalScore === null) {
+        if (!hasAcademicStatus && totalScore === null) {
           batchQueue.delete(scoreRef);
           return;
         }
@@ -5302,12 +5499,11 @@ const PerformanceScoreManager: React.FC = () => {
             getRecordTotalMaxScore(record) ||
             selectedScoreRoster.totalMaxScore ||
             0,
-          feedback: transferred
-            ? TRANSFERRED_LABEL
-            : String(record.feedback || "").slice(0, 1000),
-          evidence: transferred
-            ? TRANSFERRED_LABEL
-            : String(record.evidence || record.feedback || "").slice(0, 1000),
+          feedback: String(record.feedback || "").slice(0, 1000),
+          evidence: String(record.evidence || record.feedback || "").slice(
+            0,
+            1000,
+          ),
           sourceFileName: selectedScoreRoster.sourceFileName,
           uploadedBy:
             record.uploadedBy || selectedScoreRoster.uploadedBy || editedBy,
@@ -5318,12 +5514,7 @@ const PerformanceScoreManager: React.FC = () => {
           uploadedAt:
             record.uploadedAt || selectedScoreRoster.createdAt || timestamp,
           updatedAt: timestamp,
-          ...(transferred
-            ? {
-                isTransferred: true,
-                transferStatus: "transferred" as const,
-              }
-            : {}),
+          ...getAcademicStatusRecordMeta(academicStatus),
         };
         batchQueue.set(scoreRef, payload);
       });
@@ -5642,6 +5833,8 @@ const PerformanceScoreManager: React.FC = () => {
         if (!confirmed) return;
       }
 
+      const teacherName = currentUser?.displayName || "방재석";
+      const printClientInfo = await loadClassSheetPrintClientInfo();
       const exportParams = {
         year,
         semester,
@@ -5652,7 +5845,10 @@ const PerformanceScoreManager: React.FC = () => {
           summaryExportRosters.secondRoster?.subject ||
           selectedScoreRoster?.subject ||
           "역사",
-        teacherName: currentUser?.displayName || "방재석",
+        teacherName,
+        schoolName: CLASS_SHEET_SCHOOL_NAME,
+        printedAt: new Date(),
+        clientIp: printClientInfo.clientIp,
         firstRoster: summaryExportRosters.firstRoster,
         secondRoster: summaryExportRosters.secondRoster,
         students: studentsForSheet,
@@ -6389,7 +6585,7 @@ const PerformanceScoreManager: React.FC = () => {
       {savingScoreEdits && (
         <LoadingOverlay
           message="수행평가 점수표를 저장하는 중입니다."
-          detail="학생 점수와 전출 여부를 DB에 반영하고 있습니다."
+          detail="학생 점수와 학적 변동을 DB에 반영하고 있습니다."
           warning="저장이 완료될 때까지 다른 버튼을 누르지 마세요."
           zIndexClassName="z-[240]"
         />
@@ -7965,6 +8161,8 @@ const PerformanceScoreManager: React.FC = () => {
                           </tr>
                         ) : (
                           classSheetPreviewStudents.map((student) => {
+                            const academicStatusLabel =
+                              getClassSheetAcademicStatusLabel(student);
                             const transferredStudent =
                               isClassSheetTransferredStudent(student);
                             const firstScore = getScoreNumber(
@@ -8017,7 +8215,7 @@ const PerformanceScoreManager: React.FC = () => {
                                 : "",
                             ].filter(Boolean);
                             const statusLabel = transferredStudent
-                              ? TRANSFERRED_LABEL
+                              ? academicStatusLabel
                               : missingLabels.length
                                 ? "점수 누락"
                                 : signatureRecord
@@ -8031,9 +8229,7 @@ const PerformanceScoreManager: React.FC = () => {
                                   ? "bg-emerald-50 text-emerald-700"
                                   : "bg-rose-50 text-rose-700";
                             return (
-                              <tr
-                                key={`${student.uid}-${student.class}-${student.number}`}
-                              >
+                              <tr key={studentKey}>
                                 <td className="whitespace-nowrap px-3 py-3 text-center">
                                   <span
                                     className={`inline-flex min-w-[4.25rem] items-center justify-center whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-black ${statusClass}`}
@@ -8050,7 +8246,7 @@ const PerformanceScoreManager: React.FC = () => {
                                 <td className="whitespace-nowrap px-3 py-3 text-right font-bold text-slate-700">
                                   {transferredStudent ? (
                                     <span className="font-black text-rose-600">
-                                      {TRANSFERRED_LABEL}
+                                      {academicStatusLabel}
                                     </span>
                                   ) : (
                                     <>
@@ -8070,7 +8266,7 @@ const PerformanceScoreManager: React.FC = () => {
                                 <td className="whitespace-nowrap px-3 py-3 text-right font-bold text-slate-700">
                                   {transferredStudent ? (
                                     <span className="font-black text-rose-600">
-                                      {TRANSFERRED_LABEL}
+                                      {academicStatusLabel}
                                     </span>
                                   ) : (
                                     <>
@@ -8138,7 +8334,7 @@ const PerformanceScoreManager: React.FC = () => {
                                   ) : (
                                     <div className="mx-auto w-fit text-center text-xs font-bold leading-5 text-slate-500">
                                       {transferredStudent
-                                        ? "전출 학생"
+                                        ? `${academicStatusLabel} 학생`
                                         : missingLabels.length
                                           ? `${missingLabels.join(", ")} 없음`
                                           : "학생 점수 확인 서명 전"}
@@ -8456,7 +8652,7 @@ const PerformanceScoreManager: React.FC = () => {
         </div>
       )}
 
-      <section className="rounded-xl border border-slate-200 bg-white p-5">
+      <section className="rounded-xl border border-slate-200 bg-white p-5 xl:-mx-8 2xl:-mx-14">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <h2 className="text-xl font-black text-slate-900">
@@ -8723,6 +8919,8 @@ const PerformanceScoreManager: React.FC = () => {
                       ) : (
                         filteredScoreListSummaryStudents.map((student) => {
                           const studentKey = getClassSheetStudentKey(student);
+                          const academicStatusLabel =
+                            getClassSheetAcademicStatusLabel(student);
                           const transferredStudent =
                             isClassSheetTransferredStudent(student);
                           const firstRecordAvailable = Boolean(
@@ -8758,7 +8956,7 @@ const PerformanceScoreManager: React.FC = () => {
                               >
                                 {getScoreListSummaryTotalOnlyLabel(
                                   student.firstRecord,
-                                  transferredStudent,
+                                  academicStatusLabel,
                                 )}
                               </td>
                               <td
@@ -8772,7 +8970,7 @@ const PerformanceScoreManager: React.FC = () => {
                               >
                                 {getScoreListSummaryTotalOnlyLabel(
                                   student.secondRecord,
-                                  transferredStudent,
+                                  academicStatusLabel,
                                 )}
                               </td>
                               <td
@@ -8898,14 +9096,9 @@ const PerformanceScoreManager: React.FC = () => {
                   </div>
                 </div>
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[1080px] text-left text-sm">
+                  <table className="w-full min-w-[1120px] text-left text-sm">
                     <thead className="bg-slate-50 text-xs font-black text-slate-500">
                       <tr>
-                        {scoreEditing && (
-                          <th className="w-14 whitespace-nowrap px-3 py-3 text-center">
-                            전출
-                          </th>
-                        )}
                         {renderScoreListHeader("grade", "학년")}
                         {renderScoreListHeader("class", "반")}
                         {renderScoreListHeader("number", "번호")}
@@ -8918,8 +9111,11 @@ const PerformanceScoreManager: React.FC = () => {
                           ),
                         )}
                         {renderScoreListHeader("totalScore", "총점", "right")}
-                        <th className="whitespace-nowrap px-3 py-3">
-                          감점 요인 및 평가 근거
+                        <th className="w-32 whitespace-nowrap px-3 py-3 text-center">
+                          사유
+                        </th>
+                        <th className="w-48 whitespace-nowrap px-3 py-3 text-center">
+                          학적 변동
                         </th>
                       </tr>
                     </thead>
@@ -8928,8 +9124,7 @@ const PerformanceScoreManager: React.FC = () => {
                         <tr>
                           <td
                             colSpan={
-                              (selectedScoreRoster?.items.length || 0) +
-                              (scoreEditing ? 7 : 6)
+                              (selectedScoreRoster?.items.length || 0) + 7
                             }
                             className="px-4 py-10 text-center text-sm font-bold text-slate-400"
                           >
@@ -8940,8 +9135,14 @@ const PerformanceScoreManager: React.FC = () => {
                         sortedFilteredScoreListRecords.map((record) => {
                           const recordKey = getScoreListRecordKey(record);
                           const manualRecord = isManualScoreListRecord(record);
-                          const transferredRecord =
-                            isTransferredScoreRecord(record);
+                          const academicStatusLabel =
+                            getAcademicStatusLabel(record);
+                          const hasAcademicStatus = Boolean(
+                            academicStatusLabel,
+                          );
+                          const evidenceText = String(
+                            record.evidence || record.feedback || "",
+                          ).trim();
                           const editableItems = selectedScoreRoster
                             ? getRecordItemsForRoster(
                                 record,
@@ -8956,23 +9157,6 @@ const PerformanceScoreManager: React.FC = () => {
                             getEnteredTotalScore(record);
                           return (
                             <tr key={recordKey}>
-                              {scoreEditing && (
-                                <td className="whitespace-nowrap px-3 py-3 text-center">
-                                  <input
-                                    type="checkbox"
-                                    checked={transferredRecord}
-                                    onChange={(event) =>
-                                      updateScoreListTransferred(
-                                        recordKey,
-                                        event.target.checked,
-                                      )
-                                    }
-                                    disabled={savingScoreEdits}
-                                    aria-label={`${record.studentName || "수동 추가 학생"} 전출 학생 여부`}
-                                    className="h-3.5 w-3.5 rounded border-slate-300 text-rose-600 focus:ring-rose-200"
-                                  />
-                                </td>
-                              )}
                               <td className="whitespace-nowrap px-3 py-3 font-bold text-slate-600">
                                 {scoreEditing && manualRecord ? (
                                   <input
@@ -9073,9 +9257,9 @@ const PerformanceScoreManager: React.FC = () => {
                                       key={`${recordKey}-${item.name}-${index}`}
                                       className="whitespace-nowrap px-3 py-3 text-right font-bold text-slate-700"
                                     >
-                                      {transferredRecord ? (
+                                      {hasAcademicStatus ? (
                                         <span className="inline-flex rounded-full bg-rose-50 px-2.5 py-1 text-xs font-black text-rose-600">
-                                          {TRANSFERRED_LABEL}
+                                          {academicStatusLabel}
                                         </span>
                                       ) : scoreEditing ? (
                                         <div className="flex items-center justify-end gap-1.5">
@@ -9132,9 +9316,9 @@ const PerformanceScoreManager: React.FC = () => {
                                 },
                               )}
                               <td className="whitespace-nowrap px-3 py-3 text-right">
-                                {transferredRecord ? (
+                                {hasAcademicStatus ? (
                                   <span className="inline-flex rounded-full bg-rose-50 px-2.5 py-1 text-xs font-black text-rose-600">
-                                    {TRANSFERRED_LABEL}
+                                    {academicStatusLabel}
                                   </span>
                                 ) : (
                                   <>
@@ -9156,31 +9340,64 @@ const PerformanceScoreManager: React.FC = () => {
                                   </>
                                 )}
                               </td>
-                              <td className="px-3 py-3">
-                                {transferredRecord ? (
-                                  <div className="max-w-[360px] text-xs font-black leading-5 text-rose-600">
-                                    {TRANSFERRED_LABEL}
-                                  </div>
-                                ) : scoreEditing ? (
-                                  <textarea
-                                    value={
-                                      record.evidence || record.feedback || ""
-                                    }
+                              <td className="whitespace-nowrap px-3 py-3 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    scoreEditing
+                                      ? void editScoreListEvidence(recordKey)
+                                      : void showScoreListEvidence(record)
+                                  }
+                                  disabled={savingScoreEdits}
+                                  className={`inline-flex h-9 max-w-28 items-center justify-center gap-1 rounded-lg border px-2.5 text-xs font-black transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                                    evidenceText
+                                      ? "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                                      : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                                  }`}
+                                  title={evidenceText || "사유 없음"}
+                                >
+                                  <i
+                                    className="fas fa-comment-dots text-[11px]"
+                                    aria-hidden="true"
+                                  ></i>
+                                  <span className="truncate">
+                                    {evidenceText
+                                      ? evidenceText.slice(0, 12)
+                                      : scoreEditing
+                                        ? "작성"
+                                        : "없음"}
+                                  </span>
+                                </button>
+                              </td>
+                              <td className="whitespace-nowrap px-3 py-3 text-center">
+                                {scoreEditing ? (
+                                  <select
+                                    value={academicStatusLabel}
                                     onChange={(event) =>
-                                      updateScoreListEvidence(
+                                      updateScoreListAcademicStatus(
                                         recordKey,
                                         event.target.value,
                                       )
                                     }
-                                    rows={2}
                                     disabled={savingScoreEdits}
-                                    className="w-full min-w-72 resize-y rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold leading-5 text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-50"
-                                    placeholder="학생에게 보여줄 감점 요인 또는 평가 근거"
-                                  />
+                                    className="h-9 w-44 rounded-lg border border-slate-200 bg-white px-2 text-xs font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-50"
+                                    aria-label={`${record.studentName || "학생"} 학적 변동`}
+                                  >
+                                    <option value="">해당 없음</option>
+                                    {ACADEMIC_STATUS_OPTIONS.map((status) => (
+                                      <option key={status} value={status}>
+                                        {status}
+                                      </option>
+                                    ))}
+                                  </select>
+                                ) : academicStatusLabel ? (
+                                  <span className="inline-flex rounded-full bg-rose-50 px-2.5 py-1 text-xs font-black text-rose-600">
+                                    {academicStatusLabel}
+                                  </span>
                                 ) : (
-                                  <div className="max-w-[360px] text-xs font-semibold leading-5 text-slate-600">
-                                    {record.evidence || record.feedback || "-"}
-                                  </div>
+                                  <span className="text-xs font-bold text-slate-400">
+                                    -
+                                  </span>
                                 )}
                               </td>
                             </tr>
