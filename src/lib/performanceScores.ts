@@ -64,6 +64,7 @@ export interface PerformanceScoreRecord {
   studentName: string;
   uid: string;
   items: PerformanceScoreItem[];
+  enteredScoreCount?: number;
   totalScore: number;
   totalMaxScore: number;
   feedback: string;
@@ -139,6 +140,7 @@ export interface PerformanceScoreRosterRow {
   number: string;
   studentName: string;
   items?: PerformanceScoreItem[];
+  enteredScoreCount?: number;
   totalScore?: number;
   totalMaxScore?: number;
   feedback?: string;

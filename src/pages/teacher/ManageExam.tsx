@@ -65,7 +65,11 @@ const ManageExam: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <main className="w-full max-w-7xl mx-auto px-4 py-6 flex-1 flex flex-col">
+      <main
+        className={`w-full ${
+          activeTab === "performance" ? "max-w-[1500px]" : "max-w-7xl"
+        } mx-auto px-4 py-6 flex-1 flex flex-col`}
+      >
         <div className="mb-4 flex shrink-0 overflow-x-auto rounded-t-lg border-b border-gray-200 bg-white px-2">
           <button
             onClick={() => setActiveTab("preview")}
