@@ -4733,86 +4733,117 @@ exports.reviewPerformanceScoreObjection = onCall({ region: REGION }, async (requ
   }
 
   const objectionRef = db.doc(getPerformanceScoreObjectionPath(year, semester, objectionId));
-  const objectionSnap = await objectionRef.get();
-  if (!objectionSnap.exists) {
-    throw new HttpsError('not-found', 'Performance score objection does not exist.');
-  }
-
-  const objection = objectionSnap.data() || {};
-  if (String(objection.status || 'pending').trim() !== 'pending') {
-    throw new HttpsError('failed-precondition', 'Performance score objection has already been reviewed.');
-  }
-  const recipientUid = sanitizeNotificationText(objection.uid, 160);
-  if (!recipientUid) {
-    throw new HttpsError('failed-precondition', 'Objection student uid is missing.');
-  }
-  const scoreId = sanitizeNotificationText(objection.scoreId || objection.rosterId, 160);
-  if (!scoreId) {
-    throw new HttpsError('failed-precondition', 'Objection score id is missing.');
-  }
-
-  let changedTotalScore = null;
-  let changedScoreLabel = '';
-  if (action === 'accepted') {
-    changedTotalScore = toNullablePerformanceScoreNumber(request.data?.changedTotalScore);
-    if (changedTotalScore === null) {
-      throw new HttpsError('invalid-argument', 'changedTotalScore is required when accepting an objection.');
-    }
-    const scoreRef = db.doc(`users/${recipientUid}/${PERFORMANCE_SCORE_USER_COLLECTION}/${scoreId}`);
-    const scoreSnap = await scoreRef.get();
-    if (!scoreSnap.exists) {
-      throw new HttpsError('failed-precondition', 'Accepted score must be saved before reviewing an objection.');
-    }
-    const scoreData = scoreSnap.data() || {};
-    if (
-      String(scoreData.uid || '').trim() !== recipientUid
-      || String(scoreData.rosterId || scoreId).trim() !== scoreId
-      || String(scoreData.academicYear || '').trim() !== year
-      || String(scoreData.semester || '').trim() !== semester
-    ) {
-      throw new HttpsError('failed-precondition', 'Saved performance score does not match this objection.');
-    }
-    const savedTotalScore = toNullablePerformanceScoreNumber(scoreData.totalScore);
-    if (savedTotalScore === null || savedTotalScore !== changedTotalScore) {
-      throw new HttpsError('failed-precondition', 'Accepted score must match the saved performance score.');
-    }
-    const maxScore = toNullablePerformanceScoreNumber(scoreData.totalMaxScore ?? objection.totalMaxScore);
-    if (changedTotalScore < 0 || (maxScore !== null && maxScore > 0 && changedTotalScore > maxScore)) {
-      throw new HttpsError('invalid-argument', 'changedTotalScore is outside the valid score range.');
-    }
-    changedScoreLabel = formatPerformanceScoreLabel(savedTotalScore, maxScore);
-  }
-
   const reviewerName = sanitizeNotificationText(
     manager.profile?.teacherName || manager.profile?.displayName || manager.profile?.name || manager.email,
     80,
     '교사',
   );
-  await objectionRef.set({
-    status: action,
-    reviewedAt: FieldValue.serverTimestamp(),
-    reviewedBy: manager.uid,
-    reviewedByName: reviewerName,
-    reviewMemo,
-    changedTotalScore,
-    changedScoreLabel,
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
 
-  const notificationResult = await createPerformanceScoreObjectionReviewedNotification(year, semester, {
-    objectionId,
-    recipientUid,
-    scoreTitle: objection.scoreTitle,
-    status: action,
-    changedScoreLabel,
-    reviewMemo,
-    actorUid: manager.uid,
+  const reviewResult = await db.runTransaction(async (transaction) => {
+    const objectionSnap = await transaction.get(objectionRef);
+    if (!objectionSnap.exists) {
+      throw new HttpsError('not-found', 'Performance score objection does not exist.');
+    }
+
+    const objection = objectionSnap.data() || {};
+    const currentStatus = String(objection.status || 'pending').trim();
+    const recipientUid = sanitizeNotificationText(objection.uid, 160);
+    if (!recipientUid) {
+      throw new HttpsError('failed-precondition', 'Objection student uid is missing.');
+    }
+    const scoreId = sanitizeNotificationText(objection.scoreId || objection.rosterId, 160);
+    if (!scoreId) {
+      throw new HttpsError('failed-precondition', 'Objection score id is missing.');
+    }
+
+    if (currentStatus !== 'pending') {
+      if (currentStatus === action) {
+        return {
+          duplicate: true,
+          status: currentStatus,
+          recipientUid,
+          scoreTitle: objection.scoreTitle,
+          changedScoreLabel: sanitizeNotificationText(objection.changedScoreLabel, 80),
+          reviewMemo: sanitizeNotificationText(objection.reviewMemo, 240),
+        };
+      }
+      throw new HttpsError('failed-precondition', 'Performance score objection has already been reviewed.');
+    }
+
+    let changedTotalScore = null;
+    let changedScoreLabel = '';
+    if (action === 'accepted') {
+      changedTotalScore = toNullablePerformanceScoreNumber(request.data?.changedTotalScore);
+      if (changedTotalScore === null) {
+        throw new HttpsError('invalid-argument', 'changedTotalScore is required when accepting an objection.');
+      }
+      const scoreRef = db.doc(`users/${recipientUid}/${PERFORMANCE_SCORE_USER_COLLECTION}/${scoreId}`);
+      const scoreSnap = await transaction.get(scoreRef);
+      if (!scoreSnap.exists) {
+        throw new HttpsError('failed-precondition', 'Accepted score must be saved before reviewing an objection.');
+      }
+      const scoreData = scoreSnap.data() || {};
+      if (
+        String(scoreData.uid || '').trim() !== recipientUid
+        || String(scoreData.rosterId || scoreId).trim() !== scoreId
+        || String(scoreData.academicYear || '').trim() !== year
+        || String(scoreData.semester || '').trim() !== semester
+      ) {
+        throw new HttpsError('failed-precondition', 'Saved performance score does not match this objection.');
+      }
+      const savedTotalScore = toNullablePerformanceScoreNumber(scoreData.totalScore);
+      if (savedTotalScore === null || savedTotalScore !== changedTotalScore) {
+        throw new HttpsError('failed-precondition', 'Accepted score must match the saved performance score.');
+      }
+      const maxScore = toNullablePerformanceScoreNumber(scoreData.totalMaxScore ?? objection.totalMaxScore);
+      if (changedTotalScore < 0 || (maxScore !== null && maxScore > 0 && changedTotalScore > maxScore)) {
+        throw new HttpsError('invalid-argument', 'changedTotalScore is outside the valid score range.');
+      }
+      changedScoreLabel = formatPerformanceScoreLabel(savedTotalScore, maxScore);
+    }
+
+    transaction.set(objectionRef, {
+      status: action,
+      reviewedAt: FieldValue.serverTimestamp(),
+      reviewedBy: manager.uid,
+      reviewedByName: reviewerName,
+      reviewMemo,
+      changedTotalScore,
+      changedScoreLabel,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    return {
+      duplicate: false,
+      status: action,
+      recipientUid,
+      scoreTitle: objection.scoreTitle,
+      changedScoreLabel,
+      reviewMemo,
+    };
   });
 
+  let notificationCreated = false;
+  try {
+    const notificationResult = await createPerformanceScoreObjectionReviewedNotification(year, semester, {
+      objectionId,
+      recipientUid: reviewResult.recipientUid,
+      scoreTitle: reviewResult.scoreTitle,
+      status: reviewResult.status,
+      changedScoreLabel: reviewResult.changedScoreLabel,
+      reviewMemo: reviewResult.reviewMemo,
+      actorUid: manager.uid,
+    });
+    notificationCreated = notificationResult.created === true || Boolean(notificationResult.notificationId);
+  } catch (error) {
+    console.error('Failed to create performance score objection reviewed notification:', error);
+  }
+
   return {
-    status: action,
-    notificationCreated: notificationResult.created === true,
-    recipientUid,
+    status: reviewResult.status,
+    notificationCreated,
+    recipientUid: reviewResult.recipientUid,
+    duplicate: reviewResult.duplicate === true,
   };
 });
 

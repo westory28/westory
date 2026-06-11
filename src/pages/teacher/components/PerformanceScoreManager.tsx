@@ -562,6 +562,10 @@ const TRANSFERRED_LABEL = "전출";
 const MANUAL_SCORE_ROW_MESSAGE = "수동 추가 학생입니다.";
 
 type PerformanceScoreObjectionStatus = "pending" | "accepted" | "rejected";
+type PerformanceScoreObjectionReviewAction = Extract<
+  PerformanceScoreObjectionStatus,
+  "accepted" | "rejected"
+>;
 
 interface PerformanceScoreObjectionItem {
   name: string;
@@ -3270,7 +3274,10 @@ const PerformanceScoreManager: React.FC = () => {
   const [objectionsLoaded, setObjectionsLoaded] = useState(false);
   const [objectionsAutoLoadAttempted, setObjectionsAutoLoadAttempted] =
     useState(false);
-  const [objectionReviewingId, setObjectionReviewingId] = useState("");
+  const [objectionReviewingAction, setObjectionReviewingAction] = useState<{
+    id: string;
+    status: PerformanceScoreObjectionReviewAction;
+  } | null>(null);
   const [scoreListSort, setScoreListSort] = useState<
     SortState<ScoreListSortKey>
   >({ key: "number", direction: "asc" });
@@ -4504,9 +4511,9 @@ const PerformanceScoreManager: React.FC = () => {
 
   const handleReviewObjection = async (
     objection: PerformanceScoreObjection,
-    status: "accepted" | "rejected",
+    status: PerformanceScoreObjectionReviewAction,
   ) => {
-    if (objectionReviewingId) return;
+    if (objectionReviewingAction) return;
 
     let changedTotalScore: number | null = null;
     let changedScoreLabel = "";
@@ -4614,7 +4621,7 @@ const PerformanceScoreManager: React.FC = () => {
     });
     if (!confirmed) return;
 
-    setObjectionReviewingId(objection.id);
+    setObjectionReviewingAction({ id: objection.id, status });
     try {
       const result = await reviewPerformanceScoreObjection(config, {
         objectionId: objection.id,
@@ -4643,7 +4650,7 @@ const PerformanceScoreManager: React.FC = () => {
         message: getObjectionReviewErrorMessage(error),
       });
     } finally {
-      setObjectionReviewingId("");
+      setObjectionReviewingAction(null);
     }
   };
 
@@ -7330,7 +7337,9 @@ const PerformanceScoreManager: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => void loadPerformanceScoreObjections()}
-                  disabled={objectionsLoading || Boolean(objectionReviewingId)}
+                  disabled={
+                    objectionsLoading || Boolean(objectionReviewingAction)
+                  }
                   className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <i
@@ -7402,14 +7411,14 @@ const PerformanceScoreManager: React.FC = () => {
                     새로고침을 누르면 제출된 이의 제기 목록을 조회합니다.
                   </div>
                 ) : (
-                  <table className="w-full min-w-[920px] table-fixed text-left text-sm">
+                  <table className="w-full min-w-[1070px] table-fixed text-left text-sm">
                     <colgroup>
                       <col className="w-[150px]" />
                       <col className="w-[210px]" />
                       <col className="w-[130px]" />
                       <col className="w-[280px]" />
                       <col className="w-[110px]" />
-                      <col className="w-[130px]" />
+                      <col className="w-[190px]" />
                     </colgroup>
                     <thead className="bg-slate-50 text-xs font-black text-slate-500">
                       <tr>
@@ -7426,7 +7435,10 @@ const PerformanceScoreManager: React.FC = () => {
                         const statusMeta = getObjectionStatusMeta(
                           objection.status,
                         );
-                        const reviewing = objectionReviewingId === objection.id;
+                        const reviewingStatus =
+                          objectionReviewingAction?.id === objection.id
+                            ? objectionReviewingAction.status
+                            : null;
                         return (
                           <tr
                             key={objection.id}
@@ -7494,10 +7506,14 @@ const PerformanceScoreManager: React.FC = () => {
                                         "rejected",
                                       )
                                     }
-                                    disabled={Boolean(objectionReviewingId)}
-                                    className="inline-flex h-8 items-center justify-center rounded-lg border border-rose-200 bg-white px-2.5 text-xs font-black text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                    disabled={Boolean(
+                                      objectionReviewingAction,
+                                    )}
+                                    className="inline-flex h-8 min-w-[44px] items-center justify-center whitespace-nowrap rounded-lg border border-rose-200 bg-white px-2.5 text-xs font-black text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
                                   >
-                                    반려
+                                    {reviewingStatus === "rejected"
+                                      ? "반려 처리 중"
+                                      : "반려"}
                                   </button>
                                   <button
                                     type="button"
@@ -7507,16 +7523,20 @@ const PerformanceScoreManager: React.FC = () => {
                                         "accepted",
                                       )
                                     }
-                                    disabled={Boolean(objectionReviewingId)}
-                                    className="inline-flex h-8 items-center justify-center rounded-lg bg-blue-600 px-2.5 text-xs font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                                    disabled={Boolean(
+                                      objectionReviewingAction,
+                                    )}
+                                    className="inline-flex h-8 min-w-[44px] items-center justify-center whitespace-nowrap rounded-lg bg-blue-600 px-2.5 text-xs font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
                                   >
-                                    {reviewing ? "처리 중" : "수용"}
+                                    {reviewingStatus === "accepted"
+                                      ? "수용 처리 중"
+                                      : "수용"}
                                   </button>
                                 </div>
                               ) : (
                                 <div className="flex justify-center">
                                   <span
-                                    className={`inline-flex rounded-full px-3 py-1 text-xs font-black ${statusMeta.badgeClass}`}
+                                    className={`inline-flex whitespace-nowrap rounded-full px-3 py-1 text-xs font-black ${statusMeta.badgeClass}`}
                                   >
                                     {statusMeta.label}
                                   </span>
