@@ -110,6 +110,57 @@ const formatNoteDate = (value: unknown) => {
   }).format(new Date(timestamp));
 };
 
+const getNotePreview = (note: TeacherPatchNote) =>
+  trimWhitespace(note.body || note.title || "패치 메모");
+
+const buildCodexCopyText = (note: TeacherPatchNote) => {
+  const lines = [
+    "위스토리 교사 패치 메모입니다. 아래 내용을 확인하고 필요한 수정안을 구현해 주세요.",
+    "",
+    "[메모]",
+    getNotePreview(note),
+    "",
+    `[유형] ${TYPE_LABELS[note.type]}`,
+    `[우선순위] ${note.priority === "high" ? "높음" : "보통"}`,
+    `[처리 상태] ${note.status === "done" ? "완료" : "미처리"}`,
+    `[현재 위치] ${note.sourcePath || "/teacher"}`,
+  ];
+
+  if (note.targetLabel) lines.push(`[관련 영역] ${note.targetLabel}`);
+  if (note.targetText) lines.push(`[선택한 화면 텍스트] ${note.targetText}`);
+  if (note.targetSelector) lines.push(`[선택자] ${note.targetSelector}`);
+  if (note.targetRect) {
+    lines.push(
+      `[화면 좌표] x=${Math.round(note.targetRect.x)}, y=${Math.round(
+        note.targetRect.y,
+      )}, width=${Math.round(note.targetRect.width)}, height=${Math.round(
+        note.targetRect.height,
+      )}`,
+    );
+  }
+
+  return lines.join("\n");
+};
+
+const copyToClipboard = async (text: string) => {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "true");
+  textarea.style.position = "fixed";
+  textarea.style.top = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  const copied = document.execCommand("copy");
+  document.body.removeChild(textarea);
+  if (!copied) throw new Error("Clipboard copy failed.");
+};
+
 const escapeAttrValue = (value: string) =>
   value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 
@@ -208,7 +259,6 @@ const TeacherPatchMemoController: React.FC = () => {
   const [notes, setNotes] = useState<TeacherPatchNote[]>([]);
   const [filter, setFilter] = useState<FilterKey>("open");
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
-  const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [type, setType] = useState<TeacherPatchNoteType>("bug");
   const [priority, setPriority] = useState<TeacherPatchNotePriority>("normal");
@@ -224,7 +274,7 @@ const TeacherPatchMemoController: React.FC = () => {
     null,
   );
   const buttonRef = useRef<HTMLButtonElement | null>(null);
-  const titleRef = useRef<HTMLInputElement | null>(null);
+  const bodyRef = useRef<HTMLTextAreaElement | null>(null);
 
   const uid = currentUser?.uid || "";
 
@@ -244,7 +294,7 @@ const TeacherPatchMemoController: React.FC = () => {
 
   useEffect(() => {
     if (!open) return undefined;
-    const timer = window.setTimeout(() => titleRef.current?.focus(), 80);
+    const timer = window.setTimeout(() => bodyRef.current?.focus(), 80);
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !selectingTarget) {
         setOpen(false);
@@ -320,7 +370,6 @@ const TeacherPatchMemoController: React.FC = () => {
 
   const resetForm = (nextPath = currentPath) => {
     setEditingNoteId(null);
-    setTitle("");
     setBody("");
     setType("bug");
     setPriority("normal");
@@ -348,7 +397,6 @@ const TeacherPatchMemoController: React.FC = () => {
 
   const startEdit = (note: TeacherPatchNote) => {
     setEditingNoteId(note.id);
-    setTitle(note.title);
     setBody(note.body);
     setType(note.type);
     setPriority(note.priority);
@@ -361,11 +409,9 @@ const TeacherPatchMemoController: React.FC = () => {
   };
 
   const buildInput = () => {
-    const trimmedTitle = title.trim();
     const trimmedBody = body.trim();
     return {
-      title:
-        trimmedTitle || truncate(trimmedBody.split("\n")[0] || "패치 메모", 80),
+      title: truncate(trimmedBody.split("\n")[0] || "패치 메모", 80),
       body: trimmedBody,
       type,
       priority,
@@ -379,11 +425,11 @@ const TeacherPatchMemoController: React.FC = () => {
 
   const handleSubmit = async () => {
     if (saving) return;
-    if (!title.trim() && !body.trim()) {
+    if (!body.trim()) {
       showToast({
         tone: "warning",
         title: "메모 내용을 입력해 주세요.",
-        message: "제목이나 상세 메모 중 하나는 필요합니다.",
+        message: "짧게라도 수정할 내용을 적어 주세요.",
       });
       return;
     }
@@ -434,7 +480,7 @@ const TeacherPatchMemoController: React.FC = () => {
 
   const handleDelete = async (note: TeacherPatchNote) => {
     const confirmed = window.confirm(
-      `"${note.title || "패치 메모"}" 메모를 삭제할까요?`,
+      `"${truncate(getNotePreview(note), 40)}" 메모를 삭제할까요?`,
     );
     if (!confirmed) return;
     try {
@@ -447,6 +493,24 @@ const TeacherPatchMemoController: React.FC = () => {
         tone: "error",
         title: "패치 메모를 삭제하지 못했습니다.",
         message: "잠시 후 다시 시도해 주세요.",
+      });
+    }
+  };
+
+  const handleCopyForCodex = async (note: TeacherPatchNote) => {
+    try {
+      await copyToClipboard(buildCodexCopyText(note));
+      showToast({
+        tone: "success",
+        title: "코덱스용 메모를 복사했습니다.",
+        message: "이제 코덱스 입력창에 바로 붙여넣을 수 있습니다.",
+      });
+    } catch (error) {
+      console.error("Failed to copy teacher patch note:", error);
+      showToast({
+        tone: "error",
+        title: "메모를 복사하지 못했습니다.",
+        message: "브라우저 권한을 확인한 뒤 다시 시도해 주세요.",
       });
     }
   };
@@ -521,28 +585,14 @@ const TeacherPatchMemoController: React.FC = () => {
             <section className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3">
               <label className="block">
                 <span className="text-xs font-extrabold text-slate-700">
-                  한 줄 메모
-                </span>
-                <input
-                  ref={titleRef}
-                  type="text"
-                  value={title}
-                  onChange={(event) => setTitle(event.target.value)}
-                  maxLength={80}
-                  className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-900 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
-                  placeholder="예: 알림장 이미지 수정 필요"
-                />
-              </label>
-
-              <label className="mt-3 block">
-                <span className="text-xs font-extrabold text-slate-700">
-                  상세 메모
+                  메모
                 </span>
                 <textarea
+                  ref={bodyRef}
                   value={body}
                   onChange={(event) => setBody(event.target.value)}
                   maxLength={2000}
-                  className="mt-1 min-h-[5.5rem] w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm leading-6 text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
+                  className="mt-1 min-h-[7rem] w-full resize-y rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm leading-6 text-slate-800 outline-none transition focus:border-blue-400 focus:ring-4 focus:ring-blue-100"
                   placeholder="버그, 수정 요청, 개선 아이디어를 적어 주세요."
                 />
               </label>
@@ -785,19 +835,14 @@ const TeacherPatchMemoController: React.FC = () => {
                             )}
                           </div>
                           <h3
-                            className={`mt-2 line-clamp-2 text-sm font-extrabold leading-5 text-slate-900 ${
+                            className={`mt-2 line-clamp-3 text-sm font-extrabold leading-5 text-slate-900 ${
                               completed
                                 ? "line-through decoration-slate-400"
                                 : ""
                             }`}
                           >
-                            {note.title || "패치 메모"}
+                            {getNotePreview(note)}
                           </h3>
-                          {note.body && (
-                            <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-600">
-                              {note.body}
-                            </p>
-                          )}
                           <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-bold text-slate-500">
                             <span className="truncate">{note.sourcePath}</span>
                             {note.targetLabel && (
@@ -811,6 +856,18 @@ const TeacherPatchMemoController: React.FC = () => {
                           </div>
                         </button>
 
+                        <button
+                          type="button"
+                          onClick={() => void handleCopyForCodex(note)}
+                          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-blue-50 hover:text-blue-600 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
+                          aria-label="코덱스용으로 패치 메모 복사"
+                          title="코덱스용 복사"
+                        >
+                          <i
+                            className="fas fa-copy text-xs"
+                            aria-hidden="true"
+                          ></i>
+                        </button>
                         <button
                           type="button"
                           onClick={() => void handleDelete(note)}

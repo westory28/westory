@@ -46,7 +46,7 @@ export interface TeacherPatchNote extends TeacherPatchNoteTarget {
 }
 
 export interface TeacherPatchNoteInput extends TeacherPatchNoteTarget {
-  title: string;
+  title?: string;
   body: string;
   type: TeacherPatchNoteType;
   priority: TeacherPatchNotePriority;
@@ -144,10 +144,11 @@ const mapTeacherPatchNoteDoc = (docSnap: {
 
 const buildNotePayload = (uid: string, input: TeacherPatchNoteInput) => {
   const status = normalizeStatus(input.status);
+  const body = trimMultilineLimit(input.body, 2000);
   const payload = {
     ownerUid: uid,
-    title: trimLimit(input.title, 80),
-    body: trimMultilineLimit(input.body, 2000),
+    title: trimLimit(input.title || body.split("\n")[0] || "패치 메모", 80),
+    body,
     type: normalizeType(input.type),
     priority: normalizePriority(input.priority),
     status,
