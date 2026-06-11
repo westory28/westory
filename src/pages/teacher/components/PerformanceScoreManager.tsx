@@ -1837,6 +1837,19 @@ const normalizeScoreRecordForIntegerEdit = (
   };
 };
 
+const prepareScoreListRecordForInstantEdit = (
+  record: ScoreListRecord,
+): ScoreListRecord => {
+  const normalized = normalizeScoreRecordForIntegerEdit(record);
+  if (!normalized.uid || normalized.scoreDocumentExists === true) {
+    return normalized;
+  }
+  return {
+    ...normalized,
+    scoreDocumentExists: true,
+  };
+};
+
 const serializeScoreRecordForEdit = (
   record: PerformanceScoreRecord | undefined,
 ) => {
@@ -5574,9 +5587,15 @@ const PerformanceScoreManager: React.FC = () => {
     }
   };
 
-  const startScoreEdit = async () => {
+  const startScoreEdit = () => {
     if (!selectedScoreRoster || !scoreListReady || scoreListLoading) return;
-    await loadScoreListRecords(selectedScoreRoster, { startEdit: true });
+    const editableRecords = scoreListRecords.map(
+      prepareScoreListRecordForInstantEdit,
+    );
+    setScoreEditOriginalRecords(cloneScoreListRecords(scoreListRecords));
+    setScoreListRecords(editableRecords);
+    setSelectedScoreListRecordKeys(new Set<string>());
+    setScoreEditing(true);
   };
 
   const cancelScoreEdit = () => {
