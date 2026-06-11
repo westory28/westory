@@ -887,6 +887,32 @@ const getScoreStudentPrimaryIdentityKey = (
     source.studentName,
   )}`;
 
+const getManualScoreStudentIdentityKey = (
+  source: Pick<
+    PerformanceScoreRecord,
+    "grade" | "class" | "number" | "studentName"
+  >,
+) => {
+  const grade = normalizeSchoolValue(source.grade);
+  const classValue = normalizeSchoolValue(source.class);
+  const number = normalizeSchoolValue(source.number);
+  const studentName = normalizeStudentName(source.studentName);
+  if (!grade || !classValue || !number || !studentName) return "";
+  return `manual:${grade}:${classValue}:${number}:${studentName}`;
+};
+
+const getScoreSyncIdentityKeys = (
+  source: Pick<
+    PerformanceScoreRecord,
+    "uid" | "grade" | "class" | "number" | "studentName"
+  >,
+) => {
+  const uid = toText(source.uid);
+  if (uid) return [`uid:${uid}`];
+  const manualKey = getManualScoreStudentIdentityKey(source);
+  return manualKey ? [manualKey] : [];
+};
+
 const hasDisplayableScoreRecord = (record?: PerformanceScoreRecord) =>
   Boolean(
     record &&
@@ -1560,6 +1586,10 @@ const serializeScoreRecordForEdit = (
   return JSON.stringify({
     uid: record.uid || "",
     rosterId: record.rosterId || record.id || "",
+    grade: normalizeSchoolValue(record.grade),
+    class: normalizeSchoolValue(record.class),
+    number: normalizeSchoolValue(record.number),
+    studentName: normalizeStudentName(record.studentName),
     items: (record.items || []).map((item) => ({
       name: item.name || "",
       score: item.scoreEntered === false ? null : getEnteredItemScore(item),
@@ -1655,6 +1685,29 @@ const hasSyncableManualScoreIdentity = (record: PerformanceScoreRecord) =>
     normalizeStudentName(record.studentName),
   );
 
+type ManualScoreIdentityReplacement = {
+  beforeKey: string;
+  after: ScoreListRecord;
+};
+
+const getManualScoreIdentityReplacements = (
+  editedRecords: ScoreListRecord[],
+  originalByKey: Map<string, ScoreListRecord>,
+) =>
+  editedRecords
+    .map((after): ManualScoreIdentityReplacement | null => {
+      if (!hasSyncableManualScoreIdentity(after)) return null;
+      const before = originalByKey.get(getScoreListRecordKey(after));
+      if (!before || !hasSyncableManualScoreIdentity(before)) return null;
+      const beforeKey = getManualScoreStudentIdentityKey(before);
+      const afterKey = getManualScoreStudentIdentityKey(after);
+      if (!beforeKey || !afterKey || beforeKey === afterKey) return null;
+      return { beforeKey, after };
+    })
+    .filter(
+      (item): item is ManualScoreIdentityReplacement => item !== null,
+    );
+
 const buildBlankManualRosterRowFromRecord = (
   record: PerformanceScoreRecord,
   roster: PerformanceScoreRoster,
@@ -1683,27 +1736,107 @@ const buildBlankManualRosterRowFromRecord = (
   isManual: true,
 });
 
+const applyManualScoreIdentityReplacements = (
+  rows: PerformanceScoreRosterRow[],
+  replacements: ManualScoreIdentityReplacement[],
+) => {
+  if (!replacements.length) return rows;
+  let changed = false;
+  const replacementByBeforeKey = new Map(
+    replacements.map((replacement) => [
+      replacement.beforeKey,
+      replacement.after,
+    ]),
+  );
+  const updatedRows = rows.map((row) => {
+    if (!isManualRosterRow(row)) return row;
+    const replacement = replacementByBeforeKey.get(
+      getManualScoreStudentIdentityKey(row),
+    );
+    if (!replacement) return row;
+    changed = true;
+    return {
+      ...row,
+      grade: normalizeSchoolValue(replacement.grade),
+      class: normalizeSchoolValue(replacement.class),
+      number: normalizeSchoolValue(replacement.number),
+      studentName: toText(replacement.studentName),
+      isManual: true,
+      matchMessage: row.matchMessage || MANUAL_SCORE_ROW_MESSAGE,
+    };
+  });
+  return changed ? updatedRows : rows;
+};
+
+const chooseManualRosterRow = (
+  current: PerformanceScoreRosterRow,
+  next: PerformanceScoreRosterRow,
+) => {
+  const currentHasScore = rosterRowHasScore(current);
+  const nextHasScore = rosterRowHasScore(next);
+  if (!currentHasScore && nextHasScore) return next;
+  if (currentHasScore && !nextHasScore) return current;
+  const currentHasEvidence = Boolean(
+    String(current.evidence || current.feedback || "").trim(),
+  );
+  const nextHasEvidence = Boolean(
+    String(next.evidence || next.feedback || "").trim(),
+  );
+  if (!currentHasEvidence && nextHasEvidence) return next;
+  return current;
+};
+
+const dedupeManualRosterRows = (rows: PerformanceScoreRosterRow[]) => {
+  const seen = new Map<
+    string,
+    { row: PerformanceScoreRosterRow; index: number }
+  >();
+  const removedIndexes = new Set<number>();
+
+  rows.forEach((row, index) => {
+    if (!isManualRosterRow(row)) return;
+    const key = getManualScoreStudentIdentityKey(row);
+    if (!key) return;
+    const current = seen.get(key);
+    if (!current) {
+      seen.set(key, { row, index });
+      return;
+    }
+    const preferred = chooseManualRosterRow(current.row, row);
+    if (preferred === current.row) {
+      removedIndexes.add(index);
+      return;
+    }
+    removedIndexes.add(current.index);
+    seen.set(key, { row, index });
+  });
+
+  return removedIndexes.size
+    ? rows.filter((_, index) => !removedIndexes.has(index))
+    : rows;
+};
+
 const rosterRowsHaveStudent = (
   rows: PerformanceScoreRosterRow[],
   record: PerformanceScoreRecord,
 ) => {
-  const recordAliases = new Set(getScoreStudentIdentityAliases(record));
+  const recordAliases = new Set(getScoreSyncIdentityKeys(record));
   if (recordAliases.size === 0) return false;
   return rows.some((row) =>
-    getScoreStudentIdentityAliases(row).some((alias) =>
-      recordAliases.has(alias),
-    ),
+    getScoreSyncIdentityKeys(row).some((alias) => recordAliases.has(alias)),
   );
 };
 
 const collectManualScoreSyncRecords = (
-  rosters: PerformanceScoreRoster[],
   editedRecords: ScoreListRecord[],
+  skippedManualIdentityKeys: Set<string>,
 ) => {
   const recordMap = new Map<string, ScoreListRecord>();
   const addRecord = (record: ScoreListRecord) => {
     if (!hasSyncableManualScoreIdentity(record)) return;
-    const aliases = getScoreStudentIdentityAliases(record);
+    const manualKey = getManualScoreStudentIdentityKey(record);
+    if (manualKey && skippedManualIdentityKeys.has(manualKey)) return;
+    const aliases = getScoreSyncIdentityKeys(record);
     const existingKey = aliases.find((alias) => recordMap.has(alias));
     const current = existingKey ? recordMap.get(existingKey) : undefined;
     const preferred = chooseClassSheetRecord(
@@ -1714,15 +1847,6 @@ const collectManualScoreSyncRecords = (
   };
 
   editedRecords.forEach(addRecord);
-  rosters.forEach((roster) => {
-    (roster.rows || []).filter(isManualRosterRow).forEach((row) =>
-      addRecord({
-        ...buildScoreListRecordFromRosterRow(roster, row),
-        isManual: true,
-      }),
-    );
-  });
-
   return Array.from(new Set(recordMap.values()));
 };
 
@@ -1746,20 +1870,37 @@ const buildRosterRowsMeta = (
 const syncManualScoreRowsAcrossAssessments = (
   rosters: PerformanceScoreRoster[],
   editedRecords: ScoreListRecord[],
+  replacements: ManualScoreIdentityReplacement[] = [],
 ) => {
-  const targetRosters = rosters.filter((roster) =>
-    [1, 2].includes(getRosterAssessmentOrder(roster)),
+  const syncGrades = new Set(
+    editedRecords
+      .filter(hasSyncableManualScoreIdentity)
+      .map((record) => normalizeSchoolValue(record.grade))
+      .filter(Boolean),
+  );
+  const targetRosters = rosters.filter((roster) => {
+    if (!syncGrades.size) return true;
+    const targetGrade = normalizeSchoolValue(roster.targetGrade);
+    if (targetGrade && syncGrades.has(targetGrade)) return true;
+    return (roster.rows || []).some((row) =>
+      syncGrades.has(normalizeSchoolValue(row.grade)),
+    );
+  });
+  const skippedManualIdentityKeys = new Set(
+    replacements.map((replacement) => replacement.beforeKey),
   );
   const syncRecords = collectManualScoreSyncRecords(
-    targetRosters,
     editedRecords,
+    skippedManualIdentityKeys,
   );
   const updates = new Map<string, PerformanceScoreRosterRow[]>();
 
-  if (!syncRecords.length) return updates;
+  if (!syncRecords.length && !replacements.length) return updates;
 
   targetRosters.forEach((roster) => {
-    let rows = roster.rows || [];
+    let rows = dedupeManualRosterRows(
+      applyManualScoreIdentityReplacements(roster.rows || [], replacements),
+    );
     let nextRowNumber = rows.reduce(
       (max, row) => Math.max(max, Number(row.rowNumber) || 0),
       0,
@@ -1773,6 +1914,8 @@ const syncManualScoreRowsAcrossAssessments = (
         buildBlankManualRosterRowFromRecord(record, roster, nextRowNumber),
       ];
     });
+
+    rows = dedupeManualRosterRows(rows);
 
     if (rows !== roster.rows) {
       updates.set(roster.id, rows);
@@ -4879,6 +5022,10 @@ const PerformanceScoreManager: React.FC = () => {
         record,
       ),
     );
+    const manualIdentityReplacements = getManualScoreIdentityReplacements(
+      persistableScoreListRecords,
+      originalByKey,
+    );
 
     if (!changedRecords.length) {
       const cleanRecords = cloneScoreListRecords(persistableScoreListRecords);
@@ -5021,6 +5168,7 @@ const PerformanceScoreManager: React.FC = () => {
       const syncedRosterRowsById = syncManualScoreRowsAcrossAssessments(
         rostersWithEditedRows,
         persistableScoreListRecords,
+        manualIdentityReplacements,
       );
       const finalUpdatedRows =
         syncedRosterRowsById.get(selectedScoreRoster.id) || updatedRows;
@@ -5157,36 +5305,47 @@ const PerformanceScoreManager: React.FC = () => {
       const changedKeys = new Set(
         changedRecords.map((record) => getScoreListRecordKey(record)),
       );
+      const finalSelectedRowNumbers = new Set(
+        finalUpdatedRows.map((row) => Number(row.rowNumber) || 0),
+      );
       const normalizedRecords: ScoreListRecord[] =
-        persistableScoreListRecords.map((record) => {
-          const recordKey = getScoreListRecordKey(record);
-          const rowNumber = rowNumberByRecordKey.get(recordKey);
-          const keyedRecord =
-            !record.uid && rowNumber
-              ? {
-                  ...record,
-                  localKey: `row:${selectedScoreRoster.id}:${rowNumber}`,
-                  rosterRowNumber: rowNumber,
-                  isManual: true,
-                }
-              : record;
-          if (!changedKeys.has(recordKey)) return keyedRecord;
-          const hasScore =
-            isTransferredScoreRecord(record) ||
-            getEnteredTotalScore(record) !== null;
-          const cleared = clearRecordSignature(record) || record;
-          return {
-            ...keyedRecord,
-            ...cleared,
-            localKey: keyedRecord.localKey,
-            rosterRowNumber: keyedRecord.rosterRowNumber,
-            isManual: keyedRecord.isManual,
-            scoreSource:
-              keyedRecord.uid && hasScore ? "student-doc" : "roster-row",
-            scoreDocumentExists: Boolean(keyedRecord.uid && hasScore),
-            updatedAt: new Date(),
-          };
-        });
+        persistableScoreListRecords
+          .filter((record) => {
+            if (record.uid) return true;
+            const rowNumber = rowNumberByRecordKey.get(
+              getScoreListRecordKey(record),
+            );
+            return Boolean(rowNumber && finalSelectedRowNumbers.has(rowNumber));
+          })
+          .map((record) => {
+            const recordKey = getScoreListRecordKey(record);
+            const rowNumber = rowNumberByRecordKey.get(recordKey);
+            const keyedRecord =
+              !record.uid && rowNumber
+                ? {
+                    ...record,
+                    localKey: `row:${selectedScoreRoster.id}:${rowNumber}`,
+                    rosterRowNumber: rowNumber,
+                    isManual: true,
+                  }
+                : record;
+            if (!changedKeys.has(recordKey)) return keyedRecord;
+            const hasScore =
+              isTransferredScoreRecord(record) ||
+              getEnteredTotalScore(record) !== null;
+            const cleared = clearRecordSignature(record) || record;
+            return {
+              ...keyedRecord,
+              ...cleared,
+              localKey: keyedRecord.localKey,
+              rosterRowNumber: keyedRecord.rosterRowNumber,
+              isManual: keyedRecord.isManual,
+              scoreSource:
+                keyedRecord.uid && hasScore ? "student-doc" : "roster-row",
+              scoreDocumentExists: Boolean(keyedRecord.uid && hasScore),
+              updatedAt: new Date(),
+            };
+          });
 
       setScoreListRecords(normalizedRecords);
       setScoreEditOriginalRecords(cloneScoreListRecords(normalizedRecords));
