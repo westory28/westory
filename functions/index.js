@@ -1641,6 +1641,70 @@ const assertAllowedWestoryUser = (request) => {
   return { uid, email };
 };
 
+const getHeaderText = (headers, name) => {
+  const value = headers?.[name];
+  if (Array.isArray(value)) return String(value[0] || '').trim();
+  return String(value || '').trim();
+};
+
+const normalizePrintIpCandidate = (value) => {
+  let candidate = String(value || '').trim();
+  if (!candidate) return '';
+  candidate = candidate.split(',')[0].trim();
+  candidate = candidate.replace(/^"|"$/g, '').replace(/^::ffff:/i, '');
+  if (candidate.startsWith('[')) {
+    const closingIndex = candidate.indexOf(']');
+    if (closingIndex > 0) {
+      candidate = candidate.slice(1, closingIndex);
+    }
+  }
+  const ipv4WithPort = candidate.match(/^(\d{1,3}(?:\.\d{1,3}){3})(?::\d+)?$/);
+  if (ipv4WithPort) return ipv4WithPort[1];
+  return candidate;
+};
+
+const extractPrintClientIp = (request) => {
+  const headers = request.rawRequest?.headers || {};
+  const candidates = [
+    getHeaderText(headers, 'x-forwarded-for'),
+    getHeaderText(headers, 'fastly-client-ip'),
+    getHeaderText(headers, 'x-real-ip'),
+    getHeaderText(headers, 'x-appengine-user-ip'),
+    request.rawRequest?.ip,
+    request.rawRequest?.socket?.remoteAddress,
+  ];
+  for (const candidate of candidates) {
+    const normalized = normalizePrintIpCandidate(candidate);
+    if (normalized) return normalized;
+  }
+  return '';
+};
+
+const maskPrintClientIp = (ip) => {
+  const normalized = normalizePrintIpCandidate(ip);
+  const ipv4Parts = normalized.split('.');
+  if (
+    ipv4Parts.length === 4
+    && ipv4Parts.every((part) => /^\d{1,3}$/.test(part) && Number(part) >= 0 && Number(part) <= 255)
+  ) {
+    return `${ipv4Parts[0]}.${ipv4Parts[1]}.***.${ipv4Parts[3]}`;
+  }
+
+  const ipv6Parts = normalized.split(':').filter(Boolean);
+  if (ipv6Parts.length >= 2 && /^[0-9a-f]+$/i.test(ipv6Parts.join(''))) {
+    return `${ipv6Parts[0]}:****:****:${ipv6Parts[ipv6Parts.length - 1]}`;
+  }
+
+  return '***.***.***.***';
+};
+
+exports.getPrintClientInfo = onCall({ region: REGION }, async (request) => {
+  assertAllowedWestoryUser(request);
+  return {
+    maskedIp: maskPrintClientIp(extractPrintClientIp(request)),
+  };
+});
+
 const assertYearSemester = (data) => {
   const year = String(data?.year || '').trim();
   const semester = String(data?.semester || '').trim();
