@@ -189,6 +189,9 @@ export interface PointOrder {
   id: string;
   uid: string;
   studentName: string;
+  grade?: string;
+  class?: string;
+  number?: string;
   productId: string;
   productName: string;
   priceSnapshot: number;

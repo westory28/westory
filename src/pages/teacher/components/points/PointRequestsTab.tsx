@@ -5,6 +5,7 @@ import {
 } from "../../../../constants/pointLabels";
 import {
   formatPointDateTime,
+  formatPointStudentLabel,
   formatPointTimeOnly,
   formatWisAmount,
 } from "../../../../lib/pointFormatters";
@@ -57,6 +58,18 @@ const getOrderStatusToneClass = (status: PointOrderStatus) => {
     return "border-rose-200 bg-rose-50 text-rose-700";
   return "border-blue-200 bg-blue-50 text-blue-700";
 };
+
+const getOrderStudentName = (order: PointOrder) =>
+  order.studentName || "(이름 없음)";
+
+const getOrderStudentLabel = (order: PointOrder | null) =>
+  order
+    ? formatPointStudentLabel({
+        grade: order.grade || "",
+        class: order.class || "",
+        number: order.number || "",
+      })
+    : "";
 
 const OrderActionContent: React.FC<{
   isSaving: boolean;
@@ -210,7 +223,7 @@ const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
         <table className="min-w-[760px] w-full table-fixed text-sm text-left">
           <thead className="bg-gray-100 text-xs font-bold uppercase text-gray-600">
             <tr>
-              <th className="w-[17%] p-4">학생 이름</th>
+              <th className="w-[17%] p-4">학생 정보</th>
               <th className="w-[23%] p-4">상품명</th>
               <th className="w-[15%] p-4 text-right">차감 위스</th>
               <th className="w-[11%] p-4 text-right">요청 시각</th>
@@ -232,8 +245,23 @@ const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
                 className={`cursor-pointer transition ${selectedOrderId === order.id ? "bg-blue-50" : "hover:bg-gray-50"}`}
                 onClick={() => onSelectOrder(order.id)}
               >
-                <td className="truncate p-4 font-bold text-gray-800">
-                  {order.studentName || "(이름 없음)"}
+                <td
+                  className="p-4"
+                  title={[
+                    getOrderStudentName(order),
+                    getOrderStudentLabel(order),
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                >
+                  <div className="min-w-0">
+                    <div className="truncate font-bold text-gray-800">
+                      {getOrderStudentName(order)}
+                    </div>
+                    <div className="mt-1 truncate text-xs font-medium text-gray-500">
+                      {getOrderStudentLabel(order) || "소속 정보 없음"}
+                    </div>
+                  </div>
                 </td>
                 <td
                   className="truncate p-4 text-gray-700"
@@ -283,7 +311,8 @@ const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
             {selectedOrder.productName}
           </h3>
           <div className="mt-1 text-sm text-gray-500">
-            {selectedOrder.studentName} · {selectedOrder.uid}
+            {getOrderStudentName(selectedOrder)} ·{" "}
+            {getOrderStudentLabel(selectedOrder) || "소속 정보 없음"}
           </div>
           <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1">
             <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">

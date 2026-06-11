@@ -663,6 +663,23 @@ const ManagePoints: React.FC = () => {
     () => new Map(wallets.map((wallet) => [wallet.uid, wallet])),
     [wallets],
   );
+
+  const ordersWithStudentProfiles = useMemo(
+    () =>
+      orders.map((order) => {
+        const wallet = walletMap.get(order.uid);
+        if (!wallet) return order;
+
+        return {
+          ...order,
+          studentName: wallet.studentName || order.studentName,
+          grade: wallet.grade || order.grade || "",
+          class: wallet.class || order.class || "",
+          number: wallet.number || order.number || "",
+        };
+      }),
+    [orders, walletMap],
+  );
   const isGlobalGrantSearch = grantNameSearch.trim().length > 0;
 
   const grantNumberOptions = useMemo(
@@ -738,17 +755,19 @@ const ManagePoints: React.FC = () => {
   const filteredOrders = useMemo(
     () =>
       orderFilter === "all"
-        ? orders
-        : orders.filter((order) => order.status === orderFilter),
-    [orderFilter, orders],
+        ? ordersWithStudentProfiles
+        : ordersWithStudentProfiles.filter(
+            (order) => order.status === orderFilter,
+          ),
+    [orderFilter, ordersWithStudentProfiles],
   );
 
   const selectedOrder = useMemo(
     () =>
       filteredOrders.find((order) => order.id === selectedOrderId) ||
-      orders.find((order) => order.id === selectedOrderId) ||
+      ordersWithStudentProfiles.find((order) => order.id === selectedOrderId) ||
       null,
-    [filteredOrders, orders, selectedOrderId],
+    [filteredOrders, ordersWithStudentProfiles, selectedOrderId],
   );
 
   const selectedEditableTransaction = useMemo(
