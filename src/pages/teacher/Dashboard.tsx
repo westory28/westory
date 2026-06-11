@@ -162,7 +162,11 @@ const TeacherDashboard: React.FC = () => {
   };
 
   return (
-    <div className="dashboard-container teacher-dashboard-container w-full max-w-7xl mx-auto px-4 py-6 flex-1">
+    <div
+      className="dashboard-container teacher-dashboard-container w-full max-w-7xl mx-auto px-4 py-6 flex-1"
+      data-patch-target="teacher-dashboard"
+      data-patch-label="교사 대시보드"
+    >
       <div className="mb-6 flex flex-col md:flex-row justify-between items-center gap-3 shrink-0">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">
@@ -177,14 +181,26 @@ const TeacherDashboard: React.FC = () => {
       </div>
 
       {/* Main Content Grid */}
-      <div className="teacher-dashboard-grid flex flex-col md:grid md:grid-cols-5 md:grid-rows-2 gap-4 h-auto md:h-[calc(100vh-140px)] min-h-[500px]">
+      <div
+        className="teacher-dashboard-grid flex flex-col md:grid md:grid-cols-5 md:grid-rows-2 gap-4 h-auto md:h-[calc(100vh-140px)] min-h-[500px]"
+        data-patch-target="teacher-dashboard-grid"
+        data-patch-label="대시보드 주요 영역"
+      >
         {/* 1. Notice Board (Mobile: Order 1 / Desktop: Order 2, Right Top) */}
-        <div className="teacher-dashboard-notice order-1 md:order-2 md:col-span-2 md:row-span-1">
+        <div
+          className="teacher-dashboard-notice order-1 md:order-2 md:col-span-2 md:row-span-1"
+          data-patch-target="teacher-dashboard-notice"
+          data-patch-label="대시보드 알림장"
+        >
           <TeacherNoticeBoard />
         </div>
 
         {/* 2. Calendar (Mobile: Order 2 / Desktop: Order 1, Left Full Height) */}
-        <div className="teacher-dashboard-calendar order-2 md:order-1 md:col-span-3 md:row-span-2">
+        <div
+          className="teacher-dashboard-calendar order-2 md:order-1 md:col-span-3 md:row-span-2"
+          data-patch-target="teacher-dashboard-calendar"
+          data-patch-label="대시보드 학사 일정"
+        >
           <React.Suspense
             fallback={
               <div className="flex min-h-[420px] items-center justify-center rounded-2xl border border-gray-200 bg-white text-sm font-semibold text-gray-500 shadow-sm">
@@ -209,7 +225,11 @@ const TeacherDashboard: React.FC = () => {
         </div>
 
         {/* 3. Wis Ranking (Mobile: Order 3 / Desktop: Order 3, Right Bottom) */}
-        <div className="teacher-dashboard-ranking order-3 md:order-3 md:col-span-2 md:row-span-1">
+        <div
+          className="teacher-dashboard-ranking order-3 md:order-3 md:col-span-2 md:row-span-1"
+          data-patch-target="teacher-dashboard-ranking"
+          data-patch-label="대시보드 위스 순위"
+        >
           <div className="min-h-[260px] h-full">
             <WisRankingPanel
               config={config}

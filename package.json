@@ -11,6 +11,7 @@
     "verify:assessment-attempt-safety": "node scripts/verify-assessment-attempt-safety.mjs",
     "verify:teacher-nav": "node scripts/verify-teacher-nav.mjs",
     "verify:score-warning-rules": "node scripts/verify-score-warning-rules.mjs",
+    "verify:teacher-patch-notes-rules": "node scripts/verify-teacher-patch-notes-rules.mjs",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx}\""
   },

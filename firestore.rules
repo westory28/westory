@@ -210,6 +210,94 @@ service cloud.firestore {
       return isAdmin() || isTeacherRole();
     }
 
+    function isTeacherPatchNoteOwner(teacherId) {
+      return canUseWestory()
+        && request.auth.uid == teacherId
+        && (isAdmin() || isTeacherRole());
+    }
+
+    function isValidTeacherPatchNoteRect(rect) {
+      return rect == null
+        || (
+          rect is map
+          && rect.keys().hasOnly(['x', 'y', 'width', 'height'])
+          && rect.x is number
+          && rect.y is number
+          && rect.width is number
+          && rect.height is number
+          && rect.x >= -20000
+          && rect.x <= 20000
+          && rect.y >= -20000
+          && rect.y <= 20000
+          && rect.width >= 0
+          && rect.width <= 20000
+          && rect.height >= 0
+          && rect.height <= 20000
+        );
+    }
+
+    function hasOnlyTeacherPatchNoteKeys() {
+      return request.resource.data.keys().hasOnly([
+        'ownerUid',
+        'title',
+        'body',
+        'type',
+        'priority',
+        'status',
+        'sourcePath',
+        'targetLabel',
+        'targetText',
+        'targetSelector',
+        'targetRect',
+        'createdAt',
+        'updatedAt',
+        'completedAt'
+      ]);
+    }
+
+    function hasValidTeacherPatchNoteFields(teacherId) {
+      return hasOnlyTeacherPatchNoteKeys()
+        && request.resource.data.ownerUid == teacherId
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.title.size() <= 80
+        && request.resource.data.body is string
+        && request.resource.data.body.size() <= 2000
+        && request.resource.data.type in ['bug', 'improvement', 'content', 'etc']
+        && request.resource.data.priority in ['normal', 'high']
+        && request.resource.data.status in ['open', 'done']
+        && request.resource.data.sourcePath is string
+        && request.resource.data.sourcePath.size() > 0
+        && request.resource.data.sourcePath.size() <= 240
+        && request.resource.data.sourcePath.matches('^/teacher.*')
+        && request.resource.data.targetLabel is string
+        && request.resource.data.targetLabel.size() <= 120
+        && request.resource.data.targetText is string
+        && request.resource.data.targetText.size() <= 240
+        && request.resource.data.targetSelector is string
+        && request.resource.data.targetSelector.size() <= 240
+        && isValidTeacherPatchNoteRect(request.resource.data.targetRect)
+        && (
+          (request.resource.data.status == 'open' && request.resource.data.completedAt == null)
+          || (request.resource.data.status == 'done' && request.resource.data.completedAt is timestamp)
+        );
+    }
+
+    function isValidTeacherPatchNoteCreate(teacherId) {
+      return isTeacherPatchNoteOwner(teacherId)
+        && hasValidTeacherPatchNoteFields(teacherId)
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    function isValidTeacherPatchNoteUpdate(teacherId) {
+      return isTeacherPatchNoteOwner(teacherId)
+        && hasValidTeacherPatchNoteFields(teacherId)
+        && resource.data.ownerUid == teacherId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time;
+    }
+
     function canReadPerformanceScoreObjection(data) {
       return canUseWestory()
         && (
@@ -795,6 +883,13 @@ service cloud.firestore {
           && likeId == request.auth.uid;
         allow update: if false;
       }
+    }
+
+    match /teacherPatchNotes/{teacherId}/notes/{noteId} {
+      allow read: if isTeacherPatchNoteOwner(teacherId);
+      allow create: if isValidTeacherPatchNoteCreate(teacherId);
+      allow update: if isValidTeacherPatchNoteUpdate(teacherId);
+      allow delete: if isTeacherPatchNoteOwner(teacherId);
     }
 
     match /metadata/{docId} {

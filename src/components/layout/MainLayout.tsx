@@ -20,6 +20,7 @@ import {
   canAccessTeacherPath,
   canAccessTeacherPortal,
   getDefaultTeacherRoute,
+  isAdminUser,
 } from "../../lib/permissions";
 
 const ROLE_SESSION_KEY = "westoryPortalRole";
@@ -32,6 +33,10 @@ const StudentHistoryDictionaryController = lazyWithRetry(
 const StudentRankPromotionController = lazyWithRetry(
   () => import("../common/StudentRankPromotionController"),
   "student-rank-promotion-controller",
+);
+const TeacherPatchMemoController = lazyWithRetry(
+  () => import("../common/TeacherPatchMemoController"),
+  "teacher-patch-memo-controller",
 );
 
 const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -51,6 +56,10 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const isStudentRoute = location.pathname.startsWith("/student");
+  const isTeacherRoute = location.pathname.startsWith("/teacher");
+  const canUseTeacherPatchMemo = Boolean(
+    currentUser && isTeacherRoute && isAdminUser(userData, currentUser.email),
+  );
   const isVisibilityControlledStudentRoute = isStudentVisibilityControlledPath(
     location.pathname,
   );
@@ -62,6 +71,8 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     setStudentVisibilityCheckedRouteKey,
   ] = React.useState("");
   const [studentEnhancementsReady, setStudentEnhancementsReady] =
+    React.useState(false);
+  const [teacherEnhancementsReady, setTeacherEnhancementsReady] =
     React.useState(false);
   const studentVisibilityRouteVerified =
     !isVisibilityControlledStudentRoute ||
@@ -245,6 +256,12 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return runAfterNextPaint(() => setStudentEnhancementsReady(true));
   }, [currentUser?.uid, isStudentRoute, loading]);
 
+  useEffect(() => {
+    setTeacherEnhancementsReady(false);
+    if (loading || !canUseTeacherPatchMemo) return undefined;
+    return runAfterNextPaint(() => setTeacherEnhancementsReady(true));
+  }, [canUseTeacherPatchMemo, currentUser?.uid, loading]);
+
   if (loading)
     return <PageLoading message="로그인 상태를 확인하는 중입니다." />;
 
@@ -268,6 +285,11 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         <React.Suspense fallback={null}>
           <StudentRankPromotionController />
           <StudentHistoryDictionaryController />
+        </React.Suspense>
+      )}
+      {teacherEnhancementsReady && (
+        <React.Suspense fallback={null}>
+          <TeacherPatchMemoController />
         </React.Suspense>
       )}
       <main className="flex-1 w-full min-h-0">{children}</main>
