@@ -24,7 +24,7 @@ import {
 import { useAppDialog } from "../../../components/common/AppDialogProvider";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { useAuth } from "../../../contexts/AuthContext";
-import { db, getHttpsCallable } from "../../../lib/firebase";
+import { db } from "../../../lib/firebase";
 import {
   getSemesterCollectionPath,
   getYearSemester,
@@ -131,10 +131,12 @@ const CLASS_SHEET_FOOTER_SCHOOL_START_COLUMN = 15;
 const CLASS_SHEET_FOOTER_SCHOOL_END_COLUMN = 16;
 const CLASS_SHEET_PRINT_INFO_START_COLUMN = 8;
 const CLASS_SHEET_PRINT_INFO_END_COLUMN = 16;
+const CLASS_SHEET_PRINT_INFO_MIN_ROW = 45;
+const CLASS_SHEET_PRINT_INFO_SPACER_ROW_HEIGHT = 6;
 const CLASS_SHEET_PRINT_INFO_ROW_HEIGHT = 9;
 const CLASS_SHEET_PRINT_INFO_FONT_SIZE = 7;
 const CLASS_SHEET_SCHOOL_NAME = "용신중학교";
-const CLASS_SHEET_PRINT_INFO_FALLBACK_IP = "***.***.***.***";
+const CLASS_SHEET_PRINT_INFO_FIXED_IP = "10.182.***.93";
 const XLSX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const SCORE_LIST_ALL_ROSTERS_VALUE = "__all_performance_scores__";
@@ -2289,7 +2291,7 @@ const formatClassSheetPrintDateTime = (date = new Date()) => {
 
 const normalizeClassSheetPrintIp = (value: unknown) => {
   const text = toText(value).slice(0, 80);
-  return text || CLASS_SHEET_PRINT_INFO_FALLBACK_IP;
+  return text || CLASS_SHEET_PRINT_INFO_FIXED_IP;
 };
 
 const getClassSheetPrintInfoText = (params: {
@@ -2305,21 +2307,9 @@ const getClassSheetPrintInfoText = (params: {
   }`;
 
 const loadClassSheetPrintClientInfo = async () => {
-  try {
-    const getPrintClientInfo = await getHttpsCallable<
-      Record<string, never>,
-      { maskedIp?: unknown }
-    >("getPrintClientInfo");
-    const result = await getPrintClientInfo({});
-    return {
-      clientIp: normalizeClassSheetPrintIp(result.data?.maskedIp),
-    };
-  } catch (error) {
-    console.warn("Failed to load print client info:", error);
-    return {
-      clientIp: CLASS_SHEET_PRINT_INFO_FALLBACK_IP,
-    };
-  }
+  return {
+    clientIp: CLASS_SHEET_PRINT_INFO_FIXED_IP,
+  };
 };
 
 const excelCell = (
@@ -3072,10 +3062,139 @@ const shrinkClassSheetRightSpacerColumns = (
 const cloneWorksheetStyle = (style: unknown) =>
   JSON.parse(JSON.stringify(style || {}));
 
+type WorksheetMergeRange = {
+  startRow: number;
+  startColumn: number;
+  endRow: number;
+  endColumn: number;
+};
+
+type WorksheetInternalMerge = {
+  model?: {
+    top?: number;
+    left?: number;
+    bottom?: number;
+    right?: number;
+  };
+};
+
+type WorksheetMergeModel = {
+  model?: { merges?: string[] };
+  _merges?: Record<string, WorksheetInternalMerge>;
+  unMergeCells?: (range: string) => void;
+};
+
+const getWorksheetColumnNumber = (columnName: string) =>
+  columnName
+    .toUpperCase()
+    .split("")
+    .reduce((value, character) => value * 26 + character.charCodeAt(0) - 64, 0);
+
+const getWorksheetColumnName = (columnNumber: number) => {
+  let value = Math.floor(columnNumber);
+  let columnName = "";
+  while (value > 0) {
+    const remainder = (value - 1) % 26;
+    columnName = String.fromCharCode(65 + remainder) + columnName;
+    value = Math.floor((value - 1) / 26);
+  }
+  return columnName;
+};
+
+const parseWorksheetCellRef = (cellRef: string) => {
+  const match = /^([A-Z]+)(\d+)$/i.exec(cellRef.trim());
+  if (!match) return null;
+  return {
+    row: Number(match[2]),
+    column: getWorksheetColumnNumber(match[1]),
+  };
+};
+
+const parseWorksheetRange = (range: string): WorksheetMergeRange | null => {
+  const [startRef, endRef = startRef] = range.split(":");
+  const start = parseWorksheetCellRef(startRef);
+  const end = parseWorksheetCellRef(endRef);
+  if (!start || !end) return null;
+  return {
+    startRow: Math.min(start.row, end.row),
+    startColumn: Math.min(start.column, end.column),
+    endRow: Math.max(start.row, end.row),
+    endColumn: Math.max(start.column, end.column),
+  };
+};
+
+const worksheetRangesOverlap = (
+  first: WorksheetMergeRange,
+  second: WorksheetMergeRange,
+) =>
+  first.startRow <= second.endRow &&
+  first.endRow >= second.startRow &&
+  first.startColumn <= second.endColumn &&
+  first.endColumn >= second.startColumn;
+
+const parseWorksheetInternalMergeRange = (
+  merge: WorksheetInternalMerge,
+): WorksheetMergeRange | null => {
+  const top = Number(merge.model?.top);
+  const left = Number(merge.model?.left);
+  const bottom = Number(merge.model?.bottom);
+  const right = Number(merge.model?.right);
+  if (![top, left, bottom, right].every(Number.isFinite)) return null;
+  return {
+    startRow: Math.min(top, bottom),
+    startColumn: Math.min(left, right),
+    endRow: Math.max(top, bottom),
+    endColumn: Math.max(left, right),
+  };
+};
+
+const formatWorksheetRange = (range: WorksheetMergeRange) =>
+  `${getWorksheetColumnName(range.startColumn)}${range.startRow}:${getWorksheetColumnName(
+    range.endColumn,
+  )}${range.endRow}`;
+
 const unmergeWorksheetRange = (
-  worksheet: { unMergeCells?: (range: string) => void },
+  worksheet: WorksheetMergeModel,
   range: string,
 ) => {
+  const targetRange = parseWorksheetRange(range);
+  const mergeRanges = Array.isArray(worksheet.model?.merges)
+    ? [...worksheet.model.merges]
+    : [];
+
+  if (targetRange) {
+    mergeRanges.forEach((mergeRange) => {
+      const parsedMergeRange = parseWorksheetRange(mergeRange);
+      if (
+        parsedMergeRange &&
+        worksheetRangesOverlap(targetRange, parsedMergeRange)
+      ) {
+        try {
+          worksheet.unMergeCells?.(mergeRange);
+        } catch {
+          // ExcelJS may already have cleared the merge while row operations shift.
+        }
+      }
+    });
+
+    Object.entries(worksheet._merges || {}).forEach(([mergeKey, merge]) => {
+      const parsedMergeRange = parseWorksheetInternalMergeRange(merge);
+      if (
+        parsedMergeRange &&
+        worksheetRangesOverlap(targetRange, parsedMergeRange)
+      ) {
+        try {
+          worksheet.unMergeCells?.(formatWorksheetRange(parsedMergeRange));
+        } catch {
+          // Some shifted template merges remain only in ExcelJS' internal map.
+        }
+        if (worksheet._merges) {
+          delete worksheet._merges[mergeKey];
+        }
+      }
+    });
+  }
+
   try {
     worksheet.unMergeCells?.(range);
   } catch {
@@ -3122,7 +3241,8 @@ const resizeClassSheetStudentRows = (
 ) => {
   const templateCapacity =
     CLASS_SHEET_STUDENT_END_ROW - CLASS_SHEET_STUDENT_START_ROW + 1;
-  const rowDelta = studentCount - templateCapacity;
+  const rowDelta = Math.max(0, studentCount - templateCapacity);
+  const visibleStudentRowCount = Math.max(studentCount, templateCapacity);
 
   const sourceRow = worksheet.getRow(CLASS_SHEET_STUDENT_END_ROW);
 
@@ -3147,14 +3267,10 @@ const resizeClassSheetStudentRows = (
         );
       }
     }
-  } else if (rowDelta < 0) {
-    worksheet.spliceRows(
-      CLASS_SHEET_STUDENT_START_ROW + studentCount,
-      Math.abs(rowDelta),
-    );
   }
 
-  const studentEndRow = CLASS_SHEET_STUDENT_START_ROW + studentCount - 1;
+  const studentEndRow =
+    CLASS_SHEET_STUDENT_START_ROW + visibleStudentRowCount - 1;
   const summaryStartRow = CLASS_SHEET_SUMMARY_START_ROW + rowDelta;
 
   for (
@@ -3284,11 +3400,26 @@ const resetClassSheetPrintInfoFooter = (
   footerRow: number,
   printInfoText: string,
 ) => {
-  const printInfoRow = footerRow + 1;
+  const printInfoRow = Math.max(
+    footerRow + 1,
+    CLASS_SHEET_PRINT_INFO_MIN_ROW,
+  );
   const spacerRow = worksheet.getRow(footerRow - 1);
   const spacerHeight = Number(spacerRow.height || 0);
   if (spacerHeight > CLASS_SHEET_PRINT_INFO_ROW_HEIGHT) {
     spacerRow.height = spacerHeight - CLASS_SHEET_PRINT_INFO_ROW_HEIGHT;
+  }
+
+  for (let row = footerRow + 1; row < printInfoRow; row += 1) {
+    worksheet.getRow(row).height = CLASS_SHEET_PRINT_INFO_SPACER_ROW_HEIGHT;
+    unmergeWorksheetRange(worksheet, `H${row}:P${row}`);
+    for (
+      let column = CLASS_SHEET_PRINT_INFO_START_COLUMN;
+      column <= CLASS_SHEET_PRINT_INFO_END_COLUMN;
+      column += 1
+    ) {
+      setWorksheetCellValue(worksheet, row, column, null);
+    }
   }
 
   unmergeWorksheetRange(worksheet, `H${printInfoRow}:P${printInfoRow}`);
