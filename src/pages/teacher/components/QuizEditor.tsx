@@ -855,6 +855,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                 const choiceOptions =
                   q.type === "choice" ? trimList(q.options || []) : [];
                 const hasChoicePreview = choiceOptions.length > 0;
+                const answerText = String(q.answer || "").trim();
+                const explanationText = String(q.explanation || "").trim();
 
                 return (
                   <div
@@ -908,31 +910,52 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                         )}
                         {hasChoicePreview && (
                           <div className="space-y-1.5">
-                            {choiceOptions.map((option, optionIndex) => (
-                              <div
-                                key={`${q.id}-option-${optionIndex}`}
-                                className="flex min-w-0 items-start gap-2 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-bold text-gray-700"
-                              >
-                                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gray-100 text-[11px] text-gray-600">
-                                  {optionIndex + 1}
-                                </span>
-                                <span className="min-w-0 break-words">
-                                  {option}
-                                </span>
-                              </div>
-                            ))}
+                            {choiceOptions.map((option, optionIndex) => {
+                              const isCorrectOption =
+                                option.trim() === answerText;
+                              return (
+                                <div
+                                  key={`${q.id}-option-${optionIndex}`}
+                                  className={`flex min-w-0 items-start gap-2 rounded-md border px-2.5 py-1.5 text-xs ${
+                                    isCorrectOption
+                                      ? "border-blue-300 bg-blue-50 font-black text-blue-800"
+                                      : "border-gray-200 bg-white font-bold text-gray-700"
+                                  }`}
+                                >
+                                  <span
+                                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] ${
+                                      isCorrectOption
+                                        ? "bg-blue-600 font-black text-white"
+                                        : "bg-gray-100 text-gray-600"
+                                    }`}
+                                  >
+                                    {optionIndex + 1}
+                                  </span>
+                                  <span className="min-w-0 break-words">
+                                    {option}
+                                  </span>
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
                       </div>
                     )}
-                    <p className="text-xs text-gray-500">
-                      <span className="text-blue-600 font-bold mr-2">
-                        정답: {formatAnswer(q)}
-                      </span>
-                      {q.type !== "choice" && q.options && q.options.length > 0
-                        ? `(${q.options.join(", ")})`
-                        : ""}
-                    </p>
+                    {q.type === "choice" ? (
+                      <p className="text-xs font-bold text-slate-500">
+                        <span className="text-slate-700">해설: </span>
+                        {explanationText || "등록된 해설이 없습니다."}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-gray-500">
+                        <span className="mr-2 font-bold text-blue-600">
+                          정답: {formatAnswer(q)}
+                        </span>
+                        {q.options && q.options.length > 0
+                          ? `(${q.options.join(", ")})`
+                          : ""}
+                      </p>
+                    )}
                     {!!(q.hintEnabled && q.hint) && (
                       <p className="text-xs text-amber-600 font-bold mt-1">
                         <i className="fas fa-lightbulb mr-1"></i>힌트 제공
