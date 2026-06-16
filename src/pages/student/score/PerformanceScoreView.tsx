@@ -209,6 +209,8 @@ const PerformanceScoreView: React.FC = () => {
   );
   const [objectionReason, setObjectionReason] = useState("");
   const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const scoreChartRef = useRef<ChartJS<"bar"> | null>(null);
+  const scoreChartContainerRef = useRef<HTMLDivElement | null>(null);
   const signatureDrawnRef = useRef(false);
   const drawingRef = useRef(false);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
@@ -296,6 +298,55 @@ const PerformanceScoreView: React.FC = () => {
         ],
       }
     : { labels: [], datasets: [] };
+
+  useEffect(() => {
+    if (!chartItems.length) return;
+
+    const container = scoreChartContainerRef.current;
+    const chart = scoreChartRef.current;
+    if (!container || !chart) return;
+
+    let frameId: number | null = null;
+    const resizeChart = () => {
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+      frameId = window.requestAnimationFrame(() => {
+        frameId = null;
+        const nextWidth = Math.floor(container.clientWidth);
+        const nextHeight = Math.floor(container.clientHeight);
+        if (nextWidth <= 0 || nextHeight <= 0) return;
+
+        chart.canvas.style.maxWidth = "100%";
+        chart.canvas.style.width = "100%";
+        chart.resize(nextWidth, nextHeight);
+      });
+    };
+
+    let resizeObserver: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      resizeObserver = new ResizeObserver(resizeChart);
+      resizeObserver.observe(container);
+    }
+
+    const visualViewport = window.visualViewport;
+    window.addEventListener("resize", resizeChart);
+    window.addEventListener("orientationchange", resizeChart);
+    visualViewport?.addEventListener("resize", resizeChart);
+    visualViewport?.addEventListener("scroll", resizeChart);
+    resizeChart();
+
+    return () => {
+      if (frameId !== null) {
+        window.cancelAnimationFrame(frameId);
+      }
+      resizeObserver?.disconnect();
+      window.removeEventListener("resize", resizeChart);
+      window.removeEventListener("orientationchange", resizeChart);
+      visualViewport?.removeEventListener("resize", resizeChart);
+      visualViewport?.removeEventListener("scroll", resizeChart);
+    };
+  }, [chartItems.length, selectedRecord?.id]);
 
   const expectedSignatureName =
     userData?.name || selectedRecord?.studentName || "";
@@ -1316,7 +1367,7 @@ const PerformanceScoreView: React.FC = () => {
               </div>
             </div>
 
-            <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(240px,280px)_minmax(0,1fr)]">
+            <div className="mt-5 grid min-w-0 gap-5 xl:grid-cols-[minmax(240px,280px)_minmax(0,1fr)]">
               <div className="flex flex-col justify-center rounded-xl border border-blue-100 bg-blue-50 p-5">
                 <div className="text-sm font-black text-blue-800">
                   내 획득 점수
@@ -1343,9 +1394,19 @@ const PerformanceScoreView: React.FC = () => {
                 </p>
               </div>
 
-              <div className="h-72 rounded-xl border border-slate-200 p-4">
+              <div className="relative h-72 min-w-0 overflow-hidden rounded-xl border border-slate-200 p-4">
                 {chartItems.length > 0 ? (
-                  <Bar data={chartData} options={chartOptions} />
+                  <div
+                    ref={scoreChartContainerRef}
+                    className="relative h-full min-h-0 w-full min-w-0 overflow-hidden"
+                  >
+                    <Bar
+                      ref={scoreChartRef}
+                      data={chartData}
+                      options={chartOptions}
+                      style={{ maxWidth: "100%" }}
+                    />
+                  </div>
                 ) : (
                   <div className="flex h-full items-center justify-center px-4 text-center text-sm font-bold leading-6 text-slate-400">
                     평가요소별 세부 점수는 제공되지 않았습니다. 총점과 평가

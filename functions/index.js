@@ -1666,12 +1666,12 @@ const normalizePrintIpCandidate = (value) => {
 const extractPrintClientIp = (request) => {
   const headers = request.rawRequest?.headers || {};
   const candidates = [
-    getHeaderText(headers, 'x-forwarded-for'),
-    getHeaderText(headers, 'fastly-client-ip'),
-    getHeaderText(headers, 'x-real-ip'),
-    getHeaderText(headers, 'x-appengine-user-ip'),
     request.rawRequest?.ip,
     request.rawRequest?.socket?.remoteAddress,
+    getHeaderText(headers, 'fastly-client-ip'),
+    getHeaderText(headers, 'x-appengine-user-ip'),
+    getHeaderText(headers, 'x-real-ip'),
+    getHeaderText(headers, 'x-forwarded-for'),
   ];
   for (const candidate of candidates) {
     const normalized = normalizePrintIpCandidate(candidate);
@@ -1687,7 +1687,7 @@ const maskPrintClientIp = (ip) => {
     ipv4Parts.length === 4
     && ipv4Parts.every((part) => /^\d{1,3}$/.test(part) && Number(part) >= 0 && Number(part) <= 255)
   ) {
-    return `${ipv4Parts[0]}.${ipv4Parts[1]}.***.${ipv4Parts[3]}`;
+    return `${ipv4Parts[0]}.${ipv4Parts[1]}.***.***`;
   }
 
   const ipv6Parts = normalized.split(':').filter(Boolean);
