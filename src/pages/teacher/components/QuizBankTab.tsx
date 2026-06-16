@@ -3457,16 +3457,16 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                         <div
                           className={
                             editImage
-                              ? "grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(240px,0.9fr)] md:items-start"
+                              ? "grid gap-4 md:grid-cols-[minmax(150px,220px)_minmax(0,1fr)] md:items-start"
                               : "space-y-2"
                           }
                         >
                           {editImage && (
-                            <div className="rounded-lg border border-gray-100 bg-gray-50 p-2 text-center">
+                            <div className="flex justify-center rounded-lg border border-gray-100 bg-gray-50 p-2">
                               <img
                                 src={editImage}
                                 alt="문항 첨부 이미지 미리보기"
-                                className="mx-auto max-h-64 w-full object-contain"
+                                className="max-h-44 max-w-full object-contain"
                               />
                             </div>
                           )}

@@ -851,63 +851,96 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                 등록된 문제가 없습니다.
               </div>
             ) : (
-              filteredQuestions.map((q, idx) => (
-                <div
-                  key={q.id}
-                  className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm"
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="bg-gray-100 text-gray-600 text-[10px] font-bold px-2 py-1 rounded">
-                      Q{idx + 1} | {TYPE_LABEL[q.type] || q.type} |{" "}
-                      {getQuestionSubUnitLabel(q)}
-                    </span>
-                    {canEdit && (
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => startEdit(q)}
-                          className="text-gray-300 hover:text-blue-500"
-                          title="문제 수정"
-                        >
-                          <i className="fas fa-pen"></i>
-                        </button>
-                        <button
-                          onClick={() => void handleDelete(q.id)}
-                          className="text-gray-300 hover:text-red-500"
-                          title="문제 삭제"
-                        >
-                          <i className="fas fa-trash"></i>
-                        </button>
+              filteredQuestions.map((q, idx) => {
+                const choiceOptions =
+                  q.type === "choice" ? trimList(q.options || []) : [];
+                const hasChoicePreview = choiceOptions.length > 0;
+
+                return (
+                  <div
+                    key={q.id}
+                    className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm"
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <span className="bg-gray-100 text-gray-600 text-[10px] font-bold px-2 py-1 rounded">
+                        Q{idx + 1} | {TYPE_LABEL[q.type] || q.type} |{" "}
+                        {getQuestionSubUnitLabel(q)}
+                      </span>
+                      {canEdit && (
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => startEdit(q)}
+                            className="text-gray-300 hover:text-blue-500"
+                            title="문제 수정"
+                          >
+                            <i className="fas fa-pen"></i>
+                          </button>
+                          <button
+                            onClick={() => void handleDelete(q.id)}
+                            className="text-gray-300 hover:text-red-500"
+                            title="문제 삭제"
+                          >
+                            <i className="fas fa-trash"></i>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <p className="font-bold text-gray-800 mb-2 text-sm">
+                      {q.question}
+                    </p>
+                    {(q.image || hasChoicePreview) && (
+                      <div
+                        className={
+                          q.image && hasChoicePreview
+                            ? "mb-2 grid gap-3 md:grid-cols-[minmax(150px,220px)_minmax(0,1fr)] md:items-start"
+                            : "mb-2 space-y-2"
+                        }
+                      >
+                        {q.image && (
+                          <div className="flex justify-center rounded border border-gray-200 bg-gray-50 p-1.5">
+                            <img
+                              src={q.image}
+                              alt="문항 첨부 이미지"
+                              className="max-h-36 max-w-full object-contain"
+                            />
+                          </div>
+                        )}
+                        {hasChoicePreview && (
+                          <div className="space-y-1.5">
+                            {choiceOptions.map((option, optionIndex) => (
+                              <div
+                                key={`${q.id}-option-${optionIndex}`}
+                                className="flex min-w-0 items-start gap-2 rounded-md border border-gray-200 bg-white px-2.5 py-1.5 text-xs font-bold text-gray-700"
+                              >
+                                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-gray-100 text-[11px] text-gray-600">
+                                  {optionIndex + 1}
+                                </span>
+                                <span className="min-w-0 break-words">
+                                  {option}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
-                  </div>
-                  <p className="font-bold text-gray-800 mb-1 text-sm">
-                    {q.question}
-                  </p>
-                  {q.image && (
-                    <div className="mb-2">
-                      <img
-                        src={q.image}
-                        alt="문항 첨부 이미지"
-                        className="max-h-44 max-w-full rounded border border-gray-200 object-contain"
-                      />
-                    </div>
-                  )}
-                  <p className="text-xs text-gray-500">
-                    <span className="text-blue-600 font-bold mr-2">
-                      정답: {formatAnswer(q)}
-                    </span>
-                    {q.options && q.options.length > 0
-                      ? `(${q.options.join(", ")})`
-                      : ""}
-                  </p>
-                  {!!(q.hintEnabled && q.hint) && (
-                    <p className="text-xs text-amber-600 font-bold mt-1">
-                      <i className="fas fa-lightbulb mr-1"></i>힌트 제공
+                    <p className="text-xs text-gray-500">
+                      <span className="text-blue-600 font-bold mr-2">
+                        정답: {formatAnswer(q)}
+                      </span>
+                      {q.type !== "choice" && q.options && q.options.length > 0
+                        ? `(${q.options.join(", ")})`
+                        : ""}
                     </p>
-                  )}
-                </div>
-              ))
+                    {!!(q.hintEnabled && q.hint) && (
+                      <p className="text-xs text-amber-600 font-bold mt-1">
+                        <i className="fas fa-lightbulb mr-1"></i>힌트 제공
+                      </p>
+                    )}
+                  </div>
+                );
+              })
             )}
           </div>
         </div>
@@ -1365,16 +1398,16 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                           <div
                             className={
                               formImage
-                                ? "grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(240px,0.9fr)] md:items-start"
+                                ? "grid gap-4 md:grid-cols-[minmax(150px,220px)_minmax(0,1fr)] md:items-start"
                                 : "space-y-2"
                             }
                           >
                             {formImage && (
-                              <div className="rounded-lg border border-gray-100 bg-gray-50 p-2 text-center">
+                              <div className="flex justify-center rounded-lg border border-gray-100 bg-gray-50 p-2">
                                 <img
                                   src={formImage}
                                   alt="문항 첨부 이미지 미리보기"
-                                  className="mx-auto max-h-64 w-full object-contain"
+                                  className="max-h-44 max-w-full object-contain"
                                 />
                               </div>
                             )}
