@@ -131,12 +131,15 @@ const CLASS_SHEET_FOOTER_SCHOOL_START_COLUMN = 15;
 const CLASS_SHEET_FOOTER_SCHOOL_END_COLUMN = 16;
 const CLASS_SHEET_PRINT_INFO_START_COLUMN = 8;
 const CLASS_SHEET_PRINT_INFO_END_COLUMN = 16;
-const CLASS_SHEET_PRINT_INFO_MIN_ROW = 45;
+const CLASS_SHEET_NICE_REFERENCE_STUDENT_COUNT = 31;
+const CLASS_SHEET_NICE_REFERENCE_FOOTER_SPACER_HEIGHT = 175.6;
+const CLASS_SHEET_STUDENT_ROW_HEIGHT = 14.1;
 const CLASS_SHEET_PRINT_INFO_SPACER_ROW_HEIGHT = 6;
 const CLASS_SHEET_PRINT_INFO_ROW_HEIGHT = 9;
 const CLASS_SHEET_PRINT_INFO_FONT_SIZE = 7;
 const CLASS_SHEET_PRINT_INFO_FONT_NAME = "바탕";
 const CLASS_SHEET_PRINT_INFO_TRAILING_SPACES = "      ";
+const CLASS_SHEET_TOTAL_SCORE_NUMBER_FORMAT = "#,##0.00";
 const CLASS_SHEET_SCHOOL_NAME = "용신중학교";
 const CLASS_SHEET_PRINT_INFO_FIXED_IP = "10.182.***.93";
 const XLSX_MIME_TYPE =
@@ -2883,6 +2886,15 @@ const setWorksheetCellValue = (
   worksheet.getCell(row, column).value = value;
 };
 
+const setWorksheetCellNumberFormat = (
+  worksheet: { getCell: (row: number, column: number) => { numFmt?: string } },
+  row: number,
+  column: number,
+  numberFormat: string,
+) => {
+  worksheet.getCell(row, column).numFmt = numberFormat;
+};
+
 const setClassSheetStudentNameCell = (
   worksheet: {
     getCell: (
@@ -3384,6 +3396,24 @@ const resetClassSheetFooter = (
   };
 };
 
+const getClassSheetFooterSpacerHeight = (studentCount: number) => {
+  const studentRowDelta =
+    (Number(studentCount) - CLASS_SHEET_NICE_REFERENCE_STUDENT_COUNT) *
+    CLASS_SHEET_STUDENT_ROW_HEIGHT;
+  const niceSpacerHeight =
+    CLASS_SHEET_NICE_REFERENCE_FOOTER_SPACER_HEIGHT - studentRowDelta;
+  return Math.max(
+    0,
+    Number(
+      (
+        niceSpacerHeight -
+        CLASS_SHEET_PRINT_INFO_SPACER_ROW_HEIGHT -
+        CLASS_SHEET_PRINT_INFO_ROW_HEIGHT
+      ).toFixed(2),
+    ),
+  );
+};
+
 const resetClassSheetPrintInfoFooter = (
   worksheet: {
     getCell: (
@@ -3405,16 +3435,11 @@ const resetClassSheetPrintInfoFooter = (
   },
   footerRow: number,
   printInfoText: string,
+  studentCount: number,
 ) => {
-  const printInfoRow = Math.max(
-    footerRow + 1,
-    CLASS_SHEET_PRINT_INFO_MIN_ROW,
-  );
+  const printInfoRow = footerRow + 2;
   const spacerRow = worksheet.getRow(footerRow - 1);
-  const spacerHeight = Number(spacerRow.height || 0);
-  if (spacerHeight > CLASS_SHEET_PRINT_INFO_ROW_HEIGHT) {
-    spacerRow.height = spacerHeight - CLASS_SHEET_PRINT_INFO_ROW_HEIGHT;
-  }
+  spacerRow.height = getClassSheetFooterSpacerHeight(studentCount);
 
   for (let row = footerRow + 1; row < printInfoRow; row += 1) {
     worksheet.getRow(row).height = CLASS_SHEET_PRINT_INFO_SPACER_ROW_HEIGHT;
@@ -3790,6 +3815,7 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
     worksheet,
     footerRow,
     getClassSheetPrintInfoText(params),
+    params.students.length,
   );
   centerClassSheetStudentNameHeader(worksheet);
 
@@ -3911,6 +3937,12 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
     summaryRow + 1,
     8,
     roundScore(firstSum + secondSum),
+  );
+  setWorksheetCellNumberFormat(
+    worksheet,
+    summaryRow + 1,
+    8,
+    CLASS_SHEET_TOTAL_SCORE_NUMBER_FORMAT,
   );
   setWorksheetCellValue(
     worksheet,
