@@ -64,13 +64,10 @@ const QuizUnitTree: React.FC<QuizUnitTreeProps> = ({ onSelect }) => {
             : "bg-yellow-50 border-yellow-200 text-yellow-700 hover:bg-yellow-100"
         }`}
         onClick={() =>
-          handleSelect(
-            { id: "exam_prep", title: "정기 시험 대비 실전" },
-            "special",
-          )
+          handleSelect({ id: "exam_prep", title: "모의고사" }, "special")
         }
       >
-        <i className="fas fa-file-contract mr-2"></i> 정기 시험 대비 실전
+        <i className="fas fa-file-contract mr-2"></i> 모의고사
       </div>
 
       <div className="space-y-1">

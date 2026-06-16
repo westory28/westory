@@ -51,8 +51,6 @@ const ManageQuiz: React.FC = () => {
     setMobileTreeOpen(false);
   }, [canWrite, searchParams]);
 
-  if (!canRead) return null;
-
   useEffect(() => {
     const loadTree = async () => {
       try {
@@ -74,6 +72,8 @@ const ManageQuiz: React.FC = () => {
     };
     void loadTree();
   }, [config]);
+
+  if (!canRead) return null;
 
   const handleNodeSelect = (
     node: TreeUnit,
@@ -176,7 +176,7 @@ const ManageQuiz: React.FC = () => {
                 <div className="h-full min-h-[520px] py-16 flex flex-col items-center justify-center text-gray-400">
                   <i className="fas fa-mouse-pointer text-4xl mb-4"></i>
                   <p className="text-lg text-center">
-                    목록에서 <strong>학기 시험 대비</strong> 또는
+                    목록에서 <strong>모의고사</strong> 또는
                     <br />
                     <strong>중단원</strong>을 선택해 문제를 관리하세요.
                   </p>

@@ -38,7 +38,7 @@ interface WrongItem {
 const categoryLabel = (category?: string) => {
   if (category === "diagnostic") return "진단평가";
   if (category === "formative") return "형성평가";
-  if (category === "exam_prep") return "학기 시험 대비";
+  if (category === "exam_prep") return "모의고사";
   return "기타";
 };
 
@@ -132,7 +132,7 @@ const StudentWrongNoteModal: React.FC<StudentWrongNoteModalProps> = ({
       if (wrongLogs.length === 0) return;
 
       const unitTitleMap: Record<string, string> = {
-        exam_prep: "학기 시험 대비",
+        exam_prep: "모의고사",
       };
       try {
         const treeSnap = await getDoc(

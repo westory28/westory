@@ -173,20 +173,20 @@ const SUBJECT_PRIORITY = [
 const CATEGORY_LABELS: Array<{ key: CategoryTab; label: string }> = [
   { key: "diagnostic", label: "진단평가" },
   { key: "formative", label: "형성평가" },
-  { key: "exam_prep", label: "학기 시험 대비" },
+  { key: "exam_prep", label: "모의고사" },
 ];
 
 const getCategoryLabel = (category?: string) => {
   if (category === "diagnostic") return "진단평가";
   if (category === "formative") return "형성평가";
-  if (category === "exam_prep") return "학기 시험 대비";
+  if (category === "exam_prep") return "모의고사";
   return "기타";
 };
 
 const getCategoryShort = (category?: string) => {
   if (category === "diagnostic") return "진단";
   if (category === "formative") return "형성";
-  if (category === "exam_prep") return "시험대비";
+  if (category === "exam_prep") return "모의";
   return "기타";
 };
 
@@ -333,7 +333,7 @@ const MyPage: React.FC = () => {
   );
 
   const [unitTitleMap, setUnitTitleMap] = useState<Record<string, string>>({
-    exam_prep: "학기 시험 대비",
+    exam_prep: "모의고사",
   });
 
   useEffect(() => {
@@ -441,7 +441,7 @@ const MyPage: React.FC = () => {
   }, [user?.uid, config?.year, config?.semester]);
 
   const loadUnitTitles = async () => {
-    if (!config) return { exam_prep: "학기 시험 대비" };
+    if (!config) return { exam_prep: "모의고사" };
 
     let treeSnap = await getDoc(
       doc(db, getSemesterCollectionPath(config, "curriculum"), "tree"),
@@ -450,7 +450,7 @@ const MyPage: React.FC = () => {
       treeSnap = await getDoc(doc(db, "curriculum", "tree"));
     }
 
-    const map: Record<string, string> = { exam_prep: "학기 시험 대비" };
+    const map: Record<string, string> = { exam_prep: "모의고사" };
     if (treeSnap.exists()) {
       const tree = treeSnap.data().tree || [];
       tree.forEach((big: any) => {
@@ -2689,7 +2689,7 @@ const MyPage: React.FC = () => {
 
                 <div>
                   <h3 className="font-bold text-gray-800 mb-2">
-                    목차별 진단/형성/시험대비 점수
+                    목차별 진단/형성/모의고사 점수
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {scoreSummaryByUnit

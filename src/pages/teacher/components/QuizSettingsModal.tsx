@@ -36,7 +36,7 @@ interface QuizSettingsFormState {
 const CATEGORY_LABELS: Record<string, string> = {
   diagnostic: "진단평가",
   formative: "형성평가",
-  exam_prep: "학기 시험 대비",
+  exam_prep: "모의고사",
 };
 
 const createDefaultFormState = (classIds: string[]): QuizSettingsFormState => ({

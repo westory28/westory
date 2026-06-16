@@ -147,11 +147,19 @@ interface BankDefaultFocus {
 }
 const ORDER_DELIMITER = "||";
 const MATCHING_PAIR_DELIMITER = "=>";
-const DEFAULT_OPTION_COUNT = 4;
+const DEFAULT_CHOICE_OPTION_COUNT = 4;
+const EXAM_PREP_CHOICE_OPTION_COUNT = 5;
+const DEFAULT_ORDER_OPTION_COUNT = 4;
 const QUESTION_PAGE_SIZE = 30;
 const RECENT_CLASS_FOCUS_MIN_STUDENTS = 10;
-const createDefaultOptionItems = () =>
-  Array.from({ length: DEFAULT_OPTION_COUNT }, () => "");
+const getDefaultChoiceOptionCount = (category?: string) =>
+  category === "exam_prep"
+    ? EXAM_PREP_CHOICE_OPTION_COUNT
+    : DEFAULT_CHOICE_OPTION_COUNT;
+const createDefaultChoiceOptionItems = (category?: string) =>
+  Array.from({ length: getDefaultChoiceOptionCount(category) }, () => "");
+const createDefaultOrderItems = () =>
+  Array.from({ length: DEFAULT_ORDER_OPTION_COUNT }, () => "");
 const createDefaultMatchingPairs = () =>
   Array.from({ length: 3 }, () => ({ left: "", right: "", rightImage: null }));
 
@@ -346,7 +354,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const [editExplanationText, setEditExplanationText] = useState("");
   const [editImage, setEditImage] = useState<string | null>(null);
   const [editChoiceOptions, setEditChoiceOptions] = useState<string[]>(
-    createDefaultOptionItems(),
+    createDefaultChoiceOptionItems(),
   );
   const [editChoiceAnswerIndex, setEditChoiceAnswerIndex] = useState<
     number | null
@@ -354,7 +362,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const [editOxAnswer, setEditOxAnswer] = useState<"O" | "X" | "">("");
   const [editWordAnswer, setEditWordAnswer] = useState("");
   const [editOrderItems, setEditOrderItems] = useState<string[]>(
-    createDefaultOptionItems(),
+    createDefaultOrderItems(),
   );
   const [editMatchingPairs, setEditMatchingPairs] = useState<MatchingPair[]>(
     createDefaultMatchingPairs(),
@@ -1051,7 +1059,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   function getCategoryLabel(category: string) {
     if (category === "diagnostic") return "진단";
     if (category === "formative") return "형성";
-    if (category === "exam_prep") return "시험 대비";
+    if (category === "exam_prep") return "모의";
     return "기타";
   }
 
@@ -1221,7 +1229,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const getCategoryPillLabel = (category: string) => {
     if (category === "diagnostic") return "진단평가";
     if (category === "formative") return "형성평가";
-    if (category === "exam_prep") return "학기 시험 대비";
+    if (category === "exam_prep") return "모의고사";
     return "기타";
   };
 
@@ -1734,10 +1742,10 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     setPreviewMatchingAnswer({});
     setPreviewMatchingActiveLeft("");
     if (nextType === "choice" && trimList(editChoiceOptions).length === 0) {
-      setEditChoiceOptions(createDefaultOptionItems());
+      setEditChoiceOptions(createDefaultChoiceOptionItems(editCategory));
     }
     if (nextType === "order" && trimList(editOrderItems).length === 0) {
-      setEditOrderItems(createDefaultOptionItems());
+      setEditOrderItems(createDefaultOrderItems());
     }
     if (
       nextType === "matching" &&
@@ -1849,7 +1857,9 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     if (normalizedType === "choice") {
       const options = (question.options || []).filter(Boolean);
       const normalizedOptions =
-        options.length >= 2 ? options : createDefaultOptionItems();
+        options.length >= 2
+          ? options
+          : createDefaultChoiceOptionItems(question.category);
       setEditChoiceOptions(normalizedOptions);
       const answerIndex = normalizedOptions.findIndex(
         (opt) => opt.trim() === String(question.answer).trim(),
@@ -1857,13 +1867,13 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       setEditChoiceAnswerIndex(answerIndex >= 0 ? answerIndex : null);
       setEditOxAnswer("");
       setEditWordAnswer("");
-      setEditOrderItems(createDefaultOptionItems());
+      setEditOrderItems(createDefaultOrderItems());
       setEditMatchingPairs(createDefaultMatchingPairs());
       return;
     }
 
     if (normalizedType === "ox") {
-      setEditChoiceOptions(createDefaultOptionItems());
+      setEditChoiceOptions(createDefaultChoiceOptionItems(question.category));
       setEditChoiceAnswerIndex(null);
       setEditOxAnswer(
         question.answer === "O" || question.answer === "X"
@@ -1871,28 +1881,28 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
           : "",
       );
       setEditWordAnswer("");
-      setEditOrderItems(createDefaultOptionItems());
+      setEditOrderItems(createDefaultOrderItems());
       setEditMatchingPairs(createDefaultMatchingPairs());
       return;
     }
 
     if (normalizedType === "word") {
-      setEditChoiceOptions(createDefaultOptionItems());
+      setEditChoiceOptions(createDefaultChoiceOptionItems(question.category));
       setEditChoiceAnswerIndex(null);
       setEditOxAnswer("");
       setEditWordAnswer(String(question.answer || ""));
-      setEditOrderItems(createDefaultOptionItems());
+      setEditOrderItems(createDefaultOrderItems());
       setEditMatchingPairs(createDefaultMatchingPairs());
       return;
     }
 
     if (normalizedType === "matching") {
       const pairs = parseMatchingAnswer(question);
-      setEditChoiceOptions(createDefaultOptionItems());
+      setEditChoiceOptions(createDefaultChoiceOptionItems(question.category));
       setEditChoiceAnswerIndex(null);
       setEditOxAnswer("");
       setEditWordAnswer("");
-      setEditOrderItems(createDefaultOptionItems());
+      setEditOrderItems(createDefaultOrderItems());
       setEditMatchingPairs(
         pairs.length >= 2 ? pairs : createDefaultMatchingPairs(),
       );
@@ -1905,12 +1915,12 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         : String(question.answer || "")
             .split(ORDER_DELIMITER)
             .filter(Boolean);
-    setEditChoiceOptions(createDefaultOptionItems());
+    setEditChoiceOptions(createDefaultChoiceOptionItems(question.category));
     setEditChoiceAnswerIndex(null);
     setEditOxAnswer("");
     setEditWordAnswer("");
     setEditOrderItems(
-      orderOptions.length >= 2 ? orderOptions : createDefaultOptionItems(),
+      orderOptions.length >= 2 ? orderOptions : createDefaultOrderItems(),
     );
     setEditMatchingPairs(createDefaultMatchingPairs());
   };
@@ -2042,11 +2052,11 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     setEditQuestionText("");
     setEditExplanationText("");
     setEditImage(null);
-    setEditChoiceOptions(createDefaultOptionItems());
+    setEditChoiceOptions(createDefaultChoiceOptionItems());
     setEditChoiceAnswerIndex(null);
     setEditOxAnswer("");
     setEditWordAnswer("");
-    setEditOrderItems(createDefaultOptionItems());
+    setEditOrderItems(createDefaultOrderItems());
     setEditMatchingPairs(createDefaultMatchingPairs());
     setEditHintEnabled(false);
     setEditHintText("");
@@ -2342,7 +2352,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
               <option value="">평가 유형 전체</option>
               <option value="diagnostic">진단평가</option>
               <option value="formative">형성평가</option>
-              <option value="exam_prep">학기 시험 대비</option>
+              <option value="exam_prep">모의고사</option>
             </select>
             <select
               value={typeFilter}
@@ -3122,11 +3132,13 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                   <select
                     value={editCategory}
                     onChange={(e) => setEditCategory(e.target.value)}
-                    className="border p-2 rounded text-sm bg-gray-50"
+                    disabled
+                    title="평가 유형 이동은 문제 등록 화면에서 처리해 주세요."
+                    className="border p-2 rounded text-sm bg-gray-100 text-gray-500"
                   >
                     <option value="diagnostic">진단평가</option>
                     <option value="formative">형성평가</option>
-                    <option value="exam_prep">학기 시험 대비</option>
+                    <option value="exam_prep">모의고사</option>
                   </select>
                 </div>
 
@@ -3158,7 +3170,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                     <img
                       src={editImage}
                       alt="문항 첨부 이미지"
-                      className="max-h-44 mx-auto rounded"
+                      className="mx-auto max-h-44 max-w-full rounded object-contain"
                     />
                     <button
                       type="button"
@@ -3441,22 +3453,54 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                         {editQuestionText ||
                           "문제 문구를 입력하면 여기 표시됩니다."}
                       </h4>
-                      {editType === "choice" &&
-                        trimList(editChoiceOptions).map((opt, index) => (
-                          <button
-                            key={`preview-choice-${index}`}
-                            type="button"
-                            onClick={() => setPreviewChoiceAnswer(opt)}
-                            className={`w-full border-2 rounded-lg p-3 text-left transition flex items-center gap-2 mb-2 ${previewChoiceAnswer === opt ? "border-blue-500 bg-blue-50 text-blue-800 font-bold" : "border-gray-200 hover:border-blue-300"}`}
-                          >
-                            <span
-                              className={`w-6 h-6 rounded-full text-xs flex items-center justify-center ${previewChoiceAnswer === opt ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-500"}`}
-                            >
-                              {index + 1}
-                            </span>
-                            <span>{opt}</span>
-                          </button>
-                        ))}
+                      {editType === "choice" ? (
+                        <div
+                          className={
+                            editImage
+                              ? "grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(240px,0.9fr)] md:items-start"
+                              : "space-y-2"
+                          }
+                        >
+                          {editImage && (
+                            <div className="rounded-lg border border-gray-100 bg-gray-50 p-2 text-center">
+                              <img
+                                src={editImage}
+                                alt="문항 첨부 이미지 미리보기"
+                                className="mx-auto max-h-64 w-full object-contain"
+                              />
+                            </div>
+                          )}
+                          <div className="space-y-2">
+                            {trimList(editChoiceOptions).map((opt, index) => (
+                              <button
+                                key={`preview-choice-${index}`}
+                                type="button"
+                                onClick={() => setPreviewChoiceAnswer(opt)}
+                                className={`flex w-full items-center gap-2 rounded-lg border-2 p-3 text-left transition ${previewChoiceAnswer === opt ? "border-blue-500 bg-blue-50 font-bold text-blue-800" : "border-gray-200 hover:border-blue-300"}`}
+                              >
+                                <span
+                                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs ${previewChoiceAnswer === opt ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-500"}`}
+                                >
+                                  {index + 1}
+                                </span>
+                                <span className="min-w-0 break-words">
+                                  {opt}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        editImage && (
+                          <div className="mb-4">
+                            <img
+                              src={editImage}
+                              alt="문항 첨부 이미지 미리보기"
+                              className="mx-auto max-h-48 max-w-full rounded-lg border border-gray-100 object-contain"
+                            />
+                          </div>
+                        )
+                      )}
                       {editType === "ox" && (
                         <div className="grid grid-cols-2 gap-2">
                           {(["O", "X"] as const).map((opt) => (

@@ -50,8 +50,11 @@ interface Question {
   image?: string;
   hintEnabled?: boolean;
   hint?: string;
+  unitId?: string;
+  subUnitId?: string;
   refBig?: string;
   refMid?: string;
+  refSmall?: string;
   category?: string;
 }
 
@@ -77,6 +80,7 @@ interface ResultDetail {
   a: string | number;
   correct: boolean;
   exp?: string;
+  image?: string;
   type?: Question["type"];
   matchingPairs?: MatchingPair[];
 }
@@ -271,6 +275,72 @@ const QuizRunner: React.FC = () => {
     return text;
   };
 
+  const shuffleItems = <T,>(items: T[]) => {
+    const next = [...items];
+    for (let index = next.length - 1; index > 0; index -= 1) {
+      const target = Math.floor(Math.random() * (index + 1));
+      [next[index], next[target]] = [next[target], next[index]];
+    }
+    return next;
+  };
+
+  const orderQuestions = (questions: Question[], randomOrder: boolean) =>
+    randomOrder
+      ? shuffleItems(questions)
+      : [...questions].sort((left, right) => left.id - right.id);
+
+  const getExamPrepSmallKey = (question: Question) =>
+    question.refSmall ||
+    question.subUnitId ||
+    question.refMid ||
+    question.refBig ||
+    `question-${question.id}`;
+
+  const getExamPrepBigKey = (question: Question) =>
+    question.refBig || question.refMid || question.subUnitId || "unassigned";
+
+  const orderExamPrepGroups = <
+    T extends { bigKey: string; midKey: string; smallKey: string },
+  >(
+    groups: T[],
+    randomOrder: boolean,
+  ) => {
+    const orderedGroups = randomOrder
+      ? shuffleItems(groups)
+      : [...groups].sort(
+          (left, right) =>
+            left.bigKey.localeCompare(right.bigKey, "ko") ||
+            left.midKey.localeCompare(right.midKey, "ko") ||
+            left.smallKey.localeCompare(right.smallKey, "ko"),
+        );
+    const groupedByBig = new Map<string, T[]>();
+    orderedGroups.forEach((group) => {
+      const current = groupedByBig.get(group.bigKey) || [];
+      current.push(group);
+      groupedByBig.set(group.bigKey, current);
+    });
+
+    const bigKeys = randomOrder
+      ? shuffleItems(Array.from(groupedByBig.keys()))
+      : Array.from(groupedByBig.keys()).sort((left, right) =>
+          left.localeCompare(right, "ko"),
+        );
+    const balancedGroups: T[] = [];
+    let added = true;
+    while (added) {
+      added = false;
+      bigKeys.forEach((bigKey) => {
+        const queue = groupedByBig.get(bigKey);
+        const next = queue?.shift();
+        if (next) {
+          balancedGroups.push(next);
+          added = true;
+        }
+      });
+    }
+    return balancedGroups;
+  };
+
   const getResolvedStudentUid = () =>
     authIdentityRef.current.uid || fallbackStudentUid;
 
@@ -351,15 +421,117 @@ const QuizRunner: React.FC = () => {
     targetCount: number,
     randomOrder: boolean,
   ) => {
-    let pool = all.filter((question) => !solvedIds.has(question.id));
-    if (pool.length < targetCount) {
-      pool = [...all];
-    }
+    const safeTargetCount = Math.min(Math.max(1, targetCount || 1), all.length);
+    const selectedIds = new Set<number>();
 
-    const orderedPool = randomOrder
-      ? [...pool].sort(() => 0.5 - Math.random())
-      : [...pool].sort((left, right) => left.id - right.id);
-    const selected = orderedPool.slice(0, targetCount);
+    const selectStandardQuestions = () => {
+      const unusedPool = orderQuestions(
+        all.filter((question) => !solvedIds.has(question.id)),
+        randomOrder,
+      );
+      const repeatPool = orderQuestions(
+        all.filter((question) => solvedIds.has(question.id)),
+        randomOrder,
+      );
+      const selected = [...unusedPool.slice(0, safeTargetCount)];
+      selected.forEach((question) => selectedIds.add(question.id));
+      if (selected.length < safeTargetCount) {
+        repeatPool.some((question) => {
+          if (selected.length >= safeTargetCount) return true;
+          if (selectedIds.has(question.id)) return false;
+          selected.push(question);
+          selectedIds.add(question.id);
+          return false;
+        });
+      }
+      return randomOrder ? shuffleItems(selected) : selected;
+    };
+
+    const selectExamPrepQuestions = () => {
+      const groupMap = new Map<
+        string,
+        {
+          bigKey: string;
+          midKey: string;
+          smallKey: string;
+          unusedQuestions: Question[];
+          repeatQuestions: Question[];
+        }
+      >();
+
+      all.forEach((question) => {
+        const smallKey = getExamPrepSmallKey(question);
+        const group = groupMap.get(smallKey) || {
+          bigKey: getExamPrepBigKey(question),
+          midKey: question.refMid || question.subUnitId || smallKey,
+          smallKey,
+          unusedQuestions: [],
+          repeatQuestions: [],
+        };
+        if (solvedIds.has(question.id)) {
+          group.repeatQuestions.push(question);
+        } else {
+          group.unusedQuestions.push(question);
+        }
+        groupMap.set(smallKey, group);
+      });
+
+      const groups = Array.from(groupMap.values()).map((group) => ({
+        ...group,
+        unusedQuestions: orderQuestions(group.unusedQuestions, randomOrder),
+        repeatQuestions: orderQuestions(group.repeatQuestions, randomOrder),
+      }));
+      const selected: Question[] = [];
+      const selectedByGroup = new Map<string, number>();
+
+      const takeFromGroups = (
+        source: "unusedQuestions" | "repeatQuestions",
+        maxPerSmallUnit: number,
+      ) => {
+        for (let pass = 0; pass < maxPerSmallUnit; pass += 1) {
+          if (selected.length >= safeTargetCount) return;
+          orderExamPrepGroups(groups, randomOrder).forEach((group) => {
+            if (selected.length >= safeTargetCount) return;
+            const currentGroupCount = selectedByGroup.get(group.smallKey) || 0;
+            if (currentGroupCount > pass) return;
+            const candidate = group[source].find(
+              (question) => !selectedIds.has(question.id),
+            );
+            if (!candidate) return;
+            selected.push(candidate);
+            selectedIds.add(candidate.id);
+            selectedByGroup.set(group.smallKey, currentGroupCount + 1);
+          });
+        }
+      };
+
+      const fillRemaining = (source: "unusedQuestions" | "repeatQuestions") => {
+        if (selected.length >= safeTargetCount) return;
+        const flatPool = orderQuestions(
+          groups.flatMap((group) => group[source]),
+          randomOrder,
+        );
+        flatPool.some((question) => {
+          if (selected.length >= safeTargetCount) return true;
+          if (selectedIds.has(question.id)) return false;
+          selected.push(question);
+          selectedIds.add(question.id);
+          return false;
+        });
+      };
+
+      takeFromGroups("unusedQuestions", 2);
+      fillRemaining("unusedQuestions");
+      takeFromGroups("repeatQuestions", 2);
+      fillRemaining("repeatQuestions");
+
+      return randomOrder ? shuffleItems(selected) : selected;
+    };
+
+    const selected =
+      unitId === "exam_prep"
+        ? selectExamPrepQuestions()
+        : selectStandardQuestions();
 
     const nextOrderMap: Record<number, string[]> = {};
     selected.forEach((question) => {
@@ -372,7 +544,7 @@ const QuizRunner: React.FC = () => {
             : String(question.answer || "")
                 .split(ORDER_DELIMITER)
                 .filter(Boolean);
-      nextOrderMap[question.id] = [...base].sort(() => 0.5 - Math.random());
+      nextOrderMap[question.id] = shuffleItems(base);
     });
 
     return { selected, orderOptionMap: nextOrderMap };
@@ -465,6 +637,7 @@ const QuizRunner: React.FC = () => {
         a: question.answer,
         correct: isCorrect,
         exp: question.explanation,
+        image: question.image,
         type: question.type,
         matchingPairs:
           question.type === "matching" ? parseMatchingPairs(question) : [],
@@ -748,10 +921,18 @@ const QuizRunner: React.FC = () => {
       const questionSnap = await getDocs(questionQuery);
       const fetchedQuestions: Question[] = [];
       questionSnap.forEach((questionDoc) => {
-        fetchedQuestions.push({
+        const question = {
           id: parseInt(questionDoc.id, 10),
           ...questionDoc.data(),
-        } as Question);
+        } as Question;
+        if (
+          unitId === "exam_prep" &&
+          question.unitId &&
+          question.unitId !== "exam_prep"
+        ) {
+          return;
+        }
+        fetchedQuestions.push(question);
       });
 
       if (!fetchedQuestions.length) {
@@ -825,11 +1006,7 @@ const QuizRunner: React.FC = () => {
         }
       }
 
-      if (
-        !nextQuizConfig.allowRetake &&
-        historyDocs.length > 0 &&
-        unitId !== "exam_prep"
-      ) {
+      if (!nextQuizConfig.allowRetake && historyDocs.length > 0) {
         setBlockReason("재응시가 허용되지 않는 평가입니다.");
         setView("intro");
         return;
@@ -864,11 +1041,13 @@ const QuizRunner: React.FC = () => {
         });
       });
 
+      const shouldRandomizeQuestions =
+        unitId === "exam_prep" ? true : (nextQuizConfig.randomOrder ?? true);
       const selection = selectQuestions(
         fetchedQuestions,
         solvedIds,
         nextQuizConfig.questionCount || 10,
-        nextQuizConfig.randomOrder ?? true,
+        shouldRandomizeQuestions,
       );
 
       setSelectedQuestions(selection.selected);
@@ -1200,7 +1379,7 @@ const QuizRunner: React.FC = () => {
               ? "진단평가"
               : category === "formative"
                 ? "형성평가"
-                : "학기 시험 대비"}
+                : "모의고사"}
           </p>
 
           <div className="mb-8 space-y-4 rounded-xl border border-blue-100 bg-blue-50 p-5 text-left text-base">
@@ -1316,16 +1495,6 @@ const QuizRunner: React.FC = () => {
         </div>
 
         <div className="flex flex-1 flex-col rounded-2xl border border-gray-200 bg-white p-6 shadow-sm md:p-8">
-          {question.image && (
-            <div className="mb-4 text-center">
-              <img
-                src={question.image}
-                className="mx-auto max-h-48 rounded-lg border border-gray-100"
-                alt="Question"
-              />
-            </div>
-          )}
-
           <h2 className="mb-8 break-keep text-xl font-bold leading-snug text-gray-800 md:text-2xl">
             {question.question}
           </h2>
@@ -1357,30 +1526,55 @@ const QuizRunner: React.FC = () => {
             </div>
           )}
 
-          <div className="flex-1 space-y-3">
-            {question.type === "choice" &&
-              question.options?.map((option, index) => (
-                <div
-                  key={option}
-                  onClick={() => handleAnswer(option)}
-                  className={`flex cursor-pointer items-center rounded-xl border-2 p-4 transition ${
-                    currentAnswer === option
-                      ? "border-blue-500 bg-blue-50 font-bold text-blue-800"
-                      : "border-gray-200 hover:border-blue-300 hover:bg-blue-50"
-                  }`}
-                >
+          <div
+            className={`flex-1 ${
+              question.type === "choice" && question.image
+                ? "grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(240px,0.9fr)] md:items-start"
+                : "space-y-3"
+            }`}
+          >
+            {question.image && (
+              <div
+                className={
+                  question.type === "choice"
+                    ? "rounded-xl border border-gray-100 bg-gray-50 p-2 text-center"
+                    : "mb-4 text-center"
+                }
+              >
+                <img
+                  src={question.image}
+                  className="mx-auto max-h-64 max-w-full rounded-lg border border-gray-100 object-contain"
+                  alt="문항 첨부 이미지"
+                />
+              </div>
+            )}
+
+            {question.type === "choice" && (
+              <div className="space-y-3">
+                {question.options?.map((option, index) => (
                   <div
-                    className={`mr-3 flex h-7 w-7 items-center justify-center rounded-full text-sm font-bold ${
+                    key={`${question.id}-choice-${index}`}
+                    onClick={() => handleAnswer(option)}
+                    className={`flex cursor-pointer items-center rounded-xl border-2 p-4 transition ${
                       currentAnswer === option
-                        ? "bg-blue-600 text-white"
-                        : "bg-gray-200 text-gray-500"
+                        ? "border-blue-500 bg-blue-50 font-bold text-blue-800"
+                        : "border-gray-200 hover:border-blue-300 hover:bg-blue-50"
                     }`}
                   >
-                    {index + 1}
+                    <div
+                      className={`mr-3 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
+                        currentAnswer === option
+                          ? "bg-blue-600 text-white"
+                          : "bg-gray-200 text-gray-500"
+                      }`}
+                    >
+                      {index + 1}
+                    </div>
+                    <div className="min-w-0 break-words">{option}</div>
                   </div>
-                  <div>{option}</div>
-                </div>
-              ))}
+                ))}
+              </div>
+            )}
 
             {question.type === "ox" &&
               ["O", "X"].map((option) => (
@@ -1673,6 +1867,15 @@ const QuizRunner: React.FC = () => {
                   </span>
                   <div className="font-bold text-gray-800">{result.q}</div>
                 </div>
+                {result.image && (
+                  <div className="mb-3 ml-8 rounded-lg border border-gray-100 bg-gray-50 p-2 text-center">
+                    <img
+                      src={result.image}
+                      alt="문항 첨부 이미지"
+                      className="mx-auto max-h-48 max-w-full object-contain"
+                    />
+                  </div>
+                )}
                 <div className="mb-2 ml-8 flex gap-4 text-sm">
                   <span
                     className={`font-bold ${

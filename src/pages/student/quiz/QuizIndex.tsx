@@ -91,12 +91,11 @@ const QuizIndex: React.FC = () => {
     <div className="mx-auto max-w-4xl animate-fadeIn px-4 py-8">
       <section className="mb-10">
         <h2 className="mb-3 ml-1 flex items-center gap-2 text-lg font-bold text-gray-800">
-          <i className="fas fa-flag-checkered text-blue-600"></i> 실전 대비
+          <i className="fas fa-flag-checkered text-blue-600"></i> 모의고사
         </h2>
         <div
           onClick={() =>
-            isExamPrepActive &&
-            startQuiz("exam_prep", "exam_prep", "정기 시험 대비 실전")
+            isExamPrepActive && startQuiz("exam_prep", "exam_prep", "모의고사")
           }
           className={`
             group relative overflow-hidden rounded-2xl p-6 shadow-lg transition-transform duration-200
@@ -124,7 +123,7 @@ const QuizIndex: React.FC = () => {
               {isExamPrepActive ? "FINAL CHECK" : "비공개"}
             </div>
             <h3 className="mb-1 text-2xl font-black">
-              정기 시험 대비 {isExamPrepActive ? "실전 문제" : "(준비중)"}
+              모의고사 {isExamPrepActive ? "문제" : "(준비중)"}
             </h3>
             <p
               className={`text-sm font-medium ${

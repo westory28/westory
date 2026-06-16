@@ -1583,7 +1583,7 @@ const QuizLogTab: React.FC = () => {
             <option value="">평가유형 전체</option>
             <option value="diagnostic">진단</option>
             <option value="formative">형성</option>
-            <option value="exam_prep">시험 대비</option>
+            <option value="exam_prep">모의고사</option>
           </select>
           <button
             type="button"

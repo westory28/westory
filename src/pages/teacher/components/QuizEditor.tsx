@@ -73,9 +73,17 @@ interface CascadingFilter {
 
 const ORDER_DELIMITER = "||";
 const MATCHING_PAIR_DELIMITER = "=>";
-const DEFAULT_OPTION_COUNT = 4;
-const createDefaultOptionItems = () =>
-  Array.from({ length: DEFAULT_OPTION_COUNT }, () => "");
+const DEFAULT_CHOICE_OPTION_COUNT = 4;
+const EXAM_PREP_CHOICE_OPTION_COUNT = 5;
+const DEFAULT_ORDER_OPTION_COUNT = 4;
+const getDefaultChoiceOptionCount = (category?: string) =>
+  category === "exam_prep"
+    ? EXAM_PREP_CHOICE_OPTION_COUNT
+    : DEFAULT_CHOICE_OPTION_COUNT;
+const createDefaultChoiceOptionItems = (category?: string) =>
+  Array.from({ length: getDefaultChoiceOptionCount(category) }, () => "");
+const createDefaultOrderItems = () =>
+  Array.from({ length: DEFAULT_ORDER_OPTION_COUNT }, () => "");
 const createDefaultMatchingPairs = () =>
   Array.from({ length: 3 }, () => ({ left: "", right: "", rightImage: null }));
 const TYPE_LABEL: Record<QuestionType, string> = {
@@ -124,7 +132,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   const [formImage, setFormImage] = useState<string | null>(null);
   const [formSubUnit, setFormSubUnit] = useState("");
   const [choiceOptions, setChoiceOptions] = useState<string[]>(
-    createDefaultOptionItems(),
+    createDefaultChoiceOptionItems(type === "special" ? "exam_prep" : ""),
   );
   const [choiceAnswerIndex, setChoiceAnswerIndex] = useState<number | null>(
     null,
@@ -132,7 +140,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   const [oxAnswer, setOxAnswer] = useState<"O" | "X" | "">("");
   const [wordAnswer, setWordAnswer] = useState("");
   const [orderItems, setOrderItems] = useState<string[]>(
-    createDefaultOptionItems(),
+    createDefaultOrderItems(),
   );
   const [matchingPairs, setMatchingPairs] = useState<MatchingPair[]>(
     createDefaultMatchingPairs(),
@@ -306,15 +314,16 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   };
 
   const resetForm = () => {
+    const defaultCategory = type === "special" ? "exam_prep" : category;
     setEditingQuestionId(null);
     setFormText("");
     setFormExp("");
     setFormImage(null);
-    setChoiceOptions(createDefaultOptionItems());
+    setChoiceOptions(createDefaultChoiceOptionItems(defaultCategory));
     setChoiceAnswerIndex(null);
     setOxAnswer("");
     setWordAnswer("");
-    setOrderItems(createDefaultOptionItems());
+    setOrderItems(createDefaultOrderItems());
     setMatchingPairs(createDefaultMatchingPairs());
     setHintEnabled(false);
     setHintText("");
@@ -391,10 +400,14 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     setPreviewOpen(false);
     resetPreview();
     if (nextType === "choice" && trimList(choiceOptions).length === 0) {
-      setChoiceOptions(createDefaultOptionItems());
+      setChoiceOptions(
+        createDefaultChoiceOptionItems(
+          type === "special" ? "exam_prep" : category,
+        ),
+      );
     }
     if (nextType === "order" && trimList(orderItems).length === 0) {
-      setOrderItems(createDefaultOptionItems());
+      setOrderItems(createDefaultOrderItems());
     }
     if (
       nextType === "matching" &&
@@ -455,7 +468,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     if (question.type === "choice") {
       const options = (question.options || []).filter(Boolean);
       const normalizedOptions =
-        options.length >= 2 ? options : createDefaultOptionItems();
+        options.length >= 2
+          ? options
+          : createDefaultChoiceOptionItems(question.category || category);
       setChoiceOptions(normalizedOptions);
       const answerIndex = normalizedOptions.findIndex(
         (opt) => opt.trim() === String(question.answer).trim(),
@@ -463,13 +478,15 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       setChoiceAnswerIndex(answerIndex >= 0 ? answerIndex : null);
       setOxAnswer("");
       setWordAnswer("");
-      setOrderItems(createDefaultOptionItems());
+      setOrderItems(createDefaultOrderItems());
       setMatchingPairs(createDefaultMatchingPairs());
       return;
     }
 
     if (question.type === "ox") {
-      setChoiceOptions(createDefaultOptionItems());
+      setChoiceOptions(
+        createDefaultChoiceOptionItems(question.category || category),
+      );
       setChoiceAnswerIndex(null);
       setOxAnswer(
         question.answer === "O" || question.answer === "X"
@@ -477,28 +494,32 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
           : "",
       );
       setWordAnswer("");
-      setOrderItems(createDefaultOptionItems());
+      setOrderItems(createDefaultOrderItems());
       setMatchingPairs(createDefaultMatchingPairs());
       return;
     }
 
     if (question.type === "word") {
-      setChoiceOptions(createDefaultOptionItems());
+      setChoiceOptions(
+        createDefaultChoiceOptionItems(question.category || category),
+      );
       setChoiceAnswerIndex(null);
       setOxAnswer("");
       setWordAnswer(String(question.answer || ""));
-      setOrderItems(createDefaultOptionItems());
+      setOrderItems(createDefaultOrderItems());
       setMatchingPairs(createDefaultMatchingPairs());
       return;
     }
 
     if (question.type === "matching") {
       const pairs = parseMatchingAnswer(question);
-      setChoiceOptions(createDefaultOptionItems());
+      setChoiceOptions(
+        createDefaultChoiceOptionItems(question.category || category),
+      );
       setChoiceAnswerIndex(null);
       setOxAnswer("");
       setWordAnswer("");
-      setOrderItems(createDefaultOptionItems());
+      setOrderItems(createDefaultOrderItems());
       setMatchingPairs(
         pairs.length >= 2 ? pairs : createDefaultMatchingPairs(),
       );
@@ -511,12 +532,14 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
         : String(question.answer || "")
             .split(ORDER_DELIMITER)
             .filter(Boolean);
-    setChoiceOptions(createDefaultOptionItems());
+    setChoiceOptions(
+      createDefaultChoiceOptionItems(question.category || category),
+    );
     setChoiceAnswerIndex(null);
     setOxAnswer("");
     setWordAnswer("");
     setOrderItems(
-      orderOptions.length >= 2 ? orderOptions : createDefaultOptionItems(),
+      orderOptions.length >= 2 ? orderOptions : createDefaultOrderItems(),
     );
     setMatchingPairs(createDefaultMatchingPairs());
   };
@@ -707,16 +730,14 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       ? "진단평가"
       : category === "formative"
         ? "형성평가"
-        : "학기 시험 대비";
+        : "모의고사";
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
       <div className="p-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
         <div>
           <div className="text-xs text-gray-500 font-bold mb-1">
-            {type === "special"
-              ? "학기 시험 대비"
-              : `${parentTitle} > ${node.title}`}
+            {type === "special" ? "모의고사" : `${parentTitle} > ${node.title}`}
           </div>
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-bold text-gray-800">{node.title}</h2>
@@ -868,7 +889,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                       <img
                         src={q.image}
                         alt="문항 첨부 이미지"
-                        className="max-h-44 rounded border border-gray-200"
+                        className="max-h-44 max-w-full rounded border border-gray-200 object-contain"
                       />
                     </div>
                   )}
@@ -1340,31 +1361,54 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                         <h4 className="font-bold text-gray-800 mb-4">
                           {formText || "문제 문구를 입력하면 여기 표시됩니다."}
                         </h4>
-                        {formImage && (
-                          <div className="mb-4">
-                            <img
-                              src={formImage}
-                              alt="문항 첨부 이미지 미리보기"
-                              className="max-h-48 mx-auto rounded-lg border border-gray-100"
-                            />
+                        {formType === "choice" ? (
+                          <div
+                            className={
+                              formImage
+                                ? "grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(240px,0.9fr)] md:items-start"
+                                : "space-y-2"
+                            }
+                          >
+                            {formImage && (
+                              <div className="rounded-lg border border-gray-100 bg-gray-50 p-2 text-center">
+                                <img
+                                  src={formImage}
+                                  alt="문항 첨부 이미지 미리보기"
+                                  className="mx-auto max-h-64 w-full object-contain"
+                                />
+                              </div>
+                            )}
+                            <div className="space-y-2">
+                              {trimList(choiceOptions).map((opt, index) => (
+                                <button
+                                  key={`preview-choice-${index}`}
+                                  type="button"
+                                  onClick={() => setPreviewChoiceAnswer(opt)}
+                                  className={`flex w-full items-center gap-2 rounded-lg border-2 p-3 text-left transition ${previewChoiceAnswer === opt ? "border-blue-500 bg-blue-50 font-bold text-blue-800" : "border-gray-200 hover:border-blue-300"}`}
+                                >
+                                  <span
+                                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs ${previewChoiceAnswer === opt ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-500"}`}
+                                  >
+                                    {index + 1}
+                                  </span>
+                                  <span className="min-w-0 break-words">
+                                    {opt}
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
                           </div>
+                        ) : (
+                          formImage && (
+                            <div className="mb-4">
+                              <img
+                                src={formImage}
+                                alt="문항 첨부 이미지 미리보기"
+                                className="mx-auto max-h-48 max-w-full rounded-lg border border-gray-100 object-contain"
+                              />
+                            </div>
+                          )
                         )}
-                        {formType === "choice" &&
-                          trimList(choiceOptions).map((opt, index) => (
-                            <button
-                              key={`preview-choice-${index}`}
-                              type="button"
-                              onClick={() => setPreviewChoiceAnswer(opt)}
-                              className={`w-full border-2 rounded-lg p-3 text-left transition flex items-center gap-2 mb-2 ${previewChoiceAnswer === opt ? "border-blue-500 bg-blue-50 text-blue-800 font-bold" : "border-gray-200 hover:border-blue-300"}`}
-                            >
-                              <span
-                                className={`w-6 h-6 rounded-full text-xs flex items-center justify-center ${previewChoiceAnswer === opt ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-500"}`}
-                              >
-                                {index + 1}
-                              </span>
-                              <span>{opt}</span>
-                            </button>
-                          ))}
                         {formType === "ox" && (
                           <div className="grid grid-cols-2 gap-2">
                             {(["O", "X"] as const).map((opt) => (

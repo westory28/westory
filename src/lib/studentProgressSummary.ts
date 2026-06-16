@@ -243,7 +243,7 @@ const formatDateTime = (value: unknown, fallback = "") => {
 const getQuizCategoryLabel = (category?: string) => {
   if (category === "diagnostic") return "진단평가";
   if (category === "formative") return "형성평가";
-  if (category === "exam_prep") return "학기 시험 대비";
+  if (category === "exam_prep") return "모의고사";
   return "평가";
 };
 
@@ -252,6 +252,7 @@ const getDisplayUnitTitle = (
   titleByUnitId: Map<string, string>,
 ) => {
   const safeUnitId = String(unitId || "").trim();
+  if (safeUnitId === "exam_prep") return "모의고사";
   return safeUnitId
     ? titleByUnitId.get(safeUnitId) || "단원명 없음"
     : "단원명 없음";
