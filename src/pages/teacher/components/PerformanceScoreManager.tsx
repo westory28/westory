@@ -135,6 +135,8 @@ const CLASS_SHEET_PRINT_INFO_MIN_ROW = 45;
 const CLASS_SHEET_PRINT_INFO_SPACER_ROW_HEIGHT = 6;
 const CLASS_SHEET_PRINT_INFO_ROW_HEIGHT = 9;
 const CLASS_SHEET_PRINT_INFO_FONT_SIZE = 7;
+const CLASS_SHEET_PRINT_INFO_FONT_NAME = "바탕";
+const CLASS_SHEET_PRINT_INFO_TRAILING_SPACES = "      ";
 const CLASS_SHEET_SCHOOL_NAME = "용신중학교";
 const CLASS_SHEET_PRINT_INFO_FIXED_IP = "10.182.***.93";
 const XLSX_MIME_TYPE =
@@ -2304,7 +2306,7 @@ const getClassSheetPrintInfoText = (params: {
     params.printedAt,
   )}/${normalizeClassSheetPrintIp(params.clientIp)}/${
     toText(params.teacherName) || "교사"
-  }`;
+  }${CLASS_SHEET_PRINT_INFO_TRAILING_SPACES}`;
 
 const loadClassSheetPrintClientInfo = async () => {
   return {
@@ -2863,6 +2865,7 @@ const buildClassSummaryWorkbook = (params: {
         1,
       align: "right",
       alignVertical: "top",
+      fontFamily: CLASS_SHEET_PRINT_INFO_FONT_NAME,
       fontSize: CLASS_SHEET_PRINT_INFO_FONT_SIZE,
     },
   );
@@ -3241,8 +3244,7 @@ const resizeClassSheetStudentRows = (
 ) => {
   const templateCapacity =
     CLASS_SHEET_STUDENT_END_ROW - CLASS_SHEET_STUDENT_START_ROW + 1;
-  const rowDelta = Math.max(0, studentCount - templateCapacity);
-  const visibleStudentRowCount = Math.max(studentCount, templateCapacity);
+  const rowDelta = studentCount - templateCapacity;
 
   const sourceRow = worksheet.getRow(CLASS_SHEET_STUDENT_END_ROW);
 
@@ -3267,10 +3269,14 @@ const resizeClassSheetStudentRows = (
         );
       }
     }
+  } else if (rowDelta < 0) {
+    worksheet.spliceRows(
+      CLASS_SHEET_STUDENT_START_ROW + studentCount,
+      Math.abs(rowDelta),
+    );
   }
 
-  const studentEndRow =
-    CLASS_SHEET_STUDENT_START_ROW + visibleStudentRowCount - 1;
+  const studentEndRow = CLASS_SHEET_STUDENT_START_ROW + studentCount - 1;
   const summaryStartRow = CLASS_SHEET_SUMMARY_START_ROW + rowDelta;
 
   for (
@@ -3451,6 +3457,7 @@ const resetClassSheetPrintInfoFooter = (
     wrapText: false,
   };
   cell.font = {
+    name: CLASS_SHEET_PRINT_INFO_FONT_NAME,
     size: CLASS_SHEET_PRINT_INFO_FONT_SIZE,
   };
 };
