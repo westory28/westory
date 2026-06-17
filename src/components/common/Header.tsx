@@ -16,7 +16,13 @@ import {
   removeStorage,
   writeLocalOnly,
 } from "../../lib/safeStorage";
-import { SESSION_ACTIVITY_EVENT } from "../../lib/sessionActivity";
+import {
+  getEditableSessionActivityTarget,
+  getSessionActivityTarget,
+  isKeyboardSessionActivity,
+  isSessionActivityIgnored,
+  SESSION_ACTIVITY_EVENT,
+} from "../../lib/sessionActivity";
 import type { PointRankDisplay } from "../../lib/pointRanks";
 import {
   canAccessTeacherPortal,
@@ -29,6 +35,8 @@ import {
 } from "../../lib/permissions";
 
 const SESSION_DURATION_SECONDS = 60 * 60;
+const SESSION_DURATION_MS = SESSION_DURATION_SECONDS * 1000;
+const SESSION_ACTIVITY_THROTTLE_MS = 30 * 1000;
 const SESSION_EXPIRY_KEY = "sessionExpiry";
 const ROLE_SESSION_KEY = "westoryPortalRole";
 
@@ -125,6 +133,8 @@ const Header: React.FC = () => {
   );
   const [mobileUnreadCount, setMobileUnreadCount] = useState(0);
   const timeoutHandledRef = useRef(false);
+  const sessionExpiryRef = useRef<number | null>(null);
+  const lastSessionExtendAtRef = useRef(0);
 
   const isReady = !!currentUser;
   const isTeacherUser = canAccessTeacherPortal(
@@ -307,8 +317,23 @@ const Header: React.FC = () => {
     await performLogout(false);
   };
 
-  const extendSession = () => {
-    const expiry = Date.now() + SESSION_DURATION_SECONDS * 1000;
+  const extendSession = (options?: { force?: boolean }) => {
+    const now = Date.now();
+    const currentExpiry = sessionExpiryRef.current;
+    const alreadyFresh =
+      currentExpiry !== null &&
+      currentExpiry - now > SESSION_DURATION_MS - SESSION_ACTIVITY_THROTTLE_MS;
+    if (
+      !options?.force &&
+      alreadyFresh &&
+      now - lastSessionExtendAtRef.current < SESSION_ACTIVITY_THROTTLE_MS
+    ) {
+      return;
+    }
+
+    const expiry = now + SESSION_DURATION_MS;
+    sessionExpiryRef.current = expiry;
+    lastSessionExtendAtRef.current = now;
     writeLocalOnly(SESSION_EXPIRY_KEY, String(expiry));
     setSessionExpiry(expiry);
     setRemainingSeconds(SESSION_DURATION_SECONDS);
@@ -347,9 +372,9 @@ const Header: React.FC = () => {
     const now = Date.now();
     const saved = Number(readLocalOnly(SESSION_EXPIRY_KEY));
     const nextExpiry =
-      Number.isFinite(saved) && saved > now
-        ? saved
-        : now + SESSION_DURATION_SECONDS * 1000;
+      Number.isFinite(saved) && saved > now ? saved : now + SESSION_DURATION_MS;
+    sessionExpiryRef.current = nextExpiry;
+    lastSessionExtendAtRef.current = now;
     writeLocalOnly(SESSION_EXPIRY_KEY, String(nextExpiry));
     setSessionExpiry(nextExpiry);
   }, [currentUser]);
@@ -378,34 +403,50 @@ const Header: React.FC = () => {
   useEffect(() => {
     if (!currentUser) return;
 
-    const handleMeaningfulClick = (event: MouseEvent) => {
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      if (target.closest('[data-session-ignore="true"]')) return;
-      if (
-        target.closest('[data-session-action="true"]') ||
-        target.closest("a[href]")
-      ) {
+    const handleMeaningfulPointer = (event: MouseEvent | PointerEvent) => {
+      if (getSessionActivityTarget(event.target)) {
+        extendSession();
+      }
+    };
+
+    const handleMeaningfulInput = (event: Event) => {
+      if (getEditableSessionActivityTarget(event.target)) {
+        extendSession();
+      }
+    };
+
+    const handleMeaningfulKeydown = (event: KeyboardEvent) => {
+      if (isKeyboardSessionActivity(event)) {
         extendSession();
       }
     };
 
     const handleSubmit = (event: Event) => {
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      if (target.closest('[data-session-ignore="true"]')) return;
+      if (isSessionActivityIgnored(event.target)) return;
       extendSession();
     };
 
     const handleSessionActivity = () => {
-      extendSession();
+      extendSession({ force: true });
     };
 
-    document.addEventListener("click", handleMeaningfulClick, true);
+    document.addEventListener("pointerdown", handleMeaningfulPointer, true);
+    document.addEventListener("click", handleMeaningfulPointer, true);
+    document.addEventListener("input", handleMeaningfulInput, true);
+    document.addEventListener("change", handleMeaningfulInput, true);
+    document.addEventListener("keydown", handleMeaningfulKeydown, true);
     document.addEventListener("submit", handleSubmit, true);
     window.addEventListener(SESSION_ACTIVITY_EVENT, handleSessionActivity);
     return () => {
-      document.removeEventListener("click", handleMeaningfulClick, true);
+      document.removeEventListener(
+        "pointerdown",
+        handleMeaningfulPointer,
+        true,
+      );
+      document.removeEventListener("click", handleMeaningfulPointer, true);
+      document.removeEventListener("input", handleMeaningfulInput, true);
+      document.removeEventListener("change", handleMeaningfulInput, true);
+      document.removeEventListener("keydown", handleMeaningfulKeydown, true);
       document.removeEventListener("submit", handleSubmit, true);
       window.removeEventListener(SESSION_ACTIVITY_EVENT, handleSessionActivity);
     };
@@ -598,7 +639,7 @@ const Header: React.FC = () => {
                 {formatCountdown(remainingSeconds)}
               </span>
               <button
-                onClick={extendSession}
+                onClick={() => extendSession({ force: true })}
                 data-session-ignore="true"
                 className="text-stone-400 hover:text-blue-600 transition p-1"
                 title="시간 연장"
@@ -666,7 +707,7 @@ const Header: React.FC = () => {
                 </div>
                 <button
                   type="button"
-                  onClick={extendSession}
+                  onClick={() => extendSession({ force: true })}
                   title="시간 연장"
                   data-session-ignore="true"
                   className={`mobile-menu-status-card mobile-menu-time-card ${remainingSeconds < 300 ? "is-warning" : ""}`}
