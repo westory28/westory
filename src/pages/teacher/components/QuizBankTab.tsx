@@ -14,6 +14,7 @@ import { db, getHttpsCallable } from "../../../lib/firebase";
 import { useAuth } from "../../../contexts/AuthContext";
 import MatchingConnectionLines from "../../../components/common/MatchingConnectionLines";
 import { LoadingOverlay } from "../../../components/common/LoadingState";
+import QuizPassage from "../../../components/common/QuizPassage";
 import {
   getSemesterCollectionPath,
   getSemesterDocPath,
@@ -25,6 +26,11 @@ import {
   optimizeQuizImageDataUrl,
   optimizeQuizImageFile,
 } from "../../../lib/quizImageCompression";
+import {
+  applyQuizPassageMark,
+  stripQuizPassageMarkup,
+  type QuizPassageMarkType,
+} from "../../../lib/quizPassageMarkup";
 
 interface TreeUnit {
   id: string;
@@ -393,6 +399,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     Record<string, HTMLButtonElement | null>
   >({});
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const editPassageTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   const toggleSort = (key: Exclude<SortKey, "none">) => {
     if (sortKey !== key) {
@@ -1757,6 +1764,27 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     }
   };
 
+  const markSelectedEditPassageText = (markType: QuizPassageMarkType) => {
+    const textarea = editPassageTextareaRef.current;
+    const selectionStart = textarea?.selectionStart ?? editPassage.length;
+    const selectionEnd = textarea?.selectionEnd ?? editPassage.length;
+    const next = applyQuizPassageMark({
+      value: editPassage,
+      selectionStart,
+      selectionEnd,
+      markType,
+    });
+
+    setEditPassage(next.value);
+    window.requestAnimationFrame(() => {
+      editPassageTextareaRef.current?.focus();
+      editPassageTextareaRef.current?.setSelectionRange(
+        next.selectionStart,
+        next.selectionEnd,
+      );
+    });
+  };
+
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -2791,6 +2819,8 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                       const wrong = getTopWrongAnswer(stat);
                       const unitMeta = getQuestionUnitMeta(q);
                       const passageText = String(q.passage || "").trim();
+                      const passagePreviewText =
+                        stripQuizPassageMarkup(passageText);
                       return (
                         <tr
                           key={`${q.docId}-${q.question.slice(0, 10)}`}
@@ -2861,9 +2891,9 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                               {passageText && (
                                 <div
                                   className="mt-2 min-w-0 truncate rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-bold text-slate-500"
-                                  title={passageText}
+                                  title={passagePreviewText}
                                 >
-                                  {passageText}
+                                  {passagePreviewText}
                                 </div>
                               )}
                               <div className="mt-2 min-w-0 truncate text-xs font-bold text-blue-700">
@@ -3182,21 +3212,42 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                       <label className="text-xs font-black text-slate-600">
                         읽기 자료 글상자
                       </label>
-                      {editPassage && (
+                      <div className="flex items-center gap-1">
                         <button
                           type="button"
-                          onClick={() => setEditPassage("")}
-                          className="text-xs font-bold text-slate-400 hover:text-red-500"
+                          onClick={() =>
+                            markSelectedEditPassageText("underline")
+                          }
+                          title="선택한 글자에 밑줄"
+                          className="rounded border border-slate-200 bg-white px-2 py-1 text-xs font-bold text-slate-600 hover:border-blue-300 hover:text-blue-700"
                         >
-                          비우기
+                          <i className="fas fa-underline mr-1"></i>밑줄
                         </button>
-                      )}
+                        <button
+                          type="button"
+                          onClick={() => markSelectedEditPassageText("box")}
+                          title="선택한 글자에 네모"
+                          className="rounded border border-slate-200 bg-white px-2 py-1 text-xs font-bold text-slate-600 hover:border-blue-300 hover:text-blue-700"
+                        >
+                          <i className="far fa-square mr-1"></i>네모
+                        </button>
+                        {editPassage && (
+                          <button
+                            type="button"
+                            onClick={() => setEditPassage("")}
+                            className="px-2 py-1 text-xs font-bold text-slate-400 hover:text-red-500"
+                          >
+                            비우기
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <textarea
+                      ref={editPassageTextareaRef}
                       value={editPassage}
                       onChange={(e) => setEditPassage(e.target.value)}
-                      placeholder="자료형 문제의 본문을 입력하세요. 학생 화면에서는 문제 아래 네모 칸으로 표시됩니다."
-                      className="h-24 w-full resize-none rounded border border-slate-200 bg-white p-2 text-sm leading-6"
+                      placeholder="자료형 문제의 본문을 입력하세요."
+                      className="h-28 w-full resize-none rounded border border-slate-200 bg-white p-3 text-base leading-7"
                     />
                   </div>
                 )}
@@ -3505,9 +3556,10 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                           "문제 문구를 입력하면 여기 표시됩니다."}
                       </h4>
                       {editType === "choice" && editPassage.trim() && (
-                        <div className="mb-4 whitespace-pre-line rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm leading-7 text-slate-800">
-                          {editPassage.trim()}
-                        </div>
+                        <QuizPassage
+                          value={editPassage.trim()}
+                          className="mb-4"
+                        />
                       )}
                       {editType === "choice" ? (
                         <div

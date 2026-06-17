@@ -10,6 +10,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../../../lib/firebase";
 import { useAuth } from "../../../contexts/AuthContext";
+import QuizPassage from "../../../components/common/QuizPassage";
 import { getSemesterCollectionPath } from "../../../lib/semesterScope";
 
 type WrongNoteReadScope = "current" | "history";
@@ -348,9 +349,10 @@ const StudentWrongNoteModal: React.FC<StudentWrongNoteModalProps> = ({
                               최근 오답 시각: {item.timeText}
                             </div>
                             {item.passage && (
-                              <div className="mb-2 whitespace-pre-line rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-6 text-slate-700">
-                                {item.passage}
-                              </div>
+                              <QuizPassage
+                                value={item.passage}
+                                className="mb-2"
+                              />
                             )}
                             <div>
                               제출 답안:{" "}

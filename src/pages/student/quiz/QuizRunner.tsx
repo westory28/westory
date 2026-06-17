@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import MatchingConnectionLines from "../../../components/common/MatchingConnectionLines";
 import { PageLoading } from "../../../components/common/LoadingState";
+import QuizPassage from "../../../components/common/QuizPassage";
 import {
   addDoc,
   collection,
@@ -1513,9 +1514,11 @@ const QuizRunner: React.FC = () => {
           </h2>
 
           {question.type === "choice" && passageText && (
-            <div className="mb-3 shrink-0 whitespace-pre-line rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-medium leading-7 text-slate-800 md:text-base">
-              {passageText}
-            </div>
+            <QuizPassage
+              value={passageText}
+              surface="muted"
+              className="mb-3 shrink-0"
+            />
           )}
 
           {!!(question.hintEnabled && question.hint) && (
@@ -1887,9 +1890,11 @@ const QuizRunner: React.FC = () => {
                   <div className="font-bold text-gray-800">{result.q}</div>
                 </div>
                 {result.passage && (
-                  <div className="mb-3 ml-8 whitespace-pre-line rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-7 text-slate-700">
-                    {result.passage}
-                  </div>
+                  <QuizPassage
+                    value={result.passage}
+                    surface="muted"
+                    className="mb-3 ml-8"
+                  />
                 )}
                 {result.image && (
                   <div className="mb-3 ml-8 rounded-lg border border-gray-100 bg-gray-50 p-2 text-center">

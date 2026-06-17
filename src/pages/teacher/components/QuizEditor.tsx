@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore";
 import { useAuth } from "../../../contexts/AuthContext";
 import { LoadingOverlay } from "../../../components/common/LoadingState";
+import QuizPassage from "../../../components/common/QuizPassage";
 import {
   getSemesterCollectionPath,
   getSemesterDocPath,
@@ -22,6 +23,11 @@ import {
   optimizeQuizImageDataUrl,
   optimizeQuizImageFile,
 } from "../../../lib/quizImageCompression";
+import {
+  applyQuizPassageMark,
+  stripQuizPassageMarkup,
+  type QuizPassageMarkType,
+} from "../../../lib/quizPassageMarkup";
 
 interface TreeUnit {
   id: string;
@@ -173,6 +179,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   const optimizingImage = optimizingImageCount > 0;
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const passageTextareaRef = useRef<HTMLTextAreaElement>(null);
   const savingQuestionRef = useRef(false);
 
   useEffect(() => {
@@ -335,6 +342,27 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     if (type !== "special") setFormSubUnit("");
     else setEpSource({ big: "", mid: "", small: "" });
     if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const markSelectedPassageText = (markType: QuizPassageMarkType) => {
+    const textarea = passageTextareaRef.current;
+    const selectionStart = textarea?.selectionStart ?? formPassage.length;
+    const selectionEnd = textarea?.selectionEnd ?? formPassage.length;
+    const next = applyQuizPassageMark({
+      value: formPassage,
+      selectionStart,
+      selectionEnd,
+      markType,
+    });
+
+    setFormPassage(next.value);
+    window.requestAnimationFrame(() => {
+      passageTextareaRef.current?.focus();
+      passageTextareaRef.current?.setSelectionRange(
+        next.selectionStart,
+        next.selectionEnd,
+      );
+    });
   };
 
   const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -863,6 +891,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                 const answerText = String(q.answer || "").trim();
                 const explanationText = String(q.explanation || "").trim();
                 const passageText = String(q.passage || "").trim();
+                const passagePreviewText = stripQuizPassageMarkup(passageText);
 
                 return (
                   <div
@@ -899,7 +928,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                     </p>
                     {passageText && (
                       <div className="mb-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium leading-5 text-slate-700">
-                        {passageText}
+                        {passagePreviewText}
                       </div>
                     )}
                     {(q.image || hasChoicePreview) && (
@@ -1126,21 +1155,40 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                         <label className="text-xs font-black text-slate-600">
                           읽기 자료 글상자
                         </label>
-                        {formPassage && (
+                        <div className="flex items-center gap-1">
                           <button
                             type="button"
-                            onClick={() => setFormPassage("")}
-                            className="text-xs font-bold text-slate-400 hover:text-red-500"
+                            onClick={() => markSelectedPassageText("underline")}
+                            title="선택한 글자에 밑줄"
+                            className="rounded border border-slate-200 bg-white px-2 py-1 text-xs font-bold text-slate-600 hover:border-blue-300 hover:text-blue-700"
                           >
-                            비우기
+                            <i className="fas fa-underline mr-1"></i>밑줄
                           </button>
-                        )}
+                          <button
+                            type="button"
+                            onClick={() => markSelectedPassageText("box")}
+                            title="선택한 글자에 네모"
+                            className="rounded border border-slate-200 bg-white px-2 py-1 text-xs font-bold text-slate-600 hover:border-blue-300 hover:text-blue-700"
+                          >
+                            <i className="far fa-square mr-1"></i>네모
+                          </button>
+                          {formPassage && (
+                            <button
+                              type="button"
+                              onClick={() => setFormPassage("")}
+                              className="px-2 py-1 text-xs font-bold text-slate-400 hover:text-red-500"
+                            >
+                              비우기
+                            </button>
+                          )}
+                        </div>
                       </div>
                       <textarea
+                        ref={passageTextareaRef}
                         value={formPassage}
                         onChange={(e) => setFormPassage(e.target.value)}
-                        placeholder="자료형 문제의 본문을 입력하세요. 학생 화면에서는 문제 아래 네모 칸으로 표시됩니다."
-                        className="quiz-compose-field h-24 w-full resize-none rounded border border-slate-200 bg-white p-2 text-sm leading-6"
+                        placeholder="자료형 문제의 본문을 입력하세요."
+                        className="quiz-compose-field h-28 w-full resize-none rounded border border-slate-200 bg-white p-3 text-base leading-7"
                       />
                     </div>
                   )}
@@ -1454,9 +1502,10 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                           {formText || "문제 문구를 입력하면 여기 표시됩니다."}
                         </h4>
                         {formType === "choice" && formPassage.trim() && (
-                          <div className="mb-4 whitespace-pre-line rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm leading-7 text-slate-800">
-                            {formPassage.trim()}
-                          </div>
+                          <QuizPassage
+                            value={formPassage.trim()}
+                            className="mb-4"
+                          />
                         )}
                         {formType === "choice" ? (
                           <div

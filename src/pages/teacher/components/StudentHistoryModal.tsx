@@ -9,6 +9,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../../../lib/firebase";
 import { useAuth } from "../../../contexts/AuthContext";
+import QuizPassage from "../../../components/common/QuizPassage";
 import { getSemesterCollectionPath } from "../../../lib/semesterScope";
 
 type HistoryReadScope = "current" | "history";
@@ -474,9 +475,9 @@ const StudentHistoryModal: React.FC<StudentHistoryModalProps> = ({
                                             {detail.questionText}
                                           </div>
                                           {detail.passageText && (
-                                            <div className="whitespace-pre-line rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-6 text-slate-700">
-                                              {detail.passageText}
-                                            </div>
+                                            <QuizPassage
+                                              value={detail.passageText}
+                                            />
                                           )}
                                           <div>
                                             학생 답:{" "}
