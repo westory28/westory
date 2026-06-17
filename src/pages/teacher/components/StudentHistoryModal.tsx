@@ -27,6 +27,7 @@ interface QuizResultDetail {
   id?: string | number;
   correct?: boolean;
   u?: string;
+  passage?: string;
 }
 
 interface QuizResultRecord {
@@ -44,12 +45,14 @@ interface QuestionDoc {
   question?: string;
   answer?: string;
   explanation?: string;
+  passage?: string;
 }
 
 interface ResolvedDetail extends QuizResultDetail {
   questionText: string;
   answerText: string;
   explanationText: string;
+  passageText: string;
 }
 
 interface HistoryGroup {
@@ -225,6 +228,7 @@ const StudentHistoryModal: React.FC<StudentHistoryModalProps> = ({
               answerText: question?.answer ? String(question.answer) : "-",
               explanationText:
                 question?.explanation || "해설이 등록되지 않았습니다.",
+              passageText: String(question?.passage || detail.passage || ""),
             } as ResolvedDetail;
           }),
         })),
@@ -469,6 +473,11 @@ const StudentHistoryModal: React.FC<StudentHistoryModalProps> = ({
                                           <div className="font-semibold text-gray-900">
                                             {detail.questionText}
                                           </div>
+                                          {detail.passageText && (
+                                            <div className="whitespace-pre-line rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-6 text-slate-700">
+                                              {detail.passageText}
+                                            </div>
+                                          )}
                                           <div>
                                             학생 답:{" "}
                                             <span

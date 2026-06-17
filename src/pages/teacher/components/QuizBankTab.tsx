@@ -42,6 +42,7 @@ interface Question {
   question: string;
   answer: string | number;
   image?: string | null;
+  passage?: string | null;
   matchingPairs?: MatchingPair[];
   refBig?: string;
   refMid?: string;
@@ -353,6 +354,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const [editQuestionText, setEditQuestionText] = useState("");
   const [editExplanationText, setEditExplanationText] = useState("");
   const [editImage, setEditImage] = useState<string | null>(null);
+  const [editPassage, setEditPassage] = useState("");
   const [editChoiceOptions, setEditChoiceOptions] = useState<string[]>(
     createDefaultChoiceOptionItems(),
   );
@@ -1842,6 +1844,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     setEditQuestionText(question.question || "");
     setEditExplanationText(question.explanation || "");
     setEditImage(question.image || null);
+    setEditPassage(normalizedType === "choice" ? question.passage || "" : "");
     setEditHintEnabled(!!(question.hintEnabled && question.hint));
     setEditHintText(question.hint || "");
     setPreviewOpen(false);
@@ -1958,6 +1961,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       question: editQuestionText.trim(),
       explanation: editExplanationText.trim(),
       image: editImage || "",
+      passage: editType === "choice" ? editPassage.trim() : "",
       options,
       answer,
       matchingPairs: editType === "matching" ? matchingOptions : [],
@@ -2002,6 +2006,10 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       question: (question.question || "").trim(),
       explanation: (question.explanation || "").trim(),
       image: question.image || "",
+      passage:
+        normalizedType === "choice"
+          ? String(question.passage || "").trim()
+          : "",
       options,
       answer,
       matchingPairs:
@@ -2028,6 +2036,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     editQuestionText,
     editExplanationText,
     editImage,
+    editPassage,
     editChoiceOptions,
     editChoiceAnswerIndex,
     editOxAnswer,
@@ -2052,6 +2061,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     setEditQuestionText("");
     setEditExplanationText("");
     setEditImage(null);
+    setEditPassage("");
     setEditChoiceOptions(createDefaultChoiceOptionItems());
     setEditChoiceAnswerIndex(null);
     setEditOxAnswer("");
@@ -2160,6 +2170,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         answer,
         explanation: editExplanationText.trim(),
         image: optimizedImage,
+        passage: editType === "choice" ? editPassage.trim() : "",
         options,
         matchingPairs: optimizedMatchingOptions,
         hintEnabled: editHintEnabled,
@@ -2779,6 +2790,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                       const status = getQuestionStatus(q);
                       const wrong = getTopWrongAnswer(stat);
                       const unitMeta = getQuestionUnitMeta(q);
+                      const passageText = String(q.passage || "").trim();
                       return (
                         <tr
                           key={`${q.docId}-${q.question.slice(0, 10)}`}
@@ -2830,6 +2842,12 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                                     title="이미지 문항"
                                   ></i>
                                 )}
+                                {passageText && (
+                                  <i
+                                    className="fas fa-align-left mt-1 text-slate-400"
+                                    title="읽기 자료 문항"
+                                  ></i>
+                                )}
                                 {q.hintEnabled && (
                                   <i
                                     className="fas fa-lightbulb mt-1 text-amber-500"
@@ -2840,6 +2858,14 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                                   {q.question}
                                 </div>
                               </div>
+                              {passageText && (
+                                <div
+                                  className="mt-2 min-w-0 truncate rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-bold text-slate-500"
+                                  title={passageText}
+                                >
+                                  {passageText}
+                                </div>
+                              )}
                               <div className="mt-2 min-w-0 truncate text-xs font-bold text-blue-700">
                                 정답:{" "}
                                 {String(q.answer || "-")
@@ -3150,6 +3176,31 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                   className="w-full border p-2 rounded text-sm"
                 />
 
+                {editType === "choice" && (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <label className="text-xs font-black text-slate-600">
+                        읽기 자료 글상자
+                      </label>
+                      {editPassage && (
+                        <button
+                          type="button"
+                          onClick={() => setEditPassage("")}
+                          className="text-xs font-bold text-slate-400 hover:text-red-500"
+                        >
+                          비우기
+                        </button>
+                      )}
+                    </div>
+                    <textarea
+                      value={editPassage}
+                      onChange={(e) => setEditPassage(e.target.value)}
+                      placeholder="자료형 문제의 본문을 입력하세요. 학생 화면에서는 문제 아래 네모 칸으로 표시됩니다."
+                      className="h-24 w-full resize-none rounded border border-slate-200 bg-white p-2 text-sm leading-6"
+                    />
+                  </div>
+                )}
+
                 <label className="inline-flex items-center gap-2 text-xs font-bold text-gray-500 cursor-pointer hover:text-blue-600 bg-gray-100 px-3 py-1 rounded transition w-fit">
                   <i className="fas fa-image"></i> 이미지 첨부
                   <input
@@ -3453,6 +3504,11 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                         {editQuestionText ||
                           "문제 문구를 입력하면 여기 표시됩니다."}
                       </h4>
+                      {editType === "choice" && editPassage.trim() && (
+                        <div className="mb-4 whitespace-pre-line rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm leading-7 text-slate-800">
+                          {editPassage.trim()}
+                        </div>
+                      )}
                       {editType === "choice" ? (
                         <div
                           className={

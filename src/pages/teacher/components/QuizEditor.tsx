@@ -49,6 +49,7 @@ interface Question {
   matchingPairs?: MatchingPair[];
   explanation?: string;
   image?: string | null;
+  passage?: string | null;
   hintEnabled?: boolean;
   hint?: string;
   refBig?: string;
@@ -130,6 +131,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   const [formText, setFormText] = useState("");
   const [formExp, setFormExp] = useState("");
   const [formImage, setFormImage] = useState<string | null>(null);
+  const [formPassage, setFormPassage] = useState("");
   const [formSubUnit, setFormSubUnit] = useState("");
   const [choiceOptions, setChoiceOptions] = useState<string[]>(
     createDefaultChoiceOptionItems(type === "special" ? "exam_prep" : ""),
@@ -319,6 +321,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     setFormText("");
     setFormExp("");
     setFormImage(null);
+    setFormPassage("");
     setChoiceOptions(createDefaultChoiceOptionItems(defaultCategory));
     setChoiceAnswerIndex(null);
     setOxAnswer("");
@@ -450,6 +453,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     setFormText(question.question || "");
     setFormExp(question.explanation || "");
     setFormImage(question.image || null);
+    setFormPassage(question.type === "choice" ? question.passage || "" : "");
     setPreviewOpen(false);
     resetPreview();
     setHintEnabled(!!(question.hintEnabled && question.hint));
@@ -667,6 +671,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
         matchingPairs: optimizedMatchingPairs,
         explanation: formExp.trim(),
         image: optimizedImage,
+        passage: formType === "choice" ? formPassage.trim() : "",
         hintEnabled,
         hint: hintEnabled ? hintText.trim() : "",
         ...(type === "special" && epSource.big ? { refBig: epSource.big } : {}),
@@ -857,6 +862,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                 const hasChoicePreview = choiceOptions.length > 0;
                 const answerText = String(q.answer || "").trim();
                 const explanationText = String(q.explanation || "").trim();
+                const passageText = String(q.passage || "").trim();
 
                 return (
                   <div
@@ -891,6 +897,11 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                     <p className="font-bold text-gray-800 mb-2 text-sm">
                       {q.question}
                     </p>
+                    {passageText && (
+                      <div className="mb-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium leading-5 text-slate-700">
+                        {passageText}
+                      </div>
+                    )}
                     {(q.image || hasChoicePreview) && (
                       <div
                         className={
@@ -1108,6 +1119,31 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                     onKeyDown={handleVerticalFocus}
                     className="quiz-compose-field w-full border p-2 rounded text-sm"
                   />
+
+                  {formType === "choice" && (
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                      <div className="mb-2 flex items-center justify-between">
+                        <label className="text-xs font-black text-slate-600">
+                          읽기 자료 글상자
+                        </label>
+                        {formPassage && (
+                          <button
+                            type="button"
+                            onClick={() => setFormPassage("")}
+                            className="text-xs font-bold text-slate-400 hover:text-red-500"
+                          >
+                            비우기
+                          </button>
+                        )}
+                      </div>
+                      <textarea
+                        value={formPassage}
+                        onChange={(e) => setFormPassage(e.target.value)}
+                        placeholder="자료형 문제의 본문을 입력하세요. 학생 화면에서는 문제 아래 네모 칸으로 표시됩니다."
+                        className="quiz-compose-field h-24 w-full resize-none rounded border border-slate-200 bg-white p-2 text-sm leading-6"
+                      />
+                    </div>
+                  )}
 
                   <label className="inline-flex items-center gap-2 text-xs font-bold text-gray-500 cursor-pointer hover:text-blue-600 bg-gray-100 px-3 py-1 rounded transition w-fit">
                     <i className="fas fa-image"></i> 이미지 첨부
@@ -1417,6 +1453,11 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                         <h4 className="font-bold text-gray-800 mb-4">
                           {formText || "문제 문구를 입력하면 여기 표시됩니다."}
                         </h4>
+                        {formType === "choice" && formPassage.trim() && (
+                          <div className="mb-4 whitespace-pre-line rounded-lg border border-slate-300 bg-white px-4 py-3 text-sm leading-7 text-slate-800">
+                            {formPassage.trim()}
+                          </div>
+                        )}
                         {formType === "choice" ? (
                           <div
                             className={

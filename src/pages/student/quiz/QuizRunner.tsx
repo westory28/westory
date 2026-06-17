@@ -48,6 +48,7 @@ interface Question {
   matchingPairs?: MatchingPair[];
   explanation?: string;
   image?: string;
+  passage?: string;
   hintEnabled?: boolean;
   hint?: string;
   unitId?: string;
@@ -81,6 +82,7 @@ interface ResultDetail {
   correct: boolean;
   exp?: string;
   image?: string;
+  passage?: string;
   type?: Question["type"];
   matchingPairs?: MatchingPair[];
 }
@@ -638,6 +640,7 @@ const QuizRunner: React.FC = () => {
         correct: isCorrect,
         exp: question.explanation,
         image: question.image,
+        passage: question.passage,
         type: question.type,
         matchingPairs:
           question.type === "matching" ? parseMatchingPairs(question) : [],
@@ -1466,6 +1469,8 @@ const QuizRunner: React.FC = () => {
       Math.min(100, (timeLeft / timeLimitSeconds) * 100),
     );
     const currentAnswer = answers[String(question.id)] || "";
+    const passageText = String(question.passage || "").trim();
+    const hasChoiceImage = question.type === "choice" && !!question.image;
 
     return (
       <div className="mx-auto flex h-[calc(100dvh-8rem)] max-w-6xl animate-fadeIn flex-col overflow-hidden px-3 py-3 sm:px-4 lg:max-w-7xl">
@@ -1507,6 +1512,12 @@ const QuizRunner: React.FC = () => {
             {question.question}
           </h2>
 
+          {question.type === "choice" && passageText && (
+            <div className="mb-3 shrink-0 whitespace-pre-line rounded-xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-medium leading-7 text-slate-800 md:text-base">
+              {passageText}
+            </div>
+          )}
+
           {!!(question.hintEnabled && question.hint) && (
             <div className="mb-3 shrink-0">
               <button
@@ -1536,7 +1547,7 @@ const QuizRunner: React.FC = () => {
 
           <div
             className={`min-h-0 flex-1 ${
-              question.type === "choice" && question.image
+              hasChoiceImage
                 ? "grid gap-4 md:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)] md:items-start"
                 : "space-y-2"
             }`}
@@ -1544,7 +1555,7 @@ const QuizRunner: React.FC = () => {
             {question.image && (
               <div
                 className={
-                  question.type === "choice"
+                  hasChoiceImage
                     ? "flex h-full min-h-0 items-center justify-center rounded-xl border border-gray-100 bg-gray-50 p-2 text-center"
                     : "mb-3 text-center"
                 }
@@ -1875,6 +1886,11 @@ const QuizRunner: React.FC = () => {
                   </span>
                   <div className="font-bold text-gray-800">{result.q}</div>
                 </div>
+                {result.passage && (
+                  <div className="mb-3 ml-8 whitespace-pre-line rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm leading-7 text-slate-700">
+                    {result.passage}
+                  </div>
+                )}
                 {result.image && (
                   <div className="mb-3 ml-8 rounded-lg border border-gray-100 bg-gray-50 p-2 text-center">
                     <img

@@ -27,6 +27,7 @@ interface StudentWrongNoteModalProps {
 interface WrongItem {
   key: string;
   question: string;
+  passage: string;
   userAnswer: string;
   answer: string;
   explanation: string;
@@ -181,6 +182,7 @@ const StudentWrongNoteModal: React.FC<StudentWrongNoteModalProps> = ({
         items.push({
           key,
           question: String(questionDoc.question || "문항 정보 없음"),
+          passage: String(questionDoc.passage || ""),
           userAnswer: log.userAnswer || "(미입력)",
           answer: questionDoc.answer ? String(questionDoc.answer) : "-",
           explanation: String(
@@ -345,6 +347,11 @@ const StudentWrongNoteModal: React.FC<StudentWrongNoteModalProps> = ({
                             <div className="text-xs text-gray-500 mb-1">
                               최근 오답 시각: {item.timeText}
                             </div>
+                            {item.passage && (
+                              <div className="mb-2 whitespace-pre-line rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs leading-6 text-slate-700">
+                                {item.passage}
+                              </div>
+                            )}
                             <div>
                               제출 답안:{" "}
                               <span className="font-bold text-red-500">
