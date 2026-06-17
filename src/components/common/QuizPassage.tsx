@@ -32,6 +32,17 @@ const QuizPassage: React.FC<QuizPassageProps> = ({
           return <React.Fragment key={index}>{segment.text}</React.Fragment>;
         }
 
+        if (segment.type === "bullet") {
+          return (
+            <div key={index} className="my-2 flex items-start gap-2">
+              <span className="mt-2 h-2 w-2 shrink-0 rounded-full border-2 border-slate-900" />
+              <span className="min-w-0 flex-1 whitespace-pre-wrap">
+                {segment.text}
+              </span>
+            </div>
+          );
+        }
+
         return (
           <span key={index} className={markClasses[segment.type]}>
             {segment.text}

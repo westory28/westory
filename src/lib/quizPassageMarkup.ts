@@ -1,17 +1,36 @@
-export type QuizPassageMarkType = "underline" | "box";
+export type QuizPassageMarkType = "underline" | "box" | "bullet";
 
 export interface QuizPassageSegment {
   type: "text" | QuizPassageMarkType;
   text: string;
 }
 
-const MARK_TOKEN_PATTERN = /\{\{(u|box):([\s\S]*?)\}\}/g;
+const MARK_TOKEN_PATTERN = /\{\{(u|box|bullet):([\s\S]*?)\}\}/g;
 
 const getTokenName = (type: QuizPassageMarkType) =>
-  type === "underline" ? "u" : "box";
+  type === "underline" ? "u" : type;
 
 const getSegmentType = (tokenName: string): QuizPassageMarkType =>
-  tokenName === "u" ? "underline" : "box";
+  tokenName === "u" ? "underline" : tokenName === "box" ? "box" : "bullet";
+
+const buildMarkedText = (
+  selectedText: string,
+  prefix: string,
+  suffix: string,
+  markType: QuizPassageMarkType,
+) => {
+  if (markType !== "bullet" || !selectedText) {
+    return `${prefix}${selectedText}${suffix}`;
+  }
+
+  return selectedText
+    .split(/(\r?\n+)/)
+    .map((part) => {
+      if (!part || /^\r?\n+$/.test(part) || !part.trim()) return part;
+      return `${prefix}${part}${suffix}`;
+    })
+    .join("");
+};
 
 export const parseQuizPassageMarkup = (
   value: string | null | undefined,
@@ -56,11 +75,17 @@ export const applyQuizPassageMark = ({
   const prefix = `{{${tokenName}:`;
   const suffix = "}}";
   const selectedText = value.slice(start, end);
-  const markedText = `${prefix}${selectedText}${suffix}`;
+  const markedText = buildMarkedText(selectedText, prefix, suffix, markType);
+  const nextSelectionStart =
+    markType === "bullet" && selectedText ? start : start + prefix.length;
+  const nextSelectionEnd =
+    markType === "bullet" && selectedText
+      ? start + markedText.length
+      : start + prefix.length + selectedText.length;
 
   return {
     value: `${value.slice(0, start)}${markedText}${value.slice(end)}`,
-    selectionStart: start + prefix.length,
-    selectionEnd: start + prefix.length + selectedText.length,
+    selectionStart: nextSelectionStart,
+    selectionEnd: nextSelectionEnd,
   };
 };

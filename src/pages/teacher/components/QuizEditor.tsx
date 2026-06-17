@@ -1155,7 +1155,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                         <label className="text-xs font-black text-slate-600">
                           읽기 자료 글상자
                         </label>
-                        <div className="flex items-center gap-1">
+                        <div className="flex flex-wrap items-center gap-1">
                           <button
                             type="button"
                             onClick={() => markSelectedPassageText("underline")}
@@ -1171,6 +1171,14 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                             className="rounded border border-slate-200 bg-white px-2 py-1 text-xs font-bold text-slate-600 hover:border-blue-300 hover:text-blue-700"
                           >
                             <i className="far fa-square mr-1"></i>네모
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => markSelectedPassageText("bullet")}
+                            title="선택한 줄에 글머리표"
+                            className="rounded border border-slate-200 bg-white px-2 py-1 text-xs font-bold text-slate-600 hover:border-blue-300 hover:text-blue-700"
+                          >
+                            <i className="fas fa-list-ul mr-1"></i>글머리표
                           </button>
                           {formPassage && (
                             <button
