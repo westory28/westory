@@ -12,6 +12,34 @@ const markClasses: Record<string, string> = {
   box: "mx-0.5 inline rounded border-2 border-slate-800 px-1 py-0.5 font-bold text-slate-950",
 };
 
+const renderInlineSegments = (value: string, keyPrefix: string) =>
+  parseQuizPassageMarkup(value).map((segment, index) => {
+    if (segment.type === "text") {
+      return (
+        <React.Fragment key={`${keyPrefix}-text-${index}`}>
+          {segment.text}
+        </React.Fragment>
+      );
+    }
+
+    if (segment.type === "bullet") {
+      return (
+        <React.Fragment key={`${keyPrefix}-bullet-${index}`}>
+          {segment.text}
+        </React.Fragment>
+      );
+    }
+
+    return (
+      <span
+        key={`${keyPrefix}-${segment.type}-${index}`}
+        className={markClasses[segment.type]}
+      >
+        {segment.text}
+      </span>
+    );
+  });
+
 const QuizPassage: React.FC<QuizPassageProps> = ({
   value,
   className = "",
@@ -37,7 +65,7 @@ const QuizPassage: React.FC<QuizPassageProps> = ({
             <div key={index} className="my-2 flex items-start gap-2">
               <span className="mt-2 h-2 w-2 shrink-0 rounded-full border-2 border-slate-900" />
               <span className="min-w-0 flex-1 whitespace-pre-wrap">
-                {segment.text}
+                {renderInlineSegments(segment.text, `bullet-${index}`)}
               </span>
             </div>
           );

@@ -5,58 +5,139 @@ export interface QuizPassageSegment {
   text: string;
 }
 
-const MARK_TOKEN_PATTERN = /\{\{(u|box|bullet):([\s\S]*?)\}\}/g;
+const BULLET_TOKEN = "{{bullet}}";
+const INLINE_MARK_TOKEN_PATTERN = /\{\{(u|box):([\s\S]*?)\}\}/g;
+const LEGACY_BULLET_TOKEN_PATTERN = /\{\{bullet:([^{}]*?)\}\}/g;
+const LEGACY_BULLET_PREFIX = "{{bullet:";
 
 const getTokenName = (type: QuizPassageMarkType) =>
   type === "underline" ? "u" : type;
 
 const getSegmentType = (tokenName: string): QuizPassageMarkType =>
-  tokenName === "u" ? "underline" : tokenName === "box" ? "box" : "bullet";
+  tokenName === "u" ? "underline" : "box";
 
-const buildMarkedText = (
-  selectedText: string,
-  prefix: string,
-  suffix: string,
-  markType: QuizPassageMarkType,
-) => {
-  if (markType !== "bullet" || !selectedText) {
-    return `${prefix}${selectedText}${suffix}`;
+const normalizeLegacyBulletLine = (line: string) => {
+  const simpleLine = line.replace(
+    LEGACY_BULLET_TOKEN_PATTERN,
+    `${BULLET_TOKEN}$1`,
+  );
+  const tokenStart = simpleLine.indexOf(LEGACY_BULLET_PREFIX);
+  if (tokenStart === -1) return simpleLine;
+
+  const beforeToken = simpleLine.slice(0, tokenStart);
+  if (beforeToken.trim()) return simpleLine;
+
+  const contentStart = tokenStart + LEGACY_BULLET_PREFIX.length;
+  if (simpleLine.startsWith("}}", contentStart)) {
+    return `${beforeToken}${BULLET_TOKEN}${simpleLine.slice(contentStart + 2)}`;
   }
 
-  return selectedText
-    .split(/(\r?\n+)/)
-    .map((part) => {
-      if (!part || /^\r?\n+$/.test(part) || !part.trim()) return part;
-      return `${prefix}${part}${suffix}`;
-    })
-    .join("");
+  const suffixStart = simpleLine.lastIndexOf("}}");
+  if (suffixStart >= contentStart) {
+    return `${beforeToken}${BULLET_TOKEN}${simpleLine.slice(
+      contentStart,
+      suffixStart,
+    )}${simpleLine.slice(suffixStart + 2)}`;
+  }
+
+  return `${beforeToken}${BULLET_TOKEN}${simpleLine.slice(contentStart)}`;
 };
 
-export const parseQuizPassageMarkup = (
-  value: string | null | undefined,
-): QuizPassageSegment[] => {
-  const source = String(value || "");
+const normalizeBulletMarkup = (value: string) =>
+  value
+    .split(/(\r?\n)/)
+    .map((part) =>
+      /^\r?\n$/.test(part) ? part : normalizeLegacyBulletLine(part),
+    )
+    .join("");
+
+const parseInlineMarkup = (value: string): QuizPassageSegment[] => {
   const segments: QuizPassageSegment[] = [];
   let lastIndex = 0;
 
-  source.replace(MARK_TOKEN_PATTERN, (match, tokenName, text, offset) => {
+  value.replace(INLINE_MARK_TOKEN_PATTERN, (match, tokenName, text, offset) => {
     if (offset > lastIndex) {
-      segments.push({ type: "text", text: source.slice(lastIndex, offset) });
+      segments.push({ type: "text", text: value.slice(lastIndex, offset) });
     }
     segments.push({ type: getSegmentType(tokenName), text });
     lastIndex = offset + match.length;
     return match;
   });
 
-  if (lastIndex < source.length) {
-    segments.push({ type: "text", text: source.slice(lastIndex) });
+  if (lastIndex < value.length) {
+    segments.push({ type: "text", text: value.slice(lastIndex) });
   }
+
+  return segments;
+};
+
+export const parseQuizPassageMarkup = (
+  value: string | null | undefined,
+): QuizPassageSegment[] => {
+  const source = normalizeBulletMarkup(String(value || ""));
+  const segments: QuizPassageSegment[] = [];
+  const parts = source.split(/(\r?\n)/);
+
+  parts.forEach((part) => {
+    if (!part) return;
+    if (/^\r?\n$/.test(part)) {
+      segments.push({ type: "text", text: part });
+      return;
+    }
+
+    const bulletMatch = /^(\s*)\{\{bullet\}\}\s?([\s\S]*)$/.exec(part);
+    if (bulletMatch) {
+      segments.push({ type: "bullet", text: bulletMatch[2] });
+      return;
+    }
+
+    segments.push(...parseInlineMarkup(part));
+  });
 
   return segments.length > 0 ? segments : [{ type: "text", text: source }];
 };
 
 export const stripQuizPassageMarkup = (value: string | null | undefined) =>
-  String(value || "").replace(MARK_TOKEN_PATTERN, "$2");
+  normalizeBulletMarkup(String(value || ""))
+    .replace(INLINE_MARK_TOKEN_PATTERN, "$2")
+    .replaceAll(BULLET_TOKEN, "");
+
+const findLineStart = (value: string, index: number) =>
+  value.lastIndexOf("\n", Math.max(0, index - 1)) + 1;
+
+const findLineEnd = (value: string, index: number) => {
+  const nextLineBreak = value.indexOf("\n", index);
+  return nextLineBreak === -1 ? value.length : nextLineBreak;
+};
+
+const applyBulletMark = (value: string, start: number, end: number) => {
+  const blockStart = findLineStart(value, start);
+  const selectionEnd = end > start && value[end - 1] === "\n" ? end - 1 : end;
+  const blockEnd = findLineEnd(value, selectionEnd);
+  const block = value.slice(blockStart, blockEnd);
+  const markedBlock = block.trim()
+    ? block
+        .split(/(\r?\n)/)
+        .map((part) => {
+          if (!part || /^\r?\n$/.test(part)) return part;
+          const indent = /^(\s*)/.exec(part)?.[1] || "";
+          const content = part.slice(indent.length);
+          if (!content.trim()) return `${indent}${BULLET_TOKEN}${content}`;
+          const normalizedContent = normalizeBulletMarkup(content);
+          if (normalizedContent.startsWith(BULLET_TOKEN)) {
+            return `${indent}${normalizedContent}`;
+          }
+          return `${indent}${BULLET_TOKEN}${content}`;
+        })
+        .join("")
+    : `${block}${BULLET_TOKEN}`;
+
+  return {
+    value: `${value.slice(0, blockStart)}${markedBlock}${value.slice(blockEnd)}`,
+    selectionStart: blockStart,
+    selectionEnd: blockStart + markedBlock.length,
+  };
+};
 
 export const applyQuizPassageMark = ({
   value,
@@ -71,21 +152,20 @@ export const applyQuizPassageMark = ({
 }) => {
   const start = Math.min(selectionStart, selectionEnd);
   const end = Math.max(selectionStart, selectionEnd);
+
+  if (markType === "bullet") {
+    return applyBulletMark(value, start, end);
+  }
+
   const tokenName = getTokenName(markType);
   const prefix = `{{${tokenName}:`;
   const suffix = "}}";
   const selectedText = value.slice(start, end);
-  const markedText = buildMarkedText(selectedText, prefix, suffix, markType);
-  const nextSelectionStart =
-    markType === "bullet" && selectedText ? start : start + prefix.length;
-  const nextSelectionEnd =
-    markType === "bullet" && selectedText
-      ? start + markedText.length
-      : start + prefix.length + selectedText.length;
+  const markedText = `${prefix}${selectedText}${suffix}`;
 
   return {
     value: `${value.slice(0, start)}${markedText}${value.slice(end)}`,
-    selectionStart: nextSelectionStart,
-    selectionEnd: nextSelectionEnd,
+    selectionStart: start + prefix.length,
+    selectionEnd: start + prefix.length + selectedText.length,
   };
 };
