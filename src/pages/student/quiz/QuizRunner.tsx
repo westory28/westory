@@ -1243,6 +1243,14 @@ const QuizRunner: React.FC = () => {
       return;
     }
 
+    if (
+      !window.confirm(
+        "정말로 제출하겠습니까? 제출 후에는 답안을 수정할 수 없습니다.",
+      )
+    ) {
+      return;
+    }
+
     void finishQuiz();
   };
 
@@ -1460,8 +1468,8 @@ const QuizRunner: React.FC = () => {
     const currentAnswer = answers[String(question.id)] || "";
 
     return (
-      <div className="mx-auto flex min-h-screen max-w-2xl animate-fadeIn flex-col px-4 py-8">
-        <div className="mb-6 flex items-center justify-between">
+      <div className="mx-auto flex h-[calc(100dvh-8rem)] max-w-6xl animate-fadeIn flex-col overflow-hidden px-3 py-3 sm:px-4 lg:max-w-7xl">
+        <div className="mb-2 flex shrink-0 items-center justify-between">
           <div className="font-bold text-gray-500">
             <span className="text-blue-600">{currentIndex + 1}</span> /{" "}
             {selectedQuestions.length}
@@ -1485,7 +1493,7 @@ const QuizRunner: React.FC = () => {
           </div>
         </div>
 
-        <div className="mb-8 h-2 w-full overflow-hidden rounded-full bg-gray-200">
+        <div className="mb-3 h-2 w-full shrink-0 overflow-hidden rounded-full bg-gray-200">
           <div
             className={`h-2 rounded-full transition-all duration-1000 ease-linear ${
               progress < 20 ? "bg-red-500" : "bg-blue-500"
@@ -1494,13 +1502,13 @@ const QuizRunner: React.FC = () => {
           ></div>
         </div>
 
-        <div className="flex flex-1 flex-col rounded-2xl border border-gray-200 bg-white p-6 shadow-sm md:p-8">
-          <h2 className="mb-8 break-keep text-xl font-bold leading-snug text-gray-800 md:text-2xl">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+          <h2 className="mb-3 shrink-0 break-keep text-lg font-bold leading-snug text-gray-800 md:text-xl">
             {question.question}
           </h2>
 
           {!!(question.hintEnabled && question.hint) && (
-            <div className="mb-4">
+            <div className="mb-3 shrink-0">
               <button
                 type="button"
                 onClick={() => revealHint(question)}
@@ -1527,35 +1535,35 @@ const QuizRunner: React.FC = () => {
           )}
 
           <div
-            className={`flex-1 ${
+            className={`min-h-0 flex-1 ${
               question.type === "choice" && question.image
-                ? "grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(240px,0.9fr)] md:items-start"
-                : "space-y-3"
+                ? "grid gap-4 md:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)] md:items-start"
+                : "space-y-2"
             }`}
           >
             {question.image && (
               <div
                 className={
                   question.type === "choice"
-                    ? "rounded-xl border border-gray-100 bg-gray-50 p-2 text-center"
-                    : "mb-4 text-center"
+                    ? "flex h-full min-h-0 items-center justify-center rounded-xl border border-gray-100 bg-gray-50 p-2 text-center"
+                    : "mb-3 text-center"
                 }
               >
                 <img
                   src={question.image}
-                  className="mx-auto max-h-64 max-w-full rounded-lg border border-gray-100 object-contain"
+                  className="mx-auto max-h-[min(42vh,380px)] max-w-full rounded-lg border border-gray-100 object-contain"
                   alt="문항 첨부 이미지"
                 />
               </div>
             )}
 
             {question.type === "choice" && (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {question.options?.map((option, index) => (
                   <div
                     key={`${question.id}-choice-${index}`}
                     onClick={() => handleAnswer(option)}
-                    className={`flex cursor-pointer items-center rounded-xl border-2 p-4 transition ${
+                    className={`flex cursor-pointer items-center rounded-xl border-2 px-3 py-2.5 transition ${
                       currentAnswer === option
                         ? "border-blue-500 bg-blue-50 font-bold text-blue-800"
                         : "border-gray-200 hover:border-blue-300 hover:bg-blue-50"
@@ -1753,12 +1761,12 @@ const QuizRunner: React.FC = () => {
               })()}
           </div>
 
-          <div className="mt-8 flex items-center justify-between border-t border-gray-100 pt-4">
+          <div className="mt-3 flex shrink-0 items-center justify-between border-t border-gray-100 pt-3">
             <button
               type="button"
               onClick={prevQuestion}
               disabled={currentIndex === 0}
-              className={`flex items-center rounded-xl px-6 py-3 font-bold shadow-sm transition ${
+              className={`flex items-center rounded-xl px-5 py-2.5 font-bold shadow-sm transition ${
                 currentIndex === 0
                   ? "cursor-not-allowed bg-gray-100 text-gray-400"
                   : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
@@ -1771,7 +1779,7 @@ const QuizRunner: React.FC = () => {
               type="button"
               onClick={nextQuestion}
               disabled={finishSubmitting}
-              className="flex items-center rounded-xl bg-gray-800 px-8 py-3 font-bold text-white shadow-lg transition hover:bg-gray-900 disabled:opacity-60"
+              className="flex items-center rounded-xl bg-gray-800 px-7 py-2.5 font-bold text-white shadow-lg transition hover:bg-gray-900 disabled:opacity-60"
             >
               {currentIndex === selectedQuestions.length - 1
                 ? finishSubmitting
