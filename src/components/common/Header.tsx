@@ -17,9 +17,8 @@ import {
   writeLocalOnly,
 } from "../../lib/safeStorage";
 import {
-  getEditableSessionActivityTarget,
+  getSessionChangeActivityTarget,
   getSessionActivityTarget,
-  isKeyboardSessionActivity,
   isSessionActivityIgnored,
   SESSION_ACTIVITY_EVENT,
 } from "../../lib/sessionActivity";
@@ -403,20 +402,14 @@ const Header: React.FC = () => {
   useEffect(() => {
     if (!currentUser) return;
 
-    const handleMeaningfulPointer = (event: MouseEvent | PointerEvent) => {
+    const handleMeaningfulClick = (event: MouseEvent) => {
       if (getSessionActivityTarget(event.target)) {
         extendSession();
       }
     };
 
-    const handleMeaningfulInput = (event: Event) => {
-      if (getEditableSessionActivityTarget(event.target)) {
-        extendSession();
-      }
-    };
-
-    const handleMeaningfulKeydown = (event: KeyboardEvent) => {
-      if (isKeyboardSessionActivity(event)) {
+    const handleMeaningfulChange = (event: Event) => {
+      if (getSessionChangeActivityTarget(event.target)) {
         extendSession();
       }
     };
@@ -430,23 +423,13 @@ const Header: React.FC = () => {
       extendSession({ force: true });
     };
 
-    document.addEventListener("pointerdown", handleMeaningfulPointer, true);
-    document.addEventListener("click", handleMeaningfulPointer, true);
-    document.addEventListener("input", handleMeaningfulInput, true);
-    document.addEventListener("change", handleMeaningfulInput, true);
-    document.addEventListener("keydown", handleMeaningfulKeydown, true);
+    document.addEventListener("click", handleMeaningfulClick, true);
+    document.addEventListener("change", handleMeaningfulChange, true);
     document.addEventListener("submit", handleSubmit, true);
     window.addEventListener(SESSION_ACTIVITY_EVENT, handleSessionActivity);
     return () => {
-      document.removeEventListener(
-        "pointerdown",
-        handleMeaningfulPointer,
-        true,
-      );
-      document.removeEventListener("click", handleMeaningfulPointer, true);
-      document.removeEventListener("input", handleMeaningfulInput, true);
-      document.removeEventListener("change", handleMeaningfulInput, true);
-      document.removeEventListener("keydown", handleMeaningfulKeydown, true);
+      document.removeEventListener("click", handleMeaningfulClick, true);
+      document.removeEventListener("change", handleMeaningfulChange, true);
       document.removeEventListener("submit", handleSubmit, true);
       window.removeEventListener(SESSION_ACTIVITY_EVENT, handleSessionActivity);
     };
