@@ -45,6 +45,7 @@ interface Question {
   type: "choice" | "ox" | "short" | "word" | "order" | "matching";
   question: string;
   options?: string[];
+  choiceOptionImages?: Array<string | null>;
   answer: string | number;
   matchingPairs?: MatchingPair[];
   explanation?: string;
@@ -247,6 +248,11 @@ const QuizRunner: React.FC = () => {
         })
         .filter(([left, right]) => left && right),
     );
+
+  const getChoiceOptionImage = (question: Question, index: number) =>
+    Array.isArray(question.choiceOptionImages)
+      ? question.choiceOptionImages[index] || null
+      : null;
 
   const encodeMatchingAnswer = (
     question: Question,
@@ -1573,28 +1579,38 @@ const QuizRunner: React.FC = () => {
 
             {question.type === "choice" && (
               <div className="space-y-2">
-                {question.options?.map((option, index) => (
-                  <div
-                    key={`${question.id}-choice-${index}`}
-                    onClick={() => handleAnswer(option)}
-                    className={`flex cursor-pointer items-center rounded-xl border-2 px-3 py-2.5 transition ${
-                      currentAnswer === option
-                        ? "border-blue-500 bg-blue-50 font-bold text-blue-800"
-                        : "border-gray-200 hover:border-blue-300 hover:bg-blue-50"
-                    }`}
-                  >
+                {question.options?.map((option, index) => {
+                  const optionImage = getChoiceOptionImage(question, index);
+                  return (
                     <div
-                      className={`mr-3 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
+                      key={`${question.id}-choice-${index}`}
+                      onClick={() => handleAnswer(option)}
+                      className={`flex cursor-pointer items-start rounded-xl border-2 px-3 py-2.5 transition ${
                         currentAnswer === option
-                          ? "bg-blue-600 text-white"
-                          : "bg-gray-200 text-gray-500"
+                          ? "border-blue-500 bg-blue-50 font-bold text-blue-800"
+                          : "border-gray-200 hover:border-blue-300 hover:bg-blue-50"
                       }`}
                     >
-                      {index + 1}
+                      <div
+                        className={`mr-3 mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
+                          currentAnswer === option
+                            ? "bg-blue-600 text-white"
+                            : "bg-gray-200 text-gray-500"
+                        }`}
+                      >
+                        {index + 1}
+                      </div>
+                      {optionImage && (
+                        <img
+                          src={optionImage}
+                          alt={`${index + 1}번 보기 이미지`}
+                          className="mr-3 h-24 w-28 shrink-0 rounded-lg border border-gray-100 bg-white object-contain"
+                        />
+                      )}
+                      <div className="min-w-0 break-words">{option}</div>
                     </div>
-                    <div className="min-w-0 break-words">{option}</div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 

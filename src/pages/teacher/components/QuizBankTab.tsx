@@ -21,8 +21,11 @@ import {
   getYearSemester,
 } from "../../../lib/semesterScope";
 import {
+  QUIZ_CHOICE_OPTION_IMAGES_TOTAL_MAX_BYTES,
+  QUIZ_CHOICE_OPTION_IMAGE_OPTIONS,
   QUIZ_MATCHING_IMAGE_OPTIONS,
   QUIZ_QUESTION_IMAGE_OPTIONS,
+  getQuizImageDataUrlBytes,
   optimizeQuizImageDataUrl,
   optimizeQuizImageFile,
 } from "../../../lib/quizImageCompression";
@@ -54,10 +57,13 @@ interface Question {
   refMid?: string;
   refSmall?: string;
   options?: string[];
+  choiceOptionImages?: ChoiceOptionImage[];
   explanation?: string;
   hintEnabled?: boolean;
   hint?: string;
 }
+
+type ChoiceOptionImage = string | null;
 
 interface MatchingPair {
   left: string;
@@ -165,6 +171,11 @@ const getDefaultChoiceOptionCount = (category?: string) =>
     : DEFAULT_CHOICE_OPTION_COUNT;
 const createDefaultChoiceOptionItems = (category?: string) =>
   Array.from({ length: getDefaultChoiceOptionCount(category) }, () => "");
+const createDefaultChoiceOptionImages = (category?: string) =>
+  Array.from(
+    { length: getDefaultChoiceOptionCount(category) },
+    () => null as ChoiceOptionImage,
+  );
 const createDefaultOrderItems = () =>
   Array.from({ length: DEFAULT_ORDER_OPTION_COUNT }, () => "");
 const createDefaultMatchingPairs = () =>
@@ -364,6 +375,9 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const [editChoiceOptions, setEditChoiceOptions] = useState<string[]>(
     createDefaultChoiceOptionItems(),
   );
+  const [editChoiceOptionImages, setEditChoiceOptionImages] = useState<
+    ChoiceOptionImage[]
+  >(createDefaultChoiceOptionImages());
   const [editChoiceAnswerIndex, setEditChoiceAnswerIndex] = useState<
     number | null
   >(null);
@@ -424,6 +438,22 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
 
   const trimList = (values: string[]) =>
     values.map((v) => v.trim()).filter(Boolean);
+  const normalizeChoiceOptionImages = (
+    images: ChoiceOptionImage[] | undefined,
+    targetLength: number,
+  ) =>
+    Array.from({ length: targetLength }, (_, index) => images?.[index] || null);
+  const getChoiceOptionItems = (
+    options: string[],
+    images: ChoiceOptionImage[],
+  ) =>
+    options
+      .map((value, index) => ({
+        text: value.trim() || (images[index] ? `${index + 1}번 보기` : ""),
+        image: images[index] || null,
+        sourceIndex: index,
+      }))
+      .filter((item) => item.text);
   const trimMatchingPairs = (values: MatchingPair[]) =>
     values
       .map((pair) => ({
@@ -1692,10 +1722,14 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     treeData,
   ]);
 
-  const addChoiceOption = () => setEditChoiceOptions((prev) => [...prev, ""]);
+  const addChoiceOption = () => {
+    setEditChoiceOptions((prev) => [...prev, ""]);
+    setEditChoiceOptionImages((prev) => [...prev, null]);
+  };
   const removeChoiceOption = (index: number) => {
     if (editChoiceOptions.length <= 2) return;
     setEditChoiceOptions((prev) => prev.filter((_, i) => i !== index));
+    setEditChoiceOptionImages((prev) => prev.filter((_, i) => i !== index));
     if (editChoiceAnswerIndex === index) setEditChoiceAnswerIndex(null);
     if (editChoiceAnswerIndex !== null && editChoiceAnswerIndex > index)
       setEditChoiceAnswerIndex(editChoiceAnswerIndex - 1);
@@ -1750,8 +1784,13 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     setPreviewOrderAnswer([]);
     setPreviewMatchingAnswer({});
     setPreviewMatchingActiveLeft("");
-    if (nextType === "choice" && trimList(editChoiceOptions).length === 0) {
+    if (
+      nextType === "choice" &&
+      getChoiceOptionItems(editChoiceOptions, editChoiceOptionImages).length ===
+        0
+    ) {
       setEditChoiceOptions(createDefaultChoiceOptionItems(editCategory));
+      setEditChoiceOptionImages(createDefaultChoiceOptionImages(editCategory));
     }
     if (nextType === "order" && trimList(editOrderItems).length === 0) {
       setEditOrderItems(createDefaultOrderItems());
@@ -1806,6 +1845,35 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     }
   };
 
+  const handleChoiceOptionImageSelect = (
+    index: number,
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setOptimizingImageCount((prev) => prev + 1);
+    optimizeQuizImageFile(file, QUIZ_CHOICE_OPTION_IMAGE_OPTIONS)
+      .then((image) => {
+        setEditChoiceOptionImages((prev) =>
+          normalizeChoiceOptionImages(prev, editChoiceOptions.length).map(
+            (current, imageIndex) => (imageIndex === index ? image : current),
+          ),
+        );
+      })
+      .catch((error) => {
+        console.error("Quiz choice option image optimization failed", error);
+        alert(
+          error instanceof Error
+            ? error.message
+            : "이미지 용량을 줄이지 못했습니다.",
+        );
+      })
+      .finally(() => {
+        setOptimizingImageCount((prev) => Math.max(0, prev - 1));
+        e.currentTarget.value = "";
+      });
+  };
+
   const handleMatchingImageSelect = (
     index: number,
     e: React.ChangeEvent<HTMLInputElement>,
@@ -1845,6 +1913,24 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         ),
       })),
     );
+
+  const optimizeChoiceOptionImages = async (images: ChoiceOptionImage[]) => {
+    const optimized = await Promise.all(
+      images.map((image) =>
+        optimizeQuizImageDataUrl(image, QUIZ_CHOICE_OPTION_IMAGE_OPTIONS),
+      ),
+    );
+    const totalBytes = optimized.reduce(
+      (sum, image) => sum + getQuizImageDataUrlBytes(image),
+      0,
+    );
+    if (totalBytes > QUIZ_CHOICE_OPTION_IMAGES_TOTAL_MAX_BYTES) {
+      throw new Error(
+        "객관식 보기 이미지 전체 용량이 큽니다. 일부 이미지를 제거하거나 더 단순한 이미지를 사용해 주세요.",
+      );
+    }
+    return optimized;
+  };
 
   const handleBigChange = (value: string) => {
     setFilters((prev) => ({
@@ -1892,6 +1978,12 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
           ? options
           : createDefaultChoiceOptionItems(question.category);
       setEditChoiceOptions(normalizedOptions);
+      setEditChoiceOptionImages(
+        normalizeChoiceOptionImages(
+          question.choiceOptionImages,
+          normalizedOptions.length,
+        ),
+      );
       const answerIndex = normalizedOptions.findIndex(
         (opt) => opt.trim() === String(question.answer).trim(),
       );
@@ -1905,6 +1997,9 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
 
     if (normalizedType === "ox") {
       setEditChoiceOptions(createDefaultChoiceOptionItems(question.category));
+      setEditChoiceOptionImages(
+        createDefaultChoiceOptionImages(question.category),
+      );
       setEditChoiceAnswerIndex(null);
       setEditOxAnswer(
         question.answer === "O" || question.answer === "X"
@@ -1919,6 +2014,9 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
 
     if (normalizedType === "word") {
       setEditChoiceOptions(createDefaultChoiceOptionItems(question.category));
+      setEditChoiceOptionImages(
+        createDefaultChoiceOptionImages(question.category),
+      );
       setEditChoiceAnswerIndex(null);
       setEditOxAnswer("");
       setEditWordAnswer(String(question.answer || ""));
@@ -1930,6 +2028,9 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     if (normalizedType === "matching") {
       const pairs = parseMatchingAnswer(question);
       setEditChoiceOptions(createDefaultChoiceOptionItems(question.category));
+      setEditChoiceOptionImages(
+        createDefaultChoiceOptionImages(question.category),
+      );
       setEditChoiceAnswerIndex(null);
       setEditOxAnswer("");
       setEditWordAnswer("");
@@ -1947,6 +2048,9 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
             .split(ORDER_DELIMITER)
             .filter(Boolean);
     setEditChoiceOptions(createDefaultChoiceOptionItems(question.category));
+    setEditChoiceOptionImages(
+      createDefaultChoiceOptionImages(question.category),
+    );
     setEditChoiceAnswerIndex(null);
     setEditOxAnswer("");
     setEditWordAnswer("");
@@ -1957,7 +2061,12 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   };
 
   const buildCurrentEditSnapshot = () => {
-    const choiceOptions = trimList(editChoiceOptions);
+    const choiceItems = getChoiceOptionItems(
+      editChoiceOptions,
+      editChoiceOptionImages,
+    );
+    const choiceOptions = choiceItems.map((item) => item.text);
+    const choiceOptionImages = choiceItems.map((item) => item.image);
     const orderOptions = trimList(editOrderItems);
     const matchingOptions = trimMatchingPairs(editMatchingPairs);
     let answer = "";
@@ -1966,7 +2075,9 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     if (editType === "choice") {
       answer =
         editChoiceAnswerIndex !== null
-          ? editChoiceOptions[editChoiceAnswerIndex]?.trim() || ""
+          ? choiceItems.find(
+              (item) => item.sourceIndex === editChoiceAnswerIndex,
+            )?.text || ""
           : "";
       options = choiceOptions;
     } else if (editType === "ox") {
@@ -1991,6 +2102,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       image: editImage || "",
       passage: editType === "choice" ? editPassage.trim() : "",
       options,
+      choiceOptionImages: editType === "choice" ? choiceOptionImages : [],
       answer,
       matchingPairs: editType === "matching" ? matchingOptions : [],
       hintEnabled: editHintEnabled,
@@ -2001,10 +2113,15 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const buildOriginalEditSnapshot = (question: Question) => {
     const normalizedType = normalizeQuestionType(question.type);
     let options: string[] = [];
+    let choiceOptionImages: ChoiceOptionImage[] = [];
     let answer = "";
 
     if (normalizedType === "choice") {
       options = trimList(question.options || []);
+      choiceOptionImages = normalizeChoiceOptionImages(
+        question.choiceOptionImages,
+        options.length,
+      );
       answer = String(question.answer || "").trim();
     } else if (normalizedType === "ox") {
       options = ["O", "X"];
@@ -2039,6 +2156,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
           ? String(question.passage || "").trim()
           : "",
       options,
+      choiceOptionImages,
       answer,
       matchingPairs:
         normalizedType === "matching"
@@ -2066,6 +2184,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     editImage,
     editPassage,
     editChoiceOptions,
+    editChoiceOptionImages,
     editChoiceAnswerIndex,
     editOxAnswer,
     editWordAnswer,
@@ -2091,6 +2210,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     setEditImage(null);
     setEditPassage("");
     setEditChoiceOptions(createDefaultChoiceOptionItems());
+    setEditChoiceOptionImages(createDefaultChoiceOptionImages());
     setEditChoiceAnswerIndex(null);
     setEditOxAnswer("");
     setEditWordAnswer("");
@@ -2123,7 +2243,12 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       return;
     }
 
-    const choiceOptions = trimList(editChoiceOptions);
+    const choiceItems = getChoiceOptionItems(
+      editChoiceOptions,
+      editChoiceOptionImages,
+    );
+    const choiceOptions = choiceItems.map((item) => item.text);
+    const choiceOptionImages = choiceItems.map((item) => item.image);
     const orderOptions = trimList(editOrderItems);
     const matchingOptions = trimMatchingPairs(editMatchingPairs);
     let answer = "";
@@ -2138,7 +2263,9 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         alert("객관식 정답 보기를 선택하세요.");
         return;
       }
-      answer = editChoiceOptions[editChoiceAnswerIndex]?.trim() || "";
+      answer =
+        choiceItems.find((item) => item.sourceIndex === editChoiceAnswerIndex)
+          ?.text || "";
       if (!answer) {
         alert("정답으로 선택한 보기에 내용을 입력하세요.");
         return;
@@ -2186,6 +2313,10 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         editImage,
         QUIZ_QUESTION_IMAGE_OPTIONS,
       );
+      const optimizedChoiceOptionImages =
+        editType === "choice"
+          ? await optimizeChoiceOptionImages(choiceOptionImages)
+          : [];
       const optimizedMatchingOptions =
         editType === "matching"
           ? await optimizeMatchingPairImages(matchingOptions)
@@ -2200,6 +2331,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         image: optimizedImage,
         passage: editType === "choice" ? editPassage.trim() : "",
         options,
+        choiceOptionImages: optimizedChoiceOptionImages,
         matchingPairs: optimizedMatchingOptions,
         hintEnabled: editHintEnabled,
         hint: editHintEnabled ? editHintText.trim() : "",
@@ -2264,8 +2396,10 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       closeEditModal(true);
     } catch (error: any) {
       console.error(error);
+      const message =
+        error instanceof Error && error.message ? `\n${error.message}` : "";
       alert(
-        `문제 수정에 실패했습니다${error?.code ? ` (${error.code})` : ""}.`,
+        `문제 수정에 실패했습니다${error?.code ? ` (${error.code})` : ""}.${message}`,
       );
     } finally {
       savingEditRef.current = false;
@@ -2866,10 +3000,15 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                           <td className="overflow-hidden px-4 py-5 align-top">
                             <div className="min-w-0">
                               <div className="flex items-start gap-3">
-                                {q.image && (
+                                {(q.image ||
+                                  q.choiceOptionImages?.some(Boolean)) && (
                                   <i
                                     className="fas fa-image mt-1 text-blue-500"
-                                    title="이미지 문항"
+                                    title={
+                                      q.image
+                                        ? "이미지 문항"
+                                        : "보기 이미지 포함"
+                                    }
                                   ></i>
                                 )}
                                 {passageText && (
@@ -3306,43 +3445,88 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                         <i className="fas fa-plus mr-1"></i>보기 추가
                       </button>
                     </div>
-                    {editChoiceOptions.map((option, index) => (
-                      <div
-                        key={`choice-option-${index}`}
-                        className="flex items-center gap-2"
-                      >
-                        <span className="w-7 h-7 rounded-full bg-gray-200 text-gray-700 text-xs font-bold flex items-center justify-center">
-                          {index + 1}
-                        </span>
-                        <input
-                          type="text"
-                          value={option}
-                          onChange={(e) =>
-                            setEditChoiceOptions((prev) =>
-                              prev.map((opt, i) =>
-                                i === index ? e.target.value : opt,
-                              ),
-                            )
-                          }
-                          placeholder={`${index + 1}번 보기`}
-                          className="flex-1 border rounded p-2 text-sm bg-white"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setEditChoiceAnswerIndex(index)}
-                          className={`text-xs px-2 py-1 rounded border ${editChoiceAnswerIndex === index ? "border-blue-500 bg-blue-100 text-blue-700 font-bold" : "border-gray-300 text-gray-500"}`}
+                    {editChoiceOptions.map((option, index) => {
+                      const optionImage = editChoiceOptionImages[index];
+                      return (
+                        <div
+                          key={`choice-option-${index}`}
+                          className="flex items-start gap-2"
                         >
-                          정답
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => removeChoiceOption(index)}
-                          className="text-gray-400 hover:text-red-500 px-1"
-                        >
-                          <i className="fas fa-times"></i>
-                        </button>
-                      </div>
-                    ))}
+                          <span className="mt-1 w-7 h-7 rounded-full bg-gray-200 text-gray-700 text-xs font-bold flex items-center justify-center">
+                            {index + 1}
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <input
+                              type="text"
+                              value={option}
+                              onChange={(e) =>
+                                setEditChoiceOptions((prev) =>
+                                  prev.map((opt, i) =>
+                                    i === index ? e.target.value : opt,
+                                  ),
+                                )
+                              }
+                              placeholder={`${index + 1}번 보기`}
+                              className="w-full border rounded p-2 text-sm bg-white"
+                            />
+                            {optionImage && (
+                              <div className="mt-2 flex min-w-0 items-center gap-2 rounded-md border border-gray-200 bg-white p-2">
+                                <img
+                                  src={optionImage}
+                                  alt={`${index + 1}번 보기 이미지`}
+                                  className="h-16 w-20 shrink-0 rounded border border-gray-100 object-contain"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setEditChoiceOptionImages((prev) =>
+                                      normalizeChoiceOptionImages(
+                                        prev,
+                                        editChoiceOptions.length,
+                                      ).map((image, imageIndex) =>
+                                        imageIndex === index ? null : image,
+                                      ),
+                                    )
+                                  }
+                                  className="text-xs font-bold text-gray-500 hover:text-red-500"
+                                >
+                                  이미지 제거
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                          <label
+                            className="mt-1 inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded border border-blue-100 bg-blue-50 text-blue-700 transition hover:bg-blue-100"
+                            title={`${index + 1}번 보기 이미지 첨부`}
+                          >
+                            <i className="fas fa-image text-xs"></i>
+                            <input
+                              type="file"
+                              className="hidden"
+                              accept="image/*"
+                              aria-label={`${index + 1}번 보기 이미지 첨부`}
+                              onChange={(e) =>
+                                handleChoiceOptionImageSelect(index, e)
+                              }
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setEditChoiceAnswerIndex(index)}
+                            className={`mt-1 text-xs px-2 py-1 rounded border ${editChoiceAnswerIndex === index ? "border-blue-500 bg-blue-100 text-blue-700 font-bold" : "border-gray-300 text-gray-500"}`}
+                          >
+                            정답
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeChoiceOption(index)}
+                            className="mt-1 text-gray-400 hover:text-red-500 px-1"
+                          >
+                            <i className="fas fa-times"></i>
+                          </button>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 
@@ -3587,20 +3771,32 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                             </div>
                           )}
                           <div className="space-y-2">
-                            {trimList(editChoiceOptions).map((opt, index) => (
+                            {getChoiceOptionItems(
+                              editChoiceOptions,
+                              editChoiceOptionImages,
+                            ).map((item, index) => (
                               <button
                                 key={`preview-choice-${index}`}
                                 type="button"
-                                onClick={() => setPreviewChoiceAnswer(opt)}
-                                className={`flex w-full items-center gap-2 rounded-lg border-2 p-3 text-left transition ${previewChoiceAnswer === opt ? "border-blue-500 bg-blue-50 font-bold text-blue-800" : "border-gray-200 hover:border-blue-300"}`}
+                                onClick={() =>
+                                  setPreviewChoiceAnswer(item.text)
+                                }
+                                className={`flex w-full items-start gap-2 rounded-lg border-2 p-3 text-left transition ${previewChoiceAnswer === item.text ? "border-blue-500 bg-blue-50 font-bold text-blue-800" : "border-gray-200 hover:border-blue-300"}`}
                               >
                                 <span
-                                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs ${previewChoiceAnswer === opt ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-500"}`}
+                                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs ${previewChoiceAnswer === item.text ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-500"}`}
                                 >
                                   {index + 1}
                                 </span>
+                                {item.image && (
+                                  <img
+                                    src={item.image}
+                                    alt={`${index + 1}번 보기 이미지 미리보기`}
+                                    className="h-20 w-24 shrink-0 rounded border border-gray-100 bg-white object-contain"
+                                  />
+                                )}
                                 <span className="min-w-0 break-words">
-                                  {opt}
+                                  {item.text}
                                 </span>
                               </button>
                             ))}

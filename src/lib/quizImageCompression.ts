@@ -16,6 +16,14 @@ export const QUIZ_MATCHING_IMAGE_OPTIONS: QuizImageCompressionOptions = {
   maxDataUrlBytes: 56 * 1024,
 };
 
+export const QUIZ_CHOICE_OPTION_IMAGE_OPTIONS: QuizImageCompressionOptions = {
+  maxSide: 640,
+  targetDataUrlBytes: 56 * 1024,
+  maxDataUrlBytes: 80 * 1024,
+};
+
+export const QUIZ_CHOICE_OPTION_IMAGES_TOTAL_MAX_BYTES = 420 * 1024;
+
 const IMAGE_QUALITY_STEPS = [0.9, 0.86, 0.82, 0.78, 0.74, 0.7, 0.66, 0.64];
 const IMAGE_SIZE_STEPS = [1, 0.875, 0.75, 0.625];
 const IMAGE_MIME_TYPES = ["image/webp", "image/jpeg"] as const;

@@ -18,8 +18,11 @@ import {
   getSemesterDocPath,
 } from "../../../lib/semesterScope";
 import {
+  QUIZ_CHOICE_OPTION_IMAGES_TOTAL_MAX_BYTES,
+  QUIZ_CHOICE_OPTION_IMAGE_OPTIONS,
   QUIZ_MATCHING_IMAGE_OPTIONS,
   QUIZ_QUESTION_IMAGE_OPTIONS,
+  getQuizImageDataUrlBytes,
   optimizeQuizImageDataUrl,
   optimizeQuizImageFile,
 } from "../../../lib/quizImageCompression";
@@ -43,6 +46,8 @@ interface MatchingPair {
   rightImage?: string | null;
 }
 
+type ChoiceOptionImage = string | null;
+
 interface Question {
   id: number;
   unitId: string;
@@ -51,6 +56,7 @@ interface Question {
   type: QuestionType;
   question: string;
   options?: string[];
+  choiceOptionImages?: ChoiceOptionImage[];
   answer: string;
   matchingPairs?: MatchingPair[];
   explanation?: string;
@@ -89,6 +95,11 @@ const getDefaultChoiceOptionCount = (category?: string) =>
     : DEFAULT_CHOICE_OPTION_COUNT;
 const createDefaultChoiceOptionItems = (category?: string) =>
   Array.from({ length: getDefaultChoiceOptionCount(category) }, () => "");
+const createDefaultChoiceOptionImages = (category?: string) =>
+  Array.from(
+    { length: getDefaultChoiceOptionCount(category) },
+    () => null as ChoiceOptionImage,
+  );
 const createDefaultOrderItems = () =>
   Array.from({ length: DEFAULT_ORDER_OPTION_COUNT }, () => "");
 const createDefaultMatchingPairs = () =>
@@ -142,6 +153,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   const [choiceOptions, setChoiceOptions] = useState<string[]>(
     createDefaultChoiceOptionItems(type === "special" ? "exam_prep" : ""),
   );
+  const [choiceOptionImages, setChoiceOptionImages] = useState<
+    ChoiceOptionImage[]
+  >(createDefaultChoiceOptionImages(type === "special" ? "exam_prep" : ""));
   const [choiceAnswerIndex, setChoiceAnswerIndex] = useState<number | null>(
     null,
   );
@@ -282,6 +296,22 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
 
   const trimList = (values: string[]) =>
     values.map((v) => v.trim()).filter(Boolean);
+  const normalizeChoiceOptionImages = (
+    images: ChoiceOptionImage[] | undefined,
+    targetLength: number,
+  ) =>
+    Array.from({ length: targetLength }, (_, index) => images?.[index] || null);
+  const getChoiceOptionItems = (
+    options: string[],
+    images: ChoiceOptionImage[],
+  ) =>
+    options
+      .map((value, index) => ({
+        text: value.trim() || (images[index] ? `${index + 1}번 보기` : ""),
+        image: images[index] || null,
+        sourceIndex: index,
+      }))
+      .filter((item) => item.text);
   const trimMatchingPairs = (values: MatchingPair[]) =>
     values
       .map((pair) => ({
@@ -330,6 +360,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     setFormImage(null);
     setFormPassage("");
     setChoiceOptions(createDefaultChoiceOptionItems(defaultCategory));
+    setChoiceOptionImages(createDefaultChoiceOptionImages(defaultCategory));
     setChoiceAnswerIndex(null);
     setOxAnswer("");
     setWordAnswer("");
@@ -386,6 +417,35 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     }
   };
 
+  const handleChoiceOptionImageSelect = (
+    index: number,
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setOptimizingImageCount((prev) => prev + 1);
+    optimizeQuizImageFile(file, QUIZ_CHOICE_OPTION_IMAGE_OPTIONS)
+      .then((image) => {
+        setChoiceOptionImages((prev) =>
+          normalizeChoiceOptionImages(prev, choiceOptions.length).map(
+            (current, imageIndex) => (imageIndex === index ? image : current),
+          ),
+        );
+      })
+      .catch((error) => {
+        console.error("Quiz choice option image optimization failed", error);
+        alert(
+          error instanceof Error
+            ? error.message
+            : "이미지 용량을 줄이지 못했습니다.",
+        );
+      })
+      .finally(() => {
+        setOptimizingImageCount((prev) => Math.max(0, prev - 1));
+        e.currentTarget.value = "";
+      });
+  };
+
   const handleMatchingImageSelect = (
     index: number,
     e: React.ChangeEvent<HTMLInputElement>,
@@ -426,16 +486,35 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       })),
     );
 
+  const optimizeChoiceOptionImages = async (images: ChoiceOptionImage[]) => {
+    const optimized = await Promise.all(
+      images.map((image) =>
+        optimizeQuizImageDataUrl(image, QUIZ_CHOICE_OPTION_IMAGE_OPTIONS),
+      ),
+    );
+    const totalBytes = optimized.reduce(
+      (sum, image) => sum + getQuizImageDataUrlBytes(image),
+      0,
+    );
+    if (totalBytes > QUIZ_CHOICE_OPTION_IMAGES_TOTAL_MAX_BYTES) {
+      throw new Error(
+        "객관식 보기 이미지 전체 용량이 큽니다. 일부 이미지를 제거하거나 더 단순한 이미지를 사용해 주세요.",
+      );
+    }
+    return optimized;
+  };
+
   const handleTypeChange = (nextType: QuestionType) => {
     setFormType(nextType);
     setPreviewOpen(false);
     resetPreview();
-    if (nextType === "choice" && trimList(choiceOptions).length === 0) {
-      setChoiceOptions(
-        createDefaultChoiceOptionItems(
-          type === "special" ? "exam_prep" : category,
-        ),
-      );
+    if (
+      nextType === "choice" &&
+      getChoiceOptionItems(choiceOptions, choiceOptionImages).length === 0
+    ) {
+      const defaultCategory = type === "special" ? "exam_prep" : category;
+      setChoiceOptions(createDefaultChoiceOptionItems(defaultCategory));
+      setChoiceOptionImages(createDefaultChoiceOptionImages(defaultCategory));
     }
     if (nextType === "order" && trimList(orderItems).length === 0) {
       setOrderItems(createDefaultOrderItems());
@@ -504,6 +583,12 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
           ? options
           : createDefaultChoiceOptionItems(question.category || category);
       setChoiceOptions(normalizedOptions);
+      setChoiceOptionImages(
+        normalizeChoiceOptionImages(
+          question.choiceOptionImages,
+          normalizedOptions.length,
+        ),
+      );
       const answerIndex = normalizedOptions.findIndex(
         (opt) => opt.trim() === String(question.answer).trim(),
       );
@@ -518,6 +603,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     if (question.type === "ox") {
       setChoiceOptions(
         createDefaultChoiceOptionItems(question.category || category),
+      );
+      setChoiceOptionImages(
+        createDefaultChoiceOptionImages(question.category || category),
       );
       setChoiceAnswerIndex(null);
       setOxAnswer(
@@ -535,6 +623,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       setChoiceOptions(
         createDefaultChoiceOptionItems(question.category || category),
       );
+      setChoiceOptionImages(
+        createDefaultChoiceOptionImages(question.category || category),
+      );
       setChoiceAnswerIndex(null);
       setOxAnswer("");
       setWordAnswer(String(question.answer || ""));
@@ -547,6 +638,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       const pairs = parseMatchingAnswer(question);
       setChoiceOptions(
         createDefaultChoiceOptionItems(question.category || category),
+      );
+      setChoiceOptionImages(
+        createDefaultChoiceOptionImages(question.category || category),
       );
       setChoiceAnswerIndex(null);
       setOxAnswer("");
@@ -567,6 +661,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     setChoiceOptions(
       createDefaultChoiceOptionItems(question.category || category),
     );
+    setChoiceOptionImages(
+      createDefaultChoiceOptionImages(question.category || category),
+    );
     setChoiceAnswerIndex(null);
     setOxAnswer("");
     setWordAnswer("");
@@ -576,10 +673,14 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     setMatchingPairs(createDefaultMatchingPairs());
   };
 
-  const addChoiceOption = () => setChoiceOptions((prev) => [...prev, ""]);
+  const addChoiceOption = () => {
+    setChoiceOptions((prev) => [...prev, ""]);
+    setChoiceOptionImages((prev) => [...prev, null]);
+  };
   const removeChoiceOption = (index: number) => {
     if (choiceOptions.length <= 2) return;
     setChoiceOptions((prev) => prev.filter((_, i) => i !== index));
+    setChoiceOptionImages((prev) => prev.filter((_, i) => i !== index));
     if (choiceAnswerIndex === index) setChoiceAnswerIndex(null);
     if (choiceAnswerIndex !== null && choiceAnswerIndex > index)
       setChoiceAnswerIndex(choiceAnswerIndex - 1);
@@ -618,6 +719,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   const buildQuestionPayload = (): {
     answer: string;
     options: string[];
+    choiceOptionImages?: ChoiceOptionImage[];
     matchingPairs?: MatchingPair[];
   } | null => {
     if (!formText.trim()) {
@@ -629,15 +731,22 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       return null;
     }
     if (formType === "choice") {
-      const options = trimList(choiceOptions);
+      const optionItems = getChoiceOptionItems(
+        choiceOptions,
+        choiceOptionImages,
+      );
+      const options = optionItems.map((item) => item.text);
+      const optionImages = optionItems.map((item) => item.image);
       if (options.length < 2)
         return (alert("객관식 보기는 최소 2개 이상 필요합니다."), null);
       if (choiceAnswerIndex === null)
         return (alert("객관식 정답 보기를 선택하세요."), null);
-      const answer = choiceOptions[choiceAnswerIndex]?.trim() || "";
+      const answer =
+        optionItems.find((item) => item.sourceIndex === choiceAnswerIndex)
+          ?.text || "";
       if (!answer)
         return (alert("정답으로 선택한 보기에 내용을 입력하세요."), null);
-      return { answer, options };
+      return { answer, options, choiceOptionImages: optionImages };
     }
     if (formType === "ox") {
       if (!oxAnswer) return (alert("O/X 정답을 선택하세요."), null);
@@ -680,6 +789,10 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
         formImage,
         QUIZ_QUESTION_IMAGE_OPTIONS,
       );
+      const optimizedChoiceOptionImages =
+        formType === "choice"
+          ? await optimizeChoiceOptionImages(payload.choiceOptionImages || [])
+          : [];
       const optimizedMatchingPairs =
         formType === "matching"
           ? await optimizeMatchingPairImages(payload.matchingPairs || [])
@@ -696,6 +809,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
         question: formText.trim(),
         answer: payload.answer,
         options: payload.options,
+        choiceOptionImages: optimizedChoiceOptionImages,
         matchingPairs: optimizedMatchingPairs,
         explanation: formExp.trim(),
         image: optimizedImage,
@@ -727,7 +841,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     } catch (error: any) {
       console.error("Add question failed", error);
       const code = error?.code ? ` (${error.code})` : "";
-      alert(`문제 등록에 실패했습니다${code}.`);
+      const message =
+        error instanceof Error && error.message ? `\n${error.message}` : "";
+      alert(`문제 등록에 실패했습니다${code}.${message}`);
     } finally {
       savingQuestionRef.current = false;
       setSavingQuestion(false);
@@ -885,9 +1001,13 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
               </div>
             ) : (
               filteredQuestions.map((q, idx) => {
-                const choiceOptions =
+                const choicePreviewOptions =
                   q.type === "choice" ? trimList(q.options || []) : [];
-                const hasChoicePreview = choiceOptions.length > 0;
+                const choicePreviewImages = normalizeChoiceOptionImages(
+                  q.choiceOptionImages,
+                  choicePreviewOptions.length,
+                );
+                const hasChoicePreview = choicePreviewOptions.length > 0;
                 const answerText = String(q.answer || "").trim();
                 const explanationText = String(q.explanation || "").trim();
                 const passageText = String(q.passage || "").trim();
@@ -950,9 +1070,11 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                         )}
                         {hasChoicePreview && (
                           <div className="space-y-1.5">
-                            {choiceOptions.map((option, optionIndex) => {
+                            {choicePreviewOptions.map((option, optionIndex) => {
                               const isCorrectOption =
                                 option.trim() === answerText;
+                              const optionImage =
+                                choicePreviewImages[optionIndex];
                               return (
                                 <div
                                   key={`${q.id}-option-${optionIndex}`}
@@ -971,6 +1093,13 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                                   >
                                     {optionIndex + 1}
                                   </span>
+                                  {optionImage && (
+                                    <img
+                                      src={optionImage}
+                                      alt={`${optionIndex + 1}번 보기 이미지`}
+                                      className="h-12 w-12 shrink-0 rounded border border-gray-200 bg-white object-contain"
+                                    />
+                                  )}
                                   <span className="min-w-0 break-words">
                                     {option}
                                   </span>
@@ -1247,44 +1376,89 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                           <i className="fas fa-plus mr-1"></i>보기 추가
                         </button>
                       </div>
-                      {choiceOptions.map((option, index) => (
-                        <div
-                          key={`choice-option-${index}`}
-                          className="flex items-center gap-2"
-                        >
-                          <span className="w-7 h-7 rounded-full bg-gray-200 text-gray-700 text-xs font-bold flex items-center justify-center">
-                            {index + 1}
-                          </span>
-                          <input
-                            type="text"
-                            value={option}
-                            onChange={(e) =>
-                              setChoiceOptions((prev) =>
-                                prev.map((opt, i) =>
-                                  i === index ? e.target.value : opt,
-                                ),
-                              )
-                            }
-                            onKeyDown={handleVerticalFocus}
-                            placeholder={`${index + 1}번 보기`}
-                            className="quiz-compose-field flex-1 border rounded p-2 text-sm bg-white"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setChoiceAnswerIndex(index)}
-                            className={`text-xs px-2 py-1 rounded border ${choiceAnswerIndex === index ? "border-blue-500 bg-blue-100 text-blue-700 font-bold" : "border-gray-300 text-gray-500"}`}
+                      {choiceOptions.map((option, index) => {
+                        const optionImage = choiceOptionImages[index];
+                        return (
+                          <div
+                            key={`choice-option-${index}`}
+                            className="flex items-start gap-2"
                           >
-                            정답
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => removeChoiceOption(index)}
-                            className="text-gray-400 hover:text-red-500 px-1"
-                          >
-                            <i className="fas fa-times"></i>
-                          </button>
-                        </div>
-                      ))}
+                            <span className="mt-1 w-7 h-7 rounded-full bg-gray-200 text-gray-700 text-xs font-bold flex items-center justify-center">
+                              {index + 1}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <input
+                                type="text"
+                                value={option}
+                                onChange={(e) =>
+                                  setChoiceOptions((prev) =>
+                                    prev.map((opt, i) =>
+                                      i === index ? e.target.value : opt,
+                                    ),
+                                  )
+                                }
+                                onKeyDown={handleVerticalFocus}
+                                placeholder={`${index + 1}번 보기`}
+                                className="quiz-compose-field w-full border rounded p-2 text-sm bg-white"
+                              />
+                              {optionImage && (
+                                <div className="mt-2 flex min-w-0 items-center gap-2 rounded-md border border-gray-200 bg-white p-2">
+                                  <img
+                                    src={optionImage}
+                                    alt={`${index + 1}번 보기 이미지`}
+                                    className="h-16 w-20 shrink-0 rounded border border-gray-100 object-contain"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setChoiceOptionImages((prev) =>
+                                        normalizeChoiceOptionImages(
+                                          prev,
+                                          choiceOptions.length,
+                                        ).map((image, imageIndex) =>
+                                          imageIndex === index ? null : image,
+                                        ),
+                                      )
+                                    }
+                                    className="text-xs font-bold text-gray-500 hover:text-red-500"
+                                  >
+                                    이미지 제거
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                            <label
+                              className="mt-1 inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded border border-blue-100 bg-blue-50 text-blue-700 transition hover:bg-blue-100"
+                              title={`${index + 1}번 보기 이미지 첨부`}
+                            >
+                              <i className="fas fa-image text-xs"></i>
+                              <input
+                                type="file"
+                                className="hidden"
+                                accept="image/*"
+                                aria-label={`${index + 1}번 보기 이미지 첨부`}
+                                onChange={(e) =>
+                                  handleChoiceOptionImageSelect(index, e)
+                                }
+                              />
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => setChoiceAnswerIndex(index)}
+                              className={`mt-1 text-xs px-2 py-1 rounded border ${choiceAnswerIndex === index ? "border-blue-500 bg-blue-100 text-blue-700 font-bold" : "border-gray-300 text-gray-500"}`}
+                            >
+                              정답
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeChoiceOption(index)}
+                              className="mt-1 text-gray-400 hover:text-red-500 px-1"
+                            >
+                              <i className="fas fa-times"></i>
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
 
@@ -1533,20 +1707,32 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                               </div>
                             )}
                             <div className="space-y-2">
-                              {trimList(choiceOptions).map((opt, index) => (
+                              {getChoiceOptionItems(
+                                choiceOptions,
+                                choiceOptionImages,
+                              ).map((item, index) => (
                                 <button
                                   key={`preview-choice-${index}`}
                                   type="button"
-                                  onClick={() => setPreviewChoiceAnswer(opt)}
-                                  className={`flex w-full items-center gap-2 rounded-lg border-2 p-3 text-left transition ${previewChoiceAnswer === opt ? "border-blue-500 bg-blue-50 font-bold text-blue-800" : "border-gray-200 hover:border-blue-300"}`}
+                                  onClick={() =>
+                                    setPreviewChoiceAnswer(item.text)
+                                  }
+                                  className={`flex w-full items-start gap-2 rounded-lg border-2 p-3 text-left transition ${previewChoiceAnswer === item.text ? "border-blue-500 bg-blue-50 font-bold text-blue-800" : "border-gray-200 hover:border-blue-300"}`}
                                 >
                                   <span
-                                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs ${previewChoiceAnswer === opt ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-500"}`}
+                                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs ${previewChoiceAnswer === item.text ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-500"}`}
                                   >
                                     {index + 1}
                                   </span>
+                                  {item.image && (
+                                    <img
+                                      src={item.image}
+                                      alt={`${index + 1}번 보기 이미지 미리보기`}
+                                      className="h-20 w-24 shrink-0 rounded border border-gray-100 bg-white object-contain"
+                                    />
+                                  )}
                                   <span className="min-w-0 break-words">
-                                    {opt}
+                                    {item.text}
                                   </span>
                                 </button>
                               ))}
