@@ -5,9 +5,9 @@ export interface QuizImageCompressionOptions {
 }
 
 export const QUIZ_QUESTION_IMAGE_OPTIONS: QuizImageCompressionOptions = {
-  maxSide: 840,
-  targetDataUrlBytes: 110 * 1024,
-  maxDataUrlBytes: 180 * 1024,
+  maxSide: 1400,
+  targetDataUrlBytes: 260 * 1024,
+  maxDataUrlBytes: 420 * 1024,
 };
 
 export const QUIZ_MATCHING_IMAGE_OPTIONS: QuizImageCompressionOptions = {
@@ -16,8 +16,8 @@ export const QUIZ_MATCHING_IMAGE_OPTIONS: QuizImageCompressionOptions = {
   maxDataUrlBytes: 56 * 1024,
 };
 
-const IMAGE_QUALITY_STEPS = [0.82, 0.76, 0.7, 0.64, 0.58, 0.52, 0.46, 0.4];
-const IMAGE_SIZE_STEPS = [1, 0.875, 0.75, 0.625, 0.5, 0.425, 0.35];
+const IMAGE_QUALITY_STEPS = [0.9, 0.86, 0.82, 0.78, 0.74, 0.7, 0.66, 0.64];
+const IMAGE_SIZE_STEPS = [1, 0.875, 0.75, 0.625];
 const IMAGE_MIME_TYPES = ["image/webp", "image/jpeg"] as const;
 const MIN_PERCEIVED_QUALITY = 0.64;
 const MIN_SIZE_STEP_FOR_QUALITY = 0.625;
@@ -72,7 +72,7 @@ const makeCandidate = (
   canvas: HTMLCanvasElement,
   mimeType: (typeof IMAGE_MIME_TYPES)[number],
   quality: number,
-) => {
+): QuizImageCandidate | null => {
   const dataUrl = canvas.toDataURL(mimeType, quality);
   if (!dataUrl.startsWith(`data:${mimeType}`)) return null;
   return {
@@ -81,6 +81,27 @@ const makeCandidate = (
     quality,
     pixelCount: canvas.width * canvas.height,
   };
+};
+
+interface QuizImageCandidate {
+  dataUrl: string;
+  byteSize: number;
+  quality: number;
+  pixelCount: number;
+}
+
+const chooseSharperCandidate = (
+  current: QuizImageCandidate | null,
+  candidate: QuizImageCandidate,
+) => {
+  if (!current) return candidate;
+  if (candidate.pixelCount !== current.pixelCount) {
+    return candidate.pixelCount > current.pixelCount ? candidate : current;
+  }
+  if (candidate.quality !== current.quality) {
+    return candidate.quality > current.quality ? candidate : current;
+  }
+  return candidate.byteSize < current.byteSize ? candidate : current;
 };
 
 const isGoodDisplayCandidate = (
@@ -107,8 +128,8 @@ const compressDataUrl = async (
     1,
     Math.round((source.naturalHeight || 1) * scale),
   );
-  let displayCandidate: ReturnType<typeof makeCandidate> | null = null;
-  let fallbackCandidate: ReturnType<typeof makeCandidate> | null = null;
+  let displayCandidate: QuizImageCandidate | null = null;
+  let fallbackCandidate: QuizImageCandidate | null = null;
 
   for (const sizeStep of IMAGE_SIZE_STEPS) {
     const width = Math.max(1, Math.round(baseWidth * sizeStep));
@@ -121,17 +142,21 @@ const compressDataUrl = async (
         if (!candidate) continue;
         if (
           candidate.byteSize <= options.targetDataUrlBytes &&
-          isGoodDisplayCandidate(candidate, sizeStep) &&
-          (!displayCandidate || candidate.byteSize < displayCandidate.byteSize)
+          isGoodDisplayCandidate(candidate, sizeStep)
         ) {
-          displayCandidate = candidate;
+          displayCandidate = chooseSharperCandidate(
+            displayCandidate,
+            candidate,
+          );
         }
         if (
           candidate.byteSize <= options.maxDataUrlBytes &&
-          (!fallbackCandidate ||
-            candidate.byteSize < fallbackCandidate.byteSize)
+          isGoodDisplayCandidate(candidate, sizeStep)
         ) {
-          fallbackCandidate = candidate;
+          fallbackCandidate = chooseSharperCandidate(
+            fallbackCandidate,
+            candidate,
+          );
         }
       }
     }

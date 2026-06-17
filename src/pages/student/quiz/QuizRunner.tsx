@@ -1562,7 +1562,7 @@ const QuizRunner: React.FC = () => {
               >
                 <img
                   src={question.image}
-                  className="mx-auto max-h-[min(42vh,380px)] max-w-full rounded-lg border border-gray-100 object-contain"
+                  className="mx-auto max-h-[min(48vh,460px)] max-w-full rounded-lg border border-gray-100 object-contain"
                   alt="문항 첨부 이미지"
                 />
               </div>
@@ -1896,7 +1896,7 @@ const QuizRunner: React.FC = () => {
                     <img
                       src={result.image}
                       alt="문항 첨부 이미지"
-                      className="mx-auto max-h-48 max-w-full object-contain"
+                      className="mx-auto max-h-72 max-w-full object-contain"
                     />
                   </div>
                 )}
