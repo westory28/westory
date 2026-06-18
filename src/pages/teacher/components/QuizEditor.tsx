@@ -1062,7 +1062,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
               onChange={(e) =>
                 setEpFilter({ big: e.target.value, mid: "", small: "" })
               }
-              className="border border-blue-200 rounded px-2 py-1 text-xs w-28 bg-white"
+              className="w-32 rounded border border-blue-200 bg-white py-1 pl-2 pr-8 text-xs sm:w-36"
             >
               <option value="">대단원 전체</option>
               {allBigUnits.map((big) => (
@@ -1080,7 +1080,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                   small: "",
                 }))
               }
-              className="border border-blue-200 rounded px-2 py-1 text-xs w-28 bg-white"
+              className="w-32 rounded border border-blue-200 bg-white py-1 pl-2 pr-8 text-xs sm:w-36"
             >
               <option value="">중단원 전체</option>
               {filterMidUnits.map((mid) => (
@@ -1094,7 +1094,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
               onChange={(e) =>
                 setEpFilter((prev) => ({ ...prev, small: e.target.value }))
               }
-              className="border border-blue-200 rounded px-2 py-1 text-xs w-28 bg-white"
+              className="w-32 rounded border border-blue-200 bg-white py-1 pl-2 pr-8 text-xs sm:w-36"
             >
               <option value="">소단원 전체</option>
               {filterSmallUnits.map((small) => (
