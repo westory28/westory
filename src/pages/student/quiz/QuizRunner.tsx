@@ -109,6 +109,10 @@ const normalizeStudentEmail = (value: unknown) =>
   String(value ?? "")
     .trim()
     .toLowerCase();
+const isGeneratedImageChoiceLabel = (value: string, index: number) => {
+  const match = value.trim().match(/^(\d+)\s*번\s*보기$/);
+  return Boolean(match && Number(match[1]) === index + 1);
+};
 
 const buildGradeClassLabel = (
   userData?: {
@@ -1484,6 +1488,9 @@ const QuizRunner: React.FC = () => {
     const passageText = String(question.passage || "").trim();
     const hasChoiceSupportPanel =
       question.type === "choice" && (!!question.image || !!passageText);
+    const hasChoiceOptionImages =
+      question.type === "choice" &&
+      (question.choiceOptionImages || []).some(Boolean);
 
     return (
       <div className="mx-auto flex h-[calc(100dvh-8rem)] max-w-6xl animate-fadeIn flex-col overflow-hidden px-3 py-3 sm:px-4 lg:max-w-7xl">
@@ -1599,37 +1606,99 @@ const QuizRunner: React.FC = () => {
             )}
 
             {question.type === "choice" && (
-              <div className="min-h-0 space-y-2 overflow-y-auto pr-1">
+              <div
+                className={
+                  hasChoiceOptionImages
+                    ? "grid h-full min-h-[16rem] grid-cols-3 auto-rows-fr gap-2 overflow-y-auto pr-1"
+                    : "min-h-0 space-y-2 overflow-y-auto pr-1"
+                }
+              >
                 {question.options?.map((option, index) => {
                   const optionImage = getChoiceOptionImage(question, index);
+                  const visibleOptionText =
+                    optionImage && isGeneratedImageChoiceLabel(option, index)
+                      ? ""
+                      : option;
+                  const selected = currentAnswer === option;
                   return (
-                    <div
+                    <button
+                      type="button"
                       key={`${question.id}-choice-${index}`}
                       onClick={() => handleAnswer(option)}
-                      className={`flex cursor-pointer items-start rounded-xl border-2 px-3 py-2.5 transition ${
-                        currentAnswer === option
-                          ? "border-blue-500 bg-blue-50 font-bold text-blue-800"
-                          : "border-gray-200 hover:border-blue-300 hover:bg-blue-50"
-                      }`}
+                      className={
+                        hasChoiceOptionImages
+                          ? `group flex h-full min-h-0 flex-col rounded-xl border-2 bg-white p-2 text-left transition ${
+                              selected
+                                ? "border-blue-500 bg-blue-50 text-blue-800 shadow-sm"
+                                : "border-gray-200 hover:border-blue-300 hover:bg-blue-50"
+                            }`
+                          : `flex cursor-pointer items-start rounded-xl border-2 px-3 py-2.5 text-left transition ${
+                              selected
+                                ? "border-blue-500 bg-blue-50 font-bold text-blue-800"
+                                : "border-gray-200 hover:border-blue-300 hover:bg-blue-50"
+                            }`
+                      }
                     >
-                      <div
-                        className={`mr-3 mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
-                          currentAnswer === option
-                            ? "bg-blue-600 text-white"
-                            : "bg-gray-200 text-gray-500"
-                        }`}
-                      >
-                        {index + 1}
-                      </div>
-                      {optionImage && (
-                        <img
-                          src={optionImage}
-                          alt={`${index + 1}번 보기 이미지`}
-                          className="mr-3 h-24 w-28 shrink-0 rounded-lg border border-gray-100 bg-white object-contain"
-                        />
+                      {hasChoiceOptionImages ? (
+                        <>
+                          <div
+                            className={`relative flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden rounded-lg border ${
+                              optionImage
+                                ? "border-gray-100 bg-white"
+                                : "border-dashed border-gray-200 bg-gray-50 px-2"
+                            }`}
+                          >
+                            <span
+                              className={`absolute left-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full text-sm font-black shadow-sm ${
+                                selected
+                                  ? "bg-blue-600 text-white"
+                                  : "bg-white/95 text-gray-600 ring-1 ring-gray-200"
+                              }`}
+                            >
+                              {index + 1}
+                            </span>
+                            {optionImage ? (
+                              <img
+                                src={optionImage}
+                                alt={`${index + 1}번 보기`}
+                                className="max-h-full max-w-full object-contain"
+                              />
+                            ) : (
+                              <span className="break-keep text-center text-sm font-bold text-gray-700">
+                                {visibleOptionText}
+                              </span>
+                            )}
+                          </div>
+                          {visibleOptionText && optionImage && (
+                            <div className="mt-2 line-clamp-2 min-h-[2.5rem] w-full break-keep text-center text-sm font-bold leading-5">
+                              {visibleOptionText}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <div
+                            className={`mr-3 mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
+                              selected
+                                ? "bg-blue-600 text-white"
+                                : "bg-gray-200 text-gray-500"
+                            }`}
+                          >
+                            {index + 1}
+                          </div>
+                          {optionImage && (
+                            <img
+                              src={optionImage}
+                              alt={`${index + 1}번 보기 이미지`}
+                              className="mr-3 h-24 w-28 shrink-0 rounded-lg border border-gray-100 bg-white object-contain"
+                            />
+                          )}
+                          <div className="min-w-0 break-words">
+                            {visibleOptionText}
+                          </div>
+                        </>
                       )}
-                      <div className="min-w-0 break-words">{option}</div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
