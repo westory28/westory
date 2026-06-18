@@ -9,7 +9,6 @@ const BULLET_TOKEN = "{{bullet}}";
 const INLINE_MARK_TOKEN_PATTERN = /\{\{(u|box):([\s\S]*?)\}\}/g;
 const LEGACY_BULLET_TOKEN_PATTERN = /\{\{bullet:([^{}]*?)\}\}/g;
 const LEGACY_BULLET_PREFIX = "{{bullet:";
-const BOX_MARK_SPACING = "   ";
 const HORIZONTAL_SPACE_PATTERN = /[ \t]/;
 
 const getTokenName = (type: QuizPassageMarkType) =>
@@ -141,28 +140,6 @@ const applyBulletMark = (value: string, start: number, end: number) => {
   };
 };
 
-const findHorizontalSpaceStart = (value: string, index: number) => {
-  let cursor = index;
-  while (
-    cursor > 0 &&
-    HORIZONTAL_SPACE_PATTERN.test(value.charAt(cursor - 1))
-  ) {
-    cursor -= 1;
-  }
-  return cursor;
-};
-
-const findHorizontalSpaceEnd = (value: string, index: number) => {
-  let cursor = index;
-  while (
-    cursor < value.length &&
-    HORIZONTAL_SPACE_PATTERN.test(value.charAt(cursor))
-  ) {
-    cursor += 1;
-  }
-  return cursor;
-};
-
 const trimSelectedHorizontalSpaces = (text: string) => {
   let startOffset = 0;
   let endOffset = text.length;
@@ -212,18 +189,13 @@ export const applyQuizPassageMark = ({
 
   if (markType === "box") {
     const trimmedSelection = trimSelectedHorizontalSpaces(selectedText);
-    const contentStart = start + trimmedSelection.startOffset;
-    const contentEnd = start + trimmedSelection.endOffset;
-    const replaceStart = findHorizontalSpaceStart(value, contentStart);
-    const replaceEnd = findHorizontalSpaceEnd(value, contentEnd);
-    const markedText = `${BOX_MARK_SPACING}${prefix}${trimmedSelection.text}${suffix}${BOX_MARK_SPACING}`;
-    const nextSelectionStart =
-      replaceStart + BOX_MARK_SPACING.length + prefix.length;
+    const markStart = start + trimmedSelection.startOffset;
+    const markEnd = start + trimmedSelection.endOffset;
+    const markedText = `${prefix}${trimmedSelection.text}${suffix}`;
+    const nextSelectionStart = markStart + prefix.length;
 
     return {
-      value: `${value.slice(0, replaceStart)}${markedText}${value.slice(
-        replaceEnd,
-      )}`,
+      value: `${value.slice(0, markStart)}${markedText}${value.slice(markEnd)}`,
       selectionStart: nextSelectionStart,
       selectionEnd: nextSelectionStart + trimmedSelection.text.length,
     };

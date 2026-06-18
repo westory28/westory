@@ -9,7 +9,7 @@ interface QuizPassageProps {
 
 const markClasses: Record<string, string> = {
   underline: "border-b-2 border-slate-900 pb-0.5 font-bold text-slate-950",
-  box: "mx-0.5 inline whitespace-nowrap rounded border-2 border-slate-800 px-1 py-0.5 font-bold text-slate-950",
+  box: "mx-0 inline-block whitespace-nowrap rounded border-2 border-slate-800 px-3 py-0.5 font-bold text-slate-950",
 };
 
 const renderInlineSegments = (value: string, keyPrefix: string) =>
