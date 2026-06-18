@@ -165,6 +165,10 @@ const EXAM_PREP_CHOICE_OPTION_COUNT = 5;
 const DEFAULT_ORDER_OPTION_COUNT = 4;
 const QUESTION_PAGE_SIZE = 30;
 const RECENT_CLASS_FOCUS_MIN_STUDENTS = 10;
+const isGeneratedImageChoiceLabel = (value: string, index: number) => {
+  const match = value.trim().match(/^(\d+)\s*번\s*보기$/);
+  return Boolean(match && Number(match[1]) === index + 1);
+};
 const getDefaultChoiceOptionCount = (category?: string) =>
   category === "exam_prep"
     ? EXAM_PREP_CHOICE_OPTION_COUNT
@@ -2407,6 +2411,16 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     }
   };
 
+  const editPreviewPassageText = editPassage.trim();
+  const editPreviewChoiceItems = getChoiceOptionItems(
+    editChoiceOptions,
+    editChoiceOptionImages,
+  );
+  const hasEditPreviewChoiceSupportPanel =
+    editType === "choice" && (!!editImage || !!editPreviewPassageText);
+  const hasEditPreviewChoiceOptionImages =
+    editType === "choice" && editPreviewChoiceItems.some((item) => item.image);
+
   return (
     <div>
       {!canEdit && (
@@ -3747,59 +3761,142 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                         {editQuestionText ||
                           "문제 문구를 입력하면 여기 표시됩니다."}
                       </h4>
-                      {editType === "choice" && editPassage.trim() && (
-                        <QuizPassage
-                          value={editPassage.trim()}
-                          className="mb-4"
-                        />
-                      )}
                       {editType === "choice" ? (
                         <div
                           className={
-                            editImage
-                              ? "grid gap-4 md:grid-cols-[minmax(150px,220px)_minmax(0,1fr)] md:items-start"
+                            hasEditPreviewChoiceSupportPanel
+                              ? "grid min-h-0 gap-4 md:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)] md:items-start"
                               : "space-y-2"
                           }
                         >
-                          {editImage && (
-                            <div className="flex justify-center rounded-lg border border-gray-100 bg-gray-50 p-2">
-                              <img
-                                src={editImage}
-                                alt="문항 첨부 이미지 미리보기"
-                                className="max-h-44 max-w-full object-contain"
-                              />
+                          {hasEditPreviewChoiceSupportPanel && (
+                            <div className="flex min-h-0 flex-col gap-3 rounded-xl border border-gray-100 bg-gray-50 p-2 text-center">
+                              {editImage && (
+                                <div
+                                  className={`flex min-h-0 items-center justify-center ${
+                                    editPreviewPassageText
+                                      ? "shrink-0"
+                                      : "flex-1"
+                                  }`}
+                                >
+                                  <img
+                                    src={editImage}
+                                    alt="문항 첨부 이미지 미리보기"
+                                    className={`mx-auto max-w-full rounded-lg border border-gray-100 object-contain ${
+                                      editPreviewPassageText
+                                        ? "max-h-[min(30vh,280px)]"
+                                        : "max-h-[min(48vh,460px)]"
+                                    }`}
+                                  />
+                                </div>
+                              )}
+                              {editPreviewPassageText && (
+                                <QuizPassage
+                                  value={editPreviewPassageText}
+                                  surface="white"
+                                  className="shrink-0 text-left"
+                                />
+                              )}
                             </div>
                           )}
-                          <div className="space-y-2">
-                            {getChoiceOptionItems(
-                              editChoiceOptions,
-                              editChoiceOptionImages,
-                            ).map((item, index) => (
-                              <button
-                                key={`preview-choice-${index}`}
-                                type="button"
-                                onClick={() =>
-                                  setPreviewChoiceAnswer(item.text)
-                                }
-                                className={`flex w-full items-start gap-2 rounded-lg border-2 p-3 text-left transition ${previewChoiceAnswer === item.text ? "border-blue-500 bg-blue-50 font-bold text-blue-800" : "border-gray-200 hover:border-blue-300"}`}
-                              >
-                                <span
-                                  className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs ${previewChoiceAnswer === item.text ? "bg-blue-600 text-white" : "bg-gray-200 text-gray-500"}`}
+                          <div
+                            className={
+                              hasEditPreviewChoiceOptionImages
+                                ? "grid min-h-[16rem] grid-cols-3 auto-rows-fr gap-2"
+                                : "space-y-2"
+                            }
+                          >
+                            {editPreviewChoiceItems.map((item, index) => {
+                              const visibleOptionText =
+                                item.image &&
+                                isGeneratedImageChoiceLabel(item.text, index)
+                                  ? ""
+                                  : item.text;
+                              const selected =
+                                previewChoiceAnswer === item.text;
+                              return (
+                                <button
+                                  key={`preview-choice-${index}`}
+                                  type="button"
+                                  onClick={() =>
+                                    setPreviewChoiceAnswer(item.text)
+                                  }
+                                  className={
+                                    hasEditPreviewChoiceOptionImages
+                                      ? `group flex h-full min-h-0 flex-col rounded-xl border-2 bg-white p-2 text-left transition ${
+                                          selected
+                                            ? "border-blue-500 bg-blue-50 text-blue-800 shadow-sm"
+                                            : "border-gray-200 hover:border-blue-300 hover:bg-blue-50"
+                                        }`
+                                      : `flex w-full items-start gap-2 rounded-lg border-2 p-3 text-left transition ${
+                                          selected
+                                            ? "border-blue-500 bg-blue-50 font-bold text-blue-800"
+                                            : "border-gray-200 hover:border-blue-300"
+                                        }`
+                                  }
                                 >
-                                  {index + 1}
-                                </span>
-                                {item.image && (
-                                  <img
-                                    src={item.image}
-                                    alt={`${index + 1}번 보기 이미지 미리보기`}
-                                    className="h-20 w-24 shrink-0 rounded border border-gray-100 bg-white object-contain"
-                                  />
-                                )}
-                                <span className="min-w-0 break-words">
-                                  {item.text}
-                                </span>
-                              </button>
-                            ))}
+                                  {hasEditPreviewChoiceOptionImages ? (
+                                    <>
+                                      <div
+                                        className={`relative flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden rounded-lg border ${
+                                          item.image
+                                            ? "border-gray-100 bg-white"
+                                            : "border-dashed border-gray-200 bg-gray-50 px-2"
+                                        }`}
+                                      >
+                                        <span
+                                          className={`absolute left-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full text-sm font-black shadow-sm ${
+                                            selected
+                                              ? "bg-blue-600 text-white"
+                                              : "bg-white/95 text-gray-600 ring-1 ring-gray-200"
+                                          }`}
+                                        >
+                                          {index + 1}
+                                        </span>
+                                        {item.image ? (
+                                          <img
+                                            src={item.image}
+                                            alt={`${index + 1}번 보기`}
+                                            className="max-h-full max-w-full object-contain"
+                                          />
+                                        ) : (
+                                          <span className="break-keep text-center text-sm font-bold text-gray-700">
+                                            {visibleOptionText}
+                                          </span>
+                                        )}
+                                      </div>
+                                      {visibleOptionText && item.image && (
+                                        <div className="mt-2 line-clamp-2 min-h-[2.5rem] w-full break-keep text-center text-sm font-bold leading-5">
+                                          {visibleOptionText}
+                                        </div>
+                                      )}
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span
+                                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs ${
+                                          selected
+                                            ? "bg-blue-600 text-white"
+                                            : "bg-gray-200 text-gray-500"
+                                        }`}
+                                      >
+                                        {index + 1}
+                                      </span>
+                                      {item.image && (
+                                        <img
+                                          src={item.image}
+                                          alt={`${index + 1}번 보기 이미지 미리보기`}
+                                          className="h-20 w-24 shrink-0 rounded border border-gray-100 bg-white object-contain"
+                                        />
+                                      )}
+                                      <span className="min-w-0 break-words">
+                                        {visibleOptionText}
+                                      </span>
+                                    </>
+                                  )}
+                                </button>
+                              );
+                            })}
                           </div>
                         </div>
                       ) : (
