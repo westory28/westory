@@ -494,6 +494,7 @@ const QuizLogTab: React.FC = () => {
   const userTouchedUnitFilterRef = useRef(false);
   const userTouchedClassFilterRef = useRef(false);
   const userTouchedCategoryFilterRef = useRef(false);
+  const isExamPrepFilter = categoryFilter === "exam_prep";
 
   const unitMetaById = useMemo(() => buildUnitMetaMap(treeData), [treeData]);
 
@@ -685,6 +686,8 @@ const QuizLogTab: React.FC = () => {
   }, [bigFilter, treeData]);
 
   const selectedUnitFilterIds = useMemo(() => {
+    if (isExamPrepFilter) return [];
+
     const ids = new Set<string>();
     const addUnitWithChildren = (unit?: TreeUnit) => {
       if (!unit) return;
@@ -702,7 +705,7 @@ const QuizLogTab: React.FC = () => {
     }
 
     return Array.from(ids);
-  }, [bigFilter, midFilter, treeData]);
+  }, [bigFilter, isExamPrepFilter, midFilter, treeData]);
 
   useEffect(() => {
     const targetStudents = students.filter((student) => student.uid);
@@ -937,7 +940,7 @@ const QuizLogTab: React.FC = () => {
     return canonicalLogs.filter((log) => {
       if (categoryFilter && log.category !== categoryFilter) return false;
 
-      if (bigFilter || midFilter) {
+      if (!isExamPrepFilter && (bigFilter || midFilter)) {
         const metas = getLogUnitMetas(log);
         if (!metas.length) return false;
         if (
@@ -962,6 +965,7 @@ const QuizLogTab: React.FC = () => {
     bigFilter,
     canonicalLogs,
     categoryFilter,
+    isExamPrepFilter,
     midFilter,
     questionMetaById,
     unitMetaById,
@@ -1015,6 +1019,7 @@ const QuizLogTab: React.FC = () => {
   }, [canonicalLogs, questionMetaById, unitMetaById]);
 
   useEffect(() => {
+    if (isExamPrepFilter) return;
     if (autoUnitFilterAppliedRef.current || userTouchedUnitFilterRef.current)
       return;
     if (bigFilter || midFilter || !recentDefaultUnitSelection) return;
@@ -1030,7 +1035,20 @@ const QuizLogTab: React.FC = () => {
     autoUnitFilterAppliedRef.current = true;
     setBigFilter(recentDefaultUnitSelection.bigId);
     setMidFilter(recentDefaultUnitSelection.midId);
-  }, [bigFilter, midFilter, recentDefaultUnitSelection, treeData]);
+  }, [
+    bigFilter,
+    isExamPrepFilter,
+    midFilter,
+    recentDefaultUnitSelection,
+    treeData,
+  ]);
+
+  useEffect(() => {
+    if (!isExamPrepFilter) return;
+    if (!bigFilter && !midFilter) return;
+    setBigFilter("");
+    setMidFilter("");
+  }, [bigFilter, isExamPrepFilter, midFilter]);
 
   const filteredLogs = useMemo(
     () =>
@@ -1529,7 +1547,8 @@ const QuizLogTab: React.FC = () => {
               setBigFilter(event.target.value);
               setMidFilter("");
             }}
-            className="min-w-0 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-bold text-gray-700"
+            disabled={isExamPrepFilter}
+            className="min-w-0 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-bold text-gray-700 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
             aria-label="대단원 필터"
           >
             <option value="">대단원 전체</option>
@@ -1545,7 +1564,8 @@ const QuizLogTab: React.FC = () => {
               userTouchedUnitFilterRef.current = true;
               setMidFilter(event.target.value);
             }}
-            className="min-w-0 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-bold text-gray-700"
+            disabled={isExamPrepFilter}
+            className="min-w-0 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-bold text-gray-700 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
             aria-label="중단원 필터"
           >
             <option value="">중단원 전체</option>
@@ -1574,8 +1594,13 @@ const QuizLogTab: React.FC = () => {
           <select
             value={categoryFilter}
             onChange={(event) => {
+              const nextCategory = event.target.value;
               userTouchedCategoryFilterRef.current = true;
-              setCategoryFilter(event.target.value);
+              setCategoryFilter(nextCategory);
+              if (nextCategory === "exam_prep") {
+                setBigFilter("");
+                setMidFilter("");
+              }
             }}
             className="min-w-0 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-bold text-gray-700"
             aria-label="평가유형 필터"
