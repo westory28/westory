@@ -64,6 +64,7 @@ import {
   createManagedNotifications,
   reviewPerformanceScoreObjection,
 } from "../../../lib/notifications";
+import { deleteStudentData } from "../../../lib/studentData";
 
 interface StudentProfile {
   uid: string;
@@ -5892,23 +5893,108 @@ const PerformanceScoreManager: React.FC = () => {
     if (!scoreEditing || savingScoreEdits || selectedScoreListRecordCount === 0)
       return;
     const selectedKeys = new Set(selectedVisibleScoreListRecordKeys);
+    const selectedRecords = scoreListRecords.filter((record) =>
+      selectedKeys.has(getScoreListRecordKey(record)),
+    );
+    const registeredRecords = selectedRecords.filter((record) => record.uid);
+    const registeredUids = Array.from(
+      new Set(registeredRecords.map((record) => record.uid).filter(Boolean)),
+    );
+    const manualSelectedCount =
+      selectedRecords.length - registeredRecords.length;
     const selectedCount = selectedKeys.size;
     const confirmed = await confirm({
-      title: "선택 학생 삭제",
-      message: [
-        `선택한 학생 ${selectedCount}명을 이 수행평가 점수표에서 삭제합니다.`,
-        "저장된 학생은 변경 저장을 눌러야 DB와 다른 수행평가 명단에 반영됩니다.",
-      ].join("\n"),
-      confirmLabel: "학생 삭제",
+      title:
+        registeredUids.length > 0 ? "선택 학생 전체 삭제" : "선택 학생 삭제",
+      message:
+        registeredUids.length > 0
+          ? [
+              `선택한 학생 ${selectedCount}명 중 등록 학생 ${registeredUids.length}명은 학생 명단과 연결된 모든 영역에서 삭제됩니다.`,
+              manualSelectedCount > 0
+                ? `수동 추가 학생 ${manualSelectedCount}명은 이 점수표에서만 삭제됩니다.`
+                : "",
+              "삭제 후 복구할 수 없습니다.",
+            ]
+              .filter(Boolean)
+              .join("\n")
+          : [
+              `선택한 학생 ${selectedCount}명을 이 수행평가 점수표에서 삭제합니다.`,
+              "변경 저장을 눌러야 DB와 다른 수행평가 명단에 반영됩니다.",
+            ].join("\n"),
+      confirmLabel: registeredUids.length > 0 ? "전체 삭제" : "학생 삭제",
       tone: "danger",
     });
     if (!confirmed) return;
+
     setScoreListRecords((current) =>
       current.filter(
         (record) => !selectedKeys.has(getScoreListRecordKey(record)),
       ),
     );
+    setScoreEditOriginalRecords((current) =>
+      current.filter(
+        (record) => !selectedKeys.has(getScoreListRecordKey(record)),
+      ),
+    );
     setSelectedScoreListRecordKeys(new Set<string>());
+
+    if (registeredUids.length === 0) return;
+
+    const deletedUidSet = new Set(registeredUids);
+    setSavingScoreEdits(true);
+    setStudents((current) =>
+      current.filter((student) => !deletedUidSet.has(student.uid)),
+    );
+    setRosters((current) =>
+      sortPerformanceScoreRosters(
+        current.map((roster) => {
+          const nextRows = (roster.rows || []).filter(
+            (row) => !deletedUidSet.has(row.uid),
+          );
+          if (nextRows.length === (roster.rows || []).length) return roster;
+          const meta = buildRosterRowsMeta(roster, nextRows);
+          return {
+            ...roster,
+            rows: nextRows,
+            classes: meta.classes,
+            targetClass: meta.targetClass,
+            rowCount: meta.rowCount,
+            matchedCount: meta.matchedCount,
+            unmatchedCount: meta.unmatchedCount,
+            updatedAt: new Date(),
+          };
+        }),
+      ),
+    );
+
+    try {
+      for (const uid of registeredUids) {
+        await deleteStudentData(config, uid);
+      }
+      setScoreStatsRecords([]);
+      setScoreStatsLoadedRosterId("");
+      setClassSheetPreviewStudents([]);
+      setClassSheetPreviewLoadedKey("");
+      showToast({
+        tone: "success",
+        title: "학생 데이터를 삭제했습니다.",
+        message:
+          "학생 명단과 수행평가, 위스, 평가 기록에 남은 연결 데이터를 함께 정리했습니다.",
+      });
+      void loadStudents();
+      void loadRosters();
+    } catch (error) {
+      console.error("Failed to delete selected score list students:", error);
+      showToast({
+        tone: "error",
+        title: "학생 삭제에 실패했습니다.",
+        message: getFirestoreWriteErrorMessage(error),
+      });
+      void loadStudents();
+      void loadRosters();
+    } finally {
+      setSavingScoreEdits(false);
+    }
   };
 
   const updateScoreListIdentity = (

@@ -1,11 +1,22 @@
 import React, { useState } from "react";
-import { db } from "../../../lib/firebase";
-import { doc, writeBatch } from "firebase/firestore";
+import { useAuth } from "../../../contexts/AuthContext";
+import { updateStudentData } from "../../../lib/studentData";
+
+interface Student {
+  id: string;
+  userId: string;
+  grade: string;
+  class: string;
+  number: number;
+  name: string;
+  email: string;
+}
 
 interface MoveClassModalProps {
   isOpen: boolean;
   onClose: () => void;
   selectedIds: Set<string>;
+  students: Student[];
   onComplete: () => void;
 }
 
@@ -13,9 +24,12 @@ const MoveClassModal: React.FC<MoveClassModalProps> = ({
   isOpen,
   onClose,
   selectedIds,
+  students,
   onComplete,
 }) => {
+  const { config } = useAuth();
   const [targetClass, setTargetClass] = useState(1);
+  const [moving, setMoving] = useState(false);
 
   const handleMove = async () => {
     if (selectedIds.size === 0) return;
@@ -26,18 +40,27 @@ const MoveClassModal: React.FC<MoveClassModalProps> = ({
     )
       return;
 
+    const targets = students.filter((student) => selectedIds.has(student.id));
+    if (!targets.length) return;
+    setMoving(true);
     try {
-      const batch = writeBatch(db);
-      selectedIds.forEach((id) => {
-        const ref = doc(db, "users", id);
-        batch.update(ref, { class: targetClass });
-      });
-      await batch.commit();
+      for (const student of targets) {
+        await updateStudentData(config, {
+          uid: student.userId,
+          grade: student.grade,
+          class: String(targetClass),
+          number: student.number,
+          name: student.name,
+          email: student.email,
+        });
+      }
       onComplete();
       onClose();
     } catch (e) {
       console.error("Move failed:", e);
       alert("이동 중 오류가 발생했습니다.");
+    } finally {
+      setMoving(false);
     }
   };
 
@@ -77,9 +100,10 @@ const MoveClassModal: React.FC<MoveClassModalProps> = ({
           </button>
           <button
             onClick={handleMove}
-            className="flex-1 bg-green-600 text-white font-bold py-2 rounded-lg hover:bg-green-700 transition shadow-md"
+            disabled={moving}
+            className="flex-1 bg-green-600 text-white font-bold py-2 rounded-lg hover:bg-green-700 transition shadow-md disabled:cursor-not-allowed disabled:bg-green-300"
           >
-            이동 확인
+            {moving ? "이동 중..." : "이동 확인"}
           </button>
         </div>
       </div>

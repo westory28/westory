@@ -1,17 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  writeBatch,
-} from "firebase/firestore";
-import { db, getHttpsCallable } from "../../lib/firebase";
-import { getYearSemester } from "../../lib/semesterScope";
+import { collection, doc, getDoc, getDocs } from "firebase/firestore";
+import { db } from "../../lib/firebase";
 import MoveClassModal from "./components/MoveClassModal";
 import StudentDetailModal from "./components/StudentDetailModal";
 import { useAuth } from "../../contexts/AuthContext";
 import { canEditStudentList } from "../../lib/permissions";
+import { deleteStudentData, updateStudentData } from "../../lib/studentData";
 
 interface Student {
   id: string;
@@ -163,8 +157,8 @@ const StudentList: React.FC = () => {
     applyFilters();
   }, [normalizedStudents, gradeFilter, classFilter, searchQuery]);
 
-  const fetchStudents = async () => {
-    setLoading(true);
+  const fetchStudents = async (options: { silent?: boolean } = {}) => {
+    if (!options.silent) setLoading(true);
     try {
       const snap = await getDocs(collection(db, "users"));
       const list: Student[] = [];
@@ -246,7 +240,7 @@ const StudentList: React.FC = () => {
     } catch (error) {
       console.error("Error fetching students:", error);
     } finally {
-      setLoading(false);
+      if (!options.silent) setLoading(false);
     }
   };
 
@@ -370,21 +364,15 @@ const StudentList: React.FC = () => {
     setSelectedIds(next);
   };
 
-  const deleteStudentData = async (student: Student) => {
-    const { year, semester } = getYearSemester(config);
-    const callable = await getHttpsCallable<
-      { uid: string; year: string; semester: string },
-      {
-        uid: string;
-        deletedRelatedDocCount: number;
-        updatedRosterCount: number;
-        removedRosterRowCount: number;
-      }
-    >("deleteStudentData");
-    await callable({
-      uid: student.userId,
-      year,
-      semester,
+  const removeStudentsLocally = (ids: Set<string>) => {
+    setStudents((current) => current.filter((student) => !ids.has(student.id)));
+    setFilteredStudents((current) =>
+      current.filter((student) => !ids.has(student.id)),
+    );
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      ids.forEach((id) => next.delete(id));
+      return next;
     });
   };
 
@@ -393,12 +381,18 @@ const StudentList: React.FC = () => {
     if (!window.confirm("정말 삭제하시겠습니까? (복구 불가)")) return;
     const target = students.find((student) => student.id === id);
     if (!target) return;
+    const previousStudents = students;
+    const previousFilteredStudents = filteredStudents;
     setDeletingStudentIds((current) => new Set(current).add(id));
+    removeStudentsLocally(new Set([id]));
     try {
-      await deleteStudentData(target);
-      await fetchStudents();
+      await deleteStudentData(config, target.userId);
+      void fetchStudents({ silent: true });
     } catch (error) {
       console.error("Delete failed", error);
+      setStudents(previousStudents);
+      setFilteredStudents(previousFilteredStudents);
+      void fetchStudents({ silent: true });
       alert("학생 삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.");
     } finally {
       setDeletingStudentIds((current) => {
@@ -419,15 +413,21 @@ const StudentList: React.FC = () => {
       .map((id) => students.find((student) => student.id === id))
       .filter((student): student is Student => Boolean(student));
     if (!targets.length) return;
-    setDeletingStudentIds(new Set(targets.map((student) => student.id)));
+    const targetIds = new Set(targets.map((student) => student.id));
+    const previousStudents = students;
+    const previousFilteredStudents = filteredStudents;
+    setDeletingStudentIds(targetIds);
+    removeStudentsLocally(targetIds);
     try {
       for (const target of targets) {
-        await deleteStudentData(target);
+        await deleteStudentData(config, target.userId);
       }
-      setSelectedIds(new Set());
-      await fetchStudents();
+      void fetchStudents({ silent: true });
     } catch (error) {
       console.error("Bulk delete failed", error);
+      setStudents(previousStudents);
+      setFilteredStudents(previousFilteredStudents);
+      void fetchStudents({ silent: true });
       alert("선택한 학생 삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.");
     } finally {
       setDeletingStudentIds(new Set());
@@ -440,27 +440,69 @@ const StudentList: React.FC = () => {
       !window.confirm(`선택한 ${selectedIds.size}명의 학년을 1 올리시겠습니까?`)
     )
       return;
-    try {
-      const batch = writeBatch(db);
-      selectedIds.forEach((id) => {
-        const student = students.find((item) => item.id === id);
-        if (!student) return;
-
+    const targets = Array.from(selectedIds)
+      .map((id) => students.find((student) => student.id === id))
+      .filter((student): student is Student => Boolean(student))
+      .map((student) => {
         const parsedGrade = parseInt(
           toCanonicalOptionValue(student.grade, gradeOptions),
           10,
         );
-        if (Number.isNaN(parsedGrade)) return;
-
-        batch.update(doc(db, "users", student.userId), {
-          grade: String(parsedGrade + 1),
+        if (Number.isNaN(parsedGrade)) return null;
+        return {
+          student,
+          nextGrade: String(parsedGrade + 1),
+        };
+      })
+      .filter(
+        (item): item is { student: Student; nextGrade: string } =>
+          item !== null,
+      );
+    if (!targets.length) return;
+    const previousStudents = students;
+    const previousFilteredStudents = filteredStudents;
+    try {
+      const nextGradeById = new Map(
+        targets.map(({ student, nextGrade }) => [student.id, nextGrade]),
+      );
+      setStudents((current) =>
+        current.map((student) =>
+          nextGradeById.has(student.id)
+            ? {
+                ...student,
+                grade: nextGradeById.get(student.id) || student.grade,
+              }
+            : student,
+        ),
+      );
+      setFilteredStudents((current) =>
+        current.map((student) =>
+          nextGradeById.has(student.id)
+            ? {
+                ...student,
+                grade: nextGradeById.get(student.id) || student.grade,
+              }
+            : student,
+        ),
+      );
+      for (const { student, nextGrade } of targets) {
+        await updateStudentData(config, {
+          uid: student.userId,
+          grade: nextGrade,
+          class: student.class,
+          number: student.number,
+          name: student.name,
+          email: student.email,
         });
-      });
-      await batch.commit();
+      }
       setSelectedIds(new Set());
-      void fetchStudents();
+      void fetchStudents({ silent: true });
     } catch (error) {
       console.error("Bulk promote failed", error);
+      setStudents(previousStudents);
+      setFilteredStudents(previousFilteredStudents);
+      void fetchStudents({ silent: true });
+      alert("진급 처리 중 오류가 발생했습니다.");
     }
   };
 
@@ -769,9 +811,10 @@ const StudentList: React.FC = () => {
           isOpen={!readOnly && moveClassModalOpen}
           onClose={() => setMoveClassModalOpen(false)}
           selectedIds={selectedIds}
+          students={students}
           onComplete={() => {
             setSelectedIds(new Set());
-            void fetchStudents();
+            void fetchStudents({ silent: true });
           }}
         />
       </div>

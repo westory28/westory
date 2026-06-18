@@ -1,13 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { doc, updateDoc } from "firebase/firestore";
 import PointRankBadge from "../../../components/common/PointRankBadge";
 import { useAuth } from "../../../contexts/AuthContext";
-import { db } from "../../../lib/firebase";
 import { formatWisAmount } from "../../../lib/pointFormatters";
 import {
   loadStudentProgressSummary,
   type StudentProgressSummary,
 } from "../../../lib/studentProgressSummary";
+import { updateStudentData } from "../../../lib/studentData";
 import {
   formatPerformanceScore,
   getPerformanceScorePercent,
@@ -50,11 +49,14 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   const [activeTab, setActiveTab] = useState<DetailTab>(initialTab);
   const [summary, setSummary] = useState<StudentProgressSummary | null>(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryLoadedStudentId, setSummaryLoadedStudentId] = useState("");
   const [performanceScores, setPerformanceScores] = useState<
     PerformanceScoreRecord[]
   >([]);
   const [performanceScoresLoading, setPerformanceScoresLoading] =
     useState(false);
+  const [performanceScoresLoadedKey, setPerformanceScoresLoadedKey] =
+    useState("");
   const [summaryPanel, setSummaryPanel] = useState<SummaryPanel>("overview");
   const [quizUnitFilter, setQuizUnitFilter] = useState("all");
   const [quizCategoryFilter, setQuizCategoryFilter] = useState("all");
@@ -79,10 +81,17 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   useEffect(() => {
     if (!student) return;
     setFormData(student);
+    setSummary(null);
+    setSummaryLoading(false);
+    setSummaryLoadedStudentId("");
+    setPerformanceScores([]);
+    setPerformanceScoresLoading(false);
+    setPerformanceScoresLoadedKey("");
   }, [student]);
 
   useEffect(() => {
-    if (!isOpen || !student?.id) return;
+    if (!isOpen || activeTab !== "summary" || !student?.id) return;
+    if (summaryLoadedStudentId === student.id) return;
     let cancelled = false;
     const loadSummary = async () => {
       setSummaryLoading(true);
@@ -91,7 +100,16 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
           config,
           student.id,
         );
-        if (!cancelled) setSummary(nextSummary);
+        if (!cancelled) {
+          setSummary(nextSummary);
+          setSummaryLoadedStudentId(student.id);
+        }
+      } catch (error) {
+        console.error("Failed to load student progress summary:", error);
+        if (!cancelled) {
+          setSummary(null);
+          setSummaryLoadedStudentId(student.id);
+        }
       } finally {
         if (!cancelled) setSummaryLoading(false);
       }
@@ -101,24 +119,32 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [config, isOpen, student?.id]);
+  }, [activeTab, config, isOpen, student?.id, summaryLoadedStudentId]);
 
   useEffect(() => {
-    if (!isOpen || !student?.id) return;
+    if (!isOpen || activeTab !== "performance" || !student?.id) return;
+    const year = String(config?.year || "2026");
+    const semester = String(config?.semester || "1");
+    const loadKey = `${student.id}:${year}:${semester}`;
+    if (performanceScoresLoadedKey === loadKey) return;
     let cancelled = false;
     const loadPerformanceScores = async () => {
       setPerformanceScoresLoading(true);
       try {
-        const year = String(config?.year || "2026");
-        const semester = String(config?.semester || "1");
         const records = await loadUserPerformanceScoreRecords(student.id, {
           year,
           semester,
         });
-        if (!cancelled) setPerformanceScores(records);
+        if (!cancelled) {
+          setPerformanceScores(records);
+          setPerformanceScoresLoadedKey(loadKey);
+        }
       } catch (error) {
         console.error("Failed to load student performance scores:", error);
-        if (!cancelled) setPerformanceScores([]);
+        if (!cancelled) {
+          setPerformanceScores([]);
+          setPerformanceScoresLoadedKey(loadKey);
+        }
       } finally {
         if (!cancelled) setPerformanceScoresLoading(false);
       }
@@ -128,7 +154,14 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [config?.semester, config?.year, isOpen, student?.id]);
+  }, [
+    activeTab,
+    config?.semester,
+    config?.year,
+    isOpen,
+    performanceScoresLoadedKey,
+    student?.id,
+  ]);
 
   const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target;
@@ -142,7 +175,8 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
     if (readOnly || !formData.id) return;
     setSaving(true);
     try {
-      await updateDoc(doc(db, "users", formData.id), {
+      await updateStudentData(config, {
+        uid: formData.id,
         grade: formData.grade,
         class: formData.class,
         number: formData.number,

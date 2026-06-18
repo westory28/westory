@@ -2732,6 +2732,33 @@ const commitDeleteRefsInChunks = async (refs) => {
   return uniqueRefs.length;
 };
 
+const commitSetEntriesInChunks = async (entries) => {
+  const uniqueEntries = Array.from(
+    entries
+      .filter((entry) => entry?.ref && entry?.data)
+      .reduce((acc, entry) => {
+        const existing = acc.get(entry.ref.path);
+        acc.set(entry.ref.path, {
+          ref: entry.ref,
+          data: {
+            ...(existing?.data || {}),
+            ...entry.data,
+          },
+        });
+        return acc;
+      }, new Map())
+      .values(),
+  );
+  for (let index = 0; index < uniqueEntries.length; index += 400) {
+    const batch = db.batch();
+    uniqueEntries.slice(index, index + 400).forEach((entry) => {
+      batch.set(entry.ref, entry.data, { merge: true });
+    });
+    await batch.commit();
+  }
+  return uniqueEntries.length;
+};
+
 const getStudentProfileClearPatch = () => ({
   studentName: '',
   studentGrade: '',
@@ -2755,7 +2782,7 @@ const collectQueryRefsByUid = async (collectionPath, uid) => {
   return snapshot.docs.map((docSnap) => docSnap.ref);
 };
 
-const collectStudentPerformanceScoreRefs = async (uid) => {
+const collectStudentPerformanceScoreDocRefs = async (uid) => {
   const refsByPath = new Map();
   const ownedScoresQuery = db.collection(`users/${uid}/${PERFORMANCE_SCORE_USER_COLLECTION}`).get();
   const uidScoresQuery = db
@@ -2771,8 +2798,14 @@ const collectStudentPerformanceScoreRefs = async (uid) => {
   addQueryDocRefs(refsByPath, ownedScores);
   addQueryDocRefs(refsByPath, uidScores);
 
-  const scoreRefs = Array.from(refsByPath.values())
+  return Array.from(refsByPath.values())
     .filter((ref) => ref.parent.id === PERFORMANCE_SCORE_USER_COLLECTION);
+};
+
+const collectStudentPerformanceScoreRefs = async (uid) => {
+  const refsByPath = new Map();
+  const scoreRefs = await collectStudentPerformanceScoreDocRefs(uid);
+  scoreRefs.forEach((ref) => refsByPath.set(ref.path, ref));
   await runInChunks(scoreRefs, 25, async (scoreRef) => {
     const confirmations = await scoreRef.collection(PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION).get();
     addQueryDocRefs(refsByPath, confirmations);
@@ -2856,18 +2889,30 @@ const collectCurrentSemesterStudentRefs = async (year, semester, uid) => {
   const uidCollections = [
     PERFORMANCE_SCORE_OBJECTIONS_COLLECTION,
     'point_transactions',
+    'point_orders',
     'quiz_results',
     'quiz_submissions',
     'history_classroom_results',
     'history_classroom_exemptions',
     'history_classroom_exemption_requests',
   ];
+  const legacyUidCollections = [
+    'quiz_results',
+    'quiz_submissions',
+    'history_classroom_results',
+    'history_classroom_exemptions',
+    'history_classroom_exemption_requests',
+    HISTORY_DICTIONARY_REQUESTS_COLLECTION,
+  ];
 
-  const queryResults = await Promise.all(
-    uidCollections.map((collectionName) =>
+  const queryResults = await Promise.all([
+    ...uidCollections.map((collectionName) =>
       collectQueryRefsByUid(`${semesterRoot}/${collectionName}`, uid),
     ),
-  );
+    ...legacyUidCollections.map((collectionName) =>
+      collectQueryRefsByUid(collectionName, uid),
+    ),
+  ]);
   queryResults.flat().forEach((ref) => refsByPath.set(ref.path, ref));
 
   const pointWalletRef = db.doc(getPointWalletPath(year, semester, uid));
@@ -2896,13 +2941,209 @@ const collectKnownUserStudentDataRefs = async (uid) => {
   return Array.from(refsByPath.values());
 };
 
-const deleteUserDocumentRecursively = async (userRef) => {
-  if (typeof db.recursiveDelete === 'function') {
-    await db.recursiveDelete(userRef);
-    return true;
+const sanitizeStudentProfileText = (value, maxLength, fallback = '') => {
+  const normalized = String(value ?? '').replace(/\s+/g, ' ').trim();
+  return (normalized || fallback).slice(0, maxLength);
+};
+
+const buildStudentGradeClassLabel = ({ grade, classValue, number }) => {
+  const parts = [];
+  if (grade) parts.push(`${grade}학년`);
+  if (classValue) parts.push(`${classValue}반`);
+  if (number) parts.push(`${number}번`);
+  return parts.join(' ');
+};
+
+const buildStudentProfileUpdatePatches = (input = {}) => {
+  const grade = sanitizeStudentProfileText(input.grade ?? input.studentGrade, 12);
+  const classValue = sanitizeStudentProfileText(
+    input.class ?? input.classValue ?? input.studentClass,
+    12,
+  );
+  const number = sanitizeStudentProfileText(input.number ?? input.studentNumber, 12);
+  const name = sanitizeStudentProfileText(input.name ?? input.studentName, 80);
+  const email = sanitizeStudentProfileText(input.email, 160).toLowerCase();
+  const gradeClass = buildStudentGradeClassLabel({ grade, classValue, number });
+  const updatedAt = FieldValue.serverTimestamp();
+
+  return {
+    grade,
+    classValue,
+    number,
+    name,
+    email,
+    gradeClass,
+    userPatch: {
+      grade,
+      class: classValue,
+      number,
+      name,
+      studentGrade: grade,
+      studentClass: classValue,
+      studentNumber: number,
+      studentName: name,
+      gradeClass,
+      email,
+      updatedAt,
+    },
+    scorePatch: {
+      grade,
+      class: classValue,
+      number,
+      studentName: name,
+      uid: sanitizeStudentProfileText(input.uid, 160),
+      updatedAt,
+    },
+    genericPatch: {
+      grade,
+      class: classValue,
+      number,
+      name,
+      email,
+      studentName: name,
+      studentGrade: grade,
+      studentClass: classValue,
+      studentNumber: number,
+      gradeClass,
+      updatedAt,
+    },
+  };
+};
+
+const collectExistingRefs = async (refs) => {
+  const uniqueRefs = Array.from(
+    new Map(refs.filter(Boolean).map((ref) => [ref.path, ref])).values(),
+  );
+  const existingRefs = [];
+  for (let index = 0; index < uniqueRefs.length; index += 100) {
+    const snapshots = await Promise.all(
+      uniqueRefs
+        .slice(index, index + 100)
+        .map((ref) => ref.get().catch(() => null)),
+    );
+    snapshots.forEach((snapshot, snapshotIndex) => {
+      if (snapshot?.exists) {
+        existingRefs.push(uniqueRefs[index + snapshotIndex]);
+      }
+    });
   }
-  await userRef.delete();
-  return false;
+  return existingRefs;
+};
+
+const updateStudentInPerformanceScoreRosters = async (
+  year,
+  semester,
+  uid,
+  profilePatch,
+) => {
+  const rosterSnapshot = await db
+    .collection(`${getSemesterRoot(year, semester)}/${PERFORMANCE_SCORE_ROSTERS_COLLECTION}`)
+    .get();
+  let updatedRosterCount = 0;
+  let updatedRosterRowCount = 0;
+  let batch = db.batch();
+  let writeCount = 0;
+  const commitBatch = async () => {
+    if (writeCount === 0) return;
+    await batch.commit();
+    batch = db.batch();
+    writeCount = 0;
+  };
+
+  for (const rosterDoc of rosterSnapshot.docs) {
+    const data = rosterDoc.data() || {};
+    const rows = Array.isArray(data.rows) ? data.rows : [];
+    let changed = false;
+    const nextRows = rows.map((row) => {
+      if (String(row?.uid || '').trim() !== uid) return row;
+      changed = true;
+      updatedRosterRowCount += 1;
+      return {
+        ...row,
+        grade: profilePatch.grade,
+        class: profilePatch.classValue,
+        number: profilePatch.number,
+        studentName: profilePatch.name,
+      };
+    });
+    if (!changed) continue;
+    const meta = buildPerformanceRosterRowsMeta(data, nextRows);
+    batch.update(rosterDoc.ref, {
+      rows: nextRows,
+      classes: meta.classes,
+      targetClass: meta.targetClass,
+      rowCount: meta.rowCount,
+      matchedCount: meta.matchedCount,
+      unmatchedCount: meta.unmatchedCount,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    writeCount += 1;
+    updatedRosterCount += 1;
+    if (writeCount >= 400) {
+      await commitBatch();
+    }
+  }
+
+  await commitBatch();
+  return { updatedRosterCount, updatedRosterRowCount };
+};
+
+const collectStudentProfileSnapshotRefs = async (year, semester, uid) => {
+  const semesterRoot = getSemesterRoot(year, semester);
+  const refsByPath = new Map();
+  const scopedCollections = [
+    PERFORMANCE_SCORE_OBJECTIONS_COLLECTION,
+    'point_transactions',
+    'point_orders',
+    'quiz_results',
+    'quiz_submissions',
+    'history_classroom_results',
+    'history_classroom_exemptions',
+    'history_classroom_exemption_requests',
+  ];
+  const legacyCollections = [
+    'quiz_results',
+    'quiz_submissions',
+    'history_classroom_results',
+    'history_classroom_exemptions',
+    'history_classroom_exemption_requests',
+    HISTORY_DICTIONARY_REQUESTS_COLLECTION,
+  ];
+  const userCollections = ['academic_records', 'history_dictionary_words'];
+
+  const [
+    scopedRefs,
+    legacyRefs,
+    userSnapshots,
+    performanceScoreRefs,
+    existingDirectRefs,
+  ] = await Promise.all([
+    Promise.all(
+      scopedCollections.map((collectionName) =>
+        collectQueryRefsByUid(`${semesterRoot}/${collectionName}`, uid),
+      ),
+    ),
+    Promise.all(
+      legacyCollections.map((collectionName) =>
+        collectQueryRefsByUid(collectionName, uid),
+      ),
+    ),
+    Promise.all(
+      userCollections.map((collectionName) =>
+        db.collection(`users/${uid}/${collectionName}`).get(),
+      ),
+    ),
+    collectStudentPerformanceScoreDocRefs(uid),
+    collectExistingRefs([db.doc(getPointWalletPath(year, semester, uid))]),
+  ]);
+
+  scopedRefs.flat().forEach((ref) => refsByPath.set(ref.path, ref));
+  legacyRefs.flat().forEach((ref) => refsByPath.set(ref.path, ref));
+  userSnapshots.forEach((snapshot) => addQueryDocRefs(refsByPath, snapshot));
+  performanceScoreRefs.forEach((ref) => refsByPath.set(ref.path, ref));
+  existingDirectRefs.forEach((ref) => refsByPath.set(ref.path, ref));
+
+  return Array.from(refsByPath.values());
 };
 
 exports.deleteStudentData = onCall({ region: REGION, timeoutSeconds: 300, memory: '512MiB' }, async (request) => {
@@ -2933,7 +3174,7 @@ exports.deleteStudentData = onCall({ region: REGION, timeoutSeconds: 300, memory
   ] = await Promise.all([
     collectStudentPerformanceScoreRefs(targetUid),
     collectCurrentSemesterStudentRefs(year, semester, targetUid),
-    preserveUserDocument ? collectKnownUserStudentDataRefs(targetUid) : Promise.resolve([]),
+    collectKnownUserStudentDataRefs(targetUid),
     removeStudentFromPerformanceScoreRosters(year, semester, targetUid),
   ]);
 
@@ -2949,7 +3190,8 @@ exports.deleteStudentData = onCall({ region: REGION, timeoutSeconds: 300, memory
     await userRef.set(getStudentProfileClearPatch(), { merge: true });
     userProfileCleared = true;
   } else if (userSnap.exists) {
-    userDocumentDeleted = await deleteUserDocumentRecursively(userRef);
+    await userRef.delete();
+    userDocumentDeleted = true;
   }
 
   console.info('Student data deleted.', {
@@ -2970,6 +3212,80 @@ exports.deleteStudentData = onCall({ region: REGION, timeoutSeconds: 300, memory
     userProfileCleared,
     deletedRelatedDocCount,
     ...rosterCleanup,
+  };
+});
+
+exports.updateStudentData = onCall({ region: REGION, timeoutSeconds: 180, memory: '512MiB' }, async (request) => {
+  const manager = await assertStudentDataManager(request);
+  const { year, semester } = assertYearSemester(request.data || {});
+  const targetUid = String(
+    request.data?.uid
+    || request.data?.studentUid
+    || request.data?.targetUid
+    || '',
+  ).trim();
+  if (!targetUid) {
+    throw new HttpsError('invalid-argument', 'Student uid is required.');
+  }
+
+  const userRef = db.doc(`users/${targetUid}`);
+  const userSnap = await userRef.get();
+  if (!userSnap.exists) {
+    throw new HttpsError('not-found', 'Student user document does not exist.');
+  }
+
+  const targetProfile = userSnap.data() || {};
+  const targetEmail = String(targetProfile.email || '').trim().toLowerCase();
+  const preserveTeacherRole = String(targetProfile.role || '').trim() === 'teacher'
+    || targetEmail === ADMIN_EMAIL;
+  const profilePatch = buildStudentProfileUpdatePatches({
+    ...request.data,
+    uid: targetUid,
+    email: request.data?.email ?? targetProfile.email,
+  });
+
+  const [snapshotRefs, rosterSync] = await Promise.all([
+    collectStudentProfileSnapshotRefs(year, semester, targetUid),
+    updateStudentInPerformanceScoreRosters(
+      year,
+      semester,
+      targetUid,
+      profilePatch,
+    ),
+  ]);
+
+  const updateEntries = [
+    {
+      ref: userRef,
+      data: {
+        ...profilePatch.userPatch,
+        ...(preserveTeacherRole ? { role: targetProfile.role || 'teacher' } : {}),
+      },
+    },
+    ...snapshotRefs.map((ref) => ({
+      ref,
+      data: ref.parent.id === PERFORMANCE_SCORE_USER_COLLECTION
+        ? profilePatch.scorePatch
+        : profilePatch.genericPatch,
+    })),
+  ];
+  const updatedRelatedDocCount = await commitSetEntriesInChunks(updateEntries);
+
+  console.info('Student data updated.', {
+    actorUid: manager.uid,
+    targetUid,
+    year,
+    semester,
+    updatedRelatedDocCount,
+    ...rosterSync,
+  });
+
+  return {
+    uid: targetUid,
+    year,
+    semester,
+    updatedRelatedDocCount,
+    ...rosterSync,
   };
 });
 

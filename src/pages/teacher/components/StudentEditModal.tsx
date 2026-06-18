@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { doc, updateDoc } from "firebase/firestore";
-import { db } from "../../../lib/firebase";
+import { useAuth } from "../../../contexts/AuthContext";
+import { updateStudentData } from "../../../lib/studentData";
 
 interface Student {
   id: string;
@@ -24,6 +24,7 @@ const StudentEditModal: React.FC<StudentEditModalProps> = ({
   student,
   onUpdate,
 }) => {
+  const { config } = useAuth();
   const [formData, setFormData] = useState<Student>({
     id: "",
     grade: "",
@@ -32,6 +33,7 @@ const StudentEditModal: React.FC<StudentEditModalProps> = ({
     name: "",
     email: "",
   });
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (student) setFormData(student);
@@ -47,8 +49,10 @@ const StudentEditModal: React.FC<StudentEditModalProps> = ({
 
   const handleSave = async () => {
     if (!formData.id) return;
+    setSaving(true);
     try {
-      await updateDoc(doc(db, "users", formData.id), {
+      await updateStudentData(config, {
+        uid: formData.id,
         grade: formData.grade,
         class: formData.class,
         number: formData.number,
@@ -60,6 +64,8 @@ const StudentEditModal: React.FC<StudentEditModalProps> = ({
     } catch (error) {
       console.error("Failed to update student:", error);
       alert("학생 정보 저장 중 오류가 발생했습니다.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -144,9 +150,10 @@ const StudentEditModal: React.FC<StudentEditModalProps> = ({
           </button>
           <button
             onClick={handleSave}
-            className="flex-1 rounded bg-blue-600 py-2 font-bold text-white shadow-md transition hover:bg-blue-700"
+            disabled={saving}
+            className="flex-1 rounded bg-blue-600 py-2 font-bold text-white shadow-md transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
           >
-            저장
+            {saving ? "저장 중..." : "저장"}
           </button>
         </div>
       </div>
