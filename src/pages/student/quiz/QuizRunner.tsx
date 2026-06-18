@@ -15,6 +15,7 @@ import {
   where,
 } from "firebase/firestore";
 import { useAppToast } from "../../../components/common/AppToastProvider";
+import { useAppDialog } from "../../../components/common/AppDialogProvider";
 import { useAuth } from "../../../contexts/AuthContext";
 import { notifyPointsUpdated } from "../../../lib/appEvents";
 import {
@@ -145,6 +146,7 @@ const readCommittedQuizSubmission = async (
 
 const QuizRunner: React.FC = () => {
   const { showToast } = useAppToast();
+  const { confirm } = useAppDialog();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { userData, config, currentUser } = useAuth();
@@ -1244,7 +1246,7 @@ const QuizRunner: React.FC = () => {
     schedulePersistQuizProgress();
   };
 
-  const nextQuestion = () => {
+  const nextQuestion = async () => {
     emitSessionActivity();
     if (currentIndex < selectedQuestions.length - 1) {
       setMatchingActiveLeft("");
@@ -1253,11 +1255,14 @@ const QuizRunner: React.FC = () => {
       return;
     }
 
-    if (
-      !window.confirm(
-        "정말로 제출하겠습니까? 제출 후에는 답안을 수정할 수 없습니다.",
-      )
-    ) {
+    const confirmed = await confirm({
+      title: "평가를 제출할까요?",
+      message: "제출 후에는 답안을 수정할 수 없습니다.",
+      confirmLabel: "제출하기",
+      cancelLabel: "계속 풀기",
+      tone: "warning",
+    });
+    if (!confirmed) {
       return;
     }
 
@@ -1477,7 +1482,8 @@ const QuizRunner: React.FC = () => {
     );
     const currentAnswer = answers[String(question.id)] || "";
     const passageText = String(question.passage || "").trim();
-    const hasChoiceImage = question.type === "choice" && !!question.image;
+    const hasChoiceSupportPanel =
+      question.type === "choice" && (!!question.image || !!passageText);
 
     return (
       <div className="mx-auto flex h-[calc(100dvh-8rem)] max-w-6xl animate-fadeIn flex-col overflow-hidden px-3 py-3 sm:px-4 lg:max-w-7xl">
@@ -1519,14 +1525,6 @@ const QuizRunner: React.FC = () => {
             {question.question}
           </h2>
 
-          {question.type === "choice" && passageText && (
-            <QuizPassage
-              value={passageText}
-              surface="muted"
-              className="mb-3 shrink-0"
-            />
-          )}
-
           {!!(question.hintEnabled && question.hint) && (
             <div className="mb-3 shrink-0">
               <button
@@ -1556,19 +1554,42 @@ const QuizRunner: React.FC = () => {
 
           <div
             className={`min-h-0 flex-1 ${
-              hasChoiceImage
-                ? "grid gap-4 md:grid-cols-[minmax(0,1.1fr)_minmax(280px,0.9fr)] md:items-start"
+              hasChoiceSupportPanel
+                ? "grid gap-4 md:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)] md:items-start"
                 : "space-y-2"
             }`}
           >
-            {question.image && (
-              <div
-                className={
-                  hasChoiceImage
-                    ? "flex h-full min-h-0 items-center justify-center rounded-xl border border-gray-100 bg-gray-50 p-2 text-center"
-                    : "mb-3 text-center"
-                }
-              >
+            {hasChoiceSupportPanel && (
+              <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto rounded-xl border border-gray-100 bg-gray-50 p-2 text-center">
+                {question.image && (
+                  <div
+                    className={`flex min-h-0 items-center justify-center ${
+                      passageText ? "shrink-0" : "flex-1"
+                    }`}
+                  >
+                    <img
+                      src={question.image}
+                      className={`mx-auto max-w-full rounded-lg border border-gray-100 object-contain ${
+                        passageText
+                          ? "max-h-[min(30vh,280px)]"
+                          : "max-h-[min(48vh,460px)]"
+                      }`}
+                      alt="문항 첨부 이미지"
+                    />
+                  </div>
+                )}
+                {passageText && (
+                  <QuizPassage
+                    value={passageText}
+                    surface="white"
+                    className="shrink-0 text-left"
+                  />
+                )}
+              </div>
+            )}
+
+            {!hasChoiceSupportPanel && question.image && (
+              <div className="mb-3 text-center">
                 <img
                   src={question.image}
                   className="mx-auto max-h-[min(48vh,460px)] max-w-full rounded-lg border border-gray-100 object-contain"
@@ -1578,7 +1599,7 @@ const QuizRunner: React.FC = () => {
             )}
 
             {question.type === "choice" && (
-              <div className="space-y-2">
+              <div className="min-h-0 space-y-2 overflow-y-auto pr-1">
                 {question.options?.map((option, index) => {
                   const optionImage = getChoiceOptionImage(question, index);
                   return (
@@ -1807,9 +1828,13 @@ const QuizRunner: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={nextQuestion}
+              onClick={() => void nextQuestion()}
               disabled={finishSubmitting}
-              className="flex items-center rounded-xl bg-gray-800 px-7 py-2.5 font-bold text-white shadow-lg transition hover:bg-gray-900 disabled:opacity-60"
+              className={`flex items-center rounded-xl px-7 py-2.5 font-bold text-white shadow-lg transition disabled:opacity-60 ${
+                currentIndex === selectedQuestions.length - 1
+                  ? "bg-blue-600 hover:bg-blue-700"
+                  : "bg-gray-800 hover:bg-gray-900"
+              }`}
             >
               {currentIndex === selectedQuestions.length - 1
                 ? finishSubmitting
@@ -1855,7 +1880,7 @@ const QuizRunner: React.FC = () => {
             </div>
           </div>
 
-          <div className="mb-6 grid grid-cols-2 gap-3">
+          <div className="mb-6 grid gap-3 sm:grid-cols-3">
             <button
               type="button"
               onClick={() =>
@@ -1865,7 +1890,14 @@ const QuizRunner: React.FC = () => {
               }
               className="rounded-xl border-2 border-gray-200 bg-white py-3 font-bold text-gray-700 transition hover:bg-gray-50"
             >
-              오답 노트
+              채점 결과
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate("/student/mypage?menu=wrong_note")}
+              className="rounded-xl border-2 border-blue-100 bg-blue-50 py-3 font-bold text-blue-700 transition hover:border-blue-200 hover:bg-blue-100"
+            >
+              오답노트로
             </button>
             <button
               type="button"

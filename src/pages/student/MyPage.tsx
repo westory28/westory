@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   collection,
   doc,
@@ -287,6 +287,8 @@ const getBandTypeColor = (
 
 const MyPage: React.FC = () => {
   const { user, userData, config } = useAuth();
+  const [searchParams] = useSearchParams();
+  const requestedMenu = searchParams.get("menu");
 
   const [menu, setMenu] = useState<MainMenu>("profile");
   const [categoryTab, setCategoryTab] = useState<CategoryTab | "all">("all");
@@ -340,6 +342,16 @@ const MyPage: React.FC = () => {
     if (!user || !config) return;
     void loadMyPage();
   }, [user, config]);
+
+  useEffect(() => {
+    if (
+      requestedMenu === "profile" ||
+      requestedMenu === "score" ||
+      requestedMenu === "wrong_note"
+    ) {
+      setMenu(requestedMenu);
+    }
+  }, [requestedMenu]);
 
   const loadMyPage = async () => {
     if (!user || !config) return;
@@ -2438,11 +2450,11 @@ const MyPage: React.FC = () => {
                           <i className="fas fa-clipboard-list"></i>
                         </span>
                         <h3 className="text-xl font-black text-slate-900">
-                          대표 오답 3문항
+                          조회된 오답 {filteredWrongItems.length}문항
                         </h3>
                       </div>
                       <div className="space-y-3">
-                        {filteredWrongItems.slice(0, 3).map((item, index) => (
+                        {filteredWrongItems.map((item, index) => (
                           <div
                             key={item.key}
                             className="rounded-xl border border-slate-200"
@@ -2493,7 +2505,7 @@ const MyPage: React.FC = () => {
                         ))}
                         {filteredWrongItems.length === 0 && (
                           <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm font-bold text-slate-400">
-                            대표 오답으로 볼 문항이 없습니다.
+                            조회 조건에 맞는 오답 문항이 없습니다.
                           </div>
                         )}
                       </div>

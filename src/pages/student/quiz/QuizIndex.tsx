@@ -89,6 +89,17 @@ const QuizIndex: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-4xl animate-fadeIn px-4 py-8">
+      <div className="mb-5 flex justify-end">
+        <button
+          type="button"
+          onClick={() => navigate("/student/mypage?menu=wrong_note")}
+          className="inline-flex items-center gap-2 rounded-xl border border-blue-100 bg-white px-4 py-2.5 text-sm font-bold text-blue-700 shadow-sm transition hover:bg-blue-50"
+        >
+          <i className="fas fa-book-open text-xs"></i>
+          오답노트
+        </button>
+      </div>
+
       <section className="mb-10">
         <h2 className="mb-3 ml-1 flex items-center gap-2 text-lg font-bold text-gray-800">
           <i className="fas fa-flag-checkered text-blue-600"></i> 모의고사
