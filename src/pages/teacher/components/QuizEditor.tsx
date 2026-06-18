@@ -1103,6 +1103,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                 </option>
               ))}
             </select>
+            <span className="rounded-full border border-blue-200 bg-white px-2.5 py-1 text-xs font-bold text-blue-700">
+              {filteredQuestions.length.toLocaleString("ko-KR")}문제
+            </span>
             <button
               onClick={() => setEpFilter({ big: "", mid: "", small: "" })}
               className="ml-auto text-xs text-blue-400 hover:text-blue-600"
