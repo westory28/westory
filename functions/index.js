@@ -710,6 +710,7 @@ const getNotificationInboxPath = (year, semester, uid) => `${getSemesterRoot(yea
 const getNotificationItemsPath = (year, semester, uid) => `${getNotificationInboxPath(year, semester, uid)}/items`;
 const getBroadcastNotificationsPath = (year, semester) => `${getSemesterRoot(year, semester)}/broadcast_notifications`;
 const NOTIFICATION_CONFIG_PATH = 'site_settings/notification_config';
+const PERFORMANCE_SCORE_ROSTERS_COLLECTION = 'performance_score_rosters';
 const PERFORMANCE_SCORE_USER_COLLECTION = 'performance_scores';
 const PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION = 'confirmations';
 const PERFORMANCE_SCORE_OBJECTIONS_COLLECTION = 'performance_score_objections';
@@ -1866,6 +1867,22 @@ const assertPerformanceScoreManager = async (request) => {
   return { uid, email, profile };
 };
 
+const assertStudentDataManager = async (request) => {
+  const { uid, email } = assertAllowedWestoryUser(request);
+  if (email === ADMIN_EMAIL) {
+    return { uid, email, profile: null };
+  }
+
+  const { profile } = await getUserProfile(uid);
+  if (String(profile?.role || '').trim() !== 'teacher') {
+    throw new HttpsError(
+      'permission-denied',
+      'teacher or admin permission is required.',
+    );
+  }
+  return { uid, email, profile };
+};
+
 const assertNotificationManager = async (request) => {
   const { uid, email } = assertAllowedWestoryUser(request);
   if (email === ADMIN_EMAIL) {
@@ -2714,6 +2731,247 @@ const commitDeleteRefsInChunks = async (refs) => {
   }
   return uniqueRefs.length;
 };
+
+const getStudentProfileClearPatch = () => ({
+  studentName: '',
+  studentGrade: '',
+  studentClass: '',
+  studentNumber: '',
+  grade: '',
+  class: '',
+  number: '',
+  gradeClass: '',
+  updatedAt: FieldValue.serverTimestamp(),
+});
+
+const addQueryDocRefs = (refsByPath, snapshot) => {
+  snapshot?.forEach((docSnap) => {
+    refsByPath.set(docSnap.ref.path, docSnap.ref);
+  });
+};
+
+const collectQueryRefsByUid = async (collectionPath, uid) => {
+  const snapshot = await db.collection(collectionPath).where('uid', '==', uid).get();
+  return snapshot.docs.map((docSnap) => docSnap.ref);
+};
+
+const collectStudentPerformanceScoreRefs = async (uid) => {
+  const refsByPath = new Map();
+  const ownedScoresQuery = db.collection(`users/${uid}/${PERFORMANCE_SCORE_USER_COLLECTION}`).get();
+  const uidScoresQuery = db
+    .collectionGroup(PERFORMANCE_SCORE_USER_COLLECTION)
+    .where('uid', '==', uid)
+    .get();
+
+  const [ownedScores, uidScores] = await Promise.all([
+    ownedScoresQuery,
+    uidScoresQuery,
+  ]);
+
+  addQueryDocRefs(refsByPath, ownedScores);
+  addQueryDocRefs(refsByPath, uidScores);
+
+  const scoreRefs = Array.from(refsByPath.values())
+    .filter((ref) => ref.parent.id === PERFORMANCE_SCORE_USER_COLLECTION);
+  await runInChunks(scoreRefs, 25, async (scoreRef) => {
+    const confirmations = await scoreRef.collection(PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION).get();
+    addQueryDocRefs(refsByPath, confirmations);
+  });
+
+  return Array.from(refsByPath.values());
+};
+
+const buildPerformanceRosterRowsMeta = (rosterData, rows) => {
+  const classes = Array.from(new Set(
+    rows.map((row) => String(row?.class || '').trim()).filter(Boolean),
+  )).sort((a, b) => Number(a) - Number(b) || String(a).localeCompare(String(b), 'ko'));
+  const rowHasScore = (row) => {
+    if (!row) return false;
+    if (String(row.uid || '').trim()) return true;
+    if (row.isManual === true || row.isTransferred === true || String(row.academicStatus || '').trim()) {
+      return true;
+    }
+    const items = Array.isArray(row.items) ? row.items : [];
+    if (items.some((item) => item?.scoreEntered !== false && Number.isFinite(Number(item?.score)))) {
+      return true;
+    }
+    const totalScore = Number(row.totalScore);
+    return Number.isFinite(totalScore) && totalScore > 0;
+  };
+  const matchedCount = rows.filter(rowHasScore).length;
+  return {
+    classes,
+    targetClass: classes.length === 1 ? classes[0] : String(rosterData?.targetClass || '').trim(),
+    rowCount: rows.length,
+    matchedCount,
+    unmatchedCount: Math.max(0, rows.length - matchedCount),
+  };
+};
+
+const removeStudentFromPerformanceScoreRosters = async (year, semester, uid) => {
+  const rosterSnapshot = await db
+    .collection(`${getSemesterRoot(year, semester)}/${PERFORMANCE_SCORE_ROSTERS_COLLECTION}`)
+    .get();
+  let updatedRosterCount = 0;
+  let removedRosterRowCount = 0;
+  let batch = db.batch();
+  let writeCount = 0;
+  const commitBatch = async () => {
+    if (writeCount === 0) return;
+    await batch.commit();
+    batch = db.batch();
+    writeCount = 0;
+  };
+
+  for (const rosterDoc of rosterSnapshot.docs) {
+    const data = rosterDoc.data() || {};
+    const rows = Array.isArray(data.rows) ? data.rows : [];
+    const nextRows = rows.filter((row) => String(row?.uid || '').trim() !== uid);
+    if (nextRows.length === rows.length) continue;
+    const meta = buildPerformanceRosterRowsMeta(data, nextRows);
+    batch.update(rosterDoc.ref, {
+      rows: nextRows,
+      classes: meta.classes,
+      targetClass: meta.targetClass,
+      rowCount: meta.rowCount,
+      matchedCount: meta.matchedCount,
+      unmatchedCount: meta.unmatchedCount,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    writeCount += 1;
+    updatedRosterCount += 1;
+    removedRosterRowCount += rows.length - nextRows.length;
+    if (writeCount >= 400) {
+      await commitBatch();
+    }
+  }
+
+  await commitBatch();
+  return { updatedRosterCount, removedRosterRowCount };
+};
+
+const collectCurrentSemesterStudentRefs = async (year, semester, uid) => {
+  const semesterRoot = getSemesterRoot(year, semester);
+  const refsByPath = new Map();
+  const uidCollections = [
+    PERFORMANCE_SCORE_OBJECTIONS_COLLECTION,
+    'point_transactions',
+    'quiz_results',
+    'quiz_submissions',
+    'history_classroom_results',
+    'history_classroom_exemptions',
+    'history_classroom_exemption_requests',
+  ];
+
+  const queryResults = await Promise.all(
+    uidCollections.map((collectionName) =>
+      collectQueryRefsByUid(`${semesterRoot}/${collectionName}`, uid),
+    ),
+  );
+  queryResults.flat().forEach((ref) => refsByPath.set(ref.path, ref));
+
+  const pointWalletRef = db.doc(getPointWalletPath(year, semester, uid));
+  refsByPath.set(pointWalletRef.path, pointWalletRef);
+
+  const notificationInboxRef = db.doc(getNotificationInboxPath(year, semester, uid));
+  refsByPath.set(notificationInboxRef.path, notificationInboxRef);
+  const notificationItems = await db.collection(getNotificationItemsPath(year, semester, uid)).get();
+  addQueryDocRefs(refsByPath, notificationItems);
+
+  return Array.from(refsByPath.values());
+};
+
+const collectKnownUserStudentDataRefs = async (uid) => {
+  const refsByPath = new Map();
+  const userCollections = [
+    'academic_records',
+    'performance_score_consents',
+    'attendance',
+    'history_dictionary_words',
+  ];
+  const snapshots = await Promise.all(
+    userCollections.map((collectionName) => db.collection(`users/${uid}/${collectionName}`).get()),
+  );
+  snapshots.forEach((snapshot) => addQueryDocRefs(refsByPath, snapshot));
+  return Array.from(refsByPath.values());
+};
+
+const deleteUserDocumentRecursively = async (userRef) => {
+  if (typeof db.recursiveDelete === 'function') {
+    await db.recursiveDelete(userRef);
+    return true;
+  }
+  await userRef.delete();
+  return false;
+};
+
+exports.deleteStudentData = onCall({ region: REGION, timeoutSeconds: 300, memory: '512MiB' }, async (request) => {
+  const manager = await assertStudentDataManager(request);
+  const { year, semester } = assertYearSemester(request.data || {});
+  const targetUid = String(
+    request.data?.uid
+    || request.data?.studentUid
+    || request.data?.targetUid
+    || '',
+  ).trim();
+  if (!targetUid) {
+    throw new HttpsError('invalid-argument', 'Student uid is required.');
+  }
+
+  const userRef = db.doc(`users/${targetUid}`);
+  const userSnap = await userRef.get();
+  const targetProfile = userSnap.exists ? userSnap.data() || {} : {};
+  const targetEmail = String(targetProfile.email || '').trim().toLowerCase();
+  const preserveUserDocument = String(targetProfile.role || '').trim() === 'teacher'
+    || targetEmail === ADMIN_EMAIL;
+
+  const [
+    performanceScoreRefs,
+    semesterRefs,
+    knownUserRefs,
+    rosterCleanup,
+  ] = await Promise.all([
+    collectStudentPerformanceScoreRefs(targetUid),
+    collectCurrentSemesterStudentRefs(year, semester, targetUid),
+    preserveUserDocument ? collectKnownUserStudentDataRefs(targetUid) : Promise.resolve([]),
+    removeStudentFromPerformanceScoreRosters(year, semester, targetUid),
+  ]);
+
+  const deletedRelatedDocCount = await commitDeleteRefsInChunks([
+    ...performanceScoreRefs,
+    ...semesterRefs,
+    ...knownUserRefs,
+  ]);
+
+  let userDocumentDeleted = false;
+  let userProfileCleared = false;
+  if (preserveUserDocument) {
+    await userRef.set(getStudentProfileClearPatch(), { merge: true });
+    userProfileCleared = true;
+  } else if (userSnap.exists) {
+    userDocumentDeleted = await deleteUserDocumentRecursively(userRef);
+  }
+
+  console.info('Student data deleted.', {
+    actorUid: manager.uid,
+    targetUid,
+    year,
+    semester,
+    preserveUserDocument,
+    deletedRelatedDocCount,
+    ...rosterCleanup,
+  });
+
+  return {
+    uid: targetUid,
+    year,
+    semester,
+    userDocumentDeleted,
+    userProfileCleared,
+    deletedRelatedDocCount,
+    ...rosterCleanup,
+  };
+});
 
 const collectMatchingQuizAttemptDocsByClass = async ({
   collectionRef,

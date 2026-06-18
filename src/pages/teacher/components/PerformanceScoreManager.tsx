@@ -498,7 +498,9 @@ const matchRowsToStudents = (
 const getRosterRowStudentRepair = (
   row: PerformanceScoreRosterRow,
   indexes: StudentMatchIndexes,
+  validStudentUids: Set<string>,
 ) => {
+  if (row.uid && !validStudentUids.has(row.uid)) return null;
   if (!rosterRowHasScore(row)) return row;
 
   const numberMatch = getUniqueStudentMatch(
@@ -544,11 +546,21 @@ const repairRosterRowsWithStudentProfiles = (
   rows: PerformanceScoreRosterRow[],
   students: StudentProfile[],
 ) => {
-  if (!rows.length || !students.length) return { rows, changed: false };
+  if (!rows.length || !students.length)
+    return { rows, changed: false, removedRows: [] };
   const indexes = buildStudentMatchIndexes(students);
+  const validStudentUids = new Set(
+    students.map((student) => student.uid).filter(Boolean),
+  );
   let changed = false;
-  const repairedRows = rows.map((row) => {
-    const repaired = getRosterRowStudentRepair(row, indexes);
+  const removedRows: PerformanceScoreRosterRow[] = [];
+  const repairedRows = rows.flatMap((row) => {
+    const repaired = getRosterRowStudentRepair(row, indexes, validStudentUids);
+    if (!repaired) {
+      changed = true;
+      removedRows.push(row);
+      return [];
+    }
     const rowChanged =
       repaired.uid !== row.uid ||
       repaired.number !== row.number ||
@@ -556,9 +568,9 @@ const repairRosterRowsWithStudentProfiles = (
       repaired.matchStatus !== row.matchStatus ||
       repaired.matchMessage !== row.matchMessage;
     if (rowChanged) changed = true;
-    return repaired;
+    return [repaired];
   });
-  return { rows: changed ? repairedRows : rows, changed };
+  return { rows: changed ? repairedRows : rows, changed, removedRows };
 };
 
 const getMatchBadgeClass = (
@@ -5108,9 +5120,17 @@ const PerformanceScoreManager: React.FC = () => {
     loadedRosters: PerformanceScoreRoster[],
     syncRunId: number,
   ) => {
+    const activeStudentUids = new Set(
+      students.map((student) => student.uid).filter(Boolean),
+    );
     const candidates = loadedRosters.flatMap((roster) =>
       (roster.rows || [])
-        .filter((row) => row.uid && rosterRowHasScore(row))
+        .filter(
+          (row) =>
+            row.uid &&
+            (!activeStudentUids.size || activeStudentUids.has(row.uid)) &&
+            rosterRowHasScore(row),
+        )
         .map((row) => {
           const key = `${year}:${semester}:${row.uid}:${roster.id}`;
           return {
@@ -5313,6 +5333,29 @@ const PerformanceScoreManager: React.FC = () => {
             unmatchedCount: meta.unmatchedCount,
             updatedAt: serverTimestamp(),
           });
+          repaired.removedRows.forEach((row) => {
+            if (!row.uid) return;
+            transaction.delete(
+              doc(
+                db,
+                "users",
+                row.uid,
+                PERFORMANCE_SCORE_USER_COLLECTION,
+                latestRoster.id,
+                PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
+                row.uid,
+              ),
+            );
+            transaction.delete(
+              doc(
+                db,
+                "users",
+                row.uid,
+                PERFORMANCE_SCORE_USER_COLLECTION,
+                latestRoster.id,
+              ),
+            );
+          });
           return nextRoster;
         });
         if (repairedRoster) repairedRosters.push(repairedRoster);
@@ -5352,12 +5395,25 @@ const PerformanceScoreManager: React.FC = () => {
     roster: PerformanceScoreRoster,
     options: { includeStudentDocuments?: boolean } = {},
   ) => {
+    const activeStudentUids = new Set(
+      students.map((student) => student.uid).filter(Boolean),
+    );
+    const rosterRows = (roster.rows || []).filter(
+      (row) =>
+        !row.uid || !activeStudentUids.size || activeStudentUids.has(row.uid),
+    );
+    const activeRoster =
+      rosterRows.length === (roster.rows || []).length
+        ? roster
+        : { ...roster, rows: rosterRows };
     if (!options.includeStudentDocuments) {
-      return buildScoreListRecordsFromRosterRows(roster);
+      return buildScoreListRecordsFromRosterRows(activeRoster);
     }
 
-    const rosterRows = roster.rows || [];
-    const linkedRows = rosterRows.filter((row) => row.uid);
+    const linkedRows = rosterRows.filter(
+      (row) =>
+        row.uid && (!activeStudentUids.size || activeStudentUids.has(row.uid)),
+    );
     const loaded: ScoreListRecord[] = [];
     for (let index = 0; index < linkedRows.length; index += 40) {
       const chunk = linkedRows.slice(index, index + 40);
@@ -6541,7 +6597,13 @@ const PerformanceScoreManager: React.FC = () => {
         (!gradeValue ||
           normalizeSchoolValue(row.grade) === normalizeSchoolValue(gradeValue)),
     );
-    const linkedRows = classRows.filter((row) => row.uid);
+    const activeStudentUids = new Set(
+      students.map((student) => student.uid).filter(Boolean),
+    );
+    const linkedRows = classRows.filter(
+      (row) =>
+        row.uid && (!activeStudentUids.size || activeStudentUids.has(row.uid)),
+    );
     const loaded: PerformanceScoreRecord[] = [];
     for (let index = 0; index < linkedRows.length; index += 40) {
       const chunk = linkedRows.slice(index, index + 40);

@@ -1,15 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   collection,
-  deleteDoc,
   doc,
   getDoc,
   getDocs,
-  serverTimestamp,
-  updateDoc,
   writeBatch,
 } from "firebase/firestore";
-import { db } from "../../lib/firebase";
+import { db, getHttpsCallable } from "../../lib/firebase";
+import { getYearSemester } from "../../lib/semesterScope";
 import MoveClassModal from "./components/MoveClassModal";
 import StudentDetailModal from "./components/StudentDetailModal";
 import { useAuth } from "../../contexts/AuthContext";
@@ -109,7 +107,7 @@ const getStudentIdentityLabel = (student: Pick<Student, "email" | "userId">) =>
   student.email || student.userId;
 
 const StudentList: React.FC = () => {
-  const { userData, currentUser } = useAuth();
+  const { userData, currentUser, config } = useAuth();
   const [students, setStudents] = useState<Student[]>([]);
   const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
@@ -136,6 +134,9 @@ const StudentList: React.FC = () => {
     useState<StudentDetailInitialTab>("summary");
   const [moveClassModalOpen, setMoveClassModalOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [deletingStudentIds, setDeletingStudentIds] = useState<Set<string>>(
+    new Set(),
+  );
   const readOnly = !canEditStudentList(userData, currentUser?.email || "");
 
   useEffect(() => {
@@ -369,30 +370,42 @@ const StudentList: React.FC = () => {
     setSelectedIds(next);
   };
 
+  const deleteStudentData = async (student: Student) => {
+    const { year, semester } = getYearSemester(config);
+    const callable = await getHttpsCallable<
+      { uid: string; year: string; semester: string },
+      {
+        uid: string;
+        deletedRelatedDocCount: number;
+        updatedRosterCount: number;
+        removedRosterRowCount: number;
+      }
+    >("deleteStudentData");
+    await callable({
+      uid: student.userId,
+      year,
+      semester,
+    });
+  };
+
   const handleDelete = async (id: string) => {
     if (readOnly) return;
     if (!window.confirm("정말 삭제하시겠습니까? (복구 불가)")) return;
+    const target = students.find((student) => student.id === id);
+    if (!target) return;
+    setDeletingStudentIds((current) => new Set(current).add(id));
     try {
-      const target = students.find((student) => student.id === id);
-      if (!target) return;
-
-      if (target.isTeacherAccount) {
-        await updateDoc(doc(db, "users", target.userId), {
-          studentName: "",
-          studentGrade: "",
-          studentClass: "",
-          studentNumber: "",
-          grade: "",
-          class: "",
-          number: "",
-          updatedAt: serverTimestamp(),
-        });
-      } else {
-        await deleteDoc(doc(db, "users", target.userId));
-      }
-      void fetchStudents();
+      await deleteStudentData(target);
+      await fetchStudents();
     } catch (error) {
       console.error("Delete failed", error);
+      alert("학생 삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setDeletingStudentIds((current) => {
+        const next = new Set(current);
+        next.delete(id);
+        return next;
+      });
     }
   };
 
@@ -402,31 +415,22 @@ const StudentList: React.FC = () => {
       !window.confirm(`선택한 ${selectedIds.size}명을 정말 삭제하시겠습니까?`)
     )
       return;
+    const targets = Array.from(selectedIds)
+      .map((id) => students.find((student) => student.id === id))
+      .filter((student): student is Student => Boolean(student));
+    if (!targets.length) return;
+    setDeletingStudentIds(new Set(targets.map((student) => student.id)));
     try {
-      const batch = writeBatch(db);
-      selectedIds.forEach((id) => {
-        const target = students.find((student) => student.id === id);
-        if (!target) return;
-        if (target.isTeacherAccount) {
-          batch.update(doc(db, "users", target.userId), {
-            studentName: "",
-            studentGrade: "",
-            studentClass: "",
-            studentNumber: "",
-            grade: "",
-            class: "",
-            number: "",
-            updatedAt: serverTimestamp(),
-          });
-        } else {
-          batch.delete(doc(db, "users", target.userId));
-        }
-      });
-      await batch.commit();
+      for (const target of targets) {
+        await deleteStudentData(target);
+      }
       setSelectedIds(new Set());
-      void fetchStudents();
+      await fetchStudents();
     } catch (error) {
       console.error("Bulk delete failed", error);
+      alert("선택한 학생 삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+    } finally {
+      setDeletingStudentIds(new Set());
     }
   };
 
@@ -656,7 +660,8 @@ const StudentList: React.FC = () => {
                               </button>
                               <button
                                 onClick={() => void handleDelete(student.id)}
-                                className="flex items-center gap-1 rounded bg-red-50 px-2.5 py-1.5 text-xs font-bold text-red-600 transition hover:bg-red-100"
+                                disabled={deletingStudentIds.has(student.id)}
+                                className="flex items-center gap-1 rounded bg-red-50 px-2.5 py-1.5 text-xs font-bold text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
                                 title={
                                   student.isTeacherAccount
                                     ? "학생 정보만 삭제"
@@ -732,10 +737,13 @@ const StudentList: React.FC = () => {
               </button>
               <button
                 onClick={() => void handleBulkDelete()}
-                className="flex items-center gap-1 rounded-lg px-3 py-2 text-red-600 transition hover:bg-gray-100"
+                disabled={deletingStudentIds.size > 0}
+                className="flex items-center gap-1 rounded-lg px-3 py-2 text-red-600 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <i className="fas fa-trash"></i>
-                <span className="text-[11px] font-bold md:text-xs">삭제</span>
+                <span className="text-[11px] font-bold md:text-xs">
+                  {deletingStudentIds.size > 0 ? "삭제 중" : "삭제"}
+                </span>
               </button>
             </div>
             <div className="hidden h-4 w-px bg-gray-300 md:block"></div>
