@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   collection,
   doc,
@@ -11,6 +11,7 @@ import {
   setDoc,
   where,
 } from "firebase/firestore";
+import { useAppToast } from "../../components/common/AppToastProvider";
 import PointRankBadge from "../../components/common/PointRankBadge";
 import { useAuth } from "../../contexts/AuthContext";
 import { subscribePointsUpdated } from "../../lib/appEvents";
@@ -50,6 +51,12 @@ import {
   type StudentProgressSummary,
   type StudentQuizResultDoc,
 } from "../../lib/studentProgressSummary";
+import {
+  buildScoreRows as buildSharedScoreRows,
+  buildSubjectScoreInsights as buildSharedSubjectScoreInsights,
+  getTeacherAdviceText as getSharedTeacherAdviceText,
+  type GradingPlanLike,
+} from "../../lib/studentScores";
 import type { PointPolicy, PointWallet } from "../../types";
 
 const LazyChart = lazyWithRetry(
@@ -138,6 +145,8 @@ interface TrendPoint {
   unitId: string;
   category: CategoryTab | "other";
   score: number;
+  wrongCount?: number;
+  dateText?: string;
 }
 
 const DEFAULT_POINT_WALLET: PointWallet = {
@@ -287,8 +296,13 @@ const getBandTypeColor = (
 
 const MyPage: React.FC = () => {
   const { user, userData, config } = useAuth();
-  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const { showToast } = useAppToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const requestedMenu = searchParams.get("menu");
+  const canUseLesson = config?.showLesson !== false;
+  const canUseQuiz = config?.showQuiz !== false;
+  const canUseScore = config?.showScore !== false;
 
   const [menu, setMenu] = useState<MainMenu>("profile");
   const [categoryTab, setCategoryTab] = useState<CategoryTab | "all">("all");
@@ -320,9 +334,13 @@ const MyPage: React.FC = () => {
     useState(false);
 
   const [trendPoints, setTrendPoints] = useState<TrendPoint[]>([]);
+  const [mockExamPoints, setMockExamPoints] = useState<TrendPoint[]>([]);
   const [quizLineData, setQuizLineData] = useState<any>(null);
   const [wrongItems, setWrongItems] = useState<WrongNoteItem[]>([]);
   const [expandedWrongKey, setExpandedWrongKey] = useState<string | null>(null);
+  const [reviewGoalChecks, setReviewGoalChecks] = useState<
+    Record<string, boolean>
+  >({});
   const [loadingWrong, setLoadingWrong] = useState(false);
   const [progressSummary, setProgressSummary] =
     useState<StudentProgressSummary | null>(null);
@@ -343,28 +361,63 @@ const MyPage: React.FC = () => {
     void loadMyPage();
   }, [user, config]);
 
+  const isMenuAvailable = (nextMenu: MainMenu) => {
+    if (nextMenu === "score") return canUseScore;
+    if (nextMenu === "wrong_note") return canUseQuiz;
+    return true;
+  };
+
+  const selectMenu = (nextMenu: MainMenu) => {
+    const safeMenu = isMenuAvailable(nextMenu) ? nextMenu : "profile";
+    setMenu(safeMenu);
+    setSearchParams(safeMenu === "profile" ? {} : { menu: safeMenu });
+  };
+
   useEffect(() => {
     if (
       requestedMenu === "profile" ||
       requestedMenu === "score" ||
       requestedMenu === "wrong_note"
     ) {
-      setMenu(requestedMenu);
+      setMenu(isMenuAvailable(requestedMenu) ? requestedMenu : "profile");
+    } else if (!isMenuAvailable(menu)) {
+      setMenu("profile");
     }
-  }, [requestedMenu]);
+  }, [requestedMenu, canUseQuiz, canUseScore, menu]);
 
   const loadMyPage = async () => {
     if (!user || !config) return;
     const titles = await loadUnitTitles();
-    const quizResults = loadStudentQuizResults(config, user.uid);
+    const quizResults: QuizResultSource = canUseQuiz
+      ? loadStudentQuizResults(config, user.uid)
+      : [];
     await Promise.all([
       loadProfileAndEmoji(),
       loadPointRankState(),
-      loadScoreData(),
-      loadPerformanceScoreData(),
-      loadQuizData(titles, quizResults),
+      canUseScore ? loadScoreData() : resetScoreData(),
+      canUseScore ? loadPerformanceScoreData() : resetPerformanceScoreData(),
+      canUseQuiz ? loadQuizData(titles, quizResults) : resetQuizData(),
       loadProgressSummary(quizResults),
     ]);
+  };
+
+  const resetScoreData = async () => {
+    setScoreRows([]);
+    setScoreChartData(null);
+  };
+
+  const resetPerformanceScoreData = async () => {
+    setPerformanceScores([]);
+    setPerformanceScoresLoading(false);
+  };
+
+  const resetQuizData = async () => {
+    setTrendPoints([]);
+    setMockExamPoints([]);
+    setQuizLineData(null);
+    setWrongItems([]);
+    setExpandedWrongKey(null);
+    setLoadingWrong(false);
   };
 
   const loadProgressSummary = async (quizResults?: QuizResultSource) => {
@@ -489,62 +542,34 @@ const MyPage: React.FC = () => {
       doc(db, "users", user.uid, "academic_records", scoreDocId),
     );
     const scoreMap = scoreSnap.exists() ? scoreSnap.data().scores || {} : {};
+    let targetGrade = normalizeClassValue(userData?.grade ?? profile?.grade);
+    if (!targetGrade) {
+      const userSnap = await getDoc(doc(db, "users", user.uid));
+      if (userSnap.exists()) {
+        targetGrade = normalizeClassValue(
+          (userSnap.data() as UserProfileDoc).grade,
+        );
+      }
+    }
 
     const plansSnap = await getDocs(
       collection(db, getSemesterCollectionPath(config, "grading_plans")),
     );
 
-    const rows: ScoreRow[] = [];
+    const plans: GradingPlanLike[] = [];
     plansSnap.forEach((planDoc) => {
-      const plan = {
+      plans.push({
         id: planDoc.id,
-        ...(planDoc.data() as Omit<GradingPlanDoc, "id">),
-      };
-      const items = Array.isArray(plan.items) ? plan.items : [];
-      const breakdown: ScoreBreakdownItem[] = items.map((item, idx) => {
-        const scoreKey = `${plan.id}_${idx}`;
-        const entered = Object.prototype.hasOwnProperty.call(
-          scoreMap,
-          scoreKey,
-        );
-        const rawValue = Number(entered ? scoreMap[scoreKey] : 0);
-        const score = Number.isFinite(rawValue) ? rawValue : 0;
-        const maxScore = Number(item.maxScore || 0);
-        const ratio = Number(item.ratio || 0);
-        const weighted = maxScore > 0 ? (score / maxScore) * ratio : 0;
-
-        return {
-          name: item.name || `${idx + 1}번 항목`,
-          score,
-          maxScore,
-          ratio,
-          weighted: Number(weighted.toFixed(1)),
-          entered,
-          type: normalizePlanItemType(item.type, String(item.name || "")),
-        };
-      });
-
-      const total = Number(
-        breakdown.reduce((acc, cur) => acc + cur.weighted, 0).toFixed(1),
-      );
-      rows.push({
-        subject: plan.subject || "과목",
-        total,
-        breakdown,
+        ...planDoc.data(),
       });
     });
 
-    rows.sort((a, b) => {
-      const getPriority = (subject: string) => {
-        const idx = SUBJECT_PRIORITY.findIndex((name) =>
-          subject.includes(name),
-        );
-        return idx === -1 ? 999 : idx;
-      };
-      return (
-        getPriority(a.subject) - getPriority(b.subject) ||
-        a.subject.localeCompare(b.subject)
-      );
+    const rows = buildSharedScoreRows(plans, scoreMap, {
+      year: String(year),
+      semester: String(semester),
+      grade: targetGrade,
+      filterByGrade: true,
+      sortMode: "importance",
     });
 
     setScoreRows(rows);
@@ -591,119 +616,158 @@ const MyPage: React.FC = () => {
     if (!user || !config) return;
     setLoadingWrong(true);
 
-    const results = (
-      preloadedQuizResults === undefined
-        ? await loadStudentQuizResults(config, user.uid)
-        : await preloadedQuizResults
-    ).slice();
-    results.sort(
-      (a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0),
-    );
+    try {
+      const results = (
+        preloadedQuizResults === undefined
+          ? await loadStudentQuizResults(config, user.uid)
+          : await preloadedQuizResults
+      ).slice();
+      results.sort(
+        (a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0),
+      );
 
-    const latest = results.slice(0, 12).reverse();
-    const points: TrendPoint[] = latest.map((result, idx) => {
-      const unitId = result.unitId || "unknown";
-      const category = (result.category || "other") as CategoryTab | "other";
-      const unitTitle = titleMap[unitId] || "단원명 없음";
-      return {
-        label: `${idx + 1}회 · ${unitTitle} · ${getCategoryShort(category)}`,
-        unitId,
-        category,
-        score: Number(result.score || 0),
-      };
-    });
-    setTrendPoints(points);
+      setMockExamPoints(
+        results
+          .filter(
+            (result) =>
+              result.category === "exam_prep" || result.unitId === "exam_prep",
+          )
+          .map((result, idx) => {
+            const unitId = result.unitId || "exam_prep";
+            return {
+              label: `${idx + 1}. ${titleMap[unitId] || getCategoryLabel("exam_prep")}`,
+              unitId,
+              category: (result.category || "exam_prep") as
+                | CategoryTab
+                | "other",
+              score: Number(result.score || 0),
+              wrongCount: (result.details || []).filter(
+                (detail) => !detail.correct,
+              ).length,
+              dateText: formatResultDate(result),
+            };
+          }),
+      );
 
-    setQuizLineData(
-      points.length
-        ? {
-            labels: points.map((point) => point.label),
-            datasets: [
-              {
-                label: "점수",
-                data: points.map((point) => point.score),
-                borderColor: "#059669",
-                backgroundColor: "rgba(16, 185, 129, 0.15)",
-                fill: true,
-                tension: 0.3,
-                pointRadius: 4,
-              },
-            ],
-          }
-        : null,
-    );
-
-    const wrongLogs: Array<{
-      qid: string;
-      userAnswer: string;
-      unitId: string;
-      category: CategoryTab | "other";
-      dateText: string;
-    }> = [];
-
-    results.forEach((result) => {
-      (result.details || []).forEach((detail) => {
-        if (detail.correct) return;
-        wrongLogs.push({
-          qid: String(detail.id),
-          userAnswer: detail.u || "",
-          unitId: result.unitId || "unknown",
-          category: (result.category || "other") as CategoryTab | "other",
+      const latest = results.slice(0, 12).reverse();
+      const points: TrendPoint[] = latest.map((result, idx) => {
+        const unitId = result.unitId || "unknown";
+        const category = (result.category || "other") as CategoryTab | "other";
+        const unitTitle = titleMap[unitId] || "단원명 없음";
+        return {
+          label: `${idx + 1}회 · ${unitTitle} · ${getCategoryShort(category)}`,
+          unitId,
+          category,
+          score: Number(result.score || 0),
+          wrongCount: (result.details || []).filter((detail) => !detail.correct)
+            .length,
           dateText: formatResultDate(result),
+        };
+      });
+      setTrendPoints(points);
+
+      setQuizLineData(
+        points.length
+          ? {
+              labels: points.map((point) => point.label),
+              datasets: [
+                {
+                  label: "점수",
+                  data: points.map((point) => point.score),
+                  borderColor: "#059669",
+                  backgroundColor: "rgba(16, 185, 129, 0.15)",
+                  fill: true,
+                  tension: 0.3,
+                  pointRadius: 4,
+                },
+              ],
+            }
+          : null,
+      );
+
+      const wrongLogs: Array<{
+        qid: string;
+        userAnswer: string;
+        unitId: string;
+        category: CategoryTab | "other";
+        dateText: string;
+      }> = [];
+
+      results.forEach((result) => {
+        (result.details || []).forEach((detail) => {
+          if (detail.correct) return;
+          wrongLogs.push({
+            qid: String(detail.id),
+            userAnswer: detail.u || "",
+            unitId: result.unitId || "unknown",
+            category: (result.category || "other") as CategoryTab | "other",
+            dateText: formatResultDate(result),
+          });
         });
       });
-    });
 
-    if (!wrongLogs.length) {
-      setWrongItems([]);
+      if (!wrongLogs.length) {
+        setWrongItems([]);
+        setLoadingWrong(false);
+        return;
+      }
+
+      const questionMap: Record<string, any> = {};
+      const questionIds = Array.from(new Set(wrongLogs.map((log) => log.qid)));
+
+      await Promise.all(
+        chunk(questionIds, 10).map(async (ids) => {
+          const scopedSnap = await getDocs(
+            query(
+              collection(
+                db,
+                getSemesterCollectionPath(config, "quiz_questions"),
+              ),
+              where(documentId(), "in", ids),
+            ),
+          );
+          scopedSnap.forEach((questionDoc) => {
+            questionMap[questionDoc.id] = questionDoc.data();
+          });
+        }),
+      );
+
+      const seen = new Set<string>();
+      const nextWrongItems: WrongNoteItem[] = [];
+
+      wrongLogs.forEach((log) => {
+        const question = questionMap[log.qid];
+        if (!question) return;
+
+        const key = `${log.qid}_${log.unitId}_${log.category}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+
+        nextWrongItems.push({
+          key,
+          question: question.question || "문항 텍스트 없음",
+          answer: question.answer || "-",
+          explanation: question.explanation || "해설이 등록되지 않았습니다.",
+          userAnswer: log.userAnswer,
+          unitId: log.unitId,
+          unitTitle: titleMap[log.unitId] || "단원명 없음",
+          category: log.category,
+          categoryLabel: getCategoryLabel(log.category),
+          dateText: log.dateText,
+        });
+      });
+
+      setWrongItems(nextWrongItems);
       setLoadingWrong(false);
-      return;
+    } catch (error) {
+      console.error("Failed to load my quiz and wrong note data:", error);
+      setTrendPoints([]);
+      setMockExamPoints([]);
+      setQuizLineData(null);
+      setWrongItems([]);
+    } finally {
+      setLoadingWrong(false);
     }
-
-    const questionMap: Record<string, any> = {};
-    const questionIds = Array.from(new Set(wrongLogs.map((log) => log.qid)));
-
-    await Promise.all(
-      chunk(questionIds, 10).map(async (ids) => {
-        const scopedSnap = await getDocs(
-          query(
-            collection(db, getSemesterCollectionPath(config, "quiz_questions")),
-            where(documentId(), "in", ids),
-          ),
-        );
-        scopedSnap.forEach((questionDoc) => {
-          questionMap[questionDoc.id] = questionDoc.data();
-        });
-      }),
-    );
-
-    const seen = new Set<string>();
-    const nextWrongItems: WrongNoteItem[] = [];
-
-    wrongLogs.forEach((log) => {
-      const question = questionMap[log.qid];
-      if (!question) return;
-
-      const key = `${log.qid}_${log.unitId}_${log.category}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-
-      nextWrongItems.push({
-        key,
-        question: question.question || "문항 텍스트 없음",
-        answer: question.answer || "-",
-        explanation: question.explanation || "해설이 등록되지 않았습니다.",
-        userAnswer: log.userAnswer,
-        unitId: log.unitId,
-        unitTitle: titleMap[log.unitId] || "단원명 없음",
-        category: log.category,
-        categoryLabel: getCategoryLabel(log.category),
-        dateText: log.dateText,
-      });
-    });
-
-    setWrongItems(nextWrongItems);
-    setLoadingWrong(false);
   };
 
   const orderedEmojiEntries = useMemo(
@@ -836,15 +900,32 @@ const MyPage: React.FC = () => {
     if (!user) return;
     setSavingGoal(true);
     try {
+      const nextGoalScore = goalScore.trim();
       await setDoc(
         doc(db, "users", user.uid),
         {
-          myPageGoalScore: goalScore.trim(),
+          myPageGoalScore: nextGoalScore,
           myPageSubjectGoals: subjectGoals,
           updatedAt: serverTimestamp(),
         },
         { merge: true },
       );
+      setProfile((prev) => ({
+        ...(prev || {}),
+        myPageGoalScore: nextGoalScore,
+        myPageSubjectGoals: subjectGoals,
+      }));
+      showToast({
+        tone: "success",
+        title: "목표를 저장했습니다.",
+      });
+    } catch (error) {
+      console.error("Failed to save my page goal:", error);
+      showToast({
+        tone: "error",
+        title: "목표 저장에 실패했습니다.",
+        description: "잠시 후 다시 시도해 주세요.",
+      });
     } finally {
       setSavingGoal(false);
     }
@@ -942,75 +1023,7 @@ const MyPage: React.FC = () => {
   }, [wrongItems, trendPoints, unitTitleMap]);
 
   const subjectInsights = useMemo<SubjectScoreInsight[]>(() => {
-    return scoreRows.map((row) => {
-      const target = Number(subjectGoals[row.subject] ?? 85);
-      const current = Number(row.total || 0);
-      const gap = Math.max(0, target - current);
-
-      let examCurrent = 0;
-      let performanceCurrent = 0;
-      let otherCurrent = 0;
-      let examRemain = 0;
-      let performanceRemain = 0;
-      let otherRemain = 0;
-      let missingExamCount = 0;
-      let missingPerformanceCount = 0;
-
-      row.breakdown.forEach((item) => {
-        const type = item.type;
-        const left = Math.max(
-          0,
-          Number(item.ratio || 0) - Number(item.weighted || 0),
-        );
-        if (type === "exam") {
-          examCurrent += item.weighted;
-          examRemain += left;
-          if (!item.entered) missingExamCount += 1;
-        } else if (type === "performance") {
-          performanceCurrent += item.weighted;
-          performanceRemain += left;
-          if (!item.entered) missingPerformanceCount += 1;
-        } else {
-          otherCurrent += item.weighted;
-          otherRemain += left;
-        }
-      });
-
-      const remainingPotential = Number(
-        (examRemain + performanceRemain + otherRemain).toFixed(1),
-      );
-      const requiredRate =
-        remainingPotential > 0
-          ? Math.min(100, Number(((gap / remainingPotential) * 100).toFixed(1)))
-          : 100;
-      const examNeed =
-        gap > 0 && remainingPotential > 0
-          ? Number(((gap * examRemain) / remainingPotential).toFixed(1))
-          : 0;
-      const performanceNeed =
-        gap > 0 && remainingPotential > 0
-          ? Number(((gap * performanceRemain) / remainingPotential).toFixed(1))
-          : 0;
-      const mood: "good" | "care" =
-        gap <= 0 || requiredRate <= 70 ? "good" : "care";
-
-      return {
-        subject: row.subject,
-        current: Number(current.toFixed(1)),
-        target: Number(target.toFixed(1)),
-        gap: Number(gap.toFixed(1)),
-        remainingPotential,
-        requiredRate,
-        examCurrent: Number(examCurrent.toFixed(1)),
-        performanceCurrent: Number(performanceCurrent.toFixed(1)),
-        otherCurrent: Number(otherCurrent.toFixed(1)),
-        examNeed,
-        performanceNeed,
-        missingExamCount,
-        missingPerformanceCount,
-        mood,
-      };
-    });
+    return buildSharedSubjectScoreInsights(scoreRows as any, subjectGoals);
   }, [scoreRows, subjectGoals]);
 
   useEffect(() => {
@@ -1032,30 +1045,10 @@ const MyPage: React.FC = () => {
     [subjectInsights, selectedSubject],
   );
 
-  const teacherAdviceText = useMemo(() => {
-    if (!selectedInsight) return "";
-    if (selectedInsight.gap <= 0) {
-      return "선생님의 조언: 목표를 이미 달성했습니다. 남은 평가에서도 현재 페이스를 유지하세요.";
-    }
-
-    const parts: string[] = [];
-    if (selectedInsight.missingExamCount > 0) {
-      parts.push(
-        `남은 정기시험 ${selectedInsight.missingExamCount}개에서 총 ${selectedInsight.examNeed}점 이상 획득하도록 하세요.`,
-      );
-    }
-    if (selectedInsight.missingPerformanceCount > 0) {
-      parts.push(
-        `남은 수행평가 ${selectedInsight.missingPerformanceCount}개에서 총 ${selectedInsight.performanceNeed}점 이상 획득하도록 하세요.`,
-      );
-    }
-
-    if (!parts.length) {
-      return "선생님의 조언: 남은 입력 가능한 평가가 없어 목표 달성에 필요한 점수를 반영하기 어렵습니다. 목표 점수를 조정하거나 교사와 상담하세요.";
-    }
-
-    return `선생님의 조언: ${parts.join(" ")}`;
-  }, [selectedInsight]);
+  const teacherAdviceText = useMemo(
+    () => getSharedTeacherAdviceText(selectedInsight),
+    [selectedInsight],
+  );
 
   const totalStackChartData = useMemo(() => {
     const labels = scoreRows.map((row) => row.subject);
@@ -1226,43 +1219,206 @@ const MyPage: React.FC = () => {
       .sort((a, b) => b.gap - a.gap)[0] || selectedInsight;
   const nextLessonTitle =
     progressSummary?.lesson.latestUnitTitle || "수업 자료 이어 보기";
+  const nextLessonUnit =
+    progressSummary?.lesson.units.find((unit) => unit.status !== "completed") ||
+    progressSummary?.lesson.units[0] ||
+    null;
+  const openNextLesson = () => {
+    if (!canUseLesson) return;
+    const params = new URLSearchParams();
+    if (nextLessonUnit?.unitId) params.set("id", nextLessonUnit.unitId);
+    if (nextLessonUnit?.title) params.set("title", nextLessonUnit.title);
+    const suffix = params.toString();
+    navigate(`/student/lesson/note${suffix ? `?${suffix}` : ""}`);
+  };
+  const openQuiz = () => {
+    if (canUseQuiz) navigate("/student/quiz");
+  };
+  const openHistoryClassroom = () => {
+    if (canUseQuiz) navigate("/student/history-classroom");
+  };
+  const focusWrongItem = (item?: WrongNoteItem | null) => {
+    if (!canUseQuiz) return;
+    if (item) {
+      if (
+        item.category === "diagnostic" ||
+        item.category === "formative" ||
+        item.category === "exam_prep"
+      ) {
+        setCategoryTab(item.category);
+      }
+      setSelectedUnitId(item.unitId);
+      setExpandedWrongKey(item.key);
+    }
+    selectMenu("wrong_note");
+  };
+  const startReview = () => {
+    if (weakWrongGroup) {
+      focusWrongItem(weakWrongGroup);
+      return;
+    }
+    openQuiz();
+  };
+  const focusScoreSubject = (subject?: SubjectScoreInsight | null) => {
+    if (!canUseScore) return;
+    if (subject?.subject) setSelectedSubject(subject.subject);
+    selectMenu("score");
+  };
+  const toggleReviewGoal = (key: string) => {
+    setReviewGoalChecks((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+  const mockExamLatest = mockExamPoints[0] || null;
+  const mockExamAverage =
+    mockExamPoints.length > 0
+      ? Math.round(
+          mockExamPoints.reduce((sum, item) => sum + item.score, 0) /
+            mockExamPoints.length,
+        )
+      : 0;
+  const mockExamWrongCount = mockExamPoints.reduce(
+    (sum, item) => sum + Number(item.wrongCount || 0),
+    0,
+  );
   const weeklySnapshotItems = [
-    {
-      icon: "fa-circle-check",
-      label: "완료한 학습 자료",
-      value: `${lessonDoneCount}개`,
-      tone: "text-blue-600 bg-blue-50",
-    },
-    {
-      icon: "fa-flag",
-      label: "남은 목표",
-      value: `${remainingLessonCount}개`,
-      tone: "text-indigo-600 bg-indigo-50",
-    },
-    {
-      icon: "fa-clock",
-      label: "평가 응시",
-      value: `${progressSummary?.quiz.totalAttempts || trendPoints.length}회`,
-      tone: "text-emerald-600 bg-emerald-50",
-    },
+    ...(canUseLesson
+      ? [
+          {
+            icon: "fa-circle-check",
+            label: "완료한 학습 자료",
+            value: `${lessonDoneCount}개`,
+            tone: "text-blue-600 bg-blue-50",
+          },
+          {
+            icon: "fa-flag",
+            label: "남은 목표",
+            value: `${remainingLessonCount}개`,
+            tone: "text-indigo-600 bg-indigo-50",
+          },
+        ]
+      : []),
+    ...(canUseQuiz
+      ? [
+          {
+            icon: "fa-clock",
+            label: "평가 응시",
+            value: `${progressSummary?.quiz.totalAttempts || trendPoints.length}회`,
+            tone: "text-emerald-600 bg-emerald-50",
+          },
+        ]
+      : []),
   ];
   const feedbackItems = [
-    lessonProgressPercent >= 70
-      ? "학습 자료 진행이 안정적이에요."
-      : "아직 보지 않은 수업 자료를 먼저 확인해 보세요.",
-    recentQuizScore >= 80
-      ? "최근 평가 흐름이 좋아요. 같은 리듬을 유지해요."
-      : "최근 평가에서 틀린 문항을 다시 보면 점수가 빨리 올라요.",
-    historyParticipationPercent >= 70
-      ? "역사교실 참여도 꾸준히 이어지고 있어요."
-      : "역사교실 활동을 한 번 더 참여해 보는 것이 좋아요.",
+    ...(canUseLesson
+      ? [
+          lessonProgressPercent >= 70
+            ? "학습 자료 진행이 안정적이에요."
+            : "아직 보지 않은 수업 자료를 먼저 확인해 보세요.",
+        ]
+      : []),
+    ...(canUseQuiz
+      ? [
+          recentQuizScore >= 80
+            ? "최근 평가 흐름이 좋아요. 같은 리듬을 유지해요."
+            : "최근 평가에서 틀린 문항을 다시 보면 점수가 빨리 올라요.",
+          historyParticipationPercent >= 70
+            ? "역사교실 참여도 꾸준히 이어지고 있어요."
+            : "역사교실 활동을 한 번 더 참여해 보는 것이 좋아요.",
+        ]
+      : []),
   ];
-  const todoItems = [
-    `수업 자료 ${remainingLessonCount || 1}개 학습하기`,
-    wrongItems.length > 0 ? "오답 문항 다시 풀기" : "최근 평가 기록 확인하기",
-    topNeedsCareSubject
-      ? `${topNeedsCareSubject.subject} 목표 점수 확인하기`
-      : "나의 목표 점수 정하기",
+  const profileMetricCards = [
+    ...(canUseLesson
+      ? [
+          {
+            icon: "fa-book-open",
+            label: "학습 진행",
+            value: `${lessonProgressPercent}%`,
+            color: "blue",
+            percent: lessonProgressPercent,
+            onClick: openNextLesson,
+          },
+        ]
+      : []),
+    ...(canUseQuiz
+      ? [
+          {
+            icon: "fa-arrow-trend-up",
+            label: "최근 평가",
+            value: `${recentQuizScore || 0}점`,
+            color: "emerald",
+            percent: recentQuizScore || 0,
+            onClick: () => selectMenu("wrong_note"),
+          },
+          {
+            icon: "fa-users",
+            label: "역사교실 참여",
+            value: `${historyParticipationPercent || 0}%`,
+            color: "violet",
+            percent: historyParticipationPercent || 0,
+            onClick: openHistoryClassroom,
+          },
+        ]
+      : []),
+  ];
+  const actionableTodoItems = [
+    ...(canUseLesson
+      ? [
+          {
+            label: `수업 자료 ${remainingLessonCount || 1}개 학습하기`,
+            onClick: openNextLesson,
+          },
+        ]
+      : []),
+    ...(canUseQuiz
+      ? [
+          {
+            label:
+              wrongItems.length > 0
+                ? "오답 문항 다시 풀기"
+                : "최근 평가 기록 확인하기",
+            onClick: wrongItems.length > 0 ? startReview : openQuiz,
+          },
+        ]
+      : []),
+    ...(canUseScore
+      ? [
+          {
+            label: topNeedsCareSubject
+              ? `${topNeedsCareSubject.subject} 목표 점수 확인하기`
+              : "나의 목표 점수 정하기",
+            onClick: () => focusScoreSubject(topNeedsCareSubject),
+          },
+        ]
+      : []),
+  ];
+  const recommendationItems = [
+    ...(canUseLesson
+      ? [
+          {
+            title: nextLessonTitle,
+            subtitle: "수업 자료 확인",
+            icon: "fa-book-open",
+            tone: "bg-blue-50 text-blue-600",
+            onClick: openNextLesson,
+          },
+        ]
+      : []),
+    ...(canUseQuiz
+      ? [
+          {
+            title: weakWrongGroup?.unitTitle || "오답 노트 복습",
+            subtitle: "틀린 문제 다시 보기",
+            icon: "fa-pen",
+            tone: "bg-violet-50 text-violet-600",
+            onClick: startReview,
+          },
+        ]
+      : []),
+  ];
+  const reviewRouteItems = [
+    { key: "concept", label: "개념 복습", onClick: openNextLesson },
+    { key: "wrong", label: "문제 풀이", onClick: startReview },
+    { key: "retry", label: "다시 도전", onClick: openQuiz },
   ];
 
   return (
@@ -1277,23 +1433,25 @@ const MyPage: React.FC = () => {
               </h2>
             </div>
             <nav className="flex flex-col">
-              {leftMenus.map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => setMenu(item.key)}
-                  className={`p-4 text-left font-bold text-sm transition-colors flex items-center gap-3 ${
-                    menu === item.key
-                      ? "bg-blue-50/80 text-blue-600 border-l-4 border-blue-600"
-                      : "text-slate-600 hover:bg-slate-50 border-l-4 border-transparent"
-                  }`}
-                >
-                  <div className="w-6 text-center">
-                    <i className={`fas ${item.icon}`}></i>
-                  </div>
-                  {item.title}
-                </button>
-              ))}
+              {leftMenus
+                .filter((item) => isMenuAvailable(item.key))
+                .map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => selectMenu(item.key)}
+                    className={`p-4 text-left font-bold text-sm transition-colors flex items-center gap-3 ${
+                      menu === item.key
+                        ? "bg-blue-50/80 text-blue-600 border-l-4 border-blue-600"
+                        : "text-slate-600 hover:bg-slate-50 border-l-4 border-transparent"
+                    }`}
+                  >
+                    <div className="w-6 text-center">
+                      <i className={`fas ${item.icon}`}></i>
+                    </div>
+                    {item.title}
+                  </button>
+                ))}
             </nav>
           </div>
         </aside>
@@ -1357,37 +1515,11 @@ const MyPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {[
-                    {
-                      icon: "fa-book-open",
-                      label: "학습 진행",
-                      value: `${lessonProgressPercent}%`,
-                      color: "blue",
-                      percent: lessonProgressPercent,
-                    },
-                    {
-                      icon: "fa-arrow-trend-up",
-                      label: "최근 평가",
-                      value: `${recentQuizScore || 0}점`,
-                      color: "emerald",
-                      percent: recentQuizScore || 0,
-                    },
-                    {
-                      icon: "fa-users",
-                      label: "역사교실 참여",
-                      value: `${historyParticipationPercent || 0}%`,
-                      color: "violet",
-                      percent: historyParticipationPercent || 0,
-                    },
-                  ].map((item) => (
+                  {profileMetricCards.map((item) => (
                     <button
                       key={item.label}
                       type="button"
-                      onClick={
-                        item.label === "역사교실 참여"
-                          ? undefined
-                          : () => setMenu("profile")
-                      }
+                      onClick={item.onClick}
                       className="rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-[0_14px_30px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_18px_36px_rgba(15,23,42,0.10)]"
                     >
                       <div className="flex items-center gap-3">
@@ -1433,53 +1565,55 @@ const MyPage: React.FC = () => {
                   ))}
                 </div>
 
-                <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
-                  <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <div className="flex items-center gap-3">
-                        <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-blue-50 text-blue-600">
-                          <i className="fas fa-chart-column"></i>
-                        </span>
-                        <h3 className="text-xl font-black text-slate-900">
-                          성적 요약
-                        </h3>
+                {canUseScore && (
+                  <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
+                    <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <div className="flex items-center gap-3">
+                          <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                            <i className="fas fa-chart-column"></i>
+                          </span>
+                          <h3 className="text-xl font-black text-slate-900">
+                            성적 요약
+                          </h3>
+                        </div>
+                        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                          <div className="rounded-xl border border-slate-200 px-4 py-3">
+                            <div className="text-xs font-bold text-slate-400">
+                              전체 평균
+                            </div>
+                            <div className="mt-1 text-2xl font-black text-blue-600">
+                              {scoreAverage}점
+                            </div>
+                          </div>
+                          <div className="rounded-xl border border-slate-200 px-4 py-3">
+                            <div className="text-xs font-bold text-slate-400">
+                              목표 달성
+                            </div>
+                            <div className="mt-1 text-2xl font-black text-emerald-600">
+                              {targetMetCount}개
+                            </div>
+                          </div>
+                          <div className="rounded-xl border border-slate-200 px-4 py-3">
+                            <div className="text-xs font-bold text-slate-400">
+                              다음 확인
+                            </div>
+                            <div className="mt-1 truncate text-lg font-black text-slate-700">
+                              {topNeedsCareSubject?.subject || "목표 유지"}
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                        <div className="rounded-xl border border-slate-200 px-4 py-3">
-                          <div className="text-xs font-bold text-slate-400">
-                            전체 평균
-                          </div>
-                          <div className="mt-1 text-2xl font-black text-blue-600">
-                            {scoreAverage}점
-                          </div>
-                        </div>
-                        <div className="rounded-xl border border-slate-200 px-4 py-3">
-                          <div className="text-xs font-bold text-slate-400">
-                            목표 달성
-                          </div>
-                          <div className="mt-1 text-2xl font-black text-emerald-600">
-                            {targetMetCount}개
-                          </div>
-                        </div>
-                        <div className="rounded-xl border border-slate-200 px-4 py-3">
-                          <div className="text-xs font-bold text-slate-400">
-                            다음 확인
-                          </div>
-                          <div className="mt-1 truncate text-lg font-black text-slate-700">
-                            {topNeedsCareSubject?.subject || "목표 유지"}
-                          </div>
-                        </div>
-                      </div>
+                      <Link
+                        to="/student/score/report"
+                        className="inline-flex shrink-0 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-extrabold text-blue-700 transition hover:bg-blue-100"
+                      >
+                        성적 리포트 보기
+                        <i className="fas fa-chevron-right ml-2 text-xs"></i>
+                      </Link>
                     </div>
-                    <Link
-                      to="/student/score/report"
-                      className="inline-flex shrink-0 items-center justify-center rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-extrabold text-blue-700 transition hover:bg-blue-100"
-                    >
-                      성적 리포트 보기
-                      <i className="fas fa-chevron-right ml-2 text-xs"></i>
-                    </Link>
-                  </div>
-                </section>
+                  </section>
+                )}
 
                 <div className="grid gap-5 lg:grid-cols-[1fr_1fr_1.1fr]">
                   <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
@@ -1545,15 +1679,19 @@ const MyPage: React.FC = () => {
                       </h3>
                     </div>
                     <div className="divide-y divide-slate-100 rounded-xl border border-slate-200">
-                      {todoItems.map((item) => (
-                        <div
-                          key={item}
+                      {actionableTodoItems.map((item) => (
+                        <button
+                          key={item.label}
+                          type="button"
+                          onClick={item.onClick}
                           className="flex items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-slate-600"
                         >
                           <span className="inline-flex h-5 w-5 shrink-0 rounded-full border border-slate-300"></span>
-                          <span className="min-w-0 flex-1">{item}</span>
+                          <span className="min-w-0 flex-1 text-left">
+                            {item.label}
+                          </span>
                           <i className="fas fa-chevron-right text-slate-400"></i>
-                        </div>
+                        </button>
                       ))}
                     </div>
                     <button
@@ -1630,6 +1768,92 @@ const MyPage: React.FC = () => {
                     </section>
                   ))}
                 </div>
+
+                {canUseQuiz && (
+                  <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
+                    <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <h3 className="text-xl font-black text-slate-900">
+                          모의고사 점수
+                        </h3>
+                        <p className="mt-1 text-sm font-bold text-slate-500">
+                          최근 모의고사 응시 기록을 성적표에서 바로 확인합니다.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={openQuiz}
+                        className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-4 text-sm font-extrabold text-blue-700 transition hover:bg-blue-100"
+                      >
+                        모의고사 풀기
+                        <i className="fas fa-chevron-right text-xs"></i>
+                      </button>
+                    </div>
+                    <div className="mt-5 grid gap-3 md:grid-cols-3">
+                      <div className="rounded-xl border border-slate-200 px-4 py-4">
+                        <div className="text-xs font-bold text-slate-400">
+                          최근 점수
+                        </div>
+                        <div className="mt-2 text-3xl font-black text-blue-600">
+                          {mockExamLatest ? `${mockExamLatest.score}점` : "-"}
+                        </div>
+                        <div className="mt-1 text-xs font-bold text-slate-400">
+                          {mockExamLatest?.dateText || "응시 기록 없음"}
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 px-4 py-4">
+                        <div className="text-xs font-bold text-slate-400">
+                          평균 점수
+                        </div>
+                        <div className="mt-2 text-3xl font-black text-emerald-600">
+                          {mockExamPoints.length ? `${mockExamAverage}점` : "-"}
+                        </div>
+                        <div className="mt-1 text-xs font-bold text-slate-400">
+                          총 {mockExamPoints.length}회 응시
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 px-4 py-4">
+                        <div className="text-xs font-bold text-slate-400">
+                          누적 오답
+                        </div>
+                        <div className="mt-2 text-3xl font-black text-orange-500">
+                          {mockExamWrongCount}개
+                        </div>
+                        <div className="mt-1 text-xs font-bold text-slate-400">
+                          오답 노트와 함께 복습
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-5 space-y-3">
+                      {mockExamPoints.slice(0, 3).map((item) => (
+                        <button
+                          key={`${item.dateText}-${item.score}`}
+                          type="button"
+                          onClick={() => selectMenu("wrong_note")}
+                          className="flex w-full items-center justify-between rounded-xl border border-slate-200 px-4 py-3 text-left transition hover:bg-slate-50"
+                        >
+                          <span className="min-w-0">
+                            <span className="block truncate text-sm font-extrabold text-slate-700">
+                              {item.label}
+                            </span>
+                            <span className="text-xs font-bold text-slate-400">
+                              {item.dateText || "-"} · 오답{" "}
+                              {item.wrongCount || 0}개
+                            </span>
+                          </span>
+                          <span className="text-lg font-black text-blue-600">
+                            {item.score}점
+                          </span>
+                        </button>
+                      ))}
+                      {mockExamPoints.length === 0 && (
+                        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm font-bold text-slate-400">
+                          아직 모의고사 응시 기록이 없습니다.
+                        </div>
+                      )}
+                    </div>
+                  </section>
+                )}
 
                 <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
                   <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -1862,37 +2086,28 @@ const MyPage: React.FC = () => {
                       추천 학습
                     </h3>
                     <div className="mt-5 space-y-3">
-                      {[
-                        nextLessonTitle,
-                        weakWrongGroup?.unitTitle || "오답 노트 복습",
-                      ].map((item, index) => (
-                        <div
-                          key={`${item}-${index}`}
-                          className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3"
+                      {recommendationItems.map((item, index) => (
+                        <button
+                          key={`${item.title}-${index}`}
+                          type="button"
+                          onClick={item.onClick}
+                          className="flex w-full items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 text-left transition hover:bg-slate-50"
                         >
                           <span
-                            className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
-                              index === 0
-                                ? "bg-blue-50 text-blue-600"
-                                : "bg-violet-50 text-violet-600"
-                            }`}
+                            className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${item.tone}`}
                           >
-                            <i
-                              className={`fas ${index === 0 ? "fa-book-open" : "fa-pen"}`}
-                            ></i>
+                            <i className={`fas ${item.icon}`}></i>
                           </span>
                           <div className="min-w-0 flex-1">
                             <div className="truncate text-sm font-extrabold text-slate-700">
-                              {item}
+                              {item.title}
                             </div>
                             <div className="text-xs font-bold text-slate-400">
-                              {index === 0
-                                ? "수업 자료 확인"
-                                : "틀린 문제 다시 보기"}
+                              {item.subtitle}
                             </div>
                           </div>
                           <i className="fas fa-chevron-right text-slate-400"></i>
-                        </div>
+                        </button>
                       ))}
                     </div>
                   </section>
@@ -1916,6 +2131,22 @@ const MyPage: React.FC = () => {
                             "나의 목표를 정하고 학습 흐름을 이어가요."}
                         </div>
                       </div>
+                    </div>
+                    <div className="mt-6 flex gap-2">
+                      <input
+                        value={goalScore}
+                        onChange={(event) => setGoalScore(event.target.value)}
+                        placeholder="이번 학기 평균 85점 이상"
+                        className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm font-bold text-slate-700 outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void saveGoal()}
+                        disabled={savingGoal}
+                        className="shrink-0 rounded-xl bg-blue-600 px-4 py-2 text-sm font-extrabold text-white transition hover:bg-blue-700 disabled:bg-blue-300"
+                      >
+                        {savingGoal ? "저장 중" : "저장"}
+                      </button>
                     </div>
                   </section>
                 </div>
@@ -2406,7 +2637,7 @@ const MyPage: React.FC = () => {
                             <button
                               key={groupKey}
                               type="button"
-                              onClick={() => setSelectedUnitId(items[0].unitId)}
+                              onClick={() => focusWrongItem(items[0])}
                               className={`flex w-full items-center gap-4 rounded-xl border px-4 py-3 text-left transition ${
                                 index === 0
                                   ? "border-blue-200 bg-blue-50"
@@ -2523,39 +2754,39 @@ const MyPage: React.FC = () => {
                         </h3>
                       </div>
                       <div className="space-y-4">
-                        {["개념 복습", "문제 풀이", "다시 도전"].map(
-                          (label, index) => (
-                            <div
-                              key={label}
-                              className="flex items-center gap-3"
+                        {reviewRouteItems.map((item, index) => (
+                          <button
+                            key={item.key}
+                            type="button"
+                            onClick={item.onClick}
+                            className="flex w-full items-center gap-3 rounded-xl px-1 py-1 text-left transition hover:bg-slate-50"
+                          >
+                            <span
+                              className={`inline-flex h-9 w-9 items-center justify-center rounded-full text-sm font-black text-white ${
+                                index === 0
+                                  ? "bg-blue-600"
+                                  : index === 1
+                                    ? "bg-emerald-500"
+                                    : "bg-orange-500"
+                              }`}
                             >
-                              <span
-                                className={`inline-flex h-9 w-9 items-center justify-center rounded-full text-sm font-black text-white ${
-                                  index === 0
-                                    ? "bg-blue-600"
-                                    : index === 1
-                                      ? "bg-emerald-500"
-                                      : "bg-orange-500"
-                                }`}
-                              >
-                                {index + 1}
-                              </span>
-                              <div className="min-w-0 flex-1">
-                                <div className="text-sm font-extrabold text-slate-800">
-                                  {label}
-                                </div>
-                                <div className="text-xs font-bold text-slate-400">
-                                  {index === 0
-                                    ? "핵심 개념 다시 보기"
-                                    : index === 1
-                                      ? "유사 유형 문제로 실전 높이기"
-                                      : "오답 문항 재도전하기"}
-                                </div>
+                              {index + 1}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <div className="text-sm font-extrabold text-slate-800">
+                                {item.label}
                               </div>
-                              <i className="fas fa-chevron-right text-slate-400"></i>
+                              <div className="text-xs font-bold text-slate-400">
+                                {index === 0
+                                  ? "핵심 개념 다시 보기"
+                                  : index === 1
+                                    ? "유사 유형 문제로 실전 높이기"
+                                    : "오답 문항 재도전하기"}
+                              </div>
                             </div>
-                          ),
-                        )}
+                            <i className="fas fa-chevron-right text-slate-400"></i>
+                          </button>
+                        ))}
                       </div>
                     </section>
 
@@ -2570,16 +2801,27 @@ const MyPage: React.FC = () => {
                       </div>
                       <div className="space-y-3 text-sm font-bold text-slate-600">
                         <label className="flex items-center gap-3">
-                          <span className="h-5 w-5 rounded border border-slate-300"></span>
+                          <input
+                            type="checkbox"
+                            checked={Boolean(reviewGoalChecks.concept)}
+                            onChange={() => toggleReviewGoal("concept")}
+                            className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                          />
                           개념 복습 15분 완료하기
                         </label>
                         <label className="flex items-center gap-3">
-                          <span className="h-5 w-5 rounded border border-slate-300"></span>
+                          <input
+                            type="checkbox"
+                            checked={Boolean(reviewGoalChecks.wrong)}
+                            onChange={() => toggleReviewGoal("wrong")}
+                            className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                          />
                           오답 문제 5문제 풀기
                         </label>
                       </div>
                       <button
                         type="button"
+                        onClick={startReview}
                         className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-extrabold text-white transition hover:bg-blue-700"
                       >
                         <i className="fas fa-play text-xs"></i>
