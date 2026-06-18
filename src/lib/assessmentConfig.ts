@@ -13,10 +13,13 @@ import type { SystemConfig, UserData } from "../types";
 
 type ConfigLike = Pick<SystemConfig, "year" | "semester"> | null | undefined;
 
+export type AssessmentQuestionOrder = "random" | "created" | "unit";
+
 export interface AssessmentConfigEntry {
   active: boolean;
   questionCount: number;
   randomOrder: boolean;
+  questionOrder: AssessmentQuestionOrder;
   timeLimit: number;
   allowRetake: boolean;
   cooldown: number;
@@ -93,6 +96,7 @@ const DEFAULT_ASSESSMENT_CONFIG_ENTRY: AssessmentConfigEntry = {
   active: false,
   questionCount: 10,
   randomOrder: true,
+  questionOrder: "random",
   timeLimit: 60,
   allowRetake: true,
   cooldown: 0,
@@ -140,6 +144,16 @@ const compareAssessmentClassIds = (left: string, right: string) => {
 
 const isTestOption = (...values: Array<unknown>) =>
   values.some((value) => TEST_OPTION_PATTERN.test(String(value ?? "").trim()));
+
+const normalizeAssessmentQuestionOrder = (
+  value: unknown,
+  fallbackRandomOrder: unknown,
+): AssessmentQuestionOrder => {
+  if (value === "random" || value === "created" || value === "unit") {
+    return value;
+  }
+  return fallbackRandomOrder === false ? "created" : "random";
+};
 
 const isTestClassId = (classId: string) => {
   const [gradeValue = "", classValue = ""] = classId.split("-");
@@ -509,6 +523,7 @@ export const normalizeAssessmentConfigEntry = (
           timeLimit?: number;
           questionCount?: number;
           randomOrder?: boolean;
+          questionOrder?: AssessmentQuestionOrder | string;
           allowRetake?: boolean;
           cooldown?: number;
           hintLimit?: number;
@@ -524,11 +539,16 @@ export const normalizeAssessmentConfigEntry = (
   const normalizedVisibleClassIds = explicitVisibility
     ? normalizeAssessmentClassIds(source.visibleClassIds)
     : [...grade3ClassIds];
+  const questionOrder = normalizeAssessmentQuestionOrder(
+    source.questionOrder,
+    source.randomOrder,
+  );
 
   return {
     active: source.active === true,
     questionCount: Math.max(1, Number(source.questionCount) || 10),
-    randomOrder: source.randomOrder !== false,
+    randomOrder: questionOrder === "random",
+    questionOrder,
     timeLimit: normalizeAssessmentTimeLimitSeconds(source.timeLimit),
     allowRetake: source.allowRetake !== false,
     cooldown: Math.max(0, Number(source.cooldown) || 0),

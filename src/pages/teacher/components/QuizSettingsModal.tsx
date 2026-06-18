@@ -3,6 +3,7 @@ import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "../../../lib/firebase";
 import { useAuth } from "../../../contexts/AuthContext";
 import {
+  type AssessmentQuestionOrder,
   type AssessmentVisibilityGroup,
   type AssessmentVisibilityTarget,
   getAssessmentConfigKey,
@@ -25,7 +26,7 @@ interface QuizSettingsModalProps {
 interface QuizSettingsFormState {
   active: boolean;
   questionCount: number;
-  randomOrder: boolean;
+  questionOrder: AssessmentQuestionOrder;
   timeLimitMinutes: number;
   allowRetake: boolean;
   cooldown: number;
@@ -38,11 +39,19 @@ const CATEGORY_LABELS: Record<string, string> = {
   formative: "형성평가",
   exam_prep: "모의고사",
 };
+const QUESTION_ORDER_OPTIONS: Array<{
+  value: AssessmentQuestionOrder;
+  label: string;
+}> = [
+  { value: "random", label: "랜덤 순서" },
+  { value: "created", label: "등록 순서" },
+  { value: "unit", label: "단원 순서" },
+];
 
 const createDefaultFormState = (classIds: string[]): QuizSettingsFormState => ({
   active: false,
   questionCount: 10,
-  randomOrder: true,
+  questionOrder: "random",
   timeLimitMinutes: 1,
   allowRetake: true,
   cooldown: 0,
@@ -189,7 +198,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
       setSettings({
         active: normalizedEntry.active,
         questionCount: normalizedEntry.questionCount,
-        randomOrder: normalizedEntry.randomOrder,
+        questionOrder: normalizedEntry.questionOrder,
         timeLimitMinutes: Math.max(
           1,
           Math.round(normalizedEntry.timeLimit / 60),
@@ -242,7 +251,8 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
           [key]: {
             active: settings.active,
             questionCount: Math.max(1, settings.questionCount),
-            randomOrder: settings.randomOrder,
+            randomOrder: settings.questionOrder === "random",
+            questionOrder: settings.questionOrder,
             timeLimit: Math.max(1, settings.timeLimitMinutes) * 60,
             allowRetake: settings.allowRetake,
             cooldown: Math.max(0, settings.cooldown),
@@ -670,39 +680,26 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                     <div className="text-xs font-bold text-gray-500">
                       문항 출제 순서
                     </div>
-                    <div className="mt-2.5 grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setSettings((prev) => ({
-                            ...prev,
-                            randomOrder: true,
-                          }))
-                        }
-                        className={`rounded-lg border px-3 py-2.5 text-xs font-bold transition ${
-                          settings.randomOrder
-                            ? "border-blue-200 bg-blue-50 text-blue-700"
-                            : "border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:text-blue-700"
-                        }`}
-                      >
-                        랜덤 순서
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setSettings((prev) => ({
-                            ...prev,
-                            randomOrder: false,
-                          }))
-                        }
-                        className={`rounded-lg border px-3 py-2.5 text-xs font-bold transition ${
-                          !settings.randomOrder
-                            ? "border-blue-200 bg-blue-50 text-blue-700"
-                            : "border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:text-blue-700"
-                        }`}
-                      >
-                        등록 순서
-                      </button>
+                    <div className="mt-2.5 grid grid-cols-3 gap-2">
+                      {QUESTION_ORDER_OPTIONS.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() =>
+                            setSettings((prev) => ({
+                              ...prev,
+                              questionOrder: option.value,
+                            }))
+                          }
+                          className={`rounded-lg border px-3 py-2.5 text-xs font-bold transition ${
+                            settings.questionOrder === option.value
+                              ? "border-blue-200 bg-blue-50 text-blue-700"
+                              : "border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:text-blue-700"
+                          }`}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 </section>

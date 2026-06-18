@@ -359,6 +359,26 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     });
   }, [questions, treeLookup, type]);
 
+  const recentNormalSubUnit = useMemo(() => {
+    if (type === "special") return "";
+    const validSubUnitIds = new Set(normalSubUnits.map((unit) => unit.id));
+    const latest = questions
+      .filter(
+        (question) =>
+          question.category === category &&
+          question.subUnitId &&
+          validSubUnitIds.has(question.subUnitId),
+      )
+      .slice()
+      .sort((a, b) => {
+        const aMs = getTimestampMs(a.createdAt) || Number(a.id) || 0;
+        const bMs = getTimestampMs(b.createdAt) || Number(b.id) || 0;
+        return bMs - aMs;
+      })[0];
+
+    return latest?.subUnitId || "";
+  }, [category, normalSubUnits, questions, type]);
+
   useEffect(() => {
     if (type !== "special") return;
     const nextKey = [
@@ -403,6 +423,14 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     });
     return list.sort((a, b) => a.id - b.id);
   }, [category, epFilter.big, epFilter.mid, epFilter.small, questions, type]);
+  const categoryQuestionCounts = useMemo(
+    () =>
+      questions.reduce<Record<string, number>>((counts, question) => {
+        counts[question.category] = (counts[question.category] || 0) + 1;
+        return counts;
+      }, {}),
+    [questions],
+  );
 
   const trimList = (values: string[]) =>
     values.map((v) => v.trim()).filter(Boolean);
@@ -480,7 +508,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     setHintText("");
     setPreviewOpen(false);
     resetPreview();
-    if (type !== "special") setFormSubUnit("");
+    if (type !== "special") setFormSubUnit(recentNormalSubUnit);
     else setEpSource(recentExamPrepFocus);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -1049,9 +1077,19 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
             <button
               key={cat}
               onClick={() => setCategory(cat)}
-              className={`py-2 px-4 font-bold text-sm border-b-2 transition ${category === cat ? "border-blue-500 text-blue-600" : "border-transparent text-gray-400 hover:text-gray-600"}`}
+              className={`flex items-center gap-2 py-2 px-4 font-bold text-sm border-b-2 transition ${category === cat ? "border-blue-500 text-blue-600" : "border-transparent text-gray-400 hover:text-gray-600"}`}
             >
               {cat === "diagnostic" ? "진단평가" : "형성평가"}
+              <span
+                className={`rounded-full px-2 py-0.5 text-[11px] ${
+                  category === cat
+                    ? "bg-blue-50 text-blue-700"
+                    : "bg-gray-100 text-gray-500"
+                }`}
+              >
+                {(categoryQuestionCounts[cat] || 0).toLocaleString("ko-KR")}
+                문제
+              </span>
             </button>
           ))}
         </div>

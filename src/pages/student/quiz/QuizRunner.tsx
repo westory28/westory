@@ -24,6 +24,7 @@ import {
   getGrade3ClassIdsFromSchoolConfig,
   isAssessmentVisibleToStudent,
   readAssessmentConfigMap,
+  type AssessmentQuestionOrder,
 } from "../../../lib/assessmentConfig";
 import { db } from "../../../lib/firebase";
 import { claimPointActivityReward } from "../../../lib/points";
@@ -38,6 +39,10 @@ import {
 } from "../../../lib/quizSubmissions";
 import { emitSessionActivity } from "../../../lib/sessionActivity";
 import { getSemesterCollectionPath } from "../../../lib/semesterScope";
+import {
+  readStudentCurriculumTree,
+  type StudentCurriculumTreeItem,
+} from "../../../lib/studentLessonReadCache";
 
 const QUIZ_PROGRESS_SAVE_DELAY_MS = 1500;
 
@@ -76,6 +81,7 @@ interface QuizConfig {
   questionCount?: number;
   hintLimit?: number;
   randomOrder?: boolean;
+  questionOrder?: AssessmentQuestionOrder;
 }
 
 interface ResultDetail {
@@ -201,6 +207,7 @@ const QuizRunner: React.FC = () => {
   const persistTimeoutRef = useRef<number | null>(null);
   const persistInFlightRef = useRef(false);
   const timeoutHandledRef = useRef(false);
+  const unitOrderMapRef = useRef<Record<string, number>>({});
   const authIdentityRef = useRef<{ uid: string; email: string }>({
     uid: "",
     email: "",
@@ -299,10 +306,78 @@ const QuizRunner: React.FC = () => {
     return next;
   };
 
-  const orderQuestions = (questions: Question[], randomOrder: boolean) =>
-    randomOrder
-      ? shuffleItems(questions)
-      : [...questions].sort((left, right) => left.id - right.id);
+  const compareUnitKeys = (left: string, right: string) =>
+    left.localeCompare(right, "ko", { numeric: true, sensitivity: "base" });
+
+  const buildUnitOrderMap = (tree: StudentCurriculumTreeItem[]) => {
+    const next: Record<string, number> = {};
+    let order = 0;
+    const visit = (items: StudentCurriculumTreeItem[]) => {
+      items.forEach((item) => {
+        const id = String(item.id || "").trim();
+        if (id && next[id] === undefined) {
+          next[id] = order;
+          order += 1;
+        }
+        visit(item.children || []);
+      });
+    };
+    visit(tree);
+    return next;
+  };
+
+  const compareUnitOrderIds = (left: string, right: string) => {
+    const leftOrder = unitOrderMapRef.current[left];
+    const rightOrder = unitOrderMapRef.current[right];
+    const leftHasOrder = leftOrder !== undefined;
+    const rightHasOrder = rightOrder !== undefined;
+    if (leftHasOrder && rightHasOrder && leftOrder !== rightOrder) {
+      return leftOrder - rightOrder;
+    }
+    if (leftHasOrder !== rightHasOrder) return leftHasOrder ? -1 : 1;
+    return compareUnitKeys(left, right);
+  };
+
+  const getQuestionUnitOrderKeys = (question: Question) => [
+    question.refBig || "",
+    question.refMid || question.unitId || "",
+    question.refSmall || question.subUnitId || "",
+  ];
+
+  const compareQuestionsByUnitOrder = (left: Question, right: Question) => {
+    const leftKeys = getQuestionUnitOrderKeys(left);
+    const rightKeys = getQuestionUnitOrderKeys(right);
+    for (let index = 0; index < leftKeys.length; index += 1) {
+      const gap = compareUnitOrderIds(leftKeys[index], rightKeys[index]);
+      if (gap !== 0) return gap;
+    }
+    return left.id - right.id;
+  };
+
+  const normalizeQuestionOrder = (
+    questionOrder: AssessmentQuestionOrder | undefined,
+    randomOrder: boolean | undefined,
+  ): AssessmentQuestionOrder => {
+    if (
+      questionOrder === "random" ||
+      questionOrder === "created" ||
+      questionOrder === "unit"
+    ) {
+      return questionOrder;
+    }
+    return randomOrder === false ? "created" : "random";
+  };
+
+  const orderQuestions = (
+    questions: Question[],
+    questionOrder: AssessmentQuestionOrder,
+  ) => {
+    if (questionOrder === "random") return shuffleItems(questions);
+    if (questionOrder === "unit") {
+      return [...questions].sort(compareQuestionsByUnitOrder);
+    }
+    return [...questions].sort((left, right) => left.id - right.id);
+  };
 
   const getExamPrepSmallKey = (question: Question) =>
     question.refSmall ||
@@ -318,16 +393,17 @@ const QuizRunner: React.FC = () => {
     T extends { bigKey: string; midKey: string; smallKey: string },
   >(
     groups: T[],
-    randomOrder: boolean,
+    questionOrder: AssessmentQuestionOrder,
   ) => {
-    const orderedGroups = randomOrder
-      ? shuffleItems(groups)
-      : [...groups].sort(
-          (left, right) =>
-            left.bigKey.localeCompare(right.bigKey, "ko") ||
-            left.midKey.localeCompare(right.midKey, "ko") ||
-            left.smallKey.localeCompare(right.smallKey, "ko"),
-        );
+    const orderedGroups =
+      questionOrder === "random"
+        ? shuffleItems(groups)
+        : [...groups].sort(
+            (left, right) =>
+              compareUnitOrderIds(left.bigKey, right.bigKey) ||
+              compareUnitOrderIds(left.midKey, right.midKey) ||
+              compareUnitOrderIds(left.smallKey, right.smallKey),
+          );
     const groupedByBig = new Map<string, T[]>();
     orderedGroups.forEach((group) => {
       const current = groupedByBig.get(group.bigKey) || [];
@@ -335,11 +411,10 @@ const QuizRunner: React.FC = () => {
       groupedByBig.set(group.bigKey, current);
     });
 
-    const bigKeys = randomOrder
-      ? shuffleItems(Array.from(groupedByBig.keys()))
-      : Array.from(groupedByBig.keys()).sort((left, right) =>
-          left.localeCompare(right, "ko"),
-        );
+    const bigKeys =
+      questionOrder === "random"
+        ? shuffleItems(Array.from(groupedByBig.keys()))
+        : Array.from(groupedByBig.keys()).sort(compareUnitOrderIds);
     const balancedGroups: T[] = [];
     let added = true;
     while (added) {
@@ -434,7 +509,7 @@ const QuizRunner: React.FC = () => {
     all: Question[],
     solvedIds: Set<number>,
     targetCount: number,
-    randomOrder: boolean,
+    questionOrder: AssessmentQuestionOrder,
   ) => {
     const safeTargetCount = Math.min(Math.max(1, targetCount || 1), all.length);
     const selectedIds = new Set<number>();
@@ -442,11 +517,11 @@ const QuizRunner: React.FC = () => {
     const selectStandardQuestions = () => {
       const unusedPool = orderQuestions(
         all.filter((question) => !solvedIds.has(question.id)),
-        randomOrder,
+        questionOrder,
       );
       const repeatPool = orderQuestions(
         all.filter((question) => solvedIds.has(question.id)),
-        randomOrder,
+        questionOrder,
       );
       const selected = [...unusedPool.slice(0, safeTargetCount)];
       selected.forEach((question) => selectedIds.add(question.id));
@@ -459,7 +534,7 @@ const QuizRunner: React.FC = () => {
           return false;
         });
       }
-      return randomOrder ? shuffleItems(selected) : selected;
+      return orderQuestions(selected, questionOrder);
     };
 
     const selectExamPrepQuestions = () => {
@@ -493,8 +568,8 @@ const QuizRunner: React.FC = () => {
 
       const groups = Array.from(groupMap.values()).map((group) => ({
         ...group,
-        unusedQuestions: orderQuestions(group.unusedQuestions, randomOrder),
-        repeatQuestions: orderQuestions(group.repeatQuestions, randomOrder),
+        unusedQuestions: orderQuestions(group.unusedQuestions, questionOrder),
+        repeatQuestions: orderQuestions(group.repeatQuestions, questionOrder),
       }));
       const selected: Question[] = [];
       const selectedByGroup = new Map<string, number>();
@@ -505,7 +580,7 @@ const QuizRunner: React.FC = () => {
       ) => {
         for (let pass = 0; pass < maxPerSmallUnit; pass += 1) {
           if (selected.length >= safeTargetCount) return;
-          orderExamPrepGroups(groups, randomOrder).forEach((group) => {
+          orderExamPrepGroups(groups, questionOrder).forEach((group) => {
             if (selected.length >= safeTargetCount) return;
             const currentGroupCount = selectedByGroup.get(group.smallKey) || 0;
             if (currentGroupCount > pass) return;
@@ -524,7 +599,7 @@ const QuizRunner: React.FC = () => {
         if (selected.length >= safeTargetCount) return;
         const flatPool = orderQuestions(
           groups.flatMap((group) => group[source]),
-          randomOrder,
+          questionOrder,
         );
         flatPool.some((question) => {
           if (selected.length >= safeTargetCount) return true;
@@ -540,7 +615,7 @@ const QuizRunner: React.FC = () => {
       takeFromGroups("repeatQuestions", 2);
       fillRemaining("repeatQuestions");
 
-      return randomOrder ? shuffleItems(selected) : selected;
+      return orderQuestions(selected, questionOrder);
     };
 
     const selected =
@@ -895,7 +970,11 @@ const QuizRunner: React.FC = () => {
       setServerTimeOffsetMs(0);
       timeoutHandledRef.current = false;
 
-      const grade3ClassIds = await getGrade3ClassIdsFromSchoolConfig();
+      const [grade3ClassIds, curriculumTree] = await Promise.all([
+        getGrade3ClassIdsFromSchoolConfig(),
+        readStudentCurriculumTree(config),
+      ]);
+      unitOrderMapRef.current = buildUnitOrderMap(curriculumTree);
       const assessmentConfigMap = await readAssessmentConfigMap(
         config,
         grade3ClassIds,
@@ -1057,13 +1136,15 @@ const QuizRunner: React.FC = () => {
         });
       });
 
-      const shouldRandomizeQuestions =
-        unitId === "exam_prep" ? true : (nextQuizConfig.randomOrder ?? true);
+      const questionOrder = normalizeQuestionOrder(
+        nextQuizConfig.questionOrder,
+        nextQuizConfig.randomOrder,
+      );
       const selection = selectQuestions(
         fetchedQuestions,
         solvedIds,
         nextQuizConfig.questionCount || 10,
-        shouldRandomizeQuestions,
+        questionOrder,
       );
 
       setSelectedQuestions(selection.selected);
