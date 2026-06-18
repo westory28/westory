@@ -1749,6 +1749,13 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     });
   };
 
+  const removeOrderItem = (index: number) => {
+    if (editOrderItems.length <= 2) return;
+    setEditOrderItems((prev) =>
+      prev.filter((_, itemIndex) => itemIndex !== index),
+    );
+  };
+
   const addMatchingPair = () =>
     setEditMatchingPairs((prev) => [
       ...prev,
@@ -3608,6 +3615,8 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                         <button
                           type="button"
                           onClick={() => moveOrderItem(index, "up")}
+                          aria-label={`${index + 1}번 항목 위로 이동`}
+                          title="위로 이동"
                           className="text-gray-400 hover:text-blue-600 px-1"
                         >
                           <i className="fas fa-arrow-up"></i>
@@ -3615,9 +3624,25 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                         <button
                           type="button"
                           onClick={() => moveOrderItem(index, "down")}
+                          aria-label={`${index + 1}번 항목 아래로 이동`}
+                          title="아래로 이동"
                           className="text-gray-400 hover:text-blue-600 px-1"
                         >
                           <i className="fas fa-arrow-down"></i>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeOrderItem(index)}
+                          disabled={editOrderItems.length <= 2}
+                          aria-label={`${index + 1}번 항목 삭제`}
+                          title={
+                            editOrderItems.length <= 2
+                              ? "순서 항목은 최소 2개 필요합니다."
+                              : "항목 삭제"
+                          }
+                          className="px-1 text-gray-400 hover:text-red-500 disabled:cursor-not-allowed disabled:text-gray-300"
+                        >
+                          <i className="fas fa-times"></i>
                         </button>
                       </div>
                     ))}
