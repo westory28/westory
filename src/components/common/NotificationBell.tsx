@@ -146,6 +146,8 @@ const getNotificationTargetUrl = (notification: WestoryNotification) => {
 const getRealtimeToastKey = (notification: WestoryNotification) =>
   `${notification.broadcast ? "broadcast" : "personal"}:${notification.id}`;
 
+const shownRealtimeToastKeys = new Set<string>();
+
 const NotificationBell: React.FC<NotificationBellProps> = ({
   className = "",
   buttonClassName = "",
@@ -162,6 +164,8 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
   >([]);
   const [notifications, setNotifications] = useState<WestoryNotification[]>([]);
   const [inbox, setInbox] = useState<WestoryNotificationInbox | null>(null);
+  const [inboxReady, setInboxReady] = useState(false);
+  const [broadcastReady, setBroadcastReady] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [privacyPolicyOpen, setPrivacyPolicyOpen] = useState(false);
   const [privacyPolicyLoading, setPrivacyPolicyLoading] = useState(false);
@@ -169,11 +173,13 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const realtimeToastStateRef = useRef({
     initialized: false,
+    scopeKey: "",
     unreadCount: 0,
   });
-  const shownRealtimeToastKeysRef = useRef<Set<string>>(new Set());
 
   const includeBroadcasts = String(userData?.role || "").trim() === "student";
+  const notificationSourcesReady =
+    inboxReady && (!includeBroadcasts || broadcastReady);
 
   const visibleBroadcastNotifications = useMemo(() => {
     if (!includeBroadcasts) return [];
@@ -218,22 +224,30 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
       setBroadcastNotifications([]);
       setNotifications([]);
       setInbox(null);
+      setInboxReady(false);
       return undefined;
     }
 
+    setInboxReady(false);
     return subscribeNotificationInbox(config, currentUser.uid, (nextInbox) => {
       setInbox(nextInbox);
       setPersonalUnreadCount(nextInbox.unreadCount);
+      setInboxReady(true);
     });
   }, [config?.semester, config?.year, currentUser?.uid]);
 
   useEffect(() => {
     if (!includeBroadcasts || !currentUser?.uid || !config) {
       setBroadcastNotifications([]);
+      setBroadcastReady(false);
       return undefined;
     }
 
-    return subscribeBroadcastNotifications(config, setBroadcastNotifications);
+    setBroadcastReady(false);
+    return subscribeBroadcastNotifications(config, (nextNotifications) => {
+      setBroadcastNotifications(nextNotifications);
+      setBroadcastReady(true);
+    });
   }, [config?.semester, config?.year, currentUser?.uid, includeBroadcasts]);
 
   useEffect(() => {
@@ -244,16 +258,25 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
     if (!currentUser?.uid || !config) {
       realtimeToastStateRef.current = {
         initialized: false,
+        scopeKey: "",
         unreadCount: 0,
       };
-      shownRealtimeToastKeysRef.current.clear();
       return undefined;
     }
 
+    if (!notificationSourcesReady) return undefined;
+
     const previousState = realtimeToastStateRef.current;
-    if (!previousState.initialized) {
+    const scopeKey = [
+      currentUser.uid,
+      config.year,
+      config.semester,
+      includeBroadcasts ? "student-broadcasts" : "personal",
+    ].join(":");
+    if (!previousState.initialized || previousState.scopeKey !== scopeKey) {
       realtimeToastStateRef.current = {
         initialized: true,
+        scopeKey,
         unreadCount,
       };
       return undefined;
@@ -261,6 +284,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
 
     realtimeToastStateRef.current = {
       initialized: true,
+      scopeKey,
       unreadCount,
     };
 
@@ -286,15 +310,20 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
           nextNotifications[0];
         if (!notification) return;
 
-        const toastKey = getRealtimeToastKey(notification);
-        if (shownRealtimeToastKeysRef.current.has(toastKey)) return;
-        shownRealtimeToastKeysRef.current.add(toastKey);
+        const toastKey = `${scopeKey}:${getRealtimeToastKey(notification)}`;
+        if (shownRealtimeToastKeys.has(toastKey)) return;
+        shownRealtimeToastKeys.add(toastKey);
 
         showToast({
           tone: notification.priority === "high" ? "warning" : "info",
           title: notification.title || "새 알림",
           message: getNotificationBodyText(notification),
-          persistent: true,
+          durationMs: includeBroadcasts
+            ? notification.priority === "high"
+              ? 5600
+              : 4200
+            : undefined,
+          persistent: includeBroadcasts ? false : true,
         });
       } catch (error) {
         console.error("Failed to show realtime notification toast:", error);
@@ -314,6 +343,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
     inbox?.broadcastClearedAt,
     inbox?.lastBroadcastReadAt,
     showToast,
+    notificationSourcesReady,
     unreadCount,
   ]);
 
