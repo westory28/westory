@@ -9,6 +9,8 @@ const BULLET_TOKEN = "{{bullet}}";
 const INLINE_MARK_TOKEN_PATTERN = /\{\{(u|box):([\s\S]*?)\}\}/g;
 const LEGACY_BULLET_TOKEN_PATTERN = /\{\{bullet:([^{}]*?)\}\}/g;
 const LEGACY_BULLET_PREFIX = "{{bullet:";
+const BOX_MARK_SPACING = "   ";
+const HORIZONTAL_SPACE_PATTERN = /[ \t]/;
 
 const getTokenName = (type: QuizPassageMarkType) =>
   type === "underline" ? "u" : type;
@@ -139,6 +141,52 @@ const applyBulletMark = (value: string, start: number, end: number) => {
   };
 };
 
+const findHorizontalSpaceStart = (value: string, index: number) => {
+  let cursor = index;
+  while (
+    cursor > 0 &&
+    HORIZONTAL_SPACE_PATTERN.test(value.charAt(cursor - 1))
+  ) {
+    cursor -= 1;
+  }
+  return cursor;
+};
+
+const findHorizontalSpaceEnd = (value: string, index: number) => {
+  let cursor = index;
+  while (
+    cursor < value.length &&
+    HORIZONTAL_SPACE_PATTERN.test(value.charAt(cursor))
+  ) {
+    cursor += 1;
+  }
+  return cursor;
+};
+
+const trimSelectedHorizontalSpaces = (text: string) => {
+  let startOffset = 0;
+  let endOffset = text.length;
+
+  while (
+    startOffset < endOffset &&
+    HORIZONTAL_SPACE_PATTERN.test(text.charAt(startOffset))
+  ) {
+    startOffset += 1;
+  }
+  while (
+    endOffset > startOffset &&
+    HORIZONTAL_SPACE_PATTERN.test(text.charAt(endOffset - 1))
+  ) {
+    endOffset -= 1;
+  }
+
+  return {
+    text: text.slice(startOffset, endOffset),
+    startOffset,
+    endOffset,
+  };
+};
+
 export const applyQuizPassageMark = ({
   value,
   selectionStart,
@@ -161,6 +209,26 @@ export const applyQuizPassageMark = ({
   const prefix = `{{${tokenName}:`;
   const suffix = "}}";
   const selectedText = value.slice(start, end);
+
+  if (markType === "box") {
+    const trimmedSelection = trimSelectedHorizontalSpaces(selectedText);
+    const contentStart = start + trimmedSelection.startOffset;
+    const contentEnd = start + trimmedSelection.endOffset;
+    const replaceStart = findHorizontalSpaceStart(value, contentStart);
+    const replaceEnd = findHorizontalSpaceEnd(value, contentEnd);
+    const markedText = `${BOX_MARK_SPACING}${prefix}${trimmedSelection.text}${suffix}${BOX_MARK_SPACING}`;
+    const nextSelectionStart =
+      replaceStart + BOX_MARK_SPACING.length + prefix.length;
+
+    return {
+      value: `${value.slice(0, replaceStart)}${markedText}${value.slice(
+        replaceEnd,
+      )}`,
+      selectionStart: nextSelectionStart,
+      selectionEnd: nextSelectionStart + trimmedSelection.text.length,
+    };
+  }
+
   const markedText = `${prefix}${selectedText}${suffix}`;
 
   return {
