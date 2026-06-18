@@ -67,6 +67,8 @@ interface Question {
   refBig?: string;
   refMid?: string;
   refSmall?: string;
+  createdAt?: unknown;
+  updatedAt?: unknown;
 }
 
 interface QuizEditorProps {
@@ -112,6 +114,34 @@ const TYPE_LABEL: Record<QuestionType, string> = {
   matching: "단어 연결하기",
 };
 
+const EMPTY_CASCADING_FILTER: CascadingFilter = {
+  big: "",
+  mid: "",
+  small: "",
+};
+
+const getTimestampMs = (value: unknown) => {
+  if (!value) return 0;
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (value instanceof Date) return value.getTime();
+  const timestampLike = value as {
+    toDate?: () => Date;
+    seconds?: number;
+    nanoseconds?: number;
+  };
+  if (typeof timestampLike.toDate === "function") {
+    const date = timestampLike.toDate();
+    return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+  }
+  if (typeof timestampLike.seconds === "number") {
+    return (
+      timestampLike.seconds * 1000 +
+      Math.floor((Number(timestampLike.nanoseconds) || 0) / 1_000_000)
+    );
+  }
+  return 0;
+};
+
 const shuffle = <T,>(input: T[]): T[] => {
   const list = [...input];
   for (let i = list.length - 1; i > 0; i -= 1) {
@@ -133,16 +163,12 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   const [questions, setQuestions] = useState<Question[]>([]);
   const [category, setCategory] = useState<string>("diagnostic");
   const [loading, setLoading] = useState(false);
-  const [epFilter, setEpFilter] = useState<CascadingFilter>({
-    big: "",
-    mid: "",
-    small: "",
-  });
-  const [epSource, setEpSource] = useState<CascadingFilter>({
-    big: "",
-    mid: "",
-    small: "",
-  });
+  const [epFilter, setEpFilter] = useState<CascadingFilter>(
+    EMPTY_CASCADING_FILTER,
+  );
+  const [epSource, setEpSource] = useState<CascadingFilter>(
+    EMPTY_CASCADING_FILTER,
+  );
 
   const [formType, setFormType] = useState<QuestionType>("choice");
   const [formText, setFormText] = useState("");
@@ -195,6 +221,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const passageTextareaRef = useRef<HTMLTextAreaElement>(null);
   const savingQuestionRef = useRef(false);
+  const defaultExamPrepFocusKeyRef = useRef("");
 
   useEffect(() => {
     if (type === "special") {
@@ -202,8 +229,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     } else {
       setCategory("diagnostic");
     }
-    setEpFilter({ big: "", mid: "", small: "" });
-    setEpSource({ big: "", mid: "", small: "" });
+    setEpFilter(EMPTY_CASCADING_FILTER);
+    setEpSource(EMPTY_CASCADING_FILTER);
+    defaultExamPrepFocusKeyRef.current = "";
     void fetchQuestions();
   }, [config, node, type]);
 
@@ -269,6 +297,84 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     }
     return "";
   };
+  const treeLookup = useMemo(() => {
+    const bigIds = new Set<string>();
+    const midToBig: Record<string, string> = {};
+    const smallToMid: Record<string, string> = {};
+    const smallToBig: Record<string, string> = {};
+
+    treeData.forEach((big) => {
+      bigIds.add(big.id);
+      (big.children || []).forEach((mid) => {
+        midToBig[mid.id] = big.id;
+        (mid.children || []).forEach((small) => {
+          smallToMid[small.id] = mid.id;
+          smallToBig[small.id] = big.id;
+        });
+      });
+    });
+
+    return { bigIds, midToBig, smallToMid, smallToBig };
+  }, [treeData]);
+
+  const normalizeCascadingFilter = (value: CascadingFilter) => {
+    const small = value.small || "";
+    const mid = value.mid || (small ? treeLookup.smallToMid[small] || "" : "");
+    const big =
+      value.big ||
+      (small ? treeLookup.smallToBig[small] || "" : "") ||
+      (mid ? treeLookup.midToBig[mid] || "" : "");
+
+    if (big && !treeLookup.bigIds.has(big)) return EMPTY_CASCADING_FILTER;
+    if (mid && treeLookup.midToBig[mid] !== big) {
+      return big ? { big, mid: "", small: "" } : EMPTY_CASCADING_FILTER;
+    }
+    if (small && (treeLookup.smallToMid[small] !== mid || !mid)) {
+      return { big, mid, small: "" };
+    }
+
+    return { big, mid, small };
+  };
+
+  const recentExamPrepFocus = useMemo(() => {
+    if (type !== "special") return EMPTY_CASCADING_FILTER;
+    const latest = questions
+      .filter((question) => question.category === "exam_prep")
+      .slice()
+      .sort((a, b) => {
+        const aMs = getTimestampMs(a.createdAt) || Number(a.id) || 0;
+        const bMs = getTimestampMs(b.createdAt) || Number(b.id) || 0;
+        return bMs - aMs;
+      })[0];
+
+    if (!latest) return EMPTY_CASCADING_FILTER;
+    return normalizeCascadingFilter({
+      big: latest.refBig || "",
+      mid: latest.refMid || "",
+      small: latest.refSmall || "",
+    });
+  }, [questions, treeLookup, type]);
+
+  useEffect(() => {
+    if (type !== "special") return;
+    const nextKey = [
+      node.id,
+      recentExamPrepFocus.big,
+      recentExamPrepFocus.mid,
+      recentExamPrepFocus.small,
+    ].join("|");
+    if (defaultExamPrepFocusKeyRef.current === nextKey) return;
+    defaultExamPrepFocusKeyRef.current = nextKey;
+    setEpFilter(recentExamPrepFocus);
+    setEpSource(recentExamPrepFocus);
+  }, [
+    node.id,
+    recentExamPrepFocus.big,
+    recentExamPrepFocus.mid,
+    recentExamPrepFocus.small,
+    type,
+  ]);
+
   const getQuestionSubUnitLabel = (question: Question) => {
     if (type === "special") {
       const sourceId =
@@ -371,7 +477,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     setPreviewOpen(false);
     resetPreview();
     if (type !== "special") setFormSubUnit("");
-    else setEpSource({ big: "", mid: "", small: "" });
+    else setEpSource(recentExamPrepFocus);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -797,6 +903,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
         formType === "matching"
           ? await optimizeMatchingPairImages(payload.matchingPairs || [])
           : [];
+      const existingQuestion = questions.find((q) => q.id === targetId);
+      const nowMs = Date.now();
       const newQuestion: Question = {
         id: targetId,
         unitId: node.id,
@@ -816,16 +924,21 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
         passage: formType === "choice" ? formPassage.trim() : "",
         hintEnabled,
         hint: hintEnabled ? hintText.trim() : "",
+        createdAt: existingQuestion?.createdAt || nowMs,
+        updatedAt: nowMs,
         ...(type === "special" && epSource.big ? { refBig: epSource.big } : {}),
         ...(type === "special" && epSource.mid ? { refMid: epSource.mid } : {}),
         ...(type === "special" && epSource.small
           ? { refSmall: epSource.small }
           : {}),
       };
+      const questionData = { ...newQuestion };
+      delete questionData.createdAt;
+      delete questionData.updatedAt;
       await setDoc(
         doc(db, getSemesterDocPath(config, "quiz_questions", String(targetId))),
         {
-          ...newQuestion,
+          ...questionData,
           updatedAt: serverTimestamp(),
           ...(editingQuestionId ? {} : { createdAt: serverTimestamp() }),
         },
