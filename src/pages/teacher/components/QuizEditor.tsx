@@ -28,7 +28,6 @@ import {
 } from "../../../lib/quizImageCompression";
 import {
   applyQuizPassageMark,
-  stripQuizPassageMarkup,
   type QuizPassageMarkType,
 } from "../../../lib/quizPassageMarkup";
 
@@ -1182,7 +1181,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                 const answerText = String(q.answer || "").trim();
                 const explanationText = String(q.explanation || "").trim();
                 const passageText = String(q.passage || "").trim();
-                const passagePreviewText = stripQuizPassageMarkup(passageText);
+                const hasChoiceSupportPanel =
+                  q.type === "choice" && (!!q.image || !!passageText);
+                const hasChoiceOptionImages = choicePreviewImages.some(Boolean);
 
                 return (
                   <div
@@ -1217,17 +1218,141 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                     <p className="font-bold text-gray-800 mb-2 text-sm">
                       {q.question}
                     </p>
-                    {passageText && (
-                      <div className="mb-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium leading-5 text-slate-700">
-                        {passagePreviewText}
-                      </div>
-                    )}
-                    {(q.image || hasChoicePreview) && (
+                    {q.type === "choice" &&
+                      (hasChoiceSupportPanel || hasChoicePreview) && (
+                        <div
+                          className={
+                            hasChoiceSupportPanel && hasChoicePreview
+                              ? "mb-3 grid min-h-0 gap-3 md:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)] md:items-start"
+                              : "mb-3 space-y-3"
+                          }
+                        >
+                          {hasChoiceSupportPanel && (
+                            <div className="flex min-h-0 flex-col gap-3 rounded-xl border border-gray-100 bg-gray-50 p-2 text-center">
+                              {q.image && (
+                                <div
+                                  className={`flex min-h-0 items-center justify-center ${
+                                    passageText ? "shrink-0" : "flex-1"
+                                  }`}
+                                >
+                                  <img
+                                    src={q.image}
+                                    alt="문항 첨부 이미지"
+                                    className={`mx-auto max-w-full rounded-lg border border-gray-100 object-contain ${
+                                      passageText
+                                        ? "max-h-[min(26vh,240px)]"
+                                        : "max-h-[min(42vh,360px)]"
+                                    }`}
+                                  />
+                                </div>
+                              )}
+                              {passageText && (
+                                <QuizPassage
+                                  value={passageText}
+                                  surface="white"
+                                  size="large"
+                                  className="shrink-0 text-left"
+                                />
+                              )}
+                            </div>
+                          )}
+                          {hasChoicePreview && (
+                            <div
+                              className={
+                                hasChoiceOptionImages
+                                  ? "grid min-h-[14rem] grid-cols-2 auto-rows-fr gap-2 sm:grid-cols-3 md:grid-cols-2 xl:grid-cols-3"
+                                  : "space-y-2"
+                              }
+                            >
+                              {choicePreviewOptions.map(
+                                (option, optionIndex) => {
+                                  const isCorrectOption =
+                                    option.trim() === answerText;
+                                  const optionImage =
+                                    choicePreviewImages[optionIndex];
+                                  return (
+                                    <div
+                                      key={`${q.id}-option-${optionIndex}`}
+                                      className={
+                                        hasChoiceOptionImages
+                                          ? `group flex h-full min-h-0 flex-col rounded-xl border-2 bg-white p-2 text-left ${
+                                              isCorrectOption
+                                                ? "border-blue-500 bg-blue-50 text-blue-800 shadow-sm"
+                                                : "border-gray-200"
+                                            }`
+                                          : `flex min-w-0 items-start gap-2 rounded-xl border-2 px-3 py-2.5 text-left text-sm leading-6 md:text-base ${
+                                              isCorrectOption
+                                                ? "border-blue-500 bg-blue-50 font-bold text-blue-800"
+                                                : "border-gray-200 bg-white font-bold text-gray-700"
+                                            }`
+                                      }
+                                    >
+                                      {hasChoiceOptionImages ? (
+                                        <>
+                                          <div
+                                            className={`relative flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden rounded-lg border ${
+                                              optionImage
+                                                ? "border-gray-100 bg-white"
+                                                : "border-dashed border-gray-200 bg-gray-50 px-2"
+                                            }`}
+                                          >
+                                            <span
+                                              className={`absolute left-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full text-sm font-black shadow-sm ${
+                                                isCorrectOption
+                                                  ? "bg-blue-600 text-white"
+                                                  : "bg-white/95 text-gray-600 ring-1 ring-gray-200"
+                                              }`}
+                                            >
+                                              {optionIndex + 1}
+                                            </span>
+                                            {optionImage ? (
+                                              <img
+                                                src={optionImage}
+                                                alt={`${optionIndex + 1}번 보기 이미지`}
+                                                className="max-h-full max-w-full object-contain"
+                                              />
+                                            ) : (
+                                              <span className="break-keep text-center text-sm font-bold text-gray-700">
+                                                {option}
+                                              </span>
+                                            )}
+                                          </div>
+                                          {optionImage && option && (
+                                            <div className="mt-2 line-clamp-2 min-h-[2.5rem] w-full break-keep text-center text-sm font-bold leading-5">
+                                              {option}
+                                            </div>
+                                          )}
+                                        </>
+                                      ) : (
+                                        <>
+                                          <span
+                                            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-sm ${
+                                              isCorrectOption
+                                                ? "bg-blue-600 font-black text-white"
+                                                : "bg-gray-100 text-gray-600"
+                                            }`}
+                                          >
+                                            {optionIndex + 1}
+                                          </span>
+                                          <span className="min-w-0 flex-1 break-keep">
+                                            {option}
+                                          </span>
+                                        </>
+                                      )}
+                                    </div>
+                                  );
+                                },
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    {q.type !== "choice" && (passageText || q.image) && (
                       <div
                         className={
-                          q.image && hasChoicePreview
-                            ? "mb-2 grid gap-3 md:grid-cols-[minmax(150px,220px)_minmax(0,1fr)] md:items-start"
-                            : "mb-2 space-y-2"
+                          q.image && passageText
+                            ? "mb-3 grid gap-3 md:grid-cols-[minmax(150px,220px)_minmax(0,1fr)] md:items-start"
+                            : "mb-3 space-y-2"
                         }
                       >
                         {q.image && (
@@ -1239,45 +1364,13 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                             />
                           </div>
                         )}
-                        {hasChoicePreview && (
-                          <div className="space-y-1.5">
-                            {choicePreviewOptions.map((option, optionIndex) => {
-                              const isCorrectOption =
-                                option.trim() === answerText;
-                              const optionImage =
-                                choicePreviewImages[optionIndex];
-                              return (
-                                <div
-                                  key={`${q.id}-option-${optionIndex}`}
-                                  className={`flex min-w-0 items-start gap-2 rounded-md border px-2.5 py-1.5 text-xs ${
-                                    isCorrectOption
-                                      ? "border-blue-300 bg-blue-50 font-black text-blue-800"
-                                      : "border-gray-200 bg-white font-bold text-gray-700"
-                                  }`}
-                                >
-                                  <span
-                                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] ${
-                                      isCorrectOption
-                                        ? "bg-blue-600 font-black text-white"
-                                        : "bg-gray-100 text-gray-600"
-                                    }`}
-                                  >
-                                    {optionIndex + 1}
-                                  </span>
-                                  {optionImage && (
-                                    <img
-                                      src={optionImage}
-                                      alt={`${optionIndex + 1}번 보기 이미지`}
-                                      className="h-12 w-12 shrink-0 rounded border border-gray-200 bg-white object-contain"
-                                    />
-                                  )}
-                                  <span className="min-w-0 break-words">
-                                    {option}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
+                        {passageText && (
+                          <QuizPassage
+                            value={passageText}
+                            surface="white"
+                            size="large"
+                            className="text-left"
+                          />
                         )}
                       </div>
                     )}
