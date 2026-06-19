@@ -7,7 +7,7 @@ import {
 interface QuizPassageProps {
   value: string | null | undefined;
   className?: string;
-  size?: "default" | "large";
+  size?: "compact" | "default" | "large";
   surface?: "white" | "muted";
 }
 
@@ -17,8 +17,15 @@ const markClasses: Record<string, string> = {
 };
 
 const sizeClasses: Record<NonNullable<QuizPassageProps["size"]>, string> = {
+  compact: "text-sm leading-6 md:text-[15px] md:leading-7",
   default: "text-base leading-8 md:text-[17px]",
   large: "text-[17px] leading-8 md:text-lg md:leading-9 lg:text-[19px]",
+};
+
+const paddingClasses: Record<NonNullable<QuizPassageProps["size"]>, string> = {
+  compact: "px-3 py-2",
+  default: "px-4 py-3",
+  large: "px-4 py-3",
 };
 
 const isLineBreakTextSegment = (segment: QuizPassageSegment | undefined) =>
@@ -69,7 +76,7 @@ const QuizPassage: React.FC<QuizPassageProps> = ({
 
   return (
     <div
-      className={`whitespace-pre-wrap break-keep rounded-xl border px-4 py-3 font-medium text-slate-900 ${sizeClasses[size]} ${surfaceClass} ${className}`}
+      className={`whitespace-pre-wrap break-keep rounded-xl border font-medium text-slate-900 ${paddingClasses[size]} ${sizeClasses[size]} ${surfaceClass} ${className}`}
     >
       {segments.map((segment, index) => {
         if (

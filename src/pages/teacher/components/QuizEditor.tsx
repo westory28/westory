@@ -1160,7 +1160,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
 
       <div className="flex-1 min-h-0 overflow-hidden p-6 bg-gray-50">
         <div className="h-full min-h-0 flex flex-col">
-          <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-4">
+          <div className="flex-1 min-h-0 overflow-y-auto pr-1 space-y-3">
             {loading ? (
               <div className="text-center p-10 text-gray-400">
                 문제를 불러오는 중...
@@ -1188,9 +1188,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                 return (
                   <div
                     key={q.id}
-                    className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm"
+                    className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm"
                   >
-                    <div className="flex justify-between items-start mb-2">
+                    <div className="flex justify-between items-start mb-1.5">
                       <span className="bg-gray-100 text-gray-600 text-[10px] font-bold px-2 py-1 rounded">
                         Q{idx + 1} | {TYPE_LABEL[q.type] || q.type} |{" "}
                         {getQuestionSubUnitLabel(q)}
@@ -1215,7 +1215,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                         </div>
                       )}
                     </div>
-                    <p className="font-bold text-gray-800 mb-2 text-sm">
+                    <p className="font-bold text-gray-800 mb-2 text-[13px] leading-5">
                       {q.question}
                     </p>
                     {q.type === "choice" &&
@@ -1223,12 +1223,12 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                         <div
                           className={
                             hasChoiceSupportPanel && hasChoicePreview
-                              ? "mb-3 grid min-h-0 gap-3 md:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)] md:items-start"
-                              : "mb-3 space-y-3"
+                              ? "mb-2 grid min-h-0 gap-2 md:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)] md:items-start"
+                              : "mb-2 space-y-2"
                           }
                         >
                           {hasChoiceSupportPanel && (
-                            <div className="flex min-h-0 flex-col gap-3 rounded-xl border border-gray-100 bg-gray-50 p-2 text-center">
+                            <div className="flex min-h-0 flex-col gap-2 rounded-lg border border-gray-100 bg-gray-50 p-2 text-center">
                               {q.image && (
                                 <div
                                   className={`flex min-h-0 items-center justify-center ${
@@ -1250,7 +1250,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                                 <QuizPassage
                                   value={passageText}
                                   surface="white"
-                                  size="large"
+                                  size="compact"
                                   className="shrink-0 text-left"
                                 />
                               )}
@@ -1260,8 +1260,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                             <div
                               className={
                                 hasChoiceOptionImages
-                                  ? "grid min-h-[14rem] grid-cols-2 auto-rows-fr gap-2 sm:grid-cols-3 md:grid-cols-2 xl:grid-cols-3"
-                                  : "space-y-2"
+                                  ? "grid min-h-[12rem] grid-cols-2 auto-rows-fr gap-2 sm:grid-cols-3 md:grid-cols-2 xl:grid-cols-3"
+                                  : "space-y-1.5"
                               }
                             >
                               {choicePreviewOptions.map(
@@ -1275,12 +1275,12 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                                       key={`${q.id}-option-${optionIndex}`}
                                       className={
                                         hasChoiceOptionImages
-                                          ? `group flex h-full min-h-0 flex-col rounded-xl border-2 bg-white p-2 text-left ${
+                                          ? `group flex h-full min-h-0 flex-col rounded-lg border-2 bg-white p-1.5 text-left ${
                                               isCorrectOption
                                                 ? "border-blue-500 bg-blue-50 text-blue-800 shadow-sm"
                                                 : "border-gray-200"
                                             }`
-                                          : `flex min-w-0 items-start gap-2 rounded-xl border-2 px-3 py-2.5 text-left text-sm leading-6 md:text-base ${
+                                          : `flex min-w-0 items-start gap-1.5 rounded-lg border-2 px-2.5 py-1.5 text-left text-[13px] leading-5 md:text-sm md:leading-5 ${
                                               isCorrectOption
                                                 ? "border-blue-500 bg-blue-50 font-bold text-blue-800"
                                                 : "border-gray-200 bg-white font-bold text-gray-700"
@@ -1297,7 +1297,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                                             }`}
                                           >
                                             <span
-                                              className={`absolute left-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full text-sm font-black shadow-sm ${
+                                              className={`absolute left-2 top-2 z-10 flex h-6 w-6 items-center justify-center rounded-full text-xs font-black shadow-sm ${
                                                 isCorrectOption
                                                   ? "bg-blue-600 text-white"
                                                   : "bg-white/95 text-gray-600 ring-1 ring-gray-200"
@@ -1318,7 +1318,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                                             )}
                                           </div>
                                           {optionImage && option && (
-                                            <div className="mt-2 line-clamp-2 min-h-[2.5rem] w-full break-keep text-center text-sm font-bold leading-5">
+                                            <div className="mt-1.5 line-clamp-2 min-h-[2rem] w-full break-keep text-center text-xs font-bold leading-4">
                                               {option}
                                             </div>
                                           )}
@@ -1326,7 +1326,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                                       ) : (
                                         <>
                                           <span
-                                            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-sm ${
+                                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs ${
                                               isCorrectOption
                                                 ? "bg-blue-600 font-black text-white"
                                                 : "bg-gray-100 text-gray-600"
@@ -1351,8 +1351,8 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                       <div
                         className={
                           q.image && passageText
-                            ? "mb-3 grid gap-3 md:grid-cols-[minmax(150px,220px)_minmax(0,1fr)] md:items-start"
-                            : "mb-3 space-y-2"
+                            ? "mb-2 grid gap-2 md:grid-cols-[minmax(150px,220px)_minmax(0,1fr)] md:items-start"
+                            : "mb-2 space-y-2"
                         }
                       >
                         {q.image && (
@@ -1368,7 +1368,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                           <QuizPassage
                             value={passageText}
                             surface="white"
-                            size="large"
+                            size="compact"
                             className="text-left"
                           />
                         )}
