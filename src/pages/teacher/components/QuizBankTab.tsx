@@ -184,6 +184,11 @@ const createDefaultOrderItems = () =>
   Array.from({ length: DEFAULT_ORDER_OPTION_COUNT }, () => "");
 const createDefaultMatchingPairs = () =>
   Array.from({ length: 3 }, () => ({ left: "", right: "", rightImage: null }));
+const createEmptyBankFilters = (): BankFilterState => ({
+  big: "",
+  mid: "",
+  small: "",
+});
 
 const QUESTION_TYPE_LABEL: Record<string, string> = {
   choice: "객관식",
@@ -325,11 +330,8 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const [lastAttemptAt, setLastAttemptAt] = useState(0);
   const [treeData, setTreeData] = useState<TreeUnit[]>([]);
   const [loading, setLoading] = useState(false);
-  const [filters, setFilters] = useState<BankFilterState>({
-    big: "",
-    mid: "",
-    small: "",
-  });
+  const [filters, setFilters] =
+    useState<BankFilterState>(createEmptyBankFilters);
   const [defaultFocus, setDefaultFocus] = useState<BankDefaultFocus | null>(
     null,
   );
@@ -527,7 +529,11 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         );
         setDefaultFocus(nextDefaultFocus);
         if (nextDefaultFocus) {
-          setFilters(nextDefaultFocus.filters);
+          setFilters(
+            nextDefaultFocus.category === "exam_prep"
+              ? createEmptyBankFilters()
+              : nextDefaultFocus.filters,
+          );
           setCategoryFilter(nextDefaultFocus.category);
         }
       } finally {
@@ -600,11 +606,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         : stat?.attempts || 0;
       const filtersForQuestion =
         question.category === "exam_prep"
-          ? {
-              big: question.refBig || "",
-              mid: question.refMid || "",
-              small: "",
-            }
+          ? createEmptyBankFilters()
           : {
               big: midToBig[question.unitId || ""] || question.refBig || "",
               mid: question.unitId || "",
@@ -682,11 +684,15 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
 
   const applyDefaultFocus = (focus = defaultFocus) => {
     if (!focus) {
-      setFilters({ big: "", mid: "", small: "" });
+      setFilters(createEmptyBankFilters());
       setCategoryFilter("");
       return;
     }
-    setFilters(focus.filters);
+    setFilters(
+      focus.category === "exam_prep"
+        ? createEmptyBankFilters()
+        : focus.filters,
+    );
     setCategoryFilter(focus.category);
   };
 
@@ -1522,6 +1528,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         attempts: number;
         correct: number;
         weakQuestions: number;
+        latest: number;
       }
     >();
 
@@ -1539,10 +1546,12 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         attempts: 0,
         correct: 0,
         weakQuestions: 0,
+        latest: 0,
       };
       current.questions += 1;
       current.attempts += stat.attempts;
       current.correct += stat.correct;
+      current.latest = Math.max(current.latest, stat.lastAttemptAt);
       if (stat.attempts >= 3 && rate < 60) current.weakQuestions += 1;
       map.set(meta.focusKey, current);
     });
@@ -1554,11 +1563,13 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
           ? Math.round((item.correct / item.attempts) * 100)
           : null,
       }))
+      .filter((item) => item.attempts > 0)
       .sort((a, b) => {
+        if (a.attempts !== b.attempts) return b.attempts - a.attempts;
+        if (a.latest !== b.latest) return b.latest - a.latest;
         const ar = a.rate ?? 101;
         const br = b.rate ?? 101;
-        if (ar !== br) return ar - br;
-        return b.attempts - a.attempts;
+        return ar - br;
       })
       .slice(0, 5);
   }, [activeClassFilter, filteredQuestions, questionStats, treeData]);
@@ -1578,6 +1589,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         questions: number;
         attempts: number;
         correct: number;
+        latest: number;
       }
     >();
 
@@ -1590,10 +1602,12 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         questions: 0,
         attempts: 0,
         correct: 0,
+        latest: 0,
       };
       current.questions += 1;
       current.attempts += stat.attempts;
       current.correct += stat.correct;
+      current.latest = Math.max(current.latest, stat.lastAttemptAt);
       map.set(key, current);
     });
 
@@ -1605,11 +1619,13 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
           ? Math.round((item.correct / item.attempts) * 100)
           : null,
       }))
+      .filter((item) => item.attempts > 0)
       .sort((a, b) => {
+        if (a.attempts !== b.attempts) return b.attempts - a.attempts;
+        if (a.latest !== b.latest) return b.latest - a.latest;
         const ar = a.rate ?? -1;
         const br = b.rate ?? -1;
-        if (ar !== br) return br - ar;
-        return b.attempts - a.attempts;
+        return br - ar;
       });
   }, [activeClassFilter, filteredQuestions, questionStats]);
 
@@ -1958,6 +1974,13 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       mid: value,
       small: "",
     }));
+  };
+
+  const handleCategoryFilterChange = (value: string) => {
+    setCategoryFilter(value);
+    if (value === "exam_prep") {
+      setFilters(createEmptyBankFilters());
+    }
   };
 
   const openEditModal = (question: Question) => {
@@ -2540,7 +2563,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
             </select>
             <select
               value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
+              onChange={(e) => handleCategoryFilterChange(e.target.value)}
               className="min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[13px] font-bold text-slate-700"
             >
               <option value="">평가 유형 전체</option>
@@ -2716,7 +2739,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                   단원별 평균 정답률
                 </h4>
                 <span className="text-xs font-black text-slate-400">
-                  낮은 순
+                  응시 많은 순
                 </span>
               </div>
               <div className="mt-3 space-y-3">
@@ -2747,7 +2770,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                             {unit.title}
                           </div>
                           <div className="shrink-0 text-[11px] font-bold text-slate-400">
-                            {unit.questions}문항
+                            {unit.attempts}응시
                           </div>
                         </div>
                         <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-100">
@@ -2772,7 +2795,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                   문항 유형별 정답률
                 </h4>
                 <span className="text-xs font-black text-slate-400">
-                  {typePerformance.length}유형
+                  응시 많은 순
                 </span>
               </div>
               <div className="mt-4 flex items-center gap-4">
@@ -2785,7 +2808,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                 <div className="min-w-0 flex-1 space-y-2">
                   {typePerformance.length === 0 && (
                     <div className="rounded-lg bg-slate-50 p-4 text-xs font-bold text-slate-400">
-                      유형별 데이터 없음
+                      유형별 응시 데이터 없음
                     </div>
                   )}
                   {typePerformance.map((item) => (
@@ -2800,6 +2823,9 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                         ></span>
                         <span className="truncate font-bold text-slate-600">
                           {item.label}
+                        </span>
+                        <span className="shrink-0 text-[11px] font-bold text-slate-400">
+                          {item.attempts}응시
                         </span>
                       </div>
                       <span className="shrink-0 font-black text-slate-800">
