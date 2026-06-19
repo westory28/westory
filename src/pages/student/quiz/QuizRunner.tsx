@@ -1670,6 +1670,7 @@ const QuizRunner: React.FC = () => {
                   <QuizPassage
                     value={passageText}
                     surface="white"
+                    size="large"
                     className="shrink-0 text-left"
                   />
                 )}
