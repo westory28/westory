@@ -3289,10 +3289,26 @@ exports.updateStudentData = onCall({ region: REGION, timeoutSeconds: 180, memory
   };
 });
 
+const normalizeMockExamRound = (value) => {
+  const raw = String(value || '').trim().toLowerCase();
+  const numeric = raw.match(/\d+/)?.[0];
+  const normalized = numeric ? `round_${Number(numeric)}` : raw;
+  return ['round_1', 'round_2', 'round_3'].includes(normalized)
+    ? normalized
+    : 'round_1';
+};
+
+const quizAttemptMatchesExamRound = (data, category, examRound) => {
+  if (String(category || '').trim() !== 'exam_prep') return true;
+  if (!examRound) return true;
+  return normalizeMockExamRound(data?.examRound) === examRound;
+};
+
 const collectMatchingQuizAttemptDocsByClass = async ({
   collectionRef,
   unitId,
   category,
+  examRound,
   className,
   normalizedClassId,
 }) => {
@@ -3324,6 +3340,7 @@ const collectMatchingQuizAttemptDocsByClass = async ({
     return (
       String(data.unitId || '').trim() === unitId
       && String(data.category || '').trim() === category
+      && quizAttemptMatchesExamRound(data, category, examRound)
       && quizAttemptMatchesClass(data, normalizedClassId)
     );
   });
@@ -3358,6 +3375,9 @@ const resetAssessmentAttemptsByClassHandler = onCall(
     const unitId = String(request.data?.unitId || '').trim();
     const category = String(request.data?.category || '').trim();
     const classId = String(request.data?.classId || '').trim();
+    const examRound = category === 'exam_prep' && request.data?.examRound
+      ? normalizeMockExamRound(request.data.examRound)
+      : '';
 
     if (!unitId || !category || !classId) {
       throw new HttpsError(
@@ -3384,6 +3404,7 @@ const resetAssessmentAttemptsByClassHandler = onCall(
       actorEmail: email,
       unitId,
       category,
+      ...(examRound ? { examRound } : {}),
       requestedClassId: classId,
       resolvedClassId: normalizedClassId,
       status: 'started',
@@ -3435,6 +3456,7 @@ const resetAssessmentAttemptsByClassHandler = onCall(
           collectionRef: quizResultsCollection,
           unitId,
           category,
+          examRound,
           className,
           normalizedClassId,
         }),
@@ -3442,6 +3464,7 @@ const resetAssessmentAttemptsByClassHandler = onCall(
           collectionRef: quizSubmissionsCollection,
           unitId,
           category,
+          examRound,
           className,
           normalizedClassId,
         }),
@@ -3459,6 +3482,7 @@ const resetAssessmentAttemptsByClassHandler = onCall(
             String(data.uid || '').trim() !== studentUid
             || String(data.unitId || '').trim() !== unitId
             || String(data.category || '').trim() !== category
+            || !quizAttemptMatchesExamRound(data, category, examRound)
           ) {
             return;
           }
@@ -3484,6 +3508,7 @@ const resetAssessmentAttemptsByClassHandler = onCall(
             String(data.uid || '').trim() !== studentUid
             || String(data.unitId || '').trim() !== unitId
             || String(data.category || '').trim() !== category
+            || !quizAttemptMatchesExamRound(data, category, examRound)
           ) {
             return;
           }
@@ -3579,6 +3604,7 @@ const resetAssessmentAttemptsByClassHandler = onCall(
         semester,
         unitId,
         category,
+        ...(examRound ? { examRound } : {}),
         classId: normalizedClassId,
         targetStudentCount: studentUids.size,
         affectedStudentCount: affectedStudentList.length,
@@ -3591,6 +3617,7 @@ const resetAssessmentAttemptsByClassHandler = onCall(
 
       return {
         classId: normalizedClassId,
+        ...(examRound ? { examRound } : {}),
         targetStudentCount: studentUids.size,
         affectedStudentCount: affectedStudentList.length,
         deletedQuizResultCount,

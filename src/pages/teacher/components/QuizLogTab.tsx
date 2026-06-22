@@ -16,6 +16,13 @@ import {
   getSemesterCollectionPath,
   getSemesterDocPath,
 } from "../../../lib/semesterScope";
+import {
+  MOCK_EXAM_ROUNDS,
+  formatMockExamRoundLabel,
+  isMockExamCategory,
+  mockExamRoundMatches,
+  normalizeMockExamRound,
+} from "../../../lib/mockExamRounds";
 import StudentWrongNoteModal from "./StudentWrongNoteModal";
 
 interface QuizDetail {
@@ -30,6 +37,7 @@ interface Log {
   uid?: string;
   unitId?: string;
   category?: string;
+  examRound?: string;
   gradeClass?: string;
   studentName: string;
   email?: string;
@@ -207,6 +215,7 @@ const buildDedupKey = (log: Log): string => {
     identity,
     toText(log.unitId),
     toText(log.category),
+    toText(log.examRound),
     String(getTimestampMs(log.timestamp)),
     String(log.score),
   ].join("::");
@@ -320,6 +329,54 @@ const findRecentCategoryFocus = (logs: Log[], classOnly?: string): string => {
   );
 };
 
+const findRecentExamRoundFocus = (logs: Log[], classOnly?: string): string => {
+  const byRound = new Map<
+    string,
+    {
+      studentKeys: Set<string>;
+      attemptCount: number;
+      latestMs: number;
+    }
+  >();
+
+  logs.forEach((log) => {
+    if (!isMockExamCategory(log.category)) return;
+    if (classOnly && log.classOnly !== classOnly) return;
+    const round = normalizeMockExamRound(log.examRound);
+    const studentKey = buildStudentKey({
+      uid: log.uid,
+      email: log.email,
+      classOnly: log.classOnly,
+      number: log.studentNumber,
+      name: log.studentName,
+    });
+    const current = byRound.get(round) || {
+      studentKeys: new Set<string>(),
+      attemptCount: 0,
+      latestMs: 0,
+    };
+    current.studentKeys.add(studentKey);
+    current.attemptCount += 1;
+    current.latestMs = Math.max(
+      current.latestMs,
+      getTimestampMs(log.timestamp),
+    );
+    byRound.set(round, current);
+  });
+
+  return (
+    Array.from(byRound.entries()).sort(([, a], [, b]) => {
+      if (a.studentKeys.size !== b.studentKeys.size) {
+        return b.studentKeys.size - a.studentKeys.size;
+      }
+      if (a.attemptCount !== b.attemptCount) {
+        return b.attemptCount - a.attemptCount;
+      }
+      return b.latestMs - a.latestMs;
+    })[0]?.[0] || ""
+  );
+};
+
 const buildUnitMetaMap = (treeData: TreeUnit[]) => {
   const map = new Map<string, UnitMeta>();
 
@@ -401,6 +458,9 @@ const parseLogDoc = (id: string, raw: any): Log => {
     ),
     unitId: toText(raw.unitId),
     category: toText(raw.category),
+    examRound: isMockExamCategory(raw.category)
+      ? normalizeMockExamRound(raw.examRound)
+      : "",
     gradeClass: gradeClassRaw,
     studentName:
       toText(
@@ -463,6 +523,7 @@ const QuizLogTab: React.FC = () => {
   const [refreshKey, setRefreshKey] = useState(0);
   const [classFilter, setClassFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [examRoundFilter, setExamRoundFilter] = useState("");
   const [bigFilter, setBigFilter] = useState("");
   const [midFilter, setMidFilter] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("scoreAsc");
@@ -494,6 +555,7 @@ const QuizLogTab: React.FC = () => {
   const userTouchedUnitFilterRef = useRef(false);
   const userTouchedClassFilterRef = useRef(false);
   const userTouchedCategoryFilterRef = useRef(false);
+  const userTouchedExamRoundFilterRef = useRef(false);
   const isExamPrepFilter = categoryFilter === "exam_prep";
 
   const unitMetaById = useMemo(() => buildUnitMetaMap(treeData), [treeData]);
@@ -726,7 +788,9 @@ const QuizLogTab: React.FC = () => {
           getSemesterCollectionPath(config, "quiz_results"),
         );
         const hasAnalysisFilter =
-          Boolean(categoryFilter) || selectedUnitFilterIds.length > 0;
+          Boolean(categoryFilter) ||
+          Boolean(examRoundFilter && isExamPrepFilter) ||
+          selectedUnitFilterIds.length > 0;
         const baseQueryLimit = hasAnalysisFilter
           ? BACKFILL_FILTERED_LIMIT
           : BACKFILL_BASIC_LIMIT;
@@ -796,6 +860,11 @@ const QuizLogTab: React.FC = () => {
         });
 
         let list = Array.from(dedupedMap.values());
+        if (isExamPrepFilter && examRoundFilter) {
+          list = list.filter((log) =>
+            mockExamRoundMatches(log.category, log.examRound, examRoundFilter),
+          );
+        }
         if (selectedUnitFilterIds.length) {
           const unitIds = new Set(selectedUnitFilterIds);
           list = list.filter((log) => {
@@ -831,6 +900,8 @@ const QuizLogTab: React.FC = () => {
     categoryFilter,
     classFilter,
     config,
+    examRoundFilter,
+    isExamPrepFilter,
     refreshKey,
     selectedUnitFilterIds,
     students,
@@ -936,9 +1007,31 @@ const QuizLogTab: React.FC = () => {
     setCategoryFilter(recentDefaultCategory);
   }, [categoryFilter, recentDefaultCategory]);
 
+  const recentDefaultExamRound = useMemo(
+    () => findRecentExamRoundFocus(canonicalLogs, recentClassFocus?.classOnly),
+    [canonicalLogs, recentClassFocus],
+  );
+
+  useEffect(() => {
+    if (!isExamPrepFilter) {
+      if (examRoundFilter) setExamRoundFilter("");
+      return;
+    }
+    if (userTouchedExamRoundFilterRef.current || !recentDefaultExamRound)
+      return;
+    if (examRoundFilter === recentDefaultExamRound) return;
+    setExamRoundFilter(recentDefaultExamRound);
+  }, [examRoundFilter, isExamPrepFilter, recentDefaultExamRound]);
+
   const analysisLogs = useMemo(() => {
     return canonicalLogs.filter((log) => {
       if (categoryFilter && log.category !== categoryFilter) return false;
+      if (
+        isExamPrepFilter &&
+        examRoundFilter &&
+        !mockExamRoundMatches(log.category, log.examRound, examRoundFilter)
+      )
+        return false;
 
       if (!isExamPrepFilter && (bigFilter || midFilter)) {
         const metas = getLogUnitMetas(log);
@@ -965,6 +1058,7 @@ const QuizLogTab: React.FC = () => {
     bigFilter,
     canonicalLogs,
     categoryFilter,
+    examRoundFilter,
     isExamPrepFilter,
     midFilter,
     questionMetaById,
@@ -1441,6 +1535,7 @@ const QuizLogTab: React.FC = () => {
     bigFilter,
     categoryFilter,
     classFilter,
+    examRoundFilter,
     midFilter,
     showPendingOnly,
     sortKey,
@@ -1449,7 +1544,14 @@ const QuizLogTab: React.FC = () => {
 
   useEffect(() => {
     setLowScorePage(1);
-  }, [bigFilter, categoryFilter, classFilter, lowScoreModalOpen, midFilter]);
+  }, [
+    bigFilter,
+    categoryFilter,
+    classFilter,
+    examRoundFilter,
+    lowScoreModalOpen,
+    midFilter,
+  ]);
 
   useEffect(() => {
     setScoreBucketPage(1);
@@ -1457,6 +1559,7 @@ const QuizLogTab: React.FC = () => {
     bigFilter,
     categoryFilter,
     classFilter,
+    examRoundFilter,
     midFilter,
     scoreBucketModalOpen,
     selectedScoreBucket,
@@ -1464,7 +1567,14 @@ const QuizLogTab: React.FC = () => {
 
   useEffect(() => {
     setPendingPage(1);
-  }, [bigFilter, categoryFilter, classFilter, midFilter, pendingModalOpen]);
+  }, [
+    bigFilter,
+    categoryFilter,
+    classFilter,
+    examRoundFilter,
+    midFilter,
+    pendingModalOpen,
+  ]);
 
   useEffect(() => {
     if (studentPage > studentTotalPages) {
@@ -1539,7 +1649,7 @@ const QuizLogTab: React.FC = () => {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-[minmax(180px,1.25fr)_minmax(180px,1.25fr)_110px_minmax(128px,0.75fr)_108px]">
+        <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-[minmax(180px,1.25fr)_minmax(180px,1.25fr)_110px_minmax(128px,0.75fr)_128px_108px]">
           <select
             value={bigFilter}
             onChange={(event) => {
@@ -1596,10 +1706,13 @@ const QuizLogTab: React.FC = () => {
             onChange={(event) => {
               const nextCategory = event.target.value;
               userTouchedCategoryFilterRef.current = true;
+              userTouchedExamRoundFilterRef.current = false;
               setCategoryFilter(nextCategory);
               if (nextCategory === "exam_prep") {
                 setBigFilter("");
                 setMidFilter("");
+              } else {
+                setExamRoundFilter("");
               }
             }}
             className="min-w-0 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-bold text-gray-700"
@@ -1609,6 +1722,23 @@ const QuizLogTab: React.FC = () => {
             <option value="diagnostic">진단</option>
             <option value="formative">형성</option>
             <option value="exam_prep">모의고사</option>
+          </select>
+          <select
+            value={examRoundFilter}
+            onChange={(event) => {
+              userTouchedExamRoundFilterRef.current = true;
+              setExamRoundFilter(event.target.value);
+            }}
+            disabled={!isExamPrepFilter}
+            className="min-w-0 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-bold text-gray-700 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+            aria-label="모의고사 회차 필터"
+          >
+            <option value="">전체 회차</option>
+            {MOCK_EXAM_ROUNDS.map((round) => (
+              <option key={round} value={round}>
+                {formatMockExamRoundLabel(round)}
+              </option>
+            ))}
           </select>
           <button
             type="button"

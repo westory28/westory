@@ -34,6 +34,13 @@ import {
   stripQuizPassageMarkup,
   type QuizPassageMarkType,
 } from "../../../lib/quizPassageMarkup";
+import {
+  MOCK_EXAM_ROUNDS,
+  formatMockExamRoundLabel,
+  isMockExamCategory,
+  mockExamRoundMatches,
+  normalizeMockExamRound,
+} from "../../../lib/mockExamRounds";
 
 interface TreeUnit {
   id: string;
@@ -108,6 +115,7 @@ interface BankAnalyticsResult {
   totalParticipants: number;
   lastAttemptAt: number;
   recentClassFocus: RecentClassFocus | null;
+  recentExamRoundFocus: string;
 }
 
 interface ClassAverageSummary {
@@ -157,6 +165,7 @@ interface BankFilterState {
 interface BankDefaultFocus {
   filters: BankFilterState;
   category: string;
+  examRound?: string;
 }
 const ORDER_DELIMITER = "||";
 const MATCHING_PAIR_DELIMITER = "=>";
@@ -330,14 +339,16 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const [lastAttemptAt, setLastAttemptAt] = useState(0);
   const [treeData, setTreeData] = useState<TreeUnit[]>([]);
   const [loading, setLoading] = useState(false);
-  const [filters, setFilters] =
-    useState<BankFilterState>(createEmptyBankFilters);
+  const [filters, setFilters] = useState<BankFilterState>(
+    createEmptyBankFilters,
+  );
   const [defaultFocus, setDefaultFocus] = useState<BankDefaultFocus | null>(
     null,
   );
   const [analyticsScope, setAnalyticsScope] = useState<AnalyticsScope>("all");
   const [classFilter, setClassFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
+  const [examRoundFilter, setExamRoundFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("");
   const [searchTerm, setSearchTerm] = useState("");
@@ -526,6 +537,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
           treeResult,
           statsResult.questionStats,
           statsResult.recentClassFocus?.classOnly,
+          statsResult.recentExamRoundFocus,
         );
         setDefaultFocus(nextDefaultFocus);
         if (nextDefaultFocus) {
@@ -535,6 +547,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
               : nextDefaultFocus.filters,
           );
           setCategoryFilter(nextDefaultFocus.category);
+          setExamRoundFilter(nextDefaultFocus.examRound || "");
         }
       } finally {
         setLoading(false);
@@ -570,6 +583,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     treeList: TreeUnit[],
     statsMap: Record<string, QuestionAggregate>,
     preferredClassOnly?: string,
+    preferredExamRound?: string,
   ): BankDefaultFocus | null => {
     if (!questionList.length) return null;
     const midToBig: Record<string, string> = {};
@@ -676,9 +690,20 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       Array.from(groups.values())[0];
 
     if (!target) return null;
+    if (
+      targetCategory?.category === "exam_prep" ||
+      target.category === "exam_prep"
+    ) {
+      return {
+        category: "exam_prep",
+        filters: { big: "", mid: "", small: "" },
+        examRound: preferredExamRound || "",
+      };
+    }
     return {
       category: targetCategory?.category || target.category,
       filters: target.filters,
+      examRound: "",
     };
   };
 
@@ -686,14 +711,14 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     if (!focus) {
       setFilters(createEmptyBankFilters());
       setCategoryFilter("");
+      setExamRoundFilter("");
       return;
     }
     setFilters(
-      focus.category === "exam_prep"
-        ? createEmptyBankFilters()
-        : focus.filters,
+      focus.category === "exam_prep" ? createEmptyBankFilters() : focus.filters,
     );
     setCategoryFilter(focus.category);
+    setExamRoundFilter(focus.examRound || "");
   };
 
   const loadTreeData = async () => {
@@ -729,7 +754,9 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     stat.wrongAnswers[wrongAnswer] = (stat.wrongAnswers[wrongAnswer] || 0) + 1;
   };
 
-  const loadQuestionAnalytics = async (): Promise<BankAnalyticsResult> => {
+  const loadQuestionAnalytics = async (
+    examRound?: string,
+  ): Promise<BankAnalyticsResult> => {
     try {
       const snap = await getDocs(
         query(
@@ -757,10 +784,29 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
           thresholdMs: number;
         }
       > = {};
+      const recentExamRoundCandidates: Record<
+        string,
+        {
+          studentKeys: Set<string>;
+          attemptCount: number;
+          latestMs: number;
+        }
+      > = {};
       let latestAttemptAt = 0;
 
       snap.forEach((d) => {
         const raw = d.data() as any;
+        const category = toText(raw.category);
+        const resultExamRound = isMockExamCategory(category)
+          ? normalizeMockExamRound(raw.examRound)
+          : "";
+        if (
+          examRound &&
+          isMockExamCategory(category) &&
+          !mockExamRoundMatches(category, resultExamRound, examRound)
+        ) {
+          return;
+        }
         const details = Array.isArray(raw.details) ? raw.details : [];
         const gradeClass = toText(
           raw.gradeClass ||
@@ -780,6 +826,17 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         const studentKey = buildStudentKey(raw, d.id);
         const attemptedAt = getTimestampMs(raw.timestamp);
         participants.add(studentKey);
+        if (isMockExamCategory(category)) {
+          const currentRound = recentExamRoundCandidates[resultExamRound] || {
+            studentKeys: new Set<string>(),
+            attemptCount: 0,
+            latestMs: 0,
+          };
+          currentRound.studentKeys.add(studentKey);
+          currentRound.attemptCount += 1;
+          currentRound.latestMs = Math.max(currentRound.latestMs, attemptedAt);
+          recentExamRoundCandidates[resultExamRound] = currentRound;
+        }
         if (classOnly) {
           classParticipants[classOnly] =
             classParticipants[classOnly] || new Set<string>();
@@ -885,6 +942,16 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
               if (a.latestMs !== b.latestMs) return b.latestMs - a.latestMs;
               return Number(a.classOnly) - Number(b.classOnly);
             })[0] || null,
+        recentExamRoundFocus:
+          Object.entries(recentExamRoundCandidates).sort(([, a], [, b]) => {
+            if (a.studentKeys.size !== b.studentKeys.size) {
+              return b.studentKeys.size - a.studentKeys.size;
+            }
+            if (a.attemptCount !== b.attemptCount) {
+              return b.attemptCount - a.attemptCount;
+            }
+            return b.latestMs - a.latestMs;
+          })[0]?.[0] || "",
       };
     } catch (error) {
       console.error(error);
@@ -895,6 +962,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         totalParticipants: 0,
         lastAttemptAt: 0,
         recentClassFocus: null,
+        recentExamRoundFocus: "",
       };
     }
   };
@@ -932,6 +1000,32 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       return { students: [], accessLimited: true };
     }
   };
+
+  useEffect(() => {
+    if (!isMockExamCategory(categoryFilter)) return;
+    let active = true;
+
+    const reloadRoundAnalytics = async () => {
+      setLoading(true);
+      try {
+        const statsResult = await loadQuestionAnalytics(examRoundFilter);
+        if (!active) return;
+        setQuestionStats(statsResult.questionStats);
+        setClassAverageByClass(statsResult.classAverageByClass);
+        setParticipationByClass(statsResult.participationByClass);
+        setTotalParticipants(statsResult.totalParticipants);
+        setRecentClassFocus(statsResult.recentClassFocus);
+        setLastAttemptAt(statsResult.lastAttemptAt);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    void reloadRoundAnalytics();
+    return () => {
+      active = false;
+    };
+  }, [categoryFilter, config, examRoundFilter]);
 
   const selectedBig = useMemo(
     () => treeData.find((big) => big.id === filters.big),
@@ -1037,6 +1131,10 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   }, [questions, treeIndexes]);
 
   const activeClassFilter = analyticsScope === "class" ? classFilter : "";
+  const activeExamRoundLabel =
+    isMockExamCategory(categoryFilter) && examRoundFilter
+      ? formatMockExamRoundLabel(examRoundFilter)
+      : "";
 
   const classOptions = useMemo(() => {
     const values = new Set<string>();
@@ -1502,6 +1600,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   }, [
     activeClassFilter,
     categoryFilter,
+    examRoundFilter,
     filters.big,
     filters.mid,
     filters.small,
@@ -1980,7 +2079,9 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     setCategoryFilter(value);
     if (value === "exam_prep") {
       setFilters(createEmptyBankFilters());
+      return;
     }
+    setExamRoundFilter("");
   };
 
   const openEditModal = (question: Question) => {
@@ -2467,6 +2568,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                 {activeClassFilter
                   ? `${activeClassFilter}반 기준`
                   : "전체 응시 기록 기준"}
+                {activeExamRoundLabel ? ` · ${activeExamRoundLabel}` : ""}
                 으로 문항, 단원, 오답 흐름을 함께 봅니다.
               </p>
             </div>
@@ -2570,6 +2672,20 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
               <option value="diagnostic">진단평가</option>
               <option value="formative">형성평가</option>
               <option value="exam_prep">모의고사</option>
+            </select>
+            <select
+              value={examRoundFilter}
+              onChange={(e) => setExamRoundFilter(e.target.value)}
+              disabled={!isMockExamCategory(categoryFilter)}
+              className="min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[13px] font-bold text-slate-700 disabled:bg-slate-100 disabled:text-slate-400"
+              aria-label="모의고사 회차"
+            >
+              <option value="">전체 회차</option>
+              {MOCK_EXAM_ROUNDS.map((round) => (
+                <option key={round} value={round}>
+                  {formatMockExamRoundLabel(round)}
+                </option>
+              ))}
             </select>
             <select
               value={typeFilter}
@@ -2885,8 +3001,9 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
               <div className="text-xs font-black text-slate-500">
                 {activeClassFilter
                   ? `${activeClassFilter}반 기준`
-                  : "전체 응시 기록"}{" "}
-                · {visibleSummary.attemptedQuestions}문항 응시 /{" "}
+                  : "전체 응시 기록"}
+                {activeExamRoundLabel ? ` · ${activeExamRoundLabel}` : ""} ·{" "}
+                {visibleSummary.attemptedQuestions}문항 응시 /{" "}
                 {visibleSummary.totalQuestions}문항
               </div>
             </div>

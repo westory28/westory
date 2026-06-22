@@ -1042,11 +1042,15 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     <div className="flex h-full min-h-0 flex-col bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
       <div className="p-4 border-b bg-gray-50 flex justify-between items-center shrink-0">
         <div>
-          <div className="text-xs text-gray-500 font-bold mb-1">
-            {type === "special" ? "모의고사" : `${parentTitle} > ${node.title}`}
-          </div>
+          {type !== "special" && (
+            <div className="text-xs text-gray-500 font-bold mb-1">
+              {parentTitle} &gt; {node.title}
+            </div>
+          )}
           <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold text-gray-800">{node.title}</h2>
+            <h2 className="text-xl font-bold text-gray-800">
+              {type === "special" ? "모의고사" : node.title}
+            </h2>
             {canEdit && (
               <button
                 onClick={() => onOpenSettings(category)}

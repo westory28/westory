@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { InlineLoading } from "../../../components/common/LoadingState";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -10,6 +10,11 @@ import {
   isAssessmentVisibleToStudent,
   readAssessmentConfigMap,
 } from "../../../lib/assessmentConfig";
+import {
+  MOCK_EXAM_ROUNDS,
+  formatMockExamRoundLabel,
+  type MockExamRound,
+} from "../../../lib/mockExamRounds";
 
 interface TreeItem {
   id: string;
@@ -67,19 +72,38 @@ const QuizIndex: React.FC = () => {
     setExpandedItems(newSet);
   };
 
-  const startQuiz = (unitId: string, category: string, title: string) => {
+  const startQuiz = (
+    unitId: string,
+    category: string,
+    title: string,
+    examRound?: MockExamRound,
+  ) => {
+    const roundParam = examRound
+      ? `&round=${encodeURIComponent(examRound)}`
+      : "";
     navigate(
-      `/student/quiz/run?unitId=${unitId}&category=${category}&title=${encodeURIComponent(title)}`,
+      `/student/quiz/run?unitId=${unitId}&category=${category}&title=${encodeURIComponent(title)}${roundParam}`,
     );
   };
 
-  const getVisibility = (unitId: string, category: string) =>
+  const getVisibility = (
+    unitId: string,
+    category: string,
+    examRound?: MockExamRound,
+  ) =>
     isAssessmentVisibleToStudent(
-      assessmentConfig[getAssessmentConfigKey(unitId, category)],
+      assessmentConfig[getAssessmentConfigKey(unitId, category, examRound)],
       userData,
     );
 
-  const isExamPrepActive = getVisibility("exam_prep", "exam_prep");
+  const activeMockExamRounds = useMemo(
+    () =>
+      MOCK_EXAM_ROUNDS.filter((round) =>
+        getVisibility("exam_prep", "exam_prep", round),
+      ),
+    [assessmentConfig, userData],
+  );
+  const isExamPrepActive = activeMockExamRounds.length > 0;
 
   if (loading) {
     return (
@@ -105,14 +129,11 @@ const QuizIndex: React.FC = () => {
           <i className="fas fa-flag-checkered text-blue-600"></i> 모의고사
         </h2>
         <div
-          onClick={() =>
-            isExamPrepActive && startQuiz("exam_prep", "exam_prep", "모의고사")
-          }
           className={`
             group relative overflow-hidden rounded-2xl p-6 shadow-lg transition-transform duration-200
             ${
               isExamPrepActive
-                ? "cursor-pointer bg-gradient-to-br from-blue-800 to-blue-500 text-white hover:scale-[1.01]"
+                ? "bg-gradient-to-br from-blue-800 to-blue-500 text-white"
                 : "cursor-not-allowed bg-gray-200 text-gray-400"
             }
           `}
@@ -145,10 +166,31 @@ const QuizIndex: React.FC = () => {
                 ? "실제 시험처럼 문제를 풀어보고 실력을 점검하세요."
                 : "선생님이 평가를 활성화하면 시작할 수 있습니다."}
             </p>
+            {isExamPrepActive && (
+              <div className="mt-5 flex flex-wrap gap-2">
+                {activeMockExamRounds.map((round) => (
+                  <button
+                    key={round}
+                    type="button"
+                    onClick={() =>
+                      startQuiz(
+                        "exam_prep",
+                        "exam_prep",
+                        formatMockExamRoundLabel(round),
+                        round,
+                      )
+                    }
+                    className="rounded-xl bg-white px-4 py-2 text-sm font-extrabold text-blue-700 shadow-sm transition hover:bg-blue-50"
+                  >
+                    {formatMockExamRoundLabel(round)}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {isExamPrepActive && (
-            <div className="absolute right-6 top-1/2 hidden -translate-y-1/2 rounded-full bg-white/20 p-3 text-white backdrop-blur-sm transition group-hover:bg-white group-hover:text-blue-600 md:block">
+            <div className="absolute right-6 top-1/2 hidden -translate-y-1/2 rounded-full bg-white/20 p-3 text-white backdrop-blur-sm md:block">
               <i className="fas fa-chevron-right text-xl"></i>
             </div>
           )}

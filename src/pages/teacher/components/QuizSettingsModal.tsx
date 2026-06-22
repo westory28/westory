@@ -12,6 +12,14 @@ import {
   normalizeAssessmentConfigEntry,
   resetAssessmentAttemptsByClass,
 } from "../../../lib/assessmentConfig";
+import {
+  DEFAULT_MOCK_EXAM_ROUND,
+  MOCK_EXAM_ROUNDS,
+  formatMockExamRoundLabel,
+  isMockExamCategory,
+  normalizeMockExamRound,
+  type MockExamRound,
+} from "../../../lib/mockExamRounds";
 import { getSemesterDocPath } from "../../../lib/semesterScope";
 
 interface QuizSettingsModalProps {
@@ -94,8 +102,15 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
   const [saving, setSaving] = useState(false);
   const [resettingClassId, setResettingClassId] = useState("");
   const [confirmResetClassId, setConfirmResetClassId] = useState("");
+  const [selectedExamRound, setSelectedExamRound] = useState<MockExamRound>(
+    DEFAULT_MOCK_EXAM_ROUND,
+  );
 
+  const isMockExam = isMockExamCategory(category);
   const categoryLabel = CATEGORY_LABELS[category] || "평가";
+  const settingsTitle = isMockExam
+    ? formatMockExamRoundLabel(selectedExamRound)
+    : `${nodeTitle || "선택한 단원"} - ${categoryLabel}`;
   const allVisibilityTargets = useMemo(
     () => [
       ...defaultVisibilityGroup.targets,
@@ -158,12 +173,22 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
   useEffect(() => {
     if (!isOpen || !nodeId) return;
     void loadSettings();
-  }, [config, isOpen, nodeId, category]);
+  }, [config, isOpen, nodeId, category, selectedExamRound]);
+
+  useEffect(() => {
+    if (!isOpen || !isMockExam) return;
+    setSelectedExamRound(DEFAULT_MOCK_EXAM_ROUND);
+  }, [category, isMockExam, isOpen, nodeId]);
 
   const loadSettings = async () => {
     setLoading(true);
     try {
-      const key = getAssessmentConfigKey(nodeId, category);
+      const key = getAssessmentConfigKey(
+        nodeId,
+        category,
+        isMockExam ? selectedExamRound : undefined,
+      );
+      const legacyKey = getAssessmentConfigKey(nodeId, category);
       const [visibilityOptions, settingsSnap, legacyStatusSnap] =
         await Promise.all([
           getAssessmentVisibilityOptionsFromSchoolConfig(),
@@ -184,11 +209,19 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
       const settingsMap = settingsSnap.exists()
         ? (settingsSnap.data() as Record<string, unknown>)
         : {};
+      const legacyEnabledForDefaultRound =
+        isMockExam && selectedExamRound === DEFAULT_MOCK_EXAM_ROUND;
+      const rawSettings = settingsMap[key] ??
+        (legacyEnabledForDefaultRound ? settingsMap[legacyKey] : undefined) ?? {
+          active:
+            legacyStatus[key] === true ||
+            (legacyEnabledForDefaultRound && legacyStatus[legacyKey] === true),
+        };
       const defaultClassIds = visibilityOptions.defaultGroup.targets.map(
         (target) => target.id,
       );
       const normalizedEntry = normalizeAssessmentConfigEntry(
-        settingsMap[key] ?? { active: legacyStatus[key] === true },
+        rawSettings,
         defaultClassIds,
       );
 
@@ -244,7 +277,11 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
     if (!canEdit || !nodeId) return;
     setSaving(true);
     try {
-      const key = getAssessmentConfigKey(nodeId, category);
+      const key = getAssessmentConfigKey(
+        nodeId,
+        category,
+        isMockExam ? selectedExamRound : undefined,
+      );
       await setDoc(
         doc(db, getSemesterDocPath(config, "assessment_config", "settings")),
         {
@@ -283,6 +320,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
         unitId: nodeId,
         category,
         classId,
+        ...(isMockExam ? { examRound: selectedExamRound } : {}),
       });
       const classLabel = visibilityTargetMap.get(classId)?.fullLabel || classId;
       setConfirmResetClassId("");
@@ -421,7 +459,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                 <span>평가 상세 설정</span>
               </div>
               <h3 className="mt-1.5 text-lg font-extrabold text-gray-900 sm:text-xl">
-                {nodeTitle || "선택한 단원"} - {categoryLabel}
+                {settingsTitle}
               </h3>
               <p className="mt-1 text-sm text-gray-500">
                 공개와 응시 조건을 빠르게 조정합니다.
@@ -445,6 +483,41 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
             </div>
           ) : (
             <div className="space-y-4">
+              {isMockExam && (
+                <section className={`${sectionCardClassName} space-y-3`}>
+                  <div>
+                    <h4 className="text-sm font-extrabold text-gray-900">
+                      모의고사 회차
+                    </h4>
+                    <p className="mt-1 text-xs font-medium text-gray-500">
+                      회차별로 공개, 문항 수, 제한 시간, 재응시 조건을 따로
+                      관리합니다.
+                    </p>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {MOCK_EXAM_ROUNDS.map((round) => {
+                      const active = selectedExamRound === round;
+                      return (
+                        <button
+                          key={round}
+                          type="button"
+                          onClick={() =>
+                            setSelectedExamRound(normalizeMockExamRound(round))
+                          }
+                          className={`rounded-xl border px-4 py-3 text-sm font-extrabold transition ${
+                            active
+                              ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm"
+                              : "border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:text-blue-700"
+                          }`}
+                        >
+                          {formatMockExamRoundLabel(round)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
+
               <section className={`${sectionCardClassName} space-y-3 p-2.5`}>
                 <div className="flex flex-wrap items-center justify-between gap-1">
                   <div>

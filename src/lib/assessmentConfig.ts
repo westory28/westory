@@ -10,6 +10,12 @@ import { db, getHttpsCallable } from "./firebase";
 import { getSemesterDocPath, getYearSemester } from "./semesterScope";
 import { readSiteSettingDoc } from "./siteSettings";
 import type { SystemConfig, UserData } from "../types";
+import {
+  DEFAULT_MOCK_EXAM_ROUND,
+  isMockExamCategory,
+  normalizeMockExamRound,
+  type MockExamRound,
+} from "./mockExamRounds";
 
 type ConfigLike = Pick<SystemConfig, "year" | "semester"> | null | undefined;
 
@@ -54,6 +60,7 @@ interface ResetAssessmentAttemptsByClassParams {
   unitId: string;
   category: string;
   classId: string;
+  examRound?: MockExamRound | string;
 }
 
 export interface ResetAssessmentAttemptsByClassResult {
@@ -378,8 +385,17 @@ const normalizeAssessmentTimeLimitSeconds = (value: unknown) => {
   return Math.max(60, Math.round(numeric));
 };
 
-export const getAssessmentConfigKey = (unitId: string, category: string) =>
-  `${String(unitId || "").trim()}_${String(category || "").trim()}`;
+export const getAssessmentConfigKey = (
+  unitId: string,
+  category: string,
+  examRound?: MockExamRound | string,
+) => {
+  const normalizedUnitId = String(unitId || "").trim();
+  const normalizedCategory = String(category || "").trim();
+  const baseKey = `${normalizedUnitId}_${normalizedCategory}`;
+  if (!isMockExamCategory(normalizedCategory) || !examRound) return baseKey;
+  return `${baseKey}__${normalizeMockExamRound(examRound)}`;
+};
 
 export const getStudentGradeClassId = (userData?: Partial<UserData> | null) => {
   const profileLike = (userData || {}) as Partial<UserData> & {
@@ -598,6 +614,16 @@ export const readAssessmentConfigMap = async (
     normalized[key] = normalizeAssessmentConfigEntry(entry, grade3ClassIds);
   });
 
+  const legacyMockExamKey = getAssessmentConfigKey("exam_prep", "exam_prep");
+  const defaultMockExamRoundKey = getAssessmentConfigKey(
+    "exam_prep",
+    "exam_prep",
+    DEFAULT_MOCK_EXAM_ROUND,
+  );
+  if (normalized[legacyMockExamKey] && !normalized[defaultMockExamRoundKey]) {
+    normalized[defaultMockExamRoundKey] = normalized[legacyMockExamKey];
+  }
+
   return normalized;
 };
 
@@ -637,6 +663,7 @@ export const resetAssessmentAttemptsByClass = async ({
   unitId,
   category,
   classId,
+  examRound,
 }: ResetAssessmentAttemptsByClassParams) => {
   const { year, semester } = getYearSemester(config);
   const callable = await getHttpsCallable<
@@ -646,6 +673,7 @@ export const resetAssessmentAttemptsByClass = async ({
       unitId: string;
       category: string;
       classId: string;
+      examRound?: string;
     },
     ResetAssessmentAttemptsByClassResult
   >("resetAssessmentAttemptsByClass");
@@ -656,6 +684,9 @@ export const resetAssessmentAttemptsByClass = async ({
     unitId: String(unitId || "").trim(),
     category: String(category || "").trim(),
     classId: normalizeAssessmentClassId(classId, "3"),
+    ...(isMockExamCategory(category) && examRound
+      ? { examRound: normalizeMockExamRound(examRound) }
+      : {}),
   });
 
   return result.data;

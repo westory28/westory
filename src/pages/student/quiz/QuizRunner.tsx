@@ -26,6 +26,13 @@ import {
   readAssessmentConfigMap,
   type AssessmentQuestionOrder,
 } from "../../../lib/assessmentConfig";
+import {
+  formatMockExamRoundLabel,
+  getResultMockExamRound,
+  isMockExamCategory,
+  mockExamRoundMatches,
+  normalizeMockExamRound,
+} from "../../../lib/mockExamRounds";
 import { db } from "../../../lib/firebase";
 import { claimPointActivityReward } from "../../../lib/points";
 import {
@@ -163,7 +170,12 @@ const QuizRunner: React.FC = () => {
 
   const unitId = searchParams.get("unitId");
   const category = searchParams.get("category");
-  const title = searchParams.get("title") || "평가";
+  const examRound = isMockExamCategory(category)
+    ? normalizeMockExamRound(searchParams.get("round"))
+    : "";
+  const title =
+    searchParams.get("title") ||
+    (examRound ? formatMockExamRoundLabel(examRound) : "평가");
 
   const [view, setView] = useState<"loading" | "intro" | "quiz" | "result">(
     "loading",
@@ -222,7 +234,13 @@ const QuizRunner: React.FC = () => {
     normalizeStudentEmail(userData?.email);
   const activeSubmissionPath =
     fallbackStudentUid && unitId && category
-      ? getQuizSubmissionDocPath(config, fallbackStudentUid, unitId, category)
+      ? getQuizSubmissionDocPath(
+          config,
+          fallbackStudentUid,
+          unitId,
+          category,
+          examRound,
+        )
       : "";
 
   const parseOrderAnswer = (value: string) =>
@@ -475,6 +493,9 @@ const QuizRunner: React.FC = () => {
     gradeClass: buildGradeClassLabel(userData || undefined),
     unitId: String(unitId || "").trim(),
     category: String(category || "").trim(),
+    ...(isMockExamCategory(category)
+      ? { examRound: normalizeMockExamRound(examRound) }
+      : {}),
     title: String(title || "").trim(),
     status,
     questionIds:
@@ -515,6 +536,67 @@ const QuizRunner: React.FC = () => {
     const selectedIds = new Set<number>();
 
     const selectStandardQuestions = () => {
+      if (questionOrder === "unit") {
+        const groupMap = new Map<
+          string,
+          {
+            unitKey: string;
+            unusedQuestions: Question[];
+            repeatQuestions: Question[];
+          }
+        >();
+
+        all.forEach((question) => {
+          const unitKey =
+            question.subUnitId || question.unitId || `question-${question.id}`;
+          const group = groupMap.get(unitKey) || {
+            unitKey,
+            unusedQuestions: [],
+            repeatQuestions: [],
+          };
+          if (solvedIds.has(question.id)) {
+            group.repeatQuestions.push(question);
+          } else {
+            group.unusedQuestions.push(question);
+          }
+          groupMap.set(unitKey, group);
+        });
+
+        const groups = Array.from(groupMap.values()).map((group) => ({
+          ...group,
+          unusedQuestions: orderQuestions(group.unusedQuestions, questionOrder),
+          repeatQuestions: orderQuestions(group.repeatQuestions, questionOrder),
+        }));
+        const orderedGroups = () =>
+          [...groups].sort((left, right) =>
+            compareUnitOrderIds(left.unitKey, right.unitKey),
+          );
+        const selected: Question[] = [];
+
+        const takeBalanced = (
+          source: "unusedQuestions" | "repeatQuestions",
+        ) => {
+          let added = true;
+          while (added && selected.length < safeTargetCount) {
+            added = false;
+            orderedGroups().forEach((group) => {
+              if (selected.length >= safeTargetCount) return;
+              const candidate = group[source].find(
+                (question) => !selectedIds.has(question.id),
+              );
+              if (!candidate) return;
+              selected.push(candidate);
+              selectedIds.add(candidate.id);
+              added = true;
+            });
+          }
+        };
+
+        takeBalanced("unusedQuestions");
+        takeBalanced("repeatQuestions");
+        return orderQuestions(selected, questionOrder);
+      }
+
       const unusedPool = orderQuestions(
         all.filter((question) => !solvedIds.has(question.id)),
         questionOrder,
@@ -596,18 +678,24 @@ const QuizRunner: React.FC = () => {
       };
 
       const fillRemaining = (source: "unusedQuestions" | "repeatQuestions") => {
-        if (selected.length >= safeTargetCount) return;
-        const flatPool = orderQuestions(
-          groups.flatMap((group) => group[source]),
-          questionOrder,
-        );
-        flatPool.some((question) => {
-          if (selected.length >= safeTargetCount) return true;
-          if (selectedIds.has(question.id)) return false;
-          selected.push(question);
-          selectedIds.add(question.id);
-          return false;
-        });
+        let added = true;
+        while (added && selected.length < safeTargetCount) {
+          added = false;
+          orderExamPrepGroups(groups, questionOrder).forEach((group) => {
+            if (selected.length >= safeTargetCount) return;
+            const candidate = group[source].find(
+              (question) => !selectedIds.has(question.id),
+            );
+            if (!candidate) return;
+            selected.push(candidate);
+            selectedIds.add(candidate.id);
+            selectedByGroup.set(
+              group.smallKey,
+              (selectedByGroup.get(group.smallKey) || 0) + 1,
+            );
+            added = true;
+          });
+        }
       };
 
       takeFromGroups("unusedQuestions", 2);
@@ -755,6 +843,9 @@ const QuizRunner: React.FC = () => {
       gradeClass: buildGradeClassLabel(resolvedUserData),
       unitId: String(unitId || "").trim(),
       category: String(category || "").trim(),
+      ...(isMockExamCategory(category)
+        ? { examRound: getResultMockExamRound(category, examRound) }
+        : {}),
       score: finalScore,
       details: logDetails,
       status: isTimeout ? "시간 초과" : "완료",
@@ -769,6 +860,9 @@ const QuizRunner: React.FC = () => {
         uid: resultPayload.uid,
         unitId: resultPayload.unitId,
         category: resultPayload.category,
+        ...(isMockExamCategory(category)
+          ? { examRound: resultPayload.examRound }
+          : {}),
         score: resultPayload.score,
         status: resultPayload.status,
       },
@@ -903,7 +997,7 @@ const QuizRunner: React.FC = () => {
         void persistQuizProgress();
       }
     };
-  }, [config, unitId, category, fallbackStudentUid]);
+  }, [config, unitId, category, examRound, fallbackStudentUid]);
 
   useEffect(() => {
     if (view !== "quiz" || !activeSubmissionPath) return;
@@ -979,7 +1073,11 @@ const QuizRunner: React.FC = () => {
         config,
         grade3ClassIds,
       );
-      const configKey = getAssessmentConfigKey(unitId || "", category || "");
+      const configKey = getAssessmentConfigKey(
+        unitId || "",
+        category || "",
+        examRound || undefined,
+      );
       const nextQuizConfig: QuizConfig =
         assessmentConfigMap[configKey] ||
         createDefaultAssessmentConfigEntry(grade3ClassIds);
@@ -1043,11 +1141,19 @@ const QuizRunner: React.FC = () => {
         ),
       );
 
-      const historyDocs = [...historySnap.docs].sort((left, right) => {
-        const leftMs = readTimestampMs(left.data().timestamp);
-        const rightMs = readTimestampMs(right.data().timestamp);
-        return rightMs - leftMs;
-      });
+      const historyDocs = [...historySnap.docs]
+        .filter((historyDoc) =>
+          mockExamRoundMatches(
+            category,
+            historyDoc.data().examRound,
+            examRound,
+          ),
+        )
+        .sort((left, right) => {
+          const leftMs = readTimestampMs(left.data().timestamp);
+          const rightMs = readTimestampMs(right.data().timestamp);
+          return rightMs - leftMs;
+        });
       setHistoryCount(historyDocs.length);
 
       const submissionRef = doc(db, activeSubmissionPath);
@@ -1056,7 +1162,12 @@ const QuizRunner: React.FC = () => {
         submissionSnap?.exists() &&
         submissionSnap.data()?.uid === fallbackStudentUid &&
         submissionSnap.data()?.unitId === unitId &&
-        submissionSnap.data()?.category === category
+        submissionSnap.data()?.category === category &&
+        mockExamRoundMatches(
+          category,
+          submissionSnap.data()?.examRound,
+          examRound,
+        )
           ? normalizeQuizSubmissionDoc(
               submissionSnap.id,
               submissionSnap.data() as Partial<QuizSubmissionDoc>,

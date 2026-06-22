@@ -569,6 +569,7 @@ service cloud.firestore {
           'gradeClass',
           'unitId',
           'category',
+          'examRound',
           'score',
           'details',
           'status',
@@ -584,6 +585,7 @@ service cloud.firestore {
         && request.resource.data.gradeClass is string
         && request.resource.data.unitId is string
         && request.resource.data.category is string
+        && (!request.resource.data.keys().hasAny(['examRound']) || request.resource.data.examRound is string)
         && request.resource.data.score is number
         && request.resource.data.details is list
         && request.resource.data.details.size() <= 200
@@ -601,6 +603,7 @@ service cloud.firestore {
         'gradeClass',
         'unitId',
         'category',
+        'examRound',
         'title',
         'status',
         'questionIds',
@@ -630,6 +633,7 @@ service cloud.firestore {
         && request.resource.data.gradeClass is string
         && request.resource.data.unitId is string
         && request.resource.data.category is string
+        && (!request.resource.data.keys().hasAny(['examRound']) || request.resource.data.examRound is string)
         && request.resource.data.title is string
         && request.resource.data.status in ['in_progress', 'submitted', 'timed_out']
         && request.resource.data.questionIds is list
@@ -668,6 +672,10 @@ service cloud.firestore {
         && (
           !resource.data.keys().hasAny(['category'])
           || request.resource.data.category == resource.data.category
+        )
+        && (
+          !resource.data.keys().hasAny(['examRound'])
+          || request.resource.data.examRound == resource.data.examRound
         )
         && isValidQuizSubmissionPayload();
     }

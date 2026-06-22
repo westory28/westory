@@ -1,4 +1,5 @@
 import type { SystemConfig } from "../types";
+import { isMockExamCategory, normalizeMockExamRound } from "./mockExamRounds";
 import { getSemesterDocPath } from "./semesterScope";
 
 type ConfigLike = Pick<SystemConfig, "year" | "semester"> | null | undefined;
@@ -15,6 +16,7 @@ export interface QuizSubmissionDoc {
   gradeClass: string;
   unitId: string;
   category: string;
+  examRound?: string;
   title: string;
   status: QuizSubmissionStatus;
   questionIds: string[];
@@ -36,12 +38,16 @@ export const buildQuizSubmissionId = (
   uid: string,
   unitId: string,
   category: string,
+  examRound?: string,
 ) =>
   [
     // Keep the uid segment raw so the doc id stays aligned with Firestore rules.
     String(uid || "").trim(),
     encodeURIComponent(String(unitId || "").trim()),
     encodeURIComponent(String(category || "").trim()),
+    ...(isMockExamCategory(category) && examRound
+      ? [encodeURIComponent(normalizeMockExamRound(examRound))]
+      : []),
   ].join("__");
 
 export const getQuizSubmissionDocPath = (
@@ -49,11 +55,12 @@ export const getQuizSubmissionDocPath = (
   uid: string,
   unitId: string,
   category: string,
+  examRound?: string,
 ) =>
   getSemesterDocPath(
     config,
     "quiz_submissions",
-    buildQuizSubmissionId(uid, unitId, category),
+    buildQuizSubmissionId(uid, unitId, category, examRound),
   );
 
 export const readTimestampMs = (value: unknown) => {
@@ -97,6 +104,9 @@ export const normalizeQuizSubmissionDoc = (
     gradeClass: String(source.gradeClass || "").trim(),
     unitId: String(source.unitId || "").trim(),
     category: String(source.category || "").trim(),
+    examRound: isMockExamCategory(source.category)
+      ? normalizeMockExamRound(source.examRound)
+      : "",
     title: String(source.title || "").trim(),
     status:
       source.status === "submitted" || source.status === "timed_out"
