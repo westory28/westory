@@ -3298,10 +3298,31 @@ const normalizeMockExamRound = (value) => {
     : 'round_1';
 };
 
+const getMockExamRoundFromCategory = (category) => {
+  const raw = String(category || '').trim();
+  const prefix = 'exam_prep__';
+  if (!raw.startsWith(prefix)) return '';
+  const round = raw.slice(prefix.length);
+  return ['round_1', 'round_2', 'round_3'].includes(round) ? round : '';
+};
+
+const isMockExamCategory = (category) => {
+  const raw = String(category || '').trim();
+  return raw === 'exam_prep' || Boolean(getMockExamRoundFromCategory(raw));
+};
+
+const normalizeMockExamCategory = (category) => (
+  isMockExamCategory(category) ? 'exam_prep' : String(category || '').trim()
+);
+
+const getResultMockExamRound = (data) => (
+  getMockExamRoundFromCategory(data?.category) || normalizeMockExamRound(data?.examRound)
+);
+
 const quizAttemptMatchesExamRound = (data, category, examRound) => {
-  if (String(category || '').trim() !== 'exam_prep') return true;
+  if (!isMockExamCategory(category)) return true;
   if (!examRound) return true;
-  return normalizeMockExamRound(data?.examRound) === examRound;
+  return getResultMockExamRound(data) === examRound;
 };
 
 const collectMatchingQuizAttemptDocsByClass = async ({
@@ -3339,7 +3360,7 @@ const collectMatchingQuizAttemptDocsByClass = async ({
     const data = docSnap.data() || {};
     return (
       String(data.unitId || '').trim() === unitId
-      && String(data.category || '').trim() === category
+      && normalizeMockExamCategory(data.category) === category
       && quizAttemptMatchesExamRound(data, category, examRound)
       && quizAttemptMatchesClass(data, normalizedClassId)
     );
@@ -3375,7 +3396,7 @@ const resetAssessmentAttemptsByClassHandler = onCall(
     const unitId = String(request.data?.unitId || '').trim();
     const category = String(request.data?.category || '').trim();
     const classId = String(request.data?.classId || '').trim();
-    const examRound = category === 'exam_prep' && request.data?.examRound
+    const examRound = isMockExamCategory(category) && request.data?.examRound
       ? normalizeMockExamRound(request.data.examRound)
       : '';
 
@@ -3481,7 +3502,7 @@ const resetAssessmentAttemptsByClassHandler = onCall(
           if (
             String(data.uid || '').trim() !== studentUid
             || String(data.unitId || '').trim() !== unitId
-            || String(data.category || '').trim() !== category
+            || normalizeMockExamCategory(data.category) !== category
             || !quizAttemptMatchesExamRound(data, category, examRound)
           ) {
             return;
@@ -3507,7 +3528,7 @@ const resetAssessmentAttemptsByClassHandler = onCall(
           if (
             String(data.uid || '').trim() !== studentUid
             || String(data.unitId || '').trim() !== unitId
-            || String(data.category || '').trim() !== category
+            || normalizeMockExamCategory(data.category) !== category
             || !quizAttemptMatchesExamRound(data, category, examRound)
           ) {
             return;

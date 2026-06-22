@@ -44,6 +44,10 @@ import {
   type PerformanceScoreRecord,
 } from "../../lib/performanceScores";
 import { getDefaultProfileEmojiValue } from "../../lib/profileEmojis";
+import {
+  isMockExamCategory,
+  normalizeMockExamCategory,
+} from "../../lib/mockExamRounds";
 import { getSemesterCollectionPath } from "../../lib/semesterScope";
 import {
   loadStudentQuizResults,
@@ -186,16 +190,18 @@ const CATEGORY_LABELS: Array<{ key: CategoryTab; label: string }> = [
 ];
 
 const getCategoryLabel = (category?: string) => {
-  if (category === "diagnostic") return "진단평가";
-  if (category === "formative") return "형성평가";
-  if (category === "exam_prep") return "모의고사";
+  const normalizedCategory = normalizeMockExamCategory(category);
+  if (normalizedCategory === "diagnostic") return "진단평가";
+  if (normalizedCategory === "formative") return "형성평가";
+  if (normalizedCategory === "exam_prep") return "모의고사";
   return "기타";
 };
 
 const getCategoryShort = (category?: string) => {
-  if (category === "diagnostic") return "진단";
-  if (category === "formative") return "형성";
-  if (category === "exam_prep") return "모의";
+  const normalizedCategory = normalizeMockExamCategory(category);
+  if (normalizedCategory === "diagnostic") return "진단";
+  if (normalizedCategory === "formative") return "형성";
+  if (normalizedCategory === "exam_prep") return "모의";
   return "기타";
 };
 
@@ -630,16 +636,17 @@ const MyPage: React.FC = () => {
         results
           .filter(
             (result) =>
-              result.category === "exam_prep" || result.unitId === "exam_prep",
+              isMockExamCategory(result.category) ||
+              result.unitId === "exam_prep",
           )
           .map((result, idx) => {
             const unitId = result.unitId || "exam_prep";
             return {
               label: `${idx + 1}. ${titleMap[unitId] || getCategoryLabel("exam_prep")}`,
               unitId,
-              category: (result.category || "exam_prep") as
-                | CategoryTab
-                | "other",
+              category: normalizeMockExamCategory(
+                result.category || "exam_prep",
+              ) as CategoryTab | "other",
               score: Number(result.score || 0),
               wrongCount: (result.details || []).filter(
                 (detail) => !detail.correct,
@@ -652,7 +659,9 @@ const MyPage: React.FC = () => {
       const latest = results.slice(0, 12).reverse();
       const points: TrendPoint[] = latest.map((result, idx) => {
         const unitId = result.unitId || "unknown";
-        const category = (result.category || "other") as CategoryTab | "other";
+        const category = normalizeMockExamCategory(
+          result.category || "other",
+        ) as CategoryTab | "other";
         const unitTitle = titleMap[unitId] || "단원명 없음";
         return {
           label: `${idx + 1}회 · ${unitTitle} · ${getCategoryShort(category)}`,
@@ -700,7 +709,9 @@ const MyPage: React.FC = () => {
             qid: String(detail.id),
             userAnswer: detail.u || "",
             unitId: result.unitId || "unknown",
-            category: (result.category || "other") as CategoryTab | "other",
+            category: normalizeMockExamCategory(result.category || "other") as
+              | CategoryTab
+              | "other",
             dateText: formatResultDate(result),
           });
         });

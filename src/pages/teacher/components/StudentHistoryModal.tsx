@@ -10,6 +10,7 @@ import {
 import { db } from "../../../lib/firebase";
 import { useAuth } from "../../../contexts/AuthContext";
 import QuizPassage from "../../../components/common/QuizPassage";
+import { normalizeMockExamCategory } from "../../../lib/mockExamRounds";
 import { getSemesterCollectionPath } from "../../../lib/semesterScope";
 
 type HistoryReadScope = "current" | "history";
@@ -69,9 +70,10 @@ const chunk = <T,>(arr: T[], size: number): T[][] =>
   );
 
 const getCategoryLabel = (category?: string): string => {
-  if (category === "diagnostic") return "진단평가";
-  if (category === "formative") return "형성평가";
-  if (category === "exam_prep") return "모의고사";
+  const normalizedCategory = normalizeMockExamCategory(category);
+  if (normalizedCategory === "diagnostic") return "진단평가";
+  if (normalizedCategory === "formative") return "형성평가";
+  if (normalizedCategory === "exam_prep") return "모의고사";
   return "기타";
 };
 

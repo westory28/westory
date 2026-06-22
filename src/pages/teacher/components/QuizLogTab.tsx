@@ -19,8 +19,10 @@ import {
 import {
   MOCK_EXAM_ROUNDS,
   formatMockExamRoundLabel,
+  getResultMockExamRound,
   isMockExamCategory,
   mockExamRoundMatches,
+  normalizeMockExamCategory,
   normalizeMockExamRound,
 } from "../../../lib/mockExamRounds";
 import StudentWrongNoteModal from "./StudentWrongNoteModal";
@@ -419,6 +421,8 @@ const buildUnitMetaMap = (treeData: TreeUnit[]) => {
 };
 
 const parseLogDoc = (id: string, raw: any): Log => {
+  const rawCategory = toText(raw.category);
+  const normalizedCategory = normalizeMockExamCategory(rawCategory);
   const gradeClassRaw = toText(
     raw.gradeClass ||
       raw.classInfo ||
@@ -457,9 +461,9 @@ const parseLogDoc = (id: string, raw: any): Log => {
         raw.user?.uid,
     ),
     unitId: toText(raw.unitId),
-    category: toText(raw.category),
-    examRound: isMockExamCategory(raw.category)
-      ? normalizeMockExamRound(raw.examRound)
+    category: normalizedCategory,
+    examRound: isMockExamCategory(rawCategory)
+      ? getResultMockExamRound(rawCategory, raw.examRound)
       : "",
     gradeClass: gradeClassRaw,
     studentName:
@@ -787,6 +791,7 @@ const QuizLogTab: React.FC = () => {
           db,
           getSemesterCollectionPath(config, "quiz_results"),
         );
+        const queryCategoryFilter = isExamPrepFilter ? "" : categoryFilter;
         const hasAnalysisFilter =
           Boolean(categoryFilter) ||
           Boolean(examRoundFilter && isExamPrepFilter) ||
@@ -817,8 +822,8 @@ const QuizLogTab: React.FC = () => {
           queryPlans.map(async ({ uidChunk, queryLimit }) => {
             const constraints = [
               where("uid", "in", uidChunk),
-              ...(categoryFilter
-                ? [where("category", "==", categoryFilter)]
+              ...(queryCategoryFilter
+                ? [where("category", "==", queryCategoryFilter)]
                 : []),
               orderBy("timestamp", "desc"),
               limit(queryLimit),
@@ -831,8 +836,8 @@ const QuizLogTab: React.FC = () => {
                 query(
                   quizResultCollection,
                   where("uid", "in", uidChunk),
-                  ...(categoryFilter
-                    ? [where("category", "==", categoryFilter)]
+                  ...(queryCategoryFilter
+                    ? [where("category", "==", queryCategoryFilter)]
                     : []),
                   limit(queryLimit),
                 ),

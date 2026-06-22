@@ -19,6 +19,7 @@ import {
   type PointRankDisplay,
 } from "./pointRanks";
 import { normalizeBlankText } from "./lessonWorksheet";
+import { normalizeMockExamCategory } from "./mockExamRounds";
 import { getSemesterCollectionPath, getSemesterDocPath } from "./semesterScope";
 import type { PointWallet, SystemConfig } from "../types";
 
@@ -241,9 +242,10 @@ const formatDateTime = (value: unknown, fallback = "") => {
 };
 
 const getQuizCategoryLabel = (category?: string) => {
-  if (category === "diagnostic") return "진단평가";
-  if (category === "formative") return "형성평가";
-  if (category === "exam_prep") return "모의고사";
+  const normalizedCategory = normalizeMockExamCategory(category);
+  if (normalizedCategory === "diagnostic") return "진단평가";
+  if (normalizedCategory === "formative") return "형성평가";
+  if (normalizedCategory === "exam_prep") return "모의고사";
   return "평가";
 };
 
@@ -581,7 +583,7 @@ const loadQuizSummary = async (
     >();
     results.forEach((result) => {
       const unitTitle = getDisplayUnitTitle(result.unitId, titleByUnitId);
-      const category = String(result.category || "other");
+      const category = normalizeMockExamCategory(result.category || "other");
       const categoryLabel = getQuizCategoryLabel(category);
       const key = `${unitTitle}__${category}`;
       const itemWrongCount = Array.isArray(result.details)
@@ -639,7 +641,7 @@ const loadQuizSummary = async (
       const itemWrongCount = Array.isArray(result.details)
         ? result.details.filter((detail) => !detail.correct).length
         : 0;
-      const category = String(result.category || "other");
+      const category = normalizeMockExamCategory(result.category || "other");
       return {
         id: result.id,
         unitTitle: getDisplayUnitTitle(result.unitId, titleByUnitId),

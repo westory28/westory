@@ -37,9 +37,10 @@ import {
 import {
   MOCK_EXAM_ROUNDS,
   formatMockExamRoundLabel,
+  getResultMockExamRound,
   isMockExamCategory,
   mockExamRoundMatches,
-  normalizeMockExamRound,
+  normalizeMockExamCategory,
 } from "../../../lib/mockExamRounds";
 
 interface TreeUnit {
@@ -796,13 +797,14 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
 
       snap.forEach((d) => {
         const raw = d.data() as any;
-        const category = toText(raw.category);
-        const resultExamRound = isMockExamCategory(category)
-          ? normalizeMockExamRound(raw.examRound)
+        const rawCategory = toText(raw.category);
+        const category = normalizeMockExamCategory(rawCategory);
+        const resultExamRound = isMockExamCategory(rawCategory)
+          ? getResultMockExamRound(rawCategory, raw.examRound)
           : "";
         if (
           examRound &&
-          isMockExamCategory(category) &&
+          isMockExamCategory(rawCategory) &&
           !mockExamRoundMatches(category, resultExamRound, examRound)
         ) {
           return;

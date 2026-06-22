@@ -1,5 +1,9 @@
 import type { SystemConfig } from "../types";
-import { isMockExamCategory, normalizeMockExamRound } from "./mockExamRounds";
+import {
+  getResultMockExamRound,
+  isMockExamCategory,
+  normalizeMockExamRound,
+} from "./mockExamRounds";
 import { getSemesterDocPath } from "./semesterScope";
 
 type ConfigLike = Pick<SystemConfig, "year" | "semester"> | null | undefined;
@@ -105,7 +109,7 @@ export const normalizeQuizSubmissionDoc = (
     unitId: String(source.unitId || "").trim(),
     category: String(source.category || "").trim(),
     examRound: isMockExamCategory(source.category)
-      ? normalizeMockExamRound(source.examRound)
+      ? getResultMockExamRound(source.category, source.examRound)
       : "",
     title: String(source.title || "").trim(),
     status:

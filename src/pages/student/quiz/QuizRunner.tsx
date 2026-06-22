@@ -28,7 +28,7 @@ import {
 } from "../../../lib/assessmentConfig";
 import {
   formatMockExamRoundLabel,
-  getResultMockExamRound,
+  getMockExamResultCategory,
   isMockExamCategory,
   mockExamRoundMatches,
   normalizeMockExamRound,
@@ -493,9 +493,6 @@ const QuizRunner: React.FC = () => {
     gradeClass: buildGradeClassLabel(userData || undefined),
     unitId: String(unitId || "").trim(),
     category: String(category || "").trim(),
-    ...(isMockExamCategory(category)
-      ? { examRound: normalizeMockExamRound(examRound) }
-      : {}),
     title: String(title || "").trim(),
     status,
     questionIds:
@@ -842,10 +839,7 @@ const QuizRunner: React.FC = () => {
       number: normalizeStudentText(resolvedUserData?.number),
       gradeClass: buildGradeClassLabel(resolvedUserData),
       unitId: String(unitId || "").trim(),
-      category: String(category || "").trim(),
-      ...(isMockExamCategory(category)
-        ? { examRound: getResultMockExamRound(category, examRound) }
-        : {}),
+      category: getMockExamResultCategory(category, examRound),
       score: finalScore,
       details: logDetails,
       status: isTimeout ? "시간 초과" : "완료",
@@ -860,9 +854,6 @@ const QuizRunner: React.FC = () => {
         uid: resultPayload.uid,
         unitId: resultPayload.unitId,
         category: resultPayload.category,
-        ...(isMockExamCategory(category)
-          ? { examRound: resultPayload.examRound }
-          : {}),
         score: resultPayload.score,
         status: resultPayload.status,
       },
@@ -1132,23 +1123,42 @@ const QuizRunner: React.FC = () => {
         throw new Error("등록된 문제가 없습니다.");
       }
 
-      const historySnap = await getDocs(
+      const historyCategory = getMockExamResultCategory(category, examRound);
+      const historyQueries = [
         query(
           collection(db, getSemesterCollectionPath(config, "quiz_results")),
           where("uid", "==", fallbackStudentUid),
           where("unitId", "==", unitId),
-          where("category", "==", category),
+          where("category", "==", historyCategory),
         ),
+      ];
+      if (isMockExamCategory(category) && historyCategory !== category) {
+        historyQueries.push(
+          query(
+            collection(db, getSemesterCollectionPath(config, "quiz_results")),
+            where("uid", "==", fallbackStudentUid),
+            where("unitId", "==", unitId),
+            where("category", "==", category),
+          ),
+        );
+      }
+      const historySnaps = await Promise.all(
+        historyQueries.map((historyQuery) => getDocs(historyQuery)),
       );
 
-      const historyDocs = [...historySnap.docs]
-        .filter((historyDoc) =>
-          mockExamRoundMatches(
-            category,
-            historyDoc.data().examRound,
+      const historyDocs = historySnaps
+        .flatMap((historySnap) => historySnap.docs)
+        .filter((historyDoc, index, docs) => {
+          if (docs.findIndex((item) => item.id === historyDoc.id) !== index) {
+            return false;
+          }
+          const historyData = historyDoc.data();
+          return mockExamRoundMatches(
+            historyData.category || category,
+            historyData.examRound,
             examRound,
-          ),
-        )
+          );
+        })
         .sort((left, right) => {
           const leftMs = readTimestampMs(left.data().timestamp);
           const rightMs = readTimestampMs(right.data().timestamp);
@@ -1158,19 +1168,20 @@ const QuizRunner: React.FC = () => {
 
       const submissionRef = doc(db, activeSubmissionPath);
       const submissionSnap = await getDoc(submissionRef).catch(() => null);
+      const submissionData = submissionSnap?.data();
+      const submissionRoundMatches =
+        !isMockExamCategory(category) ||
+        !submissionData?.examRound ||
+        mockExamRoundMatches(category, submissionData.examRound, examRound);
       const existingSubmission =
         submissionSnap?.exists() &&
-        submissionSnap.data()?.uid === fallbackStudentUid &&
-        submissionSnap.data()?.unitId === unitId &&
-        submissionSnap.data()?.category === category &&
-        mockExamRoundMatches(
-          category,
-          submissionSnap.data()?.examRound,
-          examRound,
-        )
+        submissionData?.uid === fallbackStudentUid &&
+        submissionData?.unitId === unitId &&
+        submissionData?.category === category &&
+        submissionRoundMatches
           ? normalizeQuizSubmissionDoc(
               submissionSnap.id,
-              submissionSnap.data() as Partial<QuizSubmissionDoc>,
+              submissionData as Partial<QuizSubmissionDoc>,
             )
           : null;
 
