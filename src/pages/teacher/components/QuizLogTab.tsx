@@ -19,11 +19,13 @@ import {
 import {
   MOCK_EXAM_ROUNDS,
   formatMockExamRoundLabel,
+  getMockExamRoundsFromAssessmentConfig,
   getResultMockExamRound,
   isMockExamCategory,
   mockExamRoundMatches,
   normalizeMockExamCategory,
   normalizeMockExamRound,
+  sortMockExamRounds,
 } from "../../../lib/mockExamRounds";
 import StudentWrongNoteModal from "./StudentWrongNoteModal";
 
@@ -528,6 +530,8 @@ const QuizLogTab: React.FC = () => {
   const [classFilter, setClassFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [examRoundFilter, setExamRoundFilter] = useState("");
+  const [configuredMockExamRounds, setConfiguredMockExamRounds] =
+    useState<string[]>(MOCK_EXAM_ROUNDS);
   const [bigFilter, setBigFilter] = useState("");
   const [midFilter, setMidFilter] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("scoreAsc");
@@ -563,6 +567,33 @@ const QuizLogTab: React.FC = () => {
   const isExamPrepFilter = categoryFilter === "exam_prep";
 
   const unitMetaById = useMemo(() => buildUnitMetaMap(treeData), [treeData]);
+
+  useEffect(() => {
+    let active = true;
+    const loadConfiguredMockExamRounds = async () => {
+      try {
+        const settingsSnap = await getDoc(
+          doc(db, getSemesterDocPath(config, "assessment_config", "settings")),
+        );
+        if (!active) return;
+        setConfiguredMockExamRounds(
+          getMockExamRoundsFromAssessmentConfig(
+            settingsSnap.exists()
+              ? (settingsSnap.data() as Record<string, unknown>)
+              : {},
+          ),
+        );
+      } catch (error) {
+        console.warn("Failed to load mock exam rounds:", error);
+        if (active) setConfiguredMockExamRounds(MOCK_EXAM_ROUNDS);
+      }
+    };
+
+    void loadConfiguredMockExamRounds();
+    return () => {
+      active = false;
+    };
+  }, [config]);
 
   const questionMetaById = useMemo(() => {
     const map = new Map<string, QuestionMeta>();
@@ -1015,6 +1046,17 @@ const QuizLogTab: React.FC = () => {
   const recentDefaultExamRound = useMemo(
     () => findRecentExamRoundFocus(canonicalLogs, recentClassFocus?.classOnly),
     [canonicalLogs, recentClassFocus],
+  );
+  const examRoundOptions = useMemo(
+    () =>
+      sortMockExamRounds([
+        ...configuredMockExamRounds,
+        ...canonicalLogs
+          .filter((log) => isMockExamCategory(log.category))
+          .map((log) => log.examRound),
+        examRoundFilter,
+      ]),
+    [canonicalLogs, configuredMockExamRounds, examRoundFilter],
   );
 
   useEffect(() => {
@@ -1739,7 +1781,7 @@ const QuizLogTab: React.FC = () => {
             aria-label="모의고사 회차 필터"
           >
             <option value="">전체 회차</option>
-            {MOCK_EXAM_ROUNDS.map((round) => (
+            {examRoundOptions.map((round) => (
               <option key={round} value={round}>
                 {formatMockExamRoundLabel(round)}
               </option>

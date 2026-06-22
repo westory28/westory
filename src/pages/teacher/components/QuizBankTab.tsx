@@ -37,10 +37,12 @@ import {
 import {
   MOCK_EXAM_ROUNDS,
   formatMockExamRoundLabel,
+  getMockExamRoundsFromAssessmentConfig,
   getResultMockExamRound,
   isMockExamCategory,
   mockExamRoundMatches,
   normalizeMockExamCategory,
+  sortMockExamRounds,
 } from "../../../lib/mockExamRounds";
 
 interface TreeUnit {
@@ -350,6 +352,8 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const [classFilter, setClassFilter] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [examRoundFilter, setExamRoundFilter] = useState("");
+  const [configuredMockExamRounds, setConfiguredMockExamRounds] =
+    useState<string[]>(MOCK_EXAM_ROUNDS);
   const [typeFilter, setTypeFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("");
   const [searchTerm, setSearchTerm] = useState("");
@@ -511,6 +515,33 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     }
     return list;
   };
+
+  useEffect(() => {
+    let active = true;
+    const loadConfiguredMockExamRounds = async () => {
+      try {
+        const settingsSnap = await getDoc(
+          doc(db, getSemesterDocPath(config, "assessment_config", "settings")),
+        );
+        if (!active) return;
+        setConfiguredMockExamRounds(
+          getMockExamRoundsFromAssessmentConfig(
+            settingsSnap.exists()
+              ? (settingsSnap.data() as Record<string, unknown>)
+              : {},
+          ),
+        );
+      } catch (error) {
+        console.warn("Failed to load mock exam rounds:", error);
+        if (active) setConfiguredMockExamRounds(MOCK_EXAM_ROUNDS);
+      }
+    };
+
+    void loadConfiguredMockExamRounds();
+    return () => {
+      active = false;
+    };
+  }, [config]);
 
   useEffect(() => {
     const loadAll = async () => {
@@ -1137,6 +1168,15 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     isMockExamCategory(categoryFilter) && examRoundFilter
       ? formatMockExamRoundLabel(examRoundFilter)
       : "";
+  const examRoundOptions = useMemo(
+    () =>
+      sortMockExamRounds([
+        ...configuredMockExamRounds,
+        defaultFocus?.examRound,
+        examRoundFilter,
+      ]),
+    [configuredMockExamRounds, defaultFocus, examRoundFilter],
+  );
 
   const classOptions = useMemo(() => {
     const values = new Set<string>();
@@ -2683,7 +2723,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
               aria-label="모의고사 회차"
             >
               <option value="">전체 회차</option>
-              {MOCK_EXAM_ROUNDS.map((round) => (
+              {examRoundOptions.map((round) => (
                 <option key={round} value={round}>
                   {formatMockExamRoundLabel(round)}
                 </option>

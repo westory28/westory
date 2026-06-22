@@ -11,8 +11,8 @@ import {
   readAssessmentConfigMap,
 } from "../../../lib/assessmentConfig";
 import {
-  MOCK_EXAM_ROUNDS,
   formatMockExamRoundLabel,
+  getMockExamRoundsFromAssessmentConfig,
   type MockExamRound,
 } from "../../../lib/mockExamRounds";
 
@@ -98,7 +98,7 @@ const QuizIndex: React.FC = () => {
 
   const activeMockExamRounds = useMemo(
     () =>
-      MOCK_EXAM_ROUNDS.filter((round) =>
+      getMockExamRoundsFromAssessmentConfig(assessmentConfig).filter((round) =>
         getVisibility("exam_prep", "exam_prep", round),
       ),
     [assessmentConfig, userData],

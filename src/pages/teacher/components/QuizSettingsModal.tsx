@@ -16,8 +16,11 @@ import {
   DEFAULT_MOCK_EXAM_ROUND,
   MOCK_EXAM_ROUNDS,
   formatMockExamRoundLabel,
+  getMockExamRoundsFromAssessmentConfig,
+  getNextMockExamRound,
   isMockExamCategory,
   normalizeMockExamRound,
+  sortMockExamRounds,
   type MockExamRound,
 } from "../../../lib/mockExamRounds";
 import { getSemesterDocPath } from "../../../lib/semesterScope";
@@ -105,6 +108,8 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
   const [selectedExamRound, setSelectedExamRound] = useState<MockExamRound>(
     DEFAULT_MOCK_EXAM_ROUND,
   );
+  const [mockExamRounds, setMockExamRounds] =
+    useState<MockExamRound[]>(MOCK_EXAM_ROUNDS);
 
   const isMockExam = isMockExamCategory(category);
   const categoryLabel = CATEGORY_LABELS[category] || "평가";
@@ -178,7 +183,19 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
   useEffect(() => {
     if (!isOpen || !isMockExam) return;
     setSelectedExamRound(DEFAULT_MOCK_EXAM_ROUND);
+    setMockExamRounds(MOCK_EXAM_ROUNDS);
   }, [category, isMockExam, isOpen, nodeId]);
+
+  const handleSelectExamRound = (round: unknown) => {
+    setSelectedExamRound(normalizeMockExamRound(round));
+  };
+
+  const handleAddMockExamRound = () => {
+    if (!canEdit) return;
+    const nextRound = getNextMockExamRound(mockExamRounds);
+    setMockExamRounds((prev) => sortMockExamRounds([...prev, nextRound]));
+    setSelectedExamRound(nextRound);
+  };
 
   const loadSettings = async () => {
     setLoading(true);
@@ -209,6 +226,19 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
       const settingsMap = settingsSnap.exists()
         ? (settingsSnap.data() as Record<string, unknown>)
         : {};
+      if (isMockExam) {
+        setMockExamRounds((prev) =>
+          sortMockExamRounds([
+            ...prev,
+            ...getMockExamRoundsFromAssessmentConfig(
+              settingsMap,
+              nodeId,
+              category,
+            ),
+            selectedExamRound,
+          ]),
+        );
+      }
       const legacyEnabledForDefaultRound =
         isMockExam && selectedExamRound === DEFAULT_MOCK_EXAM_ROUND;
       const rawSettings = settingsMap[key] ??
@@ -494,26 +524,37 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                       관리합니다.
                     </p>
                   </div>
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    {MOCK_EXAM_ROUNDS.map((round) => {
-                      const active = selectedExamRound === round;
-                      return (
-                        <button
-                          key={round}
-                          type="button"
-                          onClick={() =>
-                            setSelectedExamRound(normalizeMockExamRound(round))
-                          }
-                          className={`rounded-xl border px-4 py-3 text-sm font-extrabold transition ${
-                            active
-                              ? "border-blue-500 bg-blue-50 text-blue-700 shadow-sm"
-                              : "border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:text-blue-700"
-                          }`}
-                        >
-                          {formatMockExamRoundLabel(round)}
-                        </button>
-                      );
-                    })}
+                  <div className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-slate-100/70 p-1.5">
+                    <div className="flex min-w-0 flex-1 items-end gap-1 overflow-x-auto pb-1 [scrollbar-width:thin]">
+                      {mockExamRounds.map((round) => {
+                        const active = selectedExamRound === round;
+                        return (
+                          <button
+                            key={round}
+                            type="button"
+                            onClick={() => handleSelectExamRound(round)}
+                            className={`relative inline-flex h-12 min-w-[150px] shrink-0 items-center justify-center rounded-t-2xl rounded-b-lg border px-4 text-sm font-extrabold transition ${
+                              active
+                                ? "z-10 border-blue-500 bg-white text-blue-700 shadow-sm"
+                                : "border-gray-200 bg-white/80 text-gray-600 hover:border-blue-200 hover:text-blue-700"
+                            }`}
+                            aria-current={active ? "page" : undefined}
+                          >
+                            {formatMockExamRoundLabel(round)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAddMockExamRound}
+                      disabled={!canEdit || loading || saving}
+                      className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-blue-200 bg-white text-blue-600 shadow-sm transition hover:border-blue-500 hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-gray-200 disabled:text-gray-300 disabled:shadow-none"
+                      aria-label="모의고사 회차 추가"
+                      title="모의고사 회차 추가"
+                    >
+                      <i className="fas fa-plus text-sm" aria-hidden="true"></i>
+                    </button>
                   </div>
                 </section>
               )}

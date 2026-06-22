@@ -2,13 +2,22 @@ export const MOCK_EXAM_CATEGORY = "exam_prep";
 export const MOCK_EXAM_UNIT_ID = "exam_prep";
 export const DEFAULT_MOCK_EXAM_ROUND = "round_1";
 const MOCK_EXAM_RESULT_CATEGORY_SEPARATOR = "__";
+const MOCK_EXAM_ROUND_PATTERN = /^round_([1-9]\d*)$/;
 
-export const MOCK_EXAM_ROUNDS = ["round_1", "round_2", "round_3"] as const;
+export type MockExamRound = string;
 
-export type MockExamRound = (typeof MOCK_EXAM_ROUNDS)[number];
+export const MOCK_EXAM_ROUNDS: MockExamRound[] = [
+  "round_1",
+  "round_2",
+  "round_3",
+];
 
 export const isMockExamRound = (value: unknown): value is MockExamRound =>
-  MOCK_EXAM_ROUNDS.includes(value as MockExamRound);
+  MOCK_EXAM_ROUND_PATTERN.test(
+    String(value || "")
+      .trim()
+      .toLowerCase(),
+  );
 
 const getRawCategory = (category?: unknown) => String(category || "").trim();
 
@@ -54,6 +63,56 @@ export const getMockExamRoundNumber = (round: unknown) => {
 
 export const formatMockExamRoundLabel = (round: unknown) =>
   `모의고사 ${getMockExamRoundNumber(round)}회`;
+
+export const sortMockExamRounds = (rounds: Iterable<unknown>) =>
+  Array.from(
+    new Set(
+      Array.from(rounds)
+        .map((round) => normalizeMockExamRound(round, ""))
+        .filter(Boolean),
+    ),
+  ).sort((left, right) => {
+    const leftNumber = getMockExamRoundNumber(left);
+    const rightNumber = getMockExamRoundNumber(right);
+    return (
+      leftNumber - rightNumber || String(left).localeCompare(String(right))
+    );
+  });
+
+export const getNextMockExamRound = (rounds: Iterable<unknown>) => {
+  const maxRoundNumber = sortMockExamRounds(rounds).reduce(
+    (maxNumber, round) => Math.max(maxNumber, getMockExamRoundNumber(round)),
+    0,
+  );
+  return `round_${Math.max(1, maxRoundNumber + 1)}`;
+};
+
+export const getMockExamRoundFromAssessmentConfigKey = (
+  key: unknown,
+  unitId = MOCK_EXAM_UNIT_ID,
+  category = MOCK_EXAM_CATEGORY,
+): MockExamRound | "" => {
+  const normalizedUnitId = String(unitId || "").trim();
+  const normalizedCategory = normalizeMockExamCategory(category);
+  const prefix = `${normalizedUnitId}_${normalizedCategory}__`;
+  const rawKey = String(key || "").trim();
+  if (!rawKey.startsWith(prefix)) return "";
+  return normalizeMockExamRound(rawKey.slice(prefix.length), "");
+};
+
+export const getMockExamRoundsFromAssessmentConfig = (
+  settings: Record<string, unknown> | null | undefined,
+  unitId = MOCK_EXAM_UNIT_ID,
+  category = MOCK_EXAM_CATEGORY,
+) =>
+  sortMockExamRounds([
+    ...MOCK_EXAM_ROUNDS,
+    ...Object.keys(settings || {})
+      .map((key) =>
+        getMockExamRoundFromAssessmentConfigKey(key, unitId, category),
+      )
+      .filter(Boolean),
+  ]);
 
 export const getMockExamResultCategory = (
   category: unknown,

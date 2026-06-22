@@ -3293,7 +3293,7 @@ const normalizeMockExamRound = (value) => {
   const raw = String(value || '').trim().toLowerCase();
   const numeric = raw.match(/\d+/)?.[0];
   const normalized = numeric ? `round_${Number(numeric)}` : raw;
-  return ['round_1', 'round_2', 'round_3'].includes(normalized)
+  return /^round_([1-9]\d*)$/.test(normalized)
     ? normalized
     : 'round_1';
 };
@@ -3303,7 +3303,7 @@ const getMockExamRoundFromCategory = (category) => {
   const prefix = 'exam_prep__';
   if (!raw.startsWith(prefix)) return '';
   const round = raw.slice(prefix.length);
-  return ['round_1', 'round_2', 'round_3'].includes(round) ? round : '';
+  return /^round_([1-9]\d*)$/.test(round) ? round : '';
 };
 
 const isMockExamCategory = (category) => {
