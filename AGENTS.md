@@ -80,6 +80,9 @@
 - 루트 앱 변경 후 기본 검증은 `npm run build`다.
 - `src/**/*.ts`, `src/**/*.tsx` 포맷 확인이 필요하면 `npm run format:check`를 사용한다.
 - Functions 변경 후 기본 검증은 `npm --prefix functions run check`다.
+- Firebase Functions 또는 rules/storage에 영향을 주는 변경을 완료하면, 검증 통과 후 커밋/푸시만으로 끝내지 말고 운영 Firebase에도 즉시 반영한다. 기본 프로젝트는 `history-quiz-yongsin`이며, Functions 배포 전 PowerShell에서는 `$env:FUNCTIONS_DISCOVERY_TIMEOUT='60'`를 설정한다.
+- Functions 변경이 전체 배포에서 네트워크/빌드/디스커버리 문제로 막히면 변경된 함수만 `firebase deploy --only "functions:functionName" --project history-quiz-yongsin` 형식으로 개별 배포를 재시도하고, `firebase functions:list --project history-quiz-yongsin`로 반영 상태를 확인한다.
+- Firestore rules 변경은 `firebase deploy --only firestore:rules --project history-quiz-yongsin`, Storage rules 변경은 `firebase deploy --only storage --project history-quiz-yongsin`으로 운영 반영 여부를 확인한다.
 - 이 저장소에는 루트 `test` 스크립트가 없다.
 - rules 전용 자동 검증도 저장소에 준비되어 있지 않다.
 - 자동 검증이 없을수록 영향 경로를 더 좁히고 diff를 더 엄격하게 읽는다.
