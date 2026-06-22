@@ -731,6 +731,7 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
             <LessonWorksheetStage
               pageImages={worksheet.pageImages}
               blanks={worksheet.blanks}
+              examHighlights={worksheet.examHighlights}
               textRegions={worksheet.textRegions}
               footnoteAnchors={worksheet.footnoteAnchors}
               selectedFootnoteAnchorId={activeWorksheetFootnoteAnchorId}

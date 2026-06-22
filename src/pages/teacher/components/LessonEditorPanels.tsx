@@ -14,6 +14,7 @@ import type {
 import { getLessonFootnoteDisplayTitle } from "../../../lib/lessonData";
 import type {
   LessonWorksheetBlank,
+  LessonWorksheetExamHighlight,
   LessonWorksheetFootnoteAnchor,
   LessonWorksheetPageImage,
   LessonWorksheetTextRegion,
@@ -95,7 +96,7 @@ type LessonBodyEditorProps = {
   sourceArchivePickerOpen?: boolean;
 };
 
-type LessonPdfTeacherTool = "pan" | "ocr" | "box" | "footnote";
+type LessonPdfTeacherTool = "pan" | "ocr" | "box" | "exam" | "footnote";
 
 type LessonPdfSectionProps = {
   pdfBusy: boolean;
@@ -106,9 +107,11 @@ type LessonPdfSectionProps = {
   worksheetPageImages: LessonWorksheetPageImage[];
   worksheetTextRegions: LessonWorksheetTextRegion[];
   worksheetBlanks: LessonWorksheetBlank[];
+  worksheetExamHighlights: LessonWorksheetExamHighlight[];
   worksheetFootnoteAnchors: LessonWorksheetFootnoteAnchor[];
   worksheetTool: LessonPdfTeacherTool;
   activeBlankId: string | null;
+  activeExamHighlightId?: string | null;
   activeFootnoteAnchorId?: string | null;
   draftBlank: LessonWorksheetBlank | null;
   draftBlankAnswer: string;
@@ -122,6 +125,8 @@ type LessonPdfSectionProps = {
   onWorksheetToolChange: (value: LessonPdfTeacherTool) => void;
   onSelectBlank: (blankId: string) => void;
   onDeleteBlank: (blankId: string) => void;
+  onSelectExamHighlight?: (highlightId: string) => void;
+  onDeleteExamHighlight?: (highlightId: string) => void;
   onSelectFootnoteAnchor?: (anchorId: string) => void;
   onDeleteFootnoteAnchor?: (anchorId: string) => void;
   onActivateFootnoteAnchor?: (anchorId: string) => void;
@@ -147,6 +152,15 @@ type LessonPdfSectionProps = {
     source: "ocr" | "manual",
   ) => void;
   onCreateFootnoteAnchorFromSelection?: (
+    page: number,
+    rect: {
+      leftRatio: number;
+      topRatio: number;
+      widthRatio: number;
+      heightRatio: number;
+    },
+  ) => void;
+  onCreateExamHighlightFromSelection?: (
     page: number,
     rect: {
       leftRatio: number;
@@ -911,9 +925,11 @@ export function LessonPdfSection({
   worksheetPageImages,
   worksheetTextRegions,
   worksheetBlanks,
+  worksheetExamHighlights,
   worksheetFootnoteAnchors,
   worksheetTool,
   activeBlankId,
+  activeExamHighlightId = null,
   activeFootnoteAnchorId,
   draftBlank,
   draftBlankAnswer,
@@ -927,6 +943,8 @@ export function LessonPdfSection({
   onWorksheetToolChange,
   onSelectBlank,
   onDeleteBlank,
+  onSelectExamHighlight,
+  onDeleteExamHighlight,
   onSelectFootnoteAnchor,
   onDeleteFootnoteAnchor,
   onActivateFootnoteAnchor,
@@ -942,6 +960,7 @@ export function LessonPdfSection({
   onInsertFootnoteToken,
   onCreateBlankFromSelection,
   onCreateFootnoteAnchorFromSelection,
+  onCreateExamHighlightFromSelection,
   onDraftBlankAnswerChange,
   onDraftBlankPromptChange,
   onConfirmDraftBlank,
@@ -1060,6 +1079,7 @@ export function LessonPdfSection({
     if (worksheetTool === "pan") return "페이지 이동";
     if (worksheetTool === "ocr") return "OCR 선택";
     if (worksheetTool === "box") return "직접 그리기";
+    if (worksheetTool === "exam") return "시험 하이라이트";
     return "각주 배치";
   }, [worksheetTool]);
   const saveSummaryLabel =
@@ -1082,13 +1102,20 @@ export function LessonPdfSection({
     Boolean(onRetryPdfExtraction) &&
     Boolean(lessonPdfUrl || pdfProcessing.file.storagePath) &&
     pdfStatusTone !== "emerald";
-  const toolButtonClass = (active: boolean, tone: "blue" | "slate" = "slate") =>
+  const toolButtonClass = (
+    active: boolean,
+    tone: "blue" | "slate" | "gold" = "slate",
+  ) =>
     `inline-flex h-10 items-center gap-2 rounded-lg px-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-4 ${
       active
         ? tone === "blue"
           ? "bg-blue-600 text-white shadow-sm focus-visible:ring-blue-100"
-          : "bg-slate-900 text-white shadow-sm focus-visible:ring-slate-200"
-        : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus-visible:ring-slate-100"
+          : tone === "gold"
+            ? "border border-amber-300 bg-amber-100 text-amber-950 shadow-sm focus-visible:ring-amber-100"
+            : "bg-slate-900 text-white shadow-sm focus-visible:ring-slate-200"
+        : tone === "gold"
+          ? "border border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100 focus-visible:ring-amber-100"
+          : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 focus-visible:ring-slate-100"
     }`;
 
   const focusFootnote = React.useCallback(
@@ -1282,6 +1309,17 @@ export function LessonPdfSection({
               </button>
               <button
                 type="button"
+                onClick={() => onWorksheetToolChange("exam")}
+                className={toolButtonClass(worksheetTool === "exam", "gold")}
+                aria-label="시험 하이라이트"
+                aria-pressed={worksheetTool === "exam"}
+                title="시험 하이라이트"
+              >
+                <i className="fas fa-certificate text-sm"></i>
+                시험
+              </button>
+              <button
+                type="button"
                 onClick={() => {
                   onWorksheetToolChange("footnote");
                   openLibraryTab("footnotes");
@@ -1338,14 +1376,18 @@ export function LessonPdfSection({
                   mode="teacher-edit"
                   pageImages={worksheetPageImages}
                   blanks={worksheetBlanks}
+                  examHighlights={worksheetExamHighlights}
                   textRegions={worksheetTextRegions}
                   teacherTool={worksheetTool}
                   selectedBlankId={activeBlankId}
+                  selectedExamHighlightId={activeExamHighlightId}
                   footnoteAnchors={worksheetFootnoteAnchors}
                   selectedFootnoteAnchorId={activeFootnoteAnchorId}
                   pendingBlank={draftBlank}
                   onSelectBlank={onSelectBlank}
                   onDeleteBlank={onDeleteBlank}
+                  onSelectExamHighlight={onSelectExamHighlight}
+                  onDeleteExamHighlight={onDeleteExamHighlight}
                   onSelectFootnoteAnchor={onSelectFootnoteAnchor}
                   onDeleteFootnoteAnchor={onDeleteFootnoteAnchor}
                   onActivateFootnoteAnchor={onActivateFootnoteAnchor}
@@ -1353,6 +1395,9 @@ export function LessonPdfSection({
                   teacherCurrentPage={teacherCurrentPage}
                   onTeacherCurrentPageChange={setTeacherCurrentPage}
                   onCreateBlankFromSelection={onCreateBlankFromSelection}
+                  onCreateExamHighlightFromSelection={
+                    onCreateExamHighlightFromSelection
+                  }
                   onCreateFootnoteAnchorFromSelection={
                     onCreateFootnoteAnchorFromSelection
                   }

@@ -33,11 +33,13 @@ import { type ProcessedPdfMap } from "../../lib/pdfMapProcessor";
 import {
   clampRatio,
   normalizeWorksheetBlanks,
+  normalizeWorksheetExamHighlights,
   getTightTextRegionBounds,
   normalizeWorksheetFootnoteAnchors,
   normalizeWorksheetPageImages,
   normalizeWorksheetTextRegions,
   type LessonWorksheetBlank,
+  type LessonWorksheetExamHighlight,
   type LessonWorksheetFootnoteAnchor,
   type LessonWorksheetPageImage,
   type LessonWorksheetTextRegion,
@@ -204,6 +206,23 @@ const createBlankFromRect = (
   answer: "",
   prompt: "",
   source,
+});
+
+const createExamHighlightFromRect = (
+  page: number,
+  rect: {
+    leftRatio: number;
+    topRatio: number;
+    widthRatio: number;
+    heightRatio: number;
+  },
+): LessonWorksheetExamHighlight => ({
+  id: `exam-highlight-${page}-${Date.now()}`,
+  page,
+  leftRatio: rect.leftRatio,
+  topRatio: rect.topRatio,
+  widthRatio: rect.widthRatio,
+  heightRatio: rect.heightRatio,
 });
 
 const getBlankAnswerFromRegions = (regions: LessonWorksheetTextRegion[]) =>
@@ -408,6 +427,18 @@ const sortWorksheetBlanks = (blanks: LessonWorksheetBlank[]) =>
     return left.id.localeCompare(right.id);
   });
 
+const sortWorksheetExamHighlights = (
+  highlights: LessonWorksheetExamHighlight[],
+) =>
+  [...highlights].sort((left, right) => {
+    if (left.page !== right.page) return left.page - right.page;
+    if (left.topRatio !== right.topRatio) return left.topRatio - right.topRatio;
+    if (left.leftRatio !== right.leftRatio) {
+      return left.leftRatio - right.leftRatio;
+    }
+    return left.id.localeCompare(right.id);
+  });
+
 const sortWorksheetTextRegions = (regions: LessonWorksheetTextRegion[]) =>
   [...regions].sort((left, right) => {
     if (left.page !== right.page) return left.page - right.page;
@@ -462,6 +493,7 @@ const buildNormalizedLessonDraft = (params: {
   worksheetPageImages: LessonWorksheetPageImage[];
   worksheetTextRegions: LessonWorksheetTextRegion[];
   worksheetBlanks: LessonWorksheetBlank[];
+  worksheetExamHighlights: LessonWorksheetExamHighlight[];
 }) => {
   const sanitizedFootnotes = reindexFootnotes(
     params.lessonFootnotes.map((footnote) =>
@@ -500,6 +532,9 @@ const buildNormalizedLessonDraft = (params: {
     worksheetBlanks: sortWorksheetBlanks(
       normalizeWorksheetBlanks(params.worksheetBlanks),
     ),
+    worksheetExamHighlights: sortWorksheetExamHighlights(
+      normalizeWorksheetExamHighlights(params.worksheetExamHighlights),
+    ),
     worksheetFootnoteAnchors: sortWorksheetFootnoteAnchors(
       normalizeWorksheetFootnoteAnchors(params.worksheetFootnoteAnchors),
     ),
@@ -526,6 +561,7 @@ const buildNormalizedGeneralLessonDraft = (params: {
     worksheetPageImages: [],
     worksheetTextRegions: [],
     worksheetBlanks: [],
+    worksheetExamHighlights: [],
   });
 
   return {
@@ -550,6 +586,7 @@ const createEmptyNormalizedLessonData = (): NormalizedLessonData =>
     worksheetPageImages: [],
     worksheetTextRegions: [],
     worksheetBlanks: [],
+    worksheetExamHighlights: [],
   });
 
 const buildNormalizedPdfEditorDraft = (params: {
@@ -563,6 +600,7 @@ const buildNormalizedPdfEditorDraft = (params: {
   worksheetPageImages: LessonWorksheetPageImage[];
   worksheetTextRegions: LessonWorksheetTextRegion[];
   worksheetBlanks: LessonWorksheetBlank[];
+  worksheetExamHighlights: LessonWorksheetExamHighlight[];
 }) => {
   const normalized = buildNormalizedLessonDraft({
     lessonTitle: "",
@@ -578,6 +616,7 @@ const buildNormalizedPdfEditorDraft = (params: {
     worksheetPageImages: params.worksheetPageImages,
     worksheetTextRegions: params.worksheetTextRegions,
     worksheetBlanks: params.worksheetBlanks,
+    worksheetExamHighlights: params.worksheetExamHighlights,
   });
 
   return {
@@ -591,6 +630,7 @@ const buildNormalizedPdfEditorDraft = (params: {
     worksheetPageImages: normalized.worksheetPageImages,
     worksheetTextRegions: normalized.worksheetTextRegions,
     worksheetBlanks: normalized.worksheetBlanks,
+    worksheetExamHighlights: normalized.worksheetExamHighlights,
   };
 };
 
@@ -616,6 +656,7 @@ const createPdfEditorSnapshot = (params: {
   worksheetPageImages: LessonWorksheetPageImage[];
   worksheetTextRegions: LessonWorksheetTextRegion[];
   worksheetBlanks: LessonWorksheetBlank[];
+  worksheetExamHighlights: LessonWorksheetExamHighlight[];
   selectedPdfFile: File | null;
   preparedPdf: ProcessedPdfMap | null;
   footnoteImageDrafts: Record<string, FootnoteImageDraft>;
@@ -645,6 +686,7 @@ const createPdfEditorSnapshot = (params: {
       worksheetPageImages: params.worksheetPageImages,
       worksheetTextRegions: params.worksheetTextRegions,
       worksheetBlanks: params.worksheetBlanks,
+      worksheetExamHighlights: params.worksheetExamHighlights,
     }),
     footnoteImageDrafts: Object.entries(params.footnoteImageDrafts)
       .sort(([leftId], [rightId]) => leftId.localeCompare(rightId))
@@ -678,6 +720,7 @@ const EMPTY_PDF_EDITOR_SNAPSHOT = createPdfEditorSnapshot({
   worksheetPageImages: [],
   worksheetTextRegions: [],
   worksheetBlanks: [],
+  worksheetExamHighlights: [],
   selectedPdfFile: null,
   preparedPdf: null,
   footnoteImageDrafts: {},
@@ -722,9 +765,15 @@ const ManageLesson: React.FC = () => {
   const [worksheetBlanks, setWorksheetBlanks] = useState<
     LessonWorksheetBlank[]
   >([]);
+  const [worksheetExamHighlights, setWorksheetExamHighlights] = useState<
+    LessonWorksheetExamHighlight[]
+  >([]);
   const [selectedPdfFile, setSelectedPdfFile] = useState<File | null>(null);
   const [preparedPdf, setPreparedPdf] = useState<ProcessedPdfMap | null>(null);
   const [activeBlankId, setActiveBlankId] = useState<string | null>(null);
+  const [activeExamHighlightId, setActiveExamHighlightId] = useState<
+    string | null
+  >(null);
   const [draftBlank, setDraftBlank] = useState<LessonWorksheetBlank | null>(
     null,
   );
@@ -734,7 +783,7 @@ const ManageLesson: React.FC = () => {
     "draft" | "existing" | null
   >(null);
   const [worksheetTool, setWorksheetTool] = useState<
-    "pan" | "ocr" | "box" | "footnote"
+    "pan" | "ocr" | "box" | "exam" | "footnote"
   >("pan");
   const [pdfBusy, setPdfBusy] = useState(false);
   const [screenBusyMessage, setScreenBusyMessage] = useState<string | null>(
@@ -808,6 +857,10 @@ const ManageLesson: React.FC = () => {
       ),
     [worksheetBlanks],
   );
+  const sortedExamHighlights = useMemo(
+    () => sortWorksheetExamHighlights(worksheetExamHighlights),
+    [worksheetExamHighlights],
+  );
   const lessonDraft = useMemo<LessonData>(
     () => ({
       unitId: selectedNodeId || undefined,
@@ -822,6 +875,7 @@ const ManageLesson: React.FC = () => {
       worksheetPageImages: savedLessonState.worksheetPageImages,
       worksheetTextRegions: savedLessonState.worksheetTextRegions,
       worksheetBlanks: savedLessonState.worksheetBlanks,
+      worksheetExamHighlights: savedLessonState.worksheetExamHighlights,
       worksheetFootnoteAnchors: savedLessonState.worksheetFootnoteAnchors,
       footnotes: savedLessonState.footnotes,
     }),
@@ -1071,6 +1125,7 @@ const ManageLesson: React.FC = () => {
         worksheetPageImages,
         worksheetTextRegions,
         worksheetBlanks,
+        worksheetExamHighlights,
         selectedPdfFile,
         preparedPdf,
         footnoteImageDrafts,
@@ -1088,6 +1143,7 @@ const ManageLesson: React.FC = () => {
       worksheetPageImages,
       worksheetTextRegions,
       worksheetBlanks,
+      worksheetExamHighlights,
       selectedPdfFile,
       preparedPdf,
       footnoteImageDrafts,
@@ -1187,6 +1243,7 @@ const ManageLesson: React.FC = () => {
       worksheetPageImages: LessonWorksheetPageImage[];
       worksheetTextRegions: LessonWorksheetTextRegion[];
       worksheetBlanks: LessonWorksheetBlank[];
+      worksheetExamHighlights: LessonWorksheetExamHighlight[];
       selectedPdfFile: File | null;
       preparedPdf: ProcessedPdfMap | null;
       footnoteImageDrafts: Record<string, FootnoteImageDraft>;
@@ -1202,6 +1259,7 @@ const ManageLesson: React.FC = () => {
         worksheetPageImages: params.worksheetPageImages,
         worksheetTextRegions: params.worksheetTextRegions,
         worksheetBlanks: params.worksheetBlanks,
+        worksheetExamHighlights: params.worksheetExamHighlights,
       });
       setSavedLessonState((prev) => ({
         ...prev,
@@ -1215,6 +1273,7 @@ const ManageLesson: React.FC = () => {
         worksheetPageImages: normalizedPdfDraft.worksheetPageImages,
         worksheetTextRegions: normalizedPdfDraft.worksheetTextRegions,
         worksheetBlanks: normalizedPdfDraft.worksheetBlanks,
+        worksheetExamHighlights: normalizedPdfDraft.worksheetExamHighlights,
       }));
       lastSavedPdfSnapshotRef.current = createPdfEditorSnapshot({
         selectedNodeId: params.selectedNodeId,
@@ -1228,6 +1287,7 @@ const ManageLesson: React.FC = () => {
         worksheetPageImages: normalizedPdfDraft.worksheetPageImages,
         worksheetTextRegions: normalizedPdfDraft.worksheetTextRegions,
         worksheetBlanks: normalizedPdfDraft.worksheetBlanks,
+        worksheetExamHighlights: normalizedPdfDraft.worksheetExamHighlights,
         selectedPdfFile: params.selectedPdfFile,
         preparedPdf: params.preparedPdf,
         footnoteImageDrafts: params.footnoteImageDrafts,
@@ -1251,6 +1311,7 @@ const ManageLesson: React.FC = () => {
       worksheetPageImages: LessonWorksheetPageImage[];
       worksheetTextRegions: LessonWorksheetTextRegion[];
       worksheetBlanks: LessonWorksheetBlank[];
+      worksheetExamHighlights: LessonWorksheetExamHighlight[];
       selectedPdfFile: File | null;
       preparedPdf: ProcessedPdfMap | null;
       footnoteImageDrafts: Record<string, FootnoteImageDraft>;
@@ -1273,6 +1334,7 @@ const ManageLesson: React.FC = () => {
         worksheetPageImages: params.worksheetPageImages,
         worksheetTextRegions: params.worksheetTextRegions,
         worksheetBlanks: params.worksheetBlanks,
+        worksheetExamHighlights: params.worksheetExamHighlights,
         selectedPdfFile: params.selectedPdfFile,
         preparedPdf: params.preparedPdf,
         footnoteImageDrafts: params.footnoteImageDrafts,
@@ -1352,6 +1414,7 @@ const ManageLesson: React.FC = () => {
         worksheetPageImages: normalizedLesson.worksheetPageImages,
         worksheetTextRegions: normalizedLesson.worksheetTextRegions,
         worksheetBlanks: normalizedLesson.worksheetBlanks,
+        worksheetExamHighlights: normalizedLesson.worksheetExamHighlights,
         selectedPdfFile: null,
         preparedPdf: null,
         footnoteImageDrafts: {},
@@ -1368,6 +1431,7 @@ const ManageLesson: React.FC = () => {
         worksheetPageImages,
         worksheetTextRegions,
         worksheetBlanks,
+        worksheetExamHighlights,
         selectedPdfFile: null,
         preparedPdf: null,
         footnoteImageDrafts: {},
@@ -1388,6 +1452,7 @@ const ManageLesson: React.FC = () => {
         setWorksheetPageImages(normalizedLesson.worksheetPageImages);
         setWorksheetTextRegions(normalizedLesson.worksheetTextRegions);
         setWorksheetBlanks(normalizedLesson.worksheetBlanks);
+        setWorksheetExamHighlights(normalizedLesson.worksheetExamHighlights);
         syncSavedPdfState({
           selectedNodeId: unitId,
           lessonContent,
@@ -1400,6 +1465,7 @@ const ManageLesson: React.FC = () => {
           worksheetPageImages: normalizedLesson.worksheetPageImages,
           worksheetTextRegions: normalizedLesson.worksheetTextRegions,
           worksheetBlanks: normalizedLesson.worksheetBlanks,
+          worksheetExamHighlights: normalizedLesson.worksheetExamHighlights,
           selectedPdfFile: null,
           preparedPdf: null,
           footnoteImageDrafts: {},
@@ -1422,6 +1488,7 @@ const ManageLesson: React.FC = () => {
       selectedNodeTitle,
       syncSavedPdfState,
       worksheetBlanks,
+      worksheetExamHighlights,
       worksheetFootnoteAnchors,
       worksheetPageImages,
       worksheetTextRegions,
@@ -1541,6 +1608,7 @@ const ManageLesson: React.FC = () => {
         worksheetPageImages,
         worksheetTextRegions,
         worksheetBlanks,
+        worksheetExamHighlights,
         selectedPdfFile: null,
         preparedPdf: null,
         footnoteImageDrafts: {},
@@ -1594,6 +1662,7 @@ const ManageLesson: React.FC = () => {
           worksheetPageImages,
           worksheetTextRegions,
           worksheetBlanks,
+          worksheetExamHighlights,
           selectedPdfFile: null,
           preparedPdf: null,
           footnoteImageDrafts: {},
@@ -2141,9 +2210,11 @@ const ManageLesson: React.FC = () => {
     setWorksheetPageImages([]);
     setWorksheetTextRegions([]);
     setWorksheetBlanks([]);
+    setWorksheetExamHighlights([]);
     setWorksheetFootnoteAnchors([]);
     setPreparedPdf(null);
     setSelectedPdfFile(null);
+    setActiveExamHighlightId(null);
     setActiveFootnoteAnchorId(null);
     resetBlankEditor();
   };
@@ -2187,6 +2258,7 @@ const ManageLesson: React.FC = () => {
       worksheetPageImages: [],
       worksheetTextRegions: [],
       worksheetBlanks: [],
+      worksheetExamHighlights: [],
       selectedPdfFile: null,
       preparedPdf: null,
       footnoteImageDrafts: {},
@@ -2428,6 +2500,7 @@ const ManageLesson: React.FC = () => {
           normalizeWorksheetTextRegions(data.worksheetTextRegions),
         );
         setWorksheetBlanks(data.worksheetBlanks);
+        setWorksheetExamHighlights(data.worksheetExamHighlights);
         syncSavedSnapshots({
           selectedNodeId: unitId,
           lessonTitle: data.title || title,
@@ -2449,6 +2522,7 @@ const ManageLesson: React.FC = () => {
             data.worksheetTextRegions,
           ),
           worksheetBlanks: data.worksheetBlanks,
+          worksheetExamHighlights: data.worksheetExamHighlights,
           selectedPdfFile: null,
           preparedPdf: null,
           footnoteImageDrafts: {},
@@ -2469,6 +2543,7 @@ const ManageLesson: React.FC = () => {
           worksheetPageImages: [],
           worksheetTextRegions: [],
           worksheetBlanks: [],
+          worksheetExamHighlights: [],
           selectedPdfFile: null,
           preparedPdf: null,
           footnoteImageDrafts: {},
@@ -2534,9 +2609,11 @@ const ManageLesson: React.FC = () => {
       setWorksheetPageImages(nextPageImages);
       setWorksheetTextRegions(processed.regions);
       setWorksheetBlanks([]);
+      setWorksheetExamHighlights([]);
       setWorksheetFootnoteAnchors([]);
       setBlankEditorMode(null);
       setActiveBlankId(null);
+      setActiveExamHighlightId(null);
       setActiveFootnoteAnchorId(null);
       setDraftBlank(null);
       setDraftBlankAnswer("");
@@ -2574,6 +2651,7 @@ const ManageLesson: React.FC = () => {
     setDraftBlankAnswer(getBlankAnswerFromRegions(matchedRegions));
     setDraftBlankPrompt("");
     setActiveBlankId(null);
+    setActiveExamHighlightId(null);
   };
 
   const handleConfirmDraftBlank = () => {
@@ -2622,6 +2700,7 @@ const ManageLesson: React.FC = () => {
     }
     setBlankEditorMode("existing");
     setActiveBlankId(blankId);
+    setActiveExamHighlightId(null);
     setDraftBlank(null);
     setDraftBlankAnswer(targetBlank.answer);
     setDraftBlankPrompt(targetBlank.prompt || "");
@@ -2645,6 +2724,43 @@ const ManageLesson: React.FC = () => {
       setActiveBlankId(null);
       setDraftBlankAnswer("");
       setDraftBlankPrompt("");
+    }
+  };
+
+  const handleCreateExamHighlightFromSelection = (
+    page: number,
+    rect: {
+      leftRatio: number;
+      topRatio: number;
+      widthRatio: number;
+      heightRatio: number;
+    },
+  ) => {
+    const highlight = createExamHighlightFromRect(page, rect);
+    setWorksheetExamHighlights((prev) => [...prev, highlight]);
+    setActiveExamHighlightId(highlight.id);
+    resetBlankEditor();
+  };
+
+  const handleSelectExamHighlight = (highlightId: string) => {
+    const targetHighlight =
+      worksheetExamHighlights.find(
+        (highlight) => highlight.id === highlightId,
+      ) || null;
+    if (!targetHighlight) {
+      setActiveExamHighlightId(null);
+      return;
+    }
+    setActiveExamHighlightId(highlightId);
+    resetBlankEditor();
+  };
+
+  const handleDeleteExamHighlight = (highlightId: string) => {
+    setWorksheetExamHighlights((prev) =>
+      prev.filter((highlight) => highlight.id !== highlightId),
+    );
+    if (activeExamHighlightId === highlightId) {
+      setActiveExamHighlightId(null);
     }
   };
 
@@ -3402,6 +3518,7 @@ const ManageLesson: React.FC = () => {
         worksheetPageImages,
         worksheetTextRegions,
         worksheetBlanks,
+        worksheetExamHighlights,
       });
       const uploadedWorksheet = await uploadWorksheetAssets(selectedNodeId);
       const { footnotes: uploadedFootnotes, staleAssetPathsToDelete } =
@@ -3420,6 +3537,7 @@ const ManageLesson: React.FC = () => {
         worksheetPageImages: uploadedWorksheet.pageImages,
         worksheetTextRegions: uploadedWorksheet.textRegions,
         worksheetBlanks: normalizedDraft.worksheetBlanks,
+        worksheetExamHighlights: normalizedDraft.worksheetExamHighlights,
       });
       const payload = {
         unitId: selectedNodeId,
@@ -3433,6 +3551,7 @@ const ManageLesson: React.FC = () => {
         worksheetPageImages: draftForPersist.worksheetPageImages,
         worksheetTextRegions: draftForPersist.worksheetTextRegions,
         worksheetBlanks: draftForPersist.worksheetBlanks,
+        worksheetExamHighlights: draftForPersist.worksheetExamHighlights,
         worksheetFootnoteAnchors: draftForPersist.worksheetFootnoteAnchors,
         pdfProcessing: draftForPersist.pdfProcessing,
         footnotes: draftForPersist.footnotes,
@@ -3498,6 +3617,7 @@ const ManageLesson: React.FC = () => {
         worksheetPageImages: uploadedWorksheet.pageImages,
         worksheetTextRegions: uploadedWorksheet.textRegions,
         worksheetBlanks: normalizedDraft.worksheetBlanks,
+        worksheetExamHighlights: normalizedDraft.worksheetExamHighlights,
       });
       setLessonContent(savedDraft.contentHtml);
       setLessonPdfName(savedDraft.pdfName);
@@ -3507,6 +3627,7 @@ const ManageLesson: React.FC = () => {
       setWorksheetPageImages(savedDraft.worksheetPageImages);
       setWorksheetTextRegions(savedDraft.worksheetTextRegions);
       setWorksheetBlanks(savedDraft.worksheetBlanks);
+      setWorksheetExamHighlights(savedDraft.worksheetExamHighlights);
       setWorksheetFootnoteAnchors(savedDraft.worksheetFootnoteAnchors);
       setLessonFootnotes(savedDraft.footnotes);
       if (committedFootnoteEditor) {
@@ -3565,6 +3686,7 @@ const ManageLesson: React.FC = () => {
         worksheetPageImages: savedDraft.worksheetPageImages,
         worksheetTextRegions: savedDraft.worksheetTextRegions,
         worksheetBlanks: savedDraft.worksheetBlanks,
+        worksheetExamHighlights: savedDraft.worksheetExamHighlights,
         selectedPdfFile: null,
         preparedPdf: null,
         footnoteImageDrafts: {},
@@ -3866,9 +3988,11 @@ const ManageLesson: React.FC = () => {
                         worksheetPageImages={worksheetPageImages}
                         worksheetTextRegions={worksheetTextRegions}
                         worksheetBlanks={worksheetBlanks}
+                        worksheetExamHighlights={sortedExamHighlights}
                         worksheetFootnoteAnchors={worksheetFootnoteAnchors}
                         worksheetTool={worksheetTool}
                         activeBlankId={activeBlankId}
+                        activeExamHighlightId={activeExamHighlightId}
                         activeFootnoteAnchorId={activeFootnoteAnchorId}
                         draftBlank={draftBlank}
                         draftBlankAnswer={draftBlankAnswer}
@@ -3882,6 +4006,8 @@ const ManageLesson: React.FC = () => {
                         onWorksheetToolChange={setWorksheetTool}
                         onSelectBlank={handleSelectBlank}
                         onDeleteBlank={handleDeleteBlank}
+                        onSelectExamHighlight={handleSelectExamHighlight}
+                        onDeleteExamHighlight={handleDeleteExamHighlight}
                         onSelectFootnoteAnchor={handleSelectFootnoteAnchor}
                         onDeleteFootnoteAnchor={handleDeleteFootnoteAnchor}
                         onActivateFootnoteAnchor={
@@ -3899,6 +4025,9 @@ const ManageLesson: React.FC = () => {
                         onInsertFootnoteToken={insertFootnoteTokenIntoContent}
                         onCreateBlankFromSelection={
                           handleCreateBlankFromSelection
+                        }
+                        onCreateExamHighlightFromSelection={
+                          handleCreateExamHighlightFromSelection
                         }
                         onCreateFootnoteAnchorFromSelection={
                           handleCreateFootnoteAnchorFromSelection

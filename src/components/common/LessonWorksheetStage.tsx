@@ -7,6 +7,7 @@ import {
   normalizeBlankText,
   splitTextRegionIntoTokens,
   type LessonWorksheetBlank,
+  type LessonWorksheetExamHighlight,
   type LessonWorksheetFootnoteAnchor,
   type LessonWorksheetPageImage,
   type LessonWorksheetStageMode,
@@ -21,7 +22,7 @@ type StudentTool =
   | "rectangle"
   | "eraser"
   | "text";
-type TeacherWorksheetTool = "pan" | "ocr" | "box" | "footnote";
+type TeacherWorksheetTool = "pan" | "ocr" | "box" | "exam" | "footnote";
 type DrawingColor = "blue" | "red" | "green" | "yellow" | "black";
 
 interface LessonWorksheetStageProps {
@@ -30,13 +31,17 @@ interface LessonWorksheetStageProps {
   mode: LessonWorksheetStageMode;
   teacherTool?: TeacherWorksheetTool;
   textRegions?: LessonWorksheetTextRegion[];
+  examHighlights?: LessonWorksheetExamHighlight[];
   footnoteAnchors?: LessonWorksheetFootnoteAnchor[];
   selectedFootnoteAnchorId?: string | null;
+  selectedExamHighlightId?: string | null;
   footnoteTitles?: Record<string, string>;
   selectedBlankId?: string | null;
   studentAnswers?: Record<string, { value?: string; status?: AnswerStatus }>;
   onSelectBlank?: (blankId: string) => void;
   onDeleteBlank?: (blankId: string) => void;
+  onSelectExamHighlight?: (highlightId: string) => void;
+  onDeleteExamHighlight?: (highlightId: string) => void;
   onSelectFootnoteAnchor?: (anchorId: string) => void;
   onDeleteFootnoteAnchor?: (anchorId: string) => void;
   onActivateFootnoteAnchor?: (anchorId: string) => void;
@@ -52,6 +57,15 @@ interface LessonWorksheetStageProps {
     source: "ocr" | "manual",
   ) => void;
   onCreateFootnoteAnchorFromSelection?: (
+    page: number,
+    rect: {
+      leftRatio: number;
+      topRatio: number;
+      widthRatio: number;
+      heightRatio: number;
+    },
+  ) => void;
+  onCreateExamHighlightFromSelection?: (
     page: number,
     rect: {
       leftRatio: number;
@@ -668,18 +682,23 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   mode,
   teacherTool = "pan",
   textRegions = [],
+  examHighlights = [],
   footnoteAnchors = [],
   selectedFootnoteAnchorId = null,
+  selectedExamHighlightId = null,
   footnoteTitles = {},
   selectedBlankId,
   studentAnswers = {},
   onSelectBlank,
   onDeleteBlank,
+  onSelectExamHighlight,
+  onDeleteExamHighlight,
   onSelectFootnoteAnchor,
   onDeleteFootnoteAnchor,
   onActivateFootnoteAnchor,
   onCreateBlankFromSelection,
   onCreateFootnoteAnchorFromSelection,
+  onCreateExamHighlightFromSelection,
   onStudentAnswerChange,
   pendingBlank = null,
   annotationEnabled,
@@ -801,6 +820,16 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     });
     return grouped;
   }, [blanks]);
+
+  const examHighlightsByPage = useMemo(() => {
+    const grouped = new Map<number, LessonWorksheetExamHighlight[]>();
+    examHighlights.forEach((highlight) => {
+      const current = grouped.get(highlight.page) || [];
+      current.push(highlight);
+      grouped.set(highlight.page, current);
+    });
+    return grouped;
+  }, [examHighlights]);
 
   const footnoteAnchorsByPage = useMemo(() => {
     const grouped = new Map<number, LessonWorksheetFootnoteAnchor[]>();
@@ -1459,6 +1488,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
       }
       if (
         (event.target as HTMLElement).closest("[data-blank-box]") ||
+        (event.target as HTMLElement).closest("[data-exam-highlight]") ||
         (event.target as HTMLElement).closest("[data-footnote-anchor]")
       )
         return;
@@ -1501,6 +1531,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     const target = event.target as HTMLElement;
     if (
       target.closest("[data-blank-box]") ||
+      target.closest("[data-exam-highlight]") ||
       target.closest("[data-annotation-note]") ||
       target.closest("[data-footnote-anchor]")
     )
@@ -1684,6 +1715,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
       nextRect.widthRatio < MIN_DRAG_SIZE ||
       nextRect.heightRatio < MIN_DRAG_SIZE;
     const isBoxTool = teacherTool === "box";
+    const isExamTool = teacherTool === "exam";
     const isFootnoteTool = teacherTool === "footnote";
 
     if (isFootnoteTool) {
@@ -1700,6 +1732,19 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
           )
         : nextRect;
       onCreateFootnoteAnchorFromSelection?.(pageImage.page, anchorRect);
+      setDraftRect(null);
+      return;
+    }
+
+    if (isExamTool) {
+      if (
+        nextRect.widthRatio < MIN_BOX_DRAG_SIZE ||
+        nextRect.heightRatio < MIN_BOX_DRAG_SIZE
+      ) {
+        setDraftRect(null);
+        return;
+      }
+      onCreateExamHighlightFromSelection?.(pageImage.page, nextRect);
       setDraftRect(null);
       return;
     }
@@ -2377,6 +2422,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
           )}
         {visiblePageImages.map((pageImage) => {
           const pageBlanks = blanksByPage.get(pageImage.page) || [];
+          const pageExamHighlights =
+            examHighlightsByPage.get(pageImage.page) || [];
           const pageFootnoteAnchors =
             footnoteAnchorsByPage.get(pageImage.page) || [];
           const pageRegions = regionsByPage.get(pageImage.page) || [];
@@ -2621,7 +2668,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                               : "cursor-grab"
                             : teacherTool === "box"
                               ? "cursor-default"
-                              : teacherTool === "footnote"
+                              : teacherTool === "exam" ||
+                                  teacherTool === "footnote"
                                 ? "cursor-crosshair"
                                 : "cursor-text"
                         }`
@@ -2705,6 +2753,65 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                     draggable={false}
                     onDragStart={(event) => event.preventDefault()}
                   />
+
+                  {pageExamHighlights.map((highlight) => {
+                    const isSelectedHighlight =
+                      selectedExamHighlightId === highlight.id;
+                    const highlightClassName = isTeacherEditMode
+                      ? `absolute z-[8] rounded-sm border bg-amber-200/35 mix-blend-multiply transition ${
+                          isSelectedHighlight
+                            ? "border-amber-500 shadow-[0_0_0_3px_rgba(251,191,36,0.24)]"
+                            : "border-amber-300/70 hover:border-amber-500"
+                        }`
+                      : isStudentSolveMode
+                        ? "pointer-events-none absolute z-[8] animate-pulse rounded-sm border border-amber-300/70 bg-amber-200/35 shadow-[0_0_18px_rgba(251,191,36,0.26)] mix-blend-multiply"
+                        : "pointer-events-none absolute z-[8] rounded-sm border border-amber-300/70 bg-amber-200/35 mix-blend-multiply";
+                    const highlightStyle = {
+                      left: toPercent(highlight.leftRatio),
+                      top: toPercent(highlight.topRatio),
+                      width: toPercent(highlight.widthRatio),
+                      height: toPercent(highlight.heightRatio),
+                    };
+
+                    if (!isTeacherEditMode) {
+                      return (
+                        <div
+                          key={highlight.id}
+                          className={highlightClassName}
+                          style={highlightStyle}
+                        />
+                      );
+                    }
+
+                    return (
+                      <button
+                        key={highlight.id}
+                        type="button"
+                        data-exam-highlight="true"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          onSelectExamHighlight?.(highlight.id);
+                        }}
+                        onPointerDown={(event) => {
+                          if (event.button === 2) {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            onDeleteExamHighlight?.(highlight.id);
+                          }
+                        }}
+                        onContextMenu={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          onDeleteExamHighlight?.(highlight.id);
+                        }}
+                        aria-label="시험 하이라이트 선택"
+                        title="시험 하이라이트"
+                        className={highlightClassName}
+                        style={highlightStyle}
+                      />
+                    );
+                  })}
 
                   {isAnnotationEnabled &&
                     (pageStrokes.length > 0 || currentDraftStroke) && (
@@ -3277,7 +3384,11 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
 
                   {showDraftRect && liveDraft && (
                     <div
-                      className="pointer-events-none absolute z-30 border-2 border-sky-500 bg-sky-500/20"
+                      className={`pointer-events-none absolute z-30 border-2 ${
+                        teacherTool === "exam"
+                          ? "border-amber-500 bg-amber-200/30"
+                          : "border-sky-500 bg-sky-500/20"
+                      }`}
                       style={{
                         left: toPercent(liveDraft.leftRatio),
                         top: toPercent(liveDraft.topRatio),

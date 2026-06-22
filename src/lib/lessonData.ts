@@ -1,9 +1,11 @@
 import {
   normalizeWorksheetBlanks,
+  normalizeWorksheetExamHighlights,
   normalizeWorksheetFootnoteAnchors,
   normalizeWorksheetPageImages,
   normalizeWorksheetTextRegions,
   type LessonWorksheetBlank,
+  type LessonWorksheetExamHighlight,
   type LessonWorksheetFootnoteAnchor,
   type LessonWorksheetPageImage,
   type LessonWorksheetTextRegion,
@@ -52,6 +54,7 @@ export interface LessonData {
   worksheetPageImages?: LessonWorksheetPageImage[];
   worksheetTextRegions?: LessonWorksheetTextRegion[];
   worksheetBlanks?: LessonWorksheetBlank[];
+  worksheetExamHighlights?: LessonWorksheetExamHighlight[];
   worksheetFootnoteAnchors?: LessonWorksheetFootnoteAnchor[];
   pdfProcessing?: LessonPdfProcessingMeta;
   footnotes?: LessonFootnote[];
@@ -69,6 +72,7 @@ export interface NormalizedLessonData extends LessonData {
   worksheetPageImages: LessonWorksheetPageImage[];
   worksheetTextRegions: LessonWorksheetTextRegion[];
   worksheetBlanks: LessonWorksheetBlank[];
+  worksheetExamHighlights: LessonWorksheetExamHighlight[];
   worksheetFootnoteAnchors: LessonWorksheetFootnoteAnchor[];
   pdfProcessing: LessonPdfProcessingMeta;
   footnotes: LessonFootnote[];
@@ -83,6 +87,7 @@ export interface LessonContentSections {
     pageImages: LessonWorksheetPageImage[];
     textRegions: LessonWorksheetTextRegion[];
     blanks: LessonWorksheetBlank[];
+    examHighlights: LessonWorksheetExamHighlight[];
     footnoteAnchors: LessonWorksheetFootnoteAnchor[];
   };
 }
@@ -396,6 +401,9 @@ export const normalizeLessonData = (
     worksheetBlanks: normalizeWorksheetBlanks(
       source.worksheetBlanks ?? fallback.worksheetBlanks,
     ),
+    worksheetExamHighlights: normalizeWorksheetExamHighlights(
+      source.worksheetExamHighlights ?? fallback.worksheetExamHighlights,
+    ),
     worksheetFootnoteAnchors: normalizeWorksheetFootnoteAnchors(
       source.worksheetFootnoteAnchors ?? fallback.worksheetFootnoteAnchors,
     ),
@@ -424,6 +432,7 @@ export const getLessonContentSections = (
       pageImages: normalized.worksheetPageImages,
       textRegions: normalized.worksheetTextRegions,
       blanks: normalized.worksheetBlanks,
+      examHighlights: normalized.worksheetExamHighlights,
       footnoteAnchors: normalized.worksheetFootnoteAnchors,
     },
   };

@@ -26,6 +26,15 @@ export interface LessonWorksheetBlank {
   source?: "ocr" | "manual";
 }
 
+export interface LessonWorksheetExamHighlight {
+  id: string;
+  page: number;
+  leftRatio: number;
+  topRatio: number;
+  widthRatio: number;
+  heightRatio: number;
+}
+
 export interface LessonWorksheetFootnoteAnchor {
   id: string;
   footnoteId: string;
@@ -359,6 +368,59 @@ export const normalizeWorksheetBlanks = (
       (item as { source?: string }).source === "manual"
         ? "manual"
         : "ocr") as "ocr" | "manual",
+    }))
+    .filter((item) => item.widthRatio > 0 && item.heightRatio > 0);
+};
+
+export const normalizeWorksheetExamHighlights = (
+  raw: unknown,
+): LessonWorksheetExamHighlight[] => {
+  if (!Array.isArray(raw)) return [];
+
+  return raw
+    .map((item, index) => ({
+      id:
+        String(
+          item && typeof item === "object" && "id" in item
+            ? (item as { id?: string }).id
+            : "",
+        ).trim() || `exam-highlight-${index + 1}`,
+      page: Math.max(
+        1,
+        Number(
+          item && typeof item === "object" && "page" in item
+            ? (item as { page?: number }).page
+            : 1,
+        ) || 1,
+      ),
+      leftRatio: clampRatio(
+        Number(
+          item && typeof item === "object" && "leftRatio" in item
+            ? (item as { leftRatio?: number }).leftRatio
+            : 0,
+        ) || 0,
+      ),
+      topRatio: clampRatio(
+        Number(
+          item && typeof item === "object" && "topRatio" in item
+            ? (item as { topRatio?: number }).topRatio
+            : 0,
+        ) || 0,
+      ),
+      widthRatio: clampRatio(
+        Number(
+          item && typeof item === "object" && "widthRatio" in item
+            ? (item as { widthRatio?: number }).widthRatio
+            : 0,
+        ) || 0,
+      ),
+      heightRatio: clampRatio(
+        Number(
+          item && typeof item === "object" && "heightRatio" in item
+            ? (item as { heightRatio?: number }).heightRatio
+            : 0,
+        ) || 0,
+      ),
     }))
     .filter((item) => item.widthRatio > 0 && item.heightRatio > 0);
 };
