@@ -3367,6 +3367,84 @@ const collectMatchingQuizAttemptDocsByClass = async ({
   });
 };
 
+const runWithConcurrency = async (items, limit, worker) => {
+  const safeItems = Array.isArray(items) ? items : [];
+  const safeLimit = Math.max(1, Number(limit) || 1);
+  const results = new Array(safeItems.length);
+  let nextIndex = 0;
+  const workers = Array.from(
+    { length: Math.min(safeLimit, safeItems.length) },
+    async () => {
+      while (nextIndex < safeItems.length) {
+        const currentIndex = nextIndex;
+        nextIndex += 1;
+        results[currentIndex] = await worker(
+          safeItems[currentIndex],
+          currentIndex,
+        );
+      }
+    },
+  );
+  await Promise.all(workers);
+  return results;
+};
+
+const collectMatchingQuizAttemptDocsByUidChunks = async ({
+  collectionRef,
+  studentUids,
+  unitId,
+  category,
+  examRound,
+}) => {
+  const uidList = Array.from(
+    new Set(
+      Array.from(studentUids || [])
+        .map((uid) => String(uid || '').trim())
+        .filter(Boolean),
+    ),
+  );
+  if (!uidList.length) return [];
+
+  const uidChunks = [];
+  for (let index = 0; index < uidList.length; index += 10) {
+    uidChunks.push(uidList.slice(index, index + 10));
+  }
+
+  const snapshots = await runWithConcurrency(uidChunks, 4, (uidChunk) =>
+    collectionRef
+      .where('uid', 'in', uidChunk)
+      .get()
+      .catch((error) => {
+        console.warn('Failed to query quiz attempts by uid chunk.', {
+          collectionPath: collectionRef.path,
+          uidCount: uidChunk.length,
+          errorMessage: String(error?.message || 'query-failed'),
+        });
+        return null;
+      }),
+  );
+
+  const docsByPath = new Map();
+  const uidSet = new Set(uidList);
+  snapshots.forEach((snapshot) => {
+    snapshot?.forEach((docSnap) => {
+      const data = docSnap.data() || {};
+      const uid = String(data.uid || '').trim();
+      if (
+        !uidSet.has(uid)
+        || String(data.unitId || '').trim() !== unitId
+        || normalizeMockExamCategory(data.category) !== category
+        || !quizAttemptMatchesExamRound(data, category, examRound)
+      ) {
+        return;
+      }
+      docsByPath.set(docSnap.ref.path, docSnap);
+    });
+  });
+
+  return Array.from(docsByPath.values());
+};
+
 const filterExistingRefs = async (refs) => {
   const uniqueRefs = Array.from(
     new Map(
@@ -3472,7 +3550,12 @@ const resetAssessmentAttemptsByClassHandler = onCall(
       const pointTransactionRefs = [];
       const affectedStudentUids = new Set();
 
-      const [classResultDocs, classSubmissionDocs] = await Promise.all([
+      const [
+        classResultDocs,
+        classSubmissionDocs,
+        uidResultDocs,
+        uidSubmissionDocs,
+      ] = await Promise.all([
         collectMatchingQuizAttemptDocsByClass({
           collectionRef: quizResultsCollection,
           unitId,
@@ -3489,56 +3572,23 @@ const resetAssessmentAttemptsByClassHandler = onCall(
           className,
           normalizedClassId,
         }),
+        collectMatchingQuizAttemptDocsByUidChunks({
+          collectionRef: quizResultsCollection,
+          studentUids,
+          unitId,
+          category,
+          examRound,
+        }),
+        collectMatchingQuizAttemptDocsByUidChunks({
+          collectionRef: quizSubmissionsCollection,
+          studentUids,
+          unitId,
+          category,
+          examRound,
+        }),
       ]);
 
-      for (const studentUid of studentUids) {
-        const [resultSnap, submissionSnap] = await Promise.all([
-          quizResultsCollection.where('uid', '==', studentUid).get(),
-          quizSubmissionsCollection.where('uid', '==', studentUid).get().catch(() => null),
-        ]);
-
-        resultSnap.forEach((docSnap) => {
-          const data = docSnap.data() || {};
-          if (
-            String(data.uid || '').trim() !== studentUid
-            || String(data.unitId || '').trim() !== unitId
-            || normalizeMockExamCategory(data.category) !== category
-            || !quizAttemptMatchesExamRound(data, category, examRound)
-          ) {
-            return;
-          }
-          resultRefs.push(docSnap.ref);
-          affectedStudentUids.add(studentUid);
-
-          const sourceId = `quiz-result-${docSnap.id}`;
-          pointTransactionRefs.push(
-            db.doc(
-              `${getPointCollectionPath(year, semester, 'point_transactions')}/${buildActivityTransactionId(studentUid, 'quiz', sourceId)}`,
-            ),
-          );
-          pointTransactionRefs.push(
-            db.doc(
-              `${getPointCollectionPath(year, semester, 'point_transactions')}/${buildActivityTransactionId(studentUid, 'quiz_bonus', sourceId)}`,
-            ),
-          );
-        });
-
-        submissionSnap?.forEach((docSnap) => {
-          const data = docSnap.data() || {};
-          if (
-            String(data.uid || '').trim() !== studentUid
-            || String(data.unitId || '').trim() !== unitId
-            || normalizeMockExamCategory(data.category) !== category
-            || !quizAttemptMatchesExamRound(data, category, examRound)
-          ) {
-            return;
-          }
-          submissionRefs.push(docSnap.ref);
-          affectedStudentUids.add(studentUid);
-        });
-      }
-
-      classResultDocs.forEach((docSnap) => {
+      [...uidResultDocs, ...classResultDocs].forEach((docSnap) => {
         const data = docSnap.data() || {};
         const studentUid = String(data.uid || '').trim();
         if (!studentUid) return;
@@ -3558,7 +3608,7 @@ const resetAssessmentAttemptsByClassHandler = onCall(
         );
       });
 
-      classSubmissionDocs.forEach((docSnap) => {
+      [...uidSubmissionDocs, ...classSubmissionDocs].forEach((docSnap) => {
         const data = docSnap.data() || {};
         const studentUid = String(data.uid || '').trim();
         if (!studentUid) return;
@@ -3566,17 +3616,28 @@ const resetAssessmentAttemptsByClassHandler = onCall(
         affectedStudentUids.add(studentUid);
       });
 
-      const deletedQuizResultCount = await commitDeleteRefsInChunks(resultRefs);
-      const deletedSubmissionCount = await commitDeleteRefsInChunks(submissionRefs);
-      const existingPointTransactionRefs = await filterExistingRefs(pointTransactionRefs);
-      const deletedPointTransactionCount = await commitDeleteRefsInChunks(existingPointTransactionRefs);
+      const existingPointTransactionRefsPromise = filterExistingRefs(
+        pointTransactionRefs,
+      );
+      const [
+        deletedQuizResultCount,
+        deletedSubmissionCount,
+        existingPointTransactionRefs,
+      ] = await Promise.all([
+        commitDeleteRefsInChunks(resultRefs),
+        commitDeleteRefsInChunks(submissionRefs),
+        existingPointTransactionRefsPromise,
+      ]);
+      const deletedPointTransactionCount = await commitDeleteRefsInChunks(
+        existingPointTransactionRefs,
+      );
 
       const affectedStudentList = Array.from(affectedStudentUids);
       const pointPolicy = await db.runTransaction((transaction) =>
         loadPolicy(transaction, year, semester),
       );
       const walletRebuildErrors = [];
-      for (const studentUid of affectedStudentList) {
+      await runWithConcurrency(affectedStudentList, 6, async (studentUid) => {
         try {
           await rebuildQuizResetWallet({
             year,
@@ -3596,7 +3657,7 @@ const resetAssessmentAttemptsByClassHandler = onCall(
             error,
           });
         }
-      }
+      });
       const recalculatedWalletCount = affectedStudentList.length - walletRebuildErrors.length;
 
       if (deletedPointTransactionCount > 0) {
