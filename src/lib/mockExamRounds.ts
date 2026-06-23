@@ -61,6 +61,12 @@ export const getMockExamRoundNumber = (round: unknown) => {
   return Number(normalized.replace("round_", "")) || 1;
 };
 
+export const isPresetMockExamRound = (round: unknown) =>
+  getMockExamRoundNumber(round) <= MOCK_EXAM_ROUNDS.length;
+
+export const isAdditionalMockExamRound = (round: unknown) =>
+  !isPresetMockExamRound(round);
+
 export const formatMockExamRoundLabel = (round: unknown) =>
   `모의고사 ${getMockExamRoundNumber(round)}회`;
 

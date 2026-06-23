@@ -29,6 +29,7 @@ import {
 import {
   formatMockExamRoundLabel,
   getMockExamResultCategory,
+  isAdditionalMockExamRound,
   isMockExamCategory,
   mockExamRoundMatches,
   normalizeMockExamRound,
@@ -225,7 +226,9 @@ const QuizRunner: React.FC = () => {
     email: "",
   });
 
-  const maxHintUses = quizConfig?.hintLimit ?? 2;
+  const isMockExamAttempt = isMockExamCategory(category);
+  const maxHintUses = isMockExamAttempt ? 0 : (quizConfig?.hintLimit ?? 2);
+  const canUseHints = maxHintUses > 0;
   const fallbackStudentUid =
     normalizeStudentText(currentUser?.uid) ||
     normalizeStudentText(userData?.uid);
@@ -1275,11 +1278,11 @@ const QuizRunner: React.FC = () => {
         }
       }
 
-      if (
-        !isMockExamCategory(category) &&
-        !nextQuizConfig.allowRetake &&
-        historyDocs.length > 0
-      ) {
+      const allowRetakeForAttempt = isMockExamCategory(category)
+        ? isAdditionalMockExamRound(examRound)
+        : nextQuizConfig.allowRetake;
+
+      if (!allowRetakeForAttempt && historyDocs.length > 0) {
         setBlockReason("재응시가 허용되지 않는 평가입니다.");
         setView("intro");
         return;
@@ -1494,7 +1497,7 @@ const QuizRunner: React.FC = () => {
   const revealHint = (question: Question) => {
     const questionId = question.id;
     if (revealedHints[questionId]) return;
-    if (hintUsedCount >= maxHintUses) {
+    if (!canUseHints || hintUsedCount >= maxHintUses) {
       alert(
         `힌트는 한 번의 평가에서 최대 ${maxHintUses}회만 사용할 수 있습니다.`,
       );
@@ -1759,9 +1762,11 @@ const QuizRunner: React.FC = () => {
             {selectedQuestions.length}
           </div>
           <div className="flex items-center gap-2">
-            <div className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">
-              힌트 {hintUsedCount}/{maxHintUses}
-            </div>
+            {canUseHints && (
+              <div className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700">
+                힌트 {hintUsedCount}/{maxHintUses}
+              </div>
+            )}
             <div className="flex items-center gap-2 rounded-full border border-gray-200 bg-white px-3 py-1 shadow-sm">
               <i className="fas fa-stopwatch text-red-500"></i>
               <span className="w-12 text-center font-mono text-lg font-bold text-gray-700">
@@ -1791,7 +1796,7 @@ const QuizRunner: React.FC = () => {
             {question.question}
           </h2>
 
-          {!!(question.hintEnabled && question.hint) && (
+          {!!(canUseHints && question.hintEnabled && question.hint) && (
             <div className="mb-3 shrink-0">
               <button
                 type="button"

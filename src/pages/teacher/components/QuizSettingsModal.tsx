@@ -18,6 +18,7 @@ import {
   formatMockExamRoundLabel,
   getMockExamRoundsFromAssessmentConfig,
   getNextMockExamRound,
+  isAdditionalMockExamRound,
   isMockExamCategory,
   normalizeMockExamRound,
   sortMockExamRounds,
@@ -112,6 +113,8 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
     useState<MockExamRound[]>(MOCK_EXAM_ROUNDS);
 
   const isMockExam = isMockExamCategory(category);
+  const isRetakableMockExam =
+    isMockExam && isAdditionalMockExamRound(selectedExamRound);
   const categoryLabel = CATEGORY_LABELS[category] || "평가";
   const settingsTitle = isMockExam
     ? formatMockExamRoundLabel(selectedExamRound)
@@ -260,7 +263,12 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
           legacyStatus[key] === true ||
           (legacyEnabledForDefaultRound && legacyStatus[legacyKey] === true),
         ...(isMockExam
-          ? { allowRetake: true, questionOrder: "unit", randomOrder: false }
+          ? {
+              allowRetake: isRetakableMockExam,
+              questionOrder: "unit",
+              randomOrder: false,
+              hintLimit: 0,
+            }
           : {}),
       };
       const defaultClassIds = visibilityOptions.defaultGroup.targets.map(
@@ -282,9 +290,11 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
           1,
           Math.round(normalizedEntry.timeLimit / 60),
         ),
-        allowRetake: isMockExam ? true : normalizedEntry.allowRetake,
+        allowRetake: isMockExam
+          ? isRetakableMockExam
+          : normalizedEntry.allowRetake,
         cooldown: normalizedEntry.cooldown,
-        hintLimit: normalizedEntry.hintLimit,
+        hintLimit: isMockExam ? 0 : normalizedEntry.hintLimit,
         visibleClassIds: normalizedEntry.hasExplicitClassVisibility
           ? normalizedEntry.visibleClassIds
           : [...defaultClassIds],
@@ -337,9 +347,11 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
             randomOrder: settings.questionOrder === "random",
             questionOrder: settings.questionOrder,
             timeLimit: Math.max(1, settings.timeLimitMinutes) * 60,
-            allowRetake: isMockExam ? true : settings.allowRetake,
+            allowRetake: isMockExam
+              ? isRetakableMockExam
+              : settings.allowRetake,
             cooldown: Math.max(0, settings.cooldown),
-            hintLimit: Math.max(0, settings.hintLimit),
+            hintLimit: isMockExam ? 0 : Math.max(0, settings.hintLimit),
             visibleTargetGrade: "3",
             visibleClassIds: normalizedSelectedClassIds,
             visibilityVersion: 2,
@@ -463,8 +475,9 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
               {target.fullLabel} 응시 기록을 초기화합니다.
             </div>
             <p className="mt-1 text-[10px] leading-4 text-rose-700">
-              응시 기록, 제출 상태, 사용한 힌트, 해당 평가 포인트 거래를
-              정리합니다.
+              {isMockExam
+                ? "응시 기록, 제출 상태, 해당 평가 포인트 거래를 정리합니다."
+                : "응시 기록, 제출 상태, 사용한 힌트, 해당 평가 포인트 거래를 정리합니다."}
             </p>
             <div className="mt-2 flex flex-wrap justify-end gap-1.5">
               <button
@@ -536,8 +549,8 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
               }
             >
               {isMockExam && (
-                <section className="border-b border-gray-200 bg-white p-4">
-                  <div>
+                <section className="bg-white pt-4">
+                  <div className="px-4">
                     <h4 className="text-sm font-extrabold text-gray-900">
                       모의고사 회차
                     </h4>
@@ -546,7 +559,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                       관리합니다.
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 rounded-2xl border border-gray-200 bg-slate-100/70 p-1.5">
+                  <div className="mt-3 flex items-center gap-2 border-y border-gray-200 bg-slate-100/70 px-3 py-2">
                     <div className="flex min-w-0 flex-1 items-end gap-1 overflow-x-auto pb-1 [scrollbar-width:thin]">
                       {mockExamRounds.map((round) => {
                         const active = selectedExamRound === round;
@@ -587,8 +600,11 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                 {isMockExam && (
                   <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700">
                     {formatMockExamRoundLabel(selectedExamRound)} 설정을
-                    조정하고 있습니다. 모의고사는 재응시를 항상 허용하고 대기
-                    시간만 적용합니다.
+                    조정하고 있습니다.{" "}
+                    {isRetakableMockExam
+                      ? "추가 회차는 재응시를 계속 허용하고 대기 시간만 적용합니다."
+                      : "1~3회는 최초 응시 후 재응시할 수 없습니다."}{" "}
+                    모의고사에는 힌트가 없습니다.
                   </div>
                 )}
 
@@ -856,67 +872,105 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                   <section className={sectionCardClassName}>
                     <div className="mb-3">
                       <h4 className="text-base font-extrabold text-gray-900">
-                        힌트/재응시 설정
+                        {isMockExam ? "재응시 설정" : "힌트/재응시 설정"}
                       </h4>
                       <p className="mt-1 text-xs text-gray-500">
-                        힌트 횟수와 재응시 규칙을 조정합니다.
+                        {isMockExam
+                          ? "회차별 재응시 규칙을 확인합니다."
+                          : "힌트 횟수와 재응시 규칙을 조정합니다."}
                       </p>
                     </div>
 
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <label className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
-                        <span className="text-xs font-bold text-gray-500">
-                          힌트 사용 가능 횟수
-                        </span>
-                        <input
-                          type="number"
-                          min={0}
-                          value={settings.hintLimit}
-                          onChange={(event) =>
-                            setSettings((prev) => ({
-                              ...prev,
-                              hintLimit: Math.max(
-                                0,
-                                parseInt(event.target.value, 10) || 0,
-                              ),
-                            }))
-                          }
-                          className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-center text-base font-extrabold text-gray-800"
-                        />
-                      </label>
+                    {!isMockExam && (
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <label className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
+                          <span className="text-xs font-bold text-gray-500">
+                            힌트 사용 가능 횟수
+                          </span>
+                          <input
+                            type="number"
+                            min={0}
+                            value={settings.hintLimit}
+                            onChange={(event) =>
+                              setSettings((prev) => ({
+                                ...prev,
+                                hintLimit: Math.max(
+                                  0,
+                                  parseInt(event.target.value, 10) || 0,
+                                ),
+                              }))
+                            }
+                            className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-center text-base font-extrabold text-gray-800"
+                          />
+                        </label>
 
-                      <label className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
-                        <span className="text-xs font-bold text-gray-500">
-                          재응시 대기 시간 (분)
-                        </span>
-                        <input
-                          type="number"
-                          min={0}
-                          value={settings.cooldown}
-                          onChange={(event) =>
-                            setSettings((prev) => ({
-                              ...prev,
-                              cooldown: Math.max(
-                                0,
-                                parseInt(event.target.value, 10) || 0,
-                              ),
-                            }))
-                          }
-                          className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-center text-base font-extrabold text-gray-800"
-                        />
-                      </label>
-                    </div>
+                        <label className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
+                          <span className="text-xs font-bold text-gray-500">
+                            재응시 대기 시간 (분)
+                          </span>
+                          <input
+                            type="number"
+                            min={0}
+                            value={settings.cooldown}
+                            onChange={(event) =>
+                              setSettings((prev) => ({
+                                ...prev,
+                                cooldown: Math.max(
+                                  0,
+                                  parseInt(event.target.value, 10) || 0,
+                                ),
+                              }))
+                            }
+                            className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-center text-base font-extrabold text-gray-800"
+                          />
+                        </label>
+                      </div>
+                    )}
 
                     {isMockExam ? (
-                      <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50 px-3.5 py-3">
-                        <div className="text-sm font-bold text-blue-800">
-                          재응시 항상 허용
+                      isRetakableMockExam ? (
+                        <>
+                          <label className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
+                            <span className="text-xs font-bold text-gray-500">
+                              재응시 대기 시간 (분)
+                            </span>
+                            <input
+                              type="number"
+                              min={0}
+                              value={settings.cooldown}
+                              onChange={(event) =>
+                                setSettings((prev) => ({
+                                  ...prev,
+                                  cooldown: Math.max(
+                                    0,
+                                    parseInt(event.target.value, 10) || 0,
+                                  ),
+                                }))
+                              }
+                              className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-center text-base font-extrabold text-gray-800"
+                            />
+                          </label>
+                          <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50 px-3.5 py-3">
+                            <div className="text-sm font-bold text-blue-800">
+                              추가 회차 재응시 허용
+                            </div>
+                            <div className="mt-0.5 text-xs font-medium text-blue-600">
+                              학생은 대기 시간이 끝나면 이 회차를 다시 응시할 수
+                              있습니다.
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-3">
+                          <div className="text-sm font-bold text-slate-800">
+                            기본 회차 재응시 불가
+                          </div>
+                          <div className="mt-0.5 text-xs font-medium text-slate-600">
+                            모의고사 1~3회는 한 번 제출하면 다시 응시할 수
+                            없습니다.
+                          </div>
                         </div>
-                        <div className="mt-0.5 text-xs font-medium text-blue-600">
-                          학생은 대기 시간이 끝나면 같은 회차를 다시 응시할 수
-                          있습니다.
-                        </div>
-                      </div>
+                      )
                     ) : (
                       <label className="mt-3 flex items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white px-3.5 py-3">
                         <div>
