@@ -109,7 +109,6 @@ const QuizIndex: React.FC = () => {
       })),
     [assessmentConfig, mockExamRounds, userData],
   );
-  const isExamPrepActive = mockExamRoundStates.some((item) => item.visible);
 
   if (loading) {
     return (
@@ -134,46 +133,17 @@ const QuizIndex: React.FC = () => {
         <h2 className="mb-3 ml-1 flex items-center gap-2 text-lg font-bold text-gray-800">
           <i className="fas fa-flag-checkered text-blue-600"></i> 모의고사
         </h2>
-        <div
-          className={`
-            group relative overflow-hidden rounded-2xl p-6 shadow-lg transition-transform duration-200
-            ${
-              isExamPrepActive
-                ? "bg-gradient-to-br from-blue-800 to-blue-500 text-white"
-                : "cursor-not-allowed bg-gray-200 text-gray-400"
-            }
-          `}
-        >
-          <i
-            className={`fas fa-pen-fancy absolute -bottom-5 -right-5 text-8xl opacity-10 -rotate-15 ${
-              !isExamPrepActive ? "hidden" : ""
-            }`}
-          ></i>
+        <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-800 to-blue-500 p-6 text-white shadow-lg transition-transform duration-200">
+          <i className="fas fa-pen-fancy absolute -bottom-5 -right-5 text-8xl opacity-10 -rotate-15"></i>
 
           <div className="relative z-10 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
             <div className="min-w-0">
-              <div
-                className={`mb-2 inline-block rounded px-2 py-1 text-[10px] font-bold shadow-sm ${
-                  isExamPrepActive
-                    ? "bg-red-500 text-white"
-                    : "bg-gray-400 text-white"
-                }`}
-              >
-                {isExamPrepActive ? "FINAL CHECK" : "비공개"}
+              <div className="mb-2 inline-block rounded bg-red-500 px-2 py-1 text-[10px] font-bold text-white shadow-sm">
+                FINAL CHECK
               </div>
-              <h3 className="mb-1 text-2xl font-black">
-                모의고사 {isExamPrepActive ? "문제" : "(준비중)"}
-              </h3>
-              <p
-                className={`text-sm font-medium ${
-                  isExamPrepActive
-                    ? "text-blue-100 opacity-90"
-                    : "text-gray-400"
-                }`}
-              >
-                {isExamPrepActive
-                  ? "실제 시험처럼 문제를 풀어보고 실력을 점검하세요."
-                  : "선생님이 평가를 활성화하면 시작할 수 있습니다."}
+              <h3 className="mb-1 text-2xl font-black">모의고사 문제</h3>
+              <p className="text-sm font-medium text-blue-100 opacity-90">
+                실제 시험처럼 문제를 풀어보고 실력을 점검하세요.
               </p>
             </div>
 
@@ -195,9 +165,7 @@ const QuizIndex: React.FC = () => {
                   className={`inline-flex h-11 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-extrabold shadow-sm transition ${
                     visible
                       ? "bg-white text-blue-700 hover:bg-blue-50"
-                      : isExamPrepActive
-                        ? "cursor-not-allowed bg-white/25 text-white/70 ring-1 ring-white/20"
-                        : "cursor-not-allowed bg-white/70 text-gray-500 ring-1 ring-gray-300"
+                      : "cursor-not-allowed bg-white/25 text-white/70 ring-1 ring-white/20"
                   }`}
                   aria-label={`${formatMockExamRoundLabel(round)} ${
                     visible ? "시작" : "잠김"
