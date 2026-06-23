@@ -111,6 +111,13 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
   );
   const [mockExamRounds, setMockExamRounds] =
     useState<MockExamRound[]>(MOCK_EXAM_ROUNDS);
+  const [assessmentSettingsMap, setAssessmentSettingsMap] = useState<
+    Record<string, unknown>
+  >({});
+  const [legacyStatusMap, setLegacyStatusMap] = useState<
+    Record<string, unknown>
+  >({});
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
   const isMockExam = isMockExamCategory(category);
   const isRetakableMockExam =
@@ -173,6 +180,10 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
         : QUESTION_ORDER_OPTIONS,
     [isMockExam],
   );
+  const defaultClassIds = useMemo(
+    () => defaultVisibilityGroup.targets.map((target) => target.id),
+    [defaultVisibilityGroup.targets],
+  );
 
   const buildOrderedVisibleClassIds = (selectedIds: Iterable<string>) => {
     const selectedSet = new Set(
@@ -189,10 +200,57 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
     ];
   };
 
+  const createFormStateForRound = (round: MockExamRound) => {
+    const key = getAssessmentConfigKey(
+      nodeId,
+      category,
+      isMockExam ? round : undefined,
+    );
+    const legacyKey = getAssessmentConfigKey(nodeId, category);
+    const legacyEnabledForDefaultRound =
+      isMockExam && round === DEFAULT_MOCK_EXAM_ROUND;
+    const storedSettings =
+      assessmentSettingsMap[key] ??
+      (legacyEnabledForDefaultRound
+        ? assessmentSettingsMap[legacyKey]
+        : undefined);
+    const retakableMockExam = isMockExam && isAdditionalMockExamRound(round);
+    const rawSettings = storedSettings ?? {
+      active:
+        legacyStatusMap[key] === true ||
+        (legacyEnabledForDefaultRound && legacyStatusMap[legacyKey] === true),
+      ...(isMockExam
+        ? {
+            allowRetake: retakableMockExam,
+            questionOrder: "unit",
+            randomOrder: false,
+            hintLimit: 0,
+          }
+        : {}),
+    };
+    const normalizedEntry = normalizeAssessmentConfigEntry(
+      rawSettings,
+      defaultClassIds,
+    );
+
+    return {
+      active: normalizedEntry.active,
+      questionCount: normalizedEntry.questionCount,
+      questionOrder: normalizedEntry.questionOrder,
+      timeLimitMinutes: Math.max(1, Math.round(normalizedEntry.timeLimit / 60)),
+      allowRetake: isMockExam ? retakableMockExam : normalizedEntry.allowRetake,
+      cooldown: normalizedEntry.cooldown,
+      hintLimit: isMockExam ? 0 : normalizedEntry.hintLimit,
+      visibleClassIds: normalizedEntry.hasExplicitClassVisibility
+        ? normalizedEntry.visibleClassIds
+        : [...defaultClassIds],
+    };
+  };
+
   useEffect(() => {
     if (!isOpen || !nodeId) return;
     void loadSettings();
-  }, [config, isOpen, nodeId, category, selectedExamRound]);
+  }, [config, isOpen, nodeId, category]);
 
   useEffect(() => {
     if (!isOpen || !isMockExam) return;
@@ -200,8 +258,25 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
     setMockExamRounds(MOCK_EXAM_ROUNDS);
   }, [category, isMockExam, isOpen, nodeId]);
 
+  useEffect(() => {
+    if (!isOpen || !settingsLoaded) return;
+    setSettings(createFormStateForRound(selectedExamRound));
+    setConfirmResetClassId("");
+  }, [
+    assessmentSettingsMap,
+    category,
+    defaultClassIds,
+    isMockExam,
+    isOpen,
+    legacyStatusMap,
+    nodeId,
+    selectedExamRound,
+    settingsLoaded,
+  ]);
+
   const handleSelectExamRound = (round: unknown) => {
-    setSelectedExamRound(normalizeMockExamRound(round));
+    const nextRound = normalizeMockExamRound(round);
+    setSelectedExamRound((prev) => (prev === nextRound ? prev : nextRound));
   };
 
   const handleAddMockExamRound = () => {
@@ -213,13 +288,8 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
 
   const loadSettings = async () => {
     setLoading(true);
+    setSettingsLoaded(false);
     try {
-      const key = getAssessmentConfigKey(
-        nodeId,
-        category,
-        isMockExam ? selectedExamRound : undefined,
-      );
-      const legacyKey = getAssessmentConfigKey(nodeId, category);
       const [visibilityOptions, settingsSnap, legacyStatusSnap] =
         await Promise.all([
           getAssessmentVisibilityOptionsFromSchoolConfig(),
@@ -241,64 +311,24 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
         ? (settingsSnap.data() as Record<string, unknown>)
         : {};
       if (isMockExam) {
-        setMockExamRounds((prev) =>
+        setMockExamRounds(() =>
           sortMockExamRounds([
-            ...prev,
+            ...MOCK_EXAM_ROUNDS,
             ...getMockExamRoundsFromAssessmentConfig(
               settingsMap,
               nodeId,
               category,
             ),
-            selectedExamRound,
           ]),
         );
       }
-      const legacyEnabledForDefaultRound =
-        isMockExam && selectedExamRound === DEFAULT_MOCK_EXAM_ROUND;
-      const storedSettings =
-        settingsMap[key] ??
-        (legacyEnabledForDefaultRound ? settingsMap[legacyKey] : undefined);
-      const rawSettings = storedSettings ?? {
-        active:
-          legacyStatus[key] === true ||
-          (legacyEnabledForDefaultRound && legacyStatus[legacyKey] === true),
-        ...(isMockExam
-          ? {
-              allowRetake: isRetakableMockExam,
-              questionOrder: "unit",
-              randomOrder: false,
-              hintLimit: 0,
-            }
-          : {}),
-      };
-      const defaultClassIds = visibilityOptions.defaultGroup.targets.map(
-        (target) => target.id,
-      );
-      const normalizedEntry = normalizeAssessmentConfigEntry(
-        rawSettings,
-        defaultClassIds,
-      );
 
       setDefaultVisibilityGroup(visibilityOptions.defaultGroup);
       setExtraVisibilityGroups(visibilityOptions.extraGroups);
       setExpandedExtraGrades(new Set());
-      setSettings({
-        active: normalizedEntry.active,
-        questionCount: normalizedEntry.questionCount,
-        questionOrder: normalizedEntry.questionOrder,
-        timeLimitMinutes: Math.max(
-          1,
-          Math.round(normalizedEntry.timeLimit / 60),
-        ),
-        allowRetake: isMockExam
-          ? isRetakableMockExam
-          : normalizedEntry.allowRetake,
-        cooldown: normalizedEntry.cooldown,
-        hintLimit: isMockExam ? 0 : normalizedEntry.hintLimit,
-        visibleClassIds: normalizedEntry.hasExplicitClassVisibility
-          ? normalizedEntry.visibleClassIds
-          : [...defaultClassIds],
-      });
+      setAssessmentSettingsMap(settingsMap);
+      setLegacyStatusMap(legacyStatus);
+      setSettingsLoaded(true);
       setConfirmResetClassId("");
     } catch (error) {
       console.error("Failed to load assessment settings:", error);
@@ -543,7 +573,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
           ) : (
             <div className={isMockExam ? "space-y-0" : "space-y-4"}>
               {isMockExam && (
-                <section className="rounded-t-2xl border border-b-0 border-gray-200 bg-white pt-4 shadow-sm">
+                <section className="rounded-t-2xl border-x border-t border-gray-200 bg-white pt-4">
                   <div className="px-4">
                     <h4 className="text-sm font-extrabold text-gray-900">
                       모의고사 회차
@@ -554,7 +584,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                     </p>
                   </div>
                   <div className="mt-3 flex items-end gap-2 border-t border-gray-200 bg-slate-100/70 px-3 pt-2">
-                    <div className="flex min-w-0 flex-1 items-end gap-1 overflow-x-auto [scrollbar-width:thin]">
+                    <div className="flex min-w-0 flex-1 items-end gap-1 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                       {mockExamRounds.map((round) => {
                         const active = selectedExamRound === round;
                         return (
@@ -591,7 +621,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
               <div
                 className={
                   isMockExam
-                    ? "space-y-4 rounded-b-2xl border border-gray-200 bg-white p-4 shadow-sm"
+                    ? "space-y-4 rounded-b-2xl border-x border-b border-gray-200 bg-white p-4 shadow-sm"
                     : "space-y-4"
                 }
               >
