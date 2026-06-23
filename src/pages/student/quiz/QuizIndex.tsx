@@ -12,6 +12,7 @@ import {
 } from "../../../lib/assessmentConfig";
 import {
   formatMockExamRoundLabel,
+  getMockExamRoundNumber,
   getMockExamRoundsFromAssessmentConfig,
   type MockExamRound,
 } from "../../../lib/mockExamRounds";
@@ -96,14 +97,19 @@ const QuizIndex: React.FC = () => {
       userData,
     );
 
-  const activeMockExamRounds = useMemo(
-    () =>
-      getMockExamRoundsFromAssessmentConfig(assessmentConfig).filter((round) =>
-        getVisibility("exam_prep", "exam_prep", round),
-      ),
-    [assessmentConfig, userData],
+  const mockExamRounds = useMemo(
+    () => getMockExamRoundsFromAssessmentConfig(assessmentConfig),
+    [assessmentConfig],
   );
-  const isExamPrepActive = activeMockExamRounds.length > 0;
+  const mockExamRoundStates = useMemo(
+    () =>
+      mockExamRounds.map((round) => ({
+        round,
+        visible: getVisibility("exam_prep", "exam_prep", round),
+      })),
+    [assessmentConfig, mockExamRounds, userData],
+  );
+  const isExamPrepActive = mockExamRoundStates.some((item) => item.visible);
 
   if (loading) {
     return (
@@ -144,56 +150,65 @@ const QuizIndex: React.FC = () => {
             }`}
           ></i>
 
-          <div className="relative z-10">
-            <div
-              className={`mb-2 inline-block rounded px-2 py-1 text-[10px] font-bold shadow-sm ${
-                isExamPrepActive
-                  ? "bg-red-500 text-white"
-                  : "bg-gray-400 text-white"
-              }`}
-            >
-              {isExamPrepActive ? "FINAL CHECK" : "비공개"}
-            </div>
-            <h3 className="mb-1 text-2xl font-black">
-              모의고사 {isExamPrepActive ? "문제" : "(준비중)"}
-            </h3>
-            <p
-              className={`text-sm font-medium ${
-                isExamPrepActive ? "text-blue-100 opacity-90" : "text-gray-400"
-              }`}
-            >
-              {isExamPrepActive
-                ? "실제 시험처럼 문제를 풀어보고 실력을 점검하세요."
-                : "선생님이 평가를 활성화하면 시작할 수 있습니다."}
-            </p>
-            {isExamPrepActive && (
-              <div className="mt-5 flex flex-wrap gap-2">
-                {activeMockExamRounds.map((round) => (
-                  <button
-                    key={round}
-                    type="button"
-                    onClick={() =>
-                      startQuiz(
-                        "exam_prep",
-                        "exam_prep",
-                        formatMockExamRoundLabel(round),
-                        round,
-                      )
-                    }
-                    className="rounded-xl bg-white px-4 py-2 text-sm font-extrabold text-blue-700 shadow-sm transition hover:bg-blue-50"
-                  >
-                    {formatMockExamRoundLabel(round)}
-                  </button>
-                ))}
+          <div className="relative z-10 flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
+            <div className="min-w-0">
+              <div
+                className={`mb-2 inline-block rounded px-2 py-1 text-[10px] font-bold shadow-sm ${
+                  isExamPrepActive
+                    ? "bg-red-500 text-white"
+                    : "bg-gray-400 text-white"
+                }`}
+              >
+                {isExamPrepActive ? "FINAL CHECK" : "비공개"}
               </div>
-            )}
-          </div>
-
-          {isExamPrepActive && (
-            <div className="absolute right-6 top-1/2 hidden -translate-y-1/2 rounded-full bg-white/20 p-3 text-white backdrop-blur-sm md:block">
-              <i className="fas fa-chevron-right text-xl"></i>
+              <h3 className="mb-1 text-2xl font-black">
+                모의고사 {isExamPrepActive ? "문제" : "(준비중)"}
+              </h3>
+              <p
+                className={`text-sm font-medium ${
+                  isExamPrepActive
+                    ? "text-blue-100 opacity-90"
+                    : "text-gray-400"
+                }`}
+              >
+                {isExamPrepActive
+                  ? "실제 시험처럼 문제를 풀어보고 실력을 점검하세요."
+                  : "선생님이 평가를 활성화하면 시작할 수 있습니다."}
+              </p>
             </div>
-          )}
+
+            <div className="grid min-w-[min(100%,16rem)] grid-cols-3 gap-2 md:min-w-[17rem]">
+              {mockExamRoundStates.map(({ round, visible }) => (
+                <button
+                  key={round}
+                  type="button"
+                  onClick={() =>
+                    visible &&
+                    startQuiz(
+                      "exam_prep",
+                      "exam_prep",
+                      formatMockExamRoundLabel(round),
+                      round,
+                    )
+                  }
+                  disabled={!visible}
+                  className={`inline-flex h-11 items-center justify-center gap-1.5 rounded-xl px-3 text-sm font-extrabold shadow-sm transition ${
+                    visible
+                      ? "bg-white text-blue-700 hover:bg-blue-50"
+                      : isExamPrepActive
+                        ? "cursor-not-allowed bg-white/25 text-white/70 ring-1 ring-white/20"
+                        : "cursor-not-allowed bg-white/70 text-gray-500 ring-1 ring-gray-300"
+                  }`}
+                  aria-label={`${formatMockExamRoundLabel(round)} ${
+                    visible ? "시작" : "잠김"
+                  }`}
+                >
+                  {!visible && <i className="fas fa-lock text-xs"></i>}
+                  {getMockExamRoundNumber(round)}회
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 

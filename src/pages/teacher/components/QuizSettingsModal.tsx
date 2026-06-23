@@ -159,6 +159,17 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
     [availableTargetIdSet, normalizedSelectedClassIds],
   );
   const hasVisibleClassSelection = normalizedSelectedClassIds.length > 0;
+  const questionOrderOptions = useMemo(
+    () =>
+      isMockExam
+        ? QUESTION_ORDER_OPTIONS.map((option) =>
+            option.value === "unit"
+              ? { ...option, label: "단원 균형 랜덤" }
+              : option,
+          )
+        : QUESTION_ORDER_OPTIONS,
+    [isMockExam],
+  );
 
   const buildOrderedVisibleClassIds = (selectedIds: Iterable<string>) => {
     const selectedSet = new Set(
@@ -241,12 +252,17 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
       }
       const legacyEnabledForDefaultRound =
         isMockExam && selectedExamRound === DEFAULT_MOCK_EXAM_ROUND;
-      const rawSettings = settingsMap[key] ??
-        (legacyEnabledForDefaultRound ? settingsMap[legacyKey] : undefined) ?? {
-          active:
-            legacyStatus[key] === true ||
-            (legacyEnabledForDefaultRound && legacyStatus[legacyKey] === true),
-        };
+      const storedSettings =
+        settingsMap[key] ??
+        (legacyEnabledForDefaultRound ? settingsMap[legacyKey] : undefined);
+      const rawSettings = storedSettings ?? {
+        active:
+          legacyStatus[key] === true ||
+          (legacyEnabledForDefaultRound && legacyStatus[legacyKey] === true),
+        ...(isMockExam
+          ? { allowRetake: true, questionOrder: "unit", randomOrder: false }
+          : {}),
+      };
       const defaultClassIds = visibilityOptions.defaultGroup.targets.map(
         (target) => target.id,
       );
@@ -266,7 +282,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
           1,
           Math.round(normalizedEntry.timeLimit / 60),
         ),
-        allowRetake: normalizedEntry.allowRetake,
+        allowRetake: isMockExam ? true : normalizedEntry.allowRetake,
         cooldown: normalizedEntry.cooldown,
         hintLimit: normalizedEntry.hintLimit,
         visibleClassIds: normalizedEntry.hasExplicitClassVisibility
@@ -321,7 +337,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
             randomOrder: settings.questionOrder === "random",
             questionOrder: settings.questionOrder,
             timeLimit: Math.max(1, settings.timeLimitMinutes) * 60,
-            allowRetake: settings.allowRetake,
+            allowRetake: isMockExam ? true : settings.allowRetake,
             cooldown: Math.max(0, settings.cooldown),
             hintLimit: Math.max(0, settings.hintLimit),
             visibleTargetGrade: "3",
@@ -512,9 +528,15 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
               설정을 불러오는 중입니다...
             </div>
           ) : (
-            <div className="space-y-4">
+            <div
+              className={
+                isMockExam
+                  ? "overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm"
+                  : "space-y-4"
+              }
+            >
               {isMockExam && (
-                <section className={`${sectionCardClassName} space-y-3`}>
+                <section className="border-b border-gray-200 bg-white p-4">
                   <div>
                     <h4 className="text-sm font-extrabold text-gray-900">
                       모의고사 회차
@@ -559,343 +581,371 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                 </section>
               )}
 
-              <section className={`${sectionCardClassName} space-y-3 p-2.5`}>
-                <div className="flex flex-wrap items-center justify-between gap-1">
-                  <div>
-                    <h4 className="text-sm font-extrabold text-gray-900">
-                      학급별 공개 / 초기화
-                    </h4>
-                    <p className="mt-0.5 text-[10px] text-gray-500">
-                      공개 반과 응시 초기화를 빠르게 조정합니다.
-                    </p>
+              <div
+                className={isMockExam ? "space-y-4 bg-white p-4" : "space-y-4"}
+              >
+                {isMockExam && (
+                  <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700">
+                    {formatMockExamRoundLabel(selectedExamRound)} 설정을
+                    조정하고 있습니다. 모의고사는 재응시를 항상 허용하고 대기
+                    시간만 적용합니다.
                   </div>
-                  <div className="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">
-                    공개 학급 {selectedKnownClassIdSet.size}/
-                    {allVisibilityTargets.length || 0}
-                  </div>
-                </div>
+                )}
 
-                <div className="flex flex-wrap items-center gap-0.5 rounded-lg border border-gray-200 bg-gray-50 px-1.5 py-1">
-                  <div className="text-[10px] font-semibold text-gray-600">
-                    공개를 꺼도 선택한 반 상태는 유지됩니다.
+                <section className={`${sectionCardClassName} space-y-3 p-2.5`}>
+                  <div className="flex flex-wrap items-center justify-between gap-1">
+                    <div>
+                      <h4 className="text-sm font-extrabold text-gray-900">
+                        학급별 공개 / 초기화
+                      </h4>
+                      <p className="mt-0.5 text-[10px] text-gray-500">
+                        공개 반과 응시 초기화를 빠르게 조정합니다.
+                      </p>
+                    </div>
+                    <div className="inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">
+                      공개 학급 {selectedKnownClassIdSet.size}/
+                      {allVisibilityTargets.length || 0}
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={settings.active}
-                    aria-label="전체 공개 전환"
-                    title={
-                      settings.active ? "전체 공개 켜짐" : "전체 공개 꺼짐"
-                    }
-                    onClick={() =>
-                      canEdit &&
-                      setSettings((prev) => ({
-                        ...prev,
-                        active: !prev.active,
-                      }))
-                    }
-                    disabled={!canEdit}
-                    className={`ml-auto inline-flex h-7 w-12 shrink-0 box-border items-center rounded-full border p-0.5 transition ${
-                      settings.active
-                        ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
-                        : "border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:text-blue-700"
-                    } disabled:cursor-not-allowed disabled:opacity-60`}
-                  >
-                    <span
-                      className={`flex h-full w-full items-center rounded-full ${
+
+                  <div className="flex flex-wrap items-center gap-0.5 rounded-lg border border-gray-200 bg-gray-50 px-1.5 py-1">
+                    <div className="text-[10px] font-semibold text-gray-600">
+                      공개를 꺼도 선택한 반 상태는 유지됩니다.
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={settings.active}
+                      aria-label="전체 공개 전환"
+                      title={
+                        settings.active ? "전체 공개 켜짐" : "전체 공개 꺼짐"
+                      }
+                      onClick={() =>
+                        canEdit &&
+                        setSettings((prev) => ({
+                          ...prev,
+                          active: !prev.active,
+                        }))
+                      }
+                      disabled={!canEdit}
+                      className={`ml-auto inline-flex h-7 w-12 shrink-0 box-border items-center rounded-full border p-0.5 transition ${
                         settings.active
-                          ? "justify-end bg-white/25"
-                          : "justify-start bg-gray-200"
-                      }`}
+                          ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700"
+                          : "border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:text-blue-700"
+                      } disabled:cursor-not-allowed disabled:opacity-60`}
                     >
-                      <span className="h-5 w-5 rounded-full bg-white shadow-sm" />
-                    </span>
-                  </button>
-                  <div className="flex items-center gap-1">
-                    <span className="text-[10px] font-bold text-gray-700">
-                      공개 학급 빠른 선택
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setSettings((prev) => ({
-                          ...prev,
-                          visibleClassIds:
-                            buildOrderedVisibleClassIds(availableTargetIds),
-                        }))
-                      }
-                      disabled={!canEdit || allVisibilityTargets.length === 0}
-                      className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      전체 공개
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setSettings((prev) => ({
-                          ...prev,
-                          visibleClassIds: [],
-                        }))
-                      }
-                      disabled={!canEdit || allVisibilityTargets.length === 0}
-                      className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      전체 비공개
-                    </button>
-                  </div>
-                  <div className="text-[10px] font-semibold text-rose-600">
-                    초기화는 선택한 반 기록만 정리합니다.
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="rounded-xl border border-gray-200 bg-white p-2">
-                    <div className="mb-2 flex items-center justify-between gap-2 px-1">
-                      <div className="text-[11px] font-extrabold text-gray-800">
-                        {defaultVisibilityGroup.gradeLabel}
-                      </div>
-                      <div className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-600">
-                        {
-                          defaultVisibilityGroup.targets.filter((target) =>
-                            selectedKnownClassIdSet.has(target.id),
-                          ).length
-                        }
-                        /{defaultVisibilityGroup.targets.length}
-                      </div>
-                    </div>
-                    {defaultVisibilityGroup.targets.length > 0 ? (
-                      <div className="grid gap-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
-                        {defaultVisibilityGroup.targets.map(
-                          renderVisibilityTargetCard,
-                        )}
-                      </div>
-                    ) : (
-                      <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-sm text-gray-500">
-                        3학년 학급 목록을 아직 불러오지 못했습니다.
-                      </div>
-                    )}
-                  </div>
-
-                  {extraVisibilityGroups.map((group) => {
-                    const expanded = expandedExtraGrades.has(group.gradeValue);
-                    const selectedCount = group.targets.filter((target) =>
-                      selectedKnownClassIdSet.has(target.id),
-                    ).length;
-
-                    return (
-                      <div
-                        key={group.gradeValue}
-                        className="overflow-hidden rounded-xl border border-gray-200 bg-white"
+                      <span
+                        className={`flex h-full w-full items-center rounded-full ${
+                          settings.active
+                            ? "justify-end bg-white/25"
+                            : "justify-start bg-gray-200"
+                        }`}
                       >
-                        <button
-                          type="button"
-                          onClick={() => toggleExtraGrade(group.gradeValue)}
-                          className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left transition hover:bg-gray-50"
-                        >
-                          <div>
-                            <div className="text-[11px] font-extrabold text-gray-800">
-                              {group.gradeLabel}
-                            </div>
-                            <div className="mt-0.5 text-[10px] font-medium text-gray-500">
-                              클릭하면 이 학년의 모든 반을 펼칩니다.
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <div className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-600">
-                              {selectedCount}/{group.targets.length}
-                            </div>
-                            <i
-                              className={`fas fa-chevron-${expanded ? "up" : "down"} text-[11px] text-gray-400`}
-                            ></i>
-                          </div>
-                        </button>
-                        {expanded && (
-                          <div className="border-t border-gray-100 px-2 pb-2 pt-2">
-                            <div className="grid gap-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
-                              {group.targets.map(renderVisibilityTargetCard)}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {settings.active && !hasVisibleClassSelection && (
-                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
-                    공개는 켜져 있지만 선택된 학급이 없습니다.
-                  </div>
-                )}
-
-                {!settings.active && allVisibilityTargets.length > 0 && (
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600">
-                    전체 공개를 켜면 현재 저장된 학급 선택 상태가 그대로
-                    반영됩니다.
-                  </div>
-                )}
-              </section>
-
-              <div className="grid gap-4 xl:grid-cols-2">
-                <section className={sectionCardClassName}>
-                  <div className="mb-3">
-                    <h4 className="text-base font-extrabold text-gray-900">
-                      출제/응시 설정
-                    </h4>
-                    <p className="mt-1 text-xs text-gray-500">
-                      문항 수와 제한 시간을 조정합니다.
-                    </p>
-                  </div>
-
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <label className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
-                      <span className="text-xs font-bold text-gray-500">
-                        한 번에 출제할 문항 수
+                        <span className="h-5 w-5 rounded-full bg-white shadow-sm" />
                       </span>
-                      <input
-                        type="number"
-                        min={1}
-                        value={settings.questionCount}
-                        onChange={(event) =>
+                    </button>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] font-bold text-gray-700">
+                        공개 학급 빠른 선택
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
                           setSettings((prev) => ({
                             ...prev,
-                            questionCount: Math.max(
-                              1,
-                              parseInt(event.target.value, 10) || 1,
-                            ),
+                            visibleClassIds:
+                              buildOrderedVisibleClassIds(availableTargetIds),
                           }))
                         }
-                        className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-center text-base font-extrabold text-blue-700"
-                      />
-                    </label>
-
-                    <label className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
-                      <span className="text-xs font-bold text-gray-500">
-                        제한 시간 (분)
-                      </span>
-                      <input
-                        type="number"
-                        min={1}
-                        value={settings.timeLimitMinutes}
-                        onChange={(event) =>
+                        disabled={!canEdit || allVisibilityTargets.length === 0}
+                        className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        전체 공개
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
                           setSettings((prev) => ({
                             ...prev,
-                            timeLimitMinutes: Math.max(
-                              1,
-                              parseInt(event.target.value, 10) || 1,
-                            ),
+                            visibleClassIds: [],
                           }))
                         }
-                        className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-center text-base font-extrabold text-gray-800"
-                      />
-                    </label>
-                  </div>
-
-                  <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
-                    <div className="text-xs font-bold text-gray-500">
-                      문항 출제 순서
+                        disabled={!canEdit || allVisibilityTargets.length === 0}
+                        className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        전체 비공개
+                      </button>
                     </div>
-                    <div className="mt-2.5 grid grid-cols-3 gap-2">
-                      {QUESTION_ORDER_OPTIONS.map((option) => (
-                        <button
-                          key={option.value}
-                          type="button"
-                          onClick={() =>
+                    <div className="text-[10px] font-semibold text-rose-600">
+                      초기화는 선택한 반 기록만 정리합니다.
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="rounded-xl border border-gray-200 bg-white p-2">
+                      <div className="mb-2 flex items-center justify-between gap-2 px-1">
+                        <div className="text-[11px] font-extrabold text-gray-800">
+                          {defaultVisibilityGroup.gradeLabel}
+                        </div>
+                        <div className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-600">
+                          {
+                            defaultVisibilityGroup.targets.filter((target) =>
+                              selectedKnownClassIdSet.has(target.id),
+                            ).length
+                          }
+                          /{defaultVisibilityGroup.targets.length}
+                        </div>
+                      </div>
+                      {defaultVisibilityGroup.targets.length > 0 ? (
+                        <div className="grid gap-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+                          {defaultVisibilityGroup.targets.map(
+                            renderVisibilityTargetCard,
+                          )}
+                        </div>
+                      ) : (
+                        <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-sm text-gray-500">
+                          3학년 학급 목록을 아직 불러오지 못했습니다.
+                        </div>
+                      )}
+                    </div>
+
+                    {extraVisibilityGroups.map((group) => {
+                      const expanded = expandedExtraGrades.has(
+                        group.gradeValue,
+                      );
+                      const selectedCount = group.targets.filter((target) =>
+                        selectedKnownClassIdSet.has(target.id),
+                      ).length;
+
+                      return (
+                        <div
+                          key={group.gradeValue}
+                          className="overflow-hidden rounded-xl border border-gray-200 bg-white"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => toggleExtraGrade(group.gradeValue)}
+                            className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left transition hover:bg-gray-50"
+                          >
+                            <div>
+                              <div className="text-[11px] font-extrabold text-gray-800">
+                                {group.gradeLabel}
+                              </div>
+                              <div className="mt-0.5 text-[10px] font-medium text-gray-500">
+                                클릭하면 이 학년의 모든 반을 펼칩니다.
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <div className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-600">
+                                {selectedCount}/{group.targets.length}
+                              </div>
+                              <i
+                                className={`fas fa-chevron-${expanded ? "up" : "down"} text-[11px] text-gray-400`}
+                              ></i>
+                            </div>
+                          </button>
+                          {expanded && (
+                            <div className="border-t border-gray-100 px-2 pb-2 pt-2">
+                              <div className="grid gap-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5">
+                                {group.targets.map(renderVisibilityTargetCard)}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {settings.active && !hasVisibleClassSelection && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-800">
+                      공개는 켜져 있지만 선택된 학급이 없습니다.
+                    </div>
+                  )}
+
+                  {!settings.active && allVisibilityTargets.length > 0 && (
+                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600">
+                      전체 공개를 켜면 현재 저장된 학급 선택 상태가 그대로
+                      반영됩니다.
+                    </div>
+                  )}
+                </section>
+
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <section className={sectionCardClassName}>
+                    <div className="mb-3">
+                      <h4 className="text-base font-extrabold text-gray-900">
+                        출제/응시 설정
+                      </h4>
+                      <p className="mt-1 text-xs text-gray-500">
+                        문항 수와 제한 시간을 조정합니다.
+                      </p>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <label className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
+                        <span className="text-xs font-bold text-gray-500">
+                          한 번에 출제할 문항 수
+                        </span>
+                        <input
+                          type="number"
+                          min={1}
+                          value={settings.questionCount}
+                          onChange={(event) =>
                             setSettings((prev) => ({
                               ...prev,
-                              questionOrder: option.value,
+                              questionCount: Math.max(
+                                1,
+                                parseInt(event.target.value, 10) || 1,
+                              ),
                             }))
                           }
-                          className={`rounded-lg border px-3 py-2.5 text-xs font-bold transition ${
-                            settings.questionOrder === option.value
-                              ? "border-blue-200 bg-blue-50 text-blue-700"
-                              : "border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:text-blue-700"
-                          }`}
-                        >
-                          {option.label}
-                        </button>
-                      ))}
+                          className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-center text-base font-extrabold text-blue-700"
+                        />
+                      </label>
+
+                      <label className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
+                        <span className="text-xs font-bold text-gray-500">
+                          제한 시간 (분)
+                        </span>
+                        <input
+                          type="number"
+                          min={1}
+                          value={settings.timeLimitMinutes}
+                          onChange={(event) =>
+                            setSettings((prev) => ({
+                              ...prev,
+                              timeLimitMinutes: Math.max(
+                                1,
+                                parseInt(event.target.value, 10) || 1,
+                              ),
+                            }))
+                          }
+                          className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-center text-base font-extrabold text-gray-800"
+                        />
+                      </label>
                     </div>
-                  </div>
-                </section>
 
-                <section className={sectionCardClassName}>
-                  <div className="mb-3">
-                    <h4 className="text-base font-extrabold text-gray-900">
-                      힌트/재응시 설정
-                    </h4>
-                    <p className="mt-1 text-xs text-gray-500">
-                      힌트 횟수와 재응시 규칙을 조정합니다.
-                    </p>
-                  </div>
-
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <label className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
-                      <span className="text-xs font-bold text-gray-500">
-                        힌트 사용 가능 횟수
-                      </span>
-                      <input
-                        type="number"
-                        min={0}
-                        value={settings.hintLimit}
-                        onChange={(event) =>
-                          setSettings((prev) => ({
-                            ...prev,
-                            hintLimit: Math.max(
-                              0,
-                              parseInt(event.target.value, 10) || 0,
-                            ),
-                          }))
-                        }
-                        className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-center text-base font-extrabold text-gray-800"
-                      />
-                    </label>
-
-                    <label className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
-                      <span className="text-xs font-bold text-gray-500">
-                        재응시 대기 시간 (분)
-                      </span>
-                      <input
-                        type="number"
-                        min={0}
-                        value={settings.cooldown}
-                        disabled={!settings.allowRetake}
-                        onChange={(event) =>
-                          setSettings((prev) => ({
-                            ...prev,
-                            cooldown: Math.max(
-                              0,
-                              parseInt(event.target.value, 10) || 0,
-                            ),
-                          }))
-                        }
-                        className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-center text-base font-extrabold text-gray-800 disabled:cursor-not-allowed disabled:bg-gray-100"
-                      />
-                    </label>
-                  </div>
-
-                  <label className="mt-3 flex items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white px-3.5 py-3">
-                    <div>
-                      <div className="text-sm font-bold text-gray-800">
-                        재응시 허용
+                    <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
+                      <div className="text-xs font-bold text-gray-500">
+                        문항 출제 순서
                       </div>
-                      <div className="mt-0.5 text-xs text-gray-500">
-                        허용을 끄면 이미 응시한 학생은 다시 시작할 수 없습니다.
+                      <div className="mt-2.5 grid grid-cols-3 gap-2">
+                        {questionOrderOptions.map((option) => (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() =>
+                              setSettings((prev) => ({
+                                ...prev,
+                                questionOrder: option.value,
+                              }))
+                            }
+                            className={`rounded-lg border px-3 py-2.5 text-xs font-bold transition ${
+                              settings.questionOrder === option.value
+                                ? "border-blue-200 bg-blue-50 text-blue-700"
+                                : "border-gray-200 bg-white text-gray-600 hover:border-blue-200 hover:text-blue-700"
+                            }`}
+                          >
+                            {option.label}
+                          </button>
+                        ))}
                       </div>
                     </div>
-                    <input
-                      type="checkbox"
-                      checked={settings.allowRetake}
-                      onChange={(event) =>
-                        setSettings((prev) => ({
-                          ...prev,
-                          allowRetake: event.target.checked,
-                          cooldown: event.target.checked ? prev.cooldown : 0,
-                        }))
-                      }
-                      className="h-5 w-5 rounded border-gray-300 text-blue-600"
-                    />
-                  </label>
-                </section>
+                  </section>
+
+                  <section className={sectionCardClassName}>
+                    <div className="mb-3">
+                      <h4 className="text-base font-extrabold text-gray-900">
+                        힌트/재응시 설정
+                      </h4>
+                      <p className="mt-1 text-xs text-gray-500">
+                        힌트 횟수와 재응시 규칙을 조정합니다.
+                      </p>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <label className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
+                        <span className="text-xs font-bold text-gray-500">
+                          힌트 사용 가능 횟수
+                        </span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={settings.hintLimit}
+                          onChange={(event) =>
+                            setSettings((prev) => ({
+                              ...prev,
+                              hintLimit: Math.max(
+                                0,
+                                parseInt(event.target.value, 10) || 0,
+                              ),
+                            }))
+                          }
+                          className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-center text-base font-extrabold text-gray-800"
+                        />
+                      </label>
+
+                      <label className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
+                        <span className="text-xs font-bold text-gray-500">
+                          재응시 대기 시간 (분)
+                        </span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={settings.cooldown}
+                          onChange={(event) =>
+                            setSettings((prev) => ({
+                              ...prev,
+                              cooldown: Math.max(
+                                0,
+                                parseInt(event.target.value, 10) || 0,
+                              ),
+                            }))
+                          }
+                          className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-center text-base font-extrabold text-gray-800"
+                        />
+                      </label>
+                    </div>
+
+                    {isMockExam ? (
+                      <div className="mt-3 rounded-xl border border-blue-100 bg-blue-50 px-3.5 py-3">
+                        <div className="text-sm font-bold text-blue-800">
+                          재응시 항상 허용
+                        </div>
+                        <div className="mt-0.5 text-xs font-medium text-blue-600">
+                          학생은 대기 시간이 끝나면 같은 회차를 다시 응시할 수
+                          있습니다.
+                        </div>
+                      </div>
+                    ) : (
+                      <label className="mt-3 flex items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white px-3.5 py-3">
+                        <div>
+                          <div className="text-sm font-bold text-gray-800">
+                            재응시 허용
+                          </div>
+                          <div className="mt-0.5 text-xs text-gray-500">
+                            허용을 끄면 이미 응시한 학생은 다시 시작할 수
+                            없습니다.
+                          </div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={settings.allowRetake}
+                          onChange={(event) =>
+                            setSettings((prev) => ({
+                              ...prev,
+                              allowRetake: event.target.checked,
+                              cooldown: event.target.checked
+                                ? prev.cooldown
+                                : 0,
+                            }))
+                          }
+                          className="h-5 w-5 rounded border-gray-300 text-blue-600"
+                        />
+                      </label>
+                    )}
+                  </section>
+                </div>
               </div>
             </div>
           )}

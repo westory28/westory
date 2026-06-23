@@ -628,6 +628,31 @@ const QuizRunner: React.FC = () => {
         }
       >();
 
+      const orderExamPrepQuestionPool = (questions: Question[]) => {
+        if (questionOrder === "created") {
+          return orderQuestions(questions, "created");
+        }
+        return shuffleItems(questions);
+      };
+
+      const orderSelectedExamPrepQuestions = (questions: Question[]) => {
+        if (questionOrder === "created") {
+          return orderQuestions(questions, "created");
+        }
+        if (questionOrder === "random") {
+          return shuffleItems(questions);
+        }
+        return [...questions].sort((left, right) => {
+          const leftKeys = getQuestionUnitOrderKeys(left);
+          const rightKeys = getQuestionUnitOrderKeys(right);
+          for (let index = 0; index < leftKeys.length; index += 1) {
+            const gap = compareUnitOrderIds(leftKeys[index], rightKeys[index]);
+            if (gap !== 0) return gap;
+          }
+          return 0;
+        });
+      };
+
       all.forEach((question) => {
         const smallKey = getExamPrepSmallKey(question);
         const group = groupMap.get(smallKey) || {
@@ -647,8 +672,8 @@ const QuizRunner: React.FC = () => {
 
       const groups = Array.from(groupMap.values()).map((group) => ({
         ...group,
-        unusedQuestions: orderQuestions(group.unusedQuestions, questionOrder),
-        repeatQuestions: orderQuestions(group.repeatQuestions, questionOrder),
+        unusedQuestions: orderExamPrepQuestionPool(group.unusedQuestions),
+        repeatQuestions: orderExamPrepQuestionPool(group.repeatQuestions),
       }));
       const selected: Question[] = [];
       const selectedByGroup = new Map<string, number>();
@@ -700,7 +725,7 @@ const QuizRunner: React.FC = () => {
       takeFromGroups("repeatQuestions", 2);
       fillRemaining("repeatQuestions");
 
-      return orderQuestions(selected, questionOrder);
+      return orderSelectedExamPrepQuestions(selected);
     };
 
     const selected =
@@ -840,6 +865,7 @@ const QuizRunner: React.FC = () => {
       gradeClass: buildGradeClassLabel(resolvedUserData),
       unitId: String(unitId || "").trim(),
       category: getMockExamResultCategory(category, examRound),
+      ...(isMockExamCategory(category) ? { examRound } : {}),
       score: finalScore,
       details: logDetails,
       status: isTimeout ? "시간 초과" : "완료",
@@ -1123,10 +1149,14 @@ const QuizRunner: React.FC = () => {
         throw new Error("등록된 문제가 없습니다.");
       }
 
+      const resultCollectionRef = collection(
+        db,
+        getSemesterCollectionPath(config, "quiz_results"),
+      );
       const historyCategory = getMockExamResultCategory(category, examRound);
       const historyQueries = [
         query(
-          collection(db, getSemesterCollectionPath(config, "quiz_results")),
+          resultCollectionRef,
           where("uid", "==", fallbackStudentUid),
           where("unitId", "==", unitId),
           where("category", "==", historyCategory),
@@ -1135,7 +1165,7 @@ const QuizRunner: React.FC = () => {
       if (isMockExamCategory(category) && historyCategory !== category) {
         historyQueries.push(
           query(
-            collection(db, getSemesterCollectionPath(config, "quiz_results")),
+            resultCollectionRef,
             where("uid", "==", fallbackStudentUid),
             where("unitId", "==", unitId),
             where("category", "==", category),
@@ -1165,6 +1195,28 @@ const QuizRunner: React.FC = () => {
           return rightMs - leftMs;
         });
       setHistoryCount(historyDocs.length);
+
+      let solvedHistoryDocs = historyDocs;
+      if (isMockExamCategory(category)) {
+        try {
+          const allMockHistorySnap = await getDocs(
+            query(
+              resultCollectionRef,
+              where("uid", "==", fallbackStudentUid),
+              where("unitId", "==", unitId),
+            ),
+          );
+          solvedHistoryDocs = allMockHistorySnap.docs.filter((historyDoc) => {
+            const historyData = historyDoc.data();
+            return isMockExamCategory(historyData.category || category);
+          });
+        } catch (mockHistoryError) {
+          console.warn(
+            "Failed to load all mock exam attempts for question selection:",
+            mockHistoryError,
+          );
+        }
+      }
 
       const submissionRef = doc(db, activeSubmissionPath);
       const submissionSnap = await getDoc(submissionRef).catch(() => null);
@@ -1223,7 +1275,11 @@ const QuizRunner: React.FC = () => {
         }
       }
 
-      if (!nextQuizConfig.allowRetake && historyDocs.length > 0) {
+      if (
+        !isMockExamCategory(category) &&
+        !nextQuizConfig.allowRetake &&
+        historyDocs.length > 0
+      ) {
         setBlockReason("재응시가 허용되지 않는 평가입니다.");
         setView("intro");
         return;
@@ -1246,7 +1302,7 @@ const QuizRunner: React.FC = () => {
       }
 
       const solvedIds = new Set<number>();
-      historyDocs.forEach((historyDoc) => {
+      solvedHistoryDocs.forEach((historyDoc) => {
         const details = Array.isArray(historyDoc.data().details)
           ? historyDoc.data().details
           : [];
