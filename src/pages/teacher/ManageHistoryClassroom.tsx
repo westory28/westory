@@ -3387,13 +3387,13 @@ const ManageHistoryClassroom: React.FC = () => {
         </div>
       </section>
 
-      <section className="mb-5 rounded-3xl border border-gray-200 bg-white p-3.5 shadow-sm">
-        <div className="grid gap-2.5 xl:grid-cols-[15rem_minmax(12rem,18rem)_auto_auto] xl:items-center xl:justify-between">
-          <div className="flex h-12 items-center gap-3 rounded-2xl border border-gray-200 px-4 text-sm font-bold text-gray-700">
+      <section className="mb-5 rounded-3xl border border-gray-200 bg-white p-3 shadow-sm xl:p-3.5">
+        <div className="grid gap-2 md:grid-cols-[minmax(12rem,15rem)_minmax(0,1fr)_auto] md:items-center lg:grid-cols-[12.5rem_minmax(14rem,1fr)_auto_auto] xl:grid-cols-[15rem_minmax(12rem,18rem)_auto_auto] xl:justify-between xl:gap-2.5">
+          <div className="flex h-11 items-center gap-3 rounded-2xl border border-gray-200 px-3 text-sm font-bold text-gray-700 xl:h-12 xl:px-4">
             <DashboardIcon name="calendar" className="h-4 w-4 text-blue-600" />
             {dashboardDateRangeLabel}
           </div>
-          <div className="flex h-12 items-center gap-3 rounded-2xl border border-gray-200 px-4">
+          <div className="flex h-11 items-center gap-3 rounded-2xl border border-gray-200 px-3 md:col-span-2 lg:col-span-1 xl:h-12 xl:px-4">
             <input
               value={dashboardSearch}
               onChange={(event) => setDashboardSearch(event.target.value)}
@@ -3402,7 +3402,7 @@ const ManageHistoryClassroom: React.FC = () => {
             />
             <DashboardIcon name="search" className="h-5 w-5 text-gray-400" />
           </div>
-          <div className="flex flex-nowrap gap-2">
+          <div className="flex flex-nowrap gap-1.5 md:col-span-2 lg:col-span-1 xl:gap-2">
             {[
               ["all", "전체"],
               ["published", "공개"],
@@ -3416,7 +3416,7 @@ const ManageHistoryClassroom: React.FC = () => {
                   onClick={() =>
                     setDashboardStatusFilter(value as DashboardStatusFilter)
                   }
-                  className={`h-10 rounded-xl border px-3 text-xs font-bold transition ${
+                  className={`h-9 rounded-xl border px-2.5 text-xs font-bold transition xl:h-10 xl:px-3 ${
                     dashboardStatusFilter === value
                       ? "border-blue-600 bg-blue-600 text-white shadow-sm"
                       : value === "pending"
@@ -3437,7 +3437,7 @@ const ManageHistoryClassroom: React.FC = () => {
                     disabled={refreshingDashboard}
                     aria-label="새로고침"
                     title="새로고침"
-                    className="flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 xl:h-10 xl:w-10"
                   >
                     <DashboardIcon
                       name="refresh"
@@ -3448,14 +3448,14 @@ const ManageHistoryClassroom: React.FC = () => {
               </React.Fragment>
             ))}
           </div>
-          <label className="flex h-12 items-center gap-3 rounded-2xl border border-gray-200 px-4 text-sm font-bold text-gray-600">
+          <label className="flex h-11 items-center gap-2 rounded-2xl border border-gray-200 px-3 text-sm font-bold text-gray-600 xl:h-12 xl:gap-3 xl:px-4">
             정렬 기준
             <select
               value={dashboardSortOrder}
               onChange={(event) =>
                 setDashboardSortOrder(event.target.value as DashboardSortOrder)
               }
-              className="h-full min-w-[7rem] border-0 bg-transparent text-sm font-bold text-gray-900 outline-none"
+              className="h-full min-w-[5.75rem] border-0 bg-transparent text-sm font-bold text-gray-900 outline-none xl:min-w-[7rem]"
             >
               <option value="latest">최신순</option>
               <option value="oldest">오래된순</option>
