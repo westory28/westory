@@ -122,12 +122,19 @@ interface RecentClassFocus {
   thresholdMs: number;
 }
 
-type SortKey =
-  | "scoreAsc"
-  | "scoreDesc"
-  | "nameAsc"
-  | "attemptDesc"
-  | "averageAsc";
+type StudentSortKey =
+  | "number"
+  | "name"
+  | "latestScore"
+  | "averageScore"
+  | "attemptCount"
+  | "weakUnits"
+  | "status";
+type SortDirection = "asc" | "desc";
+type StudentSort = {
+  key: StudentSortKey;
+  direction: SortDirection;
+};
 
 const SCORE_BUCKETS = [
   { label: "0-20", min: 0, max: 20 },
@@ -520,6 +527,109 @@ const getStatusMeta = (status: StudentSummary["status"]) => {
   };
 };
 
+const STATUS_SORT_ORDER: Record<StudentSummary["status"], number> = {
+  risk: 0,
+  watch: 1,
+  stable: 2,
+  pending: 3,
+};
+
+const compareNullableNumber = (
+  left: number | null,
+  right: number | null,
+  direction: SortDirection,
+) => {
+  const leftMissing = left === null || Number.isNaN(left);
+  const rightMissing = right === null || Number.isNaN(right);
+  if (leftMissing && rightMissing) return 0;
+  if (leftMissing) return 1;
+  if (rightMissing) return -1;
+  const diff = left - right;
+  return direction === "asc" ? diff : -diff;
+};
+
+const compareNumberText = (
+  left: string,
+  right: string,
+  direction: SortDirection,
+) => {
+  const leftNumber = Number.parseInt(left, 10);
+  const rightNumber = Number.parseInt(right, 10);
+  const leftMissing = !Number.isFinite(leftNumber);
+  const rightMissing = !Number.isFinite(rightNumber);
+  if (leftMissing && rightMissing) return 0;
+  if (leftMissing) return 1;
+  if (rightMissing) return -1;
+  const diff = leftNumber - rightNumber;
+  return direction === "asc" ? diff : -diff;
+};
+
+const compareText = (left: string, right: string, direction: SortDirection) => {
+  const diff = left.localeCompare(right, "ko-KR", { numeric: true });
+  return direction === "asc" ? diff : -diff;
+};
+
+const compareStudentIdentity = (
+  left: StudentSummary,
+  right: StudentSummary,
+) => {
+  const classCompare = compareText(left.classOnly, right.classOnly, "asc");
+  if (classCompare !== 0) return classCompare;
+  const numberCompare = compareNumberText(left.number, right.number, "asc");
+  if (numberCompare !== 0) return numberCompare;
+  return compareText(left.name, right.name, "asc");
+};
+
+const compareStudentsBySort = (
+  left: StudentSummary,
+  right: StudentSummary,
+  sort: StudentSort,
+) => {
+  let primaryCompare = 0;
+
+  if (sort.key === "number") {
+    primaryCompare = compareNumberText(
+      left.number,
+      right.number,
+      sort.direction,
+    );
+  } else if (sort.key === "name") {
+    primaryCompare = compareText(left.name, right.name, sort.direction);
+  } else if (sort.key === "latestScore") {
+    primaryCompare = compareNullableNumber(
+      left.latestScore,
+      right.latestScore,
+      sort.direction,
+    );
+  } else if (sort.key === "averageScore") {
+    primaryCompare = compareNullableNumber(
+      left.averageScore,
+      right.averageScore,
+      sort.direction,
+    );
+  } else if (sort.key === "attemptCount") {
+    const diff = left.attemptCount - right.attemptCount;
+    primaryCompare = sort.direction === "asc" ? diff : -diff;
+  } else if (sort.key === "weakUnits") {
+    primaryCompare = compareText(
+      left.weakUnits.join(", "),
+      right.weakUnits.join(", "),
+      sort.direction,
+    );
+  } else if (sort.key === "status") {
+    const diff =
+      STATUS_SORT_ORDER[left.status] - STATUS_SORT_ORDER[right.status];
+    primaryCompare = sort.direction === "asc" ? diff : -diff;
+  }
+
+  return primaryCompare || compareStudentIdentity(left, right);
+};
+
+const getDefaultSortDirection = (key: StudentSortKey): SortDirection =>
+  key === "latestScore" || key === "averageScore" || key === "attemptCount"
+    ? "desc"
+    : "asc";
+
 const QuizLogTab: React.FC = () => {
   const { config, userData, currentUser } = useAuth();
   const [logs, setLogs] = useState<Log[]>([]);
@@ -542,8 +652,10 @@ const QuizLogTab: React.FC = () => {
     useState<string[]>(MOCK_EXAM_ROUNDS);
   const [bigFilter, setBigFilter] = useState("");
   const [midFilter, setMidFilter] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("scoreAsc");
-  const [showPendingOnly, setShowPendingOnly] = useState(false);
+  const [studentSort, setStudentSort] = useState<StudentSort>({
+    key: "latestScore",
+    direction: "desc",
+  });
   const [studentSearch, setStudentSearch] = useState("");
   const [studentPage, setStudentPage] = useState(1);
   const [lowScoreModalOpen, setLowScoreModalOpen] = useState(false);
@@ -1550,8 +1662,6 @@ const QuizLogTab: React.FC = () => {
     const keyword = studentSearch.trim().toLowerCase();
     let list = selectedStudentSummaries;
 
-    if (showPendingOnly)
-      list = list.filter((student) => student.attemptCount === 0);
     if (keyword) {
       list = list.filter((student) =>
         [student.name, student.number, student.email, student.classOnly].some(
@@ -1563,17 +1673,8 @@ const QuizLogTab: React.FC = () => {
       );
     }
 
-    return [...list].sort((a, b) => {
-      if (sortKey === "scoreAsc")
-        return (a.latestScore ?? 101) - (b.latestScore ?? 101);
-      if (sortKey === "scoreDesc")
-        return (b.latestScore ?? -1) - (a.latestScore ?? -1);
-      if (sortKey === "averageAsc")
-        return (a.averageScore ?? 101) - (b.averageScore ?? 101);
-      if (sortKey === "attemptDesc") return b.attemptCount - a.attemptCount;
-      return a.name.localeCompare(b.name, "ko-KR");
-    });
-  }, [selectedStudentSummaries, showPendingOnly, sortKey, studentSearch]);
+    return [...list].sort((a, b) => compareStudentsBySort(a, b, studentSort));
+  }, [selectedStudentSummaries, studentSearch, studentSort]);
 
   const studentTotalPages = Math.max(
     1,
@@ -1635,8 +1736,7 @@ const QuizLogTab: React.FC = () => {
     classFilter,
     examRoundFilter,
     midFilter,
-    showPendingOnly,
-    sortKey,
+    studentSort,
     studentSearch,
   ]);
 
@@ -1737,6 +1837,64 @@ const QuizLogTab: React.FC = () => {
     }
   }, [bigFilter, bigOptions, midFilter, midOptions]);
 
+  const selectedBigFilterLabel =
+    bigOptions.find((big) => big.id === bigFilter)?.title || "대단원 전체";
+  const selectedMidFilterLabel =
+    midOptions.find((mid) => mid.id === midFilter)?.title || "중단원 전체";
+
+  const handleStudentSort = (key: StudentSortKey) => {
+    setStudentSort((previous) => {
+      if (previous.key === key) {
+        return {
+          key,
+          direction: previous.direction === "asc" ? "desc" : "asc",
+        };
+      }
+      return { key, direction: getDefaultSortDirection(key) };
+    });
+  };
+
+  const getSortIcon = (key: StudentSortKey) => {
+    if (studentSort.key !== key) return "fa-sort";
+    return studentSort.direction === "asc" ? "fa-sort-up" : "fa-sort-down";
+  };
+
+  const renderStudentSortHeader = (
+    key: StudentSortKey,
+    label: string,
+    className = "px-4 py-3",
+  ) => (
+    <th
+      className={className}
+      aria-sort={
+        studentSort.key === key
+          ? studentSort.direction === "asc"
+            ? "ascending"
+            : "descending"
+          : "none"
+      }
+    >
+      <button
+        type="button"
+        onClick={() => handleStudentSort(key)}
+        className="inline-flex items-center gap-1 whitespace-nowrap rounded px-1 py-0.5 text-left transition hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-200"
+        aria-label={`${label} ${
+          studentSort.key === key && studentSort.direction === "asc"
+            ? "내림차순"
+            : "오름차순"
+        } 정렬`}
+      >
+        {label}
+        <i
+          className={`fas ${getSortIcon(key)} text-[10px] ${
+            studentSort.key === key ? "text-blue-600" : "text-gray-300"
+          }`}
+          aria-hidden="true"
+        ></i>
+      </button>
+    </th>
+  );
+
   return (
     <div className="pb-4">
       <div className="mb-6 flex flex-col gap-4">
@@ -1747,105 +1905,109 @@ const QuizLogTab: React.FC = () => {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-[minmax(180px,1.25fr)_minmax(180px,1.25fr)_110px_minmax(128px,0.75fr)_128px_108px]">
-          <select
-            value={bigFilter}
-            onChange={(event) => {
-              userTouchedUnitFilterRef.current = true;
-              setBigFilter(event.target.value);
-              setMidFilter("");
-            }}
-            disabled={isExamPrepFilter}
-            className="min-w-0 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-bold text-gray-700 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
-            aria-label="대단원 필터"
-          >
-            <option value="">대단원 전체</option>
-            {bigOptions.map((big) => (
-              <option key={big.id} value={big.id}>
-                {big.title}
-              </option>
-            ))}
-          </select>
-          <select
-            value={midFilter}
-            onChange={(event) => {
-              userTouchedUnitFilterRef.current = true;
-              setMidFilter(event.target.value);
-            }}
-            disabled={isExamPrepFilter}
-            className="min-w-0 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-bold text-gray-700 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
-            aria-label="중단원 필터"
-          >
-            <option value="">중단원 전체</option>
-            {midOptions.map((mid) => (
-              <option key={mid.id} value={mid.id}>
-                {mid.title}
-              </option>
-            ))}
-          </select>
-          <select
-            value={classFilter}
-            onChange={(event) => {
-              userTouchedClassFilterRef.current = true;
-              setClassFilter(event.target.value);
-            }}
-            className="min-w-0 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-bold text-gray-700"
-            aria-label="반 필터"
-          >
-            <option value="">반 전체</option>
-            {classOptions.map((classOnly) => (
-              <option key={classOnly} value={classOnly}>
-                {classOnly}반
-              </option>
-            ))}
-          </select>
-          <select
-            value={categoryFilter}
-            onChange={(event) => {
-              const nextCategory = event.target.value;
-              userTouchedCategoryFilterRef.current = true;
-              userTouchedExamRoundFilterRef.current = false;
-              setCategoryFilter(nextCategory);
-              if (nextCategory === "exam_prep") {
-                setBigFilter("");
+        <div className="overflow-x-auto pb-1">
+          <div className="grid min-w-[680px] grid-cols-[minmax(0,1.4fr)_minmax(0,1.4fr)_minmax(56px,0.45fr)_minmax(86px,0.78fr)_minmax(84px,0.72fr)_minmax(88px,0.7fr)] gap-2">
+            <select
+              value={bigFilter}
+              onChange={(event) => {
+                userTouchedUnitFilterRef.current = true;
+                setBigFilter(event.target.value);
                 setMidFilter("");
-              } else {
-                setExamRoundFilter("");
-              }
-            }}
-            className="min-w-0 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-bold text-gray-700"
-            aria-label="평가유형 필터"
-          >
-            <option value="">평가유형 전체</option>
-            <option value="diagnostic">진단</option>
-            <option value="formative">형성</option>
-            <option value="exam_prep">모의고사</option>
-          </select>
-          <select
-            value={examRoundFilter}
-            onChange={(event) => {
-              userTouchedExamRoundFilterRef.current = true;
-              setExamRoundFilter(event.target.value);
-            }}
-            disabled={!isExamPrepFilter}
-            className="min-w-0 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-bold text-gray-700 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
-            aria-label="모의고사 회차 필터"
-          >
-            <option value="">전체 회차</option>
-            {examRoundOptions.map((round) => (
-              <option key={round} value={round}>
-                {formatMockExamRoundLabel(round)}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            onClick={reload}
-            className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-blue-600 px-3 py-2 text-[13px] font-bold text-white shadow-sm transition hover:bg-blue-700"
-          >
-            <i className="fas fa-sync-alt text-xs" aria-hidden="true"></i>
-            새로고침
-          </button>
+              }}
+              disabled={isExamPrepFilter}
+              title={selectedBigFilterLabel}
+              className="min-w-0 truncate rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-bold text-gray-700 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+              aria-label="대단원 필터"
+            >
+              <option value="">대단원 전체</option>
+              {bigOptions.map((big) => (
+                <option key={big.id} value={big.id}>
+                  {big.title}
+                </option>
+              ))}
+            </select>
+            <select
+              value={midFilter}
+              onChange={(event) => {
+                userTouchedUnitFilterRef.current = true;
+                setMidFilter(event.target.value);
+              }}
+              disabled={isExamPrepFilter}
+              title={selectedMidFilterLabel}
+              className="min-w-0 truncate rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-bold text-gray-700 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+              aria-label="중단원 필터"
+            >
+              <option value="">중단원 전체</option>
+              {midOptions.map((mid) => (
+                <option key={mid.id} value={mid.id}>
+                  {mid.title}
+                </option>
+              ))}
+            </select>
+            <select
+              value={classFilter}
+              onChange={(event) => {
+                userTouchedClassFilterRef.current = true;
+                setClassFilter(event.target.value);
+              }}
+              className="min-w-0 truncate rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-bold text-gray-700"
+              aria-label="반 필터"
+            >
+              <option value="">반 전체</option>
+              {classOptions.map((classOnly) => (
+                <option key={classOnly} value={classOnly}>
+                  {classOnly}반
+                </option>
+              ))}
+            </select>
+            <select
+              value={categoryFilter}
+              onChange={(event) => {
+                const nextCategory = event.target.value;
+                userTouchedCategoryFilterRef.current = true;
+                userTouchedExamRoundFilterRef.current = false;
+                setCategoryFilter(nextCategory);
+                if (nextCategory === "exam_prep") {
+                  setBigFilter("");
+                  setMidFilter("");
+                } else {
+                  setExamRoundFilter("");
+                }
+              }}
+              className="min-w-0 truncate rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-bold text-gray-700"
+              aria-label="평가유형 필터"
+            >
+              <option value="">평가유형 전체</option>
+              <option value="diagnostic">진단</option>
+              <option value="formative">형성</option>
+              <option value="exam_prep">모의고사</option>
+            </select>
+            <select
+              value={examRoundFilter}
+              onChange={(event) => {
+                userTouchedExamRoundFilterRef.current = true;
+                setExamRoundFilter(event.target.value);
+              }}
+              disabled={!isExamPrepFilter}
+              className="min-w-0 truncate rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-[13px] font-bold text-gray-700 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+              aria-label="모의고사 회차 필터"
+            >
+              <option value="">전체 회차</option>
+              {examRoundOptions.map((round) => (
+                <option key={round} value={round}>
+                  {formatMockExamRoundLabel(round)}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={reload}
+              className="inline-flex min-w-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg bg-blue-600 px-2 py-2 text-[13px] font-bold text-white shadow-sm transition hover:bg-blue-700"
+            >
+              <i className="fas fa-sync-alt text-xs" aria-hidden="true"></i>
+              새로고침
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1872,81 +2034,84 @@ const QuizLogTab: React.FC = () => {
             </span>
           )}
         </div>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-6">
-          {[
-            {
-              label: "응시",
-              value: `${attemptedSummaries.length}명`,
-              icon: "fa-users",
-              tone: "text-blue-500",
-            },
-            {
-              label: "평균",
-              value: `${roundOne(averageScore)}점`,
-              icon: "fa-chart-simple",
-              tone: "text-emerald-500",
-            },
-            {
-              label: "중앙값",
-              value: `${roundOne(medianScore)}점`,
-              icon: "fa-chart-line",
-              tone: "text-violet-500",
-            },
-            {
-              label: "50점 미만",
-              value: `${below50Students.length}명`,
-              icon: "fa-circle-exclamation",
-              tone: "text-red-500",
-              onClick: () => setLowScoreModalOpen(true),
-            },
-            {
-              label: "미응시",
-              value: rosterLimited || !classFilter ? "-" : `${pendingCount}명`,
-              icon: "fa-user-clock",
-              tone: "text-gray-400",
-              onClick:
-                rosterLimited || !classFilter
-                  ? undefined
-                  : () => setPendingModalOpen(true),
-            },
-            {
-              label: "마지막 동기화",
-              value: formatTime(lastSyncedAt),
-              icon: "fa-clock",
-              tone: "text-blue-500",
-            },
-          ].map((item) => {
-            const handleClick = "onClick" in item ? item.onClick : undefined;
+        <div className="overflow-x-auto pb-1">
+          <div className="grid min-w-[640px] grid-cols-6 gap-2">
+            {[
+              {
+                label: "응시",
+                value: `${attemptedSummaries.length}명`,
+                icon: "fa-users",
+                tone: "text-blue-500",
+              },
+              {
+                label: "평균",
+                value: `${roundOne(averageScore)}점`,
+                icon: "fa-chart-simple",
+                tone: "text-emerald-500",
+              },
+              {
+                label: "중앙값",
+                value: `${roundOne(medianScore)}점`,
+                icon: "fa-chart-line",
+                tone: "text-violet-500",
+              },
+              {
+                label: "50점 미만",
+                value: `${below50Students.length}명`,
+                icon: "fa-circle-exclamation",
+                tone: "text-red-500",
+                onClick: () => setLowScoreModalOpen(true),
+              },
+              {
+                label: "미응시",
+                value:
+                  rosterLimited || !classFilter ? "-" : `${pendingCount}명`,
+                icon: "fa-user-clock",
+                tone: "text-gray-400",
+                onClick:
+                  rosterLimited || !classFilter
+                    ? undefined
+                    : () => setPendingModalOpen(true),
+              },
+              {
+                label: "마지막 동기화",
+                value: formatTime(lastSyncedAt),
+                icon: "fa-clock",
+                tone: "text-blue-500",
+              },
+            ].map((item) => {
+              const handleClick = "onClick" in item ? item.onClick : undefined;
 
-            return (
-              <button
-                key={item.label}
-                type="button"
-                onClick={handleClick}
-                disabled={!handleClick}
-                className={`rounded-lg border border-gray-200 bg-white px-4 py-4 text-left transition ${
-                  handleClick
-                    ? "hover:-translate-y-0.5 hover:border-red-200 hover:bg-red-50/40 hover:shadow-sm"
-                    : "cursor-default"
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <i
-                    className={`fas ${item.icon} text-3xl ${item.tone}`}
-                    aria-hidden="true"
-                  ></i>
-                  <div>
-                    <div className="text-xs font-bold text-gray-500">
-                      {item.label}
-                    </div>
-                    <div className="mt-1 text-2xl font-extrabold text-gray-900">
-                      {item.value}
+              return (
+                <button
+                  key={item.label}
+                  type="button"
+                  onClick={handleClick}
+                  disabled={!handleClick}
+                  className={`min-w-0 rounded-lg border border-gray-200 bg-white px-3 py-3 text-left transition ${
+                    handleClick
+                      ? "hover:-translate-y-0.5 hover:border-red-200 hover:bg-red-50/40 hover:shadow-sm"
+                      : "cursor-default"
+                  }`}
+                >
+                  <div className="flex min-w-0 items-center gap-2">
+                    <i
+                      className={`fas ${item.icon} shrink-0 text-2xl ${item.tone}`}
+                      aria-hidden="true"
+                    ></i>
+                    <div className="min-w-0">
+                      <div className="truncate text-[11px] font-bold text-gray-500">
+                        {item.label}
+                      </div>
+                      <div className="mt-1 truncate text-xl font-extrabold text-gray-900 xl:text-2xl">
+                        {item.value}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </button>
-            );
-          })}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </section>
 
@@ -2092,42 +2257,17 @@ const QuizLogTab: React.FC = () => {
           <h3 className="text-lg font-extrabold text-gray-900">
             선택 학급 상세 · {classFilter ? `${classFilter}반` : "반 선택 필요"}
           </h3>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <select
-              value={sortKey}
-              onChange={(event) => setSortKey(event.target.value as SortKey)}
-              className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-bold text-gray-700"
-              aria-label="학생 정렬"
-            >
-              <option value="scoreAsc">점수 낮은순</option>
-              <option value="scoreDesc">점수 높은순</option>
-              <option value="averageAsc">평균 낮은순</option>
-              <option value="attemptDesc">응시 많은순</option>
-              <option value="nameAsc">이름순</option>
-            </select>
-            <button
-              type="button"
-              onClick={() => setShowPendingOnly((prev) => !prev)}
-              className={`rounded-lg border px-3 py-2 text-sm font-bold transition ${
-                showPendingOnly
-                  ? "border-blue-300 bg-blue-50 text-blue-700"
-                  : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-              }`}
-            >
-              미응시만
-            </button>
-            <div className="relative">
-              <input
-                value={studentSearch}
-                onChange={(event) => setStudentSearch(event.target.value)}
-                placeholder="학생 검색"
-                className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-3 pr-9 text-sm font-medium outline-none transition focus:border-blue-400 sm:w-64"
-              />
-              <i
-                className="fas fa-search absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400"
-                aria-hidden="true"
-              ></i>
-            </div>
+          <div className="relative w-full sm:w-72">
+            <input
+              value={studentSearch}
+              onChange={(event) => setStudentSearch(event.target.value)}
+              placeholder="학생 검색"
+              className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-3 pr-9 text-sm font-medium outline-none transition focus:border-blue-400"
+            />
+            <i
+              className="fas fa-search absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400"
+              aria-hidden="true"
+            ></i>
           </div>
         </div>
 
@@ -2234,13 +2374,13 @@ const QuizLogTab: React.FC = () => {
           <table className="w-full min-w-[880px] text-left text-sm">
             <thead className="border-y border-gray-100 bg-gray-50 text-xs font-extrabold text-gray-500">
               <tr>
-                <th className="px-4 py-3">번호</th>
-                <th className="px-4 py-3">학생</th>
-                <th className="px-4 py-3">최근점수</th>
-                <th className="px-4 py-3">평균</th>
-                <th className="px-4 py-3">응시</th>
-                <th className="px-4 py-3">취약 단원</th>
-                <th className="px-4 py-3">상태</th>
+                {renderStudentSortHeader("number", "번호")}
+                {renderStudentSortHeader("name", "학생")}
+                {renderStudentSortHeader("latestScore", "최근점수")}
+                {renderStudentSortHeader("averageScore", "평균")}
+                {renderStudentSortHeader("attemptCount", "응시")}
+                {renderStudentSortHeader("weakUnits", "취약 단원")}
+                {renderStudentSortHeader("status", "상태")}
                 <th className="px-4 py-3">오답노트</th>
               </tr>
             </thead>
