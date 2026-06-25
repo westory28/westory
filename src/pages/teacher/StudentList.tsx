@@ -100,6 +100,20 @@ const classSortValue = (classValue: string) => {
 const getStudentIdentityLabel = (student: Pick<Student, "email" | "userId">) =>
   student.email || student.userId;
 
+const getStudentDeleteErrorMessage = (error: unknown) => {
+  const code = String((error as { code?: string })?.code || "");
+  if (code.includes("permission-denied")) {
+    return "학생 삭제 권한이 없습니다. 교사 또는 관리자 권한으로 다시 확인해 주세요.";
+  }
+  if (code.includes("not-found")) {
+    return "삭제할 학생 정보를 찾지 못했습니다. 명단을 새로고침해 주세요.";
+  }
+  if (code.includes("unavailable") || code.includes("deadline-exceeded")) {
+    return "삭제 서버 응답이 지연되고 있습니다. 잠시 후 다시 시도해 주세요.";
+  }
+  return "학생 삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.";
+};
+
 const StudentList: React.FC = () => {
   const { userData, currentUser, config } = useAuth();
   const [students, setStudents] = useState<Student[]>([]);
@@ -386,14 +400,17 @@ const StudentList: React.FC = () => {
     setDeletingStudentIds((current) => new Set(current).add(id));
     removeStudentsLocally(new Set([id]));
     try {
-      await deleteStudentData(config, target.userId);
+      const result = await deleteStudentData(config, target.userId);
+      if (result.authUserDeleteError) {
+        console.warn("Student auth account cleanup failed", result);
+      }
       void fetchStudents({ silent: true });
     } catch (error) {
       console.error("Delete failed", error);
       setStudents(previousStudents);
       setFilteredStudents(previousFilteredStudents);
       void fetchStudents({ silent: true });
-      alert("학생 삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+      alert(getStudentDeleteErrorMessage(error));
     } finally {
       setDeletingStudentIds((current) => {
         const next = new Set(current);
@@ -420,7 +437,10 @@ const StudentList: React.FC = () => {
     removeStudentsLocally(targetIds);
     try {
       for (const target of targets) {
-        await deleteStudentData(config, target.userId);
+        const result = await deleteStudentData(config, target.userId);
+        if (result.authUserDeleteError) {
+          console.warn("Student auth account cleanup failed", result);
+        }
       }
       void fetchStudents({ silent: true });
     } catch (error) {
@@ -428,7 +448,7 @@ const StudentList: React.FC = () => {
       setStudents(previousStudents);
       setFilteredStudents(previousFilteredStudents);
       void fetchStudents({ silent: true });
-      alert("선택한 학생 삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+      alert(getStudentDeleteErrorMessage(error));
     } finally {
       setDeletingStudentIds(new Set());
     }

@@ -437,6 +437,26 @@ const readLessons = async (config: ConfigLike) => {
   return semesterLessons.length ? semesterLessons : readCollection("lessons");
 };
 
+type LessonCatalog = Awaited<ReturnType<typeof readLessons>>;
+
+const lessonCatalogCache = new Map<string, Promise<LessonCatalog>>();
+
+const getLessonCatalogCacheKey = (config: ConfigLike) =>
+  `${String(config?.year || "default")}:${String(config?.semester || "default")}`;
+
+const readLessonsCached = (config: ConfigLike) => {
+  const key = getLessonCatalogCacheKey(config);
+  const cached = lessonCatalogCache.get(key);
+  if (cached) return cached;
+
+  const promise = readLessons(config).catch((error) => {
+    lessonCatalogCache.delete(key);
+    throw error;
+  });
+  lessonCatalogCache.set(key, promise);
+  return promise;
+};
+
 const loadLessonSummary = async (
   config: ConfigLike,
   uid: string,
@@ -511,6 +531,24 @@ const loadLessonSummary = async (
       "수업 자료 진행률을 읽을 권한이 없거나 데이터를 불러오지 못했습니다.",
     );
   }
+};
+
+export const loadStudentLessonProgressSummary = async (
+  config: ConfigLike,
+  uid: string,
+): Promise<StudentLessonProgressSummary> => {
+  const safeUid = String(uid || "").trim();
+  if (!safeUid) {
+    return emptyLessonSummary(
+      "학생 정보가 없어 수업 자료 진행률을 불러오지 못했습니다.",
+    );
+  }
+
+  const lessonCatalog = await readLessonsCached(config).catch((error) => {
+    console.warn("Failed to load lesson catalog for student summary:", error);
+    return null;
+  });
+  return loadLessonSummary(config, safeUid, lessonCatalog);
 };
 
 export const loadStudentQuizResults = async (
@@ -671,6 +709,27 @@ const loadQuizSummary = async (
   }
 };
 
+export const loadStudentQuizProgressSummary = async (
+  config: ConfigLike,
+  uid: string,
+): Promise<StudentQuizProgressSummary> => {
+  const safeUid = String(uid || "").trim();
+  if (!safeUid) {
+    return emptyQuizSummary(
+      "학생 정보가 없어 평가 기록을 불러오지 못했습니다.",
+    );
+  }
+
+  const lessonCatalog = await readLessonsCached(config).catch((error) => {
+    console.warn(
+      "Failed to load lesson catalog for student quiz summary:",
+      error,
+    );
+    return null;
+  });
+  return loadQuizSummary(config, safeUid, lessonCatalog);
+};
+
 const loadHistoryClassroomSummary = async (
   config: ConfigLike,
   uid: string,
@@ -718,6 +777,19 @@ const loadHistoryClassroomSummary = async (
   }
 };
 
+export const loadStudentHistoryClassroomProgressSummary = async (
+  config: ConfigLike,
+  uid: string,
+): Promise<StudentHistoryClassroomSummary> => {
+  const safeUid = String(uid || "").trim();
+  if (!safeUid) {
+    return emptyHistoryClassroomSummary(
+      "학생 정보가 없어 역사교실 결과를 불러오지 못했습니다.",
+    );
+  }
+  return loadHistoryClassroomSummary(config, safeUid);
+};
+
 const loadWisSummary = async (
   config: ConfigLike,
   uid: string,
@@ -753,6 +825,17 @@ const loadWisSummary = async (
   }
 };
 
+export const loadStudentWisProgressSummary = async (
+  config: ConfigLike,
+  uid: string,
+): Promise<StudentWisSummary> => {
+  const safeUid = String(uid || "").trim();
+  if (!safeUid) {
+    return emptyWisSummary("학생 정보가 없어 위스 정보를 불러오지 못했습니다.");
+  }
+  return loadWisSummary(config, safeUid);
+};
+
 export const loadStudentProgressSummary = async (
   config: ConfigLike,
   uid: string,
@@ -774,7 +857,7 @@ export const loadStudentProgressSummary = async (
     };
   }
 
-  const lessonCatalog = await readLessons(config).catch((error) => {
+  const lessonCatalog = await readLessonsCached(config).catch((error) => {
     console.warn("Failed to load lesson catalog for student summary:", error);
     return null;
   });

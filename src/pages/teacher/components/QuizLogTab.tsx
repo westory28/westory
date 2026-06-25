@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../../../lib/firebase";
 import { useAuth } from "../../../contexts/AuthContext";
+import { canEditStudentList } from "../../../lib/permissions";
 import {
   getSemesterCollectionPath,
   getSemesterDocPath,
@@ -27,6 +28,7 @@ import {
   normalizeMockExamRound,
   sortMockExamRounds,
 } from "../../../lib/mockExamRounds";
+import StudentDetailModal from "./StudentDetailModal";
 import StudentWrongNoteModal from "./StudentWrongNoteModal";
 
 interface QuizDetail {
@@ -53,6 +55,7 @@ interface Log {
 
 interface UserProfile {
   uid: string;
+  grade: string;
   name: string;
   class: string;
   number: string;
@@ -90,6 +93,7 @@ interface UnitMeta {
 interface StudentSummary {
   key: string;
   uid: string;
+  grade: string;
   name: string;
   email: string;
   classOnly: string;
@@ -153,6 +157,13 @@ const normalizeNumber = (value: unknown): string => {
   if (!raw) return "";
   const digits = raw.match(/\d+/)?.[0];
   return digits || raw.replace("번", "").trim();
+};
+
+const normalizeGrade = (value: unknown): string => {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const digits = raw.match(/\d+/)?.[0];
+  return digits || raw.replace("학년", "").trim();
 };
 
 const toText = (value: unknown): string => String(value ?? "").trim();
@@ -324,11 +335,10 @@ const findRecentCategoryFocus = (logs: Log[], classOnly?: string): string => {
 
   return (
     Array.from(byCategory.entries()).sort(([, a], [, b]) => {
-      if (a.attemptCount !== b.attemptCount)
-        return b.attemptCount - a.attemptCount;
+      if (a.latestMs !== b.latestMs) return b.latestMs - a.latestMs;
       if (a.studentKeys.size !== b.studentKeys.size)
         return b.studentKeys.size - a.studentKeys.size;
-      return b.latestMs - a.latestMs;
+      return b.attemptCount - a.attemptCount;
     })[0]?.[0] || ""
   );
 };
@@ -370,13 +380,11 @@ const findRecentExamRoundFocus = (logs: Log[], classOnly?: string): string => {
 
   return (
     Array.from(byRound.entries()).sort(([, a], [, b]) => {
+      if (a.latestMs !== b.latestMs) return b.latestMs - a.latestMs;
       if (a.studentKeys.size !== b.studentKeys.size) {
         return b.studentKeys.size - a.studentKeys.size;
       }
-      if (a.attemptCount !== b.attemptCount) {
-        return b.attemptCount - a.attemptCount;
-      }
-      return b.latestMs - a.latestMs;
+      return b.attemptCount - a.attemptCount;
     })[0]?.[0] || ""
   );
 };
@@ -513,7 +521,7 @@ const getStatusMeta = (status: StudentSummary["status"]) => {
 };
 
 const QuizLogTab: React.FC = () => {
-  const { config } = useAuth();
+  const { config, userData, currentUser } = useAuth();
   const [logs, setLogs] = useState<Log[]>([]);
   const [analyticsBackfillLogs, setAnalyticsBackfillLogs] = useState<Log[]>([]);
   const [students, setStudents] = useState<UserProfile[]>([]);
@@ -555,6 +563,14 @@ const QuizLogTab: React.FC = () => {
     uid: string;
     name: string;
   } | null>(null);
+  const [detailStudent, setDetailStudent] = useState<{
+    id: string;
+    grade: string;
+    class: string;
+    number: number;
+    name: string;
+    email: string;
+  } | null>(null);
   const lowScoreModalRef = useRef<HTMLDivElement>(null);
   const lowScoreCloseButtonRef = useRef<HTMLButtonElement>(null);
   const scoreBucketCloseButtonRef = useRef<HTMLButtonElement>(null);
@@ -565,6 +581,10 @@ const QuizLogTab: React.FC = () => {
   const userTouchedCategoryFilterRef = useRef(false);
   const userTouchedExamRoundFilterRef = useRef(false);
   const isExamPrepFilter = categoryFilter === "exam_prep";
+  const detailReadOnly = !canEditStudentList(
+    userData,
+    currentUser?.email || "",
+  );
 
   const unitMetaById = useMemo(() => buildUnitMetaMap(treeData), [treeData]);
 
@@ -709,9 +729,17 @@ const QuizLogTab: React.FC = () => {
                 const data = item.data() as any;
                 return {
                   uid: item.id,
-                  name: toText(data.name) || "학생",
-                  class: normalizeClass(data.class),
-                  number: normalizeNumber(data.number),
+                  grade: normalizeGrade(data.studentGrade || data.grade),
+                  name:
+                    toText(
+                      data.studentName ||
+                        data.name ||
+                        data.displayName ||
+                        data.nickname ||
+                        data.customName,
+                    ) || "학생",
+                  class: normalizeClass(data.studentClass || data.class),
+                  number: normalizeNumber(data.studentNumber || data.number),
                   email: toText(data.email),
                   role: toText(data.role),
                 };
@@ -733,7 +761,7 @@ const QuizLogTab: React.FC = () => {
     return () => {
       active = false;
     };
-  }, [config]);
+  }, [config, refreshKey]);
 
   useEffect(() => {
     setLoading(true);
@@ -1032,9 +1060,10 @@ const QuizLogTab: React.FC = () => {
     setClassFilter(recentClassFocus.classOnly);
   }, [classFilter, recentClassFocus]);
 
+  const autoFocusClass = classFilter || recentClassFocus?.classOnly || "";
   const recentDefaultCategory = useMemo(
-    () => findRecentCategoryFocus(canonicalLogs, recentClassFocus?.classOnly),
-    [canonicalLogs, recentClassFocus],
+    () => findRecentCategoryFocus(canonicalLogs, autoFocusClass),
+    [autoFocusClass, canonicalLogs],
   );
 
   useEffect(() => {
@@ -1044,8 +1073,8 @@ const QuizLogTab: React.FC = () => {
   }, [categoryFilter, recentDefaultCategory]);
 
   const recentDefaultExamRound = useMemo(
-    () => findRecentExamRoundFocus(canonicalLogs, recentClassFocus?.classOnly),
-    [canonicalLogs, recentClassFocus],
+    () => findRecentExamRoundFocus(canonicalLogs, autoFocusClass),
+    [autoFocusClass, canonicalLogs],
   );
   const examRoundOptions = useMemo(
     () =>
@@ -1225,6 +1254,7 @@ const QuizLogTab: React.FC = () => {
       if (!map.has(key)) {
         map.set(key, {
           uid: log.uid || profile?.uid || "",
+          grade: profile?.grade || "",
           name: profile?.name || log.studentName,
           class: profile?.class || log.classOnly,
           number: profile?.number || log.studentNumber,
@@ -1269,6 +1299,7 @@ const QuizLogTab: React.FC = () => {
       byStudent.set(key, {
         key,
         uid: student.uid,
+        grade: student.grade,
         name: student.name || "학생",
         email: student.email,
         classOnly: student.class,
@@ -1304,6 +1335,7 @@ const QuizLogTab: React.FC = () => {
         ({
           key,
           uid: log.uid || profile?.uid || "",
+          grade: profile?.grade || "",
           name: profile?.name || log.studentName,
           email: profile?.email || log.email || "",
           classOnly: profile?.class || log.classOnly,
@@ -1575,6 +1607,25 @@ const QuizLogTab: React.FC = () => {
     (pendingPage - 1) * STUDENTS_PER_PAGE,
     pendingPage * STUDENTS_PER_PAGE,
   );
+
+  const openStudentDetail = (student: StudentSummary) => {
+    if (!student.uid) return;
+    setLowScoreModalOpen(false);
+    setScoreBucketModalOpen(false);
+    setPendingModalOpen(false);
+    setWrongNoteTarget(null);
+    setReturnToLowScoreModal(false);
+    setReturnToScoreBucketModal(false);
+    setReturnToPendingModal(false);
+    setDetailStudent({
+      id: student.uid,
+      grade: student.grade,
+      class: student.classOnly,
+      number: parseInt(student.number, 10) || 0,
+      name: student.name,
+      email: student.email,
+    });
+  };
 
   useEffect(() => {
     setStudentPage(1);
@@ -2103,9 +2154,20 @@ const QuizLogTab: React.FC = () => {
                         ? `${student.number}번`
                         : "-"}
                     </div>
-                    <div className="mt-1 truncate text-base font-extrabold text-gray-900">
-                      {student.name}
-                    </div>
+                    {student.uid ? (
+                      <button
+                        type="button"
+                        onClick={() => openStudentDetail(student)}
+                        className="mt-1 block max-w-full truncate text-left text-base font-extrabold text-gray-900 transition hover:text-blue-600 hover:underline"
+                        title="학생 상세 보기"
+                      >
+                        {student.name}
+                      </button>
+                    ) : (
+                      <div className="mt-1 truncate text-base font-extrabold text-gray-900">
+                        {student.name}
+                      </div>
+                    )}
                   </div>
                   <span
                     className={`shrink-0 rounded-md border px-2 py-1 text-xs font-extrabold ${status.className}`}
@@ -2205,9 +2267,20 @@ const QuizLogTab: React.FC = () => {
                         : "-"}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="font-extrabold text-gray-800">
-                        {student.name}
-                      </div>
+                      {student.uid ? (
+                        <button
+                          type="button"
+                          onClick={() => openStudentDetail(student)}
+                          className="font-extrabold text-gray-800 transition hover:text-blue-600 hover:underline"
+                          title="학생 상세 보기"
+                        >
+                          {student.name}
+                        </button>
+                      ) : (
+                        <div className="font-extrabold text-gray-800">
+                          {student.name}
+                        </div>
+                      )}
                       <div className="text-xs text-gray-400">
                         {student.classOnly ? `${student.classOnly}반` : "-"}
                       </div>
@@ -2367,9 +2440,20 @@ const QuizLogTab: React.FC = () => {
                               : ""}
                           </td>
                           <td className="px-4 py-3">
-                            <div className="font-extrabold text-gray-800">
-                              {student.name}
-                            </div>
+                            {student.uid ? (
+                              <button
+                                type="button"
+                                onClick={() => openStudentDetail(student)}
+                                className="font-extrabold text-gray-800 transition hover:text-blue-600 hover:underline"
+                                title="학생 상세 보기"
+                              >
+                                {student.name}
+                              </button>
+                            ) : (
+                              <div className="font-extrabold text-gray-800">
+                                {student.name}
+                              </div>
+                            )}
                           </td>
                           <td className="px-4 py-3 font-extrabold text-red-600">
                             {student.latestScore === null
@@ -2525,9 +2609,20 @@ const QuizLogTab: React.FC = () => {
                               : ""}
                           </td>
                           <td className="px-4 py-3">
-                            <div className="font-extrabold text-gray-800">
-                              {student.name}
-                            </div>
+                            {student.uid ? (
+                              <button
+                                type="button"
+                                onClick={() => openStudentDetail(student)}
+                                className="font-extrabold text-gray-800 transition hover:text-blue-600 hover:underline"
+                                title="학생 상세 보기"
+                              >
+                                {student.name}
+                              </button>
+                            ) : (
+                              <div className="font-extrabold text-gray-800">
+                                {student.name}
+                              </div>
+                            )}
                           </td>
                           <td className="px-4 py-3 font-extrabold text-gray-800">
                             {student.latestScore === null
@@ -2686,9 +2781,20 @@ const QuizLogTab: React.FC = () => {
                                 : ""}
                             </td>
                             <td className="px-4 py-3">
-                              <div className="font-extrabold text-gray-800">
-                                {student.name}
-                              </div>
+                              {student.uid ? (
+                                <button
+                                  type="button"
+                                  onClick={() => openStudentDetail(student)}
+                                  className="font-extrabold text-gray-800 transition hover:text-blue-600 hover:underline"
+                                  title="학생 상세 보기"
+                                >
+                                  {student.name}
+                                </button>
+                              ) : (
+                                <div className="font-extrabold text-gray-800">
+                                  {student.name}
+                                </div>
+                              )}
                             </td>
                             <td className="px-4 py-3">
                               <span
@@ -2772,6 +2878,15 @@ const QuizLogTab: React.FC = () => {
           </div>
         </div>
       )}
+
+      <StudentDetailModal
+        isOpen={!!detailStudent}
+        onClose={() => setDetailStudent(null)}
+        student={detailStudent}
+        onUpdate={reload}
+        readOnly={detailReadOnly}
+        initialTab="quiz"
+      />
 
       <StudentWrongNoteModal
         isOpen={!!wrongNoteTarget}

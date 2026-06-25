@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { initializeApp } = require('firebase-admin/app');
+const { getAuth } = require('firebase-admin/auth');
 const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
@@ -2771,6 +2772,27 @@ const getStudentProfileClearPatch = () => ({
   updatedAt: FieldValue.serverTimestamp(),
 });
 
+const deleteAuthUserIfExists = async (uid) => {
+  try {
+    await getAuth().deleteUser(uid);
+    return { authUserDeleted: true, authUserDeleteError: '' };
+  } catch (error) {
+    const code = String(error?.code || '').trim();
+    if (code === 'auth/user-not-found') {
+      return { authUserDeleted: false, authUserDeleteError: '' };
+    }
+    console.warn('Failed to delete Firebase Auth user for student cleanup.', {
+      uid,
+      code,
+      message: String(error?.message || error),
+    });
+    return {
+      authUserDeleted: false,
+      authUserDeleteError: code || 'auth-delete-failed',
+    };
+  }
+};
+
 const addQueryDocRefs = (refsByPath, snapshot) => {
   snapshot?.forEach((docSnap) => {
     refsByPath.set(docSnap.ref.path, docSnap.ref);
@@ -3186,12 +3208,17 @@ exports.deleteStudentData = onCall({ region: REGION, timeoutSeconds: 300, memory
 
   let userDocumentDeleted = false;
   let userProfileCleared = false;
+  let authUserDeleted = false;
+  let authUserDeleteError = '';
   if (preserveUserDocument) {
     await userRef.set(getStudentProfileClearPatch(), { merge: true });
     userProfileCleared = true;
   } else if (userSnap.exists) {
     await userRef.delete();
     userDocumentDeleted = true;
+    const authCleanup = await deleteAuthUserIfExists(targetUid);
+    authUserDeleted = authCleanup.authUserDeleted;
+    authUserDeleteError = authCleanup.authUserDeleteError;
   }
 
   console.info('Student data deleted.', {
@@ -3201,6 +3228,8 @@ exports.deleteStudentData = onCall({ region: REGION, timeoutSeconds: 300, memory
     semester,
     preserveUserDocument,
     deletedRelatedDocCount,
+    authUserDeleted,
+    authUserDeleteError,
     ...rosterCleanup,
   });
 
@@ -3210,6 +3239,8 @@ exports.deleteStudentData = onCall({ region: REGION, timeoutSeconds: 300, memory
     semester,
     userDocumentDeleted,
     userProfileCleared,
+    authUserDeleted,
+    authUserDeleteError,
     deletedRelatedDocCount,
     ...rosterCleanup,
   };

@@ -9,6 +9,8 @@ export interface StudentDataDeleteResult {
   semester: string;
   userDocumentDeleted?: boolean;
   userProfileCleared?: boolean;
+  authUserDeleted?: boolean;
+  authUserDeleteError?: string;
   deletedRelatedDocCount: number;
   updatedRosterCount: number;
   removedRosterRowCount: number;
