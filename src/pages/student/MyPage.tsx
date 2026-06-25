@@ -2747,7 +2747,7 @@ const MyPage: React.FC = () => {
                   )}
                 </section>
 
-                <div className="grid gap-5 xl:grid-cols-[1.45fr_0.7fr]">
+                <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,24rem)] 2xl:grid-cols-[minmax(0,1fr)_minmax(24rem,26rem)]">
                   <div className="space-y-5">
                     <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
                       <div className="mb-5 flex items-center gap-3">
@@ -2842,20 +2842,15 @@ const MyPage: React.FC = () => {
                             </button>
                             {expandedWrongKey === item.key && (
                               <div className="border-t border-slate-100 bg-slate-50 px-4 py-3 text-sm font-semibold leading-6 text-slate-700">
-                                <div className="text-xs font-bold text-slate-400">
-                                  최근 오답 일시: {item.dateText}
-                                </div>
-                                <div className="mt-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
-                                  <div className="mb-1 text-xs font-black text-blue-600">
-                                    문제
+                                <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                                    <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-600">
+                                      문항 {index + 1}
+                                    </span>
+                                    <span className="text-xs font-bold text-slate-400">
+                                      최근 오답 일시: {item.dateText}
+                                    </span>
                                   </div>
-                                  {item.passage && (
-                                    <QuizPassage
-                                      value={item.passage}
-                                      surface="muted"
-                                      className="mb-3"
-                                    />
-                                  )}
                                   <div className="whitespace-pre-wrap break-keep text-base font-black leading-7 text-slate-900">
                                     {item.question}
                                   </div>
@@ -2869,19 +2864,34 @@ const MyPage: React.FC = () => {
                                     </div>
                                   )}
                                 </div>
-                                <div>
-                                  나의 오답:{" "}
-                                  <span className="font-extrabold text-red-500">
-                                    {item.userAnswer || "(미입력)"}
-                                  </span>
+                                {item.passage && (
+                                  <div className="mt-3">
+                                    <div className="mb-1 text-xs font-black text-slate-500">
+                                      본문
+                                    </div>
+                                    <QuizPassage
+                                      value={item.passage}
+                                      surface="muted"
+                                    />
+                                  </div>
+                                )}
+                                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                  <div className="rounded-xl bg-white px-3 py-2">
+                                    나의 오답:{" "}
+                                    <span className="font-extrabold text-red-500">
+                                      {item.userAnswer || "(미입력)"}
+                                    </span>
+                                  </div>
+                                  <div className="rounded-xl bg-white px-3 py-2">
+                                    정답:{" "}
+                                    <span className="font-extrabold text-emerald-600">
+                                      {item.answer}
+                                    </span>
+                                  </div>
                                 </div>
-                                <div>
-                                  정답:{" "}
-                                  <span className="font-extrabold text-emerald-600">
-                                    {item.answer}
-                                  </span>
+                                <div className="mt-2 rounded-xl bg-white px-3 py-2">
+                                  해설: {item.explanation}
                                 </div>
-                                <div>해설: {item.explanation}</div>
                               </div>
                             )}
                           </div>
@@ -2911,10 +2921,10 @@ const MyPage: React.FC = () => {
                             key={item.key}
                             type="button"
                             onClick={item.onClick}
-                            className="flex w-full items-center gap-3 rounded-xl px-1 py-1 text-left transition hover:bg-slate-50"
+                            className="flex w-full items-start gap-3 rounded-xl px-1 py-1 text-left transition hover:bg-slate-50"
                           >
                             <span
-                              className={`inline-flex h-9 w-9 items-center justify-center rounded-full text-sm font-black text-white ${
+                              className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-black text-white ${
                                 index === 0
                                   ? "bg-blue-600"
                                   : index === 1
@@ -2924,11 +2934,11 @@ const MyPage: React.FC = () => {
                             >
                               {index + 1}
                             </span>
-                            <div className="min-w-0 flex-1">
-                              <div className="text-sm font-extrabold text-slate-800">
+                            <div className="min-w-0 flex-1 space-y-0.5">
+                              <div className="whitespace-normal break-keep text-sm font-extrabold leading-5 text-slate-800">
                                 {item.label}
                               </div>
-                              <div className="text-xs font-bold text-slate-400">
+                              <div className="whitespace-normal break-keep text-xs font-bold leading-5 text-slate-400">
                                 {index === 0
                                   ? "핵심 개념 다시 보기"
                                   : index === 1
@@ -2936,7 +2946,7 @@ const MyPage: React.FC = () => {
                                     : "오답 문항 재도전하기"}
                               </div>
                             </div>
-                            <i className="fas fa-chevron-right text-slate-400"></i>
+                            <i className="fas fa-chevron-right mt-3 shrink-0 text-slate-400"></i>
                           </button>
                         ))}
                       </div>
@@ -3241,24 +3251,14 @@ const MyPage: React.FC = () => {
                       key={item.key}
                       className="rounded-2xl border border-red-100 bg-red-50/60 p-4"
                     >
-                      <div className="mb-3 flex flex-wrap items-center gap-2">
-                        <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-red-500 text-sm font-black text-white">
-                          {index + 1}
-                        </span>
-                        <span className="rounded-full bg-white px-3 py-1 text-xs font-black text-red-600">
-                          오답
-                        </span>
-                      </div>
-                      {item.passage && (
-                        <QuizPassage
-                          value={item.passage}
-                          surface="muted"
-                          className="mb-3"
-                        />
-                      )}
                       <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-                        <div className="mb-1 text-xs font-black text-blue-600">
-                          문제
+                        <div className="mb-2 flex flex-wrap items-center gap-2">
+                          <span className="inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-red-500 px-2 text-sm font-black text-white">
+                            {index + 1}
+                          </span>
+                          <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-black text-red-600">
+                            오답
+                          </span>
                         </div>
                         <div className="whitespace-pre-wrap break-keep text-base font-black leading-7 text-slate-900">
                           {item.question}
@@ -3273,6 +3273,14 @@ const MyPage: React.FC = () => {
                           </div>
                         )}
                       </div>
+                      {item.passage && (
+                        <div className="mt-3">
+                          <div className="mb-1 text-xs font-black text-slate-500">
+                            본문
+                          </div>
+                          <QuizPassage value={item.passage} surface="muted" />
+                        </div>
+                      )}
                       <div className="mt-3 grid gap-2 text-sm font-bold leading-6 text-slate-700 sm:grid-cols-2">
                         <div className="rounded-xl bg-white px-3 py-2">
                           나의 오답:{" "}
