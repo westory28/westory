@@ -158,8 +158,8 @@ const PointsOverviewTab: React.FC<PointsOverviewTabProps> = ({
                 학생별 위스 현황
               </h2>
               <p className="mt-1 text-sm text-gray-500">
-                학년, 반, 번호, 이름 검색을 조합해 학생 위스 현황과 최근 거래
-                내역을 빠르게 확인할 수 있습니다.
+                기본은 누적 적립 순으로 보며, 학년·반·번호·이름 검색을 조합해
+                최근 거래 내역까지 확인할 수 있습니다.
               </p>
             </div>
             <div className="text-sm font-bold text-gray-500">{`검색 결과 ${totalWalletCount}명`}</div>

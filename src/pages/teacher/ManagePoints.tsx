@@ -461,7 +461,7 @@ const ManagePoints: React.FC = () => {
   const [numberFilter, setNumberFilter] = useState("all");
   const [nameSearch, setNameSearch] = useState("");
   const [overviewSortKey, setOverviewSortKey] =
-    useState<OverviewSortKey>("none");
+    useState<OverviewSortKey>("earnedTotal");
   const [overviewSortDirection, setOverviewSortDirection] =
     useState<OverviewSortDirection>("desc");
   const [overviewPage, setOverviewPage] = useState(1);
