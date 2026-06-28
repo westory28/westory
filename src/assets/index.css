@@ -4,6 +4,12 @@
 @tailwind components;
 @tailwind utilities;
 
+@property --lesson-core-point-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
 .dashboard-container {
   max-width: 1280px;
   margin: 0 auto;
@@ -105,6 +111,7 @@
 }
 
 .lesson-core-point {
+  --lesson-core-point-angle: 0deg;
   --lesson-core-point-border-duration: 5.6s;
   --lesson-core-point-glow-duration: 3.8s;
   --lesson-core-point-spark-duration: 3.2s;
@@ -223,48 +230,23 @@
   inset: -6px;
   border-radius: 11px;
   padding: 4px;
-  background:
-    linear-gradient(
-        90deg,
-        transparent 0 16%,
-        rgba(255, 255, 255, 0.4) 36%,
-        rgba(254, 240, 138, 0.66) 50%,
-        rgba(245, 158, 11, 0.46) 64%,
-        transparent 84% 100%
-      )
-      top left / 58% 4px no-repeat,
-    linear-gradient(
-        180deg,
-        transparent 0 16%,
-        rgba(255, 255, 255, 0.4) 36%,
-        rgba(254, 240, 138, 0.66) 50%,
-        rgba(245, 158, 11, 0.46) 64%,
-        transparent 84% 100%
-      )
-      top right / 4px 58% no-repeat,
-    linear-gradient(
-        270deg,
-        transparent 0 16%,
-        rgba(255, 255, 255, 0.4) 36%,
-        rgba(254, 240, 138, 0.66) 50%,
-        rgba(245, 158, 11, 0.46) 64%,
-        transparent 84% 100%
-      )
-      bottom right / 58% 4px no-repeat,
-    linear-gradient(
-        0deg,
-        transparent 0 16%,
-        rgba(255, 255, 255, 0.4) 36%,
-        rgba(254, 240, 138, 0.66) 50%,
-        rgba(245, 158, 11, 0.46) 64%,
-        transparent 84% 100%
-      )
-      bottom left / 4px 58% no-repeat;
-  filter: drop-shadow(0 0 5px rgba(250, 204, 21, 0.32));
+  background: conic-gradient(
+    from var(--lesson-core-point-angle),
+    transparent 0deg 30deg,
+    rgba(255, 255, 255, 0.38) 42deg,
+    rgba(254, 240, 138, 0.66) 56deg,
+    rgba(245, 158, 11, 0.46) 72deg,
+    transparent 92deg 152deg,
+    rgba(255, 255, 255, 0.32) 168deg,
+    rgba(254, 240, 138, 0.56) 184deg,
+    rgba(245, 158, 11, 0.42) 202deg,
+    transparent 224deg 360deg
+  );
+  filter: drop-shadow(0 0 5px rgba(250, 204, 21, 0.28));
   opacity: 0.54;
   animation: westory-core-point-border-run
     var(--lesson-core-point-border-duration) linear infinite;
-  will-change: background-position;
+  will-change: --lesson-core-point-angle;
 }
 
 .lesson-core-point__check {
@@ -297,6 +279,44 @@
 
 .lesson-core-point.is-unfound {
   cursor: pointer;
+}
+
+.lesson-core-point.is-found.is-unfound {
+  background:
+    radial-gradient(
+      circle at 18% 16%,
+      rgba(255, 255, 255, 0.26),
+      transparent 34%
+    ),
+    linear-gradient(
+      135deg,
+      rgba(254, 240, 138, 0.18),
+      rgba(251, 191, 36, 0.12) 46%,
+      rgba(245, 158, 11, 0.08)
+    );
+  box-shadow:
+    inset 0 0 0 1px rgba(251, 191, 36, 0.12),
+    0 0 13px rgba(245, 158, 11, 0.16);
+  cursor: pointer;
+}
+
+.lesson-core-point.is-found.is-unfound:hover,
+.lesson-core-point.is-found.is-unfound:focus-visible {
+  background:
+    radial-gradient(
+      circle at 18% 16%,
+      rgba(255, 255, 255, 0.3),
+      transparent 36%
+    ),
+    linear-gradient(
+      135deg,
+      rgba(254, 240, 138, 0.23),
+      rgba(251, 191, 36, 0.15) 48%,
+      rgba(245, 158, 11, 0.1)
+    );
+  box-shadow:
+    inset 0 0 0 1px rgba(251, 191, 36, 0.18),
+    0 0 15px rgba(245, 158, 11, 0.2);
 }
 
 .lesson-core-point.is-found::before {
@@ -471,36 +491,8 @@
 }
 
 @keyframes westory-core-point-border-run {
-  0% {
-    background-position:
-      0 0,
-      100% -65%,
-      100% 100%,
-      0 165%;
-  }
-
-  49.99% {
-    background-position:
-      100% 0,
-      100% -65%,
-      0 100%,
-      0 165%;
-  }
-
-  50% {
-    background-position:
-      165% 0,
-      100% 0,
-      -65% 100%,
-      0 100%;
-  }
-
-  100% {
-    background-position:
-      165% 0,
-      100% 100%,
-      -65% 100%,
-      0 0;
+  to {
+    --lesson-core-point-angle: 360deg;
   }
 }
 
