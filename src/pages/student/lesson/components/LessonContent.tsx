@@ -1247,6 +1247,13 @@ const LessonContent: React.FC<LessonContentProps> = ({
       )}
     </>
   );
+  const floatingCorePointRewardContent = (
+    <span className="lesson-core-point-floating-status__reward">
+      {corePointRewardPending
+        ? "반영 중"
+        : `${LESSON_CORE_POINTS_REWARD_LABEL} 받기`}
+    </span>
+  );
   const floatingSaveControls = canPersist ? (
     <div
       className={
@@ -1316,7 +1323,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
             {corePointRewardReady || corePointRewardPending ? (
               <button
                 type="button"
-                className={`lesson-core-point-floating-status ${
+                className={`lesson-core-point-floating-status lesson-core-point-floating-status--reward ${
                   corePointRewardReady ? "is-claimable" : ""
                 } ${corePointRewardPending ? "is-pending" : ""}`}
                 onClick={handleCorePointRewardClaim}
@@ -1327,7 +1334,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
                     : `핵심포인트 완주 보상 ${LESSON_CORE_POINTS_REWARD_LABEL} 받기`
                 }
               >
-                {floatingCorePointStatusContent}
+                {floatingCorePointRewardContent}
               </button>
             ) : (
               <div

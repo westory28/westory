@@ -104,7 +104,7 @@ button.lesson-core-point-floating-status:disabled {
 
 .lesson-core-point-floating-status > * {
   position: relative;
-  z-index: 1;
+  z-index: 3;
 }
 
 .lesson-core-point-floating-status.is-claimable {
@@ -154,24 +154,24 @@ button.lesson-core-point-floating-status:disabled {
   content: "";
   position: absolute;
   inset: -4px;
-  z-index: 0;
+  z-index: 2;
   border-radius: 1.32rem;
   padding: 3px;
   pointer-events: none;
   background: conic-gradient(
     from var(--lesson-core-point-angle),
-    transparent 0deg 32deg,
-    rgba(255, 255, 255, 0.48) 44deg,
-    rgba(254, 240, 138, 0.78) 58deg,
-    rgba(245, 158, 11, 0.56) 76deg,
-    transparent 98deg 150deg,
-    rgba(255, 255, 255, 0.38) 168deg,
-    rgba(254, 240, 138, 0.66) 186deg,
-    rgba(245, 158, 11, 0.48) 206deg,
-    transparent 228deg 360deg
+    transparent 0deg 26deg,
+    rgba(255, 255, 255, 0.62) 40deg,
+    rgba(254, 240, 138, 0.88) 58deg,
+    rgba(245, 158, 11, 0.72) 80deg,
+    transparent 104deg 144deg,
+    rgba(255, 255, 255, 0.52) 162deg,
+    rgba(254, 240, 138, 0.76) 184deg,
+    rgba(245, 158, 11, 0.64) 208deg,
+    transparent 232deg 360deg
   );
-  filter: drop-shadow(0 0 6px rgba(250, 204, 21, 0.34));
-  opacity: 0.72;
+  filter: drop-shadow(0 0 7px rgba(245, 158, 11, 0.46));
+  opacity: 0.95;
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
@@ -181,6 +181,7 @@ button.lesson-core-point-floating-status:disabled {
     linear-gradient(#000 0 0);
   mask-composite: exclude;
   animation: westory-core-point-border-run 5.6s linear infinite;
+  will-change: --lesson-core-point-angle;
 }
 
 .lesson-core-point-floating-status.is-claimable::after {
@@ -200,6 +201,16 @@ button.lesson-core-point-floating-status:disabled {
 
 .lesson-core-point-floating-status.is-pending {
   opacity: 0.82;
+}
+
+.lesson-core-point-floating-status--reward {
+  display: inline-flex;
+  min-height: 2.65rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 0.62rem 0.75rem;
+  text-align: center;
 }
 
 .lesson-core-point-floating-status__label {
@@ -231,6 +242,16 @@ button.lesson-core-point-floating-status:disabled {
 .lesson-core-point-floating-status.is-claimable
   .lesson-core-point-floating-status__meta {
   color: rgba(146, 64, 14, 0.86);
+}
+
+.lesson-core-point-floating-status__reward {
+  position: relative;
+  z-index: 3;
+  color: #92400e;
+  font-size: 0.86rem;
+  font-weight: 900;
+  line-height: 1.1;
+  white-space: nowrap;
 }
 
 .lesson-core-point {
