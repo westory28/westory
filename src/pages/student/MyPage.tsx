@@ -1547,6 +1547,82 @@ const MyPage: React.FC = () => {
       "other",
     ];
 
+    if (categoryTab !== "exam_prep" && selectedUnitId === "all") {
+      const groupedByBig = new Map<string, QuizAttemptReview[]>();
+
+      filteredQuizAttempts.forEach((attempt) => {
+        const bigKey =
+          attempt.category === "exam_prep"
+            ? "exam_prep"
+            : attempt.bigUnitId ||
+              attempt.bigUnitTitle ||
+              attempt.unitId ||
+              "unknown-big";
+        groupedByBig.set(bigKey, [
+          ...(groupedByBig.get(bigKey) || []),
+          attempt,
+        ]);
+      });
+
+      return Array.from(groupedByBig.entries()).map(([bigKey, attempts]) => {
+        const firstAttempt = attempts[0];
+        const grouped = new Map<
+          string,
+          { label: string; attempts: QuizAttemptReview[] }
+        >();
+
+        attempts.forEach((attempt) => {
+          const midLabel =
+            attempt.category === "exam_prep"
+              ? attempt.roundLabel || "모의고사"
+              : attempt.midUnitTitle || attempt.unitTitle || attempt.groupLabel;
+          const groupKey =
+            categoryTab === "all"
+              ? `${attempt.category}_${midLabel}`
+              : midLabel;
+          const groupLabel =
+            categoryTab === "all" && attempt.category !== "exam_prep"
+              ? `${getCategoryLabel(attempt.category)} · ${midLabel}`
+              : midLabel;
+          const existing = grouped.get(groupKey) || {
+            label: groupLabel,
+            attempts: [],
+          };
+          existing.attempts.push(attempt);
+          grouped.set(groupKey, existing);
+        });
+
+        return {
+          key: `big_${bigKey}`,
+          label:
+            firstAttempt?.category === "exam_prep"
+              ? "모의고사"
+              : firstAttempt?.bigUnitTitle ||
+                firstAttempt?.unitTitle ||
+                "대단원 미지정",
+          count: attempts.length,
+          wrongCount: attempts.reduce(
+            (sum, attempt) => sum + attempt.wrongCount,
+            0,
+          ),
+          groups: Array.from(grouped.entries()).map(([groupKey, group]) => ({
+            key: `${bigKey}_${groupKey}`,
+            label: group.label,
+            subLabel: "",
+            attempts: group.attempts,
+            wrongCount: group.attempts.reduce(
+              (sum, attempt) => sum + attempt.wrongCount,
+              0,
+            ),
+            totalCount: group.attempts.reduce(
+              (sum, attempt) => sum + attempt.allItems.length,
+              0,
+            ),
+          })),
+        };
+      });
+    }
+
     if (shouldGroupByMidUnit) {
       const groupedByMid = new Map<string, QuizAttemptReview[]>();
 
@@ -3358,13 +3434,10 @@ const MyPage: React.FC = () => {
                                   selectedUnitId === "exam_prep";
 
                                 return (
-                                  <div
-                                    key={group.key}
-                                    className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4"
-                                  >
+                                  <div key={group.key} className="space-y-2">
                                     {showGroupHeader && (
                                       <div className="min-w-0">
-                                        <div className="flex min-h-8 items-center">
+                                        <div className="flex min-h-7 items-center">
                                           <h5 className="truncate text-base font-black text-slate-900">
                                             {group.label}
                                           </h5>
@@ -3385,11 +3458,7 @@ const MyPage: React.FC = () => {
                                             onClick={() =>
                                               openQuizAttemptReview(attempt)
                                             }
-                                            className={`rounded-xl border bg-white px-4 py-3 text-left transition hover:-translate-y-0.5 ${
-                                              attempt.wrongCount > 0
-                                                ? "border-red-100 hover:border-red-200 hover:bg-red-50/50"
-                                                : "border-blue-100 hover:border-blue-200 hover:bg-blue-50/50"
-                                            }`}
+                                            className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-left transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-sm"
                                           >
                                             <div className="flex items-start justify-between gap-3">
                                               <div className="min-w-0">
