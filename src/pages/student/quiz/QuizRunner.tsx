@@ -108,6 +108,7 @@ interface QuizLogDetail {
   id: number;
   correct: boolean;
   u: string;
+  displayU?: string;
 }
 
 const ORDER_DELIMITER = "||";
@@ -218,6 +219,7 @@ const QuizRunner: React.FC = () => {
   const [results, setResults] = useState<ResultDetail[]>([]);
   const [pointNotice, setPointNotice] = useState("");
   const [finishSubmitting, setFinishSubmitting] = useState(false);
+  const [finalizedResultId, setFinalizedResultId] = useState("");
 
   const timerRef = useRef<number | null>(null);
   const persistTimeoutRef = useRef<number | null>(null);
@@ -854,6 +856,7 @@ const QuizRunner: React.FC = () => {
         id: question.id,
         correct: isCorrect,
         u: userAnswer,
+        displayU: storedAnswer,
       });
     });
 
@@ -922,6 +925,7 @@ const QuizRunner: React.FC = () => {
 
     setScore(finalScore);
     setResults(resultDetails);
+    setFinalizedResultId(resultRef.id);
     setPointNotice("");
     setActiveSubmission((prev) =>
       prev
@@ -1587,6 +1591,7 @@ const QuizRunner: React.FC = () => {
       }
 
       const finalized = await finalizeQuizAttempt({ isTimeout });
+      setFinalizedResultId(finalized.resultId);
 
       try {
         const pointResult = await claimPointActivityReward({
@@ -2302,6 +2307,12 @@ const QuizRunner: React.FC = () => {
   }
 
   if (view === "result") {
+    const resultReviewUrl = finalizedResultId
+      ? `/student/mypage?menu=wrong_note&attemptId=${encodeURIComponent(
+          finalizedResultId,
+        )}`
+      : "/student/mypage?menu=wrong_note";
+
     return (
       <div className="mx-auto min-h-screen max-w-2xl animate-fadeIn px-4 py-8 text-center">
         <div className="mb-8 rounded-2xl border-t-8 border-blue-500 bg-white p-8 shadow-xl">
@@ -2328,24 +2339,13 @@ const QuizRunner: React.FC = () => {
             </div>
           </div>
 
-          <div className="mb-6 grid gap-3 sm:grid-cols-3">
+          <div className="mb-6 grid gap-3 sm:grid-cols-2">
             <button
               type="button"
-              onClick={() =>
-                document
-                  .getElementById("review-section")
-                  ?.classList.toggle("hidden")
-              }
-              className="rounded-xl border-2 border-gray-200 bg-white py-3 font-bold text-gray-700 transition hover:bg-gray-50"
-            >
-              채점 결과
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate("/student/mypage?menu=wrong_note")}
+              onClick={() => navigate(resultReviewUrl)}
               className="rounded-xl border-2 border-blue-100 bg-blue-50 py-3 font-bold text-blue-700 transition hover:border-blue-200 hover:bg-blue-100"
             >
-              오답노트로
+              오답노트에서 확인
             </button>
             <button
               type="button"
@@ -2354,75 +2354,6 @@ const QuizRunner: React.FC = () => {
             >
               목록으로
             </button>
-          </div>
-        </div>
-
-        <div
-          id="review-section"
-          className="hidden animate-slideDown rounded-2xl border border-red-100 bg-white p-6 text-left shadow-lg"
-        >
-          <h3 className="mb-4 border-b pb-2 text-lg font-bold text-red-500">
-            <i className="fas fa-check-circle mr-2"></i>
-            채점 결과 확인
-          </h3>
-          <div className="space-y-6">
-            {results.map((result, index) => (
-              <div
-                key={`${result.q}-${index}`}
-                className={`border-b pb-4 last:border-0 ${
-                  result.correct ? "opacity-50" : ""
-                }`}
-              >
-                <div className="mb-2 flex items-start gap-2">
-                  <span
-                    className={`rounded px-2 py-1 text-xs font-bold ${
-                      result.correct
-                        ? "bg-green-100 text-green-600"
-                        : "bg-red-100 text-red-600"
-                    }`}
-                  >
-                    Q{index + 1}
-                  </span>
-                  <div className="font-bold text-gray-800">{result.q}</div>
-                </div>
-                {result.passage && (
-                  <QuizPassage
-                    value={result.passage}
-                    surface="muted"
-                    className="mb-3 ml-8"
-                  />
-                )}
-                {result.image && (
-                  <div className="mb-3 ml-8 rounded-lg border border-gray-100 bg-gray-50 p-2 text-center">
-                    <img
-                      src={result.image}
-                      alt="문항 첨부 이미지"
-                      className="mx-auto max-h-72 max-w-full object-contain"
-                    />
-                  </div>
-                )}
-                <div className="mb-2 ml-8 flex gap-4 text-sm">
-                  <span
-                    className={`font-bold ${
-                      result.correct
-                        ? "text-green-500"
-                        : "text-red-500 line-through"
-                    }`}
-                  >
-                    {formatAnswerForDisplay(result.u, result.type)}
-                  </span>
-                  {!result.correct && (
-                    <span className="font-bold text-blue-600">
-                      <i className="fas fa-arrow-right mr-1"></i>
-                      {formatAnswerForDisplay(result.a, result.type)}
-                    </span>
-                  )}
-                </div>
-                <div className="ml-8 rounded bg-gray-50 p-3 text-xs text-gray-600">
-                  {result.exp || "해설 없음"}
-                </div>
-              </div>
-            ))}
           </div>
         </div>
       </div>

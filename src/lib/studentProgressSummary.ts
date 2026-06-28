@@ -64,7 +64,12 @@ export interface StudentQuizResultDoc {
   score?: number;
   timestamp?: FirestoreTimestampLike;
   timeString?: string;
-  details?: Array<{ id?: string | number; correct?: boolean; u?: string }>;
+  details?: Array<{
+    id?: string | number;
+    correct?: boolean;
+    u?: string;
+    displayU?: string;
+  }>;
 }
 
 interface HistoryClassroomResultDoc {

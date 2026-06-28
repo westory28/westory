@@ -136,12 +136,14 @@ type QuizResultSource = QuizResultDoc[] | Promise<QuizResultDoc[]>;
 
 interface WrongNoteItem {
   key: string;
+  questionNumber: number;
   question: string;
   passage: string;
   image: string;
   answer: string;
   explanation: string;
   userAnswer: string;
+  correct: boolean;
   unitId: string;
   unitTitle: string;
   category: CategoryTab | "other";
@@ -158,13 +160,19 @@ interface TrendPoint {
   dateText?: string;
 }
 
-interface MockExamAttempt {
+interface QuizAttemptReview {
   key: string;
   roundLabel: string;
   title: string;
+  unitId: string;
+  unitTitle: string;
+  category: CategoryTab | "other";
+  categoryLabel: string;
+  groupLabel: string;
   score: number;
   wrongCount: number;
   dateText: string;
+  allItems: WrongNoteItem[];
   wrongItems: WrongNoteItem[];
 }
 
@@ -230,6 +238,46 @@ const formatResultDate = (result: QuizResultDoc) => {
     return new Date(result.timestamp.seconds * 1000).toLocaleString("ko-KR");
   }
   return result.timeString || "-";
+};
+
+const ORDER_DELIMITER = "||";
+const MATCHING_PAIR_DELIMITER = "=>";
+
+const normalizeAnswerText = (value: unknown) =>
+  String(value ?? "")
+    .replace(/\s+/g, "")
+    .trim();
+
+const formatQuizAnswerText = (value: unknown) => {
+  const text = String(value ?? "").trim();
+  if (!text) return "";
+  if (text.includes(MATCHING_PAIR_DELIMITER)) {
+    return text
+      .split(ORDER_DELIMITER)
+      .filter(Boolean)
+      .map((item) => item.split(MATCHING_PAIR_DELIMITER).join(" → "))
+      .join(", ");
+  }
+  if (text.includes(ORDER_DELIMITER)) {
+    return text.split(ORDER_DELIMITER).filter(Boolean).join(" → ");
+  }
+  return text;
+};
+
+const getQuestionAnswerCandidates = (question: any) =>
+  [
+    question?.answer,
+    ...(Array.isArray(question?.options) ? question.options : []),
+  ].filter((item) => item !== undefined && item !== null);
+
+const restoreAnswerSpacing = (value: unknown, question: any) => {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  const normalizedRaw = normalizeAnswerText(raw);
+  const matched = getQuestionAnswerCandidates(question).find(
+    (candidate) => normalizeAnswerText(candidate) === normalizedRaw,
+  );
+  return formatQuizAnswerText(matched ?? raw);
 };
 
 const normalizeClassValue = (value: unknown): string => {
@@ -321,6 +369,8 @@ const MyPage: React.FC = () => {
   const { showToast } = useAppToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const requestedMenu = searchParams.get("menu");
+  const requestedAttemptId =
+    searchParams.get("attemptId") || searchParams.get("resultId") || "";
   const canUseLesson = config?.showLesson !== false;
   const canUseQuiz = config?.showQuiz !== false;
   const canUseScore = config?.showScore !== false;
@@ -356,11 +406,9 @@ const MyPage: React.FC = () => {
 
   const [trendPoints, setTrendPoints] = useState<TrendPoint[]>([]);
   const [mockExamPoints, setMockExamPoints] = useState<TrendPoint[]>([]);
-  const [mockExamAttempts, setMockExamAttempts] = useState<MockExamAttempt[]>(
-    [],
-  );
-  const [selectedMockExamAttempt, setSelectedMockExamAttempt] =
-    useState<MockExamAttempt | null>(null);
+  const [quizAttempts, setQuizAttempts] = useState<QuizAttemptReview[]>([]);
+  const [selectedQuizAttempt, setSelectedQuizAttempt] =
+    useState<QuizAttemptReview | null>(null);
   const [quizLineData, setQuizLineData] = useState<any>(null);
   const [wrongItems, setWrongItems] = useState<WrongNoteItem[]>([]);
   const [expandedWrongKey, setExpandedWrongKey] = useState<string | null>(null);
@@ -399,6 +447,25 @@ const MyPage: React.FC = () => {
     setSearchParams(safeMenu === "profile" ? {} : { menu: safeMenu });
   };
 
+  const closeQuizAttemptModal = () => {
+    setSelectedQuizAttempt(null);
+    if (!requestedAttemptId) return;
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("attemptId");
+    nextParams.delete("resultId");
+    if (!nextParams.get("menu")) nextParams.set("menu", "wrong_note");
+    setSearchParams(nextParams);
+  };
+
+  const openQuizAttemptReview = (attempt: QuizAttemptReview) => {
+    setSelectedQuizAttempt(attempt);
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("menu", "wrong_note");
+    nextParams.set("attemptId", attempt.key);
+    nextParams.delete("resultId");
+    setSearchParams(nextParams);
+  };
+
   useEffect(() => {
     if (
       requestedMenu === "profile" ||
@@ -410,6 +477,16 @@ const MyPage: React.FC = () => {
       setMenu("profile");
     }
   }, [requestedMenu, canUseQuiz, canUseScore, menu]);
+
+  useEffect(() => {
+    if (!requestedAttemptId || menu !== "wrong_note") return;
+    const attempt = quizAttempts.find(
+      (item) => item.key === requestedAttemptId,
+    );
+    if (attempt) {
+      setSelectedQuizAttempt(attempt);
+    }
+  }, [requestedAttemptId, menu, quizAttempts]);
 
   const loadMyPage = async () => {
     if (!user || !config) return;
@@ -440,8 +517,8 @@ const MyPage: React.FC = () => {
   const resetQuizData = async () => {
     setTrendPoints([]);
     setMockExamPoints([]);
-    setMockExamAttempts([]);
-    setSelectedMockExamAttempt(null);
+    setQuizAttempts([]);
+    setSelectedQuizAttempt(null);
     setQuizLineData(null);
     setWrongItems([]);
     setExpandedWrongKey(null);
@@ -654,18 +731,16 @@ const MyPage: React.FC = () => {
         (a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0),
       );
 
-      const mockExamResults = results.filter(
-        (result) =>
-          isMockExamCategory(result.category) || result.unitId === "exam_prep",
-      );
-
       const latest = results.slice(0, 12).reverse();
       const points: TrendPoint[] = latest.map((result, idx) => {
         const unitId = result.unitId || "unknown";
         const category = normalizeMockExamCategory(
           result.category || "other",
         ) as CategoryTab | "other";
-        const unitTitle = titleMap[unitId] || "단원명 없음";
+        const unitTitle =
+          unitId === "exam_prep"
+            ? "모의고사"
+            : titleMap[unitId] || "단원명 없음";
         return {
           label: `${idx + 1}회 · ${unitTitle} · ${getCategoryShort(category)}`,
           unitId,
@@ -703,6 +778,8 @@ const MyPage: React.FC = () => {
         unitId: string;
         category: CategoryTab | "other";
         dateText: string;
+        correct?: boolean;
+        questionNumber?: number;
       }> = [];
 
       results.forEach((result) => {
@@ -710,18 +787,41 @@ const MyPage: React.FC = () => {
           if (detail.correct) return;
           wrongLogs.push({
             qid: String(detail.id),
-            userAnswer: detail.u || "",
+            userAnswer: detail.displayU || detail.u || "",
             unitId: result.unitId || "unknown",
             category: normalizeMockExamCategory(result.category || "other") as
               | CategoryTab
               | "other",
             dateText: formatResultDate(result),
+            correct: false,
           });
         });
       });
 
+      const quizDetailLogs = results.flatMap((result) => {
+        const dateText = formatResultDate(result);
+        const category = normalizeMockExamCategory(
+          result.category || "other",
+        ) as CategoryTab | "other";
+        return (result.details || []).map((detail, detailIndex) => ({
+          resultId: result.id,
+          qid: String(detail.id),
+          userAnswer: detail.displayU || detail.u || "",
+          unitId: result.unitId || "unknown",
+          category,
+          dateText,
+          correct: detail.correct === true,
+          questionNumber: detailIndex + 1,
+        }));
+      });
+
       const questionMap: Record<string, any> = {};
-      const questionIds = Array.from(new Set(wrongLogs.map((log) => log.qid)));
+      const questionIds = Array.from(
+        new Set([
+          ...wrongLogs.map((log) => log.qid),
+          ...quizDetailLogs.map((log) => log.qid),
+        ]),
+      );
 
       if (questionIds.length > 0) {
         await Promise.all(
@@ -749,25 +849,32 @@ const MyPage: React.FC = () => {
           unitId: string;
           category: CategoryTab | "other";
           dateText: string;
+          correct?: boolean;
+          questionNumber?: number;
         },
         key: string,
       ): WrongNoteItem => {
         const question = questionMap[log.qid] || {};
         return {
           key,
+          questionNumber: log.questionNumber || 0,
           question: String(question.question || "문항 텍스트 없음"),
           passage: String(question.passage || ""),
           image: String(question.image || ""),
           answer:
             question.answer !== undefined && question.answer !== null
-              ? String(question.answer)
+              ? formatQuizAnswerText(question.answer)
               : "-",
           explanation: String(
             question.explanation || "해설이 등록되지 않았습니다.",
           ),
-          userAnswer: log.userAnswer,
+          userAnswer: restoreAnswerSpacing(log.userAnswer, question),
+          correct: log.correct === true,
           unitId: log.unitId,
-          unitTitle: titleMap[log.unitId] || "단원명 없음",
+          unitTitle:
+            log.unitId === "exam_prep"
+              ? "모의고사"
+              : titleMap[log.unitId] || "단원명 없음",
           category: log.category,
           categoryLabel: getCategoryLabel(log.category),
           dateText: log.dateText,
@@ -785,55 +892,66 @@ const MyPage: React.FC = () => {
         nextWrongItems.push(buildWrongNoteItem(log, key));
       });
 
-      const nextMockExamAttempts: MockExamAttempt[] = mockExamResults.map(
+      const nextQuizAttempts: QuizAttemptReview[] = results.map(
         (result, resultIndex) => {
           const dateText = formatResultDate(result);
+          const category = normalizeMockExamCategory(
+            result.category || "other",
+          ) as CategoryTab | "other";
+          const isMockAttempt =
+            isMockExamCategory(result.category) ||
+            result.unitId === "exam_prep";
+          const unitId = result.unitId || (isMockAttempt ? "exam_prep" : "");
+          const unitTitle = isMockAttempt
+            ? "모의고사"
+            : titleMap[unitId] || "단원명 없음";
           const round = getResultMockExamRound(
             result.category || "exam_prep",
             (result as QuizResultDoc & { examRound?: string }).examRound,
           );
-          const roundLabel = formatMockExamRoundLabel(round || "round_1");
-          const wrongItemsForAttempt = (result.details || [])
-            .map((detail, detailIndex) => {
-              if (detail.correct) return null;
-              const category = normalizeMockExamCategory(
-                result.category || "exam_prep",
-              ) as CategoryTab | "other";
-              return buildWrongNoteItem(
-                {
-                  qid: String(detail.id),
-                  userAnswer: detail.u || "",
-                  unitId: result.unitId || "exam_prep",
-                  category,
-                  dateText,
-                },
-                `${result.id}_${detail.id}_${detailIndex}`,
-              );
-            })
-            .filter((item): item is WrongNoteItem => Boolean(item));
+          const roundLabel = isMockAttempt
+            ? formatMockExamRoundLabel(round || "round_1")
+            : `${unitTitle} ${getCategoryShort(category)}`;
+          const categoryLabel = getCategoryLabel(category);
+          const allItemsForAttempt = quizDetailLogs
+            .filter((log) => log.resultId === result.id)
+            .map((log, detailIndex) =>
+              buildWrongNoteItem(log, `${result.id}_${log.qid}_${detailIndex}`),
+            );
+          const wrongItemsForAttempt = allItemsForAttempt.filter(
+            (item) => !item.correct,
+          );
 
           return {
             key: result.id || `${roundLabel}_${dateText}_${resultIndex}`,
             roundLabel,
-            title: `${roundLabel} 응시 내역`,
+            title: isMockAttempt ? `${roundLabel} 응시 내역` : unitTitle,
+            unitId,
+            unitTitle,
+            category,
+            categoryLabel,
+            groupLabel: isMockAttempt ? roundLabel : unitTitle,
             score: Number(result.score || 0),
             wrongCount: wrongItemsForAttempt.length,
             dateText,
+            allItems: allItemsForAttempt,
             wrongItems: wrongItemsForAttempt,
           };
         },
       );
 
-      setMockExamAttempts(nextMockExamAttempts);
+      setQuizAttempts(nextQuizAttempts);
       setMockExamPoints(
-        nextMockExamAttempts.map((attempt) => ({
-          label: attempt.roundLabel,
-          unitId: "exam_prep",
-          category: "exam_prep",
-          score: attempt.score,
-          wrongCount: attempt.wrongCount,
-          dateText: attempt.dateText,
-        })),
+        nextQuizAttempts
+          .filter((attempt) => attempt.category === "exam_prep")
+          .map((attempt) => ({
+            label: attempt.roundLabel,
+            unitId: "exam_prep",
+            category: "exam_prep",
+            score: attempt.score,
+            wrongCount: attempt.wrongCount,
+            dateText: attempt.dateText,
+          })),
       );
       setWrongItems(nextWrongItems);
       setLoadingWrong(false);
@@ -841,8 +959,8 @@ const MyPage: React.FC = () => {
       console.error("Failed to load my quiz and wrong note data:", error);
       setTrendPoints([]);
       setMockExamPoints([]);
-      setMockExamAttempts([]);
-      setSelectedMockExamAttempt(null);
+      setQuizAttempts([]);
+      setSelectedQuizAttempt(null);
       setQuizLineData(null);
       setWrongItems([]);
     } finally {
@@ -1072,7 +1190,10 @@ const MyPage: React.FC = () => {
       if (!grouped[key]) {
         grouped[key] = {
           unitId: point.unitId,
-          unitTitle: unitTitleMap[point.unitId] || "단원명 없음",
+          unitTitle:
+            point.unitId === "exam_prep"
+              ? "모의고사"
+              : unitTitleMap[point.unitId] || "단원명 없음",
           category: point.category,
           scores: [],
         };
@@ -1096,11 +1217,99 @@ const MyPage: React.FC = () => {
     const source = new Set<string>();
     wrongItems.forEach((item) => source.add(item.unitId));
     trendPoints.forEach((point) => source.add(point.unitId));
+    quizAttempts.forEach((attempt) => {
+      if (attempt.unitId) source.add(attempt.unitId);
+    });
     return Array.from(source).map((unitId) => ({
       id: unitId,
-      title: unitTitleMap[unitId] || "단원명 없음",
+      title:
+        unitId === "exam_prep"
+          ? "모의고사"
+          : unitTitleMap[unitId] || "단원명 없음",
     }));
-  }, [wrongItems, trendPoints, unitTitleMap]);
+  }, [wrongItems, trendPoints, quizAttempts, unitTitleMap]);
+
+  const filteredQuizAttempts = useMemo(
+    () =>
+      quizAttempts.filter(
+        (attempt) =>
+          (categoryTab === "all" || attempt.category === categoryTab) &&
+          (selectedUnitId === "all" || attempt.unitId === selectedUnitId),
+      ),
+    [quizAttempts, categoryTab, selectedUnitId],
+  );
+
+  const quizAttemptHierarchy = useMemo(() => {
+    const sections: Array<{
+      key: CategoryTab | "other";
+      label: string;
+      count: number;
+      wrongCount: number;
+      groups: Array<{
+        key: string;
+        label: string;
+        subLabel: string;
+        attempts: QuizAttemptReview[];
+        wrongCount: number;
+        totalCount: number;
+      }>;
+    }> = [];
+    const categoryOrder: Array<CategoryTab | "other"> = [
+      ...CATEGORY_LABELS.map((tab) => tab.key),
+      "other",
+    ];
+
+    categoryOrder.forEach((category) => {
+      const categoryAttempts = filteredQuizAttempts.filter(
+        (attempt) => attempt.category === category,
+      );
+      if (categoryAttempts.length === 0) return;
+
+      const grouped = new Map<string, QuizAttemptReview[]>();
+      categoryAttempts.forEach((attempt) => {
+        const groupKey =
+          category === "exam_prep"
+            ? attempt.roundLabel || "모의고사"
+            : attempt.unitId || attempt.groupLabel || attempt.unitTitle;
+        grouped.set(groupKey, [...(grouped.get(groupKey) || []), attempt]);
+      });
+
+      sections.push({
+        key: category,
+        label: getCategoryLabel(category),
+        count: categoryAttempts.length,
+        wrongCount: categoryAttempts.reduce(
+          (sum, attempt) => sum + attempt.wrongCount,
+          0,
+        ),
+        groups: Array.from(grouped.entries()).map(([groupKey, attempts]) => {
+          const firstAttempt = attempts[0];
+          return {
+            key: `${category}_${groupKey}`,
+            label:
+              category === "exam_prep"
+                ? groupKey
+                : firstAttempt?.unitTitle || groupKey,
+            subLabel:
+              category === "exam_prep"
+                ? "같은 회차의 응시 기록"
+                : `${firstAttempt?.categoryLabel || getCategoryLabel(category)} 응시 기록`,
+            attempts,
+            wrongCount: attempts.reduce(
+              (sum, attempt) => sum + attempt.wrongCount,
+              0,
+            ),
+            totalCount: attempts.reduce(
+              (sum, attempt) => sum + attempt.allItems.length,
+              0,
+            ),
+          };
+        }),
+      });
+    });
+
+    return sections;
+  }, [filteredQuizAttempts]);
 
   const subjectInsights = useMemo<SubjectScoreInsight[]>(() => {
     return buildSharedSubjectScoreInsights(scoreRows as any, subjectGoals);
@@ -2643,367 +2852,233 @@ const MyPage: React.FC = () => {
                   ))}
                 </div>
 
-                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setCategoryTab("all")}
-                      className={`rounded-full px-4 py-2 text-sm font-extrabold transition ${
-                        categoryTab === "all"
-                          ? "bg-blue-600 text-white"
-                          : "bg-slate-100 text-slate-600 hover:bg-blue-50"
-                      }`}
-                    >
-                      전체
-                    </button>
-                    {CATEGORY_LABELS.map((tab) => (
-                      <button
-                        key={tab.key}
-                        type="button"
-                        onClick={() => setCategoryTab(tab.key)}
-                        className={`rounded-full px-4 py-2 text-sm font-extrabold transition ${
-                          categoryTab === tab.key
-                            ? "bg-blue-600 text-white"
-                            : "bg-slate-100 text-slate-600 hover:bg-blue-50"
-                        }`}
-                      >
-                        {tab.label}
-                      </button>
-                    ))}
-                    <span className="mx-1 hidden h-9 w-px bg-slate-200 sm:block"></span>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedUnitId("all")}
-                      className={`rounded-full px-4 py-2 text-sm font-extrabold transition ${
-                        selectedUnitId === "all"
-                          ? "bg-slate-900 text-white"
-                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                      }`}
-                    >
-                      전체 목차
-                    </button>
-                    {availableUnitTabs.slice(0, 5).map((tab) => (
-                      <button
-                        key={tab.id}
-                        type="button"
-                        onClick={() => setSelectedUnitId(tab.id)}
-                        className={`rounded-full px-4 py-2 text-sm font-extrabold transition ${
-                          selectedUnitId === tab.id
-                            ? "bg-slate-900 text-white"
-                            : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                        }`}
-                      >
-                        {tab.title}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
-                  <div className="mb-5 flex items-center gap-3">
-                    <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-blue-50 text-blue-600">
-                      <i className="fas fa-flag-checkered"></i>
-                    </span>
-                    <h3 className="text-xl font-black text-slate-900">
-                      모의고사 회차별 오답
-                    </h3>
-                  </div>
-                  {mockExamAttempts.length > 0 ? (
-                    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                      {mockExamAttempts.map((attempt) => (
+                <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
+                  <div className="grid gap-4">
+                    <div className="grid gap-3 lg:grid-cols-[6.25rem_minmax(0,1fr)] lg:items-center">
+                      <div className="flex items-center gap-2 text-sm font-black text-slate-500">
+                        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-50 text-xs text-blue-600">
+                          1
+                        </span>
+                        평가 유형
+                      </div>
+                      <div className="flex flex-wrap gap-2">
                         <button
-                          key={attempt.key}
                           type="button"
-                          onClick={() => setSelectedMockExamAttempt(attempt)}
-                          className="rounded-xl border border-slate-200 px-4 py-4 text-left transition hover:border-blue-200 hover:bg-blue-50"
+                          onClick={() => setCategoryTab("all")}
+                          className={`rounded-full px-4 py-2 text-sm font-extrabold transition ${
+                            categoryTab === "all"
+                              ? "bg-blue-600 text-white"
+                              : "bg-slate-100 text-slate-600 hover:bg-blue-50"
+                          }`}
                         >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="truncate text-base font-black text-slate-900">
-                                {attempt.roundLabel}
-                              </div>
-                              <div className="mt-1 text-xs font-bold text-slate-400">
-                                {attempt.dateText}
-                              </div>
-                            </div>
-                            <span className="shrink-0 rounded-full bg-blue-50 px-3 py-1 text-sm font-black text-blue-600">
-                              {attempt.score}점
-                            </span>
-                          </div>
-                          <div className="mt-4 flex items-center justify-between text-sm font-bold text-slate-500">
-                            <span>오답 {attempt.wrongCount}문항</span>
-                            <span className="inline-flex items-center gap-1 text-blue-600">
-                              확인
-                              <i className="fas fa-chevron-right text-xs"></i>
-                            </span>
-                          </div>
+                          전체
                         </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm font-bold text-slate-400">
-                      아직 모의고사 응시 기록이 없습니다.
-                    </div>
-                  )}
-                </section>
-
-                <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(22rem,24rem)] 2xl:grid-cols-[minmax(0,1fr)_minmax(24rem,26rem)]">
-                  <div className="space-y-5">
-                    <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
-                      <div className="mb-5 flex items-center gap-3">
-                        <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-blue-50 text-blue-600">
-                          <i className="fas fa-book-open"></i>
-                        </span>
-                        <h3 className="text-xl font-black text-slate-900">
-                          복습이 필요한 단원
-                        </h3>
-                      </div>
-                      <div className="space-y-3">
-                        {sortedWrongGroups
-                          .slice(0, 3)
-                          .map(([groupKey, items], index) => (
-                            <button
-                              key={groupKey}
-                              type="button"
-                              onClick={() => focusWrongItem(items[0])}
-                              className={`flex w-full items-center gap-4 rounded-xl border px-4 py-3 text-left transition ${
-                                index === 0
-                                  ? "border-blue-200 bg-blue-50"
-                                  : "border-slate-200 bg-white hover:bg-slate-50"
-                              }`}
-                            >
-                              <span
-                                className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-black ${
-                                  index === 0
-                                    ? "bg-blue-600 text-white"
-                                    : "bg-slate-100 text-slate-600"
-                                }`}
-                              >
-                                {index + 1}
-                              </span>
-                              <span className="min-w-0 flex-1">
-                                <span className="block truncate text-base font-extrabold text-slate-800">
-                                  {items[0].unitTitle}
-                                </span>
-                                <span className="text-sm font-bold text-slate-400">
-                                  {items[0].categoryLabel}
-                                </span>
-                              </span>
-                              <span className="text-sm font-bold text-slate-500">
-                                오답 {items.length}개
-                              </span>
-                              <i className="fas fa-chevron-right text-slate-400"></i>
-                            </button>
-                          ))}
-                        {sortedWrongGroups.length === 0 && (
-                          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm font-bold text-slate-400">
-                            조건에 맞는 오답이 없습니다.
-                          </div>
-                        )}
-                      </div>
-                    </section>
-
-                    <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
-                      <div className="mb-5 flex items-center gap-3">
-                        <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-blue-50 text-blue-600">
-                          <i className="fas fa-clipboard-list"></i>
-                        </span>
-                        <h3 className="text-xl font-black text-slate-900">
-                          조회된 오답 {filteredWrongItems.length}문항
-                        </h3>
-                      </div>
-                      <div className="space-y-3">
-                        {filteredWrongItems.map((item, index) => (
-                          <div
-                            key={item.key}
-                            className="rounded-xl border border-slate-200"
-                          >
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setExpandedWrongKey((prev) =>
-                                  prev === item.key ? null : item.key,
-                                )
-                              }
-                              className="flex w-full items-center gap-4 px-4 py-3 text-left"
-                            >
-                              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-blue-200 text-sm font-black text-blue-600">
-                                {index + 1}
-                              </span>
-                              <span className="min-w-0 flex-1 truncate text-sm font-extrabold text-slate-700">
-                                {item.question}
-                              </span>
-                              <span className="rounded-full bg-orange-50 px-3 py-1 text-xs font-extrabold text-orange-600">
-                                {item.categoryLabel}
-                              </span>
-                              <i
-                                className={`fas fa-chevron-down text-slate-400 transition ${expandedWrongKey === item.key ? "rotate-180" : ""}`}
-                              ></i>
-                            </button>
-                            {expandedWrongKey === item.key && (
-                              <div className="border-t border-slate-100 bg-slate-50 px-4 py-3 text-sm font-semibold leading-6 text-slate-700">
-                                <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-                                  <div className="mb-2 flex flex-wrap items-center gap-2">
-                                    <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-black text-blue-600">
-                                      문항 {index + 1}
-                                    </span>
-                                    <span className="text-xs font-bold text-slate-400">
-                                      최근 오답 일시: {item.dateText}
-                                    </span>
-                                  </div>
-                                  <div className="whitespace-pre-wrap break-keep text-base font-black leading-7 text-slate-900">
-                                    {item.question}
-                                  </div>
-                                  {item.image && (
-                                    <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-2 text-center">
-                                      <img
-                                        src={item.image}
-                                        alt="문항 첨부 이미지"
-                                        className="mx-auto max-h-72 max-w-full object-contain"
-                                      />
-                                    </div>
-                                  )}
-                                </div>
-                                {item.passage && (
-                                  <div className="mt-3">
-                                    <div className="mb-1 text-xs font-black text-slate-500">
-                                      본문
-                                    </div>
-                                    <QuizPassage
-                                      value={item.passage}
-                                      surface="muted"
-                                    />
-                                  </div>
-                                )}
-                                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                                  <div className="rounded-xl bg-white px-3 py-2">
-                                    나의 오답:{" "}
-                                    <span className="font-extrabold text-red-500">
-                                      {item.userAnswer || "(미입력)"}
-                                    </span>
-                                  </div>
-                                  <div className="rounded-xl bg-white px-3 py-2">
-                                    정답:{" "}
-                                    <span className="font-extrabold text-emerald-600">
-                                      {item.answer}
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="mt-2 rounded-xl bg-white px-3 py-2">
-                                  해설: {item.explanation}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                        {filteredWrongItems.length === 0 && (
-                          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm font-bold text-slate-400">
-                            조회 조건에 맞는 오답 문항이 없습니다.
-                          </div>
-                        )}
-                      </div>
-                    </section>
-                  </div>
-
-                  <div className="space-y-5">
-                    <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
-                      <div className="mb-5 flex items-center gap-3">
-                        <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-blue-600">
-                          <i className="fas fa-route"></i>
-                        </span>
-                        <h3 className="text-xl font-black text-slate-900">
-                          맞춤 복습 루트
-                        </h3>
-                      </div>
-                      <div className="space-y-4">
-                        {reviewRouteItems.map((item, index) => (
+                        {CATEGORY_LABELS.map((tab) => (
                           <button
-                            key={item.key}
+                            key={tab.key}
                             type="button"
-                            onClick={item.onClick}
-                            className="flex w-full items-start gap-3 rounded-xl px-1 py-1 text-left transition hover:bg-slate-50"
+                            onClick={() => setCategoryTab(tab.key)}
+                            className={`rounded-full px-4 py-2 text-sm font-extrabold transition ${
+                              categoryTab === tab.key
+                                ? "bg-blue-600 text-white"
+                                : "bg-slate-100 text-slate-600 hover:bg-blue-50"
+                            }`}
                           >
-                            <span
-                              className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-black text-white ${
-                                index === 0
-                                  ? "bg-blue-600"
-                                  : index === 1
-                                    ? "bg-emerald-500"
-                                    : "bg-orange-500"
-                              }`}
-                            >
-                              {index + 1}
-                            </span>
-                            <div className="min-w-0 flex-1 space-y-0.5">
-                              <div className="whitespace-normal break-keep text-sm font-extrabold leading-5 text-slate-800">
-                                {item.label}
-                              </div>
-                              <div className="whitespace-normal break-keep text-xs font-bold leading-5 text-slate-400">
-                                {index === 0
-                                  ? "핵심 개념 다시 보기"
-                                  : index === 1
-                                    ? "유사 유형 문제로 실전 높이기"
-                                    : "오답 문항 재도전하기"}
-                              </div>
-                            </div>
-                            <i className="fas fa-chevron-right mt-3 shrink-0 text-slate-400"></i>
+                            {tab.label}
                           </button>
                         ))}
                       </div>
-                    </section>
+                    </div>
 
-                    <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
-                      <div className="mb-5 flex items-center gap-3">
-                        <span className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-blue-600">
-                          <i className="fas fa-bullseye"></i>
+                    <div className="grid gap-3 border-t border-slate-100 pt-4 lg:grid-cols-[6.25rem_minmax(0,1fr)] lg:items-center">
+                      <div className="flex items-center gap-2 text-sm font-black text-slate-500">
+                        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-xs text-slate-600">
+                          2
                         </span>
-                        <h3 className="text-xl font-black text-slate-900">
-                          오늘의 복습 목표
-                        </h3>
+                        목차
                       </div>
-                      <div className="space-y-3 text-sm font-bold text-slate-600">
-                        <label className="flex items-center gap-3">
-                          <input
-                            type="checkbox"
-                            checked={Boolean(reviewGoalChecks.concept)}
-                            onChange={() => toggleReviewGoal("concept")}
-                            className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                          />
-                          개념 복습 15분 완료하기
-                        </label>
-                        <label className="flex items-center gap-3">
-                          <input
-                            type="checkbox"
-                            checked={Boolean(reviewGoalChecks.wrong)}
-                            onChange={() => toggleReviewGoal("wrong")}
-                            className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                          />
-                          오답 문제 5문제 풀기
-                        </label>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedUnitId("all")}
+                          className={`rounded-full px-4 py-2 text-sm font-extrabold transition ${
+                            selectedUnitId === "all"
+                              ? "bg-slate-900 text-white"
+                              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                          }`}
+                        >
+                          전체 목차
+                        </button>
+                        {availableUnitTabs.map((tab) => (
+                          <button
+                            key={tab.id}
+                            type="button"
+                            onClick={() => setSelectedUnitId(tab.id)}
+                            className={`rounded-full px-4 py-2 text-sm font-extrabold transition ${
+                              selectedUnitId === tab.id
+                                ? "bg-slate-900 text-white"
+                                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                            }`}
+                          >
+                            {tab.title}
+                          </button>
+                        ))}
                       </div>
-                      <button
-                        type="button"
-                        onClick={startReview}
-                        className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-extrabold text-white transition hover:bg-blue-700"
-                      >
-                        <i className="fas fa-play text-xs"></i>
-                        복습 시작하기
-                      </button>
-                    </section>
-
-                    <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
-                      <div className="mb-3 flex items-center gap-3">
-                        <i className="fas fa-thumbs-up text-blue-600"></i>
-                        <h3 className="text-lg font-black text-slate-900">
-                          좋았던 점
-                        </h3>
-                      </div>
-                      <p className="text-sm font-semibold leading-6 text-slate-600">
-                        재도전 성공률이 꾸준히 좋아지고 있어요.
-                      </p>
-                    </section>
+                    </div>
                   </div>
-                </div>
+                </section>
+
+                <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
+                  <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-blue-50 text-blue-600">
+                        <i className="fas fa-layer-group"></i>
+                      </span>
+                      <div>
+                        <h3 className="text-xl font-black text-slate-900">
+                          복습할 응시 기록
+                        </h3>
+                        <p className="mt-1 text-sm font-bold text-slate-400">
+                          단원과 회차를 고른 뒤 응시 기록을 확인합니다.
+                        </p>
+                      </div>
+                    </div>
+                    <span className="inline-flex w-fit rounded-full bg-slate-100 px-3 py-1 text-sm font-black text-slate-600">
+                      {filteredQuizAttempts.length}회 응시
+                    </span>
+                  </div>
+
+                  {loadingWrong ? (
+                    <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-12 text-center text-sm font-bold text-slate-400">
+                      응시 기록을 불러오는 중입니다.
+                    </div>
+                  ) : quizAttemptHierarchy.length > 0 ? (
+                    <div className="space-y-7">
+                      {quizAttemptHierarchy.map((section) => (
+                        <div key={section.key} className="space-y-3">
+                          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                            <div className="flex items-center gap-3">
+                              <span
+                                className={`inline-flex h-9 w-9 items-center justify-center rounded-full ${
+                                  section.key === "exam_prep"
+                                    ? "bg-blue-600 text-white"
+                                    : "bg-blue-50 text-blue-600"
+                                }`}
+                              >
+                                <i
+                                  className={`fas ${
+                                    section.key === "diagnostic"
+                                      ? "fa-stethoscope"
+                                      : section.key === "formative"
+                                        ? "fa-pen-to-square"
+                                        : section.key === "exam_prep"
+                                          ? "fa-flag-checkered"
+                                          : "fa-list-check"
+                                  } text-sm`}
+                                ></i>
+                              </span>
+                              <div>
+                                <h4 className="text-lg font-black text-slate-900">
+                                  {section.label}
+                                </h4>
+                                <p className="text-sm font-bold text-slate-400">
+                                  {section.count}회 응시 · 오답{" "}
+                                  {section.wrongCount}문항
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-3">
+                            {section.groups.map((group) => (
+                              <div
+                                key={group.key}
+                                className="rounded-2xl border border-slate-200 bg-slate-50/70 p-4"
+                              >
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <h5 className="truncate text-base font-black text-slate-900">
+                                        {group.label}
+                                      </h5>
+                                      {group.wrongCount > 0 && (
+                                        <span className="rounded-full bg-red-50 px-2.5 py-1 text-xs font-black text-red-600">
+                                          오답 {group.wrongCount}
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="mt-1 text-sm font-bold text-slate-400">
+                                      {group.subLabel} · 전체 {group.totalCount}
+                                      문항
+                                    </p>
+                                  </div>
+                                  <span className="rounded-full bg-white px-3 py-1 text-sm font-black text-slate-500">
+                                    {group.attempts.length}회 응시
+                                  </span>
+                                </div>
+
+                                <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                                  {group.attempts.map(
+                                    (attempt, attemptIndex) => (
+                                      <button
+                                        key={attempt.key}
+                                        type="button"
+                                        onClick={() =>
+                                          openQuizAttemptReview(attempt)
+                                        }
+                                        className={`rounded-xl border bg-white px-4 py-3 text-left transition hover:-translate-y-0.5 ${
+                                          attempt.wrongCount > 0
+                                            ? "border-red-100 hover:border-red-200 hover:bg-red-50/50"
+                                            : "border-blue-100 hover:border-blue-200 hover:bg-blue-50/50"
+                                        }`}
+                                      >
+                                        <div className="flex items-start justify-between gap-3">
+                                          <div className="min-w-0">
+                                            <div className="text-sm font-black text-slate-900">
+                                              {group.attempts.length > 1
+                                                ? `기록 ${attemptIndex + 1}`
+                                                : "응시 기록"}
+                                            </div>
+                                            <div className="mt-1 break-keep text-xs font-bold leading-5 text-slate-400">
+                                              {attempt.dateText}
+                                            </div>
+                                          </div>
+                                          <span
+                                            className={`shrink-0 rounded-full px-3 py-1 text-sm font-black ${
+                                              attempt.wrongCount > 0
+                                                ? "bg-red-50 text-red-600"
+                                                : "bg-blue-50 text-blue-600"
+                                            }`}
+                                          >
+                                            {attempt.score}점
+                                          </span>
+                                        </div>
+                                        <div className="mt-3 flex items-center justify-between text-sm font-bold text-slate-500">
+                                          <span>
+                                            오답 {attempt.wrongCount} / 전체{" "}
+                                            {attempt.allItems.length}
+                                          </span>
+                                          <span className="inline-flex items-center gap-1 text-blue-600">
+                                            확인
+                                            <i className="fas fa-chevron-right text-xs"></i>
+                                          </span>
+                                        </div>
+                                      </button>
+                                    ),
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-12 text-center text-sm font-bold text-slate-400">
+                      조건에 맞는 응시 기록이 없습니다.
+                    </div>
+                  )}
+                </section>
               </div>
             )}
 
@@ -3210,104 +3285,185 @@ const MyPage: React.FC = () => {
         </section>
       </main>
 
-      {selectedMockExamAttempt && (
+      {selectedQuizAttempt && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-          onClick={() => setSelectedMockExamAttempt(null)}
+          onClick={closeQuizAttemptModal}
         >
           <div
-            className="flex max-h-[min(88vh,820px)] w-full max-w-4xl flex-col overflow-hidden rounded-[1.75rem] bg-white shadow-2xl"
+            className="flex max-h-[min(92vh,900px)] w-full max-w-6xl flex-col overflow-hidden rounded-[1.75rem] bg-white shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-5 sm:px-6">
               <div className="min-w-0">
                 <div className="text-xs font-black uppercase text-blue-600">
-                  모의고사 오답
+                  {selectedQuizAttempt.categoryLabel} 응시 리뷰
                 </div>
                 <h3 className="mt-1 text-xl font-black text-slate-900">
-                  {selectedMockExamAttempt.roundLabel}
+                  {selectedQuizAttempt.roundLabel}
                 </h3>
                 <p className="mt-1 text-sm font-bold text-slate-500">
-                  {selectedMockExamAttempt.dateText} ·{" "}
-                  {selectedMockExamAttempt.score}점 · 오답{" "}
-                  {selectedMockExamAttempt.wrongCount}문항
+                  {selectedQuizAttempt.dateText} · {selectedQuizAttempt.score}점
+                  · 오답 {selectedQuizAttempt.wrongCount} / 전체{" "}
+                  {selectedQuizAttempt.allItems.length}문항
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => setSelectedMockExamAttempt(null)}
+                onClick={closeQuizAttemptModal}
                 className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50"
-                aria-label="모의고사 오답 닫기"
+                aria-label="응시 리뷰 닫기"
               >
                 <i className="fas fa-times text-sm" aria-hidden="true"></i>
               </button>
             </div>
 
+            <div className="border-b border-slate-100 bg-white px-5 py-4 sm:px-6">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div className="text-sm font-black text-slate-700">
+                  문항 응시 진척도
+                </div>
+                <div className="flex items-center gap-3 text-xs font-bold text-slate-400">
+                  <span className="inline-flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-full bg-red-500"></span>
+                    오답
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-full bg-blue-500"></span>
+                    정답
+                  </span>
+                </div>
+              </div>
+              <div className="-mx-1 overflow-x-auto px-1 pb-0.5">
+                <div
+                  className="grid min-w-full gap-1"
+                  style={{
+                    gridTemplateColumns: `repeat(${Math.max(selectedQuizAttempt.allItems.length, 1)}, minmax(1.75rem, 1fr))`,
+                  }}
+                >
+                  {selectedQuizAttempt.allItems.map((item, index) => {
+                    const displayNumber = item.questionNumber || index + 1;
+                    return (
+                      <button
+                        key={item.key}
+                        type="button"
+                        onClick={() =>
+                          document
+                            .getElementById(`attempt-review-${item.key}`)
+                            ?.scrollIntoView({
+                              behavior: "smooth",
+                              block: "start",
+                            })
+                        }
+                        className={`h-9 min-w-0 rounded-lg text-xs font-black transition focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                          item.correct
+                            ? "bg-blue-500 text-white hover:bg-blue-600 focus:ring-blue-300"
+                            : "bg-red-500 text-white shadow-[0_6px_14px_rgba(239,68,68,0.22)] hover:bg-red-600 focus:ring-red-300"
+                        }`}
+                        aria-label={`${displayNumber}번 ${item.correct ? "정답" : "오답"} 문항으로 이동`}
+                      >
+                        {displayNumber}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
             <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-6">
-              {selectedMockExamAttempt.wrongItems.length > 0 ? (
+              {selectedQuizAttempt.allItems.length > 0 ? (
                 <div className="space-y-4">
-                  {selectedMockExamAttempt.wrongItems.map((item, index) => (
-                    <article
-                      key={item.key}
-                      className="rounded-2xl border border-red-100 bg-red-50/60 p-4"
-                    >
-                      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-                        <div className="mb-2 flex flex-wrap items-center gap-2">
-                          <span className="inline-flex h-8 min-w-8 items-center justify-center rounded-full bg-red-500 px-2 text-sm font-black text-white">
-                            {index + 1}
-                          </span>
-                          <span className="rounded-full bg-red-50 px-3 py-1 text-xs font-black text-red-600">
-                            오답
-                          </span>
+                  {selectedQuizAttempt.allItems.map((item, index) => {
+                    const displayNumber = item.questionNumber || index + 1;
+                    return (
+                      <article
+                        id={`attempt-review-${item.key}`}
+                        key={item.key}
+                        className={`scroll-mt-4 rounded-2xl border p-4 ${
+                          item.correct
+                            ? "border-blue-100 bg-blue-50/45"
+                            : "border-red-100 bg-red-50/70 ring-1 ring-red-100"
+                        }`}
+                      >
+                        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                          <div className="mb-2 flex flex-wrap items-center gap-2">
+                            <span
+                              className={`inline-flex h-8 min-w-8 items-center justify-center rounded-full px-2 text-sm font-black text-white ${
+                                item.correct ? "bg-blue-500" : "bg-red-500"
+                              }`}
+                            >
+                              {displayNumber}
+                            </span>
+                            <span
+                              className={`rounded-full px-3 py-1 text-xs font-black ${
+                                item.correct
+                                  ? "bg-blue-50 text-blue-600"
+                                  : "bg-red-50 text-red-600"
+                              }`}
+                            >
+                              {item.correct ? "정답" : "오답"}
+                            </span>
+                            <span className="text-xs font-bold text-slate-400">
+                              {item.dateText}
+                            </span>
+                          </div>
+                          <div className="whitespace-pre-wrap break-keep text-base font-black leading-7 text-slate-900">
+                            {item.question}
+                          </div>
+                          {item.image && (
+                            <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-2 text-center">
+                              <img
+                                src={item.image}
+                                alt="문항 첨부 이미지"
+                                className="mx-auto max-h-72 max-w-full object-contain"
+                              />
+                            </div>
+                          )}
                         </div>
-                        <div className="whitespace-pre-wrap break-keep text-base font-black leading-7 text-slate-900">
-                          {item.question}
-                        </div>
-                        {item.image && (
-                          <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-2 text-center">
-                            <img
-                              src={item.image}
-                              alt="문항 첨부 이미지"
-                              className="mx-auto max-h-72 max-w-full object-contain"
-                            />
+                        {item.passage && (
+                          <div className="mt-3">
+                            <div className="mb-1 text-xs font-black text-slate-500">
+                              본문
+                            </div>
+                            <QuizPassage value={item.passage} surface="muted" />
                           </div>
                         )}
-                      </div>
-                      {item.passage && (
-                        <div className="mt-3">
-                          <div className="mb-1 text-xs font-black text-slate-500">
-                            본문
+                        <div className="mt-3 grid gap-2 text-sm font-bold leading-6 text-slate-700 sm:grid-cols-2">
+                          <div className="rounded-xl bg-white px-3 py-2">
+                            <span className="block text-xs font-black text-slate-500">
+                              {item.correct ? "나의 답" : "나의 오답"}
+                            </span>
+                            <span
+                              className={`mt-1 block whitespace-pre-wrap break-keep text-base font-black ${
+                                item.correct ? "text-blue-600" : "text-red-500"
+                              }`}
+                            >
+                              {item.userAnswer || "(미입력)"}
+                            </span>
                           </div>
-                          <QuizPassage value={item.passage} surface="muted" />
+                          <div className="rounded-xl bg-white px-3 py-2">
+                            <span className="block text-xs font-black text-slate-500">
+                              정답
+                            </span>
+                            <span className="mt-1 block whitespace-pre-wrap break-keep text-base font-black text-emerald-600">
+                              {item.answer}
+                            </span>
+                          </div>
                         </div>
-                      )}
-                      <div className="mt-3 grid gap-2 text-sm font-bold leading-6 text-slate-700 sm:grid-cols-2">
-                        <div className="rounded-xl bg-white px-3 py-2">
-                          나의 오답:{" "}
-                          <span className="text-red-500">
-                            {item.userAnswer || "(미입력)"}
-                          </span>
+                        <div className="mt-2 rounded-xl bg-white px-3 py-2 text-sm font-semibold leading-6 text-slate-600">
+                          해설: {item.explanation}
                         </div>
-                        <div className="rounded-xl bg-white px-3 py-2">
-                          정답:{" "}
-                          <span className="text-emerald-600">
-                            {item.answer}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="mt-2 rounded-xl bg-white px-3 py-2 text-sm font-semibold leading-6 text-slate-600">
-                        해설: {item.explanation}
-                      </div>
-                    </article>
-                  ))}
+                      </article>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-16 text-center">
                   <div className="text-lg font-black text-slate-700">
-                    오답이 없습니다.
+                    표시할 문항이 없습니다.
                   </div>
                   <p className="mt-2 text-sm font-bold text-slate-400">
-                    이 응시는 모든 문항을 맞혔습니다.
+                    응시 기록을 다시 불러온 뒤 확인해 주세요.
                   </p>
                 </div>
               )}
