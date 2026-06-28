@@ -110,8 +110,6 @@ interface CorePointBurst {
   page: number;
   xPercent: number;
   yPercent: number;
-  clientX: number;
-  clientY: number;
 }
 
 interface RatioPoint {
@@ -267,6 +265,7 @@ const HIGHLIGHTER_CURSOR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.
 const ERASER_CURSOR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cpath fill='%23F59E0B' d='M10.3 5.3l12.4 12.4-5.3 5.3H8.6L3 17.4z'/%3E%3Cpath fill='%23FFF7ED' d='M10.3 5.3l6.1 6.1-8 8L3 17.4z'/%3E%3Cpath stroke='%23111827' stroke-width='1.4' d='M3.5 17.4l6.8 6.8m12.1-6.5l-5.1 5.1m-8.7 1h13.2'/%3E%3C/g%3E%3C/svg%3E") 6 22, cell`;
 const RECTANGLE_CURSOR = "crosshair";
 const STRAIGHT_LINE_HOLD_MS = 650;
+const CORE_POINT_BURST_LIFETIME_MS = 1200;
 const STRAIGHT_LINE_MOVE_THRESHOLD = 0.002;
 const WHEEL_ZOOM_STEP_MIN = 0.01;
 const WHEEL_ZOOM_STEP_MAX = 0.18;
@@ -1516,16 +1515,14 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     const pageNode = pageRefs.current[page];
     const pageRect = pageNode?.getBoundingClientRect();
     const targetRect = event.currentTarget.getBoundingClientRect();
+    const burstClientX = targetRect.left + targetRect.width / 2;
+    const burstClientY = targetRect.top + targetRect.height / 2;
     const rawX = pageRect
-      ? ((event.clientX - pageRect.left) / Math.max(1, pageRect.width)) * 100
-      : ((targetRect.left + targetRect.width / 2) /
-          Math.max(1, window.innerWidth)) *
-        100;
+      ? ((burstClientX - pageRect.left) / Math.max(1, pageRect.width)) * 100
+      : (burstClientX / Math.max(1, window.innerWidth)) * 100;
     const rawY = pageRect
-      ? ((event.clientY - pageRect.top) / Math.max(1, pageRect.height)) * 100
-      : ((targetRect.top + targetRect.height / 2) /
-          Math.max(1, window.innerHeight)) *
-        100;
+      ? ((burstClientY - pageRect.top) / Math.max(1, pageRect.height)) * 100
+      : (burstClientY / Math.max(1, window.innerHeight)) * 100;
     const burst: CorePointBurst = {
       id: `core-point-burst-${page}-${Date.now()}-${Math.random()
         .toString(36)
@@ -1533,8 +1530,6 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
       page,
       xPercent: Math.min(100, Math.max(0, rawX)),
       yPercent: Math.min(100, Math.max(0, rawY)),
-      clientX: event.clientX,
-      clientY: event.clientY,
     };
     setCorePointBursts((prev) => [...prev, burst]);
     const timeoutId = window.setTimeout(() => {
@@ -1545,7 +1540,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         corePointBurstTimeoutsRef.current.filter(
           (candidate) => candidate !== timeoutId,
         );
-    }, 900);
+    }, CORE_POINT_BURST_LIFETIME_MS);
     corePointBurstTimeoutsRef.current.push(timeoutId);
   };
 
@@ -2992,32 +2987,6 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                         <span className="lesson-core-burst__spark lesson-core-burst__spark--b" />
                       </span>
                     ))}
-
-                  {isStudentSolveMode &&
-                    corePointBursts
-                      .filter((burst) => burst.page === pageImage.page)
-                      .map((burst) =>
-                        createPortal(
-                          <span
-                            key={`viewport-${burst.id}`}
-                            className="lesson-core-burst lesson-core-burst--viewport"
-                            style={{
-                              left: `${burst.clientX}px`,
-                              top: `${burst.clientY}px`,
-                            }}
-                            aria-hidden="true"
-                          >
-                            <span className="lesson-core-burst__ring" />
-                            <span className="lesson-core-burst__flare lesson-core-burst__flare--a" />
-                            <span className="lesson-core-burst__flare lesson-core-burst__flare--b" />
-                            <span className="lesson-core-burst__flare lesson-core-burst__flare--c" />
-                            <span className="lesson-core-burst__flare lesson-core-burst__flare--d" />
-                            <span className="lesson-core-burst__spark" />
-                            <span className="lesson-core-burst__spark lesson-core-burst__spark--b" />
-                          </span>,
-                          document.body,
-                        ),
-                      )}
 
                   {isAnnotationEnabled &&
                     (pageStrokes.length > 0 || currentDraftStroke) && (

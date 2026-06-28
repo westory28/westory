@@ -543,7 +543,7 @@ button.lesson-core-point-floating-status:disabled {
 .lesson-core-burst {
   --lesson-core-burst-width: clamp(185px, 19vw, 300px);
   --lesson-core-burst-height: clamp(114px, 12vw, 184px);
-  --lesson-core-burst-duration: 680ms;
+  --lesson-core-burst-duration: 980ms;
   position: absolute;
   z-index: 42;
   display: block;
@@ -552,17 +552,9 @@ button.lesson-core-point-floating-status:disabled {
   border-radius: 45%;
   pointer-events: none;
   transform: translate(-50%, -50%) scale(0.34);
+  will-change: opacity, transform;
   animation: westory-core-burst-pop var(--lesson-core-burst-duration)
     cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-.lesson-core-burst--viewport {
-  --lesson-core-burst-width: clamp(260px, 32vw, 450px);
-  --lesson-core-burst-height: clamp(160px, 20vw, 276px);
-  --lesson-core-burst-duration: 780ms;
-  position: fixed;
-  z-index: 2147483000;
-  filter: saturate(0.98) contrast(1.06) brightness(1.03);
 }
 
 .lesson-core-burst::before {
@@ -597,6 +589,13 @@ button.lesson-core-point-floating-status:disabled {
   transform-origin: center;
   animation: westory-core-burst-rays var(--lesson-core-burst-duration) ease-out
     forwards;
+}
+
+@media (max-width: 767px) {
+  .lesson-core-burst {
+    --lesson-core-burst-width: clamp(145px, 44vw, 210px);
+    --lesson-core-burst-height: clamp(90px, 28vw, 130px);
+  }
 }
 
 .lesson-core-burst__ring {
@@ -758,8 +757,8 @@ button.lesson-core-point-floating-status:disabled {
     transform: translate(-50%, -50%) scale(1);
   }
 
-  62% {
-    opacity: 0.22;
+  70% {
+    opacity: 0.52;
     transform: translate(-50%, -50%) scale(1.06);
   }
 
@@ -780,9 +779,14 @@ button.lesson-core-point-floating-status:disabled {
     transform: scale(0.96);
   }
 
-  38% {
+  46% {
     opacity: 0.88;
     transform: scale(1.08);
+  }
+
+  72% {
+    opacity: 0.44;
+    transform: scale(1.22);
   }
 
   100% {
@@ -807,8 +811,8 @@ button.lesson-core-point-floating-status:disabled {
     transform: scale(1);
   }
 
-  64% {
-    opacity: 0.28;
+  72% {
+    opacity: 0.46;
     transform: scale(1.05);
   }
 
