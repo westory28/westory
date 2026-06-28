@@ -709,7 +709,7 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
           contentHeight="100%"
           expandRows
           eventDisplay="block"
-          dayMaxEvents={2}
+          dayMaxEvents={3}
           moreLinkClick={handleMoreLinkClick}
           fixedWeekCount={false}
           showNonCurrentDates={true}

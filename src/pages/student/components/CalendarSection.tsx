@@ -713,7 +713,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
           contentHeight="100%"
           expandRows
           eventDisplay="block"
-          dayMaxEvents={2}
+          dayMaxEvents={3}
           moreLinkClick={handleMoreLinkClick}
           showNonCurrentDates={true}
           dayCellClassNames={(arg) => {
