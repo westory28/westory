@@ -1211,17 +1211,13 @@ const LessonContent: React.FC<LessonContentProps> = ({
   const displayedCorePointFoundCount = corePointOverview.loaded
     ? corePointOverview.foundCount
     : foundCorePointIds.length;
-  const displayedCorePointRemainingCount = Math.max(
-    0,
-    displayedCorePointTotalCount - displayedCorePointFoundCount,
-  );
   const showFloatingCorePointStatus = displayedCorePointTotalCount > 0;
   const floatingSaveControls = canPersist ? (
     <div
       className={
         fullscreenPreview
-          ? "pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] right-[calc(env(safe-area-inset-right,0px)+0.75rem)] z-[70] flex justify-end"
-          : "pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] right-[calc(env(safe-area-inset-right,0px)+1rem)] z-[70] flex justify-end sm:bottom-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] sm:right-[calc(env(safe-area-inset-right,0px)+1.5rem)]"
+          ? "pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] right-[calc(env(safe-area-inset-right,0px)+5.25rem)] z-[70] flex justify-end"
+          : "pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] right-[calc(env(safe-area-inset-right,0px)+5.25rem)] z-[70] flex justify-end sm:bottom-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] sm:right-[calc(env(safe-area-inset-right,0px)+6rem)]"
       }
     >
       <div className="pointer-events-auto flex w-[11.75rem] flex-col gap-2 rounded-[1.35rem] border border-blue-100 bg-white/95 p-2 shadow-[0_18px_42px_rgba(37,99,235,0.18)] backdrop-blur-xl">
@@ -1291,14 +1287,13 @@ const LessonContent: React.FC<LessonContentProps> = ({
               핵심포인트
             </span>
             <strong>
-              {displayedCorePointRemainingCount > 0
-                ? `남은 ${displayedCorePointRemainingCount}개`
-                : "모두 찾음"}
-            </strong>
-            <span className="lesson-core-point-floating-status__meta">
               {displayedCorePointFoundCount}/{displayedCorePointTotalCount}
-              {corePointRewardPending ? " · 반영 중" : ""}
-            </span>
+            </strong>
+            {corePointRewardPending && (
+              <span className="lesson-core-point-floating-status__meta">
+                반영 중
+              </span>
+            )}
           </div>
         )}
         <button
