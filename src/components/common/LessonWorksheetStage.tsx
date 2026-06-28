@@ -110,6 +110,8 @@ interface CorePointBurst {
   page: number;
   xPercent: number;
   yPercent: number;
+  clientX: number;
+  clientY: number;
 }
 
 interface RatioPoint {
@@ -1531,6 +1533,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
       page,
       xPercent: Math.min(100, Math.max(0, rawX)),
       yPercent: Math.min(100, Math.max(0, rawY)),
+      clientX: event.clientX,
+      clientY: event.clientY,
     };
     setCorePointBursts((prev) => [...prev, burst]);
     const timeoutId = window.setTimeout(() => {
@@ -1541,7 +1545,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         corePointBurstTimeoutsRef.current.filter(
           (candidate) => candidate !== timeoutId,
         );
-    }, 1180);
+    }, 1900);
     corePointBurstTimeoutsRef.current.push(timeoutId);
   };
 
@@ -2988,6 +2992,32 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                         <span className="lesson-core-burst__spark lesson-core-burst__spark--b" />
                       </span>
                     ))}
+
+                  {isStudentSolveMode &&
+                    corePointBursts
+                      .filter((burst) => burst.page === pageImage.page)
+                      .map((burst) =>
+                        createPortal(
+                          <span
+                            key={`viewport-${burst.id}`}
+                            className="lesson-core-burst lesson-core-burst--viewport"
+                            style={{
+                              left: `${burst.clientX}px`,
+                              top: `${burst.clientY}px`,
+                            }}
+                            aria-hidden="true"
+                          >
+                            <span className="lesson-core-burst__ring" />
+                            <span className="lesson-core-burst__flare lesson-core-burst__flare--a" />
+                            <span className="lesson-core-burst__flare lesson-core-burst__flare--b" />
+                            <span className="lesson-core-burst__flare lesson-core-burst__flare--c" />
+                            <span className="lesson-core-burst__flare lesson-core-burst__flare--d" />
+                            <span className="lesson-core-burst__spark" />
+                            <span className="lesson-core-burst__spark lesson-core-burst__spark--b" />
+                          </span>,
+                          document.body,
+                        ),
+                      )}
 
                   {isAnnotationEnabled &&
                     (pageStrokes.length > 0 || currentDraftStroke) && (
