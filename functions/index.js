@@ -388,6 +388,8 @@ const getDefaultPointPolicy = () => ({
   attendanceDaily: 5,
   attendanceMonthlyBonus: 20,
   lessonView: 3,
+  lessonCorePointsEnabled: true,
+  lessonCorePointsAmount: 500,
   quizSolve: 10,
   thinkCloudEnabled: true,
   thinkCloudAmount: 20,
@@ -420,6 +422,7 @@ const getDefaultPointPolicy = () => ({
     attendance: { enabled: true, amount: 5 },
     quiz: { enabled: true, amount: 10 },
     lesson: { enabled: true, amount: 3 },
+    lessonCorePoints: { enabled: true, amount: 500 },
     thinkCloud: { enabled: true, amount: 20, cooldownHours: 24, maxClaims: 5 },
     mapTag: { enabled: true, amount: 10, cooldownHours: 24, maxClaims: 5 },
     historyDictionary: {
@@ -465,12 +468,20 @@ const normalizePointPolicy = (policy) => {
   const rewardPolicy = policy?.rewardPolicy || {};
   const manualAdjustEnabled = (controlPolicy?.manualAdjustEnabled ?? policy?.manualAdjustEnabled) === true;
   const allowNegativeBalance = (controlPolicy?.allowNegativeBalance ?? policy?.allowNegativeBalance) === true;
+  const lessonCorePointsRule = rewardPolicy?.lessonCorePoints || {};
   const thinkCloudRule = rewardPolicy?.thinkCloud || {};
   const mapTagRule = rewardPolicy?.mapTag || {};
   const historyDictionaryRule = rewardPolicy?.historyDictionary || {};
   const historyClassroomRule = rewardPolicy?.historyClassroom || {};
   const historyClassroomBonusRule = rewardPolicy?.historyClassroomBonus || {};
   const attendanceMilestoneBonusRule = rewardPolicy?.attendanceMilestoneBonus || {};
+  const lessonCorePointsEnabled = (policy?.lessonCorePointsEnabled
+    ?? lessonCorePointsRule?.enabled
+    ?? defaults.lessonCorePointsEnabled) === true;
+  const lessonCorePointsAmount = toNonNegativeNumber(
+    policy?.lessonCorePointsAmount ?? lessonCorePointsRule?.amount,
+    defaults.lessonCorePointsAmount,
+  );
   const thinkCloudEnabled = (policy?.thinkCloudEnabled ?? thinkCloudRule?.enabled ?? defaults.thinkCloudEnabled) === true;
   const thinkCloudAmount = toNonNegativeNumber(
     policy?.thinkCloudAmount ?? thinkCloudRule?.amount,
@@ -556,6 +567,8 @@ const normalizePointPolicy = (policy) => {
     attendanceDaily: toNonNegativeNumber(policy?.attendanceDaily, defaults.attendanceDaily),
     attendanceMonthlyBonus: toNonNegativeNumber(policy?.attendanceMonthlyBonus, defaults.attendanceMonthlyBonus),
     lessonView: toNonNegativeNumber(policy?.lessonView, defaults.lessonView),
+    lessonCorePointsEnabled,
+    lessonCorePointsAmount,
     quizSolve: toNonNegativeNumber(policy?.quizSolve, defaults.quizSolve),
     thinkCloudEnabled,
     thinkCloudAmount,
@@ -596,6 +609,10 @@ const normalizePointPolicy = (policy) => {
       lesson: {
         enabled: autoRewardEnabled,
         amount: toNonNegativeNumber(policy?.lessonView, defaults.lessonView),
+      },
+      lessonCorePoints: {
+        enabled: autoRewardEnabled && lessonCorePointsEnabled,
+        amount: lessonCorePointsAmount,
       },
       thinkCloud: {
         enabled: autoRewardEnabled && thinkCloudEnabled,
@@ -668,6 +685,8 @@ const buildPointPolicyPayload = (policy, actorUid) => {
     attendanceDaily: normalizedPolicy.attendanceDaily,
     attendanceMonthlyBonus: normalizedPolicy.attendanceMonthlyBonus,
     lessonView: normalizedPolicy.lessonView,
+    lessonCorePointsEnabled: normalizedPolicy.lessonCorePointsEnabled,
+    lessonCorePointsAmount: normalizedPolicy.lessonCorePointsAmount,
     quizSolve: normalizedPolicy.quizSolve,
     thinkCloudEnabled: normalizedPolicy.thinkCloudEnabled,
     thinkCloudAmount: normalizedPolicy.thinkCloudAmount,
@@ -4057,11 +4076,13 @@ const resolveActivityReward = ({
       ? normalizedPolicy.quizSolve
       : activityType === 'lesson'
         ? normalizedPolicy.lessonView
-        : activityType === 'think_cloud'
-          ? (normalizedPolicy.rewardPolicy.thinkCloud.enabled ? normalizedPolicy.rewardPolicy.thinkCloud.amount : 0)
-          : activityType === 'map_tag'
-            ? (normalizedPolicy.rewardPolicy.mapTag.enabled ? normalizedPolicy.rewardPolicy.mapTag.amount : 0)
-            : (normalizedPolicy.rewardPolicy.historyClassroom.enabled ? normalizedPolicy.rewardPolicy.historyClassroom.amount : 0);
+        : activityType === 'lesson_core_points'
+          ? (normalizedPolicy.rewardPolicy.lessonCorePoints.enabled ? normalizedPolicy.rewardPolicy.lessonCorePoints.amount : 0)
+          : activityType === 'think_cloud'
+            ? (normalizedPolicy.rewardPolicy.thinkCloud.enabled ? normalizedPolicy.rewardPolicy.thinkCloud.amount : 0)
+            : activityType === 'map_tag'
+              ? (normalizedPolicy.rewardPolicy.mapTag.enabled ? normalizedPolicy.rewardPolicy.mapTag.amount : 0)
+              : (normalizedPolicy.rewardPolicy.historyClassroom.enabled ? normalizedPolicy.rewardPolicy.historyClassroom.amount : 0);
   const normalizedSourceLabel = String(sourceLabel || '').trim();
   const items = [];
 
@@ -4074,9 +4095,11 @@ const resolveActivityReward = ({
         activityType === 'attendance'
           ? `${todayKey} 출석 체크`
           : activityType === 'quiz'
-            ? '문제 풀이'
-            : activityType === 'lesson'
-              ? '수업 자료 확인'
+          ? '문제 풀이'
+          : activityType === 'lesson'
+            ? '수업 자료 확인'
+            : activityType === 'lesson_core_points'
+              ? '핵심포인트 완주'
               : activityType === 'think_cloud'
                 ? '생각모아 참여'
                 : activityType === 'map_tag'
@@ -5841,7 +5864,7 @@ exports.applyPointActivityReward = onCall({ region: REGION }, async (request) =>
   const { uid } = assertAllowedWestoryUser(request);
   const { year, semester } = assertYearSemester(request.data);
   const activityType = String(request.data?.activityType || '').trim();
-  const allowedTypes = ['attendance', 'quiz', 'lesson', 'think_cloud', 'map_tag', 'history_classroom'];
+  const allowedTypes = ['attendance', 'quiz', 'lesson', 'lesson_core_points', 'think_cloud', 'map_tag', 'history_classroom'];
   if (!allowedTypes.includes(activityType)) {
     throw new HttpsError('invalid-argument', 'Unsupported point activity type.');
   }

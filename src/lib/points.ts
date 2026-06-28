@@ -38,6 +38,7 @@ type PointActivityRewardType = Extract<
   | "attendance"
   | "quiz"
   | "lesson"
+  | "lesson_core_points"
   | "think_cloud"
   | "map_tag"
   | "history_classroom"
@@ -219,6 +220,8 @@ export const getDefaultPointPolicy = (): PointPolicy => ({
   attendanceDaily: 5,
   attendanceMonthlyBonus: 20,
   lessonView: 3,
+  lessonCorePointsEnabled: true,
+  lessonCorePointsAmount: 500,
   quizSolve: 10,
   thinkCloudEnabled: true,
   thinkCloudAmount: 20,
@@ -251,6 +254,7 @@ export const getDefaultPointPolicy = (): PointPolicy => ({
     attendance: { enabled: true, amount: 5 },
     quiz: { enabled: true, amount: 10 },
     lesson: { enabled: true, amount: 3 },
+    lessonCorePoints: { enabled: true, amount: 500 },
     thinkCloud: { enabled: true, amount: 20, cooldownHours: 24, maxClaims: 5 },
     mapTag: { enabled: true, amount: 10, cooldownHours: 24, maxClaims: 5 },
     historyDictionary: {
@@ -297,6 +301,7 @@ export const normalizePointPolicy = (
   const allowNegativeBalance =
     (controlPolicy?.allowNegativeBalance ?? policy?.allowNegativeBalance) ===
     true;
+  const lessonCorePointsRule = rewardPolicy?.lessonCorePoints || {};
   const thinkCloudRule = rewardPolicy?.thinkCloud || {};
   const mapTagRule = rewardPolicy?.mapTag || {};
   const historyDictionaryRule = rewardPolicy?.historyDictionary || {};
@@ -304,6 +309,14 @@ export const normalizePointPolicy = (
   const historyClassroomBonusRule = rewardPolicy?.historyClassroomBonus || {};
   const attendanceMilestoneBonusRule =
     rewardPolicy?.attendanceMilestoneBonus || {};
+  const lessonCorePointsEnabled =
+    ((policy as any)?.lessonCorePointsEnabled ??
+      lessonCorePointsRule?.enabled ??
+      defaults.lessonCorePointsEnabled) === true;
+  const lessonCorePointsAmount = toNonNegativeNumber(
+    (policy as any)?.lessonCorePointsAmount ?? lessonCorePointsRule?.amount,
+    defaults.lessonCorePointsAmount,
+  );
   const thinkCloudEnabled =
     ((policy as any)?.thinkCloudEnabled ??
       thinkCloudRule?.enabled ??
@@ -405,6 +418,8 @@ export const normalizePointPolicy = (
       defaults.attendanceMonthlyBonus,
     ),
     lessonView: toNonNegativeNumber(policy?.lessonView, defaults.lessonView),
+    lessonCorePointsEnabled,
+    lessonCorePointsAmount,
     quizSolve: toNonNegativeNumber(policy?.quizSolve, defaults.quizSolve),
     thinkCloudEnabled,
     thinkCloudAmount,
@@ -454,6 +469,10 @@ export const normalizePointPolicy = (
       lesson: {
         enabled: autoRewardEnabled,
         amount: toNonNegativeNumber(policy?.lessonView, defaults.lessonView),
+      },
+      lessonCorePoints: {
+        enabled: autoRewardEnabled && lessonCorePointsEnabled,
+        amount: lessonCorePointsAmount,
       },
       thinkCloud: {
         enabled: autoRewardEnabled && thinkCloudEnabled,
@@ -661,11 +680,15 @@ export const resolveActivityReward = ({
         ? normalizedPolicy.quizSolve
         : activityType === "lesson"
           ? normalizedPolicy.lessonView
-          : activityType === "think_cloud"
-            ? normalizedPolicy.rewardPolicy.thinkCloud.amount
-            : activityType === "map_tag"
-              ? normalizedPolicy.rewardPolicy.mapTag.amount
-              : normalizedPolicy.rewardPolicy.historyClassroom.amount;
+          : activityType === "lesson_core_points"
+            ? normalizedPolicy.rewardPolicy.lessonCorePoints.enabled
+              ? normalizedPolicy.rewardPolicy.lessonCorePoints.amount
+              : 0
+            : activityType === "think_cloud"
+              ? normalizedPolicy.rewardPolicy.thinkCloud.amount
+              : activityType === "map_tag"
+                ? normalizedPolicy.rewardPolicy.mapTag.amount
+                : normalizedPolicy.rewardPolicy.historyClassroom.amount;
 
   if (baseAmount > 0) {
     items.push({
@@ -680,11 +703,13 @@ export const resolveActivityReward = ({
             ? "문제 풀이"
             : activityType === "lesson"
               ? "수업 자료 확인"
-              : activityType === "think_cloud"
-                ? "생각모아 참여"
-                : activityType === "map_tag"
-                  ? "지도 태그 탐색"
-                  : "역사교실 제출 완료"),
+              : activityType === "lesson_core_points"
+                ? "핵심포인트 완주"
+                : activityType === "think_cloud"
+                  ? "생각모아 참여"
+                  : activityType === "map_tag"
+                    ? "지도 태그 탐색"
+                    : "역사교실 제출 완료"),
       targetMonth:
         activityType === "attendance" ? String(monthKey || "").trim() : "",
       targetDate:
@@ -1184,6 +1209,8 @@ export const buildPointPolicyPayload = (
     attendanceDaily: normalizedPolicy.attendanceDaily,
     attendanceMonthlyBonus: normalizedPolicy.attendanceMonthlyBonus,
     lessonView: normalizedPolicy.lessonView,
+    lessonCorePointsEnabled: normalizedPolicy.lessonCorePointsEnabled,
+    lessonCorePointsAmount: normalizedPolicy.lessonCorePointsAmount,
     quizSolve: normalizedPolicy.quizSolve,
     thinkCloudEnabled: normalizedPolicy.thinkCloudEnabled,
     thinkCloudAmount: normalizedPolicy.thinkCloudAmount,

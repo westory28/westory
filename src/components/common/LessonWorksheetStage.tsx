@@ -38,10 +38,13 @@ interface LessonWorksheetStageProps {
   footnoteTitles?: Record<string, string>;
   selectedBlankId?: string | null;
   studentAnswers?: Record<string, { value?: string; status?: AnswerStatus }>;
+  foundCorePointIds?: string[];
+  corePointRewardPending?: boolean;
   onSelectBlank?: (blankId: string) => void;
   onDeleteBlank?: (blankId: string) => void;
   onSelectExamHighlight?: (highlightId: string) => void;
   onDeleteExamHighlight?: (highlightId: string) => void;
+  onFindCorePoint?: (highlightId: string) => void;
   onSelectFootnoteAnchor?: (anchorId: string) => void;
   onDeleteFootnoteAnchor?: (anchorId: string) => void;
   onActivateFootnoteAnchor?: (anchorId: string) => void;
@@ -99,6 +102,13 @@ interface DraftRect {
   startY: number;
   currentX: number;
   currentY: number;
+}
+
+interface CorePointBurst {
+  id: string;
+  page: number;
+  xPercent: number;
+  yPercent: number;
 }
 
 interface RatioPoint {
@@ -689,10 +699,13 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   footnoteTitles = {},
   selectedBlankId,
   studentAnswers = {},
+  foundCorePointIds = [],
+  corePointRewardPending = false,
   onSelectBlank,
   onDeleteBlank,
   onSelectExamHighlight,
   onDeleteExamHighlight,
+  onFindCorePoint,
   onSelectFootnoteAnchor,
   onDeleteFootnoteAnchor,
   onActivateFootnoteAnchor,
@@ -726,6 +739,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     mode === "teacher-present" || isStudentSolveMode || isTeacherEditMode;
   const pageRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const [draftRect, setDraftRect] = useState<DraftRect | null>(null);
+  const [corePointBursts, setCorePointBursts] = useState<CorePointBurst[]>([]);
   const [activeTeacherPage, setActiveTeacherPage] = useState<number | null>(
     pageImages[0]?.page ?? null,
   );
@@ -788,6 +802,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   const viewportZoomFrameRef = useRef<number | null>(null);
   const scrollHostRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const holdRef = useRef<PressHoldState>({ timeoutId: null, page: null });
+  const corePointBurstTimeoutsRef = useRef<number[]>([]);
   const initialAnnotationKey = getAnnotationStateKey(
     annotationState || EMPTY_ANNOTATION_STATE,
   );
@@ -830,6 +845,25 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
     });
     return grouped;
   }, [examHighlights]);
+  const corePointIdSet = useMemo(
+    () => new Set(examHighlights.map((highlight) => highlight.id)),
+    [examHighlights],
+  );
+  const foundCorePointSet = useMemo(
+    () =>
+      new Set(
+        foundCorePointIds.filter((highlightId) =>
+          corePointIdSet.has(highlightId),
+        ),
+      ),
+    [corePointIdSet, foundCorePointIds],
+  );
+  const corePointCount = examHighlights.length;
+  const foundCorePointCount = foundCorePointSet.size;
+  const remainingCorePointCount = Math.max(
+    0,
+    corePointCount - foundCorePointCount,
+  );
 
   const footnoteAnchorsByPage = useMemo(() => {
     const grouped = new Map<number, LessonWorksheetFootnoteAnchor[]>();
@@ -909,6 +943,16 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
       setIsMobileToolMenuOpen(false);
     }
   }, [isMobileViewport]);
+
+  useEffect(
+    () => () => {
+      corePointBurstTimeoutsRef.current.forEach((timeoutId) => {
+        window.clearTimeout(timeoutId);
+      });
+      corePointBurstTimeoutsRef.current = [];
+    },
+    [],
+  );
 
   useEffect(() => {
     if (annotationTool !== "text") {
@@ -1459,6 +1503,44 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
       holdRef.current.timeoutId = null;
     }
     holdRef.current.page = null;
+  };
+
+  const queueCorePointBurst = (
+    page: number,
+    event: React.MouseEvent<HTMLElement>,
+  ) => {
+    const pageNode = pageRefs.current[page];
+    const pageRect = pageNode?.getBoundingClientRect();
+    const targetRect = event.currentTarget.getBoundingClientRect();
+    const rawX = pageRect
+      ? ((event.clientX - pageRect.left) / Math.max(1, pageRect.width)) * 100
+      : ((targetRect.left + targetRect.width / 2) /
+          Math.max(1, window.innerWidth)) *
+        100;
+    const rawY = pageRect
+      ? ((event.clientY - pageRect.top) / Math.max(1, pageRect.height)) * 100
+      : ((targetRect.top + targetRect.height / 2) /
+          Math.max(1, window.innerHeight)) *
+        100;
+    const burst: CorePointBurst = {
+      id: `core-point-burst-${page}-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2)}`,
+      page,
+      xPercent: Math.min(100, Math.max(0, rawX)),
+      yPercent: Math.min(100, Math.max(0, rawY)),
+    };
+    setCorePointBursts((prev) => [...prev, burst]);
+    const timeoutId = window.setTimeout(() => {
+      setCorePointBursts((prev) =>
+        prev.filter((candidate) => candidate.id !== burst.id),
+      );
+      corePointBurstTimeoutsRef.current =
+        corePointBurstTimeoutsRef.current.filter(
+          (candidate) => candidate !== timeoutId,
+        );
+    }, 760);
+    corePointBurstTimeoutsRef.current.push(timeoutId);
   };
 
   const armStraightLineTimer = (page: number) => {
@@ -2355,6 +2437,27 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
             </div>
           </>
         )}
+        {isStudentSolveMode && corePointCount > 0 && (
+          <div
+            className="lesson-core-point-status"
+            role="status"
+            aria-live="polite"
+          >
+            <span className="lesson-core-point-status__label">
+              <i className="fas fa-bolt" aria-hidden="true"></i>
+              핵심포인트
+            </span>
+            <strong>
+              {remainingCorePointCount > 0
+                ? `남은 ${remainingCorePointCount}개`
+                : "모두 찾음"}
+            </strong>
+            <span className="lesson-core-point-status__meta">
+              {foundCorePointCount}/{corePointCount}
+              {corePointRewardPending ? " · 위스 반영 중" : ""}
+            </span>
+          </div>
+        )}
         {capabilities.showStudentPageNavigator &&
           !hideStudentPageNavigator &&
           pageImages.length > 1 &&
@@ -2757,6 +2860,9 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                   {pageExamHighlights.map((highlight) => {
                     const isSelectedHighlight =
                       selectedExamHighlightId === highlight.id;
+                    const isFoundCorePoint = foundCorePointSet.has(
+                      highlight.id,
+                    );
                     const highlightClassName = isTeacherEditMode
                       ? `absolute z-[8] rounded-sm border bg-amber-200/35 mix-blend-multiply transition ${
                           isSelectedHighlight
@@ -2764,7 +2870,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                             : "border-amber-300/70 hover:border-amber-500"
                         }`
                       : isStudentSolveMode
-                        ? "pointer-events-none absolute z-[8] animate-pulse rounded-sm border border-amber-300/70 bg-amber-200/35 shadow-[0_0_18px_rgba(251,191,36,0.26)] mix-blend-multiply"
+                        ? `lesson-core-point absolute z-[8] ${isFoundCorePoint ? "is-found" : ""}`
                         : "pointer-events-none absolute z-[8] rounded-sm border border-amber-300/70 bg-amber-200/35 mix-blend-multiply";
                     const highlightStyle = {
                       left: toPercent(highlight.leftRatio),
@@ -2772,6 +2878,52 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                       width: toPercent(highlight.widthRatio),
                       height: toPercent(highlight.heightRatio),
                     };
+
+                    if (isStudentSolveMode) {
+                      return (
+                        <button
+                          key={highlight.id}
+                          type="button"
+                          data-exam-highlight="true"
+                          aria-label={
+                            isFoundCorePoint
+                              ? "이미 찾은 핵심포인트"
+                              : "핵심포인트 찾기"
+                          }
+                          aria-pressed={isFoundCorePoint}
+                          title={
+                            isFoundCorePoint
+                              ? "이미 찾은 핵심포인트"
+                              : "핵심포인트"
+                          }
+                          className={highlightClassName}
+                          style={highlightStyle}
+                          onPointerDown={(event) => {
+                            event.stopPropagation();
+                          }}
+                          onClick={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            if (isFoundCorePoint) return;
+                            queueCorePointBurst(pageImage.page, event);
+                            onFindCorePoint?.(highlight.id);
+                          }}
+                        >
+                          <span
+                            className="lesson-core-point__inner"
+                            aria-hidden="true"
+                          />
+                          {isFoundCorePoint && (
+                            <span
+                              className="lesson-core-point__check"
+                              aria-hidden="true"
+                            >
+                              <i className="fas fa-check"></i>
+                            </span>
+                          )}
+                        </button>
+                      );
+                    }
 
                     if (!isTeacherEditMode) {
                       return (
@@ -2812,6 +2964,24 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                       />
                     );
                   })}
+
+                  {corePointBursts
+                    .filter((burst) => burst.page === pageImage.page)
+                    .map((burst) => (
+                      <span
+                        key={burst.id}
+                        className="lesson-core-burst"
+                        style={{
+                          left: `${burst.xPercent}%`,
+                          top: `${burst.yPercent}%`,
+                        }}
+                        aria-hidden="true"
+                      >
+                        <span className="lesson-core-burst__ring" />
+                        <span className="lesson-core-burst__flare lesson-core-burst__flare--a" />
+                        <span className="lesson-core-burst__flare lesson-core-burst__flare--b" />
+                      </span>
+                    ))}
 
                   {isAnnotationEnabled &&
                     (pageStrokes.length > 0 || currentDraftStroke) && (

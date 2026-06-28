@@ -185,6 +185,7 @@ export const POINT_TRANSACTION_TYPE_LABELS: Record<
   quiz: "문제 풀이",
   quiz_bonus: "문제 풀이 만점 보너스",
   lesson: "수업 자료 확인",
+  lesson_core_points: "핵심포인트 완주",
   think_cloud: "생각모아 참여",
   map_tag: "지도 태그 탐색",
   history_dictionary: "역사 사전",
@@ -205,6 +206,8 @@ export const POINT_POLICY_FIELD_LABELS: Record<
     | "attendanceMonthlyBonus"
     | "quizSolve"
     | "lessonView"
+    | "lessonCorePointsEnabled"
+    | "lessonCorePointsAmount"
     | "thinkCloudEnabled"
     | "thinkCloudAmount"
     | "thinkCloudMaxClaims"
@@ -238,6 +241,8 @@ export const POINT_POLICY_FIELD_LABELS: Record<
   attendanceMonthlyBonus: "월간 개근 보너스",
   quizSolve: "문제 풀이 기본 위스",
   lessonView: "수업 자료 확인 위스",
+  lessonCorePointsEnabled: "핵심포인트 완주 보상 사용",
+  lessonCorePointsAmount: "핵심포인트 완주 위스",
   thinkCloudEnabled: "생각모아 자동 지급 사용",
   thinkCloudAmount: "생각모아 1회 지급 위스",
   thinkCloudMaxClaims: "생각모아 누적 최대 인정 횟수",
@@ -273,6 +278,8 @@ export const POINT_POLICY_FIELD_HELPERS: Record<
     | "attendanceMonthlyBonus"
     | "quizSolve"
     | "lessonView"
+    | "lessonCorePointsEnabled"
+    | "lessonCorePointsAmount"
     | "thinkCloudEnabled"
     | "thinkCloudAmount"
     | "thinkCloudMaxClaims"
@@ -308,6 +315,10 @@ export const POINT_POLICY_FIELD_HELPERS: Record<
     "해당 월의 모든 날짜에 출석한 학생에게 마지막 출석 시점에 한 번만 추가 지급됩니다.",
   quizSolve: "문제 풀이를 정상 제출했을 때 자동으로 적립되는 기본 위스입니다.",
   lessonView: "수업 자료를 충분히 확인하고 저장까지 마쳤을 때 지급됩니다.",
+  lessonCorePointsEnabled:
+    "수업자료 안의 핵심포인트를 모두 찾은 학생에게 별도 위스를 지급합니다.",
+  lessonCorePointsAmount:
+    "한 수업자료의 핵심포인트를 모두 찾았을 때 한 번만 지급할 위스입니다.",
   thinkCloudEnabled:
     "생각모아 제출 위스를 별도로 운영합니다. 실제 중복 제한은 최근 지급 시점 기준 24시간마다 1회입니다.",
   thinkCloudAmount: "생각모아 응답 제출이 완료되면 적립되는 기본 위스입니다.",
@@ -345,7 +356,7 @@ export const POINT_POLICY_FIELD_HELPERS: Record<
   attendanceMilestone300:
     "현재 학기 누적 출석 300회에 도달했을 때 지급할 위스입니다.",
   autoRewardEnabled:
-    "끄면 출석, 문제 풀이, 수업 자료 확인, 생각모아, 지도 태그, 역사교실 자동 지급이 모두 멈춥니다.",
+    "끄면 출석, 문제 풀이, 수업 자료 확인, 핵심포인트, 생각모아, 지도 태그, 역사교실 자동 지급이 모두 멈춥니다.",
   quizBonusEnabled:
     "기본 지급과 별도로 기준 점수 이상일 때 추가 위스를 지급합니다.",
   quizBonusThreshold:
@@ -365,6 +376,7 @@ export const POINT_HISTORY_FILTER_LABELS = {
   quiz: "문제 풀이",
   quiz_bonus: "문제 풀이 보너스",
   lesson: "수업 자료",
+  lesson_core_points: "핵심포인트",
   think_cloud: "생각모아",
   map_tag: "지도 태그",
   history_dictionary: "역사 사전",

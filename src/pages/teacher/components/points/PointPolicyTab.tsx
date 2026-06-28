@@ -712,6 +712,43 @@ const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
                 />
 
                 <PolicyRuleCard
+                  title={POINT_POLICY_FIELD_LABELS.lessonCorePointsEnabled}
+                  description={
+                    POINT_POLICY_FIELD_HELPERS.lessonCorePointsEnabled
+                  }
+                  checked={policy.lessonCorePointsEnabled}
+                  disabled={!canManage || !policy.autoRewardEnabled}
+                  summary={formatWisAmount(policy.lessonCorePointsAmount)}
+                  footer="학생이 한 수업자료 안의 핵심포인트를 모두 찾았을 때, 해당 수업자료 기준으로 한 번만 지급됩니다."
+                  onChange={(checked) =>
+                    onPolicyChange((prev) => ({
+                      ...prev,
+                      lessonCorePointsEnabled: checked,
+                    }))
+                  }
+                >
+                  <AmountField
+                    title={POINT_POLICY_FIELD_LABELS.lessonCorePointsAmount}
+                    description={
+                      POINT_POLICY_FIELD_HELPERS.lessonCorePointsAmount
+                    }
+                    value={policy.lessonCorePointsAmount}
+                    disabled={
+                      !canManage ||
+                      !policy.lessonCorePointsEnabled ||
+                      !policy.autoRewardEnabled
+                    }
+                    suffix={formatWisAmount(policy.lessonCorePointsAmount)}
+                    onChange={(value) =>
+                      onPolicyChange((prev) => ({
+                        ...prev,
+                        lessonCorePointsAmount: value,
+                      }))
+                    }
+                  />
+                </PolicyRuleCard>
+
+                <PolicyRuleCard
                   title={POINT_POLICY_FIELD_LABELS.quizBonusEnabled}
                   description={POINT_POLICY_FIELD_HELPERS.quizBonusEnabled}
                   checked={policy.quizBonusEnabled}

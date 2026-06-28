@@ -119,6 +119,7 @@ export type PointTransactionType =
   | "quiz"
   | "quiz_bonus"
   | "lesson"
+  | "lesson_core_points"
   | "think_cloud"
   | "map_tag"
   | "history_dictionary"
@@ -458,6 +459,7 @@ export interface PointRewardPolicy {
   attendance: PointPolicyRewardRule;
   quiz: PointPolicyRewardRule;
   lesson: PointPolicyRewardRule;
+  lessonCorePoints: PointPolicyRewardRule;
   thinkCloud: PointPolicyActivityRewardRule;
   mapTag: PointPolicyActivityRewardRule;
   historyDictionary: PointPolicyActivityRewardRule;
@@ -477,6 +479,8 @@ export interface PointPolicy {
   attendanceDaily: number;
   attendanceMonthlyBonus: number;
   lessonView: number;
+  lessonCorePointsEnabled: boolean;
+  lessonCorePointsAmount: number;
   quizSolve: number;
   thinkCloudEnabled: boolean;
   thinkCloudAmount: number;
