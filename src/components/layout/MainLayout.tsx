@@ -80,7 +80,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     studentVisibilityCheckedRouteKey === studentVisibilityRouteKey;
   const studentAccessReady =
     !isStudentRoute ||
-    (!isVisibilityControlledStudentRoute && configReady && menuConfigReady) ||
+    !isVisibilityControlledStudentRoute ||
     (configReady &&
       menuConfigReady &&
       studentVisibilityRouteVerified &&

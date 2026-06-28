@@ -230,6 +230,7 @@ const StudentDashboard: React.FC = () => {
       path,
       userClassStr,
       (loadedEvents) => {
+        if (active) setEvents(loadedEvents);
         void getKoreanPublicHolidays(currentYear)
           .then((holidays) => {
             if (!active) return;
@@ -471,10 +472,16 @@ const StudentDashboard: React.FC = () => {
         </div>
 
         <div className="student-dashboard-ranking order-3 md:order-3 md:col-span-2 md:row-span-1">
-          <WisRankingPanel
-            config={config}
-            hallOfFamePath="/student/points?tab=hall-of-fame"
-          />
+          {secondaryPanelsReady ? (
+            <WisRankingPanel
+              config={config}
+              hallOfFamePath="/student/points?tab=hall-of-fame"
+            />
+          ) : (
+            <div className="flex h-full min-h-[260px] items-center justify-center rounded-xl border border-blue-100 bg-white p-4 text-sm font-semibold text-blue-700/70 shadow-sm">
+              위스 순위를 준비 중입니다.
+            </div>
+          )}
         </div>
       </div>
 

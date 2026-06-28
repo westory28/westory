@@ -85,6 +85,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     useState<InterfaceConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const firstUserDocReadyRef = useRef<string | null>(null);
+  const systemConfigLoadRef = useRef<Promise<void> | null>(null);
+  const menuConfigLoadRef = useRef<Promise<void> | null>(null);
 
   const loadPublicInterfaceConfig = useCallback(async () => {
     try {
@@ -99,45 +101,69 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const loadAuthedSystemConfig = useCallback(async (user: User | null) => {
     if (!user) {
+      systemConfigLoadRef.current = null;
       setConfig(null);
       setConfigReady(false);
       setConfigLoadedAt(0);
       return;
     }
 
-    try {
-      const data = await readFreshSiteSettingDoc<SystemConfig>("config");
-      setConfig(normalizeSystemConfig(data));
-      setConfigReady(true);
-      setConfigLoadedAt(Date.now());
-      markLoginPerf("westory-auth-config-ready");
-    } catch (e) {
-      console.error("Failed to load system config", e);
-      setConfig(null);
-      setConfigReady(true);
-      setConfigLoadedAt(Date.now());
+    if (systemConfigLoadRef.current) {
+      return systemConfigLoadRef.current;
     }
+
+    const promise = (async () => {
+      try {
+        const data = await readFreshSiteSettingDoc<SystemConfig>("config");
+        setConfig(normalizeSystemConfig(data));
+        setConfigReady(true);
+        setConfigLoadedAt(Date.now());
+        markLoginPerf("westory-auth-config-ready");
+      } catch (e) {
+        console.error("Failed to load system config", e);
+        setConfig(null);
+        setConfigReady(true);
+        setConfigLoadedAt(Date.now());
+      } finally {
+        systemConfigLoadRef.current = null;
+      }
+    })();
+
+    systemConfigLoadRef.current = promise;
+    return promise;
   }, []);
 
   const loadAuthedMenuConfig = useCallback(async (user: User | null) => {
     if (!user) {
+      menuConfigLoadRef.current = null;
       setMenuConfig(null);
       setMenuConfigReady(false);
       setMenuConfigLoadedAt(0);
       return;
     }
 
-    try {
-      const data = await readFreshSiteSettingDoc<MenuConfig>("menu_config");
-      setMenuConfig(data ? sanitizeMenuConfig(data) : cloneDefaultMenus());
-      setMenuConfigReady(true);
-      setMenuConfigLoadedAt(Date.now());
-    } catch (e) {
-      console.error("Failed to load menu config", e);
-      setMenuConfig(null);
-      setMenuConfigReady(true);
-      setMenuConfigLoadedAt(Date.now());
+    if (menuConfigLoadRef.current) {
+      return menuConfigLoadRef.current;
     }
+
+    const promise = (async () => {
+      try {
+        const data = await readFreshSiteSettingDoc<MenuConfig>("menu_config");
+        setMenuConfig(data ? sanitizeMenuConfig(data) : cloneDefaultMenus());
+        setMenuConfigReady(true);
+        setMenuConfigLoadedAt(Date.now());
+      } catch (e) {
+        console.error("Failed to load menu config", e);
+        setMenuConfig(null);
+        setMenuConfigReady(true);
+        setMenuConfigLoadedAt(Date.now());
+      } finally {
+        menuConfigLoadRef.current = null;
+      }
+    })();
+
+    menuConfigLoadRef.current = promise;
+    return promise;
   }, []);
 
   useEffect(() => {
@@ -228,7 +254,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                   };
                   setUserData(bootstrapUser);
                 }
-                await visibilitySettingsReady;
+                void visibilitySettingsReady?.catch(() => undefined);
                 setLoading(false);
                 window.clearTimeout(loadingGuard);
               } catch (e) {
@@ -321,11 +347,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const refreshConfig = useCallback(async () => {
     invalidateSiteSettingDocCache("config");
+    systemConfigLoadRef.current = null;
     await loadAuthedSystemConfig(currentUser);
   }, [currentUser, loadAuthedSystemConfig]);
 
   const refreshMenuConfig = useCallback(async () => {
     invalidateSiteSettingDocCache("menu_config");
+    menuConfigLoadRef.current = null;
     await loadAuthedMenuConfig(currentUser);
   }, [currentUser, loadAuthedMenuConfig]);
 

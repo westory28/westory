@@ -12,6 +12,7 @@ import { useScheduleCategories } from "../../lib/scheduleCategories";
 import { getYearSemester } from "../../lib/semesterScope";
 import ScheduleEventDetailModal from "../../components/common/ScheduleEventDetailModal";
 import WisRankingPanel from "../../components/common/WisRankingPanel";
+import { runAfterNextPaint, runWhenIdle } from "../../lib/browserTasks";
 import {
   ensureKoreanPublicHolidaysSynced,
   getKoreanPublicHolidays,
@@ -58,9 +59,15 @@ const TeacherDashboard: React.FC = () => {
   );
   const [modalInitialDate, setModalInitialDate] = useState("");
   const [filterClass, setFilterClass] = useState("all");
+  const [secondaryPanelsReady, setSecondaryPanelsReady] = useState(false);
 
   const calendarRef = useRef<FullCalendar>(null);
   const { categories } = useScheduleCategories();
+
+  useEffect(() => {
+    const cancel = runAfterNextPaint(() => setSecondaryPanelsReady(true));
+    return cancel;
+  }, []);
 
   // Fetch Events real-time
   useEffect(() => {
@@ -75,6 +82,7 @@ const TeacherDashboard: React.FC = () => {
         const d = doc.data();
         loadedEvents.push({ id: doc.id, ...d } as CalendarEvent);
       });
+      if (active) setEvents(loadedEvents);
       void getKoreanPublicHolidays(year)
         .then((holidays) => {
           if (!active) return;
@@ -96,11 +104,13 @@ const TeacherDashboard: React.FC = () => {
 
   useEffect(() => {
     const { year, semester } = getYearSemester(config);
-    void ensureKoreanPublicHolidaysSynced({ db, year, semester }).catch(
-      (error) => {
-        console.error("Failed to sync Korean public holidays:", error);
-      },
-    );
+    return runWhenIdle(() => {
+      void ensureKoreanPublicHolidaysSynced({ db, year, semester }).catch(
+        (error) => {
+          console.error("Failed to sync Korean public holidays:", error);
+        },
+      );
+    }, 1200);
   }, [config]);
 
   const availableClassTargets = useMemo(() => {
@@ -192,7 +202,13 @@ const TeacherDashboard: React.FC = () => {
           data-patch-target="teacher-dashboard-notice"
           data-patch-label="대시보드 알림장"
         >
-          <TeacherNoticeBoard />
+          {secondaryPanelsReady ? (
+            <TeacherNoticeBoard />
+          ) : (
+            <div className="rounded-xl border border-yellow-200 bg-[#fffbeb] p-4 text-sm font-semibold text-amber-800/70">
+              알림장을 준비 중입니다.
+            </div>
+          )}
         </div>
 
         {/* 2. Calendar (Mobile: Order 2 / Desktop: Order 1, Left Full Height) */}
@@ -231,10 +247,16 @@ const TeacherDashboard: React.FC = () => {
           data-patch-label="대시보드 위스 순위"
         >
           <div className="min-h-[260px] h-full">
-            <WisRankingPanel
-              config={config}
-              hallOfFamePath="/teacher/points?tab=hall-of-fame"
-            />
+            {secondaryPanelsReady ? (
+              <WisRankingPanel
+                config={config}
+                hallOfFamePath="/teacher/points?tab=hall-of-fame"
+              />
+            ) : (
+              <div className="flex h-full min-h-[260px] items-center justify-center rounded-xl border border-blue-100 bg-white p-4 text-sm font-semibold text-blue-700/70 shadow-sm">
+                위스 순위를 준비 중입니다.
+              </div>
+            )}
           </div>
         </div>
       </div>

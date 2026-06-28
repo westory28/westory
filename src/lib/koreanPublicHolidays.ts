@@ -26,6 +26,7 @@ interface HolidaySeed {
 }
 
 const holidayCache = new Map<string, Promise<KoreanPublicHoliday[]>>();
+const holidayOfficialRefreshStarted = new Set<string>();
 
 const toDateKey = (year: number, month: number, day: number) =>
   `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
@@ -283,6 +284,21 @@ const fetchKasiPublicHolidays = async (targetYear: number) => {
     .sort((left, right) => left.start.localeCompare(right.start));
 };
 
+const refreshOfficialHolidayCache = (year: number, cacheKey: string) => {
+  if (holidayOfficialRefreshStarted.has(cacheKey)) return;
+  holidayOfficialRefreshStarted.add(cacheKey);
+
+  void fetchKasiPublicHolidays(year)
+    .then((officialHolidays) => {
+      if (officialHolidays.length > 0) {
+        holidayCache.set(cacheKey, Promise.resolve(officialHolidays));
+      }
+    })
+    .catch((error) => {
+      console.debug("Skipping official Korean public holidays:", error);
+    });
+};
+
 export const getKoreanPublicHolidays = (targetYear: string | number) => {
   const year = Number(targetYear);
   const cacheKey = String(year);
@@ -292,21 +308,10 @@ export const getKoreanPublicHolidays = (targetYear: string | number) => {
   if (!holidayCache.has(cacheKey)) {
     holidayCache.set(
       cacheKey,
-      fetchKasiPublicHolidays(year)
-        .catch((error) => {
-          console.warn(
-            "Falling back to generated Korean public holidays:",
-            error,
-          );
-          return [];
-        })
-        .then((officialHolidays) =>
-          officialHolidays.length > 0
-            ? officialHolidays
-            : generateKoreanPublicHolidays(year),
-        ),
+      Promise.resolve(generateKoreanPublicHolidays(year)),
     );
   }
+  refreshOfficialHolidayCache(year, cacheKey);
   return holidayCache.get(cacheKey)!;
 };
 
