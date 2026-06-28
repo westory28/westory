@@ -146,6 +146,11 @@ interface WrongNoteItem {
   correct: boolean;
   unitId: string;
   unitTitle: string;
+  bigUnitId: string;
+  bigUnitTitle: string;
+  midUnitId: string;
+  midUnitTitle: string;
+  hierarchyLabel: string;
   category: CategoryTab | "other";
   categoryLabel: string;
   dateText: string;
@@ -174,6 +179,12 @@ interface QuizAttemptReview {
   dateText: string;
   allItems: WrongNoteItem[];
   wrongItems: WrongNoteItem[];
+}
+
+interface ReviewProgressGroup {
+  key: string;
+  label: string;
+  items: Array<{ item: WrongNoteItem; index: number }>;
 }
 
 const DEFAULT_POINT_WALLET: PointWallet = {
@@ -211,6 +222,37 @@ const CATEGORY_LABELS: Array<{ key: CategoryTab; label: string }> = [
   { key: "formative", label: "형성평가" },
   { key: "exam_prep", label: "모의고사" },
 ];
+const MOCK_ROUND_SCOPE_PREFIX = "mock_round:";
+
+const getMockRoundScopeId = (roundLabel: string) =>
+  `${MOCK_ROUND_SCOPE_PREFIX}${roundLabel}`;
+
+const getMockRoundLabelFromScope = (scopeId: string) =>
+  scopeId.startsWith(MOCK_ROUND_SCOPE_PREFIX)
+    ? scopeId.slice(MOCK_ROUND_SCOPE_PREFIX.length)
+    : "";
+
+const getInitialReviewIndex = (attempt: QuizAttemptReview | null) => {
+  if (!attempt?.allItems.length) return 0;
+  const firstWrongIndex = attempt.allItems.findIndex((item) => !item.correct);
+  return firstWrongIndex >= 0 ? firstWrongIndex : 0;
+};
+
+const getReviewProgressGroups = (
+  items: WrongNoteItem[],
+): ReviewProgressGroup[] => {
+  const grouped = new Map<string, ReviewProgressGroup>();
+  items.forEach((item, index) => {
+    const key =
+      `${item.bigUnitId || "unknown"}_${item.midUnitId || "unknown"}` ||
+      item.hierarchyLabel;
+    const label = item.hierarchyLabel || "목차 미지정";
+    const current = grouped.get(key) || { key, label, items: [] };
+    current.items.push({ item, index });
+    grouped.set(key, current);
+  });
+  return Array.from(grouped.values());
+};
 
 const getCategoryLabel = (category?: string) => {
   const normalizedCategory = normalizeMockExamCategory(category);
@@ -409,6 +451,8 @@ const MyPage: React.FC = () => {
   const [quizAttempts, setQuizAttempts] = useState<QuizAttemptReview[]>([]);
   const [selectedQuizAttempt, setSelectedQuizAttempt] =
     useState<QuizAttemptReview | null>(null);
+  const [selectedReviewQuestionIndex, setSelectedReviewQuestionIndex] =
+    useState(0);
   const [quizLineData, setQuizLineData] = useState<any>(null);
   const [wrongItems, setWrongItems] = useState<WrongNoteItem[]>([]);
   const [expandedWrongKey, setExpandedWrongKey] = useState<string | null>(null);
@@ -447,8 +491,14 @@ const MyPage: React.FC = () => {
     setSearchParams(safeMenu === "profile" ? {} : { menu: safeMenu });
   };
 
+  const selectWrongNoteCategory = (nextCategory: CategoryTab | "all") => {
+    setCategoryTab(nextCategory);
+    setSelectedUnitId("all");
+  };
+
   const closeQuizAttemptModal = () => {
     setSelectedQuizAttempt(null);
+    setSelectedReviewQuestionIndex(0);
     if (!requestedAttemptId) return;
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete("attemptId");
@@ -459,6 +509,7 @@ const MyPage: React.FC = () => {
 
   const openQuizAttemptReview = (attempt: QuizAttemptReview) => {
     setSelectedQuizAttempt(attempt);
+    setSelectedReviewQuestionIndex(getInitialReviewIndex(attempt));
     const nextParams = new URLSearchParams(searchParams);
     nextParams.set("menu", "wrong_note");
     nextParams.set("attemptId", attempt.key);
@@ -485,6 +536,7 @@ const MyPage: React.FC = () => {
     );
     if (attempt) {
       setSelectedQuizAttempt(attempt);
+      setSelectedReviewQuestionIndex(getInitialReviewIndex(attempt));
     }
   }, [requestedAttemptId, menu, quizAttempts]);
 
@@ -519,6 +571,7 @@ const MyPage: React.FC = () => {
     setMockExamPoints([]);
     setQuizAttempts([]);
     setSelectedQuizAttempt(null);
+    setSelectedReviewQuestionIndex(0);
     setQuizLineData(null);
     setWrongItems([]);
     setExpandedWrongKey(null);
@@ -624,6 +677,9 @@ const MyPage: React.FC = () => {
     if (treeSnap.exists()) {
       const tree = treeSnap.data().tree || [];
       tree.forEach((big: any) => {
+        if (big?.id && big?.title) {
+          map[big.id] = big.title;
+        }
         (big.children || []).forEach((mid: any) => {
           if (mid?.id && mid?.title) {
             map[mid.id] = mid.title;
@@ -855,6 +911,20 @@ const MyPage: React.FC = () => {
         key: string,
       ): WrongNoteItem => {
         const question = questionMap[log.qid] || {};
+        const bigUnitId = String(question.refBig || "").trim();
+        const midUnitId = String(
+          question.refMid || question.unitId || log.unitId || "",
+        ).trim();
+        const bigUnitTitle = bigUnitId ? titleMap[bigUnitId] || bigUnitId : "";
+        const midUnitTitle = midUnitId
+          ? titleMap[midUnitId] ||
+            (midUnitId === "exam_prep" ? "모의고사" : midUnitId)
+          : "";
+        const hierarchyLabel =
+          bigUnitTitle && midUnitTitle && bigUnitTitle !== midUnitTitle
+            ? `${bigUnitTitle} > ${midUnitTitle}`
+            : midUnitTitle || bigUnitTitle || "목차 미지정";
+
         return {
           key,
           questionNumber: log.questionNumber || 0,
@@ -875,6 +945,11 @@ const MyPage: React.FC = () => {
             log.unitId === "exam_prep"
               ? "모의고사"
               : titleMap[log.unitId] || "단원명 없음",
+          bigUnitId,
+          bigUnitTitle,
+          midUnitId,
+          midUnitTitle,
+          hierarchyLabel,
           category: log.category,
           categoryLabel: getCategoryLabel(log.category),
           dateText: log.dateText,
@@ -961,6 +1036,7 @@ const MyPage: React.FC = () => {
       setMockExamPoints([]);
       setQuizAttempts([]);
       setSelectedQuizAttempt(null);
+      setSelectedReviewQuestionIndex(0);
       setQuizLineData(null);
       setWrongItems([]);
     } finally {
@@ -1214,28 +1290,81 @@ const MyPage: React.FC = () => {
   }, [trendPoints, unitTitleMap]);
 
   const availableUnitTabs = useMemo(() => {
-    const source = new Set<string>();
-    wrongItems.forEach((item) => source.add(item.unitId));
-    trendPoints.forEach((point) => source.add(point.unitId));
+    if (categoryTab === "exam_prep") {
+      const rounds = new Map<string, string>();
+      quizAttempts
+        .filter((attempt) => attempt.category === "exam_prep")
+        .forEach((attempt) => {
+          const label = attempt.roundLabel || "모의고사";
+          rounds.set(label, getMockRoundScopeId(label));
+        });
+      return Array.from(rounds.entries()).map(([title, id]) => ({
+        id,
+        title,
+      }));
+    }
+
+    const source = new Map<string, string>();
     quizAttempts.forEach((attempt) => {
-      if (attempt.unitId) source.add(attempt.unitId);
+      if (categoryTab !== "all" && attempt.category !== categoryTab) return;
+      if (attempt.category === "exam_prep") {
+        if (categoryTab === "all") source.set("exam_prep", "모의고사");
+        return;
+      }
+      if (attempt.unitId) {
+        source.set(attempt.unitId, attempt.unitTitle || attempt.unitId);
+      }
     });
-    return Array.from(source).map((unitId) => ({
+    wrongItems.forEach((item) => {
+      if (categoryTab !== "all" && item.category !== categoryTab) return;
+      if (item.category === "exam_prep") {
+        if (categoryTab === "all") source.set("exam_prep", "모의고사");
+        return;
+      }
+      source.set(item.unitId, item.unitTitle);
+    });
+    trendPoints.forEach((point) => {
+      if (categoryTab !== "all" && point.category !== categoryTab) return;
+      if (point.category === "exam_prep") {
+        if (categoryTab === "all") source.set("exam_prep", "모의고사");
+        return;
+      }
+      source.set(
+        point.unitId,
+        point.unitId === "exam_prep"
+          ? "모의고사"
+          : unitTitleMap[point.unitId] || "단원명 없음",
+      );
+    });
+
+    return Array.from(source.entries()).map(([unitId, title]) => ({
       id: unitId,
       title:
         unitId === "exam_prep"
           ? "모의고사"
-          : unitTitleMap[unitId] || "단원명 없음",
+          : title || unitTitleMap[unitId] || "단원명 없음",
     }));
-  }, [wrongItems, trendPoints, quizAttempts, unitTitleMap]);
+  }, [wrongItems, trendPoints, quizAttempts, unitTitleMap, categoryTab]);
 
   const filteredQuizAttempts = useMemo(
     () =>
-      quizAttempts.filter(
-        (attempt) =>
-          (categoryTab === "all" || attempt.category === categoryTab) &&
-          (selectedUnitId === "all" || attempt.unitId === selectedUnitId),
-      ),
+      quizAttempts.filter((attempt) => {
+        if (categoryTab !== "all" && attempt.category !== categoryTab) {
+          return false;
+        }
+        if (selectedUnitId === "all") return true;
+        const selectedRoundLabel = getMockRoundLabelFromScope(selectedUnitId);
+        if (selectedRoundLabel) {
+          return (
+            attempt.category === "exam_prep" &&
+            attempt.roundLabel === selectedRoundLabel
+          );
+        }
+        if (selectedUnitId === "exam_prep") {
+          return attempt.category === "exam_prep";
+        }
+        return attempt.unitId === selectedUnitId;
+      }),
     [quizAttempts, categoryTab, selectedUnitId],
   );
 
@@ -1568,6 +1697,26 @@ const MyPage: React.FC = () => {
     (sum, item) => sum + Number(item.wrongCount || 0),
     0,
   );
+  const selectedReviewItems = selectedQuizAttempt?.allItems || [];
+  const safeReviewQuestionIndex =
+    selectedReviewItems.length > 0
+      ? Math.min(
+          Math.max(selectedReviewQuestionIndex, 0),
+          selectedReviewItems.length - 1,
+        )
+      : 0;
+  const selectedReviewItem =
+    selectedReviewItems[safeReviewQuestionIndex] || null;
+  const selectedReviewProgressGroups = useMemo(
+    () => getReviewProgressGroups(selectedReviewItems),
+    [selectedReviewItems],
+  );
+  const goToReviewQuestion = (nextIndex: number) => {
+    if (!selectedReviewItems.length) return;
+    setSelectedReviewQuestionIndex(
+      Math.min(Math.max(nextIndex, 0), selectedReviewItems.length - 1),
+    );
+  };
   const weeklySnapshotItems = [
     ...(canUseLesson
       ? [
@@ -2788,70 +2937,6 @@ const MyPage: React.FC = () => {
                   오답 노트
                 </h2>
 
-                <div className="grid gap-5 lg:grid-cols-3">
-                  {[
-                    {
-                      icon: "fa-file-circle-xmark",
-                      label: "이번 달 오답",
-                      value: `${wrongItems.length}개`,
-                      sub: `현재 조건 ${filteredWrongItems.length}개`,
-                      tone: "blue",
-                    },
-                    {
-                      icon: "fa-circle-check",
-                      label: "복습 완료율",
-                      value: `${reviewCompletionRate}%`,
-                      sub: `${scoreSummaryByUnit.filter((item) => item.average >= 80).length} / ${scoreSummaryByUnit.length || 0}개 안정권`,
-                      tone: "emerald",
-                    },
-                    {
-                      icon: "fa-bullseye",
-                      label: "취약 유형",
-                      value: weakWrongGroup?.categoryLabel || "분석 대기",
-                      sub:
-                        weakWrongGroup?.unitTitle ||
-                        "오답이 쌓이면 표시됩니다.",
-                      tone: "orange",
-                    },
-                  ].map((item) => (
-                    <section
-                      key={item.label}
-                      className="flex items-center gap-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-[0_14px_30px_rgba(15,23,42,0.05)]"
-                    >
-                      <span
-                        className={`inline-flex h-20 w-20 shrink-0 items-center justify-center rounded-full text-3xl ${
-                          item.tone === "emerald"
-                            ? "bg-emerald-50 text-emerald-500"
-                            : item.tone === "orange"
-                              ? "bg-orange-50 text-orange-500"
-                              : "bg-blue-50 text-blue-600"
-                        }`}
-                      >
-                        <i className={`fas ${item.icon}`}></i>
-                      </span>
-                      <div className="min-w-0">
-                        <div className="text-sm font-extrabold text-slate-600">
-                          {item.label}
-                        </div>
-                        <div
-                          className={`mt-2 truncate text-3xl font-black ${
-                            item.tone === "emerald"
-                              ? "text-emerald-600"
-                              : item.tone === "orange"
-                                ? "text-orange-500"
-                                : "text-blue-600"
-                          }`}
-                        >
-                          {item.value}
-                        </div>
-                        <div className="mt-2 text-sm font-bold text-slate-400">
-                          {item.sub}
-                        </div>
-                      </div>
-                    </section>
-                  ))}
-                </div>
-
                 <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_14px_30px_rgba(15,23,42,0.05)]">
                   <div className="grid gap-4">
                     <div className="grid gap-3 lg:grid-cols-[6.25rem_minmax(0,1fr)] lg:items-center">
@@ -2864,7 +2949,7 @@ const MyPage: React.FC = () => {
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
-                          onClick={() => setCategoryTab("all")}
+                          onClick={() => selectWrongNoteCategory("all")}
                           className={`rounded-full px-4 py-2 text-sm font-extrabold transition ${
                             categoryTab === "all"
                               ? "bg-blue-600 text-white"
@@ -2877,7 +2962,7 @@ const MyPage: React.FC = () => {
                           <button
                             key={tab.key}
                             type="button"
-                            onClick={() => setCategoryTab(tab.key)}
+                            onClick={() => selectWrongNoteCategory(tab.key)}
                             className={`rounded-full px-4 py-2 text-sm font-extrabold transition ${
                               categoryTab === tab.key
                                 ? "bg-blue-600 text-white"
@@ -2895,7 +2980,7 @@ const MyPage: React.FC = () => {
                         <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-xs text-slate-600">
                           2
                         </span>
-                        목차
+                        {categoryTab === "exam_prep" ? "회차" : "목차"}
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <button
@@ -2907,7 +2992,9 @@ const MyPage: React.FC = () => {
                               : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                           }`}
                         >
-                          전체 목차
+                          {categoryTab === "exam_prep"
+                            ? "전체 회차"
+                            : "전체 목차"}
                         </button>
                         {availableUnitTabs.map((tab) => (
                           <button
@@ -3122,7 +3209,7 @@ const MyPage: React.FC = () => {
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
-                        onClick={() => setCategoryTab("all")}
+                        onClick={() => selectWrongNoteCategory("all")}
                         className={`px-4 py-2 rounded-lg text-sm font-bold transition ${
                           categoryTab === "all"
                             ? "bg-blue-600 text-white shadow"
@@ -3135,7 +3222,7 @@ const MyPage: React.FC = () => {
                         <button
                           key={tab.key}
                           type="button"
-                          onClick={() => setCategoryTab(tab.key)}
+                          onClick={() => selectWrongNoteCategory(tab.key)}
                           className={`px-4 py-2 rounded-lg text-sm font-bold transition ${
                             categoryTab === tab.key
                               ? "bg-blue-600 text-white shadow"
@@ -3321,7 +3408,7 @@ const MyPage: React.FC = () => {
             <div className="border-b border-slate-100 bg-white px-5 py-4 sm:px-6">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <div className="text-sm font-black text-slate-700">
-                  문항 응시 진척도
+                  문항 이동
                 </div>
                 <div className="flex items-center gap-3 text-xs font-bold text-slate-400">
                   <span className="inline-flex items-center gap-1">
@@ -3334,128 +3421,162 @@ const MyPage: React.FC = () => {
                   </span>
                 </div>
               </div>
-              <div className="-mx-1 overflow-x-auto px-1 pb-0.5">
-                <div
-                  className="grid min-w-full gap-1"
-                  style={{
-                    gridTemplateColumns: `repeat(${Math.max(selectedQuizAttempt.allItems.length, 1)}, minmax(1.75rem, 1fr))`,
-                  }}
-                >
-                  {selectedQuizAttempt.allItems.map((item, index) => {
-                    const displayNumber = item.questionNumber || index + 1;
-                    return (
-                      <button
-                        key={item.key}
-                        type="button"
-                        onClick={() =>
-                          document
-                            .getElementById(`attempt-review-${item.key}`)
-                            ?.scrollIntoView({
-                              behavior: "smooth",
-                              block: "start",
-                            })
-                        }
-                        className={`h-9 min-w-0 rounded-lg text-xs font-black transition focus:outline-none focus:ring-2 focus:ring-offset-2 ${
-                          item.correct
-                            ? "bg-blue-500 text-white hover:bg-blue-600 focus:ring-blue-300"
-                            : "bg-red-500 text-white shadow-[0_6px_14px_rgba(239,68,68,0.22)] hover:bg-red-600 focus:ring-red-300"
-                        }`}
-                        aria-label={`${displayNumber}번 ${item.correct ? "정답" : "오답"} 문항으로 이동`}
-                      >
-                        {displayNumber}
-                      </button>
-                    );
-                  })}
-                </div>
+              <div className="max-h-32 space-y-2 overflow-y-auto pr-1">
+                {selectedReviewProgressGroups.map((group) => (
+                  <div
+                    key={group.key}
+                    className="grid gap-1.5 sm:grid-cols-[minmax(8rem,13rem)_minmax(0,1fr)] sm:items-start"
+                  >
+                    <div className="truncate text-[11px] font-black leading-6 text-slate-500">
+                      {group.label}
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {group.items.map(({ item, index }) => {
+                        const displayNumber = item.questionNumber || index + 1;
+                        const active = index === safeReviewQuestionIndex;
+                        return (
+                          <button
+                            key={item.key}
+                            type="button"
+                            onClick={() => goToReviewQuestion(index)}
+                            className={`h-6 min-w-6 rounded-md px-1.5 text-[10px] font-black leading-none transition focus:outline-none focus:ring-2 focus:ring-offset-1 ${
+                              item.correct
+                                ? "bg-blue-500 text-white hover:bg-blue-600 focus:ring-blue-300"
+                                : "bg-red-500 text-white hover:bg-red-600 focus:ring-red-300"
+                            } ${active ? "ring-2 ring-slate-900 ring-offset-1" : ""}`}
+                            aria-current={active ? "step" : undefined}
+                            aria-label={`${displayNumber}번 ${item.correct ? "정답" : "오답"} 문항으로 이동`}
+                          >
+                            {displayNumber}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
 
             <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-6">
-              {selectedQuizAttempt.allItems.length > 0 ? (
+              {selectedReviewItem ? (
                 <div className="space-y-4">
-                  {selectedQuizAttempt.allItems.map((item, index) => {
-                    const displayNumber = item.questionNumber || index + 1;
-                    return (
-                      <article
-                        id={`attempt-review-${item.key}`}
-                        key={item.key}
-                        className={`scroll-mt-4 rounded-2xl border p-4 ${
-                          item.correct
-                            ? "border-blue-100 bg-blue-50/45"
-                            : "border-red-100 bg-red-50/70 ring-1 ring-red-100"
-                        }`}
-                      >
-                        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-                          <div className="mb-2 flex flex-wrap items-center gap-2">
-                            <span
-                              className={`inline-flex h-8 min-w-8 items-center justify-center rounded-full px-2 text-sm font-black text-white ${
-                                item.correct ? "bg-blue-500" : "bg-red-500"
-                              }`}
-                            >
-                              {displayNumber}
-                            </span>
-                            <span
-                              className={`rounded-full px-3 py-1 text-xs font-black ${
-                                item.correct
-                                  ? "bg-blue-50 text-blue-600"
-                                  : "bg-red-50 text-red-600"
-                              }`}
-                            >
-                              {item.correct ? "정답" : "오답"}
-                            </span>
-                            <span className="text-xs font-bold text-slate-400">
-                              {item.dateText}
-                            </span>
-                          </div>
-                          <div className="whitespace-pre-wrap break-keep text-base font-black leading-7 text-slate-900">
-                            {item.question}
-                          </div>
-                          {item.image && (
-                            <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-2 text-center">
-                              <img
-                                src={item.image}
-                                alt="문항 첨부 이미지"
-                                className="mx-auto max-h-72 max-w-full object-contain"
-                              />
-                            </div>
-                          )}
+                  <div className="flex items-center justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        goToReviewQuestion(safeReviewQuestionIndex - 1)
+                      }
+                      disabled={safeReviewQuestionIndex === 0}
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      <i className="fas fa-chevron-left text-xs"></i>
+                      이전
+                    </button>
+                    <div className="rounded-full bg-slate-100 px-3 py-1 text-sm font-black text-slate-600">
+                      {safeReviewQuestionIndex + 1} /{" "}
+                      {selectedReviewItems.length}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        goToReviewQuestion(safeReviewQuestionIndex + 1)
+                      }
+                      disabled={
+                        safeReviewQuestionIndex >=
+                        selectedReviewItems.length - 1
+                      }
+                      className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      다음
+                      <i className="fas fa-chevron-right text-xs"></i>
+                    </button>
+                  </div>
+
+                  <article
+                    key={selectedReviewItem.key}
+                    className={`rounded-2xl border p-4 ${
+                      selectedReviewItem.correct
+                        ? "border-blue-100 bg-blue-50/45"
+                        : "border-red-100 bg-red-50/70 ring-1 ring-red-100"
+                    }`}
+                  >
+                    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                      <div className="mb-2 flex flex-wrap items-center gap-2">
+                        <span
+                          className={`inline-flex h-8 min-w-8 items-center justify-center rounded-full px-2 text-sm font-black text-white ${
+                            selectedReviewItem.correct
+                              ? "bg-blue-500"
+                              : "bg-red-500"
+                          }`}
+                        >
+                          {selectedReviewItem.questionNumber ||
+                            safeReviewQuestionIndex + 1}
+                        </span>
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-black ${
+                            selectedReviewItem.correct
+                              ? "bg-blue-50 text-blue-600"
+                              : "bg-red-50 text-red-600"
+                          }`}
+                        >
+                          {selectedReviewItem.correct ? "정답" : "오답"}
+                        </span>
+                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500">
+                          {selectedReviewItem.hierarchyLabel}
+                        </span>
+                      </div>
+                      <div className="whitespace-pre-wrap break-keep text-base font-black leading-7 text-slate-900">
+                        {selectedReviewItem.question}
+                      </div>
+                      {selectedReviewItem.image && (
+                        <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-2 text-center">
+                          <img
+                            src={selectedReviewItem.image}
+                            alt="문항 첨부 이미지"
+                            className="mx-auto max-h-72 max-w-full object-contain"
+                          />
                         </div>
-                        {item.passage && (
-                          <div className="mt-3">
-                            <div className="mb-1 text-xs font-black text-slate-500">
-                              본문
-                            </div>
-                            <QuizPassage value={item.passage} surface="muted" />
-                          </div>
-                        )}
-                        <div className="mt-3 grid gap-2 text-sm font-bold leading-6 text-slate-700 sm:grid-cols-2">
-                          <div className="rounded-xl bg-white px-3 py-2">
-                            <span className="block text-xs font-black text-slate-500">
-                              {item.correct ? "나의 답" : "나의 오답"}
-                            </span>
-                            <span
-                              className={`mt-1 block whitespace-pre-wrap break-keep text-base font-black ${
-                                item.correct ? "text-blue-600" : "text-red-500"
-                              }`}
-                            >
-                              {item.userAnswer || "(미입력)"}
-                            </span>
-                          </div>
-                          <div className="rounded-xl bg-white px-3 py-2">
-                            <span className="block text-xs font-black text-slate-500">
-                              정답
-                            </span>
-                            <span className="mt-1 block whitespace-pre-wrap break-keep text-base font-black text-emerald-600">
-                              {item.answer}
-                            </span>
-                          </div>
+                      )}
+                    </div>
+                    {selectedReviewItem.passage && (
+                      <div className="mt-3">
+                        <div className="mb-1 text-xs font-black text-slate-500">
+                          본문
                         </div>
-                        <div className="mt-2 rounded-xl bg-white px-3 py-2 text-sm font-semibold leading-6 text-slate-600">
-                          해설: {item.explanation}
-                        </div>
-                      </article>
-                    );
-                  })}
+                        <QuizPassage
+                          value={selectedReviewItem.passage}
+                          surface="muted"
+                        />
+                      </div>
+                    )}
+                    <div className="mt-3 grid gap-2 text-sm font-bold leading-6 text-slate-700 sm:grid-cols-2">
+                      <div className="rounded-xl bg-white px-3 py-2">
+                        <span className="block text-xs font-black text-slate-500">
+                          {selectedReviewItem.correct ? "나의 답" : "나의 오답"}
+                        </span>
+                        <span
+                          className={`mt-1 block whitespace-pre-wrap break-keep text-base font-black ${
+                            selectedReviewItem.correct
+                              ? "text-blue-600"
+                              : "text-red-500"
+                          }`}
+                        >
+                          {selectedReviewItem.userAnswer || "(미입력)"}
+                        </span>
+                      </div>
+                      <div className="rounded-xl bg-white px-3 py-2">
+                        <span className="block text-xs font-black text-slate-500">
+                          정답
+                        </span>
+                        <span className="mt-1 block whitespace-pre-wrap break-keep text-base font-black text-emerald-600">
+                          {selectedReviewItem.answer}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="mt-2 rounded-xl bg-white px-3 py-2 text-sm font-semibold leading-6 text-slate-600">
+                      해설: {selectedReviewItem.explanation}
+                    </div>
+                  </article>
                 </div>
               ) : (
                 <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-16 text-center">
