@@ -12,7 +12,7 @@ import {
 } from "../../../lib/assessmentConfig";
 import {
   formatMockExamRoundLabel,
-  getMockExamRoundNumber,
+  formatMockExamRoundShortLabel,
   getMockExamRoundsFromAssessmentConfig,
   type MockExamRound,
 } from "../../../lib/mockExamRounds";
@@ -147,7 +147,7 @@ const QuizIndex: React.FC = () => {
               </p>
             </div>
 
-            <div className="grid min-w-[min(100%,16rem)] grid-cols-3 gap-2 md:min-w-[17rem]">
+            <div className="grid min-w-[min(100%,18rem)] grid-cols-4 gap-2 md:min-w-[19rem]">
               {mockExamRoundStates.map(({ round, visible }) => (
                 <button
                   key={round}
@@ -172,7 +172,7 @@ const QuizIndex: React.FC = () => {
                   }`}
                 >
                   {!visible && <i className="fas fa-lock text-xs"></i>}
-                  {getMockExamRoundNumber(round)}회
+                  {formatMockExamRoundShortLabel(round)}
                 </button>
               ))}
             </div>

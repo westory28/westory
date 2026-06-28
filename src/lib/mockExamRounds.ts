@@ -67,8 +67,11 @@ export const isPresetMockExamRound = (round: unknown) =>
 export const isAdditionalMockExamRound = (round: unknown) =>
   !isPresetMockExamRound(round);
 
+export const formatMockExamRoundShortLabel = (round: unknown) =>
+  `${isAdditionalMockExamRound(round) ? "N" : getMockExamRoundNumber(round)}회`;
+
 export const formatMockExamRoundLabel = (round: unknown) =>
-  `모의고사 ${getMockExamRoundNumber(round)}회`;
+  `모의고사 ${formatMockExamRoundShortLabel(round)}`;
 
 export const sortMockExamRounds = (rounds: Iterable<unknown>) =>
   Array.from(

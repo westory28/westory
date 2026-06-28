@@ -177,8 +177,9 @@ const QuizRunner: React.FC = () => {
     ? normalizeMockExamRound(searchParams.get("round"))
     : "";
   const title =
-    searchParams.get("title") ||
-    (examRound ? formatMockExamRoundLabel(examRound) : "평가");
+    isMockExamCategory(category) && examRound
+      ? formatMockExamRoundLabel(examRound)
+      : searchParams.get("title") || "평가";
 
   const [view, setView] = useState<"loading" | "intro" | "quiz" | "result">(
     "loading",
@@ -1671,6 +1672,20 @@ const QuizRunner: React.FC = () => {
     const timeLimitMinutes = Math.max(1, Math.round(timeLimitSeconds / 60));
     const questionCount =
       selectedQuestions.length || quizConfig?.questionCount || 10;
+    const assessmentTypeLabel =
+      category === "diagnostic"
+        ? "진단평가"
+        : category === "formative"
+          ? "형성평가"
+          : "모의고사";
+    const introStatusLabel = blockReason
+      ? "응시 불가"
+      : activeSubmission?.status === "in_progress"
+        ? "이어 풀기"
+        : "응시 전 확인";
+    const introDescription = isMockExamAttempt
+      ? "실제 시험 흐름에 맞춰 제한 시간 안에 모든 문항을 풀어 보세요."
+      : "문항 수와 제한 시간을 확인한 뒤 바로 시작하세요.";
     const introActionLabel = startingQuiz
       ? "준비 중..."
       : activeSubmission?.status === "in_progress"
@@ -1678,76 +1693,116 @@ const QuizRunner: React.FC = () => {
         : "평가 시작하기";
 
     return (
-      <div className="mx-auto flex min-h-screen max-w-2xl animate-fadeIn flex-col items-center justify-center px-4 py-8 text-center">
-        <div className="relative w-full rounded-2xl border border-gray-100 bg-white p-8 shadow-lg">
-          <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-full bg-blue-100 text-3xl text-blue-600">
-            <i className="fas fa-file-signature"></i>
+      <div className="mx-auto flex min-h-[calc(100dvh-8rem)] max-w-5xl animate-fadeIn items-center px-4 py-3">
+        <div className="w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60">
+          <div className="grid lg:grid-cols-[minmax(0,1.12fr)_minmax(18rem,0.88fr)]">
+            <section className="p-5 text-left sm:p-6 lg:p-7">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
+                  <i className="fas fa-file-signature text-[11px]"></i>
+                  {assessmentTypeLabel}
+                </span>
+                <span
+                  className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-black ${
+                    blockReason
+                      ? "bg-rose-50 text-rose-600"
+                      : activeSubmission?.status === "in_progress"
+                        ? "bg-emerald-50 text-emerald-700"
+                        : "bg-slate-100 text-slate-600"
+                  }`}
+                >
+                  {introStatusLabel}
+                </span>
+              </div>
+
+              <h1 className="mt-4 break-keep text-2xl font-black leading-tight text-slate-950 sm:text-3xl">
+                {title}
+              </h1>
+              <p className="mt-2 max-w-2xl break-keep text-sm font-semibold leading-6 text-slate-500">
+                {introDescription}
+              </p>
+
+              <dl className="mt-5 grid overflow-hidden rounded-xl border border-blue-100 bg-blue-50/70 text-left sm:grid-cols-3 sm:divide-x sm:divide-y-0 sm:divide-blue-100">
+                <div className="border-b border-blue-100 px-4 py-3 sm:border-b-0">
+                  <dt className="text-xs font-bold text-slate-500">
+                    제한 시간
+                  </dt>
+                  <dd className="mt-1 text-xl font-black text-blue-700">
+                    {timeLimitMinutes}분
+                  </dd>
+                </div>
+                <div className="border-b border-blue-100 px-4 py-3 sm:border-b-0">
+                  <dt className="text-xs font-bold text-slate-500">
+                    출제 문항
+                  </dt>
+                  <dd className="mt-1 text-xl font-black text-blue-700">
+                    {questionCount}문항
+                  </dd>
+                </div>
+                <div className="px-4 py-3">
+                  <dt className="text-xs font-bold text-slate-500">
+                    응시 횟수
+                  </dt>
+                  <dd className="mt-1 text-xl font-black text-slate-900">
+                    {historyCount}회
+                  </dd>
+                </div>
+              </dl>
+
+              {(resumeNotice || errorMsg) && (
+                <div className="mt-4 space-y-2">
+                  {resumeNotice && !blockReason && (
+                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-700">
+                      {resumeNotice}
+                    </div>
+                  )}
+                  {errorMsg && (
+                    <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-500">
+                      {errorMsg}
+                    </div>
+                  )}
+                </div>
+              )}
+            </section>
+
+            <aside className="flex flex-col justify-between gap-4 border-t border-slate-100 bg-slate-50 p-5 sm:p-6 lg:border-l lg:border-t-0">
+              <div>
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-xl text-white shadow-lg shadow-blue-200">
+                  <i className="fas fa-stopwatch"></i>
+                </div>
+                <p className="mt-4 text-sm font-bold leading-6 text-slate-600">
+                  시작하면 타이머가 바로 작동합니다. 답안을 확인한 뒤 마지막
+                  문항에서 제출하세요.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                {!blockReason ? (
+                  <button
+                    type="button"
+                    onClick={() => void startQuiz()}
+                    disabled={startingQuiz}
+                    className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-blue-600 px-5 text-base font-black text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+                  >
+                    {introActionLabel}
+                  </button>
+                ) : (
+                  <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-bold text-red-500">
+                    <i className="fas fa-ban mr-2"></i>
+                    {blockReason}
+                  </div>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => navigate(-1)}
+                  className="inline-flex h-10 w-full items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-black text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+                >
+                  돌아가기
+                </button>
+              </div>
+            </aside>
           </div>
-          <h1 className="mb-2 text-2xl font-bold text-gray-900">{title}</h1>
-          <p className="mb-6 inline-block rounded-full bg-gray-50 px-4 py-1 text-sm font-medium text-gray-500">
-            {category === "diagnostic"
-              ? "진단평가"
-              : category === "formative"
-                ? "형성평가"
-                : "모의고사"}
-          </p>
-
-          <div className="mb-8 space-y-4 rounded-xl border border-blue-100 bg-blue-50 p-5 text-left text-base">
-            <div className="flex justify-between border-b border-blue-200 pb-2">
-              <span className="text-gray-600">제한 시간</span>
-              <span className="text-lg font-bold text-blue-800">
-                {timeLimitMinutes}분
-              </span>
-            </div>
-            <div className="flex justify-between border-b border-blue-200 pb-2">
-              <span className="text-gray-600">출제 문항 수</span>
-              <span className="text-lg font-bold text-blue-800">
-                {questionCount}문항
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">응시 횟수</span>
-              <span className="text-lg font-bold text-gray-800">
-                {historyCount}회
-              </span>
-            </div>
-          </div>
-
-          {resumeNotice && !blockReason && (
-            <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-left text-sm font-bold text-emerald-700">
-              {resumeNotice}
-            </div>
-          )}
-
-          {errorMsg && (
-            <div className="mb-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 font-bold text-red-500">
-              {errorMsg}
-            </div>
-          )}
-
-          {!blockReason ? (
-            <button
-              type="button"
-              onClick={() => void startQuiz()}
-              disabled={startingQuiz}
-              className="w-full rounded-xl bg-blue-600 py-4 text-lg font-bold text-white shadow-md transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
-            >
-              {introActionLabel}
-            </button>
-          ) : (
-            <div className="rounded-xl border border-red-100 bg-red-50 p-4 font-bold text-red-500">
-              <i className="fas fa-ban mr-2"></i>
-              {blockReason}
-            </div>
-          )}
-
-          <button
-            type="button"
-            onClick={() => navigate(-1)}
-            className="mt-4 text-sm text-gray-400 hover:underline"
-          >
-            돌아가기
-          </button>
         </div>
       </div>
     );
