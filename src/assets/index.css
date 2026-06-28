@@ -105,7 +105,7 @@
 }
 
 .lesson-core-point {
-  --lesson-core-point-border-duration: 4.6s;
+  --lesson-core-point-border-duration: 5.6s;
   --lesson-core-point-glow-duration: 3.8s;
   --lesson-core-point-spark-duration: 3.2s;
   isolation: isolate;
@@ -226,42 +226,42 @@
   background:
     linear-gradient(
         90deg,
-        transparent 0 28%,
-        rgba(255, 255, 255, 0.62) 42%,
-        rgba(254, 240, 138, 0.76) 50%,
-        rgba(245, 158, 11, 0.58) 59%,
-        transparent 74% 100%
+        transparent 0 16%,
+        rgba(255, 255, 255, 0.4) 36%,
+        rgba(254, 240, 138, 0.66) 50%,
+        rgba(245, 158, 11, 0.46) 64%,
+        transparent 84% 100%
       )
-      top left / 46% 4px no-repeat,
+      top left / 58% 4px no-repeat,
     linear-gradient(
         180deg,
-        transparent 0 28%,
-        rgba(255, 255, 255, 0.62) 42%,
-        rgba(254, 240, 138, 0.76) 50%,
-        rgba(245, 158, 11, 0.58) 59%,
-        transparent 74% 100%
+        transparent 0 16%,
+        rgba(255, 255, 255, 0.4) 36%,
+        rgba(254, 240, 138, 0.66) 50%,
+        rgba(245, 158, 11, 0.46) 64%,
+        transparent 84% 100%
       )
-      top right / 4px 46% no-repeat,
+      top right / 4px 58% no-repeat,
     linear-gradient(
         270deg,
-        transparent 0 28%,
-        rgba(255, 255, 255, 0.62) 42%,
-        rgba(254, 240, 138, 0.76) 50%,
-        rgba(245, 158, 11, 0.58) 59%,
-        transparent 74% 100%
+        transparent 0 16%,
+        rgba(255, 255, 255, 0.4) 36%,
+        rgba(254, 240, 138, 0.66) 50%,
+        rgba(245, 158, 11, 0.46) 64%,
+        transparent 84% 100%
       )
-      bottom right / 46% 4px no-repeat,
+      bottom right / 58% 4px no-repeat,
     linear-gradient(
         0deg,
-        transparent 0 28%,
-        rgba(255, 255, 255, 0.62) 42%,
-        rgba(254, 240, 138, 0.76) 50%,
-        rgba(245, 158, 11, 0.58) 59%,
-        transparent 74% 100%
+        transparent 0 16%,
+        rgba(255, 255, 255, 0.4) 36%,
+        rgba(254, 240, 138, 0.66) 50%,
+        rgba(245, 158, 11, 0.46) 64%,
+        transparent 84% 100%
       )
-      bottom left / 4px 46% no-repeat;
-  filter: drop-shadow(0 0 5px rgba(250, 204, 21, 0.34));
-  opacity: 0.64;
+      bottom left / 4px 58% no-repeat;
+  filter: drop-shadow(0 0 4px rgba(250, 204, 21, 0.26));
+  opacity: 0.58;
   animation: westory-core-point-border-run
     var(--lesson-core-point-border-duration) linear infinite;
   will-change: background-position;
@@ -318,7 +318,7 @@
 .lesson-core-point.is-found .lesson-core-point__inner::after {
   animation: westory-core-point-border-run
     var(--lesson-core-point-border-duration) linear infinite;
-  opacity: 0.58;
+  opacity: 0.52;
 }
 
 .lesson-core-burst {
@@ -469,66 +469,34 @@
 @keyframes westory-core-point-border-run {
   0% {
     background-position:
-      -55% 0,
-      100% -55%,
-      155% 100%,
-      0 155%;
-  }
-
-  24.99% {
-    background-position:
-      155% 0,
-      100% -55%,
-      155% 100%,
-      0 155%;
-  }
-
-  25% {
-    background-position:
-      155% 0,
-      100% -55%,
-      155% 100%,
-      0 155%;
+      -65% 0,
+      100% -65%,
+      165% 100%,
+      0 165%;
   }
 
   49.99% {
     background-position:
-      155% 0,
-      100% 155%,
-      155% 100%,
-      0 155%;
+      165% 0,
+      100% -65%,
+      -65% 100%,
+      0 165%;
   }
 
   50% {
     background-position:
-      155% 0,
-      100% 155%,
-      155% 100%,
-      0 155%;
-  }
-
-  74.99% {
-    background-position:
-      155% 0,
-      100% 155%,
-      -55% 100%,
-      0 155%;
-  }
-
-  75% {
-    background-position:
-      155% 0,
-      100% 155%,
-      -55% 100%,
-      0 155%;
+      165% 0,
+      100% -65%,
+      -65% 100%,
+      0 165%;
   }
 
   100% {
     background-position:
-      155% 0,
-      100% 155%,
-      -55% 100%,
-      0 -55%;
+      165% 0,
+      100% 165%,
+      -65% 100%,
+      0 -65%;
   }
 }
 
@@ -1076,10 +1044,10 @@
 }
 
 .student-calendar-shell__attendance-indicator {
-  border: 1px solid #a7f3d0;
+  border: 1px solid #bfdbfe;
   border-radius: 9999px;
-  background: #ecfdf5;
-  color: #047857;
+  background: #eff6ff;
+  color: #1d4ed8;
 }
 
 .student-calendar-shell__error-message {
@@ -1532,7 +1500,7 @@
   .student-calendar-attendance-day.is-attended
   .fc-daygrid-day-frame::after {
   background: transparent;
-  color: #047857;
+  color: #1d4ed8;
 }
 
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
@@ -1551,7 +1519,7 @@
   height: 14px;
   border-radius: 9999px;
   background: #ffffff;
-  color: #10b981;
+  color: #2563eb;
   font-family: "Font Awesome 6 Free";
   font-size: 14px;
   font-weight: 900;
