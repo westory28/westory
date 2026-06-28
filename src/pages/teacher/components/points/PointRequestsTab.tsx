@@ -377,7 +377,7 @@ const OrderDetailPanel: React.FC<{
 
   return (
     <div
-      className="relative overflow-hidden rounded-b-xl border-x border-b border-blue-200 bg-blue-50/80"
+      className="relative overflow-hidden rounded-xl border border-gray-200 bg-white"
       aria-busy={isSavingThisOrder}
     >
       {isSavingThisOrder && (
@@ -418,20 +418,20 @@ const OrderDetailPanel: React.FC<{
             </span>
           </div>
 
-          <dl className="mt-3 grid overflow-hidden rounded-lg border border-blue-100 bg-white sm:grid-cols-2 xl:grid-cols-4">
-            <div className="border-b border-blue-100 p-2.5 sm:border-r xl:border-b-0">
+          <dl className="mt-3 grid overflow-hidden rounded-lg border border-gray-200 bg-gray-50 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="border-b border-gray-200 p-2.5 sm:border-r xl:border-b-0">
               <dt className="text-xs font-bold text-gray-500">차감 위스</dt>
               <dd className="mt-1 font-bold text-gray-900 whitespace-nowrap">
                 {formatWisAmount(order.priceSnapshot)}
               </dd>
             </div>
-            <div className="border-b border-blue-100 p-2.5 xl:border-r xl:border-b-0">
+            <div className="border-b border-gray-200 p-2.5 xl:border-r xl:border-b-0">
               <dt className="text-xs font-bold text-gray-500">요청 시각</dt>
               <dd className="mt-1 text-sm font-bold text-gray-900">
                 {formatPointDateTime(order.requestedAt)}
               </dd>
             </div>
-            <div className="border-b border-blue-100 p-2.5 sm:border-r sm:border-b-0">
+            <div className="border-b border-gray-200 p-2.5 sm:border-r sm:border-b-0">
               <dt className="text-xs font-bold text-gray-500">최근 처리</dt>
               <dd className="mt-1 text-sm font-bold text-gray-900">
                 {formatPointDateTime(order.reviewedAt)}
@@ -453,7 +453,7 @@ const OrderDetailPanel: React.FC<{
             onChange={(event) => onOrderMemoChange(event.target.value)}
             rows={2}
             placeholder="학생 화면에 함께 표시할 메모를 입력해 주세요."
-            className="mt-1.5 w-full rounded-lg border border-blue-100 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+            className="mt-1.5 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
             disabled={!canManage || Boolean(orderSavingStatus)}
           />
           {!!orderFeedback && (
@@ -513,7 +513,7 @@ const MobileOrderCard: React.FC<{
     <div
       className={`overflow-hidden rounded-xl border ${
         isSelected
-          ? "border-blue-200 bg-blue-50/70"
+          ? "border-gray-300 bg-white shadow-sm"
           : isSavingOrder
             ? "border-amber-200 bg-amber-50/70"
             : "border-gray-200 bg-white"
@@ -572,7 +572,7 @@ const MobileOrderCard: React.FC<{
       </button>
 
       {isSelected && (
-        <div className="px-3 pb-3">
+        <div className="border-t border-gray-100 px-3 py-3">
           <OrderDetailPanel
             order={detailOrder}
             orderMemo={orderMemo}
@@ -689,7 +689,7 @@ const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
                 <tr
                   className={`cursor-pointer transition ${
                     isSelected
-                      ? "bg-blue-50"
+                      ? "border-b border-gray-200 bg-blue-50"
                       : isSavingOrder
                         ? "bg-amber-50/60"
                         : "hover:bg-gray-50"
@@ -754,8 +754,8 @@ const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
                   </td>
                 </tr>
                 {isSelected && selectedOrder && (
-                  <tr className="bg-blue-50/40">
-                    <td colSpan={6} className="px-4 pb-3 pt-0">
+                  <tr className="bg-white">
+                    <td colSpan={6} className="px-4 pb-4 pt-3">
                       <OrderDetailPanel
                         order={selectedOrder}
                         orderMemo={orderMemo}
