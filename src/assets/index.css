@@ -490,7 +490,7 @@ button.lesson-core-point-floating-status:disabled {
   --lesson-core-burst-duration: 780ms;
   position: fixed;
   z-index: 2147483000;
-  filter: saturate(1.22) contrast(1.1) brightness(1.1);
+  filter: saturate(0.98) contrast(1.06) brightness(1.03);
 }
 
 .lesson-core-burst::before {
@@ -502,16 +502,16 @@ button.lesson-core-point-floating-status:disabled {
     radial-gradient(circle, rgba(255, 255, 255, 1) 0 22%, transparent 23%),
     radial-gradient(
       circle,
-      rgba(255, 255, 255, 1) 0 24%,
-      rgba(254, 249, 195, 0.98) 25% 42%,
-      rgba(250, 204, 21, 0.74) 43% 62%,
-      rgba(245, 158, 11, 0.2) 63% 78%,
+      rgba(255, 250, 240, 1) 0 24%,
+      rgba(254, 243, 199, 0.94) 25% 42%,
+      rgba(251, 191, 36, 0.52) 43% 62%,
+      rgba(217, 119, 6, 0.18) 63% 78%,
       transparent 80%
     );
   box-shadow:
-    0 0 18px rgba(255, 255, 255, 0.98),
-    0 0 34px rgba(250, 204, 21, 0.88),
-    0 0 68px rgba(245, 158, 11, 0.42);
+    0 0 18px rgba(255, 255, 255, 0.92),
+    0 0 30px rgba(245, 158, 11, 0.5),
+    0 0 58px rgba(146, 64, 14, 0.2);
   animation: westory-core-burst-core var(--lesson-core-burst-duration) ease-out
     forwards;
 }
@@ -521,7 +521,7 @@ button.lesson-core-point-floating-status:disabled {
   position: absolute;
   inset: -4% -2%;
   background: url("./core-point-burst.svg") center / contain no-repeat;
-  filter: brightness(1.22) drop-shadow(0 0 16px rgba(250, 204, 21, 0.86));
+  filter: brightness(1.06) drop-shadow(0 0 15px rgba(245, 158, 11, 0.58));
   transform-origin: center;
   animation: westory-core-burst-rays var(--lesson-core-burst-duration) ease-out
     forwards;
@@ -553,14 +553,14 @@ button.lesson-core-point-floating-status:disabled {
   background: linear-gradient(
     90deg,
     transparent 0%,
-    rgba(245, 158, 11, 0.18) 10%,
-    rgba(254, 240, 138, 0.86) 35%,
-    rgba(255, 255, 255, 1) 50%,
-    rgba(254, 240, 138, 0.86) 65%,
-    rgba(245, 158, 11, 0.18) 90%,
+    rgba(180, 83, 9, 0.14) 10%,
+    rgba(251, 191, 36, 0.58) 35%,
+    rgba(255, 250, 240, 0.92) 50%,
+    rgba(251, 191, 36, 0.58) 65%,
+    rgba(180, 83, 9, 0.14) 90%,
     transparent 100%
   );
-  filter: blur(0.2px) drop-shadow(0 0 8px rgba(250, 204, 21, 0.78));
+  filter: blur(0.2px) drop-shadow(0 0 8px rgba(245, 158, 11, 0.46));
   transform: translate(-50%, -50%)
     rotate(var(--lesson-core-burst-flare-rotation))
     scaleX(var(--lesson-core-burst-flare-scale));
@@ -604,15 +604,15 @@ button.lesson-core-point-floating-status:disabled {
   border-radius: 9999px;
   background: rgba(255, 255, 255, 1);
   box-shadow:
-    -84px -10px 0 2px rgba(254, 240, 138, 0.98),
-    -64px -42px 0 0 rgba(255, 255, 255, 0.98),
-    -36px 34px 0 1px rgba(250, 204, 21, 0.96),
-    32px -36px 0 1px rgba(255, 255, 255, 0.98),
-    58px 28px 0 0 rgba(245, 158, 11, 0.9),
-    92px -8px 0 2px rgba(254, 240, 138, 0.96),
-    -112px 26px 0 0 rgba(245, 158, 11, 0.86),
-    112px 24px 0 0 rgba(255, 255, 255, 0.92);
-  filter: drop-shadow(0 0 9px rgba(250, 204, 21, 0.9));
+    -84px -10px 0 2px rgba(254, 243, 199, 0.92),
+    -64px -42px 0 0 rgba(255, 250, 240, 0.94),
+    -36px 34px 0 1px rgba(251, 191, 36, 0.76),
+    32px -36px 0 1px rgba(255, 250, 240, 0.94),
+    58px 28px 0 0 rgba(217, 119, 6, 0.62),
+    92px -8px 0 2px rgba(254, 243, 199, 0.86),
+    -112px 26px 0 0 rgba(217, 119, 6, 0.56),
+    112px 24px 0 0 rgba(255, 250, 240, 0.88);
+  filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.52));
   transform: translate(-50%, -50%) scale(0.18);
   animation: westory-core-burst-sparks var(--lesson-core-burst-duration)
     ease-out forwards;
@@ -623,11 +623,11 @@ button.lesson-core-point-floating-status:disabled {
   height: 4px;
   box-shadow:
     -76px 18px 0 -1px rgba(255, 255, 255, 0.9),
-    -48px -24px 0 0 rgba(245, 158, 11, 0.88),
-    -18px -52px 0 -1px rgba(254, 240, 138, 0.9),
+    -48px -24px 0 0 rgba(217, 119, 6, 0.58),
+    -18px -52px 0 -1px rgba(254, 243, 199, 0.86),
     16px 48px 0 -1px rgba(255, 255, 255, 0.86),
-    48px -22px 0 0 rgba(250, 204, 21, 0.86),
-    76px 14px 0 -1px rgba(245, 158, 11, 0.82);
+    48px -22px 0 0 rgba(251, 191, 36, 0.68),
+    76px 14px 0 -1px rgba(217, 119, 6, 0.54);
   transform: translate(-50%, -50%) rotate(22deg) scale(0.16);
   animation-name: westory-core-burst-sparks-alt;
 }
