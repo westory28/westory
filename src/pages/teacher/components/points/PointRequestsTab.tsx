@@ -480,6 +480,115 @@ const OrderDetailPanel: React.FC<{
   );
 };
 
+const MobileOrderCard: React.FC<{
+  order: PointOrder;
+  selectedOrder: PointOrder | null;
+  isSelected: boolean;
+  isSavingOrder: boolean;
+  orderMemo: string;
+  orderFeedback: string;
+  orderSavingOrderId: string;
+  orderSavingStatus: PointOrderStatus | null;
+  canManage: boolean;
+  onSelectOrder: (orderId: string) => void;
+  onOrderMemoChange: (value: string) => void;
+  onSaveOrder: (status: PointOrderStatus) => void;
+}> = ({
+  order,
+  selectedOrder,
+  isSelected,
+  isSavingOrder,
+  orderMemo,
+  orderFeedback,
+  orderSavingOrderId,
+  orderSavingStatus,
+  canManage,
+  onSelectOrder,
+  onOrderMemoChange,
+  onSaveOrder,
+}) => {
+  const detailOrder = selectedOrder || order;
+
+  return (
+    <div
+      className={`overflow-hidden rounded-xl border ${
+        isSelected
+          ? "border-blue-200 bg-blue-50/70"
+          : isSavingOrder
+            ? "border-amber-200 bg-amber-50/70"
+            : "border-gray-200 bg-white"
+      }`}
+    >
+      <button
+        type="button"
+        onClick={() => onSelectOrder(isSelected ? "" : order.id)}
+        className="block w-full px-3 py-3 text-left"
+        aria-expanded={isSelected}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="truncate text-sm font-extrabold text-gray-900">
+              {getOrderStudentName(order)}
+            </div>
+            <div className="mt-0.5 truncate text-xs font-medium text-gray-500">
+              {getOrderStudentLabel(order) || "소속 정보 없음"}
+            </div>
+          </div>
+          <span
+            className={`inline-flex shrink-0 rounded-full border px-2.5 py-1 text-xs font-bold ${
+              isSavingOrder
+                ? "border-amber-200 bg-amber-50 text-amber-700"
+                : getOrderStatusToneClass(order.status)
+            }`}
+          >
+            {isSavingOrder
+              ? "처리 중"
+              : POINT_ORDER_STATUS_LABELS[order.status] || order.status}
+          </span>
+        </div>
+
+        <div className="mt-2 truncate text-sm font-bold text-gray-700">
+          {order.productName}
+        </div>
+
+        <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+          <div className="rounded-lg bg-gray-50 px-3 py-2">
+            <div className="font-bold text-gray-500">차감 위스</div>
+            <div className="mt-0.5 font-extrabold text-gray-900">
+              {formatWisAmount(order.priceSnapshot)}
+            </div>
+          </div>
+          <div className="rounded-lg bg-gray-50 px-3 py-2">
+            <div className="font-bold text-gray-500">요청 시각</div>
+            <div className="mt-0.5 font-extrabold text-gray-900">
+              {formatPointTimeOnly(order.requestedAt)}
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-3">
+          <OrderProcessStepper status={order.status} compact />
+        </div>
+      </button>
+
+      {isSelected && (
+        <div className="px-3 pb-3">
+          <OrderDetailPanel
+            order={detailOrder}
+            orderMemo={orderMemo}
+            orderFeedback={orderFeedback}
+            orderSavingOrderId={orderSavingOrderId}
+            orderSavingStatus={orderSavingStatus}
+            canManage={canManage}
+            onOrderMemoChange={onOrderMemoChange}
+            onSaveOrder={onSaveOrder}
+          />
+        </div>
+      )}
+    </div>
+  );
+};
+
 const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
   orders,
   orderFilter,
@@ -508,7 +617,7 @@ const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
         onChange={(event) =>
           onFilterChange(event.target.value as "all" | PointOrderStatus)
         }
-        className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700"
+        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700 sm:w-auto"
       >
         <option value="all">전체 상태</option>
         {(Object.keys(POINT_ORDER_STATUS_LABELS) as PointOrderStatus[]).map(
@@ -520,7 +629,38 @@ const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
         )}
       </select>
     </div>
-    <div className="overflow-x-auto">
+
+    <div className="grid gap-3 p-3 md:hidden">
+      {orders.length === 0 && (
+        <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-sm font-medium text-gray-400">
+          선택한 조건에 맞는 요청이 없습니다.
+        </div>
+      )}
+      {orders.map((order) => {
+        const isSelected = selectedOrderId === order.id;
+        const isSavingOrder = orderSavingOrderId === order.id;
+
+        return (
+          <MobileOrderCard
+            key={order.id}
+            order={order}
+            selectedOrder={isSelected ? selectedOrder : null}
+            isSelected={isSelected}
+            isSavingOrder={isSavingOrder}
+            orderMemo={orderMemo}
+            orderFeedback={orderFeedback}
+            orderSavingOrderId={orderSavingOrderId}
+            orderSavingStatus={orderSavingStatus}
+            canManage={canManage}
+            onSelectOrder={onSelectOrder}
+            onOrderMemoChange={onOrderMemoChange}
+            onSaveOrder={onSaveOrder}
+          />
+        );
+      })}
+    </div>
+
+    <div className="hidden overflow-x-auto md:block">
       <table className="min-w-[760px] w-full table-fixed text-sm text-left">
         <thead className="bg-gray-100 text-xs font-bold uppercase text-gray-600">
           <tr>

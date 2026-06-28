@@ -496,7 +496,7 @@ const ManagePoints: React.FC = () => {
   const [productOrderDirty, setProductOrderDirty] = useState(false);
   const [productOrderSaving, setProductOrderSaving] = useState(false);
   const [productOrderFeedback, setProductOrderFeedback] = useState("");
-  const [orderFilter, setOrderFilter] = useState<OrderFilter>("all");
+  const [orderFilter, setOrderFilter] = useState<OrderFilter>("requested");
   const [selectedOrderId, setSelectedOrderId] = useState("");
   const [orderMemo, setOrderMemo] = useState("");
   const [orderFeedback, setOrderFeedback] = useState("");
