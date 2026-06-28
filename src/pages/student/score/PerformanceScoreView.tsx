@@ -568,6 +568,17 @@ const PerformanceScoreView: React.FC = () => {
     setSignatureError("");
   };
 
+  const toggleSignatureConsent = () => {
+    if (signatureActionPending) return;
+    const nextConsent = !signatureConsent;
+    setSignatureConsent(nextConsent);
+    if (!nextConsent) {
+      clearSignatureCanvas();
+    } else {
+      setSignatureError("");
+    }
+  };
+
   const openSignatureModal = () => {
     if (!warningConsentCurrent) {
       showToast({
@@ -1742,122 +1753,133 @@ const PerformanceScoreView: React.FC = () => {
                       없고 해당 점수에 대해 이의를 제기하지 않을 것에
                       동의합니까?
                     </p>
-                    <label className="mt-3 flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-3">
-                      <input
-                        type="checkbox"
-                        checked={signatureConsent}
-                        onChange={(event) => {
-                          const checked = event.target.checked;
-                          setSignatureConsent(checked);
-                          setSignatureError("");
-                          if (!checked) clearSignatureCanvas();
-                        }}
-                        disabled={signatureActionPending}
-                        className="h-5 w-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <span className="text-sm font-black text-slate-800">
-                        동의합니다
-                      </span>
-                    </label>
-                  </div>
-
-                  <div>
-                    <div className="mb-2 flex items-center justify-between gap-3">
-                      <div>
-                        <h4 className="text-sm font-black text-slate-800">
-                          서명 그리기
-                        </h4>
-                        <p className="mt-1 text-xs font-bold leading-5 text-slate-500">
-                          성을 포함한 이름을 직접 적어 주세요. 배경의 흐린
-                          이름은 안내용이며 저장되지 않습니다.
-                        </p>
-                      </div>
+                    <div className="mt-4 flex justify-center">
                       <button
                         type="button"
-                        onClick={clearSignatureCanvas}
-                        disabled={signatureActionPending || !signatureConsent}
-                        className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                        onClick={toggleSignatureConsent}
+                        disabled={signatureActionPending}
+                        aria-pressed={signatureConsent}
+                        aria-controls="performance-signature-drawing-panel"
+                        className={`inline-flex h-12 min-w-[13rem] items-center justify-center gap-2 rounded-full border px-6 text-sm font-black shadow-sm transition focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
+                          signatureConsent
+                            ? "border-blue-600 bg-blue-600 text-white shadow-blue-100 hover:bg-blue-700"
+                            : "border-blue-200 bg-white text-blue-700 hover:border-blue-300 hover:bg-blue-50"
+                        }`}
                       >
-                        지우기
+                        <span
+                          className={`inline-flex h-5 w-5 items-center justify-center rounded-full border ${
+                            signatureConsent
+                              ? "border-white bg-white text-blue-600"
+                              : "border-blue-300 bg-blue-50 text-blue-600"
+                          }`}
+                          aria-hidden="true"
+                        >
+                          <i className="fas fa-check text-[10px]"></i>
+                        </span>
+                        {signatureConsent ? "동의 완료" : "동의합니다"}
                       </button>
                     </div>
-                    <div
-                      className={`relative mx-auto overflow-hidden rounded-xl border border-blue-200 bg-blue-50 ${
-                        signatureConsent ? "" : "opacity-60"
-                      }`}
-                      style={{ width: signatureCanvasWidth, maxWidth: "100%" }}
-                    >
-                      <div
-                        className="pointer-events-none absolute inset-0 flex items-center justify-center px-2 text-center font-black leading-none"
-                        style={{
-                          color: "rgba(30, 58, 138, 0.09)",
-                          fontSize: signatureMobileGuideFontSize,
-                          letterSpacing: signatureMobileGuideLetterSpacing,
-                        }}
-                      >
-                        <span className="whitespace-nowrap sm:hidden">
-                          {signatureGuideText}
-                        </span>
-                      </div>
-                      <div
-                        className="pointer-events-none absolute inset-0 hidden items-center justify-center px-2 text-center font-black leading-none sm:flex"
-                        style={{
-                          color: "rgba(30, 58, 138, 0.09)",
-                          fontSize: signatureGuideFontSize,
-                          letterSpacing: signatureGuideLetterSpacing,
-                        }}
-                      >
-                        <span className="whitespace-nowrap">
-                          {signatureGuideText}
-                        </span>
-                      </div>
-                      {!signatureConsent && (
-                        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-white/55 text-sm font-black text-slate-500">
-                          동의합니다를 체크하면 서명 칸이 활성화됩니다.
-                        </div>
-                      )}
-                      <canvas
-                        ref={signatureCanvasRef}
-                        width={signatureCanvasWidth}
-                        height={SIGNATURE_CANVAS_HEIGHT}
-                        className="relative z-10 h-40 w-full touch-none cursor-crosshair bg-transparent sm:h-52"
-                        onPointerDown={(event) => {
-                          if (!signatureConsent || signatureActionPending)
-                            return;
-                          const point = getSignatureCanvasPoint(event);
-                          if (!point) return;
-                          event.currentTarget.setPointerCapture(
-                            event.pointerId,
-                          );
-                          drawingRef.current = true;
-                          signatureDrawnRef.current = true;
-                          setSignatureImageDraft("");
-                          lastPointRef.current = null;
-                          drawSignaturePoint(point);
-                          setSignatureDrawn(true);
-                          setSignatureError("");
-                        }}
-                        onPointerMove={(event) => {
-                          if (!drawingRef.current || !signatureConsent) return;
-                          const point = getSignatureCanvasPoint(event);
-                          if (point) drawSignaturePoint(point);
-                        }}
-                        onPointerUp={() => {
-                          drawingRef.current = false;
-                          lastPointRef.current = null;
-                        }}
-                        onPointerCancel={() => {
-                          drawingRef.current = false;
-                          lastPointRef.current = null;
-                        }}
-                        onPointerLeave={() => {
-                          drawingRef.current = false;
-                          lastPointRef.current = null;
-                        }}
-                        aria-label="점수 확인 서명 그리기 칸"
-                      />
-                    </div>
                   </div>
+
+                  {signatureConsent && (
+                    <div
+                      id="performance-signature-drawing-panel"
+                      className="rounded-xl border border-blue-100 bg-white px-4 py-4 shadow-sm"
+                    >
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <div>
+                          <h4 className="text-sm font-black text-slate-800">
+                            서명 그리기
+                          </h4>
+                          <p className="mt-1 text-xs font-bold leading-5 text-slate-500">
+                            성을 포함한 이름을 직접 적어 주세요. 배경의 흐린
+                            이름은 안내용이며 저장되지 않습니다.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={clearSignatureCanvas}
+                          disabled={signatureActionPending}
+                          className="inline-flex h-9 items-center justify-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          지우기
+                        </button>
+                      </div>
+                      <div
+                        className="relative mx-auto overflow-hidden rounded-xl border border-blue-200 bg-blue-50"
+                        style={{
+                          width: signatureCanvasWidth,
+                          maxWidth: "100%",
+                        }}
+                      >
+                        <div
+                          className="pointer-events-none absolute inset-0 flex items-center justify-center px-2 text-center font-black leading-none"
+                          style={{
+                            color: "rgba(30, 58, 138, 0.09)",
+                            fontSize: signatureMobileGuideFontSize,
+                            letterSpacing: signatureMobileGuideLetterSpacing,
+                          }}
+                        >
+                          <span className="whitespace-nowrap sm:hidden">
+                            {signatureGuideText}
+                          </span>
+                        </div>
+                        <div
+                          className="pointer-events-none absolute inset-0 hidden items-center justify-center px-2 text-center font-black leading-none sm:flex"
+                          style={{
+                            color: "rgba(30, 58, 138, 0.09)",
+                            fontSize: signatureGuideFontSize,
+                            letterSpacing: signatureGuideLetterSpacing,
+                          }}
+                        >
+                          <span className="whitespace-nowrap">
+                            {signatureGuideText}
+                          </span>
+                        </div>
+                        <canvas
+                          ref={signatureCanvasRef}
+                          width={signatureCanvasWidth}
+                          height={SIGNATURE_CANVAS_HEIGHT}
+                          className="relative z-10 h-40 w-full touch-none cursor-crosshair bg-transparent sm:h-52"
+                          onPointerDown={(event) => {
+                            if (!signatureConsent || signatureActionPending)
+                              return;
+                            const point = getSignatureCanvasPoint(event);
+                            if (!point) return;
+                            event.currentTarget.setPointerCapture(
+                              event.pointerId,
+                            );
+                            drawingRef.current = true;
+                            signatureDrawnRef.current = true;
+                            setSignatureImageDraft("");
+                            lastPointRef.current = null;
+                            drawSignaturePoint(point);
+                            setSignatureDrawn(true);
+                            setSignatureError("");
+                          }}
+                          onPointerMove={(event) => {
+                            if (!drawingRef.current || !signatureConsent)
+                              return;
+                            const point = getSignatureCanvasPoint(event);
+                            if (point) drawSignaturePoint(point);
+                          }}
+                          onPointerUp={() => {
+                            drawingRef.current = false;
+                            lastPointRef.current = null;
+                          }}
+                          onPointerCancel={() => {
+                            drawingRef.current = false;
+                            lastPointRef.current = null;
+                          }}
+                          onPointerLeave={() => {
+                            drawingRef.current = false;
+                            lastPointRef.current = null;
+                          }}
+                          aria-label="점수 확인 서명 그리기 칸"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="space-y-4">
