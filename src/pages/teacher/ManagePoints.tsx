@@ -103,6 +103,10 @@ const normalizeValue = (value: unknown) => String(value || "").trim();
 const normalizeSearchValue = (value: unknown) =>
   normalizeValue(value).toLowerCase();
 const OVERVIEW_PAGE_SIZE = 20;
+const createLocalPointTimestamp = () => ({
+  seconds: Math.floor(Date.now() / 1000),
+  nanoseconds: 0,
+});
 
 const sortPointProducts = (items: PointProduct[]) =>
   [...items].sort((left, right) => {
@@ -1706,19 +1710,39 @@ const ManagePoints: React.FC = () => {
     if (!selectedOrder || !canManage || orderSavingStatus) return;
 
     const orderId = selectedOrder.id;
+    const memo = orderMemo.trim();
     try {
       setOrderSavingOrderId(orderId);
       setOrderSavingStatus(nextStatus);
       setOrderFeedback("구매 요청 상태를 반영하는 중입니다.");
-      await reviewPointOrder({
+      const result = await reviewPointOrder({
         config,
         orderId,
         nextStatus,
         actor,
-        memo: orderMemo,
+        memo,
       });
+      setOrders((prev) =>
+        prev.map((order) =>
+          order.id === result.orderId
+            ? {
+                ...order,
+                status: result.status,
+                stockDeducted:
+                  result.status === "approved" || result.status === "fulfilled",
+                reviewedAt: createLocalPointTimestamp(),
+                reviewedBy: actor.uid,
+                memo: memo || order.memo || "",
+              }
+            : order,
+        ),
+      );
       setOrderFeedback("구매 요청 상태를 반영했습니다.");
-      setOrders(await listPointOrders(config, { limitCount: 200 }));
+      void listPointOrders(config, { limitCount: 200 })
+        .then((nextOrders) => setOrders(nextOrders))
+        .catch((error) => {
+          console.warn("Failed to refresh point orders after review:", error);
+        });
     } catch (error: any) {
       console.error("Failed to review point order:", error);
       setOrderFeedback(error?.message || "요청 상태 변경에 실패했습니다.");
