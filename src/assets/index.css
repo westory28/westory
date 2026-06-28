@@ -154,12 +154,12 @@ button.lesson-core-point-floating-status:disabled {
   content: "";
   position: absolute;
   inset: -4px;
-  z-index: 2;
+  z-index: 1;
   border-radius: 1.32rem;
   padding: 3px;
   pointer-events: none;
   background: conic-gradient(
-    from var(--lesson-core-point-angle),
+    from 18deg,
     transparent 0deg 26deg,
     rgba(255, 255, 255, 0.62) 40deg,
     rgba(254, 240, 138, 0.88) 58deg,
@@ -180,8 +180,6 @@ button.lesson-core-point-floating-status:disabled {
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
   mask-composite: exclude;
-  animation: westory-core-point-border-run 5.6s linear infinite;
-  will-change: --lesson-core-point-angle;
 }
 
 .lesson-core-point-floating-status.is-claimable::after {
@@ -204,13 +202,7 @@ button.lesson-core-point-floating-status:disabled {
 }
 
 .lesson-core-point-floating-status--reward {
-  display: inline-flex;
   min-height: 2.65rem;
-  align-items: center;
-  justify-content: center;
-  gap: 0;
-  padding: 0.62rem 0.75rem;
-  text-align: center;
 }
 
 .lesson-core-point-floating-status__label {
@@ -248,10 +240,40 @@ button.lesson-core-point-floating-status:disabled {
   position: relative;
   z-index: 3;
   color: #92400e;
-  font-size: 0.86rem;
+  font-size: 0.82rem;
   font-weight: 900;
   line-height: 1.1;
+  text-align: right;
   white-space: nowrap;
+}
+
+.lesson-core-point-floating-status__runner {
+  position: absolute;
+  z-index: 2;
+  left: 10%;
+  top: -3px;
+  width: 42%;
+  height: 4px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.78) 22%,
+    rgba(254, 240, 138, 0.92) 48%,
+    rgba(245, 158, 11, 0.86) 72%,
+    transparent 100%
+  );
+  box-shadow:
+    0 0 7px rgba(245, 158, 11, 0.42),
+    0 0 12px rgba(250, 204, 21, 0.24);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  animation: westory-floating-core-point-runner 4.8s linear infinite;
+}
+
+.lesson-core-point-floating-status__runner--b {
+  animation-delay: -2.4s;
 }
 
 .lesson-core-point {
@@ -665,6 +687,85 @@ button.lesson-core-point-floating-status:disabled {
   }
 }
 
+@keyframes westory-floating-core-point-runner {
+  0% {
+    left: 14%;
+    top: -3px;
+    width: 34%;
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+
+  4% {
+    opacity: 0.95;
+  }
+
+  24% {
+    left: 86%;
+    top: -3px;
+    width: 34%;
+    opacity: 0.95;
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+
+  25% {
+    left: calc(100% + 3px);
+    top: 14%;
+    width: 24%;
+    transform: translate(-50%, -50%) rotate(90deg);
+  }
+
+  49% {
+    left: calc(100% + 3px);
+    top: 86%;
+    width: 24%;
+    opacity: 0.95;
+    transform: translate(-50%, -50%) rotate(90deg);
+  }
+
+  50% {
+    left: 86%;
+    top: calc(100% + 3px);
+    width: 34%;
+    transform: translate(-50%, -50%) rotate(180deg);
+  }
+
+  74% {
+    left: 14%;
+    top: calc(100% + 3px);
+    width: 34%;
+    opacity: 0.95;
+    transform: translate(-50%, -50%) rotate(180deg);
+  }
+
+  75% {
+    left: -3px;
+    top: 86%;
+    width: 24%;
+    transform: translate(-50%, -50%) rotate(270deg);
+  }
+
+  96% {
+    opacity: 0.95;
+  }
+
+  99% {
+    left: -3px;
+    top: 14%;
+    width: 24%;
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(270deg);
+  }
+
+  100% {
+    left: 14%;
+    top: -3px;
+    width: 34%;
+    opacity: 0;
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+}
+
 @keyframes westory-core-point-glow {
   0%,
   100% {
@@ -856,6 +957,7 @@ button.lesson-core-point-floating-status:disabled {
   .lesson-core-point__inner::after,
   .lesson-core-point-floating-status.is-claimable::before,
   .lesson-core-point-floating-status.is-claimable::after,
+  .lesson-core-point-floating-status__runner,
   .lesson-core-burst,
   .lesson-core-burst__ring,
   .lesson-core-burst__flare,
