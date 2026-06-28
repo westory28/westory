@@ -272,7 +272,12 @@ const PerformanceScoreView: React.FC = () => {
 
   const chartData = selectedRecord
     ? {
-        labels: chartItems.map((item, index) => getItemLabel(item, index)),
+        labels: chartItems.map(
+          (item) =>
+            `(${formatPerformanceScore(item.score)} / ${formatPerformanceScore(
+              item.maxScore,
+            )}점)`,
+        ),
         datasets: [
           {
             label: "획득 점수",
@@ -1106,6 +1111,8 @@ const PerformanceScoreView: React.FC = () => {
             size: 11,
             weight: "bold" as const,
           },
+          maxRotation: 0,
+          minRotation: 0,
         },
       },
     },
@@ -1417,43 +1424,6 @@ const PerformanceScoreView: React.FC = () => {
                 {evidenceText ||
                   "아직 입력된 평가 근거가 없습니다. 필요한 경우 수업 시간이나 상담 시간에 교사에게 확인하세요."}
               </p>
-            </div>
-
-            <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
-              {selectedItems.map((item, index) => {
-                const scoreEntered = item.scoreEntered !== false;
-                const itemLabel = getItemLabel(item, index);
-                return (
-                  <div
-                    key={`${item.name}-${item.maxScore}-${index}`}
-                    className="grid gap-3 border-b border-slate-100 px-4 py-4 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_auto]"
-                  >
-                    <div className="min-w-0">
-                      <div
-                        className="whitespace-normal break-keep text-sm font-black leading-5 text-slate-900"
-                        title={item.name}
-                      >
-                        {itemLabel}
-                      </div>
-                      <div className="mt-1 text-xs font-bold text-slate-400">
-                        {formatPerformanceScore(item.maxScore)}점 만점
-                      </div>
-                    </div>
-                    <div className="text-right text-sm font-black text-slate-800">
-                      {scoreEntered ? (
-                        <>
-                          {formatPerformanceScore(item.score)}점
-                          <span className="ml-1 text-xs text-slate-400">
-                            / {formatPerformanceScore(item.maxScore)}점
-                          </span>
-                        </>
-                      ) : (
-                        <span className="text-xs text-slate-400">미입력</span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
             </div>
           </section>
         </div>
