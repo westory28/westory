@@ -2911,6 +2911,44 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                             onFindCorePoint?.(highlight.id);
                           }}
                         >
+                          <svg
+                            className="lesson-core-point__orbit"
+                            viewBox="0 0 100 100"
+                            preserveAspectRatio="none"
+                            aria-hidden="true"
+                            focusable="false"
+                          >
+                            <rect
+                              className="lesson-core-point__orbit-track"
+                              x="2"
+                              y="2"
+                              width="96"
+                              height="96"
+                              rx="4"
+                              ry="4"
+                              pathLength="100"
+                            />
+                            <rect
+                              className="lesson-core-point__orbit-runner"
+                              x="2"
+                              y="2"
+                              width="96"
+                              height="96"
+                              rx="4"
+                              ry="4"
+                              pathLength="100"
+                            />
+                            <rect
+                              className="lesson-core-point__orbit-shine"
+                              x="2"
+                              y="2"
+                              width="96"
+                              height="96"
+                              rx="4"
+                              ry="4"
+                              pathLength="100"
+                            />
+                          </svg>
                           <span
                             className="lesson-core-point__inner"
                             aria-hidden="true"

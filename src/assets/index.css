@@ -4,12 +4,6 @@
 @tailwind components;
 @tailwind utilities;
 
-@property --lesson-core-point-angle {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 0deg;
-}
-
 .dashboard-container {
   max-width: 1280px;
   margin: 0 auto;
@@ -111,7 +105,6 @@
 }
 
 .lesson-core-point {
-  --lesson-core-point-angle: 0deg;
   --lesson-core-point-border-duration: 5.6s;
   --lesson-core-point-glow-duration: 3.8s;
   --lesson-core-point-spark-duration: 3.2s;
@@ -161,38 +154,57 @@
 }
 
 .lesson-core-point::after {
-  content: "";
+  content: none;
+}
+
+.lesson-core-point__orbit {
   position: absolute;
-  inset: -6px;
+  left: -5px;
+  top: -5px;
   z-index: 4;
-  border-radius: 11px;
-  padding: 4px;
-  background: conic-gradient(
-    from var(--lesson-core-point-angle),
-    transparent 0deg 28deg,
-    rgba(255, 255, 255, 0.78) 40deg,
-    rgba(254, 240, 138, 0.98) 53deg,
-    rgba(245, 158, 11, 0.76) 67deg,
-    transparent 84deg 158deg,
-    rgba(255, 255, 255, 0.64) 172deg,
-    rgba(254, 240, 138, 0.86) 185deg,
-    rgba(245, 158, 11, 0.66) 200deg,
-    transparent 218deg 360deg
-  );
-  filter: drop-shadow(0 0 6px rgba(250, 204, 21, 0.42));
-  opacity: 0.9;
+  display: block;
+  width: calc(100% + 10px);
+  height: calc(100% + 10px);
+  overflow: visible;
   pointer-events: none;
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  mask-composite: exclude;
+}
+
+.lesson-core-point__orbit-track,
+.lesson-core-point__orbit-runner,
+.lesson-core-point__orbit-shine {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.lesson-core-point__orbit-track {
+  stroke: rgba(251, 191, 36, 0.52);
+  stroke-width: 2.2;
+}
+
+.lesson-core-point__orbit-runner {
+  stroke: #f59e0b;
+  stroke-width: 4;
+  stroke-dasharray: 48 144 48 144;
+  stroke-dashoffset: 0;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 5px rgba(245, 158, 11, 0.52));
+  opacity: 0.96;
   animation: westory-core-point-border-run
     var(--lesson-core-point-border-duration) linear infinite;
-  will-change: --lesson-core-point-angle;
+  will-change: stroke-dashoffset;
+}
+
+.lesson-core-point__orbit-shine {
+  stroke: rgba(255, 255, 255, 0.82);
+  stroke-width: 2;
+  stroke-dasharray: 18 174 18 174;
+  stroke-dashoffset: 0;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 4px rgba(254, 240, 138, 0.48));
+  opacity: 0.82;
+  animation: westory-core-point-border-run
+    var(--lesson-core-point-border-duration) linear infinite;
+  will-change: stroke-dashoffset;
 }
 
 .lesson-core-point__inner {
@@ -276,9 +288,19 @@
 }
 
 .lesson-core-point.is-found::after {
-  animation: westory-core-point-border-run
-    var(--lesson-core-point-border-duration) linear infinite;
-  opacity: 0.62;
+  content: none;
+}
+
+.lesson-core-point.is-found .lesson-core-point__orbit-track {
+  stroke: rgba(251, 191, 36, 0.34);
+}
+
+.lesson-core-point.is-found .lesson-core-point__orbit-runner {
+  opacity: 0.68;
+}
+
+.lesson-core-point.is-found .lesson-core-point__orbit-shine {
+  opacity: 0.52;
 }
 
 .lesson-core-point.is-found .lesson-core-point__inner::before {
@@ -436,7 +458,7 @@
 
 @keyframes westory-core-point-border-run {
   to {
-    --lesson-core-point-angle: 360deg;
+    stroke-dashoffset: -384;
   }
 }
 
@@ -567,6 +589,8 @@
 @media (prefers-reduced-motion: reduce) {
   .lesson-core-point::before,
   .lesson-core-point::after,
+  .lesson-core-point__orbit-runner,
+  .lesson-core-point__orbit-shine,
   .lesson-core-point__inner::before,
   .lesson-core-point__inner::after,
   .lesson-core-burst,
