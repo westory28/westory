@@ -3905,17 +3905,10 @@ const ManageLesson: React.FC = () => {
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
       <main className="relative flex flex-1 flex-col px-4 py-6 lg:px-6 xl:px-8">
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex items-center">
           <h1 className="text-xl font-bold text-gray-800 lg:text-2xl">
             <i className="fas fa-sitemap mr-2 text-blue-500"></i>수업 자료 관리
           </h1>
-          <button
-            type="button"
-            onClick={() => setSidebarOpen(true)}
-            className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 lg:hidden"
-          >
-            <i className="fas fa-bars mr-2"></i>트리
-          </button>
         </div>
         {!canEdit && (
           <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
@@ -4181,6 +4174,17 @@ const ManageLesson: React.FC = () => {
             )}
           </div>
         </div>
+        <button
+          type="button"
+          onClick={() => setSidebarOpen(true)}
+          className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+5.75rem)] right-[calc(env(safe-area-inset-right,0px)+1rem)] z-30 inline-flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-xl transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 sm:bottom-[calc(env(safe-area-inset-bottom,0px)+6.5rem)] sm:right-[calc(env(safe-area-inset-right,0px)+1.5rem)] lg:hidden"
+          aria-label="수업 자료 목차 열기"
+          aria-controls="lesson-tree-drawer"
+          aria-expanded={sidebarOpen}
+          title="목차"
+        >
+          <i className="fas fa-list text-lg" aria-hidden="true"></i>
+        </button>
       </main>
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
