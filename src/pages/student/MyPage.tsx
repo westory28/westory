@@ -134,6 +134,13 @@ interface SubjectScoreInsight {
 type QuizResultDoc = StudentQuizResultDoc;
 type QuizResultSource = QuizResultDoc[] | Promise<QuizResultDoc[]>;
 
+interface UnitParentMeta {
+  bigId: string;
+  bigTitle: string;
+  midId: string;
+  midTitle: string;
+}
+
 interface WrongNoteItem {
   key: string;
   questionNumber: number;
@@ -171,6 +178,10 @@ interface QuizAttemptReview {
   title: string;
   unitId: string;
   unitTitle: string;
+  bigUnitId: string;
+  bigUnitTitle: string;
+  midUnitId: string;
+  midUnitTitle: string;
   category: CategoryTab | "other";
   categoryLabel: string;
   groupLabel: string;
@@ -565,7 +576,7 @@ const MyPage: React.FC = () => {
 
   const loadMyPage = async () => {
     if (!user || !config) return;
-    const titles = await loadUnitTitles();
+    const { titles, parents } = await loadUnitTitles();
     const quizResults: QuizResultSource = canUseQuiz
       ? loadStudentQuizResults(config, user.uid)
       : [];
@@ -574,7 +585,7 @@ const MyPage: React.FC = () => {
       loadPointRankState(),
       canUseScore ? loadScoreData() : resetScoreData(),
       canUseScore ? loadPerformanceScoreData() : resetPerformanceScoreData(),
-      canUseQuiz ? loadQuizData(titles, quizResults) : resetQuizData(),
+      canUseQuiz ? loadQuizData(titles, parents, quizResults) : resetQuizData(),
       loadProgressSummary(quizResults),
     ]);
   };
@@ -688,7 +699,12 @@ const MyPage: React.FC = () => {
   }, [user?.uid, config?.year, config?.semester]);
 
   const loadUnitTitles = async () => {
-    if (!config) return { exam_prep: "모의고사" };
+    if (!config) {
+      return {
+        titles: { exam_prep: "모의고사" },
+        parents: {} as Record<string, UnitParentMeta>,
+      };
+    }
 
     let treeSnap = await getDoc(
       doc(db, getSemesterCollectionPath(config, "curriculum"), "tree"),
@@ -698,22 +714,53 @@ const MyPage: React.FC = () => {
     }
 
     const map: Record<string, string> = { exam_prep: "모의고사" };
+    const parentMap: Record<string, UnitParentMeta> = {};
+    const rememberTitle = (id: unknown, title: unknown) => {
+      const titleText = String(title || "").trim();
+      if (!titleText) return;
+      const idText = String(id || "").trim();
+      if (idText) {
+        map[idText] = titleText;
+      }
+      map[titleText] = titleText;
+    };
+    const rememberParent = (
+      id: unknown,
+      title: unknown,
+      meta: UnitParentMeta,
+    ) => {
+      const idText = String(id || "").trim();
+      if (idText) {
+        parentMap[idText] = meta;
+      }
+      const titleText = String(title || "").trim();
+      if (titleText) {
+        parentMap[titleText] = meta;
+      }
+    };
     if (treeSnap.exists()) {
       const tree = treeSnap.data().tree || [];
       tree.forEach((big: any) => {
-        if (big?.id && big?.title) {
-          map[big.id] = big.title;
-        }
+        rememberTitle(big?.id, big?.title);
         (big.children || []).forEach((mid: any) => {
-          if (mid?.id && mid?.title) {
-            map[mid.id] = mid.title;
-          }
+          const midMeta = {
+            bigId: String(big.id || ""),
+            bigTitle: String(big.title || ""),
+            midId: String(mid.id || ""),
+            midTitle: String(mid.title || ""),
+          };
+          rememberTitle(mid?.id, mid?.title);
+          rememberParent(mid?.id, mid?.title, midMeta);
+          (mid.children || []).forEach((small: any) => {
+            rememberTitle(small?.id, small?.title);
+            rememberParent(small?.id, small?.title, midMeta);
+          });
         });
       });
     }
 
     setUnitTitleMap(map);
-    return map;
+    return { titles: map, parents: parentMap };
   };
 
   const loadScoreData = async () => {
@@ -796,6 +843,7 @@ const MyPage: React.FC = () => {
 
   const loadQuizData = async (
     titleMap: Record<string, string>,
+    parentMap: Record<string, UnitParentMeta>,
     preloadedQuizResults?: QuizResultSource,
   ) => {
     if (!user || !config) return;
@@ -935,15 +983,35 @@ const MyPage: React.FC = () => {
         key: string,
       ): WrongNoteItem => {
         const question = questionMap[log.qid] || {};
-        const bigUnitId = String(question.refBig || "").trim();
-        const midUnitId = String(
+        const smallUnitId = String(
+          question.refSmall || question.subUnitId || "",
+        ).trim();
+        const sourceUnitId = String(
           question.refMid || question.unitId || log.unitId || "",
         ).trim();
-        const bigUnitTitle = bigUnitId ? titleMap[bigUnitId] || bigUnitId : "";
+        const parentMeta =
+          (smallUnitId && parentMap[smallUnitId]) ||
+          (sourceUnitId && parentMap[sourceUnitId]) ||
+          (log.unitId && parentMap[log.unitId]) ||
+          null;
+        const bigUnitId = String(
+          question.refBig || parentMeta?.bigId || "",
+        ).trim();
+        const midUnitId = String(
+          question.refMid ||
+            parentMeta?.midId ||
+            question.unitId ||
+            log.unitId ||
+            "",
+        ).trim();
+        const bigUnitTitle = bigUnitId
+          ? titleMap[bigUnitId] || parentMeta?.bigTitle || bigUnitId
+          : parentMeta?.bigTitle || "";
         const midUnitTitle = midUnitId
           ? titleMap[midUnitId] ||
+            parentMeta?.midTitle ||
             (midUnitId === "exam_prep" ? "모의고사" : midUnitId)
-          : "";
+          : parentMeta?.midTitle || "";
         const hierarchyLabel =
           bigUnitTitle && midUnitTitle && bigUnitTitle !== midUnitTitle
             ? `${bigUnitTitle} > ${midUnitTitle}`
@@ -1020,6 +1088,24 @@ const MyPage: React.FC = () => {
           const wrongItemsForAttempt = allItemsForAttempt.filter(
             (item) => !item.correct,
           );
+          const firstAttemptItem = allItemsForAttempt[0] || null;
+          const attemptParentMeta = unitId ? parentMap[unitId] : null;
+          const bigUnitId = isMockAttempt
+            ? "exam_prep"
+            : firstAttemptItem?.bigUnitId || attemptParentMeta?.bigId || "";
+          const bigUnitTitle = isMockAttempt
+            ? "모의고사"
+            : firstAttemptItem?.bigUnitTitle ||
+              attemptParentMeta?.bigTitle ||
+              (bigUnitId ? titleMap[bigUnitId] || bigUnitId : "대단원 미지정");
+          const midUnitId = isMockAttempt
+            ? roundLabel
+            : firstAttemptItem?.midUnitId || attemptParentMeta?.midId || unitId;
+          const midUnitTitle = isMockAttempt
+            ? roundLabel
+            : firstAttemptItem?.midUnitTitle ||
+              attemptParentMeta?.midTitle ||
+              unitTitle;
 
           return {
             key: result.id || `${roundLabel}_${dateText}_${resultIndex}`,
@@ -1027,6 +1113,10 @@ const MyPage: React.FC = () => {
             title: isMockAttempt ? `${roundLabel} 응시 내역` : unitTitle,
             unitId,
             unitTitle,
+            bigUnitId,
+            bigUnitTitle,
+            midUnitId,
+            midUnitTitle,
             category,
             categoryLabel,
             groupLabel: isMockAttempt ? roundLabel : unitTitle,
@@ -1336,8 +1426,14 @@ const MyPage: React.FC = () => {
         if (categoryTab === "all") source.set("exam_prep", "모의고사");
         return;
       }
-      if (attempt.unitId) {
-        source.set(attempt.unitId, attempt.unitTitle || attempt.unitId);
+      const bigId = attempt.bigUnitId || attempt.unitId;
+      const bigTitle =
+        attempt.bigUnitTitle ||
+        attempt.unitTitle ||
+        unitTitleMap[bigId] ||
+        bigId;
+      if (bigId) {
+        source.set(bigId, bigTitle);
       }
     });
     wrongItems.forEach((item) => {
@@ -1346,20 +1442,12 @@ const MyPage: React.FC = () => {
         if (categoryTab === "all") source.set("exam_prep", "모의고사");
         return;
       }
-      source.set(item.unitId, item.unitTitle);
-    });
-    trendPoints.forEach((point) => {
-      if (categoryTab !== "all" && point.category !== categoryTab) return;
-      if (point.category === "exam_prep") {
-        if (categoryTab === "all") source.set("exam_prep", "모의고사");
-        return;
+      const bigId = item.bigUnitId || item.unitId;
+      const bigTitle =
+        item.bigUnitTitle || item.unitTitle || unitTitleMap[bigId] || bigId;
+      if (bigId) {
+        source.set(bigId, bigTitle);
       }
-      source.set(
-        point.unitId,
-        point.unitId === "exam_prep"
-          ? "모의고사"
-          : unitTitleMap[point.unitId] || "단원명 없음",
-      );
     });
 
     return Array.from(source.entries()).map(([unitId, title]) => ({
@@ -1369,7 +1457,7 @@ const MyPage: React.FC = () => {
           ? "모의고사"
           : title || unitTitleMap[unitId] || "단원명 없음",
     }));
-  }, [wrongItems, trendPoints, quizAttempts, unitTitleMap, categoryTab]);
+  }, [wrongItems, quizAttempts, unitTitleMap, categoryTab]);
 
   const filteredQuizAttempts = useMemo(
     () =>
@@ -1388,14 +1476,17 @@ const MyPage: React.FC = () => {
         if (selectedUnitId === "exam_prep") {
           return attempt.category === "exam_prep";
         }
-        return attempt.unitId === selectedUnitId;
+        return (
+          attempt.bigUnitId === selectedUnitId ||
+          (!attempt.bigUnitId && attempt.unitId === selectedUnitId)
+        );
       }),
     [quizAttempts, categoryTab, selectedUnitId],
   );
 
   const quizAttemptHierarchy = useMemo(() => {
     const sections: Array<{
-      key: CategoryTab | "other";
+      key: string;
       label: string;
       count: number;
       wrongCount: number;
@@ -1408,10 +1499,78 @@ const MyPage: React.FC = () => {
         totalCount: number;
       }>;
     }> = [];
+    const selectedRoundLabel = getMockRoundLabelFromScope(selectedUnitId);
+    const shouldGroupByMidUnit =
+      categoryTab !== "exam_prep" &&
+      selectedUnitId !== "all" &&
+      selectedUnitId !== "exam_prep" &&
+      !selectedRoundLabel;
     const categoryOrder: Array<CategoryTab | "other"> = [
       ...CATEGORY_LABELS.map((tab) => tab.key),
       "other",
     ];
+
+    if (shouldGroupByMidUnit) {
+      const groupedByMid = new Map<string, QuizAttemptReview[]>();
+
+      filteredQuizAttempts.forEach((attempt) => {
+        if (attempt.category === "exam_prep") return;
+        const midKey =
+          attempt.midUnitId ||
+          attempt.unitId ||
+          attempt.groupLabel ||
+          attempt.unitTitle;
+        groupedByMid.set(midKey, [
+          ...(groupedByMid.get(midKey) || []),
+          attempt,
+        ]);
+      });
+
+      return Array.from(groupedByMid.entries()).map(([midKey, attempts]) => {
+        const firstAttempt = attempts[0];
+        const groupedByCategory = new Map<
+          CategoryTab | "other",
+          QuizAttemptReview[]
+        >();
+
+        attempts.forEach((attempt) => {
+          groupedByCategory.set(attempt.category, [
+            ...(groupedByCategory.get(attempt.category) || []),
+            attempt,
+          ]);
+        });
+
+        return {
+          key: `mid_${midKey}`,
+          label:
+            firstAttempt?.midUnitTitle || firstAttempt?.unitTitle || midKey,
+          count: attempts.length,
+          wrongCount: attempts.reduce(
+            (sum, attempt) => sum + attempt.wrongCount,
+            0,
+          ),
+          groups: categoryOrder
+            .filter((category) => groupedByCategory.has(category))
+            .map((category) => {
+              const categoryAttempts = groupedByCategory.get(category) || [];
+              return {
+                key: `${midKey}_${category}`,
+                label: getCategoryLabel(category),
+                subLabel: `${categoryAttempts.length}회 응시 기록`,
+                attempts: categoryAttempts,
+                wrongCount: categoryAttempts.reduce(
+                  (sum, attempt) => sum + attempt.wrongCount,
+                  0,
+                ),
+                totalCount: categoryAttempts.reduce(
+                  (sum, attempt) => sum + attempt.allItems.length,
+                  0,
+                ),
+              };
+            }),
+        };
+      });
+    }
 
     categoryOrder.forEach((category) => {
       const categoryAttempts = filteredQuizAttempts.filter(
@@ -1424,7 +1583,10 @@ const MyPage: React.FC = () => {
         const groupKey =
           category === "exam_prep"
             ? attempt.roundLabel || "모의고사"
-            : attempt.unitId || attempt.groupLabel || attempt.unitTitle;
+            : attempt.midUnitId ||
+              attempt.unitId ||
+              attempt.groupLabel ||
+              attempt.unitTitle;
         grouped.set(groupKey, [...(grouped.get(groupKey) || []), attempt]);
       });
 
@@ -1443,7 +1605,9 @@ const MyPage: React.FC = () => {
             label:
               category === "exam_prep"
                 ? groupKey
-                : firstAttempt?.unitTitle || groupKey,
+                : firstAttempt?.midUnitTitle ||
+                  firstAttempt?.unitTitle ||
+                  groupKey,
             subLabel:
               category === "exam_prep"
                 ? "같은 회차의 응시 기록"
@@ -1463,7 +1627,7 @@ const MyPage: React.FC = () => {
     });
 
     return sections;
-  }, [filteredQuizAttempts]);
+  }, [filteredQuizAttempts, categoryTab, selectedUnitId]);
 
   const subjectInsights = useMemo<SubjectScoreInsight[]>(() => {
     return buildSharedSubjectScoreInsights(scoreRows as any, subjectGoals);
