@@ -62,6 +62,7 @@ interface LessonContentProps {
 
 const EMPTY_BLANK_LABEL = "빈칸";
 const LESSON_CORE_POINTS_ALL_SOURCE_ID = "lesson-core-points-all";
+const LESSON_CORE_POINTS_REWARD_LABEL = "500위스";
 const EMPTY_CORE_POINT_OVERVIEW: CorePointOverviewState = {
   loaded: false,
   totalCount: 0,
@@ -1175,7 +1176,11 @@ const LessonContent: React.FC<LessonContentProps> = ({
               overview.totalCount > 0 &&
               overview.foundCount >= overview.totalCount
             ) {
-              void claimCorePointCompletionReward(nextFoundIds, overview);
+              showToast({
+                tone: "reward",
+                title: "핵심포인트를 모두 찾았습니다.",
+                message: `빛나는 핵심포인트 버튼을 눌러 ${LESSON_CORE_POINTS_REWARD_LABEL}를 받으세요.`,
+              });
             }
           })
           .catch((overviewError) => {
@@ -1192,10 +1197,9 @@ const LessonContent: React.FC<LessonContentProps> = ({
       tone: "reward",
       title: "핵심포인트를 모두 찾았습니다.",
       message: canPersist
-        ? "전체 수업자료 완주 보상을 확인하고 있습니다."
+        ? `빛나는 핵심포인트 버튼을 눌러 ${LESSON_CORE_POINTS_REWARD_LABEL}를 받으세요.`
         : "완료했습니다.",
     });
-    void claimCorePointCompletionReward(nextFoundIds, nextOverview);
   };
 
   const floatingSaveButtonLabel = isSaving
@@ -1212,6 +1216,37 @@ const LessonContent: React.FC<LessonContentProps> = ({
     ? corePointOverview.foundCount
     : foundCorePointIds.length;
   const showFloatingCorePointStatus = displayedCorePointTotalCount > 0;
+  const isCorePointCompletionReady =
+    corePointOverview.loaded &&
+    displayedCorePointTotalCount > 0 &&
+    displayedCorePointFoundCount >= displayedCorePointTotalCount;
+  const corePointRewardReady =
+    isCorePointCompletionReady && !corePointRewardSettled;
+  const handleCorePointRewardClaim = () => {
+    if (!corePointRewardReady || corePointRewardPending) return;
+    void claimCorePointCompletionReward(
+      foundCorePointIdsRef.current,
+      corePointOverviewRef.current,
+    );
+  };
+  const floatingCorePointStatusContent = (
+    <>
+      <span className="lesson-core-point-floating-status__label">
+        <i className="fas fa-bolt" aria-hidden="true"></i>
+        핵심포인트
+      </span>
+      <strong>
+        {displayedCorePointFoundCount}/{displayedCorePointTotalCount}
+      </strong>
+      {(corePointRewardPending || corePointRewardReady) && (
+        <span className="lesson-core-point-floating-status__meta">
+          {corePointRewardPending
+            ? "반영 중"
+            : `${LESSON_CORE_POINTS_REWARD_LABEL} 받기`}
+        </span>
+      )}
+    </>
+  );
   const floatingSaveControls = canPersist ? (
     <div
       className={
@@ -1277,24 +1312,33 @@ const LessonContent: React.FC<LessonContentProps> = ({
           <span>{floatingSaveButtonLabel}</span>
         </button>
         {showFloatingCorePointStatus && (
-          <div
-            className="lesson-core-point-floating-status"
-            role="status"
-            aria-live="polite"
-          >
-            <span className="lesson-core-point-floating-status__label">
-              <i className="fas fa-bolt" aria-hidden="true"></i>
-              핵심포인트
-            </span>
-            <strong>
-              {displayedCorePointFoundCount}/{displayedCorePointTotalCount}
-            </strong>
-            {corePointRewardPending && (
-              <span className="lesson-core-point-floating-status__meta">
-                반영 중
-              </span>
+          <>
+            {corePointRewardReady || corePointRewardPending ? (
+              <button
+                type="button"
+                className={`lesson-core-point-floating-status ${
+                  corePointRewardReady ? "is-claimable" : ""
+                } ${corePointRewardPending ? "is-pending" : ""}`}
+                onClick={handleCorePointRewardClaim}
+                disabled={corePointRewardPending}
+                aria-label={
+                  corePointRewardPending
+                    ? "핵심포인트 보상 반영 중"
+                    : `핵심포인트 완주 보상 ${LESSON_CORE_POINTS_REWARD_LABEL} 받기`
+                }
+              >
+                {floatingCorePointStatusContent}
+              </button>
+            ) : (
+              <div
+                className="lesson-core-point-floating-status"
+                role="status"
+                aria-live="polite"
+              >
+                {floatingCorePointStatusContent}
+              </div>
             )}
-          </div>
+          </>
         )}
         <button
           type="button"

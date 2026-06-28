@@ -1541,7 +1541,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         corePointBurstTimeoutsRef.current.filter(
           (candidate) => candidate !== timeoutId,
         );
-    }, 920);
+    }, 1180);
     corePointBurstTimeoutsRef.current.push(timeoutId);
   };
 
@@ -2982,6 +2982,8 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
                         <span className="lesson-core-burst__ring" />
                         <span className="lesson-core-burst__flare lesson-core-burst__flare--a" />
                         <span className="lesson-core-burst__flare lesson-core-burst__flare--b" />
+                        <span className="lesson-core-burst__flare lesson-core-burst__flare--c" />
+                        <span className="lesson-core-burst__flare lesson-core-burst__flare--d" />
                         <span className="lesson-core-burst__spark" />
                         <span className="lesson-core-burst__spark lesson-core-burst__spark--b" />
                       </span>
