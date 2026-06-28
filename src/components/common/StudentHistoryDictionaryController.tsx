@@ -23,7 +23,7 @@ const getFloatingOffsetClassName = (pathname: string, search: string) => {
   if (pathname.startsWith("/student/lesson/note")) {
     const hasSelectedUnit = Boolean(new URLSearchParams(search).get("id"));
     return hasSelectedUnit
-      ? "bottom-[calc(env(safe-area-inset-bottom,0px)+18rem)] right-[calc(env(safe-area-inset-right,0px)+1rem)] lg:bottom-[calc(env(safe-area-inset-bottom,0px)+12.25rem)] lg:right-[calc(env(safe-area-inset-right,0px)+1.5rem)]"
+      ? "bottom-[calc(env(safe-area-inset-bottom,0px)+18rem)] right-[calc(env(safe-area-inset-right,0px)+1rem)] lg:bottom-[calc(env(safe-area-inset-bottom,0px)+16rem)] lg:right-[calc(env(safe-area-inset-right,0px)+1.5rem)]"
       : "bottom-[calc(env(safe-area-inset-bottom,0px)+6.5rem)] right-[calc(env(safe-area-inset-right,0px)+1rem)] lg:bottom-[calc(env(safe-area-inset-bottom,0px)+12.25rem)] lg:right-[calc(env(safe-area-inset-right,0px)+1.5rem)]";
   }
   return "bottom-[calc(env(safe-area-inset-bottom,0px)+5.25rem)] right-[calc(env(safe-area-inset-right,0px)+1rem)] lg:bottom-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] lg:right-[calc(env(safe-area-inset-right,0px)+1.5rem)]";

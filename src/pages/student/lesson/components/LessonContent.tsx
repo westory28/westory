@@ -1216,8 +1216,8 @@ const LessonContent: React.FC<LessonContentProps> = ({
     <div
       className={
         fullscreenPreview
-          ? "pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] right-[calc(env(safe-area-inset-right,0px)+5.25rem)] z-[70] flex justify-end"
-          : "pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] right-[calc(env(safe-area-inset-right,0px)+5.25rem)] z-[70] flex justify-end sm:bottom-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] sm:right-[calc(env(safe-area-inset-right,0px)+6rem)]"
+          ? "pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom,0px)+0.75rem)] right-[calc(env(safe-area-inset-right,0px)+0.75rem)] z-[70] flex justify-end"
+          : "pointer-events-none fixed bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] right-[calc(env(safe-area-inset-right,0px)+1rem)] z-[70] flex justify-end sm:bottom-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] sm:right-[calc(env(safe-area-inset-right,0px)+1.5rem)]"
       }
     >
       <div className="pointer-events-auto flex w-[11.75rem] flex-col gap-2 rounded-[1.35rem] border border-blue-100 bg-white/95 p-2 shadow-[0_18px_42px_rgba(37,99,235,0.18)] backdrop-blur-xl">
