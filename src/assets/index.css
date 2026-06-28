@@ -157,11 +157,11 @@
   width: fit-content;
   max-width: 100%;
   margin-inline: auto;
-  padding: 0.34rem 0.5rem;
-  border: 1px solid #dbeafe;
-  border-radius: 1rem;
-  background: linear-gradient(180deg, #f8fbff 0%, #eff6ff 100%);
-  box-shadow: inset 0 0 0 1px rgba(191, 219, 254, 0.85);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .student-calendar-shell__eyebrow {
@@ -620,6 +620,100 @@
   .fc-daygrid-day {
   box-sizing: border-box;
   width: calc(100% / 7) !important;
+}
+
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-scrollgrid {
+  border-width: 0 !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+}
+
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc-theme-standard
+  td,
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc-theme-standard
+  th {
+  border-color: #dbe3ef !important;
+}
+
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-scrollgrid-section
+  > td,
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-scrollgrid-section
+  > th {
+  border-width: 0 !important;
+}
+
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-col-header-cell {
+  border-width: 0 0 1px 1px !important;
+  border-style: solid !important;
+  border-color: #dbe3ef !important;
+}
+
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-col-header-cell:first-child {
+  border-left-width: 0 !important;
+}
+
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-daygrid-day {
+  border-width: 0 0 1px 1px !important;
+  border-style: solid !important;
+  border-color: #dbe3ef !important;
+}
+
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-daygrid-body
+  tr
+  .fc-daygrid-day:first-child {
+  border-left-width: 0 !important;
+}
+
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-daygrid-body
+  tr:last-child
+  .fc-daygrid-day {
+  border-bottom-width: 0 !important;
+}
+
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-day-other {
+  background: #f8fafc;
+}
+
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-day-other
+  .student-calendar-day-head,
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-day-other
+  .fc-daygrid-day-frame::before,
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-day-other
+  .fc-daygrid-day-frame::after {
+  opacity: 0.42;
+}
+
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-day-other
+  .fc-daygrid-event {
+  opacity: 0.48;
 }
 
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"] .fc-scroller,

@@ -712,7 +712,7 @@ const TeacherCalendarSection: React.FC<TeacherCalendarSectionProps> = ({
           dayMaxEvents={2}
           moreLinkClick={handleMoreLinkClick}
           fixedWeekCount={false}
-          showNonCurrentDates={false}
+          showNonCurrentDates={true}
           dayCellClassNames={(arg) => {
             const dateStr = toLocalYmd(arg.date);
             const classes: string[] = [];

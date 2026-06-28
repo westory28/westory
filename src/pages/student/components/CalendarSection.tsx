@@ -715,7 +715,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
           eventDisplay="block"
           dayMaxEvents={2}
           moreLinkClick={handleMoreLinkClick}
-          showNonCurrentDates={false}
+          showNonCurrentDates={true}
           dayCellClassNames={(arg) => {
             const dateStr = toLocalYmd(arg.date);
             const classes: string[] = [];
