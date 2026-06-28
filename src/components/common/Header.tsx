@@ -293,6 +293,10 @@ const Header: React.FC = () => {
         resolvedChildren.length > 0 &&
         desktopSubmenuParentUrls.has(item.url),
     );
+  const desktopSubmenuContainerClass =
+    activeDesktopSubmenu?.item.url === "/student/lesson/note"
+      ? "mx-auto max-w-[1500px] px-3 pt-6 md:px-5 lg:px-8 xl:px-10"
+      : "mx-auto max-w-7xl px-4 pt-6 lg:px-6";
 
   const performLogout = async (isTimeout: boolean) => {
     try {
@@ -749,7 +753,7 @@ const Header: React.FC = () => {
 
       {activeDesktopSubmenu && (
         <div className="hidden lg:block">
-          <div className="mx-auto max-w-7xl px-4 pt-6 lg:px-6">
+          <div className={desktopSubmenuContainerClass}>
             <div className="mb-4 flex shrink-0 overflow-x-auto rounded-t-lg border-b border-gray-200 bg-white px-2">
               {activeDesktopSubmenu.resolvedChildren.map((child, childIdx) => {
                 const childTarget = child.resolvedUrl;
