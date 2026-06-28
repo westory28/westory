@@ -216,7 +216,7 @@
     rgba(251, 191, 36, 0.72)
   );
   filter: drop-shadow(0 0 3px rgba(245, 158, 11, 0.24));
-  opacity: 0.7;
+  opacity: 0.48;
 }
 
 .lesson-core-point__inner::after {
@@ -260,8 +260,8 @@
         transparent 84% 100%
       )
       bottom left / 4px 58% no-repeat;
-  filter: drop-shadow(0 0 4px rgba(250, 204, 21, 0.26));
-  opacity: 0.58;
+  filter: drop-shadow(0 0 5px rgba(250, 204, 21, 0.32));
+  opacity: 0.72;
   animation: westory-core-point-border-run
     var(--lesson-core-point-border-duration) linear infinite;
   will-change: background-position;
@@ -312,13 +312,13 @@
 }
 
 .lesson-core-point.is-found .lesson-core-point__inner::before {
-  opacity: 0.6;
+  opacity: 0.42;
 }
 
 .lesson-core-point.is-found .lesson-core-point__inner::after {
   animation: westory-core-point-border-run
     var(--lesson-core-point-border-duration) linear infinite;
-  opacity: 0.52;
+  opacity: 0.54;
 }
 
 .lesson-core-burst {
@@ -469,34 +469,34 @@
 @keyframes westory-core-point-border-run {
   0% {
     background-position:
-      -65% 0,
+      0 0,
       100% -65%,
-      165% 100%,
+      100% 100%,
       0 165%;
   }
 
   49.99% {
     background-position:
-      165% 0,
+      100% 0,
       100% -65%,
-      -65% 100%,
+      0 100%,
       0 165%;
   }
 
   50% {
     background-position:
       165% 0,
-      100% -65%,
+      100% 0,
       -65% 100%,
-      0 165%;
+      0 100%;
   }
 
   100% {
     background-position:
       165% 0,
-      100% 165%,
+      100% 100%,
       -65% 100%,
-      0 -65%;
+      0 0;
   }
 }
 
