@@ -23,7 +23,14 @@
 }
 
 .student-quiz-runner {
-  min-height: calc(100dvh - 8rem);
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+}
+
+.student-quiz-intro,
+.student-quiz-result {
+  min-height: 0;
 }
 
 .student-quiz-shell {
@@ -1334,7 +1341,8 @@
 
 @media (min-width: 900px) and (orientation: landscape) {
   .student-quiz-runner {
-    height: calc(100dvh - 8rem);
+    flex: 1 1 auto;
+    height: auto;
     min-height: 0;
     overflow: hidden;
   }

@@ -1698,10 +1698,10 @@ const QuizRunner: React.FC = () => {
         : "평가 시작하기";
 
     return (
-      <div className="mx-auto flex min-h-[calc(100dvh-8rem)] max-w-5xl animate-fadeIn items-center px-4 py-3">
+      <div className="student-quiz-intro mx-auto flex min-h-0 w-full max-w-5xl flex-1 animate-fadeIn items-center px-4 py-2 lg:py-3">
         <div className="w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-200/60">
-          <div className="grid lg:grid-cols-[minmax(0,1.12fr)_minmax(18rem,0.88fr)]">
-            <section className="p-5 text-left sm:p-6 lg:p-7">
+          <div className="grid md:grid-cols-[minmax(0,1.12fr)_minmax(18rem,0.88fr)]">
+            <section className="p-4 text-left sm:p-6 lg:p-7">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
                   <i className="fas fa-file-signature text-[11px]"></i>
@@ -1720,35 +1720,35 @@ const QuizRunner: React.FC = () => {
                 </span>
               </div>
 
-              <h1 className="mt-4 break-keep text-2xl font-black leading-tight text-slate-950 sm:text-3xl">
+              <h1 className="mt-3 break-keep text-2xl font-black leading-tight text-slate-950 sm:mt-4 sm:text-3xl">
                 {title}
               </h1>
               <p className="mt-2 max-w-2xl break-keep text-sm font-semibold leading-6 text-slate-500">
                 {introDescription}
               </p>
 
-              <dl className="mt-5 grid overflow-hidden rounded-xl border border-blue-100 bg-blue-50/70 text-left sm:grid-cols-3 sm:divide-x sm:divide-y-0 sm:divide-blue-100">
-                <div className="border-b border-blue-100 px-4 py-3 sm:border-b-0">
+              <dl className="mt-4 grid grid-cols-3 divide-x divide-blue-100 overflow-hidden rounded-xl border border-blue-100 bg-blue-50/70 text-left sm:mt-5">
+                <div className="px-3 py-2.5 sm:px-4 sm:py-3">
                   <dt className="text-xs font-bold text-slate-500">
                     제한 시간
                   </dt>
-                  <dd className="mt-1 text-xl font-black text-blue-700">
+                  <dd className="mt-1 text-lg font-black text-blue-700 sm:text-xl">
                     {timeLimitMinutes}분
                   </dd>
                 </div>
-                <div className="border-b border-blue-100 px-4 py-3 sm:border-b-0">
+                <div className="px-3 py-2.5 sm:px-4 sm:py-3">
                   <dt className="text-xs font-bold text-slate-500">
                     출제 문항
                   </dt>
-                  <dd className="mt-1 text-xl font-black text-blue-700">
+                  <dd className="mt-1 text-lg font-black text-blue-700 sm:text-xl">
                     {questionCount}문항
                   </dd>
                 </div>
-                <div className="px-4 py-3">
+                <div className="px-3 py-2.5 sm:px-4 sm:py-3">
                   <dt className="text-xs font-bold text-slate-500">
                     응시 횟수
                   </dt>
-                  <dd className="mt-1 text-xl font-black text-slate-900">
+                  <dd className="mt-1 text-lg font-black text-slate-900 sm:text-xl">
                     {historyCount}회
                   </dd>
                 </div>
@@ -1770,12 +1770,12 @@ const QuizRunner: React.FC = () => {
               )}
             </section>
 
-            <aside className="flex flex-col justify-between gap-4 border-t border-slate-100 bg-slate-50 p-5 sm:p-6 lg:border-l lg:border-t-0">
-              <div>
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-xl text-white shadow-lg shadow-blue-200">
+            <aside className="flex flex-col justify-between gap-3 border-t border-slate-100 bg-slate-50 p-4 sm:p-6 md:border-l md:border-t-0">
+              <div className="flex items-start gap-3 md:block">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-lg text-white shadow-lg shadow-blue-200 sm:h-12 sm:w-12 sm:text-xl">
                   <i className="fas fa-stopwatch"></i>
                 </div>
-                <p className="mt-4 text-sm font-bold leading-6 text-slate-600">
+                <p className="text-sm font-bold leading-6 text-slate-600 md:mt-4">
                   시작하면 타이머가 바로 작동합니다. 답안을 확인한 뒤 마지막
                   문항에서 제출하세요.
                 </p>
@@ -1787,7 +1787,7 @@ const QuizRunner: React.FC = () => {
                     type="button"
                     onClick={() => void startQuiz()}
                     disabled={startingQuiz}
-                    className="inline-flex h-12 w-full items-center justify-center rounded-xl bg-blue-600 px-5 text-base font-black text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+                    className="inline-flex h-11 w-full items-center justify-center rounded-xl bg-blue-600 px-5 text-base font-black text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300 sm:h-12"
                   >
                     {introActionLabel}
                   </button>
@@ -2314,8 +2314,8 @@ const QuizRunner: React.FC = () => {
       : "/student/mypage?menu=wrong_note";
 
     return (
-      <div className="mx-auto min-h-screen max-w-2xl animate-fadeIn px-4 py-8 text-center">
-        <div className="mb-8 rounded-2xl border-t-8 border-blue-500 bg-white p-8 shadow-xl">
+      <div className="student-quiz-result mx-auto flex w-full max-w-2xl animate-fadeIn items-center px-4 py-4 text-center sm:py-6">
+        <div className="w-full rounded-2xl border-t-8 border-blue-500 bg-white p-6 shadow-xl sm:p-8">
           <h2 className="mb-2 text-3xl font-black text-gray-800">평가 종료</h2>
           <p className="mb-8 text-gray-500">
             수고하셨습니다. 결과를 확인하세요.
