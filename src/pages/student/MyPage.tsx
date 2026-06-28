@@ -181,10 +181,16 @@ interface QuizAttemptReview {
   wrongItems: WrongNoteItem[];
 }
 
-interface ReviewProgressGroup {
+interface ReviewProgressMidGroup {
   key: string;
   label: string;
   items: Array<{ item: WrongNoteItem; index: number }>;
+}
+
+interface ReviewProgressBigGroup {
+  key: string;
+  label: string;
+  mids: ReviewProgressMidGroup[];
 }
 
 const DEFAULT_POINT_WALLET: PointWallet = {
@@ -240,16 +246,29 @@ const getInitialReviewIndex = (attempt: QuizAttemptReview | null) => {
 
 const getReviewProgressGroups = (
   items: WrongNoteItem[],
-): ReviewProgressGroup[] => {
-  const grouped = new Map<string, ReviewProgressGroup>();
+): ReviewProgressBigGroup[] => {
+  const grouped = new Map<string, ReviewProgressBigGroup>();
   items.forEach((item, index) => {
-    const key =
-      `${item.bigUnitId || "unknown"}_${item.midUnitId || "unknown"}` ||
-      item.hierarchyLabel;
-    const label = item.hierarchyLabel || "목차 미지정";
-    const current = grouped.get(key) || { key, label, items: [] };
-    current.items.push({ item, index });
-    grouped.set(key, current);
+    const bigKey = item.bigUnitId || item.bigUnitTitle || "unknown-big";
+    const bigLabel = item.bigUnitTitle || "대단원 미지정";
+    const midKey = item.midUnitId || item.midUnitTitle || "unknown-mid";
+    const midLabel = item.midUnitTitle || item.unitTitle || "중단원 미지정";
+    const bigGroup = grouped.get(bigKey) || {
+      key: bigKey,
+      label: bigLabel,
+      mids: [],
+    };
+    const existingMid = bigGroup.mids.find((mid) => mid.key === midKey);
+    if (existingMid) {
+      existingMid.items.push({ item, index });
+    } else {
+      bigGroup.mids.push({
+        key: midKey,
+        label: midLabel,
+        items: [{ item, index }],
+      });
+    }
+    grouped.set(bigKey, bigGroup);
   });
   return Array.from(grouped.values());
 };
@@ -453,6 +472,7 @@ const MyPage: React.FC = () => {
     useState<QuizAttemptReview | null>(null);
   const [selectedReviewQuestionIndex, setSelectedReviewQuestionIndex] =
     useState(0);
+  const [reviewSidebarOpen, setReviewSidebarOpen] = useState(false);
   const [quizLineData, setQuizLineData] = useState<any>(null);
   const [wrongItems, setWrongItems] = useState<WrongNoteItem[]>([]);
   const [expandedWrongKey, setExpandedWrongKey] = useState<string | null>(null);
@@ -499,6 +519,7 @@ const MyPage: React.FC = () => {
   const closeQuizAttemptModal = () => {
     setSelectedQuizAttempt(null);
     setSelectedReviewQuestionIndex(0);
+    setReviewSidebarOpen(false);
     if (!requestedAttemptId) return;
     const nextParams = new URLSearchParams(searchParams);
     nextParams.delete("attemptId");
@@ -510,6 +531,7 @@ const MyPage: React.FC = () => {
   const openQuizAttemptReview = (attempt: QuizAttemptReview) => {
     setSelectedQuizAttempt(attempt);
     setSelectedReviewQuestionIndex(getInitialReviewIndex(attempt));
+    setReviewSidebarOpen(false);
     const nextParams = new URLSearchParams(searchParams);
     nextParams.set("menu", "wrong_note");
     nextParams.set("attemptId", attempt.key);
@@ -537,6 +559,7 @@ const MyPage: React.FC = () => {
     if (attempt) {
       setSelectedQuizAttempt(attempt);
       setSelectedReviewQuestionIndex(getInitialReviewIndex(attempt));
+      setReviewSidebarOpen(false);
     }
   }, [requestedAttemptId, menu, quizAttempts]);
 
@@ -572,6 +595,7 @@ const MyPage: React.FC = () => {
     setQuizAttempts([]);
     setSelectedQuizAttempt(null);
     setSelectedReviewQuestionIndex(0);
+    setReviewSidebarOpen(false);
     setQuizLineData(null);
     setWrongItems([]);
     setExpandedWrongKey(null);
@@ -1037,6 +1061,7 @@ const MyPage: React.FC = () => {
       setQuizAttempts([]);
       setSelectedQuizAttempt(null);
       setSelectedReviewQuestionIndex(0);
+      setReviewSidebarOpen(false);
       setQuizLineData(null);
       setWrongItems([]);
     } finally {
@@ -1711,12 +1736,78 @@ const MyPage: React.FC = () => {
     () => getReviewProgressGroups(selectedReviewItems),
     [selectedReviewItems],
   );
-  const goToReviewQuestion = (nextIndex: number) => {
+  const goToReviewQuestion = (nextIndex: number, closeSidebar = false) => {
     if (!selectedReviewItems.length) return;
     setSelectedReviewQuestionIndex(
       Math.min(Math.max(nextIndex, 0), selectedReviewItems.length - 1),
     );
+    if (closeSidebar) setReviewSidebarOpen(false);
   };
+  const renderReviewNavigation = (closeAfterSelect = false) => (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-black text-slate-900">단원별 문항</div>
+          <div className="mt-1 text-xs font-bold text-slate-400">
+            대단원 아래 중단원별로 이동합니다.
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2 text-[11px] font-bold text-slate-400">
+          <span className="inline-flex items-center gap-1">
+            <span className="h-2.5 w-2.5 rounded-full bg-red-500"></span>
+            오답
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="h-2.5 w-2.5 rounded-full bg-blue-500"></span>
+            정답
+          </span>
+        </div>
+      </div>
+
+      <div className="space-y-5">
+        {selectedReviewProgressGroups.map((bigGroup) => (
+          <section key={bigGroup.key} className="space-y-3">
+            <div className="break-keep text-sm font-black leading-5 text-slate-900">
+              {bigGroup.label}
+            </div>
+            <div className="space-y-3 border-l border-slate-200 pl-3">
+              {bigGroup.mids.map((midGroup) => (
+                <div key={midGroup.key} className="space-y-2">
+                  <div className="break-keep text-xs font-extrabold leading-5 text-slate-500">
+                    {midGroup.label}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {midGroup.items.map(({ item, index }) => {
+                      const displayNumber = item.questionNumber || index + 1;
+                      const active = index === safeReviewQuestionIndex;
+                      return (
+                        <button
+                          key={item.key}
+                          type="button"
+                          onClick={() =>
+                            goToReviewQuestion(index, closeAfterSelect)
+                          }
+                          className={`h-7 min-w-7 rounded-lg px-2 text-[11px] font-black leading-none transition focus:outline-none focus:ring-2 focus:ring-offset-1 ${
+                            item.correct
+                              ? "bg-blue-500 text-white hover:bg-blue-600 focus:ring-blue-300"
+                              : "bg-red-500 text-white hover:bg-red-600 focus:ring-red-300"
+                          } ${active ? "ring-2 ring-slate-900 ring-offset-1" : ""}`}
+                          aria-current={active ? "step" : undefined}
+                          aria-label={`${displayNumber}번 ${item.correct ? "정답" : "오답"} 문항으로 이동`}
+                        >
+                          {displayNumber}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    </div>
+  );
   const weeklySnapshotItems = [
     ...(canUseLesson
       ? [
@@ -3405,189 +3496,189 @@ const MyPage: React.FC = () => {
               </button>
             </div>
 
-            <div className="border-b border-slate-100 bg-white px-5 py-4 sm:px-6">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <div className="text-sm font-black text-slate-700">
-                  문항 이동
-                </div>
-                <div className="flex items-center gap-3 text-xs font-bold text-slate-400">
-                  <span className="inline-flex items-center gap-1">
-                    <span className="h-2.5 w-2.5 rounded-full bg-red-500"></span>
-                    오답
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <span className="h-2.5 w-2.5 rounded-full bg-blue-500"></span>
-                    정답
-                  </span>
-                </div>
-              </div>
-              <div className="max-h-32 space-y-2 overflow-y-auto pr-1">
-                {selectedReviewProgressGroups.map((group) => (
-                  <div
-                    key={group.key}
-                    className="grid gap-1.5 sm:grid-cols-[minmax(8rem,13rem)_minmax(0,1fr)] sm:items-start"
-                  >
-                    <div className="truncate text-[11px] font-black leading-6 text-slate-500">
-                      {group.label}
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                      {group.items.map(({ item, index }) => {
-                        const displayNumber = item.questionNumber || index + 1;
-                        const active = index === safeReviewQuestionIndex;
-                        return (
-                          <button
-                            key={item.key}
-                            type="button"
-                            onClick={() => goToReviewQuestion(index)}
-                            className={`h-6 min-w-6 rounded-md px-1.5 text-[10px] font-black leading-none transition focus:outline-none focus:ring-2 focus:ring-offset-1 ${
-                              item.correct
-                                ? "bg-blue-500 text-white hover:bg-blue-600 focus:ring-blue-300"
-                                : "bg-red-500 text-white hover:bg-red-600 focus:ring-red-300"
-                            } ${active ? "ring-2 ring-slate-900 ring-offset-1" : ""}`}
-                            aria-current={active ? "step" : undefined}
-                            aria-label={`${displayNumber}번 ${item.correct ? "정답" : "오답"} 문항으로 이동`}
-                          >
-                            {displayNumber}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
+            <div className="flex items-center justify-between gap-3 border-b border-slate-100 bg-white px-5 py-3 lg:hidden">
+              <button
+                type="button"
+                onClick={() => setReviewSidebarOpen(true)}
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+              >
+                <i className="fas fa-bars text-xs"></i>
+                단원별 문항
+              </button>
+              <div className="rounded-full bg-slate-100 px-3 py-1 text-sm font-black text-slate-600">
+                {selectedReviewItems.length > 0
+                  ? `${safeReviewQuestionIndex + 1} / ${selectedReviewItems.length}`
+                  : "0 / 0"}
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-5 py-5 sm:px-6">
-              {selectedReviewItem ? (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        goToReviewQuestion(safeReviewQuestionIndex - 1)
-                      }
-                      disabled={safeReviewQuestionIndex === 0}
-                      className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      <i className="fas fa-chevron-left text-xs"></i>
-                      이전
-                    </button>
-                    <div className="rounded-full bg-slate-100 px-3 py-1 text-sm font-black text-slate-600">
-                      {safeReviewQuestionIndex + 1} /{" "}
-                      {selectedReviewItems.length}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        goToReviewQuestion(safeReviewQuestionIndex + 1)
-                      }
-                      disabled={
-                        safeReviewQuestionIndex >=
-                        selectedReviewItems.length - 1
-                      }
-                      className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      다음
-                      <i className="fas fa-chevron-right text-xs"></i>
-                    </button>
-                  </div>
+            <div className="relative flex min-h-0 flex-1">
+              <aside className="hidden w-80 shrink-0 overflow-y-auto border-r border-slate-100 bg-slate-50/70 px-5 py-5 lg:block">
+                {renderReviewNavigation(false)}
+              </aside>
 
-                  <article
-                    key={selectedReviewItem.key}
-                    className={`rounded-2xl border p-4 ${
-                      selectedReviewItem.correct
-                        ? "border-blue-100 bg-blue-50/45"
-                        : "border-red-100 bg-red-50/70 ring-1 ring-red-100"
-                    }`}
-                  >
-                    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-                      <div className="mb-2 flex flex-wrap items-center gap-2">
-                        <span
-                          className={`inline-flex h-8 min-w-8 items-center justify-center rounded-full px-2 text-sm font-black text-white ${
-                            selectedReviewItem.correct
-                              ? "bg-blue-500"
-                              : "bg-red-500"
-                          }`}
-                        >
-                          {selectedReviewItem.questionNumber ||
-                            safeReviewQuestionIndex + 1}
-                        </span>
-                        <span
-                          className={`rounded-full px-3 py-1 text-xs font-black ${
-                            selectedReviewItem.correct
-                              ? "bg-blue-50 text-blue-600"
-                              : "bg-red-50 text-red-600"
-                          }`}
-                        >
-                          {selectedReviewItem.correct ? "정답" : "오답"}
-                        </span>
-                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500">
-                          {selectedReviewItem.hierarchyLabel}
-                        </span>
+              {reviewSidebarOpen && (
+                <div className="absolute inset-0 z-20 flex bg-slate-950/35 lg:hidden">
+                  <div className="h-full w-[min(22rem,86vw)] overflow-y-auto bg-white px-5 py-5 shadow-2xl">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div className="text-base font-black text-slate-900">
+                        문항 이동
                       </div>
-                      <div className="whitespace-pre-wrap break-keep text-base font-black leading-7 text-slate-900">
-                        {selectedReviewItem.question}
+                      <button
+                        type="button"
+                        onClick={() => setReviewSidebarOpen(false)}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 text-slate-500 transition hover:bg-slate-50"
+                        aria-label="단원별 문항 닫기"
+                      >
+                        <i className="fas fa-times text-xs"></i>
+                      </button>
+                    </div>
+                    {renderReviewNavigation(true)}
+                  </div>
+                  <button
+                    type="button"
+                    className="min-w-0 flex-1"
+                    onClick={() => setReviewSidebarOpen(false)}
+                    aria-label="단원별 문항 닫기"
+                  />
+                </div>
+              )}
+
+              <div className="min-w-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">
+                {selectedReviewItem ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          goToReviewQuestion(safeReviewQuestionIndex - 1)
+                        }
+                        disabled={safeReviewQuestionIndex === 0}
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        <i className="fas fa-chevron-left text-xs"></i>
+                        이전
+                      </button>
+                      <div className="hidden rounded-full bg-slate-100 px-3 py-1 text-sm font-black text-slate-600 lg:block">
+                        {selectedReviewItems.length > 0
+                          ? `${safeReviewQuestionIndex + 1} / ${selectedReviewItems.length}`
+                          : "0 / 0"}
                       </div>
-                      {selectedReviewItem.image && (
-                        <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-2 text-center">
-                          <img
-                            src={selectedReviewItem.image}
-                            alt="문항 첨부 이미지"
-                            className="mx-auto max-h-72 max-w-full object-contain"
+                      <button
+                        type="button"
+                        onClick={() =>
+                          goToReviewQuestion(safeReviewQuestionIndex + 1)
+                        }
+                        disabled={
+                          safeReviewQuestionIndex >=
+                          selectedReviewItems.length - 1
+                        }
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        다음
+                        <i className="fas fa-chevron-right text-xs"></i>
+                      </button>
+                    </div>
+
+                    <article
+                      key={selectedReviewItem.key}
+                      className={`rounded-2xl border p-4 ${
+                        selectedReviewItem.correct
+                          ? "border-blue-100 bg-blue-50/45"
+                          : "border-red-100 bg-red-50/70 ring-1 ring-red-100"
+                      }`}
+                    >
+                      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+                        <div className="mb-2 flex flex-wrap items-center gap-2">
+                          <span
+                            className={`inline-flex h-8 min-w-8 items-center justify-center rounded-full px-2 text-sm font-black text-white ${
+                              selectedReviewItem.correct
+                                ? "bg-blue-500"
+                                : "bg-red-500"
+                            }`}
+                          >
+                            {selectedReviewItem.questionNumber ||
+                              safeReviewQuestionIndex + 1}
+                          </span>
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-black ${
+                              selectedReviewItem.correct
+                                ? "bg-blue-50 text-blue-600"
+                                : "bg-red-50 text-red-600"
+                            }`}
+                          >
+                            {selectedReviewItem.correct ? "정답" : "오답"}
+                          </span>
+                          <span className="whitespace-normal break-keep rounded-full bg-slate-100 px-3 py-1 text-xs font-black leading-5 text-slate-500">
+                            {selectedReviewItem.hierarchyLabel}
+                          </span>
+                        </div>
+                        <div className="whitespace-pre-wrap break-keep text-base font-black leading-7 text-slate-900">
+                          {selectedReviewItem.question}
+                        </div>
+                        {selectedReviewItem.image && (
+                          <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-2 text-center">
+                            <img
+                              src={selectedReviewItem.image}
+                              alt="문항 첨부 이미지"
+                              className="mx-auto max-h-72 max-w-full object-contain"
+                            />
+                          </div>
+                        )}
+                      </div>
+                      {selectedReviewItem.passage && (
+                        <div className="mt-3">
+                          <div className="mb-1 text-xs font-black text-slate-500">
+                            본문
+                          </div>
+                          <QuizPassage
+                            value={selectedReviewItem.passage}
+                            surface="muted"
                           />
                         </div>
                       )}
-                    </div>
-                    {selectedReviewItem.passage && (
-                      <div className="mt-3">
-                        <div className="mb-1 text-xs font-black text-slate-500">
-                          본문
+                      <div className="mt-3 grid gap-2 text-sm font-bold leading-6 text-slate-700 sm:grid-cols-2">
+                        <div className="rounded-xl bg-white px-3 py-2">
+                          <span className="block text-xs font-black text-slate-500">
+                            {selectedReviewItem.correct
+                              ? "나의 답"
+                              : "나의 오답"}
+                          </span>
+                          <span
+                            className={`mt-1 block whitespace-pre-wrap break-keep text-base font-black ${
+                              selectedReviewItem.correct
+                                ? "text-blue-600"
+                                : "text-red-500"
+                            }`}
+                          >
+                            {selectedReviewItem.userAnswer || "(미입력)"}
+                          </span>
                         </div>
-                        <QuizPassage
-                          value={selectedReviewItem.passage}
-                          surface="muted"
-                        />
+                        <div className="rounded-xl bg-white px-3 py-2">
+                          <span className="block text-xs font-black text-slate-500">
+                            정답
+                          </span>
+                          <span className="mt-1 block whitespace-pre-wrap break-keep text-base font-black text-emerald-600">
+                            {selectedReviewItem.answer}
+                          </span>
+                        </div>
                       </div>
-                    )}
-                    <div className="mt-3 grid gap-2 text-sm font-bold leading-6 text-slate-700 sm:grid-cols-2">
-                      <div className="rounded-xl bg-white px-3 py-2">
-                        <span className="block text-xs font-black text-slate-500">
-                          {selectedReviewItem.correct ? "나의 답" : "나의 오답"}
-                        </span>
-                        <span
-                          className={`mt-1 block whitespace-pre-wrap break-keep text-base font-black ${
-                            selectedReviewItem.correct
-                              ? "text-blue-600"
-                              : "text-red-500"
-                          }`}
-                        >
-                          {selectedReviewItem.userAnswer || "(미입력)"}
-                        </span>
+                      <div className="mt-2 rounded-xl bg-white px-3 py-2 text-sm font-semibold leading-6 text-slate-600">
+                        해설: {selectedReviewItem.explanation}
                       </div>
-                      <div className="rounded-xl bg-white px-3 py-2">
-                        <span className="block text-xs font-black text-slate-500">
-                          정답
-                        </span>
-                        <span className="mt-1 block whitespace-pre-wrap break-keep text-base font-black text-emerald-600">
-                          {selectedReviewItem.answer}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="mt-2 rounded-xl bg-white px-3 py-2 text-sm font-semibold leading-6 text-slate-600">
-                      해설: {selectedReviewItem.explanation}
-                    </div>
-                  </article>
-                </div>
-              ) : (
-                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-16 text-center">
-                  <div className="text-lg font-black text-slate-700">
-                    표시할 문항이 없습니다.
+                    </article>
                   </div>
-                  <p className="mt-2 text-sm font-bold text-slate-400">
-                    응시 기록을 다시 불러온 뒤 확인해 주세요.
-                  </p>
-                </div>
-              )}
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-16 text-center">
+                    <div className="text-lg font-black text-slate-700">
+                      표시할 문항이 없습니다.
+                    </div>
+                    <p className="mt-2 text-sm font-bold text-slate-400">
+                      응시 기록을 다시 불러온 뒤 확인해 주세요.
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
