@@ -1257,14 +1257,6 @@ const LessonContent: React.FC<LessonContentProps> = ({
           ? "반영 중"
           : `${LESSON_CORE_POINTS_REWARD_LABEL} 받기`}
       </strong>
-      <span
-        className="lesson-core-point-floating-status__runner lesson-core-point-floating-status__runner--a"
-        aria-hidden="true"
-      />
-      <span
-        className="lesson-core-point-floating-status__runner lesson-core-point-floating-status__runner--b"
-        aria-hidden="true"
-      />
     </>
   );
   const floatingSaveControls = canPersist ? (

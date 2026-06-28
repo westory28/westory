@@ -206,6 +206,7 @@ button.lesson-core-point-floating-status:disabled {
   min-height: 2.65rem;
   align-items: center;
   gap: 0.45rem;
+  overflow: hidden;
   padding-inline: 0.72rem;
 }
 
@@ -264,33 +265,54 @@ button.lesson-core-point-floating-status:disabled {
   line-height: 1;
 }
 
-.lesson-core-point-floating-status__runner {
-  position: absolute;
-  z-index: 2;
-  left: 10%;
-  top: -3px;
-  width: 42%;
-  height: 4px;
-  border-radius: 9999px;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgba(255, 255, 255, 0.78) 22%,
-    rgba(254, 240, 138, 0.92) 48%,
-    rgba(245, 158, 11, 0.86) 72%,
-    transparent 100%
-  );
-  box-shadow:
-    0 0 7px rgba(245, 158, 11, 0.42),
-    0 0 12px rgba(250, 204, 21, 0.24);
-  opacity: 0;
-  pointer-events: none;
-  transform: translate(-50%, -50%);
-  animation: westory-floating-core-point-runner 4.8s linear infinite;
+.lesson-core-point-floating-status--reward.is-claimable {
+  border-color: rgba(245, 158, 11, 0.42);
 }
 
-.lesson-core-point-floating-status__runner--b {
-  animation-delay: -2.4s;
+.lesson-core-point-floating-status--reward.is-claimable::before {
+  inset: -76%;
+  z-index: 0;
+  border-radius: 9999px;
+  padding: 0;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg 24deg,
+    rgba(255, 255, 255, 0.78) 40deg,
+    rgba(254, 240, 138, 0.92) 58deg,
+    rgba(245, 158, 11, 0.82) 82deg,
+    transparent 108deg 150deg,
+    rgba(255, 255, 255, 0.6) 168deg,
+    rgba(254, 240, 138, 0.78) 188deg,
+    rgba(245, 158, 11, 0.68) 214deg,
+    transparent 238deg 360deg
+  );
+  filter: drop-shadow(0 0 7px rgba(245, 158, 11, 0.38));
+  opacity: 0.9;
+  transform-origin: center;
+  animation: westory-core-point-border-spin 4.8s linear infinite;
+  -webkit-mask: none;
+  mask: none;
+}
+
+.lesson-core-point-floating-status--reward.is-claimable::after {
+  inset: 2px;
+  z-index: 1;
+  border-radius: calc(1.1rem - 2px);
+  background:
+    radial-gradient(
+      circle at 18% 16%,
+      rgba(255, 255, 255, 0.94),
+      transparent 34%
+    ),
+    linear-gradient(
+      135deg,
+      rgba(255, 251, 235, 0.98),
+      rgba(254, 243, 199, 0.98) 50%,
+      rgba(253, 230, 138, 0.94)
+    );
+  filter: none;
+  opacity: 1;
+  animation: none;
 }
 
 .lesson-core-point {
@@ -704,85 +726,6 @@ button.lesson-core-point-floating-status:disabled {
   }
 }
 
-@keyframes westory-floating-core-point-runner {
-  0% {
-    left: 14%;
-    top: -3px;
-    width: 34%;
-    opacity: 0;
-    transform: translate(-50%, -50%) rotate(0deg);
-  }
-
-  4% {
-    opacity: 0.95;
-  }
-
-  24% {
-    left: 86%;
-    top: -3px;
-    width: 34%;
-    opacity: 0.95;
-    transform: translate(-50%, -50%) rotate(0deg);
-  }
-
-  25% {
-    left: calc(100% + 3px);
-    top: 14%;
-    width: 24%;
-    transform: translate(-50%, -50%) rotate(90deg);
-  }
-
-  49% {
-    left: calc(100% + 3px);
-    top: 86%;
-    width: 24%;
-    opacity: 0.95;
-    transform: translate(-50%, -50%) rotate(90deg);
-  }
-
-  50% {
-    left: 86%;
-    top: calc(100% + 3px);
-    width: 34%;
-    transform: translate(-50%, -50%) rotate(180deg);
-  }
-
-  74% {
-    left: 14%;
-    top: calc(100% + 3px);
-    width: 34%;
-    opacity: 0.95;
-    transform: translate(-50%, -50%) rotate(180deg);
-  }
-
-  75% {
-    left: -3px;
-    top: 86%;
-    width: 24%;
-    transform: translate(-50%, -50%) rotate(270deg);
-  }
-
-  96% {
-    opacity: 0.95;
-  }
-
-  99% {
-    left: -3px;
-    top: 14%;
-    width: 24%;
-    opacity: 0;
-    transform: translate(-50%, -50%) rotate(270deg);
-  }
-
-  100% {
-    left: 14%;
-    top: -3px;
-    width: 34%;
-    opacity: 0;
-    transform: translate(-50%, -50%) rotate(0deg);
-  }
-}
-
 @keyframes westory-core-point-glow {
   0%,
   100% {
@@ -974,7 +917,6 @@ button.lesson-core-point-floating-status:disabled {
   .lesson-core-point__inner::after,
   .lesson-core-point-floating-status.is-claimable::before,
   .lesson-core-point-floating-status.is-claimable::after,
-  .lesson-core-point-floating-status__runner,
   .lesson-core-burst,
   .lesson-core-burst__ring,
   .lesson-core-burst__flare,
