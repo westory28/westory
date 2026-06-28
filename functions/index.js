@@ -13,6 +13,7 @@ const db = getFirestore();
 const REGION = 'asia-northeast3';
 const ADMIN_EMAIL = 'westoria28@gmail.com';
 const SCHOOL_EMAIL_PATTERN = /@yongshin-ms\.ms\.kr$/i;
+const LESSON_CORE_POINT_RESET_TEST_LABEL = '방테스트';
 const DEFAULT_POINT_RANK_TIERS = [
   { code: 'tier_1', minPoints: 0 },
   { code: 'tier_2', minPoints: 50 },
@@ -2989,6 +2990,90 @@ const collectCurrentSemesterStudentRefs = async (year, semester, uid) => {
   return Array.from(refsByPath.values());
 };
 
+const normalizeLessonCorePointResetIdentity = (value) =>
+  String(value ?? '')
+    .toLowerCase()
+    .replace(/[\s._-]+/g, '')
+    .trim();
+
+const isLessonCorePointResetTestStudent = (profile = {}, uid = '') => {
+  const candidates = [
+    uid,
+    profile.email,
+    profile.studentName,
+    profile.name,
+    profile.displayName,
+    profile.nickname,
+    profile.customName,
+  ];
+  return candidates.some((candidate) => {
+    const raw = String(candidate ?? '').trim();
+    const normalized = normalizeLessonCorePointResetIdentity(raw);
+    return raw.includes(LESSON_CORE_POINT_RESET_TEST_LABEL)
+      || normalized.includes('bangtest');
+  });
+};
+
+const collectLessonCorePointResetUpdates = async (year, semester, uid) => {
+  const progressRootRef = db.doc(`${getSemesterRoot(year, semester)}/lesson_progress/${uid}`);
+  const [progressRootSnap, progressUnitsSnap] = await Promise.all([
+    progressRootRef.get(),
+    progressRootRef.collection('units').get(),
+  ]);
+  const updates = [];
+  let resetRoot = false;
+  let resetUnitCount = 0;
+  let removedCorePointFindCount = 0;
+
+  if (progressRootSnap.exists) {
+    const rootData = progressRootSnap.data() || {};
+    const hasRootCorePointState =
+      Object.prototype.hasOwnProperty.call(rootData, 'corePointRewardClaimed')
+      || Object.prototype.hasOwnProperty.call(rootData, 'corePointCompletedAt')
+      || Object.prototype.hasOwnProperty.call(rootData, 'corePointFoundCount')
+      || Object.prototype.hasOwnProperty.call(rootData, 'corePointTotalCount');
+    if (hasRootCorePointState) {
+      updates.push({
+        ref: progressRootRef,
+        data: {
+          corePointRewardClaimed: FieldValue.delete(),
+          corePointCompletedAt: FieldValue.delete(),
+          corePointFoundCount: FieldValue.delete(),
+          corePointTotalCount: FieldValue.delete(),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+      });
+      resetRoot = true;
+    }
+  }
+
+  progressUnitsSnap.docs.forEach((unitDoc) => {
+    const data = unitDoc.data() || {};
+    const hasCorePointFinds = Object.prototype.hasOwnProperty.call(data, 'corePointFinds');
+    const hasCorePointCompletedAt = Object.prototype.hasOwnProperty.call(data, 'corePointCompletedAt');
+    if (!hasCorePointFinds && !hasCorePointCompletedAt) return;
+    if (Array.isArray(data.corePointFinds)) {
+      removedCorePointFindCount += data.corePointFinds.length;
+    }
+    updates.push({
+      ref: unitDoc.ref,
+      data: {
+        corePointFinds: FieldValue.delete(),
+        corePointCompletedAt: FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+    });
+    resetUnitCount += 1;
+  });
+
+  return {
+    updates,
+    resetRoot,
+    resetUnitCount,
+    removedCorePointFindCount,
+  };
+};
+
 const collectKnownUserStudentDataRefs = async (uid) => {
   const refsByPath = new Map();
   const userCollections = [
@@ -3284,6 +3369,68 @@ exports.deleteStudentData = onCall({ region: REGION, timeoutSeconds: 300, memory
     authUserDeleteError,
     deletedRelatedDocCount,
     ...rosterCleanup,
+  };
+});
+
+exports.resetLessonCorePointProgress = onCall({ region: REGION, timeoutSeconds: 180, memory: '512MiB' }, async (request) => {
+  const manager = await assertStudentDataManager(request);
+  const { year, semester } = assertYearSemester(request.data || {});
+  const targetUid = String(
+    request.data?.uid
+    || request.data?.studentUid
+    || request.data?.targetUid
+    || '',
+  ).trim();
+  if (!targetUid) {
+    throw new HttpsError('invalid-argument', 'Student uid is required.');
+  }
+
+  const userRef = db.doc(`users/${targetUid}`);
+  const userSnap = await userRef.get();
+  if (!userSnap.exists) {
+    throw new HttpsError('not-found', 'Student user document does not exist.');
+  }
+
+  const targetProfile = userSnap.data() || {};
+  if (!isLessonCorePointResetTestStudent(targetProfile, targetUid)) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Lesson core point reset is only allowed for the Bang test account.',
+    );
+  }
+
+  const {
+    updates,
+    resetRoot,
+    resetUnitCount,
+    removedCorePointFindCount,
+  } = await collectLessonCorePointResetUpdates(year, semester, targetUid);
+
+  for (let index = 0; index < updates.length; index += 400) {
+    const batch = db.batch();
+    updates.slice(index, index + 400).forEach((entry) => {
+      batch.update(entry.ref, entry.data);
+    });
+    await batch.commit();
+  }
+
+  console.info('Lesson core point progress reset.', {
+    actorUid: manager.uid,
+    targetUid,
+    year,
+    semester,
+    resetRoot,
+    resetUnitCount,
+    removedCorePointFindCount,
+  });
+
+  return {
+    uid: targetUid,
+    year,
+    semester,
+    resetRoot,
+    resetUnitCount,
+    removedCorePointFindCount,
   };
 });
 

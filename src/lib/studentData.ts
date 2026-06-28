@@ -34,6 +34,15 @@ export interface StudentDataUpdateResult {
   updatedRosterRowCount: number;
 }
 
+export interface LessonCorePointResetResult {
+  uid: string;
+  year: string;
+  semester: string;
+  resetRoot: boolean;
+  resetUnitCount: number;
+  removedCorePointFindCount: number;
+}
+
 export const deleteStudentData = async (
   config: ConfigLike,
   uid: string,
@@ -43,6 +52,23 @@ export const deleteStudentData = async (
     { uid: string; year: string; semester: string },
     StudentDataDeleteResult
   >("deleteStudentData");
+  const result = await callable({
+    uid,
+    year,
+    semester,
+  });
+  return result.data;
+};
+
+export const resetLessonCorePointProgress = async (
+  config: ConfigLike,
+  uid: string,
+): Promise<LessonCorePointResetResult> => {
+  const { year, semester } = getYearSemester(config);
+  const callable = await getHttpsCallable<
+    { uid: string; year: string; semester: string },
+    LessonCorePointResetResult
+  >("resetLessonCorePointProgress");
   const result = await callable({
     uid,
     year,

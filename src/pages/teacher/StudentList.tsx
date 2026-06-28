@@ -5,7 +5,11 @@ import MoveClassModal from "./components/MoveClassModal";
 import StudentDetailModal from "./components/StudentDetailModal";
 import { useAuth } from "../../contexts/AuthContext";
 import { canEditStudentList } from "../../lib/permissions";
-import { deleteStudentData, updateStudentData } from "../../lib/studentData";
+import {
+  deleteStudentData,
+  resetLessonCorePointProgress,
+  updateStudentData,
+} from "../../lib/studentData";
 
 interface Student {
   id: string;
@@ -100,6 +104,24 @@ const classSortValue = (classValue: string) => {
 const getStudentIdentityLabel = (student: Pick<Student, "email" | "userId">) =>
   student.email || student.userId;
 
+const normalizeBangTestIdentity = (value: unknown) =>
+  String(value ?? "")
+    .toLowerCase()
+    .replace(/[\s._-]+/g, "")
+    .trim();
+
+const isBangTestStudent = (
+  student: Pick<Student, "name" | "email" | "userId" | "id">,
+) => {
+  return [student.name, student.email, student.userId, student.id].some(
+    (value) => {
+      const raw = String(value ?? "").trim();
+      const normalized = normalizeBangTestIdentity(raw);
+      return raw.includes("방테스트") || normalized.includes("bangtest");
+    },
+  );
+};
+
 const getStudentDeleteErrorMessage = (error: unknown) => {
   const code = String((error as { code?: string })?.code || "");
   if (code.includes("permission-denied")) {
@@ -112,6 +134,23 @@ const getStudentDeleteErrorMessage = (error: unknown) => {
     return "삭제 서버 응답이 지연되고 있습니다. 잠시 후 다시 시도해 주세요.";
   }
   return "학생 삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.";
+};
+
+const getCorePointResetErrorMessage = (error: unknown) => {
+  const code = String((error as { code?: string })?.code || "");
+  if (code.includes("permission-denied")) {
+    return "핵심포인트 초기화 권한이 없습니다. 관리자 권한으로 다시 확인해 주세요.";
+  }
+  if (code.includes("failed-precondition")) {
+    return "방테스트 계정만 핵심포인트 기록을 초기화할 수 있습니다.";
+  }
+  if (code.includes("not-found")) {
+    return "초기화할 학생 계정을 찾지 못했습니다. 명단을 새로고침해 주세요.";
+  }
+  if (code.includes("unavailable") || code.includes("deadline-exceeded")) {
+    return "초기화 서버 응답이 지연되고 있습니다. 잠시 후 다시 시도해 주세요.";
+  }
+  return "핵심포인트 초기화에 실패했습니다. 잠시 후 다시 시도해 주세요.";
 };
 
 const StudentList: React.FC = () => {
@@ -145,6 +184,8 @@ const StudentList: React.FC = () => {
   const [deletingStudentIds, setDeletingStudentIds] = useState<Set<string>>(
     new Set(),
   );
+  const [resettingCorePointStudentIds, setResettingCorePointStudentIds] =
+    useState<Set<string>>(new Set());
   const readOnly = !canEditStudentList(userData, currentUser?.email || "");
 
   useEffect(() => {
@@ -526,6 +567,36 @@ const StudentList: React.FC = () => {
     }
   };
 
+  const handleResetCorePoints = async (student: Student) => {
+    if (readOnly || !isBangTestStudent(student)) return;
+    if (
+      !window.confirm(
+        `${student.name || getStudentIdentityLabel(student)} 학생의 핵심포인트 클릭 기록을 초기화하시겠습니까?\n수업자료 저장 답안은 유지하고, 핵심포인트 발견 기록과 완주 표시만 초기화합니다.`,
+      )
+    ) {
+      return;
+    }
+
+    setResettingCorePointStudentIds((current) =>
+      new Set(current).add(student.id),
+    );
+    try {
+      const result = await resetLessonCorePointProgress(config, student.userId);
+      alert(
+        `핵심포인트 기록을 초기화했습니다.\n초기화한 수업자료: ${result.resetUnitCount}개\n삭제한 발견 기록: ${result.removedCorePointFindCount}개`,
+      );
+    } catch (error) {
+      console.error("Failed to reset lesson core point progress:", error);
+      alert(getCorePointResetErrorMessage(error));
+    } finally {
+      setResettingCorePointStudentIds((current) => {
+        const next = new Set(current);
+        next.delete(student.id);
+        return next;
+      });
+    }
+  };
+
   const handleRefreshList = async () => {
     setGradeFilter("all");
     setClassFilter("all");
@@ -608,7 +679,7 @@ const StudentList: React.FC = () => {
           </div>
 
           <div className="flex-1 overflow-x-auto">
-            <table className="w-full min-w-[560px] text-left text-sm md:min-w-0">
+            <table className="w-full min-w-[680px] text-left text-sm md:min-w-0">
               <thead className="bg-gray-100 text-xs font-bold uppercase text-gray-600">
                 <tr>
                   <th className="w-10 p-4 text-center">
@@ -629,7 +700,7 @@ const StudentList: React.FC = () => {
                   <th className="w-16 p-4 text-center">번호</th>
                   <th className="w-32 p-4">이름</th>
                   <th className="hidden w-64 p-4 lg:table-cell">이메일</th>
-                  <th className="w-44 p-4 text-center">관리</th>
+                  <th className="w-64 p-4 text-center">관리</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 bg-white">
@@ -693,7 +764,7 @@ const StudentList: React.FC = () => {
                         {student.email}
                       </td>
                       <td className="p-4 text-center">
-                        <div className="flex justify-center gap-1">
+                        <div className="flex flex-wrap justify-center gap-1">
                           <button
                             onClick={() => {
                               setSelectedStudent(student);
@@ -733,6 +804,31 @@ const StudentList: React.FC = () => {
                                 <i className="fas fa-trash"></i>
                                 <span className="hidden lg:inline">삭제</span>
                               </button>
+                              {isBangTestStudent(student) && (
+                                <button
+                                  onClick={() =>
+                                    void handleResetCorePoints(student)
+                                  }
+                                  disabled={resettingCorePointStudentIds.has(
+                                    student.id,
+                                  )}
+                                  className="flex items-center gap-1 rounded bg-amber-50 px-2.5 py-1.5 text-xs font-bold text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                  title="방테스트 핵심포인트 클릭 기록 초기화"
+                                >
+                                  <i
+                                    className={`fas ${
+                                      resettingCorePointStudentIds.has(
+                                        student.id,
+                                      )
+                                        ? "fa-spinner fa-spin"
+                                        : "fa-undo"
+                                    }`}
+                                  ></i>
+                                  <span className="hidden lg:inline">
+                                    핵심초기화
+                                  </span>
+                                </button>
+                              )}
                             </>
                           )}
                         </div>
