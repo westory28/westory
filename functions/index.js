@@ -2804,13 +2804,34 @@ const collectQueryRefsByUid = async (collectionPath, uid) => {
   return snapshot.docs.map((docSnap) => docSnap.ref);
 };
 
+const isMissingFirestoreIndexError = (error) => {
+  const code = String(error?.code || '').trim();
+  const message = String(error?.details || error?.message || error || '').toLowerCase();
+  return (code === '9' || code === 'failed-precondition')
+    && message.includes('query requires')
+    && message.includes('index');
+};
+
 const collectStudentPerformanceScoreDocRefs = async (uid) => {
   const refsByPath = new Map();
   const ownedScoresQuery = db.collection(`users/${uid}/${PERFORMANCE_SCORE_USER_COLLECTION}`).get();
   const uidScoresQuery = db
     .collectionGroup(PERFORMANCE_SCORE_USER_COLLECTION)
     .where('uid', '==', uid)
-    .get();
+    .get()
+    .catch((error) => {
+      if (!isMissingFirestoreIndexError(error)) {
+        throw error;
+      }
+      console.warn('Skipping performance score collection group cleanup until Firestore index is ready.', {
+        uid,
+        collectionGroup: PERFORMANCE_SCORE_USER_COLLECTION,
+        field: 'uid',
+        code: String(error?.code || ''),
+        message: String(error?.details || error?.message || error || '').slice(0, 500),
+      });
+      return null;
+    });
 
   const [ownedScores, uidScores] = await Promise.all([
     ownedScoresQuery,
