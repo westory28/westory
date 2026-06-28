@@ -4,6 +4,12 @@
 @tailwind components;
 @tailwind utilities;
 
+@property --westory-core-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
 .dashboard-container {
   max-width: 1280px;
   margin: 0 auto;
@@ -50,7 +56,62 @@
   opacity: 0.74;
 }
 
+.lesson-core-point-floating-status {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 0.15rem 0.5rem;
+  width: 100%;
+  min-height: 3.15rem;
+  border: 1px solid rgba(245, 158, 11, 0.26);
+  border-radius: 1.1rem;
+  background:
+    radial-gradient(
+      circle at 16% 18%,
+      rgba(255, 255, 255, 0.92),
+      transparent 32%
+    ),
+    linear-gradient(
+      135deg,
+      rgba(255, 251, 235, 0.96),
+      rgba(254, 243, 199, 0.78)
+    );
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.58),
+    0 10px 22px rgba(146, 64, 14, 0.1);
+  color: #78350f;
+  padding: 0.52rem 0.68rem;
+  line-height: 1.15;
+}
+
+.lesson-core-point-floating-status__label {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.32rem;
+  color: #b45309;
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.lesson-core-point-floating-status strong {
+  color: #78350f;
+  font-size: 0.75rem;
+  font-weight: 900;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.lesson-core-point-floating-status__meta {
+  grid-column: 1 / -1;
+  color: rgba(120, 53, 15, 0.72);
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-align: center;
+}
+
 .lesson-core-point {
+  --westory-core-angle: 0deg;
   isolation: isolate;
   border: 0;
   border-radius: 7px;
@@ -83,37 +144,16 @@
 .lesson-core-point::before {
   content: "";
   position: absolute;
-  inset: -4px;
+  inset: -6px;
   z-index: -1;
-  border-radius: 9px;
-  padding: 2px;
+  border-radius: 11px;
   background:
-    conic-gradient(
-      from 0deg,
-      rgba(255, 255, 255, 0) 0deg,
-      rgba(255, 255, 255, 0) 18deg,
-      rgba(255, 255, 255, 0.96) 27deg,
-      rgba(250, 204, 21, 1) 39deg,
-      rgba(245, 158, 11, 0.95) 53deg,
-      rgba(255, 255, 255, 0) 74deg,
-      rgba(255, 255, 255, 0) 162deg,
-      rgba(254, 240, 138, 0.96) 184deg,
-      rgba(251, 191, 36, 1) 202deg,
-      rgba(249, 115, 22, 0.72) 218deg,
-      rgba(255, 255, 255, 0) 242deg,
-      rgba(255, 255, 255, 0) 360deg
-    );
-  filter: drop-shadow(0 0 7px rgba(245, 158, 11, 0.62));
-  mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  mask-composite: exclude;
+    radial-gradient(closest-side, rgba(254, 240, 138, 0.28), transparent 72%),
+    linear-gradient(135deg, rgba(250, 204, 21, 0.18), rgba(249, 115, 22, 0.12));
+  filter: blur(2px);
+  opacity: 0.88;
   pointer-events: none;
-  -webkit-mask:
-    linear-gradient(#000 0 0) content-box,
-    linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  animation: westory-core-point-border-spin 1.32s linear infinite;
+  animation: westory-core-point-glow 1.55s ease-in-out infinite;
 }
 
 .lesson-core-point::after {
@@ -123,9 +163,21 @@
   z-index: -2;
   border-radius: 11px;
   background:
-    radial-gradient(circle at 18% 22%, rgba(255, 255, 255, 0.86) 0 2px, transparent 3px),
-    radial-gradient(circle at 86% 74%, rgba(254, 240, 138, 0.9) 0 2px, transparent 3px),
-    radial-gradient(circle at 64% 8%, rgba(251, 191, 36, 0.72) 0 1px, transparent 3px);
+    radial-gradient(
+      circle at 18% 22%,
+      rgba(255, 255, 255, 0.86) 0 2px,
+      transparent 3px
+    ),
+    radial-gradient(
+      circle at 86% 74%,
+      rgba(254, 240, 138, 0.9) 0 2px,
+      transparent 3px
+    ),
+    radial-gradient(
+      circle at 64% 8%,
+      rgba(251, 191, 36, 0.72) 0 1px,
+      transparent 3px
+    );
   opacity: 0.78;
   pointer-events: none;
   animation: westory-core-point-spark 1.08s steps(2, end) infinite;
@@ -134,14 +186,70 @@
 .lesson-core-point__inner {
   position: absolute;
   inset: 0;
+  z-index: 1;
   border-radius: inherit;
+  overflow: visible;
   pointer-events: none;
+}
+
+.lesson-core-point__inner::before,
+.lesson-core-point__inner::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+}
+
+.lesson-core-point__inner::before {
+  inset: -4px;
+  border-radius: 10px;
+  padding: 2px;
+  background: conic-gradient(
+    from var(--westory-core-angle),
+    rgba(255, 255, 255, 0) 0deg 22deg,
+    rgba(255, 255, 255, 0.98) 33deg,
+    rgba(253, 224, 71, 1) 48deg,
+    rgba(245, 158, 11, 0.95) 62deg,
+    rgba(255, 255, 255, 0) 82deg 154deg,
+    rgba(254, 249, 195, 0.86) 174deg,
+    rgba(251, 191, 36, 0.98) 194deg,
+    rgba(249, 115, 22, 0.7) 212deg,
+    rgba(255, 255, 255, 0) 236deg 360deg
+  );
+  filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0.68));
+  animation: westory-core-point-border-orbit 1.05s linear infinite;
+}
+
+.lesson-core-point__inner::after {
+  inset: -7px;
+  border-radius: 12px;
+  padding: 4px;
+  background: conic-gradient(
+    from calc(var(--westory-core-angle) + 34deg),
+    transparent 0deg 42deg,
+    rgba(255, 255, 255, 0.96) 49deg,
+    rgba(254, 240, 138, 0.96) 57deg,
+    rgba(245, 158, 11, 0.72) 66deg,
+    transparent 78deg 360deg
+  );
+  filter: blur(0.4px) drop-shadow(0 0 9px rgba(250, 204, 21, 0.76));
+  mix-blend-mode: screen;
+  opacity: 0.92;
+  animation: westory-core-point-border-orbit 1.05s linear infinite;
 }
 
 .lesson-core-point__check {
   position: absolute;
   right: -0.55rem;
   top: -0.55rem;
+  z-index: 2;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -167,12 +275,32 @@
 
 .lesson-core-point.is-found::before {
   animation: none;
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.64), rgba(253, 224, 71, 0.26));
+  background: linear-gradient(
+    135deg,
+    rgba(245, 158, 11, 0.18),
+    rgba(253, 224, 71, 0.1)
+  );
   filter: none;
   opacity: 0.5;
 }
 
 .lesson-core-point.is-found::after {
+  animation: none;
+  opacity: 0;
+}
+
+.lesson-core-point.is-found .lesson-core-point__inner::before {
+  animation: none;
+  background: linear-gradient(
+    135deg,
+    rgba(245, 158, 11, 0.62),
+    rgba(253, 224, 71, 0.22)
+  );
+  filter: none;
+  opacity: 0.58;
+}
+
+.lesson-core-point.is-found .lesson-core-point__inner::after {
   animation: none;
   opacity: 0;
 }
@@ -195,8 +323,13 @@
   position: absolute;
   inset: 16%;
   border-radius: 9999px;
-  background:
-    radial-gradient(circle, rgba(255, 255, 255, 0.98) 0 26%, rgba(254, 240, 138, 0.95) 27% 42%, rgba(245, 158, 11, 0.58) 43% 62%, transparent 64%);
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.98) 0 26%,
+    rgba(254, 240, 138, 0.95) 27% 42%,
+    rgba(245, 158, 11, 0.58) 43% 62%,
+    transparent 64%
+  );
   box-shadow:
     0 0 16px rgba(250, 204, 21, 0.95),
     0 0 34px rgba(245, 158, 11, 0.48);
@@ -207,23 +340,22 @@
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background:
-    conic-gradient(
-      from 45deg,
-      transparent 0deg 20deg,
-      rgba(255, 255, 255, 0.92) 25deg,
-      rgba(250, 204, 21, 0.96) 36deg,
-      transparent 50deg 110deg,
-      rgba(255, 255, 255, 0.9) 116deg,
-      rgba(245, 158, 11, 0.92) 132deg,
-      transparent 146deg 200deg,
-      rgba(255, 255, 255, 0.9) 208deg,
-      rgba(250, 204, 21, 0.94) 224deg,
-      transparent 238deg 290deg,
-      rgba(255, 255, 255, 0.86) 300deg,
-      rgba(245, 158, 11, 0.86) 316deg,
-      transparent 330deg 360deg
-    );
+  background: conic-gradient(
+    from 45deg,
+    transparent 0deg 20deg,
+    rgba(255, 255, 255, 0.92) 25deg,
+    rgba(250, 204, 21, 0.96) 36deg,
+    transparent 50deg 110deg,
+    rgba(255, 255, 255, 0.9) 116deg,
+    rgba(245, 158, 11, 0.92) 132deg,
+    transparent 146deg 200deg,
+    rgba(255, 255, 255, 0.9) 208deg,
+    rgba(250, 204, 21, 0.94) 224deg,
+    transparent 238deg 290deg,
+    rgba(255, 255, 255, 0.86) 300deg,
+    rgba(245, 158, 11, 0.86) 316deg,
+    transparent 330deg 360deg
+  );
   filter: drop-shadow(0 0 8px rgba(250, 204, 21, 0.78));
 }
 
@@ -265,6 +397,25 @@
 @keyframes westory-core-point-border-spin {
   to {
     transform: rotate(1turn);
+  }
+}
+
+@keyframes westory-core-point-border-orbit {
+  to {
+    --westory-core-angle: 360deg;
+  }
+}
+
+@keyframes westory-core-point-glow {
+  0%,
+  100% {
+    opacity: 0.58;
+    transform: scale(0.985);
+  }
+
+  50% {
+    opacity: 0.95;
+    transform: scale(1.015);
   }
 }
 
@@ -317,6 +468,8 @@
 @media (prefers-reduced-motion: reduce) {
   .lesson-core-point::before,
   .lesson-core-point::after,
+  .lesson-core-point__inner::before,
+  .lesson-core-point__inner::after,
   .lesson-core-burst,
   .lesson-core-burst__ring {
     animation: none;
@@ -649,6 +802,13 @@
 .student-calendar-shell__control-cluster--view {
   gap: 0.45rem;
   padding-right: 0.32rem;
+}
+
+.student-calendar-shell__calendar-tools
+  > .student-calendar-shell__control-cluster:first-child {
+  border-color: transparent;
+  background: transparent;
+  padding: 0;
 }
 
 .student-calendar-shell__attendance-tools {
@@ -1551,7 +1711,21 @@
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
   .fc
   .fc-daygrid-day.fc-day-today {
-  background: rgba(219, 234, 254, 0.24) !important;
+  background: #eff6ff !important;
+  box-shadow: inset 0 0 0 2px rgba(59, 130, 246, 0.72);
+}
+
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-daygrid-day.fc-day-today.fc-day-selected {
+  box-shadow: none;
+}
+
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-daygrid-day.fc-day-today
+  .student-calendar-day-label {
+  font-weight: 900;
 }
 
 @media (min-width: 640px) and (max-width: 1280px) {

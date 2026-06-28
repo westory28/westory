@@ -120,6 +120,7 @@ export type PointTransactionType =
   | "quiz_bonus"
   | "lesson"
   | "lesson_core_points"
+  | "lesson_core_points_reclaim"
   | "think_cloud"
   | "map_tag"
   | "history_dictionary"
@@ -167,6 +168,11 @@ export interface PointTransaction {
   createdBy: string;
   targetMonth?: string;
   targetDate?: string;
+  reclaimed?: boolean;
+  reclaimedAt?: any;
+  reclaimedBy?: string;
+  reclaimReason?: string;
+  originalTransactionId?: string;
   createdAt?: any;
 }
 

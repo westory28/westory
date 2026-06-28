@@ -40,6 +40,7 @@ interface LessonWorksheetStageProps {
   studentAnswers?: Record<string, { value?: string; status?: AnswerStatus }>;
   foundCorePointIds?: string[];
   corePointRewardPending?: boolean;
+  hideCorePointStatus?: boolean;
   onSelectBlank?: (blankId: string) => void;
   onDeleteBlank?: (blankId: string) => void;
   onSelectExamHighlight?: (highlightId: string) => void;
@@ -701,6 +702,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
   studentAnswers = {},
   foundCorePointIds = [],
   corePointRewardPending = false,
+  hideCorePointStatus = false,
   onSelectBlank,
   onDeleteBlank,
   onSelectExamHighlight,
@@ -2437,7 +2439,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
             </div>
           </>
         )}
-        {isStudentSolveMode && corePointCount > 0 && (
+        {isStudentSolveMode && !hideCorePointStatus && corePointCount > 0 && (
           <div
             className="lesson-core-point-status"
             role="status"

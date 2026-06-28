@@ -55,6 +55,7 @@ const effectiveLessonsCache = new Map<
   CacheEntry<{
     scopedLatestLessons: Partial<LessonData>[];
     legacyLatestLessons: Partial<LessonData>[];
+    visibleLessons: Partial<LessonData>[];
     visibleUnitIds: Set<string>;
   }>
 >();
@@ -182,15 +183,20 @@ const readEffectiveStudentLessons = (config: ConfigLike) =>
       (lesson) => !scopedUnitIds.has(String(lesson.unitId || "").trim()),
     );
     const effectiveLessons = [...scopedLatestLessons, ...legacyLatestLessons];
+    const visibleLessons = effectiveLessons.filter(isStudentVisibleLesson);
 
     return {
       scopedLatestLessons,
       legacyLatestLessons,
-      visibleUnitIds: getLessonUnitIds(
-        effectiveLessons.filter(isStudentVisibleLesson),
-      ),
+      visibleLessons,
+      visibleUnitIds: getLessonUnitIds(visibleLessons),
     };
   });
+
+export const readStudentVisibleLessons = (config: ConfigLike) =>
+  readEffectiveStudentLessons(config).then(
+    ({ visibleLessons }) => visibleLessons,
+  );
 
 export const readStudentVisibleCurriculumTree = (config: ConfigLike) =>
   readCached(visibleCurriculumTreeCache, getScopeKey(config), async () => {

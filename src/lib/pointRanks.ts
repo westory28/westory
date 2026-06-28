@@ -844,24 +844,33 @@ export const getPointRankPolicyValidationError = (
 };
 
 export const isPointRankEarnTransaction = (
-  transaction: Pick<PointTransaction, "type" | "delta">,
-) =>
-  [
-    "attendance",
-    "attendance_monthly_bonus",
-    "attendance_milestone_bonus",
-    "quiz",
-    "quiz_bonus",
-    "lesson",
-    "think_cloud",
-    "map_tag",
-    "history_classroom",
-    "history_classroom_bonus",
-    "manual_adjust",
-  ].includes(transaction.type) && Number(transaction.delta || 0) > 0;
+  transaction: Pick<PointTransaction, "type" | "delta"> & {
+    reclaimed?: boolean;
+  },
+) => {
+  if (transaction.reclaimed === true) return false;
+  return (
+    [
+      "attendance",
+      "attendance_monthly_bonus",
+      "attendance_milestone_bonus",
+      "quiz",
+      "quiz_bonus",
+      "lesson",
+      "lesson_core_points",
+      "think_cloud",
+      "map_tag",
+      "history_classroom",
+      "history_classroom_bonus",
+      "manual_adjust",
+    ].includes(transaction.type) && Number(transaction.delta || 0) > 0
+  );
+};
 
 export const sumPointRankEarnedPoints = (
-  transactions: Array<Pick<PointTransaction, "type" | "delta">>,
+  transactions: Array<
+    Pick<PointTransaction, "type" | "delta"> & { reclaimed?: boolean }
+  >,
 ) =>
   transactions.reduce(
     (total, transaction) =>
@@ -872,7 +881,9 @@ export const sumPointRankEarnedPoints = (
   );
 
 export const buildPointRankEarnedPointsByUid = (
-  transactions: Array<Pick<PointTransaction, "uid" | "type" | "delta">>,
+  transactions: Array<
+    Pick<PointTransaction, "uid" | "type" | "delta"> & { reclaimed?: boolean }
+  >,
 ) =>
   transactions.reduce<Record<string, number>>((accumulator, transaction) => {
     const uid = String(transaction.uid || "").trim();

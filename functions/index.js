@@ -766,6 +766,7 @@ const WIS_HALL_OF_FAME_SNAPSHOT_VERSION = 6;
 const WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS = 4;
 const WIS_HALL_OF_FAME_STALE_MS = WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS * 60 * 60 * 1000;
 const WIS_HALL_OF_FAME_GRADE_KEY = '3';
+const LESSON_CORE_POINTS_ALL_SOURCE_ID = 'lesson-core-points-all';
 const DEFAULT_HALL_OF_FAME_PROFILE_ICON = '😀';
 const DEFAULT_HALL_OF_FAME_GRADE_RANK_LIMIT = 10;
 const DEFAULT_HALL_OF_FAME_CLASS_RANK_LIMIT = 10;
@@ -2528,7 +2529,7 @@ const quizAttemptMatchesClass = (attempt = {}, normalizedClassId) => {
 const shouldCountTowardsEarnedTotal = (pointTransaction = {}) => {
   const type = String(pointTransaction.type || '').trim();
   const delta = Number(pointTransaction.delta || 0);
-  if (type === 'history_dictionary' && pointTransaction.reclaimed === true) {
+  if (pointTransaction.reclaimed === true) {
     return false;
   }
   if (delta <= 0) return false;
@@ -3873,6 +3874,115 @@ const createTransactionPayload = ({
   targetDate: String(targetDate || '').trim(),
   createdAt: FieldValue.serverTimestamp(),
 });
+
+const getLessonCorePointTimestampMs = (value) => {
+  if (!value) return 0;
+  if (typeof value.toMillis === 'function') return value.toMillis();
+  if (Number(value.seconds || 0) || Number(value.nanoseconds || 0)) {
+    return (Number(value.seconds || 0) * 1000) + Math.floor(Number(value.nanoseconds || 0) / 1000000);
+  }
+  const parsed = Date.parse(String(value || ''));
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const getLessonUpdatedAtMs = (lesson = {}) => Math.max(
+  getLessonCorePointTimestampMs(lesson.updatedAt),
+  getLessonCorePointTimestampMs(lesson.createdAt),
+);
+
+const getLatestLessonsByUnitIdForCorePoints = (lessons = []) => {
+  const latestByUnitId = new Map();
+  [...lessons]
+    .sort((left, right) => getLessonUpdatedAtMs(right) - getLessonUpdatedAtMs(left))
+    .forEach((lesson) => {
+      const unitId = String(lesson?.unitId || '').trim();
+      if (!unitId || latestByUnitId.has(unitId)) return;
+      latestByUnitId.set(unitId, lesson);
+    });
+  return Array.from(latestByUnitId.values());
+};
+
+const isStudentVisibleLessonForCorePoints = (lesson = {}) => lesson.isVisibleToStudents !== false;
+
+const normalizeLessonCorePointIds = (lesson = {}) => {
+  const rawHighlights = Array.isArray(lesson.worksheetExamHighlights)
+    ? lesson.worksheetExamHighlights
+    : [];
+  return rawHighlights
+    .map((item, index) => {
+      const widthRatio = Math.max(0, Number(item?.widthRatio || 0));
+      const heightRatio = Math.max(0, Number(item?.heightRatio || 0));
+      if (widthRatio <= 0 || heightRatio <= 0) return '';
+      return String(item?.id || '').trim() || `exam-highlight-${index + 1}`;
+    })
+    .filter(Boolean);
+};
+
+const readEffectiveVisibleLessonCorePointCatalog = async (transaction, year, semester) => {
+  const scopedSnapshot = await transaction.get(
+    db.collection(`${getSemesterRoot(year, semester)}/lessons`),
+  );
+  const scopedLessons = getLatestLessonsByUnitIdForCorePoints(
+    scopedSnapshot.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() || {}) })),
+  );
+  const scopedUnitIds = new Set(scopedLessons.map((lesson) => String(lesson.unitId || '').trim()).filter(Boolean));
+  const legacySnapshot = await transaction.get(db.collection('lessons'));
+  const legacyLessons = getLatestLessonsByUnitIdForCorePoints(
+    legacySnapshot.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() || {}) })),
+  ).filter((lesson) => !scopedUnitIds.has(String(lesson.unitId || '').trim()));
+
+  return [...scopedLessons, ...legacyLessons]
+    .filter(isStudentVisibleLessonForCorePoints)
+    .map((lesson) => ({
+      unitId: String(lesson.unitId || '').trim(),
+      title: String(lesson.title || '').trim(),
+      corePointIds: normalizeLessonCorePointIds(lesson),
+    }))
+    .filter((lesson) => lesson.unitId && lesson.corePointIds.length > 0);
+};
+
+const getLessonCorePointCompletion = async (transaction, year, semester, uid) => {
+  const catalog = await readEffectiveVisibleLessonCorePointCatalog(transaction, year, semester);
+  const progressSnapshot = await transaction.get(
+    db.collection(`${getSemesterRoot(year, semester)}/lesson_progress/${uid}/units`),
+  );
+  const progressByUnitId = new Map(
+    progressSnapshot.docs.map((docSnap) => [docSnap.id, docSnap.data() || {}]),
+  );
+  let totalCount = 0;
+  let foundCount = 0;
+  const missingUnits = [];
+
+  catalog.forEach((lesson) => {
+    const corePointIdSet = new Set(lesson.corePointIds);
+    const progress = progressByUnitId.get(lesson.unitId) || {};
+    const foundIds = Array.isArray(progress.corePointFinds)
+      ? progress.corePointFinds
+        .map((value) => String(value || '').trim())
+        .filter((value) => value && corePointIdSet.has(value))
+      : [];
+    const uniqueFoundCount = new Set(foundIds).size;
+    totalCount += lesson.corePointIds.length;
+    foundCount += uniqueFoundCount;
+    const missingCount = Math.max(0, lesson.corePointIds.length - uniqueFoundCount);
+    if (missingCount > 0) {
+      missingUnits.push({
+        unitId: lesson.unitId,
+        title: lesson.title,
+        missingCount,
+      });
+    }
+  });
+
+  return {
+    totalCount,
+    foundCount: Math.min(foundCount, totalCount),
+    remainingCount: Math.max(0, totalCount - foundCount),
+    complete: totalCount > 0 && foundCount >= totalCount,
+    unitCount: catalog.length,
+    missingUnits,
+  };
+};
 
 const extractActivityDocumentId = (sourceId, prefix) => {
   const normalizedSourceId = String(sourceId || '').trim();
@@ -5899,6 +6009,63 @@ exports.applyPointActivityReward = onCall({ region: REGION }, async (request) =>
       await assertMapTagRewardSource(transaction, year, semester, sourceId);
     }
 
+    let lessonCorePointCompletion = null;
+    if (activityType === 'lesson_core_points') {
+      if (sourceId !== LESSON_CORE_POINTS_ALL_SOURCE_ID) {
+        return {
+          awarded: false,
+          duplicate: false,
+          amount: 0,
+          bonusAwarded: false,
+          bonusAmount: 0,
+          bonusType: '',
+          monthlyBonusAwarded: false,
+          monthlyBonusAmount: 0,
+          totalAwarded: 0,
+          targetMonth: '',
+          balance: currentBalance,
+          transactionId: fallbackTransactionId,
+          sourceId,
+          policyId: 'current',
+          blockedReason: 'legacy_unit_scope_disabled',
+          blockedMessage: '핵심포인트 보상은 전체 수업자료를 모두 찾았을 때만 지급됩니다.',
+          claimCount: 0,
+          maxClaims: 1,
+        };
+      }
+
+      lessonCorePointCompletion = await getLessonCorePointCompletion(transaction, year, semester, uid);
+      if (!lessonCorePointCompletion.complete) {
+        return {
+          awarded: false,
+          duplicate: false,
+          amount: 0,
+          bonusAwarded: false,
+          bonusAmount: 0,
+          bonusType: '',
+          monthlyBonusAwarded: false,
+          monthlyBonusAmount: 0,
+          totalAwarded: 0,
+          targetMonth: '',
+          balance: currentBalance,
+          transactionId: fallbackTransactionId,
+          sourceId,
+          policyId: 'current',
+          blockedReason: lessonCorePointCompletion.totalCount > 0
+            ? 'core_points_remaining'
+            : 'no_core_points',
+          blockedMessage: lessonCorePointCompletion.totalCount > 0
+            ? `전체 수업자료에서 남은 핵심포인트 ${lessonCorePointCompletion.remainingCount}개`
+            : '아직 찾을 수 있는 핵심포인트가 없습니다.',
+          claimCount: lessonCorePointCompletion.foundCount,
+          maxClaims: lessonCorePointCompletion.totalCount,
+          corePointTotalCount: lessonCorePointCompletion.totalCount,
+          corePointFoundCount: lessonCorePointCompletion.foundCount,
+          corePointRemainingCount: lessonCorePointCompletion.remainingCount,
+        };
+      }
+    }
+
     let claimCount = 0;
     if (activityType === 'think_cloud' || activityType === 'map_tag' || activityType === 'history_classroom') {
       const activityHistory = await listActivityTransactionsByType(transaction, year, semester, uid, activityType);
@@ -6041,6 +6208,16 @@ exports.applyPointActivityReward = onCall({ region: REGION }, async (request) =>
     const resolvedFallbackTransactionId = rewardDocs[0]?.transactionId || fallbackTransactionId;
 
     if (totalAwarded <= 0) {
+      if (activityType === 'lesson_core_points' && rewardDocs.length > 0 && lessonCorePointCompletion?.complete) {
+        transaction.set(db.doc(`${getSemesterRoot(year, semester)}/lesson_progress/${uid}`), {
+          userId: uid,
+          corePointRewardClaimed: true,
+          corePointCompletedAt: FieldValue.serverTimestamp(),
+          corePointFoundCount: lessonCorePointCompletion.foundCount,
+          corePointTotalCount: lessonCorePointCompletion.totalCount,
+          updatedAt: FieldValue.serverTimestamp(),
+        }, { merge: true });
+      }
       return {
         awarded: false,
         duplicate: rewardDocs.length > 0,
@@ -6063,7 +6240,12 @@ exports.applyPointActivityReward = onCall({ region: REGION }, async (request) =>
           ? Number(policy.rewardPolicy.thinkCloud.maxClaims || 0)
           : activityType === 'map_tag'
             ? Number(policy.rewardPolicy.mapTag.maxClaims || 0)
-            : 0,
+            : activityType === 'lesson_core_points'
+              ? lessonCorePointCompletion?.totalCount || 1
+              : 0,
+        corePointTotalCount: lessonCorePointCompletion?.totalCount || 0,
+        corePointFoundCount: lessonCorePointCompletion?.foundCount || 0,
+        corePointRemainingCount: lessonCorePointCompletion?.remainingCount || 0,
       };
     }
 
@@ -6098,6 +6280,17 @@ exports.applyPointActivityReward = onCall({ region: REGION }, async (request) =>
       }));
     });
 
+    if (activityType === 'lesson_core_points' && lessonCorePointCompletion?.complete) {
+      transaction.set(db.doc(`${getSemesterRoot(year, semester)}/lesson_progress/${uid}`), {
+        userId: uid,
+        corePointRewardClaimed: true,
+        corePointCompletedAt: FieldValue.serverTimestamp(),
+        corePointFoundCount: lessonCorePointCompletion.foundCount,
+        corePointTotalCount: lessonCorePointCompletion.totalCount,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+
     return {
       awarded: true,
       duplicate: false,
@@ -6122,7 +6315,12 @@ exports.applyPointActivityReward = onCall({ region: REGION }, async (request) =>
         ? Number(policy.rewardPolicy.thinkCloud.maxClaims || 0)
         : activityType === 'map_tag'
           ? Number(policy.rewardPolicy.mapTag.maxClaims || 0)
-          : 0,
+          : activityType === 'lesson_core_points'
+            ? lessonCorePointCompletion?.totalCount || 1
+            : 0,
+      corePointTotalCount: lessonCorePointCompletion?.totalCount || 0,
+      corePointFoundCount: lessonCorePointCompletion?.foundCount || 0,
+      corePointRemainingCount: lessonCorePointCompletion?.remainingCount || 0,
     };
   });
 

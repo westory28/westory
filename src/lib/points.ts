@@ -103,11 +103,17 @@ export interface PointActivityRewardResult {
     | "duplicate_source"
     | "cooldown_active"
     | "max_claims_reached"
+    | "legacy_unit_scope_disabled"
+    | "core_points_remaining"
+    | "no_core_points"
     | "";
   blockedMessage?: string;
   nextEligibleAt?: string;
   claimCount?: number;
   maxClaims?: number;
+  corePointTotalCount?: number;
+  corePointFoundCount?: number;
+  corePointRemainingCount?: number;
 }
 
 export interface ResolvedPointActivityRewardItem {

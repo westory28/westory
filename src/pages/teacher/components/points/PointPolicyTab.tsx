@@ -719,7 +719,7 @@ const PointPolicyTab: React.FC<PointPolicyTabProps> = ({
                   checked={policy.lessonCorePointsEnabled}
                   disabled={!canManage || !policy.autoRewardEnabled}
                   summary={formatWisAmount(policy.lessonCorePointsAmount)}
-                  footer="학생이 한 수업자료 안의 핵심포인트를 모두 찾았을 때, 해당 수업자료 기준으로 한 번만 지급됩니다."
+                  footer="학생이 전체 수업자료의 핵심포인트를 모두 찾았을 때, 현재 학기 기준으로 한 번만 지급됩니다."
                   onChange={(checked) =>
                     onPolicyChange((prev) => ({
                       ...prev,
