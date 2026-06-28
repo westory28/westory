@@ -20,7 +20,6 @@ import {
   PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
   PERFORMANCE_SCORE_USER_COLLECTION,
   formatPerformanceScore,
-  getPerformanceScorePercent,
   isPerformanceScoreWarningConsentCurrent,
   loadPerformanceScoreSettings,
   loadPerformanceScoreWarningConsent,
@@ -259,12 +258,6 @@ const PerformanceScoreView: React.FC = () => {
     [records, selectedId],
   );
 
-  const percent = selectedRecord
-    ? getPerformanceScorePercent(
-        selectedRecord.totalScore,
-        selectedRecord.totalMaxScore,
-      )
-    : 0;
   const selectedItems = Array.isArray(selectedRecord?.items)
     ? selectedRecord.items
     : [];
@@ -1378,19 +1371,8 @@ const PerformanceScoreView: React.FC = () => {
                     / {formatPerformanceScore(selectedRecord.totalMaxScore)}
                   </span>
                 </div>
-                <div className="mt-5 h-3 overflow-hidden rounded-full bg-white">
-                  <div
-                    className="h-full rounded-full bg-blue-600"
-                    style={{ width: `${percent}%` }}
-                    aria-label={`획득 점수 ${formatPerformanceScore(
-                      selectedRecord.totalScore,
-                    )}점, 만점 ${formatPerformanceScore(
-                      selectedRecord.totalMaxScore,
-                    )}점`}
-                  />
-                </div>
-                <p className="mt-3 whitespace-normal break-keep text-sm font-bold leading-6 text-blue-900/70">
-                  실제 획득한 점수를 중심으로 표시합니다.
+                <p className="mt-5 whitespace-normal break-keep text-sm font-bold leading-6 text-blue-900/70">
+                  점수와 평가 근거를 함께 확인해 주세요.
                 </p>
               </div>
 
@@ -1429,15 +1411,11 @@ const PerformanceScoreView: React.FC = () => {
             <div className="mt-5 overflow-hidden rounded-xl border border-slate-200">
               {selectedItems.map((item, index) => {
                 const scoreEntered = item.scoreEntered !== false;
-                const itemPercent = getPerformanceScorePercent(
-                  item.score,
-                  item.maxScore,
-                );
                 const itemLabel = getItemLabel(item, index);
                 return (
                   <div
                     key={`${item.name}-${item.maxScore}-${index}`}
-                    className="grid gap-3 border-b border-slate-100 px-4 py-4 last:border-b-0 sm:grid-cols-[minmax(150px,190px)_minmax(0,1fr)_auto]"
+                    className="grid gap-3 border-b border-slate-100 px-4 py-4 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_auto]"
                   >
                     <div className="min-w-0">
                       <div
@@ -1448,18 +1426,6 @@ const PerformanceScoreView: React.FC = () => {
                       </div>
                       <div className="mt-1 text-xs font-bold text-slate-400">
                         {formatPerformanceScore(item.maxScore)}점 만점
-                      </div>
-                    </div>
-                    <div className="flex items-center">
-                      <div className="h-3 w-full overflow-hidden rounded-full bg-slate-100">
-                        <div
-                          className={`h-full rounded-full ${
-                            scoreEntered ? "bg-blue-500" : "bg-slate-300"
-                          }`}
-                          style={{
-                            width: scoreEntered ? `${itemPercent}%` : "0%",
-                          }}
-                        />
                       </div>
                     </div>
                     <div className="text-right text-sm font-black text-slate-800">
@@ -1726,7 +1692,7 @@ const PerformanceScoreView: React.FC = () => {
 
       {signatureModalOpen && selectedRecord && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-3 py-3 sm:px-4 sm:py-6">
-          <section className="flex max-h-[96dvh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl sm:max-h-[92vh]">
+          <section className="flex max-h-[96dvh] w-full max-w-6xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl sm:max-h-[92vh]">
             <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-3 sm:px-5 sm:py-4">
               <div className="min-w-0 break-keep">
                 <h3 className="text-lg font-black text-slate-900">
@@ -1935,11 +1901,11 @@ const PerformanceScoreView: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="space-y-3">
+                  <div className="grid gap-3 lg:grid-cols-2">
                     {records.map((record) => (
                       <div
                         key={`${getRecordScoreId(record)}-review`}
-                        className="rounded-xl border border-slate-200"
+                        className="flex min-w-0 flex-col rounded-xl border border-slate-200"
                       >
                         <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                           <div className="whitespace-normal break-keep font-black text-slate-900">

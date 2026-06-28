@@ -15,7 +15,6 @@ import {
 import { updateStudentData } from "../../../lib/studentData";
 import {
   formatPerformanceScore,
-  getPerformanceScorePercent,
   loadUserPerformanceScoreRecords,
   type PerformanceScoreRecord,
 } from "../../../lib/performanceScores";
@@ -982,15 +981,11 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                   저장된 수행평가 점수가 없습니다.
                 </div>
               ) : (
-                performanceScores.map((record) => {
-                  const percent = getPerformanceScorePercent(
-                    record.totalScore,
-                    record.totalMaxScore,
-                  );
-                  return (
+                <div className="grid gap-4 lg:grid-cols-2">
+                  {performanceScores.map((record) => (
                     <section
                       key={record.id || record.rosterId}
-                      className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
+                      className="min-w-0 rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
                     >
                       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                         <div className="min-w-0">
@@ -1010,18 +1005,9 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                               / {formatPerformanceScore(record.totalMaxScore)}
                             </span>
                           </div>
-                          <div className="text-xs font-black text-blue-500">
-                            {formatPerformanceScore(percent)}%
-                          </div>
                         </div>
                       </div>
-                      <div className="mt-4 h-2 overflow-hidden rounded-full bg-gray-100">
-                        <div
-                          className="h-full rounded-full bg-blue-600"
-                          style={{ width: `${percent}%` }}
-                        />
-                      </div>
-                      <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                      <div className="mt-4 grid gap-2 sm:grid-cols-2">
                         {(record.items || []).map((item, index) => (
                           <div
                             key={`${record.rosterId}-${item.name}-${index}`}
@@ -1048,8 +1034,8 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                           "등록된 피드백이 없습니다."}
                       </div>
                     </section>
-                  );
-                })
+                  ))}
+                </div>
               )}
             </div>
           )}
