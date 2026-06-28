@@ -39,6 +39,19 @@ const dedupePreviewEmojiEntries = (entries: PointRankEmojiRegistryEntry[]) => {
   });
 };
 
+const getPreviewEmojiLabel = (entry: PointRankEmojiRegistryEntry) => {
+  const rawLabel = String(entry.label || "").trim();
+  const normalizedEmojiValue = normalizeProfileEmojiValue(
+    entry.value || entry.emoji,
+  );
+  const labelWithoutEmoji =
+    normalizedEmojiValue && rawLabel.startsWith(normalizedEmojiValue)
+      ? rawLabel.slice(normalizedEmojiValue.length).trim()
+      : rawLabel;
+
+  return labelWithoutEmoji || "아이콘";
+};
+
 const StudentRankPromotionPopup: React.FC<StudentRankPromotionPopupProps> = ({
   open,
   rank,
@@ -223,17 +236,23 @@ const StudentRankPromotionPopup: React.FC<StudentRankPromotionPopupProps> = ({
 
             {hasPreviewEmojis ? (
               <div className="mt-3 flex flex-wrap gap-2">
-                {visiblePreviewEmojis.map((entry) => (
-                  <div
-                    key={entry.id}
-                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/85 px-3 py-2 text-sm shadow-sm"
-                  >
-                    <span className="text-lg leading-none">{entry.emoji}</span>
-                    <span className="whitespace-nowrap font-semibold text-slate-700">
-                      {entry.label}
-                    </span>
-                  </div>
-                ))}
+                {visiblePreviewEmojis.map((entry) => {
+                  const displayLabel = getPreviewEmojiLabel(entry);
+
+                  return (
+                    <div
+                      key={entry.id}
+                      className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/85 px-3 py-2 text-sm shadow-sm"
+                    >
+                      <span className="text-lg leading-none">
+                        {entry.emoji}
+                      </span>
+                      <span className="whitespace-nowrap font-semibold text-slate-700">
+                        {displayLabel}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <p className="mt-3 rounded-2xl border border-dashed border-slate-200 bg-white/70 px-4 py-3 text-sm text-slate-500">
