@@ -202,7 +202,11 @@ button.lesson-core-point-floating-status:disabled {
 }
 
 .lesson-core-point-floating-status--reward {
+  grid-template-columns: auto minmax(0, 1fr);
   min-height: 2.65rem;
+  align-items: center;
+  gap: 0.45rem;
+  padding-inline: 0.72rem;
 }
 
 .lesson-core-point-floating-status__label {
@@ -239,12 +243,25 @@ button.lesson-core-point-floating-status:disabled {
 .lesson-core-point-floating-status__reward {
   position: relative;
   z-index: 3;
+  justify-self: center;
   color: #92400e;
-  font-size: 0.82rem;
+  font-size: 0.86rem;
   font-weight: 900;
   line-height: 1.1;
-  text-align: right;
+  text-align: center;
   white-space: nowrap;
+}
+
+.lesson-core-point-floating-status__reward-icon {
+  position: relative;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  color: #d97706;
+  font-size: 0.82rem;
+  line-height: 1;
 }
 
 .lesson-core-point-floating-status__runner {

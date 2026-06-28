@@ -1249,9 +1249,8 @@ const LessonContent: React.FC<LessonContentProps> = ({
   );
   const floatingCorePointRewardContent = (
     <>
-      <span className="lesson-core-point-floating-status__label">
+      <span className="lesson-core-point-floating-status__reward-icon">
         <i className="fas fa-bolt" aria-hidden="true"></i>
-        핵심포인트
       </span>
       <strong className="lesson-core-point-floating-status__reward">
         {corePointRewardPending
