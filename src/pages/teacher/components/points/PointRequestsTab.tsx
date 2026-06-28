@@ -183,6 +183,170 @@ const OrderProcessStepper: React.FC<{
   );
 };
 
+const FlowActionButton: React.FC<{
+  label: string;
+  isSaving: boolean;
+  savingLabel: string;
+  disabled: boolean;
+  complete?: boolean;
+  tone: "primary" | "success" | "danger" | "neutral";
+  onClick: () => void;
+}> = ({
+  label,
+  isSaving,
+  savingLabel,
+  disabled,
+  complete = false,
+  tone,
+  onClick,
+}) => {
+  const toneClassName =
+    tone === "primary"
+      ? "border-blue-600 bg-blue-600 text-white hover:bg-blue-700 disabled:border-blue-200 disabled:bg-blue-50 disabled:text-blue-300"
+      : tone === "success"
+        ? "border-emerald-500 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:border-emerald-200 disabled:text-emerald-300"
+        : tone === "danger"
+          ? "border-rose-500 bg-rose-500 text-white hover:bg-rose-600 disabled:border-rose-200 disabled:bg-rose-50 disabled:text-rose-300"
+          : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:text-gray-300";
+  const completeClassName =
+    tone === "success"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+      : tone === "primary"
+        ? "border-blue-200 bg-blue-50 text-blue-700"
+        : "border-gray-200 bg-gray-50 text-gray-700";
+
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`min-h-9 rounded-lg border px-3 py-2 text-sm font-bold transition ${
+        complete ? completeClassName : toneClassName
+      }`}
+    >
+      <OrderActionContent
+        isSaving={isSaving}
+        idleLabel={label}
+        savingLabel={savingLabel}
+      />
+    </button>
+  );
+};
+
+const OrderReviewFlowPanel: React.FC<{
+  order: PointOrder;
+  isSavingThisOrder: boolean;
+  orderSavingOrderId: string;
+  orderSavingStatus: PointOrderStatus | null;
+  canManage: boolean;
+  onSaveOrder: (status: PointOrderStatus) => void;
+}> = ({
+  order,
+  isSavingThisOrder,
+  orderSavingOrderId,
+  orderSavingStatus,
+  canManage,
+  onSaveOrder,
+}) => {
+  const savingLabel = orderSavingStatus
+    ? ORDER_SAVING_LABELS[orderSavingStatus]
+    : "처리 중...";
+  const disableAll = !canManage || Boolean(orderSavingStatus);
+  const canApprove = order.status === "requested";
+  const canFulfill = order.status === "approved";
+  const canCloseRequest = order.status === "requested";
+  const canReopen = order.status === "approved";
+  const approvalComplete =
+    order.status === "approved" || order.status === "fulfilled";
+  const fulfillmentComplete = order.status === "fulfilled";
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="text-sm font-extrabold text-gray-900">처리 흐름</div>
+        <span
+          className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${
+            isSavingThisOrder
+              ? "border-amber-200 bg-amber-50 text-amber-700"
+              : getOrderStatusToneClass(order.status)
+          }`}
+        >
+          {isSavingThisOrder
+            ? "처리 중"
+            : POINT_ORDER_STATUS_LABELS[order.status] || order.status}
+        </span>
+      </div>
+
+      <div className="mt-3">
+        <OrderProcessStepper status={order.status} compact />
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <FlowActionButton
+          label={
+            order.status === "approved" || order.status === "fulfilled"
+              ? "승인 완료"
+              : "승인"
+          }
+          isSaving={isApprovalToggleSaving(
+            order,
+            orderSavingOrderId,
+            orderSavingStatus,
+          )}
+          savingLabel={savingLabel}
+          disabled={disableAll || !canApprove || approvalComplete}
+          complete={approvalComplete}
+          tone="primary"
+          onClick={() => onSaveOrder("approved")}
+        />
+        <FlowActionButton
+          label="지급 완료"
+          isSaving={isSavingThisOrder && orderSavingStatus === "fulfilled"}
+          savingLabel={ORDER_SAVING_LABELS.fulfilled}
+          disabled={disableAll || !canFulfill || fulfillmentComplete}
+          complete={fulfillmentComplete}
+          tone="success"
+          onClick={() => onSaveOrder("fulfilled")}
+        />
+      </div>
+
+      <div className="mt-2 grid grid-cols-2 gap-2 border-t border-gray-100 pt-2">
+        <FlowActionButton
+          label="반려"
+          isSaving={isSavingThisOrder && orderSavingStatus === "rejected"}
+          savingLabel={ORDER_SAVING_LABELS.rejected}
+          disabled={disableAll || !canCloseRequest}
+          tone="danger"
+          onClick={() => onSaveOrder("rejected")}
+        />
+        <FlowActionButton
+          label="요청 취소 처리"
+          isSaving={isSavingThisOrder && orderSavingStatus === "cancelled"}
+          savingLabel={ORDER_SAVING_LABELS.cancelled}
+          disabled={disableAll || !canCloseRequest}
+          tone="neutral"
+          onClick={() => onSaveOrder("cancelled")}
+        />
+      </div>
+
+      {canReopen && (
+        <button
+          type="button"
+          disabled={disableAll}
+          onClick={() => onSaveOrder("requested")}
+          className="mt-2 min-h-8 w-full rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-bold text-gray-600 transition hover:bg-gray-50 disabled:text-gray-300"
+        >
+          <OrderActionContent
+            isSaving={isSavingThisOrder && orderSavingStatus === "requested"}
+            idleLabel="승인 취소"
+            savingLabel={ORDER_SAVING_LABELS.requested}
+          />
+        </button>
+      )}
+    </div>
+  );
+};
+
 const OrderDetailPanel: React.FC<{
   order: PointOrder;
   orderMemo: string;
@@ -213,7 +377,7 @@ const OrderDetailPanel: React.FC<{
 
   return (
     <div
-      className="relative overflow-hidden rounded-xl border border-blue-100 bg-white shadow-sm"
+      className="relative overflow-hidden rounded-b-xl border-x border-b border-blue-200 bg-blue-50/80"
       aria-busy={isSavingThisOrder}
     >
       {isSavingThisOrder && (
@@ -228,23 +392,21 @@ const OrderDetailPanel: React.FC<{
         </div>
       )}
 
-      <div className="grid gap-5 p-4 lg:grid-cols-[minmax(0,1fr)_minmax(17rem,0.55fr)] lg:p-5">
+      <div className="grid gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.72fr)]">
         <div className="min-w-0">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
             <div className="min-w-0">
-              <div className="text-xs font-bold uppercase text-blue-700">
-                요청 상세
-              </div>
-              <h3 className="mt-1 truncate text-lg font-extrabold text-gray-900">
+              <div className="text-xs font-bold text-blue-700">요청 상세</div>
+              <h3 className="mt-0.5 truncate text-base font-extrabold text-gray-900">
                 {order.productName}
               </h3>
-              <div className="mt-1 text-sm font-medium text-gray-500">
+              <div className="mt-0.5 text-xs font-medium text-gray-500">
                 {getOrderStudentName(order)} ·{" "}
                 {getOrderStudentLabel(order) || "소속 정보 없음"}
               </div>
             </div>
             <span
-              className={`inline-flex shrink-0 rounded-full border px-3 py-1 text-xs font-bold ${
+              className={`inline-flex w-fit shrink-0 rounded-full border px-3 py-1 text-xs font-bold ${
                 isSavingThisOrder
                   ? "border-amber-200 bg-amber-50 text-amber-700"
                   : getOrderStatusToneClass(order.status)
@@ -256,146 +418,63 @@ const OrderDetailPanel: React.FC<{
             </span>
           </div>
 
-          <div className="mt-4">
-            <OrderProcessStepper status={order.status} />
-          </div>
-
-          <dl className="mt-4 grid overflow-hidden rounded-lg border border-gray-200 bg-gray-50 sm:grid-cols-2 xl:grid-cols-4">
-            <div className="border-b border-gray-200 p-3 sm:border-r xl:border-b-0">
+          <dl className="mt-3 grid overflow-hidden rounded-lg border border-blue-100 bg-white sm:grid-cols-2 xl:grid-cols-4">
+            <div className="border-b border-blue-100 p-2.5 sm:border-r xl:border-b-0">
               <dt className="text-xs font-bold text-gray-500">차감 위스</dt>
               <dd className="mt-1 font-bold text-gray-900 whitespace-nowrap">
                 {formatWisAmount(order.priceSnapshot)}
               </dd>
             </div>
-            <div className="border-b border-gray-200 p-3 xl:border-r xl:border-b-0">
+            <div className="border-b border-blue-100 p-2.5 xl:border-r xl:border-b-0">
               <dt className="text-xs font-bold text-gray-500">요청 시각</dt>
-              <dd className="mt-1 font-bold text-gray-900">
+              <dd className="mt-1 text-sm font-bold text-gray-900">
                 {formatPointDateTime(order.requestedAt)}
               </dd>
             </div>
-            <div className="border-b border-gray-200 p-3 sm:border-r sm:border-b-0">
+            <div className="border-b border-blue-100 p-2.5 sm:border-r sm:border-b-0">
               <dt className="text-xs font-bold text-gray-500">최근 처리</dt>
-              <dd className="mt-1 font-bold text-gray-900">
+              <dd className="mt-1 text-sm font-bold text-gray-900">
                 {formatPointDateTime(order.reviewedAt)}
               </dd>
             </div>
-            <div className="p-3">
+            <div className="p-2.5">
               <dt className="text-xs font-bold text-gray-500">현재 상태</dt>
-              <dd className="mt-1 font-bold text-gray-900">
+              <dd className="mt-1 text-sm font-bold text-gray-900">
                 {POINT_ORDER_STATUS_LABELS[order.status] || order.status}
               </dd>
             </div>
           </dl>
 
-          <label className="mt-4 block text-sm font-bold text-gray-700">
+          <label className="mt-3 block text-xs font-bold text-gray-700">
             처리 메모
           </label>
           <textarea
             value={orderMemo}
             onChange={(event) => onOrderMemoChange(event.target.value)}
-            rows={3}
+            rows={2}
             placeholder="학생 화면에 함께 표시할 메모를 입력해 주세요."
-            className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+            className="mt-1.5 w-full rounded-lg border border-blue-100 bg-white px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
             disabled={!canManage || Boolean(orderSavingStatus)}
           />
           {!!orderFeedback && (
             <div
               role="status"
               aria-live="polite"
-              className={`mt-3 rounded-lg px-4 py-3 text-sm font-bold ${getPointFeedbackToneClass(orderFeedback)}`}
+              className={`mt-2 rounded-lg px-3 py-2 text-sm font-bold ${getPointFeedbackToneClass(orderFeedback)}`}
             >
               {orderFeedback}
             </div>
           )}
         </div>
 
-        <div className="flex flex-col justify-between rounded-lg border border-gray-200 bg-gray-50 p-4">
-          <div>
-            <div className="text-sm font-extrabold text-gray-900">처리</div>
-          </div>
-          <div className="mt-4 grid gap-2">
-            <button
-              type="button"
-              disabled={
-                !canManage ||
-                Boolean(orderSavingStatus) ||
-                !["requested", "approved"].includes(order.status)
-              }
-              onClick={() =>
-                onSaveOrder(
-                  order.status === "approved" ? "requested" : "approved",
-                )
-              }
-              className="min-h-11 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-blue-700 disabled:bg-blue-300"
-            >
-              <OrderActionContent
-                isSaving={isApprovalToggleSaving(
-                  order,
-                  orderSavingOrderId,
-                  orderSavingStatus,
-                )}
-                idleLabel={order.status === "approved" ? "승인 취소" : "승인"}
-                savingLabel={savingLabel}
-              />
-            </button>
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1">
-              <button
-                type="button"
-                disabled={
-                  !canManage ||
-                  Boolean(orderSavingStatus) ||
-                  order.status !== "requested"
-                }
-                onClick={() => onSaveOrder("rejected")}
-                className="min-h-11 rounded-lg bg-rose-500 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-rose-600 disabled:bg-rose-300"
-              >
-                <OrderActionContent
-                  isSaving={
-                    isSavingThisOrder && orderSavingStatus === "rejected"
-                  }
-                  idleLabel="반려"
-                  savingLabel={ORDER_SAVING_LABELS.rejected}
-                />
-              </button>
-              <button
-                type="button"
-                disabled={
-                  !canManage ||
-                  Boolean(orderSavingStatus) ||
-                  order.status !== "approved"
-                }
-                onClick={() => onSaveOrder("fulfilled")}
-                className="min-h-11 rounded-lg border border-emerald-500 bg-emerald-50 px-4 py-2.5 text-sm font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:border-emerald-200 disabled:text-emerald-300"
-              >
-                <OrderActionContent
-                  isSaving={
-                    isSavingThisOrder && orderSavingStatus === "fulfilled"
-                  }
-                  idleLabel="지급 완료"
-                  savingLabel={ORDER_SAVING_LABELS.fulfilled}
-                />
-              </button>
-            </div>
-            <button
-              type="button"
-              disabled={
-                !canManage ||
-                Boolean(orderSavingStatus) ||
-                order.status !== "requested"
-              }
-              onClick={() => onSaveOrder("cancelled")}
-              className="min-h-11 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-bold text-gray-700 transition hover:bg-gray-50 disabled:text-gray-300"
-            >
-              <OrderActionContent
-                isSaving={
-                  isSavingThisOrder && orderSavingStatus === "cancelled"
-                }
-                idleLabel="요청 취소 처리"
-                savingLabel={ORDER_SAVING_LABELS.cancelled}
-              />
-            </button>
-          </div>
-        </div>
+        <OrderReviewFlowPanel
+          order={order}
+          isSavingThisOrder={isSavingThisOrder}
+          orderSavingOrderId={orderSavingOrderId}
+          orderSavingStatus={orderSavingStatus}
+          canManage={canManage}
+          onSaveOrder={onSaveOrder}
+        />
       </div>
     </div>
   );
@@ -417,7 +496,7 @@ const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
   onSaveOrder,
 }) => (
   <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-    <div className="flex flex-col gap-3 border-b border-gray-100 bg-gray-50 p-5 md:flex-row md:items-center md:justify-between">
+    <div className="flex flex-col gap-3 border-b border-gray-100 bg-gray-50 p-4 md:flex-row md:items-center md:justify-between">
       <div>
         <h2 className="text-lg font-bold text-gray-800">구매 요청 목록</h2>
         <div className="mt-1 text-sm font-medium text-gray-500">
@@ -445,12 +524,12 @@ const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
       <table className="min-w-[760px] w-full table-fixed text-sm text-left">
         <thead className="bg-gray-100 text-xs font-bold uppercase text-gray-600">
           <tr>
-            <th className="w-[17%] p-4">학생 정보</th>
-            <th className="w-[25%] p-4">상품명</th>
-            <th className="w-[14%] p-4 text-right">차감 위스</th>
-            <th className="w-[11%] p-4 text-right">요청 시각</th>
-            <th className="w-[22%] p-4 text-center">처리 단계</th>
-            <th className="w-[11%] p-4 text-center">상태</th>
+            <th className="w-[17%] px-4 py-3">학생 정보</th>
+            <th className="w-[25%] px-4 py-3">상품명</th>
+            <th className="w-[14%] px-4 py-3 text-right">차감 위스</th>
+            <th className="w-[11%] px-4 py-3 text-right">요청 시각</th>
+            <th className="w-[22%] px-4 py-3 text-center">처리 단계</th>
+            <th className="w-[11%] px-4 py-3 text-center">상태</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100 bg-white">
@@ -475,11 +554,11 @@ const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
                         ? "bg-amber-50/60"
                         : "hover:bg-gray-50"
                   }`}
-                  onClick={() => onSelectOrder(order.id)}
+                  onClick={() => onSelectOrder(isSelected ? "" : order.id)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      onSelectOrder(order.id);
+                      onSelectOrder(isSelected ? "" : order.id);
                     }
                   }}
                   role="button"
@@ -487,7 +566,7 @@ const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
                   aria-expanded={isSelected}
                 >
                   <td
-                    className="p-4"
+                    className="px-4 py-3"
                     title={[
                       getOrderStudentName(order),
                       getOrderStudentLabel(order),
@@ -505,21 +584,21 @@ const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
                     </div>
                   </td>
                   <td
-                    className="truncate p-4 text-gray-700"
+                    className="truncate px-4 py-3 text-gray-700"
                     title={order.productName}
                   >
                     {order.productName}
                   </td>
-                  <td className="p-4 text-right font-bold text-gray-800 whitespace-nowrap">
+                  <td className="px-4 py-3 text-right font-bold text-gray-800 whitespace-nowrap">
                     {formatWisAmount(order.priceSnapshot)}
                   </td>
-                  <td className="p-4 text-right text-gray-500 whitespace-nowrap">
+                  <td className="px-4 py-3 text-right text-gray-500 whitespace-nowrap">
                     {formatPointTimeOnly(order.requestedAt)}
                   </td>
-                  <td className="p-4">
+                  <td className="px-4 py-2.5">
                     <OrderProcessStepper status={order.status} compact />
                   </td>
-                  <td className="p-4 text-center">
+                  <td className="px-4 py-3 text-center">
                     <span
                       className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${
                         isSavingOrder
@@ -536,7 +615,7 @@ const PointRequestsTab: React.FC<PointRequestsTabProps> = ({
                 </tr>
                 {isSelected && selectedOrder && (
                   <tr className="bg-blue-50/40">
-                    <td colSpan={6} className="px-4 pb-5 pt-0">
+                    <td colSpan={6} className="px-4 pb-3 pt-0">
                       <OrderDetailPanel
                         order={selectedOrder}
                         orderMemo={orderMemo}
