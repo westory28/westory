@@ -266,39 +266,8 @@ button.lesson-core-point-floating-status:disabled {
 }
 
 .lesson-core-point-floating-status--reward.is-claimable {
-  border-color: rgba(245, 158, 11, 0.42);
-}
-
-.lesson-core-point-floating-status--reward.is-claimable::before {
-  inset: -76%;
-  z-index: 0;
-  border-radius: 9999px;
-  padding: 0;
-  background: conic-gradient(
-    from 0deg,
-    transparent 0deg 24deg,
-    rgba(255, 255, 255, 0.78) 40deg,
-    rgba(254, 240, 138, 0.92) 58deg,
-    rgba(245, 158, 11, 0.82) 82deg,
-    transparent 108deg 150deg,
-    rgba(255, 255, 255, 0.6) 168deg,
-    rgba(254, 240, 138, 0.78) 188deg,
-    rgba(245, 158, 11, 0.68) 214deg,
-    transparent 238deg 360deg
-  );
-  filter: drop-shadow(0 0 7px rgba(245, 158, 11, 0.38));
-  opacity: 0.9;
-  transform-origin: center;
-  animation: westory-core-point-border-spin 4.8s linear infinite;
-  -webkit-mask: none;
-  mask: none;
-}
-
-.lesson-core-point-floating-status--reward.is-claimable::after {
-  inset: 2px;
-  z-index: 1;
-  border-radius: calc(1.1rem - 2px);
-  background:
+  border: 2px solid transparent;
+  background-image:
     radial-gradient(
       circle at 18% 16%,
       rgba(255, 255, 255, 0.94),
@@ -309,10 +278,31 @@ button.lesson-core-point-floating-status:disabled {
       rgba(255, 251, 235, 0.98),
       rgba(254, 243, 199, 0.98) 50%,
       rgba(253, 230, 138, 0.94)
+    ),
+    conic-gradient(
+      from var(--lesson-core-point-angle),
+      rgba(245, 158, 11, 0.24) 0deg,
+      rgba(245, 158, 11, 0.9) 28deg,
+      rgba(255, 255, 255, 0.96) 46deg,
+      rgba(245, 158, 11, 0.78) 64deg,
+      rgba(245, 158, 11, 0.2) 88deg,
+      transparent 116deg,
+      rgba(245, 158, 11, 0.18) 148deg,
+      rgba(245, 158, 11, 0.78) 184deg,
+      rgba(255, 255, 255, 0.86) 202deg,
+      rgba(245, 158, 11, 0.68) 222deg,
+      rgba(245, 158, 11, 0.16) 248deg,
+      transparent 282deg,
+      rgba(245, 158, 11, 0.24) 360deg
     );
-  filter: none;
-  opacity: 1;
-  animation: none;
+  background-origin: border-box;
+  background-clip: padding-box, padding-box, border-box;
+  animation: westory-core-point-border-run 4.6s linear infinite;
+}
+
+.lesson-core-point-floating-status--reward.is-claimable::before,
+.lesson-core-point-floating-status--reward.is-claimable::after {
+  content: none;
 }
 
 .lesson-core-point {
