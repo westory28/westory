@@ -4,6 +4,12 @@
 @tailwind components;
 @tailwind utilities;
 
+@property --lesson-core-point-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
 .dashboard-container {
   max-width: 1280px;
   margin: 0 auto;
@@ -105,6 +111,7 @@
 }
 
 .lesson-core-point {
+  --lesson-core-point-angle: 0deg;
   --lesson-core-point-border-duration: 5.6s;
   --lesson-core-point-glow-duration: 3.8s;
   --lesson-core-point-spark-duration: 3.2s;
@@ -156,29 +163,36 @@
 .lesson-core-point::after {
   content: "";
   position: absolute;
-  inset: -7px;
-  z-index: -2;
+  inset: -6px;
+  z-index: 4;
   border-radius: 11px;
-  background:
-    radial-gradient(
-      circle at 18% 22%,
-      rgba(255, 255, 255, 0.48) 0 2px,
-      transparent 3px
-    ),
-    radial-gradient(
-      circle at 86% 74%,
-      rgba(254, 240, 138, 0.5) 0 2px,
-      transparent 3px
-    ),
-    radial-gradient(
-      circle at 64% 8%,
-      rgba(251, 191, 36, 0.38) 0 1px,
-      transparent 3px
-    );
-  opacity: 0.3;
+  padding: 4px;
+  background: conic-gradient(
+    from var(--lesson-core-point-angle),
+    transparent 0deg 28deg,
+    rgba(255, 255, 255, 0.78) 40deg,
+    rgba(254, 240, 138, 0.98) 53deg,
+    rgba(245, 158, 11, 0.76) 67deg,
+    transparent 84deg 158deg,
+    rgba(255, 255, 255, 0.64) 172deg,
+    rgba(254, 240, 138, 0.86) 185deg,
+    rgba(245, 158, 11, 0.66) 200deg,
+    transparent 218deg 360deg
+  );
+  filter: drop-shadow(0 0 6px rgba(250, 204, 21, 0.42));
+  opacity: 0.9;
   pointer-events: none;
-  animation: westory-core-point-spark var(--lesson-core-point-spark-duration)
-    steps(2, end) infinite;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  animation: westory-core-point-border-run
+    var(--lesson-core-point-border-duration) linear infinite;
+  will-change: --lesson-core-point-angle;
 }
 
 .lesson-core-point__inner {
@@ -220,58 +234,14 @@
 }
 
 .lesson-core-point__inner::after {
-  inset: -6px;
-  border-radius: 11px;
-  padding: 4px;
-  background:
-    linear-gradient(
-        90deg,
-        transparent 0 16%,
-        rgba(255, 255, 255, 0.4) 36%,
-        rgba(254, 240, 138, 0.66) 50%,
-        rgba(245, 158, 11, 0.46) 64%,
-        transparent 84% 100%
-      )
-      top left / 58% 4px no-repeat,
-    linear-gradient(
-        180deg,
-        transparent 0 16%,
-        rgba(255, 255, 255, 0.4) 36%,
-        rgba(254, 240, 138, 0.66) 50%,
-        rgba(245, 158, 11, 0.46) 64%,
-        transparent 84% 100%
-      )
-      top right / 4px 58% no-repeat,
-    linear-gradient(
-        270deg,
-        transparent 0 16%,
-        rgba(255, 255, 255, 0.4) 36%,
-        rgba(254, 240, 138, 0.66) 50%,
-        rgba(245, 158, 11, 0.46) 64%,
-        transparent 84% 100%
-      )
-      bottom right / 58% 4px no-repeat,
-    linear-gradient(
-        0deg,
-        transparent 0 16%,
-        rgba(255, 255, 255, 0.4) 36%,
-        rgba(254, 240, 138, 0.66) 50%,
-        rgba(245, 158, 11, 0.46) 64%,
-        transparent 84% 100%
-      )
-      bottom left / 4px 58% no-repeat;
-  filter: drop-shadow(0 0 5px rgba(250, 204, 21, 0.32));
-  opacity: 0.72;
-  animation: westory-core-point-border-run
-    var(--lesson-core-point-border-duration) linear infinite;
-  will-change: background-position;
+  display: none;
 }
 
 .lesson-core-point__check {
   position: absolute;
   right: -0.55rem;
   top: -0.55rem;
-  z-index: 2;
+  z-index: 5;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -306,9 +276,9 @@
 }
 
 .lesson-core-point.is-found::after {
-  animation: westory-core-point-spark var(--lesson-core-point-spark-duration)
-    steps(2, end) infinite;
-  opacity: 0.2;
+  animation: westory-core-point-border-run
+    var(--lesson-core-point-border-duration) linear infinite;
+  opacity: 0.62;
 }
 
 .lesson-core-point.is-found .lesson-core-point__inner::before {
@@ -316,9 +286,7 @@
 }
 
 .lesson-core-point.is-found .lesson-core-point__inner::after {
-  animation: westory-core-point-border-run
-    var(--lesson-core-point-border-duration) linear infinite;
-  opacity: 0.54;
+  display: none;
 }
 
 .lesson-core-burst {
@@ -467,36 +435,8 @@
 }
 
 @keyframes westory-core-point-border-run {
-  0% {
-    background-position:
-      0 0,
-      100% -65%,
-      100% 100%,
-      0 165%;
-  }
-
-  49.99% {
-    background-position:
-      100% 0,
-      100% -65%,
-      0 100%,
-      0 165%;
-  }
-
-  50% {
-    background-position:
-      165% 0,
-      100% 0,
-      -65% 100%,
-      0 100%;
-  }
-
-  100% {
-    background-position:
-      165% 0,
-      100% 100%,
-      -65% 100%,
-      0 0;
+  to {
+    --lesson-core-point-angle: 360deg;
   }
 }
 
