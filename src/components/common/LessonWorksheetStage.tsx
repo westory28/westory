@@ -1545,7 +1545,7 @@ const LessonWorksheetStage: React.FC<LessonWorksheetStageProps> = ({
         corePointBurstTimeoutsRef.current.filter(
           (candidate) => candidate !== timeoutId,
         );
-    }, 1900);
+    }, 900);
     corePointBurstTimeoutsRef.current.push(timeoutId);
   };
 

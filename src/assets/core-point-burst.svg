@@ -1,0 +1,247 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 380" fill="none">
+  <defs>
+    <radialGradient
+      id="core"
+      cx="0"
+      cy="0"
+      r="1"
+      gradientUnits="userSpaceOnUse"
+      gradientTransform="translate(310 190) rotate(90) scale(92 132)"
+    >
+      <stop offset="0" stop-color="#fff" />
+      <stop offset="0.2" stop-color="#fff" />
+      <stop offset="0.42" stop-color="#fef08a" stop-opacity="0.96" />
+      <stop offset="0.72" stop-color="#facc15" stop-opacity="0.42" />
+      <stop offset="1" stop-color="#f59e0b" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient
+      id="aura"
+      cx="0"
+      cy="0"
+      r="1"
+      gradientUnits="userSpaceOnUse"
+      gradientTransform="translate(310 190) scale(286 128)"
+    >
+      <stop offset="0" stop-color="#fff" stop-opacity="1" />
+      <stop offset="0.28" stop-color="#fef08a" stop-opacity="0.84" />
+      <stop offset="0.58" stop-color="#fbbf24" stop-opacity="0.36" />
+      <stop offset="1" stop-color="#92400e" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient
+      id="beam"
+      x1="0"
+      y1="190"
+      x2="620"
+      y2="190"
+      gradientUnits="userSpaceOnUse"
+    >
+      <stop offset="0" stop-color="#f59e0b" stop-opacity="0" />
+      <stop offset="0.18" stop-color="#facc15" stop-opacity="0.34" />
+      <stop offset="0.39" stop-color="#fff" stop-opacity="0.96" />
+      <stop offset="0.5" stop-color="#fff" />
+      <stop offset="0.61" stop-color="#fff" stop-opacity="0.96" />
+      <stop offset="0.82" stop-color="#facc15" stop-opacity="0.34" />
+      <stop offset="1" stop-color="#f59e0b" stop-opacity="0" />
+    </linearGradient>
+    <linearGradient id="ray" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f59e0b" stop-opacity="0" />
+      <stop offset="0.45" stop-color="#fef08a" stop-opacity="0.88" />
+      <stop offset="0.52" stop-color="#fff" />
+      <stop offset="0.59" stop-color="#fef08a" stop-opacity="0.88" />
+      <stop offset="1" stop-color="#f59e0b" stop-opacity="0" />
+    </linearGradient>
+    <filter
+      id="glow"
+      x="-30%"
+      y="-45%"
+      width="160%"
+      height="190%"
+      color-interpolation-filters="sRGB"
+    >
+      <feGaussianBlur stdDeviation="5" result="blur" />
+      <feColorMatrix
+        in="blur"
+        type="matrix"
+        values="1 0 0 0 0.95 0 1 0 0 0.68 0 0 1 0 0.03 0 0 0 0.92 0"
+        result="gold"
+      />
+      <feMerge>
+        <feMergeNode in="gold" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <filter id="soft" x="-40%" y="-60%" width="180%" height="220%">
+      <feGaussianBlur stdDeviation="9" />
+    </filter>
+  </defs>
+  <ellipse
+    cx="310"
+    cy="190"
+    rx="286"
+    ry="126"
+    fill="url(#aura)"
+    filter="url(#soft)"
+    opacity="1"
+  />
+  <ellipse
+    cx="310"
+    cy="190"
+    rx="304"
+    ry="30"
+    fill="url(#beam)"
+    filter="url(#glow)"
+  />
+  <ellipse
+    cx="310"
+    cy="190"
+    rx="190"
+    ry="66"
+    fill="#facc15"
+    opacity="0.28"
+    filter="url(#soft)"
+  />
+  <g filter="url(#glow)" stroke-linecap="round">
+    <path d="M28 190H592" stroke="url(#beam)" stroke-width="17" />
+    <path
+      d="M62 188H558"
+      stroke="#fff"
+      stroke-opacity="0.88"
+      stroke-width="5"
+    />
+    <path
+      d="M310 26V354"
+      stroke="url(#ray)"
+      stroke-width="6"
+      transform="rotate(90 310 190)"
+      opacity="0.9"
+    />
+    <path
+      d="M108 96L512 284"
+      stroke="url(#ray)"
+      stroke-width="5"
+      opacity="0.86"
+    />
+    <path
+      d="M110 284L512 96"
+      stroke="url(#ray)"
+      stroke-width="5"
+      opacity="0.86"
+    />
+    <path
+      d="M212 38L408 342"
+      stroke="url(#ray)"
+      stroke-width="4"
+      opacity="0.76"
+    />
+    <path
+      d="M208 342L412 38"
+      stroke="url(#ray)"
+      stroke-width="4"
+      opacity="0.76"
+    />
+    <path d="M310 0V108" stroke="#fff" stroke-opacity="0.88" stroke-width="3" />
+    <path
+      d="M310 272V380"
+      stroke="#fff"
+      stroke-opacity="0.82"
+      stroke-width="3"
+    />
+  </g>
+  <g filter="url(#glow)">
+    <circle cx="310" cy="190" r="70" fill="url(#core)" />
+    <circle cx="310" cy="190" r="34" fill="#fff" opacity="0.98" />
+    <circle
+      cx="310"
+      cy="190"
+      r="92"
+      stroke="#fff7ad"
+      stroke-opacity="0.55"
+      stroke-width="2"
+    />
+    <circle
+      cx="310"
+      cy="190"
+      r="120"
+      stroke="#facc15"
+      stroke-opacity="0.22"
+      stroke-width="3"
+    />
+  </g>
+  <g filter="url(#glow)" opacity="0.96">
+    <ellipse
+      cx="140"
+      cy="146"
+      rx="18"
+      ry="6"
+      fill="#facc15"
+      transform="rotate(-24 140 146)"
+    />
+    <ellipse
+      cx="188"
+      cy="96"
+      rx="12"
+      ry="4.5"
+      fill="#fff"
+      transform="rotate(-18 188 96)"
+    />
+    <ellipse
+      cx="222"
+      cy="268"
+      rx="15"
+      ry="5"
+      fill="#f59e0b"
+      transform="rotate(28 222 268)"
+    />
+    <ellipse
+      cx="420"
+      cy="104"
+      rx="14"
+      ry="5"
+      fill="#fff"
+      transform="rotate(18 420 104)"
+    />
+    <ellipse
+      cx="460"
+      cy="250"
+      rx="18"
+      ry="6"
+      fill="#facc15"
+      transform="rotate(-20 460 250)"
+    />
+    <ellipse
+      cx="520"
+      cy="168"
+      rx="13"
+      ry="5"
+      fill="#fef08a"
+      transform="rotate(-16 520 168)"
+    />
+    <ellipse
+      cx="98"
+      cy="220"
+      rx="10"
+      ry="4"
+      fill="#fff"
+      transform="rotate(18 98 220)"
+    />
+    <ellipse
+      cx="548"
+      cy="222"
+      rx="10"
+      ry="4"
+      fill="#fff"
+      transform="rotate(-24 548 222)"
+    />
+    <circle cx="158" cy="238" r="4" fill="#f59e0b" />
+    <circle cx="226" cy="132" r="3" fill="#fff" />
+    <circle cx="384" cy="276" r="3.5" fill="#fff" />
+    <circle cx="488" cy="128" r="3" fill="#fbbf24" />
+    <circle cx="548" cy="186" r="2.4" fill="#f59e0b" />
+  </g>
+  <g stroke="#fff" stroke-linecap="round" filter="url(#glow)" opacity="0.9">
+    <path d="M164 80v18M155 89h18" stroke-width="2.4" />
+    <path d="M456 70v22M445 81h22" stroke-width="2.6" />
+    <path d="M508 288v18M499 297h18" stroke-width="2.2" />
+    <path d="M244 316v14M237 323h14" stroke-width="2" />
+  </g>
+</svg>
