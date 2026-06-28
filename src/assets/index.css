@@ -469,8 +469,8 @@ button.lesson-core-point-floating-status:disabled {
 }
 
 .lesson-core-burst {
-  --lesson-core-burst-width: clamp(240px, 25vw, 390px);
-  --lesson-core-burst-height: clamp(148px, 16vw, 240px);
+  --lesson-core-burst-width: clamp(185px, 19vw, 300px);
+  --lesson-core-burst-height: clamp(114px, 12vw, 184px);
   --lesson-core-burst-duration: 680ms;
   position: absolute;
   z-index: 42;
@@ -485,8 +485,8 @@ button.lesson-core-point-floating-status:disabled {
 }
 
 .lesson-core-burst--viewport {
-  --lesson-core-burst-width: clamp(360px, 44vw, 620px);
-  --lesson-core-burst-height: clamp(220px, 28vw, 380px);
+  --lesson-core-burst-width: clamp(260px, 32vw, 450px);
+  --lesson-core-burst-height: clamp(160px, 20vw, 276px);
   --lesson-core-burst-duration: 780ms;
   position: fixed;
   z-index: 2147483000;
