@@ -123,6 +123,8 @@ const normalizeStudentEmail = (value: unknown) =>
   String(value ?? "")
     .trim()
     .toLowerCase();
+const hasStudentAnswer = (value: unknown) =>
+  normalizeStudentText(value).length > 0;
 const isGeneratedImageChoiceLabel = (value: string, index: number) => {
   const match = value.trim().match(/^(\d+)\s*번\s*보기$/);
   return Boolean(match && Number(match[1]) === index + 1);
@@ -1543,6 +1545,25 @@ const QuizRunner: React.FC = () => {
     schedulePersistQuizProgress();
   };
 
+  const goToQuestion = async (targetIndex: number) => {
+    if (targetIndex < 0 || targetIndex >= selectedQuestions.length) return;
+    if (targetIndex === currentIndex) return;
+
+    const confirmed = await confirm({
+      title: `${targetIndex + 1}번 문제로 이동하시겠습니까?`,
+      message: "지금까지 입력한 답안은 자동 저장됩니다.",
+      confirmLabel: "이동하기",
+      cancelLabel: "취소",
+      tone: "info",
+    });
+    if (!confirmed) return;
+
+    emitSessionActivity();
+    setMatchingActiveLeft("");
+    setCurrentIndex(targetIndex);
+    schedulePersistQuizProgress();
+  };
+
   const finishQuiz = async (isTimeout = false) => {
     if (finishSubmitting) return;
     if (!isTimeout) {
@@ -1742,11 +1763,10 @@ const QuizRunner: React.FC = () => {
       );
     }
 
-    const progress = Math.max(
-      0,
-      Math.min(100, (timeLeft / timeLimitSeconds) * 100),
-    );
     const currentAnswer = answers[String(question.id)] || "";
+    const answeredQuestionCount = selectedQuestions.filter((item) =>
+      hasStudentAnswer(answers[String(item.id)]),
+    ).length;
     const passageText = String(question.passage || "").trim();
     const hasChoiceSupportPanel =
       question.type === "choice" && (!!question.image || !!passageText);
@@ -1755,7 +1775,7 @@ const QuizRunner: React.FC = () => {
       (question.choiceOptionImages || []).some(Boolean);
 
     return (
-      <div className="mx-auto flex h-[calc(100dvh-8rem)] max-w-6xl animate-fadeIn flex-col overflow-hidden px-3 py-3 sm:px-4 lg:max-w-7xl">
+      <div className="student-quiz-runner mx-auto flex max-w-6xl animate-fadeIn flex-col px-3 py-3 sm:px-4 lg:max-w-7xl">
         <div className="mb-2 flex shrink-0 items-center justify-between">
           <div className="font-bold text-gray-500">
             <span className="text-blue-600">{currentIndex + 1}</span> /{" "}
@@ -1782,16 +1802,55 @@ const QuizRunner: React.FC = () => {
           </div>
         </div>
 
-        <div className="mb-3 h-2 w-full shrink-0 overflow-hidden rounded-full bg-gray-200">
-          <div
-            className={`h-2 rounded-full transition-all duration-1000 ease-linear ${
-              progress < 20 ? "bg-red-500" : "bg-blue-500"
-            }`}
-            style={{ width: `${progress}%` }}
-          ></div>
-        </div>
+        <nav
+          className="mb-3 shrink-0 rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-sm"
+          aria-label="문항 이동"
+        >
+          <div className="mb-2 flex items-center justify-between gap-3 text-xs font-bold text-gray-500">
+            <span>응시 진척도</span>
+            <span>
+              <span className="text-blue-600">{answeredQuestionCount}</span>/
+              {selectedQuestions.length}문항 완료
+            </span>
+          </div>
+          <div className="student-quiz-progress-scroll -mx-1 overflow-x-auto px-1 pb-0.5">
+            <div
+              className="grid min-w-full gap-1"
+              style={{
+                gridTemplateColumns: `repeat(${selectedQuestions.length}, minmax(1.5rem, 1fr))`,
+              }}
+            >
+              {selectedQuestions.map((item, index) => {
+                const answered = hasStudentAnswer(answers[String(item.id)]);
+                const active = index === currentIndex;
+                return (
+                  <button
+                    key={`question-progress-${item.id}-${index}`}
+                    type="button"
+                    onClick={() => void goToQuestion(index)}
+                    aria-current={active ? "step" : undefined}
+                    aria-label={`${index + 1}번 문제${
+                      answered ? " 답안 입력됨" : " 미입력"
+                    }`}
+                    className={`flex h-7 items-center justify-center rounded-md border text-[10px] font-black leading-none transition focus:outline-none focus:ring-2 focus:ring-blue-300 ${
+                      active
+                        ? answered
+                          ? "border-blue-600 bg-blue-600 text-white shadow-sm"
+                          : "border-blue-500 bg-white text-blue-700 shadow-sm"
+                        : answered
+                          ? "border-blue-300 bg-blue-100 text-blue-700 hover:border-blue-400 hover:bg-blue-200"
+                          : "border-gray-200 bg-gray-100 text-gray-500 hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600"
+                    }`}
+                  >
+                    {index + 1}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </nav>
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
+        <div className="student-quiz-shell flex min-h-0 flex-1 flex-col rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
           <h2 className="mb-3 shrink-0 break-keep text-lg font-bold leading-snug text-gray-800 md:text-xl">
             {question.question}
           </h2>
@@ -1826,12 +1885,12 @@ const QuizRunner: React.FC = () => {
           <div
             className={`min-h-0 flex-1 ${
               hasChoiceSupportPanel
-                ? "grid gap-4 md:grid-cols-[minmax(0,1.05fr)_minmax(280px,0.95fr)] md:items-start"
+                ? "student-quiz-body-with-support"
                 : "space-y-2"
             }`}
           >
             {hasChoiceSupportPanel && (
-              <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto rounded-xl border border-gray-100 bg-gray-50 p-2 text-center">
+              <div className="student-quiz-support-panel flex min-h-0 flex-col gap-3 rounded-xl border border-gray-100 bg-gray-50 p-2 text-center">
                 {question.image && (
                   <div
                     className={`flex min-h-0 items-center justify-center ${
@@ -1874,7 +1933,7 @@ const QuizRunner: React.FC = () => {
               <div
                 className={
                   hasChoiceOptionImages
-                    ? "grid h-full min-h-[16rem] grid-cols-3 auto-rows-fr gap-2 overflow-y-auto pr-1"
+                    ? "student-quiz-choice-grid grid min-h-[16rem] grid-cols-2 auto-rows-fr gap-2 overflow-y-auto pr-1 sm:grid-cols-3"
                     : "min-h-0 space-y-2 overflow-y-auto pr-1"
                 }
               >

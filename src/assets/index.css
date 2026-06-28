@@ -22,6 +22,39 @@
   min-height: 0;
 }
 
+.student-quiz-runner {
+  min-height: calc(100dvh - 8rem);
+}
+
+.student-quiz-shell {
+  overflow: visible;
+}
+
+.student-quiz-body-with-support {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  overflow-y: auto;
+  padding-right: 0.125rem;
+}
+
+.student-quiz-support-panel {
+  overflow: visible;
+}
+
+.student-quiz-progress-scroll {
+  scrollbar-width: thin;
+}
+
+.student-quiz-progress-scroll::-webkit-scrollbar {
+  height: 0.375rem;
+}
+
+.student-quiz-progress-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #cbd5e1;
+}
+
 .fc .fc-toolbar-title {
   font-weight: 800 !important;
 }
@@ -1296,6 +1329,36 @@
 
   .student-dashboard-container {
     padding-bottom: calc(1.5rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media (min-width: 900px) and (orientation: landscape) {
+  .student-quiz-runner {
+    height: calc(100dvh - 8rem);
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .student-quiz-shell {
+    overflow: hidden;
+  }
+
+  .student-quiz-body-with-support {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.95fr);
+    align-items: start;
+    overflow: hidden;
+    padding-right: 0;
+  }
+
+  .student-quiz-support-panel {
+    height: 100%;
+    overflow-y: auto;
+  }
+
+  .student-quiz-choice-grid {
+    height: 100%;
+    min-height: 0;
   }
 }
 
