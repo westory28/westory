@@ -2498,6 +2498,213 @@ button.lesson-core-point-floating-status:disabled {
   }
 }
 
+.wis-ranking-title-link,
+.wis-ranking-more-button {
+  transform: translateY(0);
+  transition:
+    transform 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease,
+    border-color 160ms ease;
+}
+
+.wis-ranking-title-link:hover,
+.wis-ranking-title-link:focus-visible,
+.wis-ranking-more-button:hover,
+.wis-ranking-more-button:focus-visible {
+  transform: translateY(-1px);
+}
+
+.wis-ranking-more-button:hover,
+.wis-ranking-more-button:focus-visible {
+  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.12);
+}
+
+.wis-ranking-row {
+  --wis-ranking-accent-rgb: 37 99 235;
+  --wis-ranking-row-border: rgba(37, 99, 235, 0.14);
+  --wis-ranking-row-glow: rgba(37, 99, 235, 0.12);
+  --wis-ranking-medal-bg: linear-gradient(135deg, #0f172a, #111827);
+  --wis-ranking-medal-color: #ffffff;
+  --wis-ranking-medal-ring: rgba(15, 23, 42, 0.12);
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  transform: translateY(0);
+  transition:
+    transform 170ms ease,
+    border-color 170ms ease,
+    box-shadow 170ms ease,
+    background-color 170ms ease;
+}
+
+.wis-ranking-row::before {
+  content: "";
+  position: absolute;
+  inset: -28% -12%;
+  z-index: -1;
+  background:
+    radial-gradient(
+      closest-side at 16% 18%,
+      rgb(var(--wis-ranking-accent-rgb) / 0.15),
+      transparent 72%
+    ),
+    linear-gradient(
+      135deg,
+      rgb(var(--wis-ranking-accent-rgb) / 0.08),
+      transparent 48%
+    );
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.92);
+  transition:
+    opacity 170ms ease,
+    transform 170ms ease;
+}
+
+.wis-ranking-row--rank-1 {
+  --wis-ranking-accent-rgb: 245 158 11;
+  --wis-ranking-row-border: rgba(245, 158, 11, 0.34);
+  --wis-ranking-row-glow: rgba(245, 158, 11, 0.18);
+  --wis-ranking-medal-bg: linear-gradient(135deg, #fff7ed, #fef3c7);
+  --wis-ranking-medal-color: #92400e;
+  --wis-ranking-medal-ring: rgba(245, 158, 11, 0.3);
+}
+
+.wis-ranking-row--rank-2 {
+  --wis-ranking-accent-rgb: 148 163 184;
+  --wis-ranking-row-border: rgba(148, 163, 184, 0.38);
+  --wis-ranking-row-glow: rgba(100, 116, 139, 0.15);
+  --wis-ranking-medal-bg: linear-gradient(135deg, #ffffff, #e2e8f0);
+  --wis-ranking-medal-color: #475569;
+  --wis-ranking-medal-ring: rgba(148, 163, 184, 0.32);
+}
+
+.wis-ranking-row--rank-3 {
+  --wis-ranking-accent-rgb: 249 115 22;
+  --wis-ranking-row-border: rgba(249, 115, 22, 0.34);
+  --wis-ranking-row-glow: rgba(249, 115, 22, 0.16);
+  --wis-ranking-medal-bg: linear-gradient(135deg, #fff7ed, #fed7aa);
+  --wis-ranking-medal-color: #9a3412;
+  --wis-ranking-medal-ring: rgba(249, 115, 22, 0.3);
+}
+
+.wis-ranking-row--rank-4,
+.wis-ranking-row--rank-5 {
+  --wis-ranking-accent-rgb: 14 116 144;
+  --wis-ranking-row-border: rgba(14, 116, 144, 0.24);
+  --wis-ranking-row-glow: rgba(14, 116, 144, 0.14);
+  --wis-ranking-medal-bg: linear-gradient(
+    135deg,
+    #020617,
+    #0f172a 58%,
+    #164e63
+  );
+  --wis-ranking-medal-color: #ffffff;
+  --wis-ranking-medal-ring: rgba(14, 116, 144, 0.32);
+}
+
+.wis-ranking-rank-medal {
+  background: var(--wis-ranking-medal-bg) !important;
+  color: var(--wis-ranking-medal-color) !important;
+  box-shadow:
+    0 8px 18px rgba(15, 23, 42, 0.1),
+    0 0 0 1px var(--wis-ranking-medal-ring);
+  transition:
+    transform 170ms ease,
+    box-shadow 170ms ease,
+    filter 170ms ease;
+}
+
+.wis-ranking-crown,
+.wis-ranking-profile,
+.wis-ranking-rank-badge,
+.wis-ranking-score {
+  transition:
+    transform 170ms ease,
+    filter 170ms ease;
+}
+
+.wis-ranking-row:hover,
+.wis-ranking-row:focus-within {
+  z-index: 2;
+  border-color: var(--wis-ranking-row-border);
+  box-shadow:
+    0 14px 28px rgba(15, 23, 42, 0.1),
+    0 0 0 1px var(--wis-ranking-row-border),
+    0 0 22px var(--wis-ranking-row-glow);
+  transform: translateY(-2px);
+}
+
+.wis-ranking-row:hover::before,
+.wis-ranking-row:focus-within::before {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.wis-ranking-row:hover .wis-ranking-rank-medal,
+.wis-ranking-row:focus-within .wis-ranking-rank-medal {
+  box-shadow:
+    0 12px 22px rgba(15, 23, 42, 0.14),
+    0 0 0 2px var(--wis-ranking-medal-ring),
+    0 0 18px rgb(var(--wis-ranking-accent-rgb) / 0.18);
+  filter: saturate(1.04);
+  transform: translateY(-1px) scale(1.08);
+}
+
+.wis-ranking-row:hover .wis-ranking-crown,
+.wis-ranking-row:focus-within .wis-ranking-crown {
+  filter: drop-shadow(0 6px 8px rgb(var(--wis-ranking-accent-rgb) / 0.28));
+  transform: translateY(-1px) scale(1.12);
+}
+
+.wis-ranking-row:hover .wis-ranking-profile,
+.wis-ranking-row:focus-within .wis-ranking-profile,
+.wis-ranking-row:hover .wis-ranking-rank-badge,
+.wis-ranking-row:focus-within .wis-ranking-rank-badge {
+  filter: drop-shadow(0 7px 10px rgba(15, 23, 42, 0.12));
+  transform: translateY(-1px);
+}
+
+.wis-ranking-row:hover .wis-ranking-score,
+.wis-ranking-row:focus-within .wis-ranking-score {
+  filter: drop-shadow(0 5px 9px rgb(var(--wis-ranking-accent-rgb) / 0.2));
+  transform: translateY(-1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wis-ranking-title-link,
+  .wis-ranking-more-button,
+  .wis-ranking-row,
+  .wis-ranking-row::before,
+  .wis-ranking-rank-medal,
+  .wis-ranking-crown,
+  .wis-ranking-profile,
+  .wis-ranking-rank-badge,
+  .wis-ranking-score {
+    transition: none;
+  }
+
+  .wis-ranking-title-link:hover,
+  .wis-ranking-title-link:focus-visible,
+  .wis-ranking-more-button:hover,
+  .wis-ranking-more-button:focus-visible,
+  .wis-ranking-row:hover,
+  .wis-ranking-row:focus-within,
+  .wis-ranking-row:hover .wis-ranking-rank-medal,
+  .wis-ranking-row:focus-within .wis-ranking-rank-medal,
+  .wis-ranking-row:hover .wis-ranking-crown,
+  .wis-ranking-row:focus-within .wis-ranking-crown,
+  .wis-ranking-row:hover .wis-ranking-profile,
+  .wis-ranking-row:focus-within .wis-ranking-profile,
+  .wis-ranking-row:hover .wis-ranking-rank-badge,
+  .wis-ranking-row:focus-within .wis-ranking-rank-badge,
+  .wis-ranking-row:hover .wis-ranking-score,
+  .wis-ranking-row:focus-within .wis-ranking-score {
+    transform: none;
+  }
+}
+
 @media (min-width: 640px) and (max-width: 1280px) {
   .wis-ranking-panel {
     padding: clamp(0.65rem, 1.2vw, 0.9rem) !important;

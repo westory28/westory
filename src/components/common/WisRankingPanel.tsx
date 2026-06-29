@@ -42,6 +42,11 @@ const rankIcon = (rank: number) => {
   return "";
 };
 
+const rankAccentClassName = (rank: number) => {
+  if (rank >= 1 && rank <= 5) return `wis-ranking-row--rank-${rank}`;
+  return "wis-ranking-row--default";
+};
+
 const buildRankWallet = (entry: WisHallOfFameEntry): PointWallet => ({
   uid: entry.uid,
   studentName: entry.studentName,
@@ -106,12 +111,12 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
 
   return (
     <div className="wis-ranking-panel flex h-full min-h-[260px] flex-col rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:min-h-0">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex items-center justify-between gap-2">
         {hallOfFamePath ? (
           <button
             type="button"
             onClick={() => navigate(hallOfFamePath)}
-            className="wis-ranking-title flex items-center rounded-md bg-transparent p-0 text-left text-lg font-extrabold text-gray-900 transition hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+            className="wis-ranking-title wis-ranking-title-link flex items-center rounded-md bg-transparent p-0 text-left text-lg font-extrabold text-gray-900 transition hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
             aria-label="화랑의 전당으로 이동"
           >
             <i className="fas fa-trophy mr-2 text-blue-600"></i>
@@ -122,6 +127,20 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
             <i className="fas fa-trophy mr-2 text-blue-600"></i>
             위스 순위
           </h3>
+        )}
+        {hallOfFamePath && (
+          <button
+            type="button"
+            onClick={() => navigate(hallOfFamePath)}
+            className="wis-ranking-more-button inline-flex min-h-8 shrink-0 items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-2.5 text-xs font-black text-blue-700 transition hover:border-blue-200 hover:bg-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
+            aria-label="화랑의 전당 더보기"
+          >
+            더보기
+            <i
+              className="fas fa-chevron-right text-[10px]"
+              aria-hidden="true"
+            />
+          </button>
         )}
       </div>
 
@@ -150,21 +169,22 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
                   wallet: buildRankWallet(entry),
                 })
               : null;
+            const rankAccent = rankAccentClassName(rank);
             return (
               <div
                 key={entry.uid}
-                className={`wis-ranking-row rounded-lg border px-2 py-2 sm:grid sm:grid-cols-[72px_minmax(0,1fr)_92px_minmax(80px,auto)] sm:items-center sm:gap-3 sm:px-3 sm:py-2.5 max-[1120px]:sm:grid-cols-[52px_minmax(0,1fr)_70px_minmax(64px,auto)] max-[1120px]:sm:gap-1.5 max-[1120px]:sm:px-2 max-[1120px]:sm:py-2 ${rankTone(rank)}`}
+                className={`wis-ranking-row ${rankAccent} rounded-lg border px-2 py-2 sm:grid sm:grid-cols-[72px_minmax(0,1fr)_92px_minmax(80px,auto)] sm:items-center sm:gap-3 sm:px-3 sm:py-2.5 max-[1120px]:sm:grid-cols-[52px_minmax(0,1fr)_70px_minmax(64px,auto)] max-[1120px]:sm:gap-1.5 max-[1120px]:sm:px-2 max-[1120px]:sm:py-2 ${rankTone(rank)}`}
               >
                 <div className="wis-ranking-mobile-row flex flex-nowrap items-center gap-x-1.5 gap-y-1 sm:hidden">
                   <span
-                    className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-black ${
+                    className={`wis-ranking-rank-medal inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-black ${
                       rank <= 3 ? "bg-white/70" : "bg-slate-900 text-white"
                     }`}
                   >
                     {rank}
                   </span>
                   <span
-                    className="inline-flex h-4 w-4 shrink-0 items-center justify-center"
+                    className="wis-ranking-crown inline-flex h-4 w-4 shrink-0 items-center justify-center"
                     aria-hidden="true"
                   >
                     {iconClassName && (
@@ -194,7 +214,7 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
 
                 <div className="wis-ranking-rank hidden grid-cols-[2rem_1.25rem] items-center gap-1.5 sm:grid max-[1120px]:sm:grid-cols-[1.75rem_0.875rem] max-[1120px]:sm:gap-1">
                   <span
-                    className={`inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-black max-[1120px]:h-7 max-[1120px]:w-7 max-[1120px]:text-xs ${
+                    className={`wis-ranking-rank-medal inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-black max-[1120px]:h-7 max-[1120px]:w-7 max-[1120px]:text-xs ${
                       rank <= 3 ? "bg-white/70" : "bg-slate-900 text-white"
                     }`}
                   >
@@ -202,7 +222,7 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
                   </span>
                   {iconClassName && (
                     <i
-                      className={`${iconClassName} justify-self-center text-base max-[1120px]:text-xs`}
+                      className={`wis-ranking-crown ${iconClassName} justify-self-center text-base max-[1120px]:text-xs`}
                       aria-hidden="true"
                     ></i>
                   )}
