@@ -5,11 +5,9 @@ import { formatWisAmount } from "../../../lib/pointFormatters";
 import {
   loadStudentHistoryClassroomProgressSummary,
   loadStudentLessonProgressSummary,
-  loadStudentQuizProgressSummary,
   loadStudentWisProgressSummary,
   type StudentHistoryClassroomSummary,
   type StudentLessonProgressSummary,
-  type StudentQuizProgressSummary,
   type StudentWisSummary,
 } from "../../../lib/studentProgressSummary";
 import { updateStudentData } from "../../../lib/studentData";
@@ -18,6 +16,7 @@ import {
   loadUserPerformanceScoreRecords,
   type PerformanceScoreRecord,
 } from "../../../lib/performanceScores";
+import { StudentQuizHistoryPanel } from "./StudentHistoryModal";
 
 interface Student {
   id: string;
@@ -27,12 +26,6 @@ interface Student {
   number: number;
   name: string;
   email: string;
-}
-
-interface QuizHistoryFilter {
-  category?: string;
-  unitId?: string;
-  unitTitle?: string;
 }
 
 type DetailTab =
@@ -52,7 +45,6 @@ interface StudentDetailModalProps {
   onUpdate: () => void;
   readOnly?: boolean;
   initialTab?: StudentDetailInitialTab;
-  onOpenQuizHistory?: (student: Student, filter?: QuizHistoryFilter) => void;
 }
 
 const EMPTY_SUMMARY_TEXT = "-";
@@ -78,7 +70,6 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   onUpdate,
   readOnly = false,
   initialTab = "overview",
-  onOpenQuizHistory,
 }) => {
   const { config } = useAuth();
   const [activeTab, setActiveTab] = useState<DetailTab>(
@@ -88,10 +79,6 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
     useState<StudentLessonProgressSummary | null>(null);
   const [lessonLoading, setLessonLoading] = useState(false);
   const [lessonLoadedKey, setLessonLoadedKey] = useState("");
-  const [quizSummary, setQuizSummary] =
-    useState<StudentQuizProgressSummary | null>(null);
-  const [quizLoading, setQuizLoading] = useState(false);
-  const [quizLoadedKey, setQuizLoadedKey] = useState("");
   const [historySummary, setHistorySummary] =
     useState<StudentHistoryClassroomSummary | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -107,8 +94,6 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   const [performanceScoresLoadedKey, setPerformanceScoresLoadedKey] =
     useState("");
   const [lessonSectionFilter, setLessonSectionFilter] = useState("all");
-  const [quizUnitFilter, setQuizUnitFilter] = useState("all");
-  const [quizCategoryFilter, setQuizCategoryFilter] = useState("all");
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState<Student>({
     id: "",
@@ -123,8 +108,6 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
     if (!isOpen) return;
     setActiveTab(normalizeInitialTab(initialTab));
     setLessonSectionFilter("all");
-    setQuizUnitFilter("all");
-    setQuizCategoryFilter("all");
   }, [initialTab, isOpen]);
 
   useEffect(() => {
@@ -133,9 +116,6 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
     setLessonSummary(null);
     setLessonLoading(false);
     setLessonLoadedKey("");
-    setQuizSummary(null);
-    setQuizLoading(false);
-    setQuizLoadedKey("");
     setHistorySummary(null);
     setHistoryLoading(false);
     setHistoryLoadedKey("");
@@ -180,40 +160,6 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
       cancelled = true;
     };
   }, [activeTab, config, isOpen, lessonLoadedKey, student?.id]);
-
-  useEffect(() => {
-    if (!isOpen || activeTab !== "quiz" || !student?.id) return;
-    const loadKey = buildLoadKey(student.id, config);
-    if (quizLoadedKey === loadKey) return;
-
-    let cancelled = false;
-    const loadQuiz = async () => {
-      setQuizLoading(true);
-      try {
-        const nextSummary = await loadStudentQuizProgressSummary(
-          config,
-          student.id,
-        );
-        if (!cancelled) {
-          setQuizSummary(nextSummary);
-          setQuizLoadedKey(loadKey);
-        }
-      } catch (error) {
-        console.error("Failed to load student quiz summary:", error);
-        if (!cancelled) {
-          setQuizSummary(null);
-          setQuizLoadedKey(loadKey);
-        }
-      } finally {
-        if (!cancelled) setQuizLoading(false);
-      }
-    };
-
-    void loadQuiz();
-    return () => {
-      cancelled = true;
-    };
-  }, [activeTab, config, isOpen, quizLoadedKey, student?.id]);
 
   useEffect(() => {
     if (!isOpen || activeTab !== "history" || !student?.id) return;
@@ -414,47 +360,6 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
     (unit) => unit.submitted,
   ).length;
 
-  const quizGroups = quizSummary?.groups || [];
-  const quizUnitOptions = Array.from(
-    new Set(quizGroups.map((item) => item.unitTitle).filter(Boolean)),
-  );
-  const quizCategoryOptions = Array.from(
-    new Map(
-      quizGroups.map((item) => [
-        item.category,
-        { category: item.category, label: item.categoryLabel },
-      ]),
-    ).values(),
-  );
-  const filteredQuizGroups = quizGroups.filter(
-    (item) =>
-      (quizUnitFilter === "all" || item.unitTitle === quizUnitFilter) &&
-      (quizCategoryFilter === "all" || item.category === quizCategoryFilter),
-  );
-  const activeQuizHistoryFilter = useMemo(() => {
-    const matchedUnitGroup =
-      quizUnitFilter === "all"
-        ? null
-        : quizGroups.find((group) => group.unitTitle === quizUnitFilter) ||
-          null;
-    const hasFilter = quizCategoryFilter !== "all" || Boolean(matchedUnitGroup);
-    if (!hasFilter) return undefined;
-    return {
-      category: quizCategoryFilter === "all" ? undefined : quizCategoryFilter,
-      unitId: matchedUnitGroup?.unitId,
-      unitTitle: matchedUnitGroup?.unitTitle,
-    };
-  }, [quizCategoryFilter, quizGroups, quizUnitFilter]);
-
-  useEffect(() => {
-    if (
-      quizCategoryFilter !== "all" &&
-      !quizCategoryOptions.some((item) => item.category === quizCategoryFilter)
-    ) {
-      setQuizCategoryFilter("all");
-    }
-  }, [quizCategoryFilter, quizCategoryOptions]);
-
   if (!isOpen || !student) return null;
 
   const topTabs: Array<{ key: DetailTab; label: string; icon: string }> = [
@@ -477,10 +382,6 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   );
 
   const openTab = (tab: DetailTab) => {
-    if (tab === "quiz" && onOpenQuizHistory) {
-      onOpenQuizHistory(student);
-      return;
-    }
     setActiveTab(tab);
   };
 
@@ -586,10 +487,8 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               {renderOverviewCard({
                 tab: "quiz",
                 label: "평가",
-                value: quizSummary
-                  ? `${quizSummary.totalAttempts || 0}회`
-                  : "조회 전",
-                meta: quizSummary?.latestTitle || "평가 유형별 응시 기록",
+                value: "기록 확인",
+                meta: "문항별 답안과 해설",
                 icon: "fa-clipboard-check",
                 tone: "text-emerald-700",
               })}
@@ -768,138 +667,13 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
           )}
 
           {activeTab === "quiz" && (
-            <div className="space-y-4">
-              {quizLoading && renderLoading("평가 기록")}
-              {!quizLoading && quizSummary?.unavailable && (
-                <div className={emptyClassName}>{quizSummary.message}</div>
-              )}
-              {!quizLoading && quizSummary && !quizSummary.unavailable && (
-                <>
-                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
-                    <div>
-                      <h4 className="text-sm font-extrabold text-gray-900">
-                        평가 기록
-                      </h4>
-                      <p className="mt-1 text-xs font-bold text-gray-500">
-                        응시 {quizSummary.totalAttempts}회 · 평균{" "}
-                        {quizSummary.averageScore}점 · 오답{" "}
-                        {quizSummary.wrongCount}개
-                      </p>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      {onOpenQuizHistory && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onOpenQuizHistory(student, activeQuizHistoryFilter)
-                          }
-                          className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-extrabold text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100"
-                        >
-                          전체 응시 기록 보기
-                        </button>
-                      )}
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setQuizCategoryFilter("all")}
-                          className={`rounded-lg border px-3 py-1.5 text-xs font-bold transition ${
-                            quizCategoryFilter === "all"
-                              ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-                              : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-                          }`}
-                        >
-                          전체 유형
-                        </button>
-                        {quizCategoryOptions.map((category) => (
-                          <button
-                            key={category.category}
-                            type="button"
-                            onClick={() =>
-                              setQuizCategoryFilter(category.category)
-                            }
-                            className={`rounded-lg border px-3 py-1.5 text-xs font-bold transition ${
-                              quizCategoryFilter === category.category
-                                ? "border-emerald-300 bg-emerald-50 text-emerald-700"
-                                : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-                            }`}
-                          >
-                            {category.label}
-                          </button>
-                        ))}
-                      </div>
-                      <select
-                        value={quizUnitFilter}
-                        onChange={(event) =>
-                          setQuizUnitFilter(event.target.value)
-                        }
-                        className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-bold text-gray-700"
-                        aria-label="평가 단원 필터"
-                      >
-                        <option value="all">전체 단원</option>
-                        {quizUnitOptions.map((unitTitle) => (
-                          <option key={unitTitle} value={unitTitle}>
-                            {unitTitle}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid gap-2 md:grid-cols-2">
-                    {filteredQuizGroups.map((group) => (
-                      <div
-                        key={`${group.unitTitle}-${group.category}`}
-                        className="rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-extrabold text-gray-800">
-                              {group.unitTitle}
-                            </div>
-                            <div className="mt-1 text-xs font-bold text-emerald-700">
-                              {group.categoryLabel}
-                            </div>
-                          </div>
-                          <span className="shrink-0 text-lg font-black text-emerald-700">
-                            평균 {group.averageScore}점
-                          </span>
-                        </div>
-                        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold text-gray-500">
-                          <span>응시 {group.totalAttempts}회</span>
-                          <span>최근 {group.latestScore ?? 0}점</span>
-                          <span>오답 {group.wrongCount}개</span>
-                        </div>
-                        {group.latestDateText && (
-                          <div className="mt-1 text-xs font-semibold text-gray-400">
-                            최근 응시 {group.latestDateText}
-                          </div>
-                        )}
-                        {onOpenQuizHistory && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              onOpenQuizHistory(student, {
-                                category: group.category,
-                                unitId: group.unitId,
-                                unitTitle: group.unitTitle,
-                              })
-                            }
-                            className="mt-3 inline-flex items-center gap-1 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-extrabold text-gray-600 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
-                          >
-                            <i className="fas fa-list-check text-[10px]"></i>
-                            개별 응시 확인
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                    {!filteredQuizGroups.length && (
-                      <div className={`${emptyClassName} md:col-span-2`}>
-                        조건에 맞는 평가 기록이 없습니다.
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
+            <div>
+              <StudentQuizHistoryPanel
+                studentId={student.userId || student.id}
+                studentName={student.name || student.email || "학생"}
+                readScope="history"
+                surface="embedded"
+              />
             </div>
           )}
 
