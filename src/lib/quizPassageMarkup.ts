@@ -1,4 +1,4 @@
-export type QuizPassageMarkType = "underline" | "box" | "bullet";
+export type QuizPassageMarkType = "underline" | "box" | "blank" | "bullet";
 
 export interface QuizPassageSegment {
   type: "text" | QuizPassageMarkType;
@@ -6,7 +6,7 @@ export interface QuizPassageSegment {
 }
 
 const BULLET_TOKEN = "{{bullet}}";
-const INLINE_MARK_TOKEN_PATTERN = /\{\{(u|box):([\s\S]*?)\}\}/g;
+const INLINE_MARK_TOKEN_PATTERN = /\{\{(u|box|blank):([\s\S]*?)\}\}/g;
 const LEGACY_BULLET_TOKEN_PATTERN = /\{\{bullet:([^{}]*?)\}\}/g;
 const LEGACY_BULLET_PREFIX = "{{bullet:";
 const HORIZONTAL_SPACE_PATTERN = /[ \t]/;
@@ -14,8 +14,11 @@ const HORIZONTAL_SPACE_PATTERN = /[ \t]/;
 const getTokenName = (type: QuizPassageMarkType) =>
   type === "underline" ? "u" : type;
 
-const getSegmentType = (tokenName: string): QuizPassageMarkType =>
-  tokenName === "u" ? "underline" : "box";
+const getSegmentType = (tokenName: string): QuizPassageMarkType => {
+  if (tokenName === "u") return "underline";
+  if (tokenName === "blank") return "blank";
+  return "box";
+};
 
 const normalizeLegacyBulletLine = (line: string) => {
   const simpleLine = line.replace(
@@ -100,7 +103,9 @@ export const parseQuizPassageMarkup = (
 
 export const stripQuizPassageMarkup = (value: string | null | undefined) =>
   normalizeBulletMarkup(String(value || ""))
-    .replace(INLINE_MARK_TOKEN_PATTERN, "$2")
+    .replace(INLINE_MARK_TOKEN_PATTERN, (_match, tokenName, text) =>
+      tokenName === "blank" ? "____" : text,
+    )
     .replaceAll(BULLET_TOKEN, "");
 
 const findLineStart = (value: string, index: number) =>
@@ -187,7 +192,7 @@ export const applyQuizPassageMark = ({
   const suffix = "}}";
   const selectedText = value.slice(start, end);
 
-  if (markType === "box") {
+  if (markType === "box" || markType === "blank") {
     const trimmedSelection = trimSelectedHorizontalSpaces(selectedText);
     const markStart = start + trimmedSelection.startOffset;
     const markEnd = start + trimmedSelection.endOffset;

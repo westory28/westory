@@ -112,6 +112,8 @@ const TYPE_LABEL: Record<QuestionType, string> = {
   order: "순서 나열형",
   matching: "단어 연결하기",
 };
+const supportsQuestionPassage = (questionType: QuestionType) =>
+  questionType === "choice" || questionType === "word";
 const isGeneratedImageChoiceLabel = (value: string, index: number) => {
   const match = value.trim().match(/^(\d+)\s*번\s*보기$/);
   return Boolean(match && Number(match[1]) === index + 1);
@@ -697,7 +699,9 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     setFormText(question.question || "");
     setFormExp(question.explanation || "");
     setFormImage(question.image || null);
-    setFormPassage(question.type === "choice" ? question.passage || "" : "");
+    setFormPassage(
+      supportsQuestionPassage(question.type) ? question.passage || "" : "",
+    );
     setPreviewOpen(false);
     resetPreview();
     setHintEnabled(!!(question.hintEnabled && question.hint));
@@ -956,7 +960,7 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
         matchingPairs: optimizedMatchingPairs,
         explanation: formExp.trim(),
         image: optimizedImage,
-        passage: formType === "choice" ? formPassage.trim() : "",
+        passage: supportsQuestionPassage(formType) ? formPassage.trim() : "",
         hintEnabled,
         hint: hintEnabled ? hintText.trim() : "",
         createdAt: existingQuestion?.createdAt || nowMs,
@@ -1546,11 +1550,13 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                     className="quiz-compose-field w-full border p-2 rounded text-sm"
                   />
 
-                  {formType === "choice" && (
+                  {supportsQuestionPassage(formType) && (
                     <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                       <div className="mb-2 flex items-center justify-between">
                         <label className="text-xs font-black text-slate-600">
-                          읽기 자료 글상자
+                          {formType === "word"
+                            ? "단답형 본문 글상자"
+                            : "읽기 자료 글상자"}
                         </label>
                         <div className="flex flex-wrap items-center gap-1">
                           <button
@@ -1569,6 +1575,16 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                           >
                             <i className="far fa-square mr-1"></i>네모
                           </button>
+                          {formType === "word" && (
+                            <button
+                              type="button"
+                              onClick={() => markSelectedPassageText("blank")}
+                              title="선택한 글자를 단답형 빈칸으로 표시"
+                              className="rounded border border-slate-200 bg-white px-2 py-1 text-xs font-bold text-slate-600 hover:border-blue-300 hover:text-blue-700"
+                            >
+                              <i className="fas fa-minus mr-1"></i>빈칸
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={() => markSelectedPassageText("bullet")}
@@ -1592,7 +1608,11 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                         ref={passageTextareaRef}
                         value={formPassage}
                         onChange={(e) => setFormPassage(e.target.value)}
-                        placeholder="자료형 문제의 본문을 입력하세요."
+                        placeholder={
+                          formType === "word"
+                            ? "단답형 빈칸을 넣을 본문을 입력하세요."
+                            : "자료형 문제의 본문을 입력하세요."
+                        }
                         className="quiz-compose-field h-28 w-full resize-none rounded border border-slate-200 bg-white p-3 text-base leading-7"
                       />
                     </div>
@@ -2106,13 +2126,23 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
                             </div>
                           </div>
                         ) : (
-                          formImage && (
-                            <div className="mb-4">
-                              <img
-                                src={formImage}
-                                alt="문항 첨부 이미지 미리보기"
-                                className="mx-auto max-h-48 max-w-full rounded-lg border border-gray-100 object-contain"
-                              />
+                          (formImage ||
+                            (formType === "word" && previewPassageText)) && (
+                            <div className="mb-4 flex flex-col gap-3 rounded-xl border border-gray-100 bg-gray-50 p-2 text-center">
+                              {formImage && (
+                                <img
+                                  src={formImage}
+                                  alt="문항 첨부 이미지 미리보기"
+                                  className="mx-auto max-h-48 max-w-full rounded-lg border border-gray-100 object-contain"
+                                />
+                              )}
+                              {formType === "word" && previewPassageText && (
+                                <QuizPassage
+                                  value={previewPassageText}
+                                  surface="white"
+                                  className="text-left"
+                                />
+                              )}
                             </div>
                           )
                         )}

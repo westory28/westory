@@ -158,6 +158,8 @@ type SortDirection = "asc" | "desc";
 type AnalyticsScope = "all" | "class";
 type StatusFilter = "" | "weak" | "no_attempt" | "data_short" | "stable";
 type ClassComparisonSort = "class" | "rateAsc" | "rateDesc";
+const supportsQuestionPassage = (questionType: QuestionType | string) =>
+  questionType === "choice" || questionType === "word";
 
 interface BankFilterState {
   big: string;
@@ -2135,7 +2137,9 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     setEditQuestionText(question.question || "");
     setEditExplanationText(question.explanation || "");
     setEditImage(question.image || null);
-    setEditPassage(normalizedType === "choice" ? question.passage || "" : "");
+    setEditPassage(
+      supportsQuestionPassage(normalizedType) ? question.passage || "" : "",
+    );
     setEditHintEnabled(!!(question.hintEnabled && question.hint));
     setEditHintText(question.hint || "");
     setPreviewOpen(false);
@@ -2277,7 +2281,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       question: editQuestionText.trim(),
       explanation: editExplanationText.trim(),
       image: editImage || "",
-      passage: editType === "choice" ? editPassage.trim() : "",
+      passage: supportsQuestionPassage(editType) ? editPassage.trim() : "",
       options,
       choiceOptionImages: editType === "choice" ? choiceOptionImages : [],
       answer,
@@ -2328,10 +2332,9 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       question: (question.question || "").trim(),
       explanation: (question.explanation || "").trim(),
       image: question.image || "",
-      passage:
-        normalizedType === "choice"
-          ? String(question.passage || "").trim()
-          : "",
+      passage: supportsQuestionPassage(normalizedType)
+        ? String(question.passage || "").trim()
+        : "",
       options,
       choiceOptionImages,
       answer,
@@ -2506,7 +2509,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         answer,
         explanation: editExplanationText.trim(),
         image: optimizedImage,
-        passage: editType === "choice" ? editPassage.trim() : "",
+        passage: supportsQuestionPassage(editType) ? editPassage.trim() : "",
         options,
         choiceOptionImages: optimizedChoiceOptionImages,
         matchingPairs: optimizedMatchingOptions,
@@ -3551,11 +3554,13 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                   className="w-full border p-2 rounded text-sm"
                 />
 
-                {editType === "choice" && (
+                {supportsQuestionPassage(editType) && (
                   <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                     <div className="mb-2 flex items-center justify-between">
                       <label className="text-xs font-black text-slate-600">
-                        읽기 자료 글상자
+                        {editType === "word"
+                          ? "단답형 본문 글상자"
+                          : "읽기 자료 글상자"}
                       </label>
                       <div className="flex flex-wrap items-center gap-1">
                         <button
@@ -3576,6 +3581,16 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                         >
                           <i className="far fa-square mr-1"></i>네모
                         </button>
+                        {editType === "word" && (
+                          <button
+                            type="button"
+                            onClick={() => markSelectedEditPassageText("blank")}
+                            title="선택한 글자를 단답형 빈칸으로 표시"
+                            className="rounded border border-slate-200 bg-white px-2 py-1 text-xs font-bold text-slate-600 hover:border-blue-300 hover:text-blue-700"
+                          >
+                            <i className="fas fa-minus mr-1"></i>빈칸
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => markSelectedEditPassageText("bullet")}
@@ -3599,7 +3614,11 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                       ref={editPassageTextareaRef}
                       value={editPassage}
                       onChange={(e) => setEditPassage(e.target.value)}
-                      placeholder="자료형 문제의 본문을 입력하세요."
+                      placeholder={
+                        editType === "word"
+                          ? "단답형 빈칸을 넣을 본문을 입력하세요."
+                          : "자료형 문제의 본문을 입력하세요."
+                      }
                       className="h-28 w-full resize-none rounded border border-slate-200 bg-white p-3 text-base leading-7"
                     />
                   </div>
@@ -4110,13 +4129,23 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                           </div>
                         </div>
                       ) : (
-                        editImage && (
-                          <div className="mb-4">
-                            <img
-                              src={editImage}
-                              alt="문항 첨부 이미지 미리보기"
-                              className="mx-auto max-h-48 max-w-full rounded-lg border border-gray-100 object-contain"
-                            />
+                        (editImage ||
+                          (editType === "word" && editPreviewPassageText)) && (
+                          <div className="mb-4 flex flex-col gap-3 rounded-xl border border-gray-100 bg-gray-50 p-2 text-center">
+                            {editImage && (
+                              <img
+                                src={editImage}
+                                alt="문항 첨부 이미지 미리보기"
+                                className="mx-auto max-h-48 max-w-full rounded-lg border border-gray-100 object-contain"
+                              />
+                            )}
+                            {editType === "word" && editPreviewPassageText && (
+                              <QuizPassage
+                                value={editPreviewPassageText}
+                                surface="white"
+                                className="text-left"
+                              />
+                            )}
                           </div>
                         )
                       )}

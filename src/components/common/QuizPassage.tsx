@@ -14,6 +14,8 @@ interface QuizPassageProps {
 const markClasses: Record<string, string> = {
   underline: "border-b-2 border-slate-900 pb-0.5 font-bold text-slate-950",
   box: "mx-0 inline-block whitespace-nowrap rounded border-2 border-slate-800 px-3 py-0.5 font-bold text-slate-950",
+  blank:
+    "mx-1 inline-block align-baseline border-b-2 border-slate-900 px-3 pb-0.5",
 };
 
 const sizeClasses: Record<NonNullable<QuizPassageProps["size"]>, string> = {
@@ -34,6 +36,29 @@ const isLineBreakTextSegment = (segment: QuizPassageSegment | undefined) =>
 const isBulletSegment = (segment: QuizPassageSegment | undefined) =>
   segment?.type === "bullet";
 
+const renderMarkedSegment = (segment: QuizPassageSegment, key: React.Key) => {
+  if (segment.type === "blank") {
+    const blankWidth = `${Math.min(Math.max(segment.text.length, 4), 14)}ch`;
+
+    return (
+      <span
+        key={key}
+        aria-label="빈칸"
+        className={markClasses.blank}
+        style={{ minWidth: blankWidth }}
+      >
+        &nbsp;
+      </span>
+    );
+  }
+
+  return (
+    <span key={key} className={markClasses[segment.type]}>
+      {segment.text}
+    </span>
+  );
+};
+
 const renderInlineSegments = (value: string, keyPrefix: string) =>
   parseQuizPassageMarkup(value).map((segment, index) => {
     if (segment.type === "text") {
@@ -52,13 +77,9 @@ const renderInlineSegments = (value: string, keyPrefix: string) =>
       );
     }
 
-    return (
-      <span
-        key={`${keyPrefix}-${segment.type}-${index}`}
-        className={markClasses[segment.type]}
-      >
-        {segment.text}
-      </span>
+    return renderMarkedSegment(
+      segment,
+      `${keyPrefix}-${segment.type}-${index}`,
     );
   });
 
@@ -102,11 +123,7 @@ const QuizPassage: React.FC<QuizPassageProps> = ({
           );
         }
 
-        return (
-          <span key={index} className={markClasses[segment.type]}>
-            {segment.text}
-          </span>
-        );
+        return renderMarkedSegment(segment, index);
       })}
     </div>
   );
