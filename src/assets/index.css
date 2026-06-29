@@ -1303,10 +1303,11 @@ button.lesson-core-point-floating-status:disabled {
   box-shadow: 0 8px 18px rgba(59, 130, 246, 0.18);
 }
 
-.student-calendar-shell__attendance-action {
-  border-color: #bfdbfe;
-  background: #eff6ff;
-  color: #1d4ed8;
+.student-calendar-shell__attendance-action[data-tone="default"] {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.24);
 }
 
 .student-calendar-shell__attendance-label {
@@ -1329,6 +1330,13 @@ button.lesson-core-point-floating-status:disabled {
   border-color: #e2e8f0;
   background: #f8fafc;
   color: #475569;
+}
+
+.student-calendar-shell__attendance-action[data-tone="default"]:hover {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+  color: #ffffff;
+  box-shadow: 0 14px 24px rgba(37, 99, 235, 0.28);
 }
 
 .student-calendar-shell__search-button {
