@@ -184,6 +184,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
     () => defaultVisibilityGroup.targets.map((target) => target.id),
     [defaultVisibilityGroup.targets],
   );
+  const hintsEnabled = !isMockExam && settings.hintLimit > 0;
 
   const buildOrderedVisibleClassIds = (selectedIds: Iterable<string>) => {
     const selectedSet = new Set(
@@ -910,48 +911,79 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                     </div>
 
                     {!isMockExam && (
-                      <div className="grid gap-3 md:grid-cols-2">
-                        <label className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
-                          <span className="text-xs font-bold text-gray-500">
-                            힌트 사용 가능 횟수
-                          </span>
+                      <div className="space-y-3">
+                        <label className="flex items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white px-3.5 py-3">
+                          <div>
+                            <div className="text-sm font-bold text-gray-800">
+                              힌트 사용
+                            </div>
+                            <div className="mt-0.5 text-xs text-gray-500">
+                              체크한 경우에만 학생에게 힌트 버튼이 보입니다.
+                            </div>
+                          </div>
                           <input
-                            type="number"
-                            min={0}
-                            value={settings.hintLimit}
+                            type="checkbox"
+                            checked={hintsEnabled}
                             onChange={(event) =>
                               setSettings((prev) => ({
                                 ...prev,
-                                hintLimit: Math.max(
-                                  0,
-                                  parseInt(event.target.value, 10) || 0,
-                                ),
+                                hintLimit: event.target.checked
+                                  ? Math.max(1, prev.hintLimit || 1)
+                                  : 0,
                               }))
                             }
-                            className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-center text-base font-extrabold text-gray-800"
+                            className="h-5 w-5 rounded border-gray-300 text-blue-600"
                           />
                         </label>
 
-                        <label className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
-                          <span className="text-xs font-bold text-gray-500">
-                            재응시 대기 시간 (분)
-                          </span>
-                          <input
-                            type="number"
-                            min={0}
-                            value={settings.cooldown}
-                            onChange={(event) =>
-                              setSettings((prev) => ({
-                                ...prev,
-                                cooldown: Math.max(
-                                  0,
-                                  parseInt(event.target.value, 10) || 0,
-                                ),
-                              }))
-                            }
-                            className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-center text-base font-extrabold text-gray-800"
-                          />
-                        </label>
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <label
+                            className={`rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3 ${
+                              hintsEnabled ? "" : "opacity-60"
+                            }`}
+                          >
+                            <span className="text-xs font-bold text-gray-500">
+                              힌트 사용 가능 횟수
+                            </span>
+                            <input
+                              type="number"
+                              min={1}
+                              value={settings.hintLimit}
+                              disabled={!hintsEnabled}
+                              onChange={(event) =>
+                                setSettings((prev) => ({
+                                  ...prev,
+                                  hintLimit: Math.max(
+                                    1,
+                                    parseInt(event.target.value, 10) || 1,
+                                  ),
+                                }))
+                              }
+                              className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-center text-base font-extrabold text-gray-800 disabled:bg-gray-100 disabled:text-gray-400"
+                            />
+                          </label>
+
+                          <label className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
+                            <span className="text-xs font-bold text-gray-500">
+                              재응시 대기 시간 (분)
+                            </span>
+                            <input
+                              type="number"
+                              min={0}
+                              value={settings.cooldown}
+                              onChange={(event) =>
+                                setSettings((prev) => ({
+                                  ...prev,
+                                  cooldown: Math.max(
+                                    0,
+                                    parseInt(event.target.value, 10) || 0,
+                                  ),
+                                }))
+                              }
+                              className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-center text-base font-extrabold text-gray-800"
+                            />
+                          </label>
+                        </div>
                       </div>
                     )}
 

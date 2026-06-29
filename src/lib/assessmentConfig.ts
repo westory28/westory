@@ -385,6 +385,15 @@ const normalizeAssessmentTimeLimitSeconds = (value: unknown) => {
   return Math.max(60, Math.round(numeric));
 };
 
+const normalizeAssessmentHintLimit = (value: unknown) => {
+  if (value === undefined) return DEFAULT_ASSESSMENT_CONFIG_ENTRY.hintLimit;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return DEFAULT_ASSESSMENT_CONFIG_ENTRY.hintLimit;
+  }
+  return Math.max(0, Math.round(numeric));
+};
+
 export const getAssessmentConfigKey = (
   unitId: string,
   category: string,
@@ -568,7 +577,7 @@ export const normalizeAssessmentConfigEntry = (
     timeLimit: normalizeAssessmentTimeLimitSeconds(source.timeLimit),
     allowRetake: source.allowRetake !== false,
     cooldown: Math.max(0, Number(source.cooldown) || 0),
-    hintLimit: Math.max(0, Number(source.hintLimit) || 2),
+    hintLimit: normalizeAssessmentHintLimit(source.hintLimit),
     visibleTargetGrade: normalizeSchoolToken(source.visibleTargetGrade) || "3",
     visibleClassIds: normalizedVisibleClassIds,
     visibilityVersion:

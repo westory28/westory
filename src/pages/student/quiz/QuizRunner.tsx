@@ -1828,11 +1828,21 @@ const QuizRunner: React.FC = () => {
       hasStudentAnswer(answers[String(item.id)]),
     ).length;
     const passageText = String(question.passage || "").trim();
-    const hasChoiceSupportPanel =
-      question.type === "choice" && (!!question.image || !!passageText);
+    const hasQuestionSupportPanel = !!question.image || !!passageText;
     const hasChoiceOptionImages =
       question.type === "choice" &&
       (question.choiceOptionImages || []).some(Boolean);
+    const selectedOrderItems =
+      question.type === "order" ? parseOrderAnswer(currentAnswer) : [];
+    const orderOptions =
+      question.type === "order"
+        ? orderOptionMap[question.id] || question.options || []
+        : [];
+    const orderSlotCount =
+      question.type === "order"
+        ? Math.max(orderOptions.length, selectedOrderItems.length, 1)
+        : 0;
+    const answerPanelLabel = question.type === "order" ? "보기" : "답안";
 
     return (
       <div className="student-quiz-runner mx-auto flex max-w-6xl animate-fadeIn flex-col px-3 py-3 sm:px-4 lg:max-w-7xl">
@@ -1911,358 +1921,391 @@ const QuizRunner: React.FC = () => {
         </nav>
 
         <div className="student-quiz-shell flex min-h-0 flex-1 flex-col rounded-2xl border border-gray-200 bg-white p-4 shadow-sm md:p-5">
-          <h2 className="mb-3 shrink-0 break-keep text-lg font-bold leading-snug text-gray-800 md:text-xl">
-            {question.question}
-          </h2>
-
-          {!!(canUseHints && question.hintEnabled && question.hint) && (
-            <div className="mb-3 shrink-0">
-              <button
-                type="button"
-                onClick={() => revealHint(question)}
-                disabled={
-                  !!revealedHints[question.id] || hintUsedCount >= maxHintUses
-                }
-                className={`rounded-lg px-3 py-2 text-sm font-bold transition ${
-                  revealedHints[question.id]
-                    ? "bg-amber-100 text-amber-700"
-                    : hintUsedCount >= maxHintUses
-                      ? "cursor-not-allowed bg-gray-100 text-gray-400"
-                      : "bg-amber-500 text-white hover:bg-amber-600"
-                }`}
-              >
-                {revealedHints[question.id] ? "힌트 확인됨" : "힌트 보기"}
-              </button>
-              {revealedHints[question.id] && (
-                <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                  <i className="fas fa-lightbulb mr-2"></i>
-                  {question.hint}
-                </div>
-              )}
-            </div>
-          )}
-
           <div
-            className={`min-h-0 flex-1 ${
-              hasChoiceSupportPanel
-                ? "student-quiz-body-with-support"
-                : "space-y-2"
+            className={`student-quiz-body-split min-h-0 flex-1 ${
+              hasQuestionSupportPanel ? "student-quiz-body-has-support" : ""
             }`}
           >
-            {hasChoiceSupportPanel && (
-              <div className="student-quiz-support-panel flex min-h-0 flex-col gap-3 rounded-xl border border-gray-100 bg-gray-50 p-2 text-center">
-                {question.image && (
-                  <div
-                    className={`flex min-h-0 items-center justify-center ${
-                      passageText ? "shrink-0" : "flex-1"
+            <section className="student-quiz-question-panel min-h-0 rounded-xl border border-gray-100 bg-slate-50/70 p-4">
+              <div className="mb-4">
+                <div className="mb-2 text-xs font-black text-blue-600">
+                  문제
+                </div>
+                <h2 className="break-keep text-lg font-bold leading-snug text-gray-900 md:text-xl">
+                  {question.question}
+                </h2>
+              </div>
+
+              {!!(canUseHints && question.hintEnabled && question.hint) && (
+                <div className="mb-4">
+                  <button
+                    type="button"
+                    onClick={() => revealHint(question)}
+                    disabled={
+                      !!revealedHints[question.id] ||
+                      hintUsedCount >= maxHintUses
+                    }
+                    className={`rounded-lg px-3 py-2 text-sm font-bold transition ${
+                      revealedHints[question.id]
+                        ? "bg-amber-100 text-amber-700"
+                        : hintUsedCount >= maxHintUses
+                          ? "cursor-not-allowed bg-gray-100 text-gray-400"
+                          : "bg-amber-500 text-white hover:bg-amber-600"
                     }`}
                   >
-                    <img
-                      src={question.image}
-                      className={`mx-auto max-w-full rounded-lg border border-gray-100 object-contain ${
-                        passageText
-                          ? "max-h-[min(30vh,280px)]"
-                          : "max-h-[min(48vh,460px)]"
+                    {revealedHints[question.id] ? "힌트 확인됨" : "힌트 보기"}
+                  </button>
+                  {revealedHints[question.id] && (
+                    <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                      <i className="fas fa-lightbulb mr-2"></i>
+                      {question.hint}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {hasQuestionSupportPanel && (
+                <div className="student-quiz-support-panel flex min-h-0 flex-col gap-3 rounded-xl border border-gray-100 bg-white p-2 text-center">
+                  {question.image && (
+                    <div
+                      className={`flex min-h-0 items-center justify-center ${
+                        passageText ? "shrink-0" : "flex-1"
                       }`}
-                      alt="문항 첨부 이미지"
-                    />
-                  </div>
-                )}
-                {passageText && (
-                  <QuizPassage
-                    value={passageText}
-                    surface="white"
-                    size="large"
-                    className="shrink-0 text-left"
-                  />
-                )}
-              </div>
-            )}
-
-            {!hasChoiceSupportPanel && question.image && (
-              <div className="mb-3 text-center">
-                <img
-                  src={question.image}
-                  className="mx-auto max-h-[min(48vh,460px)] max-w-full rounded-lg border border-gray-100 object-contain"
-                  alt="문항 첨부 이미지"
-                />
-              </div>
-            )}
-
-            {question.type === "choice" && (
-              <div
-                className={
-                  hasChoiceOptionImages
-                    ? "student-quiz-choice-grid grid min-h-[16rem] grid-cols-2 auto-rows-fr gap-2 overflow-y-auto pr-1 sm:grid-cols-3"
-                    : "min-h-0 space-y-2 overflow-y-auto pr-1"
-                }
-              >
-                {question.options?.map((option, index) => {
-                  const optionImage = getChoiceOptionImage(question, index);
-                  const visibleOptionText =
-                    optionImage && isGeneratedImageChoiceLabel(option, index)
-                      ? ""
-                      : option;
-                  const selected = currentAnswer === option;
-                  return (
-                    <button
-                      type="button"
-                      key={`${question.id}-choice-${index}`}
-                      onClick={() => handleAnswer(option)}
-                      className={
-                        hasChoiceOptionImages
-                          ? `group flex h-full min-h-0 flex-col rounded-xl border-2 bg-white p-2 text-left transition ${
-                              selected
-                                ? "border-blue-500 bg-blue-50 text-blue-800 shadow-sm"
-                                : "border-gray-200 hover:border-blue-300 hover:bg-blue-50"
-                            }`
-                          : `flex cursor-pointer items-start rounded-xl border-2 px-3 py-2.5 text-left transition ${
-                              selected
-                                ? "border-blue-500 bg-blue-50 font-bold text-blue-800"
-                                : "border-gray-200 hover:border-blue-300 hover:bg-blue-50"
-                            }`
-                      }
                     >
-                      {hasChoiceOptionImages ? (
-                        <>
-                          <div
-                            className={`relative flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden rounded-lg border ${
-                              optionImage
-                                ? "border-gray-100 bg-white"
-                                : "border-dashed border-gray-200 bg-gray-50 px-2"
-                            }`}
-                          >
-                            <span
-                              className={`absolute left-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full text-sm font-black shadow-sm ${
+                      <img
+                        src={question.image}
+                        className={`mx-auto max-w-full rounded-lg border border-gray-100 object-contain ${
+                          passageText
+                            ? "max-h-[min(30vh,280px)]"
+                            : "max-h-[min(48vh,460px)]"
+                        }`}
+                        alt="문항 첨부 이미지"
+                      />
+                    </div>
+                  )}
+                  {passageText && (
+                    <QuizPassage
+                      value={passageText}
+                      surface="white"
+                      size="large"
+                      className="shrink-0 text-left"
+                    />
+                  )}
+                </div>
+              )}
+
+              {question.type === "order" && (
+                <div className="mt-4 rounded-xl border border-dashed border-blue-300 bg-blue-50 p-3">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div className="text-xs font-bold text-gray-600">
+                      선택한 순서
+                    </div>
+                    <div className="text-xs font-black text-blue-700">
+                      {selectedOrderItems.length}/{orderSlotCount}
+                    </div>
+                  </div>
+                  <div className="student-quiz-order-slots flex flex-col gap-2">
+                    {Array.from({ length: orderSlotCount }).map((_, index) => {
+                      const item = selectedOrderItems[index];
+                      return item ? (
+                        <button
+                          key={`order-slot-${question.id}-${index}-${item}`}
+                          type="button"
+                          onClick={() => removeOrderSelection(index)}
+                          className="flex min-h-12 w-full items-start gap-3 rounded-lg bg-blue-600 px-3 py-2 text-left text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
+                        >
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/15 text-xs">
+                            {index + 1}
+                          </span>
+                          <span className="min-w-0 flex-1 break-words">
+                            {item}
+                          </span>
+                        </button>
+                      ) : (
+                        <div
+                          key={`order-slot-${question.id}-${index}-empty`}
+                          className="flex min-h-12 items-center gap-3 rounded-lg border border-dashed border-blue-200 bg-white px-3 py-2 text-sm font-bold text-blue-300"
+                        >
+                          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-50 text-xs text-blue-400">
+                            {index + 1}
+                          </span>
+                          <span>빈칸</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </section>
+
+            <section className="student-quiz-answer-panel min-h-0 rounded-xl border border-gray-100 bg-white p-4">
+              <div className="mb-3 text-xs font-black text-blue-600">
+                {answerPanelLabel}
+              </div>
+
+              {question.type === "choice" && (
+                <div
+                  className={
+                    hasChoiceOptionImages
+                      ? "student-quiz-choice-grid grid min-h-[16rem] grid-cols-2 auto-rows-fr gap-2 overflow-y-auto pr-1 sm:grid-cols-3"
+                      : "min-h-0 space-y-2 overflow-y-auto pr-1"
+                  }
+                >
+                  {question.options?.map((option, index) => {
+                    const optionImage = getChoiceOptionImage(question, index);
+                    const visibleOptionText =
+                      optionImage && isGeneratedImageChoiceLabel(option, index)
+                        ? ""
+                        : option;
+                    const selected = currentAnswer === option;
+                    return (
+                      <button
+                        type="button"
+                        key={`${question.id}-choice-${index}`}
+                        onClick={() => handleAnswer(option)}
+                        className={
+                          hasChoiceOptionImages
+                            ? `group flex h-full min-h-0 flex-col rounded-xl border-2 bg-white p-2 text-left transition ${
+                                selected
+                                  ? "border-blue-500 bg-blue-50 text-blue-800 shadow-sm"
+                                  : "border-gray-200 hover:border-blue-300 hover:bg-blue-50"
+                              }`
+                            : `flex cursor-pointer items-start rounded-xl border-2 px-3 py-2.5 text-left transition ${
+                                selected
+                                  ? "border-blue-500 bg-blue-50 font-bold text-blue-800"
+                                  : "border-gray-200 hover:border-blue-300 hover:bg-blue-50"
+                              }`
+                        }
+                      >
+                        {hasChoiceOptionImages ? (
+                          <>
+                            <div
+                              className={`relative flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden rounded-lg border ${
+                                optionImage
+                                  ? "border-gray-100 bg-white"
+                                  : "border-dashed border-gray-200 bg-gray-50 px-2"
+                              }`}
+                            >
+                              <span
+                                className={`absolute left-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full text-sm font-black shadow-sm ${
+                                  selected
+                                    ? "bg-blue-600 text-white"
+                                    : "bg-white/95 text-gray-600 ring-1 ring-gray-200"
+                                }`}
+                              >
+                                {index + 1}
+                              </span>
+                              {optionImage ? (
+                                <img
+                                  src={optionImage}
+                                  alt={`${index + 1}번 보기`}
+                                  className="max-h-full max-w-full object-contain"
+                                />
+                              ) : (
+                                <span className="break-keep text-center text-sm font-bold text-gray-700">
+                                  {visibleOptionText}
+                                </span>
+                              )}
+                            </div>
+                            {visibleOptionText && optionImage && (
+                              <div className="mt-2 line-clamp-2 min-h-[2.5rem] w-full break-keep text-center text-sm font-bold leading-5">
+                                {visibleOptionText}
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <div
+                              className={`mr-3 mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
                                 selected
                                   ? "bg-blue-600 text-white"
-                                  : "bg-white/95 text-gray-600 ring-1 ring-gray-200"
+                                  : "bg-gray-200 text-gray-500"
                               }`}
                             >
                               {index + 1}
-                            </span>
-                            {optionImage ? (
+                            </div>
+                            {optionImage && (
                               <img
                                 src={optionImage}
-                                alt={`${index + 1}번 보기`}
-                                className="max-h-full max-w-full object-contain"
+                                alt={`${index + 1}번 보기 이미지`}
+                                className="mr-3 h-24 w-28 shrink-0 rounded-lg border border-gray-100 bg-white object-contain"
                               />
-                            ) : (
-                              <span className="break-keep text-center text-sm font-bold text-gray-700">
-                                {visibleOptionText}
-                              </span>
                             )}
-                          </div>
-                          {visibleOptionText && optionImage && (
-                            <div className="mt-2 line-clamp-2 min-h-[2.5rem] w-full break-keep text-center text-sm font-bold leading-5">
+                            <div className="min-w-0 break-words">
                               {visibleOptionText}
                             </div>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          <div
-                            className={`mr-3 mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
-                              selected
-                                ? "bg-blue-600 text-white"
-                                : "bg-gray-200 text-gray-500"
-                            }`}
-                          >
-                            {index + 1}
-                          </div>
-                          {optionImage && (
-                            <img
-                              src={optionImage}
-                              alt={`${index + 1}번 보기 이미지`}
-                              className="mr-3 h-24 w-28 shrink-0 rounded-lg border border-gray-100 bg-white object-contain"
-                            />
-                          )}
-                          <div className="min-w-0 break-words">
-                            {visibleOptionText}
-                          </div>
-                        </>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {question.type === "ox" &&
-              ["O", "X"].map((option) => (
-                <div
-                  key={option}
-                  onClick={() => handleAnswer(option)}
-                  className={`cursor-pointer rounded-xl border-2 p-6 text-center text-xl font-bold transition ${
-                    currentAnswer === option
-                      ? "border-blue-500 bg-blue-50 text-blue-800"
-                      : "border-gray-200 hover:border-blue-300 hover:bg-blue-50"
-                  }`}
-                >
-                  {option}
+                          </>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
-              ))}
+              )}
 
-            {(question.type === "short" || question.type === "word") && (
-              <input
-                type="text"
-                value={currentAnswer}
-                onChange={(event) => handleAnswer(event.target.value)}
-                className="w-full border-b-2 border-gray-300 bg-transparent p-3 text-center text-lg outline-none focus:border-blue-500"
-                placeholder="정답을 입력하세요"
-              />
-            )}
+              {question.type === "ox" && (
+                <div className="grid gap-3">
+                  {["O", "X"].map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => handleAnswer(option)}
+                      className={`rounded-xl border-2 p-6 text-center text-xl font-bold transition ${
+                        currentAnswer === option
+                          ? "border-blue-500 bg-blue-50 text-blue-800"
+                          : "border-gray-200 hover:border-blue-300 hover:bg-blue-50"
+                      }`}
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              )}
 
-            {question.type === "order" && (
-              <div className="space-y-4">
-                <div className="flex flex-wrap gap-2">
-                  {(orderOptionMap[question.id] || question.options || []).map(
-                    (option, index) => {
-                      const selected =
-                        parseOrderAnswer(currentAnswer).includes(option);
-                      return (
-                        <button
-                          key={`${option}-${index}`}
-                          type="button"
-                          onClick={() => appendOrderSelection(option)}
-                          className={`rounded-lg border-2 px-3 py-2 text-sm font-bold transition ${
+              {(question.type === "short" || question.type === "word") && (
+                <input
+                  type="text"
+                  value={currentAnswer}
+                  onChange={(event) => handleAnswer(event.target.value)}
+                  className="w-full rounded-xl border-2 border-gray-200 bg-white p-3 text-center text-lg font-bold outline-none transition focus:border-blue-500"
+                  placeholder="정답을 입력하세요"
+                />
+              )}
+
+              {question.type === "order" && (
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                  {orderOptions.map((option, index) => {
+                    const selected = selectedOrderItems.includes(option);
+                    return (
+                      <button
+                        key={`${option}-${index}`}
+                        type="button"
+                        onClick={() => appendOrderSelection(option)}
+                        disabled={selected}
+                        aria-pressed={selected}
+                        className={`flex min-h-12 items-center gap-2 rounded-lg border-2 px-3 py-2 text-left text-sm font-bold transition ${
+                          selected
+                            ? "cursor-not-allowed border-blue-200 bg-blue-50 text-blue-700 opacity-75"
+                            : "border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50"
+                        }`}
+                      >
+                        <span
+                          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs ${
                             selected
-                              ? "border-blue-500 bg-blue-50 text-blue-700"
-                              : "border-gray-200 hover:border-blue-300"
+                              ? "bg-blue-600 text-white"
+                              : "bg-gray-100 text-gray-500"
                           }`}
                         >
+                          {index + 1}
+                        </span>
+                        <span className="min-w-0 flex-1 break-words">
                           {option}
-                        </button>
-                      );
-                    },
-                  )}
+                        </span>
+                        {selected && (
+                          <span className="shrink-0 text-[11px] font-black text-blue-600">
+                            선택됨
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
-                <div className="min-h-[84px] rounded-xl border border-dashed border-blue-300 bg-blue-50 p-3">
-                  <div className="mb-2 text-xs text-gray-500">
-                    선택한 순서 (클릭하면 제거)
-                  </div>
-                  <div className="flex flex-col items-start gap-1">
-                    {parseOrderAnswer(currentAnswer).map(
-                      (item, index, list) => (
-                        <React.Fragment key={`${item}-${index}`}>
-                          <button
-                            type="button"
-                            onClick={() => removeOrderSelection(index)}
-                            className="inline-flex max-w-full items-start gap-2 rounded-lg bg-blue-600 px-3 py-2 text-left text-sm font-bold text-white shadow-sm"
-                          >
-                            <span className="shrink-0">{index + 1}.</span>
-                            <span className="min-w-0 break-words">{item}</span>
-                          </button>
-                          {index < list.length - 1 && (
-                            <span
-                              aria-hidden="true"
-                              className="ml-5 text-base font-bold leading-none text-blue-500"
+              )}
+
+              {question.type === "matching" &&
+                (() => {
+                  const matchingPairs = parseMatchingPairs(question);
+                  const matchingAnswerMap = parseMatchingAnswer(currentAnswer);
+                  const rightOptions =
+                    orderOptionMap[question.id] ||
+                    matchingPairs.map((pair) => pair.right);
+                  const matchingConnections = Object.entries(matchingAnswerMap)
+                    .filter(([, right]) => right)
+                    .map(([left, right]) => ({
+                      id: `${left}-${right}`,
+                      leftKey: left,
+                      rightKey: right,
+                      active: matchingActiveLeft === left,
+                    }));
+
+                  return (
+                    <div
+                      ref={matchingConnectionContainerRef}
+                      className="relative grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
+                    >
+                      <div className="space-y-2">
+                        {matchingPairs.map((pair, index) => {
+                          const selectedRight =
+                            matchingAnswerMap[pair.left] || "";
+                          return (
+                            <button
+                              key={`${pair.left}-${index}`}
+                              data-matching-left-key={pair.left}
+                              ref={(element) => {
+                                matchingLeftRefs.current[pair.left] = element;
+                              }}
+                              type="button"
+                              onClick={() => setMatchingActiveLeft(pair.left)}
+                              className={`relative z-20 w-full rounded-xl border-2 p-4 text-left transition ${
+                                matchingActiveLeft === pair.left
+                                  ? "border-blue-500 bg-blue-50 text-blue-800"
+                                  : "border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50"
+                              }`}
                             >
-                              ↓
-                            </span>
-                          )}
-                        </React.Fragment>
-                      ),
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
+                              <div className="font-bold">{pair.left}</div>
+                              {selectedRight && (
+                                <div className="mt-2 flex items-center gap-2 text-sm font-bold text-blue-600">
+                                  <span>{selectedRight}</span>
+                                </div>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
 
-            {question.type === "matching" &&
-              (() => {
-                const matchingPairs = parseMatchingPairs(question);
-                const matchingAnswerMap = parseMatchingAnswer(currentAnswer);
-                const rightOptions =
-                  orderOptionMap[question.id] ||
-                  matchingPairs.map((pair) => pair.right);
-                const matchingConnections = Object.entries(matchingAnswerMap)
-                  .filter(([, right]) => right)
-                  .map(([left, right]) => ({
-                    id: `${left}-${right}`,
-                    leftKey: left,
-                    rightKey: right,
-                    active: matchingActiveLeft === left,
-                  }));
-
-                return (
-                  <div
-                    ref={matchingConnectionContainerRef}
-                    className="relative grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
-                  >
-                    <div className="space-y-2">
-                      {matchingPairs.map((pair, index) => {
-                        const selectedRight =
-                          matchingAnswerMap[pair.left] || "";
-                        return (
-                          <button
-                            key={`${pair.left}-${index}`}
-                            data-matching-left-key={pair.left}
-                            ref={(element) => {
-                              matchingLeftRefs.current[pair.left] = element;
-                            }}
-                            type="button"
-                            onClick={() => setMatchingActiveLeft(pair.left)}
-                            className={`relative z-20 w-full rounded-xl border-2 p-4 text-left transition ${
-                              matchingActiveLeft === pair.left
-                                ? "border-blue-500 bg-blue-50 text-blue-800"
-                                : "border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50"
-                            }`}
-                          >
-                            <div className="font-bold">{pair.left}</div>
-                            {selectedRight && (
-                              <div className="mt-2 flex items-center gap-2 text-sm font-bold text-blue-600">
-                                <span>{selectedRight}</span>
-                              </div>
-                            )}
-                          </button>
-                        );
-                      })}
+                      <div className="space-y-2">
+                        {rightOptions.map((right, index) => {
+                          const sourcePair = matchingPairs.find(
+                            (pair) => pair.right === right,
+                          );
+                          const used =
+                            Object.values(matchingAnswerMap).includes(right);
+                          return (
+                            <button
+                              key={`${right}-${index}`}
+                              data-matching-right-key={right}
+                              ref={(element) => {
+                                matchingRightRefs.current[right] = element;
+                              }}
+                              type="button"
+                              onClick={() => handleMatchingRightSelect(right)}
+                              className={`relative z-20 flex w-full items-center gap-3 rounded-xl border-2 p-3 text-left transition ${
+                                used
+                                  ? "border-blue-500 bg-blue-50 font-bold text-blue-700"
+                                  : "border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50"
+                              }`}
+                            >
+                              {sourcePair?.rightImage && (
+                                <img
+                                  src={sourcePair.rightImage}
+                                  alt=""
+                                  className="h-16 w-16 shrink-0 rounded-lg border border-gray-100 object-contain"
+                                />
+                              )}
+                              <span className="font-bold">{right}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <MatchingConnectionLines
+                        containerRef={matchingConnectionContainerRef}
+                        leftRefs={matchingLeftRefs}
+                        rightRefs={matchingRightRefs}
+                        connections={matchingConnections}
+                      />
                     </div>
-
-                    <div className="space-y-2">
-                      {rightOptions.map((right, index) => {
-                        const sourcePair = matchingPairs.find(
-                          (pair) => pair.right === right,
-                        );
-                        const used =
-                          Object.values(matchingAnswerMap).includes(right);
-                        return (
-                          <button
-                            key={`${right}-${index}`}
-                            data-matching-right-key={right}
-                            ref={(element) => {
-                              matchingRightRefs.current[right] = element;
-                            }}
-                            type="button"
-                            onClick={() => handleMatchingRightSelect(right)}
-                            className={`relative z-20 flex w-full items-center gap-3 rounded-xl border-2 p-3 text-left transition ${
-                              used
-                                ? "border-blue-500 bg-blue-50 font-bold text-blue-700"
-                                : "border-gray-200 bg-white hover:border-blue-300 hover:bg-blue-50"
-                            }`}
-                          >
-                            {sourcePair?.rightImage && (
-                              <img
-                                src={sourcePair.rightImage}
-                                alt=""
-                                className="h-16 w-16 shrink-0 rounded-lg border border-gray-100 object-contain"
-                              />
-                            )}
-                            <span className="font-bold">{right}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                    <MatchingConnectionLines
-                      containerRef={matchingConnectionContainerRef}
-                      leftRefs={matchingLeftRefs}
-                      rightRefs={matchingRightRefs}
-                      connections={matchingConnections}
-                    />
-                  </div>
-                );
-              })()}
+                  );
+                })()}
+            </section>
           </div>
 
           <div className="mt-3 flex shrink-0 items-center justify-between border-t border-gray-100 pt-3">
