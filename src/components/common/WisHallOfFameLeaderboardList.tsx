@@ -1,4 +1,5 @@
 import React from "react";
+import { formatWisAmount } from "../../lib/pointFormatters";
 import type {
   HallOfFameInterfaceConfig,
   WisHallOfFameEntry,
@@ -26,9 +27,6 @@ const KOREAN = {
   gradeSuffix: "\uD559\uB144",
   classSuffix: "\uBC18",
 } as const;
-
-const formatRailWis = (value: unknown) =>
-  `${Number(value || 0).toLocaleString("ko-KR")} \u16B9s`;
 
 const formatGradeClass = (entry: WisHallOfFameEntry) =>
   `${entry.grade}${KOREAN.gradeSuffix} ${entry.class}${KOREAN.classSuffix}`;
@@ -79,32 +77,41 @@ const WisHallOfFameLeaderboardList: React.FC<
       ) : (
         <div className="min-h-0 flex-1 overflow-y-auto px-2.5 py-3 sm:px-4 sm:py-3.5">
           <div className="space-y-2">
-            {safeEntries.map((entry, index) => (
-              <div
-                key={`${entry.uid}-${entry.rank}-${index}`}
-                className="rounded-[1.1rem] border border-slate-200 bg-white px-2.5 py-2.25 shadow-[0_10px_24px_rgba(15,23,42,0.06)] sm:px-3.25 sm:py-2.5"
-              >
-                <div className="grid grid-cols-[2.7rem_minmax(0,1fr)_auto_auto] items-center gap-x-1.5 sm:grid-cols-[3.55rem_minmax(0,1fr)_auto_auto] sm:gap-x-2.25">
-                  <div className="inline-flex min-h-7 min-w-[2.7rem] shrink-0 items-center justify-center whitespace-nowrap rounded-[0.95rem] bg-slate-900 px-1.5 text-[10px] font-black text-white shadow-[0_10px_20px_rgba(15,23,42,0.18)] sm:min-h-9 sm:min-w-[3.55rem] sm:px-2 sm:text-[12px]">
-                    {hasTieForRank(entry.rank)
-                      ? `${KOREAN.tiePrefix} ${entry.rank}`
-                      : entry.rank}
-                  </div>
+            {safeEntries.map((entry, index) => {
+              const rankLabel = hasTieForRank(entry.rank)
+                ? `${KOREAN.tiePrefix} ${entry.rank}`
+                : String(entry.rank);
+              return (
+                <div
+                  key={`${entry.uid}-${entry.rank}-${index}`}
+                  className="rounded-[1.05rem] border border-slate-200/85 bg-white px-2.5 py-2.25 shadow-[0_10px_22px_rgba(15,23,42,0.055)] transition hover:-translate-y-0.5 hover:border-amber-200 hover:shadow-[0_16px_30px_rgba(15,23,42,0.08)] sm:px-3 sm:py-2.5"
+                >
+                  <div className="grid grid-cols-[2.35rem_minmax(0,1fr)_minmax(4.85rem,auto)] items-center gap-x-2 sm:grid-cols-[2.6rem_minmax(0,1fr)_minmax(5.25rem,auto)] sm:gap-x-2.5">
+                    <div
+                      className="inline-flex h-8 w-[2.35rem] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-slate-950 px-1 text-[10px] font-black leading-none text-white shadow-[0_10px_18px_rgba(15,23,42,0.18)] sm:h-9 sm:w-[2.6rem] sm:text-[11px]"
+                      aria-label={`${rankLabel}위`}
+                    >
+                      {rankLabel}
+                    </div>
 
-                  <span className="min-w-0 truncate text-[12px] font-black leading-4 text-slate-900 sm:text-sm">
-                    {entry.displayName || entry.studentName}
-                  </span>
+                    <div className="min-w-0">
+                      <div className="truncate text-[13px] font-black leading-5 text-slate-950 sm:text-[14px]">
+                        {entry.displayName || entry.studentName}
+                      </div>
+                      <div className="mt-0.5 truncate text-[10px] font-bold leading-4 text-slate-500 sm:text-[11px]">
+                        {formatGradeClass(entry)}
+                      </div>
+                    </div>
 
-                  <span className="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-full border border-slate-200 bg-slate-50 px-1.5 py-1 text-[9px] font-bold text-slate-700 sm:px-2.25 sm:text-[11px]">
-                    {formatGradeClass(entry)}
-                  </span>
-
-                  <div className="inline-flex min-h-7 shrink-0 items-center whitespace-nowrap rounded-full border border-white/15 bg-[linear-gradient(135deg,_rgba(15,23,42,0.96),_rgba(14,116,144,0.94))] px-1.75 py-1 text-[10px] font-black leading-none text-white shadow-[0_12px_24px_rgba(15,23,42,0.18)] sm:min-h-8 sm:px-2.75 sm:text-[12px]">
-                    {formatRailWis(entry.cumulativeEarned)}
+                    <div className="inline-flex min-h-8 max-w-full shrink-0 items-center justify-center justify-self-end whitespace-nowrap rounded-full border border-cyan-100/25 bg-[linear-gradient(135deg,_rgba(15,23,42,0.96),_rgba(14,116,144,0.94))] px-2 py-1 text-[10px] font-black leading-none text-white shadow-[0_12px_22px_rgba(15,23,42,0.16)] sm:px-2.5 sm:text-[11px]">
+                      <span className="tabular-nums">
+                        {formatWisAmount(entry.cumulativeEarned)}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

@@ -255,7 +255,7 @@ const WisHallOfFameStudentPreview: React.FC<
         </div>
       </div>
 
-      <div className="overflow-visible rounded-[1.5rem] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(255,251,235,0.72),_rgba(248,250,252,0.98)_38%,_rgba(255,255,255,1)_100%)] p-3 shadow-[0_16px_38px_rgba(15,23,42,0.07)] sm:p-4 xl:p-5">
+      <div className="wis-hall-student-preview-shell overflow-visible rounded-[1.5rem] border border-slate-200 bg-[radial-gradient(circle_at_top_left,_rgba(255,251,235,0.72),_rgba(248,250,252,0.98)_38%,_rgba(255,255,255,1)_100%)] p-3 shadow-[0_16px_38px_rgba(15,23,42,0.07)] sm:p-4 xl:p-5">
         <div className={previewLayoutClassName}>
           <div className={podiumContainerClassName}>
             <WisHallOfFamePodium
