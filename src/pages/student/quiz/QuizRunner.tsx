@@ -1843,13 +1843,27 @@ const QuizRunner: React.FC = () => {
         ? Math.max(orderOptions.length, selectedOrderItems.length, 1)
         : 0;
     const answerPanelLabel = question.type === "order" ? "보기" : "답안";
+    const assessmentCategoryLabel =
+      category === "diagnostic"
+        ? "진단평가"
+        : category === "formative"
+          ? "형성평가"
+          : "모의고사";
+    const safeAssessmentTitle = String(title || "").trim();
+    const assessmentBadgeLabel = isMockExamAttempt
+      ? safeAssessmentTitle || assessmentCategoryLabel
+      : safeAssessmentTitle && safeAssessmentTitle !== "평가"
+        ? `${safeAssessmentTitle} · ${assessmentCategoryLabel}`
+        : assessmentCategoryLabel;
 
     return (
       <div className="student-quiz-runner mx-auto flex max-w-6xl animate-fadeIn flex-col px-3 py-3 sm:px-4 lg:max-w-7xl">
-        <div className="mb-2 flex shrink-0 items-center justify-between">
-          <div className="font-bold text-gray-500">
-            <span className="text-blue-600">{currentIndex + 1}</span> /{" "}
-            {selectedQuestions.length}
+        <div className="mb-2 flex shrink-0 items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-black text-blue-700 shadow-sm">
+              <i className="fas fa-file-signature shrink-0 text-[11px]"></i>
+              <span className="min-w-0 truncate">{assessmentBadgeLabel}</span>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {canUseHints && (
