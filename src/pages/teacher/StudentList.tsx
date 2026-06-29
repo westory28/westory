@@ -765,18 +765,6 @@ const StudentList: React.FC = () => {
                       </td>
                       <td className="p-4 text-center">
                         <div className="flex flex-wrap justify-center gap-1">
-                          <button
-                            onClick={() => {
-                              setSelectedStudent(student);
-                              setDetailInitialTab("performance");
-                              setDetailModalOpen(true);
-                            }}
-                            className="flex items-center gap-1 rounded bg-emerald-50 px-2.5 py-1.5 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100"
-                            title="수행평가 점수"
-                          >
-                            <i className="fas fa-chart-column"></i>
-                            <span className="hidden lg:inline">점수</span>
-                          </button>
                           {!readOnly && (
                             <>
                               <button
