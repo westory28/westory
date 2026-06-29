@@ -35,7 +35,6 @@ import type {
   WisHallOfFameSnapshot,
 } from "../../types";
 import StudentPointHallOfFameTab from "./components/points/StudentPointHallOfFameTab";
-import StudentPointHistoryTab from "./components/points/StudentPointHistoryTab";
 import StudentPointOrdersTab from "./components/points/StudentPointOrdersTab";
 import StudentPointShopTab from "./components/points/StudentPointShopTab";
 import StudentPointSummaryTab from "./components/points/StudentPointSummaryTab";
@@ -46,8 +45,10 @@ type OrderFilter = "all" | PointOrderStatus;
 type DeferredLoadOptions = { force?: boolean };
 type CoreLoadOptions = {
   showLoading?: boolean;
-  setRecentTransactions?: boolean;
+  setTransactionsFromCore?: boolean;
 };
+
+const STUDENT_POINT_TRANSACTION_LIMIT = 100;
 
 const DEFAULT_WALLET: PointWallet = {
   uid: "",
@@ -124,9 +125,15 @@ const Points: React.FC = () => {
 
   useEffect(() => {
     const requestedTab = searchParams.get("tab");
+    if (requestedTab === "history") {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete("tab");
+      setSearchParams(nextParams, { replace: true });
+      setActiveTab("overview");
+      return;
+    }
     if (
       requestedTab === "hall-of-fame" ||
-      requestedTab === "history" ||
       requestedTab === "shop" ||
       requestedTab === "orders"
     ) {
@@ -134,15 +141,14 @@ const Points: React.FC = () => {
       return;
     }
     setActiveTab("overview");
-  }, [searchParams]);
+  }, [searchParams, setSearchParams]);
 
   const loadCorePointData = async () => {
-    const [loadedWallet, loadedRecentTransactions, loadedPolicy] =
-      await Promise.all([
-        getPointWalletByUid(config, uid),
-        listPointTransactionsByUid(config, uid, 5),
-        getPointPolicy(config),
-      ]);
+    const [loadedWallet, loadedTransactions, loadedPolicy] = await Promise.all([
+      getPointWalletByUid(config, uid),
+      listPointTransactionsByUid(config, uid, STUDENT_POINT_TRANSACTION_LIMIT),
+      getPointPolicy(config),
+    ]);
     const loadedRankManualAdjustPoints =
       loadedWallet && needsPointRankLegacyFallback(loadedWallet)
         ? await getPointRankManualAdjustEarnedPointsByUid(config, uid)
@@ -150,7 +156,7 @@ const Points: React.FC = () => {
 
     return {
       loadedWallet,
-      loadedRecentTransactions,
+      loadedTransactions,
       loadedPolicy,
       loadedRankManualAdjustPoints,
     };
@@ -172,7 +178,7 @@ const Points: React.FC = () => {
 
   const loadPointData = async ({
     showLoading = true,
-    setRecentTransactions = true,
+    setTransactionsFromCore = true,
   }: CoreLoadOptions = {}) => {
     if (!uid) return;
 
@@ -181,13 +187,15 @@ const Points: React.FC = () => {
     try {
       const {
         loadedWallet,
-        loadedRecentTransactions,
+        loadedTransactions,
         loadedPolicy,
         loadedRankManualAdjustPoints,
       } = await loadCorePointData();
       setWallet(loadedWallet);
-      if (setRecentTransactions) {
-        setTransactions(loadedRecentTransactions);
+      if (setTransactionsFromCore) {
+        setTransactions(loadedTransactions);
+        setHistoryLoaded(true);
+        setHistoryErrorMessage("");
       }
       setPolicy(loadedPolicy);
       setRankManualAdjustPoints(loadedRankManualAdjustPoints);
@@ -215,14 +223,14 @@ const Points: React.FC = () => {
       const loadedTransactions = await listPointTransactionsByUid(
         config,
         uid,
-        100,
+        STUDENT_POINT_TRANSACTION_LIMIT,
       );
       setTransactions(loadedTransactions);
       setHistoryLoaded(true);
     } catch (error) {
       console.error("Failed to load student point history:", error);
       setHistoryErrorMessage(
-        "포인트 내역을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+        "위스 기록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
       );
     } finally {
       historyLoadInFlightRef.current = false;
@@ -281,7 +289,7 @@ const Points: React.FC = () => {
   const refreshLoadedPointData = async () => {
     await loadPointData({
       showLoading: false,
-      setRecentTransactions: !historyLoaded,
+      setTransactionsFromCore: !historyLoaded,
     });
     await Promise.all([
       historyLoaded ? loadHistoryData({ force: true }) : Promise.resolve(),
@@ -311,14 +319,12 @@ const Points: React.FC = () => {
       setLoading(false);
       return;
     }
-    void loadPointData({ setRecentTransactions: true });
+    void loadPointData({ setTransactionsFromCore: true });
   }, [config, uid]);
 
   useEffect(() => {
     if (!uid) return;
-    if (activeTab === "history") {
-      void loadHistoryData();
-    } else if (activeTab === "orders") {
+    if (activeTab === "orders") {
       void loadOrdersData();
     } else if (activeTab === "shop") {
       void loadShopData();
@@ -358,7 +364,6 @@ const Points: React.FC = () => {
     wallet: safeWallet,
     earnedPointsFromTransactions: rankManualAdjustPoints,
   });
-  const recentTransactions = transactions.slice(0, 5);
   const selectedProduct =
     products.find((item) => item.id === selectedProductId) || null;
 
@@ -417,7 +422,7 @@ const Points: React.FC = () => {
       await Promise.all([
         loadPointData({
           showLoading: false,
-          setRecentTransactions: !historyLoaded,
+          setTransactionsFromCore: !historyLoaded,
         }),
         loadOrdersData({ force: true }),
         shopLoaded ? loadShopData({ force: true }) : Promise.resolve(),
@@ -466,25 +471,20 @@ const Points: React.FC = () => {
 
   const isHallOfFameTab = activeTab === "hall-of-fame";
   const activeTabLoading =
-    (activeTab === "history" && historyLoading) ||
     (activeTab === "orders" && ordersLoading) ||
     (activeTab === "shop" && shopLoading);
   const activeTabErrorMessage =
-    activeTab === "history"
-      ? historyErrorMessage
-      : activeTab === "orders"
-        ? ordersErrorMessage
-        : activeTab === "shop"
-          ? shopErrorMessage
-          : "";
+    activeTab === "orders"
+      ? ordersErrorMessage
+      : activeTab === "shop"
+        ? shopErrorMessage
+        : "";
   const activeTabLoadingMessage =
-    activeTab === "history"
-      ? "포인트 내역을 불러오는 중입니다."
-      : activeTab === "orders"
-        ? "구매 내역을 불러오는 중입니다."
-        : activeTab === "shop"
-          ? "상품 목록을 불러오는 중입니다."
-          : "";
+    activeTab === "orders"
+      ? "구매 내역을 불러오는 중입니다."
+      : activeTab === "shop"
+        ? "상품 목록을 불러오는 중입니다."
+        : "";
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
@@ -553,8 +553,11 @@ const Points: React.FC = () => {
               <StudentPointSummaryTab
                 wallet={safeWallet}
                 rank={rank}
-                recentTransactions={recentTransactions}
-                onOpenHistory={() => handleTabChange("history")}
+                historyFilter={historyFilter}
+                transactions={filteredTransactions}
+                historyLoading={historyLoading}
+                historyErrorMessage={historyErrorMessage}
+                onHistoryFilterChange={setHistoryFilter}
               />
             )}
 
@@ -568,18 +571,6 @@ const Points: React.FC = () => {
                 hallOfFameConfig={interfaceConfig?.hallOfFame}
                 currentGrade={currentHallGrade}
                 currentClass={currentHallClass}
-              />
-            )}
-
-          {!loading &&
-            !errorMessage &&
-            !activeTabLoading &&
-            !activeTabErrorMessage &&
-            activeTab === "history" && (
-              <StudentPointHistoryTab
-                historyFilter={historyFilter}
-                transactions={filteredTransactions}
-                onHistoryFilterChange={setHistoryFilter}
               />
             )}
 

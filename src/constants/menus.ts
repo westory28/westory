@@ -54,7 +54,6 @@ export const MENUS: MenuConfig = {
       children: [
         { name: "내 위스", url: "/student/points" },
         { name: "화랑의 전당", url: "/student/points?tab=hall-of-fame" },
-        { name: "위스 내역", url: "/student/points?tab=history" },
         { name: "위스 상점", url: "/student/points?tab=shop" },
         { name: "구매 내역", url: "/student/points?tab=orders" },
       ],
@@ -177,7 +176,13 @@ const normalizeMenuUrl = (value: unknown) => {
 const isLegacyRemovedUrl = (value: unknown) => {
   const normalized = normalizeMenuUrl(value);
   if (!normalized) return false;
-  const [pathOnly] = normalized.split("?");
+  const [pathOnly, queryPart = ""] = normalized.split("?");
+  if (
+    pathOnly === "/student/points" &&
+    new URLSearchParams(queryPart).get("tab") === "history"
+  ) {
+    return true;
+  }
   return LEGACY_MENU_URL_PREFIXES.some(
     (prefix) => pathOnly === prefix || pathOnly.startsWith(`${prefix}/`),
   );
