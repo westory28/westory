@@ -427,7 +427,7 @@ const StudentHistoryModal: React.FC<StudentHistoryModalProps> = ({
       onClick={onClose}
     >
       <div
-        className="flex max-h-[88vh] w-full max-w-6xl animate-fadeScale flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
+        className="flex h-[calc(100vh-2.5rem)] max-h-[88vh] w-full max-w-6xl animate-fadeScale flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-5 py-4">
@@ -528,7 +528,7 @@ const StudentHistoryModal: React.FC<StudentHistoryModalProps> = ({
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 bg-gray-50 p-5">
+        <div className="min-h-0 flex-1 overflow-hidden bg-gray-50 p-5">
           {loading ? (
             <div className="flex h-full items-center justify-center rounded-xl border border-gray-200 bg-white text-sm font-bold text-gray-500">
               {loadingText}
@@ -552,7 +552,7 @@ const StudentHistoryModal: React.FC<StudentHistoryModalProps> = ({
               </p>
             </div>
           ) : (
-            <div className="grid h-full min-h-0 gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+            <div className="grid h-full min-h-0 overflow-hidden gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
               <aside className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                 <div className="border-b border-gray-100 px-4 py-3">
                   <div className="flex items-center justify-between gap-2">

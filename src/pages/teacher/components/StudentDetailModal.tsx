@@ -476,6 +476,14 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
     </div>
   );
 
+  const openTab = (tab: DetailTab) => {
+    if (tab === "quiz" && onOpenQuizHistory) {
+      onOpenQuizHistory(student);
+      return;
+    }
+    setActiveTab(tab);
+  };
+
   const renderOverviewCard = ({
     tab,
     label,
@@ -494,7 +502,7 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
     <button
       key={tab}
       type="button"
-      onClick={() => setActiveTab(tab)}
+      onClick={() => openTab(tab)}
       className="rounded-xl border border-gray-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md"
     >
       <div className="flex items-center justify-between gap-2">
@@ -548,7 +556,7 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
               <button
                 key={tab.key}
                 type="button"
-                onClick={() => setActiveTab(tab.key)}
+                onClick={() => openTab(tab.key)}
                 className={`inline-flex items-center gap-2 whitespace-nowrap rounded-t-lg border border-b-0 px-4 py-2 text-sm font-bold transition ${
                   activeTab === tab.key
                     ? "border-blue-200 bg-blue-50 text-blue-700"
