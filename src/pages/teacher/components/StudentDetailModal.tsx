@@ -381,6 +381,21 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
     </div>
   );
 
+  const usesFullWorkspace = activeTab === "quiz";
+  const usesWideWorkspace =
+    activeTab === "overview" ||
+    activeTab === "lesson" ||
+    activeTab === "quiz" ||
+    activeTab === "performance";
+  const modalSizeClassName = usesFullWorkspace
+    ? "h-[calc(100vh-4rem)] max-h-[90vh] max-w-6xl"
+    : usesWideWorkspace
+      ? "max-h-[90vh] max-w-6xl"
+      : "max-h-[90vh] max-w-4xl";
+  const modalBodyClassName = usesFullWorkspace
+    ? "min-h-0 flex-1 overflow-hidden bg-gray-50 p-5"
+    : "min-h-0 flex-1 overflow-y-auto bg-gray-50 p-5";
+
   const openTab = (tab: DetailTab) => {
     setActiveTab(tab);
   };
@@ -423,7 +438,7 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
       onClick={onClose}
     >
       <div
-        className="flex h-[calc(100vh-4rem)] max-h-[90vh] w-full max-w-6xl animate-fadeScale flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
+        className={`flex w-full ${modalSizeClassName} animate-fadeScale flex-col overflow-hidden rounded-xl bg-white shadow-2xl`}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex flex-col gap-4 border-b border-gray-100 px-5 py-4 md:flex-row md:items-start md:justify-between">
@@ -471,11 +486,7 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
           </div>
         </div>
 
-        <div
-          className={`min-h-0 flex-1 bg-gray-50 p-5 ${
-            activeTab === "quiz" ? "overflow-hidden" : "overflow-y-auto"
-          }`}
-        >
+        <div className={modalBodyClassName}>
           {activeTab === "overview" && (
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
               {renderOverviewCard({
