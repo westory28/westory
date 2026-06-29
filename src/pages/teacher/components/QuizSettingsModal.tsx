@@ -912,31 +912,31 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
 
                     {!isMockExam && (
                       <div className="space-y-3">
-                        <label className="flex items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white px-3.5 py-3">
-                          <div>
-                            <div className="text-sm font-bold text-gray-800">
-                              힌트 사용
-                            </div>
-                            <div className="mt-0.5 text-xs text-gray-500">
-                              체크한 경우에만 학생에게 힌트 버튼이 보입니다.
-                            </div>
-                          </div>
-                          <input
-                            type="checkbox"
-                            checked={hintsEnabled}
-                            onChange={(event) =>
-                              setSettings((prev) => ({
-                                ...prev,
-                                hintLimit: event.target.checked
-                                  ? Math.max(1, prev.hintLimit || 1)
-                                  : 0,
-                              }))
-                            }
-                            className="h-5 w-5 rounded border-gray-300 text-blue-600"
-                          />
-                        </label>
-
                         <div className="grid gap-3 md:grid-cols-2">
+                          <label className="flex h-full items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white px-3.5 py-3">
+                            <div>
+                              <div className="text-sm font-bold text-gray-800">
+                                힌트 사용
+                              </div>
+                              <div className="mt-0.5 text-xs text-gray-500">
+                                체크한 경우에만 학생에게 힌트 버튼이 보입니다.
+                              </div>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={hintsEnabled}
+                              onChange={(event) =>
+                                setSettings((prev) => ({
+                                  ...prev,
+                                  hintLimit: event.target.checked
+                                    ? Math.max(1, prev.hintLimit || 1)
+                                    : 0,
+                                }))
+                              }
+                              className="h-5 w-5 rounded border-gray-300 text-blue-600"
+                            />
+                          </label>
+
                           <label
                             className={`rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3 ${
                               hintsEnabled ? "" : "opacity-60"
@@ -962,8 +962,40 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                               className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-center text-base font-extrabold text-gray-800 disabled:bg-gray-100 disabled:text-gray-400"
                             />
                           </label>
+                        </div>
 
-                          <label className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <label className="flex h-full items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white px-3.5 py-3">
+                            <div>
+                              <div className="text-sm font-bold text-gray-800">
+                                재응시 허용
+                              </div>
+                              <div className="mt-0.5 text-xs text-gray-500">
+                                허용을 끄면 이미 응시한 학생은 다시 시작할 수
+                                없습니다.
+                              </div>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={settings.allowRetake}
+                              onChange={(event) =>
+                                setSettings((prev) => ({
+                                  ...prev,
+                                  allowRetake: event.target.checked,
+                                  cooldown: event.target.checked
+                                    ? prev.cooldown
+                                    : 0,
+                                }))
+                              }
+                              className="h-5 w-5 rounded border-gray-300 text-blue-600"
+                            />
+                          </label>
+
+                          <label
+                            className={`rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3 ${
+                              settings.allowRetake ? "" : "opacity-60"
+                            }`}
+                          >
                             <span className="text-xs font-bold text-gray-500">
                               재응시 대기 시간 (분)
                             </span>
@@ -971,6 +1003,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                               type="number"
                               min={0}
                               value={settings.cooldown}
+                              disabled={!settings.allowRetake}
                               onChange={(event) =>
                                 setSettings((prev) => ({
                                   ...prev,
@@ -980,15 +1013,15 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                                   ),
                                 }))
                               }
-                              className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-center text-base font-extrabold text-gray-800"
+                              className="mt-2 w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-center text-base font-extrabold text-gray-800 disabled:bg-gray-100 disabled:text-gray-400"
                             />
                           </label>
                         </div>
                       </div>
                     )}
 
-                    {isMockExam ? (
-                      isRetakableMockExam ? (
+                    {isMockExam &&
+                      (isRetakableMockExam ? (
                         <>
                           <label className="rounded-xl border border-gray-200 bg-gray-50 px-3.5 py-3">
                             <span className="text-xs font-bold text-gray-500">
@@ -1030,34 +1063,7 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
                             없습니다.
                           </div>
                         </div>
-                      )
-                    ) : (
-                      <label className="mt-3 flex items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white px-3.5 py-3">
-                        <div>
-                          <div className="text-sm font-bold text-gray-800">
-                            재응시 허용
-                          </div>
-                          <div className="mt-0.5 text-xs text-gray-500">
-                            허용을 끄면 이미 응시한 학생은 다시 시작할 수
-                            없습니다.
-                          </div>
-                        </div>
-                        <input
-                          type="checkbox"
-                          checked={settings.allowRetake}
-                          onChange={(event) =>
-                            setSettings((prev) => ({
-                              ...prev,
-                              allowRetake: event.target.checked,
-                              cooldown: event.target.checked
-                                ? prev.cooldown
-                                : 0,
-                            }))
-                          }
-                          className="h-5 w-5 rounded border-gray-300 text-blue-600"
-                        />
-                      </label>
-                    )}
+                      ))}
                   </section>
                 </div>
               </div>
