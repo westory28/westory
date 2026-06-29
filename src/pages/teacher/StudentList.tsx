@@ -3,6 +3,7 @@ import { collection, doc, getDoc, getDocs } from "firebase/firestore";
 import { db } from "../../lib/firebase";
 import MoveClassModal from "./components/MoveClassModal";
 import StudentDetailModal from "./components/StudentDetailModal";
+import StudentHistoryModal from "./components/StudentHistoryModal";
 import { useAuth } from "../../contexts/AuthContext";
 import { canEditStudentList } from "../../lib/permissions";
 import {
@@ -36,6 +37,18 @@ interface StudentPageGroup {
   key: string;
   label: string;
   students: Student[];
+}
+
+interface StudentHistoryTarget {
+  id: string;
+  userId: string;
+  name: string;
+  email: string;
+  filter?: {
+    category?: string;
+    unitId?: string;
+    unitTitle?: string;
+  };
 }
 
 const normalizeOptionText = (value: unknown) => String(value ?? "").trim();
@@ -179,6 +192,8 @@ const StudentList: React.FC = () => {
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [detailInitialTab, setDetailInitialTab] =
     useState<StudentDetailInitialTab>("summary");
+  const [historyTarget, setHistoryTarget] =
+    useState<StudentHistoryTarget | null>(null);
   const [moveClassModalOpen, setMoveClassModalOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [deletingStudentIds, setDeletingStudentIds] = useState<Set<string>>(
@@ -606,6 +621,25 @@ const StudentList: React.FC = () => {
     await fetchStudents();
   };
 
+  const handleOpenQuizHistory = (
+    target: {
+      id: string;
+      userId?: string;
+      name: string;
+      email?: string;
+    },
+    filter?: StudentHistoryTarget["filter"],
+  ) => {
+    setHistoryTarget({
+      id: target.id,
+      userId: target.userId || target.id,
+      name: target.name,
+      email: target.email || "",
+      filter,
+    });
+    setDetailModalOpen(false);
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
       <div className="mx-auto flex w-full max-w-6xl flex-1 animate-fadeIn flex-col px-3 py-6">
@@ -921,6 +955,20 @@ const StudentList: React.FC = () => {
           onUpdate={fetchStudents}
           readOnly={readOnly}
           initialTab={detailInitialTab}
+          onOpenQuizHistory={handleOpenQuizHistory}
+        />
+
+        <StudentHistoryModal
+          isOpen={Boolean(historyTarget)}
+          onClose={() => setHistoryTarget(null)}
+          studentId={historyTarget?.userId || ""}
+          studentName={
+            historyTarget?.name ||
+            (historyTarget ? historyTarget.email || historyTarget.id : "")
+          }
+          readScope="history"
+          launchContextLabel="학생 명단 관리"
+          initialFilter={historyTarget?.filter}
         />
 
         <MoveClassModal
