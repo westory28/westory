@@ -423,7 +423,7 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
       onClick={onClose}
     >
       <div
-        className="flex max-h-[90vh] w-full max-w-6xl animate-fadeScale flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
+        className="flex h-[calc(100vh-4rem)] max-h-[90vh] w-full max-w-6xl animate-fadeScale flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex flex-col gap-4 border-b border-gray-100 px-5 py-4 md:flex-row md:items-start md:justify-between">
@@ -471,7 +471,11 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto bg-gray-50 p-5">
+        <div
+          className={`min-h-0 flex-1 bg-gray-50 p-5 ${
+            activeTab === "quiz" ? "overflow-hidden" : "overflow-y-auto"
+          }`}
+        >
           {activeTab === "overview" && (
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
               {renderOverviewCard({
@@ -667,7 +671,7 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
           )}
 
           {activeTab === "quiz" && (
-            <div>
+            <div className="h-full min-h-0">
               <StudentQuizHistoryPanel
                 studentId={student.userId || student.id}
                 studentName={student.name || student.email || "학생"}

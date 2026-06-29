@@ -425,7 +425,7 @@ export const StudentQuizHistoryPanel: React.FC<
   const panelTitle = title || `${studentName} 응시 기록`;
   const panelClassName =
     surface === "embedded"
-      ? "flex h-[calc(90vh-10.5rem)] min-h-[520px] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm"
+      ? "flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm"
       : "flex h-full min-h-0 flex-col overflow-hidden bg-white";
 
   return (
