@@ -29,6 +29,12 @@ interface Student {
   email: string;
 }
 
+interface QuizHistoryFilter {
+  category?: string;
+  unitId?: string;
+  unitTitle?: string;
+}
+
 type DetailTab =
   | "overview"
   | "lesson"
@@ -46,7 +52,7 @@ interface StudentDetailModalProps {
   onUpdate: () => void;
   readOnly?: boolean;
   initialTab?: StudentDetailInitialTab;
-  onOpenQuizHistory?: (student: Student) => void;
+  onOpenQuizHistory?: (student: Student, filter?: QuizHistoryFilter) => void;
 }
 
 const EMPTY_SUMMARY_TEXT = "-";
@@ -425,6 +431,20 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
       (quizUnitFilter === "all" || item.unitTitle === quizUnitFilter) &&
       (quizCategoryFilter === "all" || item.category === quizCategoryFilter),
   );
+  const activeQuizHistoryFilter = useMemo(() => {
+    const matchedUnitGroup =
+      quizUnitFilter === "all"
+        ? null
+        : quizGroups.find((group) => group.unitTitle === quizUnitFilter) ||
+          null;
+    const hasFilter = quizCategoryFilter !== "all" || Boolean(matchedUnitGroup);
+    if (!hasFilter) return undefined;
+    return {
+      category: quizCategoryFilter === "all" ? undefined : quizCategoryFilter,
+      unitId: matchedUnitGroup?.unitId,
+      unitTitle: matchedUnitGroup?.unitTitle,
+    };
+  }, [quizCategoryFilter, quizGroups, quizUnitFilter]);
 
   useEffect(() => {
     if (
@@ -762,7 +782,9 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                       {onOpenQuizHistory && (
                         <button
                           type="button"
-                          onClick={() => onOpenQuizHistory(student)}
+                          onClick={() =>
+                            onOpenQuizHistory(student, activeQuizHistoryFilter)
+                          }
                           className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-extrabold text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100"
                         >
                           전체 응시 기록 보기
@@ -847,7 +869,13 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                         {onOpenQuizHistory && (
                           <button
                             type="button"
-                            onClick={() => onOpenQuizHistory(student)}
+                            onClick={() =>
+                              onOpenQuizHistory(student, {
+                                category: group.category,
+                                unitId: group.unitId,
+                                unitTitle: group.unitTitle,
+                              })
+                            }
                             className="mt-3 inline-flex items-center gap-1 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-extrabold text-gray-600 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
                           >
                             <i className="fas fa-list-check text-[10px]"></i>

@@ -44,6 +44,11 @@ interface StudentHistoryTarget {
   userId: string;
   name: string;
   email: string;
+  filter?: {
+    category?: string;
+    unitId?: string;
+    unitTitle?: string;
+  };
 }
 
 const normalizeOptionText = (value: unknown) => String(value ?? "").trim();
@@ -616,17 +621,21 @@ const StudentList: React.FC = () => {
     await fetchStudents();
   };
 
-  const handleOpenQuizHistory = (target: {
-    id: string;
-    userId?: string;
-    name: string;
-    email?: string;
-  }) => {
+  const handleOpenQuizHistory = (
+    target: {
+      id: string;
+      userId?: string;
+      name: string;
+      email?: string;
+    },
+    filter?: StudentHistoryTarget["filter"],
+  ) => {
     setHistoryTarget({
       id: target.id,
       userId: target.userId || target.id,
       name: target.name,
       email: target.email || "",
+      filter,
     });
     setDetailModalOpen(false);
   };
@@ -959,6 +968,7 @@ const StudentList: React.FC = () => {
           }
           readScope="history"
           launchContextLabel="학생 명단 관리"
+          initialFilter={historyTarget?.filter}
         />
 
         <MoveClassModal

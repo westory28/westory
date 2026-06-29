@@ -136,6 +136,7 @@ export interface StudentQuizResultSummary {
 }
 
 export interface StudentQuizGroupSummary {
+  unitId: string;
   unitTitle: string;
   category: string;
   categoryLabel: string;
@@ -622,13 +623,15 @@ const loadQuizSummary = async (
         latestScore: number | null;
         latestDateText: string;
         latestMs: number;
+        unitId: string;
       }
     >();
     results.forEach((result) => {
-      const unitTitle = getDisplayUnitTitle(result.unitId, titleByUnitId);
+      const unitId = String(result.unitId || "").trim();
+      const unitTitle = getDisplayUnitTitle(unitId, titleByUnitId);
       const category = normalizeMockExamCategory(result.category || "other");
       const categoryLabel = getQuizCategoryLabel(category);
-      const key = `${unitTitle}__${category}`;
+      const key = `${unitId || unitTitle}__${category}`;
       const itemWrongCount = Array.isArray(result.details)
         ? result.details.filter((detail) => !detail.correct).length
         : 0;
@@ -658,11 +661,13 @@ const loadQuizSummary = async (
             result.timeString || "",
           ),
           latestMs: ms,
+          unitId,
         });
       }
     });
     const groups = Array.from(groupsByKey.values())
       .map((item) => ({
+        unitId: item.unitId,
         unitTitle: item.unitTitle,
         category: item.category,
         categoryLabel: item.categoryLabel,
