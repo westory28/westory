@@ -239,8 +239,11 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
     normalizedConfig.positions || getDefaultHallOfFamePositions();
   const slotEntries = resolveSlotEntries(safeEntries);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const castStartTimeoutRef = useRef<number | null>(null);
+  const castResetTimeoutRef = useRef<number | null>(null);
   const [activeEntryKey, setActiveEntryKey] = useState<string | null>(null);
   const [hoveredEntryKey, setHoveredEntryKey] = useState<string | null>(null);
+  const [castingEntryKey, setCastingEntryKey] = useState<string | null>(null);
   const resolvedDeviceMode: SlotLayoutMode =
     deviceMode === "mobile"
       ? "mobile"
@@ -309,6 +312,39 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
       document.removeEventListener("pointerdown", handlePointerDown);
     };
   }, []);
+
+  useEffect(
+    () => () => {
+      if (castStartTimeoutRef.current !== null) {
+        window.clearTimeout(castStartTimeoutRef.current);
+      }
+      if (castResetTimeoutRef.current !== null) {
+        window.clearTimeout(castResetTimeoutRef.current);
+      }
+    },
+    [],
+  );
+
+  const triggerEntryCastEffect = (entryKey: string) => {
+    if (castStartTimeoutRef.current !== null) {
+      window.clearTimeout(castStartTimeoutRef.current);
+    }
+    if (castResetTimeoutRef.current !== null) {
+      window.clearTimeout(castResetTimeoutRef.current);
+    }
+
+    setCastingEntryKey(null);
+    castStartTimeoutRef.current = window.setTimeout(() => {
+      setCastingEntryKey(entryKey);
+      castStartTimeoutRef.current = null;
+      castResetTimeoutRef.current = window.setTimeout(() => {
+        setCastingEntryKey((previousValue) =>
+          previousValue === entryKey ? null : previousValue,
+        );
+        castResetTimeoutRef.current = null;
+      }, 900);
+    }, 0);
+  };
 
   const slotPositionClassName =
     resolvedDeviceMode === "desktop"
@@ -390,6 +426,7 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
               const isPrimaryEntryActive = activeEntryKey === primaryEntryKey;
               const isPrimaryEntryHighlighted =
                 isPrimaryEntryActive || hoveredEntryKey === primaryEntryKey;
+              const isPrimaryEntryCasting = castingEntryKey === primaryEntryKey;
               const tieCountLabel =
                 entriesForSlot.length > 1
                   ? ` · ${entriesForSlot.length}명`
@@ -443,6 +480,7 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                         disabled={Boolean(control)}
                         onClick={() => {
                           if (control) return;
+                          triggerEntryCastEffect(primaryEntryKey);
                           setActiveEntryKey((previousValue) =>
                             previousValue === primaryEntryKey
                               ? null
@@ -476,9 +514,15 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                             ? "is-active"
                             : ""
                         } ${
+                          isPrimaryEntryCasting && !control ? "is-casting" : ""
+                        } ${
                           control ? "is-static" : ""
                         } relative z-10 flex w-full max-w-full flex-col items-center gap-1.25 border-0 bg-transparent p-0 text-center sm:gap-1.5`}
                       >
+                        <span
+                          className="wis-hall-podium-entry__cast-burst"
+                          aria-hidden="true"
+                        />
                         <div
                           className={`wis-hall-podium-entry__icon relative z-10 leading-none drop-shadow-[0_12px_18px_rgba(15,23,42,0.24)] ${tone.emojiClassName}`}
                         >

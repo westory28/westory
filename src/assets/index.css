@@ -958,6 +958,7 @@ button.lesson-core-point-floating-status:disabled {
   transition:
     transform 180ms ease,
     filter 180ms ease;
+  will-change: transform;
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -978,7 +979,7 @@ button.lesson-core-point-floating-status:disabled {
 .wis-hall-podium-entry::before {
   content: "";
   position: absolute;
-  inset: 0.35rem -0.85rem -0.55rem;
+  inset: 0.15rem -1.15rem -0.75rem;
   z-index: -1;
   border-radius: 9999px;
   background:
@@ -1001,6 +1002,72 @@ button.lesson-core-point-floating-status:disabled {
     transform 180ms ease;
 }
 
+.wis-hall-podium-entry::after {
+  content: "";
+  position: absolute;
+  inset: -1.2rem -1.9rem -1.05rem;
+  z-index: 1;
+  border-radius: 9999px;
+  background:
+    radial-gradient(
+      closest-side,
+      rgb(var(--wis-hall-podium-glow) / 0.24),
+      transparent 66%
+    ),
+    conic-gradient(
+      from 0deg,
+      transparent 0deg 28deg,
+      rgb(var(--wis-hall-podium-glow) / 0.52) 40deg,
+      rgba(255, 255, 255, 0.9) 52deg,
+      rgb(var(--wis-hall-podium-glow) / 0.36) 68deg,
+      transparent 86deg 150deg,
+      rgb(var(--wis-hall-podium-glow) / 0.36) 166deg,
+      transparent 186deg 360deg
+    );
+  filter: blur(0.3px)
+    drop-shadow(0 0 12px rgb(var(--wis-hall-podium-glow) / 0.2));
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.42) rotate(-16deg);
+}
+
+.wis-hall-podium-entry__cast-burst {
+  position: absolute;
+  inset: -1.7rem -2.15rem -1.25rem;
+  z-index: 2;
+  border-radius: 9999px;
+  opacity: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      circle at 16% 42%,
+      rgba(255, 255, 255, 0.9) 0 0.09rem,
+      transparent 0.16rem
+    ),
+    radial-gradient(
+      circle at 78% 28%,
+      rgb(var(--wis-hall-podium-glow) / 0.82) 0 0.11rem,
+      transparent 0.19rem
+    ),
+    radial-gradient(
+      circle at 64% 82%,
+      rgba(255, 255, 255, 0.74) 0 0.08rem,
+      transparent 0.16rem
+    ),
+    radial-gradient(
+      circle at 30% 78%,
+      rgb(var(--wis-hall-podium-glow) / 0.68) 0 0.1rem,
+      transparent 0.18rem
+    ),
+    radial-gradient(
+      closest-side,
+      rgb(var(--wis-hall-podium-glow) / 0.16),
+      transparent 70%
+    );
+  filter: drop-shadow(0 0 12px rgb(var(--wis-hall-podium-glow) / 0.3));
+  transform: scale(0.55);
+}
+
 .wis-hall-podium-entry__icon,
 .wis-hall-podium-entry__name,
 .wis-hall-podium-entry__score {
@@ -1015,7 +1082,8 @@ button.lesson-core-point-floating-status:disabled {
 .wis-hall-podium-entry:not(.is-static).is-active {
   z-index: 40;
   outline: none;
-  transform: translateY(-0.34rem) scale(1.035);
+  animation: westory-wis-podium-float 1.9s ease-in-out infinite;
+  transform: translateY(-0.72rem) scale(1.065);
 }
 
 .wis-hall-podium-entry:not(.is-static):hover::before,
@@ -1029,8 +1097,8 @@ button.lesson-core-point-floating-status:disabled {
 .wis-hall-podium-entry:not(.is-static):focus-visible
   .wis-hall-podium-entry__icon,
 .wis-hall-podium-entry:not(.is-static).is-active .wis-hall-podium-entry__icon {
-  filter: drop-shadow(0 14px 18px rgb(var(--wis-hall-podium-glow) / 0.26));
-  transform: translateY(-0.12rem) scale(1.05);
+  filter: drop-shadow(0 18px 22px rgb(var(--wis-hall-podium-glow) / 0.34));
+  transform: translateY(-0.22rem) scale(1.08);
 }
 
 .wis-hall-podium-entry:not(.is-static):hover .wis-hall-podium-entry__name,
@@ -1053,6 +1121,132 @@ button.lesson-core-point-floating-status:disabled {
   transform: translateY(-0.06rem) scale(1.04);
 }
 
+.wis-hall-podium-entry:not(.is-static).is-casting {
+  animation: westory-wis-podium-cast-lift 720ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.wis-hall-podium-entry:not(.is-static).is-casting::after {
+  animation: westory-wis-podium-cast-ring 720ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.wis-hall-podium-entry:not(.is-static).is-casting
+  .wis-hall-podium-entry__cast-burst {
+  animation: westory-wis-podium-cast-spark 820ms ease-out;
+}
+
+.wis-hall-podium-entry:not(.is-static).is-casting .wis-hall-podium-entry__icon {
+  animation: westory-wis-podium-cast-icon 760ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.wis-hall-podium-entry:not(.is-static).is-casting
+  .wis-hall-podium-entry__score {
+  animation: westory-wis-podium-cast-score 620ms ease-out;
+}
+
+@keyframes westory-wis-podium-float {
+  0%,
+  100% {
+    transform: translateY(-0.64rem) scale(1.055);
+  }
+
+  50% {
+    transform: translateY(-0.92rem) scale(1.075);
+  }
+}
+
+@keyframes westory-wis-podium-cast-lift {
+  0% {
+    transform: translateY(-0.28rem) scale(1.03);
+  }
+
+  34% {
+    transform: translateY(-1.22rem) scale(1.1);
+  }
+
+  72% {
+    transform: translateY(-0.58rem) scale(1.045);
+  }
+
+  100% {
+    transform: translateY(-0.72rem) scale(1.065);
+  }
+}
+
+@keyframes westory-wis-podium-cast-ring {
+  0% {
+    opacity: 0;
+    transform: scale(0.28) rotate(-18deg);
+  }
+
+  20% {
+    opacity: 0.94;
+  }
+
+  72% {
+    opacity: 0.32;
+    transform: scale(1.28) rotate(18deg);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.52) rotate(34deg);
+  }
+}
+
+@keyframes westory-wis-podium-cast-spark {
+  0% {
+    opacity: 0;
+    transform: scale(0.45) rotate(-8deg);
+  }
+
+  18% {
+    opacity: 1;
+  }
+
+  60% {
+    opacity: 0.64;
+    transform: scale(1.05) rotate(8deg);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.28) rotate(15deg);
+  }
+}
+
+@keyframes westory-wis-podium-cast-icon {
+  0% {
+    transform: translateY(-0.12rem) scale(1.05) rotate(0deg);
+  }
+
+  26% {
+    transform: translateY(-0.48rem) scale(1.22) rotate(-5deg);
+  }
+
+  58% {
+    transform: translateY(-0.2rem) scale(1.1) rotate(4deg);
+  }
+
+  100% {
+    transform: translateY(-0.22rem) scale(1.08) rotate(0deg);
+  }
+}
+
+@keyframes westory-wis-podium-cast-score {
+  0% {
+    filter: brightness(1);
+  }
+
+  30% {
+    filter: brightness(1.16)
+      drop-shadow(0 0 12px rgb(var(--wis-hall-podium-glow) / 0.34));
+  }
+
+  100% {
+    filter: brightness(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .lesson-core-point::before,
   .lesson-core-point::after,
@@ -1064,12 +1258,19 @@ button.lesson-core-point-floating-status:disabled {
   .lesson-core-burst__ring,
   .lesson-core-burst__flare,
   .lesson-core-burst__spark,
-  .wis-hall-student-preview-shell {
+  .wis-hall-student-preview-shell,
+  .wis-hall-podium-entry,
+  .wis-hall-podium-entry::after,
+  .wis-hall-podium-entry__cast-burst,
+  .wis-hall-podium-entry__icon,
+  .wis-hall-podium-entry__score {
     animation: none;
   }
 
   .wis-hall-podium-entry,
   .wis-hall-podium-entry::before,
+  .wis-hall-podium-entry::after,
+  .wis-hall-podium-entry__cast-burst,
   .wis-hall-podium-entry__icon,
   .wis-hall-podium-entry__name,
   .wis-hall-podium-entry__score {
