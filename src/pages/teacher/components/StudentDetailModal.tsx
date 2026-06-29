@@ -21,6 +21,7 @@ import {
 
 interface Student {
   id: string;
+  userId?: string;
   grade: string;
   class: string;
   number: number;
@@ -45,6 +46,7 @@ interface StudentDetailModalProps {
   onUpdate: () => void;
   readOnly?: boolean;
   initialTab?: StudentDetailInitialTab;
+  onOpenQuizHistory?: (student: Student) => void;
 }
 
 const EMPTY_SUMMARY_TEXT = "-";
@@ -70,6 +72,7 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
   onUpdate,
   readOnly = false,
   initialTab = "overview",
+  onOpenQuizHistory,
 }) => {
   const { config } = useAuth();
   const [activeTab, setActiveTab] = useState<DetailTab>(
@@ -756,6 +759,15 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
+                      {onOpenQuizHistory && (
+                        <button
+                          type="button"
+                          onClick={() => onOpenQuizHistory(student)}
+                          className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-extrabold text-emerald-700 transition hover:border-emerald-300 hover:bg-emerald-100"
+                        >
+                          전체 응시 기록 보기
+                        </button>
+                      )}
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
@@ -831,6 +843,16 @@ const StudentDetailModal: React.FC<StudentDetailModalProps> = ({
                           <div className="mt-1 text-xs font-semibold text-gray-400">
                             최근 응시 {group.latestDateText}
                           </div>
+                        )}
+                        {onOpenQuizHistory && (
+                          <button
+                            type="button"
+                            onClick={() => onOpenQuizHistory(student)}
+                            className="mt-3 inline-flex items-center gap-1 rounded-md border border-gray-200 px-2.5 py-1.5 text-xs font-extrabold text-gray-600 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
+                          >
+                            <i className="fas fa-list-check text-[10px]"></i>
+                            개별 응시 확인
+                          </button>
                         )}
                       </div>
                     ))}

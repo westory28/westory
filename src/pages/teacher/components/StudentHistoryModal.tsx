@@ -3,7 +3,6 @@ import {
   collection,
   documentId,
   getDocs,
-  orderBy,
   query,
   where,
 } from "firebase/firestore";
@@ -99,6 +98,13 @@ const getTimeText = (record: QuizResultRecord): string => {
   return record.timeString || "-";
 };
 
+const getRecordTimeMs = (record: QuizResultRecord): number => {
+  if (record.timestamp?.seconds) return record.timestamp.seconds * 1000;
+  if (!record.timeString) return 0;
+  const parsed = new Date(record.timeString);
+  return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
+};
+
 const StudentHistoryModal: React.FC<StudentHistoryModalProps> = ({
   isOpen,
   onClose,
@@ -155,7 +161,6 @@ const StudentHistoryModal: React.FC<StudentHistoryModalProps> = ({
         query(
           collection(db, resultCollectionPath),
           where("uid", "==", studentId),
-          orderBy("timestamp", "desc"),
         ),
       );
 
@@ -166,6 +171,7 @@ const StudentHistoryModal: React.FC<StudentHistoryModalProps> = ({
           ...(doc.data() as Omit<QuizResultRecord, "id">),
         });
       });
+      records.sort((a, b) => getRecordTimeMs(b) - getRecordTimeMs(a));
 
       const grouped: Record<string, QuizResultRecord[]> = {};
       records.forEach((record) => {
