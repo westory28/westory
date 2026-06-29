@@ -386,6 +386,10 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
               const control = slotControls?.[slotKey];
               const primaryEntry = entriesForSlot[0];
               const rankLabel = buildRankLabel(safeEntries, primaryEntry);
+              const primaryEntryKey = `${slotKey}:${primaryEntry.uid}`;
+              const isPrimaryEntryActive = activeEntryKey === primaryEntryKey;
+              const isPrimaryEntryHighlighted =
+                isPrimaryEntryActive || hoveredEntryKey === primaryEntryKey;
               const tieCountLabel =
                 entriesForSlot.length > 1
                   ? ` · ${entriesForSlot.length}명`
@@ -434,15 +438,55 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                     )}
 
                     {entriesForSlot.length === 1 ? (
-                      <>
+                      <button
+                        type="button"
+                        disabled={Boolean(control)}
+                        onClick={() => {
+                          if (control) return;
+                          setActiveEntryKey((previousValue) =>
+                            previousValue === primaryEntryKey
+                              ? null
+                              : primaryEntryKey,
+                          );
+                        }}
+                        onMouseEnter={() => {
+                          if (!control) setHoveredEntryKey(primaryEntryKey);
+                        }}
+                        onMouseLeave={() =>
+                          setHoveredEntryKey((previousValue) =>
+                            previousValue === primaryEntryKey
+                              ? null
+                              : previousValue,
+                          )
+                        }
+                        onFocus={() => {
+                          if (!control) setHoveredEntryKey(primaryEntryKey);
+                        }}
+                        onBlur={() =>
+                          setHoveredEntryKey((previousValue) =>
+                            previousValue === primaryEntryKey
+                              ? null
+                              : previousValue,
+                          )
+                        }
+                        aria-label={`${rankLabel} ${primaryEntry.displayName || primaryEntry.studentName} 정보 강조`}
+                        aria-pressed={isPrimaryEntryActive}
+                        className={`wis-hall-podium-entry wis-hall-podium-entry--${slotKey} ${
+                          isPrimaryEntryHighlighted && !control
+                            ? "is-active"
+                            : ""
+                        } ${
+                          control ? "is-static" : ""
+                        } relative z-10 flex w-full max-w-full flex-col items-center gap-1.25 border-0 bg-transparent p-0 text-center sm:gap-1.5`}
+                      >
                         <div
-                          className={`relative z-10 leading-none drop-shadow-[0_12px_18px_rgba(15,23,42,0.24)] ${tone.emojiClassName}`}
+                          className={`wis-hall-podium-entry__icon relative z-10 leading-none drop-shadow-[0_12px_18px_rgba(15,23,42,0.24)] ${tone.emojiClassName}`}
                         >
                           {primaryEntry.profileIcon || "🙂"}
                         </div>
 
                         <div
-                          className={`relative z-10 w-full max-w-full rounded-[1.2rem] border px-2.25 py-2.25 backdrop-blur-xl sm:px-3 sm:py-2.75 ${tone.nameClassName}`}
+                          className={`wis-hall-podium-entry__name relative z-10 w-full max-w-full rounded-[1.2rem] border px-2.25 py-2.25 backdrop-blur-xl sm:px-3 sm:py-2.75 ${tone.nameClassName}`}
                         >
                           <div className="whitespace-nowrap text-[8px] font-bold uppercase tracking-[0.12em] text-white/80 [text-shadow:0_1px_2px_rgba(15,23,42,0.46)] sm:text-[9px]">
                             {primaryEntry.grade}학년 {primaryEntry.class}반
@@ -454,11 +498,11 @@ const WisHallOfFamePodium: React.FC<WisHallOfFamePodiumProps> = ({
                         </div>
 
                         <div
-                          className={`relative z-10 inline-flex min-h-[2rem] max-w-full shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-2.25 py-1 text-[9px] font-black leading-none backdrop-blur shadow-[0_14px_30px_rgba(15,23,42,0.2)] sm:min-h-[2.2rem] sm:px-2.75 sm:text-[13px] ${tone.scoreClassName}`}
+                          className={`wis-hall-podium-entry__score relative z-10 inline-flex min-h-[2rem] max-w-full shrink-0 items-center justify-center whitespace-nowrap rounded-full border px-2.25 py-1 text-[9px] font-black leading-none backdrop-blur shadow-[0_14px_30px_rgba(15,23,42,0.2)] sm:min-h-[2.2rem] sm:px-2.75 sm:text-[13px] ${tone.scoreClassName}`}
                         >
                           누적 {formatWisAmount(primaryEntry.cumulativeEarned)}
                         </div>
-                      </>
+                      </button>
                     ) : (
                       <>
                         <div className="relative z-10 flex min-h-[3.5rem] w-full items-end justify-center">

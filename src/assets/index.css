@@ -947,6 +947,112 @@ button.lesson-core-point-floating-status:disabled {
   }
 }
 
+.wis-hall-podium-entry {
+  --wis-hall-podium-glow: 245 158 11;
+  --wis-hall-podium-ring: rgba(251, 191, 36, 0.4);
+  appearance: none;
+  cursor: pointer;
+  isolation: isolate;
+  transform: translateY(0) scale(1);
+  transform-origin: top center;
+  transition:
+    transform 180ms ease,
+    filter 180ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.wis-hall-podium-entry--second {
+  --wis-hall-podium-glow: 148 163 184;
+  --wis-hall-podium-ring: rgba(203, 213, 225, 0.46);
+}
+
+.wis-hall-podium-entry--third {
+  --wis-hall-podium-glow: 251 146 60;
+  --wis-hall-podium-ring: rgba(251, 146, 60, 0.42);
+}
+
+.wis-hall-podium-entry.is-static {
+  cursor: default;
+}
+
+.wis-hall-podium-entry::before {
+  content: "";
+  position: absolute;
+  inset: 0.35rem -0.85rem -0.55rem;
+  z-index: -1;
+  border-radius: 9999px;
+  background:
+    radial-gradient(
+      closest-side,
+      rgb(var(--wis-hall-podium-glow) / 0.34),
+      transparent 72%
+    ),
+    linear-gradient(
+      135deg,
+      rgb(var(--wis-hall-podium-glow) / 0.16),
+      rgba(255, 255, 255, 0.08)
+    );
+  filter: blur(9px);
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.86);
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease;
+}
+
+.wis-hall-podium-entry__icon,
+.wis-hall-podium-entry__name,
+.wis-hall-podium-entry__score {
+  transition:
+    transform 180ms ease,
+    filter 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.wis-hall-podium-entry:not(.is-static):hover,
+.wis-hall-podium-entry:not(.is-static):focus-visible,
+.wis-hall-podium-entry:not(.is-static).is-active {
+  z-index: 40;
+  outline: none;
+  transform: translateY(-0.34rem) scale(1.035);
+}
+
+.wis-hall-podium-entry:not(.is-static):hover::before,
+.wis-hall-podium-entry:not(.is-static):focus-visible::before,
+.wis-hall-podium-entry:not(.is-static).is-active::before {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.wis-hall-podium-entry:not(.is-static):hover .wis-hall-podium-entry__icon,
+.wis-hall-podium-entry:not(.is-static):focus-visible
+  .wis-hall-podium-entry__icon,
+.wis-hall-podium-entry:not(.is-static).is-active .wis-hall-podium-entry__icon {
+  filter: drop-shadow(0 14px 18px rgb(var(--wis-hall-podium-glow) / 0.26));
+  transform: translateY(-0.12rem) scale(1.05);
+}
+
+.wis-hall-podium-entry:not(.is-static):hover .wis-hall-podium-entry__name,
+.wis-hall-podium-entry:not(.is-static):focus-visible
+  .wis-hall-podium-entry__name,
+.wis-hall-podium-entry:not(.is-static).is-active .wis-hall-podium-entry__name {
+  box-shadow:
+    0 20px 34px rgba(15, 23, 42, 0.26),
+    0 0 0 1px var(--wis-hall-podium-ring),
+    0 0 22px rgb(var(--wis-hall-podium-glow) / 0.18);
+}
+
+.wis-hall-podium-entry:not(.is-static):hover .wis-hall-podium-entry__score,
+.wis-hall-podium-entry:not(.is-static):focus-visible
+  .wis-hall-podium-entry__score,
+.wis-hall-podium-entry:not(.is-static).is-active .wis-hall-podium-entry__score {
+  box-shadow:
+    0 16px 26px rgba(15, 23, 42, 0.2),
+    0 0 0 1px rgb(var(--wis-hall-podium-glow) / 0.24);
+  transform: translateY(-0.06rem) scale(1.04);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .lesson-core-point::before,
   .lesson-core-point::after,
@@ -960,6 +1066,29 @@ button.lesson-core-point-floating-status:disabled {
   .lesson-core-burst__spark,
   .wis-hall-student-preview-shell {
     animation: none;
+  }
+
+  .wis-hall-podium-entry,
+  .wis-hall-podium-entry::before,
+  .wis-hall-podium-entry__icon,
+  .wis-hall-podium-entry__name,
+  .wis-hall-podium-entry__score {
+    transition: none;
+  }
+
+  .wis-hall-podium-entry:not(.is-static):hover,
+  .wis-hall-podium-entry:not(.is-static):focus-visible,
+  .wis-hall-podium-entry:not(.is-static).is-active,
+  .wis-hall-podium-entry:not(.is-static):hover .wis-hall-podium-entry__icon,
+  .wis-hall-podium-entry:not(.is-static):focus-visible
+    .wis-hall-podium-entry__icon,
+  .wis-hall-podium-entry:not(.is-static).is-active .wis-hall-podium-entry__icon,
+  .wis-hall-podium-entry:not(.is-static):hover .wis-hall-podium-entry__score,
+  .wis-hall-podium-entry:not(.is-static):focus-visible
+    .wis-hall-podium-entry__score,
+  .wis-hall-podium-entry:not(.is-static).is-active
+    .wis-hall-podium-entry__score {
+    transform: none;
   }
 
   .lesson-core-burst {
