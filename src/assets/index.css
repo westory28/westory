@@ -2119,6 +2119,53 @@ button.lesson-core-point-floating-status:disabled {
   align-items: center;
 }
 
+.teacher-calendar-shell
+  .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-daygrid-day-frame {
+  grid-template-rows: minmax(2.15rem, auto) minmax(0, 1fr) auto;
+}
+
+.teacher-calendar-shell
+  .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-daygrid-day-bg {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  min-width: 0;
+  z-index: 0;
+}
+
+.teacher-calendar-shell
+  .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-daygrid-day-top {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: start;
+  position: relative;
+  z-index: 8;
+}
+
+.teacher-calendar-shell
+  .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-daygrid-day-events {
+  grid-column: 1;
+  grid-row: 2;
+  align-self: start;
+  margin-top: 0;
+  padding: 0 0.18rem 0.2rem;
+}
+
+.teacher-calendar-shell
+  .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-daygrid-day-bottom {
+  grid-column: 1;
+  grid-row: 3;
+}
+
 .student-calendar-shell__filter-select {
   min-height: 2.45rem;
   max-width: 8rem;
