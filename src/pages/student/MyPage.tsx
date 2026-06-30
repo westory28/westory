@@ -2163,22 +2163,22 @@ const MyPage: React.FC = () => {
     </div>
   );
   const renderReviewAnswerSummary = (item: WrongNoteItem) => (
-    <div className="grid gap-2 text-sm font-bold leading-6 text-slate-700 sm:grid-cols-2">
-      <div className="rounded-xl bg-white px-3 py-2">
+    <div className="grid gap-2 text-xs font-bold leading-5 text-slate-700 sm:grid-cols-2">
+      <div className="rounded-lg bg-white px-2.5 py-2">
         <span className="block text-xs font-black text-slate-500">
           {item.correct ? "나의 답" : "나의 오답"}
         </span>
         <span
-          className={`mt-1 block whitespace-pre-wrap break-keep text-base font-black ${
+          className={`mt-0.5 block whitespace-pre-wrap break-keep text-sm font-black ${
             item.correct ? "text-blue-600" : "text-red-500"
           }`}
         >
           {item.userAnswer || "(미입력)"}
         </span>
       </div>
-      <div className="rounded-xl bg-white px-3 py-2">
+      <div className="rounded-lg bg-white px-2.5 py-2">
         <span className="block text-xs font-black text-slate-500">정답</span>
-        <span className="mt-1 block whitespace-pre-wrap break-keep text-base font-black text-blue-600">
+        <span className="mt-0.5 block whitespace-pre-wrap break-keep text-sm font-black text-blue-600">
           {item.answer}
         </span>
       </div>
@@ -2194,32 +2194,38 @@ const MyPage: React.FC = () => {
       return (
         <>
           {item.image && (
-            <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-2 text-center">
+            <div className="mt-2 rounded-lg border border-slate-100 bg-slate-50 p-2 text-center">
               <img
                 src={item.image}
                 alt="문항 첨부 이미지"
-                className="mx-auto max-h-72 max-w-full object-contain"
+                className="mx-auto max-h-52 max-w-full object-contain"
               />
             </div>
           )}
           {item.passage && (
-            <div className="mt-3">
-              <QuizPassage value={item.passage} surface="muted" />
+            <div className="mt-2">
+              <QuizPassage
+                value={item.passage}
+                surface="muted"
+                size="compact"
+              />
             </div>
           )}
-          <div className="mt-3">{renderReviewAnswerSummary(item)}</div>
+          <div className="mt-2">{renderReviewAnswerSummary(item)}</div>
         </>
       );
     }
 
     return (
       <div
-        className={`mt-3 min-h-0 ${
-          hasSupportPanel ? "student-quiz-body-with-support" : "space-y-2"
+        className={`mt-2 min-h-0 ${
+          hasSupportPanel
+            ? "grid gap-2 md:grid-cols-[minmax(0,0.95fr)_minmax(250px,0.95fr)]"
+            : "space-y-1.5"
         }`}
       >
         {hasSupportPanel && (
-          <div className="student-quiz-support-panel flex min-h-0 flex-col gap-3 rounded-xl border border-slate-100 bg-slate-50 p-2 text-center">
+          <div className="flex min-h-0 flex-col gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2 text-center">
             {item.image && (
               <div
                 className={`flex min-h-0 items-center justify-center ${
@@ -2231,8 +2237,8 @@ const MyPage: React.FC = () => {
                   alt="문항 첨부 이미지"
                   className={`mx-auto max-w-full rounded-lg border border-slate-100 bg-white object-contain ${
                     item.passage
-                      ? "max-h-[min(28vh,260px)]"
-                      : "max-h-[min(40vh,360px)]"
+                      ? "max-h-[min(22vh,210px)]"
+                      : "max-h-[min(26vh,230px)]"
                   }`}
                 />
               </div>
@@ -2242,7 +2248,7 @@ const MyPage: React.FC = () => {
                 value={item.passage}
                 surface="white"
                 size="compact"
-                className="shrink-0 text-left"
+                className="shrink-0 text-left text-xs leading-5 md:text-sm md:leading-6"
               />
             )}
           </div>
@@ -2251,8 +2257,8 @@ const MyPage: React.FC = () => {
         <div
           className={
             hasChoiceOptionImages
-              ? "student-quiz-choice-grid grid min-h-[16rem] grid-cols-2 auto-rows-fr gap-2 overflow-y-auto pr-1 sm:grid-cols-3"
-              : "min-h-0 space-y-2 overflow-y-auto pr-1"
+              ? "grid min-h-0 grid-cols-2 gap-1.5 overflow-y-auto pr-1 sm:grid-cols-3"
+              : "min-h-0 space-y-1.5 overflow-y-auto pr-1"
           }
         >
           {item.options.map((option, index) => {
@@ -2288,8 +2294,8 @@ const MyPage: React.FC = () => {
                 key={`${item.key}-choice-${index}`}
                 className={
                   hasChoiceOptionImages
-                    ? `flex h-full min-h-0 flex-col rounded-xl border-2 p-2 text-left ${optionTone}`
-                    : `flex items-start rounded-xl border-2 px-3 py-2.5 text-left ${optionTone}`
+                    ? `flex min-h-[7.5rem] flex-col rounded-lg border-2 p-1.5 text-left ${optionTone}`
+                    : `flex items-start rounded-lg border-2 px-2.5 py-1.5 text-left ${optionTone}`
                 }
               >
                 {hasChoiceOptionImages ? (
@@ -2302,19 +2308,19 @@ const MyPage: React.FC = () => {
                       }`}
                     >
                       <span
-                        className={`absolute left-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full text-sm font-black shadow-sm ${numberTone}`}
+                        className={`absolute left-1.5 top-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full text-xs font-black shadow-sm ${numberTone}`}
                       >
                         {index + 1}
                       </span>
                       {(optionIsCorrect || optionIsSelectedWrong) && (
-                        <div className="absolute right-2 top-2 z-10 flex flex-wrap justify-end gap-1">
+                        <div className="absolute right-1.5 top-1.5 z-10 flex flex-wrap justify-end gap-1">
                           {optionIsCorrect && (
-                            <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-black text-white shadow-sm">
+                            <span className="rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-black text-white shadow-sm">
                               정답
                             </span>
                           )}
                           {optionIsSelectedWrong && (
-                            <span className="rounded-full bg-red-500 px-2 py-0.5 text-[11px] font-black text-white shadow-sm">
+                            <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-black text-white shadow-sm">
                               내가 고른 답
                             </span>
                           )}
@@ -2327,13 +2333,13 @@ const MyPage: React.FC = () => {
                           className="max-h-full max-w-full object-contain"
                         />
                       ) : (
-                        <span className="break-keep text-center text-sm font-bold text-slate-700">
+                        <span className="break-keep text-center text-xs font-bold leading-5 text-slate-700">
                           {visibleOptionText}
                         </span>
                       )}
                     </div>
                     {visibleOptionText && option.image && (
-                      <div className="mt-2 line-clamp-2 min-h-[2.5rem] w-full break-keep text-center text-sm font-bold leading-5">
+                      <div className="mt-1.5 line-clamp-2 min-h-[2rem] w-full break-keep text-center text-xs font-bold leading-4">
                         {visibleOptionText}
                       </div>
                     )}
@@ -2341,7 +2347,7 @@ const MyPage: React.FC = () => {
                 ) : (
                   <>
                     <div
-                      className={`mr-3 mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold ${numberTone}`}
+                      className={`mr-2 mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${numberTone}`}
                     >
                       {index + 1}
                     </div>
@@ -2349,20 +2355,20 @@ const MyPage: React.FC = () => {
                       <img
                         src={option.image}
                         alt={`${index + 1}번 보기 이미지`}
-                        className="mr-3 h-24 w-28 shrink-0 rounded-lg border border-slate-100 bg-white object-contain"
+                        className="mr-2 h-16 w-20 shrink-0 rounded-lg border border-slate-100 bg-white object-contain"
                       />
                     )}
-                    <div className="min-w-0 flex-1 break-words">
+                    <div className="min-w-0 flex-1 break-words text-sm font-bold leading-5">
                       <div>{visibleOptionText}</div>
                       {(optionIsCorrect || optionIsSelectedWrong) && (
-                        <div className="mt-1 flex flex-wrap gap-1">
+                        <div className="mt-0.5 flex flex-wrap gap-1">
                           {optionIsCorrect && (
-                            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-black text-blue-700">
+                            <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-black text-blue-700">
                               정답
                             </span>
                           )}
                           {optionIsSelectedWrong && (
-                            <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-black text-red-700">
+                            <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-black text-red-700">
                               내가 고른 답
                             </span>
                           )}
@@ -4127,16 +4133,16 @@ const MyPage: React.FC = () => {
 
                     <article
                       key={selectedReviewItem.key}
-                      className={`rounded-2xl border p-4 ${
+                      className={`rounded-xl border p-3 ${
                         selectedReviewItem.correct
                           ? "border-blue-100 bg-blue-50/45"
                           : "border-red-100 bg-red-50/70 ring-1 ring-red-100"
                       }`}
                     >
-                      <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-                        <div className="mb-2 flex flex-wrap items-center gap-2">
+                      <div className="rounded-lg border border-slate-200 bg-white px-3 py-2">
+                        <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
                           <span
-                            className={`inline-flex h-8 min-w-8 items-center justify-center rounded-full px-2 text-sm font-black text-white ${
+                            className={`inline-flex h-7 min-w-7 items-center justify-center rounded-full px-2 text-xs font-black text-white ${
                               selectedReviewItem.correct
                                 ? "bg-blue-500"
                                 : "bg-red-500"
@@ -4146,7 +4152,7 @@ const MyPage: React.FC = () => {
                               safeReviewQuestionIndex + 1}
                           </span>
                           <span
-                            className={`rounded-full px-3 py-1 text-xs font-black ${
+                            className={`rounded-full px-2.5 py-0.5 text-[11px] font-black ${
                               selectedReviewItem.correct
                                 ? "bg-blue-50 text-blue-600"
                                 : "bg-red-50 text-red-600"
@@ -4154,16 +4160,16 @@ const MyPage: React.FC = () => {
                           >
                             {selectedReviewItem.correct ? "정답" : "오답"}
                           </span>
-                          <span className="whitespace-normal break-keep rounded-full bg-slate-100 px-3 py-1 text-xs font-black leading-5 text-slate-500">
+                          <span className="whitespace-normal break-keep rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-black leading-5 text-slate-500">
                             {selectedReviewItem.hierarchyLabel}
                           </span>
                         </div>
-                        <div className="whitespace-pre-wrap break-keep text-base font-black leading-7 text-slate-900">
+                        <div className="whitespace-pre-wrap break-keep text-sm font-black leading-6 text-slate-900">
                           {selectedReviewItem.question}
                         </div>
                       </div>
                       {renderReviewQuestionBody(selectedReviewItem)}
-                      <div className="mt-3 rounded-xl bg-white px-3 py-2 text-sm font-semibold leading-6 text-slate-600">
+                      <div className="mt-3 rounded-lg bg-white px-3 py-2.5 text-[15px] font-bold leading-7 text-slate-700">
                         해설: {selectedReviewItem.explanation}
                       </div>
                     </article>
