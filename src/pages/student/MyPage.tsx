@@ -141,12 +141,19 @@ interface UnitParentMeta {
   midTitle: string;
 }
 
+interface ReviewChoiceOption {
+  text: string;
+  image: string;
+}
+
 interface WrongNoteItem {
   key: string;
   questionNumber: number;
+  type: string;
   question: string;
   passage: string;
   image: string;
+  options: ReviewChoiceOption[];
   answer: string;
   explanation: string;
   userAnswer: string;
@@ -342,6 +349,11 @@ const normalizeAnswerText = (value: unknown) =>
     .replace(/\s+/g, "")
     .trim();
 
+const isGeneratedImageChoiceLabel = (value: string, index: number) => {
+  const match = value.trim().match(/^(\d+)\s*번\s*보기$/);
+  return Boolean(match && Number(match[1]) === index + 1);
+};
+
 const formatQuizAnswerText = (value: unknown) => {
   const text = String(value ?? "").trim();
   if (!text) return "";
@@ -356,6 +368,63 @@ const formatQuizAnswerText = (value: unknown) => {
     return text.split(ORDER_DELIMITER).filter(Boolean).join(" → ");
   }
   return text;
+};
+
+const getReviewChoiceOptions = (question: any): ReviewChoiceOption[] => {
+  const questionType = String(question?.type || "").trim();
+  const rawOptions =
+    Array.isArray(question?.options) && question.options.length > 0
+      ? question.options
+      : questionType === "ox"
+        ? ["O", "X"]
+        : [];
+  const rawImages = Array.isArray(question?.choiceOptionImages)
+    ? question.choiceOptionImages
+    : [];
+  const optionCount = Math.max(rawOptions.length, rawImages.length);
+
+  return Array.from({ length: optionCount }, (_, index) => {
+    const image = String(rawImages[index] || "").trim();
+    const text =
+      String(rawOptions[index] ?? "").trim() ||
+      (image ? `${index + 1}번 보기` : "");
+    return { text, image };
+  }).filter((option) => option.text || option.image);
+};
+
+const CIRCLED_NUMBER_LABELS = [
+  "①",
+  "②",
+  "③",
+  "④",
+  "⑤",
+  "⑥",
+  "⑦",
+  "⑧",
+  "⑨",
+  "⑩",
+];
+
+const isReviewOptionAnswerMatch = (
+  value: string,
+  option: ReviewChoiceOption,
+  index: number,
+) => {
+  const normalizedValue = normalizeAnswerText(value);
+  if (!normalizedValue) return false;
+
+  const optionNumber = String(index + 1);
+  const candidates = [
+    option.text,
+    optionNumber,
+    `${optionNumber}번`,
+    `(${optionNumber})`,
+    CIRCLED_NUMBER_LABELS[index] || "",
+  ];
+
+  return candidates.some(
+    (candidate) => normalizeAnswerText(candidate) === normalizedValue,
+  );
 };
 
 const getQuestionAnswerCandidates = (question: any) =>
@@ -1052,16 +1121,24 @@ const MyPage: React.FC = () => {
           bigUnitTitle && midUnitTitle && bigUnitTitle !== midUnitTitle
             ? `${bigUnitTitle} > ${midUnitTitle}`
             : midUnitTitle || bigUnitTitle || "목차 미지정";
+        const questionType = String(
+          question.type ||
+            (Array.isArray(question.options) && question.options.length > 0
+              ? "choice"
+              : ""),
+        ).trim();
 
         return {
           key,
           questionNumber: log.questionNumber || 0,
+          type: questionType,
           question: String(question.question || "문항 텍스트 없음"),
           passage: String(question.passage || ""),
           image: String(question.image || ""),
+          options: getReviewChoiceOptions({ ...question, type: questionType }),
           answer:
             question.answer !== undefined && question.answer !== null
-              ? formatQuizAnswerText(question.answer)
+              ? restoreAnswerSpacing(question.answer, question)
               : "-",
           explanation: String(
             question.explanation || "해설이 등록되지 않았습니다.",
@@ -2085,6 +2162,222 @@ const MyPage: React.FC = () => {
       </div>
     </div>
   );
+  const renderReviewAnswerSummary = (item: WrongNoteItem) => (
+    <div className="grid gap-2 text-sm font-bold leading-6 text-slate-700 sm:grid-cols-2">
+      <div className="rounded-xl bg-white px-3 py-2">
+        <span className="block text-xs font-black text-slate-500">
+          {item.correct ? "나의 답" : "나의 오답"}
+        </span>
+        <span
+          className={`mt-1 block whitespace-pre-wrap break-keep text-base font-black ${
+            item.correct ? "text-blue-600" : "text-red-500"
+          }`}
+        >
+          {item.userAnswer || "(미입력)"}
+        </span>
+      </div>
+      <div className="rounded-xl bg-white px-3 py-2">
+        <span className="block text-xs font-black text-slate-500">정답</span>
+        <span className="mt-1 block whitespace-pre-wrap break-keep text-base font-black text-blue-600">
+          {item.answer}
+        </span>
+      </div>
+    </div>
+  );
+  const renderReviewQuestionBody = (item: WrongNoteItem) => {
+    const hasChoiceReview =
+      (item.type === "choice" || item.type === "ox") && item.options.length > 0;
+    const hasSupportPanel = Boolean(item.image || item.passage);
+    const hasChoiceOptionImages = item.options.some((option) => option.image);
+
+    if (!hasChoiceReview) {
+      return (
+        <>
+          {item.image && (
+            <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-2 text-center">
+              <img
+                src={item.image}
+                alt="문항 첨부 이미지"
+                className="mx-auto max-h-72 max-w-full object-contain"
+              />
+            </div>
+          )}
+          {item.passage && (
+            <div className="mt-3">
+              <QuizPassage value={item.passage} surface="muted" />
+            </div>
+          )}
+          <div className="mt-3">{renderReviewAnswerSummary(item)}</div>
+        </>
+      );
+    }
+
+    return (
+      <div
+        className={`mt-3 min-h-0 ${
+          hasSupportPanel ? "student-quiz-body-with-support" : "space-y-2"
+        }`}
+      >
+        {hasSupportPanel && (
+          <div className="student-quiz-support-panel flex min-h-0 flex-col gap-3 rounded-xl border border-slate-100 bg-slate-50 p-2 text-center">
+            {item.image && (
+              <div
+                className={`flex min-h-0 items-center justify-center ${
+                  item.passage ? "shrink-0" : "flex-1"
+                }`}
+              >
+                <img
+                  src={item.image}
+                  alt="문항 첨부 이미지"
+                  className={`mx-auto max-w-full rounded-lg border border-slate-100 bg-white object-contain ${
+                    item.passage
+                      ? "max-h-[min(28vh,260px)]"
+                      : "max-h-[min(40vh,360px)]"
+                  }`}
+                />
+              </div>
+            )}
+            {item.passage && (
+              <QuizPassage
+                value={item.passage}
+                surface="white"
+                size="compact"
+                className="shrink-0 text-left"
+              />
+            )}
+          </div>
+        )}
+
+        <div
+          className={
+            hasChoiceOptionImages
+              ? "student-quiz-choice-grid grid min-h-[16rem] grid-cols-2 auto-rows-fr gap-2 overflow-y-auto pr-1 sm:grid-cols-3"
+              : "min-h-0 space-y-2 overflow-y-auto pr-1"
+          }
+        >
+          {item.options.map((option, index) => {
+            const optionIsCorrect = isReviewOptionAnswerMatch(
+              item.answer,
+              option,
+              index,
+            );
+            const optionIsSelected = isReviewOptionAnswerMatch(
+              item.userAnswer,
+              option,
+              index,
+            );
+            const optionIsSelectedWrong = optionIsSelected && !optionIsCorrect;
+            const visibleOptionText =
+              option.image && isGeneratedImageChoiceLabel(option.text, index)
+                ? ""
+                : option.text;
+
+            const optionTone = optionIsCorrect
+              ? "border-blue-500 bg-blue-50 text-blue-800 shadow-sm"
+              : optionIsSelectedWrong
+                ? "border-red-500 bg-red-50 text-red-700 shadow-sm"
+                : "border-slate-200 bg-white text-slate-700";
+            const numberTone = optionIsCorrect
+              ? "bg-blue-600 text-white"
+              : optionIsSelectedWrong
+                ? "bg-red-500 text-white"
+                : "bg-slate-200 text-slate-500";
+
+            return (
+              <div
+                key={`${item.key}-choice-${index}`}
+                className={
+                  hasChoiceOptionImages
+                    ? `flex h-full min-h-0 flex-col rounded-xl border-2 p-2 text-left ${optionTone}`
+                    : `flex items-start rounded-xl border-2 px-3 py-2.5 text-left ${optionTone}`
+                }
+              >
+                {hasChoiceOptionImages ? (
+                  <>
+                    <div
+                      className={`relative flex min-h-0 w-full flex-1 items-center justify-center overflow-hidden rounded-lg border ${
+                        option.image
+                          ? "border-slate-100 bg-white"
+                          : "border-dashed border-slate-200 bg-slate-50 px-2"
+                      }`}
+                    >
+                      <span
+                        className={`absolute left-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-full text-sm font-black shadow-sm ${numberTone}`}
+                      >
+                        {index + 1}
+                      </span>
+                      {(optionIsCorrect || optionIsSelectedWrong) && (
+                        <div className="absolute right-2 top-2 z-10 flex flex-wrap justify-end gap-1">
+                          {optionIsCorrect && (
+                            <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-black text-white shadow-sm">
+                              정답
+                            </span>
+                          )}
+                          {optionIsSelectedWrong && (
+                            <span className="rounded-full bg-red-500 px-2 py-0.5 text-[11px] font-black text-white shadow-sm">
+                              내가 고른 답
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {option.image ? (
+                        <img
+                          src={option.image}
+                          alt={`${index + 1}번 보기`}
+                          className="max-h-full max-w-full object-contain"
+                        />
+                      ) : (
+                        <span className="break-keep text-center text-sm font-bold text-slate-700">
+                          {visibleOptionText}
+                        </span>
+                      )}
+                    </div>
+                    {visibleOptionText && option.image && (
+                      <div className="mt-2 line-clamp-2 min-h-[2.5rem] w-full break-keep text-center text-sm font-bold leading-5">
+                        {visibleOptionText}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div
+                      className={`mr-3 mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-sm font-bold ${numberTone}`}
+                    >
+                      {index + 1}
+                    </div>
+                    {option.image && (
+                      <img
+                        src={option.image}
+                        alt={`${index + 1}번 보기 이미지`}
+                        className="mr-3 h-24 w-28 shrink-0 rounded-lg border border-slate-100 bg-white object-contain"
+                      />
+                    )}
+                    <div className="min-w-0 flex-1 break-words">
+                      <div>{visibleOptionText}</div>
+                      {(optionIsCorrect || optionIsSelectedWrong) && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {optionIsCorrect && (
+                            <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-black text-blue-700">
+                              정답
+                            </span>
+                          )}
+                          {optionIsSelectedWrong && (
+                            <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-black text-red-700">
+                              내가 고른 답
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
   const weeklySnapshotItems = [
     ...(canUseLesson
       ? [
@@ -3868,54 +4161,9 @@ const MyPage: React.FC = () => {
                         <div className="whitespace-pre-wrap break-keep text-base font-black leading-7 text-slate-900">
                           {selectedReviewItem.question}
                         </div>
-                        {selectedReviewItem.image && (
-                          <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 p-2 text-center">
-                            <img
-                              src={selectedReviewItem.image}
-                              alt="문항 첨부 이미지"
-                              className="mx-auto max-h-72 max-w-full object-contain"
-                            />
-                          </div>
-                        )}
                       </div>
-                      {selectedReviewItem.passage && (
-                        <div className="mt-3">
-                          <div className="mb-1 text-xs font-black text-slate-500">
-                            본문
-                          </div>
-                          <QuizPassage
-                            value={selectedReviewItem.passage}
-                            surface="muted"
-                          />
-                        </div>
-                      )}
-                      <div className="mt-3 grid gap-2 text-sm font-bold leading-6 text-slate-700 sm:grid-cols-2">
-                        <div className="rounded-xl bg-white px-3 py-2">
-                          <span className="block text-xs font-black text-slate-500">
-                            {selectedReviewItem.correct
-                              ? "나의 답"
-                              : "나의 오답"}
-                          </span>
-                          <span
-                            className={`mt-1 block whitespace-pre-wrap break-keep text-base font-black ${
-                              selectedReviewItem.correct
-                                ? "text-blue-600"
-                                : "text-red-500"
-                            }`}
-                          >
-                            {selectedReviewItem.userAnswer || "(미입력)"}
-                          </span>
-                        </div>
-                        <div className="rounded-xl bg-white px-3 py-2">
-                          <span className="block text-xs font-black text-slate-500">
-                            정답
-                          </span>
-                          <span className="mt-1 block whitespace-pre-wrap break-keep text-base font-black text-emerald-600">
-                            {selectedReviewItem.answer}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="mt-2 rounded-xl bg-white px-3 py-2 text-sm font-semibold leading-6 text-slate-600">
+                      {renderReviewQuestionBody(selectedReviewItem)}
+                      <div className="mt-3 rounded-xl bg-white px-3 py-2 text-sm font-semibold leading-6 text-slate-600">
                         해설: {selectedReviewItem.explanation}
                       </div>
                     </article>
