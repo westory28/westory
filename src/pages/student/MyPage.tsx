@@ -2313,15 +2313,15 @@ const MyPage: React.FC = () => {
                         {index + 1}
                       </span>
                       {(optionIsCorrect || optionIsSelectedWrong) && (
-                        <div className="absolute right-1.5 top-1.5 z-10 flex flex-wrap justify-end gap-1">
+                        <div className="absolute right-1 top-1 z-10 flex flex-wrap justify-end gap-0.5">
                           {optionIsCorrect && (
-                            <span className="rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-black text-white shadow-sm">
+                            <span className="rounded-full bg-blue-600 px-1 py-0.5 text-[9px] font-black leading-none text-white shadow-sm">
                               정답
                             </span>
                           )}
                           {optionIsSelectedWrong && (
-                            <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-black text-white shadow-sm">
-                              내가 고른 답
+                            <span className="rounded-full bg-red-500 px-1 py-0.5 text-[9px] font-black leading-none text-white shadow-sm">
+                              내 답
                             </span>
                           )}
                         </div>
@@ -2360,21 +2360,21 @@ const MyPage: React.FC = () => {
                     )}
                     <div className="min-w-0 flex-1 break-words text-sm font-bold leading-5">
                       <div>{visibleOptionText}</div>
-                      {(optionIsCorrect || optionIsSelectedWrong) && (
-                        <div className="mt-0.5 flex flex-wrap gap-1">
-                          {optionIsCorrect && (
-                            <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-black text-blue-700">
-                              정답
-                            </span>
-                          )}
-                          {optionIsSelectedWrong && (
-                            <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-black text-red-700">
-                              내가 고른 답
-                            </span>
-                          )}
-                        </div>
-                      )}
                     </div>
+                    {(optionIsCorrect || optionIsSelectedWrong) && (
+                      <div className="ml-2 flex shrink-0 items-center gap-1 self-center">
+                        {optionIsCorrect && (
+                          <span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-black leading-none text-blue-700">
+                            정답
+                          </span>
+                        )}
+                        {optionIsSelectedWrong && (
+                          <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-black leading-none text-red-700">
+                            내 답
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </>
                 )}
               </div>
