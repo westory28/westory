@@ -107,6 +107,7 @@
 
 ## 문서 참조 관계
 - 공통 UI 규칙은 `UI_RULES.md`를 따른다.
+- 프론트엔드 시각 작업은 `DESIGN.md` 토큰 계약을 먼저 확인하고, `loopy`/Superloopy 작업이면 evidence root에 검증 기록을 남긴다.
 - 교사 포털 추가 제약은 `src/pages/teacher/AGENTS.md`를 따른다.
 - 학생 포털 추가 제약은 `src/pages/student/AGENTS.md`를 따른다.
 - 하위 문서는 루트 문서를 대체하지 않는다. 루트 문서 위에 더 엄격한 규칙을 추가한다.
