@@ -194,8 +194,13 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
                   <span className="wis-ranking-mobile-profile wis-ranking-profile inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/80 text-[11px] shadow-sm">
                     {entry.profileIcon || defaultProfileIcon}
                   </span>
-                  <span className="wis-ranking-mobile-name text-sm font-extrabold leading-snug text-gray-900">
-                    {entry.displayName || entry.studentName}
+                  <span className="wis-ranking-mobile-student min-w-0">
+                    <span className="wis-ranking-mobile-name block text-sm font-extrabold leading-snug text-gray-900">
+                      {entry.displayName || entry.studentName}
+                    </span>
+                    <span className="wis-ranking-mobile-class block text-[11px] font-bold leading-snug text-gray-500">
+                      {entry.grade}학년 {entry.class}반
+                    </span>
                   </span>
                   {entryRank && (
                     <span
@@ -204,9 +209,6 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
                       {entryRank.shortLabel || entryRank.label}
                     </span>
                   )}
-                  <span className="wis-ranking-mobile-class text-[11px] font-bold leading-snug text-gray-500">
-                    {entry.grade}학년 {entry.class}반
-                  </span>
                   <span className="wis-ranking-mobile-score wis-ranking-score ml-auto shrink-0 text-xs font-black leading-snug text-blue-600">
                     {formatWis(entry.cumulativeEarned)}
                   </span>
