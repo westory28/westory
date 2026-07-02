@@ -176,38 +176,38 @@ const WisRankingPanel: React.FC<WisRankingPanelProps> = ({
                 className={`wis-ranking-row ${rankAccent} rounded-lg border px-2 py-2 sm:grid sm:grid-cols-[72px_minmax(0,1fr)_92px_minmax(80px,auto)] sm:items-center sm:gap-3 sm:px-3 sm:py-2.5 max-[1120px]:sm:grid-cols-[52px_minmax(0,1fr)_70px_minmax(64px,auto)] max-[1120px]:sm:gap-1.5 max-[1120px]:sm:px-2 max-[1120px]:sm:py-2 ${rankTone(rank)}`}
               >
                 <div className="wis-ranking-mobile-row flex flex-nowrap items-center gap-x-1.5 gap-y-1 sm:hidden">
-                  <span
-                    className={`wis-ranking-rank-medal inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-black ${
-                      rank <= 3 ? "bg-white/70" : "bg-slate-900 text-white"
-                    }`}
-                  >
-                    {rank}
-                  </span>
-                  <span
-                    className="wis-ranking-crown inline-flex h-4 w-4 shrink-0 items-center justify-center"
-                    aria-hidden="true"
-                  >
+                  <span className="wis-ranking-mobile-rank-cluster inline-grid shrink-0 grid-cols-[1.5rem_1rem] items-center gap-1">
+                    <span
+                      className={`wis-ranking-rank-medal inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-black ${
+                        rank <= 3 ? "bg-white/70" : "bg-slate-900 text-white"
+                      }`}
+                    >
+                      {rank}
+                    </span>
                     {iconClassName && (
-                      <i className={`${iconClassName} text-xs`}></i>
+                      <i
+                        className={`wis-ranking-crown ${iconClassName} justify-self-center text-xs`}
+                        aria-hidden="true"
+                      ></i>
                     )}
                   </span>
-                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/80 text-[11px] shadow-sm">
+                  <span className="wis-ranking-mobile-profile wis-ranking-profile inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-white/80 text-[11px] shadow-sm">
                     {entry.profileIcon || defaultProfileIcon}
                   </span>
-                  <span className="text-sm font-extrabold leading-snug text-gray-900">
+                  <span className="wis-ranking-mobile-name text-sm font-extrabold leading-snug text-gray-900">
                     {entry.displayName || entry.studentName}
                   </span>
                   {entryRank && (
                     <span
-                      className={`inline-flex min-h-[1.25rem] shrink-0 items-center justify-center rounded-full border px-1.5 text-[10px] font-bold leading-none ${entryRank.badgeClass}`}
+                      className={`wis-ranking-mobile-badge wis-ranking-rank-badge inline-flex min-h-[1.25rem] shrink-0 items-center justify-center rounded-full border px-1.5 text-[10px] font-bold leading-none ${entryRank.badgeClass}`}
                     >
                       {entryRank.shortLabel || entryRank.label}
                     </span>
                   )}
-                  <span className="text-[11px] font-bold leading-snug text-gray-500">
+                  <span className="wis-ranking-mobile-class text-[11px] font-bold leading-snug text-gray-500">
                     {entry.grade}학년 {entry.class}반
                   </span>
-                  <span className="ml-auto shrink-0 text-xs font-black leading-snug text-blue-600">
+                  <span className="wis-ranking-mobile-score wis-ranking-score ml-auto shrink-0 text-xs font-black leading-snug text-blue-600">
                     {formatWis(entry.cumulativeEarned)}
                   </span>
                 </div>

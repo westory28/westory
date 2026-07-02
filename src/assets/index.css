@@ -1321,6 +1321,11 @@ button.lesson-core-point-floating-status:disabled {
   min-height: 0;
 }
 
+.student-dashboard-ranking,
+.teacher-dashboard-ranking {
+  overflow: visible;
+}
+
 .student-quiz-runner {
   flex: 1 1 auto;
   width: 100%;
@@ -2634,9 +2639,12 @@ button.lesson-core-point-floating-status:disabled {
     align-items: stretch;
   }
 
-  .teacher-dashboard-notice,
-  .teacher-dashboard-ranking {
+  .teacher-dashboard-notice {
     overflow: hidden;
+  }
+
+  .teacher-dashboard-ranking {
+    overflow: visible;
   }
 
   .teacher-dashboard-calendar .student-calendar-section,
@@ -2689,13 +2697,11 @@ button.lesson-core-point-floating-status:disabled {
   }
 
   .teacher-dashboard-ranking .wis-ranking-panel {
-    overflow: hidden;
+    overflow: visible;
   }
 
   .teacher-dashboard-ranking .wis-ranking-list {
-    overflow-x: hidden;
-    overflow-y: auto;
-    padding-right: 0.125rem;
+    overflow: visible;
   }
 }
 
@@ -2721,6 +2727,23 @@ button.lesson-core-point-floating-status:disabled {
   box-shadow: 0 10px 20px rgba(37, 99, 235, 0.12);
 }
 
+.wis-ranking-panel {
+  overflow: visible;
+}
+
+.wis-ranking-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: -0.25rem;
+  padding: 0.25rem;
+  overflow: visible;
+}
+
+.wis-ranking-list > :not([hidden]) ~ :not([hidden]) {
+  margin-top: 0 !important;
+}
+
 .wis-ranking-row {
   --wis-ranking-accent-rgb: 37 99 235;
   --wis-ranking-row-border: rgba(37, 99, 235, 0.14);
@@ -2730,7 +2753,7 @@ button.lesson-core-point-floating-status:disabled {
   --wis-ranking-medal-ring: rgba(15, 23, 42, 0.12);
   position: relative;
   isolation: isolate;
-  overflow: hidden;
+  overflow: visible;
   transform: translateY(0);
   transition:
     transform 170ms ease,
@@ -2742,8 +2765,9 @@ button.lesson-core-point-floating-status:disabled {
 .wis-ranking-row::before {
   content: "";
   position: absolute;
-  inset: -28% -12%;
-  z-index: -1;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
   background:
     radial-gradient(
       closest-side at 16% 18%,
@@ -2761,6 +2785,11 @@ button.lesson-core-point-floating-status:disabled {
   transition:
     opacity 170ms ease,
     transform 170ms ease;
+}
+
+.wis-ranking-row > * {
+  position: relative;
+  z-index: 1;
 }
 
 .wis-ranking-row--rank-1 {
@@ -2908,15 +2937,15 @@ button.lesson-core-point-floating-status:disabled {
 
 @media (min-width: 640px) and (max-width: 1280px) {
   .wis-ranking-panel {
-    padding: clamp(0.65rem, 1.2vw, 0.9rem) !important;
+    padding: clamp(0.75rem, 1.2vw, 1rem) !important;
   }
 
   .wis-ranking-panel .mb-3 {
-    margin-bottom: clamp(0.45rem, 0.85vw, 0.65rem) !important;
+    margin-bottom: clamp(0.5rem, 0.85vw, 0.75rem) !important;
   }
 
   .wis-ranking-title {
-    font-size: clamp(0.98rem, 1.45vw, 1.15rem) !important;
+    font-size: clamp(1rem, 1.45vw, 1.15rem) !important;
     line-height: 1.15;
   }
 
@@ -2928,62 +2957,62 @@ button.lesson-core-point-floating-status:disabled {
   .wis-ranking-list {
     display: flex;
     flex-direction: column;
-    gap: clamp(0.42rem, 0.75vw, 0.55rem) !important;
+    gap: clamp(0.5rem, 0.75vw, 0.62rem) !important;
   }
 
   .wis-ranking-row {
     grid-template-columns:
-      clamp(2.45rem, 4vw, 3.25rem)
+      clamp(3.1rem, 5vw, 4.25rem)
       minmax(0, 1fr)
-      clamp(3.8rem, 6.8vw, 4.8rem)
-      clamp(4.2rem, 7vw, 5.4rem) !important;
+      clamp(4.6rem, 7vw, 5.75rem)
+      clamp(5.15rem, 8vw, 6.35rem) !important;
     grid-template-rows: auto !important;
     justify-content: stretch;
-    column-gap: clamp(0.32rem, 0.75vw, 0.62rem) !important;
+    column-gap: clamp(0.45rem, 0.85vw, 0.75rem) !important;
     row-gap: 0 !important;
     align-items: center;
     min-width: 0;
     max-width: 100%;
-    overflow: hidden;
+    overflow: visible;
     white-space: nowrap;
-    padding: clamp(0.38rem, 0.7vw, 0.45rem) clamp(0.35rem, 0.7vw, 0.55rem) !important;
+    padding: clamp(0.46rem, 0.78vw, 0.62rem) clamp(0.5rem, 0.85vw, 0.75rem) !important;
   }
 
   .wis-ranking-rank {
     grid-column: 1;
     grid-row: 1;
-    grid-template-columns: clamp(1.25rem, 2vw, 1.55rem) clamp(
-        0.42rem,
-        0.7vw,
-        0.62rem
+    grid-template-columns: clamp(1.65rem, 2.6vw, 2rem) clamp(
+        0.82rem,
+        1.35vw,
+        1.12rem
       ) !important;
-    gap: 0.04rem !important;
+    gap: clamp(0.18rem, 0.34vw, 0.32rem) !important;
     align-self: center;
   }
 
   .wis-ranking-rank > span {
-    width: clamp(1.25rem, 2vw, 1.55rem) !important;
-    height: clamp(1.25rem, 2vw, 1.55rem) !important;
-    font-size: clamp(0.54rem, 0.88vw, 0.68rem) !important;
+    width: clamp(1.65rem, 2.6vw, 2rem) !important;
+    height: clamp(1.65rem, 2.6vw, 2rem) !important;
+    font-size: clamp(0.72rem, 1vw, 0.88rem) !important;
   }
 
   .wis-ranking-rank > i {
-    font-size: clamp(0.46rem, 0.75vw, 0.62rem) !important;
+    font-size: clamp(0.72rem, 1vw, 0.94rem) !important;
   }
 
   .wis-ranking-student {
     grid-column: 2;
     grid-row: 1;
-    gap: clamp(0.14rem, 0.38vw, 0.28rem) !important;
+    gap: clamp(0.28rem, 0.48vw, 0.42rem) !important;
     align-self: center;
     min-width: 0;
     overflow: hidden;
   }
 
   .wis-ranking-profile {
-    width: clamp(0.84rem, 1.35vw, 1.12rem) !important;
-    height: clamp(0.84rem, 1.35vw, 1.12rem) !important;
-    font-size: clamp(0.48rem, 0.78vw, 0.66rem) !important;
+    width: clamp(1.18rem, 1.65vw, 1.5rem) !important;
+    height: clamp(1.18rem, 1.65vw, 1.5rem) !important;
+    font-size: clamp(0.68rem, 0.9vw, 0.85rem) !important;
   }
 
   .wis-ranking-name {
@@ -2993,15 +3022,15 @@ button.lesson-core-point-floating-status:disabled {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: clamp(0.58rem, 0.98vw, 0.78rem) !important;
-    line-height: 1.05;
+    font-size: clamp(0.8rem, 1.08vw, 0.95rem) !important;
+    line-height: 1.15;
   }
 
   .wis-ranking-rank-badge {
-    min-width: clamp(1.8rem, 3.2vw, 2.45rem) !important;
-    min-height: clamp(0.86rem, 1.45vw, 1.18rem) !important;
-    padding: 0 clamp(0.18rem, 0.45vw, 0.38rem) !important;
-    font-size: clamp(0.42rem, 0.72vw, 0.57rem) !important;
+    min-width: clamp(2.55rem, 3.8vw, 3.35rem) !important;
+    min-height: clamp(1.35rem, 1.75vw, 1.8rem) !important;
+    padding: 0 clamp(0.36rem, 0.55vw, 0.5rem) !important;
+    font-size: clamp(0.6rem, 0.8vw, 0.66rem) !important;
   }
 
   .wis-ranking-class {
@@ -3011,8 +3040,8 @@ button.lesson-core-point-floating-status:disabled {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: clamp(0.5rem, 0.82vw, 0.66rem) !important;
-    line-height: 1.1;
+    font-size: clamp(0.68rem, 0.9vw, 0.82rem) !important;
+    line-height: 1.15;
   }
 
   .wis-ranking-score {
@@ -3021,43 +3050,186 @@ button.lesson-core-point-floating-status:disabled {
     align-self: center;
     white-space: nowrap;
     text-align: right;
-    font-size: clamp(0.55rem, 0.9vw, 0.76rem) !important;
-    line-height: 1.05;
+    font-size: clamp(0.74rem, 0.98vw, 0.9rem) !important;
+    line-height: 1.12;
   }
 }
 
 @media (max-width: 639px) {
   .wis-ranking-mobile-row {
-    gap: clamp(0.2rem, 1.8vw, 0.38rem) !important;
+    display: grid !important;
+    grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "rank profile name badge score"
+      "rank profile class class score";
+    align-items: center;
+    column-gap: clamp(0.26rem, 1.8vw, 0.45rem) !important;
+    row-gap: 0.12rem !important;
     min-width: 0;
-    overflow: hidden;
-    white-space: nowrap;
+    overflow: visible;
+    white-space: normal;
   }
 
-  .wis-ranking-mobile-row > span {
-    flex-shrink: 0;
+  .wis-ranking-mobile-rank-cluster {
+    grid-area: rank;
+    grid-template-columns: clamp(1.45rem, 6vw, 1.62rem) clamp(
+        0.82rem,
+        3.2vw,
+        1rem
+      ) !important;
+    gap: clamp(0.16rem, 1vw, 0.28rem) !important;
+    min-width: clamp(2.5rem, 10vw, 2.9rem);
   }
 
-  .wis-ranking-mobile-row > span:nth-child(4) {
-    flex: 1 1 auto;
+  .wis-ranking-mobile-rank-cluster .wis-ranking-rank-medal {
+    width: clamp(1.45rem, 6vw, 1.62rem) !important;
+    height: clamp(1.45rem, 6vw, 1.62rem) !important;
+    font-size: clamp(0.68rem, 2.9vw, 0.78rem) !important;
+  }
+
+  .wis-ranking-mobile-rank-cluster .wis-ranking-crown {
+    font-size: clamp(0.66rem, 2.8vw, 0.78rem) !important;
+  }
+
+  .wis-ranking-mobile-profile {
+    grid-area: profile;
+    width: clamp(1.12rem, 4.8vw, 1.3rem) !important;
+    height: clamp(1.12rem, 4.8vw, 1.3rem) !important;
+    font-size: clamp(0.66rem, 2.8vw, 0.75rem) !important;
+  }
+
+  .wis-ranking-mobile-name {
+    grid-area: name;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: clamp(0.66rem, 3vw, 0.86rem) !important;
+    font-size: clamp(0.78rem, 3.35vw, 0.92rem) !important;
+    line-height: 1.15;
   }
 
-  .wis-ranking-mobile-row > span:nth-last-child(2) {
-    flex: 0 1 auto;
+  .wis-ranking-mobile-badge {
+    grid-area: badge;
+    max-width: clamp(2.65rem, 16vw, 3.4rem);
+    min-height: clamp(1.12rem, 4.8vw, 1.3rem) !important;
+    padding-inline: clamp(0.28rem, 1.4vw, 0.42rem) !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: clamp(0.56rem, 2.35vw, 0.66rem) !important;
+  }
+
+  .wis-ranking-mobile-class {
+    grid-area: class;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
-    font-size: clamp(0.58rem, 2.6vw, 0.7rem) !important;
+    white-space: nowrap;
+    font-size: clamp(0.62rem, 2.65vw, 0.74rem) !important;
+    line-height: 1.12;
   }
 
-  .wis-ranking-mobile-row > span:last-child {
-    margin-left: auto !important;
-    font-size: clamp(0.62rem, 2.8vw, 0.75rem) !important;
+  .wis-ranking-mobile-score {
+    grid-area: score;
+    align-self: center;
+    margin-left: 0 !important;
+    white-space: nowrap;
+    font-size: clamp(0.7rem, 3vw, 0.82rem) !important;
+    line-height: 1.12;
+  }
+}
+
+@media (min-width: 640px) and (max-width: 900px) {
+  .wis-ranking-row {
+    display: block !important;
+    padding: clamp(0.48rem, 1.3vw, 0.62rem) clamp(0.55rem, 1.6vw, 0.75rem) !important;
+  }
+
+  .wis-ranking-mobile-row {
+    display: grid !important;
+    grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "rank profile name badge score"
+      "rank profile class class score";
+    align-items: center;
+    column-gap: clamp(0.32rem, 0.95vw, 0.55rem) !important;
+    row-gap: 0.14rem !important;
+    min-width: 0;
+    overflow: visible;
+    white-space: normal;
+  }
+
+  .wis-ranking-row > .wis-ranking-rank,
+  .wis-ranking-row > .wis-ranking-student,
+  .wis-ranking-row > .wis-ranking-class,
+  .wis-ranking-row > .wis-ranking-score {
+    display: none !important;
+  }
+
+  .wis-ranking-mobile-rank-cluster {
+    grid-area: rank;
+    grid-template-columns: clamp(1.55rem, 3.2vw, 1.75rem) clamp(
+        0.9rem,
+        1.8vw,
+        1.05rem
+      ) !important;
+    gap: clamp(0.18rem, 0.55vw, 0.3rem) !important;
+    min-width: clamp(2.72rem, 5.3vw, 3.05rem);
+  }
+
+  .wis-ranking-mobile-rank-cluster .wis-ranking-rank-medal {
+    width: clamp(1.55rem, 3.2vw, 1.75rem) !important;
+    height: clamp(1.55rem, 3.2vw, 1.75rem) !important;
+    font-size: clamp(0.72rem, 1.35vw, 0.82rem) !important;
+  }
+
+  .wis-ranking-mobile-rank-cluster .wis-ranking-crown {
+    font-size: clamp(0.72rem, 1.35vw, 0.86rem) !important;
+  }
+
+  .wis-ranking-mobile-profile {
+    grid-area: profile;
+    width: clamp(1.18rem, 2.45vw, 1.35rem) !important;
+    height: clamp(1.18rem, 2.45vw, 1.35rem) !important;
+    font-size: clamp(0.68rem, 1.25vw, 0.8rem) !important;
+  }
+
+  .wis-ranking-mobile-name {
+    grid-area: name;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: clamp(0.82rem, 1.75vw, 0.95rem) !important;
+    line-height: 1.15;
+  }
+
+  .wis-ranking-mobile-badge {
+    grid-area: badge;
+    max-width: clamp(2.9rem, 6.5vw, 3.45rem);
+    min-height: clamp(1.16rem, 2.45vw, 1.35rem) !important;
+    padding-inline: clamp(0.32rem, 0.75vw, 0.45rem) !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: clamp(0.58rem, 1.15vw, 0.66rem) !important;
+  }
+
+  .wis-ranking-mobile-class {
+    grid-area: class;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: clamp(0.66rem, 1.35vw, 0.78rem) !important;
+    line-height: 1.12;
+  }
+
+  .wis-ranking-mobile-score {
+    grid-area: score;
+    align-self: center;
+    margin-left: 0 !important;
+    white-space: nowrap;
+    font-size: clamp(0.74rem, 1.55vw, 0.88rem) !important;
+    line-height: 1.12;
   }
 }
 
@@ -3466,13 +3638,11 @@ button.lesson-core-point-floating-status:disabled {
   }
 
   .teacher-dashboard-ranking .wis-ranking-panel {
-    overflow: hidden;
+    overflow: visible;
   }
 
   .teacher-dashboard-ranking .wis-ranking-list {
-    overflow-x: hidden;
-    overflow-y: auto;
-    padding-right: 0.125rem;
+    overflow: visible;
   }
 }
 
