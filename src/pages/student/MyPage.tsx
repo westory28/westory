@@ -235,6 +235,26 @@ interface ReviewProgressBigGroup {
   mids: ReviewProgressMidGroup[];
 }
 
+interface WrongNoteSmallScopeOption {
+  id: string;
+  title: string;
+  order: number;
+}
+
+interface WrongNoteMidScopeOption {
+  id: string;
+  title: string;
+  order: number;
+  smalls: WrongNoteSmallScopeOption[];
+}
+
+interface WrongNoteBigScopeOption {
+  id: string;
+  title: string;
+  order: number;
+  mids: WrongNoteMidScopeOption[];
+}
+
 const DEFAULT_POINT_WALLET: PointWallet = {
   uid: "",
   studentName: "",
@@ -288,6 +308,16 @@ const compareReviewGroupOrder = (
 ) =>
   left.order - right.order ||
   left.label.localeCompare(right.label, "ko", {
+    numeric: true,
+    sensitivity: "base",
+  });
+
+const compareScopeOptionOrder = (
+  left: { title: string; order: number },
+  right: { title: string; order: number },
+) =>
+  left.order - right.order ||
+  left.title.localeCompare(right.title, "ko", {
     numeric: true,
     sensitivity: "base",
   });
@@ -350,6 +380,24 @@ const wrongNoteItemMatchesSelectedUnit = (
   ].includes(selectedUnitId);
 };
 
+const wrongNoteItemMatchesSmallAssessmentScope = (
+  item: WrongNoteItem,
+  selectedBigUnitId: string,
+  selectedMidUnitId: string,
+  selectedUnitId: string,
+) => {
+  if (selectedBigUnitId !== "all" && item.bigUnitId !== selectedBigUnitId) {
+    return false;
+  }
+  if (selectedMidUnitId !== "all" && item.midUnitId !== selectedMidUnitId) {
+    return false;
+  }
+  if (selectedUnitId !== "all") {
+    return wrongNoteItemMatchesSelectedUnit(item, selectedUnitId);
+  }
+  return true;
+};
+
 const quizAttemptMatchesSelectedUnit = (
   attempt: QuizAttemptReview,
   selectedUnitId: string,
@@ -376,6 +424,37 @@ const quizAttemptMatchesSelectedUnit = (
       wrongNoteItemMatchesSelectedUnit(item, selectedUnitId),
     )
   );
+};
+
+const quizAttemptMatchesSmallAssessmentScope = (
+  attempt: QuizAttemptReview,
+  selectedBigUnitId: string,
+  selectedMidUnitId: string,
+  selectedUnitId: string,
+) => {
+  if (attempt.allItems.length > 0) {
+    return attempt.allItems.some((item) =>
+      wrongNoteItemMatchesSmallAssessmentScope(
+        item,
+        selectedBigUnitId,
+        selectedMidUnitId,
+        selectedUnitId,
+      ),
+    );
+  }
+
+  if (selectedBigUnitId !== "all" && attempt.bigUnitId !== selectedBigUnitId) {
+    return false;
+  }
+  if (selectedMidUnitId !== "all" && attempt.midUnitId !== selectedMidUnitId) {
+    return false;
+  }
+  if (selectedUnitId !== "all") {
+    return [attempt.smallUnitId, attempt.midUnitId, attempt.unitId].includes(
+      selectedUnitId,
+    );
+  }
+  return true;
 };
 
 const getWrongNoteScopeFromAttempt = (
@@ -705,6 +784,8 @@ const MyPage: React.FC = () => {
 
   const [menu, setMenu] = useState<MainMenu>("profile");
   const [categoryTab, setCategoryTab] = useState<CategoryTab | "all">("all");
+  const [selectedBigUnitId, setSelectedBigUnitId] = useState<string>("all");
+  const [selectedMidUnitId, setSelectedMidUnitId] = useState<string>("all");
   const [selectedUnitId, setSelectedUnitId] = useState<string>("all");
 
   const [profile, setProfile] = useState<UserProfileDoc | null>(null);
@@ -782,6 +863,8 @@ const MyPage: React.FC = () => {
 
   const selectWrongNoteCategory = (nextCategory: CategoryTab | "all") => {
     setCategoryTab(nextCategory);
+    setSelectedBigUnitId("all");
+    setSelectedMidUnitId("all");
     setSelectedUnitId("all");
   };
 
@@ -816,6 +899,11 @@ const MyPage: React.FC = () => {
       attempts[0];
     const nextScope = getWrongNoteScopeFromAttempt(targetAttempt);
     setCategoryTab(nextScope.category);
+    const scopeItem = isSmallUnitAssessmentCategory(nextScope.category)
+      ? getAttemptSmallUnitScopeItem(targetAttempt)
+      : null;
+    setSelectedBigUnitId(scopeItem?.bigUnitId || "all");
+    setSelectedMidUnitId(scopeItem?.midUnitId || "all");
     setSelectedUnitId(nextScope.unitId);
     wrongNoteDefaultAppliedRef.current = true;
   };
@@ -1684,12 +1772,27 @@ const MyPage: React.FC = () => {
 
   const filteredWrongItems = useMemo(
     () =>
-      wrongItems.filter(
-        (item) =>
-          (categoryTab === "all" || item.category === categoryTab) &&
-          wrongNoteItemMatchesSelectedUnit(item, selectedUnitId),
-      ),
-    [wrongItems, categoryTab, selectedUnitId],
+      wrongItems.filter((item) => {
+        if (categoryTab !== "all" && item.category !== categoryTab) {
+          return false;
+        }
+        if (isSmallUnitAssessmentCategory(categoryTab)) {
+          return wrongNoteItemMatchesSmallAssessmentScope(
+            item,
+            selectedBigUnitId,
+            selectedMidUnitId,
+            selectedUnitId,
+          );
+        }
+        return wrongNoteItemMatchesSelectedUnit(item, selectedUnitId);
+      }),
+    [
+      wrongItems,
+      categoryTab,
+      selectedBigUnitId,
+      selectedMidUnitId,
+      selectedUnitId,
+    ],
   );
 
   const wrongGroupEntries = useMemo(() => {
@@ -1735,6 +1838,131 @@ const MyPage: React.FC = () => {
     }));
   }, [trendPoints, unitTitleMap]);
 
+  const wrongNoteUnitHierarchy = useMemo<WrongNoteBigScopeOption[]>(() => {
+    if (!isSmallUnitAssessmentCategory(categoryTab)) return [];
+
+    const bigMap = new Map<
+      string,
+      WrongNoteBigScopeOption & {
+        midMap: Map<
+          string,
+          WrongNoteMidScopeOption & {
+            smallMap: Map<string, WrongNoteSmallScopeOption>;
+          }
+        >;
+      }
+    >();
+
+    const addItem = (item: WrongNoteItem) => {
+      if (item.category !== categoryTab) return;
+      const bigId = item.bigUnitId || item.bigUnitTitle || "unknown-big";
+      const midId = item.midUnitId || item.midUnitTitle || "unknown-mid";
+      const smallId = getWrongNoteItemScopeId(item);
+      if (!smallId) return;
+
+      const bigTitle =
+        item.bigUnitTitle || unitTitleMap[bigId] || "대단원 미지정";
+      const midTitle =
+        item.midUnitTitle || unitTitleMap[midId] || "중단원 미지정";
+      const smallTitle =
+        getWrongNoteItemScopeTitle(item) ||
+        unitTitleMap[smallId] ||
+        "소단원 미지정";
+      const bigOrder = item.bigUnitOrder;
+      const midOrder = item.midUnitOrder;
+      const smallOrder = item.smallUnitOrder;
+
+      const bigGroup = bigMap.get(bigId) || {
+        id: bigId,
+        title: bigTitle,
+        order: bigOrder,
+        mids: [],
+        midMap: new Map(),
+      };
+      bigGroup.title = bigTitle;
+      bigGroup.order = Math.min(bigGroup.order, bigOrder);
+
+      const midGroup = bigGroup.midMap.get(midId) || {
+        id: midId,
+        title: midTitle,
+        order: midOrder,
+        smalls: [],
+        smallMap: new Map(),
+      };
+      midGroup.title = midTitle;
+      midGroup.order = Math.min(midGroup.order, midOrder);
+
+      const existingSmall = midGroup.smallMap.get(smallId);
+      if (!existingSmall || existingSmall.order > smallOrder) {
+        midGroup.smallMap.set(smallId, {
+          id: smallId,
+          title: smallTitle,
+          order: smallOrder,
+        });
+      }
+
+      bigGroup.midMap.set(midId, midGroup);
+      bigMap.set(bigId, bigGroup);
+    };
+
+    const addAttemptFallback = (attempt: QuizAttemptReview) => {
+      if (attempt.category !== categoryTab || attempt.allItems.length) return;
+      addItem({
+        key: attempt.key,
+        questionNumber: 0,
+        type: "",
+        question: "",
+        passage: "",
+        image: "",
+        options: [],
+        answer: "",
+        explanation: "",
+        userAnswer: "",
+        correct: false,
+        unitId: attempt.unitId,
+        unitTitle: attempt.unitTitle,
+        bigUnitId: attempt.bigUnitId,
+        bigUnitTitle: attempt.bigUnitTitle,
+        midUnitId: attempt.midUnitId,
+        midUnitTitle: attempt.midUnitTitle,
+        smallUnitId: attempt.smallUnitId,
+        smallUnitTitle: attempt.smallUnitTitle,
+        bigUnitOrder: attempt.bigUnitOrder,
+        midUnitOrder: attempt.midUnitOrder,
+        smallUnitOrder: attempt.smallUnitOrder,
+        hierarchyLabel: "",
+        category: attempt.category,
+        categoryLabel: attempt.categoryLabel,
+        dateText: attempt.dateText,
+      });
+    };
+
+    quizAttempts.forEach((attempt) => {
+      if (attempt.category !== categoryTab) return;
+      attempt.allItems.forEach(addItem);
+      addAttemptFallback(attempt);
+    });
+    wrongItems.forEach(addItem);
+
+    return Array.from(bigMap.values())
+      .sort(compareScopeOptionOrder)
+      .map((bigGroup) => ({
+        id: bigGroup.id,
+        title: bigGroup.title,
+        order: bigGroup.order,
+        mids: Array.from(bigGroup.midMap.values())
+          .sort(compareScopeOptionOrder)
+          .map((midGroup) => ({
+            id: midGroup.id,
+            title: midGroup.title,
+            order: midGroup.order,
+            smalls: Array.from(midGroup.smallMap.values()).sort(
+              compareScopeOptionOrder,
+            ),
+          })),
+      }));
+  }, [wrongItems, quizAttempts, unitTitleMap, categoryTab]);
+
   const availableUnitTabs = useMemo(() => {
     if (categoryTab === "exam_prep") {
       const rounds = new Map<string, string>();
@@ -1751,59 +1979,7 @@ const MyPage: React.FC = () => {
     }
 
     if (isSmallUnitAssessmentCategory(categoryTab)) {
-      const source = new Map<string, { title: string; order: number }>();
-      const rememberSmallScope = (id: string, title: string, order: number) => {
-        const existing = source.get(id);
-        if (existing && existing.order <= order) return;
-        source.set(id, { title, order });
-      };
-      const addItem = (item: WrongNoteItem) => {
-        if (item.category !== categoryTab) return;
-        const id = getWrongNoteItemScopeId(item);
-        if (!id) return;
-        rememberSmallScope(
-          id,
-          getWrongNoteItemScopeTitle(item) || unitTitleMap[id] || id,
-          item.smallUnitOrder,
-        );
-      };
-      const addAttemptFallback = (attempt: QuizAttemptReview) => {
-        if (attempt.category !== categoryTab || attempt.allItems.length) return;
-        const id = attempt.smallUnitId || attempt.midUnitId || attempt.unitId;
-        if (!id) return;
-        rememberSmallScope(
-          id,
-          attempt.smallUnitTitle ||
-            attempt.midUnitTitle ||
-            attempt.unitTitle ||
-            unitTitleMap[id] ||
-            id,
-          attempt.smallUnitOrder,
-        );
-      };
-
-      quizAttempts.forEach((attempt) => {
-        if (attempt.category !== categoryTab) return;
-        attempt.allItems.forEach(addItem);
-        addAttemptFallback(attempt);
-      });
-      wrongItems.forEach(addItem);
-
-      return Array.from(source.entries())
-        .map(([id, value]) => ({
-          id,
-          title: value.title || unitTitleMap[id] || "소단원 미지정",
-          order: value.order,
-        }))
-        .sort(
-          (left, right) =>
-            left.order - right.order ||
-            left.title.localeCompare(right.title, "ko", {
-              numeric: true,
-              sensitivity: "base",
-            }),
-        )
-        .map(({ id, title }) => ({ id, title }));
+      return [];
     }
 
     const source = new Map<string, string>();
@@ -1852,6 +2028,14 @@ const MyPage: React.FC = () => {
         if (categoryTab !== "all" && attempt.category !== categoryTab) {
           return false;
         }
+        if (isSmallUnitAssessmentCategory(categoryTab)) {
+          return quizAttemptMatchesSmallAssessmentScope(
+            attempt,
+            selectedBigUnitId,
+            selectedMidUnitId,
+            selectedUnitId,
+          );
+        }
         if (selectedUnitId === "all") return true;
         const selectedRoundLabel = getMockRoundLabelFromScope(selectedUnitId);
         if (selectedRoundLabel) {
@@ -1865,7 +2049,13 @@ const MyPage: React.FC = () => {
         }
         return quizAttemptMatchesSelectedUnit(attempt, selectedUnitId);
       }),
-    [quizAttempts, categoryTab, selectedUnitId],
+    [
+      quizAttempts,
+      categoryTab,
+      selectedBigUnitId,
+      selectedMidUnitId,
+      selectedUnitId,
+    ],
   );
 
   const quizAttemptHierarchy = useMemo(() => {
@@ -2313,6 +2503,13 @@ const MyPage: React.FC = () => {
         item.category === "exam_prep"
       ) {
         setCategoryTab(item.category);
+      }
+      if (isSmallUnitAssessmentCategory(item.category)) {
+        setSelectedBigUnitId(item.bigUnitId || "all");
+        setSelectedMidUnitId(item.midUnitId || "all");
+      } else {
+        setSelectedBigUnitId("all");
+        setSelectedMidUnitId("all");
       }
       setSelectedUnitId(getWrongNoteItemScopeId(item) || item.unitId);
       setExpandedWrongKey(item.key);
@@ -2802,18 +2999,38 @@ const MyPage: React.FC = () => {
     { key: "wrong", label: "문제 풀이", onClick: startReview },
     { key: "retry", label: "다시 도전", onClick: openQuiz },
   ];
+  const isSmallUnitFilterMode = isSmallUnitAssessmentCategory(categoryTab);
+  const selectedBigScope =
+    wrongNoteUnitHierarchy.find((item) => item.id === selectedBigUnitId) ||
+    null;
+  const selectedMidScope =
+    selectedBigScope?.mids.find((item) => item.id === selectedMidUnitId) ||
+    null;
   const wrongNoteUnitFilterLabel =
-    categoryTab === "exam_prep"
-      ? "회차"
-      : isSmallUnitAssessmentCategory(categoryTab)
-        ? "소단원"
-        : "목차";
+    categoryTab === "exam_prep" ? "회차" : "목차";
   const wrongNoteAllUnitFilterLabel =
-    categoryTab === "exam_prep"
-      ? "전체 회차"
-      : isSmallUnitAssessmentCategory(categoryTab)
-        ? "전체 소단원"
-        : "전체 목차";
+    categoryTab === "exam_prep" ? "전체 회차" : "전체 목차";
+  const wrongNoteScopeButtonClass = (active: boolean) =>
+    `rounded-full px-4 py-2 text-sm font-extrabold transition ${
+      active
+        ? "bg-slate-900 text-white"
+        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+    }`;
+  const renderWrongNoteFilterRow = (
+    step: number,
+    label: string,
+    children: React.ReactNode,
+  ) => (
+    <div className="grid gap-3 border-t border-slate-100 pt-4 lg:grid-cols-[6.25rem_minmax(0,1fr)] lg:items-center">
+      <div className="flex items-center gap-2 text-sm font-black text-slate-500">
+        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-xs text-slate-600">
+          {step}
+        </span>
+        {label}
+      </div>
+      <div className="flex flex-wrap gap-2">{children}</div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -3931,41 +4148,139 @@ const MyPage: React.FC = () => {
                       </div>
                     </div>
 
-                    <div className="grid gap-3 border-t border-slate-100 pt-4 lg:grid-cols-[6.25rem_minmax(0,1fr)] lg:items-center">
-                      <div className="flex items-center gap-2 text-sm font-black text-slate-500">
-                        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-xs text-slate-600">
-                          2
-                        </span>
-                        {wrongNoteUnitFilterLabel}
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedUnitId("all")}
-                          className={`rounded-full px-4 py-2 text-sm font-extrabold transition ${
-                            selectedUnitId === "all"
-                              ? "bg-slate-900 text-white"
-                              : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                          }`}
-                        >
-                          {wrongNoteAllUnitFilterLabel}
-                        </button>
-                        {availableUnitTabs.map((tab) => (
+                    {isSmallUnitFilterMode ? (
+                      <>
+                        {renderWrongNoteFilterRow(
+                          2,
+                          "대단원",
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedBigUnitId("all");
+                                setSelectedMidUnitId("all");
+                                setSelectedUnitId("all");
+                              }}
+                              className={wrongNoteScopeButtonClass(
+                                selectedBigUnitId === "all",
+                              )}
+                            >
+                              전체 대단원
+                            </button>
+                            {wrongNoteUnitHierarchy.map((big) => (
+                              <button
+                                key={big.id}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedBigUnitId(big.id);
+                                  setSelectedMidUnitId("all");
+                                  setSelectedUnitId("all");
+                                }}
+                                className={wrongNoteScopeButtonClass(
+                                  selectedBigUnitId === big.id,
+                                )}
+                              >
+                                {big.title}
+                              </button>
+                            ))}
+                          </>,
+                        )}
+
+                        {selectedBigScope &&
+                          selectedBigUnitId !== "all" &&
+                          renderWrongNoteFilterRow(
+                            3,
+                            "중단원",
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedMidUnitId("all");
+                                  setSelectedUnitId("all");
+                                }}
+                                className={wrongNoteScopeButtonClass(
+                                  selectedMidUnitId === "all",
+                                )}
+                              >
+                                전체 중단원
+                              </button>
+                              {selectedBigScope.mids.map((mid) => (
+                                <button
+                                  key={mid.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedMidUnitId(mid.id);
+                                    setSelectedUnitId("all");
+                                  }}
+                                  className={wrongNoteScopeButtonClass(
+                                    selectedMidUnitId === mid.id,
+                                  )}
+                                >
+                                  {mid.title}
+                                </button>
+                              ))}
+                            </>,
+                          )}
+
+                        {selectedMidScope &&
+                          selectedMidUnitId !== "all" &&
+                          renderWrongNoteFilterRow(
+                            4,
+                            "소단원",
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedUnitId("all")}
+                                className={wrongNoteScopeButtonClass(
+                                  selectedUnitId === "all",
+                                )}
+                              >
+                                전체 소단원
+                              </button>
+                              {selectedMidScope.smalls.map((small) => (
+                                <button
+                                  key={small.id}
+                                  type="button"
+                                  onClick={() => setSelectedUnitId(small.id)}
+                                  className={wrongNoteScopeButtonClass(
+                                    selectedUnitId === small.id,
+                                  )}
+                                >
+                                  {small.title}
+                                </button>
+                              ))}
+                            </>,
+                          )}
+                      </>
+                    ) : (
+                      renderWrongNoteFilterRow(
+                        2,
+                        wrongNoteUnitFilterLabel,
+                        <>
                           <button
-                            key={tab.id}
                             type="button"
-                            onClick={() => setSelectedUnitId(tab.id)}
-                            className={`rounded-full px-4 py-2 text-sm font-extrabold transition ${
-                              selectedUnitId === tab.id
-                                ? "bg-slate-900 text-white"
-                                : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                            }`}
+                            onClick={() => setSelectedUnitId("all")}
+                            className={wrongNoteScopeButtonClass(
+                              selectedUnitId === "all",
+                            )}
                           >
-                            {tab.title}
+                            {wrongNoteAllUnitFilterLabel}
                           </button>
-                        ))}
-                      </div>
-                    </div>
+                          {availableUnitTabs.map((tab) => (
+                            <button
+                              key={tab.id}
+                              type="button"
+                              onClick={() => setSelectedUnitId(tab.id)}
+                              className={wrongNoteScopeButtonClass(
+                                selectedUnitId === tab.id,
+                              )}
+                            >
+                              {tab.title}
+                            </button>
+                          ))}
+                        </>,
+                      )
+                    )}
                   </div>
                 </section>
 
