@@ -141,6 +141,9 @@ interface UnitParentMeta {
   midTitle: string;
   smallId?: string;
   smallTitle?: string;
+  bigOrder?: number;
+  midOrder?: number;
+  smallOrder?: number;
 }
 
 interface ReviewChoiceOption {
@@ -168,6 +171,9 @@ interface WrongNoteItem {
   midUnitTitle: string;
   smallUnitId: string;
   smallUnitTitle: string;
+  bigUnitOrder: number;
+  midUnitOrder: number;
+  smallUnitOrder: number;
   hierarchyLabel: string;
   category: CategoryTab | "other";
   categoryLabel: string;
@@ -195,6 +201,9 @@ interface QuizAttemptReview {
   midUnitTitle: string;
   smallUnitId: string;
   smallUnitTitle: string;
+  bigUnitOrder: number;
+  midUnitOrder: number;
+  smallUnitOrder: number;
   category: CategoryTab | "other";
   categoryLabel: string;
   groupLabel: string;
@@ -208,18 +217,21 @@ interface QuizAttemptReview {
 interface ReviewProgressMidGroup {
   key: string;
   label: string;
+  order: number;
   smalls: ReviewProgressSmallGroup[];
 }
 
 interface ReviewProgressSmallGroup {
   key: string;
   label: string;
+  order: number;
   items: Array<{ item: WrongNoteItem; index: number }>;
 }
 
 interface ReviewProgressBigGroup {
   key: string;
   label: string;
+  order: number;
   mids: ReviewProgressMidGroup[];
 }
 
@@ -267,6 +279,18 @@ const getMockRoundLabelFromScope = (scopeId: string) =>
   scopeId.startsWith(MOCK_ROUND_SCOPE_PREFIX)
     ? scopeId.slice(MOCK_ROUND_SCOPE_PREFIX.length)
     : "";
+
+const REVIEW_GROUP_FALLBACK_ORDER = Number.MAX_SAFE_INTEGER;
+
+const compareReviewGroupOrder = (
+  left: { label: string; order: number },
+  right: { label: string; order: number },
+) =>
+  left.order - right.order ||
+  left.label.localeCompare(right.label, "ko", {
+    numeric: true,
+    sensitivity: "base",
+  });
 
 const getInitialReviewIndex = (attempt: QuizAttemptReview | null) => {
   if (!attempt?.allItems.length) return 0;
@@ -400,19 +424,27 @@ const getReviewProgressGroups = (
     const bigGroup = grouped.get(bigKey) || {
       key: bigKey,
       label: bigLabel,
+      order: item.bigUnitOrder,
       mids: [],
     };
+    bigGroup.order = Math.min(bigGroup.order, item.bigUnitOrder);
     const existingMid = bigGroup.mids.find((mid) => mid.key === midKey);
     if (existingMid) {
+      existingMid.order = Math.min(existingMid.order, item.midUnitOrder);
       const existingSmall = existingMid.smalls.find(
         (small) => small.key === smallKey,
       );
       if (existingSmall) {
+        existingSmall.order = Math.min(
+          existingSmall.order,
+          item.smallUnitOrder,
+        );
         existingSmall.items.push({ item, index });
       } else {
         existingMid.smalls.push({
           key: smallKey,
           label: smallLabel,
+          order: item.smallUnitOrder,
           items: [{ item, index }],
         });
       }
@@ -420,10 +452,12 @@ const getReviewProgressGroups = (
       bigGroup.mids.push({
         key: midKey,
         label: midLabel,
+        order: item.midUnitOrder,
         smalls: [
           {
             key: smallKey,
             label: smallLabel,
+            order: item.smallUnitOrder,
             items: [{ item, index }],
           },
         ],
@@ -431,7 +465,17 @@ const getReviewProgressGroups = (
     }
     grouped.set(bigKey, bigGroup);
   });
-  return Array.from(grouped.values());
+  return Array.from(grouped.values())
+    .sort(compareReviewGroupOrder)
+    .map((bigGroup) => ({
+      ...bigGroup,
+      mids: [...bigGroup.mids]
+        .sort(compareReviewGroupOrder)
+        .map((midGroup) => ({
+          ...midGroup,
+          smalls: [...midGroup.smalls].sort(compareReviewGroupOrder),
+        })),
+    }));
 };
 
 const getCategoryLabel = (category?: string) => {
@@ -966,22 +1010,26 @@ const MyPage: React.FC = () => {
     };
     if (treeSnap.exists()) {
       const tree = treeSnap.data().tree || [];
-      tree.forEach((big: any) => {
+      tree.forEach((big: any, bigIndex: number) => {
         rememberTitle(big?.id, big?.title);
-        (big.children || []).forEach((mid: any) => {
+        (big.children || []).forEach((mid: any, midIndex: number) => {
           const midMeta = {
             bigId: String(big.id || ""),
             bigTitle: String(big.title || ""),
             midId: String(mid.id || ""),
             midTitle: String(mid.title || ""),
+            bigOrder: bigIndex,
+            midOrder: midIndex,
+            smallOrder: REVIEW_GROUP_FALLBACK_ORDER,
           };
           rememberTitle(mid?.id, mid?.title);
           rememberParent(mid?.id, mid?.title, midMeta);
-          (mid.children || []).forEach((small: any) => {
+          (mid.children || []).forEach((small: any, smallIndex: number) => {
             const smallMeta = {
               ...midMeta,
               smallId: String(small.id || ""),
               smallTitle: String(small.title || ""),
+              smallOrder: smallIndex,
             };
             rememberTitle(small?.id, small?.title);
             rememberParent(small?.id, small?.title, smallMeta);
@@ -1247,6 +1295,12 @@ const MyPage: React.FC = () => {
         const smallUnitTitle = smallUnitId
           ? titleMap[smallUnitId] || parentMeta?.smallTitle || smallUnitId
           : parentMeta?.smallTitle || "";
+        const bigUnitOrder =
+          parentMeta?.bigOrder ?? REVIEW_GROUP_FALLBACK_ORDER;
+        const midUnitOrder =
+          parentMeta?.midOrder ?? REVIEW_GROUP_FALLBACK_ORDER;
+        const smallUnitOrder =
+          parentMeta?.smallOrder ?? REVIEW_GROUP_FALLBACK_ORDER;
         const hierarchyLabel = buildHierarchyLabel(
           bigUnitTitle,
           midUnitTitle,
@@ -1287,6 +1341,9 @@ const MyPage: React.FC = () => {
           midUnitTitle,
           smallUnitId,
           smallUnitTitle,
+          bigUnitOrder,
+          midUnitOrder,
+          smallUnitOrder,
           hierarchyLabel,
           category: log.category,
           categoryLabel: getCategoryLabel(log.category),
@@ -1360,6 +1417,20 @@ const MyPage: React.FC = () => {
           const smallUnitTitle = isMockAttempt
             ? ""
             : primaryAttemptItem?.smallUnitTitle || "";
+          const bigUnitOrder = isMockAttempt
+            ? REVIEW_GROUP_FALLBACK_ORDER
+            : (firstAttemptItem?.bigUnitOrder ??
+              attemptParentMeta?.bigOrder ??
+              REVIEW_GROUP_FALLBACK_ORDER);
+          const midUnitOrder = isMockAttempt
+            ? REVIEW_GROUP_FALLBACK_ORDER
+            : (firstAttemptItem?.midUnitOrder ??
+              attemptParentMeta?.midOrder ??
+              REVIEW_GROUP_FALLBACK_ORDER);
+          const smallUnitOrder = isMockAttempt
+            ? REVIEW_GROUP_FALLBACK_ORDER
+            : (primaryAttemptItem?.smallUnitOrder ??
+              REVIEW_GROUP_FALLBACK_ORDER);
 
           return {
             key: result.id || `${roundLabel}_${dateText}_${resultIndex}`,
@@ -1373,6 +1444,9 @@ const MyPage: React.FC = () => {
             midUnitTitle,
             smallUnitId,
             smallUnitTitle,
+            bigUnitOrder,
+            midUnitOrder,
+            smallUnitOrder,
             category,
             categoryLabel,
             groupLabel: isMockAttempt ? roundLabel : unitTitle,
@@ -1677,27 +1751,34 @@ const MyPage: React.FC = () => {
     }
 
     if (isSmallUnitAssessmentCategory(categoryTab)) {
-      const source = new Map<string, string>();
+      const source = new Map<string, { title: string; order: number }>();
+      const rememberSmallScope = (id: string, title: string, order: number) => {
+        const existing = source.get(id);
+        if (existing && existing.order <= order) return;
+        source.set(id, { title, order });
+      };
       const addItem = (item: WrongNoteItem) => {
         if (item.category !== categoryTab) return;
         const id = getWrongNoteItemScopeId(item);
         if (!id) return;
-        source.set(
+        rememberSmallScope(
           id,
           getWrongNoteItemScopeTitle(item) || unitTitleMap[id] || id,
+          item.smallUnitOrder,
         );
       };
       const addAttemptFallback = (attempt: QuizAttemptReview) => {
         if (attempt.category !== categoryTab || attempt.allItems.length) return;
         const id = attempt.smallUnitId || attempt.midUnitId || attempt.unitId;
         if (!id) return;
-        source.set(
+        rememberSmallScope(
           id,
           attempt.smallUnitTitle ||
             attempt.midUnitTitle ||
             attempt.unitTitle ||
             unitTitleMap[id] ||
             id,
+          attempt.smallUnitOrder,
         );
       };
 
@@ -1708,10 +1789,21 @@ const MyPage: React.FC = () => {
       });
       wrongItems.forEach(addItem);
 
-      return Array.from(source.entries()).map(([id, title]) => ({
-        id,
-        title: title || unitTitleMap[id] || "소단원 미지정",
-      }));
+      return Array.from(source.entries())
+        .map(([id, value]) => ({
+          id,
+          title: value.title || unitTitleMap[id] || "소단원 미지정",
+          order: value.order,
+        }))
+        .sort(
+          (left, right) =>
+            left.order - right.order ||
+            left.title.localeCompare(right.title, "ko", {
+              numeric: true,
+              sensitivity: "base",
+            }),
+        )
+        .map(({ id, title }) => ({ id, title }));
     }
 
     const source = new Map<string, string>();
@@ -2280,9 +2372,6 @@ const MyPage: React.FC = () => {
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-sm font-black text-slate-900">단원별 문항</div>
-          <div className="mt-1 text-xs font-bold text-slate-400">
-            중단원 안의 소단원별로 이동합니다.
-          </div>
         </div>
         <div className="flex shrink-0 items-center gap-2 text-[11px] font-bold text-slate-400">
           <span className="inline-flex items-center gap-1">
