@@ -139,6 +139,8 @@ interface UnitParentMeta {
   bigTitle: string;
   midId: string;
   midTitle: string;
+  smallId?: string;
+  smallTitle?: string;
 }
 
 interface ReviewChoiceOption {
@@ -164,6 +166,8 @@ interface WrongNoteItem {
   bigUnitTitle: string;
   midUnitId: string;
   midUnitTitle: string;
+  smallUnitId: string;
+  smallUnitTitle: string;
   hierarchyLabel: string;
   category: CategoryTab | "other";
   categoryLabel: string;
@@ -189,6 +193,8 @@ interface QuizAttemptReview {
   bigUnitTitle: string;
   midUnitId: string;
   midUnitTitle: string;
+  smallUnitId: string;
+  smallUnitTitle: string;
   category: CategoryTab | "other";
   categoryLabel: string;
   groupLabel: string;
@@ -200,6 +206,12 @@ interface QuizAttemptReview {
 }
 
 interface ReviewProgressMidGroup {
+  key: string;
+  label: string;
+  smalls: ReviewProgressSmallGroup[];
+}
+
+interface ReviewProgressSmallGroup {
   key: string;
   label: string;
   items: Array<{ item: WrongNoteItem; index: number }>;
@@ -262,6 +274,86 @@ const getInitialReviewIndex = (attempt: QuizAttemptReview | null) => {
   return firstWrongIndex >= 0 ? firstWrongIndex : 0;
 };
 
+const isSmallUnitAssessmentCategory = (category?: string) => {
+  const normalizedCategory = normalizeMockExamCategory(category);
+  return (
+    normalizedCategory === "diagnostic" || normalizedCategory === "formative"
+  );
+};
+
+const buildHierarchyLabel = (...labels: string[]) => {
+  const parts = labels
+    .map((label) => String(label || "").trim())
+    .filter(Boolean)
+    .filter((label, index, arr) => index === 0 || label !== arr[index - 1]);
+  return parts.join(" > ") || "목차 미지정";
+};
+
+const getWrongNoteItemScopeId = (item: WrongNoteItem) =>
+  isSmallUnitAssessmentCategory(item.category)
+    ? item.smallUnitId || item.midUnitId || item.unitId
+    : item.unitId || item.smallUnitId || item.midUnitId;
+
+const getWrongNoteItemScopeTitle = (item: WrongNoteItem) =>
+  isSmallUnitAssessmentCategory(item.category)
+    ? item.smallUnitTitle ||
+      item.midUnitTitle ||
+      item.unitTitle ||
+      "소단원 미지정"
+    : item.unitTitle || item.smallUnitTitle || item.midUnitTitle;
+
+const getAttemptSmallUnitScopeItem = (attempt: QuizAttemptReview | null) =>
+  attempt?.wrongItems[0] || attempt?.allItems[0] || null;
+
+const wrongNoteItemMatchesSelectedUnit = (
+  item: WrongNoteItem,
+  selectedUnitId: string,
+) => {
+  if (selectedUnitId === "all") return true;
+  if (selectedUnitId === "exam_prep") return item.category === "exam_prep";
+  if (isSmallUnitAssessmentCategory(item.category)) {
+    return (
+      getWrongNoteItemScopeId(item) === selectedUnitId ||
+      (!item.smallUnitId &&
+        (item.midUnitId === selectedUnitId || item.unitId === selectedUnitId))
+    );
+  }
+  return [
+    item.unitId,
+    item.bigUnitId,
+    item.midUnitId,
+    item.smallUnitId,
+  ].includes(selectedUnitId);
+};
+
+const quizAttemptMatchesSelectedUnit = (
+  attempt: QuizAttemptReview,
+  selectedUnitId: string,
+) => {
+  if (selectedUnitId === "all") return true;
+  const selectedRoundLabel = getMockRoundLabelFromScope(selectedUnitId);
+  if (selectedRoundLabel) {
+    return (
+      attempt.category === "exam_prep" &&
+      attempt.roundLabel === selectedRoundLabel
+    );
+  }
+  if (selectedUnitId === "exam_prep") {
+    return attempt.category === "exam_prep";
+  }
+  return (
+    [
+      attempt.unitId,
+      attempt.bigUnitId,
+      attempt.midUnitId,
+      attempt.smallUnitId,
+    ].includes(selectedUnitId) ||
+    attempt.allItems.some((item) =>
+      wrongNoteItemMatchesSelectedUnit(item, selectedUnitId),
+    )
+  );
+};
+
 const getWrongNoteScopeFromAttempt = (
   attempt: QuizAttemptReview | null,
 ): { category: CategoryTab | "all"; unitId: string } => {
@@ -273,9 +365,10 @@ const getWrongNoteScopeFromAttempt = (
     };
   }
   if (attempt.category === "diagnostic" || attempt.category === "formative") {
+    const scopeItem = getAttemptSmallUnitScopeItem(attempt);
     return {
       category: attempt.category,
-      unitId: attempt.bigUnitId || attempt.unitId || "all",
+      unitId: scopeItem ? getWrongNoteItemScopeId(scopeItem) || "all" : "all",
     };
   }
   return {
@@ -293,6 +386,17 @@ const getReviewProgressGroups = (
     const bigLabel = item.bigUnitTitle || "대단원 미지정";
     const midKey = item.midUnitId || item.midUnitTitle || "unknown-mid";
     const midLabel = item.midUnitTitle || item.unitTitle || "중단원 미지정";
+    const smallKey =
+      item.smallUnitId ||
+      item.smallUnitTitle ||
+      item.midUnitId ||
+      item.unitId ||
+      "unknown-small";
+    const smallLabel =
+      item.smallUnitTitle ||
+      item.unitTitle ||
+      item.midUnitTitle ||
+      "소단원 미지정";
     const bigGroup = grouped.get(bigKey) || {
       key: bigKey,
       label: bigLabel,
@@ -300,12 +404,29 @@ const getReviewProgressGroups = (
     };
     const existingMid = bigGroup.mids.find((mid) => mid.key === midKey);
     if (existingMid) {
-      existingMid.items.push({ item, index });
+      const existingSmall = existingMid.smalls.find(
+        (small) => small.key === smallKey,
+      );
+      if (existingSmall) {
+        existingSmall.items.push({ item, index });
+      } else {
+        existingMid.smalls.push({
+          key: smallKey,
+          label: smallLabel,
+          items: [{ item, index }],
+        });
+      }
     } else {
       bigGroup.mids.push({
         key: midKey,
         label: midLabel,
-        items: [{ item, index }],
+        smalls: [
+          {
+            key: smallKey,
+            label: smallLabel,
+            items: [{ item, index }],
+          },
+        ],
       });
     }
     grouped.set(bigKey, bigGroup);
@@ -857,8 +978,13 @@ const MyPage: React.FC = () => {
           rememberTitle(mid?.id, mid?.title);
           rememberParent(mid?.id, mid?.title, midMeta);
           (mid.children || []).forEach((small: any) => {
+            const smallMeta = {
+              ...midMeta,
+              smallId: String(small.id || ""),
+              smallTitle: String(small.title || ""),
+            };
             rememberTitle(small?.id, small?.title);
-            rememberParent(small?.id, small?.title, midMeta);
+            rememberParent(small?.id, small?.title, smallMeta);
           });
         });
       });
@@ -1094,8 +1220,9 @@ const MyPage: React.FC = () => {
         const sourceUnitId = String(
           question.refMid || question.unitId || log.unitId || "",
         ).trim();
+        const smallUnitMeta = smallUnitId ? parentMap[smallUnitId] : null;
         const parentMeta =
-          (smallUnitId && parentMap[smallUnitId]) ||
+          smallUnitMeta ||
           (sourceUnitId && parentMap[sourceUnitId]) ||
           (log.unitId && parentMap[log.unitId]) ||
           null;
@@ -1117,10 +1244,14 @@ const MyPage: React.FC = () => {
             parentMeta?.midTitle ||
             (midUnitId === "exam_prep" ? "모의고사" : midUnitId)
           : parentMeta?.midTitle || "";
-        const hierarchyLabel =
-          bigUnitTitle && midUnitTitle && bigUnitTitle !== midUnitTitle
-            ? `${bigUnitTitle} > ${midUnitTitle}`
-            : midUnitTitle || bigUnitTitle || "목차 미지정";
+        const smallUnitTitle = smallUnitId
+          ? titleMap[smallUnitId] || parentMeta?.smallTitle || smallUnitId
+          : parentMeta?.smallTitle || "";
+        const hierarchyLabel = buildHierarchyLabel(
+          bigUnitTitle,
+          midUnitTitle,
+          smallUnitTitle,
+        );
         const questionType = String(
           question.type ||
             (Array.isArray(question.options) && question.options.length > 0
@@ -1154,6 +1285,8 @@ const MyPage: React.FC = () => {
           bigUnitTitle,
           midUnitId,
           midUnitTitle,
+          smallUnitId,
+          smallUnitTitle,
           hierarchyLabel,
           category: log.category,
           categoryLabel: getCategoryLabel(log.category),
@@ -1202,6 +1335,8 @@ const MyPage: React.FC = () => {
             (item) => !item.correct,
           );
           const firstAttemptItem = allItemsForAttempt[0] || null;
+          const primaryAttemptItem =
+            wrongItemsForAttempt[0] || firstAttemptItem;
           const attemptParentMeta = unitId ? parentMap[unitId] : null;
           const bigUnitId = isMockAttempt
             ? "exam_prep"
@@ -1219,6 +1354,12 @@ const MyPage: React.FC = () => {
             : firstAttemptItem?.midUnitTitle ||
               attemptParentMeta?.midTitle ||
               unitTitle;
+          const smallUnitId = isMockAttempt
+            ? ""
+            : primaryAttemptItem?.smallUnitId || "";
+          const smallUnitTitle = isMockAttempt
+            ? ""
+            : primaryAttemptItem?.smallUnitTitle || "";
 
           return {
             key: result.id || `${roundLabel}_${dateText}_${resultIndex}`,
@@ -1230,6 +1371,8 @@ const MyPage: React.FC = () => {
             bigUnitTitle,
             midUnitId,
             midUnitTitle,
+            smallUnitId,
+            smallUnitTitle,
             category,
             categoryLabel,
             groupLabel: isMockAttempt ? roundLabel : unitTitle,
@@ -1470,7 +1613,7 @@ const MyPage: React.FC = () => {
       wrongItems.filter(
         (item) =>
           (categoryTab === "all" || item.category === categoryTab) &&
-          (selectedUnitId === "all" || item.unitId === selectedUnitId),
+          wrongNoteItemMatchesSelectedUnit(item, selectedUnitId),
       ),
     [wrongItems, categoryTab, selectedUnitId],
   );
@@ -1478,7 +1621,7 @@ const MyPage: React.FC = () => {
   const wrongGroupEntries = useMemo(() => {
     const grouped: Record<string, WrongNoteItem[]> = {};
     filteredWrongItems.forEach((item) => {
-      const key = `${item.unitId}_${item.category}`;
+      const key = `${getWrongNoteItemScopeId(item)}_${item.category}`;
       grouped[key] = grouped[key] || [];
       grouped[key].push(item);
     });
@@ -1530,6 +1673,44 @@ const MyPage: React.FC = () => {
       return Array.from(rounds.entries()).map(([title, id]) => ({
         id,
         title,
+      }));
+    }
+
+    if (isSmallUnitAssessmentCategory(categoryTab)) {
+      const source = new Map<string, string>();
+      const addItem = (item: WrongNoteItem) => {
+        if (item.category !== categoryTab) return;
+        const id = getWrongNoteItemScopeId(item);
+        if (!id) return;
+        source.set(
+          id,
+          getWrongNoteItemScopeTitle(item) || unitTitleMap[id] || id,
+        );
+      };
+      const addAttemptFallback = (attempt: QuizAttemptReview) => {
+        if (attempt.category !== categoryTab || attempt.allItems.length) return;
+        const id = attempt.smallUnitId || attempt.midUnitId || attempt.unitId;
+        if (!id) return;
+        source.set(
+          id,
+          attempt.smallUnitTitle ||
+            attempt.midUnitTitle ||
+            attempt.unitTitle ||
+            unitTitleMap[id] ||
+            id,
+        );
+      };
+
+      quizAttempts.forEach((attempt) => {
+        if (attempt.category !== categoryTab) return;
+        attempt.allItems.forEach(addItem);
+        addAttemptFallback(attempt);
+      });
+      wrongItems.forEach(addItem);
+
+      return Array.from(source.entries()).map(([id, title]) => ({
+        id,
+        title: title || unitTitleMap[id] || "소단원 미지정",
       }));
     }
 
@@ -1590,10 +1771,7 @@ const MyPage: React.FC = () => {
         if (selectedUnitId === "exam_prep") {
           return attempt.category === "exam_prep";
         }
-        return (
-          attempt.bigUnitId === selectedUnitId ||
-          (!attempt.bigUnitId && attempt.unitId === selectedUnitId)
-        );
+        return quizAttemptMatchesSelectedUnit(attempt, selectedUnitId);
       }),
     [quizAttempts, categoryTab, selectedUnitId],
   );
@@ -2044,7 +2222,7 @@ const MyPage: React.FC = () => {
       ) {
         setCategoryTab(item.category);
       }
-      setSelectedUnitId(item.unitId);
+      setSelectedUnitId(getWrongNoteItemScopeId(item) || item.unitId);
       setExpandedWrongKey(item.key);
     }
     selectMenu("wrong_note");
@@ -2103,7 +2281,7 @@ const MyPage: React.FC = () => {
         <div>
           <div className="text-sm font-black text-slate-900">단원별 문항</div>
           <div className="mt-1 text-xs font-bold text-slate-400">
-            대단원 아래 중단원별로 이동합니다.
+            중단원 안의 소단원별로 이동합니다.
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2 text-[11px] font-bold text-slate-400">
@@ -2130,29 +2308,39 @@ const MyPage: React.FC = () => {
                   <div className="break-keep text-xs font-extrabold leading-5 text-slate-500">
                     {midGroup.label}
                   </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {midGroup.items.map(({ item, index }) => {
-                      const displayNumber = item.questionNumber || index + 1;
-                      const active = index === safeReviewQuestionIndex;
-                      return (
-                        <button
-                          key={item.key}
-                          type="button"
-                          onClick={() =>
-                            goToReviewQuestion(index, closeAfterSelect)
-                          }
-                          className={`h-7 min-w-7 rounded-lg px-2 text-[11px] font-black leading-none transition focus:outline-none focus:ring-2 focus:ring-offset-1 ${
-                            item.correct
-                              ? "bg-blue-500 text-white hover:bg-blue-600 focus:ring-blue-300"
-                              : "bg-red-500 text-white hover:bg-red-600 focus:ring-red-300"
-                          } ${active ? "ring-2 ring-slate-900 ring-offset-1" : ""}`}
-                          aria-current={active ? "step" : undefined}
-                          aria-label={`${displayNumber}번 ${item.correct ? "정답" : "오답"} 문항으로 이동`}
-                        >
-                          {displayNumber}
-                        </button>
-                      );
-                    })}
+                  <div className="space-y-2 border-l border-slate-100 pl-3">
+                    {midGroup.smalls.map((smallGroup) => (
+                      <div key={smallGroup.key} className="space-y-1.5">
+                        <div className="break-keep text-[11px] font-extrabold leading-5 text-slate-400">
+                          {smallGroup.label}
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {smallGroup.items.map(({ item, index }) => {
+                            const displayNumber =
+                              item.questionNumber || index + 1;
+                            const active = index === safeReviewQuestionIndex;
+                            return (
+                              <button
+                                key={item.key}
+                                type="button"
+                                onClick={() =>
+                                  goToReviewQuestion(index, closeAfterSelect)
+                                }
+                                className={`h-7 min-w-7 rounded-lg px-2 text-[11px] font-black leading-none transition focus:outline-none focus:ring-2 focus:ring-offset-1 ${
+                                  item.correct
+                                    ? "bg-blue-500 text-white hover:bg-blue-600 focus:ring-blue-300"
+                                    : "bg-red-500 text-white hover:bg-red-600 focus:ring-red-300"
+                                } ${active ? "ring-2 ring-slate-900 ring-offset-1" : ""}`}
+                                aria-current={active ? "step" : undefined}
+                                aria-label={`${displayNumber}번 ${item.correct ? "정답" : "오답"} 문항으로 이동`}
+                              >
+                                {displayNumber}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               ))}
@@ -2295,7 +2483,7 @@ const MyPage: React.FC = () => {
                 className={
                   hasChoiceOptionImages
                     ? `flex min-h-[7.5rem] flex-col rounded-lg border-2 p-1.5 text-left ${optionTone}`
-                    : `flex items-start rounded-lg border-2 px-2.5 py-1.5 text-left ${optionTone}`
+                    : `flex min-h-10 items-center rounded-lg border-2 px-2.5 py-1.5 text-left ${optionTone}`
                 }
               >
                 {hasChoiceOptionImages ? (
@@ -2347,7 +2535,7 @@ const MyPage: React.FC = () => {
                 ) : (
                   <>
                     <div
-                      className={`mr-2 mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${numberTone}`}
+                      className={`mr-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold ${numberTone}`}
                     >
                       {index + 1}
                     </div>
@@ -2358,7 +2546,7 @@ const MyPage: React.FC = () => {
                         className="mr-2 h-16 w-20 shrink-0 rounded-lg border border-slate-100 bg-white object-contain"
                       />
                     )}
-                    <div className="min-w-0 flex-1 break-words text-sm font-bold leading-5">
+                    <div className="flex min-h-6 min-w-0 flex-1 items-center break-words text-sm font-bold leading-5">
                       <div>{visibleOptionText}</div>
                     </div>
                     {(optionIsCorrect || optionIsSelectedWrong) && (
@@ -2525,6 +2713,18 @@ const MyPage: React.FC = () => {
     { key: "wrong", label: "문제 풀이", onClick: startReview },
     { key: "retry", label: "다시 도전", onClick: openQuiz },
   ];
+  const wrongNoteUnitFilterLabel =
+    categoryTab === "exam_prep"
+      ? "회차"
+      : isSmallUnitAssessmentCategory(categoryTab)
+        ? "소단원"
+        : "목차";
+  const wrongNoteAllUnitFilterLabel =
+    categoryTab === "exam_prep"
+      ? "전체 회차"
+      : isSmallUnitAssessmentCategory(categoryTab)
+        ? "전체 소단원"
+        : "전체 목차";
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
@@ -3647,7 +3847,7 @@ const MyPage: React.FC = () => {
                         <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-xs text-slate-600">
                           2
                         </span>
-                        {categoryTab === "exam_prep" ? "회차" : "목차"}
+                        {wrongNoteUnitFilterLabel}
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <button
@@ -3659,9 +3859,7 @@ const MyPage: React.FC = () => {
                               : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                           }`}
                         >
-                          {categoryTab === "exam_prep"
-                            ? "전체 회차"
-                            : "전체 목차"}
+                          {wrongNoteAllUnitFilterLabel}
                         </button>
                         {availableUnitTabs.map((tab) => (
                           <button
