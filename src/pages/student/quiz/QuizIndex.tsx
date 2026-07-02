@@ -23,6 +23,9 @@ interface TreeItem {
   children?: TreeItem[];
 }
 
+const getAllExpandedIndexes = (items: TreeItem[]) =>
+  new Set(items.map((_, index) => index));
+
 const QuizIndex: React.FC = () => {
   const { userData, config } = useAuth();
   const navigate = useNavigate();
@@ -49,6 +52,7 @@ const QuizIndex: React.FC = () => {
         );
         if (cancelled) return;
         setTree(nextTree);
+        setExpandedItems(getAllExpandedIndexes(nextTree));
         setAssessmentConfig(nextConfig);
       } catch (error) {
         console.error("Error fetching quiz data:", error);
@@ -64,13 +68,15 @@ const QuizIndex: React.FC = () => {
   }, [config]);
 
   const toggleAccordion = (index: number) => {
-    const newSet = new Set(expandedItems);
-    if (newSet.has(index)) {
-      newSet.delete(index);
-    } else {
-      newSet.add(index);
-    }
-    setExpandedItems(newSet);
+    setExpandedItems((current) => {
+      const newSet = new Set(current);
+      if (newSet.has(index)) {
+        newSet.delete(index);
+      } else {
+        newSet.add(index);
+      }
+      return newSet;
+    });
   };
 
   const startQuiz = (
