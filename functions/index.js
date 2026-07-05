@@ -2218,6 +2218,7 @@ const buildPerformanceScoreObjectionItems = (items) =>
 const savePerformanceScoreObjections = async (year, semester, input) => {
   const actorUid = sanitizeNotificationText(input.actorUid, 160);
   const objectionReason = sanitizeNotificationText(input.reason, 300);
+  const targetDetails = sanitizeNotificationText(input.targetDetails, 240);
   const profile = input.profile || {};
   const records = Array.isArray(input.records) ? input.records : [];
   if (!actorUid || !objectionReason || records.length === 0) {
@@ -2287,6 +2288,7 @@ const savePerformanceScoreObjections = async (year, semester, input) => {
       totalScore,
       totalMaxScore,
       scoreLabel: formatPerformanceScoreLabel(totalScore, totalMaxScore),
+      targetDetails,
       items: buildPerformanceScoreObjectionItems(data.items),
       reason: objectionReason,
       status: 'pending',
@@ -2323,6 +2325,7 @@ const createPerformanceScoreObjectionRequestedNotifications = async (year, semes
   const scoreIds = uniqueNonEmptyStrings(input.scoreIds, 20);
   const sortedScoreIds = [...scoreIds].sort();
   const objectionReason = sanitizeNotificationText(input.reason, 300);
+  const targetDetails = sanitizeNotificationText(input.targetDetails, 240);
   if (!actorUid || scoreIds.length === 0) return [];
 
   const profile = input.profile || {};
@@ -2359,7 +2362,7 @@ const createPerformanceScoreObjectionRequestedNotifications = async (year, semes
   return createUserNotifications(year, semester, recipients, {
     type: 'performance_score_objection_requested',
     title: `${scoreKindLabel} 점수 이의 제기`,
-    body: `${studentName} 학생이 ${titleLabel} 점수에 이의를 제기했습니다. 사유: ${objectionReason}`,
+    body: `${studentName} 학생이 ${titleLabel} 점수에 이의를 제기했습니다.${targetDetails ? ` 대상: ${targetDetails}.` : ''} 사유: ${objectionReason}`,
     targetUrl: scoreKind === WRITTEN_EXAM_SCORE_KIND
       ? '/teacher/exam?tab=written-essay&panel=objections'
       : '/teacher/exam?tab=performance',
@@ -2374,6 +2377,7 @@ const createPerformanceScoreObjectionRequestedNotifications = async (year, semes
       scoreTitle: titleLabel,
       scoreCount: scoreIds.length,
       reason: objectionReason,
+      targetDetails,
       scoreKind,
     },
   });
@@ -3037,6 +3041,7 @@ const collectCurrentSemesterStudentRefs = async (year, semester, uid) => {
 const savePerformanceScoreAnswerSheetRequests = async (year, semester, input) => {
   const actorUid = sanitizeNotificationText(input.actorUid, 160);
   const requestReason = sanitizeNotificationText(input.reason, 300);
+  const targetDetails = sanitizeNotificationText(input.targetDetails, 240);
   const profile = input.profile || {};
   const records = Array.isArray(input.records) ? input.records : [];
   if (!actorUid || !requestReason || records.length === 0) {
@@ -3103,6 +3108,7 @@ const savePerformanceScoreAnswerSheetRequests = async (year, semester, input) =>
       totalScore,
       totalMaxScore,
       scoreLabel: formatPerformanceScoreLabel(totalScore, totalMaxScore),
+      targetDetails,
       reason: requestReason,
       status: 'pending',
       reviewedAt: null,
@@ -3136,6 +3142,7 @@ const createPerformanceScoreAnswerSheetRequestedNotifications = async (year, sem
   const scoreIds = uniqueNonEmptyStrings(input.scoreIds, 20);
   const sortedScoreIds = [...scoreIds].sort();
   const requestReason = sanitizeNotificationText(input.reason, 300);
+  const targetDetails = sanitizeNotificationText(input.targetDetails, 240);
   if (!actorUid || scoreIds.length === 0) return [];
 
   const profile = input.profile || {};
@@ -3173,7 +3180,7 @@ const createPerformanceScoreAnswerSheetRequestedNotifications = async (year, sem
   return createUserNotifications(year, semester, recipients, {
     type: 'performance_score_answer_sheet_requested',
     title: '답안지 확인 요청',
-    body: `${studentName} 학생이 ${titleLabel} 답안지 확인을 요청했습니다. 사유: ${requestReason}`,
+    body: `${studentName} 학생이 ${titleLabel} 답안지 확인을 요청했습니다.${targetDetails ? ` 대상: ${targetDetails}.` : ''} 사유: ${requestReason}`,
     targetUrl: scoreKind === WRITTEN_EXAM_SCORE_KIND
       ? '/teacher/exam?tab=written-essay&panel=answer-sheet-requests'
       : '/teacher/exam?tab=performance&panel=answer-sheet-requests',
@@ -3188,6 +3195,7 @@ const createPerformanceScoreAnswerSheetRequestedNotifications = async (year, sem
       scoreTitle: titleLabel,
       scoreCount: scoreIds.length,
       reason: requestReason,
+      targetDetails,
       scoreKind,
     },
   });
@@ -5948,6 +5956,7 @@ exports.notifyPerformanceScoreObjectionRequested = onCall({ region: REGION }, as
     sanitizeNotificationText(scoreId, 160),
   ).filter(Boolean);
   const reason = sanitizeNotificationText(request.data?.reason, 300);
+  const targetDetails = sanitizeNotificationText(request.data?.targetDetails, 240);
   const requestedScoreKind = normalizePerformanceScoreKind(request.data?.scoreKind);
   if (scoreIds.length === 0) {
     throw new HttpsError('invalid-argument', 'scoreIds are required.');
@@ -5973,6 +5982,7 @@ exports.notifyPerformanceScoreObjectionRequested = onCall({ region: REGION }, as
     profile,
     records,
     reason,
+    targetDetails,
   });
   const savedScoreIds = new Set(objectionSaveResult.scoreIds);
   const savedRecords = records.filter((record) => savedScoreIds.has(record.id));
@@ -5992,6 +6002,7 @@ exports.notifyPerformanceScoreObjectionRequested = onCall({ region: REGION }, as
     scoreIds: objectionSaveResult.scoreIds,
     records: savedRecords,
     reason,
+    targetDetails,
   });
 
   return {
@@ -6011,6 +6022,7 @@ exports.notifyPerformanceScoreAnswerSheetRequested = onCall({ region: REGION }, 
     sanitizeNotificationText(scoreId, 160),
   ).filter(Boolean);
   const reason = sanitizeNotificationText(request.data?.reason, 300);
+  const targetDetails = sanitizeNotificationText(request.data?.targetDetails, 240);
   const requestedScoreKind = normalizePerformanceScoreKind(request.data?.scoreKind);
   if (scoreIds.length === 0) {
     throw new HttpsError('invalid-argument', 'scoreIds are required.');
@@ -6040,6 +6052,7 @@ exports.notifyPerformanceScoreAnswerSheetRequested = onCall({ region: REGION }, 
     profile,
     records,
     reason,
+    targetDetails,
     requestBatchId,
   });
   const savedScoreIds = new Set(requestSaveResult.scoreIds);
@@ -6060,6 +6073,7 @@ exports.notifyPerformanceScoreAnswerSheetRequested = onCall({ region: REGION }, 
     scoreIds: requestSaveResult.scoreIds,
     records: savedRecords,
     reason,
+    targetDetails,
     requestBatchId,
   });
 

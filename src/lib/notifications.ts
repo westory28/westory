@@ -244,6 +244,7 @@ export const notifyPerformanceScoreObjectionRequested = async (
     scoreIds: string[];
     reason: string;
     scoreKind?: string;
+    targetDetails?: string;
   },
 ): Promise<{
   objectionIds: string[];
@@ -261,6 +262,7 @@ export const notifyPerformanceScoreObjectionRequested = async (
       scoreIds: string[];
       reason: string;
       scoreKind?: string;
+      targetDetails?: string;
     },
     {
       objectionIds?: string[];
@@ -277,6 +279,7 @@ export const notifyPerformanceScoreObjectionRequested = async (
     scoreIds: Array.from(new Set(input.scoreIds || [])).filter(Boolean),
     reason: input.reason,
     scoreKind: input.scoreKind,
+    targetDetails: input.targetDetails,
   });
   return {
     objectionIds: Array.isArray(result.data?.objectionIds)
@@ -298,6 +301,7 @@ export const notifyPerformanceScoreAnswerSheetRequested = async (
     scoreIds: string[];
     reason: string;
     scoreKind?: string;
+    targetDetails?: string;
   },
 ): Promise<{
   requestIds: string[];
@@ -315,6 +319,7 @@ export const notifyPerformanceScoreAnswerSheetRequested = async (
       scoreIds: string[];
       reason: string;
       scoreKind?: string;
+      targetDetails?: string;
     },
     {
       requestIds?: string[];
@@ -331,6 +336,7 @@ export const notifyPerformanceScoreAnswerSheetRequested = async (
     scoreIds: Array.from(new Set(input.scoreIds || [])).filter(Boolean),
     reason: input.reason,
     scoreKind: input.scoreKind,
+    targetDetails: input.targetDetails,
   });
   return {
     requestIds: Array.isArray(result.data?.requestIds)

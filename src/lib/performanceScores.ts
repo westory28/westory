@@ -140,6 +140,7 @@ export interface PerformanceScoreObjection {
   scoreId: string;
   rosterId?: string;
   scoreTitle?: string;
+  targetDetails?: string;
   status: PerformanceScoreObjectionStatus;
   reason?: string;
   requestedAt?: unknown;
@@ -157,6 +158,7 @@ export interface PerformanceScoreAnswerSheetRequest {
   scoreId: string;
   rosterId?: string;
   scoreTitle?: string;
+  targetDetails?: string;
   status: PerformanceScoreAnswerSheetRequestStatus;
   reason?: string;
   requestedAt?: unknown;
@@ -482,6 +484,7 @@ export const loadUserPerformanceScoreObjections = async (
         scoreId: String(data.scoreId || ""),
         rosterId: String(data.rosterId || ""),
         scoreTitle: String(data.scoreTitle || ""),
+        targetDetails: String(data.targetDetails || ""),
         status: normalizePerformanceScoreObjectionStatus(data.status),
         reason: String(data.reason || ""),
         requestedAt: data.requestedAt,
@@ -531,6 +534,7 @@ export const loadUserPerformanceScoreAnswerSheetRequests = async (
         scoreId: String(data.scoreId || ""),
         rosterId: String(data.rosterId || ""),
         scoreTitle: String(data.scoreTitle || ""),
+        targetDetails: String(data.targetDetails || ""),
         status: normalizePerformanceScoreAnswerSheetRequestStatus(data.status),
         reason: String(data.reason || ""),
         requestedAt: data.requestedAt,

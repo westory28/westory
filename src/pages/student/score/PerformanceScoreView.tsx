@@ -88,6 +88,33 @@ const getItemLabel = (
   index: number,
 ) => item.shortName || getPerformanceScoreItemShortName(item.name, index);
 
+const getFiniteScoreValue = (value: unknown) => {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? Number(numericValue.toFixed(2)) : 0;
+};
+
+const getEnteredItemScore = (item?: PerformanceScoreItem) => {
+  if (!item || item.scoreEntered === false) return null;
+  const numericValue = Number(item.score);
+  return Number.isFinite(numericValue) ? Number(numericValue.toFixed(2)) : null;
+};
+
+const getItemsTotalScore = (items: PerformanceScoreItem[]) => {
+  const scores = items
+    .map((item) => getEnteredItemScore(item))
+    .filter((score): score is number => score !== null);
+  return scores.length
+    ? Number(scores.reduce((sum, score) => sum + score, 0).toFixed(2))
+    : 0;
+};
+
+const getItemsMaxScore = (items: PerformanceScoreItem[]) =>
+  Number(
+    items
+      .reduce((sum, item) => sum + getFiniteScoreValue(item.maxScore), 0)
+      .toFixed(2),
+  );
+
 const getWrittenExamItemMeta = (item: PerformanceScoreItem, index: number) => {
   const rawKey = String(item.itemKey || item.shortName || item.name || "");
   const match = /^(\d+)\s*-\s*[\(\[]?\s*(\d+)\s*[\)\]]?$/.exec(rawKey.trim());
@@ -104,7 +131,8 @@ const getWrittenExamItemMeta = (item: PerformanceScoreItem, index: number) => {
     key: `${match[1]}-(${match[2]})`,
     groupKey: match[1],
     groupLabel: item.groupLabel || `${match[1]}번`,
-    label: `${match[1]}-(${match[2]})`,
+    label: `(${match[2]})`,
+    fullLabel: `${match[1]}-(${match[2]})`,
     detailed: true,
   };
 };
@@ -118,6 +146,7 @@ const getWrittenExamItemGroups = (items: PerformanceScoreItem[]) => {
       items: Array<{
         key: string;
         label: string;
+        fullLabel?: string;
         item: PerformanceScoreItem;
         index: number;
       }>;
@@ -133,6 +162,7 @@ const getWrittenExamItemGroups = (items: PerformanceScoreItem[]) => {
     group.items.push({
       key: meta.key,
       label: meta.label,
+      fullLabel: meta.fullLabel,
       item,
       index,
     });
@@ -143,6 +173,22 @@ const getWrittenExamItemGroups = (items: PerformanceScoreItem[]) => {
       Number(left.key) - Number(right.key) ||
       left.label.localeCompare(right.label, "ko"),
   );
+};
+
+const getWrittenExamGroupScore = (
+  group: ReturnType<typeof getWrittenExamItemGroups>[number],
+) => getItemsTotalScore(group.items.map(({ item }) => item));
+
+const getWrittenExamGroupMaxScore = (
+  group: ReturnType<typeof getWrittenExamItemGroups>[number],
+) => getItemsMaxScore(group.items.map(({ item }) => item));
+
+const getRequestItemSelectionKey = (scoreId: string, itemKey: string) =>
+  `${scoreId}::${itemKey}`;
+
+const parseRequestItemSelectionKey = (value: string) => {
+  const [scoreId = "", itemKey = ""] = value.split("::");
+  return { scoreId, itemKey };
 };
 
 const getWrittenExamGeneralFeedback = (
@@ -386,6 +432,9 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
   const [objectionSelectedIds, setObjectionSelectedIds] = useState<string[]>(
     [],
   );
+  const [objectionSelectedItemKeys, setObjectionSelectedItemKeys] = useState<
+    string[]
+  >([]);
   const [objectionReason, setObjectionReason] = useState("");
   const [answerSheetRequestModalOpen, setAnswerSheetRequestModalOpen] =
     useState(false);
@@ -393,7 +442,13 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
   const [answerSheetRequestError, setAnswerSheetRequestError] = useState("");
   const [answerSheetRequestSelectedIds, setAnswerSheetRequestSelectedIds] =
     useState<string[]>([]);
+  const [
+    answerSheetRequestSelectedItemKeys,
+    setAnswerSheetRequestSelectedItemKeys,
+  ] = useState<string[]>([]);
   const [answerSheetRequestReason, setAnswerSheetRequestReason] = useState("");
+  const [selectedWrittenExamGroupKey, setSelectedWrittenExamGroupKey] =
+    useState("");
   const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const scoreChartRef = useRef<ChartJS<"bar"> | null>(null);
   const scoreChartContainerRef = useRef<HTMLDivElement | null>(null);
@@ -461,20 +516,41 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
   const selectedItems = Array.isArray(selectedRecord?.items)
     ? selectedRecord.items
     : [];
-  const chartItems = selectedItems.filter(
-    (item) => item.scoreEntered !== false,
-  );
   const evidenceText =
     selectedRecord?.evidence || selectedRecord?.feedback || "";
   const writtenExamItemGroups =
     scoreKind === WRITTEN_EXAM_SCORE_KIND
       ? getWrittenExamItemGroups(selectedItems)
       : [];
+  const activeWrittenExamGroup =
+    writtenExamItemGroups.find(
+      (group) => group.key === selectedWrittenExamGroupKey,
+    ) ||
+    writtenExamItemGroups[0] ||
+    null;
   const hasDetailedWrittenExamItems =
     scoreKind === WRITTEN_EXAM_SCORE_KIND &&
     selectedItems.some(
       (item, index) => getWrittenExamItemMeta(item, index).detailed,
     );
+  const visibleChartEntries =
+    hasDetailedWrittenExamItems && activeWrittenExamGroup
+      ? activeWrittenExamGroup.items.map(({ label, item }) => ({ label, item }))
+      : selectedItems.map((item, index) => ({
+          label: getItemLabel(item, index),
+          item,
+        }));
+  const visibleChartItems = visibleChartEntries
+    .map(({ item, label }) => ({ item, label }))
+    .filter(({ item }) => item.scoreEntered !== false);
+  const visibleTotalScore =
+    hasDetailedWrittenExamItems && activeWrittenExamGroup
+      ? getWrittenExamGroupScore(activeWrittenExamGroup)
+      : (selectedRecord?.totalScore ?? 0);
+  const visibleTotalMaxScore =
+    hasDetailedWrittenExamItems && activeWrittenExamGroup
+      ? getWrittenExamGroupMaxScore(activeWrittenExamGroup)
+      : (selectedRecord?.totalMaxScore ?? 0);
   const writtenExamGeneralFeedback = getWrittenExamGeneralFeedback(
     evidenceText,
     hasDetailedWrittenExamItems,
@@ -483,23 +559,26 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     ? writtenExamGeneralFeedback
     : evidenceText;
   const chartMaxScore = selectedRecord
-    ? Math.max(10, ...chartItems.map((item) => item.maxScore || 0))
+    ? Math.max(
+        hasDetailedWrittenExamItems ? visibleTotalMaxScore : 10,
+        ...visibleChartItems.map(({ item }) => item.maxScore || 0),
+      )
     : 50;
 
   const chartData = selectedRecord
     ? {
-        labels: chartItems.map((item, index) => getItemLabel(item, index)),
+        labels: visibleChartItems.map(({ label }) => label),
         datasets: [
           {
             label: "획득 점수",
-            data: chartItems.map((item) => item.score),
+            data: visibleChartItems.map(({ item }) => item.score),
             backgroundColor: "#2563eb",
             borderRadius: 6,
             barPercentage: 0.55,
           },
           {
             label: "만점 기준",
-            data: chartItems.map((item) => item.maxScore),
+            data: visibleChartItems.map(({ item }) => item.maxScore),
             backgroundColor: "#cbd5e1",
             borderRadius: 6,
             barPercentage: 0.55,
@@ -509,7 +588,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     : { labels: [], datasets: [] };
 
   useEffect(() => {
-    if (!chartItems.length) return;
+    if (!visibleChartItems.length) return;
 
     const container = scoreChartContainerRef.current;
     const chart = scoreChartRef.current;
@@ -555,7 +634,11 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
       visualViewport?.removeEventListener("resize", resizeChart);
       visualViewport?.removeEventListener("scroll", resizeChart);
     };
-  }, [chartItems.length, selectedRecord?.id]);
+  }, [
+    visibleChartItems.length,
+    selectedRecord?.id,
+    selectedWrittenExamGroupKey,
+  ]);
 
   const expectedSignatureName =
     userData?.name || selectedRecord?.studentName || "";
@@ -693,6 +776,27 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
           : ""
       }. 담당 교사가 수용 또는 반려 처리한 뒤 서명할 수 있습니다.`
     : "";
+
+  useEffect(() => {
+    if (!hasDetailedWrittenExamItems || !writtenExamItemGroups.length) {
+      if (selectedWrittenExamGroupKey) setSelectedWrittenExamGroupKey("");
+      return;
+    }
+    if (
+      selectedWrittenExamGroupKey &&
+      writtenExamItemGroups.some(
+        (group) => group.key === selectedWrittenExamGroupKey,
+      )
+    ) {
+      return;
+    }
+    setSelectedWrittenExamGroupKey(writtenExamItemGroups[0].key);
+  }, [
+    hasDetailedWrittenExamItems,
+    selectedRecord?.id,
+    selectedWrittenExamGroupKey,
+    writtenExamItemGroups,
+  ]);
 
   const getStudentIdentityError = (targetRecords = records) => {
     if (!currentUser?.uid) return "로그인한 학생 정보를 확인하지 못했습니다.";
@@ -853,6 +957,19 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     setSignatureModalOpen(false);
   };
 
+  const getWrittenExamItemSelectionKeysForRecord = (
+    record: PerformanceScoreRecord,
+    groupKey?: string,
+  ) => {
+    const scoreId = getRecordScoreId(record);
+    if (!scoreId) return [];
+    return getWrittenExamItemGroups(record.items || [])
+      .filter((group) => !groupKey || group.key === groupKey)
+      .flatMap((group) =>
+        group.items.map(({ key }) => getRequestItemSelectionKey(scoreId, key)),
+      );
+  };
+
   const getDefaultObjectionScoreIds = () => {
     const selectedScoreId = selectedRecord
       ? getRecordScoreId(selectedRecord)
@@ -868,6 +985,29 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
       ? getRecordScoreId(pendingRecords[0])
       : "";
     return firstPendingId ? [firstPendingId] : [];
+  };
+
+  const getDefaultObjectionItemKeys = () => {
+    if (!hasDetailedWrittenExamItems) return [];
+    if (
+      selectedRecord &&
+      !isRecordConfirmed(selectedRecord) &&
+      activeWrittenExamGroup
+    ) {
+      return getWrittenExamItemSelectionKeysForRecord(
+        selectedRecord,
+        activeWrittenExamGroup.key,
+      );
+    }
+    const firstPendingRecord = pendingRecords.find(
+      (record) => getWrittenExamItemGroups(record.items || []).length > 0,
+    );
+    return firstPendingRecord
+      ? getWrittenExamItemSelectionKeysForRecord(
+          firstPendingRecord,
+          getWrittenExamItemGroups(firstPendingRecord.items || [])[0]?.key,
+        )
+      : [];
   };
 
   const openObjectionModal = () => {
@@ -894,6 +1034,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     setObjectionReason("");
     setObjectionError("");
     setObjectionSelectedIds(getDefaultObjectionScoreIds());
+    setObjectionSelectedItemKeys(getDefaultObjectionItemKeys());
     setObjectionModalOpen(true);
   };
 
@@ -939,6 +1080,33 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     return firstRecordId ? [firstRecordId] : [];
   };
 
+  const getDefaultAnswerSheetRequestItemKeys = () => {
+    if (!hasDetailedWrittenExamItems) return [];
+    if (
+      selectedRecord &&
+      !pendingAnswerSheetRequestScoreIds.has(
+        getRecordScoreId(selectedRecord),
+      ) &&
+      activeWrittenExamGroup
+    ) {
+      return getWrittenExamItemSelectionKeysForRecord(
+        selectedRecord,
+        activeWrittenExamGroup.key,
+      );
+    }
+    const firstAvailableRecord = records.find(
+      (record) =>
+        !pendingAnswerSheetRequestScoreIds.has(getRecordScoreId(record)) &&
+        getWrittenExamItemGroups(record.items || []).length > 0,
+    );
+    return firstAvailableRecord
+      ? getWrittenExamItemSelectionKeysForRecord(
+          firstAvailableRecord,
+          getWrittenExamItemGroups(firstAvailableRecord.items || [])[0]?.key,
+        )
+      : [];
+  };
+
   const openAnswerSheetRequestModal = () => {
     if (!warningConsentCurrent) {
       showToast({
@@ -974,6 +1142,9 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     setAnswerSheetRequestReason("");
     setAnswerSheetRequestError("");
     setAnswerSheetRequestSelectedIds(getDefaultAnswerSheetRequestScoreIds());
+    setAnswerSheetRequestSelectedItemKeys(
+      getDefaultAnswerSheetRequestItemKeys(),
+    );
     setAnswerSheetRequestModalOpen(true);
   };
 
@@ -996,17 +1167,86 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     });
   };
 
+  const toggleRequestItemSelection = (
+    setter: React.Dispatch<React.SetStateAction<string[]>>,
+    itemKeys: string[],
+    checked: boolean,
+  ) => {
+    setter((current) => {
+      const next = new Set(current);
+      itemKeys.forEach((key) => {
+        if (!key) return;
+        if (checked) {
+          next.add(key);
+        } else {
+          next.delete(key);
+        }
+      });
+      return Array.from(next);
+    });
+  };
+
+  const getSelectedWrittenExamScoreIds = (
+    selectedItemKeys: string[],
+    targetRecords: PerformanceScoreRecord[],
+  ) => {
+    const validScoreIds = new Set(targetRecords.map(getRecordScoreId));
+    return Array.from(
+      new Set(
+        selectedItemKeys
+          .map((key) => parseRequestItemSelectionKey(key).scoreId)
+          .filter((scoreId) => scoreId && validScoreIds.has(scoreId)),
+      ),
+    );
+  };
+
+  const buildWrittenExamTargetDetails = (
+    selectedItemKeys: string[],
+    targetRecords: PerformanceScoreRecord[],
+  ) => {
+    if (scoreKind !== WRITTEN_EXAM_SCORE_KIND) return "";
+    const selected = new Set(selectedItemKeys);
+    const details = targetRecords
+      .map((record) => {
+        const scoreId = getRecordScoreId(record);
+        const groupDetails = getWrittenExamItemGroups(record.items || [])
+          .map((group) => {
+            const itemLabels = group.items
+              .filter(({ key }) =>
+                selected.has(getRequestItemSelectionKey(scoreId, key)),
+              )
+              .map(({ label }) => label);
+            return itemLabels.length
+              ? `${group.label} ${itemLabels.join(", ")}`
+              : "";
+          })
+          .filter(Boolean);
+        return groupDetails.length
+          ? `${record.title}: ${groupDetails.join(" / ")}`
+          : "";
+      })
+      .filter(Boolean);
+    return details.join(" | ");
+  };
+
   const submitAnswerSheetRequest = async () => {
     if (!currentUser?.uid || answerSheetRequesting) return;
     if (!warningConsentCurrent) {
       setAnswerSheetRequestError("안내 문구 동의를 먼저 저장해 주세요.");
       return;
     }
-    const selectedScoreIds = Array.from(
-      new Set(answerSheetRequestSelectedIds),
-    ).filter(Boolean);
+    const selectedScoreIds = hasDetailedWrittenExamItems
+      ? getSelectedWrittenExamScoreIds(
+          answerSheetRequestSelectedItemKeys,
+          records,
+        )
+      : Array.from(new Set(answerSheetRequestSelectedIds)).filter(Boolean);
     if (!selectedScoreIds.length) {
-      setAnswerSheetRequestError("답안지 확인을 요청할 점수를 선택해 주세요.");
+      setAnswerSheetRequestError(
+        hasDetailedWrittenExamItems
+          ? "답안지 확인을 요청할 논술형 문제와 하위 문항을 선택해 주세요."
+          : "답안지 확인을 요청할 점수를 선택해 주세요.",
+      );
       return;
     }
     if (
@@ -1034,10 +1274,17 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     setAnswerSheetRequesting(true);
     setAnswerSheetRequestError("");
     try {
+      const targetDetails = buildWrittenExamTargetDetails(
+        answerSheetRequestSelectedItemKeys,
+        records.filter((record) =>
+          selectedScoreIds.includes(getRecordScoreId(record)),
+        ),
+      );
       const result = await notifyPerformanceScoreAnswerSheetRequested(config, {
         scoreIds: selectedScoreIds,
         reason,
         scoreKind,
+        targetDetails,
       });
       const latestRequests = await loadUserPerformanceScoreAnswerSheetRequests(
         config,
@@ -1046,6 +1293,8 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
       );
       setAnswerSheetRequests(latestRequests);
       setAnswerSheetRequestModalOpen(false);
+      setAnswerSheetRequestSelectedIds([]);
+      setAnswerSheetRequestSelectedItemKeys([]);
       if (result.requestSavedCount <= 0) {
         showToast({
           title: "이미 확인 요청 중입니다.",
@@ -1199,6 +1448,26 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     });
   };
 
+  const toggleObjectionItemSelection = (
+    itemKeys: string[],
+    checked: boolean,
+  ) => {
+    setObjectionError("");
+    toggleRequestItemSelection(setObjectionSelectedItemKeys, itemKeys, checked);
+  };
+
+  const toggleAnswerSheetRequestItemSelection = (
+    itemKeys: string[],
+    checked: boolean,
+  ) => {
+    setAnswerSheetRequestError("");
+    toggleRequestItemSelection(
+      setAnswerSheetRequestSelectedItemKeys,
+      itemKeys,
+      checked,
+    );
+  };
+
   const submitPerformanceScoreObjection = async () => {
     if (!currentUser?.uid || signatureActionPending) return;
     if (!warningConsentCurrent) {
@@ -1206,12 +1475,19 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
       return;
     }
     const validScoreIds = new Set(pendingRecords.map(getRecordScoreId));
-    const selectedScoreIds = Array.from(new Set(objectionSelectedIds)).filter(
-      (scoreId) => scoreId && validScoreIds.has(scoreId),
-    );
+    const selectedScoreIds = hasDetailedWrittenExamItems
+      ? getSelectedWrittenExamScoreIds(
+          objectionSelectedItemKeys,
+          pendingRecords,
+        )
+      : Array.from(new Set(objectionSelectedIds)).filter(
+          (scoreId) => scoreId && validScoreIds.has(scoreId),
+        );
     if (selectedScoreIds.length === 0) {
       setObjectionError(
-        `이의 제기할 ${resolvedCopy.scoreLabel} 점수를 선택해 주세요.`,
+        hasDetailedWrittenExamItems
+          ? "이의 제기할 논술형 문제와 하위 문항을 선택해 주세요."
+          : `이의 제기할 ${resolvedCopy.scoreLabel} 점수를 선택해 주세요.`,
       );
       return;
     }
@@ -1236,10 +1512,15 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     setObjecting(true);
     setObjectionError("");
     try {
+      const targetDetails = buildWrittenExamTargetDetails(
+        objectionSelectedItemKeys,
+        selectedRecords,
+      );
       const result = await notifyPerformanceScoreObjectionRequested(config, {
         scoreIds: selectedScoreIds,
         reason,
         scoreKind,
+        targetDetails,
       });
       if (result.objectionSavedCount > 0) {
         const latestObjections = await loadUserPerformanceScoreObjections(
@@ -1268,6 +1549,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
           setSignatureModalOpen(false);
           setObjectionReason("");
           setObjectionSelectedIds([]);
+          setObjectionSelectedItemKeys([]);
           showToast({
             title: "이의 목록에 접수했습니다.",
             message:
@@ -1287,6 +1569,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
       setSignatureModalOpen(false);
       setObjectionReason("");
       setObjectionSelectedIds([]);
+      setObjectionSelectedItemKeys([]);
       if (result.createdCount > 0) {
         showToast({
           title: "이의 제기를 전달했습니다.",
@@ -1504,6 +1787,152 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     },
   };
 
+  const renderWrittenExamRequestTargets = (params: {
+    records: PerformanceScoreRecord[];
+    selectedItemKeys: string[];
+    disabled: boolean;
+    pendingScoreIds?: Set<string>;
+    tone: "blue" | "rose";
+    onToggle: (itemKeys: string[], checked: boolean) => void;
+  }) => {
+    const selectedItemKeySet = new Set(params.selectedItemKeys);
+    return (
+      <div className="mt-3 grid gap-3">
+        {params.records.map((record) => {
+          const scoreId = getRecordScoreId(record);
+          const alreadyPending = params.pendingScoreIds?.has(scoreId) || false;
+          const groups = getWrittenExamItemGroups(record.items || []);
+          return (
+            <div
+              key={`written-request-${params.tone}-${scoreId}`}
+              className={`rounded-xl border px-3 py-3 ${
+                alreadyPending
+                  ? "border-slate-200 bg-slate-50 opacity-75"
+                  : "border-slate-200 bg-white"
+              }`}
+            >
+              <div className="whitespace-normal break-keep text-sm font-black leading-5 text-slate-900">
+                {record.title}
+              </div>
+              <div className="mt-1 text-xs font-bold text-slate-500">
+                전체 획득 {formatPerformanceScore(record.totalScore)} /{" "}
+                {formatPerformanceScore(record.totalMaxScore)}점
+              </div>
+              {alreadyPending && (
+                <div className="mt-2 text-xs font-black text-blue-700">
+                  이미 확인 요청 중입니다.
+                </div>
+              )}
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                {groups.map((group) => {
+                  const itemKeys = group.items.map(({ key }) =>
+                    getRequestItemSelectionKey(scoreId, key),
+                  );
+                  const checkedCount = itemKeys.filter((key) =>
+                    selectedItemKeySet.has(key),
+                  ).length;
+                  const checked =
+                    itemKeys.length > 0 && checkedCount === itemKeys.length;
+                  const indeterminate =
+                    checkedCount > 0 && checkedCount < itemKeys.length;
+                  const checkboxTone =
+                    params.tone === "rose"
+                      ? "text-rose-600 focus:ring-rose-500"
+                      : "text-blue-600 focus:ring-blue-500";
+                  return (
+                    <div
+                      key={`written-request-group-${scoreId}-${group.key}`}
+                      className={`rounded-lg border px-3 py-3 ${
+                        checkedCount > 0
+                          ? params.tone === "rose"
+                            ? "border-rose-200 bg-rose-50"
+                            : "border-blue-200 bg-blue-50"
+                          : "border-slate-100 bg-slate-50"
+                      }`}
+                    >
+                      <label className="flex cursor-pointer items-start gap-2">
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          ref={(node) => {
+                            if (node) node.indeterminate = indeterminate;
+                          }}
+                          onChange={(event) =>
+                            params.onToggle(itemKeys, event.target.checked)
+                          }
+                          disabled={
+                            params.disabled ||
+                            alreadyPending ||
+                            itemKeys.length === 0
+                          }
+                          className={`mt-0.5 h-4 w-4 rounded border-slate-300 ${checkboxTone}`}
+                        />
+                        <span className="min-w-0">
+                          <span className="block text-sm font-black text-slate-900">
+                            {group.label} 논술형 문제
+                          </span>
+                          <span className="mt-1 block text-xs font-bold text-slate-500">
+                            획득{" "}
+                            {formatPerformanceScore(
+                              getWrittenExamGroupScore(group),
+                            )}{" "}
+                            /{" "}
+                            {formatPerformanceScore(
+                              getWrittenExamGroupMaxScore(group),
+                            )}
+                            점
+                          </span>
+                        </span>
+                      </label>
+                      <div className="mt-3 grid gap-2">
+                        {group.items.map(({ key, label, item }) => {
+                          const itemSelectionKey = getRequestItemSelectionKey(
+                            scoreId,
+                            key,
+                          );
+                          const itemChecked =
+                            selectedItemKeySet.has(itemSelectionKey);
+                          return (
+                            <label
+                              key={`written-request-item-${scoreId}-${key}`}
+                              className="flex cursor-pointer items-center justify-between gap-3 rounded-md bg-white px-3 py-2 text-xs font-bold"
+                            >
+                              <span className="flex min-w-0 items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={itemChecked}
+                                  onChange={(event) =>
+                                    params.onToggle(
+                                      [itemSelectionKey],
+                                      event.target.checked,
+                                    )
+                                  }
+                                  disabled={params.disabled || alreadyPending}
+                                  className={`h-4 w-4 rounded border-slate-300 ${checkboxTone}`}
+                                />
+                                <span className="text-slate-700">{label}</span>
+                              </span>
+                              <span className="shrink-0 text-slate-500">
+                                {item.scoreEntered === false
+                                  ? "-"
+                                  : formatPerformanceScore(item.score)}{" "}
+                                / {formatPerformanceScore(item.maxScore)}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   if (loading) {
     return <PageLoading message={resolvedCopy.loadingMessage} />;
   }
@@ -1685,56 +2114,95 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                     record.id === selectedRecord.id ||
                     (!selectedRecord.id && record.id === records[0]?.id);
                   return (
-                    <button
-                      key={record.id || record.rosterId}
-                      type="button"
-                      onClick={() => setSelectedId(record.id || "")}
-                      aria-current={active ? "true" : undefined}
-                      className={`flex min-w-[15rem] items-start gap-3 rounded-xl border p-3 text-left transition-colors lg:min-w-0 lg:rounded-none lg:border-0 lg:border-l-4 lg:p-4 ${
-                        active
-                          ? "border-blue-200 bg-blue-50 text-blue-600 lg:border-blue-600"
-                          : "border-gray-200 text-slate-600 hover:bg-gray-50 lg:border-transparent"
-                      }`}
-                    >
-                      <div className="w-6 shrink-0 text-center">
-                        <i
-                          className="fas fa-clipboard-check text-sm"
-                          aria-hidden="true"
-                        ></i>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="whitespace-normal break-keep text-sm font-bold leading-5">
-                          {record.title}
+                    <React.Fragment key={record.id || record.rosterId}>
+                      <button
+                        key={record.id || record.rosterId}
+                        type="button"
+                        onClick={() => setSelectedId(record.id || "")}
+                        aria-current={active ? "true" : undefined}
+                        className={`flex min-w-[15rem] items-start gap-3 rounded-xl border p-3 text-left transition-colors lg:min-w-0 lg:rounded-none lg:border-0 lg:border-l-4 lg:p-4 ${
+                          active
+                            ? "border-blue-200 bg-blue-50 text-blue-600 lg:border-blue-600"
+                            : "border-gray-200 text-slate-600 hover:bg-gray-50 lg:border-transparent"
+                        }`}
+                      >
+                        <div className="w-6 shrink-0 text-center">
+                          <i
+                            className="fas fa-clipboard-check text-sm"
+                            aria-hidden="true"
+                          ></i>
                         </div>
-                        <div
-                          className={`mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold ${
-                            active ? "text-blue-500" : "text-slate-500"
-                          }`}
-                        >
-                          <span>
-                            획득 {formatPerformanceScore(record.totalScore)} /{" "}
-                            {formatPerformanceScore(record.totalMaxScore)}
-                          </span>
-                          {record.signatureName && (
-                            <span className="text-blue-700">확인 완료</span>
-                          )}
-                          {pendingObjectionScoreIds.has(
-                            getRecordScoreId(record),
-                          ) && (
-                            <span className="text-amber-700">
-                              이의 처리 대기
+                        <div className="min-w-0 flex-1">
+                          <div className="whitespace-normal break-keep text-sm font-bold leading-5">
+                            {record.title}
+                          </div>
+                          <div
+                            className={`mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold ${
+                              active ? "text-blue-500" : "text-slate-500"
+                            }`}
+                          >
+                            <span>
+                              획득 {formatPerformanceScore(record.totalScore)} /{" "}
+                              {formatPerformanceScore(record.totalMaxScore)}
                             </span>
-                          )}
-                          {pendingAnswerSheetRequestScoreIds.has(
-                            getRecordScoreId(record),
-                          ) && (
-                            <span className="text-blue-700">
-                              답안지 확인 요청 중
-                            </span>
-                          )}
+                            {record.signatureName && (
+                              <span className="text-blue-700">확인 완료</span>
+                            )}
+                            {pendingObjectionScoreIds.has(
+                              getRecordScoreId(record),
+                            ) && (
+                              <span className="text-amber-700">
+                                이의 처리 대기
+                              </span>
+                            )}
+                            {pendingAnswerSheetRequestScoreIds.has(
+                              getRecordScoreId(record),
+                            ) && (
+                              <span className="text-blue-700">
+                                답안지 확인 요청 중
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </button>
+                      </button>
+                      {active && hasDetailedWrittenExamItems && (
+                        <div className="flex min-w-[15rem] gap-2 px-3 pb-3 lg:min-w-0 lg:flex-col lg:px-4">
+                          {writtenExamItemGroups.map((group) => {
+                            const groupActive =
+                              activeWrittenExamGroup?.key === group.key;
+                            return (
+                              <button
+                                key={`score-nav-${group.key}`}
+                                type="button"
+                                onClick={() =>
+                                  setSelectedWrittenExamGroupKey(group.key)
+                                }
+                                aria-current={groupActive ? "true" : undefined}
+                                className={`block rounded-lg border px-3 py-2 text-left text-xs font-black transition ${
+                                  groupActive
+                                    ? "border-blue-500 bg-white text-blue-700 shadow-sm"
+                                    : "border-blue-100 bg-blue-50/60 text-blue-500 hover:border-blue-200 hover:bg-white"
+                                }`}
+                              >
+                                <span className="block">
+                                  {group.label} 논술형 문제
+                                </span>
+                                <span className="mt-1 block text-[11px] font-bold">
+                                  획득{" "}
+                                  {formatPerformanceScore(
+                                    getWrittenExamGroupScore(group),
+                                  )}{" "}
+                                  /{" "}
+                                  {formatPerformanceScore(
+                                    getWrittenExamGroupMaxScore(group),
+                                  )}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </React.Fragment>
                   );
                 })}
               </nav>
@@ -1750,6 +2218,11 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                 <h2 className="mt-1 whitespace-normal break-keep text-2xl font-black leading-tight text-slate-900">
                   {selectedRecord.title}
                 </h2>
+                {activeWrittenExamGroup && (
+                  <div className="mt-3 inline-flex rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-black text-blue-800">
+                    {activeWrittenExamGroup.label} 논술형 문제
+                  </div>
+                )}
                 {getRecordDate(selectedRecord) && (
                   <p className="mt-2 text-xs font-bold text-slate-400">
                     최종 반영일: {getRecordDate(selectedRecord)}
@@ -1761,10 +2234,10 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                   획득 점수 / 만점
                 </div>
                 <div className="mt-1 text-4xl font-black text-blue-600">
-                  {formatPerformanceScore(selectedRecord.totalScore)}
+                  {formatPerformanceScore(visibleTotalScore)}
                   <span className="text-xl text-slate-300">
                     {" "}
-                    / {formatPerformanceScore(selectedRecord.totalMaxScore)}
+                    / {formatPerformanceScore(visibleTotalMaxScore)}
                   </span>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2 lg:justify-end">
@@ -1797,9 +2270,9 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                   내 획득 점수
                 </div>
                 <div className="mt-3 text-5xl font-black text-blue-700">
-                  {formatPerformanceScore(selectedRecord.totalScore)}
+                  {formatPerformanceScore(visibleTotalScore)}
                   <span className="ml-1 text-2xl text-blue-300">
-                    / {formatPerformanceScore(selectedRecord.totalMaxScore)}
+                    / {formatPerformanceScore(visibleTotalMaxScore)}
                   </span>
                 </div>
                 <p className="mt-5 whitespace-normal break-keep text-sm font-bold leading-6 text-blue-900/70">
@@ -1808,7 +2281,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
               </div>
 
               <div className="relative h-72 min-w-0 overflow-hidden rounded-xl border border-slate-200 p-4">
-                {chartItems.length > 0 ? (
+                {visibleChartItems.length > 0 ? (
                   <div
                     ref={scoreChartContainerRef}
                     className="relative h-full min-h-0 w-full min-w-0 overflow-hidden"
@@ -1822,7 +2295,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                   </div>
                 ) : (
                   <div className="flex h-full items-center justify-center px-4 text-center text-sm font-bold leading-6 text-slate-400">
-                    {resolvedCopy.scoreItemsLabel}는 제공되지 않았습니다. 총점과{" "}
+                    {resolvedCopy.scoreItemsLabel}는 제공되지 않았습니다. 점수와{" "}
                     {resolvedCopy.evidenceTitle}을 확인해 주세요.
                   </div>
                 )}
@@ -1832,19 +2305,21 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
             {hasDetailedWrittenExamItems && (
               <div className="mt-5 rounded-xl border border-slate-200 bg-white px-4 py-4">
                 <h3 className="text-base font-black text-slate-900">
-                  문항별 점수와 피드백
+                  {activeWrittenExamGroup
+                    ? `${activeWrittenExamGroup.label} 문항별 점수와 피드백`
+                    : "문항별 점수와 피드백"}
                 </h3>
-                <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                  {writtenExamItemGroups.map((group) => (
+                <div className="mt-4 grid gap-4">
+                  {[activeWrittenExamGroup].filter(Boolean).map((group) => (
                     <div
-                      key={group.key}
+                      key={group?.key}
                       className="rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-4"
                     >
                       <div className="text-sm font-black text-blue-900">
-                        {group.label}
+                        {group?.label}
                       </div>
                       <div className="mt-3 space-y-2">
-                        {group.items.map(({ key, label, item, index }) => (
+                        {group?.items.map(({ key, label, item, index }) => (
                           <div
                             key={`${key}-${index}`}
                             className="rounded-lg border border-white bg-white px-3 py-3 shadow-sm"
@@ -1921,41 +2396,54 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                 <legend className="text-sm font-black text-slate-800">
                   {resolvedCopy.objectionTargetLabel}
                 </legend>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  {pendingRecords.map((record) => {
-                    const scoreId = getRecordScoreId(record);
-                    const checked = objectionSelectedIds.includes(scoreId);
-                    return (
-                      <label
-                        key={`objection-${scoreId}`}
-                        className={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-3 transition ${
-                          checked
-                            ? "border-rose-200 bg-rose-50"
-                            : "border-slate-200 bg-white hover:bg-slate-50"
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={(event) =>
-                            toggleObjectionScore(scoreId, event.target.checked)
-                          }
-                          disabled={objecting}
-                          className="mt-1 h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500"
-                        />
-                        <span className="min-w-0">
-                          <span className="block whitespace-normal break-keep text-sm font-black leading-5 text-slate-900">
-                            {record.title}
+                {hasDetailedWrittenExamItems ? (
+                  renderWrittenExamRequestTargets({
+                    records: pendingRecords,
+                    selectedItemKeys: objectionSelectedItemKeys,
+                    disabled: objecting,
+                    tone: "rose",
+                    onToggle: toggleObjectionItemSelection,
+                  })
+                ) : (
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    {pendingRecords.map((record) => {
+                      const scoreId = getRecordScoreId(record);
+                      const checked = objectionSelectedIds.includes(scoreId);
+                      return (
+                        <label
+                          key={`objection-${scoreId}`}
+                          className={`flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-3 transition ${
+                            checked
+                              ? "border-rose-200 bg-rose-50"
+                              : "border-slate-200 bg-white hover:bg-slate-50"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(event) =>
+                              toggleObjectionScore(
+                                scoreId,
+                                event.target.checked,
+                              )
+                            }
+                            disabled={objecting}
+                            className="mt-1 h-4 w-4 rounded border-slate-300 text-rose-600 focus:ring-rose-500"
+                          />
+                          <span className="min-w-0">
+                            <span className="block whitespace-normal break-keep text-sm font-black leading-5 text-slate-900">
+                              {record.title}
+                            </span>
+                            <span className="mt-1 block text-xs font-bold text-slate-500">
+                              획득 {formatPerformanceScore(record.totalScore)} /{" "}
+                              {formatPerformanceScore(record.totalMaxScore)}점
+                            </span>
                           </span>
-                          <span className="mt-1 block text-xs font-bold text-slate-500">
-                            획득 {formatPerformanceScore(record.totalScore)} /{" "}
-                            {formatPerformanceScore(record.totalMaxScore)}점
-                          </span>
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
               </fieldset>
 
               <div className="mt-5">
@@ -2041,55 +2529,66 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                 <legend className="text-sm font-black text-slate-800">
                   확인 요청 대상
                 </legend>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  {records.map((record) => {
-                    const scoreId = getRecordScoreId(record);
-                    const alreadyPending =
-                      pendingAnswerSheetRequestScoreIds.has(scoreId);
-                    const checked =
-                      !alreadyPending &&
-                      answerSheetRequestSelectedIds.includes(scoreId);
-                    return (
-                      <label
-                        key={`answer-sheet-${scoreId}`}
-                        className={`flex items-start gap-3 rounded-lg border px-3 py-3 transition ${
-                          alreadyPending
-                            ? "cursor-not-allowed border-slate-200 bg-slate-50 opacity-75"
-                            : checked
-                              ? "border-blue-200 bg-blue-50"
-                              : "border-slate-200 bg-white hover:bg-slate-50"
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={(event) =>
-                            toggleAnswerSheetRequestScore(
-                              scoreId,
-                              event.target.checked,
-                            )
-                          }
-                          disabled={answerSheetRequesting || alreadyPending}
-                          className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                        />
-                        <span className="min-w-0">
-                          <span className="block whitespace-normal break-keep text-sm font-black leading-5 text-slate-900">
-                            {record.title}
-                          </span>
-                          <span className="mt-1 block text-xs font-bold text-slate-500">
-                            획득 {formatPerformanceScore(record.totalScore)} /{" "}
-                            {formatPerformanceScore(record.totalMaxScore)}점
-                          </span>
-                          {alreadyPending && (
-                            <span className="mt-1 block text-xs font-black text-blue-700">
-                              이미 확인 요청 중입니다.
+                {hasDetailedWrittenExamItems ? (
+                  renderWrittenExamRequestTargets({
+                    records,
+                    selectedItemKeys: answerSheetRequestSelectedItemKeys,
+                    disabled: answerSheetRequesting,
+                    pendingScoreIds: pendingAnswerSheetRequestScoreIds,
+                    tone: "blue",
+                    onToggle: toggleAnswerSheetRequestItemSelection,
+                  })
+                ) : (
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    {records.map((record) => {
+                      const scoreId = getRecordScoreId(record);
+                      const alreadyPending =
+                        pendingAnswerSheetRequestScoreIds.has(scoreId);
+                      const checked =
+                        !alreadyPending &&
+                        answerSheetRequestSelectedIds.includes(scoreId);
+                      return (
+                        <label
+                          key={`answer-sheet-${scoreId}`}
+                          className={`flex items-start gap-3 rounded-lg border px-3 py-3 transition ${
+                            alreadyPending
+                              ? "cursor-not-allowed border-slate-200 bg-slate-50 opacity-75"
+                              : checked
+                                ? "border-blue-200 bg-blue-50"
+                                : "border-slate-200 bg-white hover:bg-slate-50"
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={(event) =>
+                              toggleAnswerSheetRequestScore(
+                                scoreId,
+                                event.target.checked,
+                              )
+                            }
+                            disabled={answerSheetRequesting || alreadyPending}
+                            className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                          />
+                          <span className="min-w-0">
+                            <span className="block whitespace-normal break-keep text-sm font-black leading-5 text-slate-900">
+                              {record.title}
                             </span>
-                          )}
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
+                            <span className="mt-1 block text-xs font-bold text-slate-500">
+                              획득 {formatPerformanceScore(record.totalScore)} /{" "}
+                              {formatPerformanceScore(record.totalMaxScore)}점
+                            </span>
+                            {alreadyPending && (
+                              <span className="mt-1 block text-xs font-black text-blue-700">
+                                이미 확인 요청 중입니다.
+                              </span>
+                            )}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
               </fieldset>
 
               <div className="mt-5">
@@ -2238,6 +2737,12 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                               </div>
                             )}
 
+                          {objection.targetDetails && (
+                            <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-bold leading-6 text-blue-800">
+                              대상: {objection.targetDetails}
+                            </div>
+                          )}
+
                           <div
                             className={`rounded-lg border px-3 py-3 ${meta.panelClass}`}
                           >
@@ -2278,8 +2783,9 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                   {resolvedCopy.signatureTitle}
                 </h3>
                 <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
-                  모든 차시의 점수를 확인한 뒤, 성을 포함한 이름을 직접 써
-                  주세요.
+                  {scoreKind === WRITTEN_EXAM_SCORE_KIND
+                    ? "모든 논술형 문제의 점수를 확인한 뒤, 성을 포함한 이름을 직접 써 주세요."
+                    : "모든 차시의 점수를 확인한 뒤, 성을 포함한 이름을 직접 써 주세요."}
                 </p>
               </div>
               <button
@@ -2297,22 +2803,55 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
               {signatureReviewStep === "sign" ? (
                 <div className="space-y-4">
                   <div className="grid gap-3 md:grid-cols-2">
-                    {records.map((record) => (
-                      <div
-                        key={getRecordScoreId(record)}
-                        className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3"
-                      >
-                        <div className="whitespace-normal break-keep text-sm font-black leading-5 text-blue-950">
-                          {record.title}
-                        </div>
-                        <div className="mt-2 text-lg font-black text-blue-700">
-                          {formatPerformanceScore(record.totalScore)}
-                          <span className="ml-1 text-sm text-blue-300">
-                            / {formatPerformanceScore(record.totalMaxScore)}점
-                          </span>
-                        </div>
-                      </div>
-                    ))}
+                    {records.flatMap((record) => {
+                      const groups =
+                        scoreKind === WRITTEN_EXAM_SCORE_KIND
+                          ? getWrittenExamItemGroups(record.items || [])
+                          : [];
+                      if (groups.length > 0) {
+                        return groups.map((group) => (
+                          <div
+                            key={`${getRecordScoreId(record)}-${group.key}`}
+                            className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3"
+                          >
+                            <div className="whitespace-normal break-keep text-sm font-black leading-5 text-blue-950">
+                              {group.label} 논술형 문제
+                            </div>
+                            <div className="mt-1 text-xs font-bold text-blue-900/70">
+                              {record.title}
+                            </div>
+                            <div className="mt-2 text-lg font-black text-blue-700">
+                              {formatPerformanceScore(
+                                getWrittenExamGroupScore(group),
+                              )}
+                              <span className="ml-1 text-sm text-blue-300">
+                                /{" "}
+                                {formatPerformanceScore(
+                                  getWrittenExamGroupMaxScore(group),
+                                )}
+                                점
+                              </span>
+                            </div>
+                          </div>
+                        ));
+                      }
+                      return [
+                        <div
+                          key={getRecordScoreId(record)}
+                          className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3"
+                        >
+                          <div className="whitespace-normal break-keep text-sm font-black leading-5 text-blue-950">
+                            {record.title}
+                          </div>
+                          <div className="mt-2 text-lg font-black text-blue-700">
+                            {formatPerformanceScore(record.totalScore)}
+                            <span className="ml-1 text-sm text-blue-300">
+                              / {formatPerformanceScore(record.totalMaxScore)}점
+                            </span>
+                          </div>
+                        </div>,
+                      ];
+                    })}
                   </div>
 
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
@@ -2488,43 +3027,94 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                   </div>
 
                   <div className="grid gap-3 lg:grid-cols-2">
-                    {records.map((record) => (
-                      <div
-                        key={`${getRecordScoreId(record)}-review`}
-                        className="flex min-w-0 flex-col rounded-xl border border-slate-200"
-                      >
-                        <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                          <div className="whitespace-normal break-keep font-black text-slate-900">
-                            {record.title}
-                          </div>
-                          <div className="text-sm font-black text-blue-700">
-                            {formatPerformanceScore(record.totalScore)} /{" "}
-                            {formatPerformanceScore(record.totalMaxScore)}점
-                          </div>
-                        </div>
-                        <div className="grid gap-2 px-4 py-3 md:grid-cols-2">
-                          {(record.items || []).map((item, index) => (
-                            <div
-                              key={`${record.rosterId}-${item.name}-${index}`}
-                              className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-xs font-bold"
-                            >
-                              <span className="whitespace-normal break-keep text-slate-600">
-                                {getItemLabel(item, index)}
-                              </span>
-                              <span className="shrink-0 text-slate-900">
-                                {item.scoreEntered === false
-                                  ? "-"
-                                  : formatPerformanceScore(item.score)}
-                                <span className="text-slate-400">
-                                  {" "}
-                                  / {formatPerformanceScore(item.maxScore)}
-                                </span>
-                              </span>
+                    {records.flatMap((record) => {
+                      const groups =
+                        scoreKind === WRITTEN_EXAM_SCORE_KIND
+                          ? getWrittenExamItemGroups(record.items || [])
+                          : [];
+                      if (groups.length > 0) {
+                        return groups.map((group) => (
+                          <div
+                            key={`${getRecordScoreId(record)}-${group.key}-review`}
+                            className="flex min-w-0 flex-col rounded-xl border border-slate-200"
+                          >
+                            <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                              <div className="whitespace-normal break-keep font-black text-slate-900">
+                                {group.label} 논술형 문제
+                              </div>
+                              <div className="text-sm font-black text-blue-700">
+                                {formatPerformanceScore(
+                                  getWrittenExamGroupScore(group),
+                                )}{" "}
+                                /{" "}
+                                {formatPerformanceScore(
+                                  getWrittenExamGroupMaxScore(group),
+                                )}
+                                점
+                              </div>
                             </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
+                            <div className="grid gap-2 px-4 py-3 md:grid-cols-2">
+                              {group.items.map(({ key, label, item }) => (
+                                <div
+                                  key={`${record.rosterId}-${key}-review`}
+                                  className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-xs font-bold"
+                                >
+                                  <span className="whitespace-normal break-keep text-slate-600">
+                                    {label}
+                                  </span>
+                                  <span className="shrink-0 text-slate-900">
+                                    {item.scoreEntered === false
+                                      ? "-"
+                                      : formatPerformanceScore(item.score)}
+                                    <span className="text-slate-400">
+                                      {" "}
+                                      / {formatPerformanceScore(item.maxScore)}
+                                    </span>
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ));
+                      }
+                      return [
+                        <div
+                          key={`${getRecordScoreId(record)}-review`}
+                          className="flex min-w-0 flex-col rounded-xl border border-slate-200"
+                        >
+                          <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="whitespace-normal break-keep font-black text-slate-900">
+                              {record.title}
+                            </div>
+                            <div className="text-sm font-black text-blue-700">
+                              {formatPerformanceScore(record.totalScore)} /{" "}
+                              {formatPerformanceScore(record.totalMaxScore)}점
+                            </div>
+                          </div>
+                          <div className="grid gap-2 px-4 py-3 md:grid-cols-2">
+                            {(record.items || []).map((item, index) => (
+                              <div
+                                key={`${record.rosterId}-${item.name}-${index}`}
+                                className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-xs font-bold"
+                              >
+                                <span className="whitespace-normal break-keep text-slate-600">
+                                  {getItemLabel(item, index)}
+                                </span>
+                                <span className="shrink-0 text-slate-900">
+                                  {item.scoreEntered === false
+                                    ? "-"
+                                    : formatPerformanceScore(item.score)}
+                                  <span className="text-slate-400">
+                                    {" "}
+                                    / {formatPerformanceScore(item.maxScore)}
+                                  </span>
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>,
+                      ];
+                    })}
                   </div>
 
                   <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold leading-7 text-rose-700">

@@ -417,6 +417,69 @@ const normalizePerformanceScoreRoster = (
 const getItemLabel = (item: { name: string; shortName?: string }) =>
   item.shortName || item.name;
 
+const getWrittenExamItemMeta = (
+  item: Pick<
+    PerformanceScoreItem,
+    "name" | "shortName" | "itemKey" | "groupKey" | "groupLabel"
+  >,
+  index: number,
+) => {
+  const rawKey = String(item.itemKey || item.shortName || item.name || "");
+  const match = /^(\d+)\s*-\s*[\(\[]?\s*(\d+)\s*[\)\]]?$/.exec(rawKey.trim());
+  if (!match) {
+    return {
+      key: rawKey || `item-${index}`,
+      groupKey: String(item.groupKey || "essay"),
+      groupLabel: item.groupLabel || "논술형",
+      label: getItemLabel(item),
+      fullLabel: getItemLabel(item),
+      detailed: false,
+    };
+  }
+  return {
+    key: `${match[1]}-(${match[2]})`,
+    groupKey: match[1],
+    groupLabel: item.groupLabel || `${match[1]}번`,
+    label: `(${match[2]})`,
+    fullLabel: `${match[1]}-(${match[2]})`,
+    detailed: true,
+  };
+};
+
+const buildWrittenExamStatsGroups = (
+  items: PerformanceScoreRoster["items"] | PerformanceScoreRecord["items"],
+): WrittenExamStatsGroup[] => {
+  const groups = new Map<string, WrittenExamStatsGroup>();
+  (items || []).forEach((item, index) => {
+    const meta = getWrittenExamItemMeta(item, index);
+    const key =
+      meta.groupKey === "1" || meta.groupKey === "2"
+        ? meta.groupKey
+        : ("all" as const);
+    if (key === "all") return;
+    const group: WrittenExamStatsGroup = groups.get(key) || {
+      key,
+      label: meta.groupLabel,
+      items: [],
+      maxScore: 0,
+    };
+    const maxScore = getFiniteNumber(item.maxScore) ?? 0;
+    group.items.push({
+      item: item as PerformanceScoreItem,
+      index,
+      label: meta.label,
+      fullLabel: meta.fullLabel,
+    });
+    group.maxScore = roundScore(group.maxScore + maxScore);
+    groups.set(key, group);
+  });
+  return Array.from(groups.values()).sort(
+    (left, right) =>
+      Number(left.key) - Number(right.key) ||
+      left.label.localeCompare(right.label, "ko"),
+  );
+};
+
 const getPreviewPageItems = (
   currentPage: number,
   totalPages: number,
@@ -784,6 +847,7 @@ type ClassStatsSortKey =
   | "difference"
   | "percent";
 type ScoreStatsMode = "all" | "first" | "second";
+type WrittenExamStatsGroupKey = "all" | "1" | "2";
 
 interface SortState<TKey extends string> {
   key: TKey;
@@ -823,6 +887,18 @@ interface ItemScoreSummary {
   overall: ScoreSummary;
   selected: ScoreSummary;
   difference: number | null;
+}
+
+interface WrittenExamStatsGroup {
+  key: WrittenExamStatsGroupKey;
+  label: string;
+  items: Array<{
+    item: PerformanceScoreItem;
+    index: number;
+    label: string;
+    fullLabel: string;
+  }>;
+  maxScore: number;
 }
 
 interface NormalCurveSummary {
@@ -897,6 +973,7 @@ interface PerformanceScoreObjection {
   totalScore: number | null;
   totalMaxScore: number | null;
   scoreLabel: string;
+  targetDetails?: string;
   items: PerformanceScoreObjectionItem[];
   reason: string;
   status: PerformanceScoreObjectionStatus;
@@ -923,6 +1000,7 @@ interface PerformanceScoreAnswerSheetRequest {
   academicYear: string;
   semester: string;
   scoreLabel: string;
+  targetDetails?: string;
   reason: string;
   status: "pending" | "reviewed";
   requestedAt?: unknown;
@@ -1173,6 +1251,7 @@ const normalizePerformanceScoreObjection = (
     scoreLabel:
       toText(data.scoreLabel) ||
       getObjectionScoreLabel(totalScore, totalMaxScore),
+    targetDetails: toText(data.targetDetails),
     items: normalizeObjectionItems(data.items),
     reason: toText(data.reason),
     status: normalizeObjectionStatus(data.status),
@@ -1203,6 +1282,7 @@ const normalizePerformanceScoreAnswerSheetRequest = (
   academicYear: toText(data.academicYear),
   semester: toText(data.semester),
   scoreLabel: toText(data.scoreLabel),
+  targetDetails: toText(data.targetDetails),
   reason: toText(data.reason),
   status: data.status === "reviewed" ? "reviewed" : "pending",
   requestedAt: data.requestedAt,
@@ -1278,6 +1358,39 @@ const getRecordTotalMaxScore = (record: PerformanceScoreRecord) => {
   }, 0);
   return itemMaxScore > 0 ? itemMaxScore : 0;
 };
+
+const getWrittenExamStatsRecordForGroup = (
+  record: PerformanceScoreRecord,
+  groupKey: WrittenExamStatsGroupKey,
+) => {
+  if (groupKey === "all") return record;
+  const selectedItems = (record.items || []).filter((item, index) => {
+    const meta = getWrittenExamItemMeta(item, index);
+    return meta.groupKey === groupKey;
+  });
+  if (!selectedItems.length) return null;
+  const totalScore = getEnteredItemsTotalScore(selectedItems);
+  const totalMaxScore = selectedItems.reduce((sum, item) => {
+    const maxScore = getFiniteNumber(item.maxScore);
+    return sum + (maxScore && maxScore > 0 ? maxScore : 0);
+  }, 0);
+  return {
+    ...record,
+    items: selectedItems,
+    totalScore: totalScore ?? Number.NaN,
+    totalMaxScore: roundScore(totalMaxScore),
+  };
+};
+
+const filterWrittenExamStatsRecords = (
+  records: PerformanceScoreRecord[],
+  groupKey: WrittenExamStatsGroupKey,
+) =>
+  groupKey === "all"
+    ? records
+    : records
+        .map((record) => getWrittenExamStatsRecordForGroup(record, groupKey))
+        .filter((record): record is PerformanceScoreRecord => record !== null);
 
 const getScoreStudentIdentityAliases = (
   source: Pick<
@@ -4789,28 +4902,53 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   );
   const scoreStatsFirstRoster = scoreListSummaryRosters.firstRoster;
   const scoreStatsSecondRoster = scoreListSummaryRosters.secondRoster;
-  const scoreStatsSelectedRoster =
-    scoreStatsMode === "first"
+  const writtenExamStatsGroups = useMemo(() => {
+    if (!isWrittenExamMode) return [];
+    const sourceItems =
+      rosters.find((roster) => (roster.items || []).length > 0)?.items || [];
+    return buildWrittenExamStatsGroups(sourceItems);
+  }, [isWrittenExamMode, rosters]);
+  const writtenExamStatsGroupKey: WrittenExamStatsGroupKey =
+    isWrittenExamMode && scoreStatsMode === "first"
+      ? "1"
+      : isWrittenExamMode && scoreStatsMode === "second"
+        ? "2"
+        : "all";
+  const selectedWrittenExamStatsGroup =
+    writtenExamStatsGroups.find(
+      (group) => group.key === writtenExamStatsGroupKey,
+    ) || null;
+  const scoreStatsSelectedRoster = isWrittenExamMode
+    ? null
+    : scoreStatsMode === "first"
       ? scoreStatsFirstRoster
       : scoreStatsMode === "second"
         ? scoreStatsSecondRoster
         : null;
   const scoreStatsAllSelected = scoreStatsMode === "all";
-  const scoreStatsSelectionReady =
-    !usesCombinedPerformanceSummary && scoreStatsMode === "all"
+  const scoreStatsSelectionReady = isWrittenExamMode
+    ? rosters.length > 0
+    : !usesCombinedPerformanceSummary && scoreStatsMode === "all"
       ? rosters.length > 0
       : scoreStatsMode === "all"
         ? Boolean(scoreStatsFirstRoster && scoreStatsSecondRoster)
         : Boolean(scoreStatsSelectedRoster);
-  const scoreStatsAnyAvailable = usesCombinedPerformanceSummary
-    ? Boolean(
-        (scoreStatsFirstRoster && scoreStatsSecondRoster) ||
-        scoreStatsFirstRoster ||
-        scoreStatsSecondRoster,
-      )
-    : rosters.length > 0;
-  const scoreStatsLoadKey =
-    !usesCombinedPerformanceSummary && scoreStatsMode === "all"
+  const scoreStatsAnyAvailable = isWrittenExamMode
+    ? rosters.length > 0
+    : usesCombinedPerformanceSummary
+      ? Boolean(
+          (scoreStatsFirstRoster && scoreStatsSecondRoster) ||
+          scoreStatsFirstRoster ||
+          scoreStatsSecondRoster,
+        )
+      : rosters.length > 0;
+  const scoreStatsLoadKey = isWrittenExamMode
+    ? [
+        activeScoreKind,
+        scoreStatsMode,
+        ...rosters.map((roster) => roster.id),
+      ].join(":")
+    : !usesCombinedPerformanceSummary && scoreStatsMode === "all"
       ? [
           activeScoreKind,
           SCORE_LIST_ALL_ROSTERS_VALUE,
@@ -4819,8 +4957,13 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       : scoreStatsMode === "all"
         ? scoreListSummaryLoadKey
         : [scoreStatsMode, scoreStatsSelectedRoster?.id || ""].join(":");
-  const scoreStatsTitle =
-    !usesCombinedPerformanceSummary && scoreStatsMode === "all"
+  const scoreStatsTitle = isWrittenExamMode
+    ? scoreStatsMode === "first"
+      ? "1번 논술형 문제"
+      : scoreStatsMode === "second"
+        ? "2번 논술형 문제"
+        : managerCopy.allScoresTitle
+    : !usesCombinedPerformanceSummary && scoreStatsMode === "all"
       ? managerCopy.allScoresTitle
       : scoreStatsMode === "all"
         ? combinedScoreListSummaryHeader
@@ -4828,44 +4971,64 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           ? firstScoreListSummaryHeader
           : secondScoreListSummaryHeader;
   const scoreStatsTotalMaxScore =
-    !usesCombinedPerformanceSummary && scoreStatsMode === "all"
-      ? rosters.reduce(
-          (max, roster) =>
-            Math.max(max, getFiniteNumber(roster.totalMaxScore) ?? 0),
-          0,
-        )
-      : scoreStatsMode === "all"
-        ? combinedScoreListSummaryMaxScore
-        : scoreStatsSelectedRoster?.totalMaxScore;
+    isWrittenExamMode && scoreStatsMode !== "all"
+      ? selectedWrittenExamStatsGroup?.maxScore || 0
+      : !usesCombinedPerformanceSummary && scoreStatsMode === "all"
+        ? rosters.reduce(
+            (max, roster) =>
+              Math.max(max, getFiniteNumber(roster.totalMaxScore) ?? 0),
+            0,
+          )
+        : scoreStatsMode === "all"
+          ? combinedScoreListSummaryMaxScore
+          : scoreStatsSelectedRoster?.totalMaxScore;
   const scoreStatsModeOptions: Array<{
     mode: ScoreStatsMode;
     label: string;
     disabled: boolean;
-  }> = usesCombinedPerformanceSummary
+  }> = isWrittenExamMode
     ? [
-        {
-          mode: "all",
-          label: "전체",
-          disabled: !(scoreStatsFirstRoster && scoreStatsSecondRoster),
-        },
-        {
-          mode: "first",
-          label: `1차 ${SCORE_LIST_FIRST_SUMMARY_LABEL}`,
-          disabled: !scoreStatsFirstRoster,
-        },
-        {
-          mode: "second",
-          label: `2차 ${SCORE_LIST_SECOND_SUMMARY_LABEL}`,
-          disabled: !scoreStatsSecondRoster,
-        },
-      ]
-    : [
         {
           mode: "all",
           label: "전체",
           disabled: rosters.length === 0,
         },
-      ];
+        {
+          mode: "first",
+          label: "1번",
+          disabled: !writtenExamStatsGroups.some((group) => group.key === "1"),
+        },
+        {
+          mode: "second",
+          label: "2번",
+          disabled: !writtenExamStatsGroups.some((group) => group.key === "2"),
+        },
+      ]
+    : usesCombinedPerformanceSummary
+      ? [
+          {
+            mode: "all",
+            label: "전체",
+            disabled: !(scoreStatsFirstRoster && scoreStatsSecondRoster),
+          },
+          {
+            mode: "first",
+            label: `1차 ${SCORE_LIST_FIRST_SUMMARY_LABEL}`,
+            disabled: !scoreStatsFirstRoster,
+          },
+          {
+            mode: "second",
+            label: `2차 ${SCORE_LIST_SECOND_SUMMARY_LABEL}`,
+            disabled: !scoreStatsSecondRoster,
+          },
+        ]
+      : [
+          {
+            mode: "all",
+            label: "전체",
+            disabled: rosters.length === 0,
+          },
+        ];
 
   useEffect(() => {
     setClassSheetFirstRosterId((current) => {
@@ -5157,6 +5320,14 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   }, [visibleScoreListRecordsPartiallySelected]);
 
   const scoreStatsFallbackRecords = useMemo(() => {
+    if (isWrittenExamMode) {
+      const records = rosters.flatMap((roster) =>
+        (roster.rows || [])
+          .filter((row) => rosterRowHasScore(row))
+          .map((row) => buildRecordFromRosterRow(roster, row)),
+      );
+      return filterWrittenExamStatsRecords(records, writtenExamStatsGroupKey);
+    }
     if (scoreStatsAllSelected) {
       if (!usesCombinedPerformanceSummary) {
         return rosters.flatMap((roster) =>
@@ -5187,6 +5358,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       .map((row) => buildRecordFromRosterRow(scoreStatsSelectedRoster, row));
   }, [
     combinedScoreListSummaryMaxScore,
+    isWrittenExamMode,
     rosters,
     scoreListSummaryCacheReady,
     scoreListSummaryStudents,
@@ -5196,6 +5368,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     scoreStatsSelectedRoster,
     semester,
     usesCombinedPerformanceSummary,
+    writtenExamStatsGroupKey,
     year,
   ]);
   const scoreStatsCombinedStudents = useMemo(() => {
@@ -5218,6 +5391,11 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   const scoreStatsRecordsReady =
     !!scoreStatsLoadKey && scoreStatsLoadedRosterId === scoreStatsLoadKey;
   const scoreStatsSourceRecords = useMemo(() => {
+    if (isWrittenExamMode) {
+      return scoreStatsRecordsReady
+        ? scoreStatsRecords
+        : scoreStatsFallbackRecords;
+    }
     if (scoreStatsRecordsReady) return scoreStatsRecords;
     if (
       scoreStatsAllSelected &&
@@ -5247,14 +5425,17 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     scoreStatsRecords,
     scoreStatsRecordsReady,
     scoreStatsSelectedRoster,
+    isWrittenExamMode,
   ]);
   const scoreStatsClassOptions = useMemo(() => {
     const values = new Set<string>();
-    const sourceRosters = scoreStatsAllSelected
-      ? usesCombinedPerformanceSummary
-        ? [scoreStatsFirstRoster, scoreStatsSecondRoster]
-        : rosters
-      : [scoreStatsSelectedRoster];
+    const sourceRosters = isWrittenExamMode
+      ? rosters
+      : scoreStatsAllSelected
+        ? usesCombinedPerformanceSummary
+          ? [scoreStatsFirstRoster, scoreStatsSecondRoster]
+          : rosters
+        : [scoreStatsSelectedRoster];
     sourceRosters.filter(Boolean).forEach((roster) => {
       (roster?.classes || []).forEach((classValue) => {
         const normalized = normalizeSchoolValue(classValue);
@@ -5272,6 +5453,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     return Array.from(values).sort(compareSchoolValue);
   }, [
     rosters,
+    isWrittenExamMode,
     scoreStatsAllSelected,
     scoreStatsFirstRoster,
     scoreStatsSecondRoster,
@@ -5346,11 +5528,16 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       classStatsSort,
     );
     const itemSummarySourceItems =
-      usesCombinedPerformanceSummary && scoreStatsAllSelected
-        ? []
-        : scoreStatsSelectedRoster?.items || scoreListDisplayItems;
+      isWrittenExamMode && selectedWrittenExamStatsGroup
+        ? selectedWrittenExamStatsGroup.items.map(({ item }) => item)
+        : usesCombinedPerformanceSummary && scoreStatsAllSelected
+          ? []
+          : scoreStatsSelectedRoster?.items || scoreListDisplayItems;
     const itemSummaries: ItemScoreSummary[] = itemSummarySourceItems.map(
       (item, index) => {
+        const writtenExamItemMeta = isWrittenExamMode
+          ? getWrittenExamItemMeta(item, index)
+          : null;
         const itemMaxScore = getSummaryMaxScore(
           [],
           getFiniteNumber(item.maxScore) || 0,
@@ -5367,7 +5554,11 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         );
         return {
           index,
-          label: getItemLabel(item),
+          label: writtenExamItemMeta
+            ? selectedWrittenExamStatsGroup
+              ? writtenExamItemMeta.label
+              : writtenExamItemMeta.fullLabel
+            : getItemLabel(item),
           name: item.name,
           maxScore: itemMaxScore,
           overall: itemOverall,
@@ -5440,6 +5631,8 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   }, [
     classStatsSort,
     scoreListDisplayItems,
+    isWrittenExamMode,
+    selectedWrittenExamStatsGroup,
     scoreStatsAllSelected,
     scoreStatsCombinedStudents,
     scoreStatsSelectedRecords,
@@ -6118,6 +6311,21 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
     setScoreStatsLoading(true);
     try {
+      if (isWrittenExamMode) {
+        const loadedRecords = (
+          await Promise.all(
+            rosters.map((roster) => loadScoreRecordsForRoster(roster)),
+          )
+        ).flat();
+        const scopedRecords = filterWrittenExamStatsRecords(
+          loadedRecords,
+          writtenExamStatsGroupKey,
+        );
+        setScoreStatsRecords(sortStudentIdentityRows(scopedRecords));
+        setScoreStatsLoadedRosterId(scoreStatsLoadKey);
+        return;
+      }
+
       if (scoreStatsAllSelected) {
         if (!usesCombinedPerformanceSummary) {
           const loadedRecords = (
@@ -8408,9 +8616,11 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     savingScoreEdits;
   const scoreStatsButtonTitle = scoreStatsButtonDisabled
     ? `저장된 ${managerCopy.scoreKindLabel} 점수표가 있어야 통계를 확인할 수 있습니다.`
-    : usesCombinedPerformanceSummary
-      ? `전체, 1차 ${SCORE_LIST_FIRST_SUMMARY_LABEL}, 2차 ${SCORE_LIST_SECOND_SUMMARY_LABEL} 수행평가 통계 보기`
-      : `${managerCopy.allScoresTitle} 통계 보기`;
+    : isWrittenExamMode
+      ? "전체, 1번, 2번 정기시험 논술형 통계 보기"
+      : usesCombinedPerformanceSummary
+        ? `전체, 1차 ${SCORE_LIST_FIRST_SUMMARY_LABEL}, 2차 ${SCORE_LIST_SECOND_SUMMARY_LABEL} 수행평가 통계 보기`
+        : `${managerCopy.allScoresTitle} 통계 보기`;
 
   const toggleScoreListSort = (key: ScoreListSortKey) => {
     setScoreListSort((current) =>
@@ -9879,6 +10089,11 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                               <div className="font-black text-blue-700">
                                 {objection.scoreLabel}
                               </div>
+                              {objection.targetDetails && (
+                                <div className="mt-1 whitespace-pre-wrap break-keep text-xs font-bold leading-5 text-blue-800">
+                                  대상: {objection.targetDetails}
+                                </div>
+                              )}
                               {objection.status === "accepted" &&
                                 objection.changedScoreLabel && (
                                   <div className="mt-1 text-xs font-bold text-emerald-700">
@@ -10115,6 +10330,11 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                             <div className="font-black text-blue-700">
                               {item.scoreLabel || "-"}
                             </div>
+                            {item.targetDetails && (
+                              <div className="mt-1 whitespace-pre-wrap break-keep text-xs font-bold leading-5 text-blue-800">
+                                대상: {item.targetDetails}
+                              </div>
+                            )}
                           </td>
                           <td className="px-4 py-4 align-top">
                             <p className="whitespace-pre-wrap break-words font-semibold leading-6 text-slate-700">
