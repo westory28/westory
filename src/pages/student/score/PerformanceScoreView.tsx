@@ -36,6 +36,7 @@ import {
   normalizePerformanceScoreSettings,
   savePerformanceScoreWarningConsent,
   type PerformanceScoreAnswerSheetRequest,
+  type PerformanceScoreItem,
   type PerformanceScoreKind,
   type PerformanceScoreObjection,
   type PerformanceScoreRecord,
@@ -86,6 +87,73 @@ const getItemLabel = (
   item: { name: string; shortName?: string },
   index: number,
 ) => item.shortName || getPerformanceScoreItemShortName(item.name, index);
+
+const getWrittenExamItemMeta = (item: PerformanceScoreItem, index: number) => {
+  const rawKey = String(item.itemKey || item.shortName || item.name || "");
+  const match = /^(\d+)\s*-\s*[\(\[]?\s*(\d+)\s*[\)\]]?$/.exec(rawKey.trim());
+  if (!match) {
+    return {
+      key: rawKey || `item-${index}`,
+      groupKey: String(item.groupKey || "essay"),
+      groupLabel: item.groupLabel || "논술형",
+      label: getItemLabel(item, index),
+      detailed: false,
+    };
+  }
+  return {
+    key: `${match[1]}-(${match[2]})`,
+    groupKey: match[1],
+    groupLabel: item.groupLabel || `${match[1]}번`,
+    label: `${match[1]}-(${match[2]})`,
+    detailed: true,
+  };
+};
+
+const getWrittenExamItemGroups = (items: PerformanceScoreItem[]) => {
+  const groups = new Map<
+    string,
+    {
+      key: string;
+      label: string;
+      items: Array<{
+        key: string;
+        label: string;
+        item: PerformanceScoreItem;
+        index: number;
+      }>;
+    }
+  >();
+  items.forEach((item, index) => {
+    const meta = getWrittenExamItemMeta(item, index);
+    const group = groups.get(meta.groupKey) || {
+      key: meta.groupKey,
+      label: meta.groupLabel,
+      items: [],
+    };
+    group.items.push({
+      key: meta.key,
+      label: meta.label,
+      item,
+      index,
+    });
+    groups.set(meta.groupKey, group);
+  });
+  return Array.from(groups.values()).sort(
+    (left, right) =>
+      Number(left.key) - Number(right.key) ||
+      left.label.localeCompare(right.label, "ko"),
+  );
+};
+
+const getWrittenExamGeneralFeedback = (
+  value: string,
+  hasDetailedItems: boolean,
+) => {
+  const text = value.trim();
+  if (!text || !hasDetailedItems) return text;
+  const match = /(\d+)\s*-\s*[\(\[]?\s*(\d+)\s*[\)\]]?\s*[:：]/.exec(text);
+  return match ? text.slice(0, match.index).trim() : text;
+};
 
 const SIGNATURE_CANVAS_MIN_WIDTH = 420;
 const SIGNATURE_CANVAS_MAX_WIDTH = 660;
@@ -398,18 +466,29 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
   );
   const evidenceText =
     selectedRecord?.evidence || selectedRecord?.feedback || "";
+  const writtenExamItemGroups =
+    scoreKind === WRITTEN_EXAM_SCORE_KIND
+      ? getWrittenExamItemGroups(selectedItems)
+      : [];
+  const hasDetailedWrittenExamItems =
+    scoreKind === WRITTEN_EXAM_SCORE_KIND &&
+    selectedItems.some(
+      (item, index) => getWrittenExamItemMeta(item, index).detailed,
+    );
+  const writtenExamGeneralFeedback = getWrittenExamGeneralFeedback(
+    evidenceText,
+    hasDetailedWrittenExamItems,
+  );
+  const evidenceBlockText = hasDetailedWrittenExamItems
+    ? writtenExamGeneralFeedback
+    : evidenceText;
   const chartMaxScore = selectedRecord
     ? Math.max(10, ...chartItems.map((item) => item.maxScore || 0))
     : 50;
 
   const chartData = selectedRecord
     ? {
-        labels: chartItems.map(
-          (item) =>
-            `(${formatPerformanceScore(item.score)} / ${formatPerformanceScore(
-              item.maxScore,
-            )}점)`,
-        ),
+        labels: chartItems.map((item, index) => getItemLabel(item, index)),
         datasets: [
           {
             label: "획득 점수",
@@ -1750,14 +1829,66 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
               </div>
             </div>
 
-            <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-4">
-              <h3 className="text-base font-black text-blue-900">
-                {resolvedCopy.evidenceTitle}
-              </h3>
-              <p className="mt-2 whitespace-pre-wrap break-keep text-sm font-bold leading-7 text-slate-700">
-                {evidenceText || resolvedCopy.evidenceEmptyText}
-              </p>
-            </div>
+            {hasDetailedWrittenExamItems && (
+              <div className="mt-5 rounded-xl border border-slate-200 bg-white px-4 py-4">
+                <h3 className="text-base font-black text-slate-900">
+                  문항별 점수와 피드백
+                </h3>
+                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                  {writtenExamItemGroups.map((group) => (
+                    <div
+                      key={group.key}
+                      className="rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-4"
+                    >
+                      <div className="text-sm font-black text-blue-900">
+                        {group.label}
+                      </div>
+                      <div className="mt-3 space-y-2">
+                        {group.items.map(({ key, label, item, index }) => (
+                          <div
+                            key={`${key}-${index}`}
+                            className="rounded-lg border border-white bg-white px-3 py-3 shadow-sm"
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-sm font-black text-slate-800">
+                                {label}
+                              </span>
+                              <span className="shrink-0 text-sm font-black text-blue-700">
+                                {item.scoreEntered === false
+                                  ? "-"
+                                  : formatPerformanceScore(item.score)}
+                                <span className="text-slate-400">
+                                  {" "}
+                                  / {formatPerformanceScore(item.maxScore)}점
+                                </span>
+                              </span>
+                            </div>
+                            {item.feedback && (
+                              <p className="mt-2 whitespace-pre-wrap break-keep text-sm font-bold leading-6 text-slate-600">
+                                {item.feedback}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {(!hasDetailedWrittenExamItems || evidenceBlockText) && (
+              <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-4">
+                <h3 className="text-base font-black text-blue-900">
+                  {hasDetailedWrittenExamItems
+                    ? "전체 피드백"
+                    : resolvedCopy.evidenceTitle}
+                </h3>
+                <p className="mt-2 whitespace-pre-wrap break-keep text-sm font-bold leading-7 text-slate-700">
+                  {evidenceBlockText || resolvedCopy.evidenceEmptyText}
+                </p>
+              </div>
+            )}
           </section>
         </div>
       )}

@@ -22,7 +22,16 @@ export interface ParsedPerformanceScoreUpload {
   subject: string;
   assessmentOrder?: number;
   items: Array<
-    Pick<PerformanceScoreItem, "name" | "shortName" | "maxScore" | "ratio">
+    Pick<
+      PerformanceScoreItem,
+      | "name"
+      | "shortName"
+      | "itemKey"
+      | "groupKey"
+      | "groupLabel"
+      | "maxScore"
+      | "ratio"
+    >
   >;
   rows: ParsedPerformanceScoreRow[];
   totalMaxScore: number;

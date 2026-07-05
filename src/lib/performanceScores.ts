@@ -54,6 +54,10 @@ export type PerformanceScoreKind =
 export interface PerformanceScoreItem {
   name: string;
   shortName?: string;
+  itemKey?: string;
+  groupKey?: string;
+  groupLabel?: string;
+  feedback?: string;
   score: number;
   maxScore: number;
   ratio?: number;
@@ -193,7 +197,16 @@ export interface PerformanceScoreRoster {
   targetClass: string;
   classes: string[];
   items: Array<
-    Pick<PerformanceScoreItem, "name" | "shortName" | "maxScore" | "ratio">
+    Pick<
+      PerformanceScoreItem,
+      | "name"
+      | "shortName"
+      | "itemKey"
+      | "groupKey"
+      | "groupLabel"
+      | "maxScore"
+      | "ratio"
+    >
   >;
   totalMaxScore: number;
   rowCount: number;

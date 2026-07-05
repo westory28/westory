@@ -21,6 +21,12 @@ export interface ParsedWrittenExamEssayScoreUpload {
   title: string;
   subject: string;
   itemName: string;
+  items: Array<
+    Pick<
+      PerformanceScoreItem,
+      "name" | "shortName" | "itemKey" | "groupKey" | "groupLabel" | "maxScore"
+    >
+  >;
   rows: ParsedWrittenExamEssayScoreRow[];
   totalMaxScore: number;
   detectedClasses: string[];
@@ -31,11 +37,30 @@ interface EssayScoreColumnIndexes {
   classIndex: number;
   numberIndex: number;
   nameIndex: number;
-  scoreIndex: number;
+  totalIndex: number;
   feedbackIndex: number;
 }
 
+interface EssayCriterionColumn {
+  header: string;
+  itemKey: string;
+  groupKey: string;
+  groupLabel: string;
+  index: number;
+  maxScore: number;
+}
+
 const MAX_UPLOAD_ROWS = 400;
+
+const DEFAULT_ESSAY_CRITERION_MAX_SCORE: Record<string, number> = {
+  "1-(1)": 3,
+  "1-(2)": 3,
+  "1-(3)": 4,
+  "2-(1)": 2,
+  "2-(2)": 2,
+  "2-(3)": 2,
+  "2-(4)": 4,
+};
 
 const toText = (value: unknown) =>
   String(value ?? "")
@@ -61,6 +86,66 @@ const isFeedbackHeader = (header: string) =>
     header,
   );
 
+const parseEssayCriterionHeader = (header: unknown) => {
+  const text = toText(header);
+  const match = /^(\d+)\s*-\s*[\(\[]?\s*(\d+)\s*[\)\]]?$/.exec(text);
+  if (!match) return null;
+  const groupKey = match[1];
+  const subKey = match[2];
+  const itemKey = `${groupKey}-(${subKey})`;
+  return {
+    itemKey,
+    groupKey,
+    groupLabel: `${groupKey}번`,
+    label: itemKey,
+  };
+};
+
+const parseEssayFeedback = (value: unknown) => {
+  const text = String(value ?? "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .trim();
+  if (!text || text === "-") {
+    return {
+      fullText: "",
+      generalFeedback: "",
+      byItemKey: new Map<string, string>(),
+    };
+  }
+
+  const pattern = /(\d+)\s*-\s*[\(\[]?\s*(\d+)\s*[\)\]]?\s*[:：]/g;
+  const matches = Array.from(text.matchAll(pattern));
+  if (!matches.length) {
+    return {
+      fullText: text,
+      generalFeedback: text,
+      byItemKey: new Map<string, string>(),
+    };
+  }
+
+  const byItemKey = new Map<string, string>();
+  let generalFeedback = text.slice(0, matches[0].index || 0).trim();
+  matches.forEach((match, index) => {
+    const key = `${match[1]}-(${match[2]})`;
+    const start = (match.index || 0) + match[0].length;
+    const end =
+      index + 1 < matches.length
+        ? matches[index + 1].index || text.length
+        : text.length;
+    const feedback = text.slice(start, end).trim();
+    if (feedback) byItemKey.set(key, feedback);
+  });
+
+  if (!generalFeedback && byItemKey.size === 0) generalFeedback = text;
+
+  return {
+    fullText: text,
+    generalFeedback,
+    byItemKey,
+  };
+};
+
 const resolveEssayScoreColumns = (
   headers: string[],
 ): EssayScoreColumnIndexes => {
@@ -81,7 +166,7 @@ const resolveEssayScoreColumns = (
     (header) =>
       /^(이름|성명|학생명|학생이름)$/.test(header) || header.includes("성명"),
   );
-  const scoreIndex = findColumnIndex(headers, (header) =>
+  const totalIndex = findColumnIndex(headers, (header) =>
     /^(점수|논술형점수|서술형점수|논술점수|서술점수|총점|합계|원점수)$/.test(
       header,
     ),
@@ -99,20 +184,53 @@ const resolveEssayScoreColumns = (
     classIndex,
     numberIndex,
     nameIndex,
-    scoreIndex,
+    totalIndex,
     feedbackIndex,
   };
 };
+
+const getEssayCriterionColumns = (
+  displayHeaders: string[],
+  scoreRows: Array<{ row: unknown[] }>,
+  excludedIndexes: Set<number>,
+) =>
+  displayHeaders
+    .map((header, index) => {
+      const parsed = parseEssayCriterionHeader(header);
+      return parsed ? { ...parsed, header, index } : null;
+    })
+    .filter(
+      (item): item is NonNullable<typeof item> =>
+        item !== null && !excludedIndexes.has(item.index),
+    )
+    .map((column) => {
+      const observedMax = scoreRows.reduce((max, { row }) => {
+        const value = toFiniteScore(getCell(row, column.index));
+        return value === null ? max : Math.max(max, value);
+      }, 0);
+      return {
+        header: column.header,
+        itemKey: column.itemKey,
+        groupKey: column.groupKey,
+        groupLabel: column.groupLabel,
+        index: column.index,
+        maxScore: roundScore(
+          observedMax || DEFAULT_ESSAY_CRITERION_MAX_SCORE[column.itemKey] || 0,
+        ),
+      } satisfies EssayCriterionColumn;
+    });
 
 const findEssayScoreHeaderRow = (rows: unknown[][]) => {
   const scanLimit = Math.min(rows.length, 20);
   for (let rowIndex = 0; rowIndex < scanLimit; rowIndex += 1) {
     const headers = (rows[rowIndex] || []).map(toHeaderKey);
+    const displayHeaders = (rows[rowIndex] || []).map(toText);
     const indexes = resolveEssayScoreColumns(headers);
     if (
       indexes.numberIndex >= 0 &&
       indexes.nameIndex >= 0 &&
-      indexes.scoreIndex >= 0
+      (indexes.totalIndex >= 0 ||
+        displayHeaders.some((header) => parseEssayCriterionHeader(header)))
     ) {
       return rowIndex;
     }
@@ -148,26 +266,21 @@ export const parseWrittenExamEssayScoreWorkbook = (
   if (!Array.isArray(rows) || rows.length === 0) {
     throw new Error("첫 번째 시트를 찾을 수 없습니다.");
   }
-  const maxScore = roundScore(Number(params.maxScore || 0));
-  if (!Number.isFinite(maxScore) || maxScore <= 0) {
-    throw new Error("논술형 만점을 먼저 입력해 주세요.");
-  }
+  const fallbackMaxScore = roundScore(Number(params.maxScore || 0));
 
   const headerRowIndex = findEssayScoreHeaderRow(rows);
   if (headerRowIndex < 0) {
     throw new Error(
-      "번호, 이름, 점수가 포함된 정기시험 논술형 점수표 헤더 행을 찾지 못했습니다.",
+      "번호, 이름, 총점 또는 논술형 세부 문항이 포함된 정기시험 논술형 점수표 헤더 행을 찾지 못했습니다.",
     );
   }
 
-  const headers = (rows[headerRowIndex] || []).map(toHeaderKey);
+  const rawHeaders = rows[headerRowIndex] || [];
+  const headers = rawHeaders.map(toHeaderKey);
+  const displayHeaders = rawHeaders.map(toText);
   const indexes = resolveEssayScoreColumns(headers);
-  if (
-    indexes.numberIndex < 0 ||
-    indexes.nameIndex < 0 ||
-    indexes.scoreIndex < 0
-  ) {
-    throw new Error("번호, 이름, 점수 컬럼을 모두 확인해 주세요.");
+  if (indexes.numberIndex < 0 || indexes.nameIndex < 0) {
+    throw new Error("번호, 이름 컬럼을 모두 확인해 주세요.");
   }
 
   const candidateRows = rows
@@ -185,6 +298,66 @@ export const parseWrittenExamEssayScoreWorkbook = (
   }
 
   const itemName = toText(params.itemName) || "논술형 점수";
+  const identityIndexes = new Set([
+    indexes.gradeIndex,
+    indexes.classIndex,
+    indexes.numberIndex,
+    indexes.nameIndex,
+    indexes.totalIndex,
+    indexes.feedbackIndex,
+  ]);
+  const criterionColumns = getEssayCriterionColumns(
+    displayHeaders,
+    scoreRows,
+    identityIndexes,
+  );
+  if (!criterionColumns.length && indexes.totalIndex < 0) {
+    throw new Error(
+      "총점 또는 1-(1) 형식의 논술형 세부 점수 컬럼을 확인해 주세요.",
+    );
+  }
+  const legacyMaxScore = roundScore(
+    fallbackMaxScore ||
+      scoreRows.reduce((max, { row }) => {
+        const value = toFiniteScore(getCell(row, indexes.totalIndex));
+        return value === null ? max : Math.max(max, value);
+      }, 0),
+  );
+  if (!criterionColumns.length && legacyMaxScore <= 0) {
+    throw new Error("논술형 만점을 먼저 입력해 주세요.");
+  }
+  const items =
+    criterionColumns.length > 0
+      ? criterionColumns.map((column) => ({
+          name: column.header,
+          shortName: column.itemKey,
+          itemKey: column.itemKey,
+          groupKey: column.groupKey,
+          groupLabel: column.groupLabel,
+          maxScore: column.maxScore,
+        }))
+      : [
+          {
+            name: itemName,
+            shortName: "논술형",
+            itemKey: "essay-total",
+            groupKey: "essay",
+            groupLabel: "논술형",
+            maxScore: legacyMaxScore,
+          },
+        ];
+  const criteriaMaxSum = items.reduce(
+    (sum, item) => sum + Number(item.maxScore || 0),
+    0,
+  );
+  const observedTotalMax = scoreRows.reduce((max, { row }) => {
+    const value = toFiniteScore(getCell(row, indexes.totalIndex));
+    return value === null ? max : Math.max(max, value);
+  }, 0);
+  const totalMaxScore = roundScore(
+    Math.max(observedTotalMax, criteriaMaxSum, legacyMaxScore),
+  );
+
   const rowsWithScores: ParsedWrittenExamEssayScoreRow[] = scoreRows.map(
     ({ row, rowIndex }) => {
       const rowGrade =
@@ -193,29 +366,69 @@ export const parseWrittenExamEssayScoreWorkbook = (
         getCellText(row, indexes.classIndex) || params.fallbackClass.trim();
       const rowNumber = getCellText(row, indexes.numberIndex);
       const studentName = getCellText(row, indexes.nameIndex);
-      const parsedScore = toFiniteScore(getCell(row, indexes.scoreIndex));
-      const score = roundScore(parsedScore ?? 0);
-      const feedback = getCellText(row, indexes.feedbackIndex).slice(0, 1000);
-      const item = {
-        name: itemName,
-        shortName: "논술형",
-        score,
-        maxScore,
-        scoreEntered: parsedScore !== null,
-      };
+      const parsedTotal = toFiniteScore(getCell(row, indexes.totalIndex));
+      const parsedFeedback = parseEssayFeedback(
+        getCell(row, indexes.feedbackIndex),
+      );
+      const rowItems = criterionColumns.length
+        ? criterionColumns.map((column) => {
+            const score = toFiniteScore(getCell(row, column.index));
+            return {
+              name: column.header,
+              shortName: column.itemKey,
+              itemKey: column.itemKey,
+              groupKey: column.groupKey,
+              groupLabel: column.groupLabel,
+              score: roundScore(score ?? 0),
+              maxScore: column.maxScore,
+              feedback: (
+                parsedFeedback.byItemKey.get(column.itemKey) || ""
+              ).slice(0, 1000),
+              scoreEntered: score !== null,
+            };
+          })
+        : [
+            {
+              name: itemName,
+              shortName: "논술형",
+              itemKey: "essay-total",
+              groupKey: "essay",
+              groupLabel: "논술형",
+              score: roundScore(parsedTotal ?? 0),
+              maxScore: legacyMaxScore,
+              feedback: parsedFeedback.generalFeedback.slice(0, 1000),
+              scoreEntered: parsedTotal !== null,
+            },
+          ];
+      const enteredItemCount = rowItems.filter(
+        (item) => item.scoreEntered,
+      ).length;
+      const calculatedTotal = rowItems.reduce(
+        (sum, item) =>
+          item.scoreEntered ? sum + Number(item.score || 0) : sum,
+        0,
+      );
+      const hasCriteriaScores = rowItems.some((item) => item.scoreEntered);
+      const feedback = parsedFeedback.fullText.slice(0, 1000);
 
       return {
         rowKey: `row-${rowIndex + 1}-${studentName}-${rowNumber}`,
         rowNumber: rowIndex + 1,
-        enteredScoreCount: parsedScore !== null ? 1 : 0,
+        enteredScoreCount: criterionColumns.length
+          ? enteredItemCount
+          : parsedTotal !== null
+            ? 1
+            : 0,
         uid: "",
         grade: normalizeSchoolValue(rowGrade),
         class: normalizeSchoolValue(rowClass),
         number: normalizeSchoolValue(rowNumber),
         studentName,
-        items: [item],
-        totalScore: score,
-        totalMaxScore: maxScore,
+        items: rowItems,
+        totalScore: roundScore(
+          parsedTotal ?? (hasCriteriaScores ? calculatedTotal : 0),
+        ),
+        totalMaxScore,
         feedback,
         evidence: feedback,
         matchStatus: "unmatched",
@@ -230,8 +443,9 @@ export const parseWrittenExamEssayScoreWorkbook = (
     title: toText(params.title) || cleanExamTitle(params.fileName),
     subject: toText(params.subject) || "역사",
     itemName,
+    items,
     rows: rowsWithScores,
-    totalMaxScore: maxScore,
+    totalMaxScore,
     detectedClasses: sortSchoolValues(
       Array.from(
         new Set(rowsWithScores.map((row) => row.class).filter(Boolean)),

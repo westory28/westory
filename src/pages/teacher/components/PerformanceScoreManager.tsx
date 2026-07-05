@@ -59,6 +59,7 @@ import {
   type PerformanceScoreRecord,
   type PerformanceScoreRoster,
   type PerformanceScoreRosterRow,
+  type PerformanceScoreItem,
   type PerformanceScoreKind,
 } from "../../../lib/performanceScores";
 import {
@@ -161,7 +162,7 @@ const SCORE_LIST_FIRST_SUMMARY_LABEL = "고조선 8조법 4컷 만화 그리기"
 const SCORE_LIST_SECOND_SUMMARY_LABEL = "삼국 시대 인물의 무덤에 평점 남기기";
 const WRITTEN_EXAM_DEFAULT_ITEM_NAME = "논술형 점수";
 const WRITTEN_EXAM_DEFAULT_SUBJECT = "역사";
-const WRITTEN_EXAM_DEFAULT_MAX_SCORE = "10";
+const WRITTEN_EXAM_DEFAULT_MAX_SCORE = "20";
 
 const ASSESSMENT_PRESETS: Record<
   UploadAssessmentPresetKey,
@@ -314,6 +315,26 @@ const getAssessmentConfig = (
   };
 };
 
+const parseWrittenExamFeedbackByItemKey = (value: string) => {
+  const text = value.replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+  const byItemKey = new Map<string, string>();
+  if (!text || text === "-") return byItemKey;
+
+  const pattern = /(\d+)\s*-\s*[\(\[]?\s*(\d+)\s*[\)\]]?\s*[:：]/g;
+  const matches = Array.from(text.matchAll(pattern));
+  matches.forEach((match, index) => {
+    const key = `${match[1]}-(${match[2]})`;
+    const start = (match.index || 0) + match[0].length;
+    const end =
+      index + 1 < matches.length
+        ? matches[index + 1].index || text.length
+        : text.length;
+    const feedback = text.slice(start, end).trim();
+    if (feedback) byItemKey.set(key, feedback.slice(0, 1000));
+  });
+  return byItemKey;
+};
+
 const buildWrittenExamParsedUpload = (
   rows: unknown[][],
   params: {
@@ -332,13 +353,19 @@ const buildWrittenExamParsedUpload = (
     headerRowNumber: parsedUpload.headerRowNumber,
     title: parsedUpload.title,
     subject: parsedUpload.subject,
-    items: [
-      {
-        name: parsedUpload.itemName,
-        shortName: "논술형",
-        maxScore: parsedUpload.totalMaxScore,
-      },
-    ],
+    items:
+      parsedUpload.items.length > 0
+        ? parsedUpload.items
+        : [
+            {
+              name: parsedUpload.itemName,
+              shortName: "논술형",
+              itemKey: "essay-total",
+              groupKey: "essay",
+              groupLabel: "논술형",
+              maxScore: parsedUpload.totalMaxScore,
+            },
+          ],
     rows: parsedUpload.rows,
     totalMaxScore: parsedUpload.totalMaxScore,
     detectedClasses: parsedUpload.detectedClasses,
@@ -911,6 +938,35 @@ const getFiniteNumber = (value: unknown) => {
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 };
+
+const getScoreItemBasePayload = (
+  item: Partial<PerformanceScoreItem> & { name?: string },
+) => {
+  const shortName = toText(item.shortName);
+  const itemKey = toText(item.itemKey);
+  const groupKey = toText(item.groupKey);
+  const groupLabel = toText(item.groupLabel);
+  const feedback = String(item.feedback || "").slice(0, 1000);
+  return {
+    name: toText(item.name),
+    ...(shortName ? { shortName } : {}),
+    ...(itemKey ? { itemKey } : {}),
+    ...(groupKey ? { groupKey } : {}),
+    ...(groupLabel ? { groupLabel } : {}),
+    maxScore: getFiniteNumber(item.maxScore) ?? 0,
+    ...(item.ratio !== undefined ? { ratio: item.ratio } : {}),
+    ...(feedback ? { feedback } : {}),
+  };
+};
+
+const buildScoreItemFromDefinition = (
+  item: Partial<PerformanceScoreItem> & { name?: string },
+  options: { score?: number; scoreEntered?: boolean } = {},
+): PerformanceScoreItem => ({
+  ...getScoreItemBasePayload(item),
+  score: options.score ?? 0,
+  scoreEntered: options.scoreEntered ?? false,
+});
 
 const sanitizeScoreIntegerInput = (value: string) => {
   const normalized = value.replace(/,/g, "").trim();
@@ -1809,14 +1865,7 @@ const buildRecordFromRosterRow = (
     studentName: row.studentName,
     uid: row.uid,
     items: hasAcademicStatus
-      ? (roster.items || []).map((item) => ({
-          name: item.name,
-          ...(item.shortName ? { shortName: item.shortName } : {}),
-          maxScore: getFiniteNumber(item.maxScore) ?? 0,
-          ...(item.ratio !== undefined ? { ratio: item.ratio } : {}),
-          score: 0,
-          scoreEntered: false,
-        }))
+      ? (roster.items || []).map((item) => buildScoreItemFromDefinition(item))
       : Array.isArray(row.items)
         ? row.items
         : [],
@@ -1953,14 +2002,7 @@ const createManualScoreListRecord = (
   number: "",
   studentName: "",
   uid: "",
-  items: (roster.items || []).map((item) => ({
-    name: item.name,
-    ...(item.shortName ? { shortName: item.shortName } : {}),
-    maxScore: getFiniteNumber(item.maxScore) ?? 0,
-    ...(item.ratio !== undefined ? { ratio: item.ratio } : {}),
-    score: 0,
-    scoreEntered: false,
-  })),
+  items: (roster.items || []).map((item) => buildScoreItemFromDefinition(item)),
   enteredScoreCount: 0,
   totalScore: Number.NaN,
   totalMaxScore: roster.totalMaxScore || 0,
@@ -2019,8 +2061,18 @@ const getRecordItemsForRoster = (
     const existingMaxScore = getFiniteNumber(existing?.maxScore);
     const shortName = existing?.shortName || item.shortName;
     const ratio = existing?.ratio ?? item.ratio;
-    return {
+    const baseItem = getScoreItemBasePayload({
       name: existing?.name || item.name,
+      shortName,
+      itemKey: existing?.itemKey || item.itemKey,
+      groupKey: existing?.groupKey || item.groupKey,
+      groupLabel: existing?.groupLabel || item.groupLabel,
+      maxScore: existingMaxScore === null ? item.maxScore : existing?.maxScore,
+      ratio,
+      feedback: existing?.feedback || item.feedback,
+    });
+    return {
+      ...baseItem,
       score: existingScore === null ? 0 : roundScore(existingScore),
       maxScore:
         existingMaxScore === null
@@ -2028,8 +2080,6 @@ const getRecordItemsForRoster = (
           : roundScore(existingMaxScore),
       scoreEntered:
         existing?.scoreEntered === false ? false : existingScore !== null,
-      ...(shortName ? { shortName } : {}),
-      ...(ratio !== undefined ? { ratio } : {}),
     };
   });
 
@@ -2086,9 +2136,8 @@ const serializeScoreRecordForEdit = (
     studentName: normalizeStudentName(record.studentName),
     academicStatus: getAcademicStatusLabel(record),
     items: (record.items || []).map((item) => ({
-      name: item.name || "",
+      ...getScoreItemBasePayload(item),
       score: item.scoreEntered === false ? null : getEnteredItemScore(item),
-      maxScore: getFiniteNumber(item.maxScore) ?? 0,
       scoreEntered: item.scoreEntered !== false,
     })),
     enteredScoreCount: getScoreRecordEnteredScoreCount(record),
@@ -2210,14 +2259,7 @@ const buildBlankManualRosterRowFromRecord = (
   class: normalizeSchoolValue(record.class),
   number: normalizeSchoolValue(record.number),
   studentName: toText(record.studentName),
-  items: (roster.items || []).map((item) => ({
-    name: item.name,
-    ...(item.shortName ? { shortName: item.shortName } : {}),
-    maxScore: getFiniteNumber(item.maxScore) ?? 0,
-    ...(item.ratio !== undefined ? { ratio: item.ratio } : {}),
-    score: 0,
-    scoreEntered: false,
-  })),
+  items: (roster.items || []).map((item) => buildScoreItemFromDefinition(item)),
   enteredScoreCount: 0,
   totalScore: 0,
   totalMaxScore: roster.totalMaxScore || 0,
@@ -4202,6 +4244,168 @@ const buildClassSummaryWorkbookFromTemplate = async (params: {
   return new Blob([buffer], { type: XLSX_MIME_TYPE });
 };
 
+const buildWrittenExamEssayTemplateWorkbook = async (params: {
+  year: string;
+  semester: string;
+  grade: string;
+  subject: string;
+  itemName: string;
+}) => {
+  const ExcelJS = await import("exceljs");
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "Westory";
+  workbook.created = new Date();
+
+  const worksheet = workbook.addWorksheet("논술형 점수");
+  worksheet.views = [{ state: "frozen", ySplit: 4 }];
+  worksheet.columns = [
+    { key: "grade", width: 8 },
+    { key: "class", width: 8 },
+    { key: "number", width: 8 },
+    { key: "studentName", width: 12 },
+    { key: "total", width: 10 },
+    { key: "item11", width: 9 },
+    { key: "item12", width: 9 },
+    { key: "item13", width: 9 },
+    { key: "item21", width: 9 },
+    { key: "item22", width: 9 },
+    { key: "item23", width: 9 },
+    { key: "item24", width: 9 },
+    { key: "feedback", width: 48 },
+  ];
+
+  worksheet.mergeCells("A1:M1");
+  worksheet.getCell("A1").value =
+    `${params.year}학년도 ${params.semester}학기 ${params.grade}학년 ${params.subject || "역사"}과 정기시험 논술형 점수`;
+  worksheet.getCell("A1").font = {
+    name: "맑은 고딕",
+    size: 15,
+    bold: true,
+    color: { argb: "FF111827" },
+  };
+  worksheet.getCell("A1").alignment = {
+    horizontal: "center",
+    vertical: "middle",
+  };
+  worksheet.getRow(1).height = 28;
+
+  worksheet.mergeCells("A2:M2");
+  worksheet.getCell("A2").value =
+    "선생님 피드백은 1-(1): 내용, 2-(4): 내용처럼 문항 번호를 붙이면 학생 화면에서 문항별로 나누어 표시됩니다.";
+  worksheet.getCell("A2").font = {
+    name: "맑은 고딕",
+    size: 10,
+    bold: true,
+    color: { argb: "FF1D4ED8" },
+  };
+  worksheet.getCell("A2").alignment = {
+    horizontal: "left",
+    vertical: "middle",
+    wrapText: true,
+  };
+  worksheet.getRow(2).height = 34;
+
+  worksheet.mergeCells("A3:M3");
+  worksheet.getCell("A3").value =
+    `${params.itemName || WRITTEN_EXAM_DEFAULT_ITEM_NAME} · 총점은 비워도 세부 문항 점수 합계로 자동 계산됩니다.`;
+  worksheet.getCell("A3").font = {
+    name: "맑은 고딕",
+    size: 10,
+    color: { argb: "FF475569" },
+  };
+  worksheet.getCell("A3").alignment = {
+    horizontal: "left",
+    vertical: "middle",
+  };
+  worksheet.getRow(3).height = 22;
+
+  const headers = [
+    "학년",
+    "반",
+    "번호",
+    "이름",
+    "총점",
+    "1-(1)",
+    "1-(2)",
+    "1-(3)",
+    "2-(1)",
+    "2-(2)",
+    "2-(3)",
+    "2-(4)",
+    "선생님 피드백",
+  ];
+  const headerRow = worksheet.getRow(4);
+  headerRow.values = [undefined, ...headers];
+  headerRow.height = 24;
+  headerRow.eachCell((cell) => {
+    cell.font = {
+      name: "맑은 고딕",
+      size: 10,
+      bold: true,
+      color: { argb: "FFFFFFFF" },
+    };
+    cell.fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FF2563EB" },
+    };
+    cell.alignment = {
+      horizontal: "center",
+      vertical: "middle",
+      wrapText: true,
+    };
+    cell.border = {
+      top: { style: "thin", color: { argb: "FF93C5FD" } },
+      left: { style: "thin", color: { argb: "FF93C5FD" } },
+      bottom: { style: "thin", color: { argb: "FF93C5FD" } },
+      right: { style: "thin", color: { argb: "FF93C5FD" } },
+    };
+  });
+
+  for (let rowNumber = 5; rowNumber <= 44; rowNumber += 1) {
+    const row = worksheet.getRow(rowNumber);
+    row.height = 22;
+    for (
+      let columnNumber = 1;
+      columnNumber <= headers.length;
+      columnNumber += 1
+    ) {
+      const cell = row.getCell(columnNumber);
+      cell.font = { name: "맑은 고딕", size: 10 };
+      cell.alignment = {
+        horizontal: columnNumber === 13 ? "left" : "center",
+        vertical: "middle",
+        wrapText: columnNumber === 13,
+      };
+      cell.border = {
+        top: { style: "thin", color: { argb: "FFE2E8F0" } },
+        left: { style: "thin", color: { argb: "FFE2E8F0" } },
+        bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
+        right: { style: "thin", color: { argb: "FFE2E8F0" } },
+      };
+      if (columnNumber >= 5 && columnNumber <= 12) {
+        cell.numFmt = "0.##";
+      }
+    }
+  }
+
+  worksheet.autoFilter = "A4:M4";
+  worksheet.getColumn(13).alignment = {
+    horizontal: "left",
+    vertical: "middle",
+    wrapText: true,
+  };
+  worksheet.pageSetup = {
+    orientation: "landscape",
+    fitToPage: true,
+    fitToWidth: 1,
+    fitToHeight: 0,
+  };
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return new Blob([buffer], { type: XLSX_MIME_TYPE });
+};
+
 const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   scoreKind = PERFORMANCE_SCORE_KIND,
 }) => {
@@ -4333,6 +4537,8 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     useState("");
   const [rejectingSignatureKey, setRejectingSignatureKey] = useState("");
   const [exportingClassSheet, setExportingClassSheet] = useState(false);
+  const [downloadingWrittenExamTemplate, setDownloadingWrittenExamTemplate] =
+    useState(false);
 
   useEffect(() => {
     setTitle(managerCopy.defaultTitle(year, semester));
@@ -6626,11 +6832,23 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
   const updateScoreListEvidence = (recordKey: string, value: string) => {
     const evidence = value.slice(0, 1000);
+    const feedbackByItemKey = isWrittenExamMode
+      ? parseWrittenExamFeedbackByItemKey(evidence)
+      : new Map<string, string>();
     setScoreListRecords((current) =>
       current.map((record) =>
         getScoreListRecordKey(record) === recordKey
           ? {
               ...record,
+              items: isWrittenExamMode
+                ? (record.items || []).map((item) => ({
+                    ...item,
+                    feedback:
+                      feedbackByItemKey.get(
+                        item.itemKey || item.shortName || item.name,
+                      ) || "",
+                  }))
+                : record.items,
               feedback: evidence,
               evidence,
             }
@@ -7472,6 +7690,43 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     }
   };
 
+  const downloadWrittenExamTemplate = async () => {
+    if (!isWrittenExamMode || downloadingWrittenExamTemplate) return;
+    const safeGrade = targetGrade.trim() || "3";
+    const safeSubject = subject.trim() || managerCopy.defaultSubject || "역사";
+    const safeItemName =
+      writtenExamItemName.trim() || WRITTEN_EXAM_DEFAULT_ITEM_NAME;
+
+    setDownloadingWrittenExamTemplate(true);
+    try {
+      const blob = await buildWrittenExamEssayTemplateWorkbook({
+        year,
+        semester,
+        grade: safeGrade,
+        subject: safeSubject,
+        itemName: safeItemName,
+      });
+      saveBlobAsFile(
+        blob,
+        `${year}학년도 ${semester}학기 ${safeGrade}학년 ${safeSubject}과 정기시험 논술형 점수 양식.xlsx`,
+      );
+      showToast({
+        tone: "success",
+        title: "논술형 점수 양식을 다운로드했습니다.",
+        message: "엑셀에 전체 학급 점수를 입력한 뒤 그대로 업로드해 주세요.",
+      });
+    } catch (error) {
+      console.error("Failed to create written exam essay template:", error);
+      showToast({
+        tone: "error",
+        title: "양식 다운로드에 실패했습니다.",
+        message: "잠시 후 다시 시도해 주세요.",
+      });
+    } finally {
+      setDownloadingWrittenExamTemplate(false);
+    }
+  };
+
   const rejectClassSheetSignature = async (student: ClassSheetStudent) => {
     if (rejectingSignatureKey) return;
     if (!student.uid) {
@@ -7725,6 +7980,10 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   };
 
   const updateFeedback = (rowKey: string, feedback: string) => {
+    const nextFeedback = feedback.slice(0, 1000);
+    const feedbackByItemKey = isWrittenExamMode
+      ? parseWrittenExamFeedbackByItemKey(nextFeedback)
+      : new Map<string, string>();
     setParsed((current) =>
       current
         ? {
@@ -7733,8 +7992,17 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
               row.rowKey === rowKey
                 ? {
                     ...row,
-                    feedback: feedback.slice(0, 1000),
-                    evidence: feedback.slice(0, 1000),
+                    items: isWrittenExamMode
+                      ? row.items.map((item) => ({
+                          ...item,
+                          feedback:
+                            feedbackByItemKey.get(
+                              item.itemKey || item.shortName || item.name,
+                            ) || "",
+                        }))
+                      : row.items,
+                    feedback: nextFeedback,
+                    evidence: nextFeedback,
                   }
                 : row,
             ),
@@ -8412,7 +8680,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                   </label>
                   <label className="block">
                     <span className="text-xs font-black text-slate-600">
-                      만점
+                      기본 만점
                     </span>
                     <input
                       type="number"
@@ -8491,13 +8759,33 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
               {isWrittenExamMode ? (
                 <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-4">
-                  <div className="text-sm font-black text-blue-900">
-                    전체 파일 한 번 업로드
-                  </div>
-                  <div className="mt-1 text-xs font-bold leading-5 text-blue-700">
-                    파일에 학년과 반 컬럼이 있으면 전체 학급을 한 번에
-                    인식합니다. 학년 또는 반이 비어 있는 행만 아래 기본값을
-                    사용합니다.
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="text-sm font-black text-blue-900">
+                        전체 파일 한 번 업로드
+                      </div>
+                      <div className="mt-1 text-xs font-bold leading-5 text-blue-700">
+                        파일에 학년과 반 컬럼이 있으면 전체 학급을 한 번에
+                        인식합니다. 학년 또는 반이 비어 있는 행만 아래 기본값을
+                        사용합니다.
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void downloadWrittenExamTemplate()}
+                      disabled={parsing || downloadingWrittenExamTemplate}
+                      className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white px-4 text-xs font-black text-blue-700 shadow-sm transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <i
+                        className={`fas fa-file-download text-[11px] ${
+                          downloadingWrittenExamTemplate ? "animate-pulse" : ""
+                        }`}
+                        aria-hidden="true"
+                      />
+                      {downloadingWrittenExamTemplate
+                        ? "생성 중"
+                        : "양식 다운로드"}
+                    </button>
                   </div>
                 </div>
               ) : (
