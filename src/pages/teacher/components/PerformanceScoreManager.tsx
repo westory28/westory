@@ -5697,6 +5697,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     writtenExamItemSummaryGroups.some(
       (group) => group.key === "1" || group.key === "2",
     );
+  const showScoreStatsItemDetail =
+    (!isWrittenExamMode || writtenExamItemSummaryGroups.length === 0) &&
+    (!scoreStatsAllSelected || !usesCombinedPerformanceSummary);
   const objectionSummary = useMemo(
     () => ({
       total: objections.length,
@@ -9732,7 +9735,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
                     {isWrittenExamMode &&
                       writtenExamItemSummaryGroups.length > 0 && (
-                        <section className="rounded-xl border border-slate-200 bg-white p-4 xl:col-span-2">
+                        <section className="rounded-xl border border-slate-200 bg-white p-4">
                           <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
                             <div>
                               <h4 className="text-sm font-black text-slate-900">
@@ -9802,7 +9805,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                                     return (
                                       <div
                                         key={`${group.key}-${item.name}-${item.index}`}
-                                        className="grid gap-2 rounded-lg bg-slate-50 px-3 py-2 md:grid-cols-[52px_minmax(130px,220px)_minmax(130px,220px)_72px] md:items-center"
+                                        className="grid gap-2 rounded-lg bg-slate-50 px-3 py-2 md:grid-cols-[42px_minmax(0,1fr)_minmax(0,1fr)_64px] md:items-center"
                                       >
                                         <div className="text-sm font-black text-slate-900">
                                           {item.shortLabel || item.label}
@@ -9952,8 +9955,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                       </div>
                     </section>
 
-                    {(!scoreStatsAllSelected ||
-                      !usesCombinedPerformanceSummary) && (
+                    {showScoreStatsItemDetail && (
                       <section className="rounded-xl border border-slate-200 bg-white">
                         <div className="border-b border-slate-100 px-4 py-3">
                           <h4 className="text-sm font-black text-slate-900">
