@@ -10143,7 +10143,7 @@ const PerformanceScoreManager: React.FC = () => {
         </div>
       )}
 
-      <section className="rounded-xl border border-slate-200 bg-white p-5">
+      <section className="min-w-0">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <h2 className="text-xl font-black text-slate-900">
