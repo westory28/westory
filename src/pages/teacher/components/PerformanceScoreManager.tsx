@@ -882,6 +882,10 @@ interface AssessmentContributionSummary {
 interface ItemScoreSummary {
   index: number;
   label: string;
+  shortLabel?: string;
+  fullLabel?: string;
+  groupKey?: string;
+  groupLabel?: string;
   name: string;
   maxScore: number;
   overall: ScoreSummary;
@@ -5559,6 +5563,10 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
               ? writtenExamItemMeta.label
               : writtenExamItemMeta.fullLabel
             : getItemLabel(item),
+          shortLabel: writtenExamItemMeta?.label,
+          fullLabel: writtenExamItemMeta?.fullLabel,
+          groupKey: writtenExamItemMeta?.groupKey,
+          groupLabel: writtenExamItemMeta?.groupLabel,
           name: item.name,
           maxScore: itemMaxScore,
           overall: itemOverall,
@@ -5643,6 +5651,52 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     secondScoreListSummaryMaxScore,
     usesCombinedPerformanceSummary,
   ]);
+  const writtenExamItemSummaryGroups = useMemo(() => {
+    if (!isWrittenExamMode) return [];
+    const groups = new Map<
+      string,
+      {
+        key: string;
+        label: string;
+        maxScore: number;
+        items: ItemScoreSummary[];
+      }
+    >();
+
+    scoreStats.itemSummaries.forEach((item) => {
+      const rawKey = item.groupKey || "essay";
+      const key = rawKey === "1" || rawKey === "2" ? rawKey : `group-${rawKey}`;
+      const label =
+        item.groupLabel ||
+        (rawKey === "1" || rawKey === "2" ? `${rawKey}번` : "논술형");
+      const group = groups.get(key) || {
+        key,
+        label,
+        maxScore: 0,
+        items: [],
+      };
+      group.maxScore = roundScore(group.maxScore + item.maxScore);
+      group.items.push(item);
+      groups.set(key, group);
+    });
+
+    return Array.from(groups.values()).sort((left, right) => {
+      const leftNumber = getFiniteNumber(left.key);
+      const rightNumber = getFiniteNumber(right.key);
+      if (
+        leftNumber !== null &&
+        rightNumber !== null &&
+        leftNumber !== rightNumber
+      ) {
+        return leftNumber - rightNumber;
+      }
+      return left.label.localeCompare(right.label, "ko", { numeric: true });
+    });
+  }, [isWrittenExamMode, scoreStats.itemSummaries]);
+  const hasNumberedWrittenExamItemSummaryGroups =
+    writtenExamItemSummaryGroups.some(
+      (group) => group.key === "1" || group.key === "2",
+    );
   const objectionSummary = useMemo(
     () => ({
       total: objections.length,
@@ -9321,6 +9375,151 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                     </div>
                   </div>
 
+                  {isWrittenExamMode &&
+                    writtenExamItemSummaryGroups.length > 0 && (
+                      <section className="rounded-xl border border-blue-100 bg-blue-50/40 p-4">
+                        <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+                          <div>
+                            <h4 className="text-sm font-black text-slate-900">
+                              문항별 평균 비교
+                            </h4>
+                            <p className="mt-1 text-xs font-bold text-slate-500">
+                              {hasNumberedWrittenExamItemSummaryGroups
+                                ? "1번과 2번 논술형 문제를 나누고, 각 하위 문항은 괄호 번호로 구분해 표시합니다."
+                                : "논술형 점수 항목별 전체 평균과 선택 학급 평균을 비교해 표시합니다."}
+                            </p>
+                          </div>
+                          <span className="text-xs font-black text-blue-700">
+                            {scoreStatsMode === "all"
+                              ? "전체 문항 기준"
+                              : `${scoreStatsTitle} 기준`}
+                          </span>
+                        </div>
+                        <div className="mt-4 grid gap-3 xl:grid-cols-2">
+                          {writtenExamItemSummaryGroups.map((group) => (
+                            <div
+                              key={group.key}
+                              className="rounded-lg border border-slate-200 bg-white p-3"
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <div className="text-sm font-black text-slate-900">
+                                    {group.key === "1" || group.key === "2"
+                                      ? `${group.label} 논술형 문제`
+                                      : group.label}
+                                  </div>
+                                  <div className="mt-1 text-xs font-bold text-slate-500">
+                                    하위 {group.items.length}개 문항 · 만점{" "}
+                                    {formatPerformanceScore(group.maxScore)}점
+                                  </div>
+                                </div>
+                                <div className="flex shrink-0 flex-col gap-1 text-[11px] font-black">
+                                  <span className="inline-flex items-center gap-1 text-slate-600">
+                                    <span className="h-2 w-5 rounded-full bg-slate-500" />
+                                    전체
+                                  </span>
+                                  <span className="inline-flex items-center gap-1 text-blue-700">
+                                    <span className="h-2 w-5 rounded-full bg-blue-600" />
+                                    {selectedScoreClassLabel}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="mt-3 space-y-2">
+                                {group.items.map((item) => {
+                                  const overallPercent =
+                                    item.maxScore > 0 &&
+                                    item.overall.average !== null
+                                      ? (item.overall.average / item.maxScore) *
+                                        100
+                                      : 0;
+                                  const selectedPercent =
+                                    item.maxScore > 0 &&
+                                    item.selected.average !== null
+                                      ? (item.selected.average /
+                                          item.maxScore) *
+                                        100
+                                      : 0;
+                                  const overallWidth =
+                                    item.overall.average === null ||
+                                    item.maxScore <= 0
+                                      ? 0
+                                      : Math.min(
+                                          100,
+                                          Math.max(2, overallPercent),
+                                        );
+                                  const selectedWidth =
+                                    item.selected.average === null ||
+                                    item.maxScore <= 0
+                                      ? 0
+                                      : Math.min(
+                                          100,
+                                          Math.max(2, selectedPercent),
+                                        );
+                                  return (
+                                    <div
+                                      key={`${group.key}-${item.name}-${item.index}`}
+                                      className="rounded-lg bg-slate-50 p-3"
+                                    >
+                                      <div className="flex items-center justify-between gap-3">
+                                        <span className="text-sm font-black text-slate-900">
+                                          {item.shortLabel || item.label}
+                                        </span>
+                                        <span className="shrink-0 text-xs font-black text-slate-500">
+                                          만점{" "}
+                                          {formatPerformanceScore(
+                                            item.maxScore,
+                                          )}
+                                          점
+                                        </span>
+                                      </div>
+                                      <div className="mt-2 space-y-1.5">
+                                        <div className="grid grid-cols-[54px_1fr_88px] items-center gap-2">
+                                          <span className="text-[11px] font-black text-slate-500">
+                                            전체
+                                          </span>
+                                          <div className="h-3 rounded-full bg-slate-100">
+                                            <div
+                                              className="h-3 rounded-full bg-slate-500"
+                                              style={{
+                                                width: `${overallWidth}%`,
+                                              }}
+                                            />
+                                          </div>
+                                          <span className="text-right text-[11px] font-black text-slate-700">
+                                            {formatScoreStat(
+                                              item.overall.average,
+                                            )}
+                                          </span>
+                                        </div>
+                                        <div className="grid grid-cols-[54px_1fr_88px] items-center gap-2">
+                                          <span className="text-[11px] font-black text-blue-700">
+                                            {selectedScoreClassLabel}
+                                          </span>
+                                          <div className="h-3 rounded-full bg-blue-50">
+                                            <div
+                                              className="h-3 rounded-full bg-blue-600"
+                                              style={{
+                                                width: `${selectedWidth}%`,
+                                              }}
+                                            />
+                                          </div>
+                                          <span className="text-right text-[11px] font-black text-blue-700">
+                                            {formatScoreStat(
+                                              item.selected.average,
+                                            )}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+                    )}
+
                   <div className="grid gap-5 xl:grid-cols-2">
                     <section className="rounded-xl border border-slate-200 bg-white p-4">
                       <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
@@ -9773,18 +9972,23 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                       <section className="rounded-xl border border-slate-200 bg-white">
                         <div className="border-b border-slate-100 px-4 py-3">
                           <h4 className="text-sm font-black text-slate-900">
-                            평가 요소별 평균 비교
+                            {isWrittenExamMode
+                              ? "문항별 평균 비교 상세"
+                              : "평가 요소별 평균 비교"}
                           </h4>
                           <p className="mt-1 text-xs font-bold text-slate-500">
-                            각 평가 요소는 해당 요소 점수가 입력된 학생만 평균에
-                            포함합니다.
+                            {isWrittenExamMode
+                              ? "각 하위 문항은 해당 문항 점수가 입력된 학생만 평균에 포함합니다."
+                              : "각 평가 요소는 해당 요소 점수가 입력된 학생만 평균에 포함합니다."}
                           </p>
                         </div>
                         <div className="overflow-x-auto">
                           <table className="w-full min-w-[600px] text-left text-sm">
                             <thead className="bg-slate-50 text-xs font-black text-slate-500">
                               <tr>
-                                <th className="px-3 py-3">평가 요소</th>
+                                <th className="px-3 py-3">
+                                  {isWrittenExamMode ? "문항" : "평가 요소"}
+                                </th>
                                 <th className="px-3 py-3 text-right">만점</th>
                                 <th className="px-3 py-3 text-right">
                                   전체 평균
@@ -9804,19 +10008,37 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                                     colSpan={5}
                                     className="px-4 py-10 text-center text-sm font-bold text-slate-400"
                                   >
-                                    평가 요소 정보가 없습니다.
+                                    {isWrittenExamMode
+                                      ? "문항 정보가 없습니다."
+                                      : "평가 요소 정보가 없습니다."}
                                   </td>
                                 </tr>
                               ) : (
                                 scoreStats.itemSummaries.map((item) => (
                                   <tr key={`${item.name}-${item.index}`}>
                                     <td className="px-3 py-3">
-                                      <div
-                                        className="max-w-[280px] truncate font-black text-slate-900"
-                                        title={item.name}
-                                      >
-                                        {item.label}
-                                      </div>
+                                      {isWrittenExamMode ? (
+                                        <div className="flex flex-wrap items-center gap-2">
+                                          {item.groupLabel && (
+                                            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-black text-blue-700">
+                                              {item.groupLabel}
+                                            </span>
+                                          )}
+                                          <span
+                                            className="max-w-[220px] truncate font-black text-slate-900"
+                                            title={item.fullLabel || item.name}
+                                          >
+                                            {item.shortLabel || item.label}
+                                          </span>
+                                        </div>
+                                      ) : (
+                                        <div
+                                          className="max-w-[280px] truncate font-black text-slate-900"
+                                          title={item.name}
+                                        >
+                                          {item.label}
+                                        </div>
+                                      )}
                                       <div className="mt-1 text-[11px] font-bold text-slate-400">
                                         전체 {item.overall.count}명 · 선택{" "}
                                         {item.selected.count}명 산출
