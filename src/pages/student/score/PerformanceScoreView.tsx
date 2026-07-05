@@ -2388,10 +2388,17 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                             key={`${key}-${index}`}
                             className="rounded-lg border border-white bg-white px-3 py-3 shadow-sm"
                           >
-                            <div className="flex items-center justify-between gap-3">
+                            <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3">
                               <span className="text-sm font-black text-slate-800">
                                 {label}
                               </span>
+                              <div className="min-w-0">
+                                {item.feedback && (
+                                  <p className="whitespace-pre-wrap break-keep text-sm font-bold leading-6 text-slate-600">
+                                    {item.feedback}
+                                  </p>
+                                )}
+                              </div>
                               <span className="shrink-0 text-sm font-black text-blue-700">
                                 {item.scoreEntered === false
                                   ? "-"
@@ -2402,11 +2409,6 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                                 </span>
                               </span>
                             </div>
-                            {item.feedback && (
-                              <p className="mt-2 whitespace-pre-wrap break-keep text-sm font-bold leading-6 text-slate-600">
-                                {item.feedback}
-                              </p>
-                            )}
                           </div>
                         ))}
                       </div>
