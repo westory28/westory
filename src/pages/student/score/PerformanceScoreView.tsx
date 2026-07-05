@@ -211,6 +211,9 @@ const SIGNATURE_STROKE_WIDTH = 14;
 const SIGNATURE_DOT_RADIUS = 5;
 const SIGNATURE_ALPHA_THRESHOLD = 8;
 const SIGNATURE_IMAGE_MAX_LENGTH = 110000;
+const ZERO_SCORE_BAR_RATIO = 0.012;
+const ZERO_SCORE_BAR_MIN_VALUE = 0.08;
+const ZERO_SCORE_BAR_MAX_VALUE = 0.18;
 
 const getDataUrlStoredLength = (dataUrl: string) => dataUrl.length;
 
@@ -533,6 +536,13 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     selectedItems.some(
       (item, index) => getWrittenExamItemMeta(item, index).detailed,
     );
+  const hasWrittenExamSidebarGroups =
+    scoreKind === WRITTEN_EXAM_SCORE_KIND &&
+    records.some((record) =>
+      (record.items || []).some(
+        (item, index) => getWrittenExamItemMeta(item, index).detailed,
+      ),
+    );
   const visibleChartEntries =
     hasDetailedWrittenExamItems && activeWrittenExamGroup
       ? activeWrittenExamGroup.items.map(({ label, item }) => ({ label, item }))
@@ -564,6 +574,14 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
         ...visibleChartItems.map(({ item }) => item.maxScore || 0),
       )
     : 50;
+  const zeroScoreBarValue = Math.min(
+    ZERO_SCORE_BAR_MAX_VALUE,
+    Math.max(ZERO_SCORE_BAR_MIN_VALUE, chartMaxScore * ZERO_SCORE_BAR_RATIO),
+  );
+  const getChartDisplayScore = (item: PerformanceScoreItem) => {
+    const score = getFiniteScoreValue(item.score);
+    return score === 0 ? zeroScoreBarValue : score;
+  };
 
   const chartData = selectedRecord
     ? {
@@ -571,7 +589,9 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
         datasets: [
           {
             label: "획득 점수",
-            data: visibleChartItems.map(({ item }) => item.score),
+            data: visibleChartItems.map(({ item }) =>
+              getChartDisplayScore(item),
+            ),
             backgroundColor: "#2563eb",
             borderRadius: 6,
             barPercentage: 0.55,
@@ -1759,10 +1779,16 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
       },
       tooltip: {
         callbacks: {
-          label: (context: TooltipItem<"bar">) =>
-            `${context.dataset.label || "점수"}: ${formatPerformanceScore(
-              context.parsed.y ?? 0,
-            )}점`,
+          label: (context: TooltipItem<"bar">) => {
+            const item = visibleChartItems[context.dataIndex]?.item;
+            const score =
+              context.datasetIndex === 0 && item
+                ? getFiniteScoreValue(item.score)
+                : (context.parsed.y ?? 0);
+            return `${context.dataset.label || "점수"}: ${formatPerformanceScore(
+              score,
+            )}점`;
+          },
         },
       },
     },
@@ -2109,102 +2135,140 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                 className="flex gap-2 overflow-x-auto p-3 lg:flex-col lg:gap-0 lg:overflow-visible lg:p-0"
                 aria-label={resolvedCopy.scoreListLabel}
               >
-                {records.map((record) => {
-                  const active =
-                    record.id === selectedRecord.id ||
-                    (!selectedRecord.id && record.id === records[0]?.id);
-                  return (
-                    <React.Fragment key={record.id || record.rosterId}>
-                      <button
-                        key={record.id || record.rosterId}
-                        type="button"
-                        onClick={() => setSelectedId(record.id || "")}
-                        aria-current={active ? "true" : undefined}
-                        className={`flex min-w-[15rem] items-start gap-3 rounded-xl border p-3 text-left transition-colors lg:min-w-0 lg:rounded-none lg:border-0 lg:border-l-4 lg:p-4 ${
-                          active
-                            ? "border-blue-200 bg-blue-50 text-blue-600 lg:border-blue-600"
-                            : "border-gray-200 text-slate-600 hover:bg-gray-50 lg:border-transparent"
-                        }`}
-                      >
-                        <div className="w-6 shrink-0 text-center">
-                          <i
-                            className="fas fa-clipboard-check text-sm"
-                            aria-hidden="true"
-                          ></i>
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="whitespace-normal break-keep text-sm font-bold leading-5">
-                            {record.title}
-                          </div>
-                          <div
-                            className={`mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold ${
-                              active ? "text-blue-500" : "text-slate-500"
-                            }`}
-                          >
-                            <span>
-                              획득 {formatPerformanceScore(record.totalScore)} /{" "}
-                              {formatPerformanceScore(record.totalMaxScore)}
-                            </span>
-                            {record.signatureName && (
-                              <span className="text-blue-700">확인 완료</span>
-                            )}
-                            {pendingObjectionScoreIds.has(
-                              getRecordScoreId(record),
-                            ) && (
-                              <span className="text-amber-700">
-                                이의 처리 대기
-                              </span>
-                            )}
-                            {pendingAnswerSheetRequestScoreIds.has(
-                              getRecordScoreId(record),
-                            ) && (
-                              <span className="text-blue-700">
-                                답안지 확인 요청 중
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </button>
-                      {active && hasDetailedWrittenExamItems && (
-                        <div className="flex min-w-[15rem] gap-2 px-3 pb-3 lg:min-w-0 lg:flex-col lg:px-4">
-                          {writtenExamItemGroups.map((group) => {
-                            const groupActive =
-                              activeWrittenExamGroup?.key === group.key;
-                            return (
-                              <button
-                                key={`score-nav-${group.key}`}
-                                type="button"
-                                onClick={() =>
-                                  setSelectedWrittenExamGroupKey(group.key)
-                                }
-                                aria-current={groupActive ? "true" : undefined}
-                                className={`block rounded-lg border px-3 py-2 text-left text-xs font-black transition ${
-                                  groupActive
-                                    ? "border-blue-500 bg-white text-blue-700 shadow-sm"
-                                    : "border-blue-100 bg-blue-50/60 text-blue-500 hover:border-blue-200 hover:bg-white"
-                                }`}
-                              >
-                                <span className="block">
+                {hasWrittenExamSidebarGroups
+                  ? records.flatMap((record) => {
+                      const scoreId = getRecordScoreId(record);
+                      const recordActive =
+                        record.id === selectedRecord.id ||
+                        (!selectedRecord.id && record.id === records[0]?.id);
+                      return getWrittenExamItemGroups(record.items || []).map(
+                        (group) => {
+                          const groupActive =
+                            recordActive &&
+                            activeWrittenExamGroup?.key === group.key;
+                          return (
+                            <button
+                              key={`${scoreId || record.rosterId}-${group.key}`}
+                              type="button"
+                              onClick={() => {
+                                setSelectedId(record.id || "");
+                                setSelectedWrittenExamGroupKey(group.key);
+                              }}
+                              aria-current={groupActive ? "true" : undefined}
+                              className={`flex min-w-[15rem] items-start gap-3 rounded-xl border p-3 text-left transition-colors lg:min-w-0 lg:rounded-none lg:border-0 lg:border-l-4 lg:p-4 ${
+                                groupActive
+                                  ? "border-blue-200 bg-blue-50 text-blue-600 lg:border-blue-600"
+                                  : "border-gray-200 text-slate-600 hover:bg-gray-50 lg:border-transparent"
+                              }`}
+                            >
+                              <div className="w-6 shrink-0 text-center">
+                                <i
+                                  className="fas fa-clipboard-check text-sm"
+                                  aria-hidden="true"
+                                ></i>
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="whitespace-normal break-keep text-sm font-bold leading-5">
                                   {group.label} 논술형 문제
-                                </span>
-                                <span className="mt-1 block text-[11px] font-bold">
-                                  획득{" "}
-                                  {formatPerformanceScore(
-                                    getWrittenExamGroupScore(group),
-                                  )}{" "}
-                                  /{" "}
-                                  {formatPerformanceScore(
-                                    getWrittenExamGroupMaxScore(group),
+                                </div>
+                                <div
+                                  className={`mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold ${
+                                    groupActive
+                                      ? "text-blue-500"
+                                      : "text-slate-500"
+                                  }`}
+                                >
+                                  <span>
+                                    획득{" "}
+                                    {formatPerformanceScore(
+                                      getWrittenExamGroupScore(group),
+                                    )}{" "}
+                                    /{" "}
+                                    {formatPerformanceScore(
+                                      getWrittenExamGroupMaxScore(group),
+                                    )}
+                                  </span>
+                                  {record.signatureName && (
+                                    <span className="text-blue-700">
+                                      확인 완료
+                                    </span>
                                   )}
+                                  {pendingObjectionScoreIds.has(scoreId) && (
+                                    <span className="text-amber-700">
+                                      이의 처리 대기
+                                    </span>
+                                  )}
+                                  {pendingAnswerSheetRequestScoreIds.has(
+                                    scoreId,
+                                  ) && (
+                                    <span className="text-blue-700">
+                                      답안지 확인 요청 중
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        },
+                      );
+                    })
+                  : records.map((record) => {
+                      const active =
+                        record.id === selectedRecord.id ||
+                        (!selectedRecord.id && record.id === records[0]?.id);
+                      return (
+                        <button
+                          key={record.id || record.rosterId}
+                          type="button"
+                          onClick={() => setSelectedId(record.id || "")}
+                          aria-current={active ? "true" : undefined}
+                          className={`flex min-w-[15rem] items-start gap-3 rounded-xl border p-3 text-left transition-colors lg:min-w-0 lg:rounded-none lg:border-0 lg:border-l-4 lg:p-4 ${
+                            active
+                              ? "border-blue-200 bg-blue-50 text-blue-600 lg:border-blue-600"
+                              : "border-gray-200 text-slate-600 hover:bg-gray-50 lg:border-transparent"
+                          }`}
+                        >
+                          <div className="w-6 shrink-0 text-center">
+                            <i
+                              className="fas fa-clipboard-check text-sm"
+                              aria-hidden="true"
+                            ></i>
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="whitespace-normal break-keep text-sm font-bold leading-5">
+                              {record.title}
+                            </div>
+                            <div
+                              className={`mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold ${
+                                active ? "text-blue-500" : "text-slate-500"
+                              }`}
+                            >
+                              <span>
+                                획득 {formatPerformanceScore(record.totalScore)}{" "}
+                                / {formatPerformanceScore(record.totalMaxScore)}
+                              </span>
+                              {record.signatureName && (
+                                <span className="text-blue-700">확인 완료</span>
+                              )}
+                              {pendingObjectionScoreIds.has(
+                                getRecordScoreId(record),
+                              ) && (
+                                <span className="text-amber-700">
+                                  이의 처리 대기
                                 </span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
+                              )}
+                              {pendingAnswerSheetRequestScoreIds.has(
+                                getRecordScoreId(record),
+                              ) && (
+                                <span className="text-blue-700">
+                                  답안지 확인 요청 중
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
               </nav>
             </div>
           </aside>
