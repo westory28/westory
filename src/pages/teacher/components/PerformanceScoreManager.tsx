@@ -9856,56 +9856,73 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                                             100,
                                             Math.max(2, selectedPercent),
                                           );
+                                    const comparisonRows = [
+                                      {
+                                        key: "selected",
+                                        label: selectedScoreClassLabel,
+                                        average: item.selected.average,
+                                        width: selectedWidth,
+                                        trackClass: "bg-blue-50",
+                                        barClass: "bg-blue-600",
+                                        textClass: "text-blue-700",
+                                        valueClass: "text-blue-700",
+                                      },
+                                      {
+                                        key: "overall",
+                                        label: "전체",
+                                        average: item.overall.average,
+                                        width: overallWidth,
+                                        trackClass: "bg-slate-100",
+                                        barClass: "bg-slate-500",
+                                        textClass: "text-slate-500",
+                                        valueClass: "text-slate-700",
+                                      },
+                                    ];
                                     return (
                                       <div
                                         key={`${group.key}-${item.name}-${item.index}`}
-                                        className="grid gap-2 rounded-lg bg-slate-50 px-3 py-2 md:grid-cols-[42px_minmax(0,1fr)_minmax(0,1fr)_64px] md:items-center"
+                                        className="grid gap-2 rounded-lg bg-slate-50 px-3 py-2 sm:grid-cols-[52px_minmax(0,1fr)] sm:items-start"
                                       >
-                                        <div className="text-sm font-black text-slate-900">
-                                          {item.shortLabel || item.label}
-                                        </div>
-                                        <div className="grid grid-cols-[34px_minmax(0,1fr)_42px] items-center gap-2">
-                                          <span className="text-[11px] font-black text-slate-500">
-                                            전체
-                                          </span>
-                                          <div className="h-2.5 rounded-full bg-slate-100">
-                                            <div
-                                              className="h-2.5 rounded-full bg-slate-500"
-                                              style={{
-                                                width: `${overallWidth}%`,
-                                              }}
-                                            />
+                                        <div className="flex items-center justify-between gap-2 sm:block">
+                                          <div className="text-sm font-black text-slate-900">
+                                            {item.shortLabel || item.label}
                                           </div>
-                                          <span className="text-right text-[11px] font-black text-slate-700">
-                                            {formatScoreStat(
-                                              item.overall.average,
+                                          <div className="text-[11px] font-black text-slate-400 sm:mt-1">
+                                            만점{" "}
+                                            {formatPerformanceScore(
+                                              item.maxScore,
                                             )}
-                                          </span>
-                                        </div>
-                                        <div className="grid grid-cols-[34px_minmax(0,1fr)_42px] items-center gap-2">
-                                          <span className="text-[11px] font-black text-blue-700">
-                                            {selectedScoreClassLabel}
-                                          </span>
-                                          <div className="h-2.5 rounded-full bg-blue-50">
-                                            <div
-                                              className="h-2.5 rounded-full bg-blue-600"
-                                              style={{
-                                                width: `${selectedWidth}%`,
-                                              }}
-                                            />
+                                            점
                                           </div>
-                                          <span className="text-right text-[11px] font-black text-blue-700">
-                                            {formatScoreStat(
-                                              item.selected.average,
-                                            )}
-                                          </span>
                                         </div>
-                                        <div className="text-right text-[11px] font-black text-slate-500 md:text-left">
-                                          만점{" "}
-                                          {formatPerformanceScore(
-                                            item.maxScore,
-                                          )}
-                                          점
+                                        <div className="space-y-1.5">
+                                          {comparisonRows.map((row) => (
+                                            <div
+                                              key={`${group.key}-${item.name}-${item.index}-${row.key}`}
+                                              className="grid grid-cols-[46px_minmax(0,1fr)_44px] items-center gap-2"
+                                            >
+                                              <span
+                                                className={`truncate text-[11px] font-black ${row.textClass}`}
+                                              >
+                                                {row.label}
+                                              </span>
+                                              <div
+                                                className={`h-2.5 rounded-full ${row.trackClass}`}
+                                              >
+                                                <div
+                                                  className={`h-2.5 rounded-full ${row.barClass}`}
+                                                  style={{
+                                                    width: `${row.width}%`,
+                                                  }}
+                                                />
+                                              </div>
+                                              <span
+                                                className={`text-right text-[11px] font-black ${row.valueClass}`}
+                                              >
+                                                {formatScoreStat(row.average)}
+                                              </span>
+                                            </div>
+                                          ))}
                                         </div>
                                       </div>
                                     );
