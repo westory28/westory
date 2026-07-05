@@ -104,7 +104,8 @@ const getDesktopSubmenuChildren = (
     (child) =>
       child.resolvedUrl === "/student/score" ||
       child.resolvedUrl === "/student/score/report" ||
-      child.resolvedUrl === "/student/score/performance",
+      child.resolvedUrl === "/student/score/performance" ||
+      child.resolvedUrl === "/student/score/written-exam",
   );
 };
 
