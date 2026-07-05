@@ -362,6 +362,30 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     ],
   },
   {
+    key: "performance_score_answer_sheet_requested",
+    label: "답안지 확인 요청",
+    audience: "teachers",
+    description:
+      "학생이 점수 이의 제기와 별개로 본인의 답안지 확인을 요청했을 때 담당 교사에게 안내합니다.",
+    triggerLabel: "학생이 답안지 확인을 요청했을 때",
+    recipientLabel: "점수표 업로드 교사·관리자",
+    status: "connected",
+    defaultEnabled: true,
+    defaultPriority: "high",
+    titleTemplate: "답안지 확인 요청",
+    bodyTemplate:
+      "{studentName} 학생이 {scoreTitle} 답안지 확인을 요청했습니다. 사유: {reason}",
+    targetUrl: "/teacher/exam?tab=written-essay&panel=answer-sheet-requests",
+    targetLabel: "교사 정기시험 논술형 점수 관리 화면",
+    tokens: [
+      { key: "studentName", label: "학생 이름" },
+      { key: "studentScope", label: "학생 학급" },
+      { key: "scoreTitle", label: "점수표 이름" },
+      { key: "scoreCount", label: "선택 점수 수" },
+      { key: "reason", label: "확인 요청 사유" },
+    ],
+  },
+  {
     key: "point_order_requested",
     label: "위스 상점 신청",
     audience: "teachers",

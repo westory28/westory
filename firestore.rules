@@ -306,6 +306,14 @@ service cloud.firestore {
         );
     }
 
+    function canReadPerformanceScoreAnswerSheetRequest(data) {
+      return canUseWestory()
+        && (
+          data.uid == request.auth.uid
+          || canManagePerformanceScores()
+        );
+    }
+
     function performanceScorePath(userId, scoreId) {
       return /databases/$(database)/documents/users/$(userId)/performance_scores/$(scoreId);
     }
@@ -1140,6 +1148,12 @@ service cloud.firestore {
       match /performance_score_objections/{docId} {
         allow read: if canReadPerformanceScoreObjection(resource.data);
         allow create, update, delete: if false;
+      }
+
+      match /performance_score_answer_sheet_requests/{docId} {
+        allow read: if canReadPerformanceScoreAnswerSheetRequest(resource.data);
+        allow update: if canManagePerformanceScores();
+        allow create, delete: if false;
       }
 
       match /quiz_results/{resultId} {

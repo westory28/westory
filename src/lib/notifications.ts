@@ -243,6 +243,7 @@ export const notifyPerformanceScoreObjectionRequested = async (
   input: {
     scoreIds: string[];
     reason: string;
+    scoreKind?: string;
   },
 ): Promise<{
   objectionIds: string[];
@@ -259,6 +260,7 @@ export const notifyPerformanceScoreObjectionRequested = async (
       semester: string;
       scoreIds: string[];
       reason: string;
+      scoreKind?: string;
     },
     {
       objectionIds?: string[];
@@ -274,6 +276,7 @@ export const notifyPerformanceScoreObjectionRequested = async (
     semester,
     scoreIds: Array.from(new Set(input.scoreIds || [])).filter(Boolean),
     reason: input.reason,
+    scoreKind: input.scoreKind,
   });
   return {
     objectionIds: Array.isArray(result.data?.objectionIds)
@@ -282,6 +285,60 @@ export const notifyPerformanceScoreObjectionRequested = async (
     objectionSavedCount: Number(result.data?.objectionSavedCount || 0),
     objectionSkippedProcessedCount: Number(
       result.data?.objectionSkippedProcessedCount || 0,
+    ),
+    createdCount: Number(result.data?.createdCount || 0),
+    recipientCount: Number(result.data?.recipientCount || 0),
+    skippedCount: Number(result.data?.skippedCount || 0),
+  };
+};
+
+export const notifyPerformanceScoreAnswerSheetRequested = async (
+  config: ConfigLike,
+  input: {
+    scoreIds: string[];
+    reason: string;
+    scoreKind?: string;
+  },
+): Promise<{
+  requestIds: string[];
+  requestSavedCount: number;
+  requestSkippedPendingCount?: number;
+  createdCount: number;
+  recipientCount: number;
+  skippedCount?: number;
+}> => {
+  const { year, semester } = getYearSemester(config);
+  const callable = await getHttpsCallable<
+    {
+      year: string;
+      semester: string;
+      scoreIds: string[];
+      reason: string;
+      scoreKind?: string;
+    },
+    {
+      requestIds?: string[];
+      requestSavedCount?: number;
+      requestSkippedPendingCount?: number;
+      createdCount?: number;
+      recipientCount?: number;
+      skippedCount?: number;
+    }
+  >("notifyPerformanceScoreAnswerSheetRequested");
+  const result = await callable({
+    year,
+    semester,
+    scoreIds: Array.from(new Set(input.scoreIds || [])).filter(Boolean),
+    reason: input.reason,
+    scoreKind: input.scoreKind,
+  });
+  return {
+    requestIds: Array.isArray(result.data?.requestIds)
+      ? result.data.requestIds.map((value) => String(value || ""))
+      : [],
+    requestSavedCount: Number(result.data?.requestSavedCount || 0),
+    requestSkippedPendingCount: Number(
+      result.data?.requestSkippedPendingCount || 0,
     ),
     createdCount: Number(result.data?.createdCount || 0),
     recipientCount: Number(result.data?.recipientCount || 0),

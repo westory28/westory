@@ -27,6 +27,9 @@ export const PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION = "confirmations";
 export const PERFORMANCE_SCORE_OBJECTIONS_COLLECTION =
   "performance_score_objections";
 
+export const PERFORMANCE_SCORE_ANSWER_SHEET_REQUESTS_COLLECTION =
+  "performance_score_answer_sheet_requests";
+
 export const PERFORMANCE_SCORE_SETTINGS_DOC_ID = "performance_score";
 
 export const PERFORMANCE_SCORE_CONSENTS_COLLECTION =
@@ -41,6 +44,13 @@ export const DEFAULT_PERFORMANCE_SCORE_WARNING_VERSION = "default-20260609";
 
 export const PERFORMANCE_SCORE_WARNING_MAX_LENGTH = 600;
 
+export const PERFORMANCE_SCORE_KIND = "performance";
+export const WRITTEN_EXAM_SCORE_KIND = "written_exam_essay";
+
+export type PerformanceScoreKind =
+  | typeof PERFORMANCE_SCORE_KIND
+  | typeof WRITTEN_EXAM_SCORE_KIND;
+
 export interface PerformanceScoreItem {
   name: string;
   shortName?: string;
@@ -52,6 +62,7 @@ export interface PerformanceScoreItem {
 
 export interface PerformanceScoreRecord {
   id?: string;
+  scoreKind?: PerformanceScoreKind;
   rosterId: string;
   title: string;
   subject: string;
@@ -120,6 +131,7 @@ export type PerformanceScoreObjectionStatus =
 
 export interface PerformanceScoreObjection {
   id: string;
+  scoreKind?: PerformanceScoreKind;
   uid: string;
   scoreId: string;
   rosterId?: string;
@@ -129,6 +141,22 @@ export interface PerformanceScoreObjection {
   requestedAt?: unknown;
   reviewedAt?: unknown;
   changedScoreLabel?: string;
+  reviewMemo?: string;
+}
+
+export type PerformanceScoreAnswerSheetRequestStatus = "pending" | "reviewed";
+
+export interface PerformanceScoreAnswerSheetRequest {
+  id: string;
+  scoreKind?: PerformanceScoreKind;
+  uid: string;
+  scoreId: string;
+  rosterId?: string;
+  scoreTitle?: string;
+  status: PerformanceScoreAnswerSheetRequestStatus;
+  reason?: string;
+  requestedAt?: unknown;
+  reviewedAt?: unknown;
   reviewMemo?: string;
 }
 
@@ -155,6 +183,7 @@ export interface PerformanceScoreRosterRow {
 
 export interface PerformanceScoreRoster {
   id: string;
+  scoreKind?: PerformanceScoreKind;
   title: string;
   subject: string;
   assessmentOrder?: number;
@@ -200,6 +229,18 @@ export const toFiniteScore = (value: unknown): number | null => {
   const parsed = Number(normalized);
   return Number.isFinite(parsed) ? parsed : null;
 };
+
+export const normalizePerformanceScoreKind = (
+  value: unknown,
+): PerformanceScoreKind =>
+  value === WRITTEN_EXAM_SCORE_KIND
+    ? WRITTEN_EXAM_SCORE_KIND
+    : PERFORMANCE_SCORE_KIND;
+
+export const isPerformanceScoreKind = (
+  value: unknown,
+  expectedKind: PerformanceScoreKind,
+) => normalizePerformanceScoreKind(value) === expectedKind;
 
 export const roundScore = (value: number) => {
   if (!Number.isFinite(value)) return 0;
@@ -402,8 +443,10 @@ const normalizePerformanceScoreObjectionStatus = (
 export const loadUserPerformanceScoreObjections = async (
   config: ConfigLike,
   uid: string,
+  options: { scoreKind?: PerformanceScoreKind | "all" } = {},
 ) => {
   if (!uid) return [];
+  const targetScoreKind = options.scoreKind ?? PERFORMANCE_SCORE_KIND;
   const snap = await getDocs(
     query(
       collection(
@@ -416,22 +459,77 @@ export const loadUserPerformanceScoreObjections = async (
       where("uid", "==", uid),
     ),
   );
-  return snap.docs.map((item) => {
-    const data = item.data() as Record<string, unknown>;
-    return {
-      id: item.id,
-      uid: String(data.uid || ""),
-      scoreId: String(data.scoreId || ""),
-      rosterId: String(data.rosterId || ""),
-      scoreTitle: String(data.scoreTitle || ""),
-      status: normalizePerformanceScoreObjectionStatus(data.status),
-      reason: String(data.reason || ""),
-      requestedAt: data.requestedAt,
-      reviewedAt: data.reviewedAt,
-      changedScoreLabel: String(data.changedScoreLabel || ""),
-      reviewMemo: String(data.reviewMemo || ""),
-    } satisfies PerformanceScoreObjection;
-  });
+  return snap.docs
+    .map((item) => {
+      const data = item.data() as Record<string, unknown>;
+      return {
+        id: item.id,
+        scoreKind: normalizePerformanceScoreKind(data.scoreKind),
+        uid: String(data.uid || ""),
+        scoreId: String(data.scoreId || ""),
+        rosterId: String(data.rosterId || ""),
+        scoreTitle: String(data.scoreTitle || ""),
+        status: normalizePerformanceScoreObjectionStatus(data.status),
+        reason: String(data.reason || ""),
+        requestedAt: data.requestedAt,
+        reviewedAt: data.reviewedAt,
+        changedScoreLabel: String(data.changedScoreLabel || ""),
+        reviewMemo: String(data.reviewMemo || ""),
+      } satisfies PerformanceScoreObjection;
+    })
+    .filter(
+      (item) =>
+        targetScoreKind === "all" ||
+        normalizePerformanceScoreKind(item.scoreKind) === targetScoreKind,
+    );
+};
+
+const normalizePerformanceScoreAnswerSheetRequestStatus = (
+  value: unknown,
+): PerformanceScoreAnswerSheetRequestStatus =>
+  String(value || "").trim() === "reviewed" ? "reviewed" : "pending";
+
+export const loadUserPerformanceScoreAnswerSheetRequests = async (
+  config: ConfigLike,
+  uid: string,
+  options: { scoreKind?: PerformanceScoreKind | "all" } = {},
+) => {
+  if (!uid) return [];
+  const targetScoreKind = options.scoreKind ?? PERFORMANCE_SCORE_KIND;
+  const snap = await getDocs(
+    query(
+      collection(
+        db,
+        getSemesterCollectionPath(
+          config,
+          PERFORMANCE_SCORE_ANSWER_SHEET_REQUESTS_COLLECTION,
+        ),
+      ),
+      where("uid", "==", uid),
+    ),
+  );
+  return snap.docs
+    .map((item) => {
+      const data = item.data() as Record<string, unknown>;
+      return {
+        id: item.id,
+        scoreKind: normalizePerformanceScoreKind(data.scoreKind),
+        uid: String(data.uid || ""),
+        scoreId: String(data.scoreId || ""),
+        rosterId: String(data.rosterId || ""),
+        scoreTitle: String(data.scoreTitle || ""),
+        status: normalizePerformanceScoreAnswerSheetRequestStatus(data.status),
+        reason: String(data.reason || ""),
+        requestedAt: data.requestedAt,
+        reviewedAt: data.reviewedAt,
+        reviewMemo: String(data.reviewMemo || ""),
+      } satisfies PerformanceScoreAnswerSheetRequest;
+    })
+    .filter(
+      (item) =>
+        targetScoreKind === "all" ||
+        normalizePerformanceScoreKind(item.scoreKind) === targetScoreKind,
+    );
 };
 
 const getTimestampSeconds = (value: unknown) => {
@@ -458,9 +556,14 @@ export const sortPerformanceScoreRecords = (
 
 export const loadUserPerformanceScoreRecords = async (
   uid: string,
-  scope?: { year?: string; semester?: string },
+  scope?: {
+    year?: string;
+    semester?: string;
+    scoreKind?: PerformanceScoreKind | "all";
+  },
 ) => {
   if (!uid) return [];
+  const targetScoreKind = scope?.scoreKind ?? PERFORMANCE_SCORE_KIND;
   const snap = await getDocs(
     query(
       collection(db, "users", uid, PERFORMANCE_SCORE_USER_COLLECTION),
@@ -478,7 +581,10 @@ export const loadUserPerformanceScoreRecords = async (
     .filter(
       (record) =>
         (!scope?.year || String(record.academicYear || "") === scope.year) &&
-        (!scope?.semester || String(record.semester || "") === scope.semester),
+        (!scope?.semester ||
+          String(record.semester || "") === scope.semester) &&
+        (targetScoreKind === "all" ||
+          normalizePerformanceScoreKind(record.scoreKind) === targetScoreKind),
     )
     .map((record) => ({
       ...record,

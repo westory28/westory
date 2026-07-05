@@ -219,6 +219,7 @@ export type WestoryNotificationType =
   | "performance_score_objection_requested"
   | "performance_score_objection_reviewed"
   | "performance_score_signature_rejected"
+  | "performance_score_answer_sheet_requested"
   | "history_dictionary_requested"
   | "history_dictionary_resolved"
   | "history_dictionary_rejected"

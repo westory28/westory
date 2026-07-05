@@ -735,6 +735,9 @@ const PERFORMANCE_SCORE_ROSTERS_COLLECTION = 'performance_score_rosters';
 const PERFORMANCE_SCORE_USER_COLLECTION = 'performance_scores';
 const PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION = 'confirmations';
 const PERFORMANCE_SCORE_OBJECTIONS_COLLECTION = 'performance_score_objections';
+const PERFORMANCE_SCORE_ANSWER_SHEET_REQUESTS_COLLECTION = 'performance_score_answer_sheet_requests';
+const PERFORMANCE_SCORE_KIND = 'performance';
+const WRITTEN_EXAM_SCORE_KIND = 'written_exam_essay';
 const NOTIFICATION_EVENT_AUDIENCE = {
   history_classroom_assigned: 'students',
   history_classroom_passed: 'teachers',
@@ -745,6 +748,7 @@ const NOTIFICATION_EVENT_AUDIENCE = {
   performance_score_objection_requested: 'teachers',
   performance_score_objection_reviewed: 'students',
   performance_score_signature_rejected: 'students',
+  performance_score_answer_sheet_requested: 'teachers',
   history_dictionary_requested: 'teachers',
   history_dictionary_resolved: 'students',
   history_dictionary_rejected: 'students',
@@ -2115,7 +2119,17 @@ const hasCompletePerformanceScoreSignatureData = (data) =>
   && typeof data?.signatureName === 'string'
   && data.signatureName.trim().length > 0;
 
-const loadStudentPerformanceScoreForNotification = async (uid, year, semester, scoreId) => {
+const normalizePerformanceScoreKind = (value) =>
+  String(value || '').trim() === WRITTEN_EXAM_SCORE_KIND
+    ? WRITTEN_EXAM_SCORE_KIND
+    : PERFORMANCE_SCORE_KIND;
+
+const getPerformanceScoreKindLabel = (scoreKind) =>
+  normalizePerformanceScoreKind(scoreKind) === WRITTEN_EXAM_SCORE_KIND
+    ? '정기시험 논술형'
+    : '수행평가';
+
+const loadStudentPerformanceScoreForNotification = async (uid, year, semester, scoreId, options = {}) => {
   const scoreRef = db.doc(`users/${uid}/${PERFORMANCE_SCORE_USER_COLLECTION}/${scoreId}`);
   const scoreSnap = await scoreRef.get();
   if (!scoreSnap.exists) {
@@ -2135,14 +2149,20 @@ const loadStudentPerformanceScoreForNotification = async (uid, year, semester, s
   ) {
     throw new HttpsError('invalid-argument', 'Performance score is outside the requested semester.');
   }
-  if (hasCompletePerformanceScoreSignatureData(scoreData)) {
+  if (
+    options.scoreKind
+    && normalizePerformanceScoreKind(scoreData.scoreKind) !== normalizePerformanceScoreKind(options.scoreKind)
+  ) {
+    throw new HttpsError('invalid-argument', 'Performance score kind does not match this request.');
+  }
+  if (!options.allowConfirmed && hasCompletePerformanceScoreSignatureData(scoreData)) {
     throw new HttpsError('failed-precondition', 'Performance score is already confirmed.');
   }
 
   const confirmationSnap = await db
     .doc(`users/${uid}/${PERFORMANCE_SCORE_USER_COLLECTION}/${scoreId}/${PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION}/${uid}`)
     .get();
-  if (confirmationSnap.exists && hasCompletePerformanceScoreSignatureData(confirmationSnap.data() || {})) {
+  if (!options.allowConfirmed && confirmationSnap.exists && hasCompletePerformanceScoreSignatureData(confirmationSnap.data() || {})) {
     throw new HttpsError('failed-precondition', 'Performance score confirmation already exists.');
   }
 
@@ -2159,6 +2179,18 @@ const buildPerformanceScoreObjectionId = (year, semester, uid, scoreId) => {
     .digest('hex')
     .slice(0, 32);
   return `pso_${hash}`;
+};
+
+const getPerformanceScoreAnswerSheetRequestPath = (year, semester, requestId) =>
+  `${getSemesterRoot(year, semester)}/${PERFORMANCE_SCORE_ANSWER_SHEET_REQUESTS_COLLECTION}/${requestId}`;
+
+const buildPerformanceScoreAnswerSheetRequestId = (year, semester, uid, scoreId) => {
+  const hash = crypto
+    .createHash('sha1')
+    .update(`${year}:${semester}:${uid}:${scoreId}:answer_sheet`)
+    .digest('hex')
+    .slice(0, 32);
+  return `psa_${hash}`;
 };
 
 const toNullablePerformanceScoreNumber = (value) => {
@@ -2234,7 +2266,10 @@ const savePerformanceScoreObjections = async (year, semester, input) => {
     );
     const totalScore = toNullablePerformanceScoreNumber(data.totalScore);
     const totalMaxScore = toNullablePerformanceScoreNumber(data.totalMaxScore);
+    const scoreKind = normalizePerformanceScoreKind(data.scoreKind);
+    const scoreKindLabel = getPerformanceScoreKindLabel(scoreKind);
     const payload = {
+      scoreKind,
       uid: actorUid,
       studentName,
       grade,
@@ -2242,7 +2277,7 @@ const savePerformanceScoreObjections = async (year, semester, input) => {
       number,
       scoreId: sanitizeNotificationText(item.record?.id, 160),
       rosterId: sanitizeNotificationText(data.rosterId || item.record?.id, 160),
-      scoreTitle: sanitizeNotificationText(data.title, 120, '수행평가'),
+      scoreTitle: sanitizeNotificationText(data.title, 120, scoreKindLabel),
       subject: sanitizeNotificationText(data.subject, 80),
       assessmentOrder: Number.isFinite(Number(data.assessmentOrder))
         ? Number(data.assessmentOrder)
@@ -2293,6 +2328,8 @@ const createPerformanceScoreObjectionRequestedNotifications = async (year, semes
   const profile = input.profile || {};
   const records = Array.isArray(input.records) ? input.records : [];
   const firstRecord = records[0]?.data || {};
+  const scoreKind = normalizePerformanceScoreKind(firstRecord.scoreKind);
+  const scoreKindLabel = getPerformanceScoreKindLabel(scoreKind);
   const studentName = sanitizeNotificationText(
     profile.name || firstRecord.studentName,
     40,
@@ -2302,12 +2339,12 @@ const createPerformanceScoreObjectionRequestedNotifications = async (year, semes
   const className = sanitizeNotificationText(profile.class || firstRecord.class, 12);
   const number = sanitizeNotificationText(profile.number || firstRecord.number, 12);
   const scoreTitles = uniqueNonEmptyStrings(
-    records.map((record) => sanitizeNotificationText(record?.data?.title, 80, '수행평가')),
+    records.map((record) => sanitizeNotificationText(record?.data?.title, 80, scoreKindLabel)),
     20,
   );
   const titleLabel = scoreTitles.length > 1
     ? `${scoreTitles[0]} 외 ${scoreTitles.length - 1}건`
-    : scoreTitles[0] || '수행평가';
+    : scoreTitles[0] || scoreKindLabel;
   const studentScopeLabel = [grade && `${grade}학년`, className && `${className}반`, number && `${number}번`]
     .filter(Boolean)
     .join(' ');
@@ -2321,9 +2358,11 @@ const createPerformanceScoreObjectionRequestedNotifications = async (year, semes
 
   return createUserNotifications(year, semester, recipients, {
     type: 'performance_score_objection_requested',
-    title: '수행평가 점수 이의 제기',
+    title: `${scoreKindLabel} 점수 이의 제기`,
     body: `${studentName} 학생이 ${titleLabel} 점수에 이의를 제기했습니다. 사유: ${objectionReason}`,
-    targetUrl: '/teacher/exam?tab=performance',
+    targetUrl: scoreKind === WRITTEN_EXAM_SCORE_KIND
+      ? '/teacher/exam?tab=written-essay&panel=objections'
+      : '/teacher/exam?tab=performance',
     entityType: 'performance_score_objection',
     entityId: objectionHash,
     actorUid,
@@ -2335,6 +2374,7 @@ const createPerformanceScoreObjectionRequestedNotifications = async (year, semes
       scoreTitle: titleLabel,
       scoreCount: scoreIds.length,
       reason: objectionReason,
+      scoreKind,
     },
   });
 };
@@ -2345,7 +2385,9 @@ const createPerformanceScoreObjectionReviewedNotification = async (year, semeste
   if (!objectionId || !recipientUid) return { created: false, recipientUid };
 
   const accepted = input.status === 'accepted';
-  const scoreTitle = sanitizeNotificationText(input.scoreTitle, 120, '수행평가');
+  const scoreKind = normalizePerformanceScoreKind(input.scoreKind);
+  const scoreKindLabel = getPerformanceScoreKindLabel(scoreKind);
+  const scoreTitle = sanitizeNotificationText(input.scoreTitle, 120, scoreKindLabel);
   const reviewMemo = sanitizeNotificationText(input.reviewMemo, 240);
   const changedScoreLabel = sanitizeNotificationText(input.changedScoreLabel, 80);
   const statusLabel = accepted ? '수용' : '반려';
@@ -2356,9 +2398,11 @@ const createPerformanceScoreObjectionReviewedNotification = async (year, semeste
 
   return createUserNotification(year, semester, recipientUid, {
     type: 'performance_score_objection_reviewed',
-    title: '수행평가 이의 제기 처리',
+    title: `${scoreKindLabel} 이의 제기 처리`,
     body: `${scoreTitle} 이의 제기가 ${statusLabel}되었습니다.${scoreMessage}${memoMessage}`,
-    targetUrl: '/student/score/performance',
+    targetUrl: scoreKind === WRITTEN_EXAM_SCORE_KIND
+      ? '/student/score/written-exam'
+      : '/student/score/performance',
     entityType: 'performance_score_objection',
     entityId: objectionId,
     actorUid: input.actorUid,
@@ -2988,6 +3032,165 @@ const collectCurrentSemesterStudentRefs = async (year, semester, uid) => {
   addQueryDocRefs(refsByPath, notificationItems);
 
   return Array.from(refsByPath.values());
+};
+
+const savePerformanceScoreAnswerSheetRequests = async (year, semester, input) => {
+  const actorUid = sanitizeNotificationText(input.actorUid, 160);
+  const requestReason = sanitizeNotificationText(input.reason, 300);
+  const profile = input.profile || {};
+  const records = Array.isArray(input.records) ? input.records : [];
+  if (!actorUid || !requestReason || records.length === 0) {
+    return { requestIds: [], scoreIds: [] };
+  }
+
+  const refs = records.map((record) => {
+    const scoreId = sanitizeNotificationText(record?.id, 160);
+    const requestId = buildPerformanceScoreAnswerSheetRequestId(year, semester, actorUid, scoreId);
+    return {
+      requestId,
+      scoreId,
+      record,
+      ref: db.doc(getPerformanceScoreAnswerSheetRequestPath(year, semester, requestId)),
+    };
+  });
+  const existingSnaps = await Promise.all(refs.map((item) => item.ref.get()));
+  const batch = db.batch();
+  const savedItems = [];
+  let skippedPendingCount = 0;
+
+  refs.forEach((item, index) => {
+    const data = item.record?.data || {};
+    const existing = existingSnaps[index];
+    const existingStatus = sanitizeNotificationText(existing.data()?.status, 40);
+    if (existing.exists && existingStatus === 'pending') {
+      skippedPendingCount += 1;
+      return;
+    }
+    const scoreKind = normalizePerformanceScoreKind(data.scoreKind);
+    const scoreKindLabel = getPerformanceScoreKindLabel(scoreKind);
+    const studentName = sanitizeNotificationText(
+      profile.studentName || profile.name || profile.displayName || data.studentName,
+      40,
+      '학생',
+    );
+    const grade = sanitizeNotificationText(
+      profile.studentGrade || profile.grade || data.grade,
+      12,
+    );
+    const className = sanitizeNotificationText(
+      profile.studentClass || profile.class || data.class,
+      12,
+    );
+    const number = sanitizeNotificationText(
+      profile.studentNumber || profile.number || data.number,
+      12,
+    );
+    const totalScore = toNullablePerformanceScoreNumber(data.totalScore);
+    const totalMaxScore = toNullablePerformanceScoreNumber(data.totalMaxScore);
+    const payload = {
+      scoreKind,
+      uid: actorUid,
+      studentName,
+      grade,
+      class: className,
+      number,
+      scoreId: sanitizeNotificationText(item.record?.id, 160),
+      rosterId: sanitizeNotificationText(data.rosterId || item.record?.id, 160),
+      scoreTitle: sanitizeNotificationText(data.title, 120, scoreKindLabel),
+      subject: sanitizeNotificationText(data.subject, 80),
+      academicYear: year,
+      semester,
+      totalScore,
+      totalMaxScore,
+      scoreLabel: formatPerformanceScoreLabel(totalScore, totalMaxScore),
+      reason: requestReason,
+      status: 'pending',
+      reviewedAt: null,
+      reviewedBy: '',
+      reviewMemo: '',
+      requestBatchId: sanitizeNotificationText(input.requestBatchId, 80),
+      uploadedBy: sanitizeNotificationText(data.uploadedBy, 160),
+      uploadedByEmail: sanitizeNotificationText(data.uploadedByEmail, 160),
+      updatedAt: FieldValue.serverTimestamp(),
+      requestedAt: FieldValue.serverTimestamp(),
+    };
+    if (!existing.exists) {
+      payload.createdAt = FieldValue.serverTimestamp();
+    }
+    batch.set(item.ref, payload, { merge: true });
+    savedItems.push(item);
+  });
+
+  if (savedItems.length > 0) {
+    await batch.commit();
+  }
+  return {
+    requestIds: savedItems.map((item) => item.requestId),
+    scoreIds: savedItems.map((item) => item.scoreId).filter(Boolean),
+    skippedPendingCount,
+  };
+};
+
+const createPerformanceScoreAnswerSheetRequestedNotifications = async (year, semester, input) => {
+  const actorUid = sanitizeNotificationText(input.actorUid, 160);
+  const scoreIds = uniqueNonEmptyStrings(input.scoreIds, 20);
+  const sortedScoreIds = [...scoreIds].sort();
+  const requestReason = sanitizeNotificationText(input.reason, 300);
+  if (!actorUid || scoreIds.length === 0) return [];
+
+  const profile = input.profile || {};
+  const records = Array.isArray(input.records) ? input.records : [];
+  const firstRecord = records[0]?.data || {};
+  const scoreKind = normalizePerformanceScoreKind(firstRecord.scoreKind);
+  const scoreKindLabel = getPerformanceScoreKindLabel(scoreKind);
+  const studentName = sanitizeNotificationText(
+    profile.name || firstRecord.studentName,
+    40,
+    '학생',
+  );
+  const grade = sanitizeNotificationText(profile.grade || firstRecord.grade, 12);
+  const className = sanitizeNotificationText(profile.class || firstRecord.class, 12);
+  const number = sanitizeNotificationText(profile.number || firstRecord.number, 12);
+  const scoreTitles = uniqueNonEmptyStrings(
+    records.map((record) => sanitizeNotificationText(record?.data?.title, 80, scoreKindLabel)),
+    20,
+  );
+  const titleLabel = scoreTitles.length > 1
+    ? `${scoreTitles[0]} 외 ${scoreTitles.length - 1}건`
+    : scoreTitles[0] || scoreKindLabel;
+  const studentScopeLabel = [grade && `${grade}학년`, className && `${className}반`, number && `${number}번`]
+    .filter(Boolean)
+    .join(' ');
+  const requestHash = crypto
+    .createHash('sha1')
+    .update(`${year}:${semester}:${actorUid}:${sortedScoreIds.join('|')}:answer_sheet`)
+    .digest('hex');
+  const requestBatchId = sanitizeNotificationText(input.requestBatchId, 80, requestHash);
+  const recipients = await resolvePerformanceScoreNotificationRecipientUids(
+    records.map((record) => record?.data?.uploadedBy),
+  );
+
+  return createUserNotifications(year, semester, recipients, {
+    type: 'performance_score_answer_sheet_requested',
+    title: '답안지 확인 요청',
+    body: `${studentName} 학생이 ${titleLabel} 답안지 확인을 요청했습니다. 사유: ${requestReason}`,
+    targetUrl: scoreKind === WRITTEN_EXAM_SCORE_KIND
+      ? '/teacher/exam?tab=written-essay&panel=answer-sheet-requests'
+      : '/teacher/exam?tab=performance&panel=answer-sheet-requests',
+    entityType: 'performance_score_answer_sheet_request',
+    entityId: requestHash,
+    actorUid,
+    priority: 'high',
+    dedupeKey: `performance_score_answer_sheet_requested:${year}:${semester}:${actorUid}:${sortedScoreIds.join('|')}:${requestBatchId}`,
+    templateValues: {
+      studentName,
+      studentScope: studentScopeLabel,
+      scoreTitle: titleLabel,
+      scoreCount: scoreIds.length,
+      reason: requestReason,
+      scoreKind,
+    },
+  });
 };
 
 const normalizeLessonCorePointResetIdentity = (value) =>
@@ -5745,6 +5948,7 @@ exports.notifyPerformanceScoreObjectionRequested = onCall({ region: REGION }, as
     sanitizeNotificationText(scoreId, 160),
   ).filter(Boolean);
   const reason = sanitizeNotificationText(request.data?.reason, 300);
+  const requestedScoreKind = normalizePerformanceScoreKind(request.data?.scoreKind);
   if (scoreIds.length === 0) {
     throw new HttpsError('invalid-argument', 'scoreIds are required.');
   }
@@ -5759,7 +5963,9 @@ exports.notifyPerformanceScoreObjectionRequested = onCall({ region: REGION }, as
 
   const records = await Promise.all(
     scoreIds.map((scoreId) =>
-      loadStudentPerformanceScoreForNotification(uid, year, semester, scoreId),
+      loadStudentPerformanceScoreForNotification(uid, year, semester, scoreId, {
+        scoreKind: requestedScoreKind,
+      }),
     ),
   );
   const objectionSaveResult = await savePerformanceScoreObjections(year, semester, {
@@ -5792,6 +5998,75 @@ exports.notifyPerformanceScoreObjectionRequested = onCall({ region: REGION }, as
     objectionIds: objectionSaveResult.objectionIds,
     objectionSavedCount: objectionSaveResult.objectionIds.length,
     objectionSkippedProcessedCount: objectionSaveResult.skippedProcessedCount,
+    createdCount: notificationResults.filter((result) => result.created).length,
+    skippedCount: notificationResults.filter((result) => result.skipped).length,
+    recipientCount: notificationResults.length,
+  };
+});
+
+exports.notifyPerformanceScoreAnswerSheetRequested = onCall({ region: REGION }, async (request) => {
+  const { uid } = assertAllowedWestoryUser(request);
+  const { year, semester } = assertYearSemester(request.data);
+  const scoreIds = uniqueNonEmptyStrings(request.data?.scoreIds, 20).map((scoreId) =>
+    sanitizeNotificationText(scoreId, 160),
+  ).filter(Boolean);
+  const reason = sanitizeNotificationText(request.data?.reason, 300);
+  const requestedScoreKind = normalizePerformanceScoreKind(request.data?.scoreKind);
+  if (scoreIds.length === 0) {
+    throw new HttpsError('invalid-argument', 'scoreIds are required.');
+  }
+  if (!reason || reason.length < 10) {
+    throw new HttpsError('invalid-argument', 'A detailed reason is required.');
+  }
+
+  const { profile } = await getUserProfile(uid);
+  if (String(profile?.role || '').trim() !== 'student') {
+    throw new HttpsError('permission-denied', 'Only students can request answer sheet checks.');
+  }
+
+  const records = await Promise.all(
+    scoreIds.map((scoreId) =>
+      loadStudentPerformanceScoreForNotification(uid, year, semester, scoreId, {
+        scoreKind: requestedScoreKind,
+        allowConfirmed: true,
+      }),
+    ),
+  );
+  const requestBatchId = typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : crypto.createHash('sha1').update(`${Date.now()}:${uid}:${scoreIds.join('|')}`).digest('hex').slice(0, 32);
+  const requestSaveResult = await savePerformanceScoreAnswerSheetRequests(year, semester, {
+    actorUid: uid,
+    profile,
+    records,
+    reason,
+    requestBatchId,
+  });
+  const savedScoreIds = new Set(requestSaveResult.scoreIds);
+  const savedRecords = records.filter((record) => savedScoreIds.has(record.id));
+  if (savedRecords.length === 0) {
+    return {
+      requestIds: [],
+      requestSavedCount: 0,
+      requestSkippedPendingCount: requestSaveResult.skippedPendingCount,
+      createdCount: 0,
+      skippedCount: 0,
+      recipientCount: 0,
+    };
+  }
+  const notificationResults = await createPerformanceScoreAnswerSheetRequestedNotifications(year, semester, {
+    actorUid: uid,
+    profile,
+    scoreIds: requestSaveResult.scoreIds,
+    records: savedRecords,
+    reason,
+    requestBatchId,
+  });
+
+  return {
+    requestIds: requestSaveResult.requestIds,
+    requestSavedCount: requestSaveResult.requestIds.length,
+    requestSkippedPendingCount: requestSaveResult.skippedPendingCount,
     createdCount: notificationResults.filter((result) => result.created).length,
     skippedCount: notificationResults.filter((result) => result.skipped).length,
     recipientCount: notificationResults.length,
@@ -5842,6 +6117,7 @@ exports.reviewPerformanceScoreObjection = onCall({ region: REGION }, async (requ
           status: currentStatus,
           recipientUid,
           scoreTitle: objection.scoreTitle,
+          scoreKind: normalizePerformanceScoreKind(objection.scoreKind),
           changedScoreLabel: sanitizeNotificationText(objection.changedScoreLabel, 80),
           reviewMemo: sanitizeNotificationText(objection.reviewMemo, 240),
         };
@@ -5897,6 +6173,7 @@ exports.reviewPerformanceScoreObjection = onCall({ region: REGION }, async (requ
       status: action,
       recipientUid,
       scoreTitle: objection.scoreTitle,
+      scoreKind: normalizePerformanceScoreKind(objection.scoreKind),
       changedScoreLabel,
       reviewMemo,
     };
@@ -5908,6 +6185,7 @@ exports.reviewPerformanceScoreObjection = onCall({ region: REGION }, async (requ
       objectionId,
       recipientUid: reviewResult.recipientUid,
       scoreTitle: reviewResult.scoreTitle,
+      scoreKind: reviewResult.scoreKind,
       status: reviewResult.status,
       changedScoreLabel: reviewResult.changedScoreLabel,
       reviewMemo: reviewResult.reviewMemo,

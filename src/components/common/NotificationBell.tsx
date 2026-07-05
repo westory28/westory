@@ -110,6 +110,22 @@ const getNotificationTargetUrl = (notification: WestoryNotification) => {
     }
     return targetUrl;
   }
+  if (notification.type === "performance_score_answer_sheet_requested") {
+    if (
+      !targetUrl ||
+      targetUrl === "/teacher/exam" ||
+      targetUrl === "/teacher/exam?tab=written-essay"
+    ) {
+      return "/teacher/exam?tab=written-essay&panel=answer-sheet-requests";
+    }
+    if (
+      targetUrl.startsWith("/teacher/exam?") &&
+      !targetUrl.includes("panel=")
+    ) {
+      return `${targetUrl}&panel=answer-sheet-requests`;
+    }
+    return targetUrl;
+  }
   if (
     notification.type === "performance_score_objection_reviewed" ||
     notification.type === "performance_score_signature_rejected"

@@ -44,6 +44,10 @@ export const MENUS: MenuConfig = {
         { name: "성적 계산기", url: "/student/score" },
         { name: "나의 성적 리포트", url: "/student/score/report" },
         { name: "내 수행평가 점수", url: "/student/score/performance" },
+        {
+          name: "내 정기시험 논술형 점수",
+          url: "/student/score/written-exam",
+        },
         { name: "정기 시험 답안", url: "/student/history" },
       ],
     },
@@ -96,6 +100,10 @@ export const MENUS: MenuConfig = {
         { name: "평가 반영 비율", url: "/teacher/exam" },
         { name: "정기시험 답안", url: "/teacher/exam?tab=omr" },
         { name: "수행평가 점수 관리", url: "/teacher/exam?tab=performance" },
+        {
+          name: "정기시험 논술형 점수 관리",
+          url: "/teacher/exam?tab=written-essay",
+        },
       ],
     },
     {

@@ -13,6 +13,7 @@ import {
   query,
   runTransaction,
   serverTimestamp,
+  updateDoc,
   type WithFieldValue,
   where,
   writeBatch,
@@ -32,8 +33,10 @@ import {
 import {
   PERFORMANCE_SCORE_ROSTERS_COLLECTION,
   PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
+  PERFORMANCE_SCORE_ANSWER_SHEET_REQUESTS_COLLECTION,
   DEFAULT_PERFORMANCE_SCORE_WARNING_TEXT,
   PERFORMANCE_SCORE_OBJECTIONS_COLLECTION,
+  PERFORMANCE_SCORE_KIND,
   PERFORMANCE_SCORE_WARNING_MAX_LENGTH,
   PERFORMANCE_SCORE_USER_COLLECTION,
   applyPerformanceScoreConfirmation,
@@ -44,6 +47,7 @@ import {
   loadPerformanceScoreSettings,
   loadPerformanceScoreConfirmation,
   normalizePerformanceScoreSettings,
+  normalizePerformanceScoreKind,
   normalizePerformanceScoreWarningText,
   normalizeSchoolValue,
   normalizeStudentName,
@@ -715,6 +719,7 @@ interface PerformanceScoreObjectionItem {
 interface PerformanceScoreObjection {
   id: string;
   uid: string;
+  scoreKind?: string;
   studentName: string;
   grade: string;
   class: string;
@@ -736,6 +741,28 @@ interface PerformanceScoreObjection {
   reviewMemo?: string;
   changedTotalScore?: number | null;
   changedScoreLabel?: string;
+}
+
+interface PerformanceScoreAnswerSheetRequest {
+  id: string;
+  uid: string;
+  scoreKind?: string;
+  studentName: string;
+  grade: string;
+  class: string;
+  number: string;
+  scoreId: string;
+  rosterId: string;
+  scoreTitle: string;
+  subject: string;
+  academicYear: string;
+  semester: string;
+  scoreLabel: string;
+  reason: string;
+  status: "pending" | "reviewed";
+  requestedAt?: unknown;
+  reviewedAt?: unknown;
+  reviewMemo?: string;
 }
 
 const SCORE_DISTRIBUTION_BUCKETS = [
@@ -937,6 +964,7 @@ const normalizePerformanceScoreObjection = (
   return {
     id,
     uid: toText(data.uid),
+    scoreKind: normalizePerformanceScoreKind(data.scoreKind),
     studentName: toText(data.studentName) || "학생",
     grade: normalizeSchoolValue(data.grade),
     class: normalizeSchoolValue(data.class),
@@ -962,6 +990,31 @@ const normalizePerformanceScoreObjection = (
     changedScoreLabel: toText(data.changedScoreLabel),
   };
 };
+
+const normalizePerformanceScoreAnswerSheetRequest = (
+  id: string,
+  data: Record<string, unknown>,
+): PerformanceScoreAnswerSheetRequest => ({
+  id,
+  uid: toText(data.uid),
+  scoreKind: normalizePerformanceScoreKind(data.scoreKind),
+  studentName: toText(data.studentName) || "학생",
+  grade: normalizeSchoolValue(data.grade),
+  class: normalizeSchoolValue(data.class),
+  number: normalizeSchoolValue(data.number),
+  scoreId: toText(data.scoreId),
+  rosterId: toText(data.rosterId),
+  scoreTitle: toText(data.scoreTitle) || "수행평가",
+  subject: toText(data.subject),
+  academicYear: toText(data.academicYear),
+  semester: toText(data.semester),
+  scoreLabel: toText(data.scoreLabel),
+  reason: toText(data.reason),
+  status: data.status === "reviewed" ? "reviewed" : "pending",
+  requestedAt: data.requestedAt,
+  reviewedAt: data.reviewedAt,
+  reviewMemo: toText(data.reviewMemo),
+});
 
 const sortPerformanceScoreObjections = (
   objections: PerformanceScoreObjection[],
@@ -1594,6 +1647,7 @@ const buildRecordFromRosterRow = (
   const hasAcademicStatus = Boolean(academicStatus);
   const record = {
     id: roster.id,
+    scoreKind: normalizePerformanceScoreKind(roster.scoreKind),
     rosterId: roster.id,
     title: roster.title,
     subject: roster.subject,
@@ -1664,6 +1718,7 @@ const buildStudentScoreDocumentPayload = (
   if (!hasAcademicStatus && totalScore === null) return null;
 
   return {
+    scoreKind: normalizePerformanceScoreKind(roster.scoreKind),
     rosterId: roster.id,
     title: roster.title,
     subject: roster.subject,
@@ -1737,6 +1792,7 @@ const createManualScoreListRecord = (
   },
 ): ScoreListRecord => ({
   id: roster.id,
+  scoreKind: normalizePerformanceScoreKind(roster.scoreKind),
   rosterId: roster.id,
   title: roster.title,
   subject: roster.subject,
@@ -4084,6 +4140,17 @@ const PerformanceScoreManager: React.FC = () => {
     id: string;
     status: PerformanceScoreObjectionReviewAction;
   } | null>(null);
+  const [answerSheetRequestModalOpen, setAnswerSheetRequestModalOpen] =
+    useState(false);
+  const [answerSheetRequests, setAnswerSheetRequests] = useState<
+    PerformanceScoreAnswerSheetRequest[]
+  >([]);
+  const [answerSheetRequestsLoading, setAnswerSheetRequestsLoading] =
+    useState(false);
+  const [answerSheetRequestsLoaded, setAnswerSheetRequestsLoaded] =
+    useState(false);
+  const [answerSheetRequestReviewingId, setAnswerSheetRequestReviewingId] =
+    useState("");
   const [scoreListSort, setScoreListSort] = useState<
     SortState<ScoreListSortKey>
   >({ key: "number", direction: "asc" });
@@ -4209,6 +4276,10 @@ const PerformanceScoreManager: React.FC = () => {
   const objectionCollectionPath = getSemesterCollectionPath(
     { year, semester },
     PERFORMANCE_SCORE_OBJECTIONS_COLLECTION,
+  );
+  const answerSheetRequestCollectionPath = getSemesterCollectionPath(
+    { year, semester },
+    PERFORMANCE_SCORE_ANSWER_SHEET_REQUESTS_COLLECTION,
   );
   const rosterStudentLinkRepairKey = useMemo(() => {
     const studentKey = students
@@ -4928,6 +4999,16 @@ const PerformanceScoreManager: React.FC = () => {
     }),
     [objections],
   );
+  const answerSheetRequestSummary = useMemo(
+    () => ({
+      total: answerSheetRequests.length,
+      pending: answerSheetRequests.filter((item) => item.status === "pending")
+        .length,
+      reviewed: answerSheetRequests.filter((item) => item.status === "reviewed")
+        .length,
+    }),
+    [answerSheetRequests],
+  );
   const summaryExportRosters = useMemo(() => {
     return {
       firstRoster:
@@ -5260,10 +5341,16 @@ const PerformanceScoreManager: React.FC = () => {
           orderBy("createdAt", "desc"),
         ),
       );
-      const loaded = snap.docs.map((item) => {
-        const data = item.data() as Omit<PerformanceScoreRoster, "id">;
-        return normalizePerformanceScoreRoster(item.id, data);
-      });
+      const loaded = snap.docs
+        .map((item) => {
+          const data = item.data() as Omit<PerformanceScoreRoster, "id">;
+          return normalizePerformanceScoreRoster(item.id, data);
+        })
+        .filter(
+          (roster) =>
+            normalizePerformanceScoreKind(roster.scoreKind) ===
+            PERFORMANCE_SCORE_KIND,
+        );
       setRosters(sortPerformanceScoreRosters(loaded));
       setScoreListLoadError("");
       void syncMissingStudentScoreDocuments(loaded, syncRunId);
@@ -5613,12 +5700,18 @@ const PerformanceScoreManager: React.FC = () => {
           orderBy("requestedAt", "desc"),
         ),
       );
-      const loaded = snap.docs.map((item) =>
-        normalizePerformanceScoreObjection(
-          item.id,
-          item.data() as Record<string, unknown>,
-        ),
-      );
+      const loaded = snap.docs
+        .map((item) =>
+          normalizePerformanceScoreObjection(
+            item.id,
+            item.data() as Record<string, unknown>,
+          ),
+        )
+        .filter(
+          (item) =>
+            normalizePerformanceScoreKind(item.scoreKind) ===
+            PERFORMANCE_SCORE_KIND,
+        );
       setObjections(sortPerformanceScoreObjections(loaded));
       setObjectionsLoaded(true);
     } catch (error) {
@@ -5648,6 +5741,100 @@ const PerformanceScoreManager: React.FC = () => {
     setSearchParams(nextParams, { replace: true });
   };
 
+  const loadAnswerSheetRequests = async () => {
+    if (answerSheetRequestsLoading) return;
+    setAnswerSheetRequestsLoading(true);
+    try {
+      const snap = await getDocs(
+        query(
+          collection(db, answerSheetRequestCollectionPath),
+          orderBy("requestedAt", "desc"),
+        ),
+      );
+      const loaded = snap.docs
+        .map((item) =>
+          normalizePerformanceScoreAnswerSheetRequest(
+            item.id,
+            item.data() as Record<string, unknown>,
+          ),
+        )
+        .filter(
+          (item) =>
+            normalizePerformanceScoreKind(item.scoreKind) ===
+            PERFORMANCE_SCORE_KIND,
+        );
+      setAnswerSheetRequests(loaded);
+      setAnswerSheetRequestsLoaded(true);
+    } catch (error) {
+      console.error("Failed to load answer sheet requests:", error);
+      setAnswerSheetRequests([]);
+      setAnswerSheetRequestsLoaded(false);
+      showToast({
+        tone: "error",
+        title: "답안지 확인 요청을 불러오지 못했습니다.",
+        message: "권한과 네트워크 상태를 확인한 뒤 다시 조회해 주세요.",
+      });
+    } finally {
+      setAnswerSheetRequestsLoading(false);
+    }
+  };
+
+  const openAnswerSheetRequestModal = () => {
+    setAnswerSheetRequestModalOpen(true);
+    void loadAnswerSheetRequests();
+  };
+
+  const closeAnswerSheetRequestModal = () => {
+    setAnswerSheetRequestModalOpen(false);
+    if (searchParams.get("panel") !== "answer-sheet-requests") return;
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("panel");
+    setSearchParams(nextParams, { replace: true });
+  };
+
+  const markAnswerSheetRequestReviewed = async (
+    item: PerformanceScoreAnswerSheetRequest,
+  ) => {
+    if (answerSheetRequestReviewingId) return;
+    const memo = await promptDialog({
+      title: "답안지 확인 요청 처리",
+      message: `${item.studentName} 학생의 답안지 확인 요청을 확인 완료로 표시합니다. 남길 메모가 있으면 입력해 주세요.`,
+      inputLabel: "처리 메모",
+      initialValue: item.reviewMemo || "",
+      multiline: true,
+      maxLength: 240,
+      confirmLabel: "확인 완료",
+      tone: "info",
+    });
+    if (memo === null) return;
+
+    setAnswerSheetRequestReviewingId(item.id);
+    try {
+      await updateDoc(doc(db, answerSheetRequestCollectionPath, item.id), {
+        status: "reviewed",
+        reviewedAt: serverTimestamp(),
+        reviewedBy: currentUser?.uid || "",
+        reviewMemo: memo.trim().slice(0, 240),
+        updatedAt: serverTimestamp(),
+      });
+      await loadAnswerSheetRequests();
+      showToast({
+        tone: "success",
+        title: "답안지 확인 요청을 처리했습니다.",
+        message: "요청 목록 상태가 갱신되었습니다.",
+      });
+    } catch (error) {
+      console.error("Failed to mark answer sheet request reviewed:", error);
+      showToast({
+        tone: "error",
+        title: "답안지 확인 요청 처리에 실패했습니다.",
+        message: "권한과 네트워크 상태를 확인한 뒤 다시 시도해 주세요.",
+      });
+    } finally {
+      setAnswerSheetRequestReviewingId("");
+    }
+  };
+
   useEffect(() => {
     if (objectionsAutoLoadAttempted || objectionsLoaded || objectionsLoading) {
       return;
@@ -5662,12 +5849,34 @@ const PerformanceScoreManager: React.FC = () => {
   ]);
 
   useEffect(() => {
+    if (answerSheetRequestsLoaded || answerSheetRequestsLoading) {
+      return;
+    }
+    void loadAnswerSheetRequests();
+  }, [
+    answerSheetRequestCollectionPath,
+    answerSheetRequestsLoaded,
+    answerSheetRequestsLoading,
+  ]);
+
+  useEffect(() => {
     if (searchParams.get("panel") !== "objections" || objectionModalOpen) {
       return;
     }
     setObjectionModalOpen(true);
     void loadPerformanceScoreObjections();
   }, [searchParams, objectionModalOpen]);
+
+  useEffect(() => {
+    if (
+      searchParams.get("panel") !== "answer-sheet-requests" ||
+      answerSheetRequestModalOpen
+    ) {
+      return;
+    }
+    setAnswerSheetRequestModalOpen(true);
+    void loadAnswerSheetRequests();
+  }, [searchParams, answerSheetRequestModalOpen]);
 
   const handleReviewObjection = async (
     objection: PerformanceScoreObjection,
@@ -6533,6 +6742,9 @@ const PerformanceScoreManager: React.FC = () => {
         }
 
         const payload: PerformanceScoreRecord = {
+          scoreKind: normalizePerformanceScoreKind(
+            selectedScoreRoster.scoreKind,
+          ),
           rosterId: scoreId,
           title: selectedScoreRoster.title,
           subject: selectedScoreRoster.subject,
@@ -7313,6 +7525,7 @@ const PerformanceScoreManager: React.FC = () => {
 
       const batchQueue = createBatchQueue();
       batchQueue.set(rosterRef, {
+        scoreKind: PERFORMANCE_SCORE_KIND,
         title: safeTitle,
         subject: safeSubject,
         ...(assessmentOrder ? { assessmentOrder } : {}),
@@ -7345,6 +7558,7 @@ const PerformanceScoreManager: React.FC = () => {
           rosterId,
         );
         const payload: PerformanceScoreRecord = {
+          scoreKind: PERFORMANCE_SCORE_KIND,
           rosterId,
           title: safeTitle,
           subject: safeSubject,
@@ -9029,6 +9243,202 @@ const PerformanceScoreManager: React.FC = () => {
         </div>
       )}
 
+      {answerSheetRequestModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="performance-score-answer-sheet-requests-title"
+            className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
+          >
+            <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0">
+                <h3
+                  id="performance-score-answer-sheet-requests-title"
+                  className="text-lg font-black text-slate-900"
+                >
+                  답안지 확인 요청
+                </h3>
+                <p className="mt-1 text-sm font-semibold text-slate-500">
+                  학생이 점수 이의와 별개로 본인 답안지 확인을 요청한
+                  내역입니다.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void loadAnswerSheetRequests()}
+                  disabled={
+                    answerSheetRequestsLoading ||
+                    Boolean(answerSheetRequestReviewingId)
+                  }
+                  className="inline-flex h-9 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <i
+                    className={`fas fa-sync-alt text-xs ${
+                      answerSheetRequestsLoading ? "animate-spin" : ""
+                    }`}
+                    aria-hidden="true"
+                  />
+                  새로고침
+                </button>
+                <button
+                  type="button"
+                  onClick={closeAnswerSheetRequestModal}
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50"
+                  aria-label="답안지 확인 요청 창 닫기"
+                >
+                  <i className="fas fa-times" aria-hidden="true"></i>
+                </button>
+              </div>
+            </div>
+
+            <div className="overflow-y-auto px-5 py-4">
+              <div className="grid gap-3 sm:grid-cols-3">
+                {[
+                  {
+                    label: "전체 요청",
+                    value: answerSheetRequestSummary.total,
+                    className: "bg-slate-50 text-slate-900",
+                  },
+                  {
+                    label: "처리 대기",
+                    value: answerSheetRequestSummary.pending,
+                    className: "bg-amber-50 text-amber-800",
+                  },
+                  {
+                    label: "확인 완료",
+                    value: answerSheetRequestSummary.reviewed,
+                    className: "bg-emerald-50 text-emerald-800",
+                  },
+                ].map((item) => (
+                  <div
+                    key={item.label}
+                    className={`rounded-lg px-4 py-3 ${item.className}`}
+                  >
+                    <div className="text-xs font-black opacity-80">
+                      {item.label}
+                    </div>
+                    <div className="mt-1 text-2xl font-black">
+                      {item.value}건
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
+                {answerSheetRequestsLoading ? (
+                  <InlineLoading message="답안지 확인 요청을 불러오는 중입니다." />
+                ) : answerSheetRequestsLoaded &&
+                  answerSheetRequests.length === 0 ? (
+                  <div className="bg-slate-50 px-4 py-12 text-center text-sm font-bold text-slate-400">
+                    제출된 답안지 확인 요청이 없습니다.
+                  </div>
+                ) : !answerSheetRequestsLoaded ? (
+                  <div className="bg-slate-50 px-4 py-12 text-center text-sm font-bold text-slate-400">
+                    새로고침을 누르면 답안지 확인 요청 목록을 조회합니다.
+                  </div>
+                ) : (
+                  <table className="w-full min-w-[960px] table-fixed text-left text-sm">
+                    <colgroup>
+                      <col className="w-[150px]" />
+                      <col className="w-[220px]" />
+                      <col className="w-[120px]" />
+                      <col className="w-[330px]" />
+                      <col className="w-[110px]" />
+                      <col className="w-[140px]" />
+                    </colgroup>
+                    <thead className="bg-slate-50 text-xs font-black text-slate-500">
+                      <tr>
+                        <th className="px-4 py-3">학생</th>
+                        <th className="px-4 py-3">수행평가 항목</th>
+                        <th className="px-4 py-3">해당 점수</th>
+                        <th className="px-4 py-3">확인 요청 사유</th>
+                        <th className="px-4 py-3">요청 시간</th>
+                        <th className="px-4 py-3 text-center">상태/처리</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {answerSheetRequests.map((item) => (
+                        <tr key={item.id}>
+                          <td className="px-4 py-4 align-top">
+                            <div className="font-black text-slate-900">
+                              {item.studentName}
+                            </div>
+                            <div className="mt-1 text-xs font-bold text-slate-500">
+                              {item.grade || "-"}학년 {item.class || "-"}반{" "}
+                              {item.number || "-"}번
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 align-top">
+                            <div className="font-black text-slate-900">
+                              {item.scoreTitle}
+                            </div>
+                            <div className="mt-1 text-xs font-bold text-slate-500">
+                              {item.subject || "과목 정보 없음"}
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 align-top">
+                            <div className="font-black text-blue-700">
+                              {item.scoreLabel || "-"}
+                            </div>
+                          </td>
+                          <td className="px-4 py-4 align-top">
+                            <p className="whitespace-pre-wrap break-words font-semibold leading-6 text-slate-700">
+                              {item.reason || "사유 없음"}
+                            </p>
+                            {item.reviewMemo && (
+                              <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs font-bold leading-5 text-slate-500">
+                                처리 메모: {item.reviewMemo}
+                              </p>
+                            )}
+                          </td>
+                          <td className="px-4 py-4 align-top text-xs font-bold leading-5 text-slate-500">
+                            {formatObjectionTime(item.requestedAt)}
+                          </td>
+                          <td className="px-4 py-4 align-top text-center">
+                            {item.status === "pending" ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  void markAnswerSheetRequestReviewed(item)
+                                }
+                                disabled={Boolean(
+                                  answerSheetRequestReviewingId,
+                                )}
+                                className="inline-flex h-8 items-center justify-center whitespace-nowrap rounded-lg bg-blue-600 px-3 text-xs font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                              >
+                                {answerSheetRequestReviewingId === item.id
+                                  ? "처리 중"
+                                  : "확인 완료"}
+                              </button>
+                            ) : (
+                              <span className="inline-flex whitespace-nowrap rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">
+                                확인 완료
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end border-t border-slate-200 px-5 py-4">
+              <button
+                type="button"
+                onClick={closeAnswerSheetRequestModal}
+                className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+              >
+                닫기
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
       {classSheetModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
           <section className="flex max-h-[calc(100vh-2rem)] w-full max-w-7xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
@@ -9799,6 +10209,27 @@ const PerformanceScoreManager: React.FC = () => {
               {objectionSummary.pending > 0 && (
                 <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-black text-rose-600">
                   {objectionSummary.pending}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={openAnswerSheetRequestModal}
+              disabled={
+                answerSheetRequestsLoading || scoreEditing || savingScoreEdits
+              }
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white px-3 text-sm font-black text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <i
+                className={`fas fa-file-signature text-xs ${
+                  answerSheetRequestsLoading ? "animate-spin" : ""
+                }`}
+                aria-hidden="true"
+              />
+              답안지 요청
+              {answerSheetRequestSummary.pending > 0 && (
+                <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-black text-blue-600">
+                  {answerSheetRequestSummary.pending}
                 </span>
               )}
             </button>

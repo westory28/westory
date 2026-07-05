@@ -14,14 +14,20 @@ import { PageLoading } from "../../../components/common/LoadingState";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
-import { notifyPerformanceScoreObjectionRequested } from "../../../lib/notifications";
+import {
+  notifyPerformanceScoreAnswerSheetRequested,
+  notifyPerformanceScoreObjectionRequested,
+} from "../../../lib/notifications";
 import { getYearSemester } from "../../../lib/semesterScope";
 import {
   PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
+  PERFORMANCE_SCORE_KIND,
   PERFORMANCE_SCORE_USER_COLLECTION,
+  WRITTEN_EXAM_SCORE_KIND,
   formatPerformanceScore,
   isPerformanceScoreWarningConsentCurrent,
   loadPerformanceScoreSettings,
+  loadUserPerformanceScoreAnswerSheetRequests,
   loadPerformanceScoreWarningConsent,
   loadUserPerformanceScoreObjections,
   loadUserPerformanceScoreRecords,
@@ -29,6 +35,8 @@ import {
   normalizeStudentName,
   normalizePerformanceScoreSettings,
   savePerformanceScoreWarningConsent,
+  type PerformanceScoreAnswerSheetRequest,
+  type PerformanceScoreKind,
   type PerformanceScoreObjection,
   type PerformanceScoreRecord,
   type PerformanceScoreSettings,
@@ -174,10 +182,111 @@ const getObjectionStatusMeta = (
   };
 };
 
-const PerformanceScoreView: React.FC = () => {
+interface ScoreConfirmationViewCopy {
+  pageTitle: string;
+  scoreLabel: string;
+  scoreListLabel: string;
+  scoreSubjectFallback: string;
+  scoreItemsLabel: string;
+  evidenceTitle: string;
+  evidenceEmptyText: string;
+  emptyTitle: string;
+  emptyDescription: string;
+  loadingMessage: string;
+  warningTitle: string;
+  warningSubtitle: string;
+  pageDescription: string;
+  objectionTitle: string;
+  objectionDescription: string;
+  objectionTargetLabel: string;
+  objectionReasonLabel: string;
+  objectionPlaceholder: string;
+  objectionResultTitle: string;
+  signatureTitle: string;
+  signatureAgreementText: string;
+  signatureReviewDescription: string;
+}
+
+interface ScoreConfirmationViewProps {
+  scoreKind?: PerformanceScoreKind;
+  copy?: Partial<ScoreConfirmationViewCopy>;
+}
+
+const PERFORMANCE_SCORE_COPY: ScoreConfirmationViewCopy = {
+  pageTitle: "내 수행평가 점수",
+  scoreLabel: "수행평가",
+  scoreListLabel: "수행평가 점수 목록",
+  scoreSubjectFallback: "수행평가",
+  scoreItemsLabel: "평가요소별 세부 점수",
+  evidenceTitle: "감점 요인 및 평가 근거",
+  evidenceEmptyText:
+    "아직 입력된 평가 근거가 없습니다. 필요한 경우 수업 시간이나 상담 시간에 교사에게 확인하세요.",
+  emptyTitle: "아직 등록된 수행평가 점수가 없습니다.",
+  emptyDescription:
+    "교사가 점수 명단을 저장하면 이곳에서 내 점수와 피드백을 확인할 수 있습니다.",
+  loadingMessage: "내 수행평가 점수를 불러오는 중입니다.",
+  warningTitle: "수행평가 점수 확인 전 안내",
+  warningSubtitle: "내 수행평가 점수",
+  pageDescription: "평가요소별 점수, 감점 요인과 평가 근거만 표시됩니다.",
+  objectionTitle: "수행평가 이의 신청",
+  objectionDescription:
+    "이의가 있는 수행평가를 선택하고 사유를 입력해 주세요. 이의 신청을 보내면 서명은 저장되지 않고 담당 교사에게 알림이 전송됩니다.",
+  objectionTargetLabel: "이의 신청 대상",
+  objectionReasonLabel: "이의 신청 사유",
+  objectionPlaceholder:
+    "예: 두 번째 평가요소 점수가 제가 받은 피드백과 다른 것 같아 확인을 요청합니다.",
+  objectionResultTitle: "수행평가 이의 결과",
+  signatureTitle: "수행평가 점수 확인 및 서명",
+  signatureAgreementText:
+    "위 수행평가 점수와 평가 근거를 확인했으며, 점수에 문제가 없고 해당 점수에 대해 이의를 제기하지 않을 것에 동의합니까?",
+  signatureReviewDescription:
+    "아래 영역별 점수와 동의, 서명 작성 여부를 한 번 더 확인해 주세요. 제출하면 현재 점수 확인 서명이 담당 교사에게 전달됩니다.",
+};
+
+const WRITTEN_EXAM_SCORE_COPY: ScoreConfirmationViewCopy = {
+  pageTitle: "내 정기시험 논술형 점수",
+  scoreLabel: "정기시험 논술형",
+  scoreListLabel: "정기시험 논술형 점수 목록",
+  scoreSubjectFallback: "정기시험",
+  scoreItemsLabel: "논술형 세부 점수",
+  evidenceTitle: "피드백 사항",
+  evidenceEmptyText:
+    "아직 입력된 피드백이 없습니다. 필요한 경우 수업 시간이나 상담 시간에 교사에게 확인하세요.",
+  emptyTitle: "아직 등록된 정기시험 논술형 점수가 없습니다.",
+  emptyDescription:
+    "교사가 점수 명단을 저장하면 이곳에서 내 논술형 점수와 피드백을 확인할 수 있습니다.",
+  loadingMessage: "내 정기시험 논술형 점수를 불러오는 중입니다.",
+  warningTitle: "정기시험 논술형 점수 확인 전 안내",
+  warningSubtitle: "내 정기시험 논술형 점수",
+  pageDescription: "논술형 점수와 피드백 사항만 표시됩니다.",
+  objectionTitle: "정기시험 논술형 이의 신청",
+  objectionDescription:
+    "이의가 있는 정기시험 논술형 점수를 선택하고 사유를 입력해 주세요. 이의 신청을 보내면 서명은 저장되지 않고 담당 교사에게 알림이 전송됩니다.",
+  objectionTargetLabel: "이의 신청 대상",
+  objectionReasonLabel: "이의 신청 사유",
+  objectionPlaceholder:
+    "예: 논술형 점수가 제가 확인한 채점 결과와 다른 것 같아 확인을 요청합니다.",
+  objectionResultTitle: "정기시험 논술형 이의 결과",
+  signatureTitle: "정기시험 논술형 점수 확인 및 서명",
+  signatureAgreementText:
+    "위 정기시험 논술형 점수와 피드백을 확인했으며, 점수에 문제가 없고 해당 점수에 대해 이의를 제기하지 않을 것에 동의합니까?",
+  signatureReviewDescription:
+    "아래 점수와 동의, 서명 작성 여부를 한 번 더 확인해 주세요. 제출하면 현재 점수 확인 서명이 담당 교사에게 전달됩니다.",
+};
+
+export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
+  scoreKind = PERFORMANCE_SCORE_KIND,
+  copy,
+}) => {
   const { currentUser, userData, config } = useAuth();
   const { showToast } = useAppToast();
   const { year, semester } = getYearSemester(config);
+  const resolvedCopy = {
+    ...(scoreKind === WRITTEN_EXAM_SCORE_KIND
+      ? WRITTEN_EXAM_SCORE_COPY
+      : PERFORMANCE_SCORE_COPY),
+    ...copy,
+  };
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState<PerformanceScoreRecord[]>([]);
   const [scoreSettings, setScoreSettings] = useState<PerformanceScoreSettings>(
@@ -188,6 +297,9 @@ const PerformanceScoreView: React.FC = () => {
   const [warningConsentChecked, setWarningConsentChecked] = useState(false);
   const [warningConsentSaving, setWarningConsentSaving] = useState(false);
   const [objections, setObjections] = useState<PerformanceScoreObjection[]>([]);
+  const [answerSheetRequests, setAnswerSheetRequests] = useState<
+    PerformanceScoreAnswerSheetRequest[]
+  >([]);
   const [selectedId, setSelectedId] = useState("");
   const [signatureModalOpen, setSignatureModalOpen] = useState(false);
   const [signatureConsent, setSignatureConsent] = useState(false);
@@ -207,6 +319,13 @@ const PerformanceScoreView: React.FC = () => {
     [],
   );
   const [objectionReason, setObjectionReason] = useState("");
+  const [answerSheetRequestModalOpen, setAnswerSheetRequestModalOpen] =
+    useState(false);
+  const [answerSheetRequesting, setAnswerSheetRequesting] = useState(false);
+  const [answerSheetRequestError, setAnswerSheetRequestError] = useState("");
+  const [answerSheetRequestSelectedIds, setAnswerSheetRequestSelectedIds] =
+    useState<string[]>([]);
+  const [answerSheetRequestReason, setAnswerSheetRequestReason] = useState("");
   const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const scoreChartRef = useRef<ChartJS<"bar"> | null>(null);
   const scoreChartContainerRef = useRef<HTMLDivElement | null>(null);
@@ -220,25 +339,38 @@ const PerformanceScoreView: React.FC = () => {
       return;
     }
     void loadScores();
-  }, [currentUser?.uid, year, semester]);
+  }, [currentUser?.uid, scoreKind, year, semester]);
 
   const loadScores = async () => {
     if (!currentUser?.uid) return;
     setLoading(true);
     try {
-      const [loaded, settings, consent, loadedObjections] = await Promise.all([
+      const [
+        loaded,
+        settings,
+        consent,
+        loadedObjections,
+        loadedAnswerSheetRequests,
+      ] = await Promise.all([
         loadUserPerformanceScoreRecords(currentUser.uid, {
           year,
           semester,
+          scoreKind,
         }),
         loadPerformanceScoreSettings(config),
         loadPerformanceScoreWarningConsent(currentUser.uid),
-        loadUserPerformanceScoreObjections(config, currentUser.uid),
+        loadUserPerformanceScoreObjections(config, currentUser.uid, {
+          scoreKind,
+        }),
+        loadUserPerformanceScoreAnswerSheetRequests(config, currentUser.uid, {
+          scoreKind,
+        }),
       ]);
       setRecords(loaded);
       setScoreSettings(settings);
       setWarningConsent(consent);
       setObjections(loadedObjections);
+      setAnswerSheetRequests(loadedAnswerSheetRequests);
       setWarningConsentChecked(false);
       setSelectedId((current) =>
         loaded.some((record) => record.id === current)
@@ -390,7 +522,8 @@ const PerformanceScoreView: React.FC = () => {
   const allScoresConfirmed =
     records.length > 0 && confirmedRecordCount === records.length;
   const pendingRecords = records.filter((record) => !isRecordConfirmed(record));
-  const signatureActionPending = confirming || objecting;
+  const signatureActionPending =
+    confirming || objecting || answerSheetRequesting;
   const warningConsentCurrent = currentUser?.uid
     ? isPerformanceScoreWarningConsentCurrent(
         warningConsent,
@@ -402,6 +535,10 @@ const PerformanceScoreView: React.FC = () => {
   const pendingObjections = useMemo(
     () => objections.filter((item) => item.status === "pending"),
     [objections],
+  );
+  const pendingAnswerSheetRequests = useMemo(
+    () => answerSheetRequests.filter((item) => item.status === "pending"),
+    [answerSheetRequests],
   );
   const sortedObjections = useMemo(
     () =>
@@ -440,9 +577,22 @@ const PerformanceScoreView: React.FC = () => {
     });
     return scoreIds;
   }, [pendingObjections]);
+  const pendingAnswerSheetRequestScoreIds = useMemo(() => {
+    const scoreIds = new Set<string>();
+    pendingAnswerSheetRequests.forEach((item) => {
+      if (item.scoreId) scoreIds.add(item.scoreId);
+      if (item.rosterId) scoreIds.add(item.rosterId);
+    });
+    return scoreIds;
+  }, [pendingAnswerSheetRequests]);
   const hasPendingObjection = pendingObjectionScoreIds.size > 0;
+  const hasPendingAnswerSheetRequest =
+    pendingAnswerSheetRequestScoreIds.size > 0;
   const selectedRecordHasPendingObjection = selectedRecord
     ? pendingObjectionScoreIds.has(getRecordScoreId(selectedRecord))
+    : false;
+  const selectedRecordHasPendingAnswerSheetRequest = selectedRecord
+    ? pendingAnswerSheetRequestScoreIds.has(getRecordScoreId(selectedRecord))
     : false;
   const hasObjectionHistory = sortedObjections.length > 0;
   const canRequestObjection =
@@ -458,7 +608,7 @@ const PerformanceScoreView: React.FC = () => {
     signatureBlockedByPendingObjection ||
     signatureActionPending;
   const signatureBlockedMessage = signatureBlockedByPendingObjection
-    ? `이의 제기 처리 대기 중인 수행평가가 있습니다${
+    ? `이의 제기 처리 대기 중인 ${resolvedCopy.scoreLabel} 점수가 있습니다${
         pendingObjectionTitles.length
           ? `: ${pendingObjectionTitles.join(", ")}`
           : ""
@@ -467,7 +617,8 @@ const PerformanceScoreView: React.FC = () => {
 
   const getStudentIdentityError = (targetRecords = records) => {
     if (!currentUser?.uid) return "로그인한 학생 정보를 확인하지 못했습니다.";
-    if (!targetRecords.length) return "확인할 수행평가 점수가 없습니다.";
+    if (!targetRecords.length)
+      return `확인할 ${resolvedCopy.scoreLabel} 점수가 없습니다.`;
     if (!expectedSignatureName.trim()) {
       return "학생 이름을 확인하지 못했습니다. 마이페이지의 이름 정보를 확인해 주세요.";
     }
@@ -655,7 +806,7 @@ const PerformanceScoreView: React.FC = () => {
         title: "이의 제기 불가",
         message: allScoresConfirmed
           ? "이미 점수 확인과 서명이 완료되었습니다. 제출 후에는 담당 교사의 반려 없이 이의를 제기할 수 없습니다."
-          : "이의 제기할 수행평가 점수가 없습니다.",
+          : `이의 제기할 ${resolvedCopy.scoreLabel} 점수가 없습니다.`,
         tone: "warning",
       });
       return;
@@ -671,7 +822,7 @@ const PerformanceScoreView: React.FC = () => {
     if (!hasObjectionHistory) {
       showToast({
         title: "이의 결과 없음",
-        message: "아직 제출한 수행평가 이의 제기가 없습니다.",
+        message: `아직 제출한 ${resolvedCopy.scoreLabel} 이의 제기가 없습니다.`,
         tone: "info",
       });
       return;
@@ -687,6 +838,160 @@ const PerformanceScoreView: React.FC = () => {
 
   const closeObjectionResultModal = () => {
     setObjectionResultModalOpen(false);
+  };
+
+  const getDefaultAnswerSheetRequestScoreIds = () => {
+    const selectedScoreId = selectedRecord
+      ? getRecordScoreId(selectedRecord)
+      : "";
+    if (
+      selectedScoreId &&
+      !pendingAnswerSheetRequestScoreIds.has(selectedScoreId)
+    ) {
+      return [selectedScoreId];
+    }
+    const firstAvailableRecord = records.find(
+      (record) =>
+        !pendingAnswerSheetRequestScoreIds.has(getRecordScoreId(record)),
+    );
+    const firstRecordId = firstAvailableRecord
+      ? getRecordScoreId(firstAvailableRecord)
+      : "";
+    return firstRecordId ? [firstRecordId] : [];
+  };
+
+  const openAnswerSheetRequestModal = () => {
+    if (!warningConsentCurrent) {
+      showToast({
+        title: "안내 동의가 필요합니다.",
+        message:
+          "경고 문구를 확인하고 동의를 저장한 뒤 답안지 확인을 요청할 수 있습니다.",
+        tone: "warning",
+      });
+      return;
+    }
+    if (!records.length) {
+      showToast({
+        title: "요청할 점수가 없습니다.",
+        message: `등록된 ${resolvedCopy.scoreLabel} 점수가 있을 때 답안지 확인을 요청할 수 있습니다.`,
+        tone: "warning",
+      });
+      return;
+    }
+    if (
+      records.every((record) =>
+        pendingAnswerSheetRequestScoreIds.has(getRecordScoreId(record)),
+      )
+    ) {
+      showToast({
+        title: "이미 확인 요청 중입니다.",
+        message:
+          "담당 교사가 요청을 확인한 뒤 필요하면 다시 요청할 수 있습니다.",
+        tone: "info",
+      });
+      return;
+    }
+
+    setAnswerSheetRequestReason("");
+    setAnswerSheetRequestError("");
+    setAnswerSheetRequestSelectedIds(getDefaultAnswerSheetRequestScoreIds());
+    setAnswerSheetRequestModalOpen(true);
+  };
+
+  const closeAnswerSheetRequestModal = () => {
+    if (answerSheetRequesting) return;
+    setAnswerSheetRequestModalOpen(false);
+  };
+
+  const toggleAnswerSheetRequestScore = (scoreId: string, checked: boolean) => {
+    if (!scoreId) return;
+    setAnswerSheetRequestError("");
+    setAnswerSheetRequestSelectedIds((current) => {
+      const next = new Set(current);
+      if (checked) {
+        next.add(scoreId);
+      } else {
+        next.delete(scoreId);
+      }
+      return Array.from(next);
+    });
+  };
+
+  const submitAnswerSheetRequest = async () => {
+    if (!currentUser?.uid || answerSheetRequesting) return;
+    if (!warningConsentCurrent) {
+      setAnswerSheetRequestError("안내 문구 동의를 먼저 저장해 주세요.");
+      return;
+    }
+    const selectedScoreIds = Array.from(
+      new Set(answerSheetRequestSelectedIds),
+    ).filter(Boolean);
+    if (!selectedScoreIds.length) {
+      setAnswerSheetRequestError("답안지 확인을 요청할 점수를 선택해 주세요.");
+      return;
+    }
+    if (
+      selectedScoreIds.some((scoreId) =>
+        pendingAnswerSheetRequestScoreIds.has(scoreId),
+      )
+    ) {
+      setAnswerSheetRequestError(
+        "이미 확인 요청 중인 점수는 다시 요청할 수 없습니다.",
+      );
+      return;
+    }
+    const reason = answerSheetRequestReason.replace(/\s+/g, " ").trim();
+    if (reason.length < 10) {
+      setAnswerSheetRequestError(
+        "교사가 확인할 수 있도록 사유를 10자 이상 자세히 입력해 주세요.",
+      );
+      return;
+    }
+    if (reason.length > 300) {
+      setAnswerSheetRequestError("사유는 300자 이내로 입력해 주세요.");
+      return;
+    }
+
+    setAnswerSheetRequesting(true);
+    setAnswerSheetRequestError("");
+    try {
+      const result = await notifyPerformanceScoreAnswerSheetRequested(config, {
+        scoreIds: selectedScoreIds,
+        reason,
+        scoreKind,
+      });
+      const latestRequests = await loadUserPerformanceScoreAnswerSheetRequests(
+        config,
+        currentUser.uid,
+        { scoreKind },
+      );
+      setAnswerSheetRequests(latestRequests);
+      setAnswerSheetRequestModalOpen(false);
+      if (result.requestSavedCount <= 0) {
+        showToast({
+          title: "이미 확인 요청 중입니다.",
+          message:
+            "기존 요청이 처리되기 전에는 같은 점수로 다시 요청할 수 없습니다.",
+          tone: "info",
+        });
+        return;
+      }
+      showToast({
+        title: "답안지 확인 요청을 보냈습니다.",
+        message:
+          result.createdCount > 0
+            ? "담당 교사에게 알림이 전송되었습니다."
+            : "요청은 저장했지만 알림 설정 때문에 새 알림은 만들지 않았습니다.",
+        tone: "success",
+      });
+    } catch (error) {
+      console.error("Failed to request answer sheet check:", error);
+      setAnswerSheetRequestError(
+        "답안지 확인 요청을 보내지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      );
+    } finally {
+      setAnswerSheetRequesting(false);
+    }
   };
 
   const saveWarningConsent = async () => {
@@ -710,7 +1015,7 @@ const PerformanceScoreView: React.FC = () => {
       setWarningConsentChecked(false);
       showToast({
         title: "동의 내용을 저장했습니다.",
-        message: "이제 내 수행평가 점수를 확인할 수 있습니다.",
+        message: `이제 ${resolvedCopy.warningSubtitle}를 확인할 수 있습니다.`,
         tone: "success",
       });
     } catch (error) {
@@ -826,7 +1131,9 @@ const PerformanceScoreView: React.FC = () => {
       (scoreId) => scoreId && validScoreIds.has(scoreId),
     );
     if (selectedScoreIds.length === 0) {
-      setObjectionError("이의 제기할 수행평가를 선택해 주세요.");
+      setObjectionError(
+        `이의 제기할 ${resolvedCopy.scoreLabel} 점수를 선택해 주세요.`,
+      );
       return;
     }
     const selectedRecords = pendingRecords.filter((record) =>
@@ -853,11 +1160,13 @@ const PerformanceScoreView: React.FC = () => {
       const result = await notifyPerformanceScoreObjectionRequested(config, {
         scoreIds: selectedScoreIds,
         reason,
+        scoreKind,
       });
       if (result.objectionSavedCount > 0) {
         const latestObjections = await loadUserPerformanceScoreObjections(
           config,
           currentUser.uid,
+          { scoreKind },
         );
         setObjections(latestObjections);
       }
@@ -902,16 +1211,14 @@ const PerformanceScoreView: React.FC = () => {
       if (result.createdCount > 0) {
         showToast({
           title: "이의 제기를 전달했습니다.",
-          message:
-            "선택한 수행평가와 사유가 담당 교사에게 알림으로 전송되었습니다.",
+          message: `선택한 ${resolvedCopy.scoreLabel} 점수와 사유가 담당 교사에게 알림으로 전송되었습니다.`,
           tone: "warning",
           durationMs: 4800,
         });
       } else {
         showToast({
           title: "이미 이의 제기가 전달되어 있습니다.",
-          message:
-            "같은 수행평가에 대한 기존 알림이 있어 새 알림은 만들지 않았습니다.",
+          message: `같은 ${resolvedCopy.scoreLabel} 점수에 대한 기존 알림이 있어 새 알림은 만들지 않았습니다.`,
           tone: "info",
           durationMs: 4600,
         });
@@ -1119,7 +1426,7 @@ const PerformanceScoreView: React.FC = () => {
   };
 
   if (loading) {
-    return <PageLoading message="내 수행평가 점수를 불러오는 중입니다." />;
+    return <PageLoading message={resolvedCopy.loadingMessage} />;
   }
 
   if (!warningConsentCurrent) {
@@ -1128,10 +1435,10 @@ const PerformanceScoreView: React.FC = () => {
         <div className="rounded-xl border border-slate-200 bg-white px-5 py-5 shadow-sm">
           <div className="break-keep">
             <p className="text-sm font-black text-blue-700">
-              수행평가 점수 확인 전 안내
+              {resolvedCopy.warningTitle}
             </p>
             <h1 className="mt-1 text-2xl font-black text-slate-900">
-              내 수행평가 점수
+              {resolvedCopy.warningSubtitle}
             </h1>
             <p className="mt-2 text-sm font-bold leading-6 text-slate-500">
               안내 문구에 동의한 학생만 점수 확인, 서명, 이의 제기를 진행할 수
@@ -1183,11 +1490,11 @@ const PerformanceScoreView: React.FC = () => {
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 break-keep">
             <h1 className="text-2xl font-black text-slate-900">
-              내 수행평가 점수
+              {resolvedCopy.pageTitle}
             </h1>
             <p className="mt-2 text-sm font-bold leading-6 text-slate-500">
-              {year}학년도 {semester}학기 기준으로 교사가 입력한 내 총점,
-              평가요소별 점수, 감점 요인과 평가 근거만 표시됩니다.
+              {year}학년도 {semester}학기 기준으로 교사가 입력한 내 총점과{" "}
+              {resolvedCopy.pageDescription}
             </p>
           </div>
           <div className="flex shrink-0 flex-col gap-2 sm:flex-row sm:items-center">
@@ -1203,6 +1510,14 @@ const PerformanceScoreView: React.FC = () => {
                       이의 결과
                     </button>
                   )}
+                  <button
+                    type="button"
+                    onClick={openAnswerSheetRequestModal}
+                    disabled={signatureActionPending}
+                    className="inline-flex min-h-11 items-center justify-center rounded-lg border border-blue-200 bg-white px-5 py-2 text-sm font-black leading-5 text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    답안지 확인 요청
+                  </button>
                   <button
                     type="button"
                     disabled
@@ -1221,6 +1536,14 @@ const PerformanceScoreView: React.FC = () => {
                     className="inline-flex min-h-11 items-center justify-center rounded-lg border border-rose-200 bg-white px-5 py-2 text-sm font-black leading-5 text-rose-700 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     이의 신청
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openAnswerSheetRequestModal}
+                    disabled={signatureActionPending}
+                    className="inline-flex min-h-11 items-center justify-center rounded-lg border border-blue-200 bg-white px-5 py-2 text-sm font-black leading-5 text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    답안지 확인 요청
                   </button>
                   {hasObjectionHistory && (
                     <button
@@ -1255,11 +1578,10 @@ const PerformanceScoreView: React.FC = () => {
       {!selectedRecord ? (
         <div className="break-keep rounded-xl border border-dashed border-slate-200 bg-white px-4 py-16 text-center shadow-sm">
           <div className="text-lg font-black text-slate-700">
-            아직 등록된 수행평가 점수가 없습니다.
+            {resolvedCopy.emptyTitle}
           </div>
           <p className="mt-2 text-sm font-bold leading-6 text-slate-400">
-            교사가 점수 명단을 저장하면 이곳에서 내 점수와 피드백을 확인할 수
-            있습니다.
+            {resolvedCopy.emptyDescription}
           </p>
         </div>
       ) : (
@@ -1277,7 +1599,7 @@ const PerformanceScoreView: React.FC = () => {
               </div>
               <nav
                 className="flex gap-2 overflow-x-auto p-3 lg:flex-col lg:gap-0 lg:overflow-visible lg:p-0"
-                aria-label="수행평가 점수 목록"
+                aria-label={resolvedCopy.scoreListLabel}
               >
                 {records.map((record) => {
                   const active =
@@ -1324,6 +1646,13 @@ const PerformanceScoreView: React.FC = () => {
                               이의 처리 대기
                             </span>
                           )}
+                          {pendingAnswerSheetRequestScoreIds.has(
+                            getRecordScoreId(record),
+                          ) && (
+                            <span className="text-blue-700">
+                              답안지 확인 요청 중
+                            </span>
+                          )}
                         </div>
                       </div>
                     </button>
@@ -1337,7 +1666,7 @@ const PerformanceScoreView: React.FC = () => {
             <div className="flex flex-col gap-4 border-b border-slate-100 pb-5 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
                 <div className="text-sm font-black text-blue-700">
-                  {selectedRecord.subject || "수행평가"}
+                  {selectedRecord.subject || resolvedCopy.scoreSubjectFallback}
                 </div>
                 <h2 className="mt-1 whitespace-normal break-keep text-2xl font-black leading-tight text-slate-900">
                   {selectedRecord.title}
@@ -1374,6 +1703,11 @@ const PerformanceScoreView: React.FC = () => {
                       상단에서 전체 점수 확인 필요
                     </span>
                   )}
+                  {selectedRecordHasPendingAnswerSheetRequest && (
+                    <span className="inline-flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-black text-blue-800">
+                      답안지 확인 요청 중
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -1390,7 +1724,7 @@ const PerformanceScoreView: React.FC = () => {
                   </span>
                 </div>
                 <p className="mt-5 whitespace-normal break-keep text-sm font-bold leading-6 text-blue-900/70">
-                  점수와 평가 근거를 함께 확인해 주세요.
+                  점수와 {resolvedCopy.evidenceTitle}을 함께 확인해 주세요.
                 </p>
               </div>
 
@@ -1409,8 +1743,8 @@ const PerformanceScoreView: React.FC = () => {
                   </div>
                 ) : (
                   <div className="flex h-full items-center justify-center px-4 text-center text-sm font-bold leading-6 text-slate-400">
-                    평가요소별 세부 점수는 제공되지 않았습니다. 총점과 평가
-                    근거를 확인해 주세요.
+                    {resolvedCopy.scoreItemsLabel}는 제공되지 않았습니다. 총점과{" "}
+                    {resolvedCopy.evidenceTitle}을 확인해 주세요.
                   </div>
                 )}
               </div>
@@ -1418,11 +1752,10 @@ const PerformanceScoreView: React.FC = () => {
 
             <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-4">
               <h3 className="text-base font-black text-blue-900">
-                감점 요인 및 평가 근거
+                {resolvedCopy.evidenceTitle}
               </h3>
               <p className="mt-2 whitespace-pre-wrap break-keep text-sm font-bold leading-7 text-slate-700">
-                {evidenceText ||
-                  "아직 입력된 평가 근거가 없습니다. 필요한 경우 수업 시간이나 상담 시간에 교사에게 확인하세요."}
+                {evidenceText || resolvedCopy.evidenceEmptyText}
               </p>
             </div>
           </section>
@@ -1435,12 +1768,10 @@ const PerformanceScoreView: React.FC = () => {
             <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
               <div className="min-w-0 break-keep">
                 <h3 className="text-lg font-black text-slate-900">
-                  수행평가 이의 신청
+                  {resolvedCopy.objectionTitle}
                 </h3>
                 <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
-                  이의가 있는 수행평가를 선택하고 사유를 입력해 주세요. 이의
-                  신청을 보내면 서명은 저장되지 않고 담당 교사에게 알림이
-                  전송됩니다.
+                  {resolvedCopy.objectionDescription}
                 </p>
               </div>
               <button
@@ -1457,7 +1788,7 @@ const PerformanceScoreView: React.FC = () => {
             <div className="overflow-y-auto px-5 py-4">
               <fieldset>
                 <legend className="text-sm font-black text-slate-800">
-                  이의 신청 대상
+                  {resolvedCopy.objectionTargetLabel}
                 </legend>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   {pendingRecords.map((record) => {
@@ -1501,7 +1832,7 @@ const PerformanceScoreView: React.FC = () => {
                   htmlFor="performance-score-objection-reason"
                   className="text-sm font-black text-slate-800"
                 >
-                  이의 신청 사유
+                  {resolvedCopy.objectionReasonLabel}
                 </label>
                 <textarea
                   id="performance-score-objection-reason"
@@ -1514,7 +1845,7 @@ const PerformanceScoreView: React.FC = () => {
                   maxLength={300}
                   rows={5}
                   className="mt-2 w-full resize-none rounded-lg border border-slate-200 px-3 py-3 text-sm font-semibold leading-6 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-rose-300 focus:ring-2 focus:ring-rose-100 disabled:bg-slate-50"
-                  placeholder="예: 두 번째 평가요소 점수가 제가 받은 피드백과 다른 것 같아 확인을 요청합니다."
+                  placeholder={resolvedCopy.objectionPlaceholder}
                 />
                 <div className="mt-1 text-right text-xs font-bold text-slate-400">
                   {objectionReason.length}/300
@@ -1550,13 +1881,147 @@ const PerformanceScoreView: React.FC = () => {
         </div>
       )}
 
+      {answerSheetRequestModalOpen && selectedRecord && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
+          <section className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+              <div className="min-w-0 break-keep">
+                <h3 className="text-lg font-black text-slate-900">
+                  답안지 확인 요청
+                </h3>
+                <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
+                  확인하고 싶은 {resolvedCopy.scoreLabel} 점수를 선택하고,
+                  답안지를 확인하려는 이유를 자세히 적어 주세요.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeAnswerSheetRequestModal}
+                disabled={answerSheetRequesting}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 disabled:opacity-40"
+                aria-label="답안지 확인 요청 창 닫기"
+              >
+                <i className="fas fa-times" aria-hidden="true"></i>
+              </button>
+            </div>
+
+            <div className="overflow-y-auto px-5 py-4">
+              <fieldset>
+                <legend className="text-sm font-black text-slate-800">
+                  확인 요청 대상
+                </legend>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {records.map((record) => {
+                    const scoreId = getRecordScoreId(record);
+                    const alreadyPending =
+                      pendingAnswerSheetRequestScoreIds.has(scoreId);
+                    const checked =
+                      !alreadyPending &&
+                      answerSheetRequestSelectedIds.includes(scoreId);
+                    return (
+                      <label
+                        key={`answer-sheet-${scoreId}`}
+                        className={`flex items-start gap-3 rounded-lg border px-3 py-3 transition ${
+                          alreadyPending
+                            ? "cursor-not-allowed border-slate-200 bg-slate-50 opacity-75"
+                            : checked
+                              ? "border-blue-200 bg-blue-50"
+                              : "border-slate-200 bg-white hover:bg-slate-50"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(event) =>
+                            toggleAnswerSheetRequestScore(
+                              scoreId,
+                              event.target.checked,
+                            )
+                          }
+                          disabled={answerSheetRequesting || alreadyPending}
+                          className="mt-1 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="min-w-0">
+                          <span className="block whitespace-normal break-keep text-sm font-black leading-5 text-slate-900">
+                            {record.title}
+                          </span>
+                          <span className="mt-1 block text-xs font-bold text-slate-500">
+                            획득 {formatPerformanceScore(record.totalScore)} /{" "}
+                            {formatPerformanceScore(record.totalMaxScore)}점
+                          </span>
+                          {alreadyPending && (
+                            <span className="mt-1 block text-xs font-black text-blue-700">
+                              이미 확인 요청 중입니다.
+                            </span>
+                          )}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </fieldset>
+
+              <div className="mt-5">
+                <label
+                  htmlFor="performance-score-answer-sheet-reason"
+                  className="text-sm font-black text-slate-800"
+                >
+                  확인 요청 사유
+                </label>
+                <textarea
+                  id="performance-score-answer-sheet-reason"
+                  value={answerSheetRequestReason}
+                  onChange={(event) => {
+                    setAnswerSheetRequestReason(event.target.value);
+                    setAnswerSheetRequestError("");
+                  }}
+                  disabled={answerSheetRequesting}
+                  maxLength={300}
+                  rows={5}
+                  className="mt-2 w-full resize-none rounded-lg border border-slate-200 px-3 py-3 text-sm font-semibold leading-6 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50"
+                  placeholder="예: 논술형 채점 근거를 다시 확인하고 싶어 답안지 확인을 요청합니다."
+                />
+                <div className="mt-1 text-right text-xs font-bold text-slate-400">
+                  {answerSheetRequestReason.length}/300
+                </div>
+              </div>
+
+              {answerSheetRequestError && (
+                <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-bold leading-6 text-rose-700">
+                  {answerSheetRequestError}
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-2 border-t border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-end">
+              <button
+                type="button"
+                onClick={closeAnswerSheetRequestModal}
+                disabled={answerSheetRequesting}
+                className="inline-flex h-11 items-center justify-center rounded-lg border border-slate-200 bg-white px-5 text-sm font-black text-slate-700 transition hover:bg-slate-50 disabled:opacity-40"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                onClick={() => void submitAnswerSheetRequest()}
+                disabled={answerSheetRequesting}
+                className="inline-flex h-11 items-center justify-center rounded-lg bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:bg-slate-300"
+              >
+                {answerSheetRequesting ? "전송 중..." : "요청 보내기"}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
       {objectionResultModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
           <section className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
             <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
               <div className="min-w-0 break-keep">
                 <h3 className="text-lg font-black text-slate-900">
-                  수행평가 이의 결과
+                  {resolvedCopy.objectionResultTitle}
                 </h3>
                 <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
                   내가 보낸 이의 신청과 담당 교사의 처리 결과를 확인합니다.
@@ -1590,7 +2055,9 @@ const PerformanceScoreView: React.FC = () => {
                       recordByScoreId.get(objection.scoreId) ||
                       recordByScoreId.get(objection.rosterId || "");
                     const scoreTitle =
-                      objection.scoreTitle || record?.title || "수행평가";
+                      objection.scoreTitle ||
+                      record?.title ||
+                      resolvedCopy.scoreLabel;
                     const teacherResponse = objection.reviewMemo?.trim() || "";
                     const requestedAtLabel =
                       formatDateTimeWithTime(objection.requestedAt) ||
@@ -1677,7 +2144,7 @@ const PerformanceScoreView: React.FC = () => {
             <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-3 sm:px-5 sm:py-4">
               <div className="min-w-0 break-keep">
                 <h3 className="text-lg font-black text-slate-900">
-                  수행평가 점수 확인 및 서명
+                  {resolvedCopy.signatureTitle}
                 </h3>
                 <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
                   모든 차시의 점수를 확인한 뒤, 성을 포함한 이름을 직접 써
@@ -1719,9 +2186,7 @@ const PerformanceScoreView: React.FC = () => {
 
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
                     <p className="break-keep text-sm font-bold leading-7 text-slate-700">
-                      위 수행평가 점수와 평가 근거를 확인했으며, 점수에 문제가
-                      없고 해당 점수에 대해 이의를 제기하지 않을 것에
-                      동의합니까?
+                      {resolvedCopy.signatureAgreementText}
                     </p>
                     <div className="mt-4 flex justify-center">
                       <button
@@ -1858,9 +2323,7 @@ const PerformanceScoreView: React.FC = () => {
                       최종 확인
                     </h4>
                     <p className="mt-2 text-sm font-bold leading-7 text-slate-700">
-                      아래 영역별 점수와 동의, 서명 작성 여부를 한 번 더 확인해
-                      주세요. 제출하면 현재 점수 확인 서명이 담당 교사용
-                      일람표의 본인 비고란에 반영됩니다.
+                      {resolvedCopy.signatureReviewDescription}
                     </p>
                   </div>
 
@@ -1998,5 +2461,7 @@ const PerformanceScoreView: React.FC = () => {
     </div>
   );
 };
+
+const PerformanceScoreView: React.FC = () => <ScoreConfirmationView />;
 
 export default PerformanceScoreView;
