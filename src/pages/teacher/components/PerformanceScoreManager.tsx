@@ -1734,6 +1734,85 @@ const buildAssessmentContributionSummaries = (
     })
     .sort((a, b) => compareSchoolValue(a.classValue, b.classValue));
 };
+
+const buildWrittenExamContributionSummaries = (
+  records: PerformanceScoreRecord[],
+  params: {
+    firstMaxScore: number;
+    secondMaxScore: number;
+  },
+) => {
+  const byClass = new Map<string, PerformanceScoreRecord[]>();
+  records.forEach((record) => {
+    const classValue = normalizeSchoolValue(record.class);
+    if (!classValue || isTransferredScoreRecord(record)) return;
+    byClass.set(classValue, [...(byClass.get(classValue) || []), record]);
+  });
+
+  return Array.from(byClass.entries())
+    .map(([classValue, classRecords]): AssessmentContributionSummary => {
+      const firstRecords = classRecords
+        .map((record) => getWrittenExamStatsRecordForGroup(record, "1"))
+        .filter((record): record is PerformanceScoreRecord => record !== null);
+      const secondRecords = classRecords
+        .map((record) => getWrittenExamStatsRecordForGroup(record, "2"))
+        .filter((record): record is PerformanceScoreRecord => record !== null);
+      const first = buildScoreSummary(firstRecords, params.firstMaxScore);
+      const second = buildScoreSummary(secondRecords, params.secondMaxScore);
+      const combinedScores = classRecords
+        .map((record) => {
+          const firstRecord = getWrittenExamStatsRecordForGroup(record, "1");
+          const secondRecord = getWrittenExamStatsRecordForGroup(record, "2");
+          const firstScore = firstRecord
+            ? getEnteredTotalScore(firstRecord)
+            : null;
+          const secondScore = secondRecord
+            ? getEnteredTotalScore(secondRecord)
+            : null;
+          return firstScore !== null || secondScore !== null
+            ? {
+                firstScore: firstScore ?? 0,
+                secondScore: secondScore ?? 0,
+              }
+            : null;
+        })
+        .filter(
+          (
+            score,
+          ): score is {
+            firstScore: number;
+            secondScore: number;
+          } => score !== null,
+        );
+      const combinedCount = combinedScores.length;
+      const firstTotal = roundScore(
+        combinedScores.reduce((sum, score) => sum + score.firstScore, 0),
+      );
+      const secondTotal = roundScore(
+        combinedScores.reduce((sum, score) => sum + score.secondScore, 0),
+      );
+      const contributionTotal = roundScore(firstTotal + secondTotal);
+      const firstAverage = combinedCount
+        ? roundScore(firstTotal / combinedCount)
+        : null;
+      const secondAverage = combinedCount
+        ? roundScore(secondTotal / combinedCount)
+        : null;
+      const combinedAverage = combinedCount
+        ? roundScore(contributionTotal / combinedCount)
+        : null;
+      return {
+        classValue,
+        first,
+        second,
+        firstAverage,
+        secondAverage,
+        combinedAverage,
+        combinedCount,
+      };
+    })
+    .sort((a, b) => compareSchoolValue(a.classValue, b.classValue));
+};
 const compareNullableNumber = (a: number | null, b: number | null) => {
   if (a === null && b === null) return 0;
   if (a === null) return 1;
@@ -4918,6 +4997,14 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       : isWrittenExamMode && scoreStatsMode === "second"
         ? "2"
         : "all";
+  const writtenExamFirstStatsGroup =
+    writtenExamStatsGroups.find((group) => group.key === "1") || null;
+  const writtenExamSecondStatsGroup =
+    writtenExamStatsGroups.find((group) => group.key === "2") || null;
+  const writtenExamFirstGroupMaxScore =
+    writtenExamFirstStatsGroup?.maxScore || 0;
+  const writtenExamSecondGroupMaxScore =
+    writtenExamSecondStatsGroup?.maxScore || 0;
   const selectedWrittenExamStatsGroup =
     writtenExamStatsGroups.find(
       (group) => group.key === writtenExamStatsGroupKey,
@@ -5627,6 +5714,13 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
               secondMaxScore: secondScoreListSummaryMaxScore ?? 0,
             })
           : [],
+      writtenExamContributions:
+        isWrittenExamMode && scoreStatsAllSelected
+          ? buildWrittenExamContributionSummaries(scoreStatsSourceRecords, {
+              firstMaxScore: writtenExamFirstGroupMaxScore,
+              secondMaxScore: writtenExamSecondGroupMaxScore,
+            })
+          : [],
       itemSummaries,
       distribution,
       maxDistributionCount,
@@ -5650,6 +5744,8 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     firstScoreListSummaryMaxScore,
     secondScoreListSummaryMaxScore,
     usesCombinedPerformanceSummary,
+    writtenExamFirstGroupMaxScore,
+    writtenExamSecondGroupMaxScore,
   ]);
   const writtenExamItemSummaryGroups = useMemo(() => {
     if (!isWrittenExamMode) return [];
@@ -5700,6 +5796,40 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   const showScoreStatsItemDetail =
     (!isWrittenExamMode || writtenExamItemSummaryGroups.length === 0) &&
     (!scoreStatsAllSelected || !usesCombinedPerformanceSummary);
+  const scoreStatsContributionSummaries = isWrittenExamMode
+    ? scoreStats.writtenExamContributions
+    : scoreStats.assessmentContributions;
+  const showScoreStatsContributionSection =
+    scoreStatsAllSelected &&
+    (isWrittenExamMode || usesCombinedPerformanceSummary);
+  const scoreStatsContributionMaxScore = isWrittenExamMode
+    ? roundScore(writtenExamFirstGroupMaxScore + writtenExamSecondGroupMaxScore)
+    : scoreStats.totalMaxScore;
+  const scoreStatsContributionTitle = isWrittenExamMode
+    ? "학급별 1·2번 논술형 점수"
+    : "학급별 1·2차 수행평가 점수";
+  const scoreStatsContributionDescription = isWrittenExamMode
+    ? `막대는 ${formatPerformanceScore(
+        scoreStatsContributionMaxScore,
+      )}점 만점 총점 안에서 1번과 2번 평균 점수를 누적해 표시합니다.`
+    : `막대는 ${formatPerformanceScore(
+        scoreStatsContributionMaxScore,
+      )}점 만점 총점 안에서 1차와 2차 평균 점수를 누적해 표시합니다.`;
+  const scoreStatsFirstContributionLabel = isWrittenExamMode
+    ? "1번 논술형"
+    : `1차 ${SCORE_LIST_FIRST_SUMMARY_LABEL}`;
+  const scoreStatsSecondContributionLabel = isWrittenExamMode
+    ? "2번 논술형"
+    : `2차 ${SCORE_LIST_SECOND_SUMMARY_LABEL}`;
+  const scoreStatsFirstContributionMaxScore = isWrittenExamMode
+    ? writtenExamFirstGroupMaxScore
+    : firstScoreListSummaryMaxScore;
+  const scoreStatsSecondContributionMaxScore = isWrittenExamMode
+    ? writtenExamSecondGroupMaxScore
+    : secondScoreListSummaryMaxScore;
+  const scoreStatsContributionEmptyMessage = isWrittenExamMode
+    ? "반별 1·2번 논술형 평균을 계산할 데이터가 없습니다."
+    : "반별 1·2차 점수 평균을 계산할 데이터가 없습니다.";
   const objectionSummary = useMemo(
     () => ({
       total: objections.length,
@@ -9379,239 +9509,163 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                   </div>
 
                   <div className="grid gap-5 xl:grid-cols-2">
-                    <section className="rounded-xl border border-slate-200 bg-white p-4">
-                      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-                        <div>
-                          <h4 className="text-sm font-black text-slate-900">
-                            전체 평균과 선택 학급 평균
-                          </h4>
-                          <p className="mt-1 text-xs font-bold text-slate-500">
-                            막대 길이는 만점 안에서 평균 점수 크기를 나타냅니다.
-                          </p>
-                        </div>
-                        <span className="text-xs font-black text-slate-400">
-                          만점{" "}
-                          {formatPerformanceScore(scoreStats.totalMaxScore)}점
-                        </span>
-                      </div>
-                      <div className="mt-4 space-y-3">
-                        {[
-                          {
-                            label: "전체",
-                            summary: scoreStats.overall,
-                            barClass: "bg-slate-500",
-                          },
-                          {
-                            label: selectedScoreClassLabel,
-                            summary: scoreStats.selected,
-                            barClass: "bg-blue-600",
-                          },
-                        ].map((item) => {
-                          const width = Math.min(
-                            100,
-                            Math.max(
-                              item.summary.count > 0 ? 4 : 0,
-                              item.summary.percent || 0,
-                            ),
-                          );
-                          return (
-                            <div
-                              key={item.label}
-                              className="grid gap-2 sm:grid-cols-[120px_1fr_130px]"
-                            >
-                              <div className="text-sm font-black text-slate-700">
-                                {item.label}
-                              </div>
-                              <div className="h-7 overflow-hidden rounded-lg bg-slate-100">
-                                <div
-                                  className={`h-full rounded-lg ${item.barClass}`}
-                                  style={{ width: `${width}%` }}
-                                />
-                              </div>
-                              <div className="text-right text-sm font-black text-slate-800">
-                                {formatScoreStat(item.summary.average)}
-                                <span className="ml-1 text-xs text-slate-400">
-                                  /{" "}
-                                  {formatPerformanceScore(
-                                    scoreStats.totalMaxScore,
-                                  )}
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </section>
-
-                    {usesCombinedPerformanceSummary &&
-                      scoreStatsAllSelected && (
-                        <section className="rounded-xl border border-slate-200 bg-white p-4">
-                          <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-                            <div>
-                              <h4 className="text-sm font-black text-slate-900">
-                                학급별 1·2차 수행평가 점수
-                              </h4>
-                              <p className="mt-1 text-xs font-bold text-slate-500">
-                                막대는{" "}
-                                {formatPerformanceScore(
-                                  scoreStats.totalMaxScore,
-                                )}
-                                점 만점 총점 안에서 1차와 2차 평균 점수를 누적해
-                                표시합니다.
-                              </p>
-                            </div>
-                            <div className="flex max-w-full flex-col gap-1 text-[11px] font-black sm:items-end">
-                              <span className="inline-flex items-center gap-1 text-amber-700">
-                                <span className="h-2 w-5 rounded-full bg-amber-400" />
-                                1차 {SCORE_LIST_FIRST_SUMMARY_LABEL}
-                              </span>
-                              <span className="inline-flex items-center gap-1 text-indigo-700">
-                                <span className="h-2 w-5 rounded-full bg-indigo-500" />
-                                2차 {SCORE_LIST_SECOND_SUMMARY_LABEL}
-                              </span>
-                            </div>
+                    {showScoreStatsContributionSection && (
+                      <section className="rounded-xl border border-slate-200 bg-white p-4">
+                        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <h4 className="text-sm font-black text-slate-900">
+                              {scoreStatsContributionTitle}
+                            </h4>
+                            <p className="mt-1 text-xs font-bold text-slate-500">
+                              {scoreStatsContributionDescription}
+                            </p>
                           </div>
-                          <div className="mt-4 space-y-3">
-                            {scoreStats.assessmentContributions.length === 0 ? (
-                              <div className="flex h-32 items-center justify-center text-center text-sm font-bold leading-6 text-slate-400">
-                                반별 1·2차 점수 평균을 계산할 데이터가 없습니다.
-                              </div>
-                            ) : (
-                              scoreStats.assessmentContributions.map(
-                                (summary) => {
-                                  const firstAverage = summary.firstAverage;
-                                  const secondAverage = summary.secondAverage;
-                                  const firstWidth =
-                                    firstAverage !== null &&
-                                    scoreStats.totalMaxScore > 0
-                                      ? Math.min(
+                          <div className="flex max-w-full flex-col gap-1 text-[11px] font-black sm:items-end">
+                            <span className="inline-flex items-center gap-1 text-amber-700">
+                              <span className="h-2 w-5 rounded-full bg-amber-400" />
+                              {scoreStatsFirstContributionLabel}
+                            </span>
+                            <span className="inline-flex items-center gap-1 text-indigo-700">
+                              <span className="h-2 w-5 rounded-full bg-indigo-500" />
+                              {scoreStatsSecondContributionLabel}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="mt-4 space-y-3">
+                          {scoreStatsContributionSummaries.length === 0 ? (
+                            <div className="flex h-32 items-center justify-center text-center text-sm font-bold leading-6 text-slate-400">
+                              {scoreStatsContributionEmptyMessage}
+                            </div>
+                          ) : (
+                            scoreStatsContributionSummaries.map((summary) => {
+                              const firstAverage = summary.firstAverage;
+                              const secondAverage = summary.secondAverage;
+                              const firstWidth =
+                                firstAverage !== null &&
+                                scoreStatsContributionMaxScore > 0
+                                  ? Math.min(
+                                      100,
+                                      Math.max(
+                                        0,
+                                        (firstAverage /
+                                          scoreStatsContributionMaxScore) *
                                           100,
-                                          Math.max(
-                                            0,
-                                            (firstAverage /
-                                              scoreStats.totalMaxScore) *
-                                              100,
-                                          ),
-                                        )
-                                      : 0;
-                                  const secondWidth =
-                                    secondAverage !== null &&
-                                    scoreStats.totalMaxScore > 0
-                                      ? Math.min(
+                                      ),
+                                    )
+                                  : 0;
+                              const secondWidth =
+                                secondAverage !== null &&
+                                scoreStatsContributionMaxScore > 0
+                                  ? Math.min(
+                                      100,
+                                      Math.max(
+                                        0,
+                                        (secondAverage /
+                                          scoreStatsContributionMaxScore) *
                                           100,
-                                          Math.max(
-                                            0,
-                                            (secondAverage /
-                                              scoreStats.totalMaxScore) *
-                                              100,
-                                          ),
-                                        )
-                                      : 0;
-                                  const tooltipId = `assessment-score-tooltip-${summary.classValue}`;
-                                  const tooltipText = `${summary.classValue}반 ${SCORE_LIST_FIRST_SUMMARY_LABEL} 평균 ${formatScoreStatWithUnit(
-                                    firstAverage,
-                                  )}, ${SCORE_LIST_SECOND_SUMMARY_LABEL} 평균 ${formatScoreStatWithUnit(
-                                    secondAverage,
-                                  )}, 합산 총점 평균 ${formatScoreStatWithUnit(
-                                    summary.combinedAverage,
-                                  )}`;
-                                  return (
-                                    <div
-                                      key={`assessment-contribution-${summary.classValue}`}
-                                      className="grid gap-2 lg:grid-cols-[90px_1fr_130px]"
-                                    >
-                                      <div className="text-sm font-black text-slate-800">
-                                        {summary.classValue}반
-                                      </div>
-                                      <div
-                                        className="group relative h-8 min-w-0 outline-none"
-                                        tabIndex={0}
-                                        aria-describedby={tooltipId}
-                                        title={tooltipText}
-                                      >
-                                        <div className="h-8 overflow-hidden rounded-lg bg-slate-100">
-                                          <div className="flex h-full">
-                                            <div
-                                              className="h-full shrink-0 bg-amber-400"
-                                              style={{
-                                                width: `${firstWidth}%`,
-                                              }}
-                                            />
-                                            <div
-                                              className="h-full shrink-0 bg-indigo-500"
-                                              style={{
-                                                width: `${secondWidth}%`,
-                                              }}
-                                            />
-                                          </div>
-                                        </div>
+                                      ),
+                                    )
+                                  : 0;
+                              const tooltipId = `${isWrittenExamMode ? "written-exam" : "assessment"}-score-tooltip-${summary.classValue}`;
+                              const tooltipText = `${summary.classValue}반 ${scoreStatsFirstContributionLabel} 평균 ${formatScoreStatWithUnit(
+                                firstAverage,
+                              )}, ${scoreStatsSecondContributionLabel} 평균 ${formatScoreStatWithUnit(
+                                secondAverage,
+                              )}, 합산 총점 평균 ${formatScoreStatWithUnit(
+                                summary.combinedAverage,
+                              )}`;
+                              return (
+                                <div
+                                  key={`assessment-contribution-${summary.classValue}`}
+                                  className="grid gap-2 lg:grid-cols-[90px_1fr_130px]"
+                                >
+                                  <div className="text-sm font-black text-slate-800">
+                                    {summary.classValue}반
+                                  </div>
+                                  <div
+                                    className="group relative h-8 min-w-0 outline-none"
+                                    tabIndex={0}
+                                    aria-describedby={tooltipId}
+                                    title={tooltipText}
+                                  >
+                                    <div className="h-8 overflow-hidden rounded-lg bg-slate-100">
+                                      <div className="flex h-full">
                                         <div
-                                          id={tooltipId}
-                                          role="tooltip"
-                                          className="pointer-events-none absolute left-1/2 top-0 z-20 hidden w-max max-w-[90vw] -translate-x-1/2 -translate-y-[calc(100%+8px)] rounded-lg bg-slate-900 px-3 py-2 text-left text-xs font-bold leading-5 text-white shadow-xl group-hover:block group-focus:block sm:max-w-[520px]"
-                                        >
-                                          <div className="text-[11px] font-black text-slate-300">
-                                            {summary.classValue}반 · 산출{" "}
-                                            {summary.combinedCount}명
-                                          </div>
-                                          <div className="mt-1 grid gap-1">
-                                            <div>
-                                              1차{" "}
-                                              {SCORE_LIST_FIRST_SUMMARY_LABEL}:{" "}
-                                              {formatScoreStatWithUnit(
-                                                firstAverage,
-                                              )}{" "}
-                                              /{" "}
-                                              {formatPerformanceScore(
-                                                firstScoreListSummaryMaxScore,
-                                              )}
-                                              점
-                                            </div>
-                                            <div>
-                                              2차{" "}
-                                              {SCORE_LIST_SECOND_SUMMARY_LABEL}:{" "}
-                                              {formatScoreStatWithUnit(
-                                                secondAverage,
-                                              )}{" "}
-                                              /{" "}
-                                              {formatPerformanceScore(
-                                                secondScoreListSummaryMaxScore,
-                                              )}
-                                              점
-                                            </div>
-                                            <div className="border-t border-white/15 pt-1 font-black">
-                                              합산 총점 평균:{" "}
-                                              {formatScoreStatWithUnit(
-                                                summary.combinedAverage,
-                                              )}{" "}
-                                              /{" "}
-                                              {formatPerformanceScore(
-                                                scoreStats.totalMaxScore,
-                                              )}
-                                              점
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </div>
-                                      <div className="text-right text-sm font-black text-slate-900">
-                                        {formatScoreStat(
-                                          summary.combinedAverage,
-                                        )}
-                                        <span className="ml-1 text-xs text-slate-400">
-                                          /{" "}
-                                          {formatPerformanceScore(
-                                            scoreStats.totalMaxScore,
-                                          )}
-                                        </span>
+                                          className="h-full shrink-0 bg-amber-400"
+                                          style={{
+                                            width: `${firstWidth}%`,
+                                          }}
+                                        />
+                                        <div
+                                          className="h-full shrink-0 bg-indigo-500"
+                                          style={{
+                                            width: `${secondWidth}%`,
+                                          }}
+                                        />
                                       </div>
                                     </div>
-                                  );
-                                },
-                              )
-                            )}
-                          </div>
-                        </section>
-                      )}
+                                    <div
+                                      id={tooltipId}
+                                      role="tooltip"
+                                      className="pointer-events-none absolute left-1/2 top-0 z-20 hidden w-max max-w-[90vw] -translate-x-1/2 -translate-y-[calc(100%+8px)] rounded-lg bg-slate-900 px-3 py-2 text-left text-xs font-bold leading-5 text-white shadow-xl group-hover:block group-focus:block sm:max-w-[520px]"
+                                    >
+                                      <div className="text-[11px] font-black text-slate-300">
+                                        {summary.classValue}반 · 산출{" "}
+                                        {summary.combinedCount}명
+                                      </div>
+                                      <div className="mt-1 grid gap-1">
+                                        <div>
+                                          {scoreStatsFirstContributionLabel}:{" "}
+                                          {formatScoreStatWithUnit(
+                                            firstAverage,
+                                          )}{" "}
+                                          /{" "}
+                                          {formatPerformanceScore(
+                                            scoreStatsFirstContributionMaxScore,
+                                          )}
+                                          점
+                                        </div>
+                                        <div>
+                                          {scoreStatsSecondContributionLabel}:{" "}
+                                          {formatScoreStatWithUnit(
+                                            secondAverage,
+                                          )}{" "}
+                                          /{" "}
+                                          {formatPerformanceScore(
+                                            scoreStatsSecondContributionMaxScore,
+                                          )}
+                                          점
+                                        </div>
+                                        <div className="border-t border-white/15 pt-1 font-black">
+                                          합산 총점 평균:{" "}
+                                          {formatScoreStatWithUnit(
+                                            summary.combinedAverage,
+                                          )}{" "}
+                                          /{" "}
+                                          {formatPerformanceScore(
+                                            scoreStatsContributionMaxScore,
+                                          )}
+                                          점
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="text-right text-sm font-black text-slate-900">
+                                    {formatScoreStat(summary.combinedAverage)}
+                                    <span className="ml-1 text-xs text-slate-400">
+                                      /{" "}
+                                      {formatPerformanceScore(
+                                        scoreStatsContributionMaxScore,
+                                      )}
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })
+                          )}
+                        </div>
+                      </section>
+                    )}
 
                     <section className="rounded-xl border border-slate-200 bg-white p-4">
                       <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
