@@ -679,13 +679,17 @@ const getRosterRowStudentRepair = (
       !row.studentName ||
       normalizeStudentName(row.studentName) ===
         normalizeStudentName(numberMatch.name);
-    if (sameName && !row.uid) {
+    if (!row.uid) {
       return {
         ...row,
         uid: numberMatch.uid,
         studentName: row.studentName || numberMatch.name,
-        matchStatus: "matched" as const,
-        matchMessage: "학생 명단과 연결된 점수입니다.",
+        matchStatus: sameName
+          ? ("matched" as const)
+          : ("name-mismatch" as const),
+        matchMessage: sameName
+          ? "학생 명단과 연결된 점수입니다."
+          : `번호로 연결했습니다. 등록 명단 이름은 ${numberMatch.name || "이름 없음"}입니다.`,
       };
     }
   }
