@@ -1163,6 +1163,19 @@ const sortPerformanceScoreObjections = (
       a.studentName.localeCompare(b.studentName, "ko"),
   );
 
+const sortPerformanceScoreAnswerSheetRequests = (
+  requests: PerformanceScoreAnswerSheetRequest[],
+) =>
+  [...requests].sort(
+    (a, b) =>
+      (a.status === "pending" ? 0 : 1) - (b.status === "pending" ? 0 : 1) ||
+      getTimestampMillis(b.requestedAt) - getTimestampMillis(a.requestedAt) ||
+      Number(a.grade) - Number(b.grade) ||
+      Number(a.class) - Number(b.class) ||
+      Number(a.number) - Number(b.number) ||
+      a.studentName.localeCompare(b.studentName, "ko"),
+  );
+
 const getEnteredItemScore = (
   item?: PerformanceScoreRecord["items"][number],
 ) => {
@@ -4214,7 +4227,8 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     WRITTEN_EXAM_DEFAULT_MAX_SCORE,
   );
   const [students, setStudents] = useState<StudentProfile[]>([]);
-  const [studentsLoading, setStudentsLoading] = useState(true);
+  const [studentsLoading, setStudentsLoading] = useState(false);
+  const [studentsLoaded, setStudentsLoaded] = useState(false);
   const [studentLoadError, setStudentLoadError] = useState("");
   const [parsed, setParsed] = useState<ParsedUpload | null>(null);
   const [parsing, setParsing] = useState(false);
@@ -4264,6 +4278,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   const [selectedScoreListRecordKeys, setSelectedScoreListRecordKeys] =
     useState<Set<string>>(() => new Set<string>());
   const scoreListSelectAllRef = useRef<HTMLInputElement | null>(null);
+  const studentsLoadPromiseRef = useRef<Promise<StudentProfile[]> | null>(null);
   const scoreDocumentSyncCheckedKeysRef = useRef<Set<string>>(
     new Set<string>(),
   );
@@ -4282,8 +4297,6 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   const [objections, setObjections] = useState<PerformanceScoreObjection[]>([]);
   const [objectionsLoading, setObjectionsLoading] = useState(false);
   const [objectionsLoaded, setObjectionsLoaded] = useState(false);
-  const [objectionsAutoLoadAttempted, setObjectionsAutoLoadAttempted] =
-    useState(false);
   const [objectionReviewingAction, setObjectionReviewingAction] = useState<{
     id: string;
     status: PerformanceScoreObjectionReviewAction;
@@ -4327,10 +4340,6 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       setSubject(managerCopy.defaultSubject);
     }
   }, [managerCopy, semester, year]);
-
-  useEffect(() => {
-    void loadStudents();
-  }, []);
 
   useEffect(() => {
     scoreDocumentSyncCheckedKeysRef.current.clear();
@@ -4398,7 +4407,6 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   useEffect(() => {
     setObjections([]);
     setObjectionsLoaded(false);
-    setObjectionsAutoLoadAttempted(false);
   }, [year, semester]);
 
   useEffect(() => {
@@ -5415,10 +5423,15 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     }
   };
 
-  const loadStudents = async () => {
+  const loadStudents = async (
+    options: { force?: boolean } = {},
+  ): Promise<StudentProfile[]> => {
+    if (!options.force && studentsLoaded) return students;
+    if (studentsLoadPromiseRef.current) return studentsLoadPromiseRef.current;
+
     setStudentsLoading(true);
     setStudentLoadError("");
-    try {
+    const loadPromise = (async () => {
       const snap = await getDocs(collection(db, "users"));
       const loaded: StudentProfile[] = [];
       snap.forEach((item) => {
@@ -5429,12 +5442,22 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         loaded.push(profile);
       });
       setStudents(loaded);
+      setStudentsLoaded(true);
+      return loaded;
+    })();
+
+    studentsLoadPromiseRef.current = loadPromise;
+    try {
+      return await loadPromise;
     } catch (error) {
       console.error("Failed to load students for performance scores:", error);
+      setStudentsLoaded(false);
       setStudentLoadError(
         "학생 명단을 불러오지 못했습니다. 학생 연결을 위해 학생 명단 조회 권한이 필요합니다.",
       );
+      return [];
     } finally {
+      studentsLoadPromiseRef.current = null;
       setStudentsLoading(false);
     }
   };
@@ -5571,7 +5594,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     }
   };
 
-  const loadRosters = async () => {
+  const loadRosters = async (
+    options: { syncMissingDocuments?: boolean } = {},
+  ) => {
     const syncRunId = scoreDocumentSyncRunRef.current + 1;
     scoreDocumentSyncRunRef.current = syncRunId;
     setRostersLoading(true);
@@ -5593,7 +5618,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         );
       setRosters(sortPerformanceScoreRosters(loaded));
       setScoreListLoadError("");
-      void syncMissingStudentScoreDocuments(loaded, syncRunId);
+      if (options.syncMissingDocuments) {
+        void syncMissingStudentScoreDocuments(loaded, syncRunId);
+      }
     } catch (error) {
       console.error("Failed to load performance score rosters:", error);
       setRosters([]);
@@ -5959,12 +5986,17 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     if (objectionsLoading) return;
     setObjectionsLoading(true);
     try {
-      const snap = await getDocs(
-        query(
-          collection(db, objectionCollectionPath),
-          orderBy("requestedAt", "desc"),
-        ),
-      );
+      const objectionQuery =
+        activeScoreKind === WRITTEN_EXAM_SCORE_KIND
+          ? query(
+              collection(db, objectionCollectionPath),
+              where("scoreKind", "==", activeScoreKind),
+            )
+          : query(
+              collection(db, objectionCollectionPath),
+              orderBy("requestedAt", "desc"),
+            );
+      const snap = await getDocs(objectionQuery);
       const loaded = snap.docs
         .map((item) =>
           normalizePerformanceScoreObjection(
@@ -6009,12 +6041,17 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     if (answerSheetRequestsLoading) return;
     setAnswerSheetRequestsLoading(true);
     try {
-      const snap = await getDocs(
-        query(
-          collection(db, answerSheetRequestCollectionPath),
-          orderBy("requestedAt", "desc"),
-        ),
-      );
+      const answerSheetRequestQuery =
+        activeScoreKind === WRITTEN_EXAM_SCORE_KIND
+          ? query(
+              collection(db, answerSheetRequestCollectionPath),
+              where("scoreKind", "==", activeScoreKind),
+            )
+          : query(
+              collection(db, answerSheetRequestCollectionPath),
+              orderBy("requestedAt", "desc"),
+            );
+      const snap = await getDocs(answerSheetRequestQuery);
       const loaded = snap.docs
         .map((item) =>
           normalizePerformanceScoreAnswerSheetRequest(
@@ -6026,7 +6063,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           (item) =>
             normalizePerformanceScoreKind(item.scoreKind) === activeScoreKind,
         );
-      setAnswerSheetRequests(loaded);
+      setAnswerSheetRequests(sortPerformanceScoreAnswerSheetRequests(loaded));
       setAnswerSheetRequestsLoaded(true);
     } catch (error) {
       console.error("Failed to load answer sheet requests:", error);
@@ -6080,7 +6117,22 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         reviewMemo: memo.trim().slice(0, 240),
         updatedAt: serverTimestamp(),
       });
-      await loadAnswerSheetRequests();
+      const reviewMemo = memo.trim().slice(0, 240);
+      setAnswerSheetRequests((current) =>
+        sortPerformanceScoreAnswerSheetRequests(
+          current.map((requestItem) =>
+            requestItem.id === item.id
+              ? {
+                  ...requestItem,
+                  status: "reviewed",
+                  reviewedAt: new Date(),
+                  reviewMemo,
+                }
+              : requestItem,
+          ),
+        ),
+      );
+      setAnswerSheetRequestsLoaded(true);
       showToast({
         tone: "success",
         title: "답안지 확인 요청을 처리했습니다.",
@@ -6097,30 +6149,6 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       setAnswerSheetRequestReviewingId("");
     }
   };
-
-  useEffect(() => {
-    if (objectionsAutoLoadAttempted || objectionsLoaded || objectionsLoading) {
-      return;
-    }
-    setObjectionsAutoLoadAttempted(true);
-    void loadPerformanceScoreObjections();
-  }, [
-    objectionsAutoLoadAttempted,
-    objectionsLoaded,
-    objectionsLoading,
-    objectionCollectionPath,
-  ]);
-
-  useEffect(() => {
-    if (answerSheetRequestsLoaded || answerSheetRequestsLoading) {
-      return;
-    }
-    void loadAnswerSheetRequests();
-  }, [
-    answerSheetRequestCollectionPath,
-    answerSheetRequestsLoaded,
-    answerSheetRequestsLoading,
-  ]);
 
   useEffect(() => {
     if (searchParams.get("panel") !== "objections" || objectionModalOpen) {
@@ -6261,7 +6289,29 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         changedTotalScore,
         reviewMemo,
       });
-      await loadPerformanceScoreObjections();
+      setObjections((current) =>
+        sortPerformanceScoreObjections(
+          current.map((item) =>
+            item.id === objection.id
+              ? {
+                  ...item,
+                  status,
+                  reviewedAt: new Date(),
+                  reviewMemo,
+                  changedTotalScore:
+                    status === "accepted"
+                      ? changedTotalScore
+                      : item.changedTotalScore,
+                  changedScoreLabel:
+                    status === "accepted"
+                      ? changedScoreLabel
+                      : item.changedScoreLabel,
+                }
+              : item,
+          ),
+        ),
+      );
+      setObjectionsLoaded(true);
       showToast({
         tone: "success",
         title:
@@ -6452,7 +6502,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         title: "학생 데이터를 삭제했습니다.",
         message: `학생 명단과 ${managerCopy.scoreKindLabel}, 위스, 평가 기록에 남은 연결 데이터를 함께 정리했습니다.`,
       });
-      void loadStudents();
+      void loadStudents({ force: true });
       void loadRosters();
     } catch (error) {
       console.error("Failed to delete selected score list students:", error);
@@ -6461,7 +6511,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         title: "학생 삭제에 실패했습니다.",
         message: getFirestoreWriteErrorMessage(error),
       });
-      void loadStudents();
+      void loadStudents({ force: true });
       void loadRosters();
     } finally {
       setSavingScoreEdits(false);
@@ -6859,35 +6909,45 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           );
         });
       const updatedRows = [...updatedExistingRows, ...addedRows];
-      const latestOtherRosters = (
-        await Promise.all(
-          rosters
-            .filter((roster) => roster.id !== selectedScoreRoster.id)
-            .map(async (roster) => {
-              const snap = await getDoc(
-                doc(db, rosterCollectionPath, roster.id),
-              );
-              if (!snap.exists()) return null;
-              return normalizePerformanceScoreRoster(
-                snap.id,
-                snap.data() as Omit<PerformanceScoreRoster, "id">,
-              );
-            }),
-        )
-      ).filter((roster): roster is PerformanceScoreRoster => roster !== null);
-      const rostersWithEditedRows = [
-        {
-          ...selectedScoreRoster,
-          rows: updatedRows,
-        },
-        ...latestOtherRosters,
-      ];
-      const syncedRosterRowsById = syncManualScoreRowsAcrossAssessments(
-        rostersWithEditedRows,
-        persistableScoreListRecords,
-        manualIdentityReplacements,
-        deletedRecords,
-      );
+      const needsCrossRosterManualSync =
+        !isWrittenExamMode &&
+        (manualIdentityReplacements.length > 0 ||
+          persistableScoreListRecords.some(hasSyncableManualScoreIdentity) ||
+          deletedRecords.some(hasSyncableManualScoreIdentity));
+      const latestOtherRosters = needsCrossRosterManualSync
+        ? (
+            await Promise.all(
+              rosters
+                .filter((roster) => roster.id !== selectedScoreRoster.id)
+                .map(async (roster) => {
+                  const snap = await getDoc(
+                    doc(db, rosterCollectionPath, roster.id),
+                  );
+                  if (!snap.exists()) return null;
+                  return normalizePerformanceScoreRoster(
+                    snap.id,
+                    snap.data() as Omit<PerformanceScoreRoster, "id">,
+                  );
+                }),
+            )
+          ).filter(
+            (roster): roster is PerformanceScoreRoster => roster !== null,
+          )
+        : [];
+      const syncedRosterRowsById = needsCrossRosterManualSync
+        ? syncManualScoreRowsAcrossAssessments(
+            [
+              {
+                ...selectedScoreRoster,
+                rows: updatedRows,
+              },
+              ...latestOtherRosters,
+            ],
+            persistableScoreListRecords,
+            manualIdentityReplacements,
+            deletedRecords,
+          )
+        : new Map<string, PerformanceScoreRosterRow[]>();
       const finalUpdatedRows =
         syncedRosterRowsById.get(selectedScoreRoster.id) || updatedRows;
       const selectedRowsMeta = buildRosterRowsMeta(
@@ -7124,7 +7184,6 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           }),
         ),
       );
-      await loadRosters();
       showToast({
         tone: "success",
         title: `${managerCopy.scoreKindLabel} 점수표를 수정했습니다.`,
@@ -7590,6 +7649,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
     setParsing(true);
     try {
+      const studentSnapshot = await loadStudents();
       const rows = await readWorkbookRows(file);
       const parsedUpload = isWrittenExamMode
         ? buildWrittenExamParsedUpload(rows, {
@@ -7619,7 +7679,10 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         : getAssessmentConfig(parsedUpload, selectedPreset);
       setTitle(assessmentConfig.title || parsedUpload.title);
       if (assessmentConfig.subject) setSubject(assessmentConfig.subject);
-      const matchedRows = matchRowsToStudents(parsedUpload.rows, students);
+      const matchedRows = matchRowsToStudents(
+        parsedUpload.rows,
+        studentSnapshot,
+      );
       if (!isWrittenExamMode) setAssessmentPreset(selectedPreset);
       setPreviewClassFilter("all");
       setPreviewPage(1);
@@ -7807,9 +7870,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       const classList = Array.from(
         new Set(parsed.rows.map((row) => row.class).filter(Boolean)),
       ).sort((a, b) => Number(a) - Number(b) || a.localeCompare(b, "ko"));
-
-      const batchQueue = createBatchQueue();
-      batchQueue.set(rosterRef, {
+      const rosterPayload = {
         scoreKind: activeScoreKind,
         title: safeTitle,
         subject: safeSubject,
@@ -7831,7 +7892,16 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         uploadedByEmail: currentUser?.email || "",
         createdAt: timestamp,
         updatedAt: timestamp,
-      } satisfies Omit<PerformanceScoreRoster, "id">);
+      } satisfies Omit<PerformanceScoreRoster, "id">;
+      const localRoster: PerformanceScoreRoster = {
+        ...rosterPayload,
+        id: rosterId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      const batchQueue = createBatchQueue();
+      batchQueue.set(rosterRef, rosterPayload);
 
       const savedScoreRecords: ScoreListRecord[] = [];
       saveableRows.forEach((row) => {
@@ -7889,7 +7959,12 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       setScoreListSummaryStudents([]);
       setScoreListSummaryLoadedKey("");
       setScoreListRecords(sortStudentIdentityRows(savedScoreRecords));
-      await loadRosters();
+      setRosters((current) =>
+        sortPerformanceScoreRosters([
+          localRoster,
+          ...current.filter((roster) => roster.id !== rosterId),
+        ]),
+      );
       showToast({
         tone: "success",
         title: `${managerCopy.scoreKindLabel} 점수를 저장했습니다.`,
@@ -7985,7 +8060,11 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       }
       setClassSheetPreviewStudents([]);
       setClassSheetPreviewLoadedKey("");
-      await loadRosters();
+      setRosters((current) =>
+        sortPerformanceScoreRosters(
+          current.filter((item) => item.id !== roster.id),
+        ),
+      );
       showToast({
         tone: "success",
         title: "업로드 기록을 삭제했습니다.",
@@ -10547,7 +10626,8 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => void loadStudents()}
+              onClick={() => void loadStudents({ force: true })}
+              disabled={studentsLoading}
               className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 bg-white text-sm font-bold text-slate-700 transition hover:bg-slate-50"
               aria-label="명단 새로고침"
               title="명단 새로고침"
