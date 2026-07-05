@@ -96,6 +96,7 @@ Layout tokens:
 
 - Page max width: `--ws-page-max: 1280px`.
 - Header height: `--ws-header-height: 64px`.
+- Header dropdown min width: `--ws-header-dropdown-min: 13.5rem`.
 - Mobile gutter: `--space-4`.
 - Desktop gutter: `--space-10`.
 - Student page default: one column first.

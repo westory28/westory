@@ -1,6 +1,10 @@
 /* Westory Standard Design System */
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800;900&display=swap');
 
+:root {
+    --ws-header-dropdown-min: 13.5rem;
+}
+
 body {
     font-family: 'Noto Sans KR', sans-serif;
     background-color: #f9fafb;
@@ -101,6 +105,10 @@ header {
     color: #2563eb;
     border-bottom-color: #2563eb;
     font-weight: 700;
+}
+
+.desktop-submenu-shell {
+    width: var(--ws-header-dropdown-min);
 }
 
 /* 학생 포털 상위 메뉴 간격 보정(교사 헤더와 유사한 여백감) */
