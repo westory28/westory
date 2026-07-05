@@ -2,7 +2,8 @@
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800;900&display=swap');
 
 :root {
-    --ws-header-dropdown-min: 13.5rem;
+    --ws-header-dropdown-min: 11rem;
+    --ws-header-dropdown-max: min(24rem, calc(100vw - 2rem));
 }
 
 body {
@@ -108,7 +109,21 @@ header {
 }
 
 .desktop-submenu-shell {
-    width: var(--ws-header-dropdown-min);
+    width: max-content;
+    min-width: var(--ws-header-dropdown-min);
+    max-width: var(--ws-header-dropdown-max);
+}
+
+.desktop-submenu-shell > div {
+    width: max-content;
+    min-width: inherit;
+    max-width: 100%;
+}
+
+.desktop-submenu-shell a {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* 학생 포털 상위 메뉴 간격 보정(교사 헤더와 유사한 여백감) */
