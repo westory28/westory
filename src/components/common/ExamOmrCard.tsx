@@ -18,6 +18,8 @@ type ExamOmrCardProps = {
   showScore?: boolean;
   showAnsweredCount?: boolean;
   scoreLabel?: string;
+  panelItemCount?: number;
+  panelGridClassName?: string;
   className?: string;
 };
 
@@ -246,12 +248,15 @@ export const ExamOmrCard: React.FC<ExamOmrCardProps> = ({
   showScore = true,
   showAnsweredCount = mode === "teacher",
   scoreLabel,
+  panelItemCount = 10,
+  panelGridClassName = "grid-cols-1 gap-3 lg:grid-cols-2",
   className = "",
 }) => {
   const answeredCount = items.filter((item) =>
     getExamOmrStudentChoice(item),
   ).length;
-  const itemGroups = chunkExamOmrItems(items, 10);
+  const safePanelItemCount = Math.max(1, Math.trunc(panelItemCount));
+  const itemGroups = chunkExamOmrItems(items, safePanelItemCount);
 
   return (
     <section
@@ -289,7 +294,7 @@ export const ExamOmrCard: React.FC<ExamOmrCardProps> = ({
 
       {items.length > 0 ? (
         <div className="mt-4">
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          <div className={["grid", panelGridClassName].join(" ")}>
             {itemGroups.map((group, index) => (
               <ExamOmrPanel
                 key={`${group[0]?.questionNumber || index}-${group[group.length - 1]?.questionNumber || index}`}

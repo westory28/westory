@@ -10006,6 +10006,8 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                 items={omrPreview.items}
                 mode="teacher"
                 showScore
+                panelItemCount={5}
+                panelGridClassName="grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-4"
                 className="border-0 shadow-none"
               />
             </div>
