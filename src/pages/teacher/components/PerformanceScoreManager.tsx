@@ -22,6 +22,8 @@ import {
   InlineLoading,
   LoadingOverlay,
 } from "../../../components/common/LoadingState";
+import ExamOmrCard from "../../../components/common/ExamOmrCard";
+import type { ExamOmrQuestionResult } from "../../../components/common/examOmr";
 import { useAppDialog } from "../../../components/common/AppDialogProvider";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -40,6 +42,8 @@ import {
   PERFORMANCE_SCORE_WARNING_MAX_LENGTH,
   PERFORMANCE_SCORE_USER_COLLECTION,
   WRITTEN_EXAM_SCORE_KIND,
+  WRITTEN_EXAM_SECTION_ESSAY,
+  WRITTEN_EXAM_SECTION_OBJECTIVE,
   applyPerformanceScoreConfirmation,
   buildStudentLookupKey,
   buildStudentNameLookupKey,
@@ -93,6 +97,14 @@ interface PerformanceScoreManagerProps {
 type AssessmentPresetKey = "auto" | "first" | "second";
 type UploadAssessmentPresetKey = Exclude<AssessmentPresetKey, "auto">;
 type PreviewPageItem = number | { key: string; label: string };
+type ObjectiveOmrSourceItem =
+  | PerformanceScoreItem
+  | PerformanceScoreRoster["items"][number];
+type OmrPreviewState = {
+  title: string;
+  description: string;
+  items: ExamOmrQuestionResult[];
+};
 
 const DEFAULT_GRADE_OPTIONS = ["1", "2", "3"];
 const DEFAULT_CLASS_OPTIONS = Array.from({ length: 12 }, (_, index) =>
@@ -257,36 +269,36 @@ const SCORE_MANAGER_COPY: Record<
   },
   [WRITTEN_EXAM_SCORE_KIND]: {
     defaultTitle: (year, semester) =>
-      `${year}학년도 ${semester}학기 정기시험 논술형 점수`,
+      `${year}학년도 ${semester}학기 정기시험 점수`,
     defaultSubject: WRITTEN_EXAM_DEFAULT_SUBJECT,
-    pageTitle: "정기시험 논술형 점수 관리",
+    pageTitle: "정기시험 점수 관리",
     pageDescription:
-      "정기시험 논술형 평가명을 선택해 학생별 점수와 피드백을 조회합니다.",
-    scoreNameLabel: "정기시험 논술형",
-    scoreKindLabel: "정기시험 논술형",
+      "정기시험 점수표를 선택해 학생별 서답형 정오답, 논술형 점수와 피드백을 조회합니다.",
+    scoreNameLabel: "정기시험",
+    scoreKindLabel: "정기시험",
     scoreKindParticle: "을",
-    uploadTitle: "정기시험 논술형 점수표 업로드",
+    uploadTitle: "정기시험 점수표 업로드",
     uploadDescription:
-      "전체 학급 점수가 담긴 엑셀 파일 하나를 선택해 한 번에 입력합니다.",
-    uploadSelectLabel: "논술형 항목",
-    uploadSuccessTitle: "정기시험 논술형 명단을 인식했습니다.",
+      "서답형 정오답 명렬표 또는 논술형 점수표 엑셀 파일을 선택해 입력합니다.",
+    uploadSelectLabel: "점수표 항목",
+    uploadSuccessTitle: "정기시험 명단을 인식했습니다.",
     uploadErrorContext:
-      "양식의 학년, 반, 번호, 이름, 점수, 피드백 컬럼을 확인해 주세요.",
-    emptyRosterMessage: "아직 저장된 정기시험 논술형 점수 명단이 없습니다.",
-    savingOverlayMessage: "정기시험 논술형 점수표를 저장하는 중입니다.",
+      "서답형 명렬표의 문항·정답·배점 행 또는 논술형 양식의 학년, 반, 번호, 이름, 점수, 피드백 컬럼을 확인해 주세요.",
+    emptyRosterMessage: "아직 저장된 정기시험 점수 명단이 없습니다.",
+    savingOverlayMessage: "정기시험 점수표를 저장하는 중입니다.",
     savingOverlayDetail:
-      "학생별 논술형 점수와 피드백을 DB에 반영하고 있습니다.",
+      "학생별 서답형 정오답, 논술형 점수와 피드백을 DB에 반영하고 있습니다.",
     warningDescription:
-      "학생은 이 문구에 동의해야 내 정기시험 논술형 점수 확인, 서명, 이의 제기를 진행할 수 있습니다.",
-    statsTitle: "정기시험 논술형 통계",
+      "학생은 이 문구에 동의해야 내 정기시험 점수 확인, 서명, 이의 제기를 진행할 수 있습니다.",
+    statsTitle: "정기시험 통계",
     statsEmptyMessage:
-      "저장된 정기시험 논술형 점수표가 있으면 통계를 확인할 수 있습니다.",
-    objectionsTitle: "정기시험 논술형 이의 목록",
-    objectionsLoadingMessage: "정기시험 논술형 이의 목록을 불러오는 중입니다.",
-    objectionsEmptyMessage: "제출된 정기시험 논술형 이의 제기가 없습니다.",
-    objectionItemHeader: "정기시험 논술형 항목",
-    answerSheetItemHeader: "정기시험 논술형 항목",
-    allScoresTitle: "전체 정기시험 논술형 점수",
+      "저장된 정기시험 점수표가 있으면 통계를 확인할 수 있습니다.",
+    objectionsTitle: "정기시험 이의 목록",
+    objectionsLoadingMessage: "정기시험 이의 목록을 불러오는 중입니다.",
+    objectionsEmptyMessage: "제출된 정기시험 이의 제기가 없습니다.",
+    objectionItemHeader: "정기시험 항목",
+    answerSheetItemHeader: "정기시험 항목",
+    allScoresTitle: "전체 정기시험 점수",
   },
 };
 
@@ -363,12 +375,14 @@ const buildWrittenExamParsedUpload = (
               itemKey: "essay-total",
               groupKey: "essay",
               groupLabel: "논술형",
+              examSection: WRITTEN_EXAM_SECTION_ESSAY,
               maxScore: parsedUpload.totalMaxScore,
             },
           ],
     rows: parsedUpload.rows,
     totalMaxScore: parsedUpload.totalMaxScore,
     detectedClasses: parsedUpload.detectedClasses,
+    scoreContentKind: parsedUpload.scoreContentKind,
   };
 };
 
@@ -420,11 +434,35 @@ const getItemLabel = (item: { name: string; shortName?: string }) =>
 const getWrittenExamItemMeta = (
   item: Pick<
     PerformanceScoreItem,
-    "name" | "shortName" | "itemKey" | "groupKey" | "groupLabel"
+    | "name"
+    | "shortName"
+    | "itemKey"
+    | "groupKey"
+    | "groupLabel"
+    | "examSection"
+    | "questionNumber"
   >,
   index: number,
 ) => {
   const rawKey = String(item.itemKey || item.shortName || item.name || "");
+  if (
+    item.examSection === WRITTEN_EXAM_SECTION_OBJECTIVE ||
+    item.groupKey === "objective" ||
+    rawKey.startsWith("objective-")
+  ) {
+    const questionNumber =
+      getFiniteNumber(item.questionNumber) ??
+      getFiniteNumber(rawKey.replace(/[^\d]/g, "")) ??
+      index + 1;
+    return {
+      key: `objective-${questionNumber}`,
+      groupKey: "objective",
+      groupLabel: item.groupLabel || "서답형",
+      label: `${questionNumber}번`,
+      fullLabel: `서답형 ${questionNumber}번`,
+      detailed: true,
+    };
+  }
   const match = /^(\d+)\s*-\s*[\(\[]?\s*(\d+)\s*[\)\]]?$/.exec(rawKey.trim());
   if (!match) {
     return {
@@ -453,7 +491,9 @@ const buildWrittenExamStatsGroups = (
   (items || []).forEach((item, index) => {
     const meta = getWrittenExamItemMeta(item, index);
     const key =
-      meta.groupKey === "1" || meta.groupKey === "2"
+      meta.groupKey === "objective" ||
+      meta.groupKey === "1" ||
+      meta.groupKey === "2"
         ? meta.groupKey
         : ("all" as const);
     if (key === "all") return;
@@ -475,10 +515,35 @@ const buildWrittenExamStatsGroups = (
   });
   return Array.from(groups.values()).sort(
     (left, right) =>
+      (left.key === "objective" ? -1 : right.key === "objective" ? 1 : 0) ||
       Number(left.key) - Number(right.key) ||
       left.label.localeCompare(right.label, "ko"),
   );
 };
+
+const getObjectiveOmrItems = (
+  items: ObjectiveOmrSourceItem[] = [],
+): ExamOmrQuestionResult[] =>
+  items
+    .map((item, index) => ({ item, meta: getWrittenExamItemMeta(item, index) }))
+    .filter(({ meta }) => meta.groupKey === "objective")
+    .map(({ item }, index) => ({
+      questionNumber: item.questionNumber || index + 1,
+      correctAnswer: item.correctAnswer || "",
+      studentAnswer: item.studentAnswer || "",
+      correct: item.answerCorrect,
+      score: item.score,
+      maxScore: item.maxScore,
+      scoreEntered: item.scoreEntered,
+      invalid: item.answerStatus === "invalid",
+    }))
+    .sort(
+      (left, right) =>
+        Number(left.questionNumber) - Number(right.questionNumber),
+    );
+
+const hasObjectiveOmrItems = (items: ObjectiveOmrSourceItem[] = []) =>
+  getObjectiveOmrItems(items).length > 0;
 
 const getPreviewPageItems = (
   currentPage: number,
@@ -846,8 +911,8 @@ type ClassStatsSortKey =
   | "min"
   | "difference"
   | "percent";
-type ScoreStatsMode = "all" | "first" | "second";
-type WrittenExamStatsGroupKey = "all" | "1" | "2";
+type ScoreStatsMode = "all" | "objective" | "first" | "second";
+type WrittenExamStatsGroupKey = "all" | "objective" | "1" | "2";
 
 interface SortState<TKey extends string> {
   key: TKey;
@@ -1032,6 +1097,14 @@ const getScoreItemBasePayload = (
   const itemKey = toText(item.itemKey);
   const groupKey = toText(item.groupKey);
   const groupLabel = toText(item.groupLabel);
+  const examSection = toText(item.examSection);
+  const questionNumber = getFiniteNumber(item.questionNumber);
+  const correctAnswer = toText(item.correctAnswer);
+  const studentAnswer = toText(item.studentAnswer);
+  const answerStatus = toText(item.answerStatus);
+  const answerChoices = Array.isArray(item.answerChoices)
+    ? item.answerChoices.map(toText).filter(Boolean).slice(0, 10)
+    : [];
   const feedback = String(item.feedback || "").slice(0, 1000);
   return {
     name: toText(item.name),
@@ -1039,6 +1112,18 @@ const getScoreItemBasePayload = (
     ...(itemKey ? { itemKey } : {}),
     ...(groupKey ? { groupKey } : {}),
     ...(groupLabel ? { groupLabel } : {}),
+    ...(examSection === WRITTEN_EXAM_SECTION_OBJECTIVE ||
+    examSection === WRITTEN_EXAM_SECTION_ESSAY
+      ? { examSection }
+      : {}),
+    ...(questionNumber !== null ? { questionNumber } : {}),
+    ...(correctAnswer ? { correctAnswer } : {}),
+    ...(studentAnswer ? { studentAnswer } : {}),
+    ...(typeof item.answerCorrect === "boolean"
+      ? { answerCorrect: item.answerCorrect }
+      : {}),
+    ...(answerStatus ? { answerStatus } : {}),
+    ...(answerChoices.length ? { answerChoices } : {}),
     maxScore: getFiniteNumber(item.maxScore) ?? 0,
     ...(item.ratio !== undefined ? { ratio: item.ratio } : {}),
     ...(feedback ? { feedback } : {}),
@@ -1371,6 +1456,30 @@ const getWrittenExamStatsRecordForGroup = (
   const selectedItems = (record.items || []).filter((item, index) => {
     const meta = getWrittenExamItemMeta(item, index);
     return meta.groupKey === groupKey;
+  });
+  if (!selectedItems.length) return null;
+  const totalScore = getEnteredItemsTotalScore(selectedItems);
+  const totalMaxScore = selectedItems.reduce((sum, item) => {
+    const maxScore = getFiniteNumber(item.maxScore);
+    return sum + (maxScore && maxScore > 0 ? maxScore : 0);
+  }, 0);
+  return {
+    ...record,
+    items: selectedItems,
+    totalScore: totalScore ?? Number.NaN,
+    totalMaxScore: roundScore(totalMaxScore),
+  };
+};
+
+const getWrittenExamStatsRecordForGroups = (
+  record: PerformanceScoreRecord,
+  groupKeys: WrittenExamStatsGroupKey[],
+) => {
+  const groupKeySet = new Set(groupKeys);
+  if (groupKeySet.has("all")) return record;
+  const selectedItems = (record.items || []).filter((item, index) => {
+    const meta = getWrittenExamItemMeta(item, index);
+    return groupKeySet.has(meta.groupKey as WrittenExamStatsGroupKey);
   });
   if (!selectedItems.length) return null;
   const totalScore = getEnteredItemsTotalScore(selectedItems);
@@ -1740,8 +1849,12 @@ const buildWrittenExamContributionSummaries = (
   params: {
     firstMaxScore: number;
     secondMaxScore: number;
+    firstGroupKeys?: WrittenExamStatsGroupKey[];
+    secondGroupKeys?: WrittenExamStatsGroupKey[];
   },
 ) => {
+  const firstGroupKeys = params.firstGroupKeys || ["1"];
+  const secondGroupKeys = params.secondGroupKeys || ["2"];
   const byClass = new Map<string, PerformanceScoreRecord[]>();
   records.forEach((record) => {
     const classValue = normalizeSchoolValue(record.class);
@@ -1752,17 +1865,27 @@ const buildWrittenExamContributionSummaries = (
   return Array.from(byClass.entries())
     .map(([classValue, classRecords]): AssessmentContributionSummary => {
       const firstRecords = classRecords
-        .map((record) => getWrittenExamStatsRecordForGroup(record, "1"))
+        .map((record) =>
+          getWrittenExamStatsRecordForGroups(record, firstGroupKeys),
+        )
         .filter((record): record is PerformanceScoreRecord => record !== null);
       const secondRecords = classRecords
-        .map((record) => getWrittenExamStatsRecordForGroup(record, "2"))
+        .map((record) =>
+          getWrittenExamStatsRecordForGroups(record, secondGroupKeys),
+        )
         .filter((record): record is PerformanceScoreRecord => record !== null);
       const first = buildScoreSummary(firstRecords, params.firstMaxScore);
       const second = buildScoreSummary(secondRecords, params.secondMaxScore);
       const combinedScores = classRecords
         .map((record) => {
-          const firstRecord = getWrittenExamStatsRecordForGroup(record, "1");
-          const secondRecord = getWrittenExamStatsRecordForGroup(record, "2");
+          const firstRecord = getWrittenExamStatsRecordForGroups(
+            record,
+            firstGroupKeys,
+          );
+          const secondRecord = getWrittenExamStatsRecordForGroups(
+            record,
+            secondGroupKeys,
+          );
           const firstScore = firstRecord
             ? getEnteredTotalScore(firstRecord)
             : null;
@@ -2051,6 +2174,9 @@ const buildRecordFromRosterRow = (
   const record = {
     id: roster.id,
     scoreKind: normalizePerformanceScoreKind(roster.scoreKind),
+    ...(roster.scoreContentKind
+      ? { scoreContentKind: roster.scoreContentKind }
+      : {}),
     rosterId: roster.id,
     title: roster.title,
     subject: roster.subject,
@@ -2267,6 +2393,16 @@ const getRecordItemsForRoster = (
       itemKey: existing?.itemKey || item.itemKey,
       groupKey: existing?.groupKey || item.groupKey,
       groupLabel: existing?.groupLabel || item.groupLabel,
+      examSection: existing?.examSection || item.examSection,
+      questionNumber: existing?.questionNumber ?? item.questionNumber,
+      correctAnswer: existing?.correctAnswer || item.correctAnswer,
+      studentAnswer: existing?.studentAnswer || item.studentAnswer,
+      answerCorrect:
+        typeof existing?.answerCorrect === "boolean"
+          ? existing.answerCorrect
+          : item.answerCorrect,
+      answerStatus: existing?.answerStatus || item.answerStatus,
+      answerChoices: existing?.answerChoices || item.answerChoices,
       maxScore: existingMaxScore === null ? item.maxScore : existing?.maxScore,
       ratio,
       feedback: existing?.feedback || item.feedback,
@@ -4655,6 +4791,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   const [assessmentPreset, setAssessmentPreset] =
     useState<AssessmentPresetKey>("auto");
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [omrPreview, setOmrPreview] = useState<OmrPreviewState | null>(null);
   const [uploadAssessmentPreset, setUploadAssessmentPreset] =
     useState<UploadAssessmentPresetKey>("first");
   const [scoreListRosterId, setScoreListRosterId] = useState(
@@ -4921,6 +5058,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         previewStartIndex,
         previewStartIndex + PREVIEW_PAGE_SIZE,
       );
+  const parsedHasObjectiveOmr = hasObjectiveOmrItems(parsed?.items || []);
   const previewRangeLabel = filteredPreviewRows.length
     ? previewClassFiltered
       ? `1-${filteredPreviewRows.length}`
@@ -4992,11 +5130,15 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     return buildWrittenExamStatsGroups(sourceItems);
   }, [isWrittenExamMode, rosters]);
   const writtenExamStatsGroupKey: WrittenExamStatsGroupKey =
-    isWrittenExamMode && scoreStatsMode === "first"
-      ? "1"
-      : isWrittenExamMode && scoreStatsMode === "second"
-        ? "2"
-        : "all";
+    isWrittenExamMode && scoreStatsMode === "objective"
+      ? "objective"
+      : isWrittenExamMode && scoreStatsMode === "first"
+        ? "1"
+        : isWrittenExamMode && scoreStatsMode === "second"
+          ? "2"
+          : "all";
+  const writtenExamObjectiveStatsGroup =
+    writtenExamStatsGroups.find((group) => group.key === "objective") || null;
   const writtenExamFirstStatsGroup =
     writtenExamStatsGroups.find((group) => group.key === "1") || null;
   const writtenExamSecondStatsGroup =
@@ -5005,6 +5147,12 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     writtenExamFirstStatsGroup?.maxScore || 0;
   const writtenExamSecondGroupMaxScore =
     writtenExamSecondStatsGroup?.maxScore || 0;
+  const writtenExamObjectiveGroupMaxScore =
+    writtenExamObjectiveStatsGroup?.maxScore || 0;
+  const hasWrittenExamObjectiveStats = writtenExamObjectiveGroupMaxScore > 0;
+  const writtenExamEssayGroupMaxScore = roundScore(
+    writtenExamFirstGroupMaxScore + writtenExamSecondGroupMaxScore,
+  );
   const selectedWrittenExamStatsGroup =
     writtenExamStatsGroups.find(
       (group) => group.key === writtenExamStatsGroupKey,
@@ -5049,11 +5197,13 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         ? scoreListSummaryLoadKey
         : [scoreStatsMode, scoreStatsSelectedRoster?.id || ""].join(":");
   const scoreStatsTitle = isWrittenExamMode
-    ? scoreStatsMode === "first"
-      ? "1번 논술형 문제"
-      : scoreStatsMode === "second"
-        ? "2번 논술형 문제"
-        : managerCopy.allScoresTitle
+    ? scoreStatsMode === "objective"
+      ? "서답형"
+      : scoreStatsMode === "first"
+        ? "1번 논술형 문제"
+        : scoreStatsMode === "second"
+          ? "2번 논술형 문제"
+          : managerCopy.allScoresTitle
     : !usesCombinedPerformanceSummary && scoreStatsMode === "all"
       ? managerCopy.allScoresTitle
       : scoreStatsMode === "all"
@@ -5083,6 +5233,13 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           mode: "all",
           label: "전체",
           disabled: rosters.length === 0,
+        },
+        {
+          mode: "objective",
+          label: "서답형",
+          disabled: !writtenExamStatsGroups.some(
+            (group) => group.key === "objective",
+          ),
         },
         {
           mode: "first",
@@ -5361,6 +5518,12 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     });
     return Array.from(byName.values());
   }, [rosters, scoreListRecords, selectedScoreRoster]);
+  const scoreListHasObjectiveOmr =
+    isWrittenExamMode &&
+    (hasObjectiveOmrItems(scoreListDisplayItems) ||
+      scoreListRecords.some((record) =>
+        hasObjectiveOmrItems(record.items || []),
+      ));
   const scoreListDisplayTitle =
     selectedScoreRoster?.title || managerCopy.allScoresTitle;
   const scoreListDisplayMaxScore =
@@ -5717,8 +5880,18 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       writtenExamContributions:
         isWrittenExamMode && scoreStatsAllSelected
           ? buildWrittenExamContributionSummaries(scoreStatsSourceRecords, {
-              firstMaxScore: writtenExamFirstGroupMaxScore,
-              secondMaxScore: writtenExamSecondGroupMaxScore,
+              firstMaxScore: hasWrittenExamObjectiveStats
+                ? writtenExamObjectiveGroupMaxScore
+                : writtenExamFirstGroupMaxScore,
+              secondMaxScore: hasWrittenExamObjectiveStats
+                ? writtenExamEssayGroupMaxScore
+                : writtenExamSecondGroupMaxScore,
+              firstGroupKeys: hasWrittenExamObjectiveStats
+                ? ["objective"]
+                : ["1"],
+              secondGroupKeys: hasWrittenExamObjectiveStats
+                ? ["1", "2"]
+                : ["2"],
             })
           : [],
       itemSummaries,
@@ -5746,6 +5919,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     usesCombinedPerformanceSummary,
     writtenExamFirstGroupMaxScore,
     writtenExamSecondGroupMaxScore,
+    writtenExamObjectiveGroupMaxScore,
+    writtenExamEssayGroupMaxScore,
+    hasWrittenExamObjectiveStats,
   ]);
   const writtenExamItemSummaryGroups = useMemo(() => {
     if (!isWrittenExamMode) return [];
@@ -5761,10 +5937,17 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
     scoreStats.itemSummaries.forEach((item) => {
       const rawKey = item.groupKey || "essay";
-      const key = rawKey === "1" || rawKey === "2" ? rawKey : `group-${rawKey}`;
+      const key =
+        rawKey === "objective" || rawKey === "1" || rawKey === "2"
+          ? rawKey
+          : `group-${rawKey}`;
       const label =
         item.groupLabel ||
-        (rawKey === "1" || rawKey === "2" ? `${rawKey}번` : "논술형");
+        (rawKey === "objective"
+          ? "서답형"
+          : rawKey === "1" || rawKey === "2"
+            ? `${rawKey}번`
+            : "논술형");
       const group = groups.get(key) || {
         key,
         label,
@@ -5777,6 +5960,8 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     });
 
     return Array.from(groups.values()).sort((left, right) => {
+      if (left.key === "objective" && right.key !== "objective") return -1;
+      if (right.key === "objective" && left.key !== "objective") return 1;
       const leftNumber = getFiniteNumber(left.key);
       const rightNumber = getFiniteNumber(right.key);
       if (
@@ -5803,32 +5988,54 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     scoreStatsAllSelected &&
     (isWrittenExamMode || usesCombinedPerformanceSummary);
   const scoreStatsContributionMaxScore = isWrittenExamMode
-    ? roundScore(writtenExamFirstGroupMaxScore + writtenExamSecondGroupMaxScore)
+    ? hasWrittenExamObjectiveStats
+      ? roundScore(
+          writtenExamObjectiveGroupMaxScore + writtenExamEssayGroupMaxScore,
+        )
+      : roundScore(
+          writtenExamFirstGroupMaxScore + writtenExamSecondGroupMaxScore,
+        )
     : scoreStats.totalMaxScore;
   const scoreStatsContributionTitle = isWrittenExamMode
-    ? "학급별 1·2번 논술형 점수"
+    ? hasWrittenExamObjectiveStats
+      ? "학급별 서답형·논술형 점수"
+      : "학급별 1·2번 논술형 점수"
     : "학급별 1·2차 수행평가 점수";
   const scoreStatsContributionDescription = isWrittenExamMode
-    ? `막대는 ${formatPerformanceScore(
-        scoreStatsContributionMaxScore,
-      )}점 만점 총점 안에서 1번과 2번 평균 점수를 누적해 표시합니다.`
+    ? hasWrittenExamObjectiveStats
+      ? `막대는 ${formatPerformanceScore(
+          scoreStatsContributionMaxScore,
+        )}점 만점 총점 안에서 서답형과 논술형 평균 점수를 누적해 표시합니다.`
+      : `막대는 ${formatPerformanceScore(
+          scoreStatsContributionMaxScore,
+        )}점 만점 총점 안에서 1번과 2번 평균 점수를 누적해 표시합니다.`
     : `막대는 ${formatPerformanceScore(
         scoreStatsContributionMaxScore,
       )}점 만점 총점 안에서 1차와 2차 평균 점수를 누적해 표시합니다.`;
   const scoreStatsFirstContributionLabel = isWrittenExamMode
-    ? "1번 논술형"
+    ? hasWrittenExamObjectiveStats
+      ? "서답형"
+      : "1번 논술형"
     : `1차 ${SCORE_LIST_FIRST_SUMMARY_LABEL}`;
   const scoreStatsSecondContributionLabel = isWrittenExamMode
-    ? "2번 논술형"
+    ? hasWrittenExamObjectiveStats
+      ? "논술형"
+      : "2번 논술형"
     : `2차 ${SCORE_LIST_SECOND_SUMMARY_LABEL}`;
   const scoreStatsFirstContributionMaxScore = isWrittenExamMode
-    ? writtenExamFirstGroupMaxScore
+    ? hasWrittenExamObjectiveStats
+      ? writtenExamObjectiveGroupMaxScore
+      : writtenExamFirstGroupMaxScore
     : firstScoreListSummaryMaxScore;
   const scoreStatsSecondContributionMaxScore = isWrittenExamMode
-    ? writtenExamSecondGroupMaxScore
+    ? hasWrittenExamObjectiveStats
+      ? writtenExamEssayGroupMaxScore
+      : writtenExamSecondGroupMaxScore
     : secondScoreListSummaryMaxScore;
   const scoreStatsContributionEmptyMessage = isWrittenExamMode
-    ? "반별 1·2번 논술형 평균을 계산할 데이터가 없습니다."
+    ? hasWrittenExamObjectiveStats
+      ? "반별 서답형·논술형 평균을 계산할 데이터가 없습니다."
+      : "반별 1·2번 논술형 평균을 계산할 데이터가 없습니다."
     : "반별 1·2차 점수 평균을 계산할 데이터가 없습니다.";
   const objectionSummary = useMemo(
     () => ({
@@ -7287,6 +7494,28 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     });
   };
 
+  const openOmrPreviewForRow = (row: ParsedScoreRow) => {
+    const items = getObjectiveOmrItems(row.items || []);
+    if (!items.length) return;
+    setOmrPreview({
+      title: `${getRowDisplayName(row)} 서답형 OMR`,
+      description: "업로드 전 인식된 학생 답안과 정오답을 확인합니다.",
+      items,
+    });
+  };
+
+  const openOmrPreviewForRecord = (record: PerformanceScoreRecord) => {
+    const items = getObjectiveOmrItems(record.items || []);
+    if (!items.length) return;
+    setOmrPreview({
+      title: `${record.class || "-"}반 ${record.number || "-"}번 ${
+        record.studentName || "(이름 없음)"
+      } 서답형 OMR`,
+      description: "저장된 서답형 답안과 정오답을 문항별로 확인합니다.",
+      items,
+    });
+  };
+
   const saveScoreListEdits = async () => {
     if (
       !selectedScoreRoster ||
@@ -7684,6 +7913,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           scoreKind: normalizePerformanceScoreKind(
             selectedScoreRoster.scoreKind,
           ),
+          ...(selectedScoreRoster.scoreContentKind
+            ? { scoreContentKind: selectedScoreRoster.scoreContentKind }
+            : {}),
           rosterId: scoreId,
           title: selectedScoreRoster.title,
           subject: selectedScoreRoster.subject,
@@ -8539,6 +8771,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       ).sort((a, b) => Number(a) - Number(b) || a.localeCompare(b, "ko"));
       const rosterPayload = {
         scoreKind: activeScoreKind,
+        ...(parsed.scoreContentKind
+          ? { scoreContentKind: parsed.scoreContentKind }
+          : {}),
         title: safeTitle,
         subject: safeSubject,
         ...(assessmentOrder ? { assessmentOrder } : {}),
@@ -8581,6 +8816,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         );
         const payload: PerformanceScoreRecord = {
           scoreKind: activeScoreKind,
+          ...(parsed.scoreContentKind
+            ? { scoreContentKind: parsed.scoreContentKind }
+            : {}),
           rosterId,
           title: safeTitle,
           subject: safeSubject,
@@ -8804,7 +9042,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   const scoreStatsButtonTitle = scoreStatsButtonDisabled
     ? `저장된 ${managerCopy.scoreKindLabel} 점수표가 있어야 통계를 확인할 수 있습니다.`
     : isWrittenExamMode
-      ? "전체, 1번, 2번 정기시험 논술형 통계 보기"
+      ? "전체, 서답형, 1번, 2번 정기시험 통계 보기"
       : usesCombinedPerformanceSummary
         ? `전체, 1차 ${SCORE_LIST_FIRST_SUMMARY_LABEL}, 2차 ${SCORE_LIST_SECOND_SUMMARY_LABEL} 수행평가 통계 보기`
         : `${managerCopy.allScoresTitle} 통계 보기`;
@@ -8923,6 +9161,58 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           warning="저장이 완료될 때까지 다른 버튼을 누르지 마세요."
           zIndexClassName="z-[240]"
         />
+      )}
+
+      {omrPreview && (
+        <div className="fixed inset-0 z-[260] flex items-center justify-center bg-slate-900/45 px-3 py-3 sm:px-4 sm:py-6">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="written-exam-omr-preview-title"
+            className="flex max-h-[94dvh] w-full max-w-6xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-3 sm:px-5 sm:py-4">
+              <div className="min-w-0 break-keep">
+                <h3
+                  id="written-exam-omr-preview-title"
+                  className="text-lg font-black text-slate-900"
+                >
+                  {omrPreview.title}
+                </h3>
+                <p className="mt-1 text-sm font-semibold leading-6 text-slate-500">
+                  {omrPreview.description}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOmrPreview(null)}
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50"
+                aria-label="서답형 OMR 미리보기 닫기"
+              >
+                <i className="fas fa-times" aria-hidden="true"></i>
+              </button>
+            </div>
+            <div className="overflow-y-auto px-3 py-3 sm:px-5 sm:py-4">
+              <ExamOmrCard
+                title="서답형 OMR 답안"
+                description="파란색은 정답, 초록색은 정답으로 마킹한 답, 빨간색은 오답으로 마킹한 답입니다."
+                items={omrPreview.items}
+                mode="teacher"
+                showScore
+                className="border-0 shadow-none"
+              />
+            </div>
+            <div className="flex justify-end border-t border-slate-200 px-4 py-3 sm:px-5 sm:py-4">
+              <button
+                type="button"
+                onClick={() => setOmrPreview(null)}
+                className="inline-flex h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 text-sm font-black text-slate-700 transition hover:bg-slate-50"
+              >
+                닫기
+              </button>
+            </div>
+          </section>
+        </div>
       )}
 
       {scoreWarningModalOpen && (
@@ -9796,9 +10086,11 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                                 문항별 평균 비교
                               </h4>
                               <p className="mt-1 text-xs font-bold text-slate-500">
-                                {hasNumberedWrittenExamItemSummaryGroups
-                                  ? "논술형 문제와 하위 문항을 한 목록에서 전체 평균과 선택 학급 평균으로 비교합니다."
-                                  : "논술형 점수 항목별 전체 평균과 선택 학급 평균을 비교해 표시합니다."}
+                                {hasWrittenExamObjectiveStats
+                                  ? "서답형과 논술형 문항을 한 목록에서 전체 평균과 선택 학급 평균으로 비교합니다."
+                                  : hasNumberedWrittenExamItemSummaryGroups
+                                    ? "논술형 문제와 하위 문항을 한 목록에서 전체 평균과 선택 학급 평균으로 비교합니다."
+                                    : "논술형 점수 항목별 전체 평균과 선택 학급 평균을 비교해 표시합니다."}
                               </p>
                             </div>
                             <span className="text-xs font-black text-blue-700">
@@ -11306,7 +11598,11 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
               </div>
 
               <div className="mt-3 overflow-x-auto rounded-xl border border-slate-200">
-                <table className="w-full min-w-[1120px] text-left text-sm">
+                <table
+                  className={`w-full text-left text-sm ${
+                    parsedHasObjectiveOmr ? "min-w-[1200px]" : "min-w-[1120px]"
+                  }`}
+                >
                   <thead className="bg-slate-50 text-xs font-black text-slate-500">
                     <tr>
                       <th className="px-3 py-3 text-center">상태</th>
@@ -11323,6 +11619,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                         </th>
                       ))}
                       <th className="px-3 py-3 text-right">총점</th>
+                      {parsedHasObjectiveOmr && (
+                        <th className="w-24 px-3 py-3 text-center">OMR</th>
+                      )}
                       <th className="w-80 px-3 py-3">감점 요인 및 평가 근거</th>
                     </tr>
                   </thead>
@@ -11365,6 +11664,23 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                           {formatPerformanceScore(row.totalScore)} /{" "}
                           {formatPerformanceScore(row.totalMaxScore)}
                         </td>
+                        {parsedHasObjectiveOmr && (
+                          <td className="whitespace-nowrap px-3 py-3 text-center">
+                            <button
+                              type="button"
+                              onClick={() => openOmrPreviewForRow(row)}
+                              className="inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 text-xs font-black text-blue-700 transition hover:bg-blue-100"
+                              aria-label={`${row.studentName || "학생"} 서답형 OMR 확인`}
+                              title="서답형 OMR 확인"
+                            >
+                              <i
+                                className="fas fa-table-list"
+                                aria-hidden="true"
+                              />
+                              보기
+                            </button>
+                          </td>
+                        )}
                         <td className="px-3 py-2">
                           <textarea
                             value={row.feedback}
@@ -11655,7 +11971,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                 <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
                   <div className="min-w-0">
                     <h4 className="truncate text-base font-black text-slate-900">
-                      전체 수행평가 총점
+                      {managerCopy.allScoresTitle}
                     </h4>
                     <p className="mt-1 text-xs font-bold text-slate-500">
                       {activeScoreListClass
@@ -11939,6 +12255,11 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                           ),
                         )}
                         {renderScoreListHeader("totalScore", "총점", "right")}
+                        {scoreListHasObjectiveOmr && (
+                          <th className="w-24 whitespace-nowrap px-3 py-3 text-center">
+                            OMR
+                          </th>
+                        )}
                         <th className="w-32 whitespace-nowrap px-3 py-3 text-center">
                           사유
                         </th>
@@ -11954,6 +12275,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                             colSpan={
                               scoreListDisplayItems.length +
                               7 +
+                              (scoreListHasObjectiveOmr ? 1 : 0) +
                               (scoreEditing ? 1 : 0)
                             }
                             className="px-4 py-10 text-center text-sm font-bold text-slate-400"
@@ -11983,6 +12305,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                                 selectedScoreRoster,
                               )
                             : record.items || [];
+                          const recordHasObjectiveOmr =
+                            hasObjectiveOmrItems(editableItems) ||
+                            hasObjectiveOmrItems(record.items || []);
                           const percent = getPerformanceScorePercent(
                             record.totalScore,
                             record.totalMaxScore,
@@ -12191,6 +12516,38 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                                   </>
                                 )}
                               </td>
+                              {scoreListHasObjectiveOmr && (
+                                <td className="whitespace-nowrap px-3 py-3 text-center">
+                                  {recordHasObjectiveOmr ? (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        openOmrPreviewForRecord({
+                                          ...record,
+                                          items:
+                                            editableItems.length > 0
+                                              ? editableItems
+                                              : record.items,
+                                        })
+                                      }
+                                      disabled={savingScoreEdits}
+                                      className="inline-flex h-8 items-center justify-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 text-xs font-black text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                      aria-label={`${record.studentName || "학생"} 서답형 OMR 확인`}
+                                      title="서답형 OMR 확인"
+                                    >
+                                      <i
+                                        className="fas fa-table-list"
+                                        aria-hidden="true"
+                                      />
+                                      보기
+                                    </button>
+                                  ) : (
+                                    <span className="text-xs font-bold text-slate-400">
+                                      -
+                                    </span>
+                                  )}
+                                </td>
+                              )}
                               <td className="whitespace-nowrap px-3 py-3 text-center">
                                 <button
                                   type="button"

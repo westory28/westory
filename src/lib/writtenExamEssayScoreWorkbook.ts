@@ -1,4 +1,6 @@
 import {
+  WRITTEN_EXAM_SECTION_ESSAY,
+  WRITTEN_EXAM_SECTION_OBJECTIVE,
   normalizeSchoolValue,
   roundScore,
   toFiniteScore,
@@ -24,12 +26,25 @@ export interface ParsedWrittenExamEssayScoreUpload {
   items: Array<
     Pick<
       PerformanceScoreItem,
-      "name" | "shortName" | "itemKey" | "groupKey" | "groupLabel" | "maxScore"
+      | "name"
+      | "shortName"
+      | "itemKey"
+      | "groupKey"
+      | "groupLabel"
+      | "maxScore"
+      | "examSection"
+      | "questionNumber"
+      | "correctAnswer"
+      | "studentAnswer"
+      | "answerCorrect"
+      | "answerStatus"
+      | "answerChoices"
     >
   >;
   rows: ParsedWrittenExamEssayScoreRow[];
   totalMaxScore: number;
   detectedClasses: string[];
+  scoreContentKind?: "objective" | "essay" | "mixed";
 }
 
 interface EssayScoreColumnIndexes {
@@ -50,6 +65,24 @@ interface EssayCriterionColumn {
   maxScore: number;
 }
 
+interface ObjectiveQuestionColumn {
+  index: number;
+  questionNumber: number;
+  correctAnswer: string;
+  maxScore: number;
+}
+
+interface ObjectiveScoreLayout {
+  headerRowIndex: number;
+  answerRowIndex: number;
+  maxScoreRowIndex: number;
+  classNumberIndex: number;
+  studentCodeIndex: number;
+  nameIndex: number;
+  totalIndex: number;
+  questionColumns: ObjectiveQuestionColumn[];
+}
+
 const MAX_UPLOAD_ROWS = 400;
 
 const DEFAULT_ESSAY_CRITERION_MAX_SCORE: Record<string, number> = {
@@ -61,6 +94,8 @@ const DEFAULT_ESSAY_CRITERION_MAX_SCORE: Record<string, number> = {
   "2-(3)": 2,
   "2-(4)": 4,
 };
+
+const OBJECTIVE_ANSWER_CHOICES = ["1", "2", "3", "4", "5"];
 
 const toText = (value: unknown) =>
   String(value ?? "")
@@ -251,6 +286,285 @@ const cleanExamTitle = (fileName: string) => {
 const sortSchoolValues = (values: string[]) =>
   values.sort((a, b) => Number(a) - Number(b) || a.localeCompare(b, "ko"));
 
+const parseQuestionNumber = (value: unknown) => {
+  const text = toText(value);
+  if (!text) return null;
+  const numeric = Number(text.replace(/[^\d]/g, ""));
+  if (!Number.isInteger(numeric) || numeric <= 0 || numeric > 200) return null;
+  return numeric;
+};
+
+const normalizeObjectiveAnswer = (value: unknown) =>
+  toText(value).replace(/[.．]/g, ".").toUpperCase();
+
+const splitClassAndNumber = (value: unknown) => {
+  const text = toText(value);
+  const match = /^(\d+)\s*[/／-]\s*(\d+)$/.exec(text);
+  if (match) {
+    return {
+      classValue: normalizeSchoolValue(match[1]),
+      numberValue: normalizeSchoolValue(match[2]),
+    };
+  }
+  return {
+    classValue: "",
+    numberValue: normalizeSchoolValue(text),
+  };
+};
+
+const findObjectiveScoreLayout = (
+  rows: unknown[][],
+): ObjectiveScoreLayout | null => {
+  const scanLimit = Math.min(rows.length, 30);
+  for (let rowIndex = 0; rowIndex < scanLimit; rowIndex += 1) {
+    const row = rows[rowIndex] || [];
+    const questionColumns = row
+      .map((cell, index) => ({
+        index,
+        questionNumber: parseQuestionNumber(cell),
+      }))
+      .filter(
+        (item): item is { index: number; questionNumber: number } =>
+          item.questionNumber !== null,
+      )
+      .sort((left, right) => left.index - right.index);
+
+    if (questionColumns.length < 5) continue;
+
+    const firstQuestionIndex = questionColumns[0].index;
+    const beforeQuestionColumns = row.slice(0, firstQuestionIndex);
+    if (beforeQuestionColumns.length < 2) continue;
+
+    const expectedSequenceCount = questionColumns.filter(
+      (item, index) => item.questionNumber === index + 1,
+    ).length;
+    if (expectedSequenceCount < Math.min(5, questionColumns.length)) continue;
+
+    const answerRowIndex = rowIndex + 1;
+    const maxScoreRowIndex = rowIndex + 2;
+    const answerRow = rows[answerRowIndex] || [];
+    const maxScoreRow = rows[maxScoreRowIndex] || [];
+    const normalizedQuestionColumns = questionColumns
+      .map((column) => {
+        const maxScore = toFiniteScore(maxScoreRow[column.index]);
+        return {
+          index: column.index,
+          questionNumber: column.questionNumber,
+          correctAnswer: normalizeObjectiveAnswer(answerRow[column.index]),
+          maxScore: roundScore(maxScore ?? 0),
+        };
+      })
+      .filter((column) => column.maxScore > 0 || column.correctAnswer);
+
+    if (normalizedQuestionColumns.length < 5) continue;
+
+    const lastQuestionIndex =
+      normalizedQuestionColumns[normalizedQuestionColumns.length - 1].index;
+    const totalOffset = row
+      .slice(lastQuestionIndex + 1)
+      .findIndex((cell) => toText(cell).length > 0);
+    const totalIndex =
+      totalOffset >= 0 ? lastQuestionIndex + 1 + totalOffset : -1;
+
+    return {
+      headerRowIndex: rowIndex,
+      answerRowIndex,
+      maxScoreRowIndex,
+      classNumberIndex: 0,
+      studentCodeIndex: firstQuestionIndex >= 3 ? 1 : -1,
+      nameIndex: Math.max(0, firstQuestionIndex - 1),
+      totalIndex,
+      questionColumns: normalizedQuestionColumns,
+    };
+  }
+  return null;
+};
+
+const isObjectiveStudentRow = (
+  row: unknown[],
+  layout: ObjectiveScoreLayout,
+) => {
+  const name = getCellText(row, layout.nameIndex);
+  const classNumber = splitClassAndNumber(
+    getCell(row, layout.classNumberIndex),
+  );
+  if (!name || !classNumber.numberValue) return false;
+  if (!/^\d+$/.test(classNumber.numberValue)) return false;
+  return !classNumber.classValue || /^\d+$/.test(classNumber.classValue);
+};
+
+const parseObjectiveItemScore = (
+  rawValue: unknown,
+  correctAnswer: string,
+  maxScore: number,
+) => {
+  const rawAnswer = normalizeObjectiveAnswer(rawValue);
+  const normalizedCorrectAnswer = normalizeObjectiveAnswer(correctAnswer);
+  if (!rawAnswer) {
+    return {
+      studentAnswer: "",
+      answerCorrect: false,
+      answerStatus: "blank" as const,
+      score: 0,
+      scoreEntered: true,
+    };
+  }
+  if (rawAnswer === ".") {
+    return {
+      studentAnswer: normalizedCorrectAnswer,
+      answerCorrect: true,
+      answerStatus: "correct" as const,
+      score: maxScore,
+      scoreEntered: true,
+    };
+  }
+  const answerCorrect =
+    normalizedCorrectAnswer.length > 0 && rawAnswer === normalizedCorrectAnswer;
+  return {
+    studentAnswer: rawAnswer,
+    answerCorrect,
+    answerStatus: answerCorrect ? ("correct" as const) : ("incorrect" as const),
+    score: answerCorrect ? maxScore : 0,
+    scoreEntered: true,
+  };
+};
+
+const parseWrittenExamObjectiveScoreWorkbook = (
+  rows: unknown[][],
+  params: {
+    fileName: string;
+    targetGrade: string;
+    fallbackClass: string;
+    title?: string;
+    subject?: string;
+  },
+): ParsedWrittenExamEssayScoreUpload | null => {
+  const layout = findObjectiveScoreLayout(rows);
+  if (!layout) return null;
+
+  const items = layout.questionColumns.map((column) => ({
+    name: `서답형 ${column.questionNumber}번`,
+    shortName: `${column.questionNumber}번`,
+    itemKey: `objective-${column.questionNumber}`,
+    groupKey: "objective",
+    groupLabel: "서답형",
+    examSection: WRITTEN_EXAM_SECTION_OBJECTIVE,
+    questionNumber: column.questionNumber,
+    correctAnswer: column.correctAnswer,
+    studentAnswer: "",
+    answerCorrect: false,
+    answerStatus: "blank" as const,
+    answerChoices: OBJECTIVE_ANSWER_CHOICES,
+    maxScore: column.maxScore,
+  }));
+  const totalMaxScore = roundScore(
+    layout.questionColumns.reduce(
+      (sum, column) => sum + Number(column.maxScore || 0),
+      0,
+    ),
+  );
+
+  const candidateRows = rows
+    .map((row, rowIndex) => ({ row, rowIndex }))
+    .slice(layout.maxScoreRowIndex + 1)
+    .slice(0, MAX_UPLOAD_ROWS)
+    .filter(({ row }) => row.some((cell) => toText(cell).length > 0));
+  const scoreRows = candidateRows.filter(({ row }) =>
+    isObjectiveStudentRow(row, layout),
+  );
+  if (!scoreRows.length) {
+    throw new Error("등록할 서답형 학생 답안 행을 찾지 못했습니다.");
+  }
+
+  const rowsWithScores: ParsedWrittenExamEssayScoreRow[] = scoreRows.map(
+    ({ row, rowIndex }) => {
+      const classNumber = splitClassAndNumber(
+        getCell(row, layout.classNumberIndex),
+      );
+      const rowClass =
+        classNumber.classValue || normalizeSchoolValue(params.fallbackClass);
+      const rowNumber = classNumber.numberValue;
+      const studentName = getCellText(row, layout.nameIndex);
+      const rowItems = layout.questionColumns.map((column) => {
+        const parsed = parseObjectiveItemScore(
+          getCell(row, column.index),
+          column.correctAnswer,
+          column.maxScore,
+        );
+        return {
+          name: `서답형 ${column.questionNumber}번`,
+          shortName: `${column.questionNumber}번`,
+          itemKey: `objective-${column.questionNumber}`,
+          groupKey: "objective",
+          groupLabel: "서답형",
+          examSection: WRITTEN_EXAM_SECTION_OBJECTIVE,
+          questionNumber: column.questionNumber,
+          correctAnswer: column.correctAnswer,
+          studentAnswer: parsed.studentAnswer,
+          answerCorrect: parsed.answerCorrect,
+          answerStatus: parsed.answerStatus,
+          answerChoices: OBJECTIVE_ANSWER_CHOICES,
+          score: parsed.score,
+          maxScore: column.maxScore,
+          scoreEntered: parsed.scoreEntered,
+          feedback: "",
+        };
+      });
+      const calculatedTotal = roundScore(
+        rowItems.reduce(
+          (sum, item) =>
+            item.scoreEntered ? sum + Number(item.score || 0) : sum,
+          0,
+        ),
+      );
+      const parsedTotal =
+        layout.totalIndex >= 0
+          ? toFiniteScore(getCell(row, layout.totalIndex))
+          : null;
+      const totalScore = roundScore(parsedTotal ?? calculatedTotal);
+      const correctCount = rowItems.filter((item) => item.answerCorrect).length;
+      const enteredScoreCount = rowItems.filter(
+        (item) => item.scoreEntered,
+      ).length;
+
+      return {
+        rowKey: `row-${rowIndex + 1}-${studentName}-${rowNumber}`,
+        rowNumber: rowIndex + 1,
+        enteredScoreCount,
+        uid: "",
+        grade: normalizeSchoolValue(params.targetGrade),
+        class: rowClass,
+        number: rowNumber,
+        studentName,
+        items: rowItems,
+        totalScore,
+        totalMaxScore,
+        feedback: "",
+        evidence: `${layout.questionColumns.length}문항 중 ${correctCount}문항 정답`,
+        matchStatus: "unmatched",
+        matchMessage: "학생 명단과 아직 연결되지 않았습니다.",
+      };
+    },
+  );
+
+  return {
+    sourceFileName: params.fileName,
+    headerRowNumber: layout.headerRowIndex + 1,
+    title: toText(params.title) || cleanExamTitle(params.fileName),
+    subject: toText(params.subject) || "역사",
+    itemName: "서답형",
+    items,
+    rows: rowsWithScores,
+    totalMaxScore,
+    detectedClasses: sortSchoolValues(
+      Array.from(
+        new Set(rowsWithScores.map((row) => row.class).filter(Boolean)),
+      ),
+    ),
+    scoreContentKind: "objective",
+  };
+};
+
 export const parseWrittenExamEssayScoreWorkbook = (
   rows: unknown[][],
   params: {
@@ -266,12 +580,15 @@ export const parseWrittenExamEssayScoreWorkbook = (
   if (!Array.isArray(rows) || rows.length === 0) {
     throw new Error("첫 번째 시트를 찾을 수 없습니다.");
   }
+  const objectiveUpload = parseWrittenExamObjectiveScoreWorkbook(rows, params);
+  if (objectiveUpload) return objectiveUpload;
+
   const fallbackMaxScore = roundScore(Number(params.maxScore || 0));
 
   const headerRowIndex = findEssayScoreHeaderRow(rows);
   if (headerRowIndex < 0) {
     throw new Error(
-      "번호, 이름, 총점 또는 논술형 세부 문항이 포함된 정기시험 논술형 점수표 헤더 행을 찾지 못했습니다.",
+      "번호, 이름, 총점 또는 정기시험 세부 문항이 포함된 점수표 헤더 행을 찾지 못했습니다.",
     );
   }
 
@@ -334,6 +651,7 @@ export const parseWrittenExamEssayScoreWorkbook = (
           itemKey: column.itemKey,
           groupKey: column.groupKey,
           groupLabel: column.groupLabel,
+          examSection: WRITTEN_EXAM_SECTION_ESSAY,
           maxScore: column.maxScore,
         }))
       : [
@@ -343,6 +661,7 @@ export const parseWrittenExamEssayScoreWorkbook = (
             itemKey: "essay-total",
             groupKey: "essay",
             groupLabel: "논술형",
+            examSection: WRITTEN_EXAM_SECTION_ESSAY,
             maxScore: legacyMaxScore,
           },
         ];
@@ -379,6 +698,7 @@ export const parseWrittenExamEssayScoreWorkbook = (
               itemKey: column.itemKey,
               groupKey: column.groupKey,
               groupLabel: column.groupLabel,
+              examSection: WRITTEN_EXAM_SECTION_ESSAY,
               score: roundScore(score ?? 0),
               maxScore: column.maxScore,
               feedback: (
@@ -394,6 +714,7 @@ export const parseWrittenExamEssayScoreWorkbook = (
               itemKey: "essay-total",
               groupKey: "essay",
               groupLabel: "논술형",
+              examSection: WRITTEN_EXAM_SECTION_ESSAY,
               score: roundScore(parsedTotal ?? 0),
               maxScore: legacyMaxScore,
               feedback: parsedFeedback.generalFeedback.slice(0, 1000),
@@ -451,5 +772,6 @@ export const parseWrittenExamEssayScoreWorkbook = (
         new Set(rowsWithScores.map((row) => row.class).filter(Boolean)),
       ),
     ),
+    scoreContentKind: "essay",
   };
 };

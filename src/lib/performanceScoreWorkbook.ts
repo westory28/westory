@@ -29,6 +29,13 @@ export interface ParsedPerformanceScoreUpload {
       | "itemKey"
       | "groupKey"
       | "groupLabel"
+      | "examSection"
+      | "questionNumber"
+      | "correctAnswer"
+      | "studentAnswer"
+      | "answerCorrect"
+      | "answerStatus"
+      | "answerChoices"
       | "maxScore"
       | "ratio"
     >
@@ -36,6 +43,7 @@ export interface ParsedPerformanceScoreUpload {
   rows: ParsedPerformanceScoreRow[];
   totalMaxScore: number;
   detectedClasses: string[];
+  scoreContentKind?: "performance" | "objective" | "essay" | "mixed";
 }
 
 interface FinalScoreColumnIndexes {

@@ -12,6 +12,8 @@ import {
 import { doc, getDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { PageLoading } from "../../../components/common/LoadingState";
 import { useAppToast } from "../../../components/common/AppToastProvider";
+import ExamOmrCard from "../../../components/common/ExamOmrCard";
+import type { ExamOmrQuestionResult } from "../../../components/common/examOmr";
 import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
 import {
@@ -24,6 +26,7 @@ import {
   PERFORMANCE_SCORE_KIND,
   PERFORMANCE_SCORE_USER_COLLECTION,
   WRITTEN_EXAM_SCORE_KIND,
+  WRITTEN_EXAM_SECTION_OBJECTIVE,
   formatPerformanceScore,
   isPerformanceScoreWarningConsentCurrent,
   loadPerformanceScoreSettings,
@@ -117,6 +120,24 @@ const getItemsMaxScore = (items: PerformanceScoreItem[]) =>
 
 const getWrittenExamItemMeta = (item: PerformanceScoreItem, index: number) => {
   const rawKey = String(item.itemKey || item.shortName || item.name || "");
+  if (
+    item.examSection === WRITTEN_EXAM_SECTION_OBJECTIVE ||
+    item.groupKey === "objective" ||
+    rawKey.startsWith("objective-")
+  ) {
+    const questionNumber =
+      getFiniteScoreValue(item.questionNumber) ||
+      getFiniteScoreValue(rawKey.replace(/[^\d]/g, "")) ||
+      index + 1;
+    return {
+      key: `objective-${questionNumber}`,
+      groupKey: "objective",
+      groupLabel: item.groupLabel || "서답형",
+      label: `${questionNumber}번`,
+      fullLabel: `서답형 ${questionNumber}번`,
+      detailed: true,
+    };
+  }
   const match = /^(\d+)\s*-\s*[\(\[]?\s*(\d+)\s*[\)\]]?$/.exec(rawKey.trim());
   if (!match) {
     return {
@@ -168,9 +189,14 @@ const getWrittenExamItemGroups = (items: PerformanceScoreItem[]) => {
     });
     groups.set(meta.groupKey, group);
   });
+  const getGroupOrder = (key: string) => {
+    if (key === "objective") return 0;
+    const numericKey = Number(key);
+    return Number.isFinite(numericKey) ? numericKey : 99;
+  };
   return Array.from(groups.values()).sort(
     (left, right) =>
-      Number(left.key) - Number(right.key) ||
+      getGroupOrder(left.key) - getGroupOrder(right.key) ||
       left.label.localeCompare(right.label, "ko"),
   );
 };
@@ -182,6 +208,31 @@ const getWrittenExamGroupScore = (
 const getWrittenExamGroupMaxScore = (
   group: ReturnType<typeof getWrittenExamItemGroups>[number],
 ) => getItemsMaxScore(group.items.map(({ item }) => item));
+
+const isObjectiveWrittenExamGroup = (
+  group: ReturnType<typeof getWrittenExamItemGroups>[number] | null,
+) => group?.key === "objective";
+
+const getWrittenExamGroupDisplayTitle = (
+  group: ReturnType<typeof getWrittenExamItemGroups>[number],
+) =>
+  isObjectiveWrittenExamGroup(group) ? "서답형" : `${group.label} 논술형 문제`;
+
+const getObjectiveOmrItems = (
+  group: ReturnType<typeof getWrittenExamItemGroups>[number] | null,
+): ExamOmrQuestionResult[] =>
+  group && isObjectiveWrittenExamGroup(group)
+    ? group.items.map(({ item, index }) => ({
+        questionNumber: item.questionNumber || index + 1,
+        correctAnswer: item.correctAnswer || "",
+        studentAnswer: item.studentAnswer || "",
+        correct: item.answerCorrect,
+        score: item.score,
+        maxScore: item.maxScore,
+        scoreEntered: item.scoreEntered,
+        invalid: item.answerStatus === "invalid",
+      }))
+    : [];
 
 const getRequestItemSelectionKey = (scoreId: string, itemKey: string) =>
   `${scoreId}::${itemKey}`;
@@ -361,32 +412,32 @@ const PERFORMANCE_SCORE_COPY: ScoreConfirmationViewCopy = {
 };
 
 const WRITTEN_EXAM_SCORE_COPY: ScoreConfirmationViewCopy = {
-  pageTitle: "내 정기시험 논술형 점수",
-  scoreLabel: "정기시험 논술형",
-  scoreListLabel: "정기시험 논술형 점수 목록",
+  pageTitle: "내 정기시험 점수",
+  scoreLabel: "정기시험",
+  scoreListLabel: "정기시험 점수 목록",
   scoreSubjectFallback: "정기시험",
-  scoreItemsLabel: "논술형 세부 점수",
+  scoreItemsLabel: "정기시험 세부 점수",
   evidenceTitle: "피드백 사항",
   evidenceEmptyText:
     "아직 입력된 피드백이 없습니다. 필요한 경우 수업 시간이나 상담 시간에 교사에게 확인하세요.",
-  emptyTitle: "아직 등록된 정기시험 논술형 점수가 없습니다.",
+  emptyTitle: "아직 등록된 정기시험 점수가 없습니다.",
   emptyDescription:
-    "교사가 점수 명단을 저장하면 이곳에서 내 논술형 점수와 피드백을 확인할 수 있습니다.",
-  loadingMessage: "내 정기시험 논술형 점수를 불러오는 중입니다.",
-  warningTitle: "정기시험 논술형 점수 확인 전 안내",
-  warningSubtitle: "내 정기시험 논술형 점수",
-  pageDescription: "논술형 점수와 피드백 사항만 표시됩니다.",
-  objectionTitle: "정기시험 논술형 이의 신청",
+    "교사가 점수 명단을 저장하면 이곳에서 내 서답형 정오답과 논술형 점수, 피드백을 확인할 수 있습니다.",
+  loadingMessage: "내 정기시험 점수를 불러오는 중입니다.",
+  warningTitle: "정기시험 점수 확인 전 안내",
+  warningSubtitle: "내 정기시험 점수",
+  pageDescription: "서답형 정오답, 논술형 점수와 피드백 사항이 표시됩니다.",
+  objectionTitle: "정기시험 이의 신청",
   objectionDescription:
-    "이의가 있는 정기시험 논술형 점수를 선택하고 사유를 입력해 주세요. 이의 신청을 보내면 서명은 저장되지 않고 담당 교사에게 알림이 전송됩니다.",
+    "이의가 있는 정기시험 점수를 선택하고 사유를 입력해 주세요. 이의 신청을 보내면 서명은 저장되지 않고 담당 교사에게 알림이 전송됩니다.",
   objectionTargetLabel: "이의 신청 대상",
   objectionReasonLabel: "이의 신청 사유",
   objectionPlaceholder:
-    "예: 논술형 점수가 제가 확인한 채점 결과와 다른 것 같아 확인을 요청합니다.",
-  objectionResultTitle: "정기시험 논술형 이의 결과",
-  signatureTitle: "정기시험 논술형 점수 확인 및 서명",
+    "예: 서답형 8번 답안 표시나 논술형 점수가 제가 확인한 결과와 다른 것 같아 확인을 요청합니다.",
+  objectionResultTitle: "정기시험 이의 결과",
+  signatureTitle: "정기시험 점수 확인 및 서명",
   signatureAgreementText:
-    "위 정기시험 논술형 점수와 피드백을 확인했으며, 점수에 문제가 없고 해당 점수에 대해 이의를 제기하지 않을 것에 동의합니까?",
+    "위 정기시험 점수와 피드백을 확인했으며, 점수에 문제가 없고 해당 점수에 대해 이의를 제기하지 않을 것에 동의합니까?",
   signatureReviewDescription:
     "아래 점수와 동의, 서명 작성 여부를 한 번 더 확인해 주세요. 제출하면 현재 점수 확인 서명이 담당 교사에게 전달됩니다.",
 };
@@ -531,6 +582,10 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     ) ||
     writtenExamItemGroups[0] ||
     null;
+  const activeWrittenExamGroupIsObjective = isObjectiveWrittenExamGroup(
+    activeWrittenExamGroup,
+  );
+  const activeObjectiveOmrItems = getObjectiveOmrItems(activeWrittenExamGroup);
   const hasDetailedWrittenExamItems =
     scoreKind === WRITTEN_EXAM_SCORE_KIND &&
     selectedItems.some(
@@ -1237,7 +1292,9 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
               )
               .map(({ label }) => label);
             return itemLabels.length
-              ? `${group.label} ${itemLabels.join(", ")}`
+              ? `${getWrittenExamGroupDisplayTitle(group)} ${itemLabels.join(
+                  ", ",
+                )}`
               : "";
           })
           .filter(Boolean);
@@ -1264,7 +1321,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     if (!selectedScoreIds.length) {
       setAnswerSheetRequestError(
         hasDetailedWrittenExamItems
-          ? "답안지 확인을 요청할 논술형 문제와 하위 문항을 선택해 주세요."
+          ? "답안지 확인을 요청할 서답형 또는 논술형 문항을 선택해 주세요."
           : "답안지 확인을 요청할 점수를 선택해 주세요.",
       );
       return;
@@ -1506,7 +1563,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     if (selectedScoreIds.length === 0) {
       setObjectionError(
         hasDetailedWrittenExamItems
-          ? "이의 제기할 논술형 문제와 하위 문항을 선택해 주세요."
+          ? "이의 제기할 서답형 또는 논술형 문항을 선택해 주세요."
           : `이의 제기할 ${resolvedCopy.scoreLabel} 점수를 선택해 주세요.`,
       );
       return;
@@ -1895,7 +1952,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                         />
                         <span className="min-w-0">
                           <span className="block text-sm font-black text-slate-900">
-                            {group.label} 논술형 문제
+                            {getWrittenExamGroupDisplayTitle(group)}
                           </span>
                           <span className="mt-1 block text-xs font-bold text-slate-500">
                             획득{" "}
@@ -2169,7 +2226,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                               </div>
                               <div className="min-w-0 flex-1">
                                 <div className="whitespace-normal break-keep text-sm font-bold leading-5">
-                                  {group.label} 논술형 문제
+                                  {getWrittenExamGroupDisplayTitle(group)}
                                 </div>
                                 <div
                                   className={`mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold ${
@@ -2284,7 +2341,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                 </h2>
                 {activeWrittenExamGroup && (
                   <div className="mt-3 inline-flex rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-black text-blue-800">
-                    {activeWrittenExamGroup.label} 논술형 문제
+                    {getWrittenExamGroupDisplayTitle(activeWrittenExamGroup)}
                   </div>
                 )}
                 {getRecordDate(selectedRecord) && (
@@ -2344,8 +2401,21 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                 </p>
               </div>
 
-              <div className="relative h-72 min-w-0 overflow-hidden rounded-xl border border-slate-200 p-4">
-                {visibleChartItems.length > 0 ? (
+              <div
+                className={`relative min-w-0 overflow-hidden rounded-xl border border-slate-200 ${
+                  activeWrittenExamGroupIsObjective ? "p-0" : "h-72 p-4"
+                }`}
+              >
+                {activeWrittenExamGroupIsObjective ? (
+                  <ExamOmrCard
+                    title="서답형 OMR 답안"
+                    description="내가 마킹한 답과 정오답을 문항별로 확인합니다."
+                    items={activeObjectiveOmrItems}
+                    mode="student"
+                    showScore
+                    className="border-0 shadow-none"
+                  />
+                ) : visibleChartItems.length > 0 ? (
                   <div
                     ref={scoreChartContainerRef}
                     className="relative h-full min-h-0 w-full min-w-0 overflow-hidden"
@@ -2366,57 +2436,58 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
               </div>
             </div>
 
-            {hasDetailedWrittenExamItems && (
-              <div className="mt-5 rounded-xl border border-slate-200 bg-white px-4 py-4">
-                <h3 className="text-base font-black text-slate-900">
-                  {activeWrittenExamGroup
-                    ? `${activeWrittenExamGroup.label} 문항별 점수와 피드백`
-                    : "문항별 점수와 피드백"}
-                </h3>
-                <div className="mt-4 grid gap-4">
-                  {[activeWrittenExamGroup].filter(Boolean).map((group) => (
-                    <div
-                      key={group?.key}
-                      className="rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-4"
-                    >
-                      <div className="text-sm font-black text-blue-900">
-                        {group?.label}
-                      </div>
-                      <div className="mt-3 space-y-2">
-                        {group?.items.map(({ key, label, item, index }) => (
-                          <div
-                            key={`${key}-${index}`}
-                            className="rounded-lg border border-white bg-white px-3 py-3 shadow-sm"
-                          >
-                            <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3">
-                              <span className="text-sm font-black text-slate-800">
-                                {label}
-                              </span>
-                              <div className="min-w-0">
-                                {item.feedback && (
-                                  <p className="whitespace-pre-wrap break-keep text-sm font-bold leading-6 text-slate-600">
-                                    {item.feedback}
-                                  </p>
-                                )}
-                              </div>
-                              <span className="shrink-0 text-sm font-black text-blue-700">
-                                {item.scoreEntered === false
-                                  ? "-"
-                                  : formatPerformanceScore(item.score)}
-                                <span className="text-slate-400">
-                                  {" "}
-                                  / {formatPerformanceScore(item.maxScore)}점
+            {hasDetailedWrittenExamItems &&
+              !activeWrittenExamGroupIsObjective && (
+                <div className="mt-5 rounded-xl border border-slate-200 bg-white px-4 py-4">
+                  <h3 className="text-base font-black text-slate-900">
+                    {activeWrittenExamGroup
+                      ? `${getWrittenExamGroupDisplayTitle(activeWrittenExamGroup)} 문항별 점수와 피드백`
+                      : "문항별 점수와 피드백"}
+                  </h3>
+                  <div className="mt-4 grid gap-4">
+                    {[activeWrittenExamGroup].filter(Boolean).map((group) => (
+                      <div
+                        key={group?.key}
+                        className="rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-4"
+                      >
+                        <div className="text-sm font-black text-blue-900">
+                          {group?.label}
+                        </div>
+                        <div className="mt-3 space-y-2">
+                          {group?.items.map(({ key, label, item, index }) => (
+                            <div
+                              key={`${key}-${index}`}
+                              className="rounded-lg border border-white bg-white px-3 py-3 shadow-sm"
+                            >
+                              <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3">
+                                <span className="text-sm font-black text-slate-800">
+                                  {label}
                                 </span>
-                              </span>
+                                <div className="min-w-0">
+                                  {item.feedback && (
+                                    <p className="whitespace-pre-wrap break-keep text-sm font-bold leading-6 text-slate-600">
+                                      {item.feedback}
+                                    </p>
+                                  )}
+                                </div>
+                                <span className="shrink-0 text-sm font-black text-blue-700">
+                                  {item.scoreEntered === false
+                                    ? "-"
+                                    : formatPerformanceScore(item.score)}
+                                  <span className="text-slate-400">
+                                    {" "}
+                                    / {formatPerformanceScore(item.maxScore)}점
+                                  </span>
+                                </span>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
             {(!hasDetailedWrittenExamItems || evidenceBlockText) && (
               <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-4">
@@ -2850,7 +2921,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                 </h3>
                 <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
                   {scoreKind === WRITTEN_EXAM_SCORE_KIND
-                    ? "모든 논술형 문제의 점수를 확인한 뒤, 성을 포함한 이름을 직접 써 주세요."
+                    ? "서답형 정오답과 논술형 점수를 모두 확인한 뒤, 성을 포함한 이름을 직접 써 주세요."
                     : "모든 차시의 점수를 확인한 뒤, 성을 포함한 이름을 직접 써 주세요."}
                 </p>
               </div>
@@ -2881,7 +2952,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                             className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3"
                           >
                             <div className="whitespace-normal break-keep text-sm font-black leading-5 text-blue-950">
-                              {group.label} 논술형 문제
+                              {getWrittenExamGroupDisplayTitle(group)}
                             </div>
                             <div className="mt-1 text-xs font-bold text-blue-900/70">
                               {record.title}
@@ -3106,7 +3177,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                           >
                             <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
                               <div className="whitespace-normal break-keep font-black text-slate-900">
-                                {group.label} 논술형 문제
+                                {getWrittenExamGroupDisplayTitle(group)}
                               </div>
                               <div className="text-sm font-black text-blue-700">
                                 {formatPerformanceScore(

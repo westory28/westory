@@ -376,7 +376,7 @@ const NOTIFICATION_EVENTS: NotificationEventDefinition[] = [
     bodyTemplate:
       "{studentName} 학생이 {scoreTitle} 답안지 확인을 요청했습니다. 사유: {reason}",
     targetUrl: "/teacher/exam?tab=written-essay&panel=answer-sheet-requests",
-    targetLabel: "교사 정기시험 논술형 점수 관리 화면",
+    targetLabel: "교사 정기시험 점수 관리 화면",
     tokens: [
       { key: "studentName", label: "학생 이름" },
       { key: "studentScope", label: "학생 학급" },

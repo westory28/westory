@@ -16,7 +16,7 @@ const ManageExam: React.FC = () => {
     preview: "평가 반영 비율",
     omr: "정기시험 답안",
     performance: "수행평가 점수 관리",
-    writtenEssay: "정기시험 논술형 점수 관리",
+    writtenEssay: "정기시험 점수 관리",
   });
   const [searchParams] = useSearchParams();
   useEffect(() => {
@@ -56,7 +56,7 @@ const ManageExam: React.FC = () => {
         const writtenEssayLabel =
           children.find(
             (child) => child.url === "/teacher/exam?tab=written-essay",
-          )?.name || "정기시험 논술형 점수 관리";
+          )?.name || "정기시험 점수 관리";
         setTabLabels({
           preview: previewLabel,
           omr: omrLabel,
@@ -69,7 +69,7 @@ const ManageExam: React.FC = () => {
           preview: "평가 반영 비율",
           omr: "정기시험 답안",
           performance: "수행평가 점수 관리",
-          writtenEssay: "정기시험 논술형 점수 관리",
+          writtenEssay: "정기시험 점수 관리",
         });
       }
     };

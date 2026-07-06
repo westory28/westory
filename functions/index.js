@@ -2126,7 +2126,7 @@ const normalizePerformanceScoreKind = (value) =>
 
 const getPerformanceScoreKindLabel = (scoreKind) =>
   normalizePerformanceScoreKind(scoreKind) === WRITTEN_EXAM_SCORE_KIND
-    ? '정기시험 논술형'
+    ? '정기시험'
     : '수행평가';
 
 const loadStudentPerformanceScoreForNotification = async (uid, year, semester, scoreId, options = {}) => {

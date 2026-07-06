@@ -47,9 +47,22 @@ export const PERFORMANCE_SCORE_WARNING_MAX_LENGTH = 600;
 export const PERFORMANCE_SCORE_KIND = "performance";
 export const WRITTEN_EXAM_SCORE_KIND = "written_exam_essay";
 
+export const WRITTEN_EXAM_SECTION_OBJECTIVE = "objective";
+export const WRITTEN_EXAM_SECTION_ESSAY = "essay";
+
 export type PerformanceScoreKind =
   | typeof PERFORMANCE_SCORE_KIND
   | typeof WRITTEN_EXAM_SCORE_KIND;
+
+export type WrittenExamSection =
+  | typeof WRITTEN_EXAM_SECTION_OBJECTIVE
+  | typeof WRITTEN_EXAM_SECTION_ESSAY;
+
+export type WrittenExamAnswerStatus =
+  | "correct"
+  | "incorrect"
+  | "blank"
+  | "invalid";
 
 export interface PerformanceScoreItem {
   name: string;
@@ -57,6 +70,13 @@ export interface PerformanceScoreItem {
   itemKey?: string;
   groupKey?: string;
   groupLabel?: string;
+  examSection?: WrittenExamSection;
+  questionNumber?: number;
+  correctAnswer?: string;
+  studentAnswer?: string;
+  answerCorrect?: boolean;
+  answerStatus?: WrittenExamAnswerStatus;
+  answerChoices?: string[];
   feedback?: string;
   score: number;
   maxScore: number;
@@ -67,6 +87,7 @@ export interface PerformanceScoreItem {
 export interface PerformanceScoreRecord {
   id?: string;
   scoreKind?: PerformanceScoreKind;
+  scoreContentKind?: "performance" | "objective" | "essay" | "mixed";
   rosterId: string;
   title: string;
   subject: string;
@@ -190,6 +211,7 @@ export interface PerformanceScoreRosterRow {
 export interface PerformanceScoreRoster {
   id: string;
   scoreKind?: PerformanceScoreKind;
+  scoreContentKind?: "performance" | "objective" | "essay" | "mixed";
   title: string;
   subject: string;
   assessmentOrder?: number;
@@ -206,6 +228,13 @@ export interface PerformanceScoreRoster {
       | "itemKey"
       | "groupKey"
       | "groupLabel"
+      | "examSection"
+      | "questionNumber"
+      | "correctAnswer"
+      | "studentAnswer"
+      | "answerCorrect"
+      | "answerStatus"
+      | "answerChoices"
       | "maxScore"
       | "ratio"
     >

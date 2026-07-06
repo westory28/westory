@@ -279,7 +279,7 @@ const App: React.FC = () => {
                   path="/student/score/written-exam"
                   element={renderWithLayout(
                     <StudentWrittenExamEssayScoreView />,
-                    "정기시험 논술형 점수를 준비하는 중입니다.",
+                    "정기시험 점수를 준비하는 중입니다.",
                   )}
                 />
                 <Route
