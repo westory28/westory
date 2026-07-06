@@ -473,6 +473,21 @@ const getRosterAssessmentOrder = (roster: PerformanceScoreRoster) => {
   return 999;
 };
 
+const rosterHasWrittenExamSection = (
+  roster: PerformanceScoreRoster,
+  section:
+    | typeof WRITTEN_EXAM_SECTION_OBJECTIVE
+    | typeof WRITTEN_EXAM_SECTION_ESSAY,
+) => (roster.items || []).some((item) => item.examSection === section);
+
+const isWrittenExamObjectiveRoster = (roster: PerformanceScoreRoster) =>
+  roster.scoreContentKind === "objective" ||
+  rosterHasWrittenExamSection(roster, WRITTEN_EXAM_SECTION_OBJECTIVE);
+
+const isWrittenExamEssayRoster = (roster: PerformanceScoreRoster) =>
+  roster.scoreContentKind === "essay" ||
+  rosterHasWrittenExamSection(roster, WRITTEN_EXAM_SECTION_ESSAY);
+
 const sortPerformanceScoreRosters = (items: PerformanceScoreRoster[]) =>
   [...items].sort(
     (a, b) =>
@@ -4816,6 +4831,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   const usesCombinedPerformanceSummary =
     activeScoreKind === PERFORMANCE_SCORE_KIND;
   const classSheetEnabled = activeScoreKind === PERFORMANCE_SCORE_KIND;
+  const signatureStatusModalEnabled = classSheetEnabled || isWrittenExamMode;
   const [searchParams, setSearchParams] = useSearchParams();
   const { config, currentUser } = useAuth();
   const { showToast } = useAppToast();
@@ -5040,6 +5056,20 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     () => rosters.filter((roster) => getRosterAssessmentOrder(roster) === 2),
     [rosters],
   );
+  const writtenExamObjectiveRosterOptions = useMemo(
+    () => rosters.filter(isWrittenExamObjectiveRoster),
+    [rosters],
+  );
+  const writtenExamEssayRosterOptions = useMemo(
+    () => rosters.filter(isWrittenExamEssayRoster),
+    [rosters],
+  );
+  const classSheetFirstRosterOptions = isWrittenExamMode
+    ? writtenExamObjectiveRosterOptions
+    : firstAssessmentRosterOptions;
+  const classSheetSecondRosterOptions = isWrittenExamMode
+    ? writtenExamEssayRosterOptions
+    : secondAssessmentRosterOptions;
 
   const rosterCollectionPath = getSemesterCollectionPath(
     { year, semester },
@@ -5352,37 +5382,41 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     setClassSheetFirstRosterId((current) => {
       if (
         current &&
-        firstAssessmentRosterOptions.some((roster) => roster.id === current)
+        classSheetFirstRosterOptions.some((roster) => roster.id === current)
       ) {
         return current;
       }
       if (
         selectedScoreRoster &&
-        getRosterAssessmentOrder(selectedScoreRoster) === 1
+        classSheetFirstRosterOptions.some(
+          (roster) => roster.id === selectedScoreRoster.id,
+        )
       ) {
         return selectedScoreRoster.id;
       }
-      return firstAssessmentRosterOptions[0]?.id || "";
+      return classSheetFirstRosterOptions[0]?.id || "";
     });
-  }, [firstAssessmentRosterOptions, selectedScoreRoster]);
+  }, [classSheetFirstRosterOptions, selectedScoreRoster]);
 
   useEffect(() => {
     setClassSheetSecondRosterId((current) => {
       if (
         current &&
-        secondAssessmentRosterOptions.some((roster) => roster.id === current)
+        classSheetSecondRosterOptions.some((roster) => roster.id === current)
       ) {
         return current;
       }
       if (
         selectedScoreRoster &&
-        getRosterAssessmentOrder(selectedScoreRoster) === 2
+        classSheetSecondRosterOptions.some(
+          (roster) => roster.id === selectedScoreRoster.id,
+        )
       ) {
         return selectedScoreRoster.id;
       }
-      return secondAssessmentRosterOptions[0]?.id || "";
+      return classSheetSecondRosterOptions[0]?.id || "";
     });
-  }, [secondAssessmentRosterOptions, selectedScoreRoster]);
+  }, [classSheetSecondRosterOptions, selectedScoreRoster]);
 
   const scoreListGradeOptions = useMemo(() => {
     const values = new Set<string>();
@@ -6183,6 +6217,26 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     }),
     [summaryExportRosters],
   );
+  const classSheetModalTitle = isWrittenExamMode
+    ? "정기시험 서명 현황"
+    : "일람표 다운로드";
+  const classSheetModalDescription = isWrittenExamMode
+    ? "정기시험 점수 확인 서명 여부와 서명 이미지를 학급별로 확인합니다."
+    : "수행평가 강의실별 일람표 양식으로 학급별 점수와 서명을 확인합니다.";
+  const classSheetFirstRosterLabel = isWrittenExamMode
+    ? "서답형 점수표"
+    : "1차 점수표";
+  const classSheetSecondRosterLabel = isWrittenExamMode
+    ? "논술형 점수표"
+    : "2차 점수표";
+  const classSheetFirstScoreLabel = isWrittenExamMode ? "서답형" : "1차 점수";
+  const classSheetSecondScoreLabel = isWrittenExamMode ? "논술형" : "2차 점수";
+  const classSheetEmptyScoreMessage = isWrittenExamMode
+    ? "선택한 학년과 반에 저장된 정기시험 점수가 없습니다."
+    : "선택한 학년과 반에 저장된 수행평가 점수가 없습니다.";
+  const classSheetLookupDescription = isWrittenExamMode
+    ? "학년과 반을 선택한 뒤 현황 조회를 누르면 정기시험 점수와 서명 현황이 표시됩니다."
+    : "학년과 반을 선택한 뒤 현황 조회를 누르면 점수와 서명 현황이 표시됩니다.";
   const classSheetStatusSummary = useMemo(() => {
     const firstScoredCount = classSheetPreviewStudents.filter(
       (student) =>
@@ -8202,10 +8256,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   };
 
   const ensureClassSheetSelection = () => {
-    if (
-      !summaryExportRosters.firstRoster ||
-      !summaryExportRosters.secondRoster
-    ) {
+    const hasFirstRoster = Boolean(summaryExportRosters.firstRoster);
+    const hasSecondRoster = Boolean(summaryExportRosters.secondRoster);
+    if (classSheetEnabled && (!hasFirstRoster || !hasSecondRoster)) {
       showToast({
         tone: "warning",
         title: "일람표 점수표를 선택해 주세요.",
@@ -8214,11 +8267,22 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       });
       return false;
     }
+    if (isWrittenExamMode && !hasFirstRoster && !hasSecondRoster) {
+      showToast({
+        tone: "warning",
+        title: "정기시험 점수표를 선택해 주세요.",
+        message:
+          "서답형 또는 논술형 점수표가 하나 이상 있어야 서명 현황을 확인할 수 있습니다.",
+      });
+      return false;
+    }
     if (!classSheetClassFilter) {
       showToast({
         tone: "warning",
         title: "반을 선택해 주세요.",
-        message: "일람표는 학급별로 생성합니다.",
+        message: isWrittenExamMode
+          ? "서명 현황은 학급별로 조회합니다."
+          : "일람표는 학급별로 생성합니다.",
       });
       return false;
     }
@@ -8270,14 +8334,16 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         showToast({
           tone: "warning",
           title: "조회할 학생 점수가 없습니다.",
-          message: "선택한 학년과 반에 저장된 수행평가 점수가 없습니다.",
+          message: classSheetEmptyScoreMessage,
         });
       }
     } catch (error) {
       console.error("Failed to load class sheet status:", error);
       showToast({
         tone: "error",
-        title: "일람표 현황을 불러오지 못했습니다.",
+        title: isWrittenExamMode
+          ? "서명 현황을 불러오지 못했습니다."
+          : "일람표 현황을 불러오지 못했습니다.",
         message: "점수와 서명 기록을 다시 확인한 뒤 시도해 주세요.",
       });
     } finally {
@@ -8476,6 +8542,13 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     if (!confirmed) return;
 
     const studentKey = getClassSheetStudentKey(student);
+    const rejectedScoreKindLabel = isWrittenExamMode ? "정기시험" : "수행평가";
+    const rejectedScoreTargetUrl = isWrittenExamMode
+      ? "/student/score/written-exam"
+      : "/student/score/performance";
+    const rejectedSignatureDedupeType = isWrittenExamMode
+      ? "written_exam_score_signature_rejected"
+      : "performance_score_signature_rejected";
     setRejectingSignatureKey(studentKey);
     try {
       const batchQueue = createBatchQueue();
@@ -8515,7 +8588,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       const rejectedScoreTitle =
         rejectedScoreTitles.length === 1
           ? rejectedScoreTitles[0]
-          : `${rejectedScoreTitles.length}개 수행평가`;
+          : `${rejectedScoreTitles.length}개 ${rejectedScoreKindLabel}`;
       const rejectedScoreIds = signedRecords
         .map(getRecordScoreId)
         .filter(Boolean);
@@ -8537,13 +8610,13 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         const notificationResult = await createManagedNotifications(config, {
           recipientUids: [student.uid],
           type: "performance_score_signature_rejected",
-          title: "수행평가 서명 반려",
+          title: `${rejectedScoreKindLabel} 서명 반려`,
           body: `교사가 ${rejectedScoreTitle} 점수 확인 서명을 반려했습니다. 점수를 다시 확인한 뒤 서명해 주세요.`,
-          targetUrl: "/student/score/performance",
+          targetUrl: rejectedScoreTargetUrl,
           entityType: "performance_score_signature",
           entityId: rejectedScoreIds.join("|"),
           priority: "high",
-          dedupeKey: `performance_score_signature_rejected:${year}:${semester}:${student.uid}:${rejectedSignatureTokens.join("|") || rejectedScoreIds.join("|")}`,
+          dedupeKey: `${rejectedSignatureDedupeType}:${year}:${semester}:${student.uid}:${rejectedSignatureTokens.join("|") || rejectedScoreIds.join("|")}`,
           templateValues: {
             studentName: student.studentName,
             studentScope: `${student.class}반 ${student.number}번`,
@@ -8575,7 +8648,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         title: "서명을 반려했습니다.",
         message: notificationSent
           ? `${student.studentName} 학생에게 서명 반려 알림을 보냈습니다.`
-          : `${student.studentName} 학생은 다시 점수 확인 및 서명을 진행할 수 있습니다. 알림은 전송하지 못했습니다.`,
+          : `${student.studentName} 학생은 다시 ${rejectedScoreKindLabel} 점수 확인 및 서명을 진행할 수 있습니다. 알림은 전송하지 못했습니다.`,
       });
     } catch (error) {
       console.error("Failed to reject performance score signature:", error);
@@ -11138,17 +11211,16 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         </div>
       )}
 
-      {classSheetEnabled && classSheetModalOpen && (
+      {signatureStatusModalEnabled && classSheetModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
           <section className="flex max-h-[calc(100vh-2rem)] w-full max-w-7xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl">
             <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <h3 className="text-lg font-black text-slate-900">
-                  일람표 다운로드
+                  {classSheetModalTitle}
                 </h3>
                 <p className="mt-1 text-sm font-semibold text-slate-500">
-                  수행평가 강의실별 일람표 양식으로 학급별 점수와 서명을
-                  확인합니다.
+                  {classSheetModalDescription}
                 </p>
               </div>
               <button
@@ -11156,17 +11228,17 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                 onClick={() => setClassSheetModalOpen(false)}
                 disabled={classSheetPreviewLoading || exportingClassSheet}
                 className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-                aria-label="일람표 다운로드 창 닫기"
+                aria-label={`${classSheetModalTitle} 창 닫기`}
               >
                 <i className="fas fa-times" aria-hidden="true"></i>
               </button>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-              <div className="grid gap-3 lg:grid-cols-[1fr_1fr_130px_130px_auto]">
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_110px_110px_auto] xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_130px_130px_auto]">
                 <label className="block">
                   <span className="mb-1.5 block text-xs font-black text-slate-500">
-                    1차 점수표
+                    {classSheetFirstRosterLabel}
                   </span>
                   <select
                     value={classSheetFirstRosterId}
@@ -11175,10 +11247,14 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                     }
                     className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
                   >
-                    {firstAssessmentRosterOptions.length === 0 ? (
-                      <option value="">1차 점수표 없음</option>
+                    {classSheetFirstRosterOptions.length === 0 ? (
+                      <option value="">
+                        {isWrittenExamMode
+                          ? "서답형 점수표 없음"
+                          : "1차 점수표 없음"}
+                      </option>
                     ) : (
-                      firstAssessmentRosterOptions.map((roster) => (
+                      classSheetFirstRosterOptions.map((roster) => (
                         <option key={roster.id} value={roster.id}>
                           {roster.title}
                         </option>
@@ -11188,7 +11264,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                 </label>
                 <label className="block">
                   <span className="mb-1.5 block text-xs font-black text-slate-500">
-                    2차 점수표
+                    {classSheetSecondRosterLabel}
                   </span>
                   <select
                     value={classSheetSecondRosterId}
@@ -11197,10 +11273,14 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                     }
                     className="h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
                   >
-                    {secondAssessmentRosterOptions.length === 0 ? (
-                      <option value="">2차 점수표 없음</option>
+                    {classSheetSecondRosterOptions.length === 0 ? (
+                      <option value="">
+                        {isWrittenExamMode
+                          ? "논술형 점수표 없음"
+                          : "2차 점수표 없음"}
+                      </option>
                     ) : (
-                      secondAssessmentRosterOptions.map((roster) => (
+                      classSheetSecondRosterOptions.map((roster) => (
                         <option key={roster.id} value={roster.id}>
                           {roster.title}
                         </option>
@@ -11281,12 +11361,12 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                         tone: "bg-slate-50 text-slate-700",
                       },
                       {
-                        label: "1차 점수",
+                        label: classSheetFirstScoreLabel,
                         value: `${classSheetStatusSummary.firstScoredCount}명`,
                         tone: "bg-blue-50 text-blue-700",
                       },
                       {
-                        label: "2차 점수",
+                        label: classSheetSecondScoreLabel,
                         value: `${classSheetStatusSummary.secondScoredCount}명`,
                         tone: "bg-blue-50 text-blue-700",
                       },
@@ -11332,8 +11412,12 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                           <th className="px-3 py-3 text-center">상태</th>
                           <th className="px-3 py-3 text-center">번호</th>
                           <th className="px-3 py-3">이름</th>
-                          <th className="px-3 py-3 text-right">1차</th>
-                          <th className="px-3 py-3 text-right">2차</th>
+                          <th className="px-3 py-3 text-right">
+                            {classSheetFirstScoreLabel}
+                          </th>
+                          <th className="px-3 py-3 text-right">
+                            {classSheetSecondScoreLabel}
+                          </th>
                           <th className="px-3 py-3 text-right">합계</th>
                           <th aria-hidden="true"></th>
                           <th className="px-3 py-3 text-center">서명 현황</th>
@@ -11346,7 +11430,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                               colSpan={8}
                               className="px-4 py-10 text-center text-sm font-bold text-slate-400"
                             >
-                              선택한 학급에 저장된 점수가 없습니다.
+                              {classSheetEmptyScoreMessage}
                             </td>
                           </tr>
                         ) : (
@@ -11398,10 +11482,10 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                             const studentKey = getClassSheetStudentKey(student);
                             const missingLabels = [
                               !transferredStudent && !student.firstRecord
-                                ? "1차 점수"
+                                ? classSheetFirstScoreLabel
                                 : "",
                               !transferredStudent && !student.secondRecord
-                                ? "2차 점수"
+                                ? classSheetSecondScoreLabel
                                 : "",
                             ].filter(Boolean);
                             const statusLabel = transferredStudent
@@ -11541,8 +11625,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                 </div>
               ) : (
                 <div className="mt-4 rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm font-bold text-slate-400">
-                  학년과 반을 선택한 뒤 현황 조회를 누르면 점수와 서명 현황이
-                  표시됩니다.
+                  {classSheetLookupDescription}
                 </div>
               )}
             </div>
@@ -11556,22 +11639,24 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
               >
                 닫기
               </button>
-              <button
-                type="button"
-                onClick={() => void downloadClassSummarySheet()}
-                disabled={
-                  classSheetPreviewLoading ||
-                  exportingClassSheet ||
-                  !classSheetClassFilter
-                }
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-              >
-                <i
-                  className={`fas fa-file-excel text-xs ${exportingClassSheet ? "animate-pulse" : ""}`}
-                  aria-hidden="true"
-                ></i>
-                {exportingClassSheet ? "생성 중" : "일람표 다운로드"}
-              </button>
+              {classSheetEnabled && (
+                <button
+                  type="button"
+                  onClick={() => void downloadClassSummarySheet()}
+                  disabled={
+                    classSheetPreviewLoading ||
+                    exportingClassSheet ||
+                    !classSheetClassFilter
+                  }
+                  className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  <i
+                    className={`fas fa-file-excel text-xs ${exportingClassSheet ? "animate-pulse" : ""}`}
+                    aria-hidden="true"
+                  ></i>
+                  {exportingClassSheet ? "생성 중" : "일람표 다운로드"}
+                </button>
+              )}
             </div>
           </section>
         </div>
@@ -11998,7 +12083,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
               ></i>
               {parsing ? "인식 중..." : "업로드"}
             </button>
-            {classSheetEnabled && (
+            {signatureStatusModalEnabled && (
               <button
                 type="button"
                 onClick={() => setClassSheetModalOpen(true)}
@@ -12011,10 +12096,10 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                 className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white px-3 text-sm font-black text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <i
-                  className="fas fa-file-download text-xs"
+                  className={`fas ${isWrittenExamMode ? "fa-file-signature" : "fa-file-download"} text-xs`}
                   aria-hidden="true"
                 />
-                일람표
+                {isWrittenExamMode ? "서명 현황" : "일람표"}
               </button>
             )}
           </div>
@@ -12035,7 +12120,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         ) : (
           <div className="mt-5 space-y-5">
             <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
-              <div className="grid gap-3 xl:grid-cols-[1.1fr_0.65fr_0.65fr_1fr_auto]">
+              <div className="grid gap-3 lg:grid-cols-[minmax(0,1.35fr)_minmax(8rem,0.65fr)_minmax(8rem,0.65fr)] xl:grid-cols-[1.1fr_0.65fr_0.65fr_1fr_auto]">
                 <label className="block">
                   <span className="mb-1.5 block text-xs font-black text-slate-500">
                     평가명
@@ -12121,7 +12206,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                     scoreEditing ||
                     savingScoreEdits
                   }
-                  className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 xl:mt-6"
+                  className="mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 text-sm font-black text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-300 lg:mt-6"
                 >
                   <i
                     className={`fas fa-search text-xs ${scoreListLoading ? "animate-spin" : ""}`}
