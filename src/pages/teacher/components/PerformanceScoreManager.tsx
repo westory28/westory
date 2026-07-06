@@ -113,6 +113,9 @@ const DEFAULT_CLASS_OPTIONS = Array.from({ length: 12 }, (_, index) =>
 );
 const PREVIEW_PAGE_SIZE = 20;
 const FIRESTORE_BATCH_WRITE_LIMIT = 450;
+const FIRESTORE_DOCUMENT_SOFT_LIMIT_BYTES = 900 * 1024;
+const FIRESTORE_ROSTER_PAYLOAD_TOO_LARGE =
+  "performance-score-roster-payload-too-large";
 const CLASS_SHEET_TEMPLATE_PATH =
   "templates/performance-score-class-sheet-template.xlsx";
 const CLASS_SHEET_STUDENT_START_ROW = 7;
@@ -662,6 +665,20 @@ const formatRowsForConfirm = (rows: ParsedScoreRow[], limit = 80) => {
   return remaining > 0 ? `${names}\n... 외 ${remaining}명` : names;
 };
 
+const getApproximateJsonByteSize = (value: unknown) => {
+  try {
+    return new TextEncoder().encode(JSON.stringify(value)).length;
+  } catch {
+    return 0;
+  }
+};
+
+const assertRosterPayloadFitsFirestore = (payload: unknown) => {
+  const byteSize = getApproximateJsonByteSize(payload);
+  if (byteSize <= FIRESTORE_DOCUMENT_SOFT_LIMIT_BYTES) return;
+  throw new Error(FIRESTORE_ROSTER_PAYLOAD_TOO_LARGE);
+};
+
 const getFirestoreWriteErrorMessage = (error: unknown) => {
   const code =
     typeof error === "object" &&
@@ -672,6 +689,14 @@ const getFirestoreWriteErrorMessage = (error: unknown) => {
       : "";
   const message =
     error instanceof Error && error.message ? ` (${error.message})` : "";
+  const rawMessage = error instanceof Error ? error.message : "";
+
+  if (
+    rawMessage === FIRESTORE_ROSTER_PAYLOAD_TOO_LARGE ||
+    /maximum size|document.*too large|larger than/i.test(rawMessage)
+  ) {
+    return "점수표 문서가 Firestore 단일 문서 한도에 가까워 저장을 중단했습니다. 새로고침 후 다시 시도해도 반복되면 점수표를 반별로 나누어 업로드해 주세요.";
+  }
 
   if (code === "permission-denied") {
     return `Firestore 권한이 거부되었습니다. 운영 Firestore rules 배포 상태를 확인해 주세요.${message}`;
@@ -1218,6 +1243,24 @@ const buildScoreItemFromDefinition = (
   score: options.score ?? 0,
   scoreEntered: options.scoreEntered ?? false,
 });
+
+const isObjectiveScoreItem = (item: Partial<PerformanceScoreItem>) => {
+  const rawKey = toText(item.itemKey || item.shortName || item.name);
+  return (
+    item.examSection === WRITTEN_EXAM_SECTION_OBJECTIVE ||
+    item.groupKey === "objective" ||
+    rawKey.startsWith("objective-")
+  );
+};
+
+const getRosterRowItemsForStorage = (
+  items: PerformanceScoreItem[] | undefined,
+  options: { preserveObjectiveItems?: boolean } = {},
+) => {
+  if (!Array.isArray(items)) return [];
+  if (options.preserveObjectiveItems) return items;
+  return items.filter((item) => !isObjectiveScoreItem(item));
+};
 
 const sanitizeScoreIntegerInput = (value: string) => {
   const normalized = value.replace(/,/g, "").trim();
@@ -2241,6 +2284,14 @@ const isManualRosterRow = (row?: PerformanceScoreRosterRow | null) =>
     (row.isManual || toText(row.matchMessage) === MANUAL_SCORE_ROW_MESSAGE),
   );
 
+const getRosterRowsForStorage = (rows: PerformanceScoreRosterRow[]) =>
+  rows.map((row) => ({
+    ...row,
+    items: getRosterRowItemsForStorage(row.items, {
+      preserveObjectiveItems: isManualRosterRow(row),
+    }),
+  }));
+
 const shouldShowRosterRowInScoreList = (row: PerformanceScoreRosterRow) =>
   rosterRowHasScore(row) || isManualRosterRow(row);
 
@@ -2615,7 +2666,9 @@ const buildRosterRowFromScoreRecord = (
     class: record.class || row.class || "",
     number: record.number || row.number || "",
     studentName: record.studentName || row.studentName || "",
-    items,
+    items: getRosterRowItemsForStorage(items, {
+      preserveObjectiveItems: manual,
+    }),
     enteredScoreCount: getScoreRecordEnteredScoreCount(record, items),
     totalScore: hasAcademicStatus ? 0 : (totalScore ?? 0),
     totalMaxScore:
@@ -2675,7 +2728,10 @@ const buildBlankManualRosterRowFromRecord = (
   class: normalizeSchoolValue(record.class),
   number: normalizeSchoolValue(record.number),
   studentName: toText(record.studentName),
-  items: (roster.items || []).map((item) => buildScoreItemFromDefinition(item)),
+  items: getRosterRowItemsForStorage(
+    (roster.items || []).map((item) => buildScoreItemFromDefinition(item)),
+    { preserveObjectiveItems: true },
+  ),
   enteredScoreCount: 0,
   totalScore: 0,
   totalMaxScore: roster.totalMaxScore || 0,
@@ -5679,6 +5735,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
   const scoreStatsFallbackRecords = useMemo(() => {
     if (isWrittenExamMode) {
+      if (rosters.some((roster) => isWrittenExamObjectiveRoster(roster))) {
+        return [];
+      }
       const records = rosters.flatMap((roster) =>
         (roster.rows || [])
           .filter((row) => rosterRowHasScore(row))
@@ -6591,10 +6650,14 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           );
           if (!repaired.changed) return null;
 
-          const meta = buildRosterRowsMeta(latestRoster, repaired.rows);
+          const repairedRowsForStorage = getRosterRowsForStorage(repaired.rows);
+          const meta = buildRosterRowsMeta(
+            latestRoster,
+            repairedRowsForStorage,
+          );
           const nextRoster = {
             ...latestRoster,
-            rows: repaired.rows,
+            rows: repairedRowsForStorage,
             classes: meta.classes,
             targetClass: meta.targetClass,
             rowCount: meta.rowCount,
@@ -6602,8 +6665,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
             unmatchedCount: meta.unmatchedCount,
             updatedAt: new Date(),
           };
+          assertRosterPayloadFitsFirestore(nextRoster);
           transaction.update(rosterRef, {
-            rows: repaired.rows,
+            rows: repairedRowsForStorage,
             classes: meta.classes,
             targetClass: meta.targetClass,
             rowCount: meta.rowCount,
@@ -6684,7 +6748,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       rosterRows.length === (roster.rows || []).length
         ? roster
         : { ...roster, rows: rosterRows };
-    if (!options.includeStudentDocuments) {
+    const shouldIncludeStudentDocuments =
+      options.includeStudentDocuments || isWrittenExamObjectiveRoster(roster);
+    if (!shouldIncludeStudentDocuments) {
       return buildScoreListRecordsFromRosterRows(activeRoster);
     }
 
@@ -7918,12 +7984,23 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
             deletedRecords,
           )
         : new Map<string, PerformanceScoreRosterRow[]>();
-      const finalUpdatedRows =
-        syncedRosterRowsById.get(selectedScoreRoster.id) || updatedRows;
+      const finalUpdatedRows = getRosterRowsForStorage(
+        syncedRosterRowsById.get(selectedScoreRoster.id) || updatedRows,
+      );
       const selectedRowsMeta = buildRosterRowsMeta(
         selectedScoreRoster,
         finalUpdatedRows,
       );
+      assertRosterPayloadFitsFirestore({
+        ...selectedScoreRoster,
+        rows: finalUpdatedRows,
+        classes: selectedRowsMeta.classes,
+        targetClass: selectedRowsMeta.targetClass,
+        rowCount: selectedRowsMeta.rowCount,
+        matchedCount: selectedRowsMeta.matchedCount,
+        unmatchedCount: selectedRowsMeta.unmatchedCount,
+        updatedAt: "",
+      });
       const batchQueue = createBatchQueue();
 
       batchQueue.update(doc(db, rosterCollectionPath, selectedScoreRoster.id), {
@@ -7942,9 +8019,20 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           (item) => item.id === rosterId,
         );
         if (!roster) return;
-        const meta = buildRosterRowsMeta(roster, rows);
+        const storageRows = getRosterRowsForStorage(rows);
+        const meta = buildRosterRowsMeta(roster, storageRows);
+        assertRosterPayloadFitsFirestore({
+          ...roster,
+          rows: storageRows,
+          classes: meta.classes,
+          targetClass: meta.targetClass,
+          rowCount: meta.rowCount,
+          matchedCount: meta.matchedCount,
+          unmatchedCount: meta.unmatchedCount,
+          updatedAt: "",
+        });
         batchQueue.update(doc(db, rosterCollectionPath, rosterId), {
-          rows,
+          rows: storageRows,
           classes: meta.classes,
           targetClass: meta.targetClass,
           rowCount: meta.rowCount,
@@ -8143,10 +8231,11 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                 ? finalUpdatedRows
                 : syncedRosterRowsById.get(roster.id);
             if (!rows) return roster;
-            const meta = buildRosterRowsMeta(roster, rows);
+            const storageRows = getRosterRowsForStorage(rows);
+            const meta = buildRosterRowsMeta(roster, storageRows);
             return {
               ...roster,
-              rows,
+              rows: storageRows,
               classes: meta.classes,
               targetClass: meta.targetClass,
               rowCount: meta.rowCount,
@@ -8916,7 +9005,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           class: row.class,
           number: row.number,
           studentName: row.studentName,
-          items: Array.isArray(_items) ? _items : [],
+          items: getRosterRowItemsForStorage(_items),
           enteredScoreCount: _enteredScoreCount,
           totalScore: row.totalScore,
           totalMaxScore: row.totalMaxScore,
@@ -8962,6 +9051,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         updatedAt: new Date(),
       };
 
+      assertRosterPayloadFitsFirestore(rosterPayload);
       const batchQueue = createBatchQueue();
       batchQueue.set(rosterRef, rosterPayload);
 
@@ -9355,7 +9445,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
             <div className="overflow-y-auto px-3 py-3 sm:px-5 sm:py-4">
               <ExamOmrCard
                 title="서답형 OMR 답안"
-                description="파란색은 정답, 초록색은 정답으로 마킹한 답, 빨간색은 오답으로 마킹한 답입니다."
+                description="파란색으로 채워진 답은 맞은 답, 회색으로 채워진 답은 학생이 선택한 오답입니다. 파란 테두리는 정답입니다."
                 items={omrPreview.items}
                 mode="teacher"
                 showScore

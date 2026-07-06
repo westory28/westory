@@ -2409,7 +2409,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                 {activeWrittenExamGroupIsObjective ? (
                   <ExamOmrCard
                     title="서답형 OMR 답안"
-                    description="내가 마킹한 답과 정오답을 문항별로 확인합니다."
+                    description="파란색으로 채워진 답은 맞은 답, 회색으로 채워진 답은 내가 선택한 오답입니다. 파란 테두리는 정답입니다."
                     items={activeObjectiveOmrItems}
                     mode="student"
                     showScore
