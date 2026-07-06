@@ -500,10 +500,23 @@ const isWrittenExamEssayRoster = (roster: PerformanceScoreRoster) =>
     WRITTEN_EXAM_SCORE_KIND &&
     !isWrittenExamObjectiveRoster(roster));
 
+const getWrittenExamRosterContentOrder = (roster: PerformanceScoreRoster) => {
+  if (
+    normalizePerformanceScoreKind(roster.scoreKind) !== WRITTEN_EXAM_SCORE_KIND
+  ) {
+    return 0;
+  }
+  if (isWrittenExamObjectiveRoster(roster)) return 0;
+  if (isWrittenExamEssayRoster(roster)) return 1;
+  return 2;
+};
+
 const sortPerformanceScoreRosters = (items: PerformanceScoreRoster[]) =>
   [...items].sort(
     (a, b) =>
       getRosterAssessmentOrder(a) - getRosterAssessmentOrder(b) ||
+      getWrittenExamRosterContentOrder(a) -
+        getWrittenExamRosterContentOrder(b) ||
       String(a.title || "").localeCompare(String(b.title || ""), "ko") ||
       getRosterTimestampSeconds(b.createdAt) -
         getRosterTimestampSeconds(a.createdAt),
