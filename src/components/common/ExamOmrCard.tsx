@@ -16,6 +16,7 @@ type ExamOmrCardProps = {
   mode?: "student" | "teacher";
   compact?: boolean;
   showScore?: boolean;
+  showAnsweredCount?: boolean;
   scoreLabel?: string;
   className?: string;
 };
@@ -61,7 +62,7 @@ const getBubbleClassName = ({
     return "border-blue-600 bg-blue-600 text-white shadow-sm";
   }
   if (isMarked) return "border-rose-600 bg-rose-600 text-white shadow-sm";
-  if (isCorrectAnswer) return "border-blue-500 bg-blue-50 text-blue-700";
+  if (isCorrectAnswer) return "border-blue-500 bg-white text-blue-700";
   return "border-slate-300 bg-white text-slate-500";
 };
 
@@ -88,38 +89,48 @@ export const ExamOmrAnswerStrip: React.FC<ExamOmrAnswerStripProps> = ({
   items,
   wrap = false,
   className = "",
-}) => (
-  <div
-    className={[
-      "flex min-w-0 items-center gap-x-0.5 gap-y-1",
-      wrap ? "flex-wrap" : "flex-nowrap",
-      className,
-    ].join(" ")}
-    aria-label="서답형 정오표"
-  >
-    {items.map((item, index) => {
-      const statusText = getStatusText(item);
-      const studentChoices = getExamOmrStudentChoices(item);
-      const correctChoices = getExamOmrCorrectChoices(item);
-      return (
+}) => {
+  const groups = chunkExamOmrItems(items, 5);
+
+  return (
+    <div
+      className={[
+        "flex min-w-0 items-center gap-x-2 gap-y-1.5",
+        wrap ? "flex-wrap" : "flex-nowrap",
+        className,
+      ].join(" ")}
+      aria-label="서답형 정오표"
+    >
+      {groups.map((group) => (
         <span
-          key={String(item.questionNumber)}
-          className={[
-            "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-[10px] font-black leading-none",
-            index > 0 && index % 5 === 0 ? "ml-2" : "",
-            getAnswerStripClassName(item),
-          ].join(" ")}
-          title={`${item.questionNumber}번 ${statusText}, 학생 답 ${formatChoices(
-            studentChoices,
-          )}, 정답 ${formatChoices(correctChoices)}`}
-          aria-label={`${item.questionNumber}번 ${statusText}`}
+          key={`${group[0]?.questionNumber || "group"}-${group[group.length - 1]?.questionNumber || "end"}`}
+          className="inline-flex shrink-0 items-center gap-0.5"
         >
-          {item.questionNumber}
+          {group.map((item) => {
+            const statusText = getStatusText(item);
+            const studentChoices = getExamOmrStudentChoices(item);
+            const correctChoices = getExamOmrCorrectChoices(item);
+            return (
+              <span
+                key={String(item.questionNumber)}
+                className={[
+                  "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-[10px] font-black leading-none",
+                  getAnswerStripClassName(item),
+                ].join(" ")}
+                title={`${item.questionNumber}번 ${statusText}, 학생 답 ${formatChoices(
+                  studentChoices,
+                )}, 정답 ${formatChoices(correctChoices)}`}
+                aria-label={`${item.questionNumber}번 ${statusText}`}
+              >
+                {item.questionNumber}
+              </span>
+            );
+          })}
         </span>
-      );
-    })}
-  </div>
-);
+      ))}
+    </div>
+  );
+};
 
 const ExamOmrQuestionRow: React.FC<{
   item: ExamOmrQuestionResult;
@@ -137,7 +148,7 @@ const ExamOmrQuestionRow: React.FC<{
   return (
     <div
       className={[
-        "grid min-w-0 grid-cols-[2.75rem_auto] items-center gap-2",
+        "grid min-w-0 grid-cols-[2.45rem_auto] items-center gap-2",
         compact ? "text-sm" : "text-base",
       ].join(" ")}
       aria-label={itemLabel}
@@ -147,17 +158,18 @@ const ExamOmrQuestionRow: React.FC<{
       </span>
 
       <div
-        className={["grid grid-cols-5", compact ? "gap-1" : "gap-1.5"].join(
-          " ",
-        )}
+        className={[
+          "grid w-max max-w-full grid-cols-5 justify-self-start",
+          compact ? "gap-1" : "gap-1.5",
+        ].join(" ")}
         aria-hidden="true"
       >
         {EXAM_OMR_CHOICES.map((choice) => (
           <span
             key={choice}
             className={[
-              "flex shrink-0 items-center justify-center rounded-full border-2 font-extrabold leading-none transition-colors",
-              compact ? "h-6 w-6 text-xs" : "h-7 w-7 text-sm",
+              "flex shrink-0 items-center justify-center rounded-full border font-extrabold leading-none transition-colors",
+              compact ? "h-7 w-5 text-[11px]" : "h-8 w-5 text-[11px]",
               getBubbleClassName({
                 choice,
                 studentChoices,
@@ -177,7 +189,7 @@ const ExamOmrQuestionRow: React.FC<{
   );
 };
 
-const ExamOmrGroup: React.FC<{
+const ExamOmrPanel: React.FC<{
   items: ExamOmrQuestionResult[];
   index: number;
   compact: boolean;
@@ -185,26 +197,40 @@ const ExamOmrGroup: React.FC<{
 }> = ({ items, index, compact, showScore }) => {
   const first = items[0]?.questionNumber;
   const last = items[items.length - 1]?.questionNumber;
+  const rowGroups = chunkExamOmrItems(items, 5);
 
   return (
     <section
       className={[
         "min-w-0 rounded-lg",
         index % 2 === 0 ? "bg-slate-50" : "bg-blue-50/60",
-        compact ? "px-3 py-3" : "px-4 py-4",
+        compact ? "p-2.5" : "p-3",
       ].join(" ")}
       aria-label={`${first}-${last}번 OMR 답안`}
     >
       <div
         className={["min-w-0", compact ? "space-y-2" : "space-y-2.5"].join(" ")}
       >
-        {items.map((item) => (
-          <ExamOmrQuestionRow
-            key={String(item.questionNumber)}
-            item={item}
-            compact={compact}
-            showScore={showScore}
-          />
+        {rowGroups.map((group, groupIndex) => (
+          <div
+            key={`${group[0]?.questionNumber || groupIndex}-${group[group.length - 1]?.questionNumber || groupIndex}`}
+            className={[
+              "min-w-0 rounded-md",
+              groupIndex % 2 === 0 ? "bg-white/80" : "bg-white/45",
+              compact ? "px-2 py-2" : "px-2.5 py-2.5",
+            ].join(" ")}
+          >
+            <div className={compact ? "space-y-1.5" : "space-y-2"}>
+              {group.map((item) => (
+                <ExamOmrQuestionRow
+                  key={String(item.questionNumber)}
+                  item={item}
+                  compact={compact}
+                  showScore={showScore}
+                />
+              ))}
+            </div>
+          </div>
         ))}
       </div>
     </section>
@@ -218,13 +244,14 @@ export const ExamOmrCard: React.FC<ExamOmrCardProps> = ({
   mode = "student",
   compact = mode === "teacher",
   showScore = true,
+  showAnsweredCount = mode === "teacher",
   scoreLabel,
   className = "",
 }) => {
   const answeredCount = items.filter((item) =>
     getExamOmrStudentChoice(item),
   ).length;
-  const itemGroups = chunkExamOmrItems(items);
+  const itemGroups = chunkExamOmrItems(items, 10);
 
   return (
     <section
@@ -252,17 +279,19 @@ export const ExamOmrCard: React.FC<ExamOmrCardProps> = ({
               {scoreLabel}
             </span>
           )}
-          <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-blue-700">
-            응답 {answeredCount}/{items.length}
-          </span>
+          {showAnsweredCount && (
+            <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-blue-700">
+              응답 {answeredCount}/{items.length}
+            </span>
+          )}
         </div>
       </div>
 
       {items.length > 0 ? (
         <div className="mt-4">
-          <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             {itemGroups.map((group, index) => (
-              <ExamOmrGroup
+              <ExamOmrPanel
                 key={`${group[0]?.questionNumber || index}-${group[group.length - 1]?.questionNumber || index}`}
                 items={group}
                 index={index}

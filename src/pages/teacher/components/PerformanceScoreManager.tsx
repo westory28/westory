@@ -6417,17 +6417,6 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       ? "학급별 서답형·논술형 점수"
       : "학급별 논술형 점수"
     : "학급별 1·2차 수행평가 점수";
-  const scoreStatsContributionDescription = isWrittenExamMode
-    ? hasWrittenExamObjectiveStats
-      ? `막대는 ${formatPerformanceScore(
-          scoreStatsContributionMaxScore,
-        )}점 만점 총점 안에서 서답형과 논술형 평균 점수를 누적해 표시합니다.`
-      : `막대는 ${formatPerformanceScore(
-          scoreStatsContributionMaxScore,
-        )}점 만점 안에서 논술형 평균 점수를 표시합니다.`
-    : `막대는 ${formatPerformanceScore(
-        scoreStatsContributionMaxScore,
-      )}점 만점 총점 안에서 1차와 2차 평균 점수를 누적해 표시합니다.`;
   const scoreStatsFirstContributionLabel = isWrittenExamMode
     ? hasWrittenExamObjectiveStats
       ? "서답형"
@@ -10001,7 +9990,6 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
             <div className="overflow-y-auto px-3 py-3 sm:px-5 sm:py-4">
               <ExamOmrCard
                 title="서답형 OMR 답안"
-                description="파란색으로 채워진 답은 맞은 답, 빨간색으로 채워진 답은 학생이 선택한 오답입니다. 파란 테두리는 정답입니다."
                 items={omrPreview.items}
                 mode="teacher"
                 showScore
@@ -10704,18 +10692,15 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                               <h4 className="text-sm font-black text-slate-900">
                                 {scoreStatsContributionTitle}
                               </h4>
-                              <p className="mt-1 text-xs font-bold text-slate-500">
-                                {scoreStatsContributionDescription}
-                              </p>
                             </div>
-                            <div className="flex max-w-full flex-col gap-1 text-[11px] font-black sm:items-end">
-                              <span className="inline-flex items-center gap-1 text-amber-700">
-                                <span className="h-2 w-5 rounded-full bg-amber-400" />
+                            <div className="flex max-w-full shrink-0 flex-row flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-black sm:justify-end">
+                              <span className="inline-flex whitespace-nowrap items-center gap-1 text-amber-700">
+                                <span className="h-2 w-5 shrink-0 rounded-full bg-amber-400" />
                                 {scoreStatsFirstContributionLabel}
                               </span>
                               {showScoreStatsSecondContribution && (
-                                <span className="inline-flex items-center gap-1 text-indigo-700">
-                                  <span className="h-2 w-5 rounded-full bg-indigo-500" />
+                                <span className="inline-flex whitespace-nowrap items-center gap-1 text-indigo-700">
+                                  <span className="h-2 w-5 shrink-0 rounded-full bg-indigo-500" />
                                   {scoreStatsSecondContributionLabel}
                                 </span>
                               )}
@@ -10873,10 +10858,6 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                             <h4 className="text-sm font-black text-slate-900">
                               정규분포 곡선
                             </h4>
-                            <p className="mt-1 text-xs font-bold text-slate-500">
-                              전체와 {selectedScoreClassLabel}의 총점 분포를
-                              평균과 표준편차로 근사합니다.
-                            </p>
                           </div>
                           <div className="shrink-0 text-right text-[11px] font-bold text-slate-500">
                             <div>
@@ -10966,15 +10947,15 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                           )}
                         </div>
                         <div className="mt-3 flex flex-wrap gap-3 text-[11px] font-black">
-                          <span className="inline-flex items-center gap-1 text-slate-600">
-                            <span className="h-2 w-5 rounded-full bg-slate-500" />
+                          <span className="inline-flex whitespace-nowrap items-center gap-1 text-slate-600">
+                            <span className="h-2 w-5 shrink-0 rounded-full bg-slate-500" />
                             전체
                           </span>
-                          <span className="inline-flex items-center gap-1 text-blue-700">
-                            <span className="h-2 w-5 rounded-full bg-blue-600" />
+                          <span className="inline-flex whitespace-nowrap items-center gap-1 text-blue-700">
+                            <span className="h-2 w-5 shrink-0 rounded-full bg-blue-600" />
                             {selectedScoreClassLabel}
                           </span>
-                          <span className="text-slate-400">
+                          <span className="whitespace-nowrap text-slate-400">
                             표준편차 전체{" "}
                             {formatScoreStat(
                               scoreStats.normalCurve.overall.standardDeviation,
@@ -10995,11 +10976,6 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                                 <h4 className="text-sm font-black text-slate-900">
                                   문항별 평균 비교
                                 </h4>
-                                <p className="mt-1 text-xs font-bold text-slate-500">
-                                  {hasWrittenExamObjectiveStats
-                                    ? "서답형과 논술형 문항을 한 목록에서 전체 평균과 선택 학급 평균으로 비교합니다."
-                                    : "논술형 점수 항목별 전체 평균과 선택 학급 평균을 비교해 표시합니다."}
-                                </p>
                               </div>
                               <span className="text-xs font-black text-blue-700">
                                 {scoreStatsMode === "all"
@@ -11007,26 +10983,21 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                                   : `${scoreStatsTitle} 기준`}
                               </span>
                             </div>
-                            <div className="mt-4 overflow-x-auto rounded-lg border border-slate-100">
-                              <table className="w-full min-w-[560px] text-left text-xs">
+                            <div className="mt-4 overflow-hidden rounded-lg border border-slate-100">
+                              <table className="w-full table-fixed text-left text-xs">
                                 <thead className="bg-slate-50 text-[11px] font-black text-slate-500">
                                   <tr>
-                                    <th className="whitespace-nowrap px-3 py-2">
-                                      구분
-                                    </th>
-                                    <th className="whitespace-nowrap px-3 py-2">
-                                      문항
-                                    </th>
-                                    <th className="whitespace-nowrap px-3 py-2 text-right">
+                                    <th className="px-3 py-2">문항</th>
+                                    <th className="w-16 whitespace-nowrap px-3 py-2 text-right">
                                       만점
                                     </th>
-                                    <th className="whitespace-nowrap px-3 py-2 text-right">
+                                    <th className="w-20 whitespace-nowrap px-3 py-2 text-right">
                                       전체 평균
                                     </th>
-                                    <th className="whitespace-nowrap px-3 py-2 text-right">
+                                    <th className="w-20 whitespace-nowrap px-3 py-2 text-right">
                                       {selectedScoreClassLabel} 평균
                                     </th>
-                                    <th className="whitespace-nowrap px-3 py-2 text-right">
+                                    <th className="w-16 whitespace-nowrap px-3 py-2 text-right">
                                       차이
                                     </th>
                                   </tr>
@@ -11036,7 +11007,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                                     <React.Fragment key={group.key}>
                                       <tr className="bg-slate-50/70">
                                         <td
-                                          colSpan={6}
+                                          colSpan={5}
                                           className="px-3 py-2 font-black text-slate-800"
                                         >
                                           <span className="whitespace-nowrap">
@@ -11056,10 +11027,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                                           key={`${group.key}-${item.name}-${item.index}`}
                                           className="bg-white"
                                         >
-                                          <td className="whitespace-nowrap px-3 py-2 font-bold text-slate-500">
-                                            {group.label}
-                                          </td>
-                                          <td className="whitespace-nowrap px-3 py-2 font-black text-slate-900">
+                                          <td className="min-w-0 px-3 py-2 font-black text-slate-900">
                                             {item.shortLabel || item.label}
                                           </td>
                                           <td className="whitespace-nowrap px-3 py-2 text-right font-bold text-slate-500">
