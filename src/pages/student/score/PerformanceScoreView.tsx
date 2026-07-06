@@ -836,20 +836,43 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     warningConsentCurrent && !allScoresConfirmed && pendingRecords.length > 0;
   const signatureBlockedByPendingObjection =
     hasPendingObjection && !allScoresConfirmed;
+  const signatureBlockedByPendingAnswerSheetRequest =
+    hasPendingAnswerSheetRequest && !allScoresConfirmed;
+  const signatureBlockedByPendingRequest =
+    signatureBlockedByPendingObjection ||
+    signatureBlockedByPendingAnswerSheetRequest;
   const pendingObjectionTitles = records
     .filter((record) => pendingObjectionScoreIds.has(getRecordScoreId(record)))
     .map((record) => record.title)
     .filter(Boolean);
+  const pendingAnswerSheetRequestTitles = records
+    .filter((record) =>
+      pendingAnswerSheetRequestScoreIds.has(getRecordScoreId(record)),
+    )
+    .map((record) => record.title)
+    .filter(Boolean);
   const signatureButtonDisabled =
     !warningConsentCurrent ||
-    signatureBlockedByPendingObjection ||
+    signatureBlockedByPendingRequest ||
     signatureActionPending;
-  const signatureBlockedMessage = signatureBlockedByPendingObjection
-    ? `이의 제기 처리 대기 중인 ${resolvedCopy.scoreLabel} 점수가 있습니다${
-        pendingObjectionTitles.length
-          ? `: ${pendingObjectionTitles.join(", ")}`
-          : ""
-      }. 담당 교사가 수용 또는 반려 처리한 뒤 서명할 수 있습니다.`
+  const signatureBlockedReasons = [
+    signatureBlockedByPendingObjection
+      ? `이의 제기 처리 대기 중인 ${resolvedCopy.scoreLabel} 점수가 있습니다${
+          pendingObjectionTitles.length
+            ? `: ${pendingObjectionTitles.join(", ")}`
+            : ""
+        }.`
+      : "",
+    signatureBlockedByPendingAnswerSheetRequest
+      ? `답안지 확인 요청 처리 대기 중인 ${resolvedCopy.scoreLabel} 점수가 있습니다${
+          pendingAnswerSheetRequestTitles.length
+            ? `: ${pendingAnswerSheetRequestTitles.join(", ")}`
+            : ""
+        }.`
+      : "",
+  ].filter(Boolean);
+  const signatureBlockedMessage = signatureBlockedReasons.length
+    ? `${signatureBlockedReasons.join(" ")} 담당 교사가 처리한 뒤 서명할 수 있습니다.`
     : "";
 
   useEffect(() => {
@@ -1002,7 +1025,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
       });
       return;
     }
-    if (signatureBlockedByPendingObjection) {
+    if (signatureBlockedByPendingRequest) {
       showToast({
         title: "서명 대기 중",
         message: signatureBlockedMessage,
@@ -1671,12 +1694,12 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
   };
 
   const submitSignatureConfirmation = async () => {
-    if (!currentUser?.uid || objecting) return;
+    if (!currentUser?.uid || signatureActionPending) return;
     if (!warningConsentCurrent) {
       setSignatureError("안내 문구 동의를 저장한 뒤 서명할 수 있습니다.");
       return;
     }
-    if (signatureBlockedByPendingObjection) {
+    if (signatureBlockedByPendingRequest) {
       setSignatureError(signatureBlockedMessage);
       return;
     }
@@ -2159,7 +2182,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
               ))}
           </div>
         </div>
-        {signatureBlockedByPendingObjection && (
+        {signatureBlockedByPendingRequest && (
           <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold leading-6 text-amber-800">
             {signatureBlockedMessage}
           </div>
@@ -3297,7 +3320,9 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                 <button
                   type="button"
                   onClick={moveToSignatureReview}
-                  disabled={signatureActionPending}
+                  disabled={
+                    signatureActionPending || signatureBlockedByPendingRequest
+                  }
                   className="inline-flex h-11 items-center justify-center rounded-lg bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:bg-slate-300"
                 >
                   확인 내용 검토
@@ -3306,7 +3331,9 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                 <button
                   type="button"
                   onClick={() => void submitSignatureConfirmation()}
-                  disabled={signatureActionPending}
+                  disabled={
+                    signatureActionPending || signatureBlockedByPendingRequest
+                  }
                   className="inline-flex h-11 items-center justify-center rounded-lg bg-blue-600 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-700 disabled:bg-slate-300"
                 >
                   {confirming ? "제출 중..." : "제출하기"}
