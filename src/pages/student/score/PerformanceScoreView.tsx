@@ -12,8 +12,13 @@ import {
 import { doc, getDoc, serverTimestamp, writeBatch } from "firebase/firestore";
 import { PageLoading } from "../../../components/common/LoadingState";
 import { useAppToast } from "../../../components/common/AppToastProvider";
-import ExamOmrCard from "../../../components/common/ExamOmrCard";
-import type { ExamOmrQuestionResult } from "../../../components/common/examOmr";
+import ExamOmrCard, {
+  ExamOmrAnswerStrip,
+} from "../../../components/common/ExamOmrCard";
+import {
+  getExamOmrCorrectState,
+  type ExamOmrQuestionResult,
+} from "../../../components/common/examOmr";
 import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
 import {
@@ -395,6 +400,7 @@ interface SignatureScoreCard {
   totalScore: unknown;
   totalMaxScore: unknown;
   details: SignatureScoreDetail[];
+  omrItems?: ExamOmrQuestionResult[];
 }
 
 interface SignatureScoreSection {
@@ -871,6 +877,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
       }
 
       groups.forEach((group) => {
+        const isObjectiveGroup = isObjectiveWrittenExamGroup(group);
         const card: SignatureScoreCard = {
           key: `${scoreId}-${group.key}`,
           title: getWrittenExamGroupDisplayTitle(group),
@@ -884,8 +891,9 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
             maxScore: item.maxScore,
             scoreEntered: item.scoreEntered,
           })),
+          omrItems: isObjectiveGroup ? getObjectiveOmrItems(group) : undefined,
         };
-        if (isObjectiveWrittenExamGroup(group)) {
+        if (isObjectiveGroup) {
           objectiveCards.push(card);
         } else {
           essayCards.push(card);
@@ -3462,63 +3470,83 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                           </div>
                         </div>
                         <div className="grid gap-3 px-4 py-3">
-                          {section.cards.map((card) => (
-                            <article
-                              key={`signature-review-card-${card.key}`}
-                              className="rounded-lg bg-slate-50 px-3 py-3"
-                            >
-                              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                                <div className="min-w-0">
-                                  <div className="break-keep text-sm font-black leading-5 text-slate-900">
-                                    {card.title}
+                          {section.cards.map((card) => {
+                            const objectiveOmrItems = card.omrItems || [];
+                            const objectiveCorrectCount =
+                              objectiveOmrItems.filter(
+                                (item) => getExamOmrCorrectState(item) === true,
+                              ).length;
+                            const objectiveIncorrectCount =
+                              objectiveOmrItems.filter(
+                                (item) =>
+                                  getExamOmrCorrectState(item) === false,
+                              ).length;
+                            return (
+                              <article
+                                key={`signature-review-card-${card.key}`}
+                                className="rounded-lg bg-slate-50 px-3 py-3"
+                              >
+                                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                  <div className="min-w-0">
+                                    <div className="break-keep text-sm font-black leading-5 text-slate-900">
+                                      {card.title}
+                                    </div>
+                                    {card.subtitle && (
+                                      <div className="mt-1 break-keep text-[11px] font-bold leading-4 text-slate-500">
+                                        {card.subtitle}
+                                      </div>
+                                    )}
                                   </div>
-                                  {card.subtitle && (
-                                    <div className="mt-1 break-keep text-[11px] font-bold leading-4 text-slate-500">
-                                      {card.subtitle}
-                                    </div>
-                                  )}
+                                  <div className="whitespace-nowrap text-sm font-black text-blue-700">
+                                    {formatPerformanceScore(card.totalScore)} /{" "}
+                                    {formatPerformanceScore(card.totalMaxScore)}
+                                    점
+                                  </div>
                                 </div>
-                                <div className="whitespace-nowrap text-sm font-black text-blue-700">
-                                  {formatPerformanceScore(card.totalScore)} /{" "}
-                                  {formatPerformanceScore(card.totalMaxScore)}점
-                                </div>
-                              </div>
-                              {card.details.length > 0 && (
-                                <div
-                                  className={`mt-3 grid gap-2 ${
-                                    section.key === "objective"
-                                      ? "grid-cols-2 sm:grid-cols-4 xl:grid-cols-5"
-                                      : "sm:grid-cols-2"
-                                  }`}
-                                >
-                                  {card.details.map((detail) => (
-                                    <div
-                                      key={`signature-review-detail-${detail.key}`}
-                                      className="flex items-center justify-between gap-3 rounded-md bg-white px-3 py-2 text-xs font-bold"
-                                    >
-                                      <span className="break-keep text-slate-600">
-                                        {detail.label}
-                                      </span>
-                                      <span className="shrink-0 whitespace-nowrap text-slate-900">
-                                        {detail.scoreEntered === false
-                                          ? "-"
-                                          : formatPerformanceScore(
-                                              detail.score,
-                                            )}
-                                        <span className="text-slate-400">
-                                          {" "}
-                                          /{" "}
-                                          {formatPerformanceScore(
-                                            detail.maxScore,
-                                          )}
+                                {section.key === "objective" &&
+                                objectiveOmrItems.length > 0 ? (
+                                  <div className="mt-3 flex flex-col gap-2 rounded-lg bg-white px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <ExamOmrAnswerStrip
+                                      items={objectiveOmrItems}
+                                      wrap
+                                      className="max-w-full"
+                                    />
+                                    <span className="shrink-0 whitespace-nowrap rounded-full bg-slate-50 px-2.5 py-1 text-[11px] font-black text-slate-600">
+                                      정 {objectiveCorrectCount} · 오{" "}
+                                      {objectiveIncorrectCount}
+                                    </span>
+                                  </div>
+                                ) : card.details.length > 0 ? (
+                                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                    {card.details.map((detail) => (
+                                      <div
+                                        key={`signature-review-detail-${detail.key}`}
+                                        className="flex items-center justify-between gap-3 rounded-md bg-white px-3 py-2 text-xs font-bold"
+                                      >
+                                        <span className="break-keep text-slate-600">
+                                          {detail.label}
                                         </span>
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                            </article>
-                          ))}
+                                        <span className="shrink-0 whitespace-nowrap text-slate-900">
+                                          {detail.scoreEntered === false
+                                            ? "-"
+                                            : formatPerformanceScore(
+                                                detail.score,
+                                              )}
+                                          <span className="text-slate-400">
+                                            {" "}
+                                            /{" "}
+                                            {formatPerformanceScore(
+                                              detail.maxScore,
+                                            )}
+                                          </span>
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                ) : null}
+                              </article>
+                            );
+                          })}
                         </div>
                       </section>
                     ))}

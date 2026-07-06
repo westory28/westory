@@ -22,6 +22,7 @@ type ExamOmrCardProps = {
 
 type ExamOmrAnswerStripProps = {
   items: ExamOmrQuestionResult[];
+  wrap?: boolean;
   className?: string;
 };
 
@@ -85,16 +86,18 @@ const chunkExamOmrItems = (items: ExamOmrQuestionResult[], size = 5) => {
 
 export const ExamOmrAnswerStrip: React.FC<ExamOmrAnswerStripProps> = ({
   items,
+  wrap = false,
   className = "",
 }) => (
   <div
     className={[
-      "flex min-w-0 flex-nowrap items-center gap-0.5",
+      "flex min-w-0 items-center gap-x-0.5 gap-y-1",
+      wrap ? "flex-wrap" : "flex-nowrap",
       className,
     ].join(" ")}
     aria-label="서답형 정오표"
   >
-    {items.map((item) => {
+    {items.map((item, index) => {
       const statusText = getStatusText(item);
       const studentChoices = getExamOmrStudentChoices(item);
       const correctChoices = getExamOmrCorrectChoices(item);
@@ -103,6 +106,7 @@ export const ExamOmrAnswerStrip: React.FC<ExamOmrAnswerStripProps> = ({
           key={String(item.questionNumber)}
           className={[
             "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-[10px] font-black leading-none",
+            index > 0 && index % 5 === 0 ? "ml-2" : "",
             getAnswerStripClassName(item),
           ].join(" ")}
           title={`${item.questionNumber}번 ${statusText}, 학생 답 ${formatChoices(
@@ -133,7 +137,7 @@ const ExamOmrQuestionRow: React.FC<{
   return (
     <div
       className={[
-        "grid min-w-0 grid-cols-[2.35rem_minmax(0,1fr)] items-center gap-2",
+        "grid min-w-0 grid-cols-[2.75rem_auto] items-center gap-2",
         compact ? "text-sm" : "text-base",
       ].join(" ")}
       aria-label={itemLabel}
@@ -142,13 +146,18 @@ const ExamOmrQuestionRow: React.FC<{
         {item.questionNumber}번
       </span>
 
-      <div className="grid min-w-0 grid-cols-5 gap-1.5" aria-hidden="true">
+      <div
+        className={["grid grid-cols-5", compact ? "gap-1" : "gap-1.5"].join(
+          " ",
+        )}
+        aria-hidden="true"
+      >
         {EXAM_OMR_CHOICES.map((choice) => (
           <span
             key={choice}
             className={[
-              "flex aspect-square min-w-0 items-center justify-center rounded-full border-2 font-extrabold leading-none transition-colors",
-              compact ? "text-xs" : "text-sm",
+              "flex shrink-0 items-center justify-center rounded-full border-2 font-extrabold leading-none transition-colors",
+              compact ? "h-6 w-6 text-xs" : "h-7 w-7 text-sm",
               getBubbleClassName({
                 choice,
                 studentChoices,
@@ -170,30 +179,22 @@ const ExamOmrQuestionRow: React.FC<{
 
 const ExamOmrGroup: React.FC<{
   items: ExamOmrQuestionResult[];
+  index: number;
   compact: boolean;
   showScore: boolean;
-}> = ({ items, compact, showScore }) => {
+}> = ({ items, index, compact, showScore }) => {
   const first = items[0]?.questionNumber;
   const last = items[items.length - 1]?.questionNumber;
 
   return (
     <section
       className={[
-        "min-w-0 rounded-lg border border-slate-200 bg-white shadow-sm",
+        "min-w-0 rounded-lg",
+        index % 2 === 0 ? "bg-slate-50" : "bg-blue-50/60",
         compact ? "px-3 py-3" : "px-4 py-4",
       ].join(" ")}
       aria-label={`${first}-${last}번 OMR 답안`}
     >
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h3
-          className={[
-            "font-black text-slate-900",
-            compact ? "text-sm" : "text-base",
-          ].join(" ")}
-        >
-          {first === last ? `${first}번` : `${first}-${last}번`}
-        </h3>
-      </div>
       <div
         className={["min-w-0", compact ? "space-y-2" : "space-y-2.5"].join(" ")}
       >
@@ -259,11 +260,12 @@ export const ExamOmrCard: React.FC<ExamOmrCardProps> = ({
 
       {items.length > 0 ? (
         <div className="mt-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
             {itemGroups.map((group, index) => (
               <ExamOmrGroup
                 key={`${group[0]?.questionNumber || index}-${group[group.length - 1]?.questionNumber || index}`}
                 items={group}
+                index={index}
                 compact={compact}
                 showScore={showScore}
               />
