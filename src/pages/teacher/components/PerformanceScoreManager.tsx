@@ -6564,10 +6564,45 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     const signedCount = classSheetPreviewStudents.filter((student) =>
       getConfirmedSignatureRecord(student, classSheetSignatureRequirements),
     ).length;
+    const firstSignedCount = classSheetPreviewStudents.filter(
+      (student) =>
+        Boolean(
+          student.firstRecord?.signatureImage ||
+          student.firstRecord?.confirmation?.signatureImage,
+        ) && classSheetSignatureRequirements.requireFirst,
+    ).length;
+    const secondSignedCount = classSheetPreviewStudents.filter(
+      (student) =>
+        Boolean(
+          student.secondRecord?.signatureImage ||
+          student.secondRecord?.confirmation?.signatureImage,
+        ) && classSheetSignatureRequirements.requireSecond,
+    ).length;
+    const secondOnlySignedCount = classSheetPreviewStudents.filter(
+      (student) => {
+        const firstSigned = Boolean(
+          student.firstRecord?.signatureImage ||
+          student.firstRecord?.confirmation?.signatureImage,
+        );
+        const secondSigned = Boolean(
+          student.secondRecord?.signatureImage ||
+          student.secondRecord?.confirmation?.signatureImage,
+        );
+        return (
+          classSheetSignatureRequirements.requireFirst &&
+          classSheetSignatureRequirements.requireSecond &&
+          secondSigned &&
+          !firstSigned
+        );
+      },
+    ).length;
     return {
       totalCount: classSheetPreviewStudents.length,
       firstScoredCount,
       secondScoredCount,
+      firstSignedCount,
+      secondSignedCount,
+      secondOnlySignedCount,
       signedCount,
       unsignedCount: Math.max(
         0,
@@ -11948,7 +11983,11 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
               {classSheetPreviewReady ? (
                 <div className="mt-4 space-y-4">
-                  <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                  <div
+                    className={`grid gap-2 sm:grid-cols-2 ${
+                      isWrittenExamMode ? "lg:grid-cols-6" : "lg:grid-cols-5"
+                    }`}
+                  >
                     {[
                       {
                         label: "학급 인원",
@@ -11965,6 +12004,13 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                         value: `${classSheetStatusSummary.secondScoredCount}명`,
                         tone: "bg-blue-50 text-blue-700",
                       },
+                      isWrittenExamMode
+                        ? {
+                            label: "논술형만 서명",
+                            value: `${classSheetStatusSummary.secondOnlySignedCount}명`,
+                            tone: "bg-amber-50 text-amber-700",
+                          }
+                        : null,
                       {
                         label: "서명 완료",
                         value: `${classSheetStatusSummary.signedCount}명`,
@@ -11975,19 +12021,29 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                         value: `${classSheetStatusSummary.unsignedCount}명`,
                         tone: "bg-rose-50 text-rose-700",
                       },
-                    ].map((item) => (
-                      <div
-                        key={item.label}
-                        className={`rounded-lg px-3 py-3 ${item.tone}`}
-                      >
-                        <div className="text-[11px] font-black">
-                          {item.label}
+                    ]
+                      .filter(
+                        (
+                          item,
+                        ): item is {
+                          label: string;
+                          value: string;
+                          tone: string;
+                        } => Boolean(item),
+                      )
+                      .map((item) => (
+                        <div
+                          key={item.label}
+                          className={`rounded-lg px-3 py-3 ${item.tone}`}
+                        >
+                          <div className="text-[11px] font-black">
+                            {item.label}
+                          </div>
+                          <div className="mt-1 text-lg font-black">
+                            {item.value}
+                          </div>
                         </div>
-                        <div className="mt-1 text-lg font-black">
-                          {item.value}
-                        </div>
-                      </div>
-                    ))}
+                      ))}
                   </div>
 
                   <div className="max-h-[min(46vh,520px)] overflow-auto rounded-xl border border-slate-200">

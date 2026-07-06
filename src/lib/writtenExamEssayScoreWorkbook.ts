@@ -297,6 +297,29 @@ const parseQuestionNumber = (value: unknown) => {
 const normalizeObjectiveAnswer = (value: unknown) =>
   toText(value).replace(/[.．]/g, ".").toUpperCase();
 
+const parseObjectiveAnswerChoices = (value: unknown) => {
+  const text = normalizeObjectiveAnswer(value);
+  if (!text || text === ".") return [];
+  return Array.from(
+    new Set(Array.from(text).filter((character) => /[1-5]/.test(character))),
+  ).sort();
+};
+
+const areObjectiveAnswersEqual = (
+  studentAnswer: string,
+  correctAnswer: string,
+) => {
+  const studentChoices = parseObjectiveAnswerChoices(studentAnswer);
+  const correctChoices = parseObjectiveAnswerChoices(correctAnswer);
+  if (studentChoices.length === 0 || correctChoices.length === 0) {
+    return Boolean(correctAnswer) && studentAnswer === correctAnswer;
+  }
+  return (
+    studentChoices.length === correctChoices.length &&
+    studentChoices.every((choice, index) => choice === correctChoices[index])
+  );
+};
+
 const splitClassAndNumber = (value: unknown) => {
   const text = toText(value);
   const match = /^(\d+)\s*[/／-]\s*(\d+)$/.exec(text);
@@ -419,7 +442,8 @@ const parseObjectiveItemScore = (
     };
   }
   const answerCorrect =
-    normalizedCorrectAnswer.length > 0 && rawAnswer === normalizedCorrectAnswer;
+    normalizedCorrectAnswer.length > 0 &&
+    areObjectiveAnswersEqual(rawAnswer, normalizedCorrectAnswer);
   return {
     studentAnswer: rawAnswer,
     answerCorrect,

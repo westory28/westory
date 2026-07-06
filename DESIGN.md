@@ -73,6 +73,7 @@ Rules:
 - 학생 화면 본문은 14px 이하로 장시간 읽게 만들지 않는다.
 - 교사 화면의 표, 상태, 보조 정보는 작게 쓸 수 있지만 label과 값의 위계를 유지한다.
 - 새 표시 텍스트에는 과한 영문 마케팅 문구를 넣지 않는다.
+- 색, 아이콘, 표 헤더, 선택 상태만으로 의미가 충분히 전달되는 곳에는 사용법 설명 문단을 추가하지 않는다. 학생 점수 확인, 교사 운영 모달, OMR·정오표처럼 반복 확인하는 화면은 특히 설명보다 구조와 라벨을 우선한다.
 
 ## 4. Spacing
 
@@ -149,6 +150,7 @@ Icon-only controls:
 - Shadow: `--shadow-sm` for routine cards, `--shadow-md` for overlays or lifted cards.
 - Do not nest cards inside cards unless the inner card is a distinct interactive object.
 - Simple counts or one-line metadata should use plain layout before adding a card.
+- 학생 점수 화면에서 문항 목록, 피드백, 확인 요청 대상은 카드 안 카드 구조를 피한다. 필요한 경우 같은 표면 안에서 header, list, footer로 나누고 내부 배경은 한 단계만 사용한다.
 
 ### Forms
 

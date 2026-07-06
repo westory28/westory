@@ -21,50 +21,80 @@ export type ExamOmrQuestionResult = {
 
 export const EXAM_OMR_CHOICES: ExamOmrChoice[] = [1, 2, 3, 4, 5];
 
-export const normalizeExamOmrChoice = (
+const uniqueChoices = (choices: ExamOmrChoice[]) =>
+  Array.from(new Set(choices)).sort((left, right) => left - right);
+
+export const normalizeExamOmrChoices = (
   answer: ExamOmrAnswerValue,
   correctAnswer?: ExamOmrAnswerValue,
-): ExamOmrChoice | null => {
+): ExamOmrChoice[] => {
   const source = answer === "." ? correctAnswer : answer;
 
   if (typeof source === "number") {
     return EXAM_OMR_CHOICES.includes(source as ExamOmrChoice)
-      ? (source as ExamOmrChoice)
-      : null;
+      ? [source as ExamOmrChoice]
+      : [];
   }
 
-  if (typeof source !== "string") return null;
+  if (typeof source !== "string") return [];
 
   const trimmed = source.trim();
-  if (!trimmed) return null;
+  if (!trimmed) return [];
 
   const parsed = Number(trimmed);
-  return EXAM_OMR_CHOICES.includes(parsed as ExamOmrChoice)
-    ? (parsed as ExamOmrChoice)
-    : null;
+  if (EXAM_OMR_CHOICES.includes(parsed as ExamOmrChoice)) {
+    return [parsed as ExamOmrChoice];
+  }
+
+  return uniqueChoices(
+    Array.from(trimmed)
+      .map((character) => Number(character))
+      .filter((choice): choice is ExamOmrChoice =>
+        EXAM_OMR_CHOICES.includes(choice as ExamOmrChoice),
+      ),
+  );
 };
 
-export const getExamOmrStudentChoice = (
-  result: ExamOmrQuestionResult,
+export const normalizeExamOmrChoice = (
+  answer: ExamOmrAnswerValue,
+  correctAnswer?: ExamOmrAnswerValue,
 ): ExamOmrChoice | null =>
-  normalizeExamOmrChoice(
+  normalizeExamOmrChoices(answer, correctAnswer)[0] || null;
+
+export const getExamOmrStudentChoices = (
+  result: ExamOmrQuestionResult,
+): ExamOmrChoice[] =>
+  normalizeExamOmrChoices(
     result.normalizedAnswer ?? result.studentAnswer,
     result.correctAnswer,
   );
 
+export const getExamOmrStudentChoice = (
+  result: ExamOmrQuestionResult,
+): ExamOmrChoice | null => getExamOmrStudentChoices(result)[0] || null;
+
+export const getExamOmrCorrectChoices = (
+  result: ExamOmrQuestionResult,
+): ExamOmrChoice[] => normalizeExamOmrChoices(result.correctAnswer);
+
 export const getExamOmrCorrectChoice = (
   result: ExamOmrQuestionResult,
-): ExamOmrChoice | null => normalizeExamOmrChoice(result.correctAnswer);
+): ExamOmrChoice | null => getExamOmrCorrectChoices(result)[0] || null;
 
 export const getExamOmrCorrectState = (
   result: ExamOmrQuestionResult,
 ): boolean | null => {
   if (result.invalid) return null;
-  if (typeof result.correct === "boolean") return result.correct;
 
-  const studentChoice = getExamOmrStudentChoice(result);
-  const correctChoice = getExamOmrCorrectChoice(result);
+  const studentChoices = getExamOmrStudentChoices(result);
+  const correctChoices = getExamOmrCorrectChoices(result);
 
-  if (!studentChoice || !correctChoice) return null;
-  return studentChoice === correctChoice;
+  if (!studentChoices.length || !correctChoices.length) {
+    return typeof result.correct === "boolean" ? result.correct : null;
+  }
+  const computedCorrect =
+    studentChoices.length === correctChoices.length &&
+    studentChoices.every((choice, index) => choice === correctChoices[index]);
+  if (computedCorrect) return true;
+  return typeof result.correct === "boolean" ? result.correct : false;
 };

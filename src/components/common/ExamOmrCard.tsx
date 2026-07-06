@@ -1,9 +1,10 @@
 import React from "react";
 import {
   EXAM_OMR_CHOICES,
-  getExamOmrCorrectChoice,
+  getExamOmrCorrectChoices,
   getExamOmrCorrectState,
   getExamOmrStudentChoice,
+  getExamOmrStudentChoices,
   type ExamOmrChoice,
   type ExamOmrQuestionResult,
 } from "./examOmr";
@@ -15,6 +16,7 @@ type ExamOmrCardProps = {
   mode?: "student" | "teacher";
   compact?: boolean;
   showScore?: boolean;
+  scoreLabel?: string;
   className?: string;
 };
 
@@ -23,8 +25,8 @@ type ExamOmrAnswerStripProps = {
   className?: string;
 };
 
-const formatAnswer = (choice: ExamOmrChoice | null) =>
-  choice ? `${choice}번` : "미응답";
+const formatChoices = (choices: ExamOmrChoice[]) =>
+  choices.length ? choices.map((choice) => `${choice}번`).join(", ") : "미응답";
 
 const formatScore = (item: ExamOmrQuestionResult) => {
   if (item.scoreEntered === false) return "점수 미입력";
@@ -44,23 +46,18 @@ const getStatusText = (item: ExamOmrQuestionResult) => {
 
 const getBubbleClassName = ({
   choice,
-  studentChoice,
-  correctChoice,
-  status,
+  studentChoices,
+  correctChoices,
 }: {
   choice: ExamOmrChoice;
-  studentChoice: ExamOmrChoice | null;
-  correctChoice: ExamOmrChoice | null;
-  status: boolean | null;
+  studentChoices: ExamOmrChoice[];
+  correctChoices: ExamOmrChoice[];
 }) => {
-  const isMarked = choice === studentChoice;
-  const isCorrectAnswer = choice === correctChoice;
+  const isMarked = studentChoices.includes(choice);
+  const isCorrectAnswer = correctChoices.includes(choice);
 
-  if (isMarked && status === true) {
+  if (isMarked && isCorrectAnswer) {
     return "border-blue-600 bg-blue-600 text-white shadow-sm";
-  }
-  if (isMarked && status === false) {
-    return "border-rose-600 bg-rose-600 text-white shadow-sm";
   }
   if (isMarked) return "border-rose-600 bg-rose-600 text-white shadow-sm";
   if (isCorrectAnswer) return "border-blue-500 bg-blue-50 text-blue-700";
@@ -99,8 +96,8 @@ export const ExamOmrAnswerStrip: React.FC<ExamOmrAnswerStripProps> = ({
   >
     {items.map((item) => {
       const statusText = getStatusText(item);
-      const studentChoice = getExamOmrStudentChoice(item);
-      const correctChoice = getExamOmrCorrectChoice(item);
+      const studentChoices = getExamOmrStudentChoices(item);
+      const correctChoices = getExamOmrCorrectChoices(item);
       return (
         <span
           key={String(item.questionNumber)}
@@ -108,9 +105,9 @@ export const ExamOmrAnswerStrip: React.FC<ExamOmrAnswerStripProps> = ({
             "inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-[10px] font-black leading-none",
             getAnswerStripClassName(item),
           ].join(" ")}
-          title={`${item.questionNumber}번 ${statusText}, 학생 답 ${formatAnswer(
-            studentChoice,
-          )}, 정답 ${formatAnswer(correctChoice)}`}
+          title={`${item.questionNumber}번 ${statusText}, 학생 답 ${formatChoices(
+            studentChoices,
+          )}, 정답 ${formatChoices(correctChoices)}`}
           aria-label={`${item.questionNumber}번 ${statusText}`}
         >
           {item.questionNumber}
@@ -125,19 +122,18 @@ const ExamOmrQuestionRow: React.FC<{
   compact: boolean;
   showScore: boolean;
 }> = ({ item, compact, showScore }) => {
-  const studentChoice = getExamOmrStudentChoice(item);
-  const correctChoice = getExamOmrCorrectChoice(item);
-  const correctState = getExamOmrCorrectState(item);
+  const studentChoices = getExamOmrStudentChoices(item);
+  const correctChoices = getExamOmrCorrectChoices(item);
   const statusText = getStatusText(item);
   const scoreText = formatScore(item);
-  const itemLabel = `${item.questionNumber}번 문항, ${statusText}, 학생 답 ${formatAnswer(
-    studentChoice,
-  )}, 정답 ${formatAnswer(correctChoice)}${scoreText ? `, ${scoreText}` : ""}`;
+  const itemLabel = `${item.questionNumber}번 문항, ${statusText}, 학생 답 ${formatChoices(
+    studentChoices,
+  )}, 정답 ${formatChoices(correctChoices)}${scoreText ? `, ${scoreText}` : ""}`;
 
   return (
     <div
       className={[
-        "grid min-w-0 grid-cols-[2.5rem_minmax(0,1fr)] items-center gap-2",
+        "grid min-w-0 grid-cols-[2.35rem_minmax(0,1fr)] items-center gap-2",
         compact ? "text-sm" : "text-base",
       ].join(" ")}
       aria-label={itemLabel}
@@ -155,9 +151,8 @@ const ExamOmrQuestionRow: React.FC<{
               compact ? "text-xs" : "text-sm",
               getBubbleClassName({
                 choice,
-                studentChoice,
-                correctChoice,
-                status: correctState,
+                studentChoices,
+                correctChoices,
               }),
             ].join(" ")}
           >
@@ -180,9 +175,6 @@ const ExamOmrGroup: React.FC<{
 }> = ({ items, compact, showScore }) => {
   const first = items[0]?.questionNumber;
   const last = items[items.length - 1]?.questionNumber;
-  const correctCount = items.filter(
-    (item) => getExamOmrCorrectState(item) === true,
-  ).length;
 
   return (
     <section
@@ -201,9 +193,6 @@ const ExamOmrGroup: React.FC<{
         >
           {first === last ? `${first}번` : `${first}-${last}번`}
         </h3>
-        <span className="rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-black text-blue-700">
-          정답 {correctCount}
-        </span>
       </div>
       <div
         className={["min-w-0", compact ? "space-y-2" : "space-y-2.5"].join(" ")}
@@ -228,13 +217,11 @@ export const ExamOmrCard: React.FC<ExamOmrCardProps> = ({
   mode = "student",
   compact = mode === "teacher",
   showScore = true,
+  scoreLabel,
   className = "",
 }) => {
   const answeredCount = items.filter((item) =>
     getExamOmrStudentChoice(item),
-  ).length;
-  const correctCount = items.filter(
-    (item) => getExamOmrCorrectState(item) === true,
   ).length;
   const itemGroups = chunkExamOmrItems(items);
 
@@ -259,18 +246,20 @@ export const ExamOmrCard: React.FC<ExamOmrCardProps> = ({
           )}
         </div>
         <div className="flex shrink-0 flex-wrap gap-2 text-xs font-extrabold">
+          {scoreLabel && (
+            <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-blue-700">
+              {scoreLabel}
+            </span>
+          )}
           <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-blue-700">
             응답 {answeredCount}/{items.length}
-          </span>
-          <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-slate-600">
-            정답 {correctCount}
           </span>
         </div>
       </div>
 
       {items.length > 0 ? (
         <div className="mt-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 2xl:grid-cols-4">
             {itemGroups.map((group, index) => (
               <ExamOmrGroup
                 key={`${group[0]?.questionNumber || index}-${group[group.length - 1]?.questionNumber || index}`}

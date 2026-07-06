@@ -400,7 +400,7 @@ interface SignatureScoreCard {
 interface SignatureScoreSection {
   key: string;
   label: string;
-  description: string;
+  description?: string;
   cards: SignatureScoreCard[];
 }
 
@@ -574,11 +574,37 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
       setObjections(loadedObjections);
       setAnswerSheetRequests(loadedAnswerSheetRequests);
       setWarningConsentChecked(false);
-      setSelectedId((current) =>
-        loaded.some((record) => record.id === current)
+      const defaultRecord =
+        scoreKind === WRITTEN_EXAM_SCORE_KIND
+          ? loaded.find((record) =>
+              getWrittenExamItemGroups(record.items || []).some((group) =>
+                isObjectiveWrittenExamGroup(group),
+              ),
+            ) || loaded[0]
+          : loaded[0];
+      setSelectedId((current) => {
+        const nextSelectedId = loaded.some((record) => record.id === current)
           ? current
-          : loaded[0]?.id || "",
-      );
+          : defaultRecord?.id || "";
+        const nextRecord =
+          loaded.find((record) => record.id === nextSelectedId) ||
+          defaultRecord ||
+          null;
+        if (scoreKind === WRITTEN_EXAM_SCORE_KIND && nextRecord) {
+          const groups = getWrittenExamItemGroups(nextRecord.items || []);
+          const fallbackGroup =
+            groups.find((group) => isObjectiveWrittenExamGroup(group)) ||
+            groups[0] ||
+            null;
+          setSelectedWrittenExamGroupKey((currentGroupKey) =>
+            currentGroupKey &&
+            groups.some((group) => group.key === currentGroupKey)
+              ? currentGroupKey
+              : fallbackGroup?.key || "",
+          );
+        }
+        return nextSelectedId;
+      });
     } catch (error) {
       console.error("Failed to load performance scores:", error);
     } finally {
@@ -623,6 +649,26 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
         (item, index) => getWrittenExamItemMeta(item, index).detailed,
       ),
     );
+  const writtenExamNavigationEntries = useMemo(() => {
+    if (scoreKind !== WRITTEN_EXAM_SCORE_KIND) return [];
+    return records.flatMap((record) =>
+      getWrittenExamItemGroups(record.items || []).map((group) => ({
+        record,
+        scoreId: getRecordScoreId(record),
+        group,
+      })),
+    );
+  }, [records, scoreKind]);
+  const writtenExamObjectiveEntry =
+    writtenExamNavigationEntries.find(({ group }) =>
+      isObjectiveWrittenExamGroup(group),
+    ) || null;
+  const writtenExamEssayEntries = writtenExamNavigationEntries.filter(
+    ({ group }) => !isObjectiveWrittenExamGroup(group),
+  );
+  const writtenExamEssayActive = Boolean(
+    activeWrittenExamGroup && !activeWrittenExamGroupIsObjective,
+  );
   const visibleChartEntries =
     hasDetailedWrittenExamItems && activeWrittenExamGroup
       ? activeWrittenExamGroup.items.map(({ label, item }) => ({ label, item }))
@@ -808,7 +854,6 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
         {
           key: "scores",
           label: resolvedCopy.scoreLabel,
-          description: "이번 서명으로 확인할 점수입니다.",
           cards: pendingRecords.map(buildRecordCard),
         },
       ];
@@ -853,7 +898,6 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
         ? {
             key: "objective",
             label: "서답형",
-            description: "정오답과 획득 점수를 확인합니다.",
             cards: objectiveCards,
           }
         : null,
@@ -861,7 +905,6 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
         ? {
             key: "essay",
             label: "논술형",
-            description: "논술형 문항별 점수와 피드백을 확인합니다.",
             cards: essayCards,
           }
         : null,
@@ -2048,6 +2091,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
               )}
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 {groups.map((group) => {
+                  const groupIsObjective = isObjectiveWrittenExamGroup(group);
                   const itemKeys = group.items.map(({ key }) =>
                     getRequestItemSelectionKey(scoreId, key),
                   );
@@ -2066,6 +2110,8 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                     <div
                       key={`written-request-group-${scoreId}-${group.key}`}
                       className={`rounded-lg border px-3 py-3 ${
+                        groupIsObjective ? "sm:col-span-2" : ""
+                      } ${
                         checkedCount > 0
                           ? params.tone === "rose"
                             ? "border-rose-200 bg-rose-50"
@@ -2107,7 +2153,13 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                           </span>
                         </span>
                       </label>
-                      <div className="mt-3 grid gap-2">
+                      <div
+                        className={`mt-3 grid gap-2 ${
+                          groupIsObjective
+                            ? "grid-cols-2 sm:grid-cols-4 lg:grid-cols-5"
+                            : "sm:grid-cols-2"
+                        }`}
+                      >
                         {group.items.map(({ key, label, item }) => {
                           const itemSelectionKey = getRequestItemSelectionKey(
                             scoreId,
@@ -2118,7 +2170,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                           return (
                             <label
                               key={`written-request-item-${scoreId}-${key}`}
-                              className="flex cursor-pointer items-center justify-between gap-3 rounded-md bg-white px-3 py-2 text-xs font-bold"
+                              className="flex min-h-10 cursor-pointer items-center justify-between gap-2 rounded-lg bg-white px-3 py-2 text-xs font-bold"
                             >
                               <span className="flex min-w-0 items-center gap-2">
                                 <input
@@ -2133,9 +2185,11 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                                   disabled={params.disabled || alreadyPending}
                                   className={`h-4 w-4 rounded border-slate-300 ${checkboxTone}`}
                                 />
-                                <span className="text-slate-700">{label}</span>
+                                <span className="truncate text-slate-700">
+                                  {label}
+                                </span>
                               </span>
-                              <span className="shrink-0 text-slate-500">
+                              <span className="shrink-0 whitespace-nowrap text-slate-500">
                                 {item.scoreEntered === false
                                   ? "-"
                                   : formatPerformanceScore(item.score)}{" "}
@@ -2333,82 +2387,162 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                 aria-label={resolvedCopy.scoreListLabel}
               >
                 {hasWrittenExamSidebarGroups
-                  ? records.flatMap((record) => {
-                      const scoreId = getRecordScoreId(record);
-                      const recordActive =
-                        record.id === selectedRecord.id ||
-                        (!selectedRecord.id && record.id === records[0]?.id);
-                      return getWrittenExamItemGroups(record.items || []).map(
-                        (group) => {
-                          const groupActive =
-                            recordActive &&
-                            activeWrittenExamGroup?.key === group.key;
-                          return (
-                            <button
-                              key={`${scoreId || record.rosterId}-${group.key}`}
-                              type="button"
-                              onClick={() => {
-                                setSelectedId(record.id || "");
-                                setSelectedWrittenExamGroupKey(group.key);
-                              }}
-                              aria-current={groupActive ? "true" : undefined}
-                              className={`flex min-w-[15rem] items-start gap-3 rounded-xl border p-3 text-left transition-colors lg:min-w-0 lg:rounded-none lg:border-0 lg:border-l-4 lg:p-4 ${
-                                groupActive
-                                  ? "border-blue-200 bg-blue-50 text-blue-600 lg:border-blue-600"
-                                  : "border-gray-200 text-slate-600 hover:bg-gray-50 lg:border-transparent"
+                  ? [
+                      writtenExamObjectiveEntry ? (
+                        <button
+                          key={`written-objective-${writtenExamObjectiveEntry.scoreId}`}
+                          type="button"
+                          onClick={() => {
+                            setSelectedId(
+                              writtenExamObjectiveEntry.record.id || "",
+                            );
+                            setSelectedWrittenExamGroupKey(
+                              writtenExamObjectiveEntry.group.key,
+                            );
+                          }}
+                          aria-current={
+                            activeWrittenExamGroupIsObjective
+                              ? "true"
+                              : undefined
+                          }
+                          className={`flex min-w-[15rem] items-start gap-3 rounded-xl border p-3 text-left transition-colors lg:min-w-0 lg:rounded-none lg:border-0 lg:border-l-4 lg:p-4 ${
+                            activeWrittenExamGroupIsObjective
+                              ? "border-blue-200 bg-blue-50 text-blue-600 lg:border-blue-600"
+                              : "border-gray-200 text-slate-600 hover:bg-gray-50 lg:border-transparent"
+                          }`}
+                        >
+                          <div className="w-6 shrink-0 text-center">
+                            <i
+                              className="fas fa-clipboard-check text-sm"
+                              aria-hidden="true"
+                            ></i>
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="whitespace-normal break-keep text-sm font-bold leading-5">
+                              서답형
+                            </div>
+                            <div
+                              className={`mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold ${
+                                activeWrittenExamGroupIsObjective
+                                  ? "text-blue-500"
+                                  : "text-slate-500"
                               }`}
                             >
-                              <div className="w-6 shrink-0 text-center">
-                                <i
-                                  className="fas fa-clipboard-check text-sm"
-                                  aria-hidden="true"
-                                ></i>
+                              <span>
+                                획득{" "}
+                                {formatPerformanceScore(
+                                  getWrittenExamGroupScore(
+                                    writtenExamObjectiveEntry.group,
+                                  ),
+                                )}{" "}
+                                /{" "}
+                                {formatPerformanceScore(
+                                  getWrittenExamGroupMaxScore(
+                                    writtenExamObjectiveEntry.group,
+                                  ),
+                                )}
+                              </span>
+                              {writtenExamObjectiveEntry.record
+                                .signatureName && (
+                                <span className="text-blue-700">확인 완료</span>
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                      ) : null,
+                      writtenExamEssayEntries.length > 0 ? (
+                        <div
+                          key="written-essay-menu"
+                          className={`min-w-[15rem] rounded-xl border text-left transition-colors lg:min-w-0 lg:rounded-none lg:border-0 lg:border-l-4 ${
+                            writtenExamEssayActive
+                              ? "border-blue-200 bg-blue-50 text-blue-600 lg:border-blue-600"
+                              : "border-gray-200 text-slate-600 lg:border-transparent"
+                          }`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const firstEssayEntry =
+                                writtenExamEssayEntries[0];
+                              if (!firstEssayEntry) return;
+                              setSelectedId(firstEssayEntry.record.id || "");
+                              setSelectedWrittenExamGroupKey(
+                                firstEssayEntry.group.key,
+                              );
+                            }}
+                            aria-current={
+                              writtenExamEssayActive ? "true" : undefined
+                            }
+                            className="flex w-full items-start gap-3 px-3 py-3 text-left transition hover:bg-gray-50 lg:px-4"
+                          >
+                            <div className="w-6 shrink-0 text-center">
+                              <i
+                                className="fas fa-clipboard-check text-sm"
+                                aria-hidden="true"
+                              ></i>
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="whitespace-normal break-keep text-sm font-bold leading-5">
+                                논술형
                               </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="whitespace-normal break-keep text-sm font-bold leading-5">
-                                  {getWrittenExamGroupDisplayTitle(group)}
-                                </div>
-                                <div
-                                  className={`mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-bold ${
-                                    groupActive
-                                      ? "text-blue-500"
-                                      : "text-slate-500"
-                                  }`}
-                                >
-                                  <span>
-                                    획득{" "}
-                                    {formatPerformanceScore(
-                                      getWrittenExamGroupScore(group),
-                                    )}{" "}
-                                    /{" "}
-                                    {formatPerformanceScore(
-                                      getWrittenExamGroupMaxScore(group),
-                                    )}
-                                  </span>
-                                  {record.signatureName && (
-                                    <span className="text-blue-700">
-                                      확인 완료
-                                    </span>
-                                  )}
-                                  {pendingObjectionScoreIds.has(scoreId) && (
-                                    <span className="text-amber-700">
-                                      이의 처리 대기
-                                    </span>
-                                  )}
-                                  {pendingAnswerSheetRequestScoreIds.has(
-                                    scoreId,
-                                  ) && (
-                                    <span className="text-blue-700">
-                                      답안지 확인 요청 중
-                                    </span>
-                                  )}
-                                </div>
+                              <div className="mt-1 text-xs font-bold text-slate-500">
+                                {writtenExamEssayEntries.length}개 문항
                               </div>
-                            </button>
-                          );
-                        },
-                      );
-                    })
+                            </div>
+                          </button>
+                          <div className="border-t border-slate-100 px-3 pb-3 lg:px-4">
+                            <div className="grid gap-2 pt-2">
+                              {writtenExamEssayEntries.map(
+                                ({ record, scoreId, group }) => {
+                                  const groupActive =
+                                    record.id === selectedRecord.id &&
+                                    activeWrittenExamGroup?.key === group.key;
+                                  return (
+                                    <button
+                                      key={`written-essay-${scoreId}-${group.key}`}
+                                      type="button"
+                                      onClick={() => {
+                                        setSelectedId(record.id || "");
+                                        setSelectedWrittenExamGroupKey(
+                                          group.key,
+                                        );
+                                      }}
+                                      aria-current={
+                                        groupActive ? "true" : undefined
+                                      }
+                                      className={`rounded-lg px-3 py-2 text-left text-xs font-black transition ${
+                                        groupActive
+                                          ? "bg-blue-600 text-white"
+                                          : "bg-white text-slate-600 hover:bg-slate-50"
+                                      }`}
+                                    >
+                                      <span className="block">
+                                        {getWrittenExamGroupDisplayTitle(group)}
+                                      </span>
+                                      <span
+                                        className={`mt-1 block font-bold ${
+                                          groupActive
+                                            ? "text-blue-100"
+                                            : "text-slate-400"
+                                        }`}
+                                      >
+                                        {formatPerformanceScore(
+                                          getWrittenExamGroupScore(group),
+                                        )}{" "}
+                                        /{" "}
+                                        {formatPerformanceScore(
+                                          getWrittenExamGroupMaxScore(group),
+                                        )}
+                                      </span>
+                                    </button>
+                                  );
+                                },
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ) : null,
+                    ].filter(Boolean)
                   : records.map((record) => {
                       const active =
                         record.id === selectedRecord.id ||
@@ -2537,7 +2671,9 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                   </span>
                 </div>
                 <p className="mt-5 whitespace-normal break-keep text-sm font-bold leading-6 text-blue-900/70">
-                  점수와 {resolvedCopy.evidenceTitle}을 함께 확인해 주세요.
+                  {activeWrittenExamGroupIsObjective
+                    ? "서답형 정오답을 확인해 주세요."
+                    : `점수와 ${resolvedCopy.evidenceTitle}을 함께 확인해 주세요.`}
                 </p>
               </div>
 
@@ -2548,11 +2684,13 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
               >
                 {activeWrittenExamGroupIsObjective ? (
                   <ExamOmrCard
-                    title="서답형 OMR 답안"
-                    description="파란색으로 채워진 답은 맞은 답, 빨간색으로 채워진 답은 내가 선택한 오답입니다. 파란 테두리는 정답입니다."
+                    title="서답형 OMR"
                     items={activeObjectiveOmrItems}
                     mode="student"
                     showScore
+                    scoreLabel={`${formatPerformanceScore(
+                      visibleTotalScore,
+                    )} / ${formatPerformanceScore(visibleTotalMaxScore)}점`}
                     className="border-0 shadow-none"
                   />
                 ) : visibleChartItems.length > 0 ? (
@@ -2584,63 +2722,52 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                       ? `${getWrittenExamGroupDisplayTitle(activeWrittenExamGroup)} 문항별 점수와 피드백`
                       : "문항별 점수와 피드백"}
                   </h3>
-                  <div className="mt-4 grid gap-4">
-                    {[activeWrittenExamGroup].filter(Boolean).map((group) => (
-                      <div
-                        key={group?.key}
-                        className="rounded-xl border border-blue-100 bg-blue-50/60 px-4 py-4"
-                      >
-                        <div className="text-sm font-black text-blue-900">
-                          {group?.label}
+                  <div className="mt-4 grid gap-2">
+                    {activeWrittenExamGroup?.items.map(
+                      ({ key, label, item, index }) => (
+                        <div
+                          key={`${key}-${index}`}
+                          className="grid gap-2 rounded-lg bg-slate-50 px-3 py-3 sm:grid-cols-[4rem_minmax(0,1fr)_auto] sm:items-start"
+                        >
+                          <span className="text-sm font-black text-slate-800">
+                            {label}
+                          </span>
+                          <div className="min-w-0">
+                            {item.feedback && (
+                              <p className="whitespace-pre-wrap break-keep text-sm font-bold leading-6 text-slate-600">
+                                {item.feedback}
+                              </p>
+                            )}
+                          </div>
+                          <span className="shrink-0 text-sm font-black text-blue-700">
+                            {item.scoreEntered === false
+                              ? "-"
+                              : formatPerformanceScore(item.score)}
+                            <span className="text-slate-400">
+                              {" "}
+                              / {formatPerformanceScore(item.maxScore)}점
+                            </span>
+                          </span>
                         </div>
-                        <div className="mt-3 space-y-2">
-                          {group?.items.map(({ key, label, item, index }) => (
-                            <div
-                              key={`${key}-${index}`}
-                              className="rounded-lg border border-white bg-white px-3 py-3 shadow-sm"
-                            >
-                              <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-3">
-                                <span className="text-sm font-black text-slate-800">
-                                  {label}
-                                </span>
-                                <div className="min-w-0">
-                                  {item.feedback && (
-                                    <p className="whitespace-pre-wrap break-keep text-sm font-bold leading-6 text-slate-600">
-                                      {item.feedback}
-                                    </p>
-                                  )}
-                                </div>
-                                <span className="shrink-0 text-sm font-black text-blue-700">
-                                  {item.scoreEntered === false
-                                    ? "-"
-                                    : formatPerformanceScore(item.score)}
-                                  <span className="text-slate-400">
-                                    {" "}
-                                    / {formatPerformanceScore(item.maxScore)}점
-                                  </span>
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
+                      ),
+                    )}
                   </div>
                 </div>
               )}
 
-            {(!hasDetailedWrittenExamItems || evidenceBlockText) && (
-              <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-4">
-                <h3 className="text-base font-black text-blue-900">
-                  {hasDetailedWrittenExamItems
-                    ? "전체 피드백"
-                    : resolvedCopy.evidenceTitle}
-                </h3>
-                <p className="mt-2 whitespace-pre-wrap break-keep text-sm font-bold leading-7 text-slate-700">
-                  {evidenceBlockText || resolvedCopy.evidenceEmptyText}
-                </p>
-              </div>
-            )}
+            {!activeWrittenExamGroupIsObjective &&
+              (!hasDetailedWrittenExamItems || evidenceBlockText) && (
+                <div className="mt-5 rounded-xl border border-blue-200 bg-blue-50 px-4 py-4">
+                  <h3 className="text-base font-black text-blue-900">
+                    {hasDetailedWrittenExamItems
+                      ? "전체 피드백"
+                      : resolvedCopy.evidenceTitle}
+                  </h3>
+                  <p className="mt-2 whitespace-pre-wrap break-keep text-sm font-bold leading-7 text-slate-700">
+                    {evidenceBlockText || resolvedCopy.evidenceEmptyText}
+                  </p>
+                </div>
+              )}
           </section>
         </div>
       )}
@@ -3083,22 +3210,32 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                     {signatureScoreSections.map((section) => (
                       <section
                         key={`signature-section-${section.key}`}
-                        className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3"
+                        className={`rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 ${
+                          section.key === "objective" ? "lg:col-span-2" : ""
+                        }`}
                       >
                         <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
                           <div className="min-w-0 break-keep">
                             <h4 className="text-sm font-black leading-5 text-blue-950">
                               {section.label}
                             </h4>
-                            <p className="mt-1 text-xs font-bold leading-5 text-blue-900/70">
-                              {section.description}
-                            </p>
+                            {section.description && (
+                              <p className="mt-1 text-xs font-bold leading-5 text-blue-900/70">
+                                {section.description}
+                              </p>
+                            )}
                           </div>
                           <span className="whitespace-nowrap text-xs font-black text-blue-700">
                             {section.cards.length}개 영역
                           </span>
                         </div>
-                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        <div
+                          className={`mt-3 grid gap-2 ${
+                            section.key === "objective"
+                              ? "sm:grid-cols-1"
+                              : "sm:grid-cols-2"
+                          }`}
+                        >
                           {section.cards.map((card) => (
                             <div
                               key={card.key}
@@ -3303,7 +3440,9 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                     {signatureScoreSections.map((section) => (
                       <section
                         key={`signature-review-section-${section.key}`}
-                        className="flex min-w-0 flex-col rounded-xl border border-slate-200"
+                        className={`flex min-w-0 flex-col rounded-xl border border-slate-200 ${
+                          section.key === "objective" ? "lg:col-span-2" : ""
+                        }`}
                       >
                         <div className="border-b border-slate-100 px-4 py-3">
                           <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
@@ -3311,9 +3450,11 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                               <h4 className="font-black text-slate-900">
                                 {section.label}
                               </h4>
-                              <p className="mt-1 text-xs font-bold leading-5 text-slate-500">
-                                {section.description}
-                              </p>
+                              {section.description && (
+                                <p className="mt-1 text-xs font-bold leading-5 text-slate-500">
+                                  {section.description}
+                                </p>
+                              )}
                             </div>
                             <span className="whitespace-nowrap text-xs font-black text-blue-700">
                               {section.cards.length}개 영역
@@ -3343,7 +3484,13 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                                 </div>
                               </div>
                               {card.details.length > 0 && (
-                                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                <div
+                                  className={`mt-3 grid gap-2 ${
+                                    section.key === "objective"
+                                      ? "grid-cols-2 sm:grid-cols-4 xl:grid-cols-5"
+                                      : "sm:grid-cols-2"
+                                  }`}
+                                >
                                   {card.details.map((detail) => (
                                     <div
                                       key={`signature-review-detail-${detail.key}`}
