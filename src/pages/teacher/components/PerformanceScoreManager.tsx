@@ -64,6 +64,7 @@ import {
   roundScore,
   savePerformanceScoreSettings,
   sortPerformanceScoreRecords,
+  type PerformanceScoreConfirmation,
   type PerformanceScoreSettings,
   type PerformanceScoreRecord,
   type PerformanceScoreRoster,
@@ -2622,6 +2623,51 @@ const buildScoreListRecordFromDocument = (
   scoreDocumentExists: true,
 });
 
+const shouldUseScoreDocumentForRoster = (
+  record: PerformanceScoreRecord,
+  roster: PerformanceScoreRoster,
+) => {
+  if (record.rosterId && record.rosterId !== roster.id) return false;
+  if (
+    record.scoreKind &&
+    normalizePerformanceScoreKind(record.scoreKind) !==
+      normalizePerformanceScoreKind(roster.scoreKind)
+  ) {
+    return false;
+  }
+  if (
+    record.academicYear &&
+    roster.academicYear &&
+    String(record.academicYear || "") !== String(roster.academicYear)
+  ) {
+    return false;
+  }
+  if (
+    record.semester &&
+    roster.semester &&
+    String(record.semester || "") !== roster.semester
+  ) {
+    return false;
+  }
+  return true;
+};
+
+const clonePerformanceScoreConfirmation = (
+  confirmation: PerformanceScoreConfirmation,
+): PerformanceScoreConfirmation => ({
+  ...confirmation,
+});
+
+const clonePerformanceScoreConfirmationMap = (
+  confirmationsByUid: Map<string, PerformanceScoreConfirmation>,
+) =>
+  new Map(
+    [...confirmationsByUid.entries()].map(([uid, confirmation]) => [
+      uid,
+      clonePerformanceScoreConfirmation(confirmation),
+    ]),
+  );
+
 const getRecordItemsForRoster = (
   record: PerformanceScoreRecord,
   roster: PerformanceScoreRoster,
@@ -5078,6 +5124,18 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   );
   const scoreDocumentSyncRunRef = useRef(0);
   const rosterStudentLinkRepairKeyRef = useRef("");
+  const scoreDocumentRecordsByRosterCacheRef = useRef<
+    Map<string, ScoreListRecord[]>
+  >(new Map());
+  const scoreDocumentRecordPromisesByRosterRef = useRef<
+    Map<string, Promise<ScoreListRecord[]>>
+  >(new Map());
+  const confirmationsByRosterCacheRef = useRef<
+    Map<string, Map<string, PerformanceScoreConfirmation>>
+  >(new Map());
+  const confirmationPromisesByRosterRef = useRef<
+    Map<string, Promise<Map<string, PerformanceScoreConfirmation>>>
+  >(new Map());
   const [savingScoreEdits, setSavingScoreEdits] = useState(false);
   const [scoreStatsModalOpen, setScoreStatsModalOpen] = useState(false);
   const [scoreStatsRecords, setScoreStatsRecords] = useState<
@@ -5253,6 +5311,20 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     { year, semester },
     PERFORMANCE_SCORE_ANSWER_SHEET_REQUESTS_COLLECTION,
   );
+  const invalidateRosterReadCaches = (...rosterIds: string[]) => {
+    rosterIds.filter(Boolean).forEach((rosterId) => {
+      scoreDocumentRecordsByRosterCacheRef.current.delete(rosterId);
+      scoreDocumentRecordPromisesByRosterRef.current.delete(rosterId);
+      confirmationsByRosterCacheRef.current.delete(rosterId);
+      confirmationPromisesByRosterRef.current.delete(rosterId);
+    });
+  };
+  const clearPerformanceScoreReadCaches = () => {
+    scoreDocumentRecordsByRosterCacheRef.current.clear();
+    scoreDocumentRecordPromisesByRosterRef.current.clear();
+    confirmationsByRosterCacheRef.current.clear();
+    confirmationPromisesByRosterRef.current.clear();
+  };
   const rosterStudentLinkRepairKey = useMemo(() => {
     const studentKey = students
       .map(
@@ -6578,6 +6650,142 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     }
   };
 
+  const loadScoreDocumentRecordsForRoster = async (
+    roster: PerformanceScoreRoster,
+  ) => {
+    const cached = scoreDocumentRecordsByRosterCacheRef.current.get(roster.id);
+    if (cached) return cloneScoreListRecords(cached);
+
+    const cachedPromise = scoreDocumentRecordPromisesByRosterRef.current.get(
+      roster.id,
+    );
+    if (cachedPromise) {
+      return cloneScoreListRecords(await cachedPromise);
+    }
+
+    const loadPromise = (async () => {
+      const snap = await getDocs(
+        query(
+          collectionGroup(db, PERFORMANCE_SCORE_USER_COLLECTION),
+          where("rosterId", "==", roster.id),
+        ),
+      );
+      return sortStudentIdentityRows(
+        snap.docs
+          .map((item) =>
+            buildScoreListRecordFromDocument(
+              item.id,
+              item.data() as PerformanceScoreRecord,
+            ),
+          )
+          .filter((record) => shouldUseScoreDocumentForRoster(record, roster)),
+      );
+    })();
+
+    scoreDocumentRecordPromisesByRosterRef.current.set(roster.id, loadPromise);
+    try {
+      const loaded = await loadPromise;
+      scoreDocumentRecordsByRosterCacheRef.current.set(
+        roster.id,
+        cloneScoreListRecords(loaded),
+      );
+      return cloneScoreListRecords(loaded);
+    } finally {
+      scoreDocumentRecordPromisesByRosterRef.current.delete(roster.id);
+    }
+  };
+
+  const loadScoreDocumentRecordsForLinkedRows = async (
+    roster: PerformanceScoreRoster,
+    linkedRows: PerformanceScoreRosterRow[],
+  ) => {
+    const chunkPromises: Array<Promise<ScoreListRecord[]>> = [];
+    for (let index = 0; index < linkedRows.length; index += 40) {
+      const chunk = linkedRows.slice(index, index + 40);
+      chunkPromises.push(
+        Promise.all(
+          chunk.map((row) =>
+            getDoc(
+              doc(
+                db,
+                "users",
+                row.uid,
+                PERFORMANCE_SCORE_USER_COLLECTION,
+                roster.id,
+              ),
+            ),
+          ),
+        ).then((snaps) =>
+          snaps.flatMap((snap) =>
+            snap.exists()
+              ? [
+                  buildScoreListRecordFromDocument(
+                    snap.id,
+                    snap.data() as PerformanceScoreRecord,
+                  ),
+                ]
+              : [],
+          ),
+        ),
+      );
+    }
+    const loaded = (await Promise.all(chunkPromises)).flat();
+    return sortStudentIdentityRows(
+      loaded.filter((record) =>
+        shouldUseScoreDocumentForRoster(record, roster),
+      ),
+    );
+  };
+
+  const loadPerformanceScoreConfirmationsForRoster = async (
+    rosterId: string,
+  ) => {
+    const cached = confirmationsByRosterCacheRef.current.get(rosterId);
+    if (cached) return clonePerformanceScoreConfirmationMap(cached);
+
+    const cachedPromise = confirmationPromisesByRosterRef.current.get(rosterId);
+    if (cachedPromise) {
+      return clonePerformanceScoreConfirmationMap(await cachedPromise);
+    }
+
+    const loadPromise = (async () => {
+      const snap = await getDocs(
+        query(
+          collectionGroup(db, PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION),
+          where("rosterId", "==", rosterId),
+        ),
+      );
+      const confirmationsByUid = new Map<
+        string,
+        PerformanceScoreConfirmation
+      >();
+      snap.docs.forEach((item) => {
+        const data = item.data() as PerformanceScoreConfirmation;
+        const uid = String(data.uid || item.id || "").trim();
+        if (!uid) return;
+        confirmationsByUid.set(uid, {
+          id: item.id,
+          ...data,
+          uid,
+          rosterId,
+        });
+      });
+      return confirmationsByUid;
+    })();
+
+    confirmationPromisesByRosterRef.current.set(rosterId, loadPromise);
+    try {
+      const loaded = await loadPromise;
+      confirmationsByRosterCacheRef.current.set(
+        rosterId,
+        clonePerformanceScoreConfirmationMap(loaded),
+      );
+      return clonePerformanceScoreConfirmationMap(loaded);
+    } finally {
+      confirmationPromisesByRosterRef.current.delete(rosterId);
+    }
+  };
+
   const syncMissingStudentScoreDocuments = async (
     loadedRosters: PerformanceScoreRoster[],
     syncRunId: number,
@@ -6619,21 +6827,55 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     try {
       const missingCandidates: typeof candidates = [];
       const existingKeys: string[] = [];
+      const candidatesByRosterId = new Map<string, typeof candidates>();
+      candidates.forEach((candidate) => {
+        const existing = candidatesByRosterId.get(candidate.roster.id) || [];
+        existing.push(candidate);
+        candidatesByRosterId.set(candidate.roster.id, existing);
+      });
 
-      for (let index = 0; index < candidates.length; index += 40) {
-        const chunk = candidates.slice(index, index + 40);
-        const snaps = await Promise.all(
-          chunk.map((candidate) => getDoc(candidate.ref)),
-        );
-        snaps.forEach((snap, chunkIndex) => {
-          const candidate = chunk[chunkIndex];
-          if (snap.exists()) {
-            existingKeys.push(candidate.key);
-            return;
+      await Promise.all(
+        [...candidatesByRosterId.values()].map(async (rosterCandidates) => {
+          const roster = rosterCandidates[0]?.roster;
+          if (!roster) return;
+
+          try {
+            const documentRecords =
+              await loadScoreDocumentRecordsForRoster(roster);
+            const existingUids = new Set(
+              documentRecords
+                .map((record) => String(record.uid || "").trim())
+                .filter(Boolean),
+            );
+            rosterCandidates.forEach((candidate) => {
+              if (existingUids.has(candidate.row.uid)) {
+                existingKeys.push(candidate.key);
+                return;
+              }
+              missingCandidates.push(candidate);
+            });
+          } catch (error) {
+            console.warn(
+              "Falling back to direct score document checks:",
+              error,
+            );
+            for (let index = 0; index < rosterCandidates.length; index += 40) {
+              const chunk = rosterCandidates.slice(index, index + 40);
+              const snaps = await Promise.all(
+                chunk.map((candidate) => getDoc(candidate.ref)),
+              );
+              snaps.forEach((snap, chunkIndex) => {
+                const candidate = chunk[chunkIndex];
+                if (snap.exists()) {
+                  existingKeys.push(candidate.key);
+                  return;
+                }
+                missingCandidates.push(candidate);
+              });
+            }
           }
-          missingCandidates.push(candidate);
-        });
-      }
+        }),
+      );
 
       if (scoreDocumentSyncRunRef.current !== syncRunId) return;
 
@@ -6645,6 +6887,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       }
 
       const writtenKeys: string[] = [];
+      const writtenRosterIds = new Set<string>();
 
       for (let index = 0; index < missingCandidates.length; index += 20) {
         const chunk = missingCandidates.slice(index, index + 20);
@@ -6694,11 +6937,15 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
             if (shouldMarkChecked) {
               writtenKeys.push(candidate.key);
+              writtenRosterIds.add(candidate.roster.id);
             }
           }),
         );
       }
 
+      if (writtenRosterIds.size) {
+        invalidateRosterReadCaches(...writtenRosterIds);
+      }
       [...existingKeys, ...writtenKeys].forEach((key) =>
         scoreDocumentSyncCheckedKeysRef.current.add(key),
       );
@@ -6715,6 +6962,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   ) => {
     const syncRunId = scoreDocumentSyncRunRef.current + 1;
     scoreDocumentSyncRunRef.current = syncRunId;
+    clearPerformanceScoreReadCaches();
     setRostersLoading(true);
     try {
       const snap = await getDocs(
@@ -6842,6 +7090,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       if (!repairedRosters.length) return;
       if (rosterStudentLinkRepairKeyRef.current !== expectedRepairKey) return;
 
+      invalidateRosterReadCaches(...repairedRosters.map((roster) => roster.id));
       setRosters((current) => {
         const byId = new Map(
           repairedRosters.map((roster) => [roster.id, roster]),
@@ -6894,32 +7143,29 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       (row) =>
         row.uid && (!activeStudentUids.size || activeStudentUids.has(row.uid)),
     );
-    const loaded: ScoreListRecord[] = [];
-    for (let index = 0; index < linkedRows.length; index += 40) {
-      const chunk = linkedRows.slice(index, index + 40);
-      const snaps = await Promise.all(
-        chunk.map((row) =>
-          getDoc(
-            doc(
-              db,
-              "users",
-              row.uid,
-              PERFORMANCE_SCORE_USER_COLLECTION,
-              roster.id,
-            ),
-          ),
-        ),
+    let documentRecords: ScoreListRecord[] = [];
+    try {
+      documentRecords = await loadScoreDocumentRecordsForRoster(roster);
+    } catch (error) {
+      console.warn(
+        "Falling back to direct performance score document reads:",
+        error,
       );
-      snaps.forEach((snap, rowIndex) => {
-        const row = chunk[rowIndex];
-        if (snap.exists()) {
-          const data = snap.data() as PerformanceScoreRecord;
-          loaded.push(buildScoreListRecordFromDocument(snap.id, data));
-          return;
-        }
-        loaded.push(buildScoreListRecordFromRosterRow(roster, row));
-      });
+      documentRecords = await loadScoreDocumentRecordsForLinkedRows(
+        roster,
+        linkedRows,
+      );
     }
+
+    const documentRecordsByUid = new Map(
+      documentRecords
+        .filter((record) => record.uid)
+        .map((record) => [record.uid, record]),
+    );
+    const loaded = linkedRows.map((row) => {
+      const documentRecord = documentRecordsByUid.get(row.uid);
+      return documentRecord || buildScoreListRecordFromRosterRow(roster, row);
+    });
     rosterRows
       .filter((row) => !row.uid && shouldShowRosterRowInScoreList(row))
       .forEach((row) => {
@@ -7262,6 +7508,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         reviewMemo: memo.trim().slice(0, 240),
         updatedAt: serverTimestamp(),
       });
+      invalidateRosterReadCaches(item.rosterId || item.scoreId);
       const reviewMemo = memo.trim().slice(0, 240);
       setAnswerSheetRequests((current) =>
         sortPerformanceScoreAnswerSheetRequests(
@@ -7434,6 +7681,11 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         changedTotalScore,
         reviewMemo,
       });
+      invalidateRosterReadCaches(objection.rosterId || objection.scoreId);
+      setScoreStatsRecords([]);
+      setScoreStatsLoadedRosterId("");
+      setClassSheetPreviewStudents([]);
+      setClassSheetPreviewLoadedKey("");
       setObjections((current) =>
         sortPerformanceScoreObjections(
           current.map((item) =>
@@ -8358,6 +8610,19 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           };
         });
 
+      const changedRosterIds = new Set<string>([
+        selectedScoreRoster.id,
+        ...syncedRosterRowsById.keys(),
+      ]);
+      invalidateRosterReadCaches(...changedRosterIds);
+      scoreDocumentRecordsByRosterCacheRef.current.set(
+        selectedScoreRoster.id,
+        cloneScoreListRecords(
+          normalizedRecords.filter(
+            (record) => record.uid && record.scoreDocumentExists,
+          ),
+        ),
+      );
       setScoreListRecords(normalizedRecords);
       setScoreEditOriginalRecords(cloneScoreListRecords(normalizedRecords));
       setScoreEditing(false);
@@ -8428,52 +8693,69 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       (row) =>
         row.uid && (!activeStudentUids.size || activeStudentUids.has(row.uid)),
     );
-    const loaded: PerformanceScoreRecord[] = [];
-    for (let index = 0; index < linkedRows.length; index += 40) {
-      const chunk = linkedRows.slice(index, index + 40);
-      const snaps = await Promise.all(
-        chunk.map((row) =>
-          getDoc(
-            doc(
-              db,
-              "users",
-              row.uid,
-              PERFORMANCE_SCORE_USER_COLLECTION,
-              roster.id,
-            ),
-          ),
-        ),
+    let documentRecords: ScoreListRecord[] = [];
+    try {
+      documentRecords = await loadScoreDocumentRecordsForRoster(roster);
+    } catch (error) {
+      console.warn("Falling back to direct class score document reads:", error);
+      documentRecords = await loadScoreDocumentRecordsForLinkedRows(
+        roster,
+        linkedRows,
       );
-      snaps.forEach((snap, rowIndex) => {
-        const row = chunk[rowIndex];
-        if (snap.exists()) {
-          const data = snap.data() as PerformanceScoreRecord;
-          loaded.push({
-            id: snap.id,
-            ...data,
-            items: Array.isArray(data.items) ? data.items : [],
-          });
-          return;
-        }
-        if (rosterRowHasScore(row)) {
-          loaded.push(buildRecordFromRosterRow(roster, row));
-        }
-      });
     }
+
+    const documentRecordsByUid = new Map(
+      documentRecords
+        .filter((record) => record.uid)
+        .map((record) => [record.uid, record]),
+    );
+    const loaded: PerformanceScoreRecord[] = linkedRows.flatMap((row) => {
+      const documentRecord = documentRecordsByUid.get(row.uid);
+      if (documentRecord) return [documentRecord];
+      if (rosterRowHasScore(row))
+        return [buildRecordFromRosterRow(roster, row)];
+      return [];
+    });
     classRows
       .filter((row) => !row.uid && shouldShowRosterRowInScoreList(row))
       .forEach((row) => {
         loaded.push(buildRecordFromRosterRow(roster, row));
       });
-    const withConfirmations = await Promise.all(
-      loaded.map(async (record) =>
-        record.uid
-          ? applyPerformanceScoreConfirmation(
-              record,
-              await loadPerformanceScoreConfirmation(record.uid, roster.id),
-            )
-          : record,
-      ),
+
+    let confirmationsByUid = new Map<string, PerformanceScoreConfirmation>();
+    try {
+      confirmationsByUid = await loadPerformanceScoreConfirmationsForRoster(
+        roster.id,
+      );
+    } catch (error) {
+      console.warn(
+        "Falling back to direct performance score confirmation reads:",
+        error,
+      );
+      const fallbackPairs = await Promise.all(
+        loaded.map(async (record) =>
+          record.uid
+            ? ([
+                record.uid,
+                await loadPerformanceScoreConfirmation(record.uid, roster.id),
+              ] as const)
+            : null,
+        ),
+      );
+      confirmationsByUid = new Map(
+        fallbackPairs.flatMap((pair) =>
+          pair && pair[1] ? [[pair[0], pair[1]]] : [],
+        ),
+      );
+    }
+
+    const withConfirmations = loaded.map((record) =>
+      record.uid
+        ? applyPerformanceScoreConfirmation(
+            record,
+            confirmationsByUid.get(record.uid) || null,
+          )
+        : record,
     );
     return sortPerformanceScoreRecords(withConfirmations).sort(
       (a, b) =>
@@ -9249,6 +9531,11 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       });
 
       await batchQueue.commit();
+      invalidateRosterReadCaches(rosterId);
+      scoreDocumentRecordsByRosterCacheRef.current.set(
+        rosterId,
+        cloneScoreListRecords(savedScoreRecords),
+      );
       setParsed(null);
       setScoreListRosterId(rosterId);
       setScoreListLoadedRosterId(rosterId);
@@ -9345,6 +9632,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           );
         });
       await batchQueue.commit();
+      invalidateRosterReadCaches(roster.id);
       if (scoreListRosterId === roster.id || scoreListAllSelected) {
         setScoreListLoadedRosterId("");
         setScoreListRecords([]);
