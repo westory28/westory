@@ -96,6 +96,7 @@ interface PerformanceScoreManagerProps {
 
 type AssessmentPresetKey = "auto" | "first" | "second";
 type UploadAssessmentPresetKey = Exclude<AssessmentPresetKey, "auto">;
+type WrittenExamUploadMode = "objective" | "essay";
 type PreviewPageItem = number | { key: string; label: string };
 type ObjectiveOmrSourceItem =
   | PerformanceScoreItem
@@ -175,6 +176,70 @@ const SCORE_LIST_SECOND_SUMMARY_LABEL = "삼국 시대 인물의 무덤에 평�
 const WRITTEN_EXAM_DEFAULT_ITEM_NAME = "논술형 점수";
 const WRITTEN_EXAM_DEFAULT_SUBJECT = "역사";
 const WRITTEN_EXAM_DEFAULT_MAX_SCORE = "20";
+
+const WRITTEN_EXAM_UPLOAD_MODE_OPTIONS: Array<{
+  key: WrittenExamUploadMode;
+  label: string;
+  shortLabel: string;
+  icon: string;
+  description: string;
+  guideTitle: string;
+  guideDescription: string;
+  fileSelectLabel: string;
+}> = [
+  {
+    key: "objective",
+    label: "서답형 정오답 명렬표",
+    shortLabel: "서답형",
+    icon: "fa-list",
+    description: "문항별 정답, 학생 마킹, 정오답이 들어 있는 엑셀입니다.",
+    guideTitle: "서답형 파일 업로드",
+    guideDescription:
+      "OMR 판독 결과처럼 문항 번호, 정답, 배점, 학생별 마킹 결과가 들어 있는 명렬표를 선택해 주세요.",
+    fileSelectLabel: "서답형 명렬표 파일 선택",
+  },
+  {
+    key: "essay",
+    label: "논술형 점수표",
+    shortLabel: "논술형",
+    icon: "fa-pen-to-square",
+    description: "논술형 문항별 점수와 피드백을 입력한 엑셀입니다.",
+    guideTitle: "논술형 파일 업로드",
+    guideDescription:
+      "논술형 1, 2번 문항의 하위 점수와 피드백을 입력한 점수표를 선택해 주세요.",
+    fileSelectLabel: "논술형 점수표 파일 선택",
+  },
+];
+
+const getWrittenExamUploadModeOption = (mode: WrittenExamUploadMode) =>
+  WRITTEN_EXAM_UPLOAD_MODE_OPTIONS.find((option) => option.key === mode) ||
+  WRITTEN_EXAM_UPLOAD_MODE_OPTIONS[0];
+
+const getWrittenExamDetectedUploadLabel = (
+  scoreContentKind: ParsedUpload["scoreContentKind"],
+) => {
+  if (scoreContentKind === "objective") return "서답형 정오답 명렬표";
+  if (scoreContentKind === "essay") return "논술형 점수표";
+  if (scoreContentKind === "mixed") return "서답형과 논술형이 섞인 점수표";
+  return "정기시험 점수표";
+};
+
+const getWrittenExamContentKindBadgeLabel = (
+  scoreContentKind: ParsedUpload["scoreContentKind"],
+) => {
+  if (scoreContentKind === "objective") return "서답형";
+  if (scoreContentKind === "essay") return "논술형";
+  if (scoreContentKind === "mixed") return "혼합";
+  return "정기시험";
+};
+
+const isWrittenExamUploadModeCompatible = (
+  mode: WrittenExamUploadMode,
+  scoreContentKind: ParsedUpload["scoreContentKind"],
+) => {
+  if (mode === "objective") return scoreContentKind === "objective";
+  return scoreContentKind === "essay";
+};
 
 const ASSESSMENT_PRESETS: Record<
   UploadAssessmentPresetKey,
@@ -279,8 +344,8 @@ const SCORE_MANAGER_COPY: Record<
     scoreKindParticle: "을",
     uploadTitle: "정기시험 점수표 업로드",
     uploadDescription:
-      "서답형 정오답 명렬표 또는 논술형 점수표 엑셀 파일을 선택해 입력합니다.",
-    uploadSelectLabel: "점수표 항목",
+      "서답형과 논술형 중 하나를 먼저 선택한 뒤 엑셀 파일을 업로드합니다.",
+    uploadSelectLabel: "논술형 항목명",
     uploadSuccessTitle: "정기시험 명단을 인식했습니다.",
     uploadErrorContext:
       "서답형 명렬표의 문항·정답·배점 행 또는 논술형 양식의 학년, 반, 번호, 이름, 점수, 피드백 컬럼을 확인해 주세요.",
@@ -4766,6 +4831,8 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   const [writtenExamMaxScore, setWrittenExamMaxScore] = useState(
     WRITTEN_EXAM_DEFAULT_MAX_SCORE,
   );
+  const [writtenExamUploadMode, setWrittenExamUploadMode] =
+    useState<WrittenExamUploadMode>("objective");
   const [students, setStudents] = useState<StudentProfile[]>([]);
   const [studentsLoading, setStudentsLoading] = useState(false);
   const [studentsLoaded, setStudentsLoaded] = useState(false);
@@ -4876,6 +4943,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   const [exportingClassSheet, setExportingClassSheet] = useState(false);
   const [downloadingWrittenExamTemplate, setDownloadingWrittenExamTemplate] =
     useState(false);
+  const writtenExamUploadModeOption = getWrittenExamUploadModeOption(
+    writtenExamUploadMode,
+  );
 
   useEffect(() => {
     setTitle(managerCopy.defaultTitle(year, semester));
@@ -8552,6 +8622,23 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
             targetGrade,
             fallbackClass,
           });
+      if (
+        isWrittenExamMode &&
+        !isWrittenExamUploadModeCompatible(
+          writtenExamUploadMode,
+          parsedUpload.scoreContentKind,
+        )
+      ) {
+        const selectedLabel = getWrittenExamUploadModeOption(
+          writtenExamUploadMode,
+        ).label;
+        const detectedLabel = getWrittenExamDetectedUploadLabel(
+          parsedUpload.scoreContentKind,
+        );
+        throw new Error(
+          `${selectedLabel} 업로드를 선택했지만 파일은 ${detectedLabel} 형식으로 인식되었습니다. 업로드 종류를 바꾸거나 파일을 다시 확인해 주세요.`,
+        );
+      }
       const detectedPreset = isWrittenExamMode
         ? "auto"
         : getDefaultAssessmentPreset(parsedUpload);
@@ -9319,10 +9406,18 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
       {uploadModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
-          <section className="w-full max-w-2xl overflow-hidden rounded-xl bg-white shadow-2xl">
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="score-upload-modal-title"
+            className="w-full max-w-3xl overflow-hidden rounded-xl bg-white shadow-2xl"
+          >
             <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
               <div>
-                <h3 className="text-lg font-black text-slate-900">
+                <h3
+                  id="score-upload-modal-title"
+                  className="text-lg font-black text-slate-900"
+                >
                   {managerCopy.uploadTitle}
                 </h3>
                 <p className="mt-1 text-sm font-semibold text-slate-500">
@@ -9341,22 +9436,82 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
             </div>
 
             <div className="max-h-[78vh] overflow-y-auto px-5 py-5">
+              {isWrittenExamMode && (
+                <div className="mb-4">
+                  <div className="text-xs font-black text-slate-600">
+                    업로드 종류
+                  </div>
+                  <div
+                    className="mt-2 grid gap-2 sm:grid-cols-2"
+                    role="group"
+                    aria-label="정기시험 업로드 종류"
+                  >
+                    {WRITTEN_EXAM_UPLOAD_MODE_OPTIONS.map((option) => {
+                      const selected = writtenExamUploadMode === option.key;
+                      return (
+                        <button
+                          key={option.key}
+                          type="button"
+                          onClick={() => setWrittenExamUploadMode(option.key)}
+                          disabled={parsing}
+                          aria-pressed={selected}
+                          className={`flex min-h-[104px] items-start gap-3 rounded-lg border px-4 py-4 text-left transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                            selected
+                              ? "border-blue-400 bg-blue-50 ring-2 ring-blue-100"
+                              : "border-slate-200 bg-white hover:border-blue-200 hover:bg-slate-50"
+                          }`}
+                        >
+                          <span
+                            className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+                              selected
+                                ? "bg-blue-600 text-white"
+                                : "bg-slate-100 text-slate-500"
+                            }`}
+                          >
+                            <i
+                              className={`fas ${option.icon} text-sm`}
+                              aria-hidden="true"
+                            />
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block text-sm font-black text-slate-900">
+                              {option.label}
+                            </span>
+                            <span className="mt-1 block text-xs font-bold leading-5 text-slate-500">
+                              {option.description}
+                            </span>
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               {isWrittenExamMode ? (
-                <div className="grid gap-3 lg:grid-cols-[1fr_160px_130px]">
-                  <label className="block">
-                    <span className="text-xs font-black text-slate-600">
-                      {managerCopy.uploadSelectLabel}
-                    </span>
-                    <input
-                      type="text"
-                      value={writtenExamItemName}
-                      onChange={(event) =>
-                        setWrittenExamItemName(event.target.value)
-                      }
-                      disabled={parsing}
-                      className="mt-1 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-100"
-                    />
-                  </label>
+                <div
+                  className={`grid gap-3 ${
+                    writtenExamUploadMode === "essay"
+                      ? "lg:grid-cols-[1fr_160px_130px]"
+                      : "sm:grid-cols-2"
+                  }`}
+                >
+                  {writtenExamUploadMode === "essay" && (
+                    <label className="block">
+                      <span className="text-xs font-black text-slate-600">
+                        {managerCopy.uploadSelectLabel}
+                      </span>
+                      <input
+                        type="text"
+                        value={writtenExamItemName}
+                        onChange={(event) =>
+                          setWrittenExamItemName(event.target.value)
+                        }
+                        disabled={parsing}
+                        className="mt-1 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-100"
+                      />
+                    </label>
+                  )}
                   <label className="block">
                     <span className="text-xs font-black text-slate-600">
                       과목
@@ -9369,22 +9524,24 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                       className="mt-1 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-100"
                     />
                   </label>
-                  <label className="block">
-                    <span className="text-xs font-black text-slate-600">
-                      기본 만점
-                    </span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.1"
-                      value={writtenExamMaxScore}
-                      onChange={(event) =>
-                        setWrittenExamMaxScore(event.target.value)
-                      }
-                      disabled={parsing}
-                      className="mt-1 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-100"
-                    />
-                  </label>
+                  {writtenExamUploadMode === "essay" && (
+                    <label className="block">
+                      <span className="text-xs font-black text-slate-600">
+                        기본 만점
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={writtenExamMaxScore}
+                        onChange={(event) =>
+                          setWrittenExamMaxScore(event.target.value)
+                        }
+                        disabled={parsing}
+                        className="mt-1 h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-100"
+                      />
+                    </label>
+                  )}
                 </div>
               ) : (
                 <label className="block">
@@ -9453,30 +9610,34 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
                       <div className="text-sm font-black text-blue-900">
-                        전체 파일 한 번 업로드
+                        {writtenExamUploadModeOption.guideTitle}
                       </div>
                       <div className="mt-1 text-xs font-bold leading-5 text-blue-700">
-                        파일에 학년과 반 컬럼이 있으면 전체 학급을 한 번에
-                        인식합니다. 학년 또는 반이 비어 있는 행만 아래 기본값을
-                        사용합니다.
+                        {writtenExamUploadModeOption.guideDescription} 파일에
+                        학년과 반 컬럼이 있으면 전체 학급을 한 번에 인식합니다.
+                        학년 또는 반이 비어 있는 행만 기본값을 사용합니다.
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => void downloadWrittenExamTemplate()}
-                      disabled={parsing || downloadingWrittenExamTemplate}
-                      className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white px-4 text-xs font-black text-blue-700 shadow-sm transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <i
-                        className={`fas fa-file-download text-[11px] ${
-                          downloadingWrittenExamTemplate ? "animate-pulse" : ""
-                        }`}
-                        aria-hidden="true"
-                      />
-                      {downloadingWrittenExamTemplate
-                        ? "생성 중"
-                        : "양식 다운로드"}
-                    </button>
+                    {writtenExamUploadMode === "essay" && (
+                      <button
+                        type="button"
+                        onClick={() => void downloadWrittenExamTemplate()}
+                        disabled={parsing || downloadingWrittenExamTemplate}
+                        className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white px-4 text-xs font-black text-blue-700 shadow-sm transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <i
+                          className={`fas fa-file-download text-[11px] ${
+                            downloadingWrittenExamTemplate
+                              ? "animate-pulse"
+                              : ""
+                          }`}
+                          aria-hidden="true"
+                        />
+                        {downloadingWrittenExamTemplate
+                          ? "생성 중"
+                          : "논술형 양식 다운로드"}
+                      </button>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -9513,10 +9674,16 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                   aria-hidden="true"
                 ></i>
                 <span className="text-sm font-black text-blue-900">
-                  {parsing ? "파일 인식 중..." : "엑셀 파일 선택"}
+                  {parsing
+                    ? "파일 인식 중..."
+                    : isWrittenExamMode
+                      ? writtenExamUploadModeOption.fileSelectLabel
+                      : "엑셀 파일 선택"}
                 </span>
                 <span className="mt-1 text-xs font-bold text-blue-700">
-                  .xlsx 파일을 선택하면 미리보기 화면으로 이동합니다.
+                  {isWrittenExamMode
+                    ? `${writtenExamUploadModeOption.shortLabel} .xlsx 파일을 선택하면 미리보기 화면으로 이동합니다.`
+                    : ".xlsx 파일을 선택하면 미리보기 화면으로 이동합니다."}
                 </span>
                 <input
                   type="file"
@@ -9560,6 +9727,13 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                             <h5 className="truncate text-sm font-black text-slate-900">
                               {roster.title}
                             </h5>
+                            {isWrittenExamMode && roster.scoreContentKind && (
+                              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-black text-slate-700">
+                                {getWrittenExamContentKindBadgeLabel(
+                                  roster.scoreContentKind,
+                                )}
+                              </span>
+                            )}
                             <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-black text-blue-700">
                               {roster.targetGrade}학년
                             </span>
