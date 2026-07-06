@@ -495,7 +495,10 @@ const isWrittenExamObjectiveRoster = (roster: PerformanceScoreRoster) =>
 
 const isWrittenExamEssayRoster = (roster: PerformanceScoreRoster) =>
   roster.scoreContentKind === "essay" ||
-  rosterHasWrittenExamSection(roster, WRITTEN_EXAM_SECTION_ESSAY);
+  rosterHasWrittenExamSection(roster, WRITTEN_EXAM_SECTION_ESSAY) ||
+  (normalizePerformanceScoreKind(roster.scoreKind) ===
+    WRITTEN_EXAM_SCORE_KIND &&
+    !isWrittenExamObjectiveRoster(roster));
 
 const sortPerformanceScoreRosters = (items: PerformanceScoreRoster[]) =>
   [...items].sort(
@@ -5425,10 +5428,20 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     scoreListRosterId === SCORE_LIST_ALL_ROSTERS_VALUE;
   const scoreListSummaryRosters = useMemo(
     () => ({
-      firstRoster: firstAssessmentRosterOptions[0],
-      secondRoster: secondAssessmentRosterOptions[0],
+      firstRoster: isWrittenExamMode
+        ? writtenExamObjectiveRosterOptions[0]
+        : firstAssessmentRosterOptions[0],
+      secondRoster: isWrittenExamMode
+        ? writtenExamEssayRosterOptions[0]
+        : secondAssessmentRosterOptions[0],
     }),
-    [firstAssessmentRosterOptions, secondAssessmentRosterOptions],
+    [
+      firstAssessmentRosterOptions,
+      isWrittenExamMode,
+      secondAssessmentRosterOptions,
+      writtenExamEssayRosterOptions,
+      writtenExamObjectiveRosterOptions,
+    ],
   );
   const scoreListSummaryLoadKey = [
     SCORE_LIST_ALL_ROSTERS_VALUE,
@@ -5452,15 +5465,15 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         )
       : null;
   const firstScoreListSummaryHeader = formatScoreListSummaryAssessmentLabel(
-    SCORE_LIST_FIRST_SUMMARY_LABEL,
+    isWrittenExamMode ? "서답형" : SCORE_LIST_FIRST_SUMMARY_LABEL,
     firstScoreListSummaryMaxScore,
   );
   const secondScoreListSummaryHeader = formatScoreListSummaryAssessmentLabel(
-    SCORE_LIST_SECOND_SUMMARY_LABEL,
+    isWrittenExamMode ? "논술형" : SCORE_LIST_SECOND_SUMMARY_LABEL,
     secondScoreListSummaryMaxScore,
   );
   const combinedScoreListSummaryHeader = formatScoreListSummaryAssessmentLabel(
-    "수행평가 총점",
+    isWrittenExamMode ? "합계" : "수행평가 총점",
     combinedScoreListSummaryMaxScore,
   );
   const scoreStatsFirstRoster = scoreListSummaryRosters.firstRoster;
@@ -5526,15 +5539,40 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         ? scoreStatsSecondRoster
         : null;
   const scoreStatsAllSelected = scoreStatsMode === "all";
+  const writtenExamScoreStatsRosters = useMemo(() => {
+    if (!isWrittenExamMode) return [];
+    const sourceRosters =
+      scoreStatsMode === "objective"
+        ? writtenExamObjectiveRosterOptions
+        : scoreStatsMode === "essay"
+          ? writtenExamEssayRosterOptions
+          : [
+              scoreListSummaryRosters.firstRoster,
+              scoreListSummaryRosters.secondRoster,
+            ];
+    const seen = new Set<string>();
+    return sourceRosters.filter((roster): roster is PerformanceScoreRoster => {
+      if (!roster || seen.has(roster.id)) return false;
+      seen.add(roster.id);
+      return true;
+    });
+  }, [
+    isWrittenExamMode,
+    scoreListSummaryRosters,
+    scoreStatsMode,
+    writtenExamEssayRosterOptions,
+    writtenExamObjectiveRosterOptions,
+  ]);
   const scoreStatsSelectionReady = isWrittenExamMode
-    ? rosters.length > 0
+    ? writtenExamScoreStatsRosters.length > 0
     : !usesCombinedPerformanceSummary && scoreStatsMode === "all"
       ? rosters.length > 0
       : scoreStatsMode === "all"
         ? Boolean(scoreStatsFirstRoster && scoreStatsSecondRoster)
         : Boolean(scoreStatsSelectedRoster);
   const scoreStatsAnyAvailable = isWrittenExamMode
-    ? rosters.length > 0
+    ? writtenExamObjectiveRosterOptions.length > 0 ||
+      writtenExamEssayRosterOptions.length > 0
     : usesCombinedPerformanceSummary
       ? Boolean(
           (scoreStatsFirstRoster && scoreStatsSecondRoster) ||
@@ -5546,7 +5584,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     ? [
         activeScoreKind,
         scoreStatsMode,
-        ...rosters.map((roster) => roster.id),
+        ...writtenExamScoreStatsRosters.map((roster) => roster.id),
       ].join(":")
     : !usesCombinedPerformanceSummary && scoreStatsMode === "all"
       ? [
@@ -5593,7 +5631,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         {
           mode: "all",
           label: "전체",
-          disabled: rosters.length === 0,
+          disabled: !scoreStatsAnyAvailable,
         },
         {
           mode: "objective",
@@ -5687,7 +5725,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   const scoreListClassOptions = useMemo(() => {
     const values = new Set<string>();
     const sourceRosters = scoreListAllSelected
-      ? usesCombinedPerformanceSummary
+      ? usesCombinedPerformanceSummary || isWrittenExamMode
         ? [
             scoreListSummaryRosters.firstRoster,
             scoreListSummaryRosters.secondRoster,
@@ -5706,6 +5744,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       (a, b) => Number(a) - Number(b) || a.localeCompare(b, "ko"),
     );
   }, [
+    isWrittenExamMode,
     rosters,
     scoreListAllSelected,
     scoreListSummaryRosters,
@@ -5717,12 +5756,13 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     !!selectedScoreRoster &&
     scoreListLoadedRosterId === selectedScoreRoster.id;
   const scoreListSummaryReady =
-    usesCombinedPerformanceSummary &&
+    (usesCombinedPerformanceSummary || isWrittenExamMode) &&
     scoreListAllSelected &&
     scoreListLoadedRosterId === SCORE_LIST_ALL_ROSTERS_VALUE &&
     scoreListSummaryCacheReady;
   const scoreListAllRecordsReady =
     !usesCombinedPerformanceSummary &&
+    !isWrittenExamMode &&
     scoreListAllSelected &&
     scoreListLoadedRosterId === SCORE_LIST_ALL_ROSTERS_VALUE;
   const scoreListDisplayReady = scoreListReady || scoreListAllRecordsReady;
@@ -5955,15 +5995,21 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
   const scoreStatsFallbackRecords = useMemo(() => {
     if (isWrittenExamMode) {
-      if (rosters.some((roster) => isWrittenExamObjectiveRoster(roster))) {
+      if (
+        writtenExamScoreStatsRosters.some((roster) =>
+          isWrittenExamObjectiveRoster(roster),
+        )
+      ) {
         return [];
       }
-      const records = rosters.flatMap((roster) =>
+      const records = writtenExamScoreStatsRosters.flatMap((roster) =>
         (roster.rows || [])
           .filter((row) => rosterRowHasScore(row))
           .map((row) => buildRecordFromRosterRow(roster, row)),
       );
-      return filterWrittenExamStatsRecords(records, writtenExamStatsGroupKey);
+      return writtenExamStatsGroupKey === "all"
+        ? mergeWrittenExamScoreRecordsByStudent(records)
+        : filterWrittenExamStatsRecords(records, writtenExamStatsGroupKey);
     }
     if (scoreStatsAllSelected) {
       if (!usesCombinedPerformanceSummary) {
@@ -6005,6 +6051,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     scoreStatsSelectedRoster,
     semester,
     usesCombinedPerformanceSummary,
+    writtenExamScoreStatsRosters,
     writtenExamStatsGroupKey,
     year,
   ]);
@@ -6067,7 +6114,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   const scoreStatsClassOptions = useMemo(() => {
     const values = new Set<string>();
     const sourceRosters = isWrittenExamMode
-      ? rosters
+      ? writtenExamScoreStatsRosters
       : scoreStatsAllSelected
         ? usesCombinedPerformanceSummary
           ? [scoreStatsFirstRoster, scoreStatsSecondRoster]
@@ -6097,6 +6144,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     scoreStatsSelectedRoster,
     scoreStatsSourceRecords,
     usesCombinedPerformanceSummary,
+    writtenExamScoreStatsRosters,
   ]);
   const scoreStatsClassOptionsKey = scoreStatsClassOptions.join("|");
 
@@ -7197,6 +7245,40 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     setScoreListSummaryLoadedKey("");
     try {
       if (loadingAllScores) {
+        if (isWrittenExamMode) {
+          const { firstRoster, secondRoster } = scoreListSummaryRosters;
+          if (!firstRoster && !secondRoster) {
+            setScoreListLoadError(
+              "전체 조회를 하려면 서답형 또는 논술형 점수표가 필요합니다.",
+            );
+            showToast({
+              tone: "warning",
+              title: "전체 조회를 할 수 없습니다.",
+              message:
+                "서답형 또는 논술형 점수표를 업로드한 뒤 다시 조회해 주세요.",
+            });
+            return;
+          }
+          const [firstRecords, secondRecords] = await Promise.all([
+            firstRoster
+              ? loadScoreRecordsForRoster(firstRoster, {
+                  includeStudentDocuments: true,
+                })
+              : Promise.resolve([]),
+            secondRoster
+              ? loadScoreRecordsForRoster(secondRoster, {
+                  includeStudentDocuments: true,
+                })
+              : Promise.resolve([]),
+          ]);
+          setScoreListSummaryStudents(
+            buildScoreListSummaryStudents(firstRecords, secondRecords),
+          );
+          setScoreListSummaryLoadedKey(scoreListSummaryLoadKey);
+          setScoreListLoadedRosterId(SCORE_LIST_ALL_ROSTERS_VALUE);
+          return;
+        }
+
         if (!usesCombinedPerformanceSummary) {
           const loadedRecords = (
             await Promise.all(
@@ -7284,7 +7366,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       if (isWrittenExamMode) {
         const loadedRecords = (
           await Promise.all(
-            rosters.map((roster) => loadScoreRecordsForRoster(roster)),
+            writtenExamScoreStatsRosters.map((roster) =>
+              loadScoreRecordsForRoster(roster),
+            ),
           )
         ).flat();
         const scopedRecords =
@@ -10408,12 +10492,12 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       )}
 
       {scoreStatsModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-4 py-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/45 px-3 py-4 sm:px-4 sm:py-6">
           <section
             role="dialog"
             aria-modal="true"
             aria-labelledby="performance-score-stats-title"
-            className="flex max-h-[92vh] w-full max-w-7xl flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
+            className="flex max-h-[92vh] w-full max-w-7xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl"
           >
             <div className="flex flex-col gap-3 border-b border-slate-200 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
               <div className="min-w-0">
@@ -10423,9 +10507,12 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                 >
                   {managerCopy.statsTitle}
                 </h3>
-                <p className="mt-1 text-sm font-semibold leading-6 text-slate-500">
-                  {scoreStatsTitle} · {selectedScoreClassLabel} 기준 · 평균은
-                  점수 입력 학생만 산출합니다.
+                <p className="mt-1 break-keep text-sm font-semibold leading-6 text-slate-500">
+                  <span className="whitespace-nowrap">{scoreStatsTitle}</span> ·{" "}
+                  <span className="whitespace-nowrap">
+                    {selectedScoreClassLabel}
+                  </span>{" "}
+                  기준 · 평균은 점수 입력 학생만 산출합니다.
                 </p>
               </div>
               <button
@@ -10438,14 +10525,17 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
               </button>
             </div>
 
-            <div className="overflow-y-auto px-5 py-4">
+            <div className="overflow-y-auto">
               {!scoreStatsSelectionReady ? (
-                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-12 text-center text-sm font-bold text-slate-400">
+                <div className="m-5 break-keep rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-12 text-center text-sm font-bold text-slate-400">
                   {managerCopy.statsEmptyMessage}
                 </div>
               ) : (
-                <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
-                  <aside className="min-w-0 rounded-xl border border-slate-200 bg-slate-50/70 p-3 lg:self-start">
+                <div className="grid min-h-[min(72vh,760px)] lg:grid-cols-[236px_minmax(0,1fr)]">
+                  <aside className="min-w-0 border-b border-slate-200 bg-slate-50 p-4 lg:border-b-0 lg:border-r">
+                    <div className="text-[11px] font-black uppercase text-blue-600">
+                      Statistics
+                    </div>
                     <div className="text-xs font-black text-slate-500">
                       보기 기준
                     </div>
@@ -10458,13 +10548,15 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                             type="button"
                             onClick={() => setScoreStatsMode(option.mode)}
                             disabled={option.disabled || scoreStatsLoading}
-                            className={`inline-flex min-h-10 min-w-0 items-center justify-center rounded-lg border px-3 py-2 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                            className={`inline-flex min-h-10 min-w-0 items-center justify-center rounded-xl border px-3 py-2 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-40 ${
                               selected
                                 ? "border-blue-600 bg-blue-600 text-white"
                                 : "border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:text-blue-700"
                             }`}
                           >
-                            <span className="truncate">{option.label}</span>
+                            <span className="whitespace-nowrap">
+                              {option.label}
+                            </span>
                           </button>
                         );
                       })}
@@ -10492,12 +10584,12 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                       </select>
                     </label>
                   </aside>
-                  <div className="min-w-0 space-y-5">
+                  <div className="min-w-0 space-y-5 px-4 py-4 sm:px-5">
                     <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-4">
-                      <div className="truncate text-sm font-black text-slate-900">
+                      <div className="break-keep text-sm font-black text-slate-900">
                         {scoreStatsTitle}
                       </div>
-                      <div className="mt-1 text-xs font-bold text-slate-500">
+                      <div className="mt-1 break-keep text-xs font-bold leading-5 text-slate-500">
                         전체 {scoreStats.overall.count}명 산출 · 반별 비교 기준
                         · 개별 학생 점수는 표시하지 않습니다.
                       </div>
@@ -10880,127 +10972,91 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                                   : `${scoreStatsTitle} 기준`}
                               </span>
                             </div>
-                            <div className="mt-4 overflow-hidden rounded-lg border border-slate-100">
-                              {writtenExamItemSummaryGroups.map((group) => (
-                                <div
-                                  key={group.key}
-                                  className="border-b border-slate-100 p-3 last:border-b-0"
-                                >
-                                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                                    <div className="text-sm font-black text-slate-900">
-                                      {group.label}
-                                    </div>
-                                    <div className="text-xs font-bold text-slate-500">
-                                      하위 {group.items.length}개 문항 · 만점{" "}
-                                      {formatPerformanceScore(group.maxScore)}점
-                                    </div>
-                                  </div>
-                                  <div className="mt-2 space-y-1.5">
-                                    {group.items.map((item) => {
-                                      const overallPercent =
-                                        item.maxScore > 0 &&
-                                        item.overall.average !== null
-                                          ? (item.overall.average /
-                                              item.maxScore) *
-                                            100
-                                          : 0;
-                                      const selectedPercent =
-                                        item.maxScore > 0 &&
-                                        item.selected.average !== null
-                                          ? (item.selected.average /
-                                              item.maxScore) *
-                                            100
-                                          : 0;
-                                      const overallWidth =
-                                        item.overall.average === null ||
-                                        item.maxScore <= 0
-                                          ? 0
-                                          : Math.min(
-                                              100,
-                                              Math.max(2, overallPercent),
-                                            );
-                                      const selectedWidth =
-                                        item.selected.average === null ||
-                                        item.maxScore <= 0
-                                          ? 0
-                                          : Math.min(
-                                              100,
-                                              Math.max(2, selectedPercent),
-                                            );
-                                      const comparisonRows = [
-                                        {
-                                          key: "selected",
-                                          label: selectedScoreClassLabel,
-                                          average: item.selected.average,
-                                          width: selectedWidth,
-                                          trackClass: "bg-blue-50",
-                                          barClass: "bg-blue-600",
-                                          textClass: "text-blue-700",
-                                          valueClass: "text-blue-700",
-                                        },
-                                        {
-                                          key: "overall",
-                                          label: "전체",
-                                          average: item.overall.average,
-                                          width: overallWidth,
-                                          trackClass: "bg-slate-100",
-                                          barClass: "bg-slate-500",
-                                          textClass: "text-slate-500",
-                                          valueClass: "text-slate-700",
-                                        },
-                                      ];
-                                      return (
-                                        <div
-                                          key={`${group.key}-${item.name}-${item.index}`}
-                                          className="grid gap-2 rounded-lg bg-slate-50 px-3 py-2 sm:grid-cols-[52px_minmax(0,1fr)] sm:items-start"
+                            <div className="mt-4 overflow-x-auto rounded-lg border border-slate-100">
+                              <table className="w-full min-w-[560px] text-left text-xs">
+                                <thead className="bg-slate-50 text-[11px] font-black text-slate-500">
+                                  <tr>
+                                    <th className="whitespace-nowrap px-3 py-2">
+                                      구분
+                                    </th>
+                                    <th className="whitespace-nowrap px-3 py-2">
+                                      문항
+                                    </th>
+                                    <th className="whitespace-nowrap px-3 py-2 text-right">
+                                      만점
+                                    </th>
+                                    <th className="whitespace-nowrap px-3 py-2 text-right">
+                                      전체 평균
+                                    </th>
+                                    <th className="whitespace-nowrap px-3 py-2 text-right">
+                                      {selectedScoreClassLabel} 평균
+                                    </th>
+                                    <th className="whitespace-nowrap px-3 py-2 text-right">
+                                      차이
+                                    </th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                  {writtenExamItemSummaryGroups.map((group) => (
+                                    <React.Fragment key={group.key}>
+                                      <tr className="bg-slate-50/70">
+                                        <td
+                                          colSpan={6}
+                                          className="px-3 py-2 font-black text-slate-800"
                                         >
-                                          <div className="flex items-center justify-between gap-2 sm:block">
-                                            <div className="text-sm font-black text-slate-900">
-                                              {item.shortLabel || item.label}
-                                            </div>
-                                            <div className="text-[11px] font-black text-slate-400 sm:mt-1">
-                                              만점{" "}
-                                              {formatPerformanceScore(
-                                                item.maxScore,
-                                              )}
-                                              점
-                                            </div>
-                                          </div>
-                                          <div className="space-y-1.5">
-                                            {comparisonRows.map((row) => (
-                                              <div
-                                                key={`${group.key}-${item.name}-${item.index}-${row.key}`}
-                                                className="grid grid-cols-[46px_minmax(0,1fr)_44px] items-center gap-2"
-                                              >
-                                                <span
-                                                  className={`truncate text-[11px] font-black ${row.textClass}`}
-                                                >
-                                                  {row.label}
-                                                </span>
-                                                <div
-                                                  className={`h-2.5 rounded-full ${row.trackClass}`}
-                                                >
-                                                  <div
-                                                    className={`h-2.5 rounded-full ${row.barClass}`}
-                                                    style={{
-                                                      width: `${row.width}%`,
-                                                    }}
-                                                  />
-                                                </div>
-                                                <span
-                                                  className={`text-right text-[11px] font-black ${row.valueClass}`}
-                                                >
-                                                  {formatScoreStat(row.average)}
-                                                </span>
-                                              </div>
-                                            ))}
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              ))}
+                                          <span className="whitespace-nowrap">
+                                            {group.label}
+                                          </span>
+                                          <span className="ml-2 text-[11px] font-bold text-slate-500">
+                                            {group.items.length}개 문항 · 만점{" "}
+                                            {formatPerformanceScore(
+                                              group.maxScore,
+                                            )}
+                                            점
+                                          </span>
+                                        </td>
+                                      </tr>
+                                      {group.items.map((item) => (
+                                        <tr
+                                          key={`${group.key}-${item.name}-${item.index}`}
+                                          className="bg-white"
+                                        >
+                                          <td className="whitespace-nowrap px-3 py-2 font-bold text-slate-500">
+                                            {group.label}
+                                          </td>
+                                          <td className="whitespace-nowrap px-3 py-2 font-black text-slate-900">
+                                            {item.shortLabel || item.label}
+                                          </td>
+                                          <td className="whitespace-nowrap px-3 py-2 text-right font-bold text-slate-500">
+                                            {formatPerformanceScore(
+                                              item.maxScore,
+                                            )}
+                                          </td>
+                                          <td className="whitespace-nowrap px-3 py-2 text-right font-black text-slate-700">
+                                            {formatScoreStat(
+                                              item.overall.average,
+                                            )}
+                                          </td>
+                                          <td className="whitespace-nowrap px-3 py-2 text-right font-black text-blue-700">
+                                            {formatScoreStat(
+                                              item.selected.average,
+                                            )}
+                                          </td>
+                                          <td
+                                            className={`whitespace-nowrap px-3 py-2 text-right font-black ${getDifferenceTextClass(
+                                              item.difference,
+                                            )}`}
+                                          >
+                                            {formatDifferenceStat(
+                                              item.difference,
+                                            )}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </React.Fragment>
+                                  ))}
+                                </tbody>
+                              </table>
                             </div>
                           </section>
                         )}
@@ -12018,6 +12074,15 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                               formatClassSheetSignatureSubmittedAt(
                                 signatureSubmittedAtValue,
                               );
+                            const firstRecordSigned = Boolean(
+                              student.firstRecord?.signatureImage ||
+                              student.firstRecord?.confirmation?.signatureImage,
+                            );
+                            const secondRecordSigned = Boolean(
+                              student.secondRecord?.signatureImage ||
+                              student.secondRecord?.confirmation
+                                ?.signatureImage,
+                            );
                             const studentKey = getClassSheetStudentKey(student);
                             const missingLabels = [
                               !transferredStudent && !student.firstRecord
@@ -12027,13 +12092,28 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                                 ? classSheetSecondScoreLabel
                                 : "",
                             ].filter(Boolean);
+                            const missingSignatureLabels =
+                              isWrittenExamMode && !missingLabels.length
+                                ? [
+                                    classSheetSignatureRequirements.requireFirst &&
+                                    !firstRecordSigned
+                                      ? "서답형"
+                                      : "",
+                                    classSheetSignatureRequirements.requireSecond &&
+                                    !secondRecordSigned
+                                      ? "논술형"
+                                      : "",
+                                  ].filter(Boolean)
+                                : [];
                             const statusLabel = transferredStudent
                               ? academicStatusLabel
                               : missingLabels.length
                                 ? "점수 누락"
                                 : signatureRecord
                                   ? "확인 완료"
-                                  : "서명 필요";
+                                  : missingSignatureLabels.length === 1
+                                    ? `${missingSignatureLabels[0]} 필요`
+                                    : "서명 필요";
                             const statusClass = transferredStudent
                               ? "bg-rose-50 text-rose-700"
                               : missingLabels.length

@@ -380,6 +380,30 @@ interface ScoreConfirmationViewProps {
   copy?: Partial<ScoreConfirmationViewCopy>;
 }
 
+interface SignatureScoreDetail {
+  key: string;
+  label: string;
+  score: unknown;
+  maxScore: unknown;
+  scoreEntered?: boolean;
+}
+
+interface SignatureScoreCard {
+  key: string;
+  title: string;
+  subtitle?: string;
+  totalScore: unknown;
+  totalMaxScore: unknown;
+  details: SignatureScoreDetail[];
+}
+
+interface SignatureScoreSection {
+  key: string;
+  label: string;
+  description: string;
+  cards: SignatureScoreCard[];
+}
+
 const PERFORMANCE_SCORE_COPY: ScoreConfirmationViewCopy = {
   pageTitle: "내 수행평가 점수",
   scoreLabel: "수행평가",
@@ -504,6 +528,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
   const [selectedWrittenExamGroupKey, setSelectedWrittenExamGroupKey] =
     useState("");
   const signatureCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const signatureDrawingPanelRef = useRef<HTMLDivElement | null>(null);
   const scoreChartRef = useRef<ChartJS<"bar"> | null>(null);
   const scoreChartContainerRef = useRef<HTMLDivElement | null>(null);
   const signatureDrawnRef = useRef(false);
@@ -759,6 +784,92 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
   const allScoresConfirmed =
     records.length > 0 && confirmedRecordCount === records.length;
   const pendingRecords = records.filter((record) => !isRecordConfirmed(record));
+  const signatureScoreSections = useMemo<SignatureScoreSection[]>(() => {
+    if (pendingRecords.length === 0) return [];
+
+    const buildRecordCard = (
+      record: PerformanceScoreRecord,
+    ): SignatureScoreCard => ({
+      key: getRecordScoreId(record),
+      title: record.title || resolvedCopy.scoreLabel,
+      totalScore: record.totalScore,
+      totalMaxScore: record.totalMaxScore,
+      details: (record.items || []).map((item, index) => ({
+        key: `${record.rosterId || getRecordScoreId(record)}-${item.name}-${index}`,
+        label: getItemLabel(item, index),
+        score: item.score,
+        maxScore: item.maxScore,
+        scoreEntered: item.scoreEntered,
+      })),
+    });
+
+    if (scoreKind !== WRITTEN_EXAM_SCORE_KIND) {
+      return [
+        {
+          key: "scores",
+          label: resolvedCopy.scoreLabel,
+          description: "이번 서명으로 확인할 점수입니다.",
+          cards: pendingRecords.map(buildRecordCard),
+        },
+      ];
+    }
+
+    const objectiveCards: SignatureScoreCard[] = [];
+    const essayCards: SignatureScoreCard[] = [];
+
+    pendingRecords.forEach((record) => {
+      const scoreId = getRecordScoreId(record);
+      const groups = getWrittenExamItemGroups(record.items || []);
+      if (groups.length === 0) {
+        essayCards.push(buildRecordCard(record));
+        return;
+      }
+
+      groups.forEach((group) => {
+        const card: SignatureScoreCard = {
+          key: `${scoreId}-${group.key}`,
+          title: getWrittenExamGroupDisplayTitle(group),
+          subtitle: record.title,
+          totalScore: getWrittenExamGroupScore(group),
+          totalMaxScore: getWrittenExamGroupMaxScore(group),
+          details: group.items.map(({ key, label, item }) => ({
+            key: `${scoreId}-${key}`,
+            label,
+            score: item.score,
+            maxScore: item.maxScore,
+            scoreEntered: item.scoreEntered,
+          })),
+        };
+        if (isObjectiveWrittenExamGroup(group)) {
+          objectiveCards.push(card);
+        } else {
+          essayCards.push(card);
+        }
+      });
+    });
+
+    return [
+      objectiveCards.length
+        ? {
+            key: "objective",
+            label: "서답형",
+            description: "정오답과 획득 점수를 확인합니다.",
+            cards: objectiveCards,
+          }
+        : null,
+      essayCards.length
+        ? {
+            key: "essay",
+            label: "논술형",
+            description: "논술형 문항별 점수와 피드백을 확인합니다.",
+            cards: essayCards,
+          }
+        : null,
+    ].filter((section): section is SignatureScoreSection => section !== null);
+  }, [pendingRecords, resolvedCopy.scoreLabel, scoreKind]);
+  const signaturePendingScopeLabel =
+    signatureScoreSections.map((section) => section.label).join("과 ") ||
+    resolvedCopy.scoreLabel;
   const signatureActionPending =
     confirming || objecting || answerSheetRequesting;
   const warningConsentCurrent = currentUser?.uid
@@ -1013,6 +1124,12 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
       clearSignatureCanvas();
     } else {
       setSignatureError("");
+      window.setTimeout(() => {
+        signatureDrawingPanelRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }, 80);
     }
   };
 
@@ -2944,7 +3061,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                 </h3>
                 <p className="mt-2 text-sm font-semibold leading-6 text-slate-500">
                   {scoreKind === WRITTEN_EXAM_SCORE_KIND
-                    ? "서답형 정오답과 논술형 점수를 모두 확인한 뒤, 성을 포함한 이름을 직접 써 주세요."
+                    ? `${signaturePendingScopeLabel} 점수를 확인한 뒤, 성을 포함한 이름을 직접 써 주세요.`
                     : "모든 차시의 점수를 확인한 뒤, 성을 포함한 이름을 직접 써 주세요."}
                 </p>
               </div>
@@ -2962,56 +3079,51 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
             <div className="overflow-y-auto px-4 py-4 sm:px-5">
               {signatureReviewStep === "sign" ? (
                 <div className="space-y-4">
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {records.flatMap((record) => {
-                      const groups =
-                        scoreKind === WRITTEN_EXAM_SCORE_KIND
-                          ? getWrittenExamItemGroups(record.items || [])
-                          : [];
-                      if (groups.length > 0) {
-                        return groups.map((group) => (
-                          <div
-                            key={`${getRecordScoreId(record)}-${group.key}`}
-                            className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3"
-                          >
-                            <div className="whitespace-normal break-keep text-sm font-black leading-5 text-blue-950">
-                              {getWrittenExamGroupDisplayTitle(group)}
-                            </div>
-                            <div className="mt-1 text-xs font-bold text-blue-900/70">
-                              {record.title}
-                            </div>
-                            <div className="mt-2 text-lg font-black text-blue-700">
-                              {formatPerformanceScore(
-                                getWrittenExamGroupScore(group),
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    {signatureScoreSections.map((section) => (
+                      <section
+                        key={`signature-section-${section.key}`}
+                        className="rounded-xl border border-blue-100 bg-blue-50 px-4 py-3"
+                      >
+                        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0 break-keep">
+                            <h4 className="text-sm font-black leading-5 text-blue-950">
+                              {section.label}
+                            </h4>
+                            <p className="mt-1 text-xs font-bold leading-5 text-blue-900/70">
+                              {section.description}
+                            </p>
+                          </div>
+                          <span className="whitespace-nowrap text-xs font-black text-blue-700">
+                            {section.cards.length}개 영역
+                          </span>
+                        </div>
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                          {section.cards.map((card) => (
+                            <div
+                              key={card.key}
+                              className="rounded-lg border border-blue-100 bg-white px-3 py-3"
+                            >
+                              <div className="break-keep text-sm font-black leading-5 text-slate-900">
+                                {card.title}
+                              </div>
+                              {card.subtitle && (
+                                <div className="mt-1 break-keep text-[11px] font-bold leading-4 text-slate-500">
+                                  {card.subtitle}
+                                </div>
                               )}
-                              <span className="ml-1 text-sm text-blue-300">
-                                /{" "}
-                                {formatPerformanceScore(
-                                  getWrittenExamGroupMaxScore(group),
-                                )}
-                                점
-                              </span>
+                              <div className="mt-2 text-lg font-black text-blue-700">
+                                {formatPerformanceScore(card.totalScore)}
+                                <span className="ml-1 text-sm text-blue-300">
+                                  / {formatPerformanceScore(card.totalMaxScore)}
+                                  점
+                                </span>
+                              </div>
                             </div>
-                          </div>
-                        ));
-                      }
-                      return [
-                        <div
-                          key={getRecordScoreId(record)}
-                          className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3"
-                        >
-                          <div className="whitespace-normal break-keep text-sm font-black leading-5 text-blue-950">
-                            {record.title}
-                          </div>
-                          <div className="mt-2 text-lg font-black text-blue-700">
-                            {formatPerformanceScore(record.totalScore)}
-                            <span className="ml-1 text-sm text-blue-300">
-                              / {formatPerformanceScore(record.totalMaxScore)}점
-                            </span>
-                          </div>
-                        </div>,
-                      ];
-                    })}
+                          ))}
+                        </div>
+                      </section>
+                    ))}
                   </div>
 
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-4">
@@ -3049,6 +3161,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                   {signatureConsent && (
                     <div
                       id="performance-signature-drawing-panel"
+                      ref={signatureDrawingPanelRef}
                       className="rounded-xl border border-blue-100 bg-white px-4 py-4 shadow-sm"
                     >
                       <div className="mb-2 flex items-center justify-between gap-3">
@@ -3187,94 +3300,81 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
                   </div>
 
                   <div className="grid gap-3 lg:grid-cols-2">
-                    {records.flatMap((record) => {
-                      const groups =
-                        scoreKind === WRITTEN_EXAM_SCORE_KIND
-                          ? getWrittenExamItemGroups(record.items || [])
-                          : [];
-                      if (groups.length > 0) {
-                        return groups.map((group) => (
-                          <div
-                            key={`${getRecordScoreId(record)}-${group.key}-review`}
-                            className="flex min-w-0 flex-col rounded-xl border border-slate-200"
-                          >
-                            <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                              <div className="whitespace-normal break-keep font-black text-slate-900">
-                                {getWrittenExamGroupDisplayTitle(group)}
-                              </div>
-                              <div className="text-sm font-black text-blue-700">
-                                {formatPerformanceScore(
-                                  getWrittenExamGroupScore(group),
-                                )}{" "}
-                                /{" "}
-                                {formatPerformanceScore(
-                                  getWrittenExamGroupMaxScore(group),
-                                )}
-                                점
-                              </div>
+                    {signatureScoreSections.map((section) => (
+                      <section
+                        key={`signature-review-section-${section.key}`}
+                        className="flex min-w-0 flex-col rounded-xl border border-slate-200"
+                      >
+                        <div className="border-b border-slate-100 px-4 py-3">
+                          <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="min-w-0 break-keep">
+                              <h4 className="font-black text-slate-900">
+                                {section.label}
+                              </h4>
+                              <p className="mt-1 text-xs font-bold leading-5 text-slate-500">
+                                {section.description}
+                              </p>
                             </div>
-                            <div className="grid gap-2 px-4 py-3 md:grid-cols-2">
-                              {group.items.map(({ key, label, item }) => (
-                                <div
-                                  key={`${record.rosterId}-${key}-review`}
-                                  className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-xs font-bold"
-                                >
-                                  <span className="whitespace-normal break-keep text-slate-600">
-                                    {label}
-                                  </span>
-                                  <span className="shrink-0 text-slate-900">
-                                    {item.scoreEntered === false
-                                      ? "-"
-                                      : formatPerformanceScore(item.score)}
-                                    <span className="text-slate-400">
-                                      {" "}
-                                      / {formatPerformanceScore(item.maxScore)}
-                                    </span>
-                                  </span>
+                            <span className="whitespace-nowrap text-xs font-black text-blue-700">
+                              {section.cards.length}개 영역
+                            </span>
+                          </div>
+                        </div>
+                        <div className="grid gap-3 px-4 py-3">
+                          {section.cards.map((card) => (
+                            <article
+                              key={`signature-review-card-${card.key}`}
+                              className="rounded-lg bg-slate-50 px-3 py-3"
+                            >
+                              <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                                <div className="min-w-0">
+                                  <div className="break-keep text-sm font-black leading-5 text-slate-900">
+                                    {card.title}
+                                  </div>
+                                  {card.subtitle && (
+                                    <div className="mt-1 break-keep text-[11px] font-bold leading-4 text-slate-500">
+                                      {card.subtitle}
+                                    </div>
+                                  )}
                                 </div>
-                              ))}
-                            </div>
-                          </div>
-                        ));
-                      }
-                      return [
-                        <div
-                          key={`${getRecordScoreId(record)}-review`}
-                          className="flex min-w-0 flex-col rounded-xl border border-slate-200"
-                        >
-                          <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                            <div className="whitespace-normal break-keep font-black text-slate-900">
-                              {record.title}
-                            </div>
-                            <div className="text-sm font-black text-blue-700">
-                              {formatPerformanceScore(record.totalScore)} /{" "}
-                              {formatPerformanceScore(record.totalMaxScore)}점
-                            </div>
-                          </div>
-                          <div className="grid gap-2 px-4 py-3 md:grid-cols-2">
-                            {(record.items || []).map((item, index) => (
-                              <div
-                                key={`${record.rosterId}-${item.name}-${index}`}
-                                className="flex items-center justify-between gap-3 rounded-lg bg-slate-50 px-3 py-2 text-xs font-bold"
-                              >
-                                <span className="whitespace-normal break-keep text-slate-600">
-                                  {getItemLabel(item, index)}
-                                </span>
-                                <span className="shrink-0 text-slate-900">
-                                  {item.scoreEntered === false
-                                    ? "-"
-                                    : formatPerformanceScore(item.score)}
-                                  <span className="text-slate-400">
-                                    {" "}
-                                    / {formatPerformanceScore(item.maxScore)}
-                                  </span>
-                                </span>
+                                <div className="whitespace-nowrap text-sm font-black text-blue-700">
+                                  {formatPerformanceScore(card.totalScore)} /{" "}
+                                  {formatPerformanceScore(card.totalMaxScore)}점
+                                </div>
                               </div>
-                            ))}
-                          </div>
-                        </div>,
-                      ];
-                    })}
+                              {card.details.length > 0 && (
+                                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                  {card.details.map((detail) => (
+                                    <div
+                                      key={`signature-review-detail-${detail.key}`}
+                                      className="flex items-center justify-between gap-3 rounded-md bg-white px-3 py-2 text-xs font-bold"
+                                    >
+                                      <span className="break-keep text-slate-600">
+                                        {detail.label}
+                                      </span>
+                                      <span className="shrink-0 whitespace-nowrap text-slate-900">
+                                        {detail.scoreEntered === false
+                                          ? "-"
+                                          : formatPerformanceScore(
+                                              detail.score,
+                                            )}
+                                        <span className="text-slate-400">
+                                          {" "}
+                                          /{" "}
+                                          {formatPerformanceScore(
+                                            detail.maxScore,
+                                          )}
+                                        </span>
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </article>
+                          ))}
+                        </div>
+                      </section>
+                    ))}
                   </div>
 
                   <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold leading-7 text-rose-700">
