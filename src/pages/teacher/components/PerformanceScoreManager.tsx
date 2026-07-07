@@ -2245,6 +2245,82 @@ const sortScoreListRecords = (
     })
     .map(({ record }) => record);
 
+const getScoreListSummarySortScore = (
+  student: ClassSheetStudent,
+  key: ScoreListSortKey,
+) => {
+  const academicStatus =
+    getAcademicStatusLabel(student.firstRecord) ||
+    getAcademicStatusLabel(student.secondRecord);
+  if (academicStatus) return null;
+
+  const firstScore = student.firstRecord
+    ? getEnteredTotalScore(student.firstRecord)
+    : null;
+  const secondScore = student.secondRecord
+    ? getEnteredTotalScore(student.secondRecord)
+    : null;
+
+  if (key === "item-0") return firstScore;
+  if (key === "item-1") return secondScore;
+  if (key === "totalScore") {
+    return firstScore !== null || secondScore !== null
+      ? roundScore((firstScore ?? 0) + (secondScore ?? 0))
+      : null;
+  }
+  return null;
+};
+
+const compareScoreListSummaryStudents = (
+  a: ClassSheetStudent,
+  b: ClassSheetStudent,
+  key: ScoreListSortKey,
+) => {
+  if (key === "grade") return compareSchoolValue(a.grade, b.grade);
+  if (key === "class") return compareSchoolValue(a.class, b.class);
+  if (key === "number") return compareSchoolValue(a.number, b.number);
+  if (key === "studentName") {
+    return String(a.studentName || "").localeCompare(
+      String(b.studentName || ""),
+      "ko",
+      { numeric: true },
+    );
+  }
+  return compareNullableNumber(
+    getScoreListSummarySortScore(a, key),
+    getScoreListSummarySortScore(b, key),
+  );
+};
+
+const sortScoreListSummaryStudents = (
+  students: ClassSheetStudent[],
+  sort: SortState<ScoreListSortKey>,
+) =>
+  students
+    .map((student, index) => ({ student, index }))
+    .sort((a, b) => {
+      const compared = compareScoreListSummaryStudents(
+        a.student,
+        b.student,
+        sort.key,
+      );
+      if (compared !== 0) {
+        return sort.direction === "asc" ? compared : -compared;
+      }
+      return (
+        compareSchoolValue(a.student.grade, b.student.grade) ||
+        compareSchoolValue(a.student.class, b.student.class) ||
+        compareSchoolValue(a.student.number, b.student.number) ||
+        String(a.student.studentName || "").localeCompare(
+          String(b.student.studentName || ""),
+          "ko",
+          { numeric: true },
+        ) ||
+        a.index - b.index
+      );
+    })
+    .map(({ student }) => student);
+
 const compareClassScoreSummaries = (
   a: ClassScoreSummary,
   b: ClassScoreSummary,
@@ -5905,6 +5981,14 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     scoreListSummaryBaseStudents,
     scoreListSummaryReady,
   ]);
+  const sortedFilteredScoreListSummaryStudents = useMemo(
+    () =>
+      sortScoreListSummaryStudents(
+        filteredScoreListSummaryStudents,
+        scoreListSort,
+      ),
+    [filteredScoreListSummaryStudents, scoreListSort],
+  );
   const sortedFilteredScoreListRecords = useMemo(
     () => sortScoreListRecords(filteredScoreListRecords, scoreListSort),
     [filteredScoreListRecords, scoreListSort],
@@ -12904,23 +12988,29 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                   <table className="w-full min-w-[880px] text-left text-sm">
                     <thead className="bg-slate-50 text-xs font-black text-slate-500">
                       <tr>
-                        <th className="whitespace-nowrap px-3 py-3">학년</th>
-                        <th className="whitespace-nowrap px-3 py-3">반</th>
-                        <th className="whitespace-nowrap px-3 py-3">번호</th>
-                        <th className="whitespace-nowrap px-3 py-3">이름</th>
-                        <th className="whitespace-nowrap px-3 py-3 text-right">
-                          {firstScoreListSummaryHeader}
-                        </th>
-                        <th className="whitespace-nowrap px-3 py-3 text-right">
-                          {secondScoreListSummaryHeader}
-                        </th>
-                        <th className="whitespace-nowrap px-3 py-3 text-right">
-                          {combinedScoreListSummaryHeader}
-                        </th>
+                        {renderScoreListHeader("grade", "학년")}
+                        {renderScoreListHeader("class", "반")}
+                        {renderScoreListHeader("number", "번호")}
+                        {renderScoreListHeader("studentName", "이름")}
+                        {renderScoreListHeader(
+                          "item-0",
+                          firstScoreListSummaryHeader,
+                          "right",
+                        )}
+                        {renderScoreListHeader(
+                          "item-1",
+                          secondScoreListSummaryHeader,
+                          "right",
+                        )}
+                        {renderScoreListHeader(
+                          "totalScore",
+                          combinedScoreListSummaryHeader,
+                          "right",
+                        )}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {filteredScoreListSummaryStudents.length === 0 ? (
+                      {sortedFilteredScoreListSummaryStudents.length === 0 ? (
                         <tr>
                           <td
                             colSpan={7}
@@ -12930,76 +13020,78 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                           </td>
                         </tr>
                       ) : (
-                        filteredScoreListSummaryStudents.map((student) => {
-                          const studentKey = getClassSheetStudentKey(student);
-                          const academicStatusLabel =
-                            getClassSheetAcademicStatusLabel(student);
-                          const transferredStudent =
-                            isClassSheetTransferredStudent(student);
-                          const firstRecordAvailable = Boolean(
-                            student.firstRecord,
-                          );
-                          const secondRecordAvailable = Boolean(
-                            student.secondRecord,
-                          );
-                          const combinedTotalScore =
-                            getScoreListCombinedTotalScore(student);
-                          return (
-                            <tr key={studentKey}>
-                              <td className="whitespace-nowrap px-3 py-3 font-bold text-slate-600">
-                                {student.grade}학년
-                              </td>
-                              <td className="whitespace-nowrap px-3 py-3 font-bold text-slate-600">
-                                {student.class}반
-                              </td>
-                              <td className="whitespace-nowrap px-3 py-3 font-bold text-slate-600">
-                                {student.number}번
-                              </td>
-                              <td className="whitespace-nowrap px-3 py-3 font-black text-slate-900">
-                                {student.studentName || "(이름 없음)"}
-                              </td>
-                              <td
-                                className={`whitespace-nowrap px-3 py-3 text-right font-black ${
-                                  transferredStudent
-                                    ? "text-rose-600"
-                                    : firstRecordAvailable
-                                      ? "text-blue-700"
-                                      : "text-slate-400"
-                                }`}
-                              >
-                                {getScoreListSummaryTotalOnlyLabel(
-                                  student.firstRecord,
-                                  academicStatusLabel,
-                                )}
-                              </td>
-                              <td
-                                className={`whitespace-nowrap px-3 py-3 text-right font-black ${
-                                  transferredStudent
-                                    ? "text-rose-600"
-                                    : secondRecordAvailable
-                                      ? "text-blue-700"
-                                      : "text-slate-400"
-                                }`}
-                              >
-                                {getScoreListSummaryTotalOnlyLabel(
-                                  student.secondRecord,
-                                  academicStatusLabel,
-                                )}
-                              </td>
-                              <td
-                                className={`whitespace-nowrap px-3 py-3 text-right text-xl font-black ${
-                                  transferredStudent
-                                    ? "text-rose-600"
-                                    : combinedTotalScore !== null
-                                      ? "text-blue-700"
-                                      : "text-slate-400"
-                                }`}
-                              >
-                                {getScoreListCombinedTotalLabel(student)}
-                              </td>
-                            </tr>
-                          );
-                        })
+                        sortedFilteredScoreListSummaryStudents.map(
+                          (student) => {
+                            const studentKey = getClassSheetStudentKey(student);
+                            const academicStatusLabel =
+                              getClassSheetAcademicStatusLabel(student);
+                            const transferredStudent =
+                              isClassSheetTransferredStudent(student);
+                            const firstRecordAvailable = Boolean(
+                              student.firstRecord,
+                            );
+                            const secondRecordAvailable = Boolean(
+                              student.secondRecord,
+                            );
+                            const combinedTotalScore =
+                              getScoreListCombinedTotalScore(student);
+                            return (
+                              <tr key={studentKey}>
+                                <td className="whitespace-nowrap px-3 py-3 font-bold text-slate-600">
+                                  {student.grade}학년
+                                </td>
+                                <td className="whitespace-nowrap px-3 py-3 font-bold text-slate-600">
+                                  {student.class}반
+                                </td>
+                                <td className="whitespace-nowrap px-3 py-3 font-bold text-slate-600">
+                                  {student.number}번
+                                </td>
+                                <td className="whitespace-nowrap px-3 py-3 font-black text-slate-900">
+                                  {student.studentName || "(이름 없음)"}
+                                </td>
+                                <td
+                                  className={`whitespace-nowrap px-3 py-3 text-right font-black ${
+                                    transferredStudent
+                                      ? "text-rose-600"
+                                      : firstRecordAvailable
+                                        ? "text-blue-700"
+                                        : "text-slate-400"
+                                  }`}
+                                >
+                                  {getScoreListSummaryTotalOnlyLabel(
+                                    student.firstRecord,
+                                    academicStatusLabel,
+                                  )}
+                                </td>
+                                <td
+                                  className={`whitespace-nowrap px-3 py-3 text-right font-black ${
+                                    transferredStudent
+                                      ? "text-rose-600"
+                                      : secondRecordAvailable
+                                        ? "text-blue-700"
+                                        : "text-slate-400"
+                                  }`}
+                                >
+                                  {getScoreListSummaryTotalOnlyLabel(
+                                    student.secondRecord,
+                                    academicStatusLabel,
+                                  )}
+                                </td>
+                                <td
+                                  className={`whitespace-nowrap px-3 py-3 text-right text-xl font-black ${
+                                    transferredStudent
+                                      ? "text-rose-600"
+                                      : combinedTotalScore !== null
+                                        ? "text-blue-700"
+                                        : "text-slate-400"
+                                  }`}
+                                >
+                                  {getScoreListCombinedTotalLabel(student)}
+                                </td>
+                              </tr>
+                            );
+                          },
+                        )
                       )}
                     </tbody>
                   </table>

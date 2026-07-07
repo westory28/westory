@@ -21,37 +21,63 @@ export type ExamOmrQuestionResult = {
 
 export const EXAM_OMR_CHOICES: ExamOmrChoice[] = [1, 2, 3, 4, 5];
 
-const EXAM_OMR_CHOICE_ALIASES: Record<string, ExamOmrChoice> = {
-  "1": 1,
-  "１": 1,
-  "①": 1,
-  "❶": 1,
-  "➀": 1,
-  "⑴": 1,
-  "2": 2,
-  "２": 2,
-  "②": 2,
-  "❷": 2,
-  "➁": 2,
-  "⑵": 2,
-  "3": 3,
-  "３": 3,
-  "③": 3,
-  "❸": 3,
-  "➂": 3,
-  "⑶": 3,
-  "4": 4,
-  "４": 4,
-  "④": 4,
-  "❹": 4,
-  "➃": 4,
-  "⑷": 4,
-  "5": 5,
-  "５": 5,
-  "⑤": 5,
-  "❺": 5,
-  "➄": 5,
-  "⑸": 5,
+const EXAM_OMR_CHOICE_ALIASES: Record<string, ExamOmrChoice[]> = {
+  "1": [1],
+  "１": [1],
+  "①": [1],
+  "❶": [1],
+  "➀": [1],
+  "⑴": [1],
+  "2": [2],
+  "２": [2],
+  "②": [2],
+  "❷": [2],
+  "➁": [2],
+  "⑵": [2],
+  "3": [3],
+  "３": [3],
+  "③": [3],
+  "❸": [3],
+  "➂": [3],
+  "⑶": [3],
+  "4": [4],
+  "４": [4],
+  "④": [4],
+  "❹": [4],
+  "➃": [4],
+  "⑷": [4],
+  "5": [5],
+  "５": [5],
+  "⑤": [5],
+  "❺": [5],
+  "➄": [5],
+  "⑸": [5],
+  A: [1, 2],
+  B: [1, 3],
+  C: [1, 4],
+  D: [1, 5],
+  E: [2, 3],
+  F: [2, 4],
+  G: [2, 5],
+  H: [3, 4],
+  I: [3, 5],
+  J: [4, 5],
+  K: [1, 2, 3],
+  L: [1, 2, 4],
+  M: [1, 2, 5],
+  N: [1, 3, 4],
+  O: [1, 3, 5],
+  P: [1, 4, 5],
+  Q: [2, 3, 4],
+  R: [2, 3, 5],
+  S: [2, 4, 5],
+  T: [3, 4, 5],
+  U: [1, 2, 3, 4],
+  V: [1, 2, 3, 5],
+  W: [1, 2, 4, 5],
+  X: [1, 3, 4, 5],
+  Y: [2, 3, 4, 5],
+  Z: [1, 2, 3, 4, 5],
 };
 
 const uniqueChoices = (choices: ExamOmrChoice[]) =>
@@ -74,14 +100,15 @@ export const normalizeExamOmrChoices = (
   const trimmed = source.trim();
   if (!trimmed) return [];
 
-  const parsed = Number(trimmed);
+  const normalized = trimmed.toUpperCase();
+  const parsed = Number(normalized);
   if (EXAM_OMR_CHOICES.includes(parsed as ExamOmrChoice)) {
     return [parsed as ExamOmrChoice];
   }
 
   return uniqueChoices(
-    Array.from(trimmed)
-      .map((character) => EXAM_OMR_CHOICE_ALIASES[character])
+    Array.from(normalized)
+      .flatMap((character) => EXAM_OMR_CHOICE_ALIASES[character] || [])
       .filter((choice): choice is ExamOmrChoice =>
         EXAM_OMR_CHOICES.includes(choice as ExamOmrChoice),
       ),
