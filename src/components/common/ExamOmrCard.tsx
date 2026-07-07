@@ -32,6 +32,9 @@ type ExamOmrAnswerStripProps = {
 const formatChoices = (choices: ExamOmrChoice[]) =>
   choices.length ? choices.map((choice) => `${choice}번`).join(", ") : "미응답";
 
+const formatChoiceNumbers = (choices: ExamOmrChoice[]) =>
+  choices.length ? choices.join(", ") : "미응답";
+
 const formatScore = (item: ExamOmrQuestionResult) => {
   if (item.scoreEntered === false) return "점수 미입력";
   if (item.score == null && item.maxScore == null) return "";
@@ -64,7 +67,7 @@ const getBubbleClassName = ({
     return "border-blue-600 bg-blue-600 text-white shadow-sm";
   }
   if (isMarked) return "border-rose-600 bg-rose-600 text-white shadow-sm";
-  if (isCorrectAnswer) return "border-blue-500 bg-white text-blue-700";
+  if (isCorrectAnswer) return "border-blue-500 bg-blue-50 text-blue-700";
   return "border-slate-300 bg-white text-slate-500";
 };
 
@@ -143,9 +146,13 @@ const ExamOmrQuestionRow: React.FC<{
   const correctChoices = getExamOmrCorrectChoices(item);
   const statusText = getStatusText(item);
   const scoreText = formatScore(item);
+  const showAnswerMeta =
+    correctChoices.length > 1 || studentChoices.length > 1;
   const itemLabel = `${item.questionNumber}번 문항, ${statusText}, 학생 답 ${formatChoices(
     studentChoices,
-  )}, 정답 ${formatChoices(correctChoices)}${scoreText ? `, ${scoreText}` : ""}`;
+  )}, ${
+    correctChoices.length > 1 ? "중복 인정 답안" : "정답"
+  } ${formatChoices(correctChoices)}${scoreText ? `, ${scoreText}` : ""}`;
 
   return (
     <div
@@ -159,29 +166,38 @@ const ExamOmrQuestionRow: React.FC<{
         {item.questionNumber}번
       </span>
 
-      <div
-        className={[
-          "grid w-max max-w-full grid-cols-5 justify-self-start",
-          compact ? "gap-1" : "gap-1.5",
-        ].join(" ")}
-        aria-hidden="true"
-      >
-        {EXAM_OMR_CHOICES.map((choice) => (
-          <span
-            key={choice}
-            className={[
-              "flex shrink-0 items-center justify-center rounded-full border font-extrabold leading-none transition-colors",
-              compact ? "h-7 w-5 text-[11px]" : "h-8 w-5 text-[11px]",
-              getBubbleClassName({
-                choice,
-                studentChoices,
-                correctChoices,
-              }),
-            ].join(" ")}
-          >
-            {choice}
-          </span>
-        ))}
+      <div className="min-w-0">
+        <div
+          className={[
+            "grid w-max max-w-full grid-cols-5 justify-self-start",
+            compact ? "gap-1" : "gap-1.5",
+          ].join(" ")}
+          aria-hidden="true"
+        >
+          {EXAM_OMR_CHOICES.map((choice) => (
+            <span
+              key={choice}
+              className={[
+                "flex shrink-0 items-center justify-center rounded-full border font-extrabold leading-none transition-colors",
+                compact ? "h-7 w-5 text-[11px]" : "h-8 w-5 text-[11px]",
+                getBubbleClassName({
+                  choice,
+                  studentChoices,
+                  correctChoices,
+                }),
+              ].join(" ")}
+            >
+              {choice}
+            </span>
+          ))}
+        </div>
+        {showAnswerMeta && (
+          <p className="mt-1 text-[10px] font-extrabold leading-4 text-slate-500">
+            체크 {formatChoiceNumbers(studentChoices)} ·{" "}
+            {correctChoices.length > 1 ? "중복 인정" : "정답"}{" "}
+            {formatChoiceNumbers(correctChoices)}
+          </p>
+        )}
       </div>
       <span className="sr-only">
         {statusText}

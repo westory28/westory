@@ -297,11 +297,48 @@ const parseQuestionNumber = (value: unknown) => {
 const normalizeObjectiveAnswer = (value: unknown) =>
   toText(value).replace(/[.．]/g, ".").toUpperCase();
 
+const OBJECTIVE_CHOICE_ALIASES: Record<string, string> = {
+  "1": "1",
+  "１": "1",
+  "①": "1",
+  "❶": "1",
+  "➀": "1",
+  "⑴": "1",
+  "2": "2",
+  "２": "2",
+  "②": "2",
+  "❷": "2",
+  "➁": "2",
+  "⑵": "2",
+  "3": "3",
+  "３": "3",
+  "③": "3",
+  "❸": "3",
+  "➂": "3",
+  "⑶": "3",
+  "4": "4",
+  "４": "4",
+  "④": "4",
+  "❹": "4",
+  "➃": "4",
+  "⑷": "4",
+  "5": "5",
+  "５": "5",
+  "⑤": "5",
+  "❺": "5",
+  "➄": "5",
+  "⑸": "5",
+};
+
 const parseObjectiveAnswerChoices = (value: unknown) => {
   const text = normalizeObjectiveAnswer(value);
   if (!text || text === ".") return [];
   return Array.from(
-    new Set(Array.from(text).filter((character) => /[1-5]/.test(character))),
+    new Set(
+      Array.from(text)
+        .map((character) => OBJECTIVE_CHOICE_ALIASES[character])
+        .filter((choice): choice is string => Boolean(choice)),
+    ),
   ).sort();
 };
 
@@ -314,10 +351,10 @@ const areObjectiveAnswersEqual = (
   if (studentChoices.length === 0 || correctChoices.length === 0) {
     return Boolean(correctAnswer) && studentAnswer === correctAnswer;
   }
-  return (
-    studentChoices.length === correctChoices.length &&
-    studentChoices.every((choice, index) => choice === correctChoices[index])
-  );
+  if (correctChoices.length > 1) {
+    return studentChoices.every((choice) => correctChoices.includes(choice));
+  }
+  return studentChoices.length === 1 && studentChoices[0] === correctChoices[0];
 };
 
 const splitClassAndNumber = (value: unknown) => {
