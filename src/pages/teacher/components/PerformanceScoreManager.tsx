@@ -1066,6 +1066,7 @@ type ClassStatsSortKey =
   | "difference"
   | "percent";
 type ScoreStatsMode = "all" | "objective" | "essay" | "first" | "second";
+type ScoreStatsStudentGroupKey = "perfect" | "nineties";
 type WrittenExamStatsGroupKey = "all" | "objective" | "essay" | "1" | "2";
 
 interface SortState<TKey extends string> {
@@ -1110,6 +1111,25 @@ interface ItemScoreSummary {
   overall: ScoreSummary;
   selected: ScoreSummary;
   difference: number | null;
+}
+
+interface ScoreStatsStudent {
+  key: string;
+  grade: string;
+  class: string;
+  number: string;
+  studentName: string;
+  score: number;
+  maxScore: number;
+  percent: number;
+}
+
+interface ScoreStatsStudentGroup {
+  key: ScoreStatsStudentGroupKey;
+  label: string;
+  description: string;
+  overallStudents: ScoreStatsStudent[];
+  selectedStudents: ScoreStatsStudent[];
 }
 
 interface WrittenExamStatsGroup {
@@ -2362,6 +2382,97 @@ const getRecordTotalScores = (records: PerformanceScoreRecord[]) =>
   records
     .map((record) => getEnteredTotalScore(record))
     .filter((score): score is number => score !== null);
+
+const SCORE_STATS_TOP_STUDENT_LIMIT = 10;
+const SCORE_STATS_SCORE_EPSILON = 0.0001;
+
+const getScoreStatsStudent = (
+  record: PerformanceScoreRecord,
+  totalMaxScore: number,
+  index: number,
+): ScoreStatsStudent | null => {
+  const score = getEnteredTotalScore(record);
+  const recordMaxScore = getRecordTotalMaxScore(record) || totalMaxScore;
+  if (score === null || recordMaxScore <= 0) return null;
+
+  return {
+    key: getScoreStudentPrimaryIdentityKey(record) || `record-${index}`,
+    grade: normalizeSchoolValue(record.grade),
+    class: normalizeSchoolValue(record.class),
+    number: normalizeSchoolValue(record.number),
+    studentName: toText(record.studentName) || "이름 없음",
+    score,
+    maxScore: recordMaxScore,
+    percent: roundScore((score / recordMaxScore) * 100),
+  };
+};
+
+const compareScoreStatsStudentIdentity = (
+  a: ScoreStatsStudent,
+  b: ScoreStatsStudent,
+) =>
+  compareSchoolValue(a.grade, b.grade) ||
+  compareSchoolValue(a.class, b.class) ||
+  compareSchoolValue(a.number, b.number) ||
+  a.studentName.localeCompare(b.studentName, "ko", { numeric: true });
+
+const compareScoreStatsStudentScore = (
+  a: ScoreStatsStudent,
+  b: ScoreStatsStudent,
+) =>
+  b.percent - a.percent ||
+  b.score - a.score ||
+  compareScoreStatsStudentIdentity(a, b);
+
+const buildScoreStatsStudents = (
+  records: PerformanceScoreRecord[],
+  totalMaxScore: number,
+) => {
+  const byStudent = new Map<string, ScoreStatsStudent>();
+  records.forEach((record, index) => {
+    const student = getScoreStatsStudent(record, totalMaxScore, index);
+    if (!student) return;
+
+    const current = byStudent.get(student.key);
+    if (!current || compareScoreStatsStudentScore(student, current) < 0) {
+      byStudent.set(student.key, student);
+    }
+  });
+  return Array.from(byStudent.values()).sort(compareScoreStatsStudentScore);
+};
+
+const isPerfectScoreStatsStudent = (student: ScoreStatsStudent) =>
+  Math.abs(student.score - student.maxScore) <= SCORE_STATS_SCORE_EPSILON;
+
+const isNinetiesScoreStatsStudent = (student: ScoreStatsStudent) =>
+  student.percent >= 90 && student.percent < 100 - SCORE_STATS_SCORE_EPSILON;
+
+const getScoreStatsPerfectLabel = (totalMaxScore: number) =>
+  Math.abs(totalMaxScore - 100) <= SCORE_STATS_SCORE_EPSILON
+    ? "100점"
+    : `${formatPerformanceScore(totalMaxScore)}점 만점`;
+
+const getScoreStatsNinetiesLabel = (totalMaxScore: number) =>
+  Math.abs(totalMaxScore - 100) <= SCORE_STATS_SCORE_EPSILON
+    ? "90점대"
+    : "90%대";
+
+const formatScoreStatsStudentIdentity = (student: ScoreStatsStudent) =>
+  [
+    student.grade ? `${student.grade}학년` : "",
+    student.class ? `${student.class}반` : "",
+    student.number ? `${student.number}번` : "",
+    student.studentName,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+const formatScoreStatsStudentScore = (student: ScoreStatsStudent) =>
+  Math.abs(student.maxScore - 100) <= SCORE_STATS_SCORE_EPSILON
+    ? `${formatPerformanceScore(student.score)}점`
+    : `${formatPerformanceScore(student.score)} / ${formatPerformanceScore(
+        student.maxScore,
+      )}점`;
 
 const buildNormalCurveSummary = (
   records: PerformanceScoreRecord[],
@@ -5237,6 +5348,8 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
   const [scoreStatsLoading, setScoreStatsLoading] = useState(false);
   const [scoreStatsClassFilter, setScoreStatsClassFilter] = useState("");
   const [scoreStatsMode, setScoreStatsMode] = useState<ScoreStatsMode>("all");
+  const [scoreStatsStudentGroupKey, setScoreStatsStudentGroupKey] =
+    useState<ScoreStatsStudentGroupKey>("perfect");
   const [objectionModalOpen, setObjectionModalOpen] = useState(false);
   const [objections, setObjections] = useState<PerformanceScoreObjection[]>([]);
   const [objectionsLoading, setObjectionsLoading] = useState(false);
@@ -6286,6 +6399,38 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       selected.average !== null && overall.average !== null
         ? roundScore(selected.average - overall.average)
         : null;
+    const overallScoreStudents = buildScoreStatsStudents(
+      scoreStatsSourceRecords,
+      totalMaxScore,
+    );
+    const selectedScoreStudents = buildScoreStatsStudents(
+      scoreStatsSelectedRecords,
+      totalMaxScore,
+    );
+    const highScoreGroups: ScoreStatsStudentGroup[] = [
+      {
+        key: "perfect",
+        label: getScoreStatsPerfectLabel(totalMaxScore),
+        description: "만점 학생",
+        overallStudents: overallScoreStudents.filter(
+          isPerfectScoreStatsStudent,
+        ),
+        selectedStudents: selectedScoreStudents.filter(
+          isPerfectScoreStatsStudent,
+        ),
+      },
+      {
+        key: "nineties",
+        label: getScoreStatsNinetiesLabel(totalMaxScore),
+        description: "만점 제외 90점대 학생",
+        overallStudents: overallScoreStudents.filter(
+          isNinetiesScoreStatsStudent,
+        ),
+        selectedStudents: selectedScoreStudents.filter(
+          isNinetiesScoreStatsStudent,
+        ),
+      },
+    ];
     const byClass = new Map<string, PerformanceScoreRecord[]>();
     scoreStatsSourceRecords.forEach((record) => {
       const classValue = normalizeSchoolValue(record.class);
@@ -6400,6 +6545,8 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       selected,
       selectedDifference,
       classSummaries: sortedClassSummaries,
+      highScoreGroups,
+      topStudents: overallScoreStudents.slice(0, SCORE_STATS_TOP_STUDENT_LIMIT),
       assessmentContributions:
         usesCombinedPerformanceSummary && scoreStatsAllSelected
           ? buildAssessmentContributionSummaries(scoreStatsCombinedStudents, {
@@ -6542,6 +6689,12 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       ? "반별 서답형·논술형 평균을 계산할 데이터가 없습니다."
       : "반별 논술형 평균을 계산할 데이터가 없습니다."
     : "반별 1·2차 점수 평균을 계산할 데이터가 없습니다.";
+  const activeScoreStatsStudentGroup =
+    scoreStats.highScoreGroups.find(
+      (group) => group.key === scoreStatsStudentGroupKey,
+    ) ||
+    scoreStats.highScoreGroups[0] ||
+    null;
   const objectionSummary = useMemo(
     () => ({
       total: objections.length,
@@ -10782,6 +10935,172 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
                         </div>
                       </div>
                     </div>
+
+                    <section className="rounded-xl border border-slate-200 bg-white p-4">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <h4 className="text-sm font-black text-slate-900">
+                            고득점 학생 현황
+                          </h4>
+                          <p className="mt-1 text-xs font-bold text-slate-500">
+                            {scoreStatsTitle} 기준 100점, 90점대, 상위권 학생을
+                            확인합니다.
+                          </p>
+                        </div>
+                        <span className="inline-flex w-max rounded-full bg-slate-100 px-3 py-1 text-[11px] font-black text-slate-600">
+                          상위권 Top {SCORE_STATS_TOP_STUDENT_LIMIT}
+                        </span>
+                      </div>
+
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        {scoreStats.highScoreGroups.map((group) => {
+                          const selected =
+                            activeScoreStatsStudentGroup?.key === group.key;
+                          return (
+                            <button
+                              key={group.key}
+                              type="button"
+                              onClick={() =>
+                                setScoreStatsStudentGroupKey(group.key)
+                              }
+                              aria-pressed={selected}
+                              className={`min-w-0 rounded-lg border px-4 py-3 text-left transition ${
+                                selected
+                                  ? "border-blue-500 bg-blue-50 text-blue-900"
+                                  : "border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:bg-slate-50"
+                              }`}
+                            >
+                              <div className="flex min-w-0 items-center justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="truncate text-base font-black">
+                                    {group.label}
+                                  </div>
+                                  <div className="mt-0.5 text-[11px] font-bold text-slate-500">
+                                    {group.description}
+                                  </div>
+                                </div>
+                                {selected && (
+                                  <span className="shrink-0 rounded-full bg-blue-600 px-2 py-0.5 text-[11px] font-black text-white">
+                                    명단
+                                  </span>
+                                )}
+                              </div>
+                              <div className="mt-3 grid grid-cols-2 gap-2 text-xs font-black">
+                                <div className="rounded-md bg-slate-100 px-3 py-2 text-slate-600">
+                                  전체
+                                  <span className="ml-2 text-slate-900">
+                                    {group.overallStudents.length}명
+                                  </span>
+                                </div>
+                                <div className="rounded-md bg-blue-100 px-3 py-2 text-blue-700">
+                                  {selectedScoreClassLabel}
+                                  <span className="ml-2 text-blue-900">
+                                    {group.selectedStudents.length}명
+                                  </span>
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {activeScoreStatsStudentGroup && (
+                        <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(260px,0.8fr)]">
+                          <div className="grid gap-3 lg:grid-cols-2">
+                            {(["overall", "selected"] as const).map((scope) => {
+                              const students =
+                                scope === "overall"
+                                  ? activeScoreStatsStudentGroup.overallStudents
+                                  : activeScoreStatsStudentGroup.selectedStudents;
+                              const title =
+                                scope === "overall"
+                                  ? "전체 명단"
+                                  : `${selectedScoreClassLabel} 명단`;
+                              return (
+                                <div
+                                  key={scope}
+                                  className="min-w-0 rounded-lg bg-slate-50 px-3 py-3"
+                                >
+                                  <div className="flex items-center justify-between gap-3">
+                                    <h5 className="text-xs font-black text-slate-700">
+                                      {activeScoreStatsStudentGroup.label}{" "}
+                                      {title}
+                                    </h5>
+                                    <span className="shrink-0 text-xs font-black text-slate-500">
+                                      {students.length}명
+                                    </span>
+                                  </div>
+                                  {students.length === 0 ? (
+                                    <div className="mt-3 rounded-md bg-white px-3 py-5 text-center text-xs font-bold text-slate-400">
+                                      해당 학생 없음
+                                    </div>
+                                  ) : (
+                                    <ol className="mt-3 max-h-56 space-y-1.5 overflow-y-auto pr-1">
+                                      {students.map((student) => (
+                                        <li
+                                          key={`${scope}-${student.key}`}
+                                          className="flex min-w-0 items-center justify-between gap-3 rounded-md bg-white px-3 py-2 text-xs"
+                                        >
+                                          <span className="min-w-0 truncate font-bold text-slate-700">
+                                            {formatScoreStatsStudentIdentity(
+                                              student,
+                                            )}
+                                          </span>
+                                          <span className="shrink-0 font-black text-blue-700">
+                                            {formatScoreStatsStudentScore(
+                                              student,
+                                            )}
+                                          </span>
+                                        </li>
+                                      ))}
+                                    </ol>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          <div className="min-w-0 rounded-lg bg-slate-50 px-3 py-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <h5 className="text-xs font-black text-slate-700">
+                                상위권 학생
+                              </h5>
+                              <span className="shrink-0 text-xs font-black text-slate-500">
+                                Top {scoreStats.topStudents.length}
+                              </span>
+                            </div>
+                            {scoreStats.topStudents.length === 0 ? (
+                              <div className="mt-3 rounded-md bg-white px-3 py-5 text-center text-xs font-bold text-slate-400">
+                                산출 가능한 학생 없음
+                              </div>
+                            ) : (
+                              <ol className="mt-3 max-h-56 space-y-1.5 overflow-y-auto pr-1">
+                                {scoreStats.topStudents.map(
+                                  (student, index) => (
+                                    <li
+                                      key={`top-${student.key}`}
+                                      className="flex min-w-0 items-center gap-3 rounded-md bg-white px-3 py-2 text-xs"
+                                    >
+                                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[11px] font-black text-white">
+                                        {index + 1}
+                                      </span>
+                                      <span className="min-w-0 flex-1 truncate font-bold text-slate-700">
+                                        {formatScoreStatsStudentIdentity(
+                                          student,
+                                        )}
+                                      </span>
+                                      <span className="shrink-0 font-black text-blue-700">
+                                        {formatScoreStatsStudentScore(student)}
+                                      </span>
+                                    </li>
+                                  ),
+                                )}
+                              </ol>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </section>
 
                     <div className="grid gap-5 xl:grid-cols-2">
                       {showScoreStatsContributionSection && (
