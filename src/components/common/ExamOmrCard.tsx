@@ -32,9 +32,6 @@ type ExamOmrAnswerStripProps = {
 const formatChoices = (choices: ExamOmrChoice[]) =>
   choices.length ? choices.map((choice) => `${choice}번`).join(", ") : "미응답";
 
-const formatChoiceNumbers = (choices: ExamOmrChoice[]) =>
-  choices.length ? choices.join(", ") : "미응답";
-
 const formatScore = (item: ExamOmrQuestionResult) => {
   if (item.scoreEntered === false) return "점수 미입력";
   if (item.score == null && item.maxScore == null) return "";
@@ -146,8 +143,6 @@ const ExamOmrQuestionRow: React.FC<{
   const correctChoices = getExamOmrCorrectChoices(item);
   const statusText = getStatusText(item);
   const scoreText = formatScore(item);
-  const showAnswerMeta =
-    correctChoices.length > 1 || studentChoices.length > 1;
   const itemLabel = `${item.questionNumber}번 문항, ${statusText}, 학생 답 ${formatChoices(
     studentChoices,
   )}, ${
@@ -191,13 +186,6 @@ const ExamOmrQuestionRow: React.FC<{
             </span>
           ))}
         </div>
-        {showAnswerMeta && (
-          <p className="mt-1 text-[10px] font-extrabold leading-4 text-slate-500">
-            체크 {formatChoiceNumbers(studentChoices)} ·{" "}
-            {correctChoices.length > 1 ? "중복 인정" : "정답"}{" "}
-            {formatChoiceNumbers(correctChoices)}
-          </p>
-        )}
       </div>
       <span className="sr-only">
         {statusText}
