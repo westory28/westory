@@ -11,6 +11,8 @@ interface WordCloudViewProps {
   className?: string;
   showSubmitters?: boolean;
   variant?: "default" | "modal";
+  batchStart?: number;
+  totalEntries?: number;
 }
 
 interface PositionedWord extends WordCloudEntry {
@@ -30,7 +32,7 @@ const CENTER_X = WIDTH / 2;
 const CENTER_Y = HEIGHT / 2 - 12;
 const RADIUS_X = 948;
 const RADIUS_Y = 346;
-const MAX_WORDS = 80;
+const WORDS_PER_CLOUD = 50;
 const COLORS = [
   "#2563eb",
   "#0f766e",
@@ -408,6 +410,8 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({
   className = "",
   showSubmitters = false,
   variant = "default",
+  batchStart = 0,
+  totalEntries,
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [hoveredText, setHoveredText] = useState("");
@@ -416,7 +420,7 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({
   const positioned = useMemo(() => {
     if (entries.length === 0) return [] as PositionedWord[];
 
-    const source = entries.slice(0, MAX_WORDS);
+    const source = entries.slice(0, WORDS_PER_CLOUD);
     const minCount = Math.min(...source.map((item) => item.count));
     const maxCount = Math.max(...source.map((item) => item.count));
     const fontRange =
@@ -583,6 +587,17 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({
   const hoveredWord = hoveredText
     ? positioned.find((item) => item.text === hoveredText) || null
     : null;
+  const positionedTextSet = new Set(positioned.map((item) => item.text));
+  const currentEntries = entries.slice(0, WORDS_PER_CLOUD);
+  const unplacedEntries = currentEntries.filter(
+    (item) => !positionedTextSet.has(item.text),
+  );
+  const remainingEntries = entries.slice(WORDS_PER_CLOUD);
+  const resolvedTotalEntries = totalEntries ?? entries.length;
+  const batchEnd = Math.min(
+    batchStart + currentEntries.length,
+    resolvedTotalEntries,
+  );
 
   const containerWidth = containerRef.current?.clientWidth || 0;
   const containerHeight = containerRef.current?.clientHeight || 0;
@@ -606,7 +621,14 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({
   };
 
   return (
-    <div className={`flex h-full w-full justify-center ${className}`}>
+    <div
+      className={`flex w-full flex-col items-center gap-[var(--space-4)] ${className}`}
+    >
+      {resolvedTotalEntries > WORDS_PER_CLOUD && (
+        <div className="w-full max-w-[2100px] text-left text-xs font-bold text-slate-500">
+          고유 응답 {batchStart + 1}~{batchEnd} / {resolvedTotalEntries}
+        </div>
+      )}
       <div
         ref={containerRef}
         className={`relative w-full overflow-hidden rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 via-white to-cyan-50 ${
@@ -715,6 +737,38 @@ const WordCloudView: React.FC<WordCloudViewProps> = ({
           </div>
         )}
       </div>
+
+      {unplacedEntries.length > 0 && (
+        <div className="w-full max-w-[2100px] rounded-xl border border-slate-200 bg-slate-50 p-4 text-left">
+          <div className="mb-3 text-xs font-bold text-slate-500">
+            목록으로 보는 응답
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {unplacedEntries.map((item) => (
+              <span
+                key={item.text}
+                className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-sm font-bold text-slate-700"
+                title={buildTooltip(item, showSubmitters)}
+              >
+                {item.text}
+                <span className="ml-1 text-xs text-slate-400">
+                  {item.count}
+                </span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {remainingEntries.length > 0 && (
+        <WordCloudView
+          entries={remainingEntries}
+          showSubmitters={showSubmitters}
+          variant={variant}
+          batchStart={batchStart + WORDS_PER_CLOUD}
+          totalEntries={resolvedTotalEntries}
+        />
+      )}
     </div>
   );
 };

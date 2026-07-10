@@ -3,7 +3,7 @@ import { db } from "../../../lib/firebase";
 import { getScheduleCategoryMeta } from "../../../lib/scheduleCategories";
 import {
   compareCalendarSchedule,
-  getSchedulePeriodLabel,
+  getSchedulePeriodRangeLabel,
 } from "../../../lib/schedulePeriods";
 import type { ScheduleCategory } from "../../../lib/scheduleCategories";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -219,8 +219,9 @@ const SearchModal: React.FC<SearchModalProps> = ({
                       : ""}
                     {result.eventType !== "holiday" && (
                       <span className="ml-2 font-bold text-blue-600">
-                        {getSchedulePeriodLabel(
+                        {getSchedulePeriodRangeLabel(
                           result.startPeriod ?? result.period,
+                          result.endPeriod,
                         )}
                       </span>
                     )}

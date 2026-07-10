@@ -1945,6 +1945,45 @@ button.lesson-core-point-floating-status:disabled {
 
 .student-calendar-shell__body[data-calendar-view="dayGridMonth"]
   .fc
+  .fc-col-header
+  > thead
+  > tr {
+  display: flex;
+  width: 100%;
+}
+
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
+  .fc-col-header-cell {
+  display: block;
+  flex: 1 1 0;
+  min-width: 0;
+  width: auto !important;
+}
+
+.schedule-event-detail-dialog {
+  max-height: calc(100dvh - var(--space-8));
+}
+
+.schedule-event-detail-overlay {
+  width: 100vw;
+  max-width: none;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  border: 0;
+}
+
+.schedule-event-detail-overlay:not([open]) {
+  display: none;
+}
+
+.schedule-event-detail-overlay::backdrop {
+  background: transparent;
+}
+
+.student-calendar-shell__body[data-calendar-view="dayGridMonth"]
+  .fc
   .fc-scrollgrid {
   border-width: 0 !important;
   border-collapse: separate !important;

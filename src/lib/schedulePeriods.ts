@@ -52,6 +52,25 @@ export const getSchedulePeriodLabel = (value: unknown) => {
   return PERIOD_OPTION_BY_VALUE.get(normalizeSchedulePeriod(value)).label;
 };
 
+export const getSchedulePeriodRangeLabel = (
+  startValue: unknown,
+  endValue?: unknown,
+) => {
+  const startPeriod = normalizeSchedulePeriod(startValue);
+  const endPeriod = normalizeSchedulePeriod(endValue, startPeriod);
+
+  if (
+    startPeriod === SCHEDULE_ALL_DAY_PERIOD_VALUE ||
+    endPeriod === SCHEDULE_ALL_DAY_PERIOD_VALUE
+  ) {
+    return getSchedulePeriodLabel(SCHEDULE_ALL_DAY_PERIOD_VALUE);
+  }
+
+  const startLabel = getSchedulePeriodLabel(startPeriod);
+  if (startPeriod === endPeriod) return startLabel;
+  return `${startLabel} ~ ${getSchedulePeriodLabel(endPeriod)}`;
+};
+
 export const getSchedulePeriodOrder = (value: unknown) => {
   return PERIOD_OPTION_BY_VALUE.get(normalizeSchedulePeriod(value)).order;
 };

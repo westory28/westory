@@ -12,7 +12,7 @@ import {
 } from "../../lib/koreanPublicHolidays";
 import {
   compareSchedulePeriod,
-  getSchedulePeriodLabel,
+  getSchedulePeriodRangeLabel,
   getSchedulePeriodOrder,
 } from "../../lib/schedulePeriods";
 import { loadVisibleCalendarEvents } from "../../lib/visibleSchedule";
@@ -366,8 +366,9 @@ const Calendar = () => {
                       ? `~ ${selectedEvent.end}`
                       : ""}
                     <span className="ml-2 font-bold text-blue-600">
-                      {getSchedulePeriodLabel(
+                      {getSchedulePeriodRangeLabel(
                         selectedEvent.startPeriod ?? selectedEvent.period,
+                        selectedEvent.endPeriod,
                       )}
                     </span>
                   </p>

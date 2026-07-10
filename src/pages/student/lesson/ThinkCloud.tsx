@@ -203,8 +203,7 @@ const ThinkCloud: React.FC = () => {
         count: info.count,
         submitters: Array.from(info.submitters),
       }))
-      .sort((a, b) => b.count - a.count || a.text.localeCompare(b.text))
-      .slice(0, 50);
+      .sort((a, b) => b.count - a.count || a.text.localeCompare(b.text));
   }, [responses]);
 
   const handleSubmit = async () => {

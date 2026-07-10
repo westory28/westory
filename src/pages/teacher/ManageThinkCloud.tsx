@@ -53,6 +53,11 @@ const defaultClassOptions: SchoolOption[] = Array.from(
   }),
 );
 
+const ADMIN_CREATE_BUTTON_STYLE: React.CSSProperties = {
+  right:
+    "calc(env(safe-area-inset-right, 0px) + var(--space-20) + var(--space-2))",
+};
+
 const ManageThinkCloud: React.FC = () => {
   const { config, currentUser, userData } = useAuth();
   const [activeSessionId, setActiveSessionId] = useState("");
@@ -248,8 +253,7 @@ const ManageThinkCloud: React.FC = () => {
         count: info.count,
         submitters: Array.from(info.submitters),
       }))
-      .sort((a, b) => b.count - a.count || a.text.localeCompare(b.text))
-      .slice(0, 50);
+      .sort((a, b) => b.count - a.count || a.text.localeCompare(b.text));
   }, [responses]);
 
   const pendingStudents = useMemo(() => {
@@ -1008,7 +1012,8 @@ const ManageThinkCloud: React.FC = () => {
 
       <button
         onClick={openCreateMode}
-        className="lg:hidden fixed bottom-6 right-6 z-[60] w-14 h-14 rounded-full bg-blue-600 text-white shadow-xl hover:bg-blue-700"
+        className={`fixed bottom-6 z-[60] h-14 w-14 rounded-full bg-blue-600 text-white shadow-xl hover:bg-blue-700 lg:hidden ${canEdit ? "" : "right-6"}`}
+        style={canEdit ? ADMIN_CREATE_BUTTON_STYLE : undefined}
         aria-label="새 주제 추가"
         title="새 주제"
       >
@@ -1017,7 +1022,7 @@ const ManageThinkCloud: React.FC = () => {
 
       {cloudModalOpen && (
         <div
-          className="fixed inset-0 z-[70] bg-white"
+          className="fixed inset-0 z-[120] bg-white"
           onClick={() => setCloudModalOpen(false)}
         >
           <div
@@ -1059,15 +1064,15 @@ const ManageThinkCloud: React.FC = () => {
                 <i className="fas fa-times text-lg"></i>
               </button>
             </div>
-            <div className="flex-1 overflow-hidden px-4 pb-4 pt-4 md:px-8 md:pb-8 md:pt-6">
-              <div className="flex h-full w-full items-center justify-center">
+            <div className="custom-scroll flex-1 overflow-y-auto overscroll-contain px-4 pb-4 pt-4 md:px-8 md:pb-8 md:pt-6">
+              <div className="flex min-h-full w-full items-center justify-center">
                 <WordCloudView
                   entries={cloudEntries}
                   showSubmitters={
                     !!selectedSession && !selectedSession.options.anonymous
                   }
                   variant="default"
-                  className="h-full"
+                  className="w-full"
                 />
               </div>
             </div>

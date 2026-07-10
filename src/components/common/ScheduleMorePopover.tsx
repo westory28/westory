@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import {
   compareCalendarSchedule,
-  getSchedulePeriodLabel,
+  getSchedulePeriodRangeLabel,
 } from "../../lib/schedulePeriods";
 import { getScheduleCategoryMeta } from "../../lib/scheduleCategories";
 import type { ScheduleCategory } from "../../lib/scheduleCategories";
@@ -109,6 +109,7 @@ const ScheduleMorePopover: React.FC<ScheduleMorePopoverProps> = ({
   onClose,
   onEventClick,
 }) => {
+  const popoverRef = useRef<HTMLElement | null>(null);
   const dayEvents = useMemo(
     () =>
       events
@@ -122,13 +123,23 @@ const ScheduleMorePopover: React.FC<ScheduleMorePopoverProps> = ({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
     };
+    const handleScroll = (event: Event) => {
+      const eventTarget = event.target;
+      if (
+        eventTarget instanceof Node &&
+        popoverRef.current?.contains(eventTarget)
+      ) {
+        return;
+      }
+      onClose();
+    };
     window.addEventListener("keydown", handleKeyDown);
     window.addEventListener("resize", onClose);
-    window.addEventListener("scroll", onClose, true);
+    window.addEventListener("scroll", handleScroll, true);
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("resize", onClose);
-      window.removeEventListener("scroll", onClose, true);
+      window.removeEventListener("scroll", handleScroll, true);
     };
   }, [onClose]);
 
@@ -145,6 +156,7 @@ const ScheduleMorePopover: React.FC<ScheduleMorePopoverProps> = ({
         onClick={onClose}
       />
       <section
+        ref={popoverRef}
         className="fixed z-[9998] overflow-hidden rounded-xl border border-blue-100 bg-white shadow-2xl shadow-slate-900/18 ring-1 ring-slate-900/5"
         style={{
           left: position.left,
@@ -183,8 +195,9 @@ const ScheduleMorePopover: React.FC<ScheduleMorePopoverProps> = ({
             const meta = getScheduleCategoryMeta(event.eventType, categories);
             const categoryLabel = isHoliday ? "공휴일" : meta.label;
             const categoryColor = isHoliday ? "#ef4444" : meta.color;
-            const periodLabel = getSchedulePeriodLabel(
+            const periodLabel = getSchedulePeriodRangeLabel(
               event.startPeriod ?? event.period,
+              event.endPeriod,
             );
             const targetLabel = formatTargetLabel(event);
             const title = String(event.title || categoryLabel).trim();

@@ -1,7 +1,7 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { getScheduleCategoryMeta } from "../../lib/scheduleCategories";
 import type { ScheduleCategory } from "../../lib/scheduleCategories";
-import { getSchedulePeriodLabel } from "../../lib/schedulePeriods";
+import { getSchedulePeriodRangeLabel } from "../../lib/schedulePeriods";
 import type { CalendarEvent } from "../../types";
 
 interface ScheduleEventDetailModalProps {
@@ -34,6 +34,18 @@ const ScheduleEventDetailModal: React.FC<ScheduleEventDetailModalProps> = ({
   onClose,
   onEdit,
 }) => {
+  const dialogRef = useRef<HTMLDialogElement | null>(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!event || !dialog) return;
+    if (!dialog.open) dialog.showModal();
+
+    return () => {
+      if (dialog.open) dialog.close();
+    };
+  }, [event]);
+
   if (!event) return null;
 
   const isHoliday = event.eventType === "holiday";
@@ -42,20 +54,41 @@ const ScheduleEventDetailModal: React.FC<ScheduleEventDetailModalProps> = ({
     ? "공휴일"
     : `${categoryMeta.emoji} ${categoryMeta.label}`;
   const categoryColor = isHoliday ? "#ef4444" : categoryMeta.color;
-  const periodLabel = getSchedulePeriodLabel(event.startPeriod ?? event.period);
+  const periodLabel = getSchedulePeriodRangeLabel(
+    event.startPeriod ?? event.period,
+    event.endPeriod,
+  );
   const targetLabel = formatEventTargetLabel(event);
 
   return (
-    <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm"
-      onClick={onClose}
+    <dialog
+      ref={dialogRef}
+      className="schedule-event-detail-overlay fixed inset-0 z-[9999] flex items-center justify-center overflow-y-auto bg-black/55 p-4 backdrop-blur-sm"
+      onClick={(clickEvent) => {
+        if (clickEvent.target === clickEvent.currentTarget) onClose();
+      }}
+      onCancel={(cancelEvent) => {
+        cancelEvent.preventDefault();
+        onClose();
+      }}
+      onKeyDown={(keyEvent) => {
+        if (keyEvent.key !== "Escape") return;
+        keyEvent.preventDefault();
+        onClose();
+      }}
+      aria-labelledby="schedule-event-detail-title"
     >
       <div
-        className="w-full max-w-md overflow-hidden rounded-xl bg-white shadow-2xl"
+        className="schedule-event-detail-dialog mx-auto flex w-full max-w-md flex-col overflow-hidden rounded-xl bg-white shadow-2xl"
         onClick={(clickEvent) => clickEvent.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4">
-          <h4 className="text-lg font-extrabold text-gray-900">일정 상세</h4>
+        <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-5 py-4">
+          <h4
+            id="schedule-event-detail-title"
+            className="text-lg font-extrabold text-gray-900"
+          >
+            일정 상세
+          </h4>
           <button
             type="button"
             onClick={onClose}
@@ -66,7 +99,7 @@ const ScheduleEventDetailModal: React.FC<ScheduleEventDetailModalProps> = ({
           </button>
         </div>
 
-        <div className="space-y-4 px-5 py-5">
+        <div className="custom-scroll min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-5 py-5">
           <div>
             <span
               className="inline-flex rounded-full px-3 py-1 text-xs font-extrabold text-white"
@@ -118,7 +151,7 @@ const ScheduleEventDetailModal: React.FC<ScheduleEventDetailModalProps> = ({
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-gray-100 px-5 py-4">
+        <div className="flex shrink-0 justify-end gap-2 border-t border-gray-100 px-5 py-4">
           {onEdit && !isHoliday && (
             <button
               type="button"
@@ -137,7 +170,7 @@ const ScheduleEventDetailModal: React.FC<ScheduleEventDetailModalProps> = ({
           </button>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 };
 

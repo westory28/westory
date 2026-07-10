@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { getScheduleCategoryMeta } from "../../../lib/scheduleCategories";
-import { getSchedulePeriodLabel } from "../../../lib/schedulePeriods";
+import { getSchedulePeriodRangeLabel } from "../../../lib/schedulePeriods";
 import type { ScheduleCategory } from "../../../lib/scheduleCategories";
 import { CalendarEvent } from "../../../types";
 
@@ -78,8 +78,9 @@ const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
             const typeLabel = isHoliday
               ? "공휴일"
               : `${categoryMeta.emoji} ${categoryMeta.label}`;
-            const periodLabel = getSchedulePeriodLabel(
+            const periodLabel = getSchedulePeriodRangeLabel(
               event.startPeriod ?? event.period,
+              event.endPeriod,
             );
 
             if (isHoliday) {
@@ -183,8 +184,9 @@ const EventDetailPanel: React.FC<EventDetailPanelProps> = ({
                   ? ` ~ ${detailModalEvent.end}`
                   : ""}
                 <span className="ml-2 font-bold text-blue-600">
-                  {getSchedulePeriodLabel(
+                  {getSchedulePeriodRangeLabel(
                     detailModalEvent.startPeriod ?? detailModalEvent.period,
+                    detailModalEvent.endPeriod,
                   )}
                 </span>
               </p>
