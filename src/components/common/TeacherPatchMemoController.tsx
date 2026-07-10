@@ -114,30 +114,42 @@ const getNotePreview = (note: TeacherPatchNote) =>
   trimWhitespace(note.body || note.title || "패치 메모");
 
 const buildCodexCopyText = (note: TeacherPatchNote) => {
-  const lines = [
-    "위스토리 교사 패치 메모입니다. 아래 내용을 확인하고 필요한 수정안을 구현해 주세요.",
-    "",
-    "[메모]",
-    getNotePreview(note),
-    "",
-    `[유형] ${TYPE_LABELS[note.type]}`,
-    `[우선순위] ${note.priority === "high" ? "높음" : "보통"}`,
-    `[처리 상태] ${note.status === "done" ? "완료" : "미처리"}`,
-    `[현재 위치] ${note.sourcePath || "/teacher"}`,
-  ];
+  const locationLines = [`- 경로: ${note.sourcePath || "/teacher"}`];
 
-  if (note.targetLabel) lines.push(`[관련 영역] ${note.targetLabel}`);
-  if (note.targetText) lines.push(`[선택한 화면 텍스트] ${note.targetText}`);
-  if (note.targetSelector) lines.push(`[선택자] ${note.targetSelector}`);
+  if (note.targetLabel) locationLines.push(`- 관련 영역: ${note.targetLabel}`);
+  if (note.targetText) {
+    locationLines.push(`- 선택한 화면 텍스트: ${note.targetText}`);
+  }
+  if (note.targetSelector) {
+    locationLines.push(`- DOM 선택자: ${note.targetSelector}`);
+  }
   if (note.targetRect) {
-    lines.push(
-      `[화면 좌표] x=${Math.round(note.targetRect.x)}, y=${Math.round(
+    locationLines.push(
+      `- 기록 당시 화면 좌표: x=${Math.round(note.targetRect.x)}, y=${Math.round(
         note.targetRect.y,
       )}, width=${Math.round(note.targetRect.width)}, height=${Math.round(
         note.targetRect.height,
       )}`,
     );
   }
+
+  const lines = [
+    "아래 위스토리 패치 메모를 기준으로 관련 코드를 찾아 수정해 주세요.",
+    "기존 구조와 권한 흐름을 유지하고, 수정 후 해당 화면에서 동작을 검증해 주세요.",
+    "",
+    "[작업 요청]",
+    String(note.body || note.title || "").trim() ||
+      "구체적인 메모 내용이 없습니다.",
+    "",
+    "[화면 위치]",
+    ...locationLines,
+    "",
+    "[메모 정보]",
+    `- 유형: ${TYPE_LABELS[note.type]}`,
+    `- 우선순위: ${note.priority === "high" ? "높음" : "보통"}`,
+    "",
+    "완료되면 변경 내용과 검증 결과를 정리해 주세요.",
+  ];
 
   return lines.join("\n");
 };
@@ -502,8 +514,8 @@ const TeacherPatchMemoController: React.FC = () => {
       await copyToClipboard(buildCodexCopyText(note));
       showToast({
         tone: "success",
-        title: "코덱스용 메모를 복사했습니다.",
-        message: "이제 코덱스 입력창에 바로 붙여넣을 수 있습니다.",
+        title: "코덱스용 프롬프트를 복사했습니다.",
+        message: "입력창에 붙여넣으면 위치와 작업 요청이 함께 전달됩니다.",
       });
     } catch (error) {
       console.error("Failed to copy teacher patch note:", error);
@@ -856,29 +868,32 @@ const TeacherPatchMemoController: React.FC = () => {
                           </div>
                         </button>
 
-                        <button
-                          type="button"
-                          onClick={() => void handleCopyForCodex(note)}
-                          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-blue-50 hover:text-blue-600 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
-                          aria-label="코덱스용으로 패치 메모 복사"
-                          title="코덱스용 복사"
-                        >
-                          <i
-                            className="fas fa-copy text-xs"
-                            aria-hidden="true"
-                          ></i>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void handleDelete(note)}
-                          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-rose-100"
-                          aria-label="패치 메모 삭제"
-                        >
-                          <i
-                            className="fas fa-trash-can text-xs"
-                            aria-hidden="true"
-                          ></i>
-                        </button>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => void handleCopyForCodex(note)}
+                            className="inline-flex min-h-10 shrink-0 items-center justify-center gap-1.5 rounded-lg border border-blue-100 bg-blue-50 px-2.5 text-xs font-extrabold text-blue-700 transition hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
+                            aria-label="코덱스용 프롬프트로 패치 메모 복사"
+                            title="코덱스용 프롬프트 복사"
+                          >
+                            <i
+                              className="fas fa-copy text-xs"
+                              aria-hidden="true"
+                            ></i>
+                            복사
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleDelete(note)}
+                            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-rose-50 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-rose-100"
+                            aria-label="패치 메모 삭제"
+                          >
+                            <i
+                              className="fas fa-trash-can text-xs"
+                              aria-hidden="true"
+                            ></i>
+                          </button>
+                        </div>
                       </div>
                     </article>
                   );
