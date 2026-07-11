@@ -53,11 +53,6 @@ const defaultClassOptions: SchoolOption[] = Array.from(
   }),
 );
 
-const ADMIN_CREATE_BUTTON_STYLE: React.CSSProperties = {
-  right:
-    "calc(env(safe-area-inset-right, 0px) + var(--space-20) + var(--space-2))",
-};
-
 const ManageThinkCloud: React.FC = () => {
   const { config, currentUser, userData } = useAuth();
   const [activeSessionId, setActiveSessionId] = useState("");
@@ -70,6 +65,7 @@ const ManageThinkCloud: React.FC = () => {
   const [message, setMessage] = useState("");
   const [isCreateMode, setIsCreateMode] = useState(false);
   const [cloudModalOpen, setCloudModalOpen] = useState(false);
+  const [mobileSessionListOpen, setMobileSessionListOpen] = useState(false);
   const [classStudents, setClassStudents] = useState<StudentRosterItem[]>([]);
   const [gradeOptions, setGradeOptions] =
     useState<SchoolOption[]>(defaultGradeOptions);
@@ -360,6 +356,7 @@ const ManageThinkCloud: React.FC = () => {
     setIsCreateMode(false);
     setSelectedSessionId(id);
     setMessage("");
+    setMobileSessionListOpen(false);
   };
 
   const openCreateMode = () => {
@@ -367,6 +364,7 @@ const ManageThinkCloud: React.FC = () => {
     setSelectedSessionId("");
     setMessage("");
     resetCreateForm();
+    setMobileSessionListOpen(false);
   };
 
   const handleStartSession = async () => {
@@ -763,7 +761,7 @@ const ManageThinkCloud: React.FC = () => {
       return (
         <section className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
           <p className="text-gray-500 font-bold">
-            좌측에서 주제를 선택하거나 새 주제를 추가해 주세요.
+            목록에서 주제를 선택하거나 새 주제를 추가해 주세요.
           </p>
         </section>
       );
@@ -914,17 +912,57 @@ const ManageThinkCloud: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <main className="flex flex-col lg:flex-row flex-1 p-6 lg:p-8 gap-6 max-w-7xl mx-auto w-full">
-        <aside className="w-full lg:w-72 shrink-0">
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="p-5 border-b border-gray-100">
+        {mobileSessionListOpen && (
+          <button
+            type="button"
+            className="fixed inset-0 z-40 bg-black/45 lg:hidden"
+            onClick={() => setMobileSessionListOpen(false)}
+            aria-label="생각모아 목록 닫기"
+          />
+        )}
+
+        <aside
+          className={`fixed bottom-0 right-0 top-16 z-50 w-[82%] max-w-[320px] shrink-0 transition-transform duration-300 motion-reduce:transition-none lg:static lg:z-auto lg:h-auto lg:w-72 lg:max-w-none lg:translate-x-0 ${
+            mobileSessionListOpen ? "translate-x-0" : "translate-x-full"
+          }`}
+          aria-label="생각모아 목록"
+        >
+          <div className="flex h-full flex-col overflow-hidden border border-gray-200 bg-white shadow-2xl lg:rounded-xl lg:shadow-sm">
+            <div className="flex items-center justify-between border-b border-gray-100 p-5">
               <h1 className="text-xl font-extrabold text-gray-800 flex items-center gap-2">
-                <i className="fas fa-cloud text-blue-500"></i> 생각모아
+                <i
+                  className="fas fa-cloud text-blue-500"
+                  aria-hidden="true"
+                ></i>
+                <span>생각모아 목록</span>
               </h1>
+              <button
+                type="button"
+                onClick={() => setMobileSessionListOpen(false)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 lg:hidden"
+                aria-label="생각모아 목록 닫기"
+              >
+                <i className="fas fa-times text-lg" aria-hidden="true"></i>
+              </button>
             </div>
+
+            {canEdit && (
+              <div className="border-b border-gray-100 p-4 lg:hidden">
+                <button
+                  type="button"
+                  onClick={openCreateMode}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
+                >
+                  <i className="fas fa-plus text-sm" aria-hidden="true"></i>
+                  <span>새 생각모아 만들기</span>
+                </button>
+              </div>
+            )}
 
             <div className="border-b border-gray-100 p-4">
               <div className="grid grid-cols-2 gap-2">
                 <select
+                  aria-label="학년 필터"
                   value={filterGrade}
                   onChange={(e) => setFilterGrade(e.target.value)}
                   className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-bold text-gray-700 outline-none"
@@ -937,6 +975,7 @@ const ManageThinkCloud: React.FC = () => {
                   ))}
                 </select>
                 <select
+                  aria-label="반 필터"
                   value={filterClass}
                   onChange={(e) => setFilterClass(e.target.value)}
                   className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-bold text-gray-700 outline-none"
@@ -951,7 +990,7 @@ const ManageThinkCloud: React.FC = () => {
               </div>
             </div>
 
-            <nav className="max-h-[60vh] overflow-y-auto">
+            <nav className="flex-1 overflow-y-auto lg:max-h-[60vh]">
               {filteredSessions.length === 0 && (
                 <p className="p-4 text-sm font-bold text-gray-500">
                   저장된 주제가 없습니다.
@@ -964,6 +1003,7 @@ const ManageThinkCloud: React.FC = () => {
                   session.id === activeSessionId && session.status === "active";
                 return (
                   <button
+                    type="button"
                     key={session.id}
                     onClick={() => selectSession(session.id)}
                     className={`w-full px-4 py-3 text-left border-l-4 transition ${isSelected ? "bg-blue-50 text-blue-700 border-blue-600" : "text-gray-700 border-transparent hover:bg-gray-50"}`}
@@ -995,7 +1035,7 @@ const ManageThinkCloud: React.FC = () => {
         </aside>
 
         <div className="flex-1">
-          <div className="mb-4 justify-end hidden lg:flex">
+          <div className="think-cloud-desktop-create-action mb-4 justify-end">
             <button
               onClick={openCreateMode}
               className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-5 rounded-lg shadow-sm"
@@ -1011,13 +1051,16 @@ const ManageThinkCloud: React.FC = () => {
       </main>
 
       <button
-        onClick={openCreateMode}
-        className={`fixed bottom-6 z-[60] h-14 w-14 rounded-full bg-blue-600 text-white shadow-xl hover:bg-blue-700 lg:hidden ${canEdit ? "" : "right-6"}`}
-        style={canEdit ? ADMIN_CREATE_BUTTON_STYLE : undefined}
-        aria-label="새 주제 추가"
-        title="새 주제"
+        type="button"
+        onClick={() => setMobileSessionListOpen(true)}
+        className={`fixed z-30 h-14 w-14 rounded-full bg-blue-600 text-white shadow-xl transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 lg:hidden ${
+          canEdit ? "teacher-floating-action-above-patch" : "bottom-6 right-6"
+        }`}
+        aria-label="생각모아 목록 열기"
+        aria-expanded={mobileSessionListOpen}
+        title="생각모아 목록"
       >
-        <i className="fas fa-plus text-lg"></i>
+        <i className="fas fa-list text-lg" aria-hidden="true"></i>
       </button>
 
       {cloudModalOpen && (

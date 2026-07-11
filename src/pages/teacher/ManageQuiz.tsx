@@ -187,8 +187,9 @@ const ManageQuiz: React.FC = () => {
             <button
               type="button"
               onClick={() => setMobileTreeOpen(true)}
-              className="fixed right-6 bottom-[6.5rem] w-14 h-14 rounded-full bg-blue-600 text-white shadow-xl lg:hidden z-30"
+              className="teacher-floating-action-above-patch fixed z-30 h-14 w-14 rounded-full bg-blue-600 text-white shadow-xl transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 lg:hidden"
               aria-label="문제 등록 패널 열기"
+              aria-expanded={mobileTreeOpen}
               title="문제 등록"
             >
               <i className="fas fa-list text-lg"></i>

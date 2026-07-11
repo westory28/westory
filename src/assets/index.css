@@ -4,6 +4,32 @@
 @tailwind components;
 @tailwind utilities;
 
+.teacher-floating-action-above-patch {
+  right: calc(env(safe-area-inset-right, 0px) + var(--space-4));
+  bottom: calc(
+    env(safe-area-inset-bottom, 0px) + var(--space-16) + var(--space-10)
+  );
+}
+
+.think-cloud-desktop-create-action {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .teacher-floating-action-above-patch {
+    right: calc(env(safe-area-inset-right, 0px) + var(--space-6));
+    bottom: calc(
+      env(safe-area-inset-bottom, 0px) + var(--space-16) + var(--space-12)
+    );
+  }
+}
+
+@media (min-width: 1024px) {
+  .think-cloud-desktop-create-action {
+    display: flex;
+  }
+}
+
 @property --lesson-core-point-angle {
   syntax: "<angle>";
   inherits: false;
