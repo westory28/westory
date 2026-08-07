@@ -1,10 +1,32 @@
 import path from "path";
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
+import {
+  assertFirebaseBuildBoundary,
+  type FirebaseClientConfig,
+} from "./src/lib/firebaseEnvironment";
 
 export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, ".", "");
+  const env = loadEnv(mode, ".", "VITE_");
   const isGitHubPagesBuild = process.env.GITHUB_ACTIONS === "true";
+  const firebaseConfig: FirebaseClientConfig = {
+    apiKey: env.VITE_FIREBASE_API_KEY || "",
+    authDomain: env.VITE_FIREBASE_AUTH_DOMAIN || "",
+    projectId: env.VITE_FIREBASE_PROJECT_ID || "",
+    storageBucket: env.VITE_FIREBASE_STORAGE_BUCKET || "",
+    messagingSenderId: env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
+    appId: env.VITE_FIREBASE_APP_ID || "",
+    measurementId: env.VITE_FIREBASE_MEASUREMENT_ID || undefined,
+  };
+
+  assertFirebaseBuildBoundary({
+    config: firebaseConfig,
+    explicitEnvironment: env.VITE_APP_ENV,
+    githubActions: isGitHubPagesBuild,
+    vercelEnvironment: process.env.VERCEL_ENV,
+    vercelProjectRole: env.VITE_VERCEL_PROJECT_ROLE,
+  });
+
   const publicBase =
     env.VITE_PUBLIC_BASE || (isGitHubPagesBuild ? "/westory/" : "/");
 
@@ -15,10 +37,6 @@ export default defineConfig(({ mode }) => {
       host: "0.0.0.0",
     },
     plugins: [react()],
-    define: {
-      "process.env.API_KEY": JSON.stringify(env.GEMINI_API_KEY),
-      "process.env.GEMINI_API_KEY": JSON.stringify(env.GEMINI_API_KEY),
-    },
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "."),

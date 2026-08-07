@@ -1,0 +1,47 @@
+name: Verify Safety Baseline
+
+on:
+  pull_request:
+  workflow_dispatch:
+  push:
+    branches-ignore:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VITE_APP_ENV: staging
+      VITE_VERCEL_PROJECT_ROLE: staging
+      VITE_USE_FIREBASE_EMULATORS: "false"
+      VITE_FIREBASE_API_KEY: ci-staging-api-key
+      VITE_FIREBASE_AUTH_DOMAIN: ci-staging.invalid
+      VITE_FIREBASE_PROJECT_ID: westory-ci-staging
+      VITE_FIREBASE_STORAGE_BUCKET: westory-ci-staging.invalid
+      VITE_FIREBASE_MESSAGING_SENDER_ID: "000000000001"
+      VITE_FIREBASE_APP_ID: 1:000000000001:web:westory-ci-staging
+      VITE_FIREBASE_FUNCTIONS_REGION: asia-northeast3
+      VITE_PUBLIC_BASE: /
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci --ignore-scripts
+      - run: npm run security:check-supply-chain
+      - run: npm run verify:firebase-environment
+      - run: npm run verify:vercel-config
+      - run: npm run verify:typescript-baseline
+      - run: npm run format:check
+      - run: npm run build
+
+      - run: npm --prefix functions ci --ignore-scripts
+      - run: npm --prefix functions run check

@@ -2,6 +2,7 @@ import { initializeApp } from "firebase/app";
 import {
   browserLocalPersistence,
   browserSessionPersistence,
+  connectAuthEmulator,
   getAuth,
   indexedDBLocalPersistence,
   inMemoryPersistence,
@@ -12,19 +13,70 @@ import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
 import type { Functions, HttpsCallable } from "firebase/functions";
 import type { FirebaseStorage } from "firebase/storage";
 import { markLoginPerf } from "./loginPerf";
+import {
+  assertFirebaseEnvironmentBoundary,
+  getLocalFirebaseConfig,
+  isLocalQaHost,
+  resolveRuntimeEnvironment,
+  type FirebaseClientConfig,
+} from "./firebaseEnvironment";
 
-const isLocalQaHost = (host: string) =>
-  /^(localhost|127\.0\.0\.1)$/i.test(host);
 const isWestoryCustomHost = (host: string) =>
   /^(?:www\.)?westory\.kr$/i.test(host);
 
+const runtimeHost =
+  typeof window === "undefined" ? "" : window.location.hostname;
+const runtimeEnvironment = resolveRuntimeEnvironment({
+  explicitEnvironment: import.meta.env.VITE_APP_ENV,
+  hostname: runtimeHost,
+  isDev: import.meta.env.DEV,
+});
+
+const useAllFirebaseEmulators =
+  import.meta.env.VITE_USE_FIREBASE_EMULATORS === "true";
+const emulatorTargets = {
+  auth:
+    useAllFirebaseEmulators || Boolean(import.meta.env.VITE_AUTH_EMULATOR_HOST),
+  firestore:
+    useAllFirebaseEmulators ||
+    Boolean(import.meta.env.VITE_FIRESTORE_EMULATOR_HOST),
+  functions:
+    useAllFirebaseEmulators ||
+    Boolean(import.meta.env.VITE_FUNCTIONS_EMULATOR_HOST),
+  storage:
+    useAllFirebaseEmulators ||
+    Boolean(import.meta.env.VITE_STORAGE_EMULATOR_HOST),
+};
+
+const envFirebaseConfig: FirebaseClientConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || undefined,
+};
+
+const baseFirebaseConfig = (() => {
+  if (runtimeEnvironment === "production") {
+    return envFirebaseConfig;
+  }
+  if (runtimeEnvironment === "local" || runtimeEnvironment === "test") {
+    return {
+      ...getLocalFirebaseConfig(),
+      ...Object.fromEntries(
+        Object.entries(envFirebaseConfig).filter(([, value]) => value),
+      ),
+    } as FirebaseClientConfig;
+  }
+  return envFirebaseConfig;
+})();
+
 const configuredAuthDomain = (() => {
-  const envDomain =
-    import.meta.env.VITE_FIREBASE_AUTH_DOMAIN ||
-    "history-quiz-yongsin.firebaseapp.com";
+  const envDomain = baseFirebaseConfig.authDomain;
   if (typeof window === "undefined") return envDomain;
 
-  const runtimeHost = window.location.hostname;
   if (isLocalQaHost(runtimeHost)) return envDomain;
 
   // Only use the custom domain helper when we are on the real HTTPS site,
@@ -41,28 +93,28 @@ const configuredAuthDomain = (() => {
 })();
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAOlPQ5PFmL0zxmGrGcuEBnqBXisph7kPU",
+  ...baseFirebaseConfig,
   authDomain: configuredAuthDomain,
-  projectId: "history-quiz-yongsin",
-  storageBucket: "history-quiz-yongsin.firebasestorage.app",
-  messagingSenderId: "177587430482",
-  appId: "1:177587430482:web:d79cc145c11e335cc3ab8b",
-  measurementId: "G-LHN97D7R2R",
 };
+
+assertFirebaseEnvironmentBoundary({
+  config: firebaseConfig,
+  environment: runtimeEnvironment,
+  hostname: runtimeHost,
+  emulators: emulatorTargets,
+});
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 let analytics: Analytics | null = null;
+let authEmulatorConnected = false;
 let firestoreEmulatorConnected = false;
 let functionsEmulatorConnected = false;
+let storageEmulatorConnected = false;
 let functionsPromise: Promise<Functions> | null = null;
 let storagePromise: Promise<FirebaseStorage> | null = null;
 
-const useFirebaseEmulators =
-  import.meta.env.VITE_USE_FIREBASE_EMULATORS === "true" ||
-  Boolean(import.meta.env.VITE_FIRESTORE_EMULATOR_HOST) ||
-  Boolean(import.meta.env.VITE_FUNCTIONS_EMULATOR_HOST);
 const emulatorHost =
   import.meta.env.VITE_FIRESTORE_EMULATOR_HOST || "127.0.0.1";
 const emulatorPort = Number(
@@ -73,6 +125,23 @@ const functionsEmulatorHost =
 const functionsEmulatorPort = Number(
   import.meta.env.VITE_FUNCTIONS_EMULATOR_PORT || 5001,
 );
+const authEmulatorHost =
+  import.meta.env.VITE_AUTH_EMULATOR_HOST || emulatorHost;
+const authEmulatorPort = Number(
+  import.meta.env.VITE_AUTH_EMULATOR_PORT || 9099,
+);
+const storageEmulatorHost =
+  import.meta.env.VITE_STORAGE_EMULATOR_HOST || emulatorHost;
+const storageEmulatorPort = Number(
+  import.meta.env.VITE_STORAGE_EMULATOR_PORT || 9199,
+);
+
+if (emulatorTargets.auth && !authEmulatorConnected) {
+  connectAuthEmulator(auth, `http://${authEmulatorHost}:${authEmulatorPort}`, {
+    disableWarnings: true,
+  });
+  authEmulatorConnected = true;
+}
 
 const isMobileBrowser = (): boolean => {
   if (typeof navigator === "undefined") return false;
@@ -116,11 +185,7 @@ void authPersistenceReady.then(() => {
 try {
   const isBrowser = typeof window !== "undefined";
 
-  if (
-    import.meta.env.DEV &&
-    useFirebaseEmulators &&
-    !firestoreEmulatorConnected
-  ) {
+  if (emulatorTargets.firestore && !firestoreEmulatorConnected) {
     connectFirestoreEmulator(db, emulatorHost, emulatorPort);
     firestoreEmulatorConnected = true;
     console.info(
@@ -166,12 +231,11 @@ const getFirebaseFunctions = () => {
   if (!functionsPromise) {
     functionsPromise = import("firebase/functions")
       .then(({ connectFunctionsEmulator, getFunctions }) => {
-        const functions = getFunctions(app, "asia-northeast3");
-        if (
-          import.meta.env.DEV &&
-          useFirebaseEmulators &&
-          !functionsEmulatorConnected
-        ) {
+        const functions = getFunctions(
+          app,
+          import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION || "asia-northeast3",
+        );
+        if (emulatorTargets.functions && !functionsEmulatorConnected) {
           connectFunctionsEmulator(
             functions,
             functionsEmulatorHost,
@@ -205,9 +269,18 @@ const getHttpsCallable = async <RequestData = unknown, ResponseData = unknown>(
 const getFirebaseStorage = () => {
   if (!storagePromise) {
     storagePromise = import("firebase/storage")
-      .then(({ getStorage }) =>
-        getStorage(app, `gs://${firebaseConfig.storageBucket}`),
-      )
+      .then(({ connectStorageEmulator, getStorage }) => {
+        const storage = getStorage(app, `gs://${firebaseConfig.storageBucket}`);
+        if (emulatorTargets.storage && !storageEmulatorConnected) {
+          connectStorageEmulator(
+            storage,
+            storageEmulatorHost,
+            storageEmulatorPort,
+          );
+          storageEmulatorConnected = true;
+        }
+        return storage;
+      })
       .catch((error) => {
         storagePromise = null;
         throw error;
@@ -226,4 +299,5 @@ export {
   analytics,
   authPersistenceReady,
   configuredAuthDomain,
+  runtimeEnvironment,
 };
