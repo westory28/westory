@@ -44,12 +44,18 @@ import type { UserData } from "../types";
 import {
   ADMIN_EMAIL,
   ALLOWED_SCHOOL_EMAIL_DOMAIN,
+  canAccessTeacherPath,
   canAccessTeacherPortal,
   getDefaultTeacherRoute,
   isAllowedWestoryEmail,
   isTeacherUser,
   normalizeStaffPermissions,
 } from "../lib/permissions";
+import {
+  clearSessionReturnPath,
+  clearSessionTiming,
+  consumeSessionReturnPath,
+} from "../lib/sessionPolicy";
 
 const TEACHER_EMAIL = ADMIN_EMAIL;
 const ROLE_SESSION_KEY = "westoryPortalRole";
@@ -696,6 +702,27 @@ const Login: React.FC = () => {
     }, 80);
   };
 
+  const resolvePostLoginTarget = (
+    user: User,
+    mode: LoginMode,
+    defaultTarget: string,
+    routeUser?: Partial<UserData> | null,
+  ) => {
+    const recoveredTarget = consumeSessionReturnPath(user.uid);
+    if (!recoveredTarget) return defaultTarget;
+
+    const [pathname] = recoveredTarget.split("?");
+    if (mode === "student") {
+      return pathname === "/student" || pathname.startsWith("/student/")
+        ? recoveredTarget
+        : defaultTarget;
+    }
+    return (pathname === "/teacher" || pathname.startsWith("/teacher/")) &&
+      canAccessTeacherPath(pathname, routeUser, user.email || "")
+      ? recoveredTarget
+      : defaultTarget;
+  };
+
   const clearRoleCache = () => {
     removeStorage(ROLE_SESSION_KEY);
   };
@@ -718,6 +745,8 @@ const Login: React.FC = () => {
     clearPendingLoginMode();
     clearRoleCache();
     clearRedirectAttempt();
+    clearSessionReturnPath();
+    clearSessionTiming();
     autoResumeUidRef.current = null;
     setLoginNotice(getUnauthorizedEmailNotice(email));
     await signOut(auth);
@@ -762,7 +791,9 @@ const Login: React.FC = () => {
         clearPendingLoginMode();
         clearRedirectAttempt();
         autoResumeUidRef.current = user.uid;
-        forceRoute("/student/dashboard");
+        forceRoute(
+          resolvePostLoginTarget(user, "student", "/student/dashboard"),
+        );
         return true;
       }
 
@@ -1323,10 +1354,16 @@ const Login: React.FC = () => {
       staffPermissions: nextStaffPermissions,
       teacherPortalEnabled: nextTeacherPortalEnabled,
     };
-    const targetPath =
+    const defaultTargetPath =
       nextPortalMode === "teacher"
         ? getDefaultTeacherRoute(teacherRouteUser, user.email || "")
         : "/student/dashboard";
+    const targetPath = resolvePostLoginTarget(
+      user,
+      nextPortalMode,
+      defaultTargetPath,
+      teacherRouteUser,
+    );
 
     markLoginPerf("westory-login-role-resolved", {
       role: nextRole,
@@ -1345,6 +1382,7 @@ const Login: React.FC = () => {
       "westory-login-first-route-decided",
     );
     autoResumeUidRef.current = user.uid;
+    clearSessionTiming();
     forceRoute(targetPath);
 
     if (userSnap.exists() && !requiresBlockingWrite) {
@@ -1504,7 +1542,18 @@ const Login: React.FC = () => {
       if (resolvedRole === "teacher") {
         saveRoleCache("teacher");
         clearPendingLoginMode();
-        forceRoute(getDefaultTeacherRoute(userData, currentUser.email || ""));
+        const defaultTarget = getDefaultTeacherRoute(
+          userData,
+          currentUser.email || "",
+        );
+        forceRoute(
+          resolvePostLoginTarget(
+            currentUser,
+            "teacher",
+            defaultTarget,
+            userData,
+          ),
+        );
         return;
       }
 
@@ -1541,7 +1590,13 @@ const Login: React.FC = () => {
     if (isTeacherPortalUser) {
       saveRoleCache("teacher");
       clearPendingLoginMode();
-      forceRoute(getDefaultTeacherRoute(userData, currentUser.email || ""));
+      const defaultTarget = getDefaultTeacherRoute(
+        userData,
+        currentUser.email || "",
+      );
+      forceRoute(
+        resolvePostLoginTarget(currentUser, "teacher", defaultTarget, userData),
+      );
       return;
     }
 
@@ -1661,7 +1716,9 @@ const Login: React.FC = () => {
         "westory-login-bootstrap-start",
         "westory-login-first-route-decided",
       );
-      forceRoute("/student/dashboard");
+      forceRoute(
+        resolvePostLoginTarget(currentUser, "student", "/student/dashboard"),
+      );
 
       if (userDocExists && !requiresBlockingWrite) {
         scheduleDeferredUserMerge(
@@ -1808,6 +1865,8 @@ const Login: React.FC = () => {
     clearRoleCache();
     clearPendingLoginMode();
     clearRedirectAttempt();
+    clearSessionReturnPath();
+    clearSessionTiming();
     setLoginNotice("");
     autoResumeUidRef.current = null;
 

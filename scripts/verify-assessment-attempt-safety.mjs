@@ -38,12 +38,22 @@ assert(
   "History classroom beforeunload path must lock/reset instead of silently preserving the attempt.",
 );
 assert(
-  /setInterval\(emitSessionActivity, 60 \* 1000\)/.test(historyRunner),
-  "History classroom must keep the app session alive while an attempt is open.",
+  !/setInterval\(emitSessionActivity, 60 \* 1000\)/.test(historyRunner),
+  "History classroom must not bypass idle expiry with an automatic session heartbeat.",
 );
 assert(
-  /setInterval\(emitSessionActivity, 60 \* 1000\)/.test(quizRunner),
-  "Quiz runner must keep the app session alive while an attempt is open.",
+  !/setInterval\(emitSessionActivity, 60 \* 1000\)/.test(quizRunner),
+  "Quiz runner must not bypass idle expiry with an automatic session heartbeat.",
+);
+assert(
+  /const savedAttempt = readJsonObject\([\s\S]*getAttemptProgressKey\(loaded\.id, userData\.uid\)[\s\S]*const hasRecoverableAttempt/.test(
+    historyRunner,
+  ),
+  "History classroom must inspect a saved attempt before enforcing the local retry cooldown.",
+);
+assert(
+  /!isRotationResume &&[\s\S]*!hasRecoverableAttempt/.test(historyRunner),
+  "History classroom must allow a saved attempt to resume after reauthentication.",
 );
 assert(
   /if \(nextTimeLeft <= 0 && !timeoutHandledRef\.current\)/.test(quizRunner),

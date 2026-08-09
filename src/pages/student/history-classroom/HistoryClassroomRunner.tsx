@@ -516,7 +516,22 @@ const HistoryClassroomRunner: React.FC = () => {
           userData.uid,
         );
         const isRotationResume = rotationGraceUntil > Date.now();
-        if (localAvailableAt > Date.now() && !isRotationResume) {
+        const savedAttempt = readJsonObject(
+          readLocalOnly(getAttemptProgressKey(loaded.id, userData.uid)),
+        );
+        const hasRecoverableAttempt = Boolean(
+          savedAttempt &&
+          (Number(savedAttempt.deadlineMs) > 0 ||
+            Number(savedAttempt.currentPage) > 0 ||
+            (savedAttempt.answers &&
+              typeof savedAttempt.answers === "object" &&
+              Object.keys(savedAttempt.answers).length > 0)),
+        );
+        if (
+          localAvailableAt > Date.now() &&
+          !isRotationResume &&
+          !hasRecoverableAttempt
+        ) {
           const remain = Math.ceil((localAvailableAt - Date.now()) / 60000);
           throw new Error(`${remain}분 후 다시 응시할 수 있습니다.`);
         }
@@ -528,11 +543,6 @@ const HistoryClassroomRunner: React.FC = () => {
           throw new Error("응시 기간이 마감된 역사교실입니다.");
         }
 
-        const savedAttempt = isRotationResume
-          ? readJsonObject(
-              readLocalOnly(getAttemptProgressKey(loaded.id, userData.uid)),
-            )
-          : null;
         const savedDeadlineMs = Number(savedAttempt?.deadlineMs) || 0;
         const hasSavedDeadline = savedDeadlineMs > 0;
         const savedAnswers =
@@ -1394,15 +1404,12 @@ const HistoryClassroomRunner: React.FC = () => {
     };
 
     refreshExitCooldown("attempt-active");
-    emitSessionActivity();
-    const activityTimerId = window.setInterval(emitSessionActivity, 60 * 1000);
     const cooldownTimerId = window.setInterval(
       () => refreshExitCooldown("attempt-active"),
       15000,
     );
 
     return () => {
-      window.clearInterval(activityTimerId);
       window.clearInterval(cooldownTimerId);
       if (!isScreenRotationGraceActive() && !networkOfflineRef.current) {
         refreshExitCooldown("attempt-left");

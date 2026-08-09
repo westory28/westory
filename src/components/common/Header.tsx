@@ -11,9 +11,21 @@ import {
 import { runAfterNextPaint } from "../../lib/browserTasks";
 import { lazyWithRetry } from "../../lib/lazyWithRetry";
 import { getDefaultProfileEmojiValue } from "../../lib/profileEmojis";
-import { removeStorage, writeLocalOnly } from "../../lib/safeStorage";
+import { removeStorage } from "../../lib/safeStorage";
 import { runtimeEnvironment } from "../../lib/firebase";
-import { readSessionExpiry, SESSION_EXPIRY_KEY } from "../../lib/sessionPolicy";
+import {
+  clearSessionReturnPath,
+  clearSessionTiming,
+  getSessionExpiryAt,
+  NORMAL_SESSION_DURATION_MS,
+  readSessionLastActivity,
+  resolveSessionPolicy,
+  SESSION_EXPIRY_KEY,
+  SESSION_LAST_ACTIVITY_KEY,
+  shouldShowSessionWarning,
+  writeSessionActivity,
+  writeSessionReturnPath,
+} from "../../lib/sessionPolicy";
 import {
   getSessionChangeActivityTarget,
   getSessionActivityTarget,
@@ -31,8 +43,7 @@ import {
   getDefaultTeacherRoute,
 } from "../../lib/permissions";
 
-const SESSION_DURATION_SECONDS = 60 * 60;
-const SESSION_DURATION_MS = SESSION_DURATION_SECONDS * 1000;
+const SESSION_DURATION_SECONDS = NORMAL_SESSION_DURATION_MS / 1000;
 const SESSION_ACTIVITY_THROTTLE_MS = 30 * 1000;
 const ROLE_SESSION_KEY = "westoryPortalRole";
 
@@ -132,12 +143,17 @@ const Header: React.FC = () => {
   const timeoutHandledRef = useRef(false);
   const sessionExpiryRef = useRef<number | null>(null);
   const lastSessionExtendAtRef = useRef(0);
+  const warnedSessionExpiryRef = useRef<number | null>(null);
 
   const isReady = !!currentUser;
   const isTeacherUser = canAccessTeacherPortal(
     userData,
     currentUser?.email || "",
   );
+  const isAdmin = canManageSettings(userData, currentUser?.email || "");
+  const sessionPolicy = resolveSessionPolicy(location.pathname, isAdmin);
+  const sessionDurationSeconds = sessionPolicy.durationMs / 1000;
+  const sessionWarningSeconds = sessionPolicy.warningLeadMs / 1000;
   const displayName = (userData?.name || "").trim() || "이름 미설정";
 
   const portal: "teacher" | "student" = location.pathname.startsWith("/teacher")
@@ -298,7 +314,16 @@ const Header: React.FC = () => {
 
   const performLogout = async (isTimeout: boolean) => {
     try {
-      removeStorage(SESSION_EXPIRY_KEY);
+      if (isTimeout && currentUser) {
+        writeSessionReturnPath(
+          currentUser.uid,
+          location.pathname,
+          location.search,
+        );
+      } else {
+        clearSessionReturnPath();
+      }
+      clearSessionTiming();
       removeStorage(ROLE_SESSION_KEY);
       if (isTimeout) {
         showToast({
@@ -322,20 +347,37 @@ const Header: React.FC = () => {
 
   const expireSessionForStagingTest = () => {
     if (runtimeEnvironment !== "staging") return;
-    const expiredAt = Date.now() - 1;
+    const expiredLastActivity = Date.now() - sessionPolicy.durationMs - 1;
+    const expiredAt = writeSessionActivity(expiredLastActivity, sessionPolicy);
     sessionExpiryRef.current = expiredAt;
     timeoutHandledRef.current = false;
-    writeLocalOnly(SESSION_EXPIRY_KEY, String(expiredAt));
     setSessionExpiry(expiredAt);
     setRemainingSeconds(0);
+  };
+
+  const warnSessionForStagingTest = () => {
+    if (runtimeEnvironment !== "staging") return;
+    const warningLastActivity =
+      Date.now() -
+      sessionPolicy.durationMs +
+      sessionPolicy.warningLeadMs -
+      1000;
+    const expiry = writeSessionActivity(warningLastActivity, sessionPolicy);
+    sessionExpiryRef.current = expiry;
+    warnedSessionExpiryRef.current = null;
+    timeoutHandledRef.current = false;
+    setSessionExpiry(expiry);
+    setRemainingSeconds(Math.max(0, Math.ceil((expiry - Date.now()) / 1000)));
   };
 
   const extendSession = (options?: { force?: boolean }) => {
     const now = Date.now();
     const currentExpiry = sessionExpiryRef.current;
+    if (currentExpiry !== null && currentExpiry <= now) return;
     const alreadyFresh =
       currentExpiry !== null &&
-      currentExpiry - now > SESSION_DURATION_MS - SESSION_ACTIVITY_THROTTLE_MS;
+      currentExpiry - now >
+        sessionPolicy.durationMs - SESSION_ACTIVITY_THROTTLE_MS;
     if (
       !options?.force &&
       alreadyFresh &&
@@ -344,13 +386,13 @@ const Header: React.FC = () => {
       return;
     }
 
-    const expiry = now + SESSION_DURATION_MS;
+    const expiry = writeSessionActivity(now, sessionPolicy);
     sessionExpiryRef.current = expiry;
     lastSessionExtendAtRef.current = now;
-    writeLocalOnly(SESSION_EXPIRY_KEY, String(expiry));
     setSessionExpiry(expiry);
-    setRemainingSeconds(SESSION_DURATION_SECONDS);
+    setRemainingSeconds(sessionDurationSeconds);
     timeoutHandledRef.current = false;
+    warnedSessionExpiryRef.current = null;
   };
 
   useEffect(() => {
@@ -383,18 +425,45 @@ const Header: React.FC = () => {
     if (!currentUser) return;
     timeoutHandledRef.current = false;
     const now = Date.now();
-    const saved = readSessionExpiry();
-    const nextExpiry = saved ?? now + SESSION_DURATION_MS;
+    const lastActivityAt = readSessionLastActivity() ?? now;
+    const nextExpiry = writeSessionActivity(lastActivityAt, sessionPolicy);
     sessionExpiryRef.current = nextExpiry;
-    lastSessionExtendAtRef.current = now;
-    if (saved === null) {
-      writeLocalOnly(SESSION_EXPIRY_KEY, String(nextExpiry));
-    }
+    lastSessionExtendAtRef.current = lastActivityAt;
+    warnedSessionExpiryRef.current = null;
     setSessionExpiry(nextExpiry);
-    if (nextExpiry <= now) {
-      setRemainingSeconds(0);
-    }
-  }, [currentUser]);
+    setRemainingSeconds(
+      nextExpiry <= now ? 0 : Math.ceil((nextExpiry - now) / 1000),
+    );
+  }, [
+    currentUser,
+    location.pathname,
+    sessionPolicy.durationMs,
+    sessionPolicy.warningLeadMs,
+  ]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const syncSessionAcrossTabs = (event: StorageEvent) => {
+      if (
+        event.key !== SESSION_LAST_ACTIVITY_KEY &&
+        event.key !== SESSION_EXPIRY_KEY
+      ) {
+        return;
+      }
+      const lastActivityAt = readSessionLastActivity();
+      if (lastActivityAt === null) return;
+      const expiry = getSessionExpiryAt(lastActivityAt, sessionPolicy);
+      sessionExpiryRef.current = expiry;
+      warnedSessionExpiryRef.current = null;
+      timeoutHandledRef.current = false;
+      setSessionExpiry(expiry);
+      setRemainingSeconds(Math.max(0, Math.ceil((expiry - Date.now()) / 1000)));
+    };
+
+    window.addEventListener("storage", syncSessionAcrossTabs);
+    return () => window.removeEventListener("storage", syncSessionAcrossTabs);
+  }, [currentUser, sessionPolicy.durationMs]);
 
   useEffect(() => {
     if (!sessionExpiry || !currentUser) return;
@@ -409,13 +478,32 @@ const Header: React.FC = () => {
         }
         return;
       }
+      if (
+        shouldShowSessionWarning(sessionExpiry, sessionPolicy) &&
+        warnedSessionExpiryRef.current !== sessionExpiry
+      ) {
+        warnedSessionExpiryRef.current = sessionExpiry;
+        showToast({
+          tone: "warning",
+          title: "세션이 5분 뒤 만료됩니다.",
+          message: sessionPolicy.highRisk
+            ? "관리자 설정을 계속 사용하려면 세션을 연장해 주세요."
+            : "작업을 계속하려면 세션을 연장해 주세요.",
+        });
+      }
       setRemainingSeconds(Math.ceil(diffMs / 1000));
     };
 
     tick();
     const timerId = window.setInterval(tick, 1000);
     return () => window.clearInterval(timerId);
-  }, [currentUser, sessionExpiry]);
+  }, [
+    currentUser,
+    sessionExpiry,
+    sessionPolicy.highRisk,
+    sessionPolicy.warningLeadMs,
+    showToast,
+  ]);
 
   useEffect(() => {
     if (!currentUser) return;
@@ -432,6 +520,12 @@ const Header: React.FC = () => {
       }
     };
 
+    const handleMeaningfulInput = (event: Event) => {
+      if (getSessionActivityTarget(event.target)) {
+        extendSession();
+      }
+    };
+
     const handleSubmit = (event: Event) => {
       if (isSessionActivityIgnored(event.target)) return;
       extendSession();
@@ -442,16 +536,18 @@ const Header: React.FC = () => {
     };
 
     document.addEventListener("click", handleMeaningfulClick, true);
+    document.addEventListener("input", handleMeaningfulInput, true);
     document.addEventListener("change", handleMeaningfulChange, true);
     document.addEventListener("submit", handleSubmit, true);
     window.addEventListener(SESSION_ACTIVITY_EVENT, handleSessionActivity);
     return () => {
       document.removeEventListener("click", handleMeaningfulClick, true);
+      document.removeEventListener("input", handleMeaningfulInput, true);
       document.removeEventListener("change", handleMeaningfulChange, true);
       document.removeEventListener("submit", handleSubmit, true);
       window.removeEventListener(SESSION_ACTIVITY_EVENT, handleSessionActivity);
     };
-  }, [currentUser]);
+  }, [currentUser, sessionPolicy.durationMs, sessionPolicy.warningLeadMs]);
 
   useEffect(() => {
     let cancelled = false;
@@ -635,7 +731,12 @@ const Header: React.FC = () => {
             <div className="hidden lg:flex items-center gap-1 md:gap-2 px-3 py-1 bg-stone-100 rounded-full border border-stone-200">
               <i className="fas fa-stopwatch text-stone-400 text-xs"></i>
               <span
-                className={`font-mono font-bold text-sm w-[42px] text-center ${remainingSeconds < 300 ? "text-red-500" : "text-stone-600"}`}
+                className={`font-mono font-bold text-sm w-[42px] text-center ${remainingSeconds <= sessionWarningSeconds ? "text-red-500" : "text-stone-600"}`}
+                title={
+                  sessionPolicy.highRisk
+                    ? "관리자 설정 세션 남은 시간"
+                    : "세션 남은 시간"
+                }
               >
                 {formatCountdown(remainingSeconds)}
               </span>
@@ -650,14 +751,24 @@ const Header: React.FC = () => {
             </div>
 
             {runtimeEnvironment === "staging" && (
-              <button
-                type="button"
-                onClick={expireSessionForStagingTest}
-                data-session-ignore="true"
-                className="hidden min-h-10 items-center rounded-lg border border-amber-300 bg-amber-50 px-3 text-xs font-bold text-amber-800 hover:bg-amber-100 lg:inline-flex"
-              >
-                세션 만료 테스트
-              </button>
+              <div className="hidden items-center gap-1 lg:flex">
+                <button
+                  type="button"
+                  onClick={warnSessionForStagingTest}
+                  data-session-ignore="true"
+                  className="inline-flex min-h-10 items-center rounded-lg border border-amber-300 bg-amber-50 px-3 text-xs font-bold text-amber-800 hover:bg-amber-100"
+                >
+                  세션 경고 테스트
+                </button>
+                <button
+                  type="button"
+                  onClick={expireSessionForStagingTest}
+                  data-session-ignore="true"
+                  className="inline-flex min-h-10 items-center rounded-lg border border-amber-300 bg-amber-50 px-3 text-xs font-bold text-amber-800 hover:bg-amber-100"
+                >
+                  세션 만료 테스트
+                </button>
+              </div>
             )}
 
             <button
@@ -722,7 +833,7 @@ const Header: React.FC = () => {
                   onClick={() => extendSession({ force: true })}
                   title="시간 연장"
                   data-session-ignore="true"
-                  className={`mobile-menu-status-card mobile-menu-time-card ${remainingSeconds < 300 ? "is-warning" : ""}`}
+                  className={`mobile-menu-status-card mobile-menu-time-card ${remainingSeconds <= sessionWarningSeconds ? "is-warning" : ""}`}
                 >
                   <div className="mobile-menu-status-copy">
                     <span className="mobile-menu-status-label">남은 시간</span>
@@ -732,6 +843,26 @@ const Header: React.FC = () => {
                     <i className="fas fa-redo-alt"></i>
                   </span>
                 </button>
+                {runtimeEnvironment === "staging" && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={warnSessionForStagingTest}
+                      data-session-ignore="true"
+                      className="min-h-10 rounded-lg border border-amber-300 bg-amber-50 px-2 text-xs font-bold text-amber-800"
+                    >
+                      세션 경고 테스트
+                    </button>
+                    <button
+                      type="button"
+                      onClick={expireSessionForStagingTest}
+                      data-session-ignore="true"
+                      className="min-h-10 rounded-lg border border-amber-300 bg-amber-50 px-2 text-xs font-bold text-amber-800"
+                    >
+                      세션 만료 테스트
+                    </button>
+                  </div>
+                )}
               </div>
               {menuItems.map((item, idx) => {
                 const visibleChildren = getVisibleChildren(item);

@@ -10,6 +10,7 @@
     "security:check-supply-chain": "node scripts/check-supply-chain-iocs.mjs",
     "verify:access-gate": "node scripts/verify-access-gate.mjs",
     "verify:assessment-attempt-safety": "node scripts/verify-assessment-attempt-safety.mjs",
+    "verify:session-policy": "node scripts/verify-session-policy.mjs",
     "verify:firebase-environment": "node scripts/verify-firebase-environment-isolation.mjs",
     "verify:vercel-config": "node scripts/verify-vercel-config.mjs",
     "verify:typescript-baseline": "node scripts/verify-typescript-baseline.mjs",

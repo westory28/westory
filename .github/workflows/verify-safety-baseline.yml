@@ -41,6 +41,8 @@ jobs:
       - run: npm run verify:vercel-config
       - run: npm run verify:typescript-baseline
       - run: npm run verify:access-gate
+      - run: npm run verify:session-policy
+      - run: npm run verify:assessment-attempt-safety
       - run: npm run format:check
       - run: npm run build
 

@@ -277,16 +277,18 @@ const QuizRunner: React.FC = () => {
       .filter((pair) => pair.left && pair.right);
   };
 
-  const parseMatchingAnswer = (value: string) =>
-    Object.fromEntries(
-      value
-        .split(ORDER_DELIMITER)
-        .map((item) => {
-          const [left = "", right = ""] = item.split(MATCHING_PAIR_DELIMITER);
-          return [left.trim(), right.trim()];
-        })
-        .filter(([left, right]) => left && right),
-    );
+  const parseMatchingAnswer = (value: string): Record<string, string> =>
+    value
+      .split(ORDER_DELIMITER)
+      .reduce<Record<string, string>>((result, item) => {
+        const [left = "", right = ""] = item.split(MATCHING_PAIR_DELIMITER);
+        const normalizedLeft = left.trim();
+        const normalizedRight = right.trim();
+        if (normalizedLeft && normalizedRight) {
+          result[normalizedLeft] = normalizedRight;
+        }
+        return result;
+      }, {});
 
   const getChoiceOptionImage = (question: Question, index: number) =>
     Array.isArray(question.choiceOptionImages)
@@ -1067,14 +1069,6 @@ const QuizRunner: React.FC = () => {
       }
     };
   }, [view, quizDeadlineMs, serverTimeOffsetMs, finishSubmitting]);
-
-  useEffect(() => {
-    if (view !== "quiz" || finishSubmitting) return undefined;
-
-    emitSessionActivity();
-    const timerId = window.setInterval(emitSessionActivity, 60 * 1000);
-    return () => window.clearInterval(timerId);
-  }, [finishSubmitting, view]);
 
   const initializeQuiz = async () => {
     if (!unitId || !category || !fallbackStudentUid) return;

@@ -2,10 +2,10 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 
-const EXPECTED_ERROR_COUNT = 64;
-const EXPECTED_FILE_COUNT = 14;
+const EXPECTED_ERROR_COUNT = 63;
+const EXPECTED_FILE_COUNT = 13;
 const EXPECTED_HEADER_SHA256 =
-  "209313844edd58c68c69d81a9ac511e5ec46682c62c8928ae3a510e8f45db84a";
+  "d12acd9bf8b88cff88da0009e010c42b7b6809ee658e38d8dfaa5351c11afc80";
 
 let output = "";
 const tscPath = fileURLToPath(
