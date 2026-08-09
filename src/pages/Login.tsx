@@ -3,6 +3,7 @@ import {
   AuthError,
   getRedirectResult,
   GoogleAuthProvider,
+  signInWithEmailAndPassword,
   signInWithPopup,
   signInWithRedirect,
   signOut,
@@ -26,6 +27,7 @@ import {
   authPersistenceReady,
   configuredAuthDomain,
   db,
+  runtimeEnvironment,
 } from "../lib/firebase";
 import { InlineLoading, PageLoading } from "../components/common/LoadingState";
 import { markLoginPerf, measureLoginPerf } from "../lib/loginPerf";
@@ -622,6 +624,8 @@ const Login: React.FC = () => {
 
   const [authBusy, setAuthBusy] = useState(false);
   const [loginNotice, setLoginNotice] = useState("");
+  const [stagingTestEmail, setStagingTestEmail] = useState("");
+  const [stagingTestPassword, setStagingTestPassword] = useState("");
   const [redirectRecoveryPending, setRedirectRecoveryPending] = useState(() =>
     shouldResolveRedirectOnBoot(),
   );
@@ -1744,6 +1748,32 @@ const Login: React.FC = () => {
     }
   };
 
+  const startStagingTestLogin = async (
+    event: React.FormEvent<HTMLFormElement>,
+  ) => {
+    event.preventDefault();
+    if (runtimeEnvironment !== "staging" || authBusy) return;
+
+    const email = stagingTestEmail.trim();
+    if (!email || !stagingTestPassword) {
+      setLoginNotice("스테이징 합성 계정 정보를 모두 입력해 주세요.");
+      return;
+    }
+
+    setLoginNotice("");
+    setAuthBusy(true);
+    try {
+      await authPersistenceReady;
+      await signInWithEmailAndPassword(auth, email, stagingTestPassword);
+    } catch (error) {
+      console.error("Staging test login failed", error);
+      setLoginNotice("스테이징 합성 계정으로 로그인하지 못했습니다.");
+    } finally {
+      setStagingTestPassword("");
+      setAuthBusy(false);
+    }
+  };
+
   const handleLogin = async (mode: LoginMode) => {
     if (authBusy || authActionLockRef.current) return;
     if (restrictedInAppBrowser) {
@@ -1953,6 +1983,51 @@ const Login: React.FC = () => {
               >
                 다른 계정으로 다시 시도
               </button>
+            )}
+            {runtimeEnvironment === "staging" && (
+              <form
+                onSubmit={startStagingTestLogin}
+                className="mt-3 rounded-2xl border border-dashed border-blue-300 bg-blue-50 p-4 text-left"
+                aria-label="스테이징 합성 계정 로그인"
+              >
+                <p className="text-sm font-extrabold text-blue-900">
+                  스테이징 합성 계정
+                </p>
+                <p className="mt-1 text-xs leading-5 text-blue-700">
+                  전용 테스트 환경에서만 표시됩니다.
+                </p>
+                <label className="mt-3 block text-xs font-bold text-gray-700">
+                  이메일
+                  <input
+                    type="email"
+                    autoComplete="username"
+                    value={stagingTestEmail}
+                    onChange={(event) =>
+                      setStagingTestEmail(event.target.value)
+                    }
+                    className="mt-1 min-h-10 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+                  />
+                </label>
+                <label className="mt-3 block text-xs font-bold text-gray-700">
+                  비밀번호
+                  <input
+                    type="password"
+                    autoComplete="current-password"
+                    value={stagingTestPassword}
+                    onChange={(event) =>
+                      setStagingTestPassword(event.target.value)
+                    }
+                    className="mt-1 min-h-10 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  disabled={authBusy}
+                  className="mt-3 inline-flex min-h-10 w-full items-center justify-center rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {authBusy ? "확인 중..." : "합성 계정으로 로그인"}
+                </button>
+              </form>
             )}
           </div>
         )}
