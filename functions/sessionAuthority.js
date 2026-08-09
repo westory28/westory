@@ -17,6 +17,7 @@ const SESSION_AUTHORITY_GENERATION = "w1r2-2026-08-09";
 const MIN_CLIENT_PROTOCOL_VERSION = 2;
 const SESSION_REVISION_BYTES = 32;
 const SESSION_PROOF_FIELD = "_session";
+const REAUTH_TRANSITION_MS = 90 * 1000;
 
 const SESSION_IDLE_MODES = Object.freeze({
   ENFORCE: "ENFORCE",
@@ -164,6 +165,9 @@ const assertAllowedIdentity = (request) => {
 
 const getSessionRef = (uid, authTime) =>
   getFirestore().doc(`application_sessions/${uid}/sessions/${authTime}`);
+
+const getReauthTransitionRef = (uid) =>
+  getFirestore().doc(`application_session_transitions/${uid}`);
 
 const timestampMillis = (value) =>
   value && typeof value.toMillis === "function" ? value.toMillis() : 0;
@@ -369,6 +373,7 @@ const openApplicationSession = onCall({ region: REGION }, async (request) => {
 
   const db = getFirestore();
   const ref = getSessionRef(identity.uid, identity.authTime);
+  const transitionRef = getReauthTransitionRef(identity.uid);
 
   return db.runTransaction(async (transaction) => {
     const nowMs = Date.now();
@@ -394,6 +399,7 @@ const openApplicationSession = onCall({ region: REGION }, async (request) => {
               { highRisk: false },
             );
           }
+          transaction.delete(transitionRef);
           return {
             resumed: true,
             authorityMode: effectiveIdleMode,
@@ -438,6 +444,7 @@ const openApplicationSession = onCall({ region: REGION }, async (request) => {
       authorityModeAtOpen: config.mode,
     };
     transaction.create(ref, session);
+    transaction.delete(transitionRef);
     return {
       resumed: false,
       authorityMode: config.mode,
@@ -445,6 +452,27 @@ const openApplicationSession = onCall({ region: REGION }, async (request) => {
     };
   });
 });
+
+const beginApplicationSessionReauthentication = onCall(
+  { region: REGION },
+  async (request) => {
+    const identity = await assertActiveApplicationSession(request, {
+      highRisk: true,
+    });
+    const nowMs = Date.now();
+    await getReauthTransitionRef(identity.uid).set({
+      uid: identity.uid,
+      status: "pending",
+      fromAuthTime: identity.authTime,
+      expiresAt: Timestamp.fromMillis(nowMs + REAUTH_TRANSITION_MS),
+      createdAt: FieldValue.serverTimestamp(),
+      authorityGeneration: SESSION_AUTHORITY_GENERATION,
+      protocolVersion: MIN_CLIENT_PROTOCOL_VERSION,
+      schemaVersion: 1,
+    });
+    return { expiresAt: nowMs + REAUTH_TRANSITION_MS };
+  },
+);
 
 const touchApplicationSession = onCall({ region: REGION }, async (request) => {
   const identity = assertAllowedIdentity(request);
@@ -577,6 +605,7 @@ const closeApplicationSession = onCall({ region: REGION }, async (request) => {
 module.exports = {
   GENERAL_IDLE_MS,
   HIGH_RISK_IDLE_MS,
+  REAUTH_TRANSITION_MS,
   RECENT_AUTH_MS,
   MIN_CLIENT_PROTOCOL_VERSION,
   SESSION_AUTHORITY_GENERATION,
@@ -587,6 +616,7 @@ module.exports = {
   resolveSessionAuthorityConfig,
   callableExports: {
     openApplicationSession,
+    beginApplicationSessionReauthentication,
     touchApplicationSession,
     closeApplicationSession,
   },

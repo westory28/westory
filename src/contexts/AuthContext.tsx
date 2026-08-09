@@ -260,6 +260,93 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       }, 15000);
     };
 
+    const subscribeUserDocument = (user: User, authRevision: number) => {
+      if (unsubscribeUserDoc) {
+        unsubscribeUserDoc();
+        unsubscribeUserDoc = null;
+      }
+      const userRef = doc(db, "users", user.uid);
+      unsubscribeUserDoc = onSnapshot(
+        userRef,
+        async (userSnap) => {
+          if (
+            !active ||
+            authRevisionRef.current !== authRevision ||
+            auth.currentUser?.uid !== user.uid
+          ) {
+            return;
+          }
+          try {
+            const normalizedRole: UserData["role"] = "student";
+            if (firstUserDocReadyRef.current !== user.uid) {
+              firstUserDocReadyRef.current = user.uid;
+              markLoginPerf("westory-auth-user-doc-ready", {
+                exists: userSnap.exists() ? "true" : "false",
+              });
+              measureLoginPerf(
+                "westory-auth-user-doc-sync",
+                "westory-auth-current-user-resolved",
+                "westory-auth-user-doc-ready",
+              );
+            }
+            if (userSnap.exists()) {
+              const raw = userSnap.data() as UserData;
+              setUserData({
+                ...raw,
+                uid: user.uid,
+                role:
+                  raw.role === "teacher"
+                    ? "teacher"
+                    : raw.role === "staff"
+                      ? "staff"
+                      : normalizedRole,
+                staffPermissions: normalizeStaffPermissions(
+                  raw.staffPermissions,
+                ),
+                teacherPortalEnabled: raw.teacherPortalEnabled === true,
+              });
+            } else {
+              const bootstrapUser: UserData = {
+                uid: user.uid,
+                email: user.email || "",
+                name: "",
+                customNameConfirmed: false,
+                role: normalizedRole,
+                staffPermissions: [],
+                teacherPortalEnabled: false,
+                grade: "",
+                class: "",
+                number: "",
+              };
+              setUserData(bootstrapUser);
+            }
+            void visibilitySettingsReady?.catch(() => undefined);
+            logoutReasonRef.current = null;
+            authResolutionPendingRef.current = false;
+            clearResolutionGuard();
+          } catch (e) {
+            console.error("Failed to sync user data", e);
+            clearAuthenticatedState();
+            authResolutionPendingRef.current = false;
+            setAuthenticationError("사용자 권한 정보를 확인하지 못했습니다.");
+            setAuthenticationStatus("ERROR");
+            clearResolutionGuard();
+          }
+        },
+        (e) => {
+          if (!active || authRevisionRef.current !== authRevision) {
+            return;
+          }
+          console.error("Failed to subscribe user data", e);
+          clearAuthenticatedState();
+          authResolutionPendingRef.current = false;
+          setAuthenticationError("사용자 권한 정보를 확인하지 못했습니다.");
+          setAuthenticationStatus("ERROR");
+          clearResolutionGuard();
+        },
+      );
+    };
+
     setAuthenticationStatus("AUTHENTICATING");
     scheduleResolutionGuard();
 
@@ -288,6 +375,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             resolvedUserRef.current?.uid === user.uid &&
             isAllowedWestoryEmail(user.email)
           ) {
+            const refreshRevision = authRevisionRef.current + 1;
+            authRevisionRef.current = refreshRevision;
+            authResolutionPendingRef.current = true;
+            scheduleResolutionGuard();
             try {
               const applicationSession = await synchronizeApplicationSession(
                 user,
@@ -295,7 +386,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                   expectedUid: user.uid,
                 },
               );
-              if (!active || auth.currentUser?.uid !== user.uid) return;
+              if (
+                !active ||
+                authRevisionRef.current !== refreshRevision ||
+                auth.currentUser?.uid !== user.uid
+              ) {
+                return;
+              }
               if (
                 applicationSession.authorityMode === "ENFORCE" &&
                 !writeSessionDeadline(applicationSession.generalExpiresAt, {
@@ -312,13 +409,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 applicationSession.authorityMode,
               );
               setCurrentUser(user);
+              setAuthenticationStatus("AUTHENTICATED");
               setAuthenticationError("");
+              subscribeUserDocument(user, refreshRevision);
             } catch (error) {
-              if (!active || auth.currentUser?.uid !== user.uid) return;
+              if (
+                !active ||
+                authRevisionRef.current !== refreshRevision ||
+                auth.currentUser?.uid !== user.uid
+              ) {
+                return;
+              }
               console.error("Failed to refresh application session", error);
+              clearAuthenticatedState();
+              authResolutionPendingRef.current = false;
               setAuthenticationError(
                 "로그인 세션을 갱신하지 못했습니다. 보호된 작업을 다시 시도해 주세요.",
               );
+              setAuthenticationStatus("ERROR");
+              clearResolutionGuard();
             }
             return;
           }
@@ -395,90 +504,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
               loadAuthedSystemConfig(user),
               loadAuthedMenuConfig(user),
             ]).then(() => undefined);
-            const userRef = doc(db, "users", user.uid);
-            unsubscribeUserDoc = onSnapshot(
-              userRef,
-              async (userSnap) => {
-                if (
-                  !active ||
-                  authRevisionRef.current !== authRevision ||
-                  auth.currentUser?.uid !== user.uid
-                ) {
-                  return;
-                }
-                try {
-                  const normalizedRole: UserData["role"] = "student";
-                  if (firstUserDocReadyRef.current !== user.uid) {
-                    firstUserDocReadyRef.current = user.uid;
-                    markLoginPerf("westory-auth-user-doc-ready", {
-                      exists: userSnap.exists() ? "true" : "false",
-                    });
-                    measureLoginPerf(
-                      "westory-auth-user-doc-sync",
-                      "westory-auth-current-user-resolved",
-                      "westory-auth-user-doc-ready",
-                    );
-                  }
-                  if (userSnap.exists()) {
-                    const raw = userSnap.data() as UserData;
-                    setUserData({
-                      ...raw,
-                      uid: user.uid,
-                      role:
-                        raw.role === "teacher"
-                          ? "teacher"
-                          : raw.role === "staff"
-                            ? "staff"
-                            : normalizedRole,
-                      staffPermissions: normalizeStaffPermissions(
-                        raw.staffPermissions,
-                      ),
-                      teacherPortalEnabled: raw.teacherPortalEnabled === true,
-                    });
-                  } else {
-                    const bootstrapUser: UserData = {
-                      uid: user.uid,
-                      email: user.email || "",
-                      name: "",
-                      customNameConfirmed: false,
-                      role: normalizedRole,
-                      staffPermissions: [],
-                      teacherPortalEnabled: false,
-                      grade: "",
-                      class: "",
-                      number: "",
-                    };
-                    setUserData(bootstrapUser);
-                  }
-                  void visibilitySettingsReady?.catch(() => undefined);
-                  logoutReasonRef.current = null;
-                  authResolutionPendingRef.current = false;
-                  clearResolutionGuard();
-                } catch (e) {
-                  console.error("Failed to sync user data", e);
-                  clearAuthenticatedState();
-                  authResolutionPendingRef.current = false;
-                  setAuthenticationError(
-                    "사용자 권한 정보를 확인하지 못했습니다.",
-                  );
-                  setAuthenticationStatus("ERROR");
-                  clearResolutionGuard();
-                }
-              },
-              (e) => {
-                if (!active || authRevisionRef.current !== authRevision) {
-                  return;
-                }
-                console.error("Failed to subscribe user data", e);
-                clearAuthenticatedState();
-                authResolutionPendingRef.current = false;
-                setAuthenticationError(
-                  "사용자 권한 정보를 확인하지 못했습니다.",
-                );
-                setAuthenticationStatus("ERROR");
-                clearResolutionGuard();
-              },
-            );
+            subscribeUserDocument(user, authRevision);
           } else {
             const logoutReason = logoutReasonRef.current;
             const wasAuthenticated = authenticatedUidRef.current !== null;

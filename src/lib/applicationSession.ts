@@ -142,6 +142,11 @@ export const openApplicationSession = () =>
         sessionHandshake(),
       );
 
+export const beginApplicationSessionReauthentication = () =>
+  invokeSessionCommand<{ expiresAt: number }>(
+    "beginApplicationSessionReauthentication",
+  );
+
 export const synchronizeApplicationSession = async (
   user: User,
   options: SynchronizeApplicationSessionOptions = {},

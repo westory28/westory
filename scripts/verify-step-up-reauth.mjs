@@ -357,7 +357,12 @@ const continuityBlock = authContextSource.slice(
   destructiveAuthReset,
 );
 assert.match(continuityBlock, /synchronizeApplicationSession/);
-assert.doesNotMatch(continuityBlock, /clearAuthenticatedState\(\)/);
+assert.match(continuityBlock, /subscribeUserDocument\(user, refreshRevision\)/);
+const continuitySuccessBlock = continuityBlock.slice(
+  0,
+  continuityBlock.indexOf("} catch (error)"),
+);
+assert.doesNotMatch(continuitySuccessBlock, /clearAuthenticatedState\(\)/);
 assert.doesNotMatch(
   continuityBlock,
   /setAuthenticationStatus\("AUTHENTICATING"\)/,
@@ -370,6 +375,11 @@ assert.ok(
 );
 assert.match(providerSource, /submittingRef\.current/);
 assert.match(providerSource, /expectedUid: current\.ownerUid/);
+assert.ok(
+  providerSource.indexOf("beginApplicationSessionReauthentication()") <
+    providerSource.indexOf("reauthenticateWithCredential(user, credential)"),
+  "the server transition must be established before password reauthentication",
+);
 assert.match(
   providerSource,
   /pendingRef\.current = null;[\s\S]*current\.resolve\(\)/,

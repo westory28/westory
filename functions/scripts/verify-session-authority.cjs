@@ -326,6 +326,33 @@ const main = async () => {
   await assert.doesNotReject(() =>
     assertActiveApplicationSession(requestFor("active", nowSeconds)),
   );
+
+  await seedSession("reauth-transition", nowSeconds);
+  await assert.doesNotReject(() =>
+    callableExports.beginApplicationSessionReauthentication.run(
+      requestFor("reauth-transition", nowSeconds),
+    ),
+  );
+  const transitionRef = getFirestore().doc(
+    "application_session_transitions/reauth-transition",
+  );
+  const transitionSnap = await transitionRef.get();
+  assert.equal(transitionSnap.exists, true);
+  assert.equal(transitionSnap.data().status, "pending");
+  assert.equal(transitionSnap.data().fromAuthTime, nowSeconds);
+  await assert.doesNotReject(() =>
+    callableExports.openApplicationSession.run({
+      auth: {
+        uid: "reauth-transition",
+        token: { email, auth_time: nowSeconds + 1 },
+      },
+      data: {
+        authorityGeneration: SESSION_AUTHORITY_GENERATION,
+        protocolVersion: MIN_CLIENT_PROTOCOL_VERSION,
+      },
+    }),
+  );
+  assert.equal((await transitionRef.get()).exists, false);
   assert.equal(
     await rejectionReason(() =>
       callableExports.touchApplicationSession.run({
@@ -431,6 +458,7 @@ const main = async () => {
         "CLOSE_PROOFLESS_AND_REVOKED",
         "STEP_UP_RETAINED_WHEN_DISABLED",
         "ACTIVE",
+        "REAUTH_TRANSITION_CREATED_AND_CONSUMED",
         "TOKEN_REFRESH_SAME_AUTH_TIME",
         "SESSION_PROOF_REQUIRED",
         "SESSION_REVISION_MISMATCH",

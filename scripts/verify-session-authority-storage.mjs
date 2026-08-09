@@ -108,6 +108,8 @@ const main = async () => {
     const oldProtocol = await createClient("storage-old-protocol", "storage.old.protocol@yongshin-ms.ms.kr");
     const observeClosed = await createClient("storage-observe-closed", "storage.observe.closed@yongshin-ms.ms.kr");
     const disabledExpired = await createClient("storage-disabled-expired", "storage.disabled.expired@yongshin-ms.ms.kr");
+    const transition = await createClient("storage-transition", "storage.transition@yongshin-ms.ms.kr");
+    const expiredTransition = await createClient("storage-expired-transition", "storage.expired.transition@yongshin-ms.ms.kr");
 
     await env.withSecurityRulesDisabled(async (context) => {
       const db = context.firestore();
@@ -128,6 +130,29 @@ const main = async () => {
         expired: true,
         mode: "DISABLED",
       });
+      await seedIdentity(db, transition, { session: false });
+      await setDoc(doc(db, "application_session_transitions", transition.uid), {
+        uid: transition.uid,
+        status: "pending",
+        fromAuthTime: transition.authTime - 1,
+        expiresAt: Timestamp.fromMillis(Date.now() + 90 * 1000),
+        schemaVersion: 1,
+        authorityGeneration: "w1r2-2026-08-09",
+        protocolVersion: 2,
+      });
+      await seedIdentity(db, expiredTransition, { session: false });
+      await setDoc(
+        doc(db, "application_session_transitions", expiredTransition.uid),
+        {
+          uid: expiredTransition.uid,
+          status: "pending",
+          fromAuthTime: expiredTransition.authTime - 1,
+          expiresAt: Timestamp.fromMillis(Date.now() - 1000),
+          schemaVersion: 1,
+          authorityGeneration: "w1r2-2026-08-09",
+          protocolVersion: 2,
+        },
+      );
     });
 
     const bytes = new Uint8Array([137, 80, 78, 71]);
@@ -162,12 +187,24 @@ const main = async () => {
       bytes,
       { contentType: "image/png" },
     );
+    await uploadBytes(
+      target(transition, "reauth-transition"),
+      bytes,
+      { contentType: "image/png" },
+    );
+    await expectRejected(() =>
+      uploadBytes(
+        target(expiredTransition, "expired-reauth-transition"),
+        bytes,
+        { contentType: "image/png" },
+      ),
+    );
 
     console.log(JSON.stringify({
       suite: "session-authority-storage-rules",
       passed: true,
-      uniqueFirestoreAccessesPerTeacherWrite: 2,
-      cases: ["ACTIVE_TEACHER", "EXPIRED", "MISSING", "WRONG_ROLE", "OBSERVE_IDLE_EXPIRED_ALLOWED", "OBSERVE_CLOSED_DENIED", "DISABLED_IDLE_EXPIRED_ALLOWED", "OLD_PROTOCOL_DENIED"],
+      uniqueFirestoreAccessesPerTeacherWrite: 3,
+      cases: ["ACTIVE_TEACHER", "REAUTH_TRANSITION_NEW_EPOCH", "REAUTH_TRANSITION_EXPIRED_DENIED", "EXPIRED", "MISSING", "WRONG_ROLE", "OBSERVE_IDLE_EXPIRED_ALLOWED", "OBSERVE_CLOSED_DENIED", "DISABLED_IDLE_EXPIRED_ALLOWED", "OLD_PROTOCOL_DENIED"],
       productionAccess: 0,
     }));
   } finally {

@@ -12,6 +12,7 @@ const authTime = Math.floor(Date.now() / 1000) - 30;
 const staleAdminAuthTime = Math.floor(Date.now() / 1000) - 6 * 60;
 const future = Timestamp.fromMillis(Date.now() + 10 * 60 * 1000);
 const past = Timestamp.fromMillis(Date.now() - 1000);
+const transitionAuthTime = authTime + 1;
 const rules = readFileSync(resolve("firestore.rules"), "utf8");
 
 const sessionPath = (uid, tokenAuthTime = authTime) =>
@@ -100,6 +101,30 @@ const main = async () => {
         doc(adminDb, sessionPath("stale-admin", staleAdminAuthTime)),
         activeSession("stale-admin", staleAdminAuthTime),
       );
+      await setDoc(
+        doc(adminDb, "application_session_transitions", "transition-user"),
+        {
+          uid: "transition-user",
+          status: "pending",
+          fromAuthTime: authTime,
+          expiresAt: future,
+          schemaVersion: 1,
+          authorityGeneration: "w1r2-2026-08-09",
+          protocolVersion: 2,
+        },
+      );
+      await setDoc(
+        doc(adminDb, "application_session_transitions", "expired-transition-user"),
+        {
+          uid: "expired-transition-user",
+          status: "pending",
+          fromAuthTime: authTime,
+          expiresAt: past,
+          schemaVersion: 1,
+          authorityGeneration: "w1r2-2026-08-09",
+          protocolVersion: 2,
+        },
+      );
     });
 
     const protectedRead = (uid, claims) =>
@@ -110,6 +135,24 @@ const main = async () => {
     );
     await assertFails(
       protectedRead("missing-user", token("missing@yongshin-ms.ms.kr")),
+    );
+    await assertSucceeds(
+      protectedRead(
+        "transition-user",
+        token("transition@yongshin-ms.ms.kr", transitionAuthTime),
+      ),
+    );
+    await assertFails(
+      protectedRead(
+        "transition-user",
+        token("transition.old@yongshin-ms.ms.kr", authTime),
+      ),
+    );
+    await assertFails(
+      protectedRead(
+        "expired-transition-user",
+        token("transition.expired@yongshin-ms.ms.kr", transitionAuthTime),
+      ),
     );
 
     const recentAdminDb = env.authenticatedContext("recent-admin", {
@@ -166,12 +209,18 @@ const main = async () => {
         generalExpiresAt: Timestamp.fromMillis(Date.now() + 60 * 60 * 1000),
       }, { merge: true }),
     );
+    await assertFails(
+      setDoc(
+        doc(directDb, "application_session_transitions", "active-user"),
+        { status: "pending" },
+      ),
+    );
 
     console.log(
       JSON.stringify({
         suite: "session-authority-firestore-rules",
         passed: true,
-        cases: ["ACTIVE", "MISSING", "EXPIRED", "CLOSED", "CORRUPT", "AUTH_TIME_MISMATCH", "OLD_PROTOCOL_DENIED", "OBSERVE_IDLE_EXPIRED_ALLOWED", "OBSERVE_CLOSED_DENIED", "DISABLED_IDLE_EXPIRED_ALLOWED", "INVALID_MODE_DENIED", "STALE_ENFORCE_MODE_NOT_DOWNGRADED", "DIRECT_SESSION_WRITE", "RECENT_ADMIN_WRITE", "STALE_ADMIN_WRITE_DENIED"],
+        cases: ["ACTIVE", "MISSING", "REAUTH_TRANSITION_NEW_EPOCH", "REAUTH_TRANSITION_OLD_EPOCH_DENIED", "REAUTH_TRANSITION_EXPIRED_DENIED", "EXPIRED", "CLOSED", "CORRUPT", "AUTH_TIME_MISMATCH", "OLD_PROTOCOL_DENIED", "OBSERVE_IDLE_EXPIRED_ALLOWED", "OBSERVE_CLOSED_DENIED", "DISABLED_IDLE_EXPIRED_ALLOWED", "INVALID_MODE_DENIED", "STALE_ENFORCE_MODE_NOT_DOWNGRADED", "DIRECT_SESSION_WRITE", "DIRECT_TRANSITION_WRITE_DENIED", "RECENT_ADMIN_WRITE", "STALE_ADMIN_WRITE_DENIED"],
         productionAccess: 0,
       }),
     );

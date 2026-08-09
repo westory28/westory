@@ -9,7 +9,10 @@ import {
   reauthenticateWithPopup,
 } from "firebase/auth";
 import { auth } from "../../lib/firebase";
-import { synchronizeApplicationSession } from "../../lib/applicationSession";
+import {
+  beginApplicationSessionReauthentication,
+  synchronizeApplicationSession,
+} from "../../lib/applicationSession";
 import {
   getStepUpReauthFailureMessage,
   registerStepUpReauthHandler,
@@ -243,6 +246,7 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
     setSubmitting(true);
     setErrorMessage("");
     try {
+      await beginApplicationSessionReauthentication();
       const credential = EmailAuthProvider.credential(user.email, password);
       await reauthenticateWithCredential(user, credential);
       await finishSuccess(current);
@@ -279,6 +283,7 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
     setSubmitting(true);
     setErrorMessage("");
     try {
+      await beginApplicationSessionReauthentication();
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ login_hint: user.email || "" });
       await reauthenticateWithPopup(user, provider);
