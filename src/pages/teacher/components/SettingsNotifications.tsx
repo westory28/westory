@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import { requestStepUpReauthentication } from "../../../lib/stepUpReauth";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { InlineLoading } from "../../../components/common/LoadingState";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -746,6 +747,7 @@ const SettingsNotifications: React.FC = () => {
   const saveConfig = async () => {
     setSaving(true);
     try {
+      await requestStepUpReauthentication("updateNotificationSettings");
       await setDoc(
         doc(db, "site_settings", "notification_config"),
         {

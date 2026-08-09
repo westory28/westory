@@ -56,6 +56,7 @@ import {
   clearSessionTiming,
   consumeSessionReturnPath,
 } from "../lib/sessionPolicy";
+import { openApplicationSession } from "../lib/applicationSession";
 
 const TEACHER_EMAIL = ADMIN_EMAIL;
 const ROLE_SESSION_KEY = "westoryPortalRole";
@@ -1171,6 +1172,11 @@ const Login: React.FC = () => {
       await rejectUnauthorizedEmailLogin(user.email);
       return;
     }
+
+    // Popup sign-in continues before AuthContext's token listener necessarily
+    // finishes. Establish the server session before the first protected
+    // Firestore read/write so login bootstrap cannot race the Rules fence.
+    await openApplicationSession();
 
     const isTeacherEmail = user.email === TEACHER_EMAIL;
     const userRef = doc(db, "users", user.uid);

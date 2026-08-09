@@ -12,12 +12,44 @@ service cloud.firestore {
         && request.auth.token.email.matches('.*@yongshin-ms\\.ms\\.kr$');
     }
 
+    function applicationSessionPath() {
+      return /databases/$(database)/documents/application_sessions/$(request.auth.uid)/sessions/$(request.auth.token.auth_time);
+    }
+
+    function hasActiveApplicationSession() {
+      return isSignedIn()
+        && request.auth.token.auth_time is int
+        && get(applicationSessionPath()).data.status == 'active'
+        && get(applicationSessionPath()).data.authTime == request.auth.token.auth_time
+        && get(applicationSessionPath()).data.generalExpiresAt is timestamp
+        && get(applicationSessionPath()).data.generalExpiresAt > request.time;
+    }
+
+    function hasActiveHighRiskSession() {
+      return hasActiveApplicationSession()
+        && get(applicationSessionPath()).data.highRiskExpiresAt is timestamp
+        && get(applicationSessionPath()).data.highRiskExpiresAt > request.time;
+    }
+
+    function hasRecentAuthentication() {
+      return isSignedIn()
+        && request.auth.token.auth_time is int
+        && request.time.toMillis() - request.auth.token.auth_time * 1000 >= -60000
+        && request.time.toMillis() - request.auth.token.auth_time * 1000 <= 300000;
+    }
+
     function canUseWestory() {
-      return isSignedIn() && (hasAllowedSchoolEmail() || request.auth.token.email == "westoria28@gmail.com");
+      return isSignedIn()
+        && (hasAllowedSchoolEmail() || request.auth.token.email == "westoria28@gmail.com")
+        && hasActiveApplicationSession();
     }
 
     function isAdmin() {
       return canUseWestory() && request.auth.token.email == "westoria28@gmail.com";
+    }
+
+    function isRecentlyAuthenticatedAdmin() {
+      return isAdmin() && hasActiveHighRiskSession() && hasRecentAuthentication();
     }
 
     function isOwnUser(userId) {
@@ -776,12 +808,16 @@ service cloud.firestore {
     }
 
     // 사용자 기본 문서 권한
+    match /application_sessions/{userId}/sessions/{authTime} {
+      allow read, create, update, delete: if false;
+    }
+
     match /users/{userId} {
       allow get: if canUseWestory() && (isOwnUser(userId) || isAdmin() || isTeacherRole() || hasPermission('student_list_read'));
       allow list: if isAdmin() || isTeacherRole() || hasPermission('student_list_read');
-      allow create: if isAdmin() || isValidOwnStudentCreate(userId);
-      allow update: if isAdmin() || isValidOwnStudentUpdate(userId);
-      allow delete: if isAdmin();
+      allow create: if isRecentlyAuthenticatedAdmin() || isValidOwnStudentCreate(userId);
+      allow update: if isRecentlyAuthenticatedAdmin() || isValidOwnStudentUpdate(userId);
+      allow delete: if isRecentlyAuthenticatedAdmin();
 
       match /academic_records/{recordId} {
         allow read: if canUseWestory() && (isOwnUser(userId) || isAdmin());
@@ -849,12 +885,12 @@ service cloud.firestore {
 
     match /site_settings/{docId} {
       allow read: if docId in ['terms', 'privacy', 'school_config', 'interface_config'] || canUseWestory();
-      allow write: if isAdmin();
+      allow write: if isRecentlyAuthenticatedAdmin();
 
       match /items/{itemId} {
         allow read: if canUseWestory();
-        allow create, delete: if isAdmin();
-        allow update: if isAdmin()
+        allow create, delete: if isRecentlyAuthenticatedAdmin();
+        allow update: if isRecentlyAuthenticatedAdmin()
           || (
             docId == 'developer_logs'
             && (

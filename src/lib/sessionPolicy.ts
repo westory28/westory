@@ -70,6 +70,18 @@ export const writeSessionActivity = (
   return expiry;
 };
 
+export const writeSessionDeadline = (
+  expiryAt: number,
+  policy: Pick<SessionPolicy, "durationMs">,
+): number | null => {
+  if (!Number.isFinite(expiryAt) || expiryAt <= 0) return null;
+  const lastActivityAt = expiryAt - policy.durationMs;
+  if (!Number.isFinite(lastActivityAt) || lastActivityAt <= 0) return null;
+  writeLocalOnly(SESSION_LAST_ACTIVITY_KEY, String(lastActivityAt));
+  writeLocalOnly(SESSION_EXPIRY_KEY, String(expiryAt));
+  return expiryAt;
+};
+
 export const clearSessionTiming = () => {
   removeStorage(SESSION_LAST_ACTIVITY_KEY);
   removeStorage(SESSION_EXPIRY_KEY);

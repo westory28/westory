@@ -24,8 +24,10 @@ import {
   SESSION_LAST_ACTIVITY_KEY,
   shouldShowSessionWarning,
   writeSessionActivity,
+  writeSessionDeadline,
   writeSessionReturnPath,
 } from "../../lib/sessionPolicy";
+import { touchApplicationSession } from "../../lib/applicationSession";
 import {
   getSessionChangeActivityTarget,
   getSessionActivityTarget,
@@ -386,13 +388,33 @@ const Header: React.FC = () => {
       return;
     }
 
-    const expiry = writeSessionActivity(now, sessionPolicy);
-    sessionExpiryRef.current = expiry;
     lastSessionExtendAtRef.current = now;
-    setSessionExpiry(expiry);
-    setRemainingSeconds(sessionDurationSeconds);
-    timeoutHandledRef.current = false;
-    warnedSessionExpiryRef.current = null;
+
+    const scope = sessionPolicy.highRisk ? "HIGH_RISK" : "GENERAL";
+    void touchApplicationSession(scope)
+      .then((serverSession) => {
+        const serverExpiry = sessionPolicy.highRisk
+          ? serverSession.highRiskExpiresAt
+          : serverSession.generalExpiresAt;
+        const syncedExpiry = writeSessionDeadline(serverExpiry, sessionPolicy);
+        if (!syncedExpiry) return;
+        sessionExpiryRef.current = syncedExpiry;
+        setSessionExpiry(syncedExpiry);
+        timeoutHandledRef.current = false;
+        warnedSessionExpiryRef.current = null;
+        setRemainingSeconds(
+          Math.max(0, Math.ceil((syncedExpiry - Date.now()) / 1000)),
+        );
+      })
+      .catch((error: unknown) => {
+        const code = String((error as { code?: unknown })?.code || "");
+        if (
+          code === "functions/unauthenticated" ||
+          code === "functions/permission-denied"
+        ) {
+          void performLogout(true);
+        }
+      });
   };
 
   useEffect(() => {

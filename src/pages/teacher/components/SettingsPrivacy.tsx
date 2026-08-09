@@ -12,6 +12,7 @@ import {
   setDoc,
   updateDoc,
 } from "firebase/firestore";
+import { requestStepUpReauthentication } from "../../../lib/stepUpReauth";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
@@ -192,6 +193,7 @@ const SettingsPrivacy: React.FC = () => {
 
   const saveTerms = async () => {
     try {
+      await requestStepUpReauthentication("updateTermsSettings");
       await setDoc(doc(db, "site_settings", "terms"), {
         text: termsText,
         updatedAt: serverTimestamp(),
@@ -226,6 +228,7 @@ const SettingsPrivacy: React.FC = () => {
     if (privacySaving) return;
     setPrivacySaving(true);
     try {
+      await requestStepUpReauthentication("updatePrivacySettings");
       await setDoc(doc(db, "site_settings", "privacy"), {
         text: privacyText,
         updatedAt: serverTimestamp(),
@@ -303,6 +306,7 @@ const SettingsPrivacy: React.FC = () => {
 
   const addConsentItem = async () => {
     try {
+      await requestStepUpReauthentication("updateConsentSettings");
       const newOrder = consentItems.length + 1;
       const payload = {
         title: "새 동의 항목",
@@ -364,6 +368,7 @@ const SettingsPrivacy: React.FC = () => {
     }
 
     try {
+      await requestStepUpReauthentication("updateConsentSettings");
       await updateDoc(doc(db, "site_settings", "consent", "items", id), {
         title: item.title,
         text: item.text,
@@ -389,6 +394,7 @@ const SettingsPrivacy: React.FC = () => {
     if (!window.confirm(`'${item.title}' 항목을 삭제하시겠습니까?`)) return;
 
     try {
+      await requestStepUpReauthentication("updateConsentSettings");
       await deleteDoc(doc(db, "site_settings", "consent", "items", id));
       setConsentItems((prev) => prev.filter((x) => x.id !== id));
       if (expandedConsentId === id) setExpandedConsentId(null);

@@ -10,6 +10,7 @@ import {
   connectAuthEmulator,
   createUserWithEmailAndPassword,
   getAuth,
+  getIdTokenResult,
 } from "firebase/auth";
 import {
   connectFirestoreEmulator,
@@ -18,6 +19,7 @@ import {
   getFirestore,
   serverTimestamp,
   setDoc,
+  Timestamp,
 } from "firebase/firestore";
 
 const projectId = "demo-westory-score-warning";
@@ -56,6 +58,26 @@ const createClient = async (name, email, password) => {
     user: userCredential.user,
     email,
   };
+};
+
+const getClientAuthTime = async (client) => {
+  const result = await getIdTokenResult(client.user);
+  return Math.floor(Date.parse(result.authTime) / 1000);
+};
+
+const seedSession = async (db, client) => {
+  const authTime = await getClientAuthTime(client);
+  await setDoc(
+    doc(db, "application_sessions", client.user.uid, "sessions", String(authTime)),
+    {
+      uid: client.user.uid,
+      email: client.email,
+      authTime,
+      status: "active",
+      generalExpiresAt: Timestamp.fromMillis(Date.now() + 30 * 60 * 1000),
+      highRiskExpiresAt: Timestamp.fromMillis(Date.now() + 15 * 60 * 1000),
+    },
+  );
 };
 
 const existingStudentDoc = (uid, email) => ({
@@ -139,6 +161,11 @@ const main = async () => {
 
   await testEnv.withSecurityRulesDisabled(async (context) => {
     const adminDb = context.firestore();
+    await Promise.all([
+      seedSession(adminDb, existingStudent),
+      seedSession(adminDb, newStudent),
+      seedSession(adminDb, otherStudent),
+    ]);
     await setDoc(
       doc(adminDb, "users", existingStudent.user.uid),
       existingStudentDoc(existingStudent.user.uid, existingStudent.email),

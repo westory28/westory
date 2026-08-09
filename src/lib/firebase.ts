@@ -20,6 +20,8 @@ import {
   resolveRuntimeEnvironment,
   type FirebaseClientConfig,
 } from "./firebaseEnvironment";
+import { isHighRiskCommand } from "./highRiskCommands";
+import { requestStepUpReauthentication } from "./stepUpReauth";
 
 const isWestoryCustomHost = (host: string) =>
   /^(?:www\.)?westory\.kr$/i.test(host);
@@ -263,7 +265,30 @@ const getHttpsCallable = async <RequestData = unknown, ResponseData = unknown>(
     getFirebaseFunctions(),
     import("firebase/functions"),
   ]);
-  return httpsCallable<RequestData, ResponseData>(functions, name);
+  const callable = httpsCallable<RequestData, ResponseData>(functions, name);
+  if (!isHighRiskCommand(name)) return callable;
+
+  const guardedCallable = (async (data?: RequestData) => {
+    await requestStepUpReauthentication(name);
+    try {
+      return await callable(data);
+    } catch (error) {
+      const details = (error as { details?: { reason?: unknown } })?.details;
+      if (
+        String(details?.reason || "") !== "RECENT_AUTH_REQUIRED" &&
+        String(details?.reason || "") !== "SESSION_EXPIRED"
+      ) {
+        throw error;
+      }
+      await requestStepUpReauthentication(name, { force: true });
+      return callable(data);
+    }
+  }) as HttpsCallable<RequestData, ResponseData>;
+  guardedCallable.stream = async (data, options) => {
+    await requestStepUpReauthentication(name);
+    return callable.stream(data, options);
+  };
+  return guardedCallable;
 };
 
 const getFirebaseStorage = () => {

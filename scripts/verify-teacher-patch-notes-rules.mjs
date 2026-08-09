@@ -12,6 +12,7 @@ import {
   getDocs,
   serverTimestamp,
   setDoc,
+  Timestamp,
   updateDoc,
 } from "firebase/firestore";
 
@@ -26,6 +27,7 @@ const teacherUid = "teacher-patch-owner";
 const otherTeacherUid = "teacher-patch-other";
 const staffUid = "teacher-patch-staff";
 const studentUid = "teacher-patch-student";
+const authTime = Math.floor(Date.now() / 1000) - 10;
 
 const notePayload = (uid, overrides = {}) => ({
   ownerUid: uid,
@@ -66,6 +68,17 @@ const seedUser = async (db, uid, email, role, extra = {}) => {
   });
 };
 
+const seedSession = async (db, uid, email) => {
+  await setDoc(doc(db, "application_sessions", uid, "sessions", String(authTime)), {
+    uid,
+    email,
+    authTime,
+    status: "active",
+    generalExpiresAt: Timestamp.fromMillis(Date.now() + 30 * 60 * 1000),
+    highRiskExpiresAt: Timestamp.fromMillis(Date.now() + 15 * 60 * 1000),
+  });
+};
+
 const main = async () => {
   const testEnv = await initializeTestEnvironment({
     projectId,
@@ -102,21 +115,28 @@ const main = async () => {
       teacherPortalEnabled: true,
       staffPermissions: ["lesson_read"],
     });
+    await Promise.all([
+      seedSession(adminDb, teacherUid, schoolEmail("teacher.patch")),
+      seedSession(adminDb, otherTeacherUid, schoolEmail("other.teacher.patch")),
+      seedSession(adminDb, studentUid, schoolEmail("student.patch")),
+      seedSession(adminDb, staffUid, schoolEmail("staff.patch")),
+    ]);
   });
 
   const teacherDb = testEnv
-    .authenticatedContext(teacherUid, { email: schoolEmail("teacher.patch") })
+    .authenticatedContext(teacherUid, { email: schoolEmail("teacher.patch"), auth_time: authTime })
     .firestore();
   const otherTeacherDb = testEnv
     .authenticatedContext(otherTeacherUid, {
       email: schoolEmail("other.teacher.patch"),
+      auth_time: authTime,
     })
     .firestore();
   const studentDb = testEnv
-    .authenticatedContext(studentUid, { email: schoolEmail("student.patch") })
+    .authenticatedContext(studentUid, { email: schoolEmail("student.patch"), auth_time: authTime })
     .firestore();
   const staffDb = testEnv
-    .authenticatedContext(staffUid, { email: schoolEmail("staff.patch") })
+    .authenticatedContext(staffUid, { email: schoolEmail("staff.patch"), auth_time: authTime })
     .firestore();
 
   const teacherNotes = collection(

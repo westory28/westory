@@ -10,6 +10,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 import MainLayout from "./components/layout/MainLayout";
 import { AppToastProvider } from "./components/common/AppToastProvider";
 import { AppDialogProvider } from "./components/common/AppDialogProvider";
+import { StepUpReauthProvider } from "./components/auth/StepUpReauthProvider";
 import ProtectedAccessGate from "./components/auth/ProtectedAccessGate";
 import { lazyWithRetry } from "./lib/lazyWithRetry";
 
@@ -180,258 +181,260 @@ const App: React.FC = () => {
 
   return (
     <AuthProvider>
-      <AppToastProvider>
-        <Router>
-          <Suspense fallback={<RouteContentFallback />}>
-            <div className="bg-gray-50 min-h-screen text-gray-900 font-sans">
-              <Routes>
-                <Route path="/" element={<Login />} />
-                <Route
-                  path="/student/dashboard"
-                  element={renderWithLayout(
-                    <StudentDashboard />,
-                    "학생 첫 화면을 준비하는 중입니다.",
-                  )}
-                />
-                <Route
-                  path="/student/lesson/note"
-                  element={renderWithLayout(
-                    <StudentNote />,
-                    "수업 자료를 준비하는 중입니다.",
-                  )}
-                />
-                <Route
-                  path="/student/lesson/history-dictionary"
-                  element={renderWithLayout(
-                    <StudentHistoryDictionary />,
-                    "역사 사전을 준비하는 중입니다.",
-                  )}
-                />
-                <Route
-                  path="/student/lesson/maps"
-                  element={renderWithLayout(
-                    <StudentMaps />,
-                    "역사 지도를 준비하는 중입니다.",
-                  )}
-                />
-                <Route
-                  path="/student/lesson/think-cloud"
-                  element={renderWithLayout(
-                    <StudentThinkCloud />,
-                    "생각 구름을 준비하는 중입니다.",
-                  )}
-                />
-                <Route
-                  path="/student/quiz"
-                  element={renderWithLayout(
-                    <StudentQuizIndex />,
-                    "퀴즈 목록을 준비하는 중입니다.",
-                  )}
-                />
-                <Route
-                  path="/student/quiz/history2"
-                  element={<LegacyRouteRedirect to="/student/quiz" />}
-                />
-                <Route
-                  path="/student/quiz/history2/*"
-                  element={<LegacyRouteRedirect to="/student/quiz" />}
-                />
-                <Route
-                  path="/student/quiz/run"
-                  element={renderWithLayout(
-                    <QuizRunner />,
-                    "퀴즈를 준비하는 중입니다.",
-                  )}
-                />
-                <Route
-                  path="/student/history-classroom"
-                  element={renderWithLayout(
-                    <HistoryClassroomIndex />,
-                    "역사교실을 준비하는 중입니다.",
-                  )}
-                />
-                <Route
-                  path="/student/history-classroom/run"
-                  element={renderWithLayout(
-                    <HistoryClassroomRunner />,
-                    "역사교실 과제를 준비하는 중입니다.",
-                  )}
-                />
-                <Route
-                  path="/student/score"
-                  element={renderWithLayout(
-                    <StudentScoreDashboard />,
-                    "성적 화면을 준비하는 중입니다.",
-                  )}
-                />
-                <Route
-                  path="/student/score/report"
-                  element={renderWithLayout(
-                    <StudentScoreReport />,
-                    "성적표를 준비하는 중입니다.",
-                  )}
-                />
-                <Route
-                  path="/student/score/performance"
-                  element={renderWithLayout(
-                    <StudentPerformanceScoreView />,
-                    "수행평가 점수를 준비하는 중입니다.",
-                  )}
-                />
-                <Route
-                  path="/student/score/written-exam"
-                  element={renderWithLayout(
-                    <StudentWrittenExamEssayScoreView />,
-                    "정기시험 점수를 준비하는 중입니다.",
-                  )}
-                />
-                <Route
-                  path="/teacher/dashboard"
-                  element={renderWithLayout(
-                    <TeacherDashboard />,
-                    "교사 첫 화면을 준비하는 중입니다.",
-                  )}
-                />
-                <Route
-                  path="/teacher/students"
-                  element={renderWithLayout(
-                    <StudentList />,
-                    "학생 명부를 준비하는 중입니다.",
-                  )}
-                />
-                <Route
-                  path="/teacher/quiz"
-                  element={renderWithLayout(
-                    <ManageQuiz />,
-                    "퀴즈 관리 화면을 준비하는 중입니다.",
-                  )}
-                />
-                <Route
-                  path="/teacher/quiz/history2"
-                  element={<LegacyRouteRedirect to="/teacher/quiz" />}
-                />
-                <Route
-                  path="/teacher/quiz/history2/*"
-                  element={<LegacyRouteRedirect to="/teacher/quiz" />}
-                />
-                <Route
-                  path="/teacher/quiz/history-classroom"
-                  element={renderWithLayout(
-                    <ManageHistoryClassroom />,
-                    "역사교실 관리 화면을 준비하는 중입니다.",
-                  )}
-                />
-                <Route
-                  path="/teacher/exam"
-                  element={renderWithLayout(
-                    <ManageExam />,
-                    "평가 관리 화면을 준비하는 중입니다.",
-                  )}
-                />
-                <Route
-                  path="/teacher/settings"
-                  element={renderWithLayout(
-                    <Settings />,
-                    "설정 화면을 준비하는 중입니다.",
-                  )}
-                />
-                <Route
-                  path="/teacher/points"
-                  element={renderWithLayout(
-                    <ManagePoints />,
-                    "위스 관리 화면을 준비하는 중입니다.",
-                  )}
-                />
-                <Route
-                  path="/teacher/schedule"
-                  element={renderWithLayout(
-                    <ManageSchedule />,
-                    "일정 관리 화면을 준비하는 중입니다.",
-                  )}
-                />
-                <Route
-                  path="/teacher/lesson"
-                  element={renderWithLayout(
-                    <ManageLesson />,
-                    "수업자료 관리 화면을 준비하는 중입니다.",
-                  )}
-                />
-                <Route
-                  path="/teacher/lesson/history-dictionary"
-                  element={renderWithLayout(
-                    <ManageHistoryDictionary />,
-                    "역사 사전 관리 화면을 준비하는 중입니다.",
-                  )}
-                />
-                <Route
-                  path="/teacher/lesson/maps"
-                  element={renderWithLayout(
-                    <ManageMaps />,
-                    "역사 지도 관리 화면을 준비하는 중입니다.",
-                  )}
-                />
-                <Route
-                  path="/teacher/lesson/source-archive"
-                  element={renderWithLayout(
-                    <ManageSourceArchive />,
-                    "사료 보관함을 준비하는 중입니다.",
-                  )}
-                />
-                <Route
-                  path="/teacher/lesson/think-cloud"
-                  element={renderWithLayout(
-                    <ManageThinkCloud />,
-                    "생각 구름 관리 화면을 준비하는 중입니다.",
-                  )}
-                />
-                <Route
-                  path="/student/mypage"
-                  element={renderWithLayout(
-                    <MyPage />,
-                    "마이페이지를 준비하는 중입니다.",
-                  )}
-                />
-                <Route
-                  path="/student/history"
-                  element={renderWithLayout(
-                    <StudentHistory />,
-                    "학습 기록을 준비하는 중입니다.",
-                  )}
-                />
-                <Route
-                  path="/student/points"
-                  element={renderWithLayout(
-                    <StudentPoints />,
-                    "위스 화면을 준비하는 중입니다.",
-                  )}
-                />
-                <Route
-                  path="/student/calendar"
-                  element={renderWithLayout(
-                    <Calendar />,
-                    "일정을 준비하는 중입니다.",
-                  )}
-                />
-                <Route
-                  path="/developer-log"
-                  element={renderWithLayout(
-                    <DeveloperLog />,
-                    "개발자 일지를 준비하는 중입니다.",
-                  )}
-                />
-                <Route
-                  path="/developer-log/:postId"
-                  element={renderWithLayout(
-                    <DeveloperLog />,
-                    "개발자 일지를 준비하는 중입니다.",
-                  )}
-                />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </div>
-          </Suspense>
-        </Router>
-      </AppToastProvider>
+      <StepUpReauthProvider>
+        <AppToastProvider>
+          <Router>
+            <Suspense fallback={<RouteContentFallback />}>
+              <div className="bg-gray-50 min-h-screen text-gray-900 font-sans">
+                <Routes>
+                  <Route path="/" element={<Login />} />
+                  <Route
+                    path="/student/dashboard"
+                    element={renderWithLayout(
+                      <StudentDashboard />,
+                      "학생 첫 화면을 준비하는 중입니다.",
+                    )}
+                  />
+                  <Route
+                    path="/student/lesson/note"
+                    element={renderWithLayout(
+                      <StudentNote />,
+                      "수업 자료를 준비하는 중입니다.",
+                    )}
+                  />
+                  <Route
+                    path="/student/lesson/history-dictionary"
+                    element={renderWithLayout(
+                      <StudentHistoryDictionary />,
+                      "역사 사전을 준비하는 중입니다.",
+                    )}
+                  />
+                  <Route
+                    path="/student/lesson/maps"
+                    element={renderWithLayout(
+                      <StudentMaps />,
+                      "역사 지도를 준비하는 중입니다.",
+                    )}
+                  />
+                  <Route
+                    path="/student/lesson/think-cloud"
+                    element={renderWithLayout(
+                      <StudentThinkCloud />,
+                      "생각 구름을 준비하는 중입니다.",
+                    )}
+                  />
+                  <Route
+                    path="/student/quiz"
+                    element={renderWithLayout(
+                      <StudentQuizIndex />,
+                      "퀴즈 목록을 준비하는 중입니다.",
+                    )}
+                  />
+                  <Route
+                    path="/student/quiz/history2"
+                    element={<LegacyRouteRedirect to="/student/quiz" />}
+                  />
+                  <Route
+                    path="/student/quiz/history2/*"
+                    element={<LegacyRouteRedirect to="/student/quiz" />}
+                  />
+                  <Route
+                    path="/student/quiz/run"
+                    element={renderWithLayout(
+                      <QuizRunner />,
+                      "퀴즈를 준비하는 중입니다.",
+                    )}
+                  />
+                  <Route
+                    path="/student/history-classroom"
+                    element={renderWithLayout(
+                      <HistoryClassroomIndex />,
+                      "역사교실을 준비하는 중입니다.",
+                    )}
+                  />
+                  <Route
+                    path="/student/history-classroom/run"
+                    element={renderWithLayout(
+                      <HistoryClassroomRunner />,
+                      "역사교실 과제를 준비하는 중입니다.",
+                    )}
+                  />
+                  <Route
+                    path="/student/score"
+                    element={renderWithLayout(
+                      <StudentScoreDashboard />,
+                      "성적 화면을 준비하는 중입니다.",
+                    )}
+                  />
+                  <Route
+                    path="/student/score/report"
+                    element={renderWithLayout(
+                      <StudentScoreReport />,
+                      "성적표를 준비하는 중입니다.",
+                    )}
+                  />
+                  <Route
+                    path="/student/score/performance"
+                    element={renderWithLayout(
+                      <StudentPerformanceScoreView />,
+                      "수행평가 점수를 준비하는 중입니다.",
+                    )}
+                  />
+                  <Route
+                    path="/student/score/written-exam"
+                    element={renderWithLayout(
+                      <StudentWrittenExamEssayScoreView />,
+                      "정기시험 점수를 준비하는 중입니다.",
+                    )}
+                  />
+                  <Route
+                    path="/teacher/dashboard"
+                    element={renderWithLayout(
+                      <TeacherDashboard />,
+                      "교사 첫 화면을 준비하는 중입니다.",
+                    )}
+                  />
+                  <Route
+                    path="/teacher/students"
+                    element={renderWithLayout(
+                      <StudentList />,
+                      "학생 명부를 준비하는 중입니다.",
+                    )}
+                  />
+                  <Route
+                    path="/teacher/quiz"
+                    element={renderWithLayout(
+                      <ManageQuiz />,
+                      "퀴즈 관리 화면을 준비하는 중입니다.",
+                    )}
+                  />
+                  <Route
+                    path="/teacher/quiz/history2"
+                    element={<LegacyRouteRedirect to="/teacher/quiz" />}
+                  />
+                  <Route
+                    path="/teacher/quiz/history2/*"
+                    element={<LegacyRouteRedirect to="/teacher/quiz" />}
+                  />
+                  <Route
+                    path="/teacher/quiz/history-classroom"
+                    element={renderWithLayout(
+                      <ManageHistoryClassroom />,
+                      "역사교실 관리 화면을 준비하는 중입니다.",
+                    )}
+                  />
+                  <Route
+                    path="/teacher/exam"
+                    element={renderWithLayout(
+                      <ManageExam />,
+                      "평가 관리 화면을 준비하는 중입니다.",
+                    )}
+                  />
+                  <Route
+                    path="/teacher/settings"
+                    element={renderWithLayout(
+                      <Settings />,
+                      "설정 화면을 준비하는 중입니다.",
+                    )}
+                  />
+                  <Route
+                    path="/teacher/points"
+                    element={renderWithLayout(
+                      <ManagePoints />,
+                      "위스 관리 화면을 준비하는 중입니다.",
+                    )}
+                  />
+                  <Route
+                    path="/teacher/schedule"
+                    element={renderWithLayout(
+                      <ManageSchedule />,
+                      "일정 관리 화면을 준비하는 중입니다.",
+                    )}
+                  />
+                  <Route
+                    path="/teacher/lesson"
+                    element={renderWithLayout(
+                      <ManageLesson />,
+                      "수업자료 관리 화면을 준비하는 중입니다.",
+                    )}
+                  />
+                  <Route
+                    path="/teacher/lesson/history-dictionary"
+                    element={renderWithLayout(
+                      <ManageHistoryDictionary />,
+                      "역사 사전 관리 화면을 준비하는 중입니다.",
+                    )}
+                  />
+                  <Route
+                    path="/teacher/lesson/maps"
+                    element={renderWithLayout(
+                      <ManageMaps />,
+                      "역사 지도 관리 화면을 준비하는 중입니다.",
+                    )}
+                  />
+                  <Route
+                    path="/teacher/lesson/source-archive"
+                    element={renderWithLayout(
+                      <ManageSourceArchive />,
+                      "사료 보관함을 준비하는 중입니다.",
+                    )}
+                  />
+                  <Route
+                    path="/teacher/lesson/think-cloud"
+                    element={renderWithLayout(
+                      <ManageThinkCloud />,
+                      "생각 구름 관리 화면을 준비하는 중입니다.",
+                    )}
+                  />
+                  <Route
+                    path="/student/mypage"
+                    element={renderWithLayout(
+                      <MyPage />,
+                      "마이페이지를 준비하는 중입니다.",
+                    )}
+                  />
+                  <Route
+                    path="/student/history"
+                    element={renderWithLayout(
+                      <StudentHistory />,
+                      "학습 기록을 준비하는 중입니다.",
+                    )}
+                  />
+                  <Route
+                    path="/student/points"
+                    element={renderWithLayout(
+                      <StudentPoints />,
+                      "위스 화면을 준비하는 중입니다.",
+                    )}
+                  />
+                  <Route
+                    path="/student/calendar"
+                    element={renderWithLayout(
+                      <Calendar />,
+                      "일정을 준비하는 중입니다.",
+                    )}
+                  />
+                  <Route
+                    path="/developer-log"
+                    element={renderWithLayout(
+                      <DeveloperLog />,
+                      "개발자 일지를 준비하는 중입니다.",
+                    )}
+                  />
+                  <Route
+                    path="/developer-log/:postId"
+                    element={renderWithLayout(
+                      <DeveloperLog />,
+                      "개발자 일지를 준비하는 중입니다.",
+                    )}
+                  />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </div>
+            </Suspense>
+          </Router>
+        </AppToastProvider>
+      </StepUpReauthProvider>
     </AuthProvider>
   );
 };

@@ -29,6 +29,14 @@ import {
   subscribeMenuConfigUpdated,
   subscribeSystemConfigUpdated,
 } from "../lib/appEvents";
+import {
+  closeApplicationSession,
+  openApplicationSession,
+} from "../lib/applicationSession";
+import {
+  NORMAL_SESSION_DURATION_MS,
+  writeSessionDeadline,
+} from "../lib/sessionPolicy";
 
 export type AuthenticationStatus =
   | "UNKNOWN"
@@ -248,7 +256,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
       unsubscribe = onIdTokenChanged(
         auth,
-        (user) => {
+        async (user) => {
           const authRevision = authRevisionRef.current + 1;
           authRevisionRef.current = authRevision;
           authResolutionPendingRef.current = true;
@@ -267,8 +275,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             unsubscribeUserDoc = null;
           }
           if (user) {
-            setAuthenticationStatus("AUTHENTICATED");
-            setCurrentUser(user);
+            setAuthenticationStatus("AUTHENTICATING");
             setUserData(null);
             firstUserDocReadyRef.current = null;
             setConfigReady(false);
@@ -280,6 +287,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
               clearResolutionGuard();
               return;
             }
+
+            try {
+              const applicationSession = await openApplicationSession();
+              if (
+                !active ||
+                authRevisionRef.current !== authRevision ||
+                auth.currentUser?.uid !== user.uid
+              ) {
+                return;
+              }
+              if (
+                !writeSessionDeadline(applicationSession.generalExpiresAt, {
+                  durationMs: NORMAL_SESSION_DURATION_MS,
+                })
+              ) {
+                throw new Error("Invalid application session deadline");
+              }
+            } catch (error) {
+              if (!active || authRevisionRef.current !== authRevision) return;
+              console.error("Failed to open application session", error);
+              clearAuthenticatedState();
+              authResolutionPendingRef.current = false;
+              setAuthenticationError(
+                "로그인 세션을 시작하지 못했습니다. 다시 로그인해 주세요.",
+              );
+              setAuthenticationStatus("SESSION_EXPIRED");
+              clearResolutionGuard();
+              await signOut(auth).catch(() => undefined);
+              return;
+            }
+
+            setAuthenticationStatus("AUTHENTICATED");
+            setCurrentUser(user);
 
             visibilitySettingsReady = Promise.all([
               loadAuthedSystemConfig(user),
@@ -472,6 +512,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       reason === "expired" ? "SESSION_EXPIRED" : "ANONYMOUS",
     );
     try {
+      await closeApplicationSession().catch(() => undefined);
       await signOut(auth);
     } catch (error) {
       logoutReasonRef.current = null;

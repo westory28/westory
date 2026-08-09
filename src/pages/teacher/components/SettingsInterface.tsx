@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import { requestStepUpReauthentication } from "../../../lib/stepUpReauth";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { InlineLoading } from "../../../components/common/LoadingState";
 import { db } from "../../../lib/firebase";
@@ -380,6 +381,7 @@ const SettingsInterface: React.FC = () => {
 
     setSavingInterface(true);
     try {
+      await requestStepUpReauthentication("updateInterfaceSettings");
       await setDoc(
         doc(db, "site_settings", "interface_config"),
         {
@@ -419,6 +421,7 @@ const SettingsInterface: React.FC = () => {
   const saveMenuConfig = async () => {
     setSavingMenu(true);
     try {
+      await requestStepUpReauthentication("updateMenuSettings");
       const normalized = sanitizeMenuConfig(menuConfig);
       await setDoc(doc(db, "site_settings", "menu_config"), {
         ...normalized,

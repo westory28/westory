@@ -18,6 +18,7 @@ const {
   buildSourceArchiveSearchState,
 } = require("./sourceArchiveProcessor");
 const { saveSourceArchivePdfArtifacts } = require("./sourceArchivePdfAdapter");
+const { assertActiveApplicationSession } = require("./sessionAuthority");
 Object.assign(exports, require("./lessonPdfBeta"));
 
 const db = getFirestore();
@@ -36,7 +37,7 @@ const getAuthEmail = (request) =>
     .trim()
     .toLowerCase();
 
-const assertAllowedWestoryUser = (request) => {
+const assertAllowedWestoryUser = async (request, options = {}) => {
   if (!request.auth?.uid) {
     throw new HttpsError("unauthenticated", "Authentication is required.");
   }
@@ -49,6 +50,8 @@ const assertAllowedWestoryUser = (request) => {
     );
   }
 
+  await assertActiveApplicationSession(request, options);
+
   return { uid: request.auth.uid, email };
 };
 
@@ -60,8 +63,8 @@ const getUserProfile = async (uid) => {
   return userSnap.data() || {};
 };
 
-const assertSourceArchiveManager = async (request) => {
-  const actor = assertAllowedWestoryUser(request);
+const assertSourceArchiveManager = async (request, options = {}) => {
+  const actor = await assertAllowedWestoryUser(request, options);
   if (actor.email === ADMIN_EMAIL) {
     return actor;
   }
@@ -780,7 +783,7 @@ exports.deleteSourceArchiveAsset = onCall(
     memory: "256MiB",
   },
   async (request) => {
-    await assertSourceArchiveManager(request);
+  await assertSourceArchiveManager(request, { recentAuth: true, highRisk: true });
 
     const assetId = normalizeText(request.data?.assetId);
     if (!assetId || !/^[a-zA-Z0-9_-]{1,128}$/.test(assetId)) {

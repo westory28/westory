@@ -6,6 +6,7 @@ import {
   connectAuthEmulator,
   createUserWithEmailAndPassword,
   getAuth,
+  getIdTokenResult,
   signOut,
 } from 'firebase/auth';
 import {
@@ -17,6 +18,7 @@ import {
   getFirestore,
   query,
   setDoc,
+  Timestamp,
   where,
 } from 'firebase/firestore';
 import { connectFunctionsEmulator, getFunctions, httpsCallable } from 'firebase/functions';
@@ -84,6 +86,22 @@ const createClient = async (name, email, password) => {
   };
 };
 
+const seedSession = async (db, client) => {
+  const result = await getIdTokenResult(client.user);
+  const authTime = Math.floor(Date.parse(result.authTime) / 1000);
+  await setDoc(
+    doc(db, 'application_sessions', client.user.uid, 'sessions', String(authTime)),
+    {
+      uid: client.user.uid,
+      email: client.email,
+      authTime,
+      status: 'active',
+      generalExpiresAt: Timestamp.fromMillis(Date.now() + 30 * 60 * 1000),
+      highRiskExpiresAt: Timestamp.fromMillis(Date.now() + 15 * 60 * 1000),
+    },
+  );
+};
+
 const expectPass = async (label, fn, results) => {
   try {
     const detail = await fn();
@@ -140,6 +158,12 @@ const main = async () => {
 
   await testEnv.withSecurityRulesDisabled(async (context) => {
     const adminDb = context.firestore();
+    await Promise.all([
+      seedSession(adminDb, student),
+      seedSession(adminDb, legacyStudent),
+      seedSession(adminDb, teacher),
+      seedSession(adminDb, reader),
+    ]);
     await setDoc(doc(adminDb, 'users', student.user.uid), {
       uid: student.user.uid,
       email: student.email,

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { db } from "../../../lib/firebase";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { requestStepUpReauthentication } from "../../../lib/stepUpReauth";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { InlineLoading } from "../../../components/common/LoadingState";
 
@@ -117,6 +118,7 @@ const SettingsSchool: React.FC = () => {
 
   const handleSave = async () => {
     try {
+      await requestStepUpReauthentication("updateSchoolSettings");
       const docRef = doc(db, "site_settings", "school_config");
       await setDoc(docRef, {
         schoolLevel,

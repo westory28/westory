@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import { requestStepUpReauthentication } from "../../../lib/stepUpReauth";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { InlineLoading } from "../../../components/common/LoadingState";
 import { useAuth } from "../../../contexts/AuthContext";
@@ -516,6 +517,7 @@ const SettingsGeneral: React.FC = () => {
     setCreating(true);
     setFeedback("");
     try {
+      await requestStepUpReauthentication("createSemesterShell");
       await ensurePointPolicyShell(year, semester);
       await ensureSemesterOperationalSeeds(year, semester);
 
@@ -566,6 +568,7 @@ const SettingsGeneral: React.FC = () => {
   const handleSave = async () => {
     setSaving(true);
     try {
+      await requestStepUpReauthentication("updateOperationalSettings");
       const year = normalizeYear(config.year);
       const semester = normalizeSemester(config.semester);
       const nextRegistry = buildSemesterRegistry(

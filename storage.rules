@@ -11,9 +11,23 @@ service firebase.storage {
         && request.auth.token.email.matches('.*@yongshin-ms\\.ms\\.kr$');
     }
 
+    function applicationSessionPath() {
+      return /databases/(default)/documents/application_sessions/$(request.auth.uid)/sessions/$(request.auth.token.auth_time);
+    }
+
+    function hasActiveApplicationSession() {
+      return isSignedIn()
+        && request.auth.token.auth_time is int
+        && firestore.get(applicationSessionPath()).data.status == 'active'
+        && firestore.get(applicationSessionPath()).data.authTime == request.auth.token.auth_time
+        && firestore.get(applicationSessionPath()).data.generalExpiresAt is timestamp
+        && firestore.get(applicationSessionPath()).data.generalExpiresAt > request.time;
+    }
+
     function canUseWestory() {
       return isSignedIn()
-        && (hasAllowedSchoolEmail() || request.auth.token.email == "westoria28@gmail.com");
+        && (hasAllowedSchoolEmail() || request.auth.token.email == "westoria28@gmail.com")
+        && hasActiveApplicationSession();
     }
 
     function isAdmin() {
@@ -22,7 +36,7 @@ service firebase.storage {
 
     function hasUserProfile() {
       return canUseWestory()
-        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid));
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role is string;
     }
 
     function userProfile() {

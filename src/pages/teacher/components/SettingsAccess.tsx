@@ -6,6 +6,7 @@ import {
   serverTimestamp,
   setDoc,
 } from "firebase/firestore";
+import { requestStepUpReauthentication } from "../../../lib/stepUpReauth";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { db } from "../../../lib/firebase";
 import {
@@ -98,7 +99,6 @@ const SettingsAccess: React.FC = () => {
   const saveUserAccess = async (user: UserRow, patch: Partial<UserRow>) => {
     const isAdmin = user.email.toLowerCase() === ADMIN_EMAIL;
     if (isAdmin) return;
-
     const nextUser: UserRow = {
       ...user,
       ...patch,
@@ -111,6 +111,7 @@ const SettingsAccess: React.FC = () => {
 
     setSavingId(user.id);
     try {
+      await requestStepUpReauthentication("updateAccessSettings");
       await setDoc(
         doc(db, "users", user.id),
         {

@@ -6,6 +6,8 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 
 initializeApp();
+const sessionAuthority = require('./sessionAuthority');
+Object.assign(exports, sessionAuthority.callableExports);
 Object.assign(exports, require('./sourceArchiveBeta'));
 Object.assign(exports, require('./lessonPdfBeta'));
 
@@ -1659,12 +1661,13 @@ const assertAuth = (request) => {
   return request.auth.uid;
 };
 
-const assertAllowedWestoryUser = (request) => {
+const assertAllowedWestoryUser = async (request, options = {}) => {
   const uid = assertAuth(request);
   const email = getAuthEmail(request);
   if (!email || (!SCHOOL_EMAIL_PATTERN.test(email) && email !== ADMIN_EMAIL)) {
     throw new HttpsError('permission-denied', 'This account cannot use Westory point functions.');
   }
+  await sessionAuthority.assertActiveApplicationSession(request, options);
   return { uid, email };
 };
 
@@ -1726,7 +1729,7 @@ const maskPrintClientIp = (ip) => {
 };
 
 exports.getPrintClientInfo = onCall({ region: REGION }, async (request) => {
-  assertAllowedWestoryUser(request);
+  await assertAllowedWestoryUser(request);
   return {
     maskedIp: maskPrintClientIp(extractPrintClientIp(request)),
   };
@@ -1818,8 +1821,8 @@ const hasStaffPermission = (profile, permission) =>
   && Array.isArray(profile.staffPermissions)
   && profile.staffPermissions.includes(permission);
 
-const assertPointManager = async (request) => {
-  const { uid, email } = assertAllowedWestoryUser(request);
+const assertPointManager = async (request, options = {}) => {
+  const { uid, email } = await assertAllowedWestoryUser(request, options);
   if (email === ADMIN_EMAIL) {
     return { uid, email, profile: null };
   }
@@ -1831,8 +1834,8 @@ const assertPointManager = async (request) => {
   return { uid, email, profile };
 };
 
-const assertHallOfFameManager = async (request) => {
-  const { uid, email } = assertAllowedWestoryUser(request);
+const assertHallOfFameManager = async (request, options = {}) => {
+  const { uid, email } = await assertAllowedWestoryUser(request, options);
   if (email === ADMIN_EMAIL) {
     return { uid, email, profile: null };
   }
@@ -1861,8 +1864,8 @@ const buildQuizClassId = (grade, className) => {
   return `${normalizedGrade}-${normalizedClass}`;
 };
 
-const assertQuizManager = async (request) => {
-  const { uid, email } = assertAllowedWestoryUser(request);
+const assertQuizManager = async (request, options = {}) => {
+  const { uid, email } = await assertAllowedWestoryUser(request, options);
   if (email === ADMIN_EMAIL) {
     return { uid, email, profile: null };
   }
@@ -1877,8 +1880,8 @@ const assertQuizManager = async (request) => {
   return { uid, email, profile };
 };
 
-const assertPerformanceScoreManager = async (request) => {
-  const { uid, email } = assertAllowedWestoryUser(request);
+const assertPerformanceScoreManager = async (request, options = {}) => {
+  const { uid, email } = await assertAllowedWestoryUser(request, options);
   if (email === ADMIN_EMAIL) {
     return { uid, email, profile: null };
   }
@@ -1893,8 +1896,8 @@ const assertPerformanceScoreManager = async (request) => {
   return { uid, email, profile };
 };
 
-const assertStudentDataManager = async (request) => {
-  const { uid, email } = assertAllowedWestoryUser(request);
+const assertStudentDataManager = async (request, options = {}) => {
+  const { uid, email } = await assertAllowedWestoryUser(request, options);
   if (email === ADMIN_EMAIL) {
     return { uid, email, profile: null };
   }
@@ -1910,7 +1913,7 @@ const assertStudentDataManager = async (request) => {
 };
 
 const assertNotificationManager = async (request) => {
-  const { uid, email } = assertAllowedWestoryUser(request);
+  const { uid, email } = await assertAllowedWestoryUser(request);
   if (email === ADMIN_EMAIL) {
     return { uid, email, profile: null };
   }
@@ -2493,7 +2496,7 @@ const resolveHistoryDictionaryManagerRecipientUids = async () => {
 };
 
 const assertHistoryDictionaryManager = async (request) => {
-  const { uid, email } = assertAllowedWestoryUser(request);
+  const { uid, email } = await assertAllowedWestoryUser(request);
   if (email === ADMIN_EMAIL) {
     return { uid, email, profile: null };
   }
@@ -2509,7 +2512,7 @@ const assertHistoryDictionaryManager = async (request) => {
 };
 
 const assertHistoryDictionaryWriteManager = async (request) => {
-  const { uid, email } = assertAllowedWestoryUser(request);
+  const { uid, email } = await assertAllowedWestoryUser(request);
   if (email === ADMIN_EMAIL) {
     return { uid, email, profile: null };
   }
@@ -3506,7 +3509,7 @@ const collectStudentProfileSnapshotRefs = async (year, semester, uid) => {
 };
 
 exports.deleteStudentData = onCall({ region: REGION, timeoutSeconds: 300, memory: '512MiB' }, async (request) => {
-  const manager = await assertStudentDataManager(request);
+  const manager = await assertStudentDataManager(request, { recentAuth: true, highRisk: true });
   const { year, semester } = assertYearSemester(request.data || {});
   const targetUid = String(
     request.data?.uid
@@ -3584,7 +3587,7 @@ exports.deleteStudentData = onCall({ region: REGION, timeoutSeconds: 300, memory
 });
 
 exports.resetLessonCorePointProgress = onCall({ region: REGION, timeoutSeconds: 180, memory: '512MiB' }, async (request) => {
-  const manager = await assertStudentDataManager(request);
+  const manager = await assertStudentDataManager(request, { recentAuth: true, highRisk: true });
   const { year, semester } = assertYearSemester(request.data || {});
   const targetUid = String(
     request.data?.uid
@@ -3646,7 +3649,7 @@ exports.resetLessonCorePointProgress = onCall({ region: REGION, timeoutSeconds: 
 });
 
 exports.updateStudentData = onCall({ region: REGION, timeoutSeconds: 180, memory: '512MiB' }, async (request) => {
-  const manager = await assertStudentDataManager(request);
+  const manager = await assertStudentDataManager(request, { recentAuth: true, highRisk: true });
   const { year, semester } = assertYearSemester(request.data || {});
   const targetUid = String(
     request.data?.uid
@@ -3899,7 +3902,10 @@ const filterExistingRefs = async (refs) => {
 const resetAssessmentAttemptsByClassHandler = onCall(
   { region: REGION, timeoutSeconds: 180 },
   async (request) => {
-    const { uid, email } = await assertQuizManager(request);
+    const { uid, email } = await assertQuizManager(request, {
+      recentAuth: true,
+      highRisk: true,
+    });
     const { year, semester } = assertYearSemester(request.data || {});
     const unitId = String(request.data?.unitId || '').trim();
     const category = String(request.data?.category || '').trim();
@@ -4749,7 +4755,10 @@ const awardQuizCorrectionBonus = async ({ year, semester, uid, resultId, score }
 exports.recalculateQuizResultsAfterQuestionCorrection = onCall(
   { region: REGION, timeoutSeconds: 180, memory: '512MiB' },
   async (request) => {
-    const { uid } = await assertQuizManager(request);
+    const { uid } = await assertQuizManager(request, {
+      recentAuth: true,
+      highRisk: true,
+    });
     const { year, semester } = assertYearSemester(request.data || {});
     const questionDocId = String(request.data?.questionDocId || '').trim();
     const questionId = String(request.data?.questionId || '').trim();
@@ -4876,7 +4885,7 @@ exports.recalculateQuizResultsAfterQuestionCorrection = onCall(
 );
 
 exports.ensureWisHallOfFame = onCall({ region: REGION }, async (request) => {
-  assertAllowedWestoryUser(request);
+  await assertAllowedWestoryUser(request);
   const forceRefresh = request.data?.force === true;
   const { year, semester } = await resolveHallOfFameTargetYearSemester(
     request.data,
@@ -4908,7 +4917,7 @@ exports.ensureWisHallOfFame = onCall({ region: REGION }, async (request) => {
 });
 
 exports.markNotificationsRead = onCall({ region: REGION }, async (request) => {
-  const { uid } = assertAllowedWestoryUser(request);
+  const { uid } = await assertAllowedWestoryUser(request);
   const { year, semester } = assertYearSemester(request.data);
   const inboxRef = db.doc(getNotificationInboxPath(year, semester, uid));
   const unreadSnap = await db.collection(getNotificationItemsPath(year, semester, uid))
@@ -4933,7 +4942,7 @@ exports.markNotificationsRead = onCall({ region: REGION }, async (request) => {
 });
 
 exports.clearNotifications = onCall({ region: REGION }, async (request) => {
-  const { uid } = assertAllowedWestoryUser(request);
+  const { uid } = await assertAllowedWestoryUser(request);
   const { year, semester } = assertYearSemester(request.data);
   const inboxRef = db.doc(getNotificationInboxPath(year, semester, uid));
   let deletedCount = 0;
@@ -5210,7 +5219,7 @@ const getHistoryClassroomProfileSnapshot = (uid, profile = {}) => ({
 });
 
 const assertHistoryClassroomStudent = async (request) => {
-  const { uid, email } = assertAllowedWestoryUser(request);
+  const { uid, email } = await assertAllowedWestoryUser(request);
   const { profile } = await getUserProfile(uid);
   if (String(profile?.role || '').trim() !== 'student') {
     throw new HttpsError('permission-denied', 'student permission is required.');
@@ -5417,7 +5426,7 @@ const createHistoryClassroomExemptionGrantedNotifications = async (year, semeste
 };
 
 exports.grantHistoryClassroomExemptions = onCall({ region: REGION }, async (request) => {
-  const manager = await assertQuizManager(request);
+  const manager = await assertQuizManager(request, { recentAuth: true, highRisk: true });
   const { year, semester } = assertYearSemester(request.data);
   const reason = sanitizeHistoryClassroomText(request.data?.reason, 240);
   if (!reason) {
@@ -5484,7 +5493,7 @@ exports.grantHistoryClassroomExemptions = onCall({ region: REGION }, async (requ
 });
 
 exports.revokeHistoryClassroomExemptions = onCall({ region: REGION }, async (request) => {
-  const manager = await assertQuizManager(request);
+  const manager = await assertQuizManager(request, { recentAuth: true, highRisk: true });
   const { year, semester } = assertYearSemester(request.data);
   const exemptionIds = uniqueNonEmptyStrings(request.data?.exemptionIds, 50);
   if (!exemptionIds.length) {
@@ -5632,7 +5641,7 @@ exports.createHistoryClassroomExemptionRequest = onCall({ region: REGION }, asyn
 });
 
 exports.reviewHistoryClassroomExemptionRequest = onCall({ region: REGION }, async (request) => {
-  const manager = await assertQuizManager(request);
+  const manager = await assertQuizManager(request, { recentAuth: true, highRisk: true });
   const { year, semester } = assertYearSemester(request.data);
   const requestId = sanitizeHistoryClassroomText(request.data?.requestId, 160);
   const approved = request.data?.approved === true
@@ -5794,7 +5803,7 @@ exports.reviewHistoryClassroomExemptionRequest = onCall({ region: REGION }, asyn
 });
 
 exports.submitHistoryClassroomResult = onCall({ region: REGION }, async (request) => {
-  const { uid } = assertAllowedWestoryUser(request);
+  const { uid } = await assertAllowedWestoryUser(request);
   const { year, semester } = assertYearSemester(request.data);
   const assignmentId = String(request.data?.assignmentId || '').trim();
   const requestedResultId = String(request.data?.resultId || '').trim();
@@ -5897,7 +5906,7 @@ exports.submitHistoryClassroomResult = onCall({ region: REGION }, async (request
 });
 
 exports.notifyHistoryClassroomSubmitted = onCall({ region: REGION }, async (request) => {
-  const { uid } = assertAllowedWestoryUser(request);
+  const { uid } = await assertAllowedWestoryUser(request);
   const { year, semester } = assertYearSemester(request.data);
   const assignmentId = sanitizeNotificationText(request.data?.assignmentId, 160);
   const resultId = sanitizeNotificationText(request.data?.resultId, 160);
@@ -5950,7 +5959,7 @@ exports.notifyHistoryClassroomSubmitted = onCall({ region: REGION }, async (requ
 });
 
 exports.notifyPerformanceScoreObjectionRequested = onCall({ region: REGION }, async (request) => {
-  const { uid } = assertAllowedWestoryUser(request);
+  const { uid } = await assertAllowedWestoryUser(request);
   const { year, semester } = assertYearSemester(request.data);
   const scoreIds = uniqueNonEmptyStrings(request.data?.scoreIds, 20).map((scoreId) =>
     sanitizeNotificationText(scoreId, 160),
@@ -6016,7 +6025,7 @@ exports.notifyPerformanceScoreObjectionRequested = onCall({ region: REGION }, as
 });
 
 exports.notifyPerformanceScoreAnswerSheetRequested = onCall({ region: REGION }, async (request) => {
-  const { uid } = assertAllowedWestoryUser(request);
+  const { uid } = await assertAllowedWestoryUser(request);
   const { year, semester } = assertYearSemester(request.data);
   const scoreIds = uniqueNonEmptyStrings(request.data?.scoreIds, 20).map((scoreId) =>
     sanitizeNotificationText(scoreId, 160),
@@ -6088,7 +6097,7 @@ exports.notifyPerformanceScoreAnswerSheetRequested = onCall({ region: REGION }, 
 });
 
 exports.reviewPerformanceScoreObjection = onCall({ region: REGION }, async (request) => {
-  const manager = await assertPerformanceScoreManager(request);
+  const manager = await assertPerformanceScoreManager(request, { recentAuth: true, highRisk: true });
   const { year, semester } = assertYearSemester(request.data);
   const objectionId = sanitizeNotificationText(request.data?.objectionId, 160);
   const action = String(request.data?.status || '').trim();
@@ -6219,7 +6228,7 @@ exports.reviewPerformanceScoreObjection = onCall({ region: REGION }, async (requ
 });
 
 exports.saveWisHallOfFameConfig = onCall({ region: REGION }, async (request) => {
-  const { uid } = await assertHallOfFameManager(request);
+  const { uid } = await assertHallOfFameManager(request, { recentAuth: true, highRisk: true });
   const { year, semester } = await resolveHallOfFameTargetYearSemester(
     request.data,
     {
@@ -6374,7 +6383,7 @@ exports.refreshWisHallOfFameOnSchedule = onSchedule(
 );
 
 exports.rebuildPointWalletRankTotals = onCall({ region: REGION, timeoutSeconds: 540, memory: '1GiB' }, async (request) => {
-  const manager = await assertPointManager(request);
+  const manager = await assertPointManager(request, { recentAuth: true, highRisk: true });
   const { year, semester } = assertYearSemester(request.data);
   const dryRun = request.data?.dryRun === true;
   const policySnap = await db.doc(getPointPolicyPath(year, semester)).get();
@@ -6410,7 +6419,7 @@ exports.rebuildPointWalletRankTotals = onCall({ region: REGION, timeoutSeconds: 
 });
 
 exports.applyPointActivityReward = onCall({ region: REGION }, async (request) => {
-  const { uid } = assertAllowedWestoryUser(request);
+  const { uid } = await assertAllowedWestoryUser(request);
   const { year, semester } = assertYearSemester(request.data);
   const activityType = String(request.data?.activityType || '').trim();
   const allowedTypes = ['attendance', 'quiz', 'lesson', 'lesson_core_points', 'think_cloud', 'map_tag', 'history_classroom'];
@@ -6770,7 +6779,7 @@ exports.applyPointActivityReward = onCall({ region: REGION }, async (request) =>
 });
 
 exports.createPointPurchaseRequest = onCall({ region: REGION }, async (request) => {
-  const { uid } = assertAllowedWestoryUser(request);
+  const { uid } = await assertAllowedWestoryUser(request);
   const { year, semester } = assertYearSemester(request.data);
   const productId = String(request.data?.productId || '').trim();
   const requestKey = String(request.data?.requestKey || '').trim();
@@ -6892,7 +6901,7 @@ exports.createPointPurchaseRequest = onCall({ region: REGION }, async (request) 
 });
 
 exports.adjustTeacherPoints = onCall({ region: REGION }, async (request) => {
-  const manager = await assertPointManager(request);
+  const manager = await assertPointManager(request, { recentAuth: true, highRisk: true });
   const { year, semester } = assertYearSemester(request.data);
   const targetUid = String(request.data?.uid || '').trim();
   const delta = Number(request.data?.delta || 0);
@@ -6976,7 +6985,7 @@ exports.adjustTeacherPoints = onCall({ region: REGION }, async (request) => {
 });
 
 exports.updateTeacherPointAdjustment = onCall({ region: REGION }, async (request) => {
-  await assertPointManager(request);
+  await assertPointManager(request, { recentAuth: true, highRisk: true });
   const { year, semester } = assertYearSemester(request.data);
   const transactionId = String(request.data?.transactionId || '').trim();
   const action = String(request.data?.action || 'update').trim();
@@ -7081,7 +7090,7 @@ exports.updateTeacherPointAdjustment = onCall({ region: REGION }, async (request
 });
 
 exports.reviewTeacherPointOrder = onCall({ region: REGION }, async (request) => {
-  const manager = await assertPointManager(request);
+  const manager = await assertPointManager(request, { recentAuth: true, highRisk: true });
   const { year, semester } = assertYearSemester(request.data);
   const orderId = String(request.data?.orderId || '').trim();
   const nextStatus = String(request.data?.nextStatus || '').trim();
@@ -7460,7 +7469,7 @@ const reclaimHistoryDictionaryRewardIfNeeded = async ({
 };
 
 exports.requestHistoryDictionaryTerm = onCall({ region: REGION }, async (request) => {
-  const { uid } = assertAllowedWestoryUser(request);
+  const { uid } = await assertAllowedWestoryUser(request);
   const { year, semester } = assertYearSemester(request.data);
   const word = sanitizeHistoryDictionaryWord(request.data?.word);
   const normalizedWord = normalizeHistoryDictionaryWord(word);
@@ -7615,7 +7624,7 @@ exports.requestHistoryDictionaryTerm = onCall({ region: REGION }, async (request
 });
 
 exports.saveStudentHistoryDictionaryWord = onCall({ region: REGION }, async (request) => {
-  const { uid } = assertAllowedWestoryUser(request);
+  const { uid } = await assertAllowedWestoryUser(request);
   const termId = sanitizeHistoryDictionaryText(request.data?.termId, 80);
   if (!termId) {
     throw new HttpsError('invalid-argument', 'termId is required.');
@@ -7650,7 +7659,7 @@ exports.saveStudentHistoryDictionaryWord = onCall({ region: REGION }, async (req
 });
 
 exports.saveStudentHistoryDictionaryEntry = onCall({ region: REGION }, async (request) => {
-  const { uid } = assertAllowedWestoryUser(request);
+  const { uid } = await assertAllowedWestoryUser(request);
   const word = sanitizeHistoryDictionaryWord(request.data?.word);
   const normalizedWord = normalizeHistoryDictionaryWord(word);
   const definition = sanitizeHistoryDictionaryText(request.data?.definition, 1200);
@@ -7722,7 +7731,7 @@ exports.saveStudentHistoryDictionaryEntry = onCall({ region: REGION }, async (re
 });
 
 exports.deleteStudentHistoryDictionaryWord = onCall({ region: REGION }, async (request) => {
-  const { uid } = assertAllowedWestoryUser(request);
+  const { uid } = await assertAllowedWestoryUser(request);
   const termId = sanitizeHistoryDictionaryText(request.data?.termId, 80);
   const scoped = getOptionalYearSemester(request.data) || await getCurrentConfiguredYearSemester();
   if (!termId) {
@@ -8365,7 +8374,7 @@ exports.approveHistoryDictionaryTermForRequests = onCall({ region: REGION }, asy
 });
 
 exports.updateStudentProfileIcon = onCall({ region: REGION }, async (request) => {
-  const { uid } = assertAllowedWestoryUser(request);
+  const { uid } = await assertAllowedWestoryUser(request);
   const { year, semester } = assertYearSemester(request.data);
   const emojiId = String(request.data?.emojiId || '').trim();
 
