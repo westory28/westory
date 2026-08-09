@@ -8,8 +8,7 @@ import {
   reauthenticateWithCredential,
   reauthenticateWithPopup,
 } from "firebase/auth";
-import { disableNetwork, enableNetwork } from "firebase/firestore";
-import { auth, db } from "../../lib/firebase";
+import { auth } from "../../lib/firebase";
 import {
   beginApplicationSessionReauthentication,
   synchronizeApplicationSession,
@@ -178,10 +177,7 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
     [],
   );
 
-  const finishSuccess = async (
-    current: PendingRequest,
-    resumeFirestore: () => Promise<void>,
-  ) => {
+  const finishSuccess = async (current: PendingRequest) => {
     const user = auth.currentUser;
     if (!user || user.uid !== current.ownerUid) {
       throw new StepUpReauthError(
@@ -241,15 +237,6 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
     if (session.authorityMode !== "ENFORCE") {
       clearSessionTiming();
     }
-    try {
-      await resumeFirestore();
-    } catch (error) {
-      throw new StepUpReauthError(
-        "SESSION_REFRESH_FAILED",
-        "새 로그인 세션으로 데이터 연결을 다시 시작하지 못했습니다.",
-        error,
-      );
-    }
     pendingRef.current = null;
     resetDialog();
     current.resolve();
@@ -275,19 +262,11 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
     submittingRef.current = true;
     setSubmitting(true);
     setErrorMessage("");
-    let firestorePaused = false;
-    const resumeFirestore = async () => {
-      if (!firestorePaused) return;
-      firestorePaused = false;
-      await enableNetwork(db);
-    };
     try {
       await beginApplicationSessionReauthentication();
-      await disableNetwork(db);
-      firestorePaused = true;
       const credential = EmailAuthProvider.credential(user.email, password);
       await reauthenticateWithCredential(user, credential);
-      await finishSuccess(current, resumeFirestore);
+      await finishSuccess(current);
     } catch (error) {
       if (
         error instanceof StepUpReauthError &&
@@ -298,12 +277,6 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
       }
       setErrorMessage(getStepUpReauthFailureMessage(error, "password"));
     } finally {
-      await resumeFirestore().catch((error) => {
-        console.error(
-          "Failed to resume Firestore after reauthentication",
-          error,
-        );
-      });
       submittingRef.current = false;
       setSubmitting(false);
     }
@@ -326,20 +299,12 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
     submittingRef.current = true;
     setSubmitting(true);
     setErrorMessage("");
-    let firestorePaused = false;
-    const resumeFirestore = async () => {
-      if (!firestorePaused) return;
-      firestorePaused = false;
-      await enableNetwork(db);
-    };
     try {
       await beginApplicationSessionReauthentication();
-      await disableNetwork(db);
-      firestorePaused = true;
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ login_hint: user.email || "" });
       await reauthenticateWithPopup(user, provider);
-      await finishSuccess(current, resumeFirestore);
+      await finishSuccess(current);
     } catch (error) {
       if (
         error instanceof StepUpReauthError &&
@@ -350,12 +315,6 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
       }
       setErrorMessage(getStepUpReauthFailureMessage(error, "google"));
     } finally {
-      await resumeFirestore().catch((error) => {
-        console.error(
-          "Failed to resume Firestore after reauthentication",
-          error,
-        );
-      });
       submittingRef.current = false;
       setSubmitting(false);
     }

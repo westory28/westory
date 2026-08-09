@@ -78,12 +78,29 @@ const screenshotPath = (name, viewport) =>
   path.join(outputDir, `${name}-${viewportKey(viewport)}.png`);
 
 const attachDiagnostics = (page) => {
-  const diagnostics = { consoleErrors: [], pageErrors: [], failedRequests: [] };
+  const diagnostics = {
+    consoleErrors: [],
+    pageErrors: [],
+    failedRequests: [],
+    httpErrors: [],
+  };
   page.on("console", (message) => {
-    if (message.type() === "error")
-      diagnostics.consoleErrors.push(message.text());
+    if (message.type() === "error") {
+      diagnostics.consoleErrors.push({
+        text: message.text(),
+        location: message.location(),
+      });
+    }
   });
   page.on("pageerror", (error) => diagnostics.pageErrors.push(error.message));
+  page.on("response", (response) => {
+    if (response.status() < 400) return;
+    diagnostics.httpErrors.push({
+      url: response.url(),
+      status: response.status(),
+      statusText: response.statusText(),
+    });
+  });
   page.on("requestfailed", (request) => {
     const failure = request.failure()?.errorText || "request failed";
     diagnostics.failedRequests.push({ url: request.url(), failure });
@@ -109,6 +126,12 @@ const createContext = async (browser, viewport, options = {}) => {
     await context.addInitScript((offsetMs) => {
       const actualNow = Date.now.bind(Date);
       Date.now = () => actualNow() + offsetMs;
+      Object.defineProperty(window, "__westoryRestoreClockForTest", {
+        configurable: false,
+        value: () => {
+          Date.now = actualNow;
+        },
+      });
     }, options.clockOffsetMs);
   }
   return context;
@@ -120,12 +143,23 @@ const login = async (page, account) => {
     if (message.type() === "error") loginErrors.push(message.text());
   });
   page.on("pageerror", (error) => loginErrors.push(error.message));
-  if (vercelShareUrl) {
-    await page.goto(vercelShareUrl, { waitUntil: "domcontentloaded" });
-  }
-  await page.goto(`${baseUrl}/#/`, { waitUntil: "domcontentloaded" });
+  const entryUrl = new URL(vercelShareUrl || `${baseUrl}/`);
+  entryUrl.hash = "#/";
+  await page.goto(entryUrl.toString(), { waitUntil: "domcontentloaded" });
   const form = page.locator('form[aria-label="스테이징 합성 계정 로그인"]');
-  await form.waitFor({ state: "visible", timeout: 30_000 });
+  try {
+    await form.waitFor({ state: "visible", timeout: 30_000 });
+  } catch (error) {
+    const entryFailure = await page.evaluate(() => ({
+      hash: window.location.hash,
+      title: document.title,
+      visibleText: document.body.innerText.slice(0, 1200),
+    }));
+    throw new Error(
+      `Staging login form did not appear: ${JSON.stringify(entryFailure)}`,
+      { cause: error },
+    );
+  }
   await form.locator('input[type="email"]').fill(account.email);
   await form.locator('input[type="password"]').fill(account.password);
   await form.getByRole("button", { name: "합성 계정으로 로그인" }).click();
@@ -274,13 +308,14 @@ const openMobileMenuIfNeeded = async (page) => {
 const verifyAdminSettings = async (browser, viewport) => {
   const context = await createContext(browser, viewport);
   const page = await context.newPage();
-  const diagnostics = attachDiagnostics(page);
+  let diagnostics;
   try {
     await login(page, admin);
     await page.goto(`${baseUrl}/#/teacher/settings`, {
       waitUntil: "domcontentloaded",
     });
     await page.getByRole("heading", { name: "관리자 설정" }).waitFor();
+    diagnostics = attachDiagnostics(page);
     await page.getByRole("button", { name: /세부 권한 관리/ }).click();
     await page.locator("main > aside + div.min-w-0.flex-1").waitFor();
     await page.waitForTimeout(500);
@@ -344,9 +379,10 @@ const verifyAuthenticating = async (browser, viewport) => {
 const verifyUnauthorized = async (browser, viewport) => {
   const context = await createContext(browser, viewport);
   const page = await context.newPage();
-  const diagnostics = attachDiagnostics(page);
+  let diagnostics;
   try {
     await login(page, negative);
+    diagnostics = attachDiagnostics(page);
     await page.goto(`${baseUrl}/#/teacher/settings`, {
       waitUntil: "domcontentloaded",
     });
@@ -374,13 +410,14 @@ const verifyUnauthorized = async (browser, viewport) => {
 const verifySessionExpired = async (browser, viewport) => {
   const context = await createContext(browser, viewport);
   const page = await context.newPage();
-  const diagnostics = attachDiagnostics(page);
+  let diagnostics;
   try {
     await login(page, admin);
     await page.goto(`${baseUrl}/#/teacher/settings`, {
       waitUntil: "domcontentloaded",
     });
     await page.getByRole("heading", { name: "관리자 설정" }).waitFor();
+    diagnostics = attachDiagnostics(page);
     await openMobileMenuIfNeeded(page);
     await page
       .getByRole("button", { name: "세션 만료 테스트", exact: true })
@@ -412,7 +449,7 @@ const verifyReauthFlow = async (browser, viewport) => {
     clockOffsetMs: 6 * 60 * 1000,
   });
   const page = await context.newPage();
-  const diagnostics = attachDiagnostics(page);
+  let diagnostics;
   const identityGate = deferred();
   const sessionGate = deferred();
   const identitySeen = deferred();
@@ -439,6 +476,7 @@ const verifyReauthFlow = async (browser, viewport) => {
       waitUntil: "domcontentloaded",
     });
     await page.getByRole("heading", { name: "관리자 설정" }).waitFor();
+    diagnostics = attachDiagnostics(page);
     const saveButton = page.getByRole("button", {
       name: "설정 저장",
       exact: true,
@@ -448,6 +486,9 @@ const verifyReauthFlow = async (browser, viewport) => {
     const dialog = page.getByRole("dialog", { name: "본인 확인이 필요합니다" });
     await dialog.waitFor({ timeout: 15_000 });
     await dialog.getByLabel("현재 비밀번호").fill(admin.password);
+    await page.evaluate(() => {
+      window.__westoryRestoreClockForTest?.();
+    });
 
     holdIdentity = true;
     holdSessionRefresh = true;
@@ -480,7 +521,10 @@ const verifyReauthFlow = async (browser, viewport) => {
       viewport,
       "access-authorized-recovery",
     );
-    authorized.protectedHeadingVisible = true;
+    authorized.protectedHeadingVisible = await page
+      .getByRole("heading", { name: "관리자 설정" })
+      .isVisible()
+      .catch(() => false);
 
     return {
       reauthenticating,
@@ -533,6 +577,9 @@ const assertEvidence = (evidence) => {
           failures.push(`${state}/${key}: dialog focus escaped`);
         if (value.protectedContentHiddenAndInert === false)
           failures.push(`${state}/${key}: background exposed`);
+      }
+      if (state === "REAUTH_FLOW" && !item.authorized.protectedHeadingVisible) {
+        failures.push(`${state}/${key}: authorized recovery missing`);
       }
       if (state !== "REAUTH_FLOW" && item.protectedHeadingVisible) {
         failures.push(`${state}/${key}: protected heading visible`);

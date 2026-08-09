@@ -1,5 +1,18 @@
 $ErrorActionPreference = "Stop"
 
+$stagingUrl = $env:WESTORY_STAGING_URL.TrimEnd("/")
+if ([string]::IsNullOrWhiteSpace($stagingUrl)) {
+  throw "WESTORY_STAGING_URL is required."
+}
+$stagingUri = [Uri]$stagingUrl
+if (
+  $stagingUri.Scheme -ne "https" -or
+  $stagingUri.Host -notmatch
+    "^westory-staging-[a-z0-9]+-bbbs-projects-44f9da30[.]vercel[.]app$"
+) {
+  throw "Invalid Dedicated Staging deployment URL."
+}
+
 $sharePath = Join-Path $env:TEMP "westory-w1r3-share-url.tmp"
 $resolvedSharePath = (Resolve-Path -LiteralPath $sharePath).Path
 $expectedSharePath = [System.IO.Path]::GetFullPath($sharePath)
@@ -8,16 +21,18 @@ if ($resolvedSharePath -ne $expectedSharePath) {
   throw "Unexpected share file path."
 }
 
-$shareUrl = (Get-Content -Raw -LiteralPath $resolvedSharePath).Trim()
-$shareUri = [Uri]$shareUrl
+$sourceShareUrl = (Get-Content -Raw -LiteralPath $resolvedSharePath).Trim()
+$sourceShareUri = [Uri]$sourceShareUrl
 
 if (
-  $shareUri.Host -ne
-    "westory-staging-1fz46o949-bbbs-projects-44f9da30.vercel.app" -or
-  $shareUri.Query -notmatch "_vercel_share="
+  $sourceShareUri.Scheme -ne "https" -or
+  $sourceShareUri.Query -notmatch "_vercel_share="
 ) {
   throw "Invalid Dedicated Staging share URL."
 }
+$shareBuilder = [UriBuilder]$stagingUri
+$shareBuilder.Query = $sourceShareUri.Query.TrimStart("?")
+$shareUrl = $shareBuilder.Uri.AbsoluteUri
 
 function New-W1R3Password {
   $bytes = New-Object byte[] 24
@@ -117,8 +132,7 @@ try {
     -Password $negativePassword `
     -ApiKey $firebaseApiKey
 
-  $env:WESTORY_STAGING_URL =
-    "https://westory-staging-1fz46o949-bbbs-projects-44f9da30.vercel.app"
+  $env:WESTORY_STAGING_URL = $stagingUrl
   $env:WESTORY_VERCEL_SHARE_URL = $shareUrl
   $env:WESTORY_ADMIN_EMAIL = "westoria28@gmail.com"
   $env:WESTORY_ADMIN_PASSWORD = $adminPassword
