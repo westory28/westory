@@ -380,6 +380,16 @@ assert.ok(
     providerSource.indexOf("reauthenticateWithCredential(user, credential)"),
   "the server transition must be established before password reauthentication",
 );
+assert.ok(
+  providerSource.indexOf("disableNetwork(db)") <
+    providerSource.indexOf("reauthenticateWithCredential(user, credential)"),
+  "Firestore listeners must pause before the authentication epoch changes",
+);
+assert.ok(
+  providerSource.indexOf("await resumeFirestore();") <
+    providerSource.indexOf("current.resolve()"),
+  "Firestore must reconnect with the new session before the command resumes",
+);
 assert.match(
   providerSource,
   /pendingRef\.current = null;[\s\S]*current\.resolve\(\)/,
