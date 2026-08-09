@@ -29,9 +29,8 @@ const outputDir = path.resolve(
     "docs/evidence/w1r3-access-viewports",
 );
 const browserExecutable = process.env.WESTORY_PLAYWRIGHT_EXECUTABLE || "";
-const interactiveVercelAuth =
-  process.env.WESTORY_VERCEL_INTERACTIVE_AUTH === "true";
-let vercelProtectionState;
+const vercelShareUrl = process.env.WESTORY_VERCEL_SHARE_URL || "";
+const appCheckDebugToken = process.env.WESTORY_APPCHECK_DEBUG_TOKEN || "";
 
 if (
   !baseUrl ||
@@ -45,13 +44,25 @@ if (
   );
 }
 
-const viewports = [
+const allViewports = [
   { width: 390, height: 844 },
   { width: 768, height: 1024 },
   { width: 1024, height: 768 },
   { width: 1280, height: 800 },
   { width: 1600, height: 900 },
 ];
+const viewportKey = ({ width, height }) => `${width}x${height}`;
+const requestedViewportKeys = new Set(
+  String(process.env.WESTORY_W1R3_VIEWPORTS || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean),
+);
+const viewports = requestedViewportKeys.size
+  ? allViewports.filter((viewport) =>
+      requestedViewportKeys.has(viewportKey(viewport)),
+    )
+  : allViewports;
 
 fs.mkdirSync(outputDir, { recursive: true });
 
@@ -63,7 +74,6 @@ const deferred = () => {
   return { promise, resolve };
 };
 
-const viewportKey = ({ width, height }) => `${width}x${height}`;
 const screenshotPath = (name, viewport) =>
   path.join(outputDir, `${name}-${viewportKey(viewport)}.png`);
 
@@ -89,8 +99,12 @@ const createContext = async (browser, viewport, options = {}) => {
     timezoneId: "Asia/Seoul",
     colorScheme: "light",
     reducedMotion: "reduce",
-    ...(vercelProtectionState ? { storageState: vercelProtectionState } : {}),
   });
+  if (appCheckDebugToken) {
+    await context.addInitScript((token) => {
+      self.FIREBASE_APPCHECK_DEBUG_TOKEN = token;
+    }, appCheckDebugToken);
+  }
   if (options.clockOffsetMs) {
     await context.addInitScript((offsetMs) => {
       const actualNow = Date.now.bind(Date);
@@ -100,43 +114,42 @@ const createContext = async (browser, viewport, options = {}) => {
   return context;
 };
 
-const establishVercelProtectionSession = async (browser) => {
-  if (!interactiveVercelAuth) return;
-  const context = await browser.newContext({
-    viewport: { width: 1280, height: 800 },
-    screen: { width: 1280, height: 800 },
-    locale: "ko-KR",
-  });
-  const page = await context.newPage();
-  console.log(
-    "Vercel 보호 로그인 창을 열었습니다. Westory Owner 계정으로 로그인해 주세요.",
-  );
-  try {
-    await page.goto(`${baseUrl}/#/`, { waitUntil: "domcontentloaded" });
-    await page
-      .locator('form[aria-label="스테이징 합성 계정 로그인"]')
-      .waitFor({ state: "visible", timeout: 10 * 60 * 1000 });
-    vercelProtectionState = await context.storageState();
-    console.log("Vercel 보호 로그인 확인: PASS");
-  } finally {
-    await context.close();
-  }
-};
-
 const login = async (page, account) => {
+  const loginErrors = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") loginErrors.push(message.text());
+  });
+  page.on("pageerror", (error) => loginErrors.push(error.message));
+  if (vercelShareUrl) {
+    await page.goto(vercelShareUrl, { waitUntil: "domcontentloaded" });
+  }
   await page.goto(`${baseUrl}/#/`, { waitUntil: "domcontentloaded" });
   const form = page.locator('form[aria-label="스테이징 합성 계정 로그인"]');
   await form.waitFor({ state: "visible", timeout: 30_000 });
   await form.locator('input[type="email"]').fill(account.email);
   await form.locator('input[type="password"]').fill(account.password);
   await form.getByRole("button", { name: "합성 계정으로 로그인" }).click();
-  await page.waitForFunction(
-    () =>
-      window.location.hash.startsWith("#/teacher/") ||
-      window.location.hash.startsWith("#/student/"),
-    undefined,
-    { timeout: 30_000 },
-  );
+  try {
+    await page.waitForFunction(
+      () =>
+        window.location.hash.startsWith("#/teacher/") ||
+        window.location.hash.startsWith("#/student/"),
+      undefined,
+      { timeout: 30_000 },
+    );
+  } catch (error) {
+    const loginFailure = await page.evaluate(() => ({
+      hash: window.location.hash,
+      alerts: [...document.querySelectorAll('[role="alert"]')]
+        .map((element) => element.textContent?.trim())
+        .filter(Boolean),
+      visibleText: document.body.innerText.slice(0, 1200),
+    }));
+    throw new Error(
+      `Staging login did not complete: ${JSON.stringify({ ...loginFailure, loginErrors })}`,
+      { cause: error },
+    );
+  }
   await page
     .waitForLoadState("networkidle", { timeout: 30_000 })
     .catch(() => undefined);
@@ -161,7 +174,9 @@ const measure = async (page, state) =>
       dialog?.querySelector('button[type="submit"], button:not([type])') ||
       document.querySelector("main a[href], main button:not([disabled])");
     const activeElement = document.activeElement;
-    const heading = document.querySelector("h1, h2");
+    const heading =
+      dialog?.querySelector("h1, h2") ||
+      document.querySelector("main h1, main h2");
     const rect = (element) => {
       if (!element) return null;
       const value = element.getBoundingClientRect();
@@ -208,7 +223,9 @@ const measure = async (page, state) =>
       localScrollWidth: localScrollRegion?.scrollWidth ?? null,
       sidebarContentOverlap:
         asideRect && contentRect
-          ? asideRect.right > contentRect.left + 0.5
+          ? asideRect.top < contentRect.bottom - 0.5 &&
+            asideRect.bottom > contentRect.top + 0.5 &&
+            asideRect.right > contentRect.left + 0.5
           : null,
       headingText: heading?.textContent?.trim() || "",
       headingRect: rect(heading),
@@ -274,7 +291,9 @@ const verifyAdminSettings = async (browser, viewport) => {
       "admin-settings",
     );
     const saveOrAction = page
-      .locator("main > aside + div.min-w-0.flex-1 button")
+      .locator(
+        "main > aside + div.min-w-0.flex-1 input[type=checkbox]:not([disabled])",
+      )
       .last();
     await saveOrAction.scrollIntoViewIfNeeded().catch(() => undefined);
     result.lastActionReachable = await saveOrAction
@@ -533,7 +552,7 @@ const assertEvidence = (evidence) => {
 
 (async () => {
   const browser = await chromium.launch({
-    headless: !interactiveVercelAuth,
+    headless: true,
     ...(browserExecutable ? { executablePath: browserExecutable } : {}),
   });
   const evidence = {
@@ -550,7 +569,6 @@ const assertEvidence = (evidence) => {
     },
   };
   try {
-    await establishVercelProtectionSession(browser);
     for (const viewport of viewports) {
       const key = viewportKey(viewport);
       console.log(`W1-R3 viewport ${key}: admin settings`);
@@ -579,12 +597,12 @@ const assertEvidence = (evidence) => {
         viewport,
       );
     }
-    assertEvidence(evidence);
     fs.writeFileSync(
       path.join(outputDir, "viewport-evidence.json"),
       `${JSON.stringify(evidence, null, 2)}\n`,
       "utf8",
     );
+    assertEvidence(evidence);
     console.log(`W1-R3 viewport evidence: PASS (${outputDir})`);
   } finally {
     await browser.close();

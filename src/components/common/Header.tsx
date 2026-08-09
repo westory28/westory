@@ -774,13 +774,13 @@ const Header: React.FC = () => {
 
             <React.Suspense fallback={null}>
               <NotificationBell
-                className="hidden lg:block"
+                className="hidden xl:block"
                 onUnreadCountChange={setMobileUnreadCount}
               />
             </React.Suspense>
 
             {isSessionEnforced && (
-              <div className="hidden lg:flex items-center gap-1 md:gap-2 px-3 py-1 bg-stone-100 rounded-full border border-stone-200">
+              <div className="hidden xl:flex items-center gap-1 md:gap-2 px-3 py-1 bg-stone-100 rounded-full border border-stone-200">
                 <i className="fas fa-stopwatch text-stone-400 text-xs"></i>
                 <span
                   className={`font-mono font-bold text-sm w-[42px] text-center ${remainingSeconds <= sessionWarningSeconds ? "text-red-500" : "text-stone-600"}`}
@@ -804,7 +804,7 @@ const Header: React.FC = () => {
             )}
 
             {runtimeEnvironment === "staging" && isSessionEnforced && (
-              <div className="hidden items-center gap-1 lg:flex">
+              <div className="hidden items-center gap-1 xl:flex">
                 <button
                   type="button"
                   onClick={warnSessionForStagingTest}
@@ -858,7 +858,7 @@ const Header: React.FC = () => {
 
         {mobileMenuOpen && (
           <div
-            className="fixed inset-0 top-16 z-40 lg:hidden bg-transparent"
+            className="fixed inset-0 top-16 z-40 xl:hidden bg-transparent"
             onClick={() => setMobileMenuOpen(false)}
             aria-hidden="true"
           ></div>
@@ -968,7 +968,7 @@ const Header: React.FC = () => {
       </header>
 
       {activeDesktopSubmenu && (
-        <div className="hidden lg:block">
+        <div className="hidden xl:block">
           <div className={desktopSubmenuContainerClass}>
             <div className="mb-4 flex shrink-0 overflow-x-auto rounded-t-lg border-b border-gray-200 bg-white px-2">
               {activeDesktopSubmenu.resolvedChildren.map((child, childIdx) => {
