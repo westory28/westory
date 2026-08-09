@@ -10,6 +10,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 import MainLayout from "./components/layout/MainLayout";
 import { AppToastProvider } from "./components/common/AppToastProvider";
 import { AppDialogProvider } from "./components/common/AppDialogProvider";
+import ProtectedAccessGate from "./components/auth/ProtectedAccessGate";
 import { lazyWithRetry } from "./lib/lazyWithRetry";
 
 const Login = lazyWithRetry(() => import("./pages/Login"), "login");
@@ -159,11 +160,13 @@ const RouteContentFallback: React.FC = () => (
 );
 
 const renderWithLayout = (children: React.ReactNode, _message?: string) => (
-  <AppDialogProvider>
-    <MainLayout>
-      <Suspense fallback={<RouteContentFallback />}>{children}</Suspense>
-    </MainLayout>
-  </AppDialogProvider>
+  <ProtectedAccessGate>
+    <AppDialogProvider>
+      <MainLayout>
+        <Suspense fallback={<RouteContentFallback />}>{children}</Suspense>
+      </MainLayout>
+    </AppDialogProvider>
+  </ProtectedAccessGate>
 );
 
 const App: React.FC = () => {

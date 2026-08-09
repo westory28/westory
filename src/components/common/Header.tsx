@@ -11,11 +11,8 @@ import {
 import { runAfterNextPaint } from "../../lib/browserTasks";
 import { lazyWithRetry } from "../../lib/lazyWithRetry";
 import { getDefaultProfileEmojiValue } from "../../lib/profileEmojis";
-import {
-  readLocalOnly,
-  removeStorage,
-  writeLocalOnly,
-} from "../../lib/safeStorage";
+import { removeStorage, writeLocalOnly } from "../../lib/safeStorage";
+import { readSessionExpiry, SESSION_EXPIRY_KEY } from "../../lib/sessionPolicy";
 import {
   getSessionChangeActivityTarget,
   getSessionActivityTarget,
@@ -36,7 +33,6 @@ import {
 const SESSION_DURATION_SECONDS = 60 * 60;
 const SESSION_DURATION_MS = SESSION_DURATION_SECONDS * 1000;
 const SESSION_ACTIVITY_THROTTLE_MS = 30 * 1000;
-const SESSION_EXPIRY_KEY = "sessionExpiry";
 const ROLE_SESSION_KEY = "westoryPortalRole";
 
 const NotificationBell = lazyWithRetry(
@@ -310,8 +306,10 @@ const Header: React.FC = () => {
           message: "보안을 위해 자동 로그아웃됩니다.",
         });
       }
-      await logout();
-      navigate("/", { replace: true });
+      await logout(isTimeout ? "expired" : "manual");
+      if (!isTimeout) {
+        navigate("/", { replace: true });
+      }
     } catch (error) {
       console.error("Logout failed", error);
     }
@@ -374,13 +372,17 @@ const Header: React.FC = () => {
     if (!currentUser) return;
     timeoutHandledRef.current = false;
     const now = Date.now();
-    const saved = Number(readLocalOnly(SESSION_EXPIRY_KEY));
-    const nextExpiry =
-      Number.isFinite(saved) && saved > now ? saved : now + SESSION_DURATION_MS;
+    const saved = readSessionExpiry();
+    const nextExpiry = saved ?? now + SESSION_DURATION_MS;
     sessionExpiryRef.current = nextExpiry;
     lastSessionExtendAtRef.current = now;
-    writeLocalOnly(SESSION_EXPIRY_KEY, String(nextExpiry));
+    if (saved === null) {
+      writeLocalOnly(SESSION_EXPIRY_KEY, String(nextExpiry));
+    }
     setSessionExpiry(nextExpiry);
+    if (nextExpiry <= now) {
+      setRemainingSeconds(0);
+    }
   }, [currentUser]);
 
   useEffect(() => {

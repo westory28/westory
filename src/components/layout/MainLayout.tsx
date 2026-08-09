@@ -9,21 +9,14 @@ import { PageLoading } from "../common/LoadingState";
 import { useAuth } from "../../contexts/AuthContext";
 import { useLocation, useNavigate } from "react-router-dom";
 import { markLoginPerf, measureLoginPerf } from "../../lib/loginPerf";
-import { readStorage } from "../../lib/safeStorage";
 import { runAfterNextPaint } from "../../lib/browserTasks";
 import { lazyWithRetry } from "../../lib/lazyWithRetry";
 import {
   getStudentRouteAccess,
   isStudentVisibilityControlledPath,
 } from "../../lib/studentMenuAccess";
-import {
-  canAccessTeacherPath,
-  canAccessTeacherPortal,
-  getDefaultTeacherRoute,
-  isAdminUser,
-} from "../../lib/permissions";
+import { isTeacherUser } from "../../lib/permissions";
 
-const ROLE_SESSION_KEY = "westoryPortalRole";
 const VISIBILITY_SETTINGS_FRESH_MS = 5000;
 
 const StudentHistoryDictionaryController = lazyWithRetry(
@@ -59,7 +52,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isTeacherRoute = location.pathname.startsWith("/teacher");
   const isStudentQuizRunRoute = location.pathname === "/student/quiz/run";
   const canUseTeacherPatchMemo = Boolean(
-    currentUser && isTeacherRoute && isAdminUser(userData, currentUser.email),
+    currentUser && isTeacherRoute && isTeacherUser(userData, currentUser.email),
   );
   const isVisibilityControlledStudentRoute = isStudentVisibilityControlledPath(
     location.pathname,
@@ -105,45 +98,6 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       studentAccessReady,
     ],
   );
-
-  useEffect(() => {
-    if (!loading && !currentUser) {
-      navigate("/");
-      return;
-    }
-
-    if (!loading && currentUser) {
-      const savedRole = readStorage(ROLE_SESSION_KEY);
-      const sessionRole =
-        savedRole === "teacher" || savedRole === "student" ? savedRole : null;
-      const canUseTeacherPortal = canAccessTeacherPortal(
-        userData,
-        currentUser.email,
-      );
-      if (location.pathname.startsWith("/teacher")) {
-        if (!canUseTeacherPortal) {
-          navigate("/student/dashboard", { replace: true });
-          return;
-        }
-
-        if (
-          !canAccessTeacherPath(location.pathname, userData, currentUser.email)
-        ) {
-          navigate(getDefaultTeacherRoute(userData, currentUser.email), {
-            replace: true,
-          });
-        }
-      } else if (
-        location.pathname.startsWith("/student") &&
-        sessionRole === "teacher" &&
-        canUseTeacherPortal
-      ) {
-        navigate(getDefaultTeacherRoute(userData, currentUser.email), {
-          replace: true,
-        });
-      }
-    }
-  }, [currentUser, userData, loading, location.pathname, navigate]);
 
   useEffect(() => {
     if (

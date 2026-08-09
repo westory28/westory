@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
-import { isAdminUser } from "../../lib/permissions";
+import { isTeacherUser } from "../../lib/permissions";
 import {
   createTeacherPatchNote,
   deleteTeacherPatchNote,
@@ -266,7 +266,7 @@ const TeacherPatchMemoController: React.FC = () => {
   const location = useLocation();
   const currentPath = useMemo(() => getCurrentPath(location), [location]);
   const isTeacherRoute = location.pathname.startsWith("/teacher");
-  const canUsePatchMemo = isAdminUser(userData, currentUser?.email);
+  const canUsePatchMemo = isTeacherUser(userData, currentUser?.email);
   const [open, setOpen] = useState(false);
   const [notes, setNotes] = useState<TeacherPatchNote[]>([]);
   const [filter, setFilter] = useState<FilterKey>("open");

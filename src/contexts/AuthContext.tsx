@@ -6,7 +6,7 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { User, onAuthStateChanged, signOut } from "firebase/auth";
+import { User, onIdTokenChanged, signOut } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
 import { auth, authPersistenceReady, db } from "../lib/firebase";
 import { SystemConfig, InterfaceConfig, UserData } from "../types";
@@ -15,7 +15,10 @@ import {
   sanitizeMenuConfig,
   type MenuConfig,
 } from "../constants/menus";
-import { normalizeStaffPermissions } from "../lib/permissions";
+import {
+  isAllowedWestoryEmail,
+  normalizeStaffPermissions,
+} from "../lib/permissions";
 import { markLoginPerf, measureLoginPerf } from "../lib/loginPerf";
 import {
   invalidateSiteSettingDocCache,
@@ -26,6 +29,16 @@ import {
   subscribeMenuConfigUpdated,
   subscribeSystemConfigUpdated,
 } from "../lib/appEvents";
+
+export type AuthenticationStatus =
+  | "UNKNOWN"
+  | "AUTHENTICATING"
+  | "AUTHENTICATED"
+  | "ANONYMOUS"
+  | "SESSION_EXPIRED"
+  | "ERROR";
+
+export type LogoutReason = "manual" | "expired";
 
 interface AuthContextType {
   // Backward-compatible alias for legacy pages.
@@ -40,8 +53,10 @@ interface AuthContextType {
   menuConfigReady: boolean;
   settingsLoadedAt: number;
   interfaceConfig: InterfaceConfig | null;
+  authenticationStatus: AuthenticationStatus;
+  authenticationError: string;
   loading: boolean;
-  logout: () => Promise<void>;
+  logout: (reason?: LogoutReason) => Promise<void>;
   refreshConfig: () => Promise<void>;
   refreshMenuConfig: () => Promise<void>;
   refreshInterfaceConfig: () => Promise<void>;
@@ -83,10 +98,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [menuConfigLoadedAt, setMenuConfigLoadedAt] = useState(0);
   const [interfaceConfig, setInterfaceConfig] =
     useState<InterfaceConfig | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [authenticationStatus, setAuthenticationStatus] =
+    useState<AuthenticationStatus>("UNKNOWN");
+  const [authenticationError, setAuthenticationError] = useState("");
   const firstUserDocReadyRef = useRef<string | null>(null);
   const systemConfigLoadRef = useRef<Promise<void> | null>(null);
   const menuConfigLoadRef = useRef<Promise<void> | null>(null);
+  const authRevisionRef = useRef(0);
+  const authenticatedUidRef = useRef<string | null>(null);
+  const logoutReasonRef = useRef<LogoutReason | null>(null);
+  const authResolutionPendingRef = useRef(true);
+
+  const clearAuthenticatedState = useCallback(() => {
+    firstUserDocReadyRef.current = null;
+    systemConfigLoadRef.current = null;
+    menuConfigLoadRef.current = null;
+    setCurrentUser(null);
+    setUserData(null);
+    setConfig(null);
+    setConfigReady(false);
+    setConfigLoadedAt(0);
+    setMenuConfig(null);
+    setMenuConfigReady(false);
+    setMenuConfigLoadedAt(0);
+  }, []);
 
   const loadPublicInterfaceConfig = useCallback(async () => {
     try {
@@ -115,12 +150,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     const promise = (async () => {
       try {
         const data = await readFreshSiteSettingDoc<SystemConfig>("config");
+        if (auth.currentUser?.uid !== user.uid) return;
         setConfig(normalizeSystemConfig(data));
         setConfigReady(true);
         setConfigLoadedAt(Date.now());
         markLoginPerf("westory-auth-config-ready");
       } catch (e) {
         console.error("Failed to load system config", e);
+        if (auth.currentUser?.uid !== user.uid) return;
         setConfig(null);
         setConfigReady(true);
         setConfigLoadedAt(Date.now());
@@ -149,11 +186,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     const promise = (async () => {
       try {
         const data = await readFreshSiteSettingDoc<MenuConfig>("menu_config");
+        if (auth.currentUser?.uid !== user.uid) return;
         setMenuConfig(data ? sanitizeMenuConfig(data) : cloneDefaultMenus());
         setMenuConfigReady(true);
         setMenuConfigLoadedAt(Date.now());
       } catch (e) {
         console.error("Failed to load menu config", e);
+        if (auth.currentUser?.uid !== user.uid) return;
         setMenuConfig(null);
         setMenuConfigReady(true);
         setMenuConfigLoadedAt(Date.now());
@@ -171,145 +210,227 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [loadPublicInterfaceConfig]);
 
   useEffect(() => {
+    let active = true;
     let unsubscribe: () => void = () => undefined;
     let unsubscribeUserDoc: (() => void) | null = null;
     let visibilitySettingsReady: Promise<void> | null = null;
-    const loadingGuard = window.setTimeout(() => {
-      setLoading(false);
-    }, 15000);
+    let resolutionGuard: number | null = null;
 
-    void authPersistenceReady.catch((e) => {
-      console.warn("Auth persistence init fallback", e);
-    });
+    const clearResolutionGuard = () => {
+      if (resolutionGuard === null) return;
+      window.clearTimeout(resolutionGuard);
+      resolutionGuard = null;
+    };
 
-    unsubscribe = onAuthStateChanged(
-      auth,
-      (user) => {
-        markLoginPerf("westory-auth-current-user-resolved", {
-          hasUser: user ? "true" : "false",
-        });
-        measureLoginPerf(
-          "westory-auth-init",
-          "westory-app-load-start",
-          "westory-auth-current-user-resolved",
+    const scheduleResolutionGuard = () => {
+      clearResolutionGuard();
+      resolutionGuard = window.setTimeout(() => {
+        if (!active || !authResolutionPendingRef.current) return;
+        authRevisionRef.current += 1;
+        clearAuthenticatedState();
+        setAuthenticationError(
+          "로그인 정보와 사용자 권한을 확인하지 못했습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.",
         );
-        setCurrentUser(user);
-        if (unsubscribeUserDoc) {
-          unsubscribeUserDoc();
-          unsubscribeUserDoc = null;
-        }
-        if (user) {
-          firstUserDocReadyRef.current = null;
-          setConfigReady(false);
-          setMenuConfigReady(false);
-          visibilitySettingsReady = Promise.all([
-            loadAuthedSystemConfig(user),
-            loadAuthedMenuConfig(user),
-          ]).then(() => undefined);
-          const userRef = doc(db, "users", user.uid);
-          unsubscribeUserDoc = onSnapshot(
-            userRef,
-            async (userSnap) => {
-              try {
-                const normalizedRole: UserData["role"] = "student";
-                if (firstUserDocReadyRef.current !== user.uid) {
-                  firstUserDocReadyRef.current = user.uid;
-                  markLoginPerf("westory-auth-user-doc-ready", {
-                    exists: userSnap.exists() ? "true" : "false",
-                  });
-                  measureLoginPerf(
-                    "westory-auth-user-doc-sync",
-                    "westory-auth-current-user-resolved",
-                    "westory-auth-user-doc-ready",
-                  );
-                }
-                if (userSnap.exists()) {
-                  const raw = userSnap.data() as UserData;
-                  setUserData({
-                    ...raw,
-                    uid: user.uid,
-                    role:
-                      raw.role === "teacher"
-                        ? "teacher"
-                        : raw.role === "staff"
-                          ? "staff"
-                          : normalizedRole,
-                    staffPermissions: normalizeStaffPermissions(
-                      raw.staffPermissions,
-                    ),
-                    teacherPortalEnabled: raw.teacherPortalEnabled === true,
-                  });
-                } else {
-                  const bootstrapUser: UserData = {
-                    uid: user.uid,
-                    email: user.email || "",
-                    name: "",
-                    customNameConfirmed: false,
-                    role: normalizedRole,
-                    staffPermissions: [],
-                    teacherPortalEnabled: false,
-                    grade: "",
-                    class: "",
-                    number: "",
-                  };
-                  setUserData(bootstrapUser);
-                }
-                void visibilitySettingsReady?.catch(() => undefined);
-                setLoading(false);
-                window.clearTimeout(loadingGuard);
-              } catch (e) {
-                console.error("Failed to sync user data", e);
-                setLoading(false);
-                window.clearTimeout(loadingGuard);
-              }
-            },
-            (e) => {
-              console.error("Failed to subscribe user data", e);
-              setLoading(false);
-              window.clearTimeout(loadingGuard);
-            },
+        setAuthenticationStatus("ERROR");
+      }, 15000);
+    };
+
+    setAuthenticationStatus("AUTHENTICATING");
+    scheduleResolutionGuard();
+
+    const startAuthListener = async () => {
+      try {
+        await authPersistenceReady;
+      } catch (e) {
+        console.warn("Auth persistence init fallback", e);
+      }
+      if (!active) return;
+
+      unsubscribe = onIdTokenChanged(
+        auth,
+        (user) => {
+          const authRevision = authRevisionRef.current + 1;
+          authRevisionRef.current = authRevision;
+          authResolutionPendingRef.current = true;
+          scheduleResolutionGuard();
+          setAuthenticationError("");
+          markLoginPerf("westory-auth-current-user-resolved", {
+            hasUser: user ? "true" : "false",
+          });
+          measureLoginPerf(
+            "westory-auth-init",
+            "westory-app-load-start",
+            "westory-auth-current-user-resolved",
           );
-        } else {
-          firstUserDocReadyRef.current = null;
-          setUserData(null);
-          setConfig(null);
-          setConfigReady(false);
-          setConfigLoadedAt(0);
-          setMenuConfig(null);
-          setMenuConfigReady(false);
-          setMenuConfigLoadedAt(0);
-          visibilitySettingsReady = null;
-          setLoading(false);
-          window.clearTimeout(loadingGuard);
-        }
-      },
-      (e) => {
-        console.error("Failed to initialize auth listener", e);
-        setLoading(false);
-        window.clearTimeout(loadingGuard);
-      },
-    );
+          if (unsubscribeUserDoc) {
+            unsubscribeUserDoc();
+            unsubscribeUserDoc = null;
+          }
+          if (user) {
+            setAuthenticationStatus("AUTHENTICATED");
+            setCurrentUser(user);
+            setUserData(null);
+            firstUserDocReadyRef.current = null;
+            setConfigReady(false);
+            setMenuConfigReady(false);
+            authenticatedUidRef.current = user.uid;
+
+            if (!isAllowedWestoryEmail(user.email)) {
+              authResolutionPendingRef.current = false;
+              clearResolutionGuard();
+              return;
+            }
+
+            visibilitySettingsReady = Promise.all([
+              loadAuthedSystemConfig(user),
+              loadAuthedMenuConfig(user),
+            ]).then(() => undefined);
+            const userRef = doc(db, "users", user.uid);
+            unsubscribeUserDoc = onSnapshot(
+              userRef,
+              async (userSnap) => {
+                if (
+                  !active ||
+                  authRevisionRef.current !== authRevision ||
+                  auth.currentUser?.uid !== user.uid
+                ) {
+                  return;
+                }
+                try {
+                  const normalizedRole: UserData["role"] = "student";
+                  if (firstUserDocReadyRef.current !== user.uid) {
+                    firstUserDocReadyRef.current = user.uid;
+                    markLoginPerf("westory-auth-user-doc-ready", {
+                      exists: userSnap.exists() ? "true" : "false",
+                    });
+                    measureLoginPerf(
+                      "westory-auth-user-doc-sync",
+                      "westory-auth-current-user-resolved",
+                      "westory-auth-user-doc-ready",
+                    );
+                  }
+                  if (userSnap.exists()) {
+                    const raw = userSnap.data() as UserData;
+                    setUserData({
+                      ...raw,
+                      uid: user.uid,
+                      role:
+                        raw.role === "teacher"
+                          ? "teacher"
+                          : raw.role === "staff"
+                            ? "staff"
+                            : normalizedRole,
+                      staffPermissions: normalizeStaffPermissions(
+                        raw.staffPermissions,
+                      ),
+                      teacherPortalEnabled: raw.teacherPortalEnabled === true,
+                    });
+                  } else {
+                    const bootstrapUser: UserData = {
+                      uid: user.uid,
+                      email: user.email || "",
+                      name: "",
+                      customNameConfirmed: false,
+                      role: normalizedRole,
+                      staffPermissions: [],
+                      teacherPortalEnabled: false,
+                      grade: "",
+                      class: "",
+                      number: "",
+                    };
+                    setUserData(bootstrapUser);
+                  }
+                  void visibilitySettingsReady?.catch(() => undefined);
+                  logoutReasonRef.current = null;
+                  authResolutionPendingRef.current = false;
+                  clearResolutionGuard();
+                } catch (e) {
+                  console.error("Failed to sync user data", e);
+                  clearAuthenticatedState();
+                  authResolutionPendingRef.current = false;
+                  setAuthenticationError(
+                    "사용자 권한 정보를 확인하지 못했습니다.",
+                  );
+                  setAuthenticationStatus("ERROR");
+                  clearResolutionGuard();
+                }
+              },
+              (e) => {
+                if (!active || authRevisionRef.current !== authRevision) {
+                  return;
+                }
+                console.error("Failed to subscribe user data", e);
+                clearAuthenticatedState();
+                authResolutionPendingRef.current = false;
+                setAuthenticationError(
+                  "사용자 권한 정보를 확인하지 못했습니다.",
+                );
+                setAuthenticationStatus("ERROR");
+                clearResolutionGuard();
+              },
+            );
+          } else {
+            const logoutReason = logoutReasonRef.current;
+            const wasAuthenticated = authenticatedUidRef.current !== null;
+            clearAuthenticatedState();
+            authenticatedUidRef.current = null;
+            logoutReasonRef.current = null;
+            visibilitySettingsReady = null;
+            authResolutionPendingRef.current = false;
+            setAuthenticationStatus(
+              logoutReason === "expired" ||
+                (wasAuthenticated && logoutReason !== "manual")
+                ? "SESSION_EXPIRED"
+                : "ANONYMOUS",
+            );
+            clearResolutionGuard();
+          }
+        },
+        (e) => {
+          if (!active) return;
+          console.error("Failed to initialize auth listener", e);
+          authRevisionRef.current += 1;
+          clearAuthenticatedState();
+          authResolutionPendingRef.current = false;
+          setAuthenticationError("로그인 세션을 확인하지 못했습니다.");
+          setAuthenticationStatus("ERROR");
+          clearResolutionGuard();
+        },
+      );
+    };
+
+    void startAuthListener();
 
     return () => {
-      window.clearTimeout(loadingGuard);
+      active = false;
+      clearResolutionGuard();
       if (unsubscribeUserDoc) {
         unsubscribeUserDoc();
       }
       unsubscribe();
     };
-  }, [loadAuthedMenuConfig, loadAuthedSystemConfig]);
+  }, [clearAuthenticatedState, loadAuthedMenuConfig, loadAuthedSystemConfig]);
 
   useEffect(() => {
-    if (!loading && currentUser && !configReady) {
+    if (
+      authenticationStatus === "AUTHENTICATED" &&
+      currentUser &&
+      !configReady
+    ) {
       void loadAuthedSystemConfig(currentUser);
     }
-    if (!loading && currentUser && !menuConfigReady) {
+    if (
+      authenticationStatus === "AUTHENTICATED" &&
+      currentUser &&
+      !menuConfigReady
+    ) {
       void loadAuthedMenuConfig(currentUser);
     }
     if (!interfaceConfig) {
       void loadPublicInterfaceConfig();
     }
   }, [
+    authenticationStatus,
     configReady,
     currentUser,
     interfaceConfig,
@@ -341,8 +462,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     [],
   );
 
-  const logout = async () => {
-    await signOut(auth);
+  const logout = async (reason: LogoutReason = "manual") => {
+    logoutReasonRef.current = reason;
+    authRevisionRef.current += 1;
+    authResolutionPendingRef.current = false;
+    clearAuthenticatedState();
+    setAuthenticationError("");
+    setAuthenticationStatus(
+      reason === "expired" ? "SESSION_EXPIRED" : "ANONYMOUS",
+    );
+    try {
+      await signOut(auth);
+    } catch (error) {
+      logoutReasonRef.current = null;
+      setAuthenticationError("로그아웃을 완료하지 못했습니다.");
+      setAuthenticationStatus("ERROR");
+      throw error;
+    }
   };
 
   const refreshConfig = useCallback(async () => {
@@ -366,6 +502,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     configReady && menuConfigReady
       ? Math.min(configLoadedAt || 0, menuConfigLoadedAt || 0)
       : 0;
+  const loading =
+    authenticationStatus === "UNKNOWN" ||
+    authenticationStatus === "AUTHENTICATING" ||
+    (authenticationStatus === "AUTHENTICATED" &&
+      currentUser !== null &&
+      isAllowedWestoryEmail(currentUser.email) &&
+      userData?.uid !== currentUser.uid);
 
   const value = {
     user: currentUser,
@@ -378,6 +521,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     menuConfigReady,
     settingsLoadedAt,
     interfaceConfig,
+    authenticationStatus,
+    authenticationError,
     loading,
     logout,
     refreshConfig,

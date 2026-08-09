@@ -40,14 +40,16 @@ import {
 import { useAuth } from "../contexts/AuthContext";
 import type { UserData } from "../types";
 import {
+  ADMIN_EMAIL,
+  ALLOWED_SCHOOL_EMAIL_DOMAIN,
   canAccessTeacherPortal,
   getDefaultTeacherRoute,
-  isAdminUser,
+  isAllowedWestoryEmail,
+  isTeacherUser,
   normalizeStaffPermissions,
 } from "../lib/permissions";
 
-const TEACHER_EMAIL = "westoria28@gmail.com";
-const ALLOWED_SCHOOL_EMAIL_DOMAIN = "yongshin-ms.ms.kr";
+const TEACHER_EMAIL = ADMIN_EMAIL;
 const ROLE_SESSION_KEY = "westoryPortalRole";
 const PENDING_LOGIN_MODE_KEY = "westoryPendingLoginMode";
 const REDIRECT_ATTEMPT_KEY = "westoryRedirectAttempt";
@@ -163,14 +165,7 @@ const formatDdayCount = (count: number): string => {
 const formatDdayDate = (dateKey: string): string =>
   String(dateKey || "").replace(/-/g, ".");
 
-const isAllowedLoginEmail = (email: unknown): boolean => {
-  const normalizedEmail = normalizeEmail(email);
-  if (!normalizedEmail) return false;
-  return (
-    normalizedEmail === TEACHER_EMAIL ||
-    normalizedEmail.endsWith(`@${ALLOWED_SCHOOL_EMAIL_DOMAIN}`)
-  );
-};
+const isAllowedLoginEmail = isAllowedWestoryEmail;
 
 const normalizeSchoolField = (value: unknown): string => {
   const raw = String(value ?? "").trim();
@@ -679,7 +674,8 @@ const Login: React.FC = () => {
     userData,
     currentUser?.email || "",
   );
-  const isTeacherUser = preferredRole === "teacher" || canUseTeacherPortal;
+  const isTeacherPortalUser =
+    preferredRole === "teacher" || canUseTeacherPortal;
 
   const forceRoute = (targetPath: string) => {
     navigate(targetPath, { replace: true });
@@ -1177,7 +1173,7 @@ const Login: React.FC = () => {
 
     const nextRole: UserData["role"] =
       mode === "teacher"
-        ? isAdminUser(existing, user.email || "")
+        ? isTeacherUser(existing, user.email || "")
           ? "teacher"
           : "staff"
         : "student";
@@ -1538,7 +1534,7 @@ const Login: React.FC = () => {
       await rejectUnauthorizedEmailLogin(currentUser.email);
       return;
     }
-    if (isTeacherUser) {
+    if (isTeacherPortalUser) {
       saveRoleCache("teacher");
       clearPendingLoginMode();
       forceRoute(getDefaultTeacherRoute(userData, currentUser.email || ""));
@@ -1920,7 +1916,9 @@ const Login: React.FC = () => {
             </button>
             <button
               onClick={() =>
-                void handleSwitchAccount(isTeacherUser ? "teacher" : "student")
+                void handleSwitchAccount(
+                  isTeacherPortalUser ? "teacher" : "student",
+                )
               }
               disabled={authBusy}
               className="w-full bg-white border border-gray-200 px-6 py-3 rounded-full text-sm font-bold text-gray-700 shadow hover:bg-gray-50 transition disabled:opacity-60 disabled:cursor-not-allowed"

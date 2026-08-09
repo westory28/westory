@@ -1,6 +1,7 @@
 import type { UserData } from "../types";
 
 export const ADMIN_EMAIL = "westoria28@gmail.com";
+export const ALLOWED_SCHOOL_EMAIL_DOMAIN = "yongshin-ms.ms.kr";
 
 export const STAFF_PERMISSION_KEYS = [
   "lesson_read",
@@ -11,6 +12,20 @@ export const STAFF_PERMISSION_KEYS = [
 ] as const;
 
 export type StaffPermission = (typeof STAFF_PERMISSION_KEYS)[number];
+
+const normalizeEmail = (value: unknown) =>
+  String(value || "")
+    .trim()
+    .toLowerCase();
+
+export const isAllowedWestoryEmail = (email: unknown): boolean => {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) return false;
+  return (
+    normalizedEmail === ADMIN_EMAIL ||
+    normalizedEmail.endsWith(`@${ALLOWED_SCHOOL_EMAIL_DOMAIN}`)
+  );
+};
 
 export const normalizeStaffPermissions = (
   value: unknown,
@@ -30,11 +45,14 @@ export const isAdminUser = (
   userData?: Partial<UserData> | null,
   email?: string | null,
 ) => {
-  const normalizedEmail = String(email || userData?.email || "")
-    .trim()
-    .toLowerCase();
-  return userData?.role === "teacher" || normalizedEmail === ADMIN_EMAIL;
+  const normalizedEmail = normalizeEmail(email || userData?.email);
+  return normalizedEmail === ADMIN_EMAIL;
 };
+
+export const isTeacherUser = (
+  userData?: Partial<UserData> | null,
+  email?: string | null,
+) => isAdminUser(userData, email) || userData?.role === "teacher";
 
 export const isDeveloperUser = (email?: string | null) =>
   String(email || "")
@@ -54,7 +72,7 @@ export const canAccessTeacherPortal = (
 ) => {
   const enabled = userData?.teacherPortalEnabled === true;
   return (
-    isAdminUser(userData, email) ||
+    isTeacherUser(userData, email) ||
     (enabled &&
       normalizeStaffPermissions(userData?.staffPermissions).length > 0)
   );
@@ -63,7 +81,7 @@ export const canAccessTeacherPortal = (
 export const canAccessTeacherDashboard = (
   userData?: Partial<UserData> | null,
   email?: string | null,
-) => isAdminUser(userData, email);
+) => isTeacherUser(userData, email);
 
 export const canManageSettings = (
   userData?: Partial<UserData> | null,
@@ -74,34 +92,35 @@ export const canReadLessonManagement = (
   userData?: Partial<UserData> | null,
   email?: string | null,
 ) =>
-  isAdminUser(userData, email) || hasStaffPermission(userData, "lesson_read");
+  isTeacherUser(userData, email) || hasStaffPermission(userData, "lesson_read");
 
 export const canWriteLessonManagement = (
   userData?: Partial<UserData> | null,
   email?: string | null,
-) => isAdminUser(userData, email);
+) => isTeacherUser(userData, email);
 
 export const canReadQuizManagement = (
   userData?: Partial<UserData> | null,
   email?: string | null,
-) => isAdminUser(userData, email) || hasStaffPermission(userData, "quiz_read");
+) =>
+  isTeacherUser(userData, email) || hasStaffPermission(userData, "quiz_read");
 
 export const canWriteQuizManagement = (
   userData?: Partial<UserData> | null,
   email?: string | null,
-) => isAdminUser(userData, email);
+) => isTeacherUser(userData, email);
 
 export const canReadStudentList = (
   userData?: Partial<UserData> | null,
   email?: string | null,
 ) =>
-  isAdminUser(userData, email) ||
+  isTeacherUser(userData, email) ||
   hasStaffPermission(userData, "student_list_read");
 
 export const canEditStudentList = (
   userData?: Partial<UserData> | null,
   email?: string | null,
-) => isAdminUser(userData, email);
+) => isTeacherUser(userData, email);
 
 export const canReadPoints = (
   userData?: Partial<UserData> | null,
@@ -146,7 +165,8 @@ export const canAccessTeacherPath = (
     return canReadStudentList(userData, email);
   if (pathname.startsWith("/teacher/points"))
     return canReadPoints(userData, email);
-  if (pathname.startsWith("/teacher/exam")) return isAdminUser(userData, email);
+  if (pathname.startsWith("/teacher/exam"))
+    return isTeacherUser(userData, email);
   if (pathname.startsWith("/teacher/schedule"))
     return isAdminUser(userData, email);
   return canAccessTeacherPortal(userData, email);
