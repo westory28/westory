@@ -333,26 +333,7 @@ const getHttpsCallable = async <RequestData = unknown, ResponseData = unknown>(
             "로그인 사용자가 바뀌어 작업을 실행하지 않았습니다.",
           );
         }
-        try {
-          return await invokeWithSession(data);
-        } catch (error) {
-          const details = (error as { details?: { reason?: unknown } })
-            ?.details;
-          if (
-            String(details?.reason || "") !== "RECENT_AUTH_REQUIRED" &&
-            String(details?.reason || "") !== "SESSION_EXPIRED"
-          ) {
-            throw error;
-          }
-          await requestStepUpReauthentication(name, { force: true });
-          if (auth.currentUser?.uid !== invocationUid) {
-            throw new StepUpReauthError(
-              "IDENTITY_CHANGED",
-              "로그인 사용자가 바뀌어 작업을 실행하지 않았습니다.",
-            );
-          }
-          return invokeWithSession(data);
-        }
+        return invokeWithSession(data);
       },
       invocationUid,
     );

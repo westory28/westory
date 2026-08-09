@@ -79,6 +79,17 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [submitting, setSubmitting] = useState(false);
   const pendingRef = useRef<PendingRequest | null>(null);
   const submittingRef = useRef(false);
+  const protectedContentRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const protectedContent = protectedContentRef.current;
+    if (!protectedContent) return;
+    if (pending) {
+      protectedContent.setAttribute("inert", "");
+      return;
+    }
+    protectedContent.removeAttribute("inert");
+  }, [pending]);
 
   const resetDialog = useCallback(() => {
     setPending(null);
@@ -364,10 +375,16 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   return (
     <>
-      {children}
+      <div
+        ref={protectedContentRef}
+        aria-hidden={pending ? "true" : undefined}
+        style={{ display: "contents" }}
+      >
+        {children}
+      </div>
       {pending && (
         <div
-          className="fixed inset-0 z-[280] flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-[280] flex items-center justify-center bg-stone-950 p-4"
           role="presentation"
         >
           <section

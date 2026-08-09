@@ -375,6 +375,9 @@ assert.ok(
 );
 assert.match(providerSource, /submittingRef\.current/);
 assert.match(providerSource, /expectedUid: current\.ownerUid/);
+assert.match(providerSource, /setAttribute\("inert", ""\)/);
+assert.match(providerSource, /aria-hidden=\{pending \? "true" : undefined\}/);
+assert.match(providerSource, /bg-stone-950/);
 assert.ok(
   providerSource.indexOf("beginApplicationSessionReauthentication()") <
     providerSource.indexOf("reauthenticateWithCredential(user, credential)"),
@@ -397,8 +400,26 @@ assert.match(
 
 assert.match(firebaseSource, /runHighRiskCommandSingleFlight/);
 assert.match(firebaseSource, /const invocationUid = auth\.currentUser\?\.uid/);
-assert.match(firebaseSource, /RECENT_AUTH_REQUIRED/);
-assert.match(firebaseSource, /SESSION_EXPIRED/);
+const guardedCallableStart = firebaseSource.indexOf("const guardedCallable");
+const guardedStreamStart = firebaseSource.indexOf(
+  "guardedCallable.stream",
+  guardedCallableStart,
+);
+const guardedCallableBlock = firebaseSource.slice(
+  guardedCallableStart,
+  guardedStreamStart,
+);
+assert.ok(
+  guardedCallableStart >= 0 && guardedStreamStart > guardedCallableStart,
+);
+assert.equal(
+  [...guardedCallableBlock.matchAll(/invokeWithSession\(data\)/g)].length,
+  1,
+  "a high-risk callable must dispatch the business command exactly once",
+);
+assert.doesNotMatch(guardedCallableBlock, /force:\s*true/);
+assert.doesNotMatch(guardedCallableBlock, /RECENT_AUTH_REQUIRED/);
+assert.doesNotMatch(guardedCallableBlock, /SESSION_EXPIRED/);
 assert.doesNotMatch(
   firebaseSource,
   /auth\/network-request-failed[\s\S]*invokeWithSession/,
@@ -435,5 +456,5 @@ assert.match(headerSource, /serverSession\.authorityMode !== "ENFORCE"/);
 assert.match(stepUpSource, /across devices and after ambiguous responses/);
 
 console.log(
-  "Step-up reauthentication checks: PASS (two-tab Web Lock executes once; competing/cancel/auth/token/session failures execute zero; fallback and continuity guards present).",
+  "Step-up reauthentication checks: PASS (two-tab Web Lock executes once; competing/cancel/auth/token/session failures execute zero; high-risk business dispatch has no automatic retry; fallback and continuity guards present).",
 );
