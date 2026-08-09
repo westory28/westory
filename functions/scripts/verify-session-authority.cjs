@@ -354,14 +354,6 @@ const main = async () => {
   );
   assert.equal((await transitionRef.get()).exists, false);
   assert.equal(
-    (
-      await getFirestore()
-        .doc(`application_sessions/reauth-transition/sessions/${nowSeconds}`)
-        .get()
-    ).data().status,
-    "closed",
-  );
-  assert.equal(
     await rejectionReason(() =>
       callableExports.touchApplicationSession.run({
         ...requestFor("active", nowSeconds),

@@ -379,25 +379,6 @@ const openApplicationSession = onCall({ region: REGION }, async (request) => {
     const nowMs = Date.now();
     const snap = await transaction.get(ref);
     const existing = snap.exists ? snap.data() || {} : null;
-    const transitionSnap = await transaction.get(transitionRef);
-    const transition = transitionSnap.exists
-      ? transitionSnap.data() || {}
-      : null;
-    const previousAuthTime = Number(transition?.fromAuthTime);
-    const shouldClosePreviousSession =
-      transition?.status === "pending" &&
-      transition?.authorityGeneration === SESSION_AUTHORITY_GENERATION &&
-      Number(transition?.protocolVersion) >= MIN_CLIENT_PROTOCOL_VERSION &&
-      Number.isInteger(previousAuthTime) &&
-      previousAuthTime < identity.authTime;
-    const closePreviousSession = () => {
-      if (!shouldClosePreviousSession) return;
-      transaction.update(getSessionRef(identity.uid, previousAuthTime), {
-        status: "closed",
-        closedAt: FieldValue.serverTimestamp(),
-        closeReason: "reauthenticated",
-      });
-    };
 
     if (existing) {
       const generalExpiryMs = timestampMillis(existing.generalExpiresAt);
@@ -418,7 +399,6 @@ const openApplicationSession = onCall({ region: REGION }, async (request) => {
               { highRisk: false },
             );
           }
-          closePreviousSession();
           transaction.delete(transitionRef);
           return {
             resumed: true,
@@ -464,7 +444,6 @@ const openApplicationSession = onCall({ region: REGION }, async (request) => {
       authorityModeAtOpen: config.mode,
     };
     transaction.create(ref, session);
-    closePreviousSession();
     transaction.delete(transitionRef);
     return {
       resumed: false,
