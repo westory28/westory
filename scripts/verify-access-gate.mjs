@@ -17,11 +17,13 @@ const server = await createServer({
 });
 
 try {
-  const [appSource, mainLayoutSource, loginSource] = await Promise.all([
-    readFile("src/App.tsx", "utf8"),
-    readFile("src/components/layout/MainLayout.tsx", "utf8"),
-    readFile("src/pages/Login.tsx", "utf8"),
-  ]);
+  const [appSource, mainLayoutSource, loginSource, headerSource] =
+    await Promise.all([
+      readFile("src/App.tsx", "utf8"),
+      readFile("src/components/layout/MainLayout.tsx", "utf8"),
+      readFile("src/pages/Login.tsx", "utf8"),
+      readFile("src/components/common/Header.tsx", "utf8"),
+    ]);
   assert.match(
     appSource,
     /<ProtectedAccessGate>[\s\S]*<MainLayout>/,
@@ -36,6 +38,8 @@ try {
   assert.match(appSource, /LegacyRouteRedirect to="\/teacher\/quiz"/);
   assert.match(loginSource, /runtimeEnvironment === "staging"/);
   assert.match(loginSource, /signInWithEmailAndPassword/);
+  assert.match(headerSource, /runtimeEnvironment === "staging"/);
+  assert.match(headerSource, /세션 만료 테스트/);
 
   const { resolveProtectedRouteAccess } = await server.ssrLoadModule(
     "/src/lib/accessControl.ts",

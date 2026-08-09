@@ -12,6 +12,7 @@ import { runAfterNextPaint } from "../../lib/browserTasks";
 import { lazyWithRetry } from "../../lib/lazyWithRetry";
 import { getDefaultProfileEmojiValue } from "../../lib/profileEmojis";
 import { removeStorage, writeLocalOnly } from "../../lib/safeStorage";
+import { runtimeEnvironment } from "../../lib/firebase";
 import { readSessionExpiry, SESSION_EXPIRY_KEY } from "../../lib/sessionPolicy";
 import {
   getSessionChangeActivityTarget,
@@ -317,6 +318,16 @@ const Header: React.FC = () => {
 
   const handleLogout = async () => {
     await performLogout(false);
+  };
+
+  const expireSessionForStagingTest = () => {
+    if (runtimeEnvironment !== "staging") return;
+    const expiredAt = Date.now() - 1;
+    sessionExpiryRef.current = expiredAt;
+    timeoutHandledRef.current = false;
+    writeLocalOnly(SESSION_EXPIRY_KEY, String(expiredAt));
+    setSessionExpiry(expiredAt);
+    setRemainingSeconds(0);
   };
 
   const extendSession = (options?: { force?: boolean }) => {
@@ -637,6 +648,17 @@ const Header: React.FC = () => {
                 <i className="fas fa-redo-alt text-xs"></i>
               </button>
             </div>
+
+            {runtimeEnvironment === "staging" && (
+              <button
+                type="button"
+                onClick={expireSessionForStagingTest}
+                data-session-ignore="true"
+                className="hidden min-h-10 items-center rounded-lg border border-amber-300 bg-amber-50 px-3 text-xs font-bold text-amber-800 hover:bg-amber-100 lg:inline-flex"
+              >
+                세션 만료 테스트
+              </button>
+            )}
 
             <button
               onClick={handleLogout}
