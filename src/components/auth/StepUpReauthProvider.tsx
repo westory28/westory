@@ -4,14 +4,20 @@ import {
   GoogleAuthProvider,
   getIdToken,
   getIdTokenResult,
+  type User,
   reauthenticateWithCredential,
   reauthenticateWithPopup,
 } from "firebase/auth";
 import { auth } from "../../lib/firebase";
-import { openApplicationSession } from "../../lib/applicationSession";
-import { registerStepUpReauthHandler } from "../../lib/stepUpReauth";
+import { synchronizeApplicationSession } from "../../lib/applicationSession";
+import {
+  getStepUpReauthFailureMessage,
+  registerStepUpReauthHandler,
+  StepUpReauthError,
+} from "../../lib/stepUpReauth";
 import type { StepUpRequestOptions } from "../../lib/stepUpReauth";
 import {
+  clearSessionTiming,
   NORMAL_SESSION_DURATION_MS,
   writeSessionDeadline,
 } from "../../lib/sessionPolicy";
@@ -20,6 +26,7 @@ const RECENT_AUTH_MS = 5 * 60 * 1000;
 
 interface PendingRequest {
   commandName: string;
+  ownerUid: string;
   resolve: () => void;
   reject: (error: Error) => void;
 }
@@ -51,9 +58,7 @@ const commandLabel = (commandName: string) => {
   return labels[commandName] || "보호된 운영 작업";
 };
 
-const hasRecentAuth = async () => {
-  const user = auth.currentUser;
-  if (!user) return false;
+const hasRecentAuth = async (user: User) => {
   const token = await getIdTokenResult(user);
   const authTimeMs = Date.parse(token.authTime);
   return (
@@ -69,21 +74,68 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [errorMessage, setErrorMessage] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const pendingRef = useRef<PendingRequest | null>(null);
+  const submittingRef = useRef(false);
 
-  useEffect(() => {
-    pendingRef.current = pending;
-  }, [pending]);
+  const resetDialog = useCallback(() => {
+    setPending(null);
+    setPassword("");
+    setErrorMessage("");
+  }, []);
+
+  const rejectPending = useCallback(
+    (current: PendingRequest, error: StepUpReauthError) => {
+      if (pendingRef.current !== current) return;
+      pendingRef.current = null;
+      resetDialog();
+      current.reject(error);
+    },
+    [resetDialog],
+  );
 
   const requestReauth = useCallback(
     async (commandName: string, options?: StepUpRequestOptions) => {
-      if (!options?.force && (await hasRecentAuth())) return;
+      const user = auth.currentUser;
+      if (!user) {
+        throw new StepUpReauthError(
+          "UNAUTHENTICATED",
+          "로그인 사용자를 확인할 수 없습니다.",
+        );
+      }
+      if (!options?.force) {
+        try {
+          if (
+            (await hasRecentAuth(user)) &&
+            auth.currentUser?.uid === user.uid
+          ) {
+            return;
+          }
+        } catch {
+          // A stale or unavailable token is not enough to bypass step-up.
+        }
+      }
       if (pendingRef.current) {
-        throw new Error("다른 재인증 요청이 진행 중입니다.");
+        throw new StepUpReauthError(
+          "IN_PROGRESS",
+          "다른 재인증 요청을 먼저 완료해 주세요.",
+        );
+      }
+      if (auth.currentUser?.uid !== user.uid) {
+        throw new StepUpReauthError(
+          "IDENTITY_CHANGED",
+          "로그인 사용자가 바뀌어 작업을 실행하지 않았습니다.",
+        );
       }
       await new Promise<void>((resolve, reject) => {
+        const request = {
+          commandName,
+          ownerUid: user.uid,
+          resolve,
+          reject,
+        };
+        pendingRef.current = request;
         setPassword("");
         setErrorMessage("");
-        setPending({ commandName, resolve, reject });
+        setPending(request);
       });
     },
     [],
@@ -93,78 +145,170 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
 
   useEffect(
     () => () => {
-      pendingRef.current?.reject(new Error("재인증 화면이 닫혔습니다."));
+      const current = pendingRef.current;
+      pendingRef.current = null;
+      current?.reject(
+        new StepUpReauthError(
+          "UNAVAILABLE",
+          "재인증 화면이 닫혀 작업을 실행하지 않았습니다.",
+        ),
+      );
     },
     [],
   );
 
-  const finishSuccess = async () => {
-    const current = pendingRef.current;
+  const finishSuccess = async (current: PendingRequest) => {
     const user = auth.currentUser;
-    if (!current || !user)
-      throw new Error("로그인 사용자를 확인할 수 없습니다.");
-    await getIdToken(user, true);
-    const session = await openApplicationSession();
-    writeSessionDeadline(session.generalExpiresAt, {
-      durationMs: NORMAL_SESSION_DURATION_MS,
-    });
+    if (!user || user.uid !== current.ownerUid) {
+      throw new StepUpReauthError(
+        "IDENTITY_CHANGED",
+        "로그인 사용자가 바뀌어 작업을 실행하지 않았습니다.",
+      );
+    }
+    try {
+      await getIdToken(user, true);
+    } catch (error) {
+      throw new StepUpReauthError(
+        "TOKEN_REFRESH_FAILED",
+        "본인 확인은 끝났지만 인증 정보를 갱신하지 못했습니다.",
+        error,
+      );
+    }
+
+    let session;
+    try {
+      session = await synchronizeApplicationSession(user, {
+        expectedUid: current.ownerUid,
+      });
+    } catch (error) {
+      if (auth.currentUser?.uid !== current.ownerUid) {
+        throw new StepUpReauthError(
+          "IDENTITY_CHANGED",
+          "로그인 사용자가 바뀌어 작업을 실행하지 않았습니다.",
+          error,
+        );
+      }
+      throw new StepUpReauthError(
+        "SESSION_REFRESH_FAILED",
+        "본인 확인은 끝났지만 로그인 세션을 갱신하지 못했습니다.",
+        error,
+      );
+    }
+    if (
+      auth.currentUser?.uid !== current.ownerUid ||
+      pendingRef.current !== current
+    ) {
+      throw new StepUpReauthError(
+        "IDENTITY_CHANGED",
+        "로그인 상태가 바뀌어 작업을 실행하지 않았습니다.",
+      );
+    }
+    if (
+      session.authorityMode === "ENFORCE" &&
+      !writeSessionDeadline(session.generalExpiresAt, {
+        durationMs: NORMAL_SESSION_DURATION_MS,
+      })
+    ) {
+      throw new StepUpReauthError(
+        "SESSION_REFRESH_FAILED",
+        "로그인 세션의 만료 시간을 확인하지 못했습니다.",
+      );
+    }
+    if (session.authorityMode !== "ENFORCE") {
+      clearSessionTiming();
+    }
+    pendingRef.current = null;
+    resetDialog();
     current.resolve();
-    setPending(null);
-    setPassword("");
-    setErrorMessage("");
   };
 
   const handlePasswordReauth = async (event: React.FormEvent) => {
     event.preventDefault();
     const user = auth.currentUser;
-    if (!user?.email || !pending || !password) return;
+    const current = pendingRef.current;
+    if (submittingRef.current || !user?.email || !current || !password) {
+      return;
+    }
+    if (user.uid !== current.ownerUid) {
+      rejectPending(
+        current,
+        new StepUpReauthError(
+          "IDENTITY_CHANGED",
+          "로그인 사용자가 바뀌어 작업을 실행하지 않았습니다.",
+        ),
+      );
+      return;
+    }
+    submittingRef.current = true;
     setSubmitting(true);
     setErrorMessage("");
     try {
       const credential = EmailAuthProvider.credential(user.email, password);
       await reauthenticateWithCredential(user, credential);
-      await finishSuccess();
+      await finishSuccess(current);
     } catch (error) {
-      const code = String((error as { code?: unknown })?.code || "");
-      setErrorMessage(
-        code === "auth/wrong-password" || code === "auth/invalid-credential"
-          ? "비밀번호가 올바르지 않습니다."
-          : "재인증하지 못했습니다. 다시 시도해 주세요.",
-      );
+      if (
+        error instanceof StepUpReauthError &&
+        error.code === "IDENTITY_CHANGED"
+      ) {
+        rejectPending(current, error);
+        return;
+      }
+      setErrorMessage(getStepUpReauthFailureMessage(error, "password"));
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
 
   const handleGoogleReauth = async () => {
     const user = auth.currentUser;
-    if (!user || !pending) return;
+    const current = pendingRef.current;
+    if (submittingRef.current || !user || !current) return;
+    if (user.uid !== current.ownerUid) {
+      rejectPending(
+        current,
+        new StepUpReauthError(
+          "IDENTITY_CHANGED",
+          "로그인 사용자가 바뀌어 작업을 실행하지 않았습니다.",
+        ),
+      );
+      return;
+    }
+    submittingRef.current = true;
     setSubmitting(true);
     setErrorMessage("");
     try {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ login_hint: user.email || "" });
       await reauthenticateWithPopup(user, provider);
-      await finishSuccess();
+      await finishSuccess(current);
     } catch (error) {
-      const code = String((error as { code?: unknown })?.code || "");
-      setErrorMessage(
-        code === "auth/popup-closed-by-user" ||
-          code === "auth/cancelled-popup-request"
-          ? "재인증이 취소되었습니다. 작업은 실행되지 않았습니다."
-          : "Google 재인증을 완료하지 못했습니다.",
-      );
+      if (
+        error instanceof StepUpReauthError &&
+        error.code === "IDENTITY_CHANGED"
+      ) {
+        rejectPending(current, error);
+        return;
+      }
+      setErrorMessage(getStepUpReauthFailureMessage(error, "google"));
     } finally {
+      submittingRef.current = false;
       setSubmitting(false);
     }
   };
 
   const cancel = () => {
+    if (submittingRef.current) return;
     const current = pendingRef.current;
-    current?.reject(new Error("재인증이 취소되어 작업을 실행하지 않았습니다."));
-    setPending(null);
-    setPassword("");
-    setErrorMessage("");
+    if (!current) return;
+    rejectPending(
+      current,
+      new StepUpReauthError(
+        "CANCELLED",
+        "본인 확인을 취소하여 작업을 실행하지 않았습니다.",
+      ),
+    );
   };
 
   const providerIds =

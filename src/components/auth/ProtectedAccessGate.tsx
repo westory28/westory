@@ -7,6 +7,7 @@ import {
   clearSessionTiming,
   isStoredSessionExpired,
   resolveSessionPolicy,
+  shouldEnforceClientIdleSession,
   writeSessionReturnPath,
 } from "../../lib/sessionPolicy";
 import { ProtectedAccessBoundary } from "./ProtectedAccessBoundary";
@@ -20,6 +21,7 @@ const ProtectedAccessGate: React.FC<{ children: React.ReactNode }> = ({
     currentUser,
     userData,
     logout,
+    applicationSessionAuthorityMode,
   } = useAuth();
   const location = useLocation();
   const sessionPolicy = resolveSessionPolicy(
@@ -27,12 +29,18 @@ const ProtectedAccessGate: React.FC<{ children: React.ReactNode }> = ({
     isAdminUser(userData, currentUser?.email),
   );
   const localSessionExpired =
+    shouldEnforceClientIdleSession(applicationSessionAuthorityMode) &&
     authenticationStatus === "AUTHENTICATED" &&
     isStoredSessionExpired(sessionPolicy);
+  const effectiveAuthenticationStatus =
+    authenticationStatus === "AUTHENTICATED" &&
+    applicationSessionAuthorityMode === null
+      ? "AUTHENTICATING"
+      : localSessionExpired
+        ? "SESSION_EXPIRED"
+        : authenticationStatus;
   const decision = resolveProtectedRouteAccess({
-    authenticationStatus: localSessionExpired
-      ? "SESSION_EXPIRED"
-      : authenticationStatus,
+    authenticationStatus: effectiveAuthenticationStatus,
     identity: currentUser
       ? { uid: currentUser.uid, email: currentUser.email }
       : null,

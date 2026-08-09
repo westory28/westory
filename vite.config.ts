@@ -21,6 +21,7 @@ export default defineConfig(({ mode }) => {
 
   assertFirebaseBuildBoundary({
     config: firebaseConfig,
+    appCheckSiteKey: env.VITE_FIREBASE_APPCHECK_SITE_KEY,
     explicitEnvironment: env.VITE_APP_ENV,
     githubActions: isGitHubPagesBuild,
     vercelEnvironment: process.env.VERCEL_ENV,

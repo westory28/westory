@@ -7,7 +7,7 @@ import {
 } from "@firebase/rules-unit-testing";
 import { doc, getDoc, setDoc, Timestamp } from "firebase/firestore";
 
-const projectId = "demo-westory-session-authority";
+const projectId = process.env.GCLOUD_PROJECT || "demo-westory-session-authority";
 const authTime = Math.floor(Date.now() / 1000) - 30;
 const staleAdminAuthTime = Math.floor(Date.now() / 1000) - 6 * 60;
 const future = Timestamp.fromMillis(Date.now() + 10 * 60 * 1000);
@@ -26,6 +26,11 @@ const activeSession = (uid, tokenAuthTime = authTime) => ({
   uid,
   authTime: tokenAuthTime,
   status: "active",
+  schemaVersion: 2,
+  authorityGeneration: "w1r2-2026-08-09",
+  protocolVersion: 2,
+  sessionRevision: "a".repeat(64),
+  authorityModeAtOpen: "ENFORCE",
   generalExpiresAt: future,
   highRiskExpiresAt: future,
 });
@@ -63,6 +68,29 @@ const main = async () => {
       await setDoc(doc(adminDb, sessionPath("mismatch-user")), {
         ...activeSession("mismatch-user"),
         authTime: authTime - 1,
+      });
+      await setDoc(doc(adminDb, sessionPath("old-protocol-user")), {
+        ...activeSession("old-protocol-user"),
+        schemaVersion: 1,
+      });
+      await setDoc(doc(adminDb, sessionPath("observe-expired-user")), {
+        ...activeSession("observe-expired-user"),
+        authorityModeAtOpen: "OBSERVE_ONLY",
+        generalExpiresAt: past,
+      });
+      await setDoc(doc(adminDb, sessionPath("observe-closed-user")), {
+        ...activeSession("observe-closed-user"),
+        authorityModeAtOpen: "OBSERVE_ONLY",
+        status: "closed",
+      });
+      await setDoc(doc(adminDb, sessionPath("disabled-expired-user")), {
+        ...activeSession("disabled-expired-user"),
+        authorityModeAtOpen: "DISABLED",
+        generalExpiresAt: past,
+      });
+      await setDoc(doc(adminDb, sessionPath("invalid-mode-user")), {
+        ...activeSession("invalid-mode-user"),
+        authorityModeAtOpen: "ALLOW",
       });
       await setDoc(
         doc(adminDb, sessionPath("recent-admin")),
@@ -114,6 +142,21 @@ const main = async () => {
     await assertFails(
       protectedRead("mismatch-user", token("mismatch@yongshin-ms.ms.kr")),
     );
+    await assertFails(
+      protectedRead("old-protocol-user", token("old.protocol@yongshin-ms.ms.kr")),
+    );
+    await assertSucceeds(
+      protectedRead("observe-expired-user", token("observe.expired@yongshin-ms.ms.kr")),
+    );
+    await assertFails(
+      protectedRead("observe-closed-user", token("observe.closed@yongshin-ms.ms.kr")),
+    );
+    await assertSucceeds(
+      protectedRead("disabled-expired-user", token("disabled.expired@yongshin-ms.ms.kr")),
+    );
+    await assertFails(
+      protectedRead("invalid-mode-user", token("invalid.mode@yongshin-ms.ms.kr")),
+    );
 
     const directDb = env
       .authenticatedContext("active-user", token("active@yongshin-ms.ms.kr"))
@@ -128,7 +171,7 @@ const main = async () => {
       JSON.stringify({
         suite: "session-authority-firestore-rules",
         passed: true,
-        cases: ["ACTIVE", "MISSING", "EXPIRED", "CLOSED", "CORRUPT", "AUTH_TIME_MISMATCH", "DIRECT_SESSION_WRITE", "RECENT_ADMIN_WRITE", "STALE_ADMIN_WRITE_DENIED"],
+        cases: ["ACTIVE", "MISSING", "EXPIRED", "CLOSED", "CORRUPT", "AUTH_TIME_MISMATCH", "OLD_PROTOCOL_DENIED", "OBSERVE_IDLE_EXPIRED_ALLOWED", "OBSERVE_CLOSED_DENIED", "DISABLED_IDLE_EXPIRED_ALLOWED", "INVALID_MODE_DENIED", "STALE_ENFORCE_MODE_NOT_DOWNGRADED", "DIRECT_SESSION_WRITE", "RECENT_ADMIN_WRITE", "STALE_ADMIN_WRITE_DENIED"],
         productionAccess: 0,
       }),
     );

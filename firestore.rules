@@ -21,14 +21,27 @@ service cloud.firestore {
         && request.auth.token.auth_time is int
         && get(applicationSessionPath()).data.status == 'active'
         && get(applicationSessionPath()).data.authTime == request.auth.token.auth_time
+        && get(applicationSessionPath()).data.schemaVersion == 2
+        && get(applicationSessionPath()).data.authorityGeneration == 'w1r2-2026-08-09'
+        && get(applicationSessionPath()).data.protocolVersion is int
+        && get(applicationSessionPath()).data.protocolVersion >= 2
+        && get(applicationSessionPath()).data.sessionRevision is string
+        && get(applicationSessionPath()).data.sessionRevision.matches('^[a-f0-9]{64}$')
+        && get(applicationSessionPath()).data.authorityModeAtOpen in ['ENFORCE', 'OBSERVE_ONLY', 'DISABLED']
         && get(applicationSessionPath()).data.generalExpiresAt is timestamp
-        && get(applicationSessionPath()).data.generalExpiresAt > request.time;
+        && (
+          get(applicationSessionPath()).data.authorityModeAtOpen != 'ENFORCE'
+          || get(applicationSessionPath()).data.generalExpiresAt > request.time
+        );
     }
 
     function hasActiveHighRiskSession() {
       return hasActiveApplicationSession()
         && get(applicationSessionPath()).data.highRiskExpiresAt is timestamp
-        && get(applicationSessionPath()).data.highRiskExpiresAt > request.time;
+        && (
+          get(applicationSessionPath()).data.authorityModeAtOpen != 'ENFORCE'
+          || get(applicationSessionPath()).data.highRiskExpiresAt > request.time
+        );
     }
 
     function hasRecentAuthentication() {

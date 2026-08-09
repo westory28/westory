@@ -38,6 +38,7 @@ type FirebaseEmulatorTargets = {
 
 type FirebaseBuildBoundaryInput = {
   config: FirebaseClientConfig;
+  appCheckSiteKey?: string;
   explicitEnvironment?: string;
   githubActions: boolean;
   vercelEnvironment?: string;
@@ -181,6 +182,7 @@ const assertFirebaseEnvironmentBoundary = ({
 
 const assertFirebaseBuildBoundary = ({
   config,
+  appCheckSiteKey,
   explicitEnvironment,
   githubActions,
   vercelEnvironment,
@@ -251,6 +253,15 @@ const assertFirebaseBuildBoundary = ({
   ) {
     throw new Error(
       `[Environment] ${normalizedEnvironment} build contains a Production Firebase identifier.`,
+    );
+  }
+  if (
+    (normalizedEnvironment === "production" ||
+      normalizedEnvironment === "staging") &&
+    !appCheckSiteKey?.trim()
+  ) {
+    throw new Error(
+      `[Environment] ${normalizedEnvironment} managed builds require VITE_FIREBASE_APPCHECK_SITE_KEY.`,
     );
   }
   assertRequiredFirebaseConfig(config);

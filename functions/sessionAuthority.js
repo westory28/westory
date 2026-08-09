@@ -1,3 +1,4 @@
+const { randomBytes } = require("node:crypto");
 const { getFirestore, FieldValue, Timestamp } = require("firebase-admin/firestore");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 
@@ -10,6 +11,119 @@ const HIGH_RISK_IDLE_MS = 15 * 60 * 1000;
 const RECENT_AUTH_MS = 5 * 60 * 1000;
 const SESSION_TOUCH_MIN_INTERVAL_MS = 30 * 1000;
 const MAX_CLOCK_SKEW_MS = 60 * 1000;
+
+const SESSION_SCHEMA_VERSION = 2;
+const SESSION_AUTHORITY_GENERATION = "w1r2-2026-08-09";
+const MIN_CLIENT_PROTOCOL_VERSION = 2;
+const SESSION_REVISION_BYTES = 32;
+const SESSION_PROOF_FIELD = "_session";
+
+const SESSION_IDLE_MODES = Object.freeze({
+  ENFORCE: "ENFORCE",
+  OBSERVE_ONLY: "OBSERVE_ONLY",
+  DISABLED: "DISABLED",
+});
+const STAGING_PROJECT_ID = "westory-staging-177587430482";
+const PRODUCTION_PROJECT_ID = "history-quiz-yongsin";
+const APP_CHECK_OBSERVATION_LOG_INTERVAL_MS = 5 * 60 * 1000;
+let lastAppCheckObservationLogAt = 0;
+
+const parseFirebaseProjectId = (value) => {
+  try {
+    return String(JSON.parse(String(value || "{}"))?.projectId || "").trim();
+  } catch {
+    return "";
+  }
+};
+
+const resolveSessionAuthorityConfig = (environment = process.env) => {
+  const projectId = String(
+    environment.GCLOUD_PROJECT
+      || environment.GOOGLE_CLOUD_PROJECT
+      || parseFirebaseProjectId(environment.FIREBASE_CONFIG),
+  ).trim();
+  const configuredMode = String(environment.WESTORY_SESSION_IDLE_MODE || "")
+    .trim()
+    .toUpperCase();
+  const configuredAppCheckMode = String(
+    environment.WESTORY_APP_CHECK_MODE || "",
+  ).trim().toUpperCase();
+  const isDemo = projectId.startsWith("demo-westory-session-")
+    || projectId === "demo-westory-session-authority";
+
+  let allowedModes;
+  let defaultMode;
+  let allowedAppCheckModes;
+  let defaultAppCheckMode;
+  if (projectId === STAGING_PROJECT_ID) {
+    allowedModes = [SESSION_IDLE_MODES.ENFORCE];
+    defaultMode = SESSION_IDLE_MODES.ENFORCE;
+    allowedAppCheckModes = [SESSION_IDLE_MODES.ENFORCE];
+    defaultAppCheckMode = SESSION_IDLE_MODES.ENFORCE;
+  } else if (isDemo) {
+    allowedModes = [SESSION_IDLE_MODES.ENFORCE];
+    defaultMode = SESSION_IDLE_MODES.ENFORCE;
+    allowedAppCheckModes = [SESSION_IDLE_MODES.DISABLED];
+    defaultAppCheckMode = SESSION_IDLE_MODES.DISABLED;
+  } else if (projectId === PRODUCTION_PROJECT_ID) {
+    allowedModes = [
+      SESSION_IDLE_MODES.OBSERVE_ONLY,
+      SESSION_IDLE_MODES.DISABLED,
+    ];
+    defaultMode = SESSION_IDLE_MODES.OBSERVE_ONLY;
+    allowedAppCheckModes = Object.values(SESSION_IDLE_MODES);
+    defaultAppCheckMode = SESSION_IDLE_MODES.OBSERVE_ONLY;
+  } else {
+    return {
+      valid: false,
+      projectId,
+      mode: "INVALID",
+      reason: "SESSION_PROJECT_NOT_ALLOWLISTED",
+    };
+  }
+
+  const mode = configuredMode || defaultMode;
+  const appCheckMode = configuredAppCheckMode || defaultAppCheckMode;
+  if (!allowedModes.includes(mode) || !allowedAppCheckModes.includes(appCheckMode)) {
+    return {
+      valid: false,
+      projectId,
+      mode,
+      reason: !allowedModes.includes(mode)
+        ? "SESSION_IDLE_MODE_INVALID"
+        : "SESSION_APP_CHECK_MODE_INVALID",
+    };
+  }
+
+  return {
+    valid: true,
+    projectId,
+    mode,
+    appCheckMode,
+    requireAppCheck: appCheckMode === SESSION_IDLE_MODES.ENFORCE,
+    appCheckPromotionRequired:
+      projectId === PRODUCTION_PROJECT_ID
+      && appCheckMode !== SESSION_IDLE_MODES.ENFORCE,
+    reason: "",
+  };
+};
+
+const getSessionAuthorityConfig = () => {
+  const config = resolveSessionAuthorityConfig();
+  if (!config.valid) {
+    console.error("Westory session authority configuration is invalid.", {
+      projectId: config.projectId || "missing",
+      mode: config.mode,
+      reason: config.reason,
+    });
+    throw new HttpsError(
+      "unavailable",
+      "The Westory session authority is not configured for this environment.",
+      { reason: "SESSION_AUTHORITY_CONFIG_INVALID" },
+    );
+  }
+  return config;
+};
 
 const getAuthEmail = (request) =>
   String(request.auth?.token?.email || "")
@@ -60,61 +174,199 @@ const isRecentAuthentication = (authTime, nowMs) => {
   return ageMs >= -MAX_CLOCK_SKEW_MS && ageMs <= RECENT_AUTH_MS;
 };
 
+const normalizeHandshake = (data) => ({
+  authorityGeneration: String(data?.authorityGeneration || "").trim(),
+  protocolVersion: Number(data?.protocolVersion || 0),
+});
+
+const normalizeSessionProof = (request) => {
+  const proof = request.data?.[SESSION_PROOF_FIELD];
+  return {
+    authorityGeneration: String(proof?.authorityGeneration || "").trim(),
+    protocolVersion: Number(proof?.protocolVersion || 0),
+    revision: String(proof?.revision || "").trim(),
+  };
+};
+
+const sessionHasCurrentProtocol = (session) =>
+  Number(session?.schemaVersion) === SESSION_SCHEMA_VERSION
+  && String(session?.authorityGeneration || "") === SESSION_AUTHORITY_GENERATION
+  && Number.isInteger(session?.protocolVersion)
+  && Number(session.protocolVersion) >= MIN_CLIENT_PROTOCOL_VERSION
+  && typeof session?.sessionRevision === "string"
+  && /^[a-f0-9]{64}$/.test(session.sessionRevision)
+  && Object.values(SESSION_IDLE_MODES).includes(session?.authorityModeAtOpen);
+
+const proofMatchesSession = (proof, session) =>
+  proof.authorityGeneration === SESSION_AUTHORITY_GENERATION
+  && Number.isInteger(proof.protocolVersion)
+  && proof.protocolVersion >= MIN_CLIENT_PROTOCOL_VERSION
+  && /^[a-f0-9]{64}$/.test(proof.revision)
+  && proof.revision === session.sessionRevision;
+
 const serializeSession = (data) => ({
   authTime: Number(data.authTime || 0),
   generalExpiresAt: timestampMillis(data.generalExpiresAt),
   highRiskExpiresAt: timestampMillis(data.highRiskExpiresAt),
   status: String(data.status || ""),
+  authorityGeneration: String(data.authorityGeneration || ""),
+  protocolVersion: Number(data.protocolVersion || 0),
+  revision: String(data.sessionRevision || ""),
 });
+
+const throwRecentAuthenticationRequired = () => {
+  throw new HttpsError(
+    "failed-precondition",
+    "Recent authentication is required for this command.",
+    { reason: "RECENT_AUTH_REQUIRED", maxAgeSeconds: RECENT_AUTH_MS / 1000 },
+  );
+};
+
+const observeSessionFailure = (config, identity, reason, options) => {
+  console.warn("Westory session authority observation.", {
+    projectId: config.projectId,
+    mode: config.mode,
+    uid: identity.uid,
+    reason,
+    scope: options.highRisk === true ? "HIGH_RISK" : "GENERAL",
+  });
+};
+
+const assertAppCheckIfRequired = (request, config) => {
+  if (config.requireAppCheck && !request.app?.appId) {
+    throw new HttpsError(
+      "unauthenticated",
+      "A verified Westory application is required.",
+      { reason: "APP_CHECK_REQUIRED" },
+    );
+  }
+  if (config.appCheckMode === SESSION_IDLE_MODES.OBSERVE_ONLY && !request.app?.appId) {
+    const nowMs = Date.now();
+    if (nowMs - lastAppCheckObservationLogAt >= APP_CHECK_OBSERVATION_LOG_INTERVAL_MS) {
+      lastAppCheckObservationLogAt = nowMs;
+      console.warn("Westory App Check observation.", {
+        projectId: config.projectId,
+        mode: config.appCheckMode,
+        reason: "APP_CHECK_MISSING",
+      });
+    }
+  }
+};
+
+const resolveEffectiveIdleMode = (runtimeMode, modeAtOpen) => {
+  if (
+    runtimeMode === SESSION_IDLE_MODES.ENFORCE
+    || modeAtOpen === SESSION_IDLE_MODES.ENFORCE
+  ) {
+    return SESSION_IDLE_MODES.ENFORCE;
+  }
+  if (
+    runtimeMode === SESSION_IDLE_MODES.OBSERVE_ONLY
+    || modeAtOpen === SESSION_IDLE_MODES.OBSERVE_ONLY
+  ) {
+    return SESSION_IDLE_MODES.OBSERVE_ONLY;
+  }
+  return SESSION_IDLE_MODES.DISABLED;
+};
 
 const assertActiveApplicationSession = async (request, options = {}) => {
   const identity = assertAllowedIdentity(request);
+  const config = getSessionAuthorityConfig();
   const nowMs = Date.now();
+  assertAppCheckIfRequired(request, config);
+
+  if (options.recentAuth === true && !isRecentAuthentication(identity.authTime, nowMs)) {
+    throwRecentAuthenticationRequired();
+  }
+
   const sessionSnap = await getSessionRef(identity.uid, identity.authTime).get();
   const session = sessionSnap.exists ? sessionSnap.data() || {} : {};
   const expiryField = options.highRisk === true
     ? "highRiskExpiresAt"
     : "generalExpiresAt";
   const expiryMs = timestampMillis(session[expiryField]);
+  let fenceFailureReason = "";
 
-  if (
-    !sessionSnap.exists
-    || session.status !== "active"
+  if (!sessionSnap.exists) {
+    fenceFailureReason = "SESSION_MISSING";
+  } else if (
+    session.status !== "active"
     || Number(session.authTime) !== identity.authTime
-    || expiryMs <= nowMs
   ) {
+    fenceFailureReason = "SESSION_EXPIRED";
+  } else if (!sessionHasCurrentProtocol(session)) {
+    fenceFailureReason = "SESSION_PROTOCOL_OUTDATED";
+  } else if (!proofMatchesSession(normalizeSessionProof(request), session)) {
+    fenceFailureReason = "SESSION_PROOF_INVALID";
+  }
+
+  if (fenceFailureReason) {
     throw new HttpsError(
       "unauthenticated",
-      "The Westory application session has expired.",
+      fenceFailureReason === "SESSION_PROOF_INVALID"
+        ? "The Westory session proof is missing or invalid."
+        : "The Westory application session has expired.",
       {
-        reason: !sessionSnap.exists
-          ? "SESSION_MISSING"
-          : "SESSION_EXPIRED",
+        reason: fenceFailureReason,
         scope: options.highRisk === true ? "HIGH_RISK" : "GENERAL",
       },
     );
   }
 
-  if (
-    options.recentAuth === true
-    && !isRecentAuthentication(identity.authTime, nowMs)
-  ) {
+  const effectiveIdleMode = resolveEffectiveIdleMode(
+    config.mode,
+    session.authorityModeAtOpen,
+  );
+  const idleExpired = expiryMs <= nowMs;
+  if (idleExpired && effectiveIdleMode === SESSION_IDLE_MODES.ENFORCE) {
     throw new HttpsError(
-      "failed-precondition",
-      "Recent authentication is required for this command.",
-      { reason: "RECENT_AUTH_REQUIRED", maxAgeSeconds: RECENT_AUTH_MS / 1000 },
+      "unauthenticated",
+      "The Westory application session has expired.",
+      {
+        reason: "SESSION_EXPIRED",
+        scope: options.highRisk === true ? "HIGH_RISK" : "GENERAL",
+      },
+    );
+  }
+  if (idleExpired && effectiveIdleMode === SESSION_IDLE_MODES.OBSERVE_ONLY) {
+    observeSessionFailure(
+      { ...config, mode: effectiveIdleMode },
+      identity,
+      "SESSION_IDLE_EXPIRED",
+      options,
     );
   }
 
   return {
     ...identity,
-    sessionRef: sessionSnap.ref,
-    session,
+    sessionRef: sessionSnap.exists ? sessionSnap.ref : null,
+    session: sessionSnap.exists ? session : null,
+    authorityMode: effectiveIdleMode,
+    observedFailure: idleExpired ? "SESSION_IDLE_EXPIRED" : null,
   };
 };
 
 const openApplicationSession = onCall({ region: REGION }, async (request) => {
   const identity = assertAllowedIdentity(request);
+  const config = getSessionAuthorityConfig();
+  assertAppCheckIfRequired(request, config);
+  const handshake = normalizeHandshake(request.data);
+  const validHandshake = handshake.authorityGeneration === SESSION_AUTHORITY_GENERATION
+    && Number.isInteger(handshake.protocolVersion)
+    && handshake.protocolVersion >= MIN_CLIENT_PROTOCOL_VERSION;
+
+  if (!validHandshake) {
+    throw new HttpsError(
+      "failed-precondition",
+      "This Westory client protocol is no longer supported.",
+      {
+        reason: "SESSION_PROTOCOL_REQUIRED",
+        authorityGeneration: SESSION_AUTHORITY_GENERATION,
+        minProtocolVersion: MIN_CLIENT_PROTOCOL_VERSION,
+      },
+    );
+  }
+
   const db = getFirestore();
   const ref = getSessionRef(identity.uid, identity.authTime);
 
@@ -125,12 +377,30 @@ const openApplicationSession = onCall({ region: REGION }, async (request) => {
 
     if (existing) {
       const generalExpiryMs = timestampMillis(existing.generalExpiresAt);
-      if (
-        existing.status === "active"
-        && Number(existing.authTime) === identity.authTime
-        && generalExpiryMs > nowMs
-      ) {
-        return { resumed: true, ...serializeSession(existing) };
+      const activeFenceMatches = existing.status === "active"
+        && Number(existing.authTime) === identity.authTime;
+      if (activeFenceMatches && sessionHasCurrentProtocol(existing)) {
+        const effectiveIdleMode = resolveEffectiveIdleMode(
+          config.mode,
+          existing.authorityModeAtOpen,
+        );
+        const idleExpired = generalExpiryMs <= nowMs;
+        if (!idleExpired || effectiveIdleMode !== SESSION_IDLE_MODES.ENFORCE) {
+          if (idleExpired && effectiveIdleMode === SESSION_IDLE_MODES.OBSERVE_ONLY) {
+            observeSessionFailure(
+              { ...config, mode: effectiveIdleMode },
+              identity,
+              "SESSION_IDLE_EXPIRED",
+              { highRisk: false },
+            );
+          }
+          return {
+            resumed: true,
+            authorityMode: effectiveIdleMode,
+            observedFailure: idleExpired ? "SESSION_IDLE_EXPIRED" : null,
+            ...serializeSession(existing),
+          };
+        }
       }
 
       throw new HttpsError(
@@ -159,15 +429,27 @@ const openApplicationSession = onCall({ region: REGION }, async (request) => {
       generalExpiresAt: Timestamp.fromMillis(nowMs + GENERAL_IDLE_MS),
       highRiskExpiresAt: Timestamp.fromMillis(nowMs + HIGH_RISK_IDLE_MS),
       closedAt: null,
-      schemaVersion: 1,
+      schemaVersion: SESSION_SCHEMA_VERSION,
+      authorityGeneration: SESSION_AUTHORITY_GENERATION,
+      protocolVersion: validHandshake
+        ? handshake.protocolVersion
+        : MIN_CLIENT_PROTOCOL_VERSION,
+      sessionRevision: randomBytes(SESSION_REVISION_BYTES).toString("hex"),
+      authorityModeAtOpen: config.mode,
     };
     transaction.create(ref, session);
-    return { resumed: false, ...serializeSession(session) };
+    return {
+      resumed: false,
+      authorityMode: config.mode,
+      ...serializeSession(session),
+    };
   });
 });
 
 const touchApplicationSession = onCall({ region: REGION }, async (request) => {
   const identity = assertAllowedIdentity(request);
+  const config = getSessionAuthorityConfig();
+  assertAppCheckIfRequired(request, config);
   const requestedScope =
     String(request.data?.scope || "GENERAL").trim().toUpperCase() === "HIGH_RISK"
       ? "HIGH_RISK"
@@ -186,24 +468,61 @@ const touchApplicationSession = onCall({ region: REGION }, async (request) => {
     const nowMs = Date.now();
     const snap = await transaction.get(ref);
     const session = snap.exists ? snap.data() || {} : {};
-    const generalExpiryMs = timestampMillis(session.generalExpiresAt);
+    const expiryField = requestedScope === "HIGH_RISK"
+      ? "highRiskExpiresAt"
+      : "generalExpiresAt";
+    const expiryMs = timestampMillis(session[expiryField]);
+    let fenceFailureReason = "";
 
-    if (
-      !snap.exists
-      || session.status !== "active"
+    if (!snap.exists) {
+      fenceFailureReason = "SESSION_MISSING";
+    } else if (
+      session.status !== "active"
       || Number(session.authTime) !== identity.authTime
-      || generalExpiryMs <= nowMs
     ) {
+      fenceFailureReason = "SESSION_EXPIRED";
+    } else if (!sessionHasCurrentProtocol(session)) {
+      fenceFailureReason = "SESSION_PROTOCOL_OUTDATED";
+    } else if (!proofMatchesSession(normalizeSessionProof(request), session)) {
+      fenceFailureReason = "SESSION_PROOF_INVALID";
+    }
+
+    if (fenceFailureReason) {
       throw new HttpsError(
         "unauthenticated",
-        "The Westory application session has expired.",
-        { reason: !snap.exists ? "SESSION_MISSING" : "SESSION_EXPIRED" },
+        "The Westory application session cannot be extended.",
+        { reason: fenceFailureReason },
+      );
+    }
+
+    const effectiveIdleMode = resolveEffectiveIdleMode(
+      config.mode,
+      session.authorityModeAtOpen,
+    );
+    const idleExpired = expiryMs <= nowMs;
+    if (idleExpired && effectiveIdleMode === SESSION_IDLE_MODES.ENFORCE) {
+      throw new HttpsError(
+        "unauthenticated",
+        "The Westory application session cannot be extended.",
+        { reason: "SESSION_EXPIRED" },
+      );
+    }
+    if (idleExpired && effectiveIdleMode === SESSION_IDLE_MODES.OBSERVE_ONLY) {
+      observeSessionFailure(
+        { ...config, mode: effectiveIdleMode },
+        identity,
+        "SESSION_IDLE_EXPIRED",
+        { highRisk: requestedScope === "HIGH_RISK" },
       );
     }
 
     const lastTouchMs = timestampMillis(session.lastTouchAt);
     if (lastTouchMs > 0 && nowMs - lastTouchMs < SESSION_TOUCH_MIN_INTERVAL_MS) {
-      return { throttled: true, ...serializeSession(session) };
+      return {
+        throttled: true,
+        authorityMode: effectiveIdleMode,
+        ...serializeSession(session),
+      };
     }
 
     const update = {
@@ -215,16 +534,23 @@ const touchApplicationSession = onCall({ region: REGION }, async (request) => {
     transaction.update(ref, update);
     return {
       throttled: false,
+      authorityMode: effectiveIdleMode,
+      observedFailure: idleExpired ? "SESSION_IDLE_EXPIRED" : null,
       authTime: identity.authTime,
       generalExpiresAt: nowMs + GENERAL_IDLE_MS,
       highRiskExpiresAt: nowMs + HIGH_RISK_IDLE_MS,
       status: "active",
+      authorityGeneration: SESSION_AUTHORITY_GENERATION,
+      protocolVersion: Number(session.protocolVersion),
+      revision: String(session.sessionRevision),
     };
   });
 });
 
 const closeApplicationSession = onCall({ region: REGION }, async (request) => {
   const identity = assertAllowedIdentity(request);
+  const config = getSessionAuthorityConfig();
+  assertAppCheckIfRequired(request, config);
   const ref = getSessionRef(identity.uid, identity.authTime);
   const snap = await ref.get();
   if (!snap.exists) return { closed: false, reason: "SESSION_MISSING" };
@@ -252,7 +578,13 @@ module.exports = {
   GENERAL_IDLE_MS,
   HIGH_RISK_IDLE_MS,
   RECENT_AUTH_MS,
+  MIN_CLIENT_PROTOCOL_VERSION,
+  SESSION_AUTHORITY_GENERATION,
+  SESSION_IDLE_MODES,
+  SESSION_PROOF_FIELD,
+  SESSION_SCHEMA_VERSION,
   assertActiveApplicationSession,
+  resolveSessionAuthorityConfig,
   callableExports: {
     openApplicationSession,
     touchApplicationSession,

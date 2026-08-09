@@ -1,5 +1,10 @@
 import { initializeApp } from "firebase/app";
 import {
+  initializeAppCheck,
+  ReCaptchaEnterpriseProvider,
+  type AppCheck,
+} from "firebase/app-check";
+import {
   browserLocalPersistence,
   browserSessionPersistence,
   connectAuthEmulator,
@@ -21,7 +26,11 @@ import {
   type FirebaseClientConfig,
 } from "./firebaseEnvironment";
 import { isHighRiskCommand } from "./highRiskCommands";
-import { requestStepUpReauthentication } from "./stepUpReauth";
+import {
+  requestStepUpReauthentication,
+  runHighRiskCommandSingleFlight,
+  StepUpReauthError,
+} from "./stepUpReauth";
 
 const isWestoryCustomHost = (host: string) =>
   /^(?:www\.)?westory\.kr$/i.test(host);
@@ -107,6 +116,24 @@ assertFirebaseEnvironmentBoundary({
 });
 
 const app = initializeApp(firebaseConfig);
+const appCheckSiteKey = String(
+  import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY || "",
+).trim();
+const isProtectedCloudRuntime =
+  typeof window !== "undefined" &&
+  (runtimeEnvironment === "staging" || runtimeEnvironment === "production") &&
+  !Object.values(emulatorTargets).some(Boolean);
+if (isProtectedCloudRuntime && !appCheckSiteKey) {
+  throw new Error(
+    "[Environment] Protected cloud deployments require VITE_FIREBASE_APPCHECK_SITE_KEY.",
+  );
+}
+const appCheck: AppCheck | null = isProtectedCloudRuntime
+  ? initializeAppCheck(app, {
+      provider: new ReCaptchaEnterpriseProvider(appCheckSiteKey),
+      isTokenAutoRefreshEnabled: true,
+    })
+  : null;
 const auth = getAuth(app);
 const db = getFirestore(app);
 let analytics: Analytics | null = null;
@@ -266,27 +293,73 @@ const getHttpsCallable = async <RequestData = unknown, ResponseData = unknown>(
     import("firebase/functions"),
   ]);
   const callable = httpsCallable<RequestData, ResponseData>(functions, name);
-  if (!isHighRiskCommand(name)) return callable;
+
+  const invokeWithSession = async (data?: RequestData) => {
+    const { prepareCallableDataWithApplicationSession } =
+      await import("./applicationSession");
+    const prepared = prepareCallableDataWithApplicationSession(name, data);
+    return callable(prepared as RequestData | undefined);
+  };
+
+  const callableWithSession = (async (data?: RequestData) =>
+    invokeWithSession(data)) as HttpsCallable<RequestData, ResponseData>;
+  callableWithSession.stream = async (data, options) => {
+    const { prepareCallableDataWithApplicationSession } =
+      await import("./applicationSession");
+    const prepared = prepareCallableDataWithApplicationSession(name, data);
+    return callable.stream(prepared as RequestData, options);
+  };
+
+  if (!isHighRiskCommand(name)) return callableWithSession;
 
   const guardedCallable = (async (data?: RequestData) => {
-    await requestStepUpReauthentication(name);
-    try {
-      return await callable(data);
-    } catch (error) {
-      const details = (error as { details?: { reason?: unknown } })?.details;
-      if (
-        String(details?.reason || "") !== "RECENT_AUTH_REQUIRED" &&
-        String(details?.reason || "") !== "SESSION_EXPIRED"
-      ) {
-        throw error;
-      }
-      await requestStepUpReauthentication(name, { force: true });
-      return callable(data);
-    }
+    const invocationUid = auth.currentUser?.uid || "";
+    return runHighRiskCommandSingleFlight(
+      name,
+      data,
+      async () => {
+        if (!invocationUid || auth.currentUser?.uid !== invocationUid) {
+          throw new StepUpReauthError(
+            invocationUid ? "IDENTITY_CHANGED" : "UNAUTHENTICATED",
+            invocationUid
+              ? "로그인 사용자가 바뀌어 작업을 실행하지 않았습니다."
+              : "로그인 사용자를 확인할 수 없어 작업을 실행하지 않았습니다.",
+          );
+        }
+        await requestStepUpReauthentication(name);
+        if (auth.currentUser?.uid !== invocationUid) {
+          throw new StepUpReauthError(
+            "IDENTITY_CHANGED",
+            "로그인 사용자가 바뀌어 작업을 실행하지 않았습니다.",
+          );
+        }
+        try {
+          return await invokeWithSession(data);
+        } catch (error) {
+          const details = (error as { details?: { reason?: unknown } })
+            ?.details;
+          if (
+            String(details?.reason || "") !== "RECENT_AUTH_REQUIRED" &&
+            String(details?.reason || "") !== "SESSION_EXPIRED"
+          ) {
+            throw error;
+          }
+          await requestStepUpReauthentication(name, { force: true });
+          if (auth.currentUser?.uid !== invocationUid) {
+            throw new StepUpReauthError(
+              "IDENTITY_CHANGED",
+              "로그인 사용자가 바뀌어 작업을 실행하지 않았습니다.",
+            );
+          }
+          return invokeWithSession(data);
+        }
+      },
+      invocationUid,
+    );
   }) as HttpsCallable<RequestData, ResponseData>;
   guardedCallable.stream = async (data, options) => {
     await requestStepUpReauthentication(name);
-    return callable.stream(data, options);
+    return callableWithSession.stream(data, options);
   };
   return guardedCallable;
 };
@@ -316,6 +389,7 @@ const getFirebaseStorage = () => {
 
 export {
   app,
+  appCheck,
   auth,
   db,
   getFirebaseFunctions,

@@ -16,7 +16,7 @@ import {
   uploadBytes,
 } from "firebase/storage";
 
-const projectId = "demo-westory-session-storage";
+const projectId = process.env.GCLOUD_PROJECT || "demo-westory-session-storage";
 const rules = readFileSync(resolve("firestore.rules"), "utf8");
 const apps = [];
 
@@ -42,7 +42,18 @@ const createClient = async (name, email) => {
   return { app, auth, storage, uid: credential.user.uid, email, authTime };
 };
 
-const seedIdentity = async (db, client, { role = "teacher", expired = false, session = true } = {}) => {
+const seedIdentity = async (
+  db,
+  client,
+  {
+    role = "teacher",
+    expired = false,
+    session = true,
+    mode = "ENFORCE",
+    schemaVersion = 2,
+    status = "active",
+  } = {},
+) => {
   await setDoc(doc(db, "users", client.uid), {
     uid: client.uid,
     email: client.email,
@@ -57,7 +68,12 @@ const seedIdentity = async (db, client, { role = "teacher", expired = false, ses
       uid: client.uid,
       email: client.email,
       authTime: client.authTime,
-      status: "active",
+      status,
+      schemaVersion,
+      authorityGeneration: "w1r2-2026-08-09",
+      protocolVersion: 2,
+      sessionRevision: "a".repeat(64),
+      authorityModeAtOpen: mode,
       generalExpiresAt: Timestamp.fromMillis(
         expired ? Date.now() - 1000 : Date.now() + 30 * 60 * 1000,
       ),
@@ -88,6 +104,10 @@ const main = async () => {
     const expired = await createClient("storage-expired", "storage.expired@yongshin-ms.ms.kr");
     const missing = await createClient("storage-missing", "storage.missing@yongshin-ms.ms.kr");
     const student = await createClient("storage-student", "storage.student@yongshin-ms.ms.kr");
+    const observeExpired = await createClient("storage-observe-expired", "storage.observe.expired@yongshin-ms.ms.kr");
+    const oldProtocol = await createClient("storage-old-protocol", "storage.old.protocol@yongshin-ms.ms.kr");
+    const observeClosed = await createClient("storage-observe-closed", "storage.observe.closed@yongshin-ms.ms.kr");
+    const disabledExpired = await createClient("storage-disabled-expired", "storage.disabled.expired@yongshin-ms.ms.kr");
 
     await env.withSecurityRulesDisabled(async (context) => {
       const db = context.firestore();
@@ -95,6 +115,19 @@ const main = async () => {
       await seedIdentity(db, expired, { expired: true });
       await seedIdentity(db, missing, { session: false });
       await seedIdentity(db, student, { role: "student" });
+      await seedIdentity(db, observeExpired, {
+        expired: true,
+        mode: "OBSERVE_ONLY",
+      });
+      await seedIdentity(db, oldProtocol, { schemaVersion: 1 });
+      await seedIdentity(db, observeClosed, {
+        mode: "OBSERVE_ONLY",
+        status: "closed",
+      });
+      await seedIdentity(db, disabledExpired, {
+        expired: true,
+        mode: "DISABLED",
+      });
     });
 
     const bytes = new Uint8Array([137, 80, 78, 71]);
@@ -113,12 +146,28 @@ const main = async () => {
     await expectRejected(() =>
       uploadBytes(target(student, "student"), bytes, { contentType: "image/png" }),
     );
+    await uploadBytes(
+      target(observeExpired, "observe-expired"),
+      bytes,
+      { contentType: "image/png" },
+    );
+    await expectRejected(() =>
+      uploadBytes(target(oldProtocol, "old-protocol"), bytes, { contentType: "image/png" }),
+    );
+    await expectRejected(() =>
+      uploadBytes(target(observeClosed, "observe-closed"), bytes, { contentType: "image/png" }),
+    );
+    await uploadBytes(
+      target(disabledExpired, "disabled-expired"),
+      bytes,
+      { contentType: "image/png" },
+    );
 
     console.log(JSON.stringify({
       suite: "session-authority-storage-rules",
       passed: true,
       uniqueFirestoreAccessesPerTeacherWrite: 2,
-      cases: ["ACTIVE_TEACHER", "EXPIRED", "MISSING", "WRONG_ROLE"],
+      cases: ["ACTIVE_TEACHER", "EXPIRED", "MISSING", "WRONG_ROLE", "OBSERVE_IDLE_EXPIRED_ALLOWED", "OBSERVE_CLOSED_DENIED", "DISABLED_IDLE_EXPIRED_ALLOWED", "OLD_PROTOCOL_DENIED"],
       productionAccess: 0,
     }));
   } finally {

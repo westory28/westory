@@ -22,6 +22,7 @@ import {
   resolveSessionPolicy,
   SESSION_EXPIRY_KEY,
   SESSION_LAST_ACTIVITY_KEY,
+  shouldEnforceClientIdleSession,
   shouldShowSessionWarning,
   writeSessionActivity,
   writeSessionDeadline,
@@ -128,6 +129,7 @@ const Header: React.FC = () => {
     configReady,
     menuConfig,
     menuConfigReady,
+    applicationSessionAuthorityMode,
   } = useAuth();
   const { showToast } = useAppToast();
   const location = useLocation();
@@ -156,6 +158,9 @@ const Header: React.FC = () => {
   const sessionPolicy = resolveSessionPolicy(location.pathname, isAdmin);
   const sessionDurationSeconds = sessionPolicy.durationMs / 1000;
   const sessionWarningSeconds = sessionPolicy.warningLeadMs / 1000;
+  const isSessionEnforced = shouldEnforceClientIdleSession(
+    applicationSessionAuthorityMode,
+  );
   const displayName = (userData?.name || "").trim() || "이름 미설정";
 
   const portal: "teacher" | "student" = location.pathname.startsWith("/teacher")
@@ -348,7 +353,7 @@ const Header: React.FC = () => {
   };
 
   const expireSessionForStagingTest = () => {
-    if (runtimeEnvironment !== "staging") return;
+    if (runtimeEnvironment !== "staging" || !isSessionEnforced) return;
     const expiredLastActivity = Date.now() - sessionPolicy.durationMs - 1;
     const expiredAt = writeSessionActivity(expiredLastActivity, sessionPolicy);
     sessionExpiryRef.current = expiredAt;
@@ -358,7 +363,7 @@ const Header: React.FC = () => {
   };
 
   const warnSessionForStagingTest = () => {
-    if (runtimeEnvironment !== "staging") return;
+    if (runtimeEnvironment !== "staging" || !isSessionEnforced) return;
     const warningLastActivity =
       Date.now() -
       sessionPolicy.durationMs +
@@ -375,14 +380,16 @@ const Header: React.FC = () => {
   const extendSession = (options?: { force?: boolean }) => {
     const now = Date.now();
     const currentExpiry = sessionExpiryRef.current;
-    if (currentExpiry !== null && currentExpiry <= now) return;
+    if (isSessionEnforced && currentExpiry !== null && currentExpiry <= now) {
+      return;
+    }
     const alreadyFresh =
       currentExpiry !== null &&
       currentExpiry - now >
         sessionPolicy.durationMs - SESSION_ACTIVITY_THROTTLE_MS;
     if (
       !options?.force &&
-      alreadyFresh &&
+      (alreadyFresh || !isSessionEnforced) &&
       now - lastSessionExtendAtRef.current < SESSION_ACTIVITY_THROTTLE_MS
     ) {
       return;
@@ -393,6 +400,12 @@ const Header: React.FC = () => {
     const scope = sessionPolicy.highRisk ? "HIGH_RISK" : "GENERAL";
     void touchApplicationSession(scope)
       .then((serverSession) => {
+        if (!isSessionEnforced || serverSession.authorityMode !== "ENFORCE") {
+          clearSessionTiming();
+          sessionExpiryRef.current = null;
+          setSessionExpiry(null);
+          return;
+        }
         const serverExpiry = sessionPolicy.highRisk
           ? serverSession.highRiskExpiresAt
           : serverSession.generalExpiresAt;
@@ -409,8 +422,9 @@ const Header: React.FC = () => {
       .catch((error: unknown) => {
         const code = String((error as { code?: unknown })?.code || "");
         if (
-          code === "functions/unauthenticated" ||
-          code === "functions/permission-denied"
+          isSessionEnforced &&
+          (code === "functions/unauthenticated" ||
+            code === "functions/permission-denied")
         ) {
           void performLogout(true);
         }
@@ -444,7 +458,15 @@ const Header: React.FC = () => {
   }, [mobileMenuOpen]);
 
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || !isSessionEnforced) {
+      sessionExpiryRef.current = null;
+      timeoutHandledRef.current = false;
+      warnedSessionExpiryRef.current = null;
+      setSessionExpiry(null);
+      setRemainingSeconds(sessionDurationSeconds);
+      if (currentUser) clearSessionTiming();
+      return;
+    }
     timeoutHandledRef.current = false;
     const now = Date.now();
     const lastActivityAt = readSessionLastActivity() ?? now;
@@ -458,13 +480,14 @@ const Header: React.FC = () => {
     );
   }, [
     currentUser,
+    isSessionEnforced,
     location.pathname,
     sessionPolicy.durationMs,
     sessionPolicy.warningLeadMs,
   ]);
 
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || !isSessionEnforced) return;
 
     const syncSessionAcrossTabs = (event: StorageEvent) => {
       if (
@@ -485,10 +508,10 @@ const Header: React.FC = () => {
 
     window.addEventListener("storage", syncSessionAcrossTabs);
     return () => window.removeEventListener("storage", syncSessionAcrossTabs);
-  }, [currentUser, sessionPolicy.durationMs]);
+  }, [currentUser, isSessionEnforced, sessionPolicy.durationMs]);
 
   useEffect(() => {
-    if (!sessionExpiry || !currentUser) return;
+    if (!sessionExpiry || !currentUser || !isSessionEnforced) return;
 
     const tick = () => {
       const diffMs = sessionExpiry - Date.now();
@@ -521,6 +544,7 @@ const Header: React.FC = () => {
     return () => window.clearInterval(timerId);
   }, [
     currentUser,
+    isSessionEnforced,
     sessionExpiry,
     sessionPolicy.highRisk,
     sessionPolicy.warningLeadMs,
@@ -569,7 +593,12 @@ const Header: React.FC = () => {
       document.removeEventListener("submit", handleSubmit, true);
       window.removeEventListener(SESSION_ACTIVITY_EVENT, handleSessionActivity);
     };
-  }, [currentUser, sessionPolicy.durationMs, sessionPolicy.warningLeadMs]);
+  }, [
+    currentUser,
+    isSessionEnforced,
+    sessionPolicy.durationMs,
+    sessionPolicy.warningLeadMs,
+  ]);
 
   useEffect(() => {
     let cancelled = false;
@@ -750,29 +779,31 @@ const Header: React.FC = () => {
               />
             </React.Suspense>
 
-            <div className="hidden lg:flex items-center gap-1 md:gap-2 px-3 py-1 bg-stone-100 rounded-full border border-stone-200">
-              <i className="fas fa-stopwatch text-stone-400 text-xs"></i>
-              <span
-                className={`font-mono font-bold text-sm w-[42px] text-center ${remainingSeconds <= sessionWarningSeconds ? "text-red-500" : "text-stone-600"}`}
-                title={
-                  sessionPolicy.highRisk
-                    ? "관리자 설정 세션 남은 시간"
-                    : "세션 남은 시간"
-                }
-              >
-                {formatCountdown(remainingSeconds)}
-              </span>
-              <button
-                onClick={() => extendSession({ force: true })}
-                data-session-ignore="true"
-                className="text-stone-400 hover:text-blue-600 transition p-1"
-                title="시간 연장"
-              >
-                <i className="fas fa-redo-alt text-xs"></i>
-              </button>
-            </div>
+            {isSessionEnforced && (
+              <div className="hidden lg:flex items-center gap-1 md:gap-2 px-3 py-1 bg-stone-100 rounded-full border border-stone-200">
+                <i className="fas fa-stopwatch text-stone-400 text-xs"></i>
+                <span
+                  className={`font-mono font-bold text-sm w-[42px] text-center ${remainingSeconds <= sessionWarningSeconds ? "text-red-500" : "text-stone-600"}`}
+                  title={
+                    sessionPolicy.highRisk
+                      ? "관리자 설정 세션 남은 시간"
+                      : "세션 남은 시간"
+                  }
+                >
+                  {formatCountdown(remainingSeconds)}
+                </span>
+                <button
+                  onClick={() => extendSession({ force: true })}
+                  data-session-ignore="true"
+                  className="text-stone-400 hover:text-blue-600 transition p-1"
+                  title="시간 연장"
+                >
+                  <i className="fas fa-redo-alt text-xs"></i>
+                </button>
+              </div>
+            )}
 
-            {runtimeEnvironment === "staging" && (
+            {runtimeEnvironment === "staging" && isSessionEnforced && (
               <div className="hidden items-center gap-1 lg:flex">
                 <button
                   type="button"
@@ -850,22 +881,29 @@ const Header: React.FC = () => {
                     <NotificationBell className="mobile-menu-notification" />
                   </React.Suspense>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => extendSession({ force: true })}
-                  title="시간 연장"
-                  data-session-ignore="true"
-                  className={`mobile-menu-status-card mobile-menu-time-card ${remainingSeconds <= sessionWarningSeconds ? "is-warning" : ""}`}
-                >
-                  <div className="mobile-menu-status-copy">
-                    <span className="mobile-menu-status-label">남은 시간</span>
-                    <strong>{formatCountdown(remainingSeconds)}</strong>
-                  </div>
-                  <span className="mobile-menu-status-icon" aria-hidden="true">
-                    <i className="fas fa-redo-alt"></i>
-                  </span>
-                </button>
-                {runtimeEnvironment === "staging" && (
+                {isSessionEnforced && (
+                  <button
+                    type="button"
+                    onClick={() => extendSession({ force: true })}
+                    title="시간 연장"
+                    data-session-ignore="true"
+                    className={`mobile-menu-status-card mobile-menu-time-card ${remainingSeconds <= sessionWarningSeconds ? "is-warning" : ""}`}
+                  >
+                    <div className="mobile-menu-status-copy">
+                      <span className="mobile-menu-status-label">
+                        남은 시간
+                      </span>
+                      <strong>{formatCountdown(remainingSeconds)}</strong>
+                    </div>
+                    <span
+                      className="mobile-menu-status-icon"
+                      aria-hidden="true"
+                    >
+                      <i className="fas fa-redo-alt"></i>
+                    </span>
+                  </button>
+                )}
+                {runtimeEnvironment === "staging" && isSessionEnforced && (
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"

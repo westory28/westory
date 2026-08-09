@@ -31,9 +31,12 @@ import {
 } from "../lib/appEvents";
 import {
   closeApplicationSession,
-  openApplicationSession,
+  subscribeApplicationSessionAuthorityMode,
+  synchronizeApplicationSession,
+  type ApplicationSessionAuthorityMode,
 } from "../lib/applicationSession";
 import {
+  clearSessionTiming,
   NORMAL_SESSION_DURATION_MS,
   writeSessionDeadline,
 } from "../lib/sessionPolicy";
@@ -63,6 +66,7 @@ interface AuthContextType {
   interfaceConfig: InterfaceConfig | null;
   authenticationStatus: AuthenticationStatus;
   authenticationError: string;
+  applicationSessionAuthorityMode: ApplicationSessionAuthorityMode | null;
   loading: boolean;
   logout: (reason?: LogoutReason) => Promise<void>;
   refreshConfig: () => Promise<void>;
@@ -109,11 +113,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [authenticationStatus, setAuthenticationStatus] =
     useState<AuthenticationStatus>("UNKNOWN");
   const [authenticationError, setAuthenticationError] = useState("");
+  const [applicationSessionAuthorityMode, setApplicationSessionAuthorityMode] =
+    useState<ApplicationSessionAuthorityMode | null>(null);
   const firstUserDocReadyRef = useRef<string | null>(null);
   const systemConfigLoadRef = useRef<Promise<void> | null>(null);
   const menuConfigLoadRef = useRef<Promise<void> | null>(null);
   const authRevisionRef = useRef(0);
   const authenticatedUidRef = useRef<string | null>(null);
+  const resolvedUserRef = useRef<User | null>(null);
   const logoutReasonRef = useRef<LogoutReason | null>(null);
   const authResolutionPendingRef = useRef(true);
 
@@ -121,6 +128,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     firstUserDocReadyRef.current = null;
     systemConfigLoadRef.current = null;
     menuConfigLoadRef.current = null;
+    resolvedUserRef.current = null;
+    setApplicationSessionAuthorityMode(null);
     setCurrentUser(null);
     setUserData(null);
     setConfig(null);
@@ -217,6 +226,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     void loadPublicInterfaceConfig();
   }, [loadPublicInterfaceConfig]);
 
+  useEffect(
+    () =>
+      subscribeApplicationSessionAuthorityMode(
+        setApplicationSessionAuthorityMode,
+      ),
+    [],
+  );
+
   useEffect(() => {
     let active = true;
     let unsubscribe: () => void = () => undefined;
@@ -257,11 +274,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       unsubscribe = onIdTokenChanged(
         auth,
         async (user) => {
-          const authRevision = authRevisionRef.current + 1;
-          authRevisionRef.current = authRevision;
-          authResolutionPendingRef.current = true;
-          scheduleResolutionGuard();
-          setAuthenticationError("");
           markLoginPerf("westory-auth-current-user-resolved", {
             hasUser: user ? "true" : "false",
           });
@@ -270,6 +282,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             "westory-app-load-start",
             "westory-auth-current-user-resolved",
           );
+
+          if (
+            user &&
+            resolvedUserRef.current?.uid === user.uid &&
+            isAllowedWestoryEmail(user.email)
+          ) {
+            try {
+              const applicationSession = await synchronizeApplicationSession(
+                user,
+                {
+                  expectedUid: user.uid,
+                },
+              );
+              if (!active || auth.currentUser?.uid !== user.uid) return;
+              if (
+                applicationSession.authorityMode === "ENFORCE" &&
+                !writeSessionDeadline(applicationSession.generalExpiresAt, {
+                  durationMs: NORMAL_SESSION_DURATION_MS,
+                })
+              ) {
+                throw new Error("Invalid application session deadline");
+              }
+              if (applicationSession.authorityMode !== "ENFORCE") {
+                clearSessionTiming();
+              }
+              resolvedUserRef.current = user;
+              setApplicationSessionAuthorityMode(
+                applicationSession.authorityMode,
+              );
+              setCurrentUser(user);
+              setAuthenticationError("");
+            } catch (error) {
+              if (!active || auth.currentUser?.uid !== user.uid) return;
+              console.error("Failed to refresh application session", error);
+              setAuthenticationError(
+                "로그인 세션을 갱신하지 못했습니다. 보호된 작업을 다시 시도해 주세요.",
+              );
+            }
+            return;
+          }
+
+          const authRevision = authRevisionRef.current + 1;
+          authRevisionRef.current = authRevision;
+          authResolutionPendingRef.current = true;
+          scheduleResolutionGuard();
+          setAuthenticationError("");
           if (unsubscribeUserDoc) {
             unsubscribeUserDoc();
             unsubscribeUserDoc = null;
@@ -289,7 +347,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             }
 
             try {
-              const applicationSession = await openApplicationSession();
+              const applicationSession = await synchronizeApplicationSession(
+                user,
+                {
+                  expectedUid: user.uid,
+                },
+              );
               if (
                 !active ||
                 authRevisionRef.current !== authRevision ||
@@ -298,12 +361,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 return;
               }
               if (
+                applicationSession.authorityMode === "ENFORCE" &&
                 !writeSessionDeadline(applicationSession.generalExpiresAt, {
                   durationMs: NORMAL_SESSION_DURATION_MS,
                 })
               ) {
                 throw new Error("Invalid application session deadline");
               }
+              if (applicationSession.authorityMode !== "ENFORCE") {
+                clearSessionTiming();
+              }
+              resolvedUserRef.current = user;
+              setApplicationSessionAuthorityMode(
+                applicationSession.authorityMode,
+              );
+              setAuthenticationStatus("AUTHENTICATED");
+              setCurrentUser(user);
             } catch (error) {
               if (!active || authRevisionRef.current !== authRevision) return;
               console.error("Failed to open application session", error);
@@ -317,9 +390,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
               await signOut(auth).catch(() => undefined);
               return;
             }
-
-            setAuthenticationStatus("AUTHENTICATED");
-            setCurrentUser(user);
 
             visibilitySettingsReady = Promise.all([
               loadAuthedSystemConfig(user),
@@ -549,7 +619,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     (authenticationStatus === "AUTHENTICATED" &&
       currentUser !== null &&
       isAllowedWestoryEmail(currentUser.email) &&
-      userData?.uid !== currentUser.uid);
+      (applicationSessionAuthorityMode === null ||
+        userData?.uid !== currentUser.uid));
 
   const value = {
     user: currentUser,
@@ -564,6 +635,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     interfaceConfig,
     authenticationStatus,
     authenticationError,
+    applicationSessionAuthorityMode,
     loading,
     logout,
     refreshConfig,

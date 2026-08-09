@@ -80,7 +80,7 @@ const Settings: React.FC = () => {
           </div>
         </aside>
 
-        <div className="flex-1">
+        <div className="min-w-0 flex-1">
           {activeTab === "general" && <SettingsGeneral />}
           {activeTab === "school" && <SettingsSchool />}
           {activeTab === "interface" && <SettingsInterface />}

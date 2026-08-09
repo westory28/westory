@@ -18,10 +18,21 @@ service firebase.storage {
     function hasActiveApplicationSession() {
       return isSignedIn()
         && request.auth.token.auth_time is int
+        && firestore.exists(applicationSessionPath())
         && firestore.get(applicationSessionPath()).data.status == 'active'
         && firestore.get(applicationSessionPath()).data.authTime == request.auth.token.auth_time
+        && firestore.get(applicationSessionPath()).data.schemaVersion == 2
+        && firestore.get(applicationSessionPath()).data.authorityGeneration == 'w1r2-2026-08-09'
+        && firestore.get(applicationSessionPath()).data.protocolVersion is int
+        && firestore.get(applicationSessionPath()).data.protocolVersion >= 2
+        && firestore.get(applicationSessionPath()).data.sessionRevision is string
+        && firestore.get(applicationSessionPath()).data.sessionRevision.matches('^[a-f0-9]{64}$')
+        && firestore.get(applicationSessionPath()).data.authorityModeAtOpen in ['ENFORCE', 'OBSERVE_ONLY', 'DISABLED']
         && firestore.get(applicationSessionPath()).data.generalExpiresAt is timestamp
-        && firestore.get(applicationSessionPath()).data.generalExpiresAt > request.time;
+        && (
+          firestore.get(applicationSessionPath()).data.authorityModeAtOpen != 'ENFORCE'
+          || firestore.get(applicationSessionPath()).data.generalExpiresAt > request.time
+        );
     }
 
     function canUseWestory() {

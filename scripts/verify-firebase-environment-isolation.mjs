@@ -159,16 +159,49 @@ expectThrow(
 );
 assertFirebaseBuildBoundary({
   config: stagingConfig,
+  appCheckSiteKey: "staging-app-check-site-key",
   explicitEnvironment: "staging",
   githubActions: false,
   vercelEnvironment: "preview",
 });
 assertFirebaseBuildBoundary({
   config: stagingConfig,
+  appCheckSiteKey: "staging-app-check-site-key",
   explicitEnvironment: "staging",
   githubActions: false,
   vercelEnvironment: "production",
   vercelProjectRole: "staging",
 });
+assertFirebaseBuildBoundary({
+  config: productionConfig,
+  appCheckSiteKey: "production-app-check-site-key",
+  explicitEnvironment: "production",
+  githubActions: false,
+  vercelEnvironment: "production",
+  vercelProjectRole: "production",
+});
+expectThrow(
+  "Protected managed builds must require App Check configuration",
+  () =>
+    assertFirebaseBuildBoundary({
+      config: stagingConfig,
+      explicitEnvironment: "staging",
+      githubActions: false,
+      vercelEnvironment: "preview",
+    }),
+  /VITE_FIREBASE_APPCHECK_SITE_KEY/,
+);
+expectThrow(
+  "Production managed builds must require App Check configuration",
+  () =>
+    assertFirebaseBuildBoundary({
+      config: productionConfig,
+      explicitEnvironment: "production",
+      githubActions: false,
+      vercelEnvironment: "production",
+      vercelProjectRole: "production",
+    }),
+  /VITE_FIREBASE_APPCHECK_SITE_KEY/,
+);
 
-console.log("Firebase environment isolation matrix: PASS (12 cases)");
+console.log("Firebase environment isolation matrix: PASS (15 cases)");

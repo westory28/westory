@@ -18,6 +18,9 @@ export interface SessionPolicy {
   highRisk: boolean;
 }
 
+export const shouldEnforceClientIdleSession = (authorityMode: unknown) =>
+  authorityMode === "ENFORCE";
+
 export const isHighRiskAdminPath = (
   pathname: string,
   isAdmin: boolean,

@@ -42,6 +42,10 @@ try {
   assert.equal(nonAdminSettings.durationMs, 30 * 60 * 1000);
   assert.equal(normal.warningLeadMs, 5 * 60 * 1000);
   assert.equal(adminSettings.warningLeadMs, 5 * 60 * 1000);
+  assert.equal(policy.shouldEnforceClientIdleSession("ENFORCE"), true);
+  assert.equal(policy.shouldEnforceClientIdleSession("OBSERVE_ONLY"), false);
+  assert.equal(policy.shouldEnforceClientIdleSession("DISABLED"), false);
+  assert.equal(policy.shouldEnforceClientIdleSession(null), false);
   assert.equal(
     policy.resolveSessionPolicy("/teacher/settings-old", true).durationMs,
     30 * 60 * 1000,
