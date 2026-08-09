@@ -383,11 +383,29 @@ assert.ok(
     providerSource.indexOf("reauthenticateWithCredential(user, credential)"),
   "the server transition must be established before password reauthentication",
 );
-assert.doesNotMatch(providerSource, /disableNetwork|enableNetwork/);
+assert.match(providerSource, /disableNetwork\(db\)/);
+assert.match(providerSource, /enableNetwork\(db\)/);
 assert.ok(
   providerSource.indexOf("synchronizeApplicationSession(user") <
     providerSource.indexOf("current.resolve()"),
   "the new application session must be synchronized before the command resumes",
+);
+const synchronizeIndex = providerSource.indexOf(
+  "session = await synchronizeApplicationSession(user",
+);
+const postSessionTokenRefreshIndex = providerSource.indexOf(
+  "await getIdToken(user, true)",
+  synchronizeIndex + 1,
+);
+const firestoreResumeIndex = providerSource.indexOf(
+  "await resumeFirestore()",
+  postSessionTokenRefreshIndex + 1,
+);
+assert.ok(
+  synchronizeIndex >= 0 &&
+    postSessionTokenRefreshIndex > synchronizeIndex &&
+    firestoreResumeIndex > postSessionTokenRefreshIndex,
+  "Firestore must resume only after the new session exists and its token is refreshed",
 );
 assert.match(
   providerSource,
