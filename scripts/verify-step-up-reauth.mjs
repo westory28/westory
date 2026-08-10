@@ -428,14 +428,24 @@ const authenticatedUserWaitIndex = providerSource.indexOf(
   "await waitForAuthenticatedUser(current.ownerUid)",
   postSessionTokenRefreshIndex + 1,
 );
+const postSessionNetworkPauseIndex = providerSource.indexOf(
+  "await disableNetwork(db)",
+  postSessionTokenRefreshIndex + 1,
+);
+const postSessionNetworkResumeIndex = providerSource.indexOf(
+  "await enableNetwork(db)",
+  postSessionNetworkPauseIndex + 1,
+);
 assert.ok(
   synchronizeIndex >= 0 &&
     postSessionTokenRefreshIndex > synchronizeIndex &&
+    postSessionNetworkPauseIndex > postSessionTokenRefreshIndex &&
+    postSessionNetworkResumeIndex > postSessionNetworkPauseIndex &&
     authenticatedUserWaitIndex > postSessionTokenRefreshIndex,
   "protected reads must wait until the new session exists and its token is refreshed",
 );
 assert.ok(
-  authenticatedUserWaitIndex > postSessionTokenRefreshIndex,
+  authenticatedUserWaitIndex > postSessionNetworkResumeIndex,
   "the business command must wait for AuthContext and the user document to recover",
 );
 assert.match(authContextSource, /getDocFromServer\(userRef\)/);
