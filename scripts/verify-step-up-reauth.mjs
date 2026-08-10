@@ -391,7 +391,7 @@ const passwordHandlerBlock = providerSource.slice(
   passwordHandlerStart,
   googleHandlerStart,
 );
-assert.doesNotMatch(passwordHandlerBlock, /disableNetwork\(db\)/);
+assert.match(passwordHandlerBlock, /pauseFirestoreForReauthentication\(\)/);
 assert.ok(
   providerSource.indexOf("prepareForReauthentication()") <
     providerSource.indexOf("reauthenticateWithCredential(user, credential)"),
@@ -399,13 +399,13 @@ assert.ok(
 );
 assert.match(
   providerSource,
-  /prepareForReauthentication\(\);[\s\S]*?requestAnimationFrame[\s\S]*?reauthenticateWithCredential\(user, credential\)/,
-  "protected reads must finish unmounting before password reauthentication publishes a new auth epoch",
+  /prepareForReauthentication\(\);[\s\S]*?requestAnimationFrame[\s\S]*?pauseFirestoreForReauthentication\(\)[\s\S]*?reauthenticateWithCredential\(user, credential\)/,
+  "protected reads must unmount and Firestore must pause before password reauthentication publishes a new auth epoch",
 );
 assert.match(
   providerSource,
-  /prepareForReauthentication\(\);[\s\S]*?reauthenticateWithPopup\(user, provider\)/,
-  "protected reads must unmount before Google reauthentication publishes a new auth epoch",
+  /prepareForReauthentication\(\);[\s\S]*?pauseFirestoreForReauthentication\(\)[\s\S]*?reauthenticateWithPopup\(user, provider\)/,
+  "protected reads must unmount and Firestore must pause before Google reauthentication publishes a new auth epoch",
 );
 assert.match(
   providerSource,
@@ -428,19 +428,14 @@ const authenticatedUserWaitIndex = providerSource.indexOf(
   "await waitForAuthenticatedUser(current.ownerUid)",
   postSessionTokenRefreshIndex + 1,
 );
-const postSessionNetworkPauseIndex = providerSource.indexOf(
-  "await disableNetwork(db)",
-  postSessionTokenRefreshIndex + 1,
-);
 const postSessionNetworkResumeIndex = providerSource.indexOf(
-  "await enableNetwork(db)",
-  postSessionNetworkPauseIndex + 1,
+  "await resumeFirestoreAfterReauthentication()",
+  postSessionTokenRefreshIndex + 1,
 );
 assert.ok(
   synchronizeIndex >= 0 &&
     postSessionTokenRefreshIndex > synchronizeIndex &&
-    postSessionNetworkPauseIndex > postSessionTokenRefreshIndex &&
-    postSessionNetworkResumeIndex > postSessionNetworkPauseIndex &&
+    postSessionNetworkResumeIndex > postSessionTokenRefreshIndex &&
     authenticatedUserWaitIndex > postSessionTokenRefreshIndex,
   "protected reads must wait until the new session exists and its token is refreshed",
 );

@@ -80,6 +80,7 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [submitting, setSubmitting] = useState(false);
   const pendingRef = useRef<PendingRequest | null>(null);
   const submittingRef = useRef(false);
+  const firestorePausedRef = useRef(false);
   const protectedContentRef = useRef<HTMLDivElement | null>(null);
   const dialogRef = useRef<HTMLElement | null>(null);
   const {
@@ -136,6 +137,17 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
     setPending(null);
     setPassword("");
     setErrorMessage("");
+  }, []);
+
+  const pauseFirestoreForReauthentication = useCallback(async () => {
+    await disableNetwork(db);
+    firestorePausedRef.current = true;
+  }, []);
+
+  const resumeFirestoreAfterReauthentication = useCallback(async () => {
+    if (!firestorePausedRef.current) return;
+    await enableNetwork(db);
+    firestorePausedRef.current = false;
   }, []);
 
   const rejectPending = useCallback(
@@ -203,6 +215,10 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
     () => () => {
       const current = pendingRef.current;
       pendingRef.current = null;
+      if (firestorePausedRef.current) {
+        firestorePausedRef.current = false;
+        void enableNetwork(db);
+      }
       current?.reject(
         new StepUpReauthError(
           "UNAVAILABLE",
@@ -269,12 +285,7 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
       // the commit and let the existing Auth/Firestore token bridge observe
       // the new credential before protected reads mount again.
       await getIdToken(user, true);
-      // Firestore may have opened a denied stream during the short interval
-      // between the new auth epoch and the matching session document. The
-      // protected tree is already unmounted, so restart that stream once and
-      // let AuthContext's server preflight prove the refreshed authorization.
-      await disableNetwork(db);
-      await enableNetwork(db);
+      await resumeFirestoreAfterReauthentication();
       await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
       await waitForAuthenticatedUser(current.ownerUid);
     } catch (error) {
@@ -293,6 +304,9 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
     user: User,
     ownerUid: string,
   ) => {
+    await resumeFirestoreAfterReauthentication().catch((error) => {
+      console.error("Failed to resume Firestore after reauthentication", error);
+    });
     if (auth.currentUser?.uid !== ownerUid) return;
     await getIdToken(user, true).catch((error) => {
       console.error(
@@ -328,6 +342,7 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
       await new Promise<void>((resolve) =>
         window.requestAnimationFrame(() => resolve()),
       );
+      await pauseFirestoreForReauthentication();
       const credential = EmailAuthProvider.credential(user.email, password);
       await reauthenticateWithCredential(user, credential);
       await finishSuccess(current);
@@ -373,6 +388,7 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
       await new Promise<void>((resolve) =>
         window.requestAnimationFrame(() => resolve()),
       );
+      await pauseFirestoreForReauthentication();
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ login_hint: user.email || "" });
       await reauthenticateWithPopup(user, provider);
