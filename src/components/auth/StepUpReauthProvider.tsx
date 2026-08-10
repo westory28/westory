@@ -8,8 +8,7 @@ import {
   reauthenticateWithCredential,
   reauthenticateWithPopup,
 } from "firebase/auth";
-import { disableNetwork, enableNetwork } from "firebase/firestore";
-import { auth, db } from "../../lib/firebase";
+import { auth } from "../../lib/firebase";
 import { useAuth } from "../../contexts/AuthContext";
 import {
   beginApplicationSessionReauthentication,
@@ -213,10 +212,7 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
     [],
   );
 
-  const finishSuccess = async (
-    current: PendingRequest,
-    resumeFirestore: () => Promise<void>,
-  ) => {
+  const finishSuccess = async (current: PendingRequest) => {
     const user = auth.currentUser;
     if (!user || user.uid !== current.ownerUid) {
       throw new StepUpReauthError(
@@ -269,11 +265,10 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       // Reauthentication publishes the new auth_time before the matching
       // application-session document is committed. Refresh once more after
-      // the commit so Firestore resumes with a credential whose Rules fence
-      // already exists.
+      // the commit and let the existing Auth/Firestore token bridge observe
+      // the new credential before protected reads mount again.
       await getIdToken(user, true);
       await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
-      await resumeFirestore();
       await waitForAuthenticatedUser(current.ownerUid);
     } catch (error) {
       throw new StepUpReauthError(
@@ -320,20 +315,15 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
     submittingRef.current = true;
     setSubmitting(true);
     setErrorMessage("");
-    let firestorePaused = false;
-    const resumeFirestore = async () => {
-      if (!firestorePaused) return;
-      firestorePaused = false;
-      await enableNetwork(db);
-    };
     try {
       await beginApplicationSessionReauthentication();
-      await disableNetwork(db);
-      firestorePaused = true;
       prepareForReauthentication();
+      await new Promise<void>((resolve) =>
+        window.requestAnimationFrame(() => resolve()),
+      );
       const credential = EmailAuthProvider.credential(user.email, password);
       await reauthenticateWithCredential(user, credential);
-      await finishSuccess(current, resumeFirestore);
+      await finishSuccess(current);
     } catch (error) {
       if (
         error instanceof StepUpReauthError &&
@@ -348,12 +338,6 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
       );
       setErrorMessage(getStepUpReauthFailureMessage(error, "password"));
     } finally {
-      await resumeFirestore().catch((error) => {
-        console.error(
-          "Failed to resume Firestore after reauthentication",
-          error,
-        );
-      });
       submittingRef.current = false;
       setSubmitting(false);
     }
@@ -376,21 +360,16 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
     submittingRef.current = true;
     setSubmitting(true);
     setErrorMessage("");
-    let firestorePaused = false;
-    const resumeFirestore = async () => {
-      if (!firestorePaused) return;
-      firestorePaused = false;
-      await enableNetwork(db);
-    };
     try {
       await beginApplicationSessionReauthentication();
-      await disableNetwork(db);
-      firestorePaused = true;
       prepareForReauthentication();
+      await new Promise<void>((resolve) =>
+        window.requestAnimationFrame(() => resolve()),
+      );
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ login_hint: user.email || "" });
       await reauthenticateWithPopup(user, provider);
-      await finishSuccess(current, resumeFirestore);
+      await finishSuccess(current);
     } catch (error) {
       if (
         error instanceof StepUpReauthError &&
@@ -405,12 +384,6 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
       );
       setErrorMessage(getStepUpReauthFailureMessage(error, "google"));
     } finally {
-      await resumeFirestore().catch((error) => {
-        console.error(
-          "Failed to resume Firestore after reauthentication",
-          error,
-        );
-      });
       submittingRef.current = false;
       setSubmitting(false);
     }

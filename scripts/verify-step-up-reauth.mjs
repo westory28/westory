@@ -383,12 +383,17 @@ assert.ok(
     providerSource.indexOf("reauthenticateWithCredential(user, credential)"),
   "the server transition must be established before password reauthentication",
 );
-assert.match(providerSource, /disableNetwork\(db\)/);
-assert.match(providerSource, /enableNetwork\(db\)/);
+assert.doesNotMatch(providerSource, /disableNetwork\(db\)/);
+assert.doesNotMatch(providerSource, /enableNetwork\(db\)/);
 assert.ok(
   providerSource.indexOf("prepareForReauthentication()") <
     providerSource.indexOf("reauthenticateWithCredential(user, credential)"),
   "protected reads must unmount before password reauthentication publishes a new auth epoch",
+);
+assert.match(
+  providerSource,
+  /prepareForReauthentication\(\);[\s\S]*?requestAnimationFrame[\s\S]*?reauthenticateWithCredential\(user, credential\)/,
+  "protected reads must finish unmounting before password reauthentication publishes a new auth epoch",
 );
 assert.match(
   providerSource,
@@ -412,19 +417,18 @@ const postSessionTokenRefreshIndex = providerSource.indexOf(
   "await getIdToken(user, true)",
   synchronizeIndex + 1,
 );
-const firestoreResumeIndex = providerSource.indexOf(
-  "await resumeFirestore()",
+const authenticatedUserWaitIndex = providerSource.indexOf(
+  "await waitForAuthenticatedUser(current.ownerUid)",
   postSessionTokenRefreshIndex + 1,
 );
 assert.ok(
   synchronizeIndex >= 0 &&
     postSessionTokenRefreshIndex > synchronizeIndex &&
-    firestoreResumeIndex > postSessionTokenRefreshIndex,
-  "Firestore must resume only after the new session exists and its token is refreshed",
+    authenticatedUserWaitIndex > postSessionTokenRefreshIndex,
+  "protected reads must wait until the new session exists and its token is refreshed",
 );
 assert.ok(
-  providerSource.indexOf("await waitForAuthenticatedUser(current.ownerUid)") >
-    firestoreResumeIndex,
+  authenticatedUserWaitIndex > postSessionTokenRefreshIndex,
   "the business command must wait for AuthContext and the user document to recover",
 );
 assert.match(authContextSource, /stopUserDocSubscriptionRef\.current\(\)/);

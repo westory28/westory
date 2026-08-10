@@ -478,10 +478,23 @@ const verifyReauthFlow = async (browser, viewport) => {
     });
     await page.getByRole("heading", { name: "관리자 설정" }).waitFor();
     diagnostics = attachDiagnostics(page);
-    const saveButton = page.getByRole("button", {
-      name: "전체 저장",
-      exact: true,
-    });
+    const saveButton = page.getByRole("button", { name: /전체 저장/ }).last();
+    try {
+      await saveButton.waitFor({ state: "visible", timeout: 60_000 });
+    } catch (error) {
+      await page.screenshot({
+        path: screenshotPath("access-reauth-setup-error", viewport),
+        fullPage: false,
+      });
+      const setupFailure = await page.evaluate(() => ({
+        hash: window.location.hash,
+        visibleText: document.body.innerText.slice(0, 1600),
+      }));
+      throw new Error(
+        `Reauthentication command setup did not appear: ${JSON.stringify(setupFailure)}`,
+        { cause: error },
+      );
+    }
     await saveButton.scrollIntoViewIfNeeded();
     await saveButton.click();
     const dialog = page.getByRole("dialog", { name: "본인 확인이 필요합니다" });

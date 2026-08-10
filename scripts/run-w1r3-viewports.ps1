@@ -26,9 +26,12 @@ $sourceShareUri = [Uri]$sourceShareUrl
 
 if (
   $sourceShareUri.Scheme -ne "https" -or
-  $sourceShareUri.Query -notmatch "_vercel_share="
+  (
+    $sourceShareUri.Query -notmatch "(^|[?&])_vercel_share=" -and
+    $sourceShareUri.Query -notmatch "(^|[?&])x-vercel-protection-bypass="
+  )
 ) {
-  throw "Invalid Dedicated Staging share URL."
+  throw "Invalid Dedicated Staging access URL."
 }
 $shareBuilder = [UriBuilder]$stagingUri
 $shareBuilder.Query = $sourceShareUri.Query.TrimStart("?")
