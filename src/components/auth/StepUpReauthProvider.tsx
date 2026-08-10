@@ -287,6 +287,19 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
     current.resolve();
   };
 
+  const recoverAuthenticationAfterFailedReauthentication = async (
+    user: User,
+    ownerUid: string,
+  ) => {
+    if (auth.currentUser?.uid !== ownerUid) return;
+    await getIdToken(user, true).catch((error) => {
+      console.error(
+        "Failed to restore authentication after reauthentication",
+        error,
+      );
+    });
+  };
+
   const handlePasswordReauth = async (event: React.FormEvent) => {
     event.preventDefault();
     const user = auth.currentUser;
@@ -317,9 +330,9 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
       await beginApplicationSessionReauthentication();
       await disableNetwork(db);
       firestorePaused = true;
+      prepareForReauthentication();
       const credential = EmailAuthProvider.credential(user.email, password);
       await reauthenticateWithCredential(user, credential);
-      prepareForReauthentication();
       await finishSuccess(current, resumeFirestore);
     } catch (error) {
       if (
@@ -329,6 +342,10 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
         rejectPending(current, error);
         return;
       }
+      await recoverAuthenticationAfterFailedReauthentication(
+        user,
+        current.ownerUid,
+      );
       setErrorMessage(getStepUpReauthFailureMessage(error, "password"));
     } finally {
       await resumeFirestore().catch((error) => {
@@ -369,10 +386,10 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
       await beginApplicationSessionReauthentication();
       await disableNetwork(db);
       firestorePaused = true;
+      prepareForReauthentication();
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ login_hint: user.email || "" });
       await reauthenticateWithPopup(user, provider);
-      prepareForReauthentication();
       await finishSuccess(current, resumeFirestore);
     } catch (error) {
       if (
@@ -382,6 +399,10 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
         rejectPending(current, error);
         return;
       }
+      await recoverAuthenticationAfterFailedReauthentication(
+        user,
+        current.ownerUid,
+      );
       setErrorMessage(getStepUpReauthFailureMessage(error, "google"));
     } finally {
       await resumeFirestore().catch((error) => {

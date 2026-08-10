@@ -16,6 +16,8 @@ const baseUrl = String(process.env.WESTORY_STAGING_URL || "").replace(
   /\/$/,
   "",
 );
+const settingsAccessUrl = `${baseUrl}/#/teacher/settings?tab=access`;
+const settingsInterfaceUrl = `${baseUrl}/#/teacher/settings?tab=interface`;
 const admin = {
   email: process.env.WESTORY_ADMIN_EMAIL || "",
   password: process.env.WESTORY_ADMIN_PASSWORD || "",
@@ -311,12 +313,11 @@ const verifyAdminSettings = async (browser, viewport) => {
   let diagnostics;
   try {
     await login(page, admin);
-    await page.goto(`${baseUrl}/#/teacher/settings`, {
+    await page.goto(settingsAccessUrl, {
       waitUntil: "domcontentloaded",
     });
     await page.getByRole("heading", { name: "관리자 설정" }).waitFor();
     diagnostics = attachDiagnostics(page);
-    await page.getByRole("button", { name: /세부 권한 관리/ }).click();
     await page.locator("main > aside + div.min-w-0.flex-1").waitFor();
     await page.waitForTimeout(500);
     const result = await capture(
@@ -353,7 +354,7 @@ const verifyAuthenticating = async (browser, viewport) => {
     await route.continue();
   });
   try {
-    void page.goto(`${baseUrl}/#/teacher/settings`, {
+    void page.goto(settingsAccessUrl, {
       waitUntil: "domcontentloaded",
     });
     await page
@@ -383,7 +384,7 @@ const verifyUnauthorized = async (browser, viewport) => {
   try {
     await login(page, negative);
     diagnostics = attachDiagnostics(page);
-    await page.goto(`${baseUrl}/#/teacher/settings`, {
+    await page.goto(settingsAccessUrl, {
       waitUntil: "domcontentloaded",
     });
     await page
@@ -413,7 +414,7 @@ const verifySessionExpired = async (browser, viewport) => {
   let diagnostics;
   try {
     await login(page, admin);
-    await page.goto(`${baseUrl}/#/teacher/settings`, {
+    await page.goto(settingsAccessUrl, {
       waitUntil: "domcontentloaded",
     });
     await page.getByRole("heading", { name: "관리자 설정" }).waitFor();
@@ -472,13 +473,13 @@ const verifyReauthFlow = async (browser, viewport) => {
 
   try {
     await login(page, admin);
-    await page.goto(`${baseUrl}/#/teacher/settings`, {
+    await page.goto(settingsInterfaceUrl, {
       waitUntil: "domcontentloaded",
     });
     await page.getByRole("heading", { name: "관리자 설정" }).waitFor();
     diagnostics = attachDiagnostics(page);
     const saveButton = page.getByRole("button", {
-      name: "설정 저장",
+      name: "전체 저장",
       exact: true,
     });
     await saveButton.scrollIntoViewIfNeeded();

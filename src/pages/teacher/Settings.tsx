@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React from "react";
+import { useSearchParams } from "react-router-dom";
 import SettingsGeneral from "./components/SettingsGeneral";
 import SettingsSchool from "./components/SettingsSchool";
 import SettingsInterface from "./components/SettingsInterface";
@@ -6,10 +7,41 @@ import SettingsPrivacy from "./components/SettingsPrivacy";
 import SettingsAccess from "./components/SettingsAccess";
 import SettingsNotifications from "./components/SettingsNotifications";
 
+type SettingsTab =
+  | "general"
+  | "school"
+  | "interface"
+  | "privacy"
+  | "access"
+  | "notifications";
+
+const SETTINGS_TABS = new Set<SettingsTab>([
+  "general",
+  "school",
+  "interface",
+  "privacy",
+  "access",
+  "notifications",
+]);
+
+const normalizeSettingsTab = (value: string | null): SettingsTab =>
+  value && SETTINGS_TABS.has(value as SettingsTab)
+    ? (value as SettingsTab)
+    : "general";
+
 const Settings: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<
-    "general" | "school" | "interface" | "privacy" | "access" | "notifications"
-  >("general");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTab = normalizeSettingsTab(searchParams.get("tab"));
+
+  const setActiveTab = (tab: SettingsTab) => {
+    const next = new URLSearchParams(searchParams);
+    if (tab === "general") {
+      next.delete("tab");
+    } else {
+      next.set("tab", tab);
+    }
+    setSearchParams(next, { replace: true });
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">

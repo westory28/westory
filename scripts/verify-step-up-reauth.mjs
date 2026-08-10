@@ -386,9 +386,19 @@ assert.ok(
 assert.match(providerSource, /disableNetwork\(db\)/);
 assert.match(providerSource, /enableNetwork\(db\)/);
 assert.ok(
-  providerSource.indexOf("reauthenticateWithCredential(user, credential)") <
-    providerSource.indexOf("prepareForReauthentication()"),
-  "the authenticated transition must unmount protected reads before session resynchronization",
+  providerSource.indexOf("prepareForReauthentication()") <
+    providerSource.indexOf("reauthenticateWithCredential(user, credential)"),
+  "protected reads must unmount before password reauthentication publishes a new auth epoch",
+);
+assert.match(
+  providerSource,
+  /prepareForReauthentication\(\);[\s\S]*?reauthenticateWithPopup\(user, provider\)/,
+  "protected reads must unmount before Google reauthentication publishes a new auth epoch",
+);
+assert.match(
+  providerSource,
+  /recoverAuthenticationAfterFailedReauthentication[\s\S]*?getIdToken\(user, true\)/,
+  "failed or cancelled reauthentication must restore the current AuthContext resolution",
 );
 assert.ok(
   providerSource.indexOf("synchronizeApplicationSession(user") <
