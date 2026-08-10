@@ -8,7 +8,8 @@ import {
   reauthenticateWithCredential,
   reauthenticateWithPopup,
 } from "firebase/auth";
-import { auth } from "../../lib/firebase";
+import { disableNetwork, enableNetwork } from "firebase/firestore";
+import { auth, db } from "../../lib/firebase";
 import { useAuth } from "../../contexts/AuthContext";
 import {
   beginApplicationSessionReauthentication,
@@ -268,6 +269,8 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
       // the commit and let the existing Auth/Firestore token bridge observe
       // the new credential before protected reads mount again.
       await getIdToken(user, true);
+      await disableNetwork(db);
+      await enableNetwork(db);
       await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
       await waitForAuthenticatedUser(current.ownerUid);
     } catch (error) {

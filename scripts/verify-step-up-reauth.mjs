@@ -383,8 +383,15 @@ assert.ok(
     providerSource.indexOf("reauthenticateWithCredential(user, credential)"),
   "the server transition must be established before password reauthentication",
 );
-assert.doesNotMatch(providerSource, /disableNetwork\(db\)/);
-assert.doesNotMatch(providerSource, /enableNetwork\(db\)/);
+const passwordHandlerStart = providerSource.indexOf(
+  "const handlePasswordReauth",
+);
+const googleHandlerStart = providerSource.indexOf("const handleGoogleReauth");
+const passwordHandlerBlock = providerSource.slice(
+  passwordHandlerStart,
+  googleHandlerStart,
+);
+assert.doesNotMatch(passwordHandlerBlock, /disableNetwork\(db\)/);
 assert.ok(
   providerSource.indexOf("prepareForReauthentication()") <
     providerSource.indexOf("reauthenticateWithCredential(user, credential)"),
@@ -421,14 +428,24 @@ const authenticatedUserWaitIndex = providerSource.indexOf(
   "await waitForAuthenticatedUser(current.ownerUid)",
   postSessionTokenRefreshIndex + 1,
 );
+const postSessionNetworkPauseIndex = providerSource.indexOf(
+  "await disableNetwork(db)",
+  postSessionTokenRefreshIndex + 1,
+);
+const postSessionNetworkResumeIndex = providerSource.indexOf(
+  "await enableNetwork(db)",
+  postSessionNetworkPauseIndex + 1,
+);
 assert.ok(
   synchronizeIndex >= 0 &&
     postSessionTokenRefreshIndex > synchronizeIndex &&
+    postSessionNetworkPauseIndex > postSessionTokenRefreshIndex &&
+    postSessionNetworkResumeIndex > postSessionNetworkPauseIndex &&
     authenticatedUserWaitIndex > postSessionTokenRefreshIndex,
-  "protected reads must wait until the new session exists and its token is refreshed",
+  "protected reads must wait until the new session exists and Firestore reconnects with its refreshed token",
 );
 assert.ok(
-  authenticatedUserWaitIndex > postSessionTokenRefreshIndex,
+  authenticatedUserWaitIndex > postSessionNetworkResumeIndex,
   "the business command must wait for AuthContext and the user document to recover",
 );
 assert.match(authContextSource, /stopUserDocSubscriptionRef\.current\(\)/);
