@@ -7,7 +7,7 @@ import React, {
   useState,
 } from "react";
 import { User, onIdTokenChanged, signOut } from "firebase/auth";
-import { doc, onSnapshot } from "firebase/firestore";
+import { doc, getDocFromServer, onSnapshot } from "firebase/firestore";
 import { auth, authPersistenceReady, db } from "../lib/firebase";
 import { SystemConfig, InterfaceConfig, UserData } from "../types";
 import {
@@ -269,87 +269,110 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       }, 15000);
     };
 
-    const subscribeUserDocument = (user: User, authRevision: number) => {
+    const subscribeUserDocument = async (user: User, authRevision: number) => {
       stopUserDocSubscription();
       const userRef = doc(db, "users", user.uid);
-      unsubscribeUserDoc = onSnapshot(
-        userRef,
-        async (userSnap) => {
-          if (
-            !active ||
-            authRevisionRef.current !== authRevision ||
-            auth.currentUser?.uid !== user.uid
-          ) {
-            return;
+      const applyUserDocument = async (
+        userSnap: Awaited<ReturnType<typeof getDocFromServer>>,
+      ) => {
+        if (
+          !active ||
+          authRevisionRef.current !== authRevision ||
+          auth.currentUser?.uid !== user.uid
+        ) {
+          return;
+        }
+        try {
+          const normalizedRole: UserData["role"] = "student";
+          if (firstUserDocReadyRef.current !== user.uid) {
+            firstUserDocReadyRef.current = user.uid;
+            markLoginPerf("westory-auth-user-doc-ready", {
+              exists: userSnap.exists() ? "true" : "false",
+            });
+            measureLoginPerf(
+              "westory-auth-user-doc-sync",
+              "westory-auth-current-user-resolved",
+              "westory-auth-user-doc-ready",
+            );
           }
-          try {
-            const normalizedRole: UserData["role"] = "student";
-            if (firstUserDocReadyRef.current !== user.uid) {
-              firstUserDocReadyRef.current = user.uid;
-              markLoginPerf("westory-auth-user-doc-ready", {
-                exists: userSnap.exists() ? "true" : "false",
-              });
-              measureLoginPerf(
-                "westory-auth-user-doc-sync",
-                "westory-auth-current-user-resolved",
-                "westory-auth-user-doc-ready",
-              );
-            }
-            if (userSnap.exists()) {
-              const raw = userSnap.data() as UserData;
-              setUserData({
-                ...raw,
-                uid: user.uid,
-                role:
-                  raw.role === "teacher"
-                    ? "teacher"
-                    : raw.role === "staff"
-                      ? "staff"
-                      : normalizedRole,
-                staffPermissions: normalizeStaffPermissions(
-                  raw.staffPermissions,
-                ),
-                teacherPortalEnabled: raw.teacherPortalEnabled === true,
-              });
-            } else {
-              const bootstrapUser: UserData = {
-                uid: user.uid,
-                email: user.email || "",
-                name: "",
-                customNameConfirmed: false,
-                role: normalizedRole,
-                staffPermissions: [],
-                teacherPortalEnabled: false,
-                grade: "",
-                class: "",
-                number: "",
-              };
-              setUserData(bootstrapUser);
-            }
-            void visibilitySettingsReady?.catch(() => undefined);
-            logoutReasonRef.current = null;
-            authResolutionPendingRef.current = false;
-            clearResolutionGuard();
-          } catch (e) {
-            console.error("Failed to sync user data", e);
-            clearAuthenticatedState();
-            authResolutionPendingRef.current = false;
-            setAuthenticationError("사용자 권한 정보를 확인하지 못했습니다.");
-            setAuthenticationStatus("ERROR");
-            clearResolutionGuard();
+          if (userSnap.exists()) {
+            const raw = userSnap.data() as UserData;
+            setUserData({
+              ...raw,
+              uid: user.uid,
+              role:
+                raw.role === "teacher"
+                  ? "teacher"
+                  : raw.role === "staff"
+                    ? "staff"
+                    : normalizedRole,
+              staffPermissions: normalizeStaffPermissions(raw.staffPermissions),
+              teacherPortalEnabled: raw.teacherPortalEnabled === true,
+            });
+          } else {
+            const bootstrapUser: UserData = {
+              uid: user.uid,
+              email: user.email || "",
+              name: "",
+              customNameConfirmed: false,
+              role: normalizedRole,
+              staffPermissions: [],
+              teacherPortalEnabled: false,
+              grade: "",
+              class: "",
+              number: "",
+            };
+            setUserData(bootstrapUser);
           }
-        },
-        (e) => {
-          if (!active || authRevisionRef.current !== authRevision) {
-            return;
-          }
-          console.error("Failed to subscribe user data", e);
+          void visibilitySettingsReady?.catch(() => undefined);
+          logoutReasonRef.current = null;
+          authResolutionPendingRef.current = false;
+          clearResolutionGuard();
+        } catch (e) {
+          console.error("Failed to sync user data", e);
           clearAuthenticatedState();
           authResolutionPendingRef.current = false;
           setAuthenticationError("사용자 권한 정보를 확인하지 못했습니다.");
           setAuthenticationStatus("ERROR");
           clearResolutionGuard();
+        }
+      };
+      const handleUserDocumentError = (e: unknown) => {
+        if (!active || authRevisionRef.current !== authRevision) {
+          return;
+        }
+        console.error("Failed to subscribe user data", e);
+        clearAuthenticatedState();
+        authResolutionPendingRef.current = false;
+        setAuthenticationError("사용자 권한 정보를 확인하지 못했습니다.");
+        setAuthenticationStatus("ERROR");
+        clearResolutionGuard();
+      };
+
+      try {
+        // A cached snapshot can arrive before Firestore has adopted the token
+        // issued by a completed step-up reauthentication. Confirm the user
+        // document against the server before protected children can remount.
+        const userSnap = await getDocFromServer(userRef);
+        await applyUserDocument(userSnap);
+      } catch (e) {
+        handleUserDocumentError(e);
+        return;
+      }
+
+      if (
+        !active ||
+        authRevisionRef.current !== authRevision ||
+        auth.currentUser?.uid !== user.uid
+      ) {
+        return;
+      }
+      unsubscribeUserDoc = onSnapshot(
+        userRef,
+        (userSnap) => {
+          void applyUserDocument(userSnap);
         },
+        handleUserDocumentError,
       );
     };
 
@@ -417,7 +440,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
               setCurrentUser(user);
               setAuthenticationStatus("AUTHENTICATED");
               setAuthenticationError("");
-              subscribeUserDocument(user, refreshRevision);
+              void subscribeUserDocument(user, refreshRevision);
             } catch (error) {
               if (
                 !active ||
@@ -510,7 +533,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
               loadAuthedSystemConfig(user),
               loadAuthedMenuConfig(user),
             ]).then(() => undefined);
-            subscribeUserDocument(user, authRevision);
+            void subscribeUserDocument(user, authRevision);
           } else {
             const logoutReason = logoutReasonRef.current;
             const wasAuthenticated = authenticatedUidRef.current !== null;

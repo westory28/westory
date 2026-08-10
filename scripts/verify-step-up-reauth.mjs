@@ -428,25 +428,21 @@ const authenticatedUserWaitIndex = providerSource.indexOf(
   "await waitForAuthenticatedUser(current.ownerUid)",
   postSessionTokenRefreshIndex + 1,
 );
-const postSessionNetworkPauseIndex = providerSource.indexOf(
-  "await disableNetwork(db)",
-  postSessionTokenRefreshIndex + 1,
-);
-const postSessionNetworkResumeIndex = providerSource.indexOf(
-  "await enableNetwork(db)",
-  postSessionNetworkPauseIndex + 1,
-);
 assert.ok(
   synchronizeIndex >= 0 &&
     postSessionTokenRefreshIndex > synchronizeIndex &&
-    postSessionNetworkPauseIndex > postSessionTokenRefreshIndex &&
-    postSessionNetworkResumeIndex > postSessionNetworkPauseIndex &&
     authenticatedUserWaitIndex > postSessionTokenRefreshIndex,
-  "protected reads must wait until the new session exists and Firestore reconnects with its refreshed token",
+  "protected reads must wait until the new session exists and its token is refreshed",
 );
 assert.ok(
-  authenticatedUserWaitIndex > postSessionNetworkResumeIndex,
+  authenticatedUserWaitIndex > postSessionTokenRefreshIndex,
   "the business command must wait for AuthContext and the user document to recover",
+);
+assert.match(authContextSource, /getDocFromServer\(userRef\)/);
+assert.ok(
+  authContextSource.indexOf("await getDocFromServer(userRef)") <
+    authContextSource.indexOf("unsubscribeUserDoc = onSnapshot"),
+  "AuthContext must confirm the refreshed session with a server user read before reopening subscriptions",
 );
 assert.match(authContextSource, /stopUserDocSubscriptionRef\.current\(\)/);
 assert.match(authContextSource, /window\.requestAnimationFrame/);
