@@ -272,6 +272,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     const subscribeUserDocument = async (user: User, authRevision: number) => {
       stopUserDocSubscription();
       const userRef = doc(db, "users", user.uid);
+      const readUserDocumentFromServer = async () => {
+        let lastError: unknown = null;
+        const retryDelaysMs = [0, 50, 100, 200, 400, 800, 1600, 2000];
+        for (const delayMs of retryDelaysMs) {
+          if (
+            !active ||
+            authRevisionRef.current !== authRevision ||
+            auth.currentUser?.uid !== user.uid
+          ) {
+            return null;
+          }
+          if (delayMs > 0) {
+            await new Promise<void>((resolve) =>
+              window.setTimeout(resolve, delayMs),
+            );
+          }
+          try {
+            return await getDocFromServer(userRef);
+          } catch (error) {
+            lastError = error;
+          }
+        }
+        throw lastError;
+      };
       const applyUserDocument = async (
         userSnap: Awaited<ReturnType<typeof getDocFromServer>>,
       ) => {
@@ -353,7 +377,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         // A cached snapshot can arrive before Firestore has adopted the token
         // issued by a completed step-up reauthentication. Confirm the user
         // document against the server before protected children can remount.
-        const userSnap = await getDocFromServer(userRef);
+        const userSnap = await readUserDocumentFromServer();
+        if (!userSnap) return;
         await applyUserDocument(userSnap);
       } catch (e) {
         handleUserDocumentError(e);

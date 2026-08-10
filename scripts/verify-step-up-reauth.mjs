@@ -439,8 +439,12 @@ assert.ok(
   "the business command must wait for AuthContext and the user document to recover",
 );
 assert.match(authContextSource, /getDocFromServer\(userRef\)/);
+assert.match(
+  authContextSource,
+  /retryDelaysMs = \[0, 50, 100, 200, 400, 800, 1600, 2000\]/,
+);
 assert.ok(
-  authContextSource.indexOf("await getDocFromServer(userRef)") <
+  authContextSource.indexOf("await readUserDocumentFromServer()") <
     authContextSource.indexOf("unsubscribeUserDoc = onSnapshot"),
   "AuthContext must confirm the refreshed session with a server user read before reopening subscriptions",
 );

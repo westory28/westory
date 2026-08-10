@@ -526,7 +526,25 @@ const verifyReauthFlow = async (browser, viewport) => {
     );
 
     sessionGate.resolve();
-    await dialog.waitFor({ state: "detached", timeout: 30_000 });
+    try {
+      await dialog.waitFor({ state: "detached", timeout: 30_000 });
+    } catch (error) {
+      await page.screenshot({
+        path: screenshotPath("access-reauth-recovery-error", viewport),
+        fullPage: false,
+      });
+      const recoveryFailure = await page.evaluate(() => ({
+        hash: window.location.hash,
+        visibleText: document.body.innerText.slice(0, 2000),
+      }));
+      throw new Error(
+        `Reauthentication recovery did not complete: ${JSON.stringify({
+          ...recoveryFailure,
+          diagnostics,
+        })}`,
+        { cause: error },
+      );
+    }
     const settingsHeading = page.getByRole("heading", { name: "관리자 설정" });
     await Promise.race([
       settingsHeading.waitFor({ timeout: 30_000 }).catch(() => undefined),
