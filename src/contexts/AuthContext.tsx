@@ -68,6 +68,7 @@ interface AuthContextType {
   authenticationError: string;
   applicationSessionAuthorityMode: ApplicationSessionAuthorityMode | null;
   loading: boolean;
+  prepareForReauthentication: () => void;
   logout: (reason?: LogoutReason) => Promise<void>;
   refreshConfig: () => Promise<void>;
   refreshMenuConfig: () => Promise<void>;
@@ -123,6 +124,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const resolvedUserRef = useRef<User | null>(null);
   const logoutReasonRef = useRef<LogoutReason | null>(null);
   const authResolutionPendingRef = useRef(true);
+  const stopUserDocSubscriptionRef = useRef<() => void>(() => undefined);
 
   const clearAuthenticatedState = useCallback(() => {
     firstUserDocReadyRef.current = null;
@@ -241,6 +243,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     let visibilitySettingsReady: Promise<void> | null = null;
     let resolutionGuard: number | null = null;
 
+    const stopUserDocSubscription = () => {
+      if (!unsubscribeUserDoc) return;
+      unsubscribeUserDoc();
+      unsubscribeUserDoc = null;
+    };
+    stopUserDocSubscriptionRef.current = stopUserDocSubscription;
+
     const clearResolutionGuard = () => {
       if (resolutionGuard === null) return;
       window.clearTimeout(resolutionGuard);
@@ -261,10 +270,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     };
 
     const subscribeUserDocument = (user: User, authRevision: number) => {
-      if (unsubscribeUserDoc) {
-        unsubscribeUserDoc();
-        unsubscribeUserDoc = null;
-      }
+      stopUserDocSubscription();
       const userRef = doc(db, "users", user.uid);
       unsubscribeUserDoc = onSnapshot(
         userRef,
@@ -540,12 +546,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     return () => {
       active = false;
       clearResolutionGuard();
-      if (unsubscribeUserDoc) {
-        unsubscribeUserDoc();
+      stopUserDocSubscription();
+      if (stopUserDocSubscriptionRef.current === stopUserDocSubscription) {
+        stopUserDocSubscriptionRef.current = () => undefined;
       }
       unsubscribe();
     };
   }, [clearAuthenticatedState, loadAuthedMenuConfig, loadAuthedSystemConfig]);
+
+  const prepareForReauthentication = useCallback(() => {
+    authRevisionRef.current += 1;
+    authResolutionPendingRef.current = true;
+    stopUserDocSubscriptionRef.current();
+    firstUserDocReadyRef.current = null;
+    setAuthenticationError("");
+    setAuthenticationStatus("AUTHENTICATING");
+    setUserData(null);
+  }, []);
 
   useEffect(() => {
     if (
@@ -607,7 +624,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     setAuthenticationStatus(
       reason === "expired" ? "SESSION_EXPIRED" : "ANONYMOUS",
     );
+    stopUserDocSubscriptionRef.current();
     try {
+      await new Promise<void>((resolve) => {
+        window.requestAnimationFrame(() => resolve());
+      });
       await closeApplicationSession().catch(() => undefined);
       await signOut(auth);
     } catch (error) {
@@ -663,6 +684,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     authenticationError,
     applicationSessionAuthorityMode,
     loading,
+    prepareForReauthentication,
     logout,
     refreshConfig,
     refreshMenuConfig,

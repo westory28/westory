@@ -10,6 +10,7 @@ import {
 } from "firebase/auth";
 import { disableNetwork, enableNetwork } from "firebase/firestore";
 import { auth, db } from "../../lib/firebase";
+import { useAuth } from "../../contexts/AuthContext";
 import {
   beginApplicationSessionReauthentication,
   synchronizeApplicationSession,
@@ -81,6 +82,40 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
   const submittingRef = useRef(false);
   const protectedContentRef = useRef<HTMLDivElement | null>(null);
   const dialogRef = useRef<HTMLElement | null>(null);
+  const {
+    authenticationStatus,
+    currentUser,
+    prepareForReauthentication,
+    userData,
+  } = useAuth();
+  const authReadyRef = useRef({
+    authenticationStatus,
+    currentUser,
+    userData,
+  });
+
+  useEffect(() => {
+    authReadyRef.current = { authenticationStatus, currentUser, userData };
+  }, [authenticationStatus, currentUser, userData]);
+
+  const waitForAuthenticatedUser = useCallback(async (ownerUid: string) => {
+    const expiresAt = Date.now() + 15_000;
+    while (Date.now() < expiresAt) {
+      const snapshot = authReadyRef.current;
+      if (
+        snapshot.authenticationStatus === "AUTHENTICATED" &&
+        snapshot.currentUser?.uid === ownerUid &&
+        snapshot.userData?.uid === ownerUid
+      ) {
+        return;
+      }
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 25));
+    }
+    throw new StepUpReauthError(
+      "SESSION_REFRESH_FAILED",
+      "새 로그인 세션으로 사용자 권한을 다시 확인하지 못했습니다.",
+    );
+  }, []);
 
   useEffect(() => {
     const protectedContent = protectedContentRef.current;
@@ -189,16 +224,6 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
         "로그인 사용자가 바뀌어 작업을 실행하지 않았습니다.",
       );
     }
-    try {
-      await getIdToken(user, true);
-    } catch (error) {
-      throw new StepUpReauthError(
-        "TOKEN_REFRESH_FAILED",
-        "본인 확인은 끝났지만 인증 정보를 갱신하지 못했습니다.",
-        error,
-      );
-    }
-
     let session;
     try {
       session = await synchronizeApplicationSession(user, {
@@ -247,7 +272,9 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
       // the commit so Firestore resumes with a credential whose Rules fence
       // already exists.
       await getIdToken(user, true);
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
       await resumeFirestore();
+      await waitForAuthenticatedUser(current.ownerUid);
     } catch (error) {
       throw new StepUpReauthError(
         "SESSION_REFRESH_FAILED",
@@ -292,6 +319,7 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
       firestorePaused = true;
       const credential = EmailAuthProvider.credential(user.email, password);
       await reauthenticateWithCredential(user, credential);
+      prepareForReauthentication();
       await finishSuccess(current, resumeFirestore);
     } catch (error) {
       if (
@@ -344,6 +372,7 @@ export const StepUpReauthProvider: React.FC<{ children: React.ReactNode }> = ({
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ login_hint: user.email || "" });
       await reauthenticateWithPopup(user, provider);
+      prepareForReauthentication();
       await finishSuccess(current, resumeFirestore);
     } catch (error) {
       if (

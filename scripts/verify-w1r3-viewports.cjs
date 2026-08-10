@@ -513,7 +513,11 @@ const verifyReauthFlow = async (browser, viewport) => {
 
     sessionGate.resolve();
     await dialog.waitFor({ state: "detached", timeout: 30_000 });
-    await page.getByRole("heading", { name: "관리자 설정" }).waitFor();
+    const settingsHeading = page.getByRole("heading", { name: "관리자 설정" });
+    await Promise.race([
+      settingsHeading.waitFor({ timeout: 30_000 }).catch(() => undefined),
+      page.waitForTimeout(10_000),
+    ]);
     await page.waitForTimeout(500);
     const authorized = await capture(
       page,

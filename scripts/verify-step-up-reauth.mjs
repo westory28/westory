@@ -386,6 +386,11 @@ assert.ok(
 assert.match(providerSource, /disableNetwork\(db\)/);
 assert.match(providerSource, /enableNetwork\(db\)/);
 assert.ok(
+  providerSource.indexOf("reauthenticateWithCredential(user, credential)") <
+    providerSource.indexOf("prepareForReauthentication()"),
+  "the authenticated transition must unmount protected reads before session resynchronization",
+);
+assert.ok(
   providerSource.indexOf("synchronizeApplicationSession(user") <
     providerSource.indexOf("current.resolve()"),
   "the new application session must be synchronized before the command resumes",
@@ -407,6 +412,13 @@ assert.ok(
     firestoreResumeIndex > postSessionTokenRefreshIndex,
   "Firestore must resume only after the new session exists and its token is refreshed",
 );
+assert.ok(
+  providerSource.indexOf("await waitForAuthenticatedUser(current.ownerUid)") >
+    firestoreResumeIndex,
+  "the business command must wait for AuthContext and the user document to recover",
+);
+assert.match(authContextSource, /stopUserDocSubscriptionRef\.current\(\)/);
+assert.match(authContextSource, /window\.requestAnimationFrame/);
 assert.match(
   providerSource,
   /pendingRef\.current = null;[\s\S]*current\.resolve\(\)/,
