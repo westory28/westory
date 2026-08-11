@@ -57,6 +57,10 @@ import {
   consumeSessionReturnPath,
 } from "../lib/sessionPolicy";
 import { openApplicationSession } from "../lib/applicationSession";
+import {
+  readStudentMaintenanceBootstrap,
+  STUDENT_MAINTENANCE_ROUTE,
+} from "../lib/studentMaintenance";
 
 const TEACHER_EMAIL = ADMIN_EMAIL;
 const ROLE_SESSION_KEY = "westoryPortalRole";
@@ -1173,9 +1177,19 @@ const Login: React.FC = () => {
       return;
     }
 
-    // Popup sign-in continues before AuthContext's token listener necessarily
-    // finishes. Establish the server session before the first protected
-    // Firestore read/write so login bootstrap cannot race the Rules fence.
+    // Popup sign-in can continue before AuthContext resolves. Read the
+    // maintenance switch and this user's own profile from the server before
+    // any application session or protected child is opened.
+    const maintenance = await readStudentMaintenanceBootstrap(user);
+    if (maintenance.accessStatus !== "allowed") {
+      clearPendingLoginMode();
+      clearRedirectAttempt();
+      navigate(STUDENT_MAINTENANCE_ROUTE, { replace: true });
+      return;
+    }
+
+    // Establish the server session before the first protected read/write so
+    // login bootstrap cannot race the Rules fence.
     await openApplicationSession();
 
     const isTeacherEmail = user.email === TEACHER_EMAIL;
@@ -1815,7 +1829,8 @@ const Login: React.FC = () => {
     event: React.FormEvent<HTMLFormElement>,
   ) => {
     event.preventDefault();
-    if (runtimeEnvironment !== "staging" || authBusy) return;
+    if (!["staging", "local", "test"].includes(runtimeEnvironment) || authBusy)
+      return;
 
     const email = stagingTestEmail.trim();
     if (!email || !stagingTestPassword) {
@@ -2036,7 +2051,7 @@ const Login: React.FC = () => {
               />
               학생 로그인
             </button>
-            <p className="text-center text-xs leading-5 text-gray-500 whitespace-nowrap">
+            <p className="text-center text-xs leading-5 text-gray-500 break-keep">
               학교 Google 계정(@{ALLOWED_SCHOOL_EMAIL_DOMAIN})으로만 로그인할 수
               있습니다.
             </p>
@@ -2049,7 +2064,7 @@ const Login: React.FC = () => {
                 다른 계정으로 다시 시도
               </button>
             )}
-            {runtimeEnvironment === "staging" && (
+            {["staging", "local", "test"].includes(runtimeEnvironment) && (
               <form
                 onSubmit={startStagingTestLogin}
                 className="mt-3 rounded-2xl border border-dashed border-blue-300 bg-blue-50 p-4 text-left"

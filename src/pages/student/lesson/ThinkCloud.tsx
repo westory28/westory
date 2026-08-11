@@ -332,7 +332,7 @@ const ThinkCloud: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <main className="flex flex-col lg:flex-row flex-1 p-6 lg:p-8 gap-6 max-w-7xl mx-auto w-full">
+      <div className="flex flex-col lg:flex-row flex-1 p-6 lg:p-8 gap-6 max-w-7xl mx-auto w-full">
         <aside className="w-full lg:w-72 shrink-0">
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="p-5 border-b border-gray-100">
@@ -513,7 +513,7 @@ const ThinkCloud: React.FC = () => {
             </>
           )}
         </div>
-      </main>
+      </div>
     </div>
   );
 };

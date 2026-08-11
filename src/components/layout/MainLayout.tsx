@@ -3,8 +3,7 @@ import {
   inferToastFromAlertMessage,
   useAppToast,
 } from "../common/AppToastProvider";
-import Header from "../common/Header";
-import Footer from "../common/Footer";
+import AppShell from "../shell/AppShell";
 import { PageLoading } from "../common/LoadingState";
 import { useAuth } from "../../contexts/AuthContext";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -16,8 +15,6 @@ import {
   isStudentVisibilityControlledPath,
 } from "../../lib/studentMenuAccess";
 import { isTeacherUser } from "../../lib/permissions";
-
-const VISIBILITY_SETTINGS_FRESH_MS = 5000;
 
 const StudentHistoryDictionaryController = lazyWithRetry(
   () => import("../common/StudentHistoryDictionaryController"),
@@ -41,9 +38,6 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     configReady,
     menuConfig,
     menuConfigReady,
-    settingsLoadedAt,
-    refreshConfig,
-    refreshMenuConfig,
   } = useAuth();
   const { showToast } = useAppToast();
   const navigate = useNavigate();
@@ -57,27 +51,14 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const isVisibilityControlledStudentRoute = isStudentVisibilityControlledPath(
     location.pathname,
   );
-  const studentVisibilityRouteKey = `${location.pathname}${location.search}`;
-  const [studentVisibilityRefreshing, setStudentVisibilityRefreshing] =
-    React.useState(false);
-  const [
-    studentVisibilityCheckedRouteKey,
-    setStudentVisibilityCheckedRouteKey,
-  ] = React.useState("");
   const [studentEnhancementsReady, setStudentEnhancementsReady] =
     React.useState(false);
   const [teacherEnhancementsReady, setTeacherEnhancementsReady] =
     React.useState(false);
-  const studentVisibilityRouteVerified =
-    !isVisibilityControlledStudentRoute ||
-    studentVisibilityCheckedRouteKey === studentVisibilityRouteKey;
   const studentAccessReady =
     !isStudentRoute ||
     !isVisibilityControlledStudentRoute ||
-    (configReady &&
-      menuConfigReady &&
-      studentVisibilityRouteVerified &&
-      !studentVisibilityRefreshing);
+    (configReady && menuConfigReady);
   const studentRouteAccess = React.useMemo(
     () =>
       studentAccessReady
@@ -98,57 +79,6 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       studentAccessReady,
     ],
   );
-
-  useEffect(() => {
-    if (
-      loading ||
-      !currentUser ||
-      !isStudentRoute ||
-      !isVisibilityControlledStudentRoute ||
-      !configReady ||
-      !menuConfigReady
-    ) {
-      return undefined;
-    }
-
-    const routeKey = studentVisibilityRouteKey;
-    let cancelled = false;
-
-    if (
-      settingsLoadedAt > 0 &&
-      Date.now() - settingsLoadedAt <= VISIBILITY_SETTINGS_FRESH_MS
-    ) {
-      setStudentVisibilityCheckedRouteKey(routeKey);
-      setStudentVisibilityRefreshing(false);
-      return undefined;
-    }
-
-    setStudentVisibilityRefreshing(true);
-
-    void Promise.all([refreshConfig(), refreshMenuConfig()]).finally(() => {
-      if (!cancelled) {
-        setStudentVisibilityCheckedRouteKey(routeKey);
-        setStudentVisibilityRefreshing(false);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    configReady,
-    currentUser,
-    isStudentRoute,
-    isVisibilityControlledStudentRoute,
-    loading,
-    location.pathname,
-    location.search,
-    menuConfigReady,
-    refreshConfig,
-    refreshMenuConfig,
-    settingsLoadedAt,
-    studentVisibilityRouteKey,
-  ]);
 
   useEffect(() => {
     if (
@@ -234,8 +164,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50">
-      <Header />
+    <AppShell>
       {studentEnhancementsReady && (
         <React.Suspense fallback={null}>
           <StudentRankPromotionController />
@@ -247,15 +176,14 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           <TeacherPatchMemoController />
         </React.Suspense>
       )}
-      <main
+      <div
         className={`min-h-0 w-full flex-1 ${
           isStudentQuizRunRoute ? "flex flex-col" : ""
         }`}
       >
         {children}
-      </main>
-      <Footer />
-    </div>
+      </div>
+    </AppShell>
   );
 };
 

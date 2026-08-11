@@ -900,23 +900,20 @@ const createSemesterCoreCommandAdapter = ({
         payload.term,
         getDefaultPointPolicy,
       );
-      const manifests = await transaction.query(SEMESTER_MANIFEST_COLLECTION);
-      const existingSeedDocuments = await readDocuments(
+      const manifestPath = `${SEMESTER_MANIFEST_COLLECTION}/${payload.semesterId}`;
+      const [manifestDocument, ...existingSeedDocuments] = await readDocuments(
         transaction,
-        allSeeds.map((seed) => seed.path),
+        [manifestPath, ...allSeeds.map((seed) => seed.path)],
       );
-      const duplicate = manifests.find((document) =>
-        document.path === `${SEMESTER_MANIFEST_COLLECTION}/${payload.semesterId}`
-        || (
-          String(document.data?.schoolYear || "") === payload.schoolYear
-          && String(document.data?.term || "") === payload.term
-        ));
-      if (duplicate) {
+      if (manifestDocument.exists) {
         fail(
           "already-exists",
           "A Semester Manifest already exists for schoolYear and term.",
           "SEMESTER_ALREADY_EXISTS",
-          { semesterId: duplicate.data?.semesterId || payload.semesterId },
+          {
+            semesterId:
+              manifestDocument.data?.semesterId || payload.semesterId,
+          },
         );
       }
       const existingSeeds = existingSeedDocuments.filter((document) => document.exists);

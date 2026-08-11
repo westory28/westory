@@ -79,7 +79,7 @@ const ManageExam: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <main
+      <div
         className={`w-full ${
           activeTab === "performance" || activeTab === "written-essay"
             ? "max-w-[1500px]"
@@ -135,7 +135,7 @@ const ManageExam: React.FC = () => {
           {activeTab === "performance" && <PerformanceScoreManager />}
           {activeTab === "written-essay" && <WrittenExamEssayScoreManager />}
         </div>
-      </main>
+      </div>
     </div>
   );
 };

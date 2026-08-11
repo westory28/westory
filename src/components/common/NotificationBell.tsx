@@ -163,6 +163,22 @@ const getRealtimeToastKey = (notification: WestoryNotification) =>
   `${notification.broadcast ? "broadcast" : "personal"}:${notification.id}`;
 
 const shownRealtimeToastKeys = new Set<string>();
+const FOCUSABLE =
+  'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+const policyHtmlToText = (value: unknown) => {
+  const html = String(value || "");
+  if (!html) return "";
+  if (typeof DOMParser === "undefined") return html.replace(/<[^>]+>/gu, " ");
+  const withLineBreaks = html.replace(
+    /<\/(p|li|h[1-6]|div|section)>/giu,
+    "$&\n",
+  );
+  const parsed = new DOMParser().parseFromString(withLineBreaks, "text/html");
+  return String(parsed.body.textContent || "")
+    .replace(/\n{3,}/gu, "\n\n")
+    .trim();
+};
 
 const NotificationBell: React.FC<NotificationBellProps> = ({
   className = "",
@@ -186,8 +202,13 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
   const [clearing, setClearing] = useState(false);
   const [privacyPolicyOpen, setPrivacyPolicyOpen] = useState(false);
   const [privacyPolicyLoading, setPrivacyPolicyLoading] = useState(false);
-  const [privacyPolicyHtml, setPrivacyPolicyHtml] = useState("");
+  const [privacyPolicyText, setPrivacyPolicyText] = useState("");
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const privacyDialogRef = useRef<HTMLDivElement | null>(null);
+  const privacyCloseRef = useRef<HTMLButtonElement | null>(null);
+  const privacyRequestRef = useRef(0);
   const realtimeToastStateRef = useRef({
     initialized: false,
     scopeKey: "",
@@ -410,9 +431,42 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
       }
     };
 
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    const frame = window.requestAnimationFrame(() => {
+      panelRef.current
+        ?.querySelector<HTMLElement>("[data-notification-close]")
+        ?.focus();
+    });
     document.addEventListener("pointerdown", handlePointerDown);
-    return () => document.removeEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+      triggerRef.current?.focus();
+    };
   }, [open]);
+
+  useEffect(() => {
+    if (!privacyPolicyOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const frame = window.requestAnimationFrame(() => {
+      privacyCloseRef.current?.focus();
+    });
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setPrivacyPolicyOpen(false);
+    };
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", handleEscape);
+      triggerRef.current?.focus();
+    };
+  }, [privacyPolicyOpen]);
 
   const panelTitle = useMemo(
     () => (unreadCount > 0 ? `새 알림 ${displayUnreadCount}개` : "알림"),
@@ -465,27 +519,49 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
   };
 
   const openPrivacyPolicyModal = async () => {
+    const requestId = ++privacyRequestRef.current;
     setOpen(false);
     setPrivacyPolicyOpen(true);
     setPrivacyPolicyLoading(true);
-    setPrivacyPolicyHtml("");
+    setPrivacyPolicyText("");
 
     try {
       const snap = await getDoc(doc(db, "site_settings", "privacy"));
       const text = snap.exists()
         ? String((snap.data() as { text?: unknown }).text || "").trim()
         : "";
-      setPrivacyPolicyHtml(
-        text ||
-          '<p class="text-center text-gray-400 py-8">등록된 내용이 없습니다.</p>',
-      );
+      if (privacyRequestRef.current !== requestId) return;
+      setPrivacyPolicyText(policyHtmlToText(text) || "등록된 내용이 없습니다.");
     } catch (error) {
+      if (privacyRequestRef.current !== requestId) return;
       console.error("Privacy policy load error:", error);
-      setPrivacyPolicyHtml(
-        '<p class="text-center text-red-400 py-8">내용을 불러오지 못했습니다.</p>',
-      );
+      setPrivacyPolicyText("내용을 불러오지 못했습니다.");
     } finally {
-      setPrivacyPolicyLoading(false);
+      if (privacyRequestRef.current === requestId) {
+        setPrivacyPolicyLoading(false);
+      }
+    }
+  };
+
+  const closePrivacyPolicy = () => {
+    privacyRequestRef.current += 1;
+    setPrivacyPolicyOpen(false);
+  };
+
+  const trapDialogFocus = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Tab") return;
+    const focusable = Array.from(
+      privacyDialogRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) || [],
+    );
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
     }
   };
 
@@ -494,12 +570,14 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
   return (
     <div ref={rootRef} className={`relative ${className}`}>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((current) => !current)}
         data-session-action="true"
-        className={`relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 ${buttonClassName}`}
+        className={`relative inline-flex h-11 w-11 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 ${buttonClassName}`}
         aria-label={panelTitle}
         aria-expanded={open}
+        aria-controls="westory-notification-panel"
       >
         <i className="fas fa-bell text-sm" aria-hidden="true"></i>
         {unreadCount > 0 && (
@@ -510,7 +588,13 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
       </button>
 
       {open && (
-        <div className="fixed inset-x-3 top-[4.25rem] z-[130] overflow-hidden rounded-lg border border-stone-200 bg-white shadow-2xl sm:left-auto sm:right-4 sm:w-[360px] lg:absolute lg:right-0 lg:top-11">
+        <div
+          id="westory-notification-panel"
+          ref={panelRef}
+          role="dialog"
+          aria-label={panelTitle}
+          className="fixed inset-x-3 top-[4.25rem] z-[130] flex max-h-[calc(100dvh-5.25rem)] flex-col overflow-hidden rounded-lg border border-stone-200 bg-white shadow-2xl sm:left-auto sm:right-4 sm:w-[360px] lg:absolute lg:right-0 lg:top-11"
+        >
           <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
             <div>
               <div className="text-sm font-extrabold text-stone-900">
@@ -524,14 +608,15 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
               type="button"
               onClick={() => setOpen(false)}
               data-session-action="true"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-stone-400 transition hover:bg-stone-100 hover:text-stone-700"
+              data-notification-close="true"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full text-stone-400 transition hover:bg-stone-100 hover:text-stone-700"
               aria-label="알림 닫기"
             >
               <i className="fas fa-times text-xs" aria-hidden="true"></i>
             </button>
           </div>
 
-          <div className="max-h-[min(70vh,420px)] overflow-y-auto">
+          <div className="min-h-0 flex-1 overflow-y-auto">
             {!hasNotifications && (
               <div className="px-4 py-10 text-center">
                 <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-stone-100 text-stone-400">
@@ -620,7 +705,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
                 onClick={handleMarkAllRead}
                 data-session-action="true"
                 disabled={markingRead}
-                className="inline-flex items-center gap-2 rounded-md border border-blue-200 bg-white px-3 py-2 text-xs font-extrabold text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex min-h-11 items-center gap-2 rounded-md border border-blue-200 bg-white px-3 py-2 text-xs font-extrabold text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <i className="fas fa-check-double" aria-hidden="true"></i>
                 {markingRead ? "처리 중..." : "모두 읽음"}
@@ -631,7 +716,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
               onClick={handleClear}
               data-session-action="true"
               disabled={!hasNotifications || clearing}
-              className="inline-flex items-center gap-2 rounded-md border border-stone-200 bg-white px-3 py-2 text-xs font-extrabold text-stone-600 transition hover:border-rose-200 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex min-h-11 items-center gap-2 rounded-md border border-stone-200 bg-white px-3 py-2 text-xs font-extrabold text-stone-600 transition hover:border-rose-200 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <i className="fas fa-trash-can" aria-hidden="true"></i>
               {clearing ? "삭제 중..." : "알림 목록 삭제"}
@@ -643,14 +728,16 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
       {privacyPolicyOpen && (
         <div
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm"
-          onClick={() => setPrivacyPolicyOpen(false)}
+          onClick={closePrivacyPolicy}
         >
           <div
+            ref={privacyDialogRef}
             role="dialog"
             aria-modal="true"
             aria-labelledby="notification-privacy-policy-title"
             className="mx-4 flex max-h-[80vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
             onClick={(event) => event.stopPropagation()}
+            onKeyDown={trapDialogFocus}
           >
             <div className="flex items-center justify-between border-b border-gray-100 p-5">
               <h2
@@ -660,9 +747,10 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
                 개인정보 처리 방침
               </h2>
               <button
+                ref={privacyCloseRef}
                 type="button"
-                onClick={() => setPrivacyPolicyOpen(false)}
-                className="text-xl text-gray-400 transition hover:text-gray-700"
+                onClick={closePrivacyPolicy}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-xl text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
                 aria-label="개인정보 처리 방침 닫기"
               >
                 <i className="fas fa-times" aria-hidden="true"></i>
@@ -675,10 +763,9 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
                   showWarning
                 />
               ) : (
-                <div
-                  className="policy-rich-text"
-                  dangerouslySetInnerHTML={{ __html: privacyPolicyHtml }}
-                />
+                <div className="policy-rich-text whitespace-pre-line">
+                  {privacyPolicyText}
+                </div>
               )}
             </div>
           </div>

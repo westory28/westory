@@ -3035,14 +3035,14 @@ const MyPage: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
-      <main className="flex w-full max-w-[1480px] flex-1 flex-col gap-8 px-5 py-7 sm:px-8 lg:mx-auto lg:flex-row lg:px-10 lg:py-10">
+      <div className="flex w-full max-w-[1480px] flex-1 flex-col gap-8 px-5 py-7 sm:px-8 lg:mx-auto lg:flex-row lg:px-10 lg:py-10">
         <aside className="w-full lg:w-64 shrink-0">
           <div className="sticky top-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_14px_35px_rgba(15,23,42,0.06)]">
             <div className="p-6 border-b border-slate-100">
-              <h2 className="text-xl font-extrabold text-gray-800 flex items-center gap-2">
+              <h1 className="text-xl font-extrabold text-gray-800 flex items-center gap-2">
                 <i className="fas fa-user-circle text-gray-400"></i>
                 마이페이지
-              </h2>
+              </h1>
             </div>
             <nav className="flex flex-col">
               {leftMenus
@@ -4618,7 +4618,7 @@ const MyPage: React.FC = () => {
             )}
           </div>
         </section>
-      </main>
+      </div>
 
       {selectedQuizAttempt && (
         <div

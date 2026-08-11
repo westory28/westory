@@ -120,7 +120,19 @@ const getDesktopSubmenuChildren = (
   );
 };
 
-const Header: React.FC = () => {
+type HeaderProps = {
+  shellMode?: boolean;
+  navigationOpen?: boolean;
+  onNavigationToggle?: () => void;
+  navigationButtonRef?: React.RefObject<HTMLButtonElement>;
+};
+
+const Header: React.FC<HeaderProps> = ({
+  shellMode = false,
+  navigationOpen = false,
+  onNavigationToggle,
+  navigationButtonRef,
+}) => {
   const {
     currentUser,
     userData,
@@ -603,6 +615,12 @@ const Header: React.FC = () => {
   useEffect(() => {
     let cancelled = false;
 
+    if (shellMode) {
+      setStudentRank(null);
+      setProfileFallbackIcon(getDefaultProfileEmojiValue());
+      return undefined;
+    }
+
     const loadStudentHeaderRank = async () => {
       if (!currentUser || !config || isTeacherPortal) {
         if (!cancelled) {
@@ -661,13 +679,142 @@ const Header: React.FC = () => {
       cancelInitialLoad();
       window.removeEventListener("westory:points-updated", triggerRankLoad);
     };
-  }, [config?.year, config?.semester, currentUser?.uid, isTeacherPortal]);
+  }, [
+    config?.year,
+    config?.semester,
+    currentUser?.uid,
+    isTeacherPortal,
+    shellMode,
+  ]);
 
   if (!isReady) return null;
 
+  if (shellMode) {
+    return (
+      <header className="ws-site-header ws-shell-topbar">
+        <div className="ws-shell-topbar__inner">
+          <div className="ws-shell-topbar__leading">
+            {onNavigationToggle && (
+              <button
+                ref={navigationButtonRef}
+                type="button"
+                className="ws-icon-button ws-shell-topbar__menu-button"
+                onClick={onNavigationToggle}
+                aria-label={
+                  navigationOpen ? "업무 메뉴 닫기" : "업무 메뉴 열기"
+                }
+                aria-expanded={navigationOpen}
+                aria-controls="westory-shell-navigation"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  aria-hidden
+                >
+                  <path
+                    d="M4 7h16M4 12h16M4 17h16"
+                    strokeLinecap="round"
+                    strokeWidth="2"
+                  />
+                </svg>
+              </button>
+            )}
+            <Link to={home} className="ws-shell-brand" aria-label="위스토리 홈">
+              <img
+                src={`${import.meta.env.BASE_URL || "/"}icons/westory-icon-192.png`}
+                width="36"
+                height="36"
+                alt=""
+              />
+              <span aria-hidden="true">
+                <span className="logo-we">We</span>
+                <span className="logo-story">story</span>
+              </span>
+            </Link>
+            <span className="ws-shell-topbar__portal-label">
+              {isTeacherPortal ? (isAdmin ? "관리자" : "교직원") : "학생"}
+            </span>
+          </div>
+
+          <div className="ws-shell-topbar__actions">
+            <React.Suspense fallback={null}>
+              <NotificationBell className="ws-shell-topbar__notification" />
+            </React.Suspense>
+
+            {isSessionEnforced && (
+              <button
+                type="button"
+                className={`ws-shell-session ${remainingSeconds <= sessionWarningSeconds ? "is-warning" : ""}`}
+                onClick={() => extendSession({ force: true })}
+                data-session-ignore="true"
+                aria-label={`세션 남은 시간 ${formatCountdown(remainingSeconds)}. 시간 연장`}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  aria-hidden
+                >
+                  <path
+                    d="M12 7v5l3 2m6-2a9 9 0 1 1-9-9"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="1.8"
+                  />
+                </svg>
+                <span>{formatCountdown(remainingSeconds)}</span>
+              </button>
+            )}
+
+            <Link
+              to={profileTarget}
+              className="ws-shell-profile"
+              aria-label={`${profileLabel} 페이지`}
+            >
+              <span className="ws-shell-profile__avatar" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path
+                    d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm7 8a7 7 0 0 0-14 0"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="1.8"
+                  />
+                </svg>
+              </span>
+              <span className="ws-shell-profile__name">{displayName}</span>
+            </Link>
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              data-session-ignore="true"
+              className="ws-icon-button"
+              aria-label="로그아웃"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                aria-hidden
+              >
+                <path
+                  d="M10 17l5-5-5-5m5 5H3m10-9h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="1.8"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
+      </header>
+    );
+  }
+
   return (
     <>
-      <header>
+      <header className="ws-site-header">
         <div className="header-container">
           <div className="flex items-center gap-4 h-full">
             <Link to={home} className="logo-text">

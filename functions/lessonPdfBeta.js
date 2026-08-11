@@ -1,5 +1,6 @@
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getStorage } = require("firebase-admin/storage");
+const { storageBucket } = require("firebase-functions/params");
 const { onObjectFinalized } = require("firebase-functions/v2/storage");
 
 const {
@@ -14,8 +15,7 @@ const db = getFirestore();
 const storage = getStorage();
 
 const REGION = "asia-northeast3";
-const STORAGE_BUCKET =
-  process.env.FIREBASE_STORAGE_BUCKET || "history-quiz-yongsin.firebasestorage.app";
+const STORAGE_BUCKET = storageBucket;
 
 const EMPTY_LESSON_PDF_FILE = {
   storagePath: "",

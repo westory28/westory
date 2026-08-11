@@ -235,7 +235,7 @@ const Calendar = () => {
 
   return (
     <div className="bg-gray-50 flex flex-col min-h-screen">
-      <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-6 h-full flex flex-col">
+      <div className="flex-1 w-full max-w-5xl mx-auto px-4 py-6 h-full flex flex-col">
         <div className="mb-4 shrink-0">
           <h1 className="text-2xl font-bold text-gray-800">
             <i className="fas fa-calendar-check text-green-500 mr-2"></i>학사
@@ -327,7 +327,7 @@ const Calendar = () => {
             />
           </div>
         </div>
-      </main>
+      </div>
 
       {/* Detail Modal */}
       {modalOpen && selectedEvent && (

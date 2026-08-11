@@ -1,6 +1,9 @@
 const { createHash } = require("node:crypto");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { HttpsError } = require("firebase-functions/v2/https");
+const {
+  onCallWithStudentMaintenance: onCall,
+} = require("./studentMaintenance");
 
 const sessionAuthority = require("./sessionAuthority");
 const semesterCore = require("./semesterCore");

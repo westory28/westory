@@ -28,7 +28,7 @@ const Note: React.FC = () => {
           selectedUnitId={unitId}
         />
 
-        <main className="relative min-w-0 flex-1 rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <div className="relative min-w-0 flex-1 rounded-2xl border border-gray-200 bg-white shadow-sm">
           <div className="p-4 md:p-6">
             <LessonContent unitId={unitId} fallbackTitle={title} />
           </div>
@@ -45,7 +45,7 @@ const Note: React.FC = () => {
           >
             <i className="fas fa-list"></i>
           </button>
-        </main>
+        </div>
       </div>
     </div>
   );

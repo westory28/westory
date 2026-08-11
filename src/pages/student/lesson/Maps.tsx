@@ -171,7 +171,7 @@ const StudentMaps: React.FC = () => {
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
-      <main className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-5 p-4 sm:gap-6 sm:p-6 lg:flex-row lg:gap-8 lg:p-10">
+      <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-5 p-4 sm:gap-6 sm:p-6 lg:flex-row lg:gap-8 lg:p-10">
         <MapSidebar
           heading="지도"
           items={sidebarItems}
@@ -262,7 +262,7 @@ const StudentMaps: React.FC = () => {
             </div>
           )}
         </section>
-      </main>
+      </div>
     </div>
   );
 };

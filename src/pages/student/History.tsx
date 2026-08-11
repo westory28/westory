@@ -156,7 +156,7 @@ const StudentExamAnswer: React.FC = () => {
   if (!hasAnyInput) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col">
-        <main className="flex-1 w-full max-w-4xl mx-auto px-4 py-8">
+        <div className="flex-1 w-full max-w-4xl mx-auto px-4 py-8">
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-10 text-center">
             <div className="text-4xl text-gray-300 mb-3">
               <i className="fas fa-file-alt"></i>
@@ -169,14 +169,14 @@ const StudentExamAnswer: React.FC = () => {
               교사가 정기 시험 답안을 입력하면 이곳에 표시됩니다.
             </p>
           </div>
-        </main>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <main className="flex-1 w-full max-w-4xl mx-auto px-4 py-8">
+      <div className="flex-1 w-full max-w-4xl mx-auto px-4 py-8">
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm px-6 py-4 mb-6 flex items-center justify-between">
           <h1 className="text-xl md:text-2xl font-bold text-gray-800 flex items-center gap-2">
             <i className="fas fa-clipboard-check text-blue-500"></i>
@@ -373,7 +373,7 @@ const StudentExamAnswer: React.FC = () => {
             </p>
           )}
         </section>
-      </main>
+      </div>
     </div>
   );
 };

@@ -566,7 +566,7 @@ const HistoryDictionary: React.FC = () => {
             </div>
           </aside>
 
-          <main className="order-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:p-7">
+          <div className="order-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:p-7">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
@@ -759,7 +759,7 @@ const HistoryDictionary: React.FC = () => {
                 수정 저장
               </button>
             </div>
-          </main>
+          </div>
         </div>
       </div>
       {requestDialogOpen && (

@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import QuizUnitTree from "./components/QuizUnitTree";
 import QuizEditor from "./components/QuizEditor";
 import QuizLogTab from "./components/QuizLogTab";
@@ -90,7 +90,7 @@ const ManageQuiz: React.FC = () => {
     <div
       className={`flex flex-col bg-gray-50 ${isManageTab ? "h-[calc(100dvh-64px)] min-h-[760px] overflow-hidden" : "min-h-[calc(100dvh-64px)]"}`}
     >
-      <main
+      <div
         className={`w-full max-w-7xl mx-auto px-4 lg:px-6 py-4 lg:py-3 ${isManageTab ? "flex-1 flex flex-col min-h-0 overflow-hidden" : "pb-8"}`}
       >
         <div className="flex border-b border-gray-200 mb-3 bg-white rounded-t-lg px-2 shrink-0 overflow-x-auto">
@@ -216,7 +216,7 @@ const ManageQuiz: React.FC = () => {
           category={settingsCategory}
           canEdit={canWrite}
         />
-      </main>
+      </div>
     </div>
   );
 };

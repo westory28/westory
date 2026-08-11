@@ -40,11 +40,20 @@ import {
   NORMAL_SESSION_DURATION_MS,
   writeSessionDeadline,
 } from "../lib/sessionPolicy";
+import {
+  STUDENT_MAINTENANCE_CONFIG_DOC_ID,
+  normalizeStudentMaintenanceConfig,
+  readStudentMaintenanceBootstrap,
+  resolveStudentMaintenanceAccess,
+  type StudentMaintenanceAccessStatus,
+  type StudentMaintenanceConfig,
+} from "../lib/studentMaintenance";
 
 export type AuthenticationStatus =
   | "UNKNOWN"
   | "AUTHENTICATING"
   | "AUTHENTICATED"
+  | "MAINTENANCE"
   | "ANONYMOUS"
   | "SESSION_EXPIRED"
   | "ERROR";
@@ -67,6 +76,8 @@ interface AuthContextType {
   authenticationStatus: AuthenticationStatus;
   authenticationError: string;
   applicationSessionAuthorityMode: ApplicationSessionAuthorityMode | null;
+  studentMaintenanceConfig: StudentMaintenanceConfig | null;
+  studentMaintenanceAccessStatus: StudentMaintenanceAccessStatus;
   loading: boolean;
   prepareForReauthentication: () => void;
   logout: (reason?: LogoutReason) => Promise<void>;
@@ -116,6 +127,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [authenticationError, setAuthenticationError] = useState("");
   const [applicationSessionAuthorityMode, setApplicationSessionAuthorityMode] =
     useState<ApplicationSessionAuthorityMode | null>(null);
+  const [studentMaintenanceConfig, setStudentMaintenanceConfig] =
+    useState<StudentMaintenanceConfig | null>(null);
+  const [studentMaintenanceAccessStatus, setStudentMaintenanceAccessStatus] =
+    useState<StudentMaintenanceAccessStatus>("anonymous");
   const firstUserDocReadyRef = useRef<string | null>(null);
   const systemConfigLoadRef = useRef<Promise<void> | null>(null);
   const menuConfigLoadRef = useRef<Promise<void> | null>(null);
@@ -125,6 +140,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const logoutReasonRef = useRef<LogoutReason | null>(null);
   const authResolutionPendingRef = useRef(true);
   const stopUserDocSubscriptionRef = useRef<() => void>(() => undefined);
+  const maintenanceProfileRef = useRef<UserData | null>(null);
+  const maintenanceBlockedRef = useRef(false);
 
   const clearAuthenticatedState = useCallback(() => {
     firstUserDocReadyRef.current = null;
@@ -132,6 +149,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     menuConfigLoadRef.current = null;
     resolvedUserRef.current = null;
     setApplicationSessionAuthorityMode(null);
+    maintenanceProfileRef.current = null;
+    maintenanceBlockedRef.current = false;
+    setStudentMaintenanceConfig(null);
+    setStudentMaintenanceAccessStatus("anonymous");
     setCurrentUser(null);
     setUserData(null);
     setConfig(null);
@@ -267,6 +288,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         );
         setAuthenticationStatus("ERROR");
       }, 15000);
+    };
+
+    const verifyMaintenanceAccess = async (
+      user: User,
+      authRevision: number,
+    ) => {
+      setStudentMaintenanceAccessStatus("checking");
+      const bootstrap = await readStudentMaintenanceBootstrap(user);
+      if (
+        !active ||
+        authRevisionRef.current !== authRevision ||
+        auth.currentUser?.uid !== user.uid
+      ) {
+        return false;
+      }
+
+      maintenanceProfileRef.current = bootstrap.profile;
+      setStudentMaintenanceConfig(bootstrap.config);
+      setStudentMaintenanceAccessStatus(bootstrap.accessStatus);
+      if (bootstrap.profile) setUserData(bootstrap.profile);
+
+      if (bootstrap.accessStatus === "allowed") {
+        maintenanceBlockedRef.current = false;
+        return true;
+      }
+
+      maintenanceBlockedRef.current = true;
+      resolvedUserRef.current = user;
+      setApplicationSessionAuthorityMode(null);
+      setCurrentUser(user);
+      setConfig(null);
+      setConfigReady(false);
+      setMenuConfig(null);
+      setMenuConfigReady(false);
+      authResolutionPendingRef.current = false;
+      setAuthenticationError(
+        bootstrap.accessStatus === "error"
+          ? "점검 상태를 안전하게 확인하지 못했습니다."
+          : "",
+      );
+      setAuthenticationStatus("MAINTENANCE");
+      clearResolutionGuard();
+      return false;
     };
 
     const subscribeUserDocument = async (user: User, authRevision: number) => {
@@ -434,6 +498,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             authResolutionPendingRef.current = true;
             scheduleResolutionGuard();
             try {
+              const maintenanceAllowed = await verifyMaintenanceAccess(
+                user,
+                refreshRevision,
+              );
+              if (!maintenanceAllowed) return;
               const applicationSession = await synchronizeApplicationSession(
                 user,
                 {
@@ -510,6 +579,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
             }
 
             try {
+              const maintenanceAllowed = await verifyMaintenanceAccess(
+                user,
+                authRevision,
+              );
+              if (!maintenanceAllowed) return;
               const applicationSession = await synchronizeApplicationSession(
                 user,
                 {
@@ -601,6 +675,107 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       unsubscribe();
     };
   }, [clearAuthenticatedState, loadAuthedMenuConfig, loadAuthedSystemConfig]);
+
+  useEffect(() => {
+    if (!currentUser) {
+      return undefined;
+    }
+    let resumeGuard: number | null = null;
+
+    const enterMaintenance = (
+      accessStatus: "blocked" | "error",
+      message = "",
+    ) => {
+      if (resumeGuard !== null) {
+        window.clearTimeout(resumeGuard);
+        resumeGuard = null;
+      }
+      maintenanceBlockedRef.current = true;
+      authRevisionRef.current += 1;
+      authResolutionPendingRef.current = false;
+      stopUserDocSubscriptionRef.current();
+      setApplicationSessionAuthorityMode(null);
+      setConfig(null);
+      setConfigReady(false);
+      setMenuConfig(null);
+      setMenuConfigReady(false);
+      setStudentMaintenanceAccessStatus(accessStatus);
+      setAuthenticationError(message);
+      setAuthenticationStatus("MAINTENANCE");
+    };
+
+    const maintenanceRef = doc(
+      db,
+      "site_settings",
+      STUDENT_MAINTENANCE_CONFIG_DOC_ID,
+    );
+    const unsubscribeMaintenance = onSnapshot(
+      maintenanceRef,
+      { includeMetadataChanges: true },
+      (maintenanceSnap) => {
+        if (maintenanceSnap.metadata.fromCache) return;
+        try {
+          const maintenanceConfig = normalizeStudentMaintenanceConfig(
+            maintenanceSnap.exists()
+              ? (maintenanceSnap.data() as Record<string, unknown>)
+              : null,
+          );
+          const profile = userData || maintenanceProfileRef.current;
+          const accessStatus = resolveStudentMaintenanceAccess({
+            user: currentUser,
+            config: maintenanceConfig,
+            profile,
+            profileStatus: profile ? "ready" : "missing",
+          });
+          setStudentMaintenanceConfig(maintenanceConfig);
+
+          if (accessStatus !== "allowed") {
+            enterMaintenance(accessStatus);
+            return;
+          }
+
+          if (maintenanceBlockedRef.current) {
+            maintenanceBlockedRef.current = false;
+            setStudentMaintenanceAccessStatus("checking");
+            setAuthenticationStatus("AUTHENTICATING");
+            authResolutionPendingRef.current = true;
+            resumeGuard = window.setTimeout(() => {
+              enterMaintenance(
+                "error",
+                "점검 종료 후 로그인 상태를 다시 확인하지 못했습니다.",
+              );
+            }, 15000);
+            void currentUser.getIdToken(true).catch((error) => {
+              console.error("Failed to resume after maintenance", error);
+              enterMaintenance(
+                "error",
+                "점검 종료 후 로그인 상태를 다시 확인하지 못했습니다.",
+              );
+            });
+            return;
+          }
+
+          setStudentMaintenanceAccessStatus("allowed");
+        } catch (error) {
+          console.error("Invalid student maintenance configuration", error);
+          setStudentMaintenanceConfig(null);
+          enterMaintenance(
+            "error",
+            "점검 설정을 안전하게 확인하지 못했습니다.",
+          );
+        }
+      },
+      (error) => {
+        console.error("Failed to subscribe student maintenance", error);
+        setStudentMaintenanceConfig(null);
+        enterMaintenance("error", "점검 상태를 안전하게 확인하지 못했습니다.");
+      },
+    );
+    return () => {
+      unsubscribeMaintenance();
+      if (resumeGuard !== null) window.clearTimeout(resumeGuard);
+    };
+  }, [currentUser?.email, currentUser?.uid, userData?.role, userData?.uid]);
 
   const prepareForReauthentication = useCallback(() => {
     authRevisionRef.current += 1;
@@ -731,6 +906,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     authenticationStatus,
     authenticationError,
     applicationSessionAuthorityMode,
+    studentMaintenanceConfig,
+    studentMaintenanceAccessStatus,
     loading,
     prepareForReauthentication,
     logout,

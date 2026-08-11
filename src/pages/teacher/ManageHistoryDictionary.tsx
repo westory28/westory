@@ -1733,7 +1733,7 @@ const ManageHistoryDictionary: React.FC = () => {
             </aside>
           )}
 
-          <main className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:p-7">
+          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:p-7">
             {activePanel === "upload" ? (
               <>
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -2313,7 +2313,7 @@ const ManageHistoryDictionary: React.FC = () => {
                 </div>
               </>
             )}
-          </main>
+          </div>
         </div>
       </div>
 

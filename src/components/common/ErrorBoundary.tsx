@@ -1,4 +1,5 @@
 import React from "react";
+import StatePanel from "./StatePanel";
 
 type Props = {
   children: React.ReactNode;
@@ -63,46 +64,31 @@ class ErrorBoundary extends React.Component<Props, State> {
       return this.props.children;
     }
 
-    const persistedMessage =
-      typeof window !== "undefined"
-        ? window.sessionStorage.getItem(ERROR_STORAGE_KEY) || ""
-        : "";
-    const message =
-      this.state.message || persistedMessage || "Unknown render error";
+    const message = this.state.message || "Unknown render error";
     const isChunkError = isChunkLoadFailure(message);
 
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-        <div className="max-w-lg w-full bg-white border border-gray-200 rounded-xl p-6 text-center shadow-sm">
-          <h1 className="text-lg font-semibold text-gray-900">
-            페이지를 불러오지 못했습니다.
-          </h1>
-          <p className="mt-2 text-sm text-gray-600">
-            {isChunkError
-              ? "배포 파일을 다시 받는 중 문제가 생겼습니다. 새로고침 후 다시 시도해 주세요."
-              : "초기 화면을 그리는 중 오류가 발생했습니다. 아래 진단 메시지를 확인해 주세요."}
-          </p>
-          <div className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-left">
-            <div className="text-xs font-bold uppercase tracking-wide text-amber-700">
-              Diagnostic
-            </div>
-            <pre className="mt-2 whitespace-pre-wrap break-words text-xs text-amber-900">
-              {message}
-            </pre>
-          </div>
-          <button
-            type="button"
-            onClick={() => {
+      <main className="ws-access-state">
+        <StatePanel
+          state="ERROR"
+          title="페이지를 불러오지 못했습니다."
+          description={
+            isChunkError
+              ? "새 배포 파일을 받는 중 문제가 생겼습니다. 다시 불러와 주세요."
+              : "화면을 그리는 중 문제가 생겼습니다. 입력한 내용은 다시 확인해 주세요."
+          }
+          retryable
+          contactAdmin
+          action={{
+            label: "다시 불러오기",
+            onClick: () => {
               if (typeof window === "undefined") return;
               window.sessionStorage.removeItem(CHUNK_RELOAD_KEY);
               window.location.reload();
-            }}
-            className="mt-4 inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700"
-          >
-            다시 불러오기
-          </button>
-        </div>
-      </div>
+            },
+          }}
+        />
+      </main>
     );
   }
 }

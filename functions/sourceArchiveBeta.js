@@ -1,7 +1,11 @@
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getStorage } = require("firebase-admin/storage");
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { storageBucket } = require("firebase-functions/params");
+const { HttpsError } = require("firebase-functions/v2/https");
 const { onObjectFinalized } = require("firebase-functions/v2/storage");
+const {
+  onCallWithStudentMaintenance: onCall,
+} = require("./studentMaintenance");
 
 const {
   SOURCE_ARCHIVE_MEDIA_KIND,
@@ -25,8 +29,7 @@ const db = getFirestore();
 const storage = getStorage();
 
 const REGION = "asia-northeast3";
-const STORAGE_BUCKET =
-  process.env.FIREBASE_STORAGE_BUCKET || "history-quiz-yongsin.firebasestorage.app";
+const STORAGE_BUCKET = storageBucket;
 const ADMIN_EMAIL = "westoria28@gmail.com";
 const SCHOOL_EMAIL_PATTERN = /@yongshin-ms\.ms\.kr$/i;
 const SOURCE_ARCHIVE_COLLECTION = "source_archive";

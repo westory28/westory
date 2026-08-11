@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { doc, getDoc } from "firebase/firestore";
 import { InlineLoading } from "./LoadingState";
@@ -14,38 +14,93 @@ const POLICY_TITLE: Record<PolicyType, string> = {
 };
 
 const FALLBACK_FOOTER_TEXT = "Copyright © Westory. All rights reserved.";
+const FOCUSABLE =
+  'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+const policyHtmlToText = (value: unknown) => {
+  const html = String(value || "");
+  if (!html) return "";
+  if (typeof DOMParser === "undefined") return html.replace(/<[^>]+>/g, " ");
+  const withLineBreaks = html.replace(
+    /<\/(p|li|h[1-6]|div|section)>/giu,
+    "$&\n",
+  );
+  const parsed = new DOMParser().parseFromString(withLineBreaks, "text/html");
+  return String(parsed.body.textContent || "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+};
 
 const Footer: React.FC = () => {
   const { interfaceConfig } = useAuth();
   const [openPolicy, setOpenPolicy] = useState<PolicyType | null>(null);
   const [loading, setLoading] = useState(false);
-  const [policyHtml, setPolicyHtml] = useState("");
+  const [policyText, setPolicyText] = useState("");
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const policyRequestRef = useRef(0);
 
   const footerText =
     String(interfaceConfig?.footerText || "").trim() || FALLBACK_FOOTER_TEXT;
   const instagramUrl = normalizeInstagramUrl(interfaceConfig?.instagramUrl);
 
   const openPolicyModal = async (type: PolicyType) => {
+    const requestId = ++policyRequestRef.current;
     setOpenPolicy(type);
     setLoading(true);
-    setPolicyHtml("");
+    setPolicyText("");
 
     try {
       const snap = await getDoc(doc(db, "site_settings", type));
+      if (policyRequestRef.current !== requestId) return;
       if (snap.exists() && snap.data().text) {
-        setPolicyHtml(snap.data().text);
+        setPolicyText(policyHtmlToText(snap.data().text));
       } else {
-        setPolicyHtml(
-          '<p class="text-center text-gray-400 py-8">등록된 내용이 없습니다.</p>',
-        );
+        setPolicyText("등록된 내용이 없습니다.");
       }
     } catch (error) {
+      if (policyRequestRef.current !== requestId) return;
       console.error("Footer policy load error:", error);
-      setPolicyHtml(
-        '<p class="text-center text-red-400 py-8">내용을 불러오지 못했습니다.</p>',
-      );
+      setPolicyText("내용을 불러오지 못했습니다.");
     } finally {
-      setLoading(false);
+      if (policyRequestRef.current === requestId) setLoading(false);
+    }
+  };
+
+  const closePolicyModal = () => {
+    policyRequestRef.current += 1;
+    setOpenPolicy(null);
+  };
+
+  useEffect(() => {
+    if (!openPolicy) return undefined;
+    previousFocusRef.current = document.activeElement as HTMLElement | null;
+    closeButtonRef.current?.focus();
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closePolicyModal();
+    };
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("keydown", handleEscape);
+      previousFocusRef.current?.focus();
+    };
+  }, [openPolicy]);
+
+  const handleDialogKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.key !== "Tab") return;
+    const focusable = Array.from(
+      dialogRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) || [],
+    );
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
     }
   };
 
@@ -55,22 +110,24 @@ const Footer: React.FC = () => {
         <div className="container mx-auto text-center">
           <div className="flex flex-wrap items-center justify-center gap-2 mb-2">
             <button
+              type="button"
               onClick={() => openPolicyModal("terms")}
-              className="text-stone-400 hover:text-stone-600 text-xs font-medium transition"
+              className="inline-flex min-h-11 items-center px-2 text-stone-400 hover:text-stone-600 text-xs font-medium transition"
             >
               이용 약관
             </button>
             <span className="text-stone-300 text-xs">|</span>
             <button
+              type="button"
               onClick={() => openPolicyModal("privacy")}
-              className="text-stone-400 hover:text-stone-600 text-xs font-medium transition"
+              className="inline-flex min-h-11 items-center px-2 text-stone-400 hover:text-stone-600 text-xs font-medium transition"
             >
               개인정보 처리 방침
             </button>
             <span className="text-stone-300 text-xs">|</span>
             <Link
               to="/developer-log"
-              className="text-stone-400 hover:text-stone-600 text-xs font-medium transition"
+              className="inline-flex min-h-11 items-center px-2 text-stone-400 hover:text-stone-600 text-xs font-medium transition"
             >
               개발자 일지
             </Link>
@@ -83,7 +140,7 @@ const Footer: React.FC = () => {
                   rel="noopener noreferrer"
                   aria-label="위스토리 공식 인스타그램"
                   title="위스토리 공식 인스타그램"
-                  className="inline-flex h-7 w-7 items-center justify-center rounded-full text-stone-400 transition hover:bg-pink-50 hover:text-pink-600"
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-full text-stone-400 transition hover:bg-pink-50 hover:text-pink-600"
                 >
                   <i
                     className="fa-brands fa-instagram text-base"
@@ -100,34 +157,54 @@ const Footer: React.FC = () => {
       {openPolicy && (
         <div
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm"
-          onClick={() => setOpenPolicy(null)}
+          onClick={closePolicyModal}
         >
           <div
+            ref={dialogRef}
             className="bg-white rounded-2xl shadow-2xl w-full max-w-xl mx-4 max-h-[80vh] flex flex-col overflow-hidden"
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={handleDialogKeyDown}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="westory-policy-title"
           >
             <div className="flex items-center justify-between p-5 border-b border-gray-100">
-              <h2 className="text-lg font-bold text-gray-900">
+              <h2
+                id="westory-policy-title"
+                className="text-lg font-bold text-gray-900"
+              >
                 {POLICY_TITLE[openPolicy]}
               </h2>
               <button
-                onClick={() => setOpenPolicy(null)}
-                className="text-gray-400 hover:text-gray-700 text-xl transition"
+                ref={closeButtonRef}
+                type="button"
+                onClick={closePolicyModal}
+                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-800 transition"
+                aria-label={`${POLICY_TITLE[openPolicy]} 닫기`}
               >
-                <i className="fas fa-times"></i>
+                <svg
+                  viewBox="0 0 24 24"
+                  width="20"
+                  height="20"
+                  fill="none"
+                  stroke="currentColor"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="m6 6 12 12M18 6 6 18"
+                    strokeLinecap="round"
+                    strokeWidth="2"
+                  />
+                </svg>
               </button>
             </div>
             <div className="p-6 overflow-y-auto flex-1 text-sm text-gray-700 leading-relaxed">
               {loading ? (
-                <InlineLoading
-                  message="약관을 불러오는 중입니다."
-                  showWarning
-                />
+                <InlineLoading message="약관을 불러오는 중입니다." />
               ) : (
-                <div
-                  className="policy-rich-text"
-                  dangerouslySetInnerHTML={{ __html: policyHtml }}
-                />
+                <div className="policy-rich-text whitespace-pre-line">
+                  {policyText}
+                </div>
               )}
             </div>
           </div>

@@ -349,7 +349,7 @@ const ManageSchedule = () => {
 
   return (
     <div className="bg-gray-50 flex flex-col min-h-screen">
-      <main className="flex-1 w-full max-w-7xl mx-auto px-6 py-6 h-full flex flex-col">
+      <div className="flex-1 w-full max-w-7xl mx-auto px-6 py-6 h-full flex flex-col">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4 shrink-0">
           <div>
             <h1 className="text-xl md:text-2xl font-bold text-gray-800">
@@ -451,7 +451,7 @@ const ManageSchedule = () => {
             />
           </div>
         </div>
-      </main>
+      </div>
 
       {/* Modal */}
       {modalOpen && (

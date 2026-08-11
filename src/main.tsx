@@ -5,15 +5,20 @@ import "./assets/index.css";
 import ErrorBoundary from "./components/common/ErrorBoundary";
 import { markLoginPerf } from "./lib/loginPerf";
 
-if (
-  typeof window !== "undefined" &&
-  window.location.hostname.endsWith("github.io") &&
-  window.location.pathname.startsWith("/westory") &&
-  !window.location.hash
-) {
-  window.location.replace(
-    `${window.location.origin}${window.location.pathname}#/`,
-  );
+if (typeof window !== "undefined" && !window.location.hash) {
+  const basePath = import.meta.env.BASE_URL.replace(/\/$/u, "");
+  const pathname = window.location.pathname;
+  const routePath =
+    basePath && pathname.startsWith(basePath)
+      ? pathname.slice(basePath.length) || "/"
+      : pathname;
+  const recoverableRoute =
+    /^\/(?:student|teacher|maintenance|developer-log)(?:\/|$)/u.test(routePath);
+
+  if (recoverableRoute) {
+    const appRoot = `${window.location.origin}${basePath || ""}/`;
+    window.location.replace(`${appRoot}#${routePath}${window.location.search}`);
+  }
 }
 
 markLoginPerf("westory-app-load-start");

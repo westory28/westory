@@ -488,7 +488,7 @@ const Points: React.FC = () => {
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
-      <main
+      <div
         className={`mx-auto w-full flex-1 px-4 py-8 ${
           isHallOfFameTab ? "max-w-7xl" : "max-w-6xl"
         }`}
@@ -610,7 +610,7 @@ const Points: React.FC = () => {
               />
             )}
         </div>
-      </main>
+      </div>
     </div>
   );
 };

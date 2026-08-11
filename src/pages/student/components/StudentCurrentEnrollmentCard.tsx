@@ -4,6 +4,7 @@ import {
   getArchiveEnrollmentState,
   type SemesterEnrollmentRecord,
 } from "../../../lib/archiveEnrollment";
+import StatePanel from "../../../components/common/StatePanel";
 
 interface StudentCurrentEnrollmentCardProps {
   studentUid: string;
@@ -55,23 +56,35 @@ const StudentCurrentEnrollmentCard: React.FC<
 
   if (loading) {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm font-semibold text-slate-500">
-        현재 학기 학급 정보를 확인하고 있어요.
-      </div>
+      <StatePanel
+        state="LOADING"
+        title="현재 학기 학적을 확인하고 있습니다."
+        compact
+      />
     );
   }
 
-  if (unavailable || !enrollment) {
+  if (unavailable) {
     return (
-      <div className="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4">
-        <div className="text-sm font-extrabold text-amber-900">
-          현재 학기 학적을 확인할 수 없습니다.
-        </div>
-        <p className="mt-1 text-sm leading-6 text-amber-800">
-          이전 학생 문서로 자동 전환하지 않았습니다. 학교 관리자에게 현재 학기
-          명단 적용 상태를 확인해 주세요.
-        </p>
-      </div>
+      <StatePanel
+        state="ERROR"
+        title="현재 학기 학적을 확인하지 못했습니다."
+        description="이전 학생 문서로 자동 전환하지 않았습니다. 학교 관리자에게 현재 학기 명단 적용 상태를 확인해 주세요."
+        contactAdmin
+        compact
+      />
+    );
+  }
+
+  if (!enrollment) {
+    return (
+      <StatePanel
+        state="EMPTY"
+        title="현재 학기 학적이 아직 등록되지 않았습니다."
+        description="학교에서 명단 적용을 마치면 현재 학급과 번호를 확인할 수 있습니다."
+        contactAdmin
+        compact
+      />
     );
   }
 

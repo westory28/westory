@@ -36,8 +36,8 @@ jobs:
       - name: Check supply-chain IOCs
         run: npm run security:check-supply-chain
 
-      - name: Verify W4 client command boundary
-        run: npm run verify:w4-command-safety
+      - name: Verify W5 client shell boundary
+        run: npm run verify:w5-shell-safety
 
       - name: Build
         run: npm run build
@@ -59,11 +59,11 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - name: Verify Functions and W4 Archive Enrollment
+      - name: Verify Functions and W5 Global Shell
         run: |
           npm --prefix functions run check
           npm install --global firebase-tools@15.15.0
-          npm run verify:w4-archive-enrollment
+          npm run verify:w5-global-shell
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5

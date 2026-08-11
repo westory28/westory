@@ -96,13 +96,33 @@ Base unit: 4px. 새 margin, padding, gap은 아래 토큰을 우선 사용한다
 Layout tokens:
 
 - Page max width: `--ws-page-max: 1280px`.
+- Wide workspace max width: `--ws-workspace-max: 1600px`.
 - Header height: `--ws-header-height: 64px`.
+- Student mobile bottom navigation height: `--ws-student-nav-height: 68px` plus the device safe area.
+- Teacher compact rail width: `--ws-teacher-rail-width: 72px`.
+- Teacher labeled sidebar width: `--ws-teacher-sidebar-width: 248px`.
+- Context panel width: `--ws-context-panel-width: 360px`.
+- Shell mobile gutter: `--ws-shell-gutter-mobile: 16px`.
+- Shell tablet gutter: `--ws-shell-gutter-tablet: 24px`.
+- Shell desktop gutter: `--ws-shell-gutter-desktop: 32px`.
+- Page header minimum height: `--ws-page-header-min-height: 72px`.
+- Skip-link offset: `--ws-skip-link-offset: 12px`.
 - Header dropdown min width: `--ws-header-dropdown-min: 11rem`.
 - Header dropdown max width: `--ws-header-dropdown-max: min(24rem, calc(100vw - 2rem))`.
 - Mobile gutter: `--space-4`.
 - Desktop gutter: `--space-10`.
 - Student page default: one column first.
 - Teacher page default: dense grid allowed only when labels, actions, and overflow remain clear.
+
+W5 shell breakpoints are behavioral contracts rather than device labels:
+
+- Below `768px`: student bottom navigation, teacher app bar and one drawer, one-column content.
+- `768px` to `1023px`: student bottom navigation, teacher compact rail, full-width detail when selected.
+- `1024px` to `1279px`: student top navigation, teacher compact rail, controlled master-detail layout.
+- `1280px` and above: student top navigation, teacher labeled sidebar, wider data workspace.
+- `1600px` and above: the workspace may add a context pane; reading content does not stretch merely to fill space.
+
+Only one responsive navigation variant may be mounted at a time. CSS-hidden duplicate navigation, notification, query, and listener instances are not allowed.
 
 ## 5. Components
 

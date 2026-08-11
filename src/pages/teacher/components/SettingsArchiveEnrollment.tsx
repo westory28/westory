@@ -12,6 +12,7 @@ import {
   type EnrollmentRosterPayload,
 } from "../../../lib/commandGateway";
 import { getServerSemesterCoreState } from "../../../lib/semesterCore";
+import ResponsiveDataContainer from "../../../components/common/ResponsiveDataContainer";
 
 const DEFAULT_ROSTER = JSON.stringify(
   {
@@ -242,12 +243,12 @@ const SettingsArchiveEnrollment: React.FC = () => {
     <section className="space-y-6" aria-labelledby="archive-enrollment-heading">
       <header className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
         <p className="text-sm font-bold text-blue-700">W4 학기 데이터 기반</p>
-        <h1
+        <h2
           id="archive-enrollment-heading"
           className="mt-1 text-2xl font-extrabold text-gray-900"
         >
           학급·학적·아카이브
-        </h1>
+        </h2>
         <p className="mt-2 text-sm leading-6 text-gray-600">
           현재, 준비, 보관, 레거시 출처를 구분해 조회합니다. 레거시와 보관
           학기는 자동으로 대신 읽지 않으며, 명시적으로 선택한 경우에만 읽기
@@ -346,7 +347,10 @@ const SettingsArchiveEnrollment: React.FC = () => {
                 </div>
               </div>
             </div>
-            <div className="overflow-x-auto rounded-xl border border-gray-200">
+            <ResponsiveDataContainer
+              className="rounded-xl border border-gray-200"
+              label="학기별 학적 목록"
+            >
               <table className="min-w-full text-left text-sm">
                 <thead className="bg-gray-50 text-xs text-gray-500">
                   <tr>
@@ -384,7 +388,7 @@ const SettingsArchiveEnrollment: React.FC = () => {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </ResponsiveDataContainer>
           </div>
         )}
       </section>

@@ -54,10 +54,93 @@ service firebase.storage {
         && firestore.get(applicationSessionTransitionPath()).data.expiresAt > request.time;
     }
 
-    function canUseWestory() {
+    function hasWestoryIdentity() {
       return isSignedIn()
-        && (hasAllowedSchoolEmail() || request.auth.token.email == "westoria28@gmail.com")
-        && (hasActiveApplicationSession() || hasActiveReauthTransition());
+        && request.auth.token.email is string
+        && (hasAllowedSchoolEmail() || request.auth.token.email == "westoria28@gmail.com");
+    }
+
+    function hasValidMaintenanceBypassUids(uids) {
+      let padded = uids.concat([
+        'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x',
+        'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x', 'x'
+      ]);
+      return padded[0] is string && padded[0].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[1] is string && padded[1].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[2] is string && padded[2].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[3] is string && padded[3].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[4] is string && padded[4].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[5] is string && padded[5].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[6] is string && padded[6].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[7] is string && padded[7].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[8] is string && padded[8].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[9] is string && padded[9].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[10] is string && padded[10].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[11] is string && padded[11].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[12] is string && padded[12].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[13] is string && padded[13].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[14] is string && padded[14].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[15] is string && padded[15].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[16] is string && padded[16].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[17] is string && padded[17].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[18] is string && padded[18].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && padded[19] is string && padded[19].matches('^\\S(?:[\\s\\S]{0,126}\\S)?$');
+    }
+
+    function isValidStudentMaintenanceConfig(config) {
+      return config.keys().hasAll([
+          'enabled', 'blockedRoles', 'bypassUids', 'title', 'message',
+          'startedAt', 'updatedAt', 'updatedBy', 'revision'
+        ])
+        && config.keys().hasOnly([
+          'enabled', 'blockedRoles', 'bypassUids', 'title', 'message',
+          'startedAt', 'updatedAt', 'updatedBy', 'revision'
+        ])
+        && config.enabled is bool
+        && config.blockedRoles == ['student']
+        && config.bypassUids is list
+        && config.bypassUids.size() <= 20
+        && config.bypassUids.toSet().size() == config.bypassUids.size()
+        && hasValidMaintenanceBypassUids(config.bypassUids)
+        && config.title is string
+        && config.title.matches('^\\S(?:[\\s\\S]{0,78}\\S)?$')
+        && config.message is string
+        && config.message.matches('^\\S(?:[\\s\\S]{0,498}\\S)?$')
+        && ((config.enabled == true && config.startedAt is timestamp)
+          || (config.enabled == false && config.startedAt == null))
+        && config.updatedAt is timestamp
+        && config.updatedBy is string
+        && config.updatedBy.matches('^\\S(?:[\\s\\S]{0,126}\\S)?$')
+        && config.revision is int
+        && config.revision >= 0;
+    }
+
+    function canUseWestoryWithMaintenanceConfig(config) {
+      return isValidStudentMaintenanceConfig(config)
+        && (
+          config.enabled == false
+          || request.auth.token.email == "westoria28@gmail.com"
+          || request.auth.uid in config.bypassUids
+          || (
+            firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
+            && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role is string
+            && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role in ['student', 'teacher', 'staff']
+            && !(firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role in config.blockedRoles)
+          )
+        );
+    }
+
+    function passesStudentMaintenanceFence() {
+      return !firestore.exists(/databases/(default)/documents/site_settings/student_maintenance)
+        || canUseWestoryWithMaintenanceConfig(
+          firestore.get(/databases/(default)/documents/site_settings/student_maintenance).data
+        );
+    }
+
+    function canUseWestory() {
+      return hasWestoryIdentity()
+        && (hasActiveApplicationSession() || hasActiveReauthTransition())
+        && passesStudentMaintenanceFence();
     }
 
     function isAdmin() {
@@ -65,7 +148,7 @@ service firebase.storage {
     }
 
     function hasUserProfile() {
-      return canUseWestory()
+      return hasWestoryIdentity()
         && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role is string;
     }
 
@@ -74,14 +157,15 @@ service firebase.storage {
     }
 
     function hasStoragePermission(permission) {
-      return hasUserProfile()
+      return canUseWestory()
+        && hasUserProfile()
         && userProfile().teacherPortalEnabled == true
         && userProfile().staffPermissions is list
         && permission in userProfile().staffPermissions;
     }
 
     function isTeacherRole() {
-      return hasUserProfile() && userProfile().role == "teacher";
+      return canUseWestory() && hasUserProfile() && userProfile().role == "teacher";
     }
 
     function canReadSourceArchive() {

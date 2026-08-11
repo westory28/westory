@@ -1,5 +1,6 @@
 import React, { useDeferredValue, useEffect, useMemo, useState } from "react";
 import StorageImage from "../../components/common/StorageImage";
+import StatePanel from "../../components/common/StatePanel";
 import { useAuth } from "../../contexts/AuthContext";
 import {
   canReadLessonManagement,
@@ -701,6 +702,14 @@ const ManageSourceArchive: React.FC = () => {
                 </div>
               ))}
             </div>
+          ) : errorMessage === UI.loadingError ? (
+            <StatePanel
+              state="ERROR"
+              title="사료 목록을 불러오지 못했습니다."
+              description="잠시 후 다시 시도해 주세요."
+              retryable
+              compact
+            />
           ) : visibleAssets.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-gray-200 bg-gray-50 px-6 py-12 text-center text-sm text-gray-500">
               {UI.emptyList}

@@ -1825,11 +1825,11 @@ const ManagePoints: React.FC = () => {
   if (!canRead) {
     return (
       <div className="flex min-h-screen flex-col bg-gray-50">
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
+        <div className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
           <div className="rounded-2xl border border-red-200 bg-red-50 px-6 py-5 text-sm font-bold text-red-700">
             위스 관리 화면을 볼 권한이 없습니다.
           </div>
-        </main>
+        </div>
       </div>
     );
   }
@@ -1841,7 +1841,7 @@ const ManagePoints: React.FC = () => {
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
-      <main
+      <div
         className={[
           "mx-auto flex w-full flex-1 flex-col px-4 py-6",
           activeTab === "hall-of-fame" ? "max-w-[96rem] 2xl:px-6" : "max-w-7xl",
@@ -2075,7 +2075,7 @@ const ManagePoints: React.FC = () => {
             />
           )}
         </div>
-      </main>
+      </div>
     </div>
   );
 };

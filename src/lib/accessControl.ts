@@ -57,6 +57,10 @@ export const resolveProtectedRouteAccess = ({
     return { status: "AUTHENTICATING" };
   }
 
+  if (authenticationStatus === "MAINTENANCE") {
+    return { status: "AUTHENTICATING" };
+  }
+
   if (authenticationStatus === "SESSION_EXPIRED") {
     return { status: "SESSION_EXPIRED" };
   }
@@ -85,6 +89,14 @@ export const resolveProtectedRouteAccess = ({
     return {
       status: "AUTHENTICATING",
       reason: "PROFILE_NOT_READY",
+    };
+  }
+
+  if (pathname.startsWith("/student") && userData.role !== "student") {
+    return {
+      status: "UNAUTHORIZED",
+      reason: "ROUTE_NOT_ALLOWED",
+      safeRoute: getSafeRoute(userData, identity.email),
     };
   }
 

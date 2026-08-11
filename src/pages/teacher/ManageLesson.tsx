@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useCallback } from "react";
 import { LoadingOverlay } from "../../components/common/LoadingState";
 import { useAuth } from "../../contexts/AuthContext";
@@ -3904,7 +3904,7 @@ const ManageLesson: React.FC = () => {
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
-      <main className="relative flex flex-1 flex-col px-4 py-6 lg:px-6 xl:px-8">
+      <div className="relative flex flex-1 flex-col px-4 py-6 lg:px-6 xl:px-8">
         <div className="mb-4 flex items-center">
           <h1 className="text-xl font-bold text-gray-800 lg:text-2xl">
             <i className="fas fa-sitemap mr-2 text-blue-500"></i>수업 자료 관리
@@ -4185,7 +4185,7 @@ const ManageLesson: React.FC = () => {
         >
           <i className="fas fa-list text-lg" aria-hidden="true"></i>
         </button>
-      </main>
+      </div>
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-96 rounded-xl bg-white p-6 shadow-2xl">

@@ -911,7 +911,7 @@ const ManageThinkCloud: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <main className="flex flex-col lg:flex-row flex-1 p-6 lg:p-8 gap-6 max-w-7xl mx-auto w-full">
+      <div className="flex flex-col lg:flex-row flex-1 p-6 lg:p-8 gap-6 max-w-7xl mx-auto w-full">
         {mobileSessionListOpen && (
           <button
             type="button"
@@ -1048,7 +1048,7 @@ const ManageThinkCloud: React.FC = () => {
             <p className="mt-3 text-sm font-bold text-blue-700">{message}</p>
           )}
         </div>
-      </main>
+      </div>
 
       <button
         type="button"

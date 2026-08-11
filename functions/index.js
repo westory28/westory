@@ -2,10 +2,12 @@ const crypto = require('crypto');
 const { initializeApp } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
 const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
-const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 
 initializeApp();
+const studentMaintenance = require('./studentMaintenance');
+const { onCallWithStudentMaintenance: onCall } = studentMaintenance;
 const sessionAuthority = require('./sessionAuthority');
 const commandGateway = require('./commandGateway');
 const semesterCore = require('./semesterCore');
@@ -17,6 +19,11 @@ const {
 Object.assign(exports, sessionAuthority.callableExports);
 Object.assign(exports, require('./sourceArchiveBeta'));
 Object.assign(exports, require('./lessonPdfBeta'));
+exports.updateStudentMaintenanceConfig =
+  studentMaintenance.createUpdateStudentMaintenanceConfigCallable({
+    assertActiveApplicationSession:
+      sessionAuthority.assertActiveApplicationSession,
+  });
 
 const db = getFirestore();
 const REGION = 'asia-northeast3';

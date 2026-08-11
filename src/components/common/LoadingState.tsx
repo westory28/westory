@@ -26,7 +26,7 @@ const LoadingCard: React.FC<LoadingStateProps> = ({
   detail,
   className = "",
   warning = DEFAULT_WARNING,
-  showWarning = true,
+  showWarning = false,
 }) => (
   <div
     className={`inline-block max-w-[calc(100vw-2rem)] rounded-lg border border-gray-200 bg-white px-6 py-5 text-center shadow-xl ${className}`}

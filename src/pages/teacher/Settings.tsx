@@ -48,13 +48,13 @@ const Settings: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
-      <main className="flex flex-col lg:flex-row flex-1 p-6 lg:p-10 gap-8 max-w-7xl mx-auto w-full">
+      <div className="flex flex-col lg:flex-row flex-1 p-6 lg:p-10 gap-8 max-w-7xl mx-auto w-full">
         <aside className="w-full lg:w-64 shrink-0">
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden sticky top-8">
             <div className="p-6 border-b border-gray-100">
-              <h2 className="text-xl font-extrabold text-gray-800 flex items-center gap-2">
+              <h1 className="text-xl font-extrabold text-gray-800 flex items-center gap-2">
                 <i className="fas fa-cog text-gray-400"></i> 관리자 설정
-              </h2>
+              </h1>
             </div>
             <nav className="flex flex-col">
               <button
@@ -133,7 +133,7 @@ const Settings: React.FC = () => {
           {activeTab === "notifications" && <SettingsNotifications />}
           {activeTab === "privacy" && <SettingsPrivacy />}
         </div>
-      </main>
+      </div>
     </div>
   );
 };
