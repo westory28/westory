@@ -1,0 +1,183 @@
+.wis-page {
+  display: grid;
+  gap: var(--ws-space-5, 1.25rem);
+  min-width: 0;
+  color: var(--ws-color-text, #172033);
+}
+
+.wis-page__header,
+.wis-panel__heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ws-space-4, 1rem);
+}
+
+.wis-page__header h1,
+.wis-panel h2,
+.wis-stack h2 {
+  margin: 0;
+  color: var(--ws-color-text-strong, #0f172a);
+}
+
+.wis-page__header p,
+.wis-panel p {
+  margin: 0.35rem 0 0;
+  color: var(--ws-color-text-muted, #64748b);
+}
+
+.wis-page__eyebrow {
+  margin: 0 0 0.35rem !important;
+  color: var(--ws-color-primary, #2563eb) !important;
+  font-size: 0.78rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.wis-balance-card {
+  display: grid;
+  gap: 0.3rem;
+  padding: clamp(1.2rem, 4vw, 2rem);
+  border: 1px solid color-mix(in srgb, var(--ws-color-primary, #2563eb) 18%, white);
+  border-radius: var(--ws-radius-xl, 1.25rem);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--ws-color-primary, #2563eb) 9%, white), #fff 68%);
+  box-shadow: var(--ws-shadow-sm, 0 8px 24px rgba(15, 23, 42, 0.06));
+}
+
+.wis-balance-card strong { font-size: clamp(1.75rem, 6vw, 2.7rem); letter-spacing: -0.04em; }
+.wis-balance-card span { color: var(--ws-color-text-muted, #64748b); }
+
+.wis-tabs {
+  display: flex;
+  gap: 0.35rem;
+  overflow-x: auto;
+  padding: 0.25rem;
+  border: 1px solid var(--ws-color-border, #e2e8f0);
+  border-radius: var(--ws-radius-lg, 0.9rem);
+  background: var(--ws-color-surface, #fff);
+  scrollbar-width: thin;
+}
+
+.wis-tabs button,
+.wis-actions button,
+.wis-panel > button,
+.wis-product-card button {
+  min-height: 44px;
+  border: 0;
+  border-radius: var(--ws-radius-md, 0.7rem);
+  padding: 0.65rem 0.9rem;
+  background: var(--ws-color-primary, #2563eb);
+  color: #fff;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.wis-tabs button { flex: 0 0 auto; background: transparent; color: var(--ws-color-text-muted, #64748b); }
+.wis-tabs button.is-active { background: color-mix(in srgb, var(--ws-color-primary, #2563eb) 10%, white); color: var(--ws-color-primary, #2563eb); }
+button:disabled { cursor: not-allowed; opacity: 0.5; }
+.wis-actions button.is-danger { background: #b42318; }
+.wis-actions button.is-secondary { background: #475569; }
+
+.wis-stack,
+.wis-panel {
+  display: grid;
+  gap: var(--ws-space-4, 1rem);
+  min-width: 0;
+  padding: clamp(1rem, 3vw, 1.4rem);
+  border: 1px solid var(--ws-color-border, #e2e8f0);
+  border-radius: var(--ws-radius-lg, 0.9rem);
+  background: var(--ws-color-surface, #fff);
+}
+
+.wis-ledger-list,
+.wis-order-list,
+.wis-ranking-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wis-ledger-list li,
+.wis-order-list li,
+.wis-ranking-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-width: 0;
+  padding: 0.9rem 0;
+  border-bottom: 1px solid var(--ws-color-border, #e2e8f0);
+}
+
+.wis-ledger-list li:last-child,
+.wis-order-list li:last-child,
+.wis-ranking-list li:last-child { border-bottom: 0; }
+.wis-ledger-list li > div { display: grid; gap: 0.2rem; min-width: 0; }
+.wis-ledger-list li > div:last-child { text-align: right; }
+.wis-ledger-list span,
+.wis-order-list span { color: var(--ws-color-text-muted, #64748b); font-size: 0.84rem; }
+.wis-ledger-list .is-positive { color: #087443; }
+.wis-ledger-list .is-negative { color: #b42318; }
+
+.wis-product-grid,
+.wis-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: var(--ws-space-4, 1rem);
+}
+
+.wis-product-card,
+.wis-kpi-grid article {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1rem;
+  border: 1px solid var(--ws-color-border, #e2e8f0);
+  border-radius: var(--ws-radius-lg, 0.9rem);
+  background: var(--ws-color-surface, #fff);
+}
+.wis-product-card h2 { margin: 0; font-size: 1.05rem; }
+.wis-kpi-grid article span { color: var(--ws-color-text-muted, #64748b); }
+.wis-kpi-grid article strong { font-size: 1.2rem; overflow-wrap: anywhere; }
+
+.wis-status { display: inline-flex; align-items: center; min-height: 28px; padding: 0.2rem 0.55rem; border-radius: 999px; background: #f1f5f9; color: #334155 !important; font-weight: 700; white-space: nowrap; }
+.wis-status--approved { background: #eff6ff; color: #1d4ed8 !important; }
+.wis-status--fulfilled { background: #ecfdf3; color: #087443 !important; }
+.wis-status--rejected { background: #fff1f2; color: #b42318 !important; }
+.wis-ranking-list li.is-me { margin-inline: -0.5rem; padding-inline: 0.5rem; border-radius: 0.6rem; background: #eff6ff; }
+
+.wis-teacher-grid,
+.wis-master-detail { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--ws-space-4, 1rem); align-items: start; }
+.wis-account-list { display: grid; gap: 0.5rem; max-height: 34rem; overflow: auto; }
+.wis-account-list button { display: flex; justify-content: space-between; gap: 1rem; min-height: 52px; padding: 0.75rem; border: 1px solid var(--ws-color-border, #e2e8f0); border-radius: 0.7rem; background: #fff; color: inherit; text-align: left; cursor: pointer; }
+.wis-account-list button.is-active { border-color: var(--ws-color-primary, #2563eb); background: #eff6ff; }
+.wis-account-list button span { color: var(--ws-color-text-muted, #64748b); }
+.wis-panel label { display: grid; gap: 0.4rem; font-weight: 700; }
+.wis-panel input,
+.wis-panel textarea { width: 100%; min-height: 44px; box-sizing: border-box; border: 1px solid var(--ws-color-border-strong, #cbd5e1); border-radius: 0.65rem; padding: 0.7rem 0.8rem; background: #fff; color: inherit; font: inherit; }
+.wis-panel textarea { min-height: 6rem; resize: vertical; }
+.wis-form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.wis-actions { display: flex; flex-wrap: wrap; gap: 0.55rem; }
+
+.wis-table-wrap { max-width: 100%; overflow: auto; border: 1px solid var(--ws-color-border, #e2e8f0); border-radius: 0.7rem; }
+.wis-table-wrap:focus-visible { outline: 3px solid color-mix(in srgb, var(--ws-color-primary, #2563eb) 40%, transparent); outline-offset: 2px; }
+.wis-table-wrap table { width: 100%; min-width: 720px; border-collapse: collapse; }
+.wis-table-wrap th,
+.wis-table-wrap td { padding: 0.8rem; border-bottom: 1px solid var(--ws-color-border, #e2e8f0); text-align: left; vertical-align: top; }
+
+@media (max-width: 767px) {
+  .wis-page__header { display: grid; }
+  .wis-teacher-grid,
+  .wis-master-detail { grid-template-columns: minmax(0, 1fr); }
+  .wis-account-list { max-height: 18rem; }
+  .wis-form-row { grid-template-columns: minmax(0, 1fr); }
+  .wis-ledger-list li,
+  .wis-order-list li { align-items: flex-start; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wis-page *, .wis-page *::before, .wis-page *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
+}

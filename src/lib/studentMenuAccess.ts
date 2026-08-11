@@ -61,6 +61,11 @@ const VISIBLE_MENU_DESCENDANT_PATHS: Record<string, string[]> = {
   "/student/history-classroom": ["/student/history-classroom/run"],
 };
 
+const ROUTE_CONTEXT_QUERY_KEYS: Readonly<Record<string, ReadonlySet<string>>> =
+  {
+    "/student/points": new Set(["semesterId", "source"]),
+  };
+
 const normalizePathname = (value: unknown) => {
   const raw = String(value || "").trim();
   if (!raw) return "/";
@@ -157,8 +162,12 @@ const childUrlHasQuerySiblingOnSamePath = (
   });
 };
 
-const targetHasSearchParams = (search: unknown) =>
-  Array.from(new URLSearchParams(normalizeSearch(search)).keys()).length > 0;
+const targetHasMenuSearchParams = (pathname: string, search: unknown) => {
+  const contextKeys = ROUTE_CONTEXT_QUERY_KEYS[pathname] || new Set<string>();
+  return Array.from(new URLSearchParams(normalizeSearch(search)).keys()).some(
+    (key) => !contextKeys.has(key),
+  );
+};
 
 const menuTargetMatchesRoute = (
   menuUrl: string,
@@ -177,7 +186,7 @@ const menuTargetMatchesRoute = (
     }
 
     if (parsedMenuUrl.hasSearch) return true;
-    if (!targetHasSearchParams(target.search)) return true;
+    if (!targetHasMenuSearchParams(targetPathname, target.search)) return true;
 
     return !siblings.some((sibling) => {
       const parsedSibling = parseMenuUrl(sibling.url);
@@ -205,8 +214,10 @@ const hiddenChildMatchesRoute = (
   const targetSearchParams = new URLSearchParams(
     normalizeSearch(target.search),
   );
-  const targetHasSearchParams =
-    Array.from(targetSearchParams.keys()).length > 0;
+  const targetHasSearchParams = targetHasMenuSearchParams(
+    targetPathname,
+    target.search,
+  );
 
   if (parsedChild.pathname === targetPathname) {
     for (const [key, value] of parsedChild.searchParams.entries()) {

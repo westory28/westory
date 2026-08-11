@@ -1,6 +1,5 @@
 import {
   collection,
-  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -8,11 +7,10 @@ import {
   orderBy,
   query,
   serverTimestamp,
-  setDoc,
   where,
 } from "firebase/firestore";
 import { db, getHttpsCallable } from "./firebase";
-import { executeWestoryCommand } from "./commandGateway";
+import type { W2CommandResults } from "./commandGateway";
 import {
   buildPointRankPolicySavePayload,
   buildPointRankEarnedPointsByUid,
@@ -1178,21 +1176,14 @@ export const adjustPoints = async ({
   sourceLabel,
   policyId,
   mode,
-}: AdjustPointsInput) => {
-  if (!Number.isFinite(delta) || delta === 0) {
-    throw new Error("Point delta must be a non-zero finite number.");
-  }
-  const { year, semester } = getYearSemester(config);
-  const response = await executeWestoryCommand("adjustTeacherPoints", {
-    year,
-    semester,
-    uid,
-    delta,
-    sourceLabel: String(sourceLabel || "").trim(),
-    policyId: String(policyId || "").trim(),
-    mode: mode || (delta > 0 ? "grant" : "reclaim"),
-  });
-  return response.result;
+}: AdjustPointsInput): Promise<W2CommandResults["adjustTeacherPoints"]> => {
+  void config;
+  void uid;
+  void delta;
+  void sourceLabel;
+  void policyId;
+  void mode;
+  throw new Error("CLIENT_UPDATE_REQUIRED: 새 위스 원장 화면을 이용해 주세요.");
 };
 
 export const buildPointPolicyPayload = (
@@ -1249,58 +1240,36 @@ export const upsertPointPolicy = async (
   config: ConfigLike,
   policy: Partial<PointPolicy>,
   actor: ActorInfo,
-) => {
-  const targetRef = doc(db, getPointPolicyDocPath(config));
-  const payload = buildPointPolicyPayload(policy, actor);
-  await setDoc(targetRef, payload);
-  return payload as PointPolicy;
+): Promise<PointPolicy> => {
+  void config;
+  void policy;
+  void actor;
+  throw new Error(
+    "CLIENT_UPDATE_REQUIRED: 이전 포인트 정책 쓰기는 종료되었습니다.",
+  );
 };
 
 export const upsertPointProduct = async (
   config: ConfigLike,
   product: Partial<PointProduct> & Pick<PointProduct, "name" | "price">,
   actor: ActorInfo,
-) => {
-  const productRef = product.id
-    ? doc(db, getPointCollectionPath(config, "point_products"), product.id)
-    : doc(collection(db, getPointCollectionPath(config, "point_products")));
-  const payload = {
-    name: String(product.name || "").trim(),
-    description: String(product.description || "").trim(),
-    price: Number(product.price || 0),
-    stock: Number(product.stock || 0),
-    isActive: product.isActive !== false,
-    sortOrder: Number(product.sortOrder || 0),
-    imageUrl: String(product.imageUrl || "").trim(),
-    previewImageUrl: String(product.previewImageUrl || "").trim(),
-    imageStoragePath: String(product.imageStoragePath || "").trim(),
-    previewStoragePath: String(product.previewStoragePath || "").trim(),
-    updatedAt: serverTimestamp(),
-    updatedBy: actor.uid,
-    ...(product.id ? {} : { createdAt: serverTimestamp() }),
-  };
-  await setDoc(productRef, payload, { merge: true });
-  return {
-    id: productRef.id,
-    ...payload,
-  };
+): Promise<PointProduct> => {
+  void config;
+  void product;
+  void actor;
+  throw new Error(
+    "CLIENT_UPDATE_REQUIRED: 새 위스 상품·재고 화면을 이용해 주세요.",
+  );
 };
 
 export const deletePointProduct = async (
   config: ConfigLike,
   productId: string,
-) => {
-  const normalizedProductId = String(productId || "").trim();
-  if (!normalizedProductId) {
-    throw new Error("삭제할 상품 정보가 올바르지 않습니다.");
-  }
-
-  await deleteDoc(
-    doc(
-      db,
-      getPointCollectionPath(config, "point_products"),
-      normalizedProductId,
-    ),
+): Promise<void> => {
+  void config;
+  void productId;
+  throw new Error(
+    "CLIENT_UPDATE_REQUIRED: 상품은 비활성 상태로 전환해 주세요.",
   );
 };
 
@@ -1310,23 +1279,20 @@ export const reviewPointOrder = async ({
   nextStatus,
   actor,
   memo,
-}: ReviewPointOrderInput) => {
-  const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable("reviewTeacherPointOrder");
-  const result = await callable({
-    year,
-    semester,
-    orderId,
-    nextStatus,
-    memo: String(memo || "").trim(),
-    actorUid: actor.uid,
-  });
-  return result.data as {
-    orderId: string;
-    transactionId: string;
-    status: PointOrderStatus;
-    duplicate?: boolean;
-  };
+}: ReviewPointOrderInput): Promise<{
+  orderId: string;
+  transactionId: string;
+  status: PointOrderStatus;
+  duplicate?: boolean;
+}> => {
+  void config;
+  void orderId;
+  void nextStatus;
+  void actor;
+  void memo;
+  throw new Error(
+    "CLIENT_UPDATE_REQUIRED: 새 위스 주문 처리 화면을 이용해 주세요.",
+  );
 };
 
 export const updatePointAdjustment = async ({
@@ -1334,23 +1300,20 @@ export const updatePointAdjustment = async ({
   transactionId,
   action,
   nextDelta,
-}: UpdatePointAdjustmentInput) => {
-  const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable("updateTeacherPointAdjustment");
-  const result = await callable({
-    year,
-    semester,
-    transactionId,
-    action,
-    nextDelta: action === "update" ? Number(nextDelta || 0) : undefined,
-  });
-  return result.data as {
-    walletId: string;
-    transactionId: string;
-    balance: number;
-    delta: number;
-    cancelled: boolean;
-  };
+}: UpdatePointAdjustmentInput): Promise<{
+  walletId: string;
+  transactionId: string;
+  balance: number;
+  delta: number;
+  cancelled: boolean;
+}> => {
+  void config;
+  void transactionId;
+  void action;
+  void nextDelta;
+  throw new Error(
+    "CLIENT_UPDATE_REQUIRED: 원장 항목은 수정·삭제할 수 없으며 반대 항목으로 되돌려야 합니다.",
+  );
 };
 
 export const updateStudentProfileIcon = async ({
@@ -1373,15 +1336,12 @@ export const updateStudentProfileIcon = async ({
 export const rebuildPointWalletRankTotals = async ({
   config,
   dryRun = false,
-}: RebuildPointWalletRankTotalsInput) => {
-  const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable("rebuildPointWalletRankTotals");
-  const result = await callable({
-    year,
-    semester,
-    dryRun,
-  });
-  return result.data as RebuildPointWalletRankTotalsResult;
+}: RebuildPointWalletRankTotalsInput): Promise<RebuildPointWalletRankTotalsResult> => {
+  void config;
+  void dryRun;
+  throw new Error(
+    "CLIENT_UPDATE_REQUIRED: 새 위스 원장 대조 기능을 이용해 주세요.",
+  );
 };
 
 // Student trusted-callable wrappers
@@ -1391,18 +1351,15 @@ export const claimPointActivityReward = async ({
   sourceId,
   sourceLabel,
   score,
-}: ClaimPointActivityInput) => {
-  const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable("applyPointActivityReward");
-  const result = await callable({
-    year,
-    semester,
-    activityType,
-    sourceId,
-    sourceLabel: String(sourceLabel || "").trim(),
-    score: score === null || score === undefined ? undefined : Number(score),
-  });
-  return result.data as PointActivityRewardResult;
+}: ClaimPointActivityInput): Promise<PointActivityRewardResult> => {
+  void config;
+  void activityType;
+  void sourceId;
+  void sourceLabel;
+  void score;
+  throw new Error(
+    "CLIENT_UPDATE_REQUIRED: 학습 보상은 W8 연동 어댑터에서 새 위스 원장으로 지급해야 합니다.",
+  );
 };
 
 export const buildPointRewardFeedback = ({
@@ -1477,23 +1434,18 @@ export const createSecurePurchaseRequest = async ({
   productId,
   memo,
   requestKey,
-}: SecurePurchaseRequestInput) => {
-  const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable("createPointPurchaseRequest");
-  const result = await callable({
-    year,
-    semester,
-    productId,
-    memo: String(memo || "").trim(),
-    requestKey,
-  });
-  return result.data as {
-    created: boolean;
-    duplicate: boolean;
-    orderId: string;
-    transactionId: string;
-    balance: number;
-  };
+}: SecurePurchaseRequestInput): Promise<{
+  created: boolean;
+  duplicate: boolean;
+  orderId: string;
+  transactionId: string;
+  balance: number;
+}> => {
+  void config;
+  void productId;
+  void memo;
+  void requestKey;
+  throw new Error("CLIENT_UPDATE_REQUIRED: 새 위스 상점을 이용해 주세요.");
 };
 
 export {

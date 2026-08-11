@@ -251,12 +251,12 @@ service firebase.storage {
 
     match /years/{year}/semesters/{semester}/point_products/{productId}/{allPaths=**} {
       allow read: if canUseWestory();
-      allow write: if isAdmin();
+      allow write: if false;
     }
 
     match /site-settings/interface/hall-of-fame/{allPaths=**} {
       allow read: if canUseWestory();
-      allow write: if isAdmin() || isTeacherRole() || hasStoragePermission('point_manage');
+      allow write: if false;
     }
 
     match /site-settings/interface/{allPaths=**} {

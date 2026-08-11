@@ -203,7 +203,7 @@ try {
       { merge: true },
     ),
   );
-  await assertSucceeds(
+  await assertFails(
     updateDoc(
       doc(
         adminDb,
@@ -229,7 +229,7 @@ try {
         "ACTIVE_POINTER_CREATE_UPDATE_DELETE_DENIED",
         "COMPAT_CONFIG_CREATE_UPDATE_DELETE_DENIED",
         "SERVER_OWNED_DOCUMENTS_READABLE_TO_AUTHORIZED_CLIENT",
-        "UNMIGRATED_SETTINGS_AND_POINT_POLICY_WRITE_RETAINED",
+        "UNMIGRATED_SETTINGS_WRITE_RETAINED_AND_W7_POINT_POLICY_WRITE_RETIRED",
       ],
     }),
   );

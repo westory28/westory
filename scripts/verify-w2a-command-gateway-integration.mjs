@@ -744,70 +744,15 @@ const main = async () => {
         mode: "grant",
       },
     };
-    const pointConcurrentResults = await Promise.all([
-      executeCommand(primary, pointEnvelope),
-      executeCommand(peer, pointEnvelope),
-    ]);
-    assert.deepEqual(
-      pointConcurrentResults.map((item) => item.data.replayed).sort(),
-      [false, true],
+    const retiredGatewayState = await snapshotCommandState(testEnv);
+    await expectReason(
+      () => executeCommand(primary, pointEnvelope),
+      "CLIENT_UPDATE_REQUIRED",
     );
-    assert.deepEqual(
-      pointConcurrentResults[0].data.result,
-      pointConcurrentResults[1].data.result,
-    );
-    assert.equal(pointConcurrentResults[0].data.result.balance, 15);
+    assert.deepEqual(await snapshotCommandState(testEnv), retiredGatewayState);
     const pointArtifacts = await commandArtifacts(testEnv, pointCommandId);
-    assert.equal(pointArtifacts.receipts.length, 1);
-    assert.equal(pointArtifacts.audits.length, 1);
-    assert.equal(pointArtifacts.receipts[0].target.adapterVersion, "legacyPointV1");
-    assert.equal(pointArtifacts.receipts[0].actorRole, "admin");
-    assert.equal(
-      pointArtifacts.receipts[0].actorCapability,
-      "command:adjustTeacherPoints",
-    );
-    const pointStateAfterFirst = await snapshotCommandState(testEnv);
-    assert.equal(pointStateAfterFirst.pointWallets[0].data.balance, 15);
-    assert.equal(pointStateAfterFirst.pointTransactions.length, 1);
-    await expectReason(
-      () =>
-        executeCommand(primary, {
-          ...pointEnvelope,
-          payload: { ...pointEnvelope.payload, delta: 7 },
-        }),
-      "COMMAND_ID_CONFLICT",
-    );
-    assert.deepEqual(await snapshotCommandState(testEnv), pointStateAfterFirst);
-
-    const pointResponseLossId = randomUUID();
-    const pointResponseLossEnvelope = {
-      commandId: pointResponseLossId,
-      commandType: "adjustTeacherPoints",
-      payload: {
-        ...pointEnvelope.payload,
-        delta: 3,
-        sourceLabel: "응답 유실 복구 지급",
-      },
-      _testDropResponseAfterCommit: true,
-    };
-    await expectReason(
-      () => executeCommand(primary, pointResponseLossEnvelope),
-      "TEST_RESPONSE_LOSS",
-    );
-    const pointRecovered = (
-      await executeCommand(peer, pointResponseLossEnvelope)
-    ).data;
-    assert.equal(pointRecovered.replayed, true);
-    assert.equal(pointRecovered.result.balance, 18);
-    const pointStateAfterRecovery = await snapshotCommandState(testEnv);
-    assert.equal(pointStateAfterRecovery.pointWallets[0].data.balance, 18);
-    assert.equal(pointStateAfterRecovery.pointTransactions.length, 2);
-    const pointResponseLossArtifacts = await commandArtifacts(
-      testEnv,
-      pointResponseLossId,
-    );
-    assert.equal(pointResponseLossArtifacts.receipts.length, 1);
-    assert.equal(pointResponseLossArtifacts.audits.length, 1);
+    assert.equal(pointArtifacts.receipts.length, 0);
+    assert.equal(pointArtifacts.audits.length, 0);
 
     const legacyCallableState = await snapshotCommandState(testEnv);
     await expectReason(
@@ -906,8 +851,7 @@ const main = async () => {
           "HOLIDAY_EXPLICIT_SYNC_REPLAY",
           "HOLIDAY_ORDINARY_EVENT_PRESERVED",
           "HOLIDAY_UNREGISTERED_SCOPE_REJECTED",
-          "POINT_ADJUST_CROSS_CONTEXT_EFFECT_ONCE_AND_CONFLICT_ZERO_WRITE",
-          "POINT_ADJUST_RESPONSE_LOSS_RECOVERY",
+          "POINT_ADJUST_GATEWAY_RETIRED_ZERO_WRITE",
           "POINT_ADJUST_UNAUTHORIZED_PRE_BUSINESS_ZERO_WRITE",
           "LEGACY_POINT_CALLABLE_RETIRED_ZERO_WRITE",
         ],

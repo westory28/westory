@@ -59,6 +59,7 @@ const QUERY_CALLABLES = new Set([
   "listStudentHistoryDictionaryWordsForTeacher",
   "getAssessmentState",
   "getGradeEvidenceState",
+  "getWisEconomyState",
 ]);
 const SESSION_CONTROL_CALLABLES = new Set([
   "beginApplicationSessionReauthentication",
@@ -92,6 +93,7 @@ const WAVE_ORDER = [
   "W5",
   "W6A",
   "W6B",
+  "W7",
   "W7A",
   "W7B",
   "W8A",

@@ -1157,6 +1157,39 @@ service cloud.firestore {
       allow read, create, update, delete: if false;
     }
 
+    // W7 canonical Wis Economy is callable-only. Ledger rows are immutable and
+    // every projection/order mutation is committed through the command gateway.
+    match /semester_wis_economies/{documentId} {
+      allow read, create, update, delete: if false;
+    }
+    match /semester_wis_accounts/{documentId} {
+      allow read, create, update, delete: if false;
+    }
+    match /semester_wis_ledger/{documentId} {
+      allow read, create, update, delete: if false;
+    }
+    match /semester_wis_balances/{documentId} {
+      allow read, create, update, delete: if false;
+    }
+    match /semester_wis_rankings/{documentId} {
+      allow read, create, update, delete: if false;
+    }
+    match /wis_product_catalog/{documentId} {
+      allow read, create, update, delete: if false;
+    }
+    match /semester_wis_inventory/{documentId} {
+      allow read, create, update, delete: if false;
+    }
+    match /semester_wis_orders/{documentId} {
+      allow read, create, update, delete: if false;
+    }
+    match /semester_wis_reconciliation_reports/{documentId} {
+      allow read, create, update, delete: if false;
+    }
+    match /wis_legacy_issues/{documentId} {
+      allow read, create, update, delete: if false;
+    }
+
     match /semester_manifests/{semesterId} {
       allow read: if canUseWestory();
       allow create, update, delete: if false;
@@ -1393,7 +1426,7 @@ service cloud.firestore {
 
       match /point_products/{productId} {
         allow read: if canUseWestory();
-        allow create, update, delete: if canManagePointData();
+        allow create, update, delete: if false;
       }
 
       match /point_orders/{orderId} {
@@ -1403,7 +1436,7 @@ service cloud.firestore {
 
       match /point_policies/{policyId} {
         allow read: if canUseWestory();
-        allow create, update, delete: if canManagePointData();
+        allow create, update, delete: if false;
       }
 
       match /notification_inboxes/{userId} {

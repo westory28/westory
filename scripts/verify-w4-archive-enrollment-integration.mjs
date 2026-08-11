@@ -414,8 +414,8 @@ const main = async () => {
       expectedRevision: 1,
     });
     assert.equal(validation.data.result.status, "PASS");
-    assert.equal(validation.data.result.requiredPassed, 16);
-    assert.equal(validation.data.result.requiredTotal, 16);
+    assert.equal(validation.data.result.requiredPassed, 17);
+    assert.equal(validation.data.result.requiredTotal, 17);
     const report = await readDocument(
       testEnv,
       "semester_readiness_reports/2027-1",

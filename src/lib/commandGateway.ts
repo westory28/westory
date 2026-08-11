@@ -47,7 +47,20 @@ export type W2CommandType =
   | "correctOfficialGrade"
   | "requestGradeReview"
   | "acknowledgeGradeEvidence"
-  | "signOfficialGrade";
+  | "signOfficialGrade"
+  | "createSemesterEconomy"
+  | "createWisAccounts"
+  | "grantInitialWis"
+  | "grantWis"
+  | "deductWis"
+  | "adjustWis"
+  | "reverseWisEntry"
+  | "rebuildWisProjection"
+  | "transitionWisEconomy"
+  | "upsertWisProduct"
+  | "upsertWisInventory"
+  | "placeWisOrder"
+  | "reviewWisOrder";
 
 interface ConsentCommandItem {
   id: string;
@@ -367,6 +380,100 @@ export interface W2CommandPayloads {
     signatureName: string;
     statementVersion: string;
   };
+  createSemesterEconomy: {
+    semesterId: string;
+    expectedSemesterRevision: number;
+    displayName: string;
+    currencyName: string;
+    initialGrantAmount: number;
+  };
+  createWisAccounts: {
+    semesterId: string;
+    expectedSemesterRevision: number;
+    expectedEconomyRevision: number;
+    enrollmentIds: string[];
+    reason: string;
+  };
+  grantInitialWis: WisAccountValuePayload;
+  grantWis: WisAccountValuePayload;
+  deductWis: WisAccountValuePayload;
+  adjustWis: Omit<WisAccountValuePayload, "amount"> & { delta: number };
+  reverseWisEntry: WisAccountCommandBase & {
+    ledgerEntryId: string;
+    reason: string;
+  };
+  rebuildWisProjection: Omit<
+    WisAccountCommandBase,
+    "expectedAccountRevision"
+  > & {
+    accountId: string;
+    reason: string;
+  };
+  transitionWisEconomy: {
+    semesterId: string;
+    expectedSemesterRevision: number;
+    expectedEconomyRevision: number;
+    targetStatus: "ACTIVE_OPEN" | "CLOSED" | "ARCHIVED";
+    reason: string;
+  };
+  upsertWisProduct: {
+    semesterId: string;
+    expectedSemesterRevision: number;
+    expectedEconomyRevision: number;
+    productId?: string;
+    expectedProductRevision: number | null;
+    name: string;
+    description: string;
+    imageUrl: string;
+    active: boolean;
+    reason: string;
+  };
+  upsertWisInventory: {
+    semesterId: string;
+    expectedSemesterRevision: number;
+    expectedEconomyRevision: number;
+    productId: string;
+    expectedInventoryRevision: number | null;
+    price: number;
+    stock: number;
+    active: boolean;
+    reason: string;
+  };
+  placeWisOrder: {
+    semesterId: string;
+    expectedSemesterRevision: number;
+    expectedEconomyRevision: number;
+    inventoryId: string;
+    expectedInventoryRevision: number;
+    expectedAccountRevision: number;
+    quantity: number;
+  };
+  reviewWisOrder: {
+    semesterId: string;
+    expectedSemesterRevision: number;
+    expectedEconomyRevision: number;
+    orderId: string;
+    expectedOrderRevision: number;
+    action: "APPROVE" | "REJECT" | "FULFILL";
+    reason: string;
+  };
+}
+
+interface WisEconomyCommandBase {
+  semesterId: string;
+  expectedSemesterRevision: number;
+  expectedEconomyRevision: number;
+}
+
+interface WisAccountCommandBase extends WisEconomyCommandBase {
+  accountId: string;
+  expectedAccountRevision: number;
+}
+
+interface WisAccountValuePayload extends WisAccountCommandBase {
+  amount: number;
+  sourceId: string;
+  reason: string;
 }
 
 export interface W2CommandResults {
@@ -526,6 +633,40 @@ export interface W2CommandResults {
   requestGradeReview: GradeCommandResult;
   acknowledgeGradeEvidence: GradeCommandResult;
   signOfficialGrade: GradeCommandResult;
+  createSemesterEconomy: WisCommandResult;
+  createWisAccounts: WisCommandResult;
+  grantInitialWis: WisCommandResult;
+  grantWis: WisCommandResult;
+  deductWis: WisCommandResult;
+  adjustWis: WisCommandResult;
+  reverseWisEntry: WisCommandResult;
+  rebuildWisProjection: WisCommandResult;
+  transitionWisEconomy: WisCommandResult;
+  upsertWisProduct: WisCommandResult;
+  upsertWisInventory: WisCommandResult;
+  placeWisOrder: WisCommandResult;
+  reviewWisOrder: WisCommandResult;
+}
+
+export interface WisCommandResult {
+  semesterId?: string;
+  accountId?: string;
+  ledgerEntryId?: string;
+  orderId?: string;
+  productId?: string;
+  inventoryId?: string;
+  reportId?: string;
+  revision?: number;
+  accountRevision?: number;
+  economyRevision?: number;
+  orderRevision?: number;
+  inventoryRevision?: number;
+  balance?: number;
+  available?: number;
+  reserved?: number;
+  status?: string;
+  type?: string;
+  createdCount?: number;
 }
 
 export interface GradeCommandResult {

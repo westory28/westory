@@ -137,11 +137,11 @@ const Calendar = lazyWithRetry(
   "student-calendar",
 );
 const ManagePoints = lazyWithRetry(
-  () => import("./pages/teacher/ManagePoints"),
+  () => import("./pages/teacher/WisEconomyManager"),
   "manage-points",
 );
 const StudentPoints = lazyWithRetry(
-  () => import("./pages/student/Points"),
+  () => import("./pages/student/WisEconomyStudentView"),
   "student-points",
 );
 const DeveloperLog = lazyWithRetry(

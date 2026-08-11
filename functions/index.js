@@ -14,6 +14,7 @@ const semesterCore = require('./semesterCore');
 const archiveEnrollment = require('./archiveEnrollment');
 const assessmentLifecycle = require('./assessmentLifecycle');
 const gradeEvidence = require('./gradeEvidence');
+const wisEconomy = require('./wisEconomy');
 const {
   createLegacyPointV1CommandAdapter,
   createRetiredAdjustTeacherPointsHandler,
@@ -4914,6 +4915,12 @@ exports.recalculateQuizResultsAfterQuestionCorrection = onCall(
 
 exports.ensureWisHallOfFame = onCall({ region: REGION }, async (request) => {
   await assertAllowedWestoryUser(request);
+  throw new HttpsError('failed-precondition', '이전 위스 명예의 전당 갱신 경로는 종료되었습니다.', {
+    reason: 'CLIENT_UPDATE_REQUIRED',
+    replacement: 'rebuildWisProjection',
+  });
+
+  /* istanbul ignore next -- 이전 번들 진단을 위해 한 Wave 동안 보존한 비활성 구현 */
   const forceRefresh = request.data?.force === true;
   const { year, semester } = await resolveHallOfFameTargetYearSemester(
     request.data,
@@ -6281,6 +6288,12 @@ exports.reviewPerformanceScoreObjection = onCall({ region: REGION }, async (requ
 
 exports.saveWisHallOfFameConfig = onCall({ region: REGION }, async (request) => {
   const { uid } = await assertHallOfFameManager(request, { recentAuth: true, highRisk: true });
+  throw new HttpsError('failed-precondition', '이전 위스 명예의 전당 설정 경로는 종료되었습니다.', {
+    reason: 'CLIENT_UPDATE_REQUIRED',
+    replacement: 'rebuildWisProjection',
+  });
+
+  /* istanbul ignore next -- 이전 번들 진단을 위해 한 Wave 동안 보존한 비활성 구현 */
   const { year, semester } = await resolveHallOfFameTargetYearSemester(
     request.data,
     {
@@ -6385,6 +6398,13 @@ exports.refreshWisHallOfFameOnSchedule = onSchedule(
     timeZone: 'Asia/Seoul',
   },
   async () => {
+    console.log('Skipped retired legacy hall of fame refresh.', {
+      reason: 'CLIENT_UPDATE_REQUIRED',
+      replacement: 'rebuildWisProjection',
+    });
+    return;
+
+    /* istanbul ignore next -- 이전 예약 작업 진단을 위해 한 Wave 동안 보존한 비활성 구현 */
     const currentYearSemester = await resolveHallOfFameTargetYearSemester(
       null,
       {
@@ -6435,6 +6455,10 @@ exports.refreshWisHallOfFameOnSchedule = onSchedule(
 );
 
 exports.rebuildPointWalletRankTotals = onCall({ region: REGION, timeoutSeconds: 540, memory: '1GiB' }, async (request) => {
+  throw new HttpsError('failed-precondition', '이전 위스 projection 재계산 경로는 종료되었습니다.', {
+    reason: 'CLIENT_UPDATE_REQUIRED',
+    replacement: 'rebuildWisProjection',
+  });
   const manager = await assertPointManager(request, { recentAuth: true, highRisk: true });
   const { year, semester } = assertYearSemester(request.data);
   const dryRun = request.data?.dryRun === true;
@@ -6471,6 +6495,10 @@ exports.rebuildPointWalletRankTotals = onCall({ region: REGION, timeoutSeconds: 
 });
 
 exports.applyPointActivityReward = onCall({ region: REGION }, async (request) => {
+  throw new HttpsError('failed-precondition', '이전 위스 자동 지급 경로는 종료되었습니다.', {
+    reason: 'CLIENT_UPDATE_REQUIRED',
+    replacement: 'grantWis',
+  });
   const { uid } = await assertAllowedWestoryUser(request);
   const { year, semester } = assertYearSemester(request.data);
   const activityType = String(request.data?.activityType || '').trim();
@@ -6831,6 +6859,10 @@ exports.applyPointActivityReward = onCall({ region: REGION }, async (request) =>
 });
 
 exports.createPointPurchaseRequest = onCall({ region: REGION }, async (request) => {
+  throw new HttpsError('failed-precondition', '이전 위스 구매 경로는 종료되었습니다.', {
+    reason: 'CLIENT_UPDATE_REQUIRED',
+    replacement: 'placeWisOrder',
+  });
   const { uid } = await assertAllowedWestoryUser(request);
   const { year, semester } = assertYearSemester(request.data);
   const productId = String(request.data?.productId || '').trim();
@@ -6958,6 +6990,10 @@ exports.adjustTeacherPoints = onCall(
 );
 
 exports.updateTeacherPointAdjustment = onCall({ region: REGION }, async (request) => {
+  throw new HttpsError('failed-precondition', '이전 위스 조정 경로는 종료되었습니다.', {
+    reason: 'CLIENT_UPDATE_REQUIRED',
+    replacement: 'adjustWis',
+  });
   await assertPointManager(request, { recentAuth: true, highRisk: true });
   const { year, semester } = assertYearSemester(request.data);
   const transactionId = String(request.data?.transactionId || '').trim();
@@ -7063,6 +7099,10 @@ exports.updateTeacherPointAdjustment = onCall({ region: REGION }, async (request
 });
 
 exports.reviewTeacherPointOrder = onCall({ region: REGION }, async (request) => {
+  throw new HttpsError('failed-precondition', '이전 위스 주문 검토 경로는 종료되었습니다.', {
+    reason: 'CLIENT_UPDATE_REQUIRED',
+    replacement: 'reviewWisOrder',
+  });
   const manager = await assertPointManager(request, { recentAuth: true, highRisk: true });
   const { year, semester } = assertYearSemester(request.data);
   const orderId = String(request.data?.orderId || '').trim();
@@ -8393,10 +8433,12 @@ exports.updateStudentProfileIcon = onCall({ region: REGION }, async (request) =>
 const authorizeCommandGatewayActor = async ({ request, identity, commandType }) => {
   const assessmentCommandTypes = Object.values(assessmentLifecycle.ASSESSMENT_COMMAND_TYPES);
   const gradeCommandTypes = Object.values(gradeEvidence.GRADE_COMMAND_TYPES);
+  const wisCommandTypes = Object.values(wisEconomy.WIS_COMMAND_TYPES);
   if (
     commandType !== commandGateway.COMMAND_TYPES.ADJUST_TEACHER_POINTS
     && !assessmentCommandTypes.includes(commandType)
     && !gradeCommandTypes.includes(commandType)
+    && !wisCommandTypes.includes(commandType)
   ) {
     return null;
   }
@@ -8418,6 +8460,11 @@ const authorizeCommandGatewayActor = async ({ request, identity, commandType }) 
         reason: 'GRADE_STUDENT_REQUIRED',
       });
     }
+    if (wisCommandTypes.includes(commandType) && wisEconomy.STUDENT_COMMAND_TYPES.has(commandType)) {
+      throw new HttpsError('permission-denied', 'A student account is required.', {
+        reason: 'WIS_STUDENT_REQUIRED',
+      });
+    }
     return {
       actorUid,
       actorEmail,
@@ -8427,6 +8474,34 @@ const authorizeCommandGatewayActor = async ({ request, identity, commandType }) 
   }
   const profileSnapshot = await db.doc(`users/${actorUid}`).get();
   const profile = profileSnapshot.exists ? profileSnapshot.data() || {} : {};
+  if (wisCommandTypes.includes(commandType)) {
+    const role = String(profile.role || 'student').trim() || 'student';
+    if (wisEconomy.STUDENT_COMMAND_TYPES.has(commandType)) {
+      if (role !== 'student') {
+        throw new HttpsError('permission-denied', 'A student account is required.', {
+          reason: 'WIS_STUDENT_REQUIRED',
+        });
+      }
+      return {
+        actorUid,
+        actorEmail,
+        actorRole: 'student',
+        actorCapability: `wis:${commandType}`,
+      };
+    }
+    const permissions = Array.isArray(profile.staffPermissions) ? profile.staffPermissions : [];
+    if (profile.teacherPortalEnabled !== true || !permissions.includes('point_manage')) {
+      throw new HttpsError('permission-denied', 'Wis management permission is required.', {
+        reason: 'WIS_MANAGE_REQUIRED',
+      });
+    }
+    return {
+      actorUid,
+      actorEmail,
+      actorRole: role === 'admin' ? 'admin' : 'teacher',
+      actorCapability: 'point_manage',
+    };
+  }
   if (gradeCommandTypes.includes(commandType)) {
     const isStudentCommand = gradeEvidence.STUDENT_COMMAND_TYPES.has(commandType);
     const role = String(profile.role || 'student').trim() || 'student';
@@ -8523,14 +8598,24 @@ const legacyPointV1CommandAdapter = createLegacyPointV1CommandAdapter({
   buildWalletRankState,
   createTransactionPayload,
 });
+const retiredLegacyPointV1CommandAdapter = {
+  apply: async () => {
+    throw new HttpsError('failed-precondition', '이전 위스 조정 경로는 종료되었습니다.', {
+      reason: 'CLIENT_UPDATE_REQUIRED',
+      replacement: 'adjustWis',
+    });
+  },
+};
 
 const archiveEnrollmentReadinessAdapter = archiveEnrollment.createArchiveEnrollmentReadinessAdapter();
 const assessmentReadinessAdapter = assessmentLifecycle.createAssessmentReadinessAdapter();
 const gradeEvidenceReadinessAdapter = gradeEvidence.createGradeReadinessAdapter();
+const wisEconomyReadinessAdapter = wisEconomy.createWisReadinessAdapter();
 const readinessAdapters = [
   archiveEnrollmentReadinessAdapter,
   assessmentReadinessAdapter,
   gradeEvidenceReadinessAdapter,
+  wisEconomyReadinessAdapter,
 ];
 const semesterCoreCommandAdapter = semesterCore.createSemesterCoreCommandAdapter({
   getDefaultPointPolicy,
@@ -8540,13 +8625,14 @@ const semesterCoreCommandAdapter = semesterCore.createSemesterCoreCommandAdapter
 const archiveEnrollmentCommandAdapter = archiveEnrollment.createArchiveEnrollmentCommandAdapter();
 const assessmentCommandAdapter = assessmentLifecycle.createAssessmentCommandAdapter();
 const gradeEvidenceCommandAdapter = gradeEvidence.createGradeCommandAdapter();
+const wisEconomyCommandAdapter = wisEconomy.createWisCommandAdapter();
 const commandGatewayStore = commandGateway.createFirestoreStore(db);
 
 const commandGatewayCore = commandGateway.createCommandGatewayCore({
   store: commandGatewayStore,
   authorizeCommand: authorizeCommandGatewayActor,
   commandAdapters: {
-    [commandGateway.COMMAND_TYPES.ADJUST_TEACHER_POINTS]: legacyPointV1CommandAdapter,
+    [commandGateway.COMMAND_TYPES.ADJUST_TEACHER_POINTS]: retiredLegacyPointV1CommandAdapter,
     [commandGateway.COMMAND_TYPES.CREATE_SEMESTER_MANIFEST]: semesterCoreCommandAdapter,
     [commandGateway.COMMAND_TYPES.UPDATE_OPERATIONAL_SETTINGS]: semesterCoreCommandAdapter,
     [commandGateway.COMMAND_TYPES.UPDATE_SEMESTER_MANIFEST]: semesterCoreCommandAdapter,
@@ -8564,6 +8650,10 @@ const commandGatewayCore = commandGateway.createCommandGatewayCore({
     ...Object.fromEntries(
       Object.values(gradeEvidence.GRADE_COMMAND_TYPES)
         .map((commandType) => [commandType, gradeEvidenceCommandAdapter]),
+    ),
+    ...Object.fromEntries(
+      Object.values(wisEconomy.WIS_COMMAND_TYPES)
+        .map((commandType) => [commandType, wisEconomyCommandAdapter]),
     ),
   },
   semesterCoreResolver: ({ store, semesterId }) =>
@@ -8590,4 +8680,10 @@ const gradeEvidenceQueryCore = gradeEvidence.createGradeQueryCore({
 });
 Object.assign(exports, gradeEvidence.createGradeCallableExports({
   core: gradeEvidenceQueryCore,
+}));
+const wisEconomyQueryCore = wisEconomy.createWisQueryCore({
+  store: commandGatewayStore,
+});
+Object.assign(exports, wisEconomy.createWisCallableExports({
+  core: wisEconomyQueryCore,
 }));
