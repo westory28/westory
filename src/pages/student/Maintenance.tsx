@@ -227,6 +227,7 @@ const Maintenance: React.FC<MaintenanceProps> = ({
             </header>
             <div
               className="maintenance-policy-dialog__body"
+              role="region"
               tabIndex={0}
               aria-label={`${POLICY_LABEL[openPolicy]} 내용`}
             >
