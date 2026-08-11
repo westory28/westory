@@ -1,7 +1,10 @@
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { getStorage } = require("firebase-admin/storage");
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { HttpsError } = require("firebase-functions/v2/https");
 const { onObjectFinalized } = require("firebase-functions/v2/storage");
+const {
+  onCallWithStudentMaintenance: onCall,
+} = require("./studentMaintenance");
 
 const {
   SOURCE_ARCHIVE_MEDIA_KIND,

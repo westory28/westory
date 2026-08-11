@@ -12,12 +12,66 @@ service cloud.firestore {
         && request.auth.token.email.matches('.*@yongshin-ms\\.ms\\.kr$');
     }
 
-    function canUseWestory() {
+    function hasWestoryIdentity() {
       return isSignedIn() && (hasAllowedSchoolEmail() || request.auth.token.email == "westoria28@gmail.com");
+    }
+
+    function isValidStudentMaintenanceConfig(config) {
+      return config.keys().hasAll(['enabled', 'blockedRoles', 'bypassUids', 'title', 'message', 'startedAt', 'updatedAt', 'updatedBy', 'revision'])
+        && config.keys().hasOnly(['enabled', 'blockedRoles', 'bypassUids', 'title', 'message', 'startedAt', 'updatedAt', 'updatedBy', 'revision'])
+        && config.enabled is bool
+        && config.blockedRoles is list
+        && config.blockedRoles.size() == 1
+        && config.blockedRoles[0] == 'student'
+        && config.bypassUids is list
+        && config.bypassUids.size() <= 20
+        && config.bypassUids.toSet().size() == config.bypassUids.size()
+        && config.title is string
+        && config.title.size() > 0
+        && config.title.size() <= 80
+        && config.message is string
+        && config.message.size() > 0
+        && config.message.size() <= 500
+        && ((config.enabled == true && config.startedAt is timestamp)
+          || (config.enabled == false && config.startedAt == null))
+        && config.updatedAt is timestamp
+        && config.updatedBy is string
+        && config.updatedBy.size() > 0
+        && config.revision is int
+        && config.revision >= 0;
+    }
+
+    function canUseWestoryWithConfig(config) {
+      return isValidStudentMaintenanceConfig(config)
+        && (
+          config.enabled == false
+          || request.auth.token.email == "westoria28@gmail.com"
+          || request.auth.uid in config.bypassUids
+          || (
+            exists(/databases/$(database)/documents/users/$(request.auth.uid))
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role is string
+            && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['student', 'teacher', 'staff']
+            && !(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in config.blockedRoles)
+          )
+        );
+    }
+
+    function canUseWestory() {
+      return hasWestoryIdentity()
+        && (
+          !exists(/databases/$(database)/documents/site_settings/student_maintenance)
+          || canUseWestoryWithConfig(
+            get(/databases/$(database)/documents/site_settings/student_maintenance).data
+          )
+        );
     }
 
     function isAdmin() {
       return canUseWestory() && request.auth.token.email == "westoria28@gmail.com";
+    }
+
+    function isOwnIdentityUser(userId) {
+      return hasWestoryIdentity() && request.auth.uid == userId;
     }
 
     function isOwnUser(userId) {
@@ -25,7 +79,7 @@ service cloud.firestore {
     }
 
     function hasUserProfile() {
-      return canUseWestory() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+      return hasWestoryIdentity() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
     function userProfile() {
@@ -33,7 +87,8 @@ service cloud.firestore {
     }
 
     function hasPermission(permission) {
-      return hasUserProfile()
+      return canUseWestory()
+        && hasUserProfile()
         && userProfile().teacherPortalEnabled == true
         && userProfile().staffPermissions is list
         && permission in userProfile().staffPermissions;
@@ -64,11 +119,11 @@ service cloud.firestore {
     }
 
     function isTeacherRole() {
-      return hasUserProfile() && userProfile().role == 'teacher';
+      return canUseWestory() && hasUserProfile() && userProfile().role == 'teacher';
     }
 
     function isStudentRole() {
-      return hasUserProfile() && userProfile().role == 'student';
+      return canUseWestory() && hasUserProfile() && userProfile().role == 'student';
     }
 
     function developerLogLikePath(logId) {
@@ -213,7 +268,10 @@ service cloud.firestore {
     function isTeacherPatchNoteOwner(teacherId) {
       return canUseWestory()
         && request.auth.uid == teacherId
-        && (isAdmin() || isTeacherRole());
+        && (
+          request.auth.token.email == "westoria28@gmail.com"
+          || (hasUserProfile() && userProfile().role == 'teacher')
+        );
     }
 
     function isValidTeacherPatchNoteRect(rect) {
@@ -777,7 +835,8 @@ service cloud.firestore {
 
     // 사용자 기본 문서 권한
     match /users/{userId} {
-      allow get: if canUseWestory() && (isOwnUser(userId) || isAdmin() || isTeacherRole() || hasPermission('student_list_read'));
+      allow get: if isOwnIdentityUser(userId)
+        || (canUseWestory() && (isAdmin() || isTeacherRole() || hasPermission('student_list_read')));
       allow list: if isAdmin() || isTeacherRole() || hasPermission('student_list_read');
       allow create: if isAdmin() || isValidOwnStudentCreate(userId);
       allow update: if isAdmin() || isValidOwnStudentUpdate(userId);
@@ -848,8 +907,16 @@ service cloud.firestore {
     }
 
     match /site_settings/{docId} {
-      allow read: if docId in ['terms', 'privacy', 'school_config', 'interface_config'] || canUseWestory();
-      allow write: if isAdmin();
+      allow get: if docId in ['terms', 'privacy', 'school_config', 'interface_config']
+        || (docId == 'student_maintenance' && hasWestoryIdentity())
+        || canUseWestory();
+      allow list: if canUseWestory();
+      allow create, update, delete: if docId != 'student_maintenance' && isAdmin();
+
+      match /audit/{auditId} {
+        allow read: if docId == 'student_maintenance' && isAdmin();
+        allow create, update, delete: if false;
+      }
 
       match /items/{itemId} {
         allow read: if canUseWestory();

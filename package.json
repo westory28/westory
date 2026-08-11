@@ -12,6 +12,9 @@
     "verify:teacher-nav": "node scripts/verify-teacher-nav.mjs",
     "verify:score-warning-rules": "node scripts/verify-score-warning-rules.mjs",
     "verify:teacher-patch-notes-rules": "node scripts/verify-teacher-patch-notes-rules.mjs",
+    "verify:student-maintenance-rules": "firebase emulators:exec --project demo-westory-maintenance --only auth,firestore,functions,storage \"node scripts/verify-student-maintenance-rules.mjs\"",
+    "verify:student-maintenance-functions": "firebase emulators:exec --project demo-westory-maintenance --only auth,firestore,functions,storage \"node scripts/verify-student-maintenance-rules.mjs --include-functions\"",
+    "seed:student-maintenance-browser": "node scripts/verify-student-maintenance-rules.mjs --browser-seed",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx}\""
   },

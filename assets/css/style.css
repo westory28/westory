@@ -2,6 +2,30 @@
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800;900&display=swap');
 
 :root {
+    --ws-bg: #f9fafb;
+    --ws-surface: #ffffff;
+    --ws-surface-subtle: #f8fafc;
+    --ws-text-strong: #111827;
+    --ws-text: #1f2937;
+    --ws-text-muted: #6b7280;
+    --ws-border: #e5e7eb;
+    --ws-border-soft: #f3f4f6;
+    --ws-border-blue: #dbeafe;
+    --ws-accent-text: #92400e;
+    --ws-accent-soft: #fffbeb;
+    --ws-ring: #3b82f6;
+    --ws-type-logo: 1.62rem;
+    --ws-type-page-title: 1.75rem;
+    --ws-type-body: 1rem;
+    --ws-type-small: 0.875rem;
+    --ws-type-button: 0.95rem;
+    --ws-maintenance-max: 640px;
+    --ws-maintenance-icon: 96px;
+    --radius-xl: 16px;
+    --radius-full: 9999px;
+    --motion-fast: 160ms;
+    --ease-standard: ease;
+    --shadow-md: 0 14px 28px rgba(15, 23, 42, 0.1);
     --ws-header-dropdown-min: 11rem;
     --ws-header-dropdown-max: min(24rem, calc(100vw - 2rem));
     --space-1: 4px;

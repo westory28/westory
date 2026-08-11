@@ -11,9 +11,59 @@ service firebase.storage {
         && request.auth.token.email.matches('.*@yongshin-ms\\.ms\\.kr$');
     }
 
-    function canUseWestory() {
+    function hasWestoryIdentity() {
       return isSignedIn()
         && (hasAllowedSchoolEmail() || request.auth.token.email == "westoria28@gmail.com");
+    }
+
+    function isValidStudentMaintenanceConfig(config) {
+      return config.keys().hasAll(['enabled', 'blockedRoles', 'bypassUids', 'title', 'message', 'startedAt', 'updatedAt', 'updatedBy', 'revision'])
+        && config.keys().hasOnly(['enabled', 'blockedRoles', 'bypassUids', 'title', 'message', 'startedAt', 'updatedAt', 'updatedBy', 'revision'])
+        && config.enabled is bool
+        && config.blockedRoles is list
+        && config.blockedRoles.size() == 1
+        && config.blockedRoles[0] == 'student'
+        && config.bypassUids is list
+        && config.bypassUids.size() <= 20
+        && config.bypassUids.toSet().size() == config.bypassUids.size()
+        && config.title is string
+        && config.title.size() > 0
+        && config.title.size() <= 80
+        && config.message is string
+        && config.message.size() > 0
+        && config.message.size() <= 500
+        && ((config.enabled == true && config.startedAt is timestamp)
+          || (config.enabled == false && config.startedAt == null))
+        && config.updatedAt is timestamp
+        && config.updatedBy is string
+        && config.updatedBy.size() > 0
+        && config.revision is int
+        && config.revision >= 0;
+    }
+
+    function canUseWestoryWithConfig(config) {
+      return isValidStudentMaintenanceConfig(config)
+        && (
+          config.enabled == false
+          || request.auth.token.email == "westoria28@gmail.com"
+          || request.auth.uid in config.bypassUids
+          || (
+            firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
+            && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role is string
+            && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role in ['student', 'teacher', 'staff']
+            && !(firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role in config.blockedRoles)
+          )
+        );
+    }
+
+    function canUseWestory() {
+      return hasWestoryIdentity()
+        && (
+          !firestore.exists(/databases/(default)/documents/site_settings/student_maintenance)
+          || canUseWestoryWithConfig(
+            firestore.get(/databases/(default)/documents/site_settings/student_maintenance).data
+          )
+        );
     }
 
     function isAdmin() {
@@ -21,7 +71,7 @@ service firebase.storage {
     }
 
     function hasUserProfile() {
-      return canUseWestory()
+      return hasWestoryIdentity()
         && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid));
     }
 
@@ -30,14 +80,15 @@ service firebase.storage {
     }
 
     function hasStoragePermission(permission) {
-      return hasUserProfile()
+      return canUseWestory()
+        && hasUserProfile()
         && userProfile().teacherPortalEnabled == true
         && userProfile().staffPermissions is list
         && permission in userProfile().staffPermissions;
     }
 
     function isTeacherRole() {
-      return hasUserProfile() && userProfile().role == "teacher";
+      return canUseWestory() && hasUserProfile() && userProfile().role == "teacher";
     }
 
     function canReadSourceArchive() {

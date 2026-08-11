@@ -2,6 +2,7 @@ import { initializeApp } from "firebase/app";
 import {
   browserLocalPersistence,
   browserSessionPersistence,
+  connectAuthEmulator,
   getAuth,
   indexedDBLocalPersistence,
   inMemoryPersistence,
@@ -41,13 +42,20 @@ const configuredAuthDomain = (() => {
 })();
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAOlPQ5PFmL0zxmGrGcuEBnqBXisph7kPU",
+  apiKey:
+    import.meta.env.VITE_FIREBASE_API_KEY ||
+    "AIzaSyAOlPQ5PFmL0zxmGrGcuEBnqBXisph7kPU",
   authDomain: configuredAuthDomain,
-  projectId: "history-quiz-yongsin",
-  storageBucket: "history-quiz-yongsin.firebasestorage.app",
-  messagingSenderId: "177587430482",
-  appId: "1:177587430482:web:d79cc145c11e335cc3ab8b",
-  measurementId: "G-LHN97D7R2R",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "history-quiz-yongsin",
+  storageBucket:
+    import.meta.env.VITE_FIREBASE_STORAGE_BUCKET ||
+    "history-quiz-yongsin.firebasestorage.app",
+  messagingSenderId:
+    import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "177587430482",
+  appId:
+    import.meta.env.VITE_FIREBASE_APP_ID ||
+    "1:177587430482:web:d79cc145c11e335cc3ab8b",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-LHN97D7R2R",
 };
 
 const app = initializeApp(firebaseConfig);
@@ -56,15 +64,23 @@ const db = getFirestore(app);
 let analytics: Analytics | null = null;
 let firestoreEmulatorConnected = false;
 let functionsEmulatorConnected = false;
+let storageEmulatorConnected = false;
 let functionsPromise: Promise<Functions> | null = null;
 let storagePromise: Promise<FirebaseStorage> | null = null;
 
 const useFirebaseEmulators =
   import.meta.env.VITE_USE_FIREBASE_EMULATORS === "true" ||
+  Boolean(import.meta.env.VITE_AUTH_EMULATOR_HOST) ||
   Boolean(import.meta.env.VITE_FIRESTORE_EMULATOR_HOST) ||
-  Boolean(import.meta.env.VITE_FUNCTIONS_EMULATOR_HOST);
+  Boolean(import.meta.env.VITE_FUNCTIONS_EMULATOR_HOST) ||
+  Boolean(import.meta.env.VITE_STORAGE_EMULATOR_HOST);
 const emulatorHost =
   import.meta.env.VITE_FIRESTORE_EMULATOR_HOST || "127.0.0.1";
+const authEmulatorHost =
+  import.meta.env.VITE_AUTH_EMULATOR_HOST || emulatorHost;
+const authEmulatorPort = Number(
+  import.meta.env.VITE_AUTH_EMULATOR_PORT || 9099,
+);
 const emulatorPort = Number(
   import.meta.env.VITE_FIRESTORE_EMULATOR_PORT || 8080,
 );
@@ -73,6 +89,20 @@ const functionsEmulatorHost =
 const functionsEmulatorPort = Number(
   import.meta.env.VITE_FUNCTIONS_EMULATOR_PORT || 5001,
 );
+const storageEmulatorHost =
+  import.meta.env.VITE_STORAGE_EMULATOR_HOST || emulatorHost;
+const storageEmulatorPort = Number(
+  import.meta.env.VITE_STORAGE_EMULATOR_PORT || 9199,
+);
+
+if (import.meta.env.DEV && useFirebaseEmulators && !auth.emulatorConfig) {
+  connectAuthEmulator(auth, `http://${authEmulatorHost}:${authEmulatorPort}`, {
+    disableWarnings: true,
+  });
+  console.info(
+    `[Firebase] Connected Auth emulator at ${authEmulatorHost}:${authEmulatorPort}`,
+  );
+}
 
 const isMobileBrowser = (): boolean => {
   if (typeof navigator === "undefined") return false;
@@ -149,7 +179,12 @@ try {
 } catch (e) {
   console.warn("Analytics not supported:", e);
 }
-if (typeof window !== "undefined" && firebaseConfig.measurementId) {
+if (
+  typeof window !== "undefined" &&
+  firebaseConfig.measurementId &&
+  import.meta.env.VITE_DISABLE_FIREBASE_ANALYTICS !== "true" &&
+  !useFirebaseEmulators
+) {
   window.setTimeout(() => {
     void import("firebase/analytics")
       .then(async ({ getAnalytics, isSupported }) => {
@@ -205,9 +240,25 @@ const getHttpsCallable = async <RequestData = unknown, ResponseData = unknown>(
 const getFirebaseStorage = () => {
   if (!storagePromise) {
     storagePromise = import("firebase/storage")
-      .then(({ getStorage }) =>
-        getStorage(app, `gs://${firebaseConfig.storageBucket}`),
-      )
+      .then(({ connectStorageEmulator, getStorage }) => {
+        const storage = getStorage(app, `gs://${firebaseConfig.storageBucket}`);
+        if (
+          import.meta.env.DEV &&
+          useFirebaseEmulators &&
+          !storageEmulatorConnected
+        ) {
+          connectStorageEmulator(
+            storage,
+            storageEmulatorHost,
+            storageEmulatorPort,
+          );
+          storageEmulatorConnected = true;
+          console.info(
+            `[Firebase] Connected Storage emulator at ${storageEmulatorHost}:${storageEmulatorPort}`,
+          );
+        }
+        return storage;
+      })
       .catch((error) => {
         storagePromise = null;
         throw error;

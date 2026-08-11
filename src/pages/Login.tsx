@@ -29,7 +29,10 @@ import {
 } from "../lib/firebase";
 import { InlineLoading, PageLoading } from "../components/common/LoadingState";
 import { markLoginPerf, measureLoginPerf } from "../lib/loginPerf";
-import { readSiteSettingDoc } from "../lib/siteSettings";
+import {
+  readFreshSiteSettingDoc,
+  readSiteSettingDoc,
+} from "../lib/siteSettings";
 import {
   readLocalOnly,
   readStorage,
@@ -45,6 +48,11 @@ import {
   isAdminUser,
   normalizeStaffPermissions,
 } from "../lib/permissions";
+import {
+  STUDENT_MAINTENANCE_CONFIG_DOC_ID,
+  STUDENT_MAINTENANCE_ROUTE,
+  normalizeStudentMaintenanceConfig,
+} from "../lib/studentMaintenance";
 
 const TEACHER_EMAIL = "westoria28@gmail.com";
 const ALLOWED_SCHOOL_EMAIL_DOMAIN = "yongshin-ms.ms.kr";
@@ -1151,6 +1159,46 @@ const Login: React.FC = () => {
     const existing = userSnap.exists()
       ? (userSnap.data() as Partial<UserData>)
       : null;
+
+    try {
+      const maintenanceConfig = normalizeStudentMaintenanceConfig(
+        await readFreshSiteSettingDoc<Record<string, unknown>>(
+          STUDENT_MAINTENANCE_CONFIG_DOC_ID,
+        ),
+      );
+      const existingRole =
+        existing?.role === "teacher" ||
+        existing?.role === "staff" ||
+        existing?.role === "student"
+          ? existing.role
+          : null;
+      const isMaintenanceBypass =
+        isTeacherEmail || maintenanceConfig.bypassUids.includes(user.uid);
+      const isBlocked =
+        maintenanceConfig.enabled &&
+        !isMaintenanceBypass &&
+        (!existingRole ||
+          maintenanceConfig.blockedRoles.includes(existingRole));
+
+      if (isBlocked) {
+        saveRoleCache(
+          existingRole === "teacher" || existingRole === "staff"
+            ? "teacher"
+            : "student",
+        );
+        clearPendingLoginMode();
+        clearRedirectAttempt();
+        forceRoute(STUDENT_MAINTENANCE_ROUTE);
+        return;
+      }
+    } catch (error) {
+      console.error("Failed to verify maintenance access during login", error);
+      clearPendingLoginMode();
+      clearRedirectAttempt();
+      forceRoute(STUDENT_MAINTENANCE_ROUTE);
+      return;
+    }
+
     const staffPermissions = normalizeStaffPermissions(
       existing?.staffPermissions,
     );

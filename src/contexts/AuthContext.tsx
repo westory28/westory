@@ -26,6 +26,15 @@ import {
   subscribeMenuConfigUpdated,
   subscribeSystemConfigUpdated,
 } from "../lib/appEvents";
+import {
+  STUDENT_MAINTENANCE_CONFIG_DOC_ID,
+  normalizeStudentMaintenanceConfig,
+  resolveStudentMaintenanceAccess,
+  type StudentMaintenanceAccessStatus,
+  type StudentMaintenanceConfig,
+  type StudentMaintenanceConfigStatus,
+  type UserProfileStatus,
+} from "../lib/studentMaintenance";
 
 interface AuthContextType {
   // Backward-compatible alias for legacy pages.
@@ -41,6 +50,10 @@ interface AuthContextType {
   settingsLoadedAt: number;
   interfaceConfig: InterfaceConfig | null;
   loading: boolean;
+  userProfileStatus: UserProfileStatus;
+  studentMaintenanceConfig: StudentMaintenanceConfig | null;
+  studentMaintenanceConfigStatus: StudentMaintenanceConfigStatus;
+  studentMaintenanceAccessStatus: StudentMaintenanceAccessStatus;
   logout: () => Promise<void>;
   refreshConfig: () => Promise<void>;
   refreshMenuConfig: () => Promise<void>;
@@ -84,6 +97,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [interfaceConfig, setInterfaceConfig] =
     useState<InterfaceConfig | null>(null);
   const [loading, setLoading] = useState(true);
+  const [userProfileStatus, setUserProfileStatus] =
+    useState<UserProfileStatus>("idle");
+  const [studentMaintenanceConfig, setStudentMaintenanceConfig] =
+    useState<StudentMaintenanceConfig | null>(null);
+  const [studentMaintenanceConfigStatus, setStudentMaintenanceConfigStatus] =
+    useState<StudentMaintenanceConfigStatus>("idle");
   const firstUserDocReadyRef = useRef<string | null>(null);
   const systemConfigLoadRef = useRef<Promise<void> | null>(null);
   const menuConfigLoadRef = useRef<Promise<void> | null>(null);
@@ -173,8 +192,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     let unsubscribe: () => void = () => undefined;
     let unsubscribeUserDoc: (() => void) | null = null;
-    let visibilitySettingsReady: Promise<void> | null = null;
-    const loadingGuard = window.setTimeout(() => {
+    let unsubscribeMaintenanceDoc: (() => void) | null = null;
+    let maintenanceGuard: number | null = null;
+    let profileGuard: number | null = null;
+    const authGuard = window.setTimeout(() => {
       setLoading(false);
     }, 15000);
 
@@ -185,6 +206,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     unsubscribe = onAuthStateChanged(
       auth,
       (user) => {
+        window.clearTimeout(authGuard);
         markLoginPerf("westory-auth-current-user-resolved", {
           hasUser: user ? "true" : "false",
         });
@@ -194,22 +216,88 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           "westory-auth-current-user-resolved",
         );
         setCurrentUser(user);
+        setUserData(null);
         if (unsubscribeUserDoc) {
           unsubscribeUserDoc();
           unsubscribeUserDoc = null;
         }
+        if (unsubscribeMaintenanceDoc) {
+          unsubscribeMaintenanceDoc();
+          unsubscribeMaintenanceDoc = null;
+        }
+        if (maintenanceGuard !== null) {
+          window.clearTimeout(maintenanceGuard);
+          maintenanceGuard = null;
+        }
+        if (profileGuard !== null) {
+          window.clearTimeout(profileGuard);
+          profileGuard = null;
+        }
         if (user) {
+          setLoading(true);
           firstUserDocReadyRef.current = null;
+          setUserProfileStatus("loading");
+          setStudentMaintenanceConfig(null);
+          setStudentMaintenanceConfigStatus("loading");
+          setConfig(null);
           setConfigReady(false);
+          setConfigLoadedAt(0);
+          setMenuConfig(null);
           setMenuConfigReady(false);
-          visibilitySettingsReady = Promise.all([
-            loadAuthedSystemConfig(user),
-            loadAuthedMenuConfig(user),
-          ]).then(() => undefined);
+          setMenuConfigLoadedAt(0);
+
+          maintenanceGuard = window.setTimeout(() => {
+            setStudentMaintenanceConfigStatus((status) =>
+              status === "loading" ? "error" : status,
+            );
+          }, 15000);
+          profileGuard = window.setTimeout(() => {
+            setUserData(null);
+            setUserProfileStatus("error");
+            setLoading(false);
+          }, 15000);
+
+          unsubscribeMaintenanceDoc = onSnapshot(
+            doc(db, "site_settings", STUDENT_MAINTENANCE_CONFIG_DOC_ID),
+            { includeMetadataChanges: true },
+            (maintenanceSnap) => {
+              if (maintenanceSnap.metadata.fromCache) return;
+              if (maintenanceGuard !== null) {
+                window.clearTimeout(maintenanceGuard);
+                maintenanceGuard = null;
+              }
+              try {
+                setStudentMaintenanceConfig(
+                  normalizeStudentMaintenanceConfig(
+                    maintenanceSnap.exists()
+                      ? (maintenanceSnap.data() as Record<string, unknown>)
+                      : null,
+                  ),
+                );
+                setStudentMaintenanceConfigStatus("ready");
+              } catch (error) {
+                console.error("Invalid maintenance config", error);
+                setStudentMaintenanceConfig(null);
+                setStudentMaintenanceConfigStatus("error");
+              }
+            },
+            (e) => {
+              console.error("Failed to subscribe maintenance config", e);
+              if (maintenanceGuard !== null) {
+                window.clearTimeout(maintenanceGuard);
+                maintenanceGuard = null;
+              }
+              setStudentMaintenanceConfig(null);
+              setStudentMaintenanceConfigStatus("error");
+            },
+          );
+
           const userRef = doc(db, "users", user.uid);
           unsubscribeUserDoc = onSnapshot(
             userRef,
-            async (userSnap) => {
+            { includeMetadataChanges: true },
+            (userSnap) => {
+              if (userSnap.metadata.fromCache) return;
               try {
                 const normalizedRole: UserData["role"] = "student";
                 if (firstUserDocReadyRef.current !== user.uid) {
@@ -225,6 +313,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                 }
                 if (userSnap.exists()) {
                   const raw = userSnap.data() as UserData;
+                  const hasKnownRole =
+                    raw.role === "teacher" ||
+                    raw.role === "staff" ||
+                    raw.role === "student";
                   setUserData({
                     ...raw,
                     uid: user.uid,
@@ -239,6 +331,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                     ),
                     teacherPortalEnabled: raw.teacherPortalEnabled === true,
                   });
+                  setUserProfileStatus(hasKnownRole ? "ready" : "malformed");
                 } else {
                   const bootstrapUser: UserData = {
                     uid: user.uid,
@@ -253,57 +346,108 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
                     number: "",
                   };
                   setUserData(bootstrapUser);
+                  setUserProfileStatus("missing");
                 }
-                void visibilitySettingsReady?.catch(() => undefined);
+                if (profileGuard !== null) {
+                  window.clearTimeout(profileGuard);
+                  profileGuard = null;
+                }
                 setLoading(false);
-                window.clearTimeout(loadingGuard);
               } catch (e) {
                 console.error("Failed to sync user data", e);
+                setUserData(null);
+                setUserProfileStatus("error");
                 setLoading(false);
-                window.clearTimeout(loadingGuard);
+                if (profileGuard !== null) {
+                  window.clearTimeout(profileGuard);
+                  profileGuard = null;
+                }
               }
             },
             (e) => {
               console.error("Failed to subscribe user data", e);
+              setUserData(null);
+              setUserProfileStatus("error");
               setLoading(false);
-              window.clearTimeout(loadingGuard);
+              if (profileGuard !== null) {
+                window.clearTimeout(profileGuard);
+                profileGuard = null;
+              }
             },
           );
         } else {
           firstUserDocReadyRef.current = null;
           setUserData(null);
+          setUserProfileStatus("idle");
+          setStudentMaintenanceConfig(null);
+          setStudentMaintenanceConfigStatus("idle");
           setConfig(null);
           setConfigReady(false);
           setConfigLoadedAt(0);
           setMenuConfig(null);
           setMenuConfigReady(false);
           setMenuConfigLoadedAt(0);
-          visibilitySettingsReady = null;
           setLoading(false);
-          window.clearTimeout(loadingGuard);
         }
       },
       (e) => {
         console.error("Failed to initialize auth listener", e);
         setLoading(false);
-        window.clearTimeout(loadingGuard);
+        window.clearTimeout(authGuard);
       },
     );
 
     return () => {
-      window.clearTimeout(loadingGuard);
+      window.clearTimeout(authGuard);
       if (unsubscribeUserDoc) {
         unsubscribeUserDoc();
       }
+      if (unsubscribeMaintenanceDoc) {
+        unsubscribeMaintenanceDoc();
+      }
+      if (maintenanceGuard !== null) {
+        window.clearTimeout(maintenanceGuard);
+      }
+      if (profileGuard !== null) {
+        window.clearTimeout(profileGuard);
+      }
       unsubscribe();
     };
-  }, [loadAuthedMenuConfig, loadAuthedSystemConfig]);
+  }, []);
+
+  const studentMaintenanceAccessStatus = resolveStudentMaintenanceAccess({
+    currentUser,
+    userData,
+    profileStatus: userProfileStatus,
+    config: studentMaintenanceConfig,
+    configStatus: studentMaintenanceConfigStatus,
+  });
 
   useEffect(() => {
-    if (!loading && currentUser && !configReady) {
+    if (currentUser && studentMaintenanceAccessStatus !== "allowed") {
+      systemConfigLoadRef.current = null;
+      menuConfigLoadRef.current = null;
+      if (config !== null) setConfig(null);
+      if (configReady) setConfigReady(false);
+      if (configLoadedAt !== 0) setConfigLoadedAt(0);
+      if (menuConfig !== null) setMenuConfig(null);
+      if (menuConfigReady) setMenuConfigReady(false);
+      if (menuConfigLoadedAt !== 0) setMenuConfigLoadedAt(0);
+    }
+    if (
+      !loading &&
+      currentUser &&
+      studentMaintenanceAccessStatus === "allowed" &&
+      !configReady
+    ) {
       void loadAuthedSystemConfig(currentUser);
     }
-    if (!loading && currentUser && !menuConfigReady) {
+    if (
+      !loading &&
+      currentUser &&
+      studentMaintenanceAccessStatus === "allowed" &&
+      !menuConfigReady
+    ) {
       void loadAuthedMenuConfig(currentUser);
     }
     if (!interfaceConfig) {
@@ -311,34 +455,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   }, [
     configReady,
+    config,
+    configLoadedAt,
     currentUser,
     interfaceConfig,
     loadAuthedMenuConfig,
     loadAuthedSystemConfig,
     loadPublicInterfaceConfig,
+    loading,
+    menuConfig,
+    menuConfigLoadedAt,
     menuConfigReady,
+    studentMaintenanceAccessStatus,
   ]);
 
   useEffect(
     () =>
       subscribeSystemConfigUpdated(() => {
-        if (auth.currentUser) {
+        if (auth.currentUser && studentMaintenanceAccessStatus === "allowed") {
           invalidateSiteSettingDocCache("config");
           void loadAuthedSystemConfig(auth.currentUser);
         }
       }),
-    [],
+    [loadAuthedSystemConfig, studentMaintenanceAccessStatus],
   );
 
   useEffect(
     () =>
       subscribeMenuConfigUpdated(() => {
-        if (auth.currentUser) {
+        if (auth.currentUser && studentMaintenanceAccessStatus === "allowed") {
           invalidateSiteSettingDocCache("menu_config");
           void loadAuthedMenuConfig(auth.currentUser);
         }
       }),
-    [],
+    [loadAuthedMenuConfig, studentMaintenanceAccessStatus],
   );
 
   const logout = async () => {
@@ -379,6 +529,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     settingsLoadedAt,
     interfaceConfig,
     loading,
+    userProfileStatus,
+    studentMaintenanceConfig,
+    studentMaintenanceConfigStatus,
+    studentMaintenanceAccessStatus,
     logout,
     refreshConfig,
     refreshMenuConfig,

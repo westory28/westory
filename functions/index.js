@@ -2,12 +2,17 @@ const crypto = require('crypto');
 const { initializeApp } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
 const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
-const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { HttpsError } = require('firebase-functions/v2/https');
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 
 initializeApp();
 Object.assign(exports, require('./sourceArchiveBeta'));
 Object.assign(exports, require('./lessonPdfBeta'));
+const {
+  onCallWithStudentMaintenance: onCall,
+  updateStudentMaintenanceConfig,
+} = require('./studentMaintenance');
+exports.updateStudentMaintenanceConfig = updateStudentMaintenanceConfig;
 
 const db = getFirestore();
 const REGION = 'asia-northeast3';

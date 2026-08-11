@@ -4,6 +4,149 @@
 @tailwind components;
 @tailwind utilities;
 
+.maintenance-page {
+  display: grid;
+  min-height: 100vh;
+  min-height: 100dvh;
+  place-items: center;
+  padding: var(--space-6) var(--space-4);
+  background: var(--ws-bg);
+  color: var(--ws-text);
+}
+
+.maintenance-card {
+  width: 100%;
+  max-width: var(--ws-maintenance-max);
+  padding: var(--space-8) var(--space-6);
+  border: 1px solid var(--ws-border);
+  border-radius: var(--radius-xl);
+  background: var(--ws-surface);
+  box-shadow: var(--shadow-md);
+  text-align: center;
+}
+
+.maintenance-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+}
+
+.maintenance-brand__icon {
+  display: block;
+  width: var(--ws-maintenance-icon);
+  height: var(--ws-maintenance-icon);
+  object-fit: contain;
+}
+
+.maintenance-brand__wordmark {
+  margin: 0;
+  font-size: var(--ws-type-logo);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.025em;
+}
+
+.maintenance-brand__wordmark .logo-story {
+  color: var(--ws-accent-text);
+}
+
+.maintenance-status {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--space-8);
+  margin: 0 0 var(--space-4);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-full);
+  background: var(--ws-accent-soft);
+  color: var(--ws-accent-text);
+  font-size: var(--ws-type-small);
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.maintenance-title {
+  margin: 0;
+  color: var(--ws-text-strong);
+  font-size: var(--ws-type-page-title);
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.maintenance-message {
+  margin-top: var(--space-5);
+  color: var(--ws-text-muted);
+  font-size: var(--ws-type-body);
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+.maintenance-message p {
+  margin: 0;
+}
+
+.maintenance-help {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  margin-top: var(--space-8);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--ws-border-soft);
+  color: var(--ws-text-muted);
+  font-size: var(--ws-type-small);
+  font-weight: 500;
+  line-height: 1.55;
+}
+
+.maintenance-help p {
+  margin: 0;
+}
+
+.maintenance-signout {
+  min-height: var(--space-10);
+  padding: var(--space-2) var(--space-5);
+  border: 1px solid var(--ws-border);
+  border-radius: var(--radius-full);
+  background: var(--ws-surface);
+  color: var(--ws-text);
+  font-size: var(--ws-type-button);
+  font-weight: 700;
+  line-height: 1.2;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard);
+}
+
+.maintenance-signout:hover {
+  background: var(--ws-surface-subtle);
+  border-color: var(--ws-border-blue);
+}
+
+.maintenance-signout:focus-visible {
+  outline: 3px solid var(--ws-ring);
+  outline-offset: var(--space-1);
+}
+
+.maintenance-signout:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+@media (max-width: 639px) {
+  .maintenance-card {
+    padding: var(--space-6) var(--space-4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .maintenance-signout {
+    transition: none;
+  }
+}
+
 .teacher-floating-action-above-patch {
   right: calc(env(safe-area-inset-right, 0px) + var(--space-4));
   bottom: calc(

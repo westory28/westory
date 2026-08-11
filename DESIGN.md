@@ -96,6 +96,8 @@ Base unit: 4px. 새 margin, padding, gap은 아래 토큰을 우선 사용한다
 Layout tokens:
 
 - Page max width: `--ws-page-max: 1280px`.
+- Student maintenance content max width: `--ws-maintenance-max: 640px`.
+- Student maintenance brand icon: `--ws-maintenance-icon: 96px`.
 - Header height: `--ws-header-height: 64px`.
 - Header dropdown min width: `--ws-header-dropdown-min: 11rem`.
 - Header dropdown max width: `--ws-header-dropdown-max: min(24rem, calc(100vw - 2rem))`.
