@@ -1,0 +1,35 @@
+{
+  "generatedAt": "2026-08-10T14:45:06.546Z",
+  "source": "W1-R5 credential barrier 768x1024 repeat 01",
+  "classification": "redacted failed-experiment summary",
+  "releaseBlockerId": "KI-W1-01",
+  "sensitiveFieldsOmitted": [
+    "stagingUid",
+    "fullSessionRevision",
+    "requestChannelIdentifiers"
+  ],
+  "sequence": [
+    "REAUTHENTICATING",
+    "ID_TOKEN_REFRESHED",
+    "ID_TOKEN_RESULT_VERIFIED",
+    "ID_TOKEN_CHANGED_OBSERVED",
+    "SESSION_ACTIVE",
+    "FAILED"
+  ],
+  "applicationSession": {
+    "openRequestCount": 1,
+    "httpStatus": 200,
+    "status": "active",
+    "schemaVersion": 2,
+    "protocolVersion": 2,
+    "revisionValidated": true
+  },
+  "probe": {
+    "path": "users/{uid}",
+    "operation": "get/listener",
+    "requestCount": 1,
+    "result": "Missing or insufficient permissions"
+  },
+  "businessCommandDispatchCount": 0,
+  "productionChanges": 0
+}

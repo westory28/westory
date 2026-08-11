@@ -1,0 +1,41 @@
+{
+  "case": "teacherPatchNotes create own note",
+  "before": {
+    "result": "RULE_EXPRESSION_LIMIT",
+    "emulatorMessage": "maximum of 1000 expressions to evaluate has been reached",
+    "reportRoots": 213,
+    "reportNodes": 3050,
+    "totalNestedValueCounts": 2191,
+    "applicationSessionPathNestedValueCount": 756,
+    "file": "before-create-rule-coverage.json",
+    "sha256": "72791f08ca64e7c2e77e63a1539e6319d695f57a91006ff446f26a340b1f4f5a"
+  },
+  "after": {
+    "result": "ALLOW",
+    "reportRoots": 218,
+    "reportNodes": 3054,
+    "totalNestedValueCounts": 1155,
+    "applicationSessionPathNestedValueCount": 27,
+    "file": "after-create-rule-coverage.json",
+    "sha256": "aefd57ae30aa564bf7dc2ca7de83bfc518562fd88f4994c1e1a7079a15695632"
+  },
+  "delta": {
+    "totalNestedValueCountReductionPercent": 47.28,
+    "applicationSessionPathReductionPercent": 96.43
+  },
+  "documentAccessBudget": {
+    "officialSingleRequestLimit": 10,
+    "teacherRequest": 2,
+    "teacherHeadroom": 8,
+    "adminRequest": 1,
+    "adminHeadroom": 9,
+    "notes": "The target document itself is not an additional Rules get/exists/getAfter access call. Repeated access to the same document path is cached by Firestore Rules."
+  },
+  "fullMatrix": {
+    "result": "PASS",
+    "checks": 20,
+    "file": "after-rule-coverage.json",
+    "sha256": "14dd9ee5a6310710b42132df5d473b6a22253731e2c13e3a45f3dc640ee41511"
+  },
+  "measurementCaveat": "Rule coverage nested value counts are comparative coverage metrics, not the platform's exact per-request expression counter. The exact before limit is evidenced by the emulator failure; after headroom is supported by the successful identical request, structural helper reduction, document-access accounting, the full matrix, and Dedicated Staging verification."
+}

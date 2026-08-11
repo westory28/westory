@@ -21,46 +21,48 @@ service cloud.firestore {
     }
 
     function hasActiveApplicationSession() {
+      let session = get(applicationSessionPath()).data;
       return isSignedIn()
         && request.auth.token.auth_time is int
-        && get(applicationSessionPath()).data.status == 'active'
-        && get(applicationSessionPath()).data.authTime == request.auth.token.auth_time
-        && get(applicationSessionPath()).data.schemaVersion == 2
-        && get(applicationSessionPath()).data.authorityGeneration == 'w1r2-2026-08-09'
-        && get(applicationSessionPath()).data.protocolVersion is int
-        && get(applicationSessionPath()).data.protocolVersion >= 2
-        && get(applicationSessionPath()).data.sessionRevision is string
-        && get(applicationSessionPath()).data.sessionRevision.matches('^[a-f0-9]{64}$')
-        && get(applicationSessionPath()).data.authorityModeAtOpen in ['ENFORCE', 'OBSERVE_ONLY', 'DISABLED']
-        && get(applicationSessionPath()).data.generalExpiresAt is timestamp
+        && session.status == 'active'
+        && session.authTime == request.auth.token.auth_time
+        && session.schemaVersion == 2
+        && session.authorityGeneration == 'w1r2-2026-08-09'
+        && session.protocolVersion is int
+        && session.protocolVersion >= 2
+        && session.sessionRevision is string
+        && session.sessionRevision.matches('^[a-f0-9]{64}$')
+        && session.authorityModeAtOpen in ['ENFORCE', 'OBSERVE_ONLY', 'DISABLED']
+        && session.generalExpiresAt is timestamp
         && (
-          get(applicationSessionPath()).data.authorityModeAtOpen != 'ENFORCE'
-          || get(applicationSessionPath()).data.generalExpiresAt > request.time
+          session.authorityModeAtOpen != 'ENFORCE'
+          || session.generalExpiresAt > request.time
         );
     }
 
     function hasActiveHighRiskSession() {
+      let session = get(applicationSessionPath()).data;
       return hasActiveApplicationSession()
-        && get(applicationSessionPath()).data.highRiskExpiresAt is timestamp
+        && session.highRiskExpiresAt is timestamp
         && (
-          get(applicationSessionPath()).data.authorityModeAtOpen != 'ENFORCE'
-          || get(applicationSessionPath()).data.highRiskExpiresAt > request.time
+          session.authorityModeAtOpen != 'ENFORCE'
+          || session.highRiskExpiresAt > request.time
         );
     }
 
     function hasActiveReauthTransition() {
+      let transition = get(applicationSessionTransitionPath()).data;
       return isSignedIn()
         && request.auth.token.auth_time is int
-        && exists(applicationSessionTransitionPath())
-        && get(applicationSessionTransitionPath()).data.status == 'pending'
-        && get(applicationSessionTransitionPath()).data.schemaVersion == 1
-        && get(applicationSessionTransitionPath()).data.authorityGeneration == 'w1r2-2026-08-09'
-        && get(applicationSessionTransitionPath()).data.protocolVersion is int
-        && get(applicationSessionTransitionPath()).data.protocolVersion >= 2
-        && get(applicationSessionTransitionPath()).data.fromAuthTime is int
-        && get(applicationSessionTransitionPath()).data.fromAuthTime < request.auth.token.auth_time
-        && get(applicationSessionTransitionPath()).data.expiresAt is timestamp
-        && get(applicationSessionTransitionPath()).data.expiresAt > request.time;
+        && transition.status == 'pending'
+        && transition.schemaVersion == 1
+        && transition.authorityGeneration == 'w1r2-2026-08-09'
+        && transition.protocolVersion is int
+        && transition.protocolVersion >= 2
+        && transition.fromAuthTime is int
+        && transition.fromAuthTime < request.auth.token.auth_time
+        && transition.expiresAt is timestamp
+        && transition.expiresAt > request.time;
     }
 
     function hasRecentAuthentication() {
@@ -274,17 +276,55 @@ service cloud.firestore {
       return isAdmin() || isTeacherRole();
     }
 
+    function currentUserIsTeacherProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher';
+    }
+
+    function currentUserCanReadStudentListProfile() {
+      let profile = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return profile.role == 'teacher'
+        || (
+          profile.teacherPortalEnabled == true
+          && profile.staffPermissions is list
+          && 'student_list_read' in profile.staffPermissions
+        );
+    }
+
+    function canGetUserDocument(userId) {
+      return canUseWestory()
+        && (
+          request.auth.uid == userId
+          || request.auth.token.email == "westoria28@gmail.com"
+          || currentUserCanReadStudentListProfile()
+        );
+    }
+
     function isTeacherPatchNoteOwner(teacherId) {
       return canUseWestory()
         && request.auth.uid == teacherId
-        && (isAdmin() || isTeacherRole());
+        && (
+          request.auth.token.email == "westoria28@gmail.com"
+          || currentUserIsTeacherProfile()
+        );
+    }
+
+    function isTeacherPatchNoteListQuery() {
+      let orderBy = request.query.orderBy;
+      return request.query.limit is int
+        && request.query.limit > 0
+        && request.query.limit <= 100
+        && orderBy is map
+        && orderBy.keys().hasOnly(['updatedAt', '__name__'])
+        && orderBy.updatedAt == 'DESC'
+        && orderBy['__name__'] == 'DESC';
     }
 
     function isValidTeacherPatchNoteRect(rect) {
+      let rectKeys = rect is map ? rect.keys() : [];
       return rect == null
         || (
           rect is map
-          && rect.keys().hasOnly(['x', 'y', 'width', 'height'])
+          && rectKeys.hasOnly(['x', 'y', 'width', 'height'])
           && rect.x is number
           && rect.y is number
           && rect.width is number
@@ -320,30 +360,31 @@ service cloud.firestore {
     }
 
     function hasValidTeacherPatchNoteFields(teacherId) {
+      let data = request.resource.data;
       return hasOnlyTeacherPatchNoteKeys()
-        && request.resource.data.ownerUid == teacherId
-        && request.resource.data.title is string
-        && request.resource.data.title.size() > 0
-        && request.resource.data.title.size() <= 80
-        && request.resource.data.body is string
-        && request.resource.data.body.size() <= 2000
-        && request.resource.data.type in ['bug', 'improvement', 'content', 'etc']
-        && request.resource.data.priority in ['normal', 'high']
-        && request.resource.data.status in ['open', 'done']
-        && request.resource.data.sourcePath is string
-        && request.resource.data.sourcePath.size() > 0
-        && request.resource.data.sourcePath.size() <= 240
-        && request.resource.data.sourcePath.matches('^/teacher.*')
-        && request.resource.data.targetLabel is string
-        && request.resource.data.targetLabel.size() <= 120
-        && request.resource.data.targetText is string
-        && request.resource.data.targetText.size() <= 240
-        && request.resource.data.targetSelector is string
-        && request.resource.data.targetSelector.size() <= 240
-        && isValidTeacherPatchNoteRect(request.resource.data.targetRect)
+        && data.ownerUid == teacherId
+        && data.title is string
+        && data.title.size() > 0
+        && data.title.size() <= 80
+        && data.body is string
+        && data.body.size() <= 2000
+        && data.type in ['bug', 'improvement', 'content', 'etc']
+        && data.priority in ['normal', 'high']
+        && data.status in ['open', 'done']
+        && data.sourcePath is string
+        && data.sourcePath.size() > 0
+        && data.sourcePath.size() <= 240
+        && data.sourcePath.matches('^/teacher.*')
+        && data.targetLabel is string
+        && data.targetLabel.size() <= 120
+        && data.targetText is string
+        && data.targetText.size() <= 240
+        && data.targetSelector is string
+        && data.targetSelector.size() <= 240
+        && isValidTeacherPatchNoteRect(data.targetRect)
         && (
-          (request.resource.data.status == 'open' && request.resource.data.completedAt == null)
-          || (request.resource.data.status == 'done' && request.resource.data.completedAt is timestamp)
+          (data.status == 'open' && data.completedAt == null)
+          || (data.status == 'done' && data.completedAt is timestamp)
         );
     }
 
@@ -849,7 +890,7 @@ service cloud.firestore {
     }
 
     match /users/{userId} {
-      allow get: if canUseWestory() && (isOwnUser(userId) || isAdmin() || isTeacherRole() || hasPermission('student_list_read'));
+      allow get: if canGetUserDocument(userId);
       allow list: if isAdmin() || isTeacherRole() || hasPermission('student_list_read');
       allow create: if isRecentlyAuthenticatedAdmin() || isValidOwnStudentCreate(userId);
       allow update: if isRecentlyAuthenticatedAdmin() || isValidOwnStudentUpdate(userId);
@@ -974,7 +1015,9 @@ service cloud.firestore {
     }
 
     match /teacherPatchNotes/{teacherId}/notes/{noteId} {
-      allow read: if isTeacherPatchNoteOwner(teacherId);
+      allow get: if isTeacherPatchNoteOwner(teacherId);
+      allow list: if isTeacherPatchNoteOwner(teacherId)
+        && isTeacherPatchNoteListQuery();
       allow create: if isValidTeacherPatchNoteCreate(teacherId);
       allow update: if isValidTeacherPatchNoteUpdate(teacherId);
       allow delete: if isTeacherPatchNoteOwner(teacherId);

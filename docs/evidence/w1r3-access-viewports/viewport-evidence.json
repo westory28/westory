@@ -1,0 +1,1834 @@
+{
+  "generatedAt": "2026-08-10T11:22:03.568Z",
+  "baseUrl": "https://westory-staging-inius92vz-bbbs-projects-44f9da30.vercel.app",
+  "runner": "Playwright Chromium independent BrowserContext",
+  "browserVersion": "151.0.7922.76",
+  "adminSettings": {
+    "390x844": {
+      "state": "ADMIN_SETTINGS",
+      "innerWidth": 390,
+      "innerHeight": 844,
+      "documentClientWidth": 390,
+      "documentScrollWidth": 390,
+      "pageOverflowPass": true,
+      "settingsContentClientWidth": 342,
+      "settingsContentScrollWidth": 342,
+      "settingsContentOverflowPass": true,
+      "localScrollClientWidth": 340,
+      "localScrollWidth": 1040,
+      "sidebarContentOverlap": false,
+      "headingText": "관리자 설정",
+      "headingRect": {
+        "left": 49,
+        "top": 114,
+        "right": 341,
+        "bottom": 142,
+        "width": 292,
+        "height": 28
+      },
+      "headingWithinViewport": true,
+      "dialogRect": null,
+      "dialogWithinViewport": null,
+      "primaryActionText": "기본 환경 설정",
+      "primaryActionRect": {
+        "left": 25,
+        "top": 167,
+        "right": 365,
+        "bottom": 219,
+        "width": 340,
+        "height": 52
+      },
+      "primaryActionWithinViewport": true,
+      "focusTag": "BODY",
+      "focusText": "Westory학습 자료 관리수업 자료역사 사전 관리지도사료 창고싱크 클라우드 관리평가 관리문제 등록응시 현황문제 은행역사교실점수 관리평가 반영 비율정기시험 답안수행평가 점수 관리정기시험 점수 관리위스 관리위스 현황지급 및 환수운영 정책화랑의 전당 관리상품 관리구매 요청 관리학생 관리W0R admin 교사14:28세션 경고 테스트세션 만료 테스트로그아웃 관리자 설정기본 환경 설정학교/학년/학기인터페이스 설정세부 권한 관리알림 관리개인정보 동의 관리세부 권한 관리로그인 허용 여부와 들어올 수 있는 메뉴를 직접 선택합니다. 등록, 수정, 삭제는 관리자만 가능합니다.사용자역할교사 포털 로그인학습 자료 관리평가 관리학생 명단 관리위스 조회위스 관리W0R adminwestoria28@gmail.com관리자허용허용허용허용허용허용W0R maintenance-bypassw0r-maintenance-bypass@yongshin-ms.ms.kr학생허용허용허용허용허용허용W0R teacher-01w0r-teacher-01@yongshin-ms.ms.kr학생허용허용허용허용허용허용W0R teacher-02w0r-teacher-02@yongshin-ms.ms.kr학생허용허용허용허용허용허용이용 약관|개인정보 처리 방침|개발자 일지Copyright © Westory. All rights reserved.\n                .policy-rich-text {\n                    color: #374151;\n                    line-height: 1.8;\n                }\n                .policy-rich-text p {\n                    margin: 0.35rem 0;\n                    white-space: pre-wrap;\n                }\n                .policy-rich-text ul {\n                    list-style: disc;\n                    padding-left: 1.4rem;\n                    margin: 0.45rem 0;\n                }\n                .policy-rich-text ol {\n                    list-style: decimal;\n                    padding-left: 1.4rem;\n                    margin: 0.45rem 0;\n                }\n                .policy-rich-text li {\n                    margin: 0.25rem 0;\n                    white-space: pre-wrap;\n                }\n                .policy-rich-text li[data-list='bullet'] {\n                    list-style-type: disc;\n                }\n                .policy-rich-text li[data-list='ordered'] {\n                    list-style-type: decimal;\n                }\n                .policy-rich-text .ql-indent-1 { padding-left: 2em; }\n                .policy-rich-text .ql-indent-2 { padding-left: 4em; }\n                .policy-rich-text .ql-indent-3 { padding-left: 6em; }\n            \n    위스토리는 JavaScript가 필요합니다.",
+      "focusInsideDialog": null,
+      "protectedContentHiddenAndInert": null,
+      "lastActionReachable": true,
+      "diagnostics": {
+        "consoleErrors": [],
+        "pageErrors": [],
+        "failedRequests": [],
+        "httpErrors": []
+      }
+    },
+    "768x1024": {
+      "state": "ADMIN_SETTINGS",
+      "innerWidth": 768,
+      "innerHeight": 1024,
+      "documentClientWidth": 768,
+      "documentScrollWidth": 768,
+      "pageOverflowPass": true,
+      "settingsContentClientWidth": 720,
+      "settingsContentScrollWidth": 720,
+      "settingsContentOverflowPass": true,
+      "localScrollClientWidth": 718,
+      "localScrollWidth": 1040,
+      "sidebarContentOverlap": false,
+      "headingText": "관리자 설정",
+      "headingRect": {
+        "left": 49,
+        "top": 114,
+        "right": 719,
+        "bottom": 142,
+        "width": 670,
+        "height": 28
+      },
+      "headingWithinViewport": true,
+      "dialogRect": null,
+      "dialogWithinViewport": null,
+      "primaryActionText": "기본 환경 설정",
+      "primaryActionRect": {
+        "left": 25,
+        "top": 167,
+        "right": 743,
+        "bottom": 219,
+        "width": 718,
+        "height": 52
+      },
+      "primaryActionWithinViewport": true,
+      "focusTag": "BODY",
+      "focusText": "Westory학습 자료 관리수업 자료역사 사전 관리지도사료 창고싱크 클라우드 관리평가 관리문제 등록응시 현황문제 은행역사교실점수 관리평가 반영 비율정기시험 답안수행평가 점수 관리정기시험 점수 관리위스 관리위스 현황지급 및 환수운영 정책화랑의 전당 관리상품 관리구매 요청 관리학생 관리W0R admin 교사14:28세션 경고 테스트세션 만료 테스트로그아웃 관리자 설정기본 환경 설정학교/학년/학기인터페이스 설정세부 권한 관리알림 관리개인정보 동의 관리세부 권한 관리로그인 허용 여부와 들어올 수 있는 메뉴를 직접 선택합니다. 등록, 수정, 삭제는 관리자만 가능합니다.사용자역할교사 포털 로그인학습 자료 관리평가 관리학생 명단 관리위스 조회위스 관리W0R adminwestoria28@gmail.com관리자허용허용허용허용허용허용W0R maintenance-bypassw0r-maintenance-bypass@yongshin-ms.ms.kr학생허용허용허용허용허용허용W0R teacher-01w0r-teacher-01@yongshin-ms.ms.kr학생허용허용허용허용허용허용W0R teacher-02w0r-teacher-02@yongshin-ms.ms.kr학생허용허용허용허용허용허용이용 약관|개인정보 처리 방침|개발자 일지Copyright © Westory. All rights reserved.\n                .policy-rich-text {\n                    color: #374151;\n                    line-height: 1.8;\n                }\n                .policy-rich-text p {\n                    margin: 0.35rem 0;\n                    white-space: pre-wrap;\n                }\n                .policy-rich-text ul {\n                    list-style: disc;\n                    padding-left: 1.4rem;\n                    margin: 0.45rem 0;\n                }\n                .policy-rich-text ol {\n                    list-style: decimal;\n                    padding-left: 1.4rem;\n                    margin: 0.45rem 0;\n                }\n                .policy-rich-text li {\n                    margin: 0.25rem 0;\n                    white-space: pre-wrap;\n                }\n                .policy-rich-text li[data-list='bullet'] {\n                    list-style-type: disc;\n                }\n                .policy-rich-text li[data-list='ordered'] {\n                    list-style-type: decimal;\n                }\n                .policy-rich-text .ql-indent-1 { padding-left: 2em; }\n                .policy-rich-text .ql-indent-2 { padding-left: 4em; }\n                .policy-rich-text .ql-indent-3 { padding-left: 6em; }\n            \n    위스토리는 JavaScript가 필요합니다.",
+      "focusInsideDialog": null,
+      "protectedContentHiddenAndInert": null,
+      "lastActionReachable": true,
+      "diagnostics": {
+        "consoleErrors": [],
+        "pageErrors": [],
+        "failedRequests": [],
+        "httpErrors": []
+      }
+    },
+    "1024x768": {
+      "state": "ADMIN_SETTINGS",
+      "innerWidth": 1024,
+      "innerHeight": 768,
+      "documentClientWidth": 1024,
+      "documentScrollWidth": 1024,
+      "pageOverflowPass": true,
+      "settingsContentClientWidth": 656,
+      "settingsContentScrollWidth": 656,
+      "settingsContentOverflowPass": true,
+      "localScrollClientWidth": 654,
+      "localScrollWidth": 1040,
+      "sidebarContentOverlap": false,
+      "headingText": "관리자 설정",
+      "headingRect": {
+        "left": 65,
+        "top": 130,
+        "right": 271,
+        "bottom": 158,
+        "width": 206,
+        "height": 28
+      },
+      "headingWithinViewport": true,
+      "dialogRect": null,
+      "dialogWithinViewport": null,
+      "primaryActionText": "기본 환경 설정",
+      "primaryActionRect": {
+        "left": 41,
+        "top": 183,
+        "right": 295,
+        "bottom": 235,
+        "width": 254,
+        "height": 52
+      },
+      "primaryActionWithinViewport": true,
+      "focusTag": "BODY",
+      "focusText": "Westory학습 자료 관리수업 자료역사 사전 관리지도사료 창고싱크 클라우드 관리평가 관리문제 등록응시 현황문제 은행역사교실점수 관리평가 반영 비율정기시험 답안수행평가 점수 관리정기시험 점수 관리위스 관리위스 현황지급 및 환수운영 정책화랑의 전당 관리상품 관리구매 요청 관리학생 관리W0R admin 교사14:28세션 경고 테스트세션 만료 테스트로그아웃 관리자 설정기본 환경 설정학교/학년/학기인터페이스 설정세부 권한 관리알림 관리개인정보 동의 관리세부 권한 관리로그인 허용 여부와 들어올 수 있는 메뉴를 직접 선택합니다. 등록, 수정, 삭제는 관리자만 가능합니다.사용자역할교사 포털 로그인학습 자료 관리평가 관리학생 명단 관리위스 조회위스 관리W0R adminwestoria28@gmail.com관리자허용허용허용허용허용허용W0R maintenance-bypassw0r-maintenance-bypass@yongshin-ms.ms.kr학생허용허용허용허용허용허용W0R teacher-01w0r-teacher-01@yongshin-ms.ms.kr학생허용허용허용허용허용허용W0R teacher-02w0r-teacher-02@yongshin-ms.ms.kr학생허용허용허용허용허용허용이용 약관|개인정보 처리 방침|개발자 일지Copyright © Westory. All rights reserved.\n                .policy-rich-text {\n                    color: #374151;\n                    line-height: 1.8;\n                }\n                .policy-rich-text p {\n                    margin: 0.35rem 0;\n                    white-space: pre-wrap;\n                }\n                .policy-rich-text ul {\n                    list-style: disc;\n                    padding-left: 1.4rem;\n                    margin: 0.45rem 0;\n                }\n                .policy-rich-text ol {\n                    list-style: decimal;\n                    padding-left: 1.4rem;\n                    margin: 0.45rem 0;\n                }\n                .policy-rich-text li {\n                    margin: 0.25rem 0;\n                    white-space: pre-wrap;\n                }\n                .policy-rich-text li[data-list='bullet'] {\n                    list-style-type: disc;\n                }\n                .policy-rich-text li[data-list='ordered'] {\n                    list-style-type: decimal;\n                }\n                .policy-rich-text .ql-indent-1 { padding-left: 2em; }\n                .policy-rich-text .ql-indent-2 { padding-left: 4em; }\n                .policy-rich-text .ql-indent-3 { padding-left: 6em; }\n            \n    위스토리는 JavaScript가 필요합니다.",
+      "focusInsideDialog": null,
+      "protectedContentHiddenAndInert": null,
+      "lastActionReachable": true,
+      "diagnostics": {
+        "consoleErrors": [],
+        "pageErrors": [],
+        "failedRequests": [],
+        "httpErrors": []
+      }
+    },
+    "1280x800": {
+      "state": "ADMIN_SETTINGS",
+      "innerWidth": 1280,
+      "innerHeight": 800,
+      "documentClientWidth": 1280,
+      "documentScrollWidth": 1280,
+      "pageOverflowPass": true,
+      "settingsContentClientWidth": 912,
+      "settingsContentScrollWidth": 912,
+      "settingsContentOverflowPass": true,
+      "localScrollClientWidth": 910,
+      "localScrollWidth": 1040,
+      "sidebarContentOverlap": false,
+      "headingText": "관리자 설정",
+      "headingRect": {
+        "left": 65,
+        "top": 130,
+        "right": 271,
+        "bottom": 158,
+        "width": 206,
+        "height": 28
+      },
+      "headingWithinViewport": true,
+      "dialogRect": null,
+      "dialogWithinViewport": null,
+      "primaryActionText": "기본 환경 설정",
+      "primaryActionRect": {
+        "left": 41,
+        "top": 183,
+        "right": 295,
+        "bottom": 235,
+        "width": 254,
+        "height": 52
+      },
+      "primaryActionWithinViewport": true,
+      "focusTag": "BODY",
+      "focusText": "Westory학습 자료 관리수업 자료역사 사전 관리지도사료 창고싱크 클라우드 관리평가 관리문제 등록응시 현황문제 은행역사교실점수 관리평가 반영 비율정기시험 답안수행평가 점수 관리정기시험 점수 관리위스 관리위스 현황지급 및 환수운영 정책화랑의 전당 관리상품 관리구매 요청 관리학생 관리W0R admin 교사14:28세션 경고 테스트세션 만료 테스트로그아웃 관리자 설정기본 환경 설정학교/학년/학기인터페이스 설정세부 권한 관리알림 관리개인정보 동의 관리세부 권한 관리로그인 허용 여부와 들어올 수 있는 메뉴를 직접 선택합니다. 등록, 수정, 삭제는 관리자만 가능합니다.사용자역할교사 포털 로그인학습 자료 관리평가 관리학생 명단 관리위스 조회위스 관리W0R adminwestoria28@gmail.com관리자허용허용허용허용허용허용W0R maintenance-bypassw0r-maintenance-bypass@yongshin-ms.ms.kr학생허용허용허용허용허용허용W0R teacher-01w0r-teacher-01@yongshin-ms.ms.kr학생허용허용허용허용허용허용W0R teacher-02w0r-teacher-02@yongshin-ms.ms.kr학생허용허용허용허용허용허용이용 약관|개인정보 처리 방침|개발자 일지Copyright © Westory. All rights reserved.\n                .policy-rich-text {\n                    color: #374151;\n                    line-height: 1.8;\n                }\n                .policy-rich-text p {\n                    margin: 0.35rem 0;\n                    white-space: pre-wrap;\n                }\n                .policy-rich-text ul {\n                    list-style: disc;\n                    padding-left: 1.4rem;\n                    margin: 0.45rem 0;\n                }\n                .policy-rich-text ol {\n                    list-style: decimal;\n                    padding-left: 1.4rem;\n                    margin: 0.45rem 0;\n                }\n                .policy-rich-text li {\n                    margin: 0.25rem 0;\n                    white-space: pre-wrap;\n                }\n                .policy-rich-text li[data-list='bullet'] {\n                    list-style-type: disc;\n                }\n                .policy-rich-text li[data-list='ordered'] {\n                    list-style-type: decimal;\n                }\n                .policy-rich-text .ql-indent-1 { padding-left: 2em; }\n                .policy-rich-text .ql-indent-2 { padding-left: 4em; }\n                .policy-rich-text .ql-indent-3 { padding-left: 6em; }\n            \n    위스토리는 JavaScript가 필요합니다.",
+      "focusInsideDialog": null,
+      "protectedContentHiddenAndInert": null,
+      "lastActionReachable": true,
+      "diagnostics": {
+        "consoleErrors": [],
+        "pageErrors": [],
+        "failedRequests": [],
+        "httpErrors": []
+      }
+    },
+    "1600x900": {
+      "state": "ADMIN_SETTINGS",
+      "innerWidth": 1600,
+      "innerHeight": 900,
+      "documentClientWidth": 1600,
+      "documentScrollWidth": 1600,
+      "pageOverflowPass": true,
+      "settingsContentClientWidth": 912,
+      "settingsContentScrollWidth": 912,
+      "settingsContentOverflowPass": true,
+      "localScrollClientWidth": 910,
+      "localScrollWidth": 1040,
+      "sidebarContentOverlap": false,
+      "headingText": "관리자 설정",
+      "headingRect": {
+        "left": 225,
+        "top": 130,
+        "right": 431,
+        "bottom": 158,
+        "width": 206,
+        "height": 28
+      },
+      "headingWithinViewport": true,
+      "dialogRect": null,
+      "dialogWithinViewport": null,
+      "primaryActionText": "기본 환경 설정",
+      "primaryActionRect": {
+        "left": 201,
+        "top": 183,
+        "right": 455,
+        "bottom": 235,
+        "width": 254,
+        "height": 52
+      },
+      "primaryActionWithinViewport": true,
+      "focusTag": "BODY",
+      "focusText": "Westory학습 자료 관리수업 자료역사 사전 관리지도사료 창고싱크 클라우드 관리평가 관리문제 등록응시 현황문제 은행역사교실점수 관리평가 반영 비율정기시험 답안수행평가 점수 관리정기시험 점수 관리위스 관리위스 현황지급 및 환수운영 정책화랑의 전당 관리상품 관리구매 요청 관리학생 관리W0R admin 교사14:28세션 경고 테스트세션 만료 테스트로그아웃 관리자 설정기본 환경 설정학교/학년/학기인터페이스 설정세부 권한 관리알림 관리개인정보 동의 관리세부 권한 관리로그인 허용 여부와 들어올 수 있는 메뉴를 직접 선택합니다. 등록, 수정, 삭제는 관리자만 가능합니다.사용자역할교사 포털 로그인학습 자료 관리평가 관리학생 명단 관리위스 조회위스 관리W0R adminwestoria28@gmail.com관리자허용허용허용허용허용허용W0R maintenance-bypassw0r-maintenance-bypass@yongshin-ms.ms.kr학생허용허용허용허용허용허용W0R teacher-01w0r-teacher-01@yongshin-ms.ms.kr학생허용허용허용허용허용허용W0R teacher-02w0r-teacher-02@yongshin-ms.ms.kr학생허용허용허용허용허용허용이용 약관|개인정보 처리 방침|개발자 일지Copyright © Westory. All rights reserved.\n                .policy-rich-text {\n                    color: #374151;\n                    line-height: 1.8;\n                }\n                .policy-rich-text p {\n                    margin: 0.35rem 0;\n                    white-space: pre-wrap;\n                }\n                .policy-rich-text ul {\n                    list-style: disc;\n                    padding-left: 1.4rem;\n                    margin: 0.45rem 0;\n                }\n                .policy-rich-text ol {\n                    list-style: decimal;\n                    padding-left: 1.4rem;\n                    margin: 0.45rem 0;\n                }\n                .policy-rich-text li {\n                    margin: 0.25rem 0;\n                    white-space: pre-wrap;\n                }\n                .policy-rich-text li[data-list='bullet'] {\n                    list-style-type: disc;\n                }\n                .policy-rich-text li[data-list='ordered'] {\n                    list-style-type: decimal;\n                }\n                .policy-rich-text .ql-indent-1 { padding-left: 2em; }\n                .policy-rich-text .ql-indent-2 { padding-left: 4em; }\n                .policy-rich-text .ql-indent-3 { padding-left: 6em; }\n            \n    위스토리는 JavaScript가 필요합니다.",
+      "focusInsideDialog": null,
+      "protectedContentHiddenAndInert": null,
+      "lastActionReachable": true,
+      "diagnostics": {
+        "consoleErrors": [],
+        "pageErrors": [],
+        "failedRequests": [],
+        "httpErrors": []
+      }
+    }
+  },
+  "accessStates": {
+    "AUTHENTICATING": {
+      "390x844": {
+        "state": "AUTHENTICATING",
+        "innerWidth": 390,
+        "innerHeight": 844,
+        "documentClientWidth": 390,
+        "documentScrollWidth": 390,
+        "pageOverflowPass": true,
+        "settingsContentClientWidth": null,
+        "settingsContentScrollWidth": null,
+        "settingsContentOverflowPass": null,
+        "localScrollClientWidth": null,
+        "localScrollWidth": null,
+        "sidebarContentOverlap": null,
+        "headingText": "인증 상태를 확인하는 중입니다.",
+        "headingRect": {
+          "left": 41,
+          "top": 410,
+          "right": 349,
+          "bottom": 438,
+          "width": 308,
+          "height": 28
+        },
+        "headingWithinViewport": true,
+        "dialogRect": null,
+        "dialogWithinViewport": null,
+        "primaryActionText": "",
+        "primaryActionRect": null,
+        "primaryActionWithinViewport": null,
+        "focusTag": "BODY",
+        "focusText": "인증 상태를 확인하는 중입니다.로그인 정보와 접근 권한을 확인한 뒤 화면을 열겠습니다.\n    위스토리는 JavaScript가 필요합니다.",
+        "focusInsideDialog": null,
+        "protectedContentHiddenAndInert": null,
+        "protectedHeadingVisible": false,
+        "diagnostics": {
+          "consoleErrors": [],
+          "pageErrors": [],
+          "failedRequests": [
+            {
+              "url": "https://www.google.com/recaptcha/enterprise/anchor?ar=1&k=6LdYTX0tAAAAAKwRvnuoUPCIrRdAMs6cwd2sg4Ix&co=aHR0cHM6Ly93ZXN0b3J5LXN0YWdpbmctaW5pdXM5MnZ6LWJiYnMtcHJvamVjdHMtNDRmOWRhMzAudmVyY2VsLmFwcDo0NDM.&hl=ko&v=w_Yb7dGGXaKesJ7BMiqFJqBG&size=invisible&anchor-ms=20000&execute-ms=30000&cb=j4w9d4y7c4ct",
+              "failure": "net::ERR_ABORTED"
+            }
+          ],
+          "httpErrors": []
+        }
+      },
+      "768x1024": {
+        "state": "AUTHENTICATING",
+        "innerWidth": 768,
+        "innerHeight": 1024,
+        "documentClientWidth": 768,
+        "documentScrollWidth": 768,
+        "pageOverflowPass": true,
+        "settingsContentClientWidth": null,
+        "settingsContentScrollWidth": null,
+        "settingsContentOverflowPass": null,
+        "localScrollClientWidth": null,
+        "localScrollWidth": null,
+        "sidebarContentOverlap": null,
+        "headingText": "인증 상태를 확인하는 중입니다.",
+        "headingRect": {
+          "left": 193,
+          "top": 512,
+          "right": 575,
+          "bottom": 540,
+          "width": 382,
+          "height": 28
+        },
+        "headingWithinViewport": true,
+        "dialogRect": null,
+        "dialogWithinViewport": null,
+        "primaryActionText": "",
+        "primaryActionRect": null,
+        "primaryActionWithinViewport": null,
+        "focusTag": "BODY",
+        "focusText": "인증 상태를 확인하는 중입니다.로그인 정보와 접근 권한을 확인한 뒤 화면을 열겠습니다.\n    위스토리는 JavaScript가 필요합니다.",
+        "focusInsideDialog": null,
+        "protectedContentHiddenAndInert": null,
+        "protectedHeadingVisible": false,
+        "diagnostics": {
+          "consoleErrors": [],
+          "pageErrors": [],
+          "failedRequests": [
+            {
+              "url": "https://www.google.com/recaptcha/enterprise/anchor?ar=1&k=6LdYTX0tAAAAAKwRvnuoUPCIrRdAMs6cwd2sg4Ix&co=aHR0cHM6Ly93ZXN0b3J5LXN0YWdpbmctaW5pdXM5MnZ6LWJiYnMtcHJvamVjdHMtNDRmOWRhMzAudmVyY2VsLmFwcDo0NDM.&hl=ko&v=w_Yb7dGGXaKesJ7BMiqFJqBG&size=invisible&anchor-ms=20000&execute-ms=30000&cb=p67kvuw2qhdy",
+              "failure": "net::ERR_ABORTED"
+            }
+          ],
+          "httpErrors": []
+        }
+      },
+      "1024x768": {
+        "state": "AUTHENTICATING",
+        "innerWidth": 1024,
+        "innerHeight": 768,
+        "documentClientWidth": 1024,
+        "documentScrollWidth": 1024,
+        "pageOverflowPass": true,
+        "settingsContentClientWidth": null,
+        "settingsContentScrollWidth": null,
+        "settingsContentOverflowPass": null,
+        "localScrollClientWidth": null,
+        "localScrollWidth": null,
+        "sidebarContentOverlap": null,
+        "headingText": "인증 상태를 확인하는 중입니다.",
+        "headingRect": {
+          "left": 321,
+          "top": 384,
+          "right": 703,
+          "bottom": 412,
+          "width": 382,
+          "height": 28
+        },
+        "headingWithinViewport": true,
+        "dialogRect": null,
+        "dialogWithinViewport": null,
+        "primaryActionText": "",
+        "primaryActionRect": null,
+        "primaryActionWithinViewport": null,
+        "focusTag": "BODY",
+        "focusText": "인증 상태를 확인하는 중입니다.로그인 정보와 접근 권한을 확인한 뒤 화면을 열겠습니다.\n    위스토리는 JavaScript가 필요합니다.",
+        "focusInsideDialog": null,
+        "protectedContentHiddenAndInert": null,
+        "protectedHeadingVisible": false,
+        "diagnostics": {
+          "consoleErrors": [],
+          "pageErrors": [],
+          "failedRequests": [
+            {
+              "url": "https://www.google.com/recaptcha/enterprise/anchor?ar=1&k=6LdYTX0tAAAAAKwRvnuoUPCIrRdAMs6cwd2sg4Ix&co=aHR0cHM6Ly93ZXN0b3J5LXN0YWdpbmctaW5pdXM5MnZ6LWJiYnMtcHJvamVjdHMtNDRmOWRhMzAudmVyY2VsLmFwcDo0NDM.&hl=ko&v=w_Yb7dGGXaKesJ7BMiqFJqBG&size=invisible&anchor-ms=20000&execute-ms=30000&cb=2fva7cfhb1e6",
+              "failure": "net::ERR_ABORTED"
+            }
+          ],
+          "httpErrors": []
+        }
+      },
+      "1280x800": {
+        "state": "AUTHENTICATING",
+        "innerWidth": 1280,
+        "innerHeight": 800,
+        "documentClientWidth": 1280,
+        "documentScrollWidth": 1280,
+        "pageOverflowPass": true,
+        "settingsContentClientWidth": null,
+        "settingsContentScrollWidth": null,
+        "settingsContentOverflowPass": null,
+        "localScrollClientWidth": null,
+        "localScrollWidth": null,
+        "sidebarContentOverlap": null,
+        "headingText": "인증 상태를 확인하는 중입니다.",
+        "headingRect": {
+          "left": 449,
+          "top": 400,
+          "right": 831,
+          "bottom": 428,
+          "width": 382,
+          "height": 28
+        },
+        "headingWithinViewport": true,
+        "dialogRect": null,
+        "dialogWithinViewport": null,
+        "primaryActionText": "",
+        "primaryActionRect": null,
+        "primaryActionWithinViewport": null,
+        "focusTag": "BODY",
+        "focusText": "인증 상태를 확인하는 중입니다.로그인 정보와 접근 권한을 확인한 뒤 화면을 열겠습니다.\n    위스토리는 JavaScript가 필요합니다.",
+        "focusInsideDialog": null,
+        "protectedContentHiddenAndInert": null,
+        "protectedHeadingVisible": false,
+        "diagnostics": {
+          "consoleErrors": [],
+          "pageErrors": [],
+          "failedRequests": [
+            {
+              "url": "https://www.google.com/recaptcha/enterprise/anchor?ar=1&k=6LdYTX0tAAAAAKwRvnuoUPCIrRdAMs6cwd2sg4Ix&co=aHR0cHM6Ly93ZXN0b3J5LXN0YWdpbmctaW5pdXM5MnZ6LWJiYnMtcHJvamVjdHMtNDRmOWRhMzAudmVyY2VsLmFwcDo0NDM.&hl=ko&v=w_Yb7dGGXaKesJ7BMiqFJqBG&size=invisible&anchor-ms=20000&execute-ms=30000&cb=s9p54flo8c3",
+              "failure": "net::ERR_ABORTED"
+            }
+          ],
+          "httpErrors": []
+        }
+      },
+      "1600x900": {
+        "state": "AUTHENTICATING",
+        "innerWidth": 1600,
+        "innerHeight": 900,
+        "documentClientWidth": 1600,
+        "documentScrollWidth": 1600,
+        "pageOverflowPass": true,
+        "settingsContentClientWidth": null,
+        "settingsContentScrollWidth": null,
+        "settingsContentOverflowPass": null,
+        "localScrollClientWidth": null,
+        "localScrollWidth": null,
+        "sidebarContentOverlap": null,
+        "headingText": "인증 상태를 확인하는 중입니다.",
+        "headingRect": {
+          "left": 609,
+          "top": 450,
+          "right": 991,
+          "bottom": 478,
+          "width": 382,
+          "height": 28
+        },
+        "headingWithinViewport": true,
+        "dialogRect": null,
+        "dialogWithinViewport": null,
+        "primaryActionText": "",
+        "primaryActionRect": null,
+        "primaryActionWithinViewport": null,
+        "focusTag": "BODY",
+        "focusText": "인증 상태를 확인하는 중입니다.로그인 정보와 접근 권한을 확인한 뒤 화면을 열겠습니다.\n    위스토리는 JavaScript가 필요합니다.",
+        "focusInsideDialog": null,
+        "protectedContentHiddenAndInert": null,
+        "protectedHeadingVisible": false,
+        "diagnostics": {
+          "consoleErrors": [],
+          "pageErrors": [],
+          "failedRequests": [
+            {
+              "url": "https://www.google.com/recaptcha/enterprise/anchor?ar=1&k=6LdYTX0tAAAAAKwRvnuoUPCIrRdAMs6cwd2sg4Ix&co=aHR0cHM6Ly93ZXN0b3J5LXN0YWdpbmctaW5pdXM5MnZ6LWJiYnMtcHJvamVjdHMtNDRmOWRhMzAudmVyY2VsLmFwcDo0NDM.&hl=ko&v=w_Yb7dGGXaKesJ7BMiqFJqBG&size=invisible&anchor-ms=20000&execute-ms=30000&cb=pancrsbkc286",
+              "failure": "net::ERR_ABORTED"
+            }
+          ],
+          "httpErrors": []
+        }
+      }
+    },
+    "UNAUTHORIZED": {
+      "390x844": {
+        "state": "UNAUTHORIZED",
+        "innerWidth": 390,
+        "innerHeight": 844,
+        "documentClientWidth": 390,
+        "documentScrollWidth": 390,
+        "pageOverflowPass": true,
+        "settingsContentClientWidth": null,
+        "settingsContentScrollWidth": null,
+        "settingsContentOverflowPass": null,
+        "localScrollClientWidth": null,
+        "localScrollWidth": null,
+        "sidebarContentOverlap": null,
+        "headingText": "접근 권한이 없습니다.",
+        "headingRect": {
+          "left": 41,
+          "top": 378,
+          "right": 349,
+          "bottom": 406,
+          "width": 308,
+          "height": 28
+        },
+        "headingWithinViewport": true,
+        "dialogRect": null,
+        "dialogWithinViewport": null,
+        "primaryActionText": "허용된 화면으로 이동",
+        "primaryActionRect": {
+          "left": 111.078125,
+          "top": 490,
+          "right": 278.921875,
+          "bottom": 530,
+          "width": 167.84375,
+          "height": 40
+        },
+        "primaryActionWithinViewport": true,
+        "focusTag": "A",
+        "focusText": "허용된 화면으로 이동",
+        "focusInsideDialog": null,
+        "protectedContentHiddenAndInert": null,
+        "protectedHeadingVisible": false,
+        "diagnostics": {
+          "consoleErrors": [],
+          "pageErrors": [],
+          "failedRequests": [],
+          "httpErrors": []
+        }
+      },
+      "768x1024": {
+        "state": "UNAUTHORIZED",
+        "innerWidth": 768,
+        "innerHeight": 1024,
+        "documentClientWidth": 768,
+        "documentScrollWidth": 768,
+        "pageOverflowPass": true,
+        "settingsContentClientWidth": null,
+        "settingsContentScrollWidth": null,
+        "settingsContentOverflowPass": null,
+        "localScrollClientWidth": null,
+        "localScrollWidth": null,
+        "sidebarContentOverlap": null,
+        "headingText": "접근 권한이 없습니다.",
+        "headingRect": {
+          "left": 193,
+          "top": 468,
+          "right": 575,
+          "bottom": 496,
+          "width": 382,
+          "height": 28
+        },
+        "headingWithinViewport": true,
+        "dialogRect": null,
+        "dialogWithinViewport": null,
+        "primaryActionText": "허용된 화면으로 이동",
+        "primaryActionRect": {
+          "left": 300.078125,
+          "top": 580,
+          "right": 467.921875,
+          "bottom": 620,
+          "width": 167.84375,
+          "height": 40
+        },
+        "primaryActionWithinViewport": true,
+        "focusTag": "A",
+        "focusText": "허용된 화면으로 이동",
+        "focusInsideDialog": null,
+        "protectedContentHiddenAndInert": null,
+        "protectedHeadingVisible": false,
+        "diagnostics": {
+          "consoleErrors": [],
+          "pageErrors": [],
+          "failedRequests": [],
+          "httpErrors": []
+        }
+      },
+      "1024x768": {
+        "state": "UNAUTHORIZED",
+        "innerWidth": 1024,
+        "innerHeight": 768,
+        "documentClientWidth": 1024,
+        "documentScrollWidth": 1024,
+        "pageOverflowPass": true,
+        "settingsContentClientWidth": null,
+        "settingsContentScrollWidth": null,
+        "settingsContentOverflowPass": null,
+        "localScrollClientWidth": null,
+        "localScrollWidth": null,
+        "sidebarContentOverlap": null,
+        "headingText": "접근 권한이 없습니다.",
+        "headingRect": {
+          "left": 321,
+          "top": 340,
+          "right": 703,
+          "bottom": 368,
+          "width": 382,
+          "height": 28
+        },
+        "headingWithinViewport": true,
+        "dialogRect": null,
+        "dialogWithinViewport": null,
+        "primaryActionText": "허용된 화면으로 이동",
+        "primaryActionRect": {
+          "left": 428.078125,
+          "top": 452,
+          "right": 595.921875,
+          "bottom": 492,
+          "width": 167.84375,
+          "height": 40
+        },
+        "primaryActionWithinViewport": true,
+        "focusTag": "A",
+        "focusText": "허용된 화면으로 이동",
+        "focusInsideDialog": null,
+        "protectedContentHiddenAndInert": null,
+        "protectedHeadingVisible": false,
+        "diagnostics": {
+          "consoleErrors": [],
+          "pageErrors": [],
+          "failedRequests": [],
+          "httpErrors": []
+        }
+      },
+      "1280x800": {
+        "state": "UNAUTHORIZED",
+        "innerWidth": 1280,
+        "innerHeight": 800,
+        "documentClientWidth": 1280,
+        "documentScrollWidth": 1280,
+        "pageOverflowPass": true,
+        "settingsContentClientWidth": null,
+        "settingsContentScrollWidth": null,
+        "settingsContentOverflowPass": null,
+        "localScrollClientWidth": null,
+        "localScrollWidth": null,
+        "sidebarContentOverlap": null,
+        "headingText": "접근 권한이 없습니다.",
+        "headingRect": {
+          "left": 449,
+          "top": 356,
+          "right": 831,
+          "bottom": 384,
+          "width": 382,
+          "height": 28
+        },
+        "headingWithinViewport": true,
+        "dialogRect": null,
+        "dialogWithinViewport": null,
+        "primaryActionText": "허용된 화면으로 이동",
+        "primaryActionRect": {
+          "left": 556.078125,
+          "top": 468,
+          "right": 723.921875,
+          "bottom": 508,
+          "width": 167.84375,
+          "height": 40
+        },
+        "primaryActionWithinViewport": true,
+        "focusTag": "A",
+        "focusText": "허용된 화면으로 이동",
+        "focusInsideDialog": null,
+        "protectedContentHiddenAndInert": null,
+        "protectedHeadingVisible": false,
+        "diagnostics": {
+          "consoleErrors": [],
+          "pageErrors": [],
+          "failedRequests": [],
+          "httpErrors": []
+        }
+      },
+      "1600x900": {
+        "state": "UNAUTHORIZED",
+        "innerWidth": 1600,
+        "innerHeight": 900,
+        "documentClientWidth": 1600,
+        "documentScrollWidth": 1600,
+        "pageOverflowPass": true,
+        "settingsContentClientWidth": null,
+        "settingsContentScrollWidth": null,
+        "settingsContentOverflowPass": null,
+        "localScrollClientWidth": null,
+        "localScrollWidth": null,
+        "sidebarContentOverlap": null,
+        "headingText": "접근 권한이 없습니다.",
+        "headingRect": {
+          "left": 609,
+          "top": 406,
+          "right": 991,
+          "bottom": 434,
+          "width": 382,
+          "height": 28
+        },
+        "headingWithinViewport": true,
+        "dialogRect": null,
+        "dialogWithinViewport": null,
+        "primaryActionText": "허용된 화면으로 이동",
+        "primaryActionRect": {
+          "left": 716.078125,
+          "top": 518,
+          "right": 883.921875,
+          "bottom": 558,
+          "width": 167.84375,
+          "height": 40
+        },
+        "primaryActionWithinViewport": true,
+        "focusTag": "A",
+        "focusText": "허용된 화면으로 이동",
+        "focusInsideDialog": null,
+        "protectedContentHiddenAndInert": null,
+        "protectedHeadingVisible": false,
+        "diagnostics": {
+          "consoleErrors": [],
+          "pageErrors": [],
+          "failedRequests": [],
+          "httpErrors": []
+        }
+      }
+    },
+    "SESSION_EXPIRED": {
+      "390x844": {
+        "state": "SESSION_EXPIRED",
+        "innerWidth": 390,
+        "innerHeight": 844,
+        "documentClientWidth": 390,
+        "documentScrollWidth": 390,
+        "pageOverflowPass": true,
+        "settingsContentClientWidth": null,
+        "settingsContentScrollWidth": null,
+        "settingsContentOverflowPass": null,
+        "localScrollClientWidth": null,
+        "localScrollWidth": null,
+        "sidebarContentOverlap": null,
+        "headingText": "세션이 만료되었습니다.",
+        "headingRect": {
+          "left": 41,
+          "top": 378,
+          "right": 349,
+          "bottom": 406,
+          "width": 308,
+          "height": 28
+        },
+        "headingWithinViewport": true,
+        "dialogRect": null,
+        "dialogWithinViewport": null,
+        "primaryActionText": "다시 로그인",
+        "primaryActionRect": {
+          "left": 141.53125,
+          "top": 490,
+          "right": 248.453125,
+          "bottom": 530,
+          "width": 106.921875,
+          "height": 40
+        },
+        "primaryActionWithinViewport": true,
+        "focusTag": "A",
+        "focusText": "다시 로그인",
+        "focusInsideDialog": null,
+        "protectedContentHiddenAndInert": null,
+        "protectedHeadingVisible": false,
+        "diagnostics": {
+          "consoleErrors": [],
+          "pageErrors": [],
+          "failedRequests": [],
+          "httpErrors": []
+        }
+      },
+      "768x1024": {
+        "state": "SESSION_EXPIRED",
+        "innerWidth": 768,
+        "innerHeight": 1024,
+        "documentClientWidth": 768,
+        "documentScrollWidth": 768,
+        "pageOverflowPass": true,
+        "settingsContentClientWidth": null,
+        "settingsContentScrollWidth": null,
+        "settingsContentOverflowPass": null,
+        "localScrollClientWidth": null,
+        "localScrollWidth": null,
+        "sidebarContentOverlap": null,
+        "headingText": "세션이 만료되었습니다.",
+        "headingRect": {
+          "left": 193,
+          "top": 468,
+          "right": 575,
+          "bottom": 496,
+          "width": 382,
+          "height": 28
+        },
+        "headingWithinViewport": true,
+        "dialogRect": null,
+        "dialogWithinViewport": null,
+        "primaryActionText": "다시 로그인",
+        "primaryActionRect": {
+          "left": 330.53125,
+          "top": 580,
+          "right": 437.453125,
+          "bottom": 620,
+          "width": 106.921875,
+          "height": 40
+        },
+        "primaryActionWithinViewport": true,
+        "focusTag": "A",
+        "focusText": "다시 로그인",
+        "focusInsideDialog": null,
+        "protectedContentHiddenAndInert": null,
+        "protectedHeadingVisible": false,
+        "diagnostics": {
+          "consoleErrors": [],
+          "pageErrors": [],
+          "failedRequests": [],
+          "httpErrors": []
+        }
+      },
+      "1024x768": {
+        "state": "SESSION_EXPIRED",
+        "innerWidth": 1024,
+        "innerHeight": 768,
+        "documentClientWidth": 1024,
+        "documentScrollWidth": 1024,
+        "pageOverflowPass": true,
+        "settingsContentClientWidth": null,
+        "settingsContentScrollWidth": null,
+        "settingsContentOverflowPass": null,
+        "localScrollClientWidth": null,
+        "localScrollWidth": null,
+        "sidebarContentOverlap": null,
+        "headingText": "세션이 만료되었습니다.",
+        "headingRect": {
+          "left": 321,
+          "top": 340,
+          "right": 703,
+          "bottom": 368,
+          "width": 382,
+          "height": 28
+        },
+        "headingWithinViewport": true,
+        "dialogRect": null,
+        "dialogWithinViewport": null,
+        "primaryActionText": "다시 로그인",
+        "primaryActionRect": {
+          "left": 458.53125,
+          "top": 452,
+          "right": 565.453125,
+          "bottom": 492,
+          "width": 106.921875,
+          "height": 40
+        },
+        "primaryActionWithinViewport": true,
+        "focusTag": "A",
+        "focusText": "다시 로그인",
+        "focusInsideDialog": null,
+        "protectedContentHiddenAndInert": null,
+        "protectedHeadingVisible": false,
+        "diagnostics": {
+          "consoleErrors": [],
+          "pageErrors": [],
+          "failedRequests": [],
+          "httpErrors": []
+        }
+      },
+      "1280x800": {
+        "state": "SESSION_EXPIRED",
+        "innerWidth": 1280,
+        "innerHeight": 800,
+        "documentClientWidth": 1280,
+        "documentScrollWidth": 1280,
+        "pageOverflowPass": true,
+        "settingsContentClientWidth": null,
+        "settingsContentScrollWidth": null,
+        "settingsContentOverflowPass": null,
+        "localScrollClientWidth": null,
+        "localScrollWidth": null,
+        "sidebarContentOverlap": null,
+        "headingText": "세션이 만료되었습니다.",
+        "headingRect": {
+          "left": 449,
+          "top": 356,
+          "right": 831,
+          "bottom": 384,
+          "width": 382,
+          "height": 28
+        },
+        "headingWithinViewport": true,
+        "dialogRect": null,
+        "dialogWithinViewport": null,
+        "primaryActionText": "다시 로그인",
+        "primaryActionRect": {
+          "left": 586.53125,
+          "top": 468,
+          "right": 693.453125,
+          "bottom": 508,
+          "width": 106.921875,
+          "height": 40
+        },
+        "primaryActionWithinViewport": true,
+        "focusTag": "A",
+        "focusText": "다시 로그인",
+        "focusInsideDialog": null,
+        "protectedContentHiddenAndInert": null,
+        "protectedHeadingVisible": false,
+        "diagnostics": {
+          "consoleErrors": [],
+          "pageErrors": [],
+          "failedRequests": [
+            {
+              "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?gsessionid=rh6CQMaYrukPkir0qmv7z0r1N1gm8bHfnM3uvOOtmt292Sj0MASG1A&VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&RID=rpc&SID=hceR3s_sKGZV8YclWvqE4Q&AID=130&CI=1&TYPE=xmlhttp&zx=xegzvfl6jm05&t=1",
+              "failure": "net::ERR_ABORTED"
+            }
+          ],
+          "httpErrors": []
+        }
+      },
+      "1600x900": {
+        "state": "SESSION_EXPIRED",
+        "innerWidth": 1600,
+        "innerHeight": 900,
+        "documentClientWidth": 1600,
+        "documentScrollWidth": 1600,
+        "pageOverflowPass": true,
+        "settingsContentClientWidth": null,
+        "settingsContentScrollWidth": null,
+        "settingsContentOverflowPass": null,
+        "localScrollClientWidth": null,
+        "localScrollWidth": null,
+        "sidebarContentOverlap": null,
+        "headingText": "세션이 만료되었습니다.",
+        "headingRect": {
+          "left": 609,
+          "top": 406,
+          "right": 991,
+          "bottom": 434,
+          "width": 382,
+          "height": 28
+        },
+        "headingWithinViewport": true,
+        "dialogRect": null,
+        "dialogWithinViewport": null,
+        "primaryActionText": "다시 로그인",
+        "primaryActionRect": {
+          "left": 746.53125,
+          "top": 518,
+          "right": 853.453125,
+          "bottom": 558,
+          "width": 106.921875,
+          "height": 40
+        },
+        "primaryActionWithinViewport": true,
+        "focusTag": "A",
+        "focusText": "다시 로그인",
+        "focusInsideDialog": null,
+        "protectedContentHiddenAndInert": null,
+        "protectedHeadingVisible": false,
+        "diagnostics": {
+          "consoleErrors": [],
+          "pageErrors": [],
+          "failedRequests": [],
+          "httpErrors": []
+        }
+      }
+    },
+    "REAUTH_FLOW": {
+      "390x844": {
+        "reauthenticating": {
+          "state": "REAUTHENTICATING",
+          "innerWidth": 390,
+          "innerHeight": 844,
+          "documentClientWidth": 390,
+          "documentScrollWidth": 390,
+          "pageOverflowPass": true,
+          "settingsContentClientWidth": null,
+          "settingsContentScrollWidth": null,
+          "settingsContentOverflowPass": null,
+          "localScrollClientWidth": null,
+          "localScrollWidth": null,
+          "sidebarContentOverlap": null,
+          "headingText": "본인 확인이 필요합니다",
+          "headingRect": {
+            "left": 41,
+            "top": 265,
+            "right": 349,
+            "bottom": 293,
+            "width": 308,
+            "height": 28
+          },
+          "headingWithinViewport": true,
+          "dialogRect": {
+            "left": 16,
+            "top": 240,
+            "right": 374,
+            "bottom": 604,
+            "width": 358,
+            "height": 364
+          },
+          "dialogWithinViewport": true,
+          "primaryActionText": "확인 중…",
+          "primaryActionRect": {
+            "left": 41,
+            "top": 483,
+            "right": 349,
+            "bottom": 527,
+            "width": 308,
+            "height": 44
+          },
+          "primaryActionWithinViewport": true,
+          "focusTag": "SECTION",
+          "focusText": "본인 확인이 필요합니다화면 설정 변경 작업을 실행하기 전에 다시 로그인해 주세요. 확인 후 5분 동안 보호된 작업을 실행할 수 있습니다.현재 비밀번호확인 중…취소",
+          "focusInsideDialog": true,
+          "protectedContentHiddenAndInert": true
+        },
+        "sessionRefreshing": {
+          "state": "SESSION_REFRESHING",
+          "innerWidth": 390,
+          "innerHeight": 844,
+          "documentClientWidth": 390,
+          "documentScrollWidth": 390,
+          "pageOverflowPass": true,
+          "settingsContentClientWidth": null,
+          "settingsContentScrollWidth": null,
+          "settingsContentOverflowPass": null,
+          "localScrollClientWidth": null,
+          "localScrollWidth": null,
+          "sidebarContentOverlap": null,
+          "headingText": "본인 확인이 필요합니다",
+          "headingRect": {
+            "left": 41,
+            "top": 265,
+            "right": 349,
+            "bottom": 293,
+            "width": 308,
+            "height": 28
+          },
+          "headingWithinViewport": true,
+          "dialogRect": {
+            "left": 16,
+            "top": 240,
+            "right": 374,
+            "bottom": 604,
+            "width": 358,
+            "height": 364
+          },
+          "dialogWithinViewport": true,
+          "primaryActionText": "확인 중…",
+          "primaryActionRect": {
+            "left": 41,
+            "top": 483,
+            "right": 349,
+            "bottom": 527,
+            "width": 308,
+            "height": 44
+          },
+          "primaryActionWithinViewport": true,
+          "focusTag": "SECTION",
+          "focusText": "본인 확인이 필요합니다화면 설정 변경 작업을 실행하기 전에 다시 로그인해 주세요. 확인 후 5분 동안 보호된 작업을 실행할 수 있습니다.현재 비밀번호확인 중…취소",
+          "focusInsideDialog": true,
+          "protectedContentHiddenAndInert": true
+        },
+        "authorized": {
+          "state": "AUTHORIZED_RECOVERY",
+          "innerWidth": 390,
+          "innerHeight": 844,
+          "documentClientWidth": 390,
+          "documentScrollWidth": 390,
+          "pageOverflowPass": true,
+          "settingsContentClientWidth": 342,
+          "settingsContentScrollWidth": 342,
+          "settingsContentOverflowPass": true,
+          "localScrollClientWidth": null,
+          "localScrollWidth": null,
+          "sidebarContentOverlap": false,
+          "headingText": "본인 확인이 필요합니다",
+          "headingRect": {
+            "left": 41,
+            "top": 239,
+            "right": 349,
+            "bottom": 267,
+            "width": 308,
+            "height": 28
+          },
+          "headingWithinViewport": true,
+          "dialogRect": {
+            "left": 16,
+            "top": 214,
+            "right": 374,
+            "bottom": 630,
+            "width": 358,
+            "height": 416
+          },
+          "dialogWithinViewport": true,
+          "primaryActionText": "비밀번호로 확인",
+          "primaryActionRect": {
+            "left": 41,
+            "top": 457,
+            "right": 349,
+            "bottom": 501,
+            "width": 308,
+            "height": 44
+          },
+          "primaryActionWithinViewport": true,
+          "focusTag": "SECTION",
+          "focusText": "본인 확인이 필요합니다화면 설정 변경 작업을 실행하기 전에 다시 로그인해 주세요. 확인 후 5분 동안 보호된 작업을 실행할 수 있습니다.현재 비밀번호비밀번호로 확인새 로그인 세션으로 데이터 연결을 다시 시작하지 못했습니다. 작업은 실행되지 않았습니다.취소",
+          "focusInsideDialog": true,
+          "protectedContentHiddenAndInert": true,
+          "protectedHeadingVisible": false
+        },
+        "diagnostics": {
+          "consoleErrors": [
+            {
+              "text": "Failed to subscribe user data FirebaseError: Missing or insufficient permissions.",
+              "location": {
+                "url": "https://westory-staging-inius92vz-bbbs-projects-44f9da30.vercel.app/assets/main-Dz4U-le0.js",
+                "line": 198,
+                "column": 29243,
+                "lineNumber": 198,
+                "columnNumber": 29243
+              }
+            }
+          ],
+          "pageErrors": [],
+          "failedRequests": [
+            {
+              "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?gsessionid=NA5pYaNlAgQdUX7cmBB1wKlJcQtqpydHpHHUMedQMuPNRAJYCFy0cw&VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&RID=rpc&SID=8dA_rxDRp0_jrdw_tsp_UQ&AID=0&CI=0&TYPE=xmlhttp&zx=ycaamzodpqhg&t=1",
+              "failure": "net::ERR_ABORTED"
+            },
+            {
+              "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&gsessionid=NA5pYaNlAgQdUX7cmBB1wKlJcQtqpydHpHHUMedQMuPNRAJYCFy0cw&SID=8dA_rxDRp0_jrdw_tsp_UQ&RID=13363&AID=139&zx=5aaows7nr01n&t=1",
+              "failure": "net::ERR_ABORTED"
+            },
+            {
+              "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?gsessionid=Qlm2RusJRMQ6jzhGtqPmkmUuVnZBOZQSUJ55fmCjCkFjv6eWpKTXdA&VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&RID=rpc&SID=rzs8If8KpltG9d4eTeY5oQ&AID=0&CI=0&TYPE=xmlhttp&zx=xn68biya8xjt&t=1",
+              "failure": "net::ERR_ABORTED"
+            },
+            {
+              "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?gsessionid=ayPTEpwlo0Ngt3K5ylBNeHMb2KxXelJN8K_qX5bcoDeMYL97R3eD9w&VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&RID=rpc&SID=PFVNp3-OmXLzzW5-N3iXXw&AID=0&CI=0&TYPE=xmlhttp&zx=y1vmrlutymi7&t=1",
+              "failure": "net::ERR_ABORTED"
+            }
+          ],
+          "httpErrors": []
+        },
+        "recoveryError": "Reauthentication recovery did not complete: {\"hash\":\"#/teacher/settings?tab=interface\",\"visibleText\":\"We\\nstory\\nW0R admin 교사\\n관리자 설정\\n기본 환경 설정\\n학교/학년/학기\\n인터페이스 설정\\n세부 권한 관리\\n알림 관리\\n개인정보 동의 관리\\n메인 화면\\n사이트맵 메뉴\\n메인 화면 설정\\n\\n로그인(메인) 화면의 문구와 이모지를 설정합니다.\\n\\n메인 이모지\\n\\n이모지 1개를 입력하세요.\\n\\n서브 타이틀\\n푸터 설정\\n\\n사이트 하단의 저작권 문구를 설정합니다.\\n\\n저작권 문구\\n공식 인스타그램 링크\\n\\n비워두면 푸터 인스타그램 아이콘을 표시하지 않습니다.\\n\\nD-Day 표시\\n\\n메인 화면에 D-Day 카운트를 표시합니다.\\n\\n사용\\n제목\\n목표 날짜\\n전체 저장\\n이용 약관\\n|\\n개인정보 처리 방침\\n|\\n개발자 일지\\n\\nCopyright © Westory. All rights reserved.\\n\\n본인 확인이 필요합니다\\n\\n화면 설정 변경 작업을 실행하기 전에 다시 로그인해 주세요. 확인 후 5분 동안 보호된 작업을 실행할 수 있습니다.\\n\\n현재 비밀번호\\n비밀번호로 확인\\n\\n새 로그인 세션으로 데이터 연결을 다시 시작하지 못했습니다. 작업은 실행되지 않았습니다.\\n\\n취소\",\"diagnostics\":{\"consoleErrors\":[{\"text\":\"Failed to subscribe user data FirebaseError: Missing or insufficient permissions.\",\"location\":{\"url\":\"https://westory-staging-inius92vz-bbbs-projects-44f9da30.vercel.app/assets/main-Dz4U-le0.js\",\"line\":198,\"column\":29243,\"lineNumber\":198,\"columnNumber\":29243}}],\"pageErrors\":[],\"failedRequests\":[{\"url\":\"https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?gsessionid=NA5pYaNlAgQdUX7cmBB1wKlJcQtqpydHpHHUMedQMuPNRAJYCFy0cw&VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&RID=rpc&SID=8dA_rxDRp0_jrdw_tsp_UQ&AID=0&CI=0&TYPE=xmlhttp&zx=ycaamzodpqhg&t=1\",\"failure\":\"net::ERR_ABORTED\"},{\"url\":\"https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&gsessionid=NA5pYaNlAgQdUX7cmBB1wKlJcQtqpydHpHHUMedQMuPNRAJYCFy0cw&SID=8dA_rxDRp0_jrdw_tsp_UQ&RID=13363&AID=139&zx=5aaows7nr01n&t=1\",\"failure\":\"net::ERR_ABORTED\"},{\"url\":\"https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?gsessionid=Qlm2RusJRMQ6jzhGtqPmkmUuVnZBOZQSUJ55fmCjCkFjv6eWpKTXdA&VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&RID=rpc&SID=rzs8If8KpltG9d4eTeY5oQ&AID=0&CI=0&TYPE=xmlhttp&zx=xn68biya8xjt&t=1\",\"failure\":\"net::ERR_ABORTED\"},{\"url\":\"https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?gsessionid=ayPTEpwlo0Ngt3K5ylBNeHMb2KxXelJN8K_qX5bcoDeMYL97R3eD9w&VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&RID=rpc&SID=PFVNp3-OmXLzzW5-N3iXXw&AID=0&CI=0&TYPE=xmlhttp&zx=y1vmrlutymi7&t=1\",\"failure\":\"net::ERR_ABORTED\"}],\"httpErrors\":[]}}"
+      },
+      "768x1024": {
+        "reauthenticating": {
+          "state": "REAUTHENTICATING",
+          "innerWidth": 768,
+          "innerHeight": 1024,
+          "documentClientWidth": 768,
+          "documentScrollWidth": 768,
+          "pageOverflowPass": true,
+          "settingsContentClientWidth": null,
+          "settingsContentScrollWidth": null,
+          "settingsContentOverflowPass": null,
+          "localScrollClientWidth": null,
+          "localScrollWidth": null,
+          "sidebarContentOverlap": null,
+          "headingText": "본인 확인이 필요합니다",
+          "headingRect": {
+            "left": 185,
+            "top": 367,
+            "right": 583,
+            "bottom": 395,
+            "width": 398,
+            "height": 28
+          },
+          "headingWithinViewport": true,
+          "dialogRect": {
+            "left": 160,
+            "top": 342,
+            "right": 608,
+            "bottom": 682,
+            "width": 448,
+            "height": 340
+          },
+          "dialogWithinViewport": true,
+          "primaryActionText": "확인 중…",
+          "primaryActionRect": {
+            "left": 185,
+            "top": 561,
+            "right": 583,
+            "bottom": 605,
+            "width": 398,
+            "height": 44
+          },
+          "primaryActionWithinViewport": true,
+          "focusTag": "SECTION",
+          "focusText": "본인 확인이 필요합니다화면 설정 변경 작업을 실행하기 전에 다시 로그인해 주세요. 확인 후 5분 동안 보호된 작업을 실행할 수 있습니다.현재 비밀번호확인 중…취소",
+          "focusInsideDialog": true,
+          "protectedContentHiddenAndInert": true
+        },
+        "sessionRefreshing": {
+          "state": "SESSION_REFRESHING",
+          "innerWidth": 768,
+          "innerHeight": 1024,
+          "documentClientWidth": 768,
+          "documentScrollWidth": 768,
+          "pageOverflowPass": true,
+          "settingsContentClientWidth": null,
+          "settingsContentScrollWidth": null,
+          "settingsContentOverflowPass": null,
+          "localScrollClientWidth": null,
+          "localScrollWidth": null,
+          "sidebarContentOverlap": null,
+          "headingText": "본인 확인이 필요합니다",
+          "headingRect": {
+            "left": 185,
+            "top": 367,
+            "right": 583,
+            "bottom": 395,
+            "width": 398,
+            "height": 28
+          },
+          "headingWithinViewport": true,
+          "dialogRect": {
+            "left": 160,
+            "top": 342,
+            "right": 608,
+            "bottom": 682,
+            "width": 448,
+            "height": 340
+          },
+          "dialogWithinViewport": true,
+          "primaryActionText": "확인 중…",
+          "primaryActionRect": {
+            "left": 185,
+            "top": 561,
+            "right": 583,
+            "bottom": 605,
+            "width": 398,
+            "height": 44
+          },
+          "primaryActionWithinViewport": true,
+          "focusTag": "SECTION",
+          "focusText": "본인 확인이 필요합니다화면 설정 변경 작업을 실행하기 전에 다시 로그인해 주세요. 확인 후 5분 동안 보호된 작업을 실행할 수 있습니다.현재 비밀번호확인 중…취소",
+          "focusInsideDialog": true,
+          "protectedContentHiddenAndInert": true
+        },
+        "authorized": {
+          "state": "AUTHORIZED_RECOVERY",
+          "innerWidth": 768,
+          "innerHeight": 1024,
+          "documentClientWidth": 768,
+          "documentScrollWidth": 768,
+          "pageOverflowPass": true,
+          "settingsContentClientWidth": 720,
+          "settingsContentScrollWidth": 720,
+          "settingsContentOverflowPass": true,
+          "localScrollClientWidth": null,
+          "localScrollWidth": null,
+          "sidebarContentOverlap": false,
+          "headingText": "본인 확인이 필요합니다",
+          "headingRect": {
+            "left": 185,
+            "top": 341,
+            "right": 583,
+            "bottom": 369,
+            "width": 398,
+            "height": 28
+          },
+          "headingWithinViewport": true,
+          "dialogRect": {
+            "left": 160,
+            "top": 316,
+            "right": 608,
+            "bottom": 708,
+            "width": 448,
+            "height": 392
+          },
+          "dialogWithinViewport": true,
+          "primaryActionText": "비밀번호로 확인",
+          "primaryActionRect": {
+            "left": 185,
+            "top": 535,
+            "right": 583,
+            "bottom": 579,
+            "width": 398,
+            "height": 44
+          },
+          "primaryActionWithinViewport": true,
+          "focusTag": "SECTION",
+          "focusText": "본인 확인이 필요합니다화면 설정 변경 작업을 실행하기 전에 다시 로그인해 주세요. 확인 후 5분 동안 보호된 작업을 실행할 수 있습니다.현재 비밀번호비밀번호로 확인새 로그인 세션으로 데이터 연결을 다시 시작하지 못했습니다. 작업은 실행되지 않았습니다.취소",
+          "focusInsideDialog": true,
+          "protectedContentHiddenAndInert": true,
+          "protectedHeadingVisible": false
+        },
+        "diagnostics": {
+          "consoleErrors": [
+            {
+              "text": "Failed to subscribe user data FirebaseError: Missing or insufficient permissions.",
+              "location": {
+                "url": "https://westory-staging-inius92vz-bbbs-projects-44f9da30.vercel.app/assets/main-Dz4U-le0.js",
+                "line": 198,
+                "column": 29243,
+                "lineNumber": 198,
+                "columnNumber": 29243
+              }
+            }
+          ],
+          "pageErrors": [],
+          "failedRequests": [
+            {
+              "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?gsessionid=QZZs8zL66cfTC8Ah3Wp9zX1jxzTWK9dUubaTCgzHLPBICi0peuMylQ&VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&RID=rpc&SID=2WB6CmSBEzXak9YhPqQ5bA&AID=0&CI=0&TYPE=xmlhttp&zx=a7hv1t2gfjnd&t=1",
+              "failure": "net::ERR_ABORTED"
+            },
+            {
+              "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&gsessionid=QZZs8zL66cfTC8Ah3Wp9zX1jxzTWK9dUubaTCgzHLPBICi0peuMylQ&SID=2WB6CmSBEzXak9YhPqQ5bA&RID=98136&AID=141&zx=5pgip9t3tzbr&t=1",
+              "failure": "net::ERR_ABORTED"
+            },
+            {
+              "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?gsessionid=T9KQu5MEksujn9gBzV1Ma5TBnHy7aveJjj8f5Sl7LoHi33lPHFZIQQ&VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&RID=rpc&SID=z85kUEnAiFdjyN2t98wdwg&AID=0&CI=0&TYPE=xmlhttp&zx=tcdbt3xg7o8e&t=1",
+              "failure": "net::ERR_ABORTED"
+            },
+            {
+              "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?gsessionid=jjDF_M6aKleAjD4oRMTrIRAGXjZ6aYIoJI0qm0N4IUghL2YQyNQnEw&VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&RID=rpc&SID=IawIAIhw_vfWMQigOkQMDg&AID=0&CI=0&TYPE=xmlhttp&zx=vpbyklldexcl&t=1",
+              "failure": "net::ERR_ABORTED"
+            }
+          ],
+          "httpErrors": []
+        },
+        "recoveryError": "Reauthentication recovery did not complete: {\"hash\":\"#/teacher/settings?tab=interface\",\"visibleText\":\"We\\nstory\\nW0R admin 교사\\n관리자 설정\\n기본 환경 설정\\n학교/학년/학기\\n인터페이스 설정\\n세부 권한 관리\\n알림 관리\\n개인정보 동의 관리\\n메인 화면\\n사이트맵 메뉴\\n메인 화면 설정\\n\\n로그인(메인) 화면의 문구와 이모지를 설정합니다.\\n\\n메인 이모지\\n\\n이모지 1개를 입력하세요.\\n\\n서브 타이틀\\n푸터 설정\\n\\n사이트 하단의 저작권 문구를 설정합니다.\\n\\n저작권 문구\\n공식 인스타그램 링크\\n\\n비워두면 푸터 인스타그램 아이콘을 표시하지 않습니다.\\n\\nD-Day 표시\\n\\n메인 화면에 D-Day 카운트를 표시합니다.\\n\\n사용\\n제목\\n목표 날짜\\n전체 저장\\n이용 약관\\n|\\n개인정보 처리 방침\\n|\\n개발자 일지\\n\\nCopyright © Westory. All rights reserved.\\n\\n본인 확인이 필요합니다\\n\\n화면 설정 변경 작업을 실행하기 전에 다시 로그인해 주세요. 확인 후 5분 동안 보호된 작업을 실행할 수 있습니다.\\n\\n현재 비밀번호\\n비밀번호로 확인\\n\\n새 로그인 세션으로 데이터 연결을 다시 시작하지 못했습니다. 작업은 실행되지 않았습니다.\\n\\n취소\",\"diagnostics\":{\"consoleErrors\":[{\"text\":\"Failed to subscribe user data FirebaseError: Missing or insufficient permissions.\",\"location\":{\"url\":\"https://westory-staging-inius92vz-bbbs-projects-44f9da30.vercel.app/assets/main-Dz4U-le0.js\",\"line\":198,\"column\":29243,\"lineNumber\":198,\"columnNumber\":29243}}],\"pageErrors\":[],\"failedRequests\":[{\"url\":\"https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?gsessionid=QZZs8zL66cfTC8Ah3Wp9zX1jxzTWK9dUubaTCgzHLPBICi0peuMylQ&VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&RID=rpc&SID=2WB6CmSBEzXak9YhPqQ5bA&AID=0&CI=0&TYPE=xmlhttp&zx=a7hv1t2gfjnd&t=1\",\"failure\":\"net::ERR_ABORTED\"},{\"url\":\"https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&gsessionid=QZZs8zL66cfTC8Ah3Wp9zX1jxzTWK9dUubaTCgzHLPBICi0peuMylQ&SID=2WB6CmSBEzXak9YhPqQ5bA&RID=98136&AID=141&zx=5pgip9t3tzbr&t=1\",\"failure\":\"net::ERR_ABORTED\"},{\"url\":\"https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?gsessionid=T9KQu5MEksujn9gBzV1Ma5TBnHy7aveJjj8f5Sl7LoHi33lPHFZIQQ&VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&RID=rpc&SID=z85kUEnAiFdjyN2t98wdwg&AID=0&CI=0&TYPE=xmlhttp&zx=tcdbt3xg7o8e&t=1\",\"failure\":\"net::ERR_ABORTED\"},{\"url\":\"https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?gsessionid=jjDF_M6aKleAjD4oRMTrIRAGXjZ6aYIoJI0qm0N4IUghL2YQyNQnEw&VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&RID=rpc&SID=IawIAIhw_vfWMQigOkQMDg&AID=0&CI=0&TYPE=xmlhttp&zx=vpbyklldexcl&t=1\",\"failure\":\"net::ERR_ABORTED\"}],\"httpErrors\":[]}}"
+      },
+      "1024x768": {
+        "reauthenticating": {
+          "state": "REAUTHENTICATING",
+          "innerWidth": 1024,
+          "innerHeight": 768,
+          "documentClientWidth": 1024,
+          "documentScrollWidth": 1024,
+          "pageOverflowPass": true,
+          "settingsContentClientWidth": null,
+          "settingsContentScrollWidth": null,
+          "settingsContentOverflowPass": null,
+          "localScrollClientWidth": null,
+          "localScrollWidth": null,
+          "sidebarContentOverlap": null,
+          "headingText": "본인 확인이 필요합니다",
+          "headingRect": {
+            "left": 313,
+            "top": 239,
+            "right": 711,
+            "bottom": 267,
+            "width": 398,
+            "height": 28
+          },
+          "headingWithinViewport": true,
+          "dialogRect": {
+            "left": 288,
+            "top": 214,
+            "right": 736,
+            "bottom": 554,
+            "width": 448,
+            "height": 340
+          },
+          "dialogWithinViewport": true,
+          "primaryActionText": "확인 중…",
+          "primaryActionRect": {
+            "left": 313,
+            "top": 433,
+            "right": 711,
+            "bottom": 477,
+            "width": 398,
+            "height": 44
+          },
+          "primaryActionWithinViewport": true,
+          "focusTag": "SECTION",
+          "focusText": "본인 확인이 필요합니다화면 설정 변경 작업을 실행하기 전에 다시 로그인해 주세요. 확인 후 5분 동안 보호된 작업을 실행할 수 있습니다.현재 비밀번호확인 중…취소",
+          "focusInsideDialog": true,
+          "protectedContentHiddenAndInert": true
+        },
+        "sessionRefreshing": {
+          "state": "SESSION_REFRESHING",
+          "innerWidth": 1024,
+          "innerHeight": 768,
+          "documentClientWidth": 1024,
+          "documentScrollWidth": 1024,
+          "pageOverflowPass": true,
+          "settingsContentClientWidth": null,
+          "settingsContentScrollWidth": null,
+          "settingsContentOverflowPass": null,
+          "localScrollClientWidth": null,
+          "localScrollWidth": null,
+          "sidebarContentOverlap": null,
+          "headingText": "본인 확인이 필요합니다",
+          "headingRect": {
+            "left": 313,
+            "top": 239,
+            "right": 711,
+            "bottom": 267,
+            "width": 398,
+            "height": 28
+          },
+          "headingWithinViewport": true,
+          "dialogRect": {
+            "left": 288,
+            "top": 214,
+            "right": 736,
+            "bottom": 554,
+            "width": 448,
+            "height": 340
+          },
+          "dialogWithinViewport": true,
+          "primaryActionText": "확인 중…",
+          "primaryActionRect": {
+            "left": 313,
+            "top": 433,
+            "right": 711,
+            "bottom": 477,
+            "width": 398,
+            "height": 44
+          },
+          "primaryActionWithinViewport": true,
+          "focusTag": "SECTION",
+          "focusText": "본인 확인이 필요합니다화면 설정 변경 작업을 실행하기 전에 다시 로그인해 주세요. 확인 후 5분 동안 보호된 작업을 실행할 수 있습니다.현재 비밀번호확인 중…취소",
+          "focusInsideDialog": true,
+          "protectedContentHiddenAndInert": true
+        },
+        "authorized": {
+          "state": "AUTHORIZED_RECOVERY",
+          "innerWidth": 1024,
+          "innerHeight": 768,
+          "documentClientWidth": 1024,
+          "documentScrollWidth": 1024,
+          "pageOverflowPass": true,
+          "settingsContentClientWidth": 656,
+          "settingsContentScrollWidth": 656,
+          "settingsContentOverflowPass": true,
+          "localScrollClientWidth": null,
+          "localScrollWidth": null,
+          "sidebarContentOverlap": false,
+          "headingText": "관리자 설정",
+          "headingRect": {
+            "left": 65,
+            "top": 130,
+            "right": 271,
+            "bottom": 158,
+            "width": 206,
+            "height": 28
+          },
+          "headingWithinViewport": true,
+          "dialogRect": null,
+          "dialogWithinViewport": null,
+          "primaryActionText": "기본 환경 설정",
+          "primaryActionRect": {
+            "left": 41,
+            "top": 183,
+            "right": 295,
+            "bottom": 235,
+            "width": 254,
+            "height": 52
+          },
+          "primaryActionWithinViewport": true,
+          "focusTag": "BODY",
+          "focusText": "Westory학습 자료 관리수업 자료역사 사전 관리지도사료 창고싱크 클라우드 관리평가 관리문제 등록응시 현황문제 은행역사교실점수 관리평가 반영 비율정기시험 답안수행평가 점수 관리정기시험 점수 관리위스 관리위스 현황지급 및 환수운영 정책화랑의 전당 관리상품 관리구매 요청 관리학생 관리W0R admin 교사14:49세션 경고 테스트세션 만료 테스트로그아웃 관리자 설정기본 환경 설정학교/학년/학기인터페이스 설정세부 권한 관리알림 관리개인정보 동의 관리메인 화면사이트맵 메뉴메인 화면 설정로그인(메인) 화면의 문구와 이모지를 설정합니다.메인 이모지이모지 1개를 입력하세요.서브 타이틀푸터 설정사이트 하단의 저작권 문구를 설정합니다.저작권 문구공식 인스타그램 링크비워두면 푸터 인스타그램 아이콘을 표시하지 않습니다.D-Day 표시메인 화면에 D-Day 카운트를 표시합니다.사용제목목표 날짜전체 저장이용 약관|개인정보 처리 방침|개발자 일지Copyright © Westory. All rights reserved.\n                .policy-rich-text {\n                    color: #374151;\n                    line-height: 1.8;\n                }\n                .policy-rich-text p {\n                    margin: 0.35rem 0;\n                    white-space: pre-wrap;\n                }\n                .policy-rich-text ul {\n                    list-style: disc;\n                    padding-left: 1.4rem;\n                    margin: 0.45rem 0;\n                }\n                .policy-rich-text ol {\n                    list-style: decimal;\n                    padding-left: 1.4rem;\n                    margin: 0.45rem 0;\n                }\n                .policy-rich-text li {\n                    margin: 0.25rem 0;\n                    white-space: pre-wrap;\n                }\n                .policy-rich-text li[data-list='bullet'] {\n                    list-style-type: disc;\n                }\n                .policy-rich-text li[data-list='ordered'] {\n                    list-style-type: decimal;\n                }\n                .policy-rich-text .ql-indent-1 { padding-left: 2em; }\n                .policy-rich-text .ql-indent-2 { padding-left: 4em; }\n                .policy-rich-text .ql-indent-3 { padding-left: 6em; }\n            \n    위스토리는 JavaScript가 필요합니다.",
+          "focusInsideDialog": null,
+          "protectedContentHiddenAndInert": null,
+          "protectedHeadingVisible": true
+        },
+        "diagnostics": {
+          "consoleErrors": [],
+          "pageErrors": [],
+          "failedRequests": [
+            {
+              "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?gsessionid=zjqjlz-8rJjtPunNbAEjIaItNyf_uluoUMS7iQgZ7MgS5v6tB3Gw2g&VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&RID=rpc&SID=OzL5qvLxmmtKEzT8ZPKwLQ&AID=0&CI=0&TYPE=xmlhttp&zx=feug70m069b2&t=1",
+              "failure": "net::ERR_ABORTED"
+            },
+            {
+              "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&gsessionid=zjqjlz-8rJjtPunNbAEjIaItNyf_uluoUMS7iQgZ7MgS5v6tB3Gw2g&SID=OzL5qvLxmmtKEzT8ZPKwLQ&RID=77193&AID=148&zx=by0dsetpbwjt&t=1",
+              "failure": "net::ERR_ABORTED"
+            },
+            {
+              "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?gsessionid=PwRhr54jUWdkQjoKhGHXm3CsdJ7A2XIzaYOAmRZCvCvpOpSpSGOvzQ&VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&RID=rpc&SID=Y0kaeoARCBdCFAw2jPYe8Q&AID=0&CI=0&TYPE=xmlhttp&zx=hvpvl8mip9qh&t=1",
+              "failure": "net::ERR_ABORTED"
+            }
+          ],
+          "httpErrors": []
+        },
+        "recoveryError": null
+      },
+      "1280x800": {
+        "reauthenticating": {
+          "state": "REAUTHENTICATING",
+          "innerWidth": 1280,
+          "innerHeight": 800,
+          "documentClientWidth": 1280,
+          "documentScrollWidth": 1280,
+          "pageOverflowPass": true,
+          "settingsContentClientWidth": null,
+          "settingsContentScrollWidth": null,
+          "settingsContentOverflowPass": null,
+          "localScrollClientWidth": null,
+          "localScrollWidth": null,
+          "sidebarContentOverlap": null,
+          "headingText": "본인 확인이 필요합니다",
+          "headingRect": {
+            "left": 441,
+            "top": 255,
+            "right": 839,
+            "bottom": 283,
+            "width": 398,
+            "height": 28
+          },
+          "headingWithinViewport": true,
+          "dialogRect": {
+            "left": 416,
+            "top": 230,
+            "right": 864,
+            "bottom": 570,
+            "width": 448,
+            "height": 340
+          },
+          "dialogWithinViewport": true,
+          "primaryActionText": "확인 중…",
+          "primaryActionRect": {
+            "left": 441,
+            "top": 449,
+            "right": 839,
+            "bottom": 493,
+            "width": 398,
+            "height": 44
+          },
+          "primaryActionWithinViewport": true,
+          "focusTag": "SECTION",
+          "focusText": "본인 확인이 필요합니다화면 설정 변경 작업을 실행하기 전에 다시 로그인해 주세요. 확인 후 5분 동안 보호된 작업을 실행할 수 있습니다.현재 비밀번호확인 중…취소",
+          "focusInsideDialog": true,
+          "protectedContentHiddenAndInert": true
+        },
+        "sessionRefreshing": {
+          "state": "SESSION_REFRESHING",
+          "innerWidth": 1280,
+          "innerHeight": 800,
+          "documentClientWidth": 1280,
+          "documentScrollWidth": 1280,
+          "pageOverflowPass": true,
+          "settingsContentClientWidth": null,
+          "settingsContentScrollWidth": null,
+          "settingsContentOverflowPass": null,
+          "localScrollClientWidth": null,
+          "localScrollWidth": null,
+          "sidebarContentOverlap": null,
+          "headingText": "본인 확인이 필요합니다",
+          "headingRect": {
+            "left": 441,
+            "top": 255,
+            "right": 839,
+            "bottom": 283,
+            "width": 398,
+            "height": 28
+          },
+          "headingWithinViewport": true,
+          "dialogRect": {
+            "left": 416,
+            "top": 230,
+            "right": 864,
+            "bottom": 570,
+            "width": 448,
+            "height": 340
+          },
+          "dialogWithinViewport": true,
+          "primaryActionText": "확인 중…",
+          "primaryActionRect": {
+            "left": 441,
+            "top": 449,
+            "right": 839,
+            "bottom": 493,
+            "width": 398,
+            "height": 44
+          },
+          "primaryActionWithinViewport": true,
+          "focusTag": "SECTION",
+          "focusText": "본인 확인이 필요합니다화면 설정 변경 작업을 실행하기 전에 다시 로그인해 주세요. 확인 후 5분 동안 보호된 작업을 실행할 수 있습니다.현재 비밀번호확인 중…취소",
+          "focusInsideDialog": true,
+          "protectedContentHiddenAndInert": true
+        },
+        "authorized": {
+          "state": "AUTHORIZED_RECOVERY",
+          "innerWidth": 1280,
+          "innerHeight": 800,
+          "documentClientWidth": 1280,
+          "documentScrollWidth": 1280,
+          "pageOverflowPass": true,
+          "settingsContentClientWidth": 912,
+          "settingsContentScrollWidth": 912,
+          "settingsContentOverflowPass": true,
+          "localScrollClientWidth": null,
+          "localScrollWidth": null,
+          "sidebarContentOverlap": false,
+          "headingText": "본인 확인이 필요합니다",
+          "headingRect": {
+            "left": 441,
+            "top": 229,
+            "right": 839,
+            "bottom": 257,
+            "width": 398,
+            "height": 28
+          },
+          "headingWithinViewport": true,
+          "dialogRect": {
+            "left": 416,
+            "top": 204,
+            "right": 864,
+            "bottom": 596,
+            "width": 448,
+            "height": 392
+          },
+          "dialogWithinViewport": true,
+          "primaryActionText": "비밀번호로 확인",
+          "primaryActionRect": {
+            "left": 441,
+            "top": 423,
+            "right": 839,
+            "bottom": 467,
+            "width": 398,
+            "height": 44
+          },
+          "primaryActionWithinViewport": true,
+          "focusTag": "SECTION",
+          "focusText": "본인 확인이 필요합니다화면 설정 변경 작업을 실행하기 전에 다시 로그인해 주세요. 확인 후 5분 동안 보호된 작업을 실행할 수 있습니다.현재 비밀번호비밀번호로 확인새 로그인 세션으로 데이터 연결을 다시 시작하지 못했습니다. 작업은 실행되지 않았습니다.취소",
+          "focusInsideDialog": true,
+          "protectedContentHiddenAndInert": true,
+          "protectedHeadingVisible": false
+        },
+        "diagnostics": {
+          "consoleErrors": [
+            {
+              "text": "Failed to subscribe user data FirebaseError: Missing or insufficient permissions.",
+              "location": {
+                "url": "https://westory-staging-inius92vz-bbbs-projects-44f9da30.vercel.app/assets/main-Dz4U-le0.js",
+                "line": 198,
+                "column": 29243,
+                "lineNumber": 198,
+                "columnNumber": 29243
+              }
+            }
+          ],
+          "pageErrors": [],
+          "failedRequests": [
+            {
+              "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?gsessionid=fZnTFfBKdustR5eWIZ2C10u8P5Ksz5e282mp5EyWy0f0lvRuj2Q3pQ&VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&RID=rpc&SID=kPnxS_jdyv9k1He4kAg4iQ&AID=0&CI=0&TYPE=xmlhttp&zx=rwd5x0339hqt&t=1",
+              "failure": "net::ERR_ABORTED"
+            },
+            {
+              "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&gsessionid=fZnTFfBKdustR5eWIZ2C10u8P5Ksz5e282mp5EyWy0f0lvRuj2Q3pQ&SID=kPnxS_jdyv9k1He4kAg4iQ&RID=40287&AID=132&zx=2f0r135cf120&t=1",
+              "failure": "net::ERR_ABORTED"
+            },
+            {
+              "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&gsessionid=fZnTFfBKdustR5eWIZ2C10u8P5Ksz5e282mp5EyWy0f0lvRuj2Q3pQ&SID=kPnxS_jdyv9k1He4kAg4iQ&RID=40288&AID=132&zx=ka9oc9q6nyda&t=1",
+              "failure": "net::ERR_ABORTED"
+            },
+            {
+              "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&gsessionid=fZnTFfBKdustR5eWIZ2C10u8P5Ksz5e282mp5EyWy0f0lvRuj2Q3pQ&SID=kPnxS_jdyv9k1He4kAg4iQ&RID=40289&AID=132&zx=9dzxfzh3g5wr&t=1",
+              "failure": "net::ERR_ABORTED"
+            },
+            {
+              "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?gsessionid=dviqUtS8NvQltc11zWWXsUpybBgGKGIkc5_a5tB56x9X59A6gT3cZA&VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&RID=rpc&SID=OZaAn1Gwdyq-IrmGB-rlhQ&AID=0&CI=0&TYPE=xmlhttp&zx=du1yssh1c2hm&t=1",
+              "failure": "net::ERR_ABORTED"
+            },
+            {
+              "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?gsessionid=YpLCE-9p0yOeBE33bFG_3jpoR4vi9UY-2-jH_B9KivaMqpJsgFN0nQ&VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&RID=rpc&SID=ZqxUcl2BdF9M7TQ69-S7fA&AID=0&CI=0&TYPE=xmlhttp&zx=mn2ez18ga179&t=1",
+              "failure": "net::ERR_ABORTED"
+            }
+          ],
+          "httpErrors": []
+        },
+        "recoveryError": "Reauthentication recovery did not complete: {\"hash\":\"#/teacher/settings?tab=interface\",\"visibleText\":\"We\\nstory\\n학습 자료 관리\\n평가 관리\\n점수 관리\\n위스 관리\\n학생 관리\\nW0R admin 교사\\n14:30\\n세션 경고 테스트\\n세션 만료 테스트\\n로그아웃\\n관리자 설정\\n기본 환경 설정\\n학교/학년/학기\\n인터페이스 설정\\n세부 권한 관리\\n알림 관리\\n개인정보 동의 관리\\n메인 화면\\n사이트맵 메뉴\\n메인 화면 설정\\n\\n로그인(메인) 화면의 문구와 이모지를 설정합니다.\\n\\n메인 이모지\\n\\n이모지 1개를 입력하세요.\\n\\n서브 타이틀\\n푸터 설정\\n\\n사이트 하단의 저작권 문구를 설정합니다.\\n\\n저작권 문구\\n공식 인스타그램 링크\\n\\n비워두면 푸터 인스타그램 아이콘을 표시하지 않습니다.\\n\\nD-Day 표시\\n\\n메인 화면에 D-Day 카운트를 표시합니다.\\n\\n사용\\n제목\\n목표 날짜\\n전체 저장\\n이용 약관\\n|\\n개인정보 처리 방침\\n|\\n개발자 일지\\n\\nCopyright © Westory. All rights reserved.\\n\\n본인 확인이 필요합니다\\n\\n화면 설정 변경 작업을 실행하기 전에 다시 로그인해 주세요. 확인 후 5분 동안 보호된 작업을 실행할 수 있습니다.\\n\\n현재 비밀번호\\n비밀번호로 확인\\n\\n새 로그인 세션으로 데이터 연결을 다시 시작하지 못했습니다. 작업은 실행되지 않았습니다.\\n\\n취소\",\"diagnostics\":{\"consoleErrors\":[{\"text\":\"Failed to subscribe user data FirebaseError: Missing or insufficient permissions.\",\"location\":{\"url\":\"https://westory-staging-inius92vz-bbbs-projects-44f9da30.vercel.app/assets/main-Dz4U-le0.js\",\"line\":198,\"column\":29243,\"lineNumber\":198,\"columnNumber\":29243}}],\"pageErrors\":[],\"failedRequests\":[{\"url\":\"https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?gsessionid=fZnTFfBKdustR5eWIZ2C10u8P5Ksz5e282mp5EyWy0f0lvRuj2Q3pQ&VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&RID=rpc&SID=kPnxS_jdyv9k1He4kAg4iQ&AID=0&CI=0&TYPE=xmlhttp&zx=rwd5x0339hqt&t=1\",\"failure\":\"net::ERR_ABORTED\"},{\"url\":\"https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&gsessionid=fZnTFfBKdustR5eWIZ2C10u8P5Ksz5e282mp5EyWy0f0lvRuj2Q3pQ&SID=kPnxS_jdyv9k1He4kAg4iQ&RID=40287&AID=132&zx=2f0r135cf120&t=1\",\"failure\":\"net::ERR_ABORTED\"},{\"url\":\"https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&gsessionid=fZnTFfBKdustR5eWIZ2C10u8P5Ksz5e282mp5EyWy0f0lvRuj2Q3pQ&SID=kPnxS_jdyv9k1He4kAg4iQ&RID=40288&AID=132&zx=ka9oc9q6nyda&t=1\",\"failure\":\"net::ERR_ABORTED\"},{\"url\":\"https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&gsessionid=fZnTFfBKdustR5eWIZ2C10u8P5Ksz5e282mp5EyWy0f0lvRuj2Q3pQ&SID=kPnxS_jdyv9k1He4kAg4iQ&RID=40289&AID=132&zx=9dzxfzh3g5wr&t=1\",\"failure\":\"net::ERR_ABORTED\"},{\"url\":\"https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?gsessionid=dviqUtS8NvQltc11zWWXsUpybBgGKGIkc5_a5tB56x9X59A6gT3cZA&VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&RID=rpc&SID=OZaAn1Gwdyq-IrmGB-rlhQ&AID=0&CI=0&TYPE=xmlhttp&zx=du1yssh1c2hm&t=1\",\"failure\":\"net::ERR_ABORTED\"},{\"url\":\"https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?gsessionid=YpLCE-9p0yOeBE33bFG_3jpoR4vi9UY-2-jH_B9KivaMqpJsgFN0nQ&VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&RID=rpc&SID=ZqxUcl2BdF9M7TQ69-S7fA&AID=0&CI=0&TYPE=xmlhttp&zx=mn2ez18ga179&t=1\",\"failure\":\"net::ERR_ABORTED\"}],\"httpErrors\":[]}}"
+      },
+      "1600x900": {
+        "reauthenticating": {
+          "state": "REAUTHENTICATING",
+          "innerWidth": 1600,
+          "innerHeight": 900,
+          "documentClientWidth": 1600,
+          "documentScrollWidth": 1600,
+          "pageOverflowPass": true,
+          "settingsContentClientWidth": null,
+          "settingsContentScrollWidth": null,
+          "settingsContentOverflowPass": null,
+          "localScrollClientWidth": null,
+          "localScrollWidth": null,
+          "sidebarContentOverlap": null,
+          "headingText": "본인 확인이 필요합니다",
+          "headingRect": {
+            "left": 601,
+            "top": 305,
+            "right": 999,
+            "bottom": 333,
+            "width": 398,
+            "height": 28
+          },
+          "headingWithinViewport": true,
+          "dialogRect": {
+            "left": 576,
+            "top": 280,
+            "right": 1024,
+            "bottom": 620,
+            "width": 448,
+            "height": 340
+          },
+          "dialogWithinViewport": true,
+          "primaryActionText": "확인 중…",
+          "primaryActionRect": {
+            "left": 601,
+            "top": 499,
+            "right": 999,
+            "bottom": 543,
+            "width": 398,
+            "height": 44
+          },
+          "primaryActionWithinViewport": true,
+          "focusTag": "SECTION",
+          "focusText": "본인 확인이 필요합니다화면 설정 변경 작업을 실행하기 전에 다시 로그인해 주세요. 확인 후 5분 동안 보호된 작업을 실행할 수 있습니다.현재 비밀번호확인 중…취소",
+          "focusInsideDialog": true,
+          "protectedContentHiddenAndInert": true
+        },
+        "sessionRefreshing": {
+          "state": "SESSION_REFRESHING",
+          "innerWidth": 1600,
+          "innerHeight": 900,
+          "documentClientWidth": 1600,
+          "documentScrollWidth": 1600,
+          "pageOverflowPass": true,
+          "settingsContentClientWidth": null,
+          "settingsContentScrollWidth": null,
+          "settingsContentOverflowPass": null,
+          "localScrollClientWidth": null,
+          "localScrollWidth": null,
+          "sidebarContentOverlap": null,
+          "headingText": "본인 확인이 필요합니다",
+          "headingRect": {
+            "left": 601,
+            "top": 305,
+            "right": 999,
+            "bottom": 333,
+            "width": 398,
+            "height": 28
+          },
+          "headingWithinViewport": true,
+          "dialogRect": {
+            "left": 576,
+            "top": 280,
+            "right": 1024,
+            "bottom": 620,
+            "width": 448,
+            "height": 340
+          },
+          "dialogWithinViewport": true,
+          "primaryActionText": "확인 중…",
+          "primaryActionRect": {
+            "left": 601,
+            "top": 499,
+            "right": 999,
+            "bottom": 543,
+            "width": 398,
+            "height": 44
+          },
+          "primaryActionWithinViewport": true,
+          "focusTag": "SECTION",
+          "focusText": "본인 확인이 필요합니다화면 설정 변경 작업을 실행하기 전에 다시 로그인해 주세요. 확인 후 5분 동안 보호된 작업을 실행할 수 있습니다.현재 비밀번호확인 중…취소",
+          "focusInsideDialog": true,
+          "protectedContentHiddenAndInert": true
+        },
+        "authorized": {
+          "state": "AUTHORIZED_RECOVERY",
+          "innerWidth": 1600,
+          "innerHeight": 900,
+          "documentClientWidth": 1600,
+          "documentScrollWidth": 1600,
+          "pageOverflowPass": true,
+          "settingsContentClientWidth": 912,
+          "settingsContentScrollWidth": 912,
+          "settingsContentOverflowPass": true,
+          "localScrollClientWidth": null,
+          "localScrollWidth": null,
+          "sidebarContentOverlap": false,
+          "headingText": "본인 확인이 필요합니다",
+          "headingRect": {
+            "left": 601,
+            "top": 279,
+            "right": 999,
+            "bottom": 307,
+            "width": 398,
+            "height": 28
+          },
+          "headingWithinViewport": true,
+          "dialogRect": {
+            "left": 576,
+            "top": 254,
+            "right": 1024,
+            "bottom": 646,
+            "width": 448,
+            "height": 392
+          },
+          "dialogWithinViewport": true,
+          "primaryActionText": "비밀번호로 확인",
+          "primaryActionRect": {
+            "left": 601,
+            "top": 473,
+            "right": 999,
+            "bottom": 517,
+            "width": 398,
+            "height": 44
+          },
+          "primaryActionWithinViewport": true,
+          "focusTag": "SECTION",
+          "focusText": "본인 확인이 필요합니다화면 설정 변경 작업을 실행하기 전에 다시 로그인해 주세요. 확인 후 5분 동안 보호된 작업을 실행할 수 있습니다.현재 비밀번호비밀번호로 확인새 로그인 세션으로 데이터 연결을 다시 시작하지 못했습니다. 작업은 실행되지 않았습니다.취소",
+          "focusInsideDialog": true,
+          "protectedContentHiddenAndInert": true,
+          "protectedHeadingVisible": false
+        },
+        "diagnostics": {
+          "consoleErrors": [
+            {
+              "text": "Failed to subscribe user data FirebaseError: Missing or insufficient permissions.",
+              "location": {
+                "url": "https://westory-staging-inius92vz-bbbs-projects-44f9da30.vercel.app/assets/main-Dz4U-le0.js",
+                "line": 198,
+                "column": 29243,
+                "lineNumber": 198,
+                "columnNumber": 29243
+              }
+            }
+          ],
+          "pageErrors": [],
+          "failedRequests": [
+            {
+              "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?gsessionid=C_j4eRNkZH_8mzRHhjPSMg4bnSqzTG97RGnR3riXsIebB5IsLRX8gg&VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&RID=rpc&SID=b6Zem1blnObVDlqToq3Y5A&AID=0&CI=0&TYPE=xmlhttp&zx=ld1kuaum6w0c&t=1",
+              "failure": "net::ERR_ABORTED"
+            },
+            {
+              "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&gsessionid=C_j4eRNkZH_8mzRHhjPSMg4bnSqzTG97RGnR3riXsIebB5IsLRX8gg&SID=b6Zem1blnObVDlqToq3Y5A&RID=38206&AID=146&zx=cntd22tvj6e7&t=1",
+              "failure": "net::ERR_ABORTED"
+            },
+            {
+              "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?gsessionid=dQPKkUFcanVh1waOgFSZxzJSteCKl2CKsKiqRYso587RSbHyjNIWKg&VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&RID=rpc&SID=vSDYq1c_K8V2mvjRnAzvfQ&AID=0&CI=0&TYPE=xmlhttp&zx=o4bbeqr3vn0w&t=1",
+              "failure": "net::ERR_ABORTED"
+            },
+            {
+              "url": "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?gsessionid=p6o9y6ppLw6S5DClsWEz5g_E9dZcLpSZANv-46cw5RqhlfGUpmGRyQ&VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&RID=rpc&SID=REfuJV4DzLRFg0jP9-Nuiw&AID=0&CI=0&TYPE=xmlhttp&zx=impoy79s69vl&t=1",
+              "failure": "net::ERR_ABORTED"
+            }
+          ],
+          "httpErrors": []
+        },
+        "recoveryError": "Reauthentication recovery did not complete: {\"hash\":\"#/teacher/settings?tab=interface\",\"visibleText\":\"We\\nstory\\n학습 자료 관리\\n평가 관리\\n점수 관리\\n위스 관리\\n학생 관리\\nW0R admin 교사\\n14:29\\n세션 경고 테스트\\n세션 만료 테스트\\n로그아웃\\n관리자 설정\\n기본 환경 설정\\n학교/학년/학기\\n인터페이스 설정\\n세부 권한 관리\\n알림 관리\\n개인정보 동의 관리\\n메인 화면\\n사이트맵 메뉴\\n메인 화면 설정\\n\\n로그인(메인) 화면의 문구와 이모지를 설정합니다.\\n\\n메인 이모지\\n\\n이모지 1개를 입력하세요.\\n\\n서브 타이틀\\n푸터 설정\\n\\n사이트 하단의 저작권 문구를 설정합니다.\\n\\n저작권 문구\\n공식 인스타그램 링크\\n\\n비워두면 푸터 인스타그램 아이콘을 표시하지 않습니다.\\n\\nD-Day 표시\\n\\n메인 화면에 D-Day 카운트를 표시합니다.\\n\\n사용\\n제목\\n목표 날짜\\n전체 저장\\n이용 약관\\n|\\n개인정보 처리 방침\\n|\\n개발자 일지\\n\\nCopyright © Westory. All rights reserved.\\n\\n본인 확인이 필요합니다\\n\\n화면 설정 변경 작업을 실행하기 전에 다시 로그인해 주세요. 확인 후 5분 동안 보호된 작업을 실행할 수 있습니다.\\n\\n현재 비밀번호\\n비밀번호로 확인\\n\\n새 로그인 세션으로 데이터 연결을 다시 시작하지 못했습니다. 작업은 실행되지 않았습니다.\\n\\n취소\",\"diagnostics\":{\"consoleErrors\":[{\"text\":\"Failed to subscribe user data FirebaseError: Missing or insufficient permissions.\",\"location\":{\"url\":\"https://westory-staging-inius92vz-bbbs-projects-44f9da30.vercel.app/assets/main-Dz4U-le0.js\",\"line\":198,\"column\":29243,\"lineNumber\":198,\"columnNumber\":29243}}],\"pageErrors\":[],\"failedRequests\":[{\"url\":\"https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?gsessionid=C_j4eRNkZH_8mzRHhjPSMg4bnSqzTG97RGnR3riXsIebB5IsLRX8gg&VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&RID=rpc&SID=b6Zem1blnObVDlqToq3Y5A&AID=0&CI=0&TYPE=xmlhttp&zx=ld1kuaum6w0c&t=1\",\"failure\":\"net::ERR_ABORTED\"},{\"url\":\"https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&gsessionid=C_j4eRNkZH_8mzRHhjPSMg4bnSqzTG97RGnR3riXsIebB5IsLRX8gg&SID=b6Zem1blnObVDlqToq3Y5A&RID=38206&AID=146&zx=cntd22tvj6e7&t=1\",\"failure\":\"net::ERR_ABORTED\"},{\"url\":\"https://firestore.googleapis.com/google.firestore.v1.Firestore/Write/channel?gsessionid=dQPKkUFcanVh1waOgFSZxzJSteCKl2CKsKiqRYso587RSbHyjNIWKg&VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&RID=rpc&SID=vSDYq1c_K8V2mvjRnAzvfQ&AID=0&CI=0&TYPE=xmlhttp&zx=o4bbeqr3vn0w&t=1\",\"failure\":\"net::ERR_ABORTED\"},{\"url\":\"https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?gsessionid=p6o9y6ppLw6S5DClsWEz5g_E9dZcLpSZANv-46cw5RqhlfGUpmGRyQ&VER=8&database=projects%2Fwestory-staging-177587430482%2Fdatabases%2F(default)&RID=rpc&SID=REfuJV4DzLRFg0jP9-Nuiw&AID=0&CI=0&TYPE=xmlhttp&zx=impoy79s69vl&t=1\",\"failure\":\"net::ERR_ABORTED\"}],\"httpErrors\":[]}}"
+      }
+    }
+  }
+}

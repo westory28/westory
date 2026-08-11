@@ -68,12 +68,23 @@ const getClientAuthTime = async (client) => {
 const seedSession = async (db, client) => {
   const authTime = await getClientAuthTime(client);
   await setDoc(
-    doc(db, "application_sessions", client.user.uid, "sessions", String(authTime)),
+    doc(
+      db,
+      "application_sessions",
+      client.user.uid,
+      "sessions",
+      String(authTime),
+    ),
     {
       uid: client.user.uid,
       email: client.email,
       authTime,
       status: "active",
+      schemaVersion: 2,
+      authorityGeneration: "w1r2-2026-08-09",
+      protocolVersion: 2,
+      sessionRevision: "a".repeat(64),
+      authorityModeAtOpen: "ENFORCE",
       generalExpiresAt: Timestamp.fromMillis(Date.now() + 30 * 60 * 1000),
       highRiskExpiresAt: Timestamp.fromMillis(Date.now() + 15 * 60 * 1000),
     },

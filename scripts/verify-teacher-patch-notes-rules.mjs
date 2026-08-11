@@ -7,9 +7,13 @@ import {
 } from "@firebase/rules-unit-testing";
 import {
   collection,
+  collectionGroup,
   deleteDoc,
   doc,
   getDocs,
+  limit,
+  orderBy,
+  query,
   serverTimestamp,
   setDoc,
   Timestamp,
@@ -17,7 +21,10 @@ import {
 } from "firebase/firestore";
 
 const projectId = "demo-westory-teacher-patch-notes";
-const rules = readFileSync(resolve("firestore.rules"), "utf8");
+const rules = readFileSync(
+  resolve(process.env.WESTORY_FIRESTORE_RULES_PATH || "firestore.rules"),
+  "utf8",
+);
 const firestoreHost = "127.0.0.1";
 const firestorePort = 8080;
 
@@ -27,6 +34,11 @@ const teacherUid = "teacher-patch-owner";
 const otherTeacherUid = "teacher-patch-other";
 const staffUid = "teacher-patch-staff";
 const studentUid = "teacher-patch-student";
+const adminUid = "teacher-patch-admin";
+const expiredUid = "teacher-patch-expired";
+const revokedUid = "teacher-patch-revoked";
+const protocolUid = "teacher-patch-old-protocol";
+const revisionUid = "teacher-patch-wrong-revision";
 const authTime = Math.floor(Date.now() / 1000) - 10;
 
 const notePayload = (uid, overrides = {}) => ({
@@ -68,15 +80,25 @@ const seedUser = async (db, uid, email, role, extra = {}) => {
   });
 };
 
-const seedSession = async (db, uid, email) => {
-  await setDoc(doc(db, "application_sessions", uid, "sessions", String(authTime)), {
-    uid,
-    email,
-    authTime,
-    status: "active",
-    generalExpiresAt: Timestamp.fromMillis(Date.now() + 30 * 60 * 1000),
-    highRiskExpiresAt: Timestamp.fromMillis(Date.now() + 15 * 60 * 1000),
-  });
+const seedSession = async (db, uid, email, overrides = {}) => {
+  const sessionAuthTime = overrides.authTime ?? authTime;
+  await setDoc(
+    doc(db, "application_sessions", uid, "sessions", String(sessionAuthTime)),
+    {
+      uid,
+      email,
+      authTime: sessionAuthTime,
+      status: "active",
+      schemaVersion: 2,
+      authorityGeneration: "w1r2-2026-08-09",
+      protocolVersion: 2,
+      sessionRevision: "a".repeat(64),
+      authorityModeAtOpen: "ENFORCE",
+      generalExpiresAt: Timestamp.fromMillis(Date.now() + 30 * 60 * 1000),
+      highRiskExpiresAt: Timestamp.fromMillis(Date.now() + 15 * 60 * 1000),
+      ...overrides,
+    },
+  );
 };
 
 const main = async () => {
@@ -115,16 +137,42 @@ const main = async () => {
       teacherPortalEnabled: true,
       staffPermissions: ["lesson_read"],
     });
+    await seedUser(adminDb, adminUid, "westoria28@gmail.com", "teacher");
+    await Promise.all(
+      [expiredUid, revokedUid, protocolUid, revisionUid].map((uid) =>
+        seedUser(adminDb, uid, schoolEmail(uid), "teacher"),
+      ),
+    );
     await Promise.all([
       seedSession(adminDb, teacherUid, schoolEmail("teacher.patch")),
       seedSession(adminDb, otherTeacherUid, schoolEmail("other.teacher.patch")),
       seedSession(adminDb, studentUid, schoolEmail("student.patch")),
       seedSession(adminDb, staffUid, schoolEmail("staff.patch")),
+      seedSession(adminDb, adminUid, "westoria28@gmail.com"),
+      seedSession(adminDb, expiredUid, schoolEmail(expiredUid), {
+        generalExpiresAt: Timestamp.fromMillis(Date.now() - 1000),
+      }),
+      seedSession(adminDb, revokedUid, schoolEmail(revokedUid), {
+        status: "revoked",
+      }),
+      seedSession(adminDb, protocolUid, schoolEmail(protocolUid), {
+        schemaVersion: 1,
+        protocolVersion: 1,
+      }),
+      seedSession(adminDb, revisionUid, schoolEmail(revisionUid), {
+        sessionRevision: "invalid-revision",
+      }),
+      seedSession(adminDb, teacherUid, schoolEmail("teacher.patch"), {
+        authTime: authTime + 1,
+      }),
     ]);
   });
 
   const teacherDb = testEnv
-    .authenticatedContext(teacherUid, { email: schoolEmail("teacher.patch"), auth_time: authTime })
+    .authenticatedContext(teacherUid, {
+      email: schoolEmail("teacher.patch"),
+      auth_time: authTime,
+    })
     .firestore();
   const otherTeacherDb = testEnv
     .authenticatedContext(otherTeacherUid, {
@@ -133,11 +181,54 @@ const main = async () => {
     })
     .firestore();
   const studentDb = testEnv
-    .authenticatedContext(studentUid, { email: schoolEmail("student.patch"), auth_time: authTime })
+    .authenticatedContext(studentUid, {
+      email: schoolEmail("student.patch"),
+      auth_time: authTime,
+    })
     .firestore();
   const staffDb = testEnv
-    .authenticatedContext(staffUid, { email: schoolEmail("staff.patch"), auth_time: authTime })
+    .authenticatedContext(staffUid, {
+      email: schoolEmail("staff.patch"),
+      auth_time: authTime,
+    })
     .firestore();
+  const adminUserDb = testEnv
+    .authenticatedContext(adminUid, {
+      email: "westoria28@gmail.com",
+      auth_time: authTime,
+    })
+    .firestore();
+  const expiredDb = testEnv
+    .authenticatedContext(expiredUid, {
+      email: schoolEmail(expiredUid),
+      auth_time: authTime,
+    })
+    .firestore();
+  const revokedDb = testEnv
+    .authenticatedContext(revokedUid, {
+      email: schoolEmail(revokedUid),
+      auth_time: authTime,
+    })
+    .firestore();
+  const protocolDb = testEnv
+    .authenticatedContext(protocolUid, {
+      email: schoolEmail(protocolUid),
+      auth_time: authTime,
+    })
+    .firestore();
+  const revisionDb = testEnv
+    .authenticatedContext(revisionUid, {
+      email: schoolEmail(revisionUid),
+      auth_time: authTime,
+    })
+    .firestore();
+  const reauthenticatedTeacherDb = testEnv
+    .authenticatedContext(teacherUid, {
+      email: schoolEmail("teacher.patch"),
+      auth_time: authTime + 1,
+    })
+    .firestore();
+  const anonymousDb = testEnv.unauthenticatedContext().firestore();
 
   const teacherNotes = collection(
     teacherDb,
@@ -146,10 +237,35 @@ const main = async () => {
     "notes",
   );
   const teacherNoteRef = doc(teacherNotes, "note-1");
+  const ownNotesQuery = (db, uid) =>
+    query(
+      collection(db, "teacherPatchNotes", uid, "notes"),
+      orderBy("updatedAt", "desc"),
+      limit(100),
+    );
 
   await assertSucceeds(setDoc(teacherNoteRef, notePayload(teacherUid)));
 
-  await assertSucceeds(getDocs(teacherNotes));
+  if (process.env.WESTORY_TEACHER_PATCH_RULE_CASE === "CREATE_ONLY") {
+    console.log(
+      JSON.stringify({
+        projectId,
+        checks: ["teacher can create own patch note"],
+      }),
+    );
+    await testEnv.cleanup();
+    return;
+  }
+
+  await assertSucceeds(getDocs(ownNotesQuery(teacherDb, teacherUid)));
+
+  await assertSucceeds(getDocs(ownNotesQuery(adminUserDb, adminUid)));
+
+  await assertSucceeds(
+    getDocs(ownNotesQuery(reauthenticatedTeacherDb, teacherUid)),
+  );
+
+  await assertFails(getDocs(teacherNotes));
 
   await assertSucceeds(
     updateDoc(teacherNoteRef, {
@@ -178,6 +294,28 @@ const main = async () => {
       collection(otherTeacherDb, "teacherPatchNotes", teacherUid, "notes"),
     ),
   );
+
+  await assertFails(
+    getDocs(collection(anonymousDb, "teacherPatchNotes", teacherUid, "notes")),
+  );
+
+  await assertFails(
+    getDocs(collection(expiredDb, "teacherPatchNotes", expiredUid, "notes")),
+  );
+
+  await assertFails(
+    getDocs(collection(revokedDb, "teacherPatchNotes", revokedUid, "notes")),
+  );
+
+  await assertFails(
+    getDocs(collection(protocolDb, "teacherPatchNotes", protocolUid, "notes")),
+  );
+
+  await assertFails(
+    getDocs(collection(revisionDb, "teacherPatchNotes", revisionUid, "notes")),
+  );
+
+  await assertFails(getDocs(collectionGroup(teacherDb, "notes")));
 
   await assertFails(
     setDoc(
@@ -216,10 +354,19 @@ const main = async () => {
         checks: [
           "teacher can create own patch note",
           "teacher can list own patch notes",
+          "admin can list own patch notes",
+          "reauthenticated teacher can list own patch notes",
+          "teacher query without required order and limit remains blocked",
           "teacher can update memo fields",
           "teacher can mark patch note done",
           "teacher cannot write another teacher path",
           "another teacher cannot read owner notes",
+          "anonymous cannot read patch notes",
+          "expired session cannot read patch notes",
+          "revoked session cannot read patch notes",
+          "old schema and protocol cannot read patch notes",
+          "invalid server revision cannot read patch notes",
+          "unscoped collection-group query remains blocked",
           "student cannot create patch notes",
           "staff portal user cannot create patch notes",
           "student sourcePath remains blocked",

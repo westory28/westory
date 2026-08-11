@@ -1,0 +1,25 @@
+{
+  "generatedAt": "2026-08-10T14:45:01.6106416Z",
+  "source": "W1-R4 Dedicated Staging isolated viewport run",
+  "classification": "redacted checkpoint summary",
+  "sensitiveFieldsOmitted": [
+    "stagingUid",
+    "fullSessionRevision"
+  ],
+  "results": {
+    "390x844": "PASS",
+    "768x1024": "FAIL_POST_REAUTH_USER_PROBE_PERMISSION_DENIED",
+    "1024x768": "NOT_RUN_FAIL_FAST",
+    "1280x800": "NOT_RUN_FAIL_FAST",
+    "1600x900": "NOT_RUN_FAIL_FAST",
+    "sameUserMultiContext": "NOT_RUN_FAIL_FAST"
+  },
+  "failedRequest": {
+    "path": "users/{uid}",
+    "operation": "get/listener",
+    "component": "AuthContext.subscribeUserDocument",
+    "applicationSessionOpen": "HTTP_200_ACTIVE",
+    "businessCommandDispatchCount": 0
+  },
+  "productionChanges": 0
+}
