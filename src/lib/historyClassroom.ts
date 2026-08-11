@@ -56,6 +56,7 @@ export interface HistoryClassroomAssignment {
   retryResetByStudentUid?: Record<string, unknown>;
   createdAt?: unknown;
   updatedAt?: unknown;
+  contentRevision?: number;
 }
 
 export type HistoryClassroomResultStatus = "passed" | "failed" | "cancelled";
@@ -334,6 +335,7 @@ export const normalizeHistoryClassroomAssignment = (
         : {},
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
+    contentRevision: Math.max(0, Number(raw.contentRevision) || 0),
   };
 };
 

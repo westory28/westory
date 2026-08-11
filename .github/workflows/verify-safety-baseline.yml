@@ -60,4 +60,4 @@ jobs:
           distribution: temurin
           java-version: 21
       - run: npm install --global firebase-tools@15.15.0
-      - run: npm run verify:w5-global-shell
+      - run: npm run verify:w6a-assessment

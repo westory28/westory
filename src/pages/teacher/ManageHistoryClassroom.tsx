@@ -7,8 +7,6 @@ import {
   limit,
   orderBy,
   query,
-  serverTimestamp,
-  setDoc,
 } from "firebase/firestore";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import HistoryClassroomAssignmentView from "../../components/common/HistoryClassroomAssignmentView";
@@ -45,12 +43,59 @@ import {
 } from "../../lib/lessonWorksheet";
 import { normalizeMapResource, type MapResource } from "../../lib/mapResources";
 import { createManagedNotifications } from "../../lib/notifications";
+import { executeWestoryCommand } from "../../lib/commandGateway";
+import {
+  buildAssessmentDefinitionId,
+  getAssessmentState,
+} from "../../lib/assessmentLifecycle";
 import {
   getSemesterCollectionPath,
   getYearSemester,
 } from "../../lib/semesterScope";
 
 const HISTORY_CLASSROOM_RESULT_LIMIT = 500;
+
+const toGatewayIso = (value: unknown): string | null => {
+  if (value == null) return null;
+  const date =
+    value instanceof Date
+      ? value
+      : value &&
+          typeof value === "object" &&
+          "toDate" in value &&
+          typeof (value as { toDate?: unknown }).toDate === "function"
+        ? (value as { toDate: () => Date }).toDate()
+        : new Date(String(value));
+  return Number.isFinite(date.getTime()) ? date.toISOString() : null;
+};
+
+const toGatewayHistorySource = (value: Record<string, unknown>) => {
+  const {
+    createdAt: _createdAt,
+    updatedAt: _updatedAt,
+    deletedAt: _deletedAt,
+    deletedByUid: _deletedByUid,
+    contentRevision: _contentRevision,
+    ...source
+  } = value;
+  for (const key of ["publishedAt", "dueAt"] as const) {
+    if (Object.prototype.hasOwnProperty.call(source, key)) {
+      source[key] = toGatewayIso(source[key]);
+    }
+  }
+  if (
+    source.retryResetByStudentUid &&
+    typeof source.retryResetByStudentUid === "object"
+  ) {
+    source.retryResetByStudentUid = Object.fromEntries(
+      Object.entries(source.retryResetByStudentUid).map(([uid, timestamp]) => [
+        uid,
+        toGatewayIso(timestamp),
+      ]),
+    );
+  }
+  return source;
+};
 
 interface StudentOption {
   uid: string;
@@ -702,6 +747,12 @@ const ManageHistoryClassroom: React.FC = () => {
   const [assignments, setAssignments] = useState<HistoryClassroomAssignment[]>(
     [],
   );
+  const [legacyAssignmentIds, setLegacyAssignmentIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [legacyMapIds, setLegacyMapIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [resultsByAssignment, setResultsByAssignment] = useState<
     Record<string, HistoryClassroomResult[]>
   >({});
@@ -896,13 +947,16 @@ const ManageHistoryClassroom: React.FC = () => {
           query(collection(db, "map_resources"), orderBy("sortOrder", "asc")),
         );
         const mapById = new Map<string, MapResource>();
+        const nextLegacyMapIds = new Set<string>();
         legacyMapSnap.docs.forEach((docSnap) => {
+          nextLegacyMapIds.add(docSnap.id);
           mapById.set(
             docSnap.id,
             normalizeMapResource(docSnap.id, docSnap.data()),
           );
         });
         semesterMapSnap.docs.forEach((docSnap) => {
+          nextLegacyMapIds.delete(docSnap.id);
           mapById.set(
             docSnap.id,
             normalizeMapResource(docSnap.id, docSnap.data()),
@@ -918,6 +972,7 @@ const ManageHistoryClassroom: React.FC = () => {
             return a.title.localeCompare(b.title, "ko");
           });
         setMaps(loadedMaps);
+        setLegacyMapIds(nextLegacyMapIds);
         if (loadedMaps[0]) {
           setSelectedMapId((prev) => prev || loadedMaps[0].id);
         }
@@ -952,6 +1007,7 @@ const ManageHistoryClassroom: React.FC = () => {
         let assignmentSnap = await getDocs(
           query(collection(db, assignmentPath), orderBy("updatedAt", "desc")),
         );
+        let loadedLegacyAssignments = false;
         if (assignmentSnap.empty) {
           assignmentSnap = await getDocs(
             query(
@@ -959,18 +1015,23 @@ const ManageHistoryClassroom: React.FC = () => {
               orderBy("updatedAt", "desc"),
             ),
           );
+          loadedLegacyAssignments = true;
         }
-        setAssignments(
-          assignmentSnap.docs
-            .map((docSnap) =>
-              mergeHistoryClassroomMapSnapshot(
-                normalizeHistoryClassroomAssignment(docSnap.id, docSnap.data()),
-                loadedMaps.find(
-                  (map) => map.id === docSnap.data().mapResourceId,
-                ) || null,
-              ),
-            )
-            .filter((assignment) => !isHistoryClassroomDeleted(assignment)),
+        const loadedAssignments = assignmentSnap.docs
+          .map((docSnap) =>
+            mergeHistoryClassroomMapSnapshot(
+              normalizeHistoryClassroomAssignment(docSnap.id, docSnap.data()),
+              loadedMaps.find(
+                (map) => map.id === docSnap.data().mapResourceId,
+              ) || null,
+            ),
+          )
+          .filter((assignment) => !isHistoryClassroomDeleted(assignment));
+        setAssignments(loadedAssignments);
+        setLegacyAssignmentIds(
+          loadedLegacyAssignments
+            ? new Set(loadedAssignments.map((assignment) => assignment.id))
+            : new Set(),
         );
 
         const resultPath = getSemesterCollectionPath(
@@ -1561,6 +1622,9 @@ const ManageHistoryClassroom: React.FC = () => {
       assignments.find((assignment) => assignment.id === editingAssignmentId) ||
       null,
     [assignments, editingAssignmentId],
+  );
+  const editingAssignmentIsLegacy = Boolean(
+    editingAssignmentId && legacyAssignmentIds.has(editingAssignmentId),
   );
 
   const editingSelectedMap = useMemo(
@@ -2794,11 +2858,92 @@ const ManageHistoryClassroom: React.FC = () => {
     setReviewCurrentPage(1);
   };
 
+  const syncHistoryClassroomDefinition = async (input: {
+    assignmentId: string;
+    title: string;
+    timeLimitMinutes: number;
+    cooldownMinutes: number;
+    isPublished: boolean;
+    dueAt?: unknown;
+  }) => {
+    const { year, semester } = getYearSemester(config);
+    const semesterId = `${year}-${semester}`;
+    const definitionId = buildAssessmentDefinitionId(
+      semesterId,
+      "HISTORY_CLASSROOM",
+      input.assignmentId,
+    );
+    const dueAtDate =
+      input.dueAt &&
+      typeof input.dueAt === "object" &&
+      "toDate" in input.dueAt &&
+      typeof (input.dueAt as { toDate?: unknown }).toDate === "function"
+        ? (input.dueAt as { toDate: () => Date }).toDate()
+        : input.dueAt instanceof Date
+          ? input.dueAt
+          : null;
+    const definitionPayload = {
+      definitionId,
+      semesterId,
+      assessmentKind: "HISTORY_CLASSROOM" as const,
+      title: input.title,
+      sourceId: input.assignmentId,
+      durationSeconds: Math.max(60, input.timeLimitMinutes * 60 || 3600),
+      maxAttempts: 20,
+      cooldownMinutes: Math.max(0, input.cooldownMinutes),
+      opensAt: "",
+      closesAt:
+        dueAtDate && Number.isFinite(dueAtDate.getTime())
+          ? dueAtDate.toISOString()
+          : "",
+      assignedClassIds: [],
+    };
+    const current = await getAssessmentState({ definitionId });
+    let revision = current.definition?.revision || 0;
+    let status = current.definition?.status || "DRAFT";
+    if (!current.definition) {
+      await executeWestoryCommand(
+        "createAssessmentDefinition",
+        definitionPayload,
+      );
+      revision = 1;
+      status = "DRAFT";
+    } else {
+      const updated = await executeWestoryCommand(
+        "updateAssessmentDefinition",
+        {
+          ...definitionPayload,
+          expectedRevision: revision,
+          reason: "역사교실 운영 설정 변경",
+        },
+      );
+      revision = updated.result.revision;
+    }
+    const targetStatus = input.isPublished ? "PUBLISHED" : "PAUSED";
+    if (
+      status !== targetStatus &&
+      !(status === "DRAFT" && targetStatus === "PAUSED")
+    ) {
+      await executeWestoryCommand("transitionAssessmentDefinition", {
+        definitionId,
+        expectedRevision: revision,
+        targetStatus,
+        reason: input.isPublished ? "학생 응시 공개" : "학생 응시 일시 중지",
+      });
+    }
+  };
+
   const handleSaveAssignmentEdit = async () => {
     const targetAssignment = assignments.find(
       (assignment) => assignment.id === editingAssignmentId,
     );
     if (!targetAssignment) return;
+    if (legacyAssignmentIds.has(targetAssignment.id)) {
+      alert(
+        "이 과제는 이전 구조의 읽기 전용 자료입니다. 현재 학기 과제로 새로 등록한 뒤 수정해 주세요.",
+      );
+      return;
+    }
     const updatedStudents = students.filter((student) =>
       editingStudentUids.includes(student.uid),
     );
@@ -2882,17 +3027,27 @@ const ManageHistoryClassroom: React.FC = () => {
         isPublished: editingIsPublished,
         publishedAt: publishWindow.publishedAt || null,
         dueAt: publishWindow.dueAt || null,
-        updatedAt: serverTimestamp(),
       });
-
-      await setDoc(
-        doc(
-          db,
-          getSemesterCollectionPath(config, "history_classrooms"),
-          targetAssignment.id,
-        ),
-        payload,
+      const { year, semester } = getYearSemester(config);
+      const savedSource = await executeWestoryCommand(
+        "upsertHistoryClassroomSource",
+        {
+          semesterId: `${year}-${semester}`,
+          sourceId: targetAssignment.id,
+          source: toGatewayHistorySource(payload),
+          expectedRevision: Number(targetAssignment.contentRevision || 0),
+          reason: "역사교실 과제 수정",
+        },
       );
+      payload.contentRevision = savedSource.result.contentRevision;
+      await syncHistoryClassroomDefinition({
+        assignmentId: targetAssignment.id,
+        title: nextMapTitle,
+        timeLimitMinutes: Math.max(0, editingTimeLimitMinutes),
+        cooldownMinutes: Math.max(0, editingCooldownMinutes),
+        isPublished: editingIsPublished,
+        dueAt: publishWindow.dueAt,
+      });
       if (editingIsPublished && !targetAssignment.isPublished) {
         void createManagedNotifications(config, {
           recipientUids: updatedStudents.map((student) => student.uid),
@@ -2957,10 +3112,8 @@ const ManageHistoryClassroom: React.FC = () => {
       (assignment) => assignment.id === editingAssignmentId,
     );
     if (!targetAssignment || !student.uid || resettingAttemptUid) return;
-
-    const latestResult = editingLatestResultsByStudentUid.get(student.uid);
-    if (!latestResult || latestResult.status === "passed") {
-      alert("초기화할 재도전 제한 기록이 없습니다.");
+    if (legacyAssignmentIds.has(targetAssignment.id)) {
+      alert("이전 구조의 과제는 응시 상태를 변경할 수 없습니다.");
       return;
     }
 
@@ -2969,37 +3122,23 @@ const ManageHistoryClassroom: React.FC = () => {
     );
     if (!confirmed) return;
 
-    const resetAt = new Date();
     setResettingAttemptUid(student.uid);
     try {
-      await setDoc(
-        doc(
-          db,
-          getSemesterCollectionPath(config, "history_classrooms"),
-          targetAssignment.id,
-        ),
-        {
-          retryResetByStudentUid: {
-            [student.uid]: serverTimestamp(),
-          },
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
+      const { year, semester } = getYearSemester(config);
+      const definitionId = buildAssessmentDefinitionId(
+        `${year}-${semester}`,
+        "HISTORY_CLASSROOM",
+        targetAssignment.id,
       );
-
-      setAssignments((prev) =>
-        prev.map((assignment) =>
-          assignment.id === targetAssignment.id
-            ? {
-                ...assignment,
-                retryResetByStudentUid: {
-                  ...(assignment.retryResetByStudentUid || {}),
-                  [student.uid]: resetAt,
-                },
-                updatedAt: resetAt,
-              }
-            : assignment,
-        ),
+      const reset = await executeWestoryCommand("resetAssessmentAttempt", {
+        definitionId,
+        studentUid: student.uid,
+        reason: "교사 개별 재응시 허용",
+      });
+      alert(
+        reset.result.resetCount > 0
+          ? "기존 응시 상태를 잠그고 새 응시를 허용했습니다. 제출 기록은 보존됩니다."
+          : "초기화할 진행 중 응시가 없습니다.",
       );
     } catch (error) {
       console.error("Failed to reset history classroom attempt cooldown", {
@@ -3020,6 +3159,10 @@ const ManageHistoryClassroom: React.FC = () => {
       (assignment) => assignment.id === editingAssignmentId,
     );
     if (!targetAssignment) return;
+    if (legacyAssignmentIds.has(targetAssignment.id)) {
+      alert("이전 구조의 과제는 읽기 전용이며 삭제할 수 없습니다.");
+      return;
+    }
     const confirmed = window.confirm(
       "이 역사교실 과제를 삭제할까요?\n학생 목록에서는 즉시 사라지며, 기존 제출 결과는 유지됩니다.",
     );
@@ -3027,19 +3170,31 @@ const ManageHistoryClassroom: React.FC = () => {
 
     setDeletingAssignment(true);
     try {
-      await setDoc(
-        doc(
-          db,
-          `${getSemesterCollectionPath(config, "history_classrooms")}/${targetAssignment.id}`,
-        ),
-        {
-          isPublished: false,
-          deletedAt: serverTimestamp(),
-          deletedByUid: String(userData?.uid || "").trim(),
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
+      const { year, semester } = getYearSemester(config);
+      const semesterId = `${year}-${semester}`;
+      const definitionId = buildAssessmentDefinitionId(
+        semesterId,
+        "HISTORY_CLASSROOM",
+        targetAssignment.id,
       );
+      const definitionState = await getAssessmentState({ definitionId });
+      if (
+        definitionState.definition &&
+        definitionState.definition.status !== "CLOSED"
+      ) {
+        await executeWestoryCommand("transitionAssessmentDefinition", {
+          definitionId,
+          expectedRevision: definitionState.definition.revision,
+          targetStatus: "CLOSED",
+          reason: "역사교실 과제 삭제",
+        });
+      }
+      await executeWestoryCommand("deleteHistoryClassroomSource", {
+        semesterId,
+        sourceId: targetAssignment.id,
+        expectedRevision: Number(targetAssignment.contentRevision || 0),
+        reason: "역사교실 과제 삭제",
+      });
       setAssignments((prev) =>
         prev.filter((assignment) => assignment.id !== targetAssignment.id),
       );
@@ -3079,6 +3234,16 @@ const ManageHistoryClassroom: React.FC = () => {
     }
     if (!selectedStudents.length) {
       alert("학생 정보를 찾을 수 없습니다.");
+      return;
+    }
+    if (
+      (worksheetEditingAssignmentId &&
+        legacyAssignmentIds.has(worksheetEditingAssignmentId)) ||
+      (!worksheetEditingAssignmentId && legacyMapIds.has(selectedMap.id))
+    ) {
+      alert(
+        "이전 구조의 자료는 읽기 전용입니다. 현재 학기 지도를 먼저 등록해 주세요.",
+      );
       return;
     }
     const saveBlanks =
@@ -3163,17 +3328,29 @@ const ManageHistoryClassroom: React.FC = () => {
         isPublished: nextIsPublished,
         publishedAt: publishWindow.publishedAt || null,
         dueAt: publishWindow.dueAt || null,
-        createdAt: existingAssignment?.createdAt || serverTimestamp(),
-        updatedAt: serverTimestamp(),
       });
-      await setDoc(
-        doc(
-          db,
-          getSemesterCollectionPath(config, "history_classrooms"),
-          assignmentId,
-        ),
-        payload,
+      const { year, semester } = getYearSemester(config);
+      const savedSource = await executeWestoryCommand(
+        "upsertHistoryClassroomSource",
+        {
+          semesterId: `${year}-${semester}`,
+          sourceId: assignmentId,
+          source: toGatewayHistorySource(payload),
+          expectedRevision: Number(existingAssignment?.contentRevision || 0),
+          reason: existingAssignment
+            ? "역사교실 과제 수정"
+            : "역사교실 과제 생성",
+        },
       );
+      payload.contentRevision = savedSource.result.contentRevision;
+      await syncHistoryClassroomDefinition({
+        assignmentId,
+        title: resolvedMapTitle,
+        timeLimitMinutes,
+        cooldownMinutes,
+        isPublished: nextIsPublished,
+        dueAt: publishWindow.dueAt,
+      });
       if (nextIsPublished && !existingAssignment?.isPublished) {
         void createManagedNotifications(config, {
           recipientUids: selectedStudents.map((student) => student.uid),
@@ -3268,6 +3445,12 @@ const ManageHistoryClassroom: React.FC = () => {
       alert("저장할 지도를 선택해 주세요.");
       return;
     }
+    if (legacyMapIds.has(selectedStoredMap.id)) {
+      alert(
+        "이 지도는 이전 구조의 읽기 전용 자료입니다. 현재 학기 지도로 등록한 뒤 수정해 주세요.",
+      );
+      return;
+    }
     if (!blanks.length || blanks.some((blank) => !blank.answer.trim())) {
       alert("빈칸을 추가하고 모든 정답을 입력해 주세요.");
       return;
@@ -3280,18 +3463,16 @@ const ManageHistoryClassroom: React.FC = () => {
         pdfBlanks: blanks,
         answerOptions: buildAnswerOptions(blanks),
       });
-      await setDoc(
-        doc(
-          db,
-          getSemesterCollectionPath(config, "map_resources"),
-          selectedStoredMap.id,
-        ),
-        {
-          ...payload,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
+      const { year, semester } = getYearSemester(config);
+      const savedMap = await executeWestoryCommand("updateMapResourceBlanks", {
+        semesterId: `${year}-${semester}`,
+        mapResourceId: selectedStoredMap.id,
+        pdfBlanks: (payload.pdfBlanks || []).map((blank) => ({ ...blank })),
+        answerOptions: payload.answerOptions || [],
+        expectedRevision: Number(selectedStoredMap.contentRevision || 0),
+        reason: "역사교실 지도 빈칸 수정",
+      });
+      payload.contentRevision = savedMap.result.contentRevision;
       setMaps((prev) =>
         prev.map((map) => (map.id === selectedStoredMap.id ? payload : map)),
       );
@@ -4812,6 +4993,9 @@ const ManageHistoryClassroom: React.FC = () => {
                       {maps.map((map) => (
                         <option key={map.id} value={map.id}>
                           {map.title}
+                          {legacyMapIds.has(map.id)
+                            ? " · 이전 자료(읽기 전용)"
+                            : ""}
                         </option>
                       ))}
                     </select>
@@ -5474,7 +5658,9 @@ const ManageHistoryClassroom: React.FC = () => {
                     >
                       <div className="text-sm font-black">{map.title}</div>
                       <div className="mt-1 text-xs font-semibold text-gray-500">
-                        빈칸 {map.pdfBlanks?.length || 0}개
+                        {legacyMapIds.has(map.id)
+                          ? "이전 자료 · 읽기 전용"
+                          : `빈칸 ${map.pdfBlanks?.length || 0}개`}
                       </div>
                     </button>
                   ))}
@@ -5487,8 +5673,10 @@ const ManageHistoryClassroom: React.FC = () => {
                       {selectedStoredMap?.title || "지도 미선택"}
                     </div>
                     <div className="mt-1 text-xs text-gray-500">
-                      백지도 위에서 영역을 드래그하거나 OCR 글자를 선택해 빈칸을
-                      추가합니다.
+                      {selectedStoredMap &&
+                      legacyMapIds.has(selectedStoredMap.id)
+                        ? "이전 구조에서 불러온 지도입니다. 현재 학기 지도로 등록하기 전에는 수정할 수 없습니다."
+                        : "백지도 위에서 영역을 드래그하거나 OCR 글자를 선택해 빈칸을 추가합니다."}
                     </div>
                   </div>
                   <div className="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-600">
@@ -5657,6 +5845,9 @@ const ManageHistoryClassroom: React.FC = () => {
                           {maps.map((map) => (
                             <option key={map.id} value={map.id}>
                               {map.title}
+                              {legacyMapIds.has(map.id)
+                                ? " · 이전 자료(읽기 전용)"
+                                : ""}
                             </option>
                           ))}
                         </select>
@@ -5877,6 +6068,7 @@ const ManageHistoryClassroom: React.FC = () => {
                                   )
                                 }
                                 disabled={
+                                  editingAssignmentIsLegacy ||
                                   resettingAttemptUid === row.student.uid
                                 }
                                 className="justify-self-end whitespace-nowrap rounded-full border border-blue-200 bg-white px-2 py-0.5 text-[11px] font-bold text-blue-700 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
@@ -6021,6 +6213,15 @@ const ManageHistoryClassroom: React.FC = () => {
               </div>
             </div>
 
+            {editingAssignmentIsLegacy && (
+              <div
+                className="shrink-0 border-t border-amber-200 bg-amber-50 px-6 py-3 text-sm font-bold text-amber-900"
+                role="status"
+              >
+                이전 구조에서 불러온 과제입니다. 내용과 결과는 확인할 수 있지만
+                공개 상태·학생 배정·응시 상태는 변경할 수 없습니다.
+              </div>
+            )}
             <div className="shrink-0 border-t border-gray-200 bg-white/95 px-6 py-4 backdrop-blur">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <label className="inline-flex items-center gap-3 self-start rounded-2xl border border-gray-200 bg-gray-50 px-3 py-2.5">
@@ -6029,6 +6230,7 @@ const ManageHistoryClassroom: React.FC = () => {
                     role="switch"
                     aria-checked={editingIsPublished}
                     onClick={() => setEditingIsPublished((prev) => !prev)}
+                    disabled={editingAssignmentIsLegacy}
                     className={`relative h-7 w-12 rounded-full transition ${
                       editingIsPublished ? "bg-emerald-500" : "bg-gray-300"
                     }`}
@@ -6054,7 +6256,11 @@ const ManageHistoryClassroom: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => void handleDeleteAssignment()}
-                    disabled={savingEdit || deletingAssignment}
+                    disabled={
+                      editingAssignmentIsLegacy ||
+                      savingEdit ||
+                      deletingAssignment
+                    }
                     className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {deletingAssignment ? "삭제 중..." : "과제 삭제"}
@@ -6085,7 +6291,11 @@ const ManageHistoryClassroom: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => void handleSaveAssignmentEdit()}
-                    disabled={savingEdit || deletingAssignment}
+                    disabled={
+                      editingAssignmentIsLegacy ||
+                      savingEdit ||
+                      deletingAssignment
+                    }
                     className="rounded-2xl bg-orange-500 px-4 py-3 text-sm font-bold text-white hover:bg-orange-600 disabled:opacity-60"
                   >
                     {savingEdit ? "저장 중..." : "설정 저장"}

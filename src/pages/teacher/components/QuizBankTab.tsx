@@ -7,10 +7,8 @@ import {
   limit,
   orderBy,
   query,
-  serverTimestamp,
-  setDoc,
 } from "firebase/firestore";
-import { db, getHttpsCallable } from "../../../lib/firebase";
+import { db } from "../../../lib/firebase";
 import { useAuth } from "../../../contexts/AuthContext";
 import MatchingConnectionLines from "../../../components/common/MatchingConnectionLines";
 import { LoadingOverlay } from "../../../components/common/LoadingState";
@@ -20,6 +18,7 @@ import {
   getSemesterDocPath,
   getYearSemester,
 } from "../../../lib/semesterScope";
+import { executeWestoryCommand } from "../../../lib/commandGateway";
 import {
   QUIZ_CHOICE_OPTION_IMAGES_TOTAL_MAX_BYTES,
   QUIZ_CHOICE_OPTION_IMAGE_OPTIONS,
@@ -71,6 +70,7 @@ interface Question {
   explanation?: string;
   hintEnabled?: boolean;
   hint?: string;
+  contentRevision?: number;
 }
 
 type ChoiceOptionImage = string | null;
@@ -143,13 +143,6 @@ interface StudentRosterItem {
 interface StudentRosterResult {
   students: StudentRosterItem[];
   accessLimited: boolean;
-}
-
-interface QuestionCorrectionResult {
-  scannedResultCount?: number;
-  updatedResultCount?: number;
-  improvedAnswerCount?: number;
-  bonusAwardedCount?: number;
 }
 
 type QuestionType = "choice" | "ox" | "word" | "order" | "matching";
@@ -2516,60 +2509,21 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         hintEnabled: editHintEnabled,
         hint: editHintEnabled ? editHintText.trim() : "",
       };
-      const originalSnapshot = buildOriginalEditSnapshot(editingQuestion);
-      const shouldRecalculateCorrections =
-        originalSnapshot.type !== payload.type ||
-        String(originalSnapshot.answer || "") !== String(payload.answer || "");
       const { docId: _docId, id: _localId, ...persistedPayload } = payload;
-      await setDoc(
-        doc(
-          db,
-          getSemesterDocPath(
-            config,
-            "quiz_questions",
-            String(editingQuestion.docId),
-          ),
-        ),
-        { ...persistedPayload, updatedAt: serverTimestamp() },
-        { merge: true },
-      );
-      if (shouldRecalculateCorrections) {
-        try {
-          const { year, semester } = getYearSemester(config);
-          const recalculateCorrections = await getHttpsCallable<
-            {
-              year: string;
-              semester: string;
-              questionDocId: string;
-              questionId: number;
-            },
-            QuestionCorrectionResult
-          >("recalculateQuizResultsAfterQuestionCorrection");
-          const correction = await recalculateCorrections({
-            year,
-            semester,
-            questionDocId: String(editingQuestion.docId),
-            questionId: Number(editingQuestion.id),
-          });
-          if (Number(correction.data?.updatedResultCount || 0) > 0) {
-            const statsResult = await loadQuestionAnalytics();
-            setQuestionStats(statsResult.questionStats);
-            setClassAverageByClass(statsResult.classAverageByClass);
-            setParticipationByClass(statsResult.participationByClass);
-            setTotalParticipants(statsResult.totalParticipants);
-            setRecentClassFocus(statsResult.recentClassFocus);
-            setLastAttemptAt(statsResult.lastAttemptAt);
-          }
-        } catch (correctionError) {
-          console.error(
-            "Failed to recalculate quiz results after answer correction",
-            correctionError,
-          );
-          alert(
-            "문제는 저장되었지만 기존 응시 결과와 위스 보너스를 자동 반영하지 못했습니다. 잠시 후 다시 저장해 주세요.",
-          );
-        }
-      }
+      const { contentRevision: _contentRevision, ...questionPayload } =
+        persistedPayload;
+      const { year, semester } = getYearSemester(config);
+      const saved = await executeWestoryCommand("upsertQuizQuestion", {
+        semesterId: `${year}-${semester}`,
+        questionId: String(editingQuestion.docId),
+        question: {
+          ...questionPayload,
+          id: editingQuestion.id,
+        } as Record<string, unknown>,
+        expectedRevision: Number(editingQuestion.contentRevision || 0),
+        reason: "평가 문항 편집",
+      });
+      payload.contentRevision = saved.result.contentRevision;
       setQuestions((prev) =>
         prev.map((q) => (q.docId === editingQuestion.docId ? payload : q)),
       );

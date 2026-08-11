@@ -14,7 +14,8 @@ import {
   updateDoc,
 } from "firebase/firestore";
 
-const projectId = "demo-westory-session-w2a";
+const projectId =
+  process.env.WESTORY_TEST_PROJECT_ID || "demo-westory-session-w2a";
 const adminUid = "w2a-admin";
 const adminEmail = "westoria28@gmail.com";
 const authTime = Math.floor(Date.now() / 1000) - 10;

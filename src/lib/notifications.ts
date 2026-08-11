@@ -217,27 +217,6 @@ export const createManagedNotifications = async (
   return result.data || { createdCount: 0, recipientCount: 0 };
 };
 
-export const notifyHistoryClassroomSubmitted = async (
-  config: ConfigLike,
-  input: {
-    assignmentId: string;
-    assignmentTitle: string;
-    resultId: string;
-    percent: number;
-  },
-) => {
-  const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable("notifyHistoryClassroomSubmitted");
-  await callable({
-    year,
-    semester,
-    assignmentId: input.assignmentId,
-    assignmentTitle: input.assignmentTitle,
-    resultId: input.resultId,
-    percent: input.percent,
-  });
-};
-
 export const notifyPerformanceScoreObjectionRequested = async (
   config: ConfigLike,
   input: {

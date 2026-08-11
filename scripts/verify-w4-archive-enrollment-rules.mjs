@@ -15,7 +15,8 @@ import {
   updateDoc,
 } from "firebase/firestore";
 
-const projectId = "demo-westory-session-w4";
+const projectId =
+  process.env.WESTORY_TEST_PROJECT_ID || "demo-westory-session-w4";
 const adminUid = "w4-admin";
 const staffUid = "w4-staff";
 const studentUid = "w4-student";

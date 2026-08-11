@@ -1229,7 +1229,13 @@ service cloud.firestore {
 
     match /map_resources/{docId} {
       allow read: if canUseWestory();
-      allow write: if isAdmin();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'pdfBlanks',
+          'answerOptions',
+          'contentRevision'
+        ]);
     }
 
     match /source_archive/{docId} {
@@ -1249,18 +1255,17 @@ service cloud.firestore {
 
     match /quiz_questions/{docId} {
       allow read: if canUseWestory();
-      allow write: if isAdmin();
+      allow create, update, delete: if false;
     }
 
     match /history_classrooms/{docId} {
       allow read: if canReadHistoryClassroomResource(resource.data);
-      allow write: if canWriteHistoryClassroomResource();
+      allow create, update, delete: if false;
     }
 
     match /history_classroom_results/{docId} {
       allow read: if canReadHistoryClassroomResult(resource.data);
-      allow create: if isValidHistoryClassroomResultCreate();
-      allow update, delete: if isAdmin();
+      allow create, update, delete: if false;
     }
 
     match /history_classroom_exemptions/{docId} {
@@ -1275,7 +1280,7 @@ service cloud.firestore {
 
     match /assessment_config/{docId} {
       allow read: if canUseWestory();
-      allow write: if isAdmin() || isTeacherRole();
+      allow write: if docId != 'settings' && (isAdmin() || isTeacherRole());
     }
 
     match /grading_plans/{docId} {
@@ -1294,15 +1299,32 @@ service cloud.firestore {
 
     match /quiz_results/{resultId} {
       allow read: if canReadQuizResult(resource.data);
-      allow create: if isValidQuizResultCreate();
-      allow update, delete: if isAdmin();
+      allow create, update, delete: if false;
     }
 
     match /quiz_submissions/{docId} {
       allow read: if canReadQuizSubmission(resource.data);
-      allow create: if isAdmin() || isValidQuizSubmissionCreate();
-      allow update: if isAdmin() || isValidQuizSubmissionUpdate();
-      allow delete: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /semester_assessment_definitions/{docId} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /semester_assessment_attempts/{docId} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /semester_assessment_submissions/{docId} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /semester_assessment_results/{docId} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /assessment_legacy_issues/{docId} {
+      allow read, create, update, delete: if false;
     }
 
     match /think_cloud_state/{docId} {
@@ -1411,23 +1433,28 @@ service cloud.firestore {
 
       match /map_resources/{docId} {
         allow read: if canUseWestory();
-        allow write: if isAdmin();
+        allow create, delete: if isAdmin();
+        allow update: if isAdmin()
+          && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'pdfBlanks',
+            'answerOptions',
+            'contentRevision'
+          ]);
       }
 
       match /quiz_questions/{docId} {
         allow read: if canUseWestory();
-        allow write: if isAdmin();
+        allow create, update, delete: if false;
       }
 
       match /history_classrooms/{docId} {
         allow read: if canReadHistoryClassroomResource(resource.data);
-        allow write: if canWriteHistoryClassroomResource();
+        allow create, update, delete: if false;
       }
 
       match /history_classroom_results/{docId} {
         allow read: if canReadHistoryClassroomResult(resource.data);
-        allow create: if isValidHistoryClassroomResultCreate();
-        allow update, delete: if isAdmin();
+        allow create, update, delete: if false;
       }
 
       match /history_classroom_exemptions/{docId} {
@@ -1442,7 +1469,7 @@ service cloud.firestore {
 
       match /assessment_config/{docId} {
         allow read: if canUseWestory();
-        allow write: if isAdmin() || isTeacherRole();
+        allow write: if docId != 'settings' && (isAdmin() || isTeacherRole());
       }
 
       match /grading_plans/{docId} {
@@ -1472,15 +1499,12 @@ service cloud.firestore {
 
       match /quiz_results/{resultId} {
         allow read: if canReadQuizResult(resource.data);
-        allow create: if isValidQuizResultCreate();
-        allow update, delete: if isAdmin();
+        allow create, update, delete: if false;
       }
 
       match /quiz_submissions/{docId} {
         allow read: if canReadQuizSubmission(resource.data);
-        allow create: if isAdmin() || isValidQuizSubmissionCreate();
-        allow update: if isAdmin() || isValidQuizSubmissionUpdate();
-        allow delete: if isAdmin();
+        allow create, update, delete: if false;
       }
 
       match /think_cloud_state/{docId} {

@@ -6,8 +6,8 @@ import {
   query,
   where,
 } from "firebase/firestore";
-import { db, getHttpsCallable } from "./firebase";
-import { getSemesterDocPath, getYearSemester } from "./semesterScope";
+import { db } from "./firebase";
+import { getSemesterDocPath } from "./semesterScope";
 import { readSiteSettingDoc } from "./siteSettings";
 import type { SystemConfig, UserData } from "../types";
 import {
@@ -53,24 +53,6 @@ interface UserProfileShape {
   class?: string | number;
   studentGrade?: string | number;
   studentClass?: string | number;
-}
-
-interface ResetAssessmentAttemptsByClassParams {
-  config: ConfigLike;
-  unitId: string;
-  category: string;
-  classId: string;
-  examRound?: MockExamRound | string;
-}
-
-export interface ResetAssessmentAttemptsByClassResult {
-  affectedStudentCount: number;
-  recalculatedWalletCount: number;
-  deletedPointTransactionCount: number;
-  deletedQuizResultCount: number;
-  deletedSubmissionCount: number;
-  targetStudentCount: number;
-  walletRebuildErrorCount?: number;
 }
 
 export interface AssessmentVisibilityTarget {
@@ -666,37 +648,3 @@ export const createDefaultAssessmentConfigEntry = (
     DEFAULT_ASSESSMENT_CONFIG_ENTRY,
     grade3ClassIds,
   );
-
-export const resetAssessmentAttemptsByClass = async ({
-  config,
-  unitId,
-  category,
-  classId,
-  examRound,
-}: ResetAssessmentAttemptsByClassParams) => {
-  const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable<
-    {
-      year: string;
-      semester: string;
-      unitId: string;
-      category: string;
-      classId: string;
-      examRound?: string;
-    },
-    ResetAssessmentAttemptsByClassResult
-  >("resetAssessmentAttemptsByClass");
-
-  const result = await callable({
-    year,
-    semester,
-    unitId: String(unitId || "").trim(),
-    category: String(category || "").trim(),
-    classId: normalizeAssessmentClassId(classId, "3"),
-    ...(isMockExamCategory(category) && examRound
-      ? { examRound: normalizeMockExamRound(examRound) }
-      : {}),
-  });
-
-  return result.data;
-};

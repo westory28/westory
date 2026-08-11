@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { doc, getDoc, setDoc } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { db } from "../../../lib/firebase";
 import { useAuth } from "../../../contexts/AuthContext";
 import {
@@ -10,7 +10,6 @@ import {
   getAssessmentVisibilityOptionsFromSchoolConfig,
   normalizeAssessmentClassId,
   normalizeAssessmentConfigEntry,
-  resetAssessmentAttemptsByClass,
 } from "../../../lib/assessmentConfig";
 import {
   DEFAULT_MOCK_EXAM_ROUND,
@@ -24,7 +23,15 @@ import {
   sortMockExamRounds,
   type MockExamRound,
 } from "../../../lib/mockExamRounds";
-import { getSemesterDocPath } from "../../../lib/semesterScope";
+import {
+  getSemesterDocPath,
+  getYearSemester,
+} from "../../../lib/semesterScope";
+import { executeWestoryCommand } from "../../../lib/commandGateway";
+import {
+  buildAssessmentDefinitionId,
+  getAssessmentState,
+} from "../../../lib/assessmentLifecycle";
 
 interface QuizSettingsModalProps {
   isOpen: boolean;
@@ -369,27 +376,86 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
         category,
         isMockExam ? selectedExamRound : undefined,
       );
-      await setDoc(
-        doc(db, getSemesterDocPath(config, "assessment_config", "settings")),
-        {
-          [key]: {
-            active: settings.active,
-            questionCount: Math.max(1, settings.questionCount),
-            randomOrder: settings.questionOrder === "random",
-            questionOrder: settings.questionOrder,
-            timeLimit: Math.max(1, settings.timeLimitMinutes) * 60,
-            allowRetake: isMockExam
-              ? isRetakableMockExam
-              : settings.allowRetake,
-            cooldown: Math.max(0, settings.cooldown),
-            hintLimit: isMockExam ? 0 : Math.max(0, settings.hintLimit),
-            visibleTargetGrade: "3",
-            visibleClassIds: normalizedSelectedClassIds,
-            visibilityVersion: 2,
-          },
-        },
-        { merge: true },
+      const presentationSettings = {
+        active: settings.active,
+        questionCount: Math.max(1, settings.questionCount),
+        randomOrder: settings.questionOrder === "random",
+        questionOrder: settings.questionOrder,
+        timeLimit: Math.max(1, settings.timeLimitMinutes) * 60,
+        allowRetake: isMockExam ? isRetakableMockExam : settings.allowRetake,
+        cooldown: Math.max(0, settings.cooldown),
+        hintLimit: isMockExam ? 0 : Math.max(0, settings.hintLimit),
+        visibleTargetGrade: "3",
+        visibleClassIds: normalizedSelectedClassIds,
+        visibilityVersion: 2,
+      };
+      const { year, semester } = getYearSemester(config);
+      const semesterId = `${year}-${semester}`;
+      const definitionId = buildAssessmentDefinitionId(
+        semesterId,
+        "QUIZ",
+        nodeId,
+        category,
+        isMockExam ? selectedExamRound : "",
       );
+      const definitionPayload = {
+        definitionId,
+        semesterId,
+        assessmentKind: "QUIZ" as const,
+        title:
+          String(nodeTitle || "").trim() || CATEGORY_LABELS[category] || "평가",
+        sourceId: nodeId,
+        category,
+        ...(isMockExam ? { examRound: selectedExamRound } : {}),
+        questionCount: Math.max(1, settings.questionCount),
+        durationSeconds: Math.max(60, settings.timeLimitMinutes * 60),
+        maxAttempts: isMockExam
+          ? isRetakableMockExam
+            ? 20
+            : 1
+          : settings.allowRetake
+            ? 20
+            : 1,
+        cooldownMinutes: Math.max(0, settings.cooldown),
+        opensAt: "",
+        closesAt: "",
+        assignedClassIds: normalizedSelectedClassIds,
+        legacyConfigKey: key,
+        presentationSettings,
+      };
+      const currentState = await getAssessmentState({ definitionId });
+      let revision = currentState.definition?.revision || 0;
+      let status = currentState.definition?.status || "DRAFT";
+      if (!currentState.definition) {
+        await executeWestoryCommand(
+          "createAssessmentDefinition",
+          definitionPayload,
+        );
+        revision = 1;
+        status = "DRAFT";
+      } else {
+        const updated = await executeWestoryCommand(
+          "updateAssessmentDefinition",
+          {
+            ...definitionPayload,
+            expectedRevision: revision,
+            reason: "평가 운영 설정 변경",
+          },
+        );
+        revision = updated.result.revision;
+      }
+      const targetStatus = settings.active ? "PUBLISHED" : "PAUSED";
+      if (
+        status !== targetStatus &&
+        !(status === "DRAFT" && targetStatus === "PAUSED")
+      ) {
+        await executeWestoryCommand("transitionAssessmentDefinition", {
+          definitionId,
+          expectedRevision: revision,
+          targetStatus,
+          reason: settings.active ? "학생 응시 공개" : "학생 응시 일시 중지",
+        });
+      }
       alert("설정을 저장했습니다.");
       onClose();
     } catch (error) {
@@ -404,17 +470,26 @@ const QuizSettingsModal: React.FC<QuizSettingsModalProps> = ({
     if (!canEdit || !nodeId) return;
     setResettingClassId(classId);
     try {
-      const result = await resetAssessmentAttemptsByClass({
-        config,
-        unitId: nodeId,
+      const { year, semester } = getYearSemester(config);
+      const definitionId = buildAssessmentDefinitionId(
+        `${year}-${semester}`,
+        "QUIZ",
+        nodeId,
         category,
-        classId,
-        ...(isMockExam ? { examRound: selectedExamRound } : {}),
-      });
+        isMockExam ? selectedExamRound : "",
+      );
+      const result = await executeWestoryCommand(
+        "resetAssessmentAttemptsByClassV2",
+        {
+          definitionId,
+          classId,
+          reason: "교사 학급별 응시 초기화",
+        },
+      );
       const classLabel = visibilityTargetMap.get(classId)?.fullLabel || classId;
       setConfirmResetClassId("");
       alert(
-        `${classLabel} 응시 초기화를 완료했습니다.\n응시 기록 ${result.deletedQuizResultCount}건, 포인트 거래 ${result.deletedPointTransactionCount}건을 정리했습니다.`,
+        `${classLabel} 응시 초기화를 완료했습니다.\n응시 상태 ${result.result.resetCount}건을 잠갔으며 제출 기록은 감사 목적으로 보존했습니다.`,
       );
     } catch (error) {
       console.error("Failed to reset assessment attempts by class:", error);

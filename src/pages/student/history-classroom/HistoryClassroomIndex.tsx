@@ -205,6 +205,9 @@ const HistoryClassroomIndex: React.FC = () => {
   const [assignments, setAssignments] = useState<HistoryClassroomAssignment[]>(
     [],
   );
+  const [legacyAssignmentIds, setLegacyAssignmentIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [resultsByAssignment, setResultsByAssignment] = useState<
     Record<string, HistoryClassroomResult[]>
   >({});
@@ -278,18 +281,25 @@ const HistoryClassroomIndex: React.FC = () => {
                 left.title.localeCompare(right.title, "ko"),
             );
 
+        let loadedFromLegacy = false;
         let loadedAssignments = normalizeVisibleAssignments(
           await loadAssignedSnapshots(
             getSemesterCollectionPath(config, "history_classrooms"),
           ),
         );
         if (!loadedAssignments.length) {
+          loadedFromLegacy = true;
           loadedAssignments = normalizeVisibleAssignments(
             await loadAssignedSnapshots("history_classrooms"),
           );
         }
         if (cancelled) return;
         setAssignments(loadedAssignments);
+        setLegacyAssignmentIds(
+          loadedFromLegacy
+            ? new Set(loadedAssignments.map((assignment) => assignment.id))
+            : new Set(),
+        );
 
         const assignmentIds = loadedAssignments.map((item) => item.id);
         const readResultDocs = async (path: string) => {
@@ -695,8 +705,13 @@ const HistoryClassroomIndex: React.FC = () => {
               <div className="space-y-3">
                 {group.items.map((item) => {
                   const statusMeta = getStatusMeta(item.status);
+                  const isLegacyAssignment = legacyAssignmentIds.has(
+                    item.assignment.id,
+                  );
                   const canStart =
-                    item.status === "available" || item.status === "retry";
+                    !isLegacyAssignment &&
+                    (item.status === "available" || item.status === "retry");
+                  const canOpen = canStart || isLegacyAssignment;
                   const canRequestExemption =
                     !item.passedAttempt &&
                     item.exemptionState === "available" &&
@@ -720,6 +735,11 @@ const HistoryClassroomIndex: React.FC = () => {
                             >
                               {statusMeta.label}
                             </span>
+                            {isLegacyAssignment && (
+                              <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800">
+                                이전 자료 · 읽기 전용
+                              </span>
+                            )}
                             {item.assignment.mapTitle && (
                               <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">
                                 {item.assignment.mapTitle}
@@ -789,22 +809,24 @@ const HistoryClassroomIndex: React.FC = () => {
 
                           <button
                             type="button"
-                            disabled={!canStart}
+                            disabled={!canOpen}
                             onClick={() => {
-                              if (!canStart) return;
+                              if (!canOpen) return;
                               navigate(
-                                `/student/history-classroom/run?id=${item.assignment.id}`,
+                                `/student/history-classroom/run?id=${item.assignment.id}${isLegacyAssignment ? "&source=LEGACY" : ""}`,
                               );
                             }}
                             className={`min-h-12 rounded-2xl px-4 py-3 text-sm font-black transition disabled:cursor-not-allowed ${statusMeta.buttonClassName}`}
                           >
-                            {item.status === "retry"
-                              ? "다시 도전하기"
-                              : item.status === "available"
-                                ? "응시하기"
-                                : item.status === "cooldown"
-                                  ? "다시 도전하기"
-                                  : statusMeta.label}
+                            {isLegacyAssignment
+                              ? "읽기 전용으로 보기"
+                              : item.status === "retry"
+                                ? "다시 도전하기"
+                                : item.status === "available"
+                                  ? "응시하기"
+                                  : item.status === "cooldown"
+                                    ? "다시 도전하기"
+                                    : statusMeta.label}
                           </button>
 
                           {canRequestExemption && item.availableExemption && (

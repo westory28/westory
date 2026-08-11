@@ -1,22 +1,14 @@
 ﻿import React, { useEffect, useMemo, useRef, useState } from "react";
 import { db } from "../../../lib/firebase";
-import {
-  collection,
-  deleteDoc,
-  doc,
-  getDocs,
-  query,
-  serverTimestamp,
-  setDoc,
-  where,
-} from "firebase/firestore";
+import { collection, getDocs, query, where } from "firebase/firestore";
 import { useAuth } from "../../../contexts/AuthContext";
 import { LoadingOverlay } from "../../../components/common/LoadingState";
 import QuizPassage from "../../../components/common/QuizPassage";
 import {
   getSemesterCollectionPath,
-  getSemesterDocPath,
+  getYearSemester,
 } from "../../../lib/semesterScope";
+import { executeWestoryCommand } from "../../../lib/commandGateway";
 import {
   QUIZ_CHOICE_OPTION_IMAGES_TOTAL_MAX_BYTES,
   QUIZ_CHOICE_OPTION_IMAGE_OPTIONS,
@@ -68,6 +60,7 @@ interface Question {
   refSmall?: string;
   createdAt?: unknown;
   updatedAt?: unknown;
+  contentRevision?: number;
 }
 
 interface QuizEditorProps {
@@ -974,15 +967,16 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
       const questionData = { ...newQuestion };
       delete questionData.createdAt;
       delete questionData.updatedAt;
-      await setDoc(
-        doc(db, getSemesterDocPath(config, "quiz_questions", String(targetId))),
-        {
-          ...questionData,
-          updatedAt: serverTimestamp(),
-          ...(editingQuestionId ? {} : { createdAt: serverTimestamp() }),
-        },
-        { merge: true },
-      );
+      delete questionData.contentRevision;
+      const { year, semester } = getYearSemester(config);
+      const saved = await executeWestoryCommand("upsertQuizQuestion", {
+        semesterId: `${year}-${semester}`,
+        questionId: String(targetId),
+        question: questionData as unknown as Record<string, unknown>,
+        expectedRevision: Number(existingQuestion?.contentRevision || 0),
+        reason: editingQuestionId ? "평가 문항 수정" : "평가 문항 생성",
+      });
+      newQuestion.contentRevision = saved.result.contentRevision;
       setQuestions((prev) =>
         editingQuestionId
           ? prev.map((q) => (q.id === targetId ? newQuestion : q))
@@ -1006,9 +1000,14 @@ const QuizEditor: React.FC<QuizEditorProps> = ({
     if (!canEdit) return;
     if (!window.confirm("이 문제를 삭제하시겠습니까?")) return;
     try {
-      await deleteDoc(
-        doc(db, getSemesterDocPath(config, "quiz_questions", String(id))),
-      );
+      const target = questions.find((question) => question.id === id);
+      const { year, semester } = getYearSemester(config);
+      await executeWestoryCommand("deleteQuizQuestion", {
+        semesterId: `${year}-${semester}`,
+        questionId: String(id),
+        expectedRevision: Number(target?.contentRevision || 0),
+        reason: "평가 문항 삭제",
+      });
       setQuestions((prev) => prev.filter((q) => q.id !== id));
     } catch (error) {
       console.error("Delete question failed", error);

@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 
-const projectId = "demo-westory-session-w4";
+const projectId =
+  process.env.WESTORY_TEST_PROJECT_ID || "demo-westory-session-w4";
 for (const variable of [
   "FIREBASE_AUTH_EMULATOR_HOST",
   "FIRESTORE_EMULATOR_HOST",

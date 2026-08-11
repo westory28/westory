@@ -27,7 +27,19 @@ export type W2CommandType =
   | "moveEnrollment"
   | "closeEnrollment"
   | "prepareSemesterArchive"
-  | "freezeSemesterArchive";
+  | "freezeSemesterArchive"
+  | "createAssessmentDefinition"
+  | "updateAssessmentDefinition"
+  | "transitionAssessmentDefinition"
+  | "startAssessmentAttempt"
+  | "submitAssessmentAttempt"
+  | "resetAssessmentAttemptsByClassV2"
+  | "resetAssessmentAttempt"
+  | "upsertQuizQuestion"
+  | "deleteQuizQuestion"
+  | "upsertHistoryClassroomSource"
+  | "deleteHistoryClassroomSource"
+  | "updateMapResourceBlanks";
 
 interface ConsentCommandItem {
   id: string;
@@ -208,6 +220,87 @@ export interface W2CommandPayloads {
     expectedIntegrityHash: string;
     reason: string;
   };
+  createAssessmentDefinition: {
+    definitionId: string;
+    semesterId: string;
+    assessmentKind: "QUIZ" | "HISTORY_CLASSROOM";
+    title: string;
+    sourceId: string;
+    category?: string;
+    examRound?: string;
+    questionCount?: number;
+    durationSeconds: number;
+    maxAttempts: number;
+    cooldownMinutes: number;
+    opensAt: string;
+    closesAt: string;
+    assignedClassIds: string[];
+    legacyConfigKey?: string;
+    presentationSettings?: Record<string, unknown>;
+  };
+  updateAssessmentDefinition: W2CommandPayloads["createAssessmentDefinition"] & {
+    expectedRevision: number;
+    reason: string;
+  };
+  transitionAssessmentDefinition: {
+    definitionId: string;
+    expectedRevision: number;
+    targetStatus: "PUBLISHED" | "PAUSED" | "CLOSED";
+    reason: string;
+  };
+  startAssessmentAttempt: {
+    definitionId: string;
+  };
+  submitAssessmentAttempt: {
+    attemptId: string;
+    expectedRevision: number;
+    answers: Record<string, string>;
+    submitReason: "STUDENT" | "TIMEOUT";
+  };
+  resetAssessmentAttemptsByClassV2: {
+    definitionId: string;
+    classId: string;
+    reason: string;
+  };
+  resetAssessmentAttempt: {
+    definitionId: string;
+    studentUid: string;
+    reason: string;
+  };
+  upsertQuizQuestion: {
+    semesterId: string;
+    questionId: string;
+    question: Record<string, unknown>;
+    expectedRevision: number;
+    reason: string;
+  };
+  deleteQuizQuestion: {
+    semesterId: string;
+    questionId: string;
+    expectedRevision: number;
+    reason: string;
+  };
+  upsertHistoryClassroomSource: {
+    semesterId: string;
+    sourceId: string;
+    source: Record<string, unknown>;
+    expectedRevision: number;
+    reason: string;
+  };
+  deleteHistoryClassroomSource: {
+    semesterId: string;
+    sourceId: string;
+    expectedRevision: number;
+    reason: string;
+  };
+  updateMapResourceBlanks: {
+    semesterId: string;
+    mapResourceId: string;
+    pdfBlanks: Array<Record<string, unknown>>;
+    answerOptions: string[];
+    expectedRevision: number;
+    reason: string;
+  };
 }
 
 export interface W2CommandResults {
@@ -320,6 +413,83 @@ export interface W2CommandResults {
     integrityHash: string;
     counts: Record<string, number>;
   };
+  createAssessmentDefinition: {
+    definition: Record<string, unknown>;
+  };
+  updateAssessmentDefinition: {
+    definitionId: string;
+    status: "DRAFT" | "PUBLISHED" | "PAUSED";
+    revision: number;
+    sourceHash: string;
+    itemCount: number;
+  };
+  transitionAssessmentDefinition: {
+    definitionId: string;
+    status: "PUBLISHED" | "PAUSED" | "CLOSED";
+    revision: number;
+  };
+  startAssessmentAttempt: AssessmentAttemptState;
+  submitAssessmentAttempt: AssessmentSubmissionResult;
+  resetAssessmentAttemptsByClassV2: {
+    definitionId: string;
+    classId: string;
+    resetCount: number;
+  };
+  resetAssessmentAttempt: {
+    definitionId: string;
+    studentUid: string;
+    resetCount: number;
+  };
+  upsertQuizQuestion: { questionId: string; contentRevision: number };
+  deleteQuizQuestion: { questionId: string; deleted: true };
+  upsertHistoryClassroomSource: { sourceId: string; contentRevision: number };
+  deleteHistoryClassroomSource: {
+    sourceId: string;
+    contentRevision: number;
+    deleted: true;
+  };
+  updateMapResourceBlanks: {
+    mapResourceId: string;
+    contentRevision: number;
+  };
+}
+
+export interface AssessmentAttemptState {
+  attemptId: string;
+  definitionId: string;
+  semesterId: string;
+  assessmentKind: "QUIZ" | "HISTORY_CLASSROOM";
+  attemptNumber: number;
+  status:
+    | "STARTED"
+    | "IN_PROGRESS"
+    | "RECOVERABLE"
+    | "SUBMITTED"
+    | "EXPIRED"
+    | "LOCKED";
+  revision: number;
+  answers: Record<string, string>;
+  currentItemId: string;
+  questionIds: string[];
+  startedAtIso: string;
+  deadlineAtIso: string;
+  lastSavedAtIso: string;
+  submittedAtIso: string;
+  resultRef: string;
+  resumed: boolean;
+}
+
+export interface AssessmentSubmissionResult {
+  attemptId: string;
+  status: "SUBMITTED";
+  revision: number;
+  score: number;
+  total: number;
+  percent: number;
+  answerChecks: Array<{ id: string; correct: boolean }>;
+  resultRef: string;
+  submissionRef: string;
+  replayedSubmission: boolean;
 }
 
 export type WestoryCommandClientState =

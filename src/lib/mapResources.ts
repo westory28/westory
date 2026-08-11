@@ -59,6 +59,7 @@ export interface MapResource {
   answerOptions?: string[];
   pdfTagSections?: PdfTagSection[];
   sortOrder: number;
+  contentRevision?: number;
 }
 
 export interface MapResourceDisplayGroup<T extends MapResource = MapResource> {
@@ -311,6 +312,7 @@ export const normalizeMapResource = (
     sortOrder: Number.isFinite(Number(raw.sortOrder))
       ? Number(raw.sortOrder)
       : 999,
+    contentRevision: Math.max(0, Number(raw.contentRevision) || 0),
   };
 };
 

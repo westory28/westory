@@ -8,6 +8,7 @@ const {
 const sessionAuthority = require("./sessionAuthority");
 const semesterCore = require("./semesterCore");
 const archiveEnrollment = require("./archiveEnrollment");
+const assessmentLifecycle = require("./assessmentLifecycle");
 
 const REGION = "asia-northeast3";
 const ADMIN_EMAIL = "westoria28@gmail.com";
@@ -24,6 +25,7 @@ const COMMAND_TYPES = Object.freeze({
   ADJUST_TEACHER_POINTS: "adjustTeacherPoints",
   ...semesterCore.SEMESTER_COMMAND_TYPES,
   ...archiveEnrollment.ARCHIVE_ENROLLMENT_COMMAND_TYPES,
+  ...assessmentLifecycle.ASSESSMENT_COMMAND_TYPES,
 });
 
 const resolveProjectId = (environment = process.env) => {
@@ -217,6 +219,9 @@ const buildHolidayDocumentId = ({ title, start }) => {
 };
 
 const normalizePayload = (commandType, payload) => {
+  if (Object.values(assessmentLifecycle.ASSESSMENT_COMMAND_TYPES).includes(commandType)) {
+    return assessmentLifecycle.normalizeAssessmentPayload(commandType, payload);
+  }
   if (Object.values(archiveEnrollment.ARCHIVE_ENROLLMENT_COMMAND_TYPES).includes(commandType)) {
     return archiveEnrollment.normalizeArchiveEnrollmentPayload(commandType, payload);
   }
@@ -715,6 +720,7 @@ const applyBusinessCommand = async ({
     commandType === COMMAND_TYPES.ADJUST_TEACHER_POINTS
     || Object.values(semesterCore.SEMESTER_COMMAND_TYPES).includes(commandType)
     || Object.values(archiveEnrollment.ARCHIVE_ENROLLMENT_COMMAND_TYPES).includes(commandType)
+    || Object.values(assessmentLifecycle.ASSESSMENT_COMMAND_TYPES).includes(commandType)
   ) {
     fail(
       "failed-precondition",
@@ -777,6 +783,9 @@ const applyBusinessCommand = async ({
 };
 
 const createFirestoreStore = (db = getFirestore()) => ({
+  set: (path, data, options) => options
+    ? db.doc(path).set(data, options)
+    : db.doc(path).set(data),
   get: async (path) => {
     const snapshot = await db.doc(path).get();
     return { exists: snapshot.exists, data: snapshot.exists ? snapshot.data() : null, path };
@@ -844,9 +853,13 @@ const createCommandGatewayCore = ({
   semesterCoreResolver = semesterCore.resolveSemesterCoreState,
   serverTimestamp = () => FieldValue.serverTimestamp(),
   projectId = resolveProjectId(),
+  getSessionOptions = (commandType) =>
+    assessmentLifecycle.STUDENT_COMMAND_TYPES.has(commandType)
+      ? { recentAuth: false, highRisk: false }
+      : { recentAuth: true, highRisk: true },
 } = {}) => {
   const authorize = async (request, commandType) => {
-    const identity = await assertSession(request, { recentAuth: true, highRisk: true });
+    const identity = await assertSession(request, getSessionOptions(commandType));
     const commandActor = typeof authorizeCommand === "function"
       ? await authorizeCommand({ request, identity, commandType })
       : null;

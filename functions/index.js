@@ -12,6 +12,7 @@ const sessionAuthority = require('./sessionAuthority');
 const commandGateway = require('./commandGateway');
 const semesterCore = require('./semesterCore');
 const archiveEnrollment = require('./archiveEnrollment');
+const assessmentLifecycle = require('./assessmentLifecycle');
 const {
   createLegacyPointV1CommandAdapter,
   createRetiredAdjustTeacherPointsHandler,
@@ -3920,6 +3921,12 @@ const resetAssessmentAttemptsByClassHandler = onCall(
       recentAuth: true,
       highRisk: true,
     });
+    if (uid && email) {
+      throw new HttpsError('failed-precondition', 'This legacy reset endpoint was retired by W6A.', {
+        reason: 'ASSESSMENT_LEGACY_RESET_RETIRED',
+        replacement: 'resetAssessmentAttemptsByClassV2',
+      });
+    }
     const { year, semester } = assertYearSemester(request.data || {});
     const unitId = String(request.data?.unitId || '').trim();
     const category = String(request.data?.category || '').trim();
@@ -4773,6 +4780,12 @@ exports.recalculateQuizResultsAfterQuestionCorrection = onCall(
       recentAuth: true,
       highRisk: true,
     });
+    if (uid) {
+      throw new HttpsError('failed-precondition', 'Submitted assessment results are immutable in W6A.', {
+        reason: 'ASSESSMENT_RESULT_RECALCULATION_RETIRED',
+        replacement: 'publish a new assessment definition revision',
+      });
+    }
     const { year, semester } = assertYearSemester(request.data || {});
     const questionDocId = String(request.data?.questionDocId || '').trim();
     const questionId = String(request.data?.questionId || '').trim();
@@ -5818,6 +5831,12 @@ exports.reviewHistoryClassroomExemptionRequest = onCall({ region: REGION }, asyn
 
 exports.submitHistoryClassroomResult = onCall({ region: REGION }, async (request) => {
   const { uid } = await assertAllowedWestoryUser(request);
+  if (uid) {
+    throw new HttpsError('failed-precondition', 'This legacy submission endpoint was retired by W6A.', {
+      reason: 'ASSESSMENT_LEGACY_SUBMISSION_RETIRED',
+      replacement: 'submitAssessmentAttempt',
+    });
+  }
   const { year, semester } = assertYearSemester(request.data);
   const assignmentId = String(request.data?.assignmentId || '').trim();
   const requestedResultId = String(request.data?.resultId || '').trim();
@@ -8353,7 +8372,11 @@ exports.updateStudentProfileIcon = onCall({ region: REGION }, async (request) =>
 });
 
 const authorizeCommandGatewayActor = async ({ request, identity, commandType }) => {
-  if (commandType !== commandGateway.COMMAND_TYPES.ADJUST_TEACHER_POINTS) {
+  const assessmentCommandTypes = Object.values(assessmentLifecycle.ASSESSMENT_COMMAND_TYPES);
+  if (
+    commandType !== commandGateway.COMMAND_TYPES.ADJUST_TEACHER_POINTS
+    && !assessmentCommandTypes.includes(commandType)
+  ) {
     return null;
   }
   const actorUid = String(identity?.uid || '').trim();
@@ -8375,6 +8398,40 @@ const authorizeCommandGatewayActor = async ({ request, identity, commandType }) 
   }
   const profileSnapshot = await db.doc(`users/${actorUid}`).get();
   const profile = profileSnapshot.exists ? profileSnapshot.data() || {} : {};
+  if (assessmentCommandTypes.includes(commandType)) {
+    const isStudentCommand = assessmentLifecycle.STUDENT_COMMAND_TYPES.has(commandType);
+    const role = String(profile.role || 'student').trim() || 'student';
+    if (isStudentCommand) {
+      if (role !== 'student') {
+        throw new HttpsError('permission-denied', 'A student account is required.', {
+          reason: 'ASSESSMENT_STUDENT_REQUIRED',
+        });
+      }
+      return {
+        actorUid,
+        actorEmail,
+        actorRole: 'student',
+        actorCapability: `assessment:${commandType}`,
+      };
+    }
+    const permissions = Array.isArray(profile.staffPermissions)
+      ? profile.staffPermissions
+      : [];
+    if (
+      profile.teacherPortalEnabled !== true
+      || (!permissions.includes('quiz_read') && !permissions.includes('lesson_read'))
+    ) {
+      throw new HttpsError('permission-denied', 'Assessment management permission is required.', {
+        reason: 'ASSESSMENT_MANAGE_REQUIRED',
+      });
+    }
+    return {
+      actorUid,
+      actorEmail,
+      actorRole: role === 'admin' ? 'admin' : 'teacher',
+      actorCapability: permissions.includes('quiz_read') ? 'quiz_read' : 'lesson_read',
+    };
+  }
   if (!hasStaffPermission(profile, 'point_manage')) {
     throw new HttpsError('permission-denied', 'point_manage permission is required.', {
       reason: 'COMMAND_CAPABILITY_REQUIRED',
@@ -8405,13 +8462,15 @@ const legacyPointV1CommandAdapter = createLegacyPointV1CommandAdapter({
 });
 
 const archiveEnrollmentReadinessAdapter = archiveEnrollment.createArchiveEnrollmentReadinessAdapter();
-const readinessAdapters = [archiveEnrollmentReadinessAdapter];
+const assessmentReadinessAdapter = assessmentLifecycle.createAssessmentReadinessAdapter();
+const readinessAdapters = [archiveEnrollmentReadinessAdapter, assessmentReadinessAdapter];
 const semesterCoreCommandAdapter = semesterCore.createSemesterCoreCommandAdapter({
   getDefaultPointPolicy,
   projectId: commandGateway.resolveProjectId(),
   readinessAdapters,
 });
 const archiveEnrollmentCommandAdapter = archiveEnrollment.createArchiveEnrollmentCommandAdapter();
+const assessmentCommandAdapter = assessmentLifecycle.createAssessmentCommandAdapter();
 const commandGatewayStore = commandGateway.createFirestoreStore(db);
 
 const commandGatewayCore = commandGateway.createCommandGatewayCore({
@@ -8429,6 +8488,10 @@ const commandGatewayCore = commandGateway.createCommandGatewayCore({
       Object.values(archiveEnrollment.ARCHIVE_ENROLLMENT_COMMAND_TYPES)
         .map((commandType) => [commandType, archiveEnrollmentCommandAdapter]),
     ),
+    ...Object.fromEntries(
+      Object.values(assessmentLifecycle.ASSESSMENT_COMMAND_TYPES)
+        .map((commandType) => [commandType, assessmentCommandAdapter]),
+    ),
   },
   semesterCoreResolver: ({ store, semesterId }) =>
     semesterCore.resolveSemesterCoreState({ store, semesterId, readinessAdapters }),
@@ -8440,4 +8503,12 @@ const archiveEnrollmentQueryCore = archiveEnrollment.createArchiveEnrollmentQuer
 });
 Object.assign(exports, archiveEnrollment.createArchiveEnrollmentCallableExports({
   core: archiveEnrollmentQueryCore,
+}));
+const assessmentQueryCore = assessmentLifecycle.createAssessmentQueryCore({
+  store: commandGatewayStore,
+  serverTimestamp: () => FieldValue.serverTimestamp(),
+  projectId: commandGateway.resolveProjectId(),
+});
+Object.assign(exports, assessmentLifecycle.createAssessmentCallableExports({
+  core: assessmentQueryCore,
 }));

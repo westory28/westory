@@ -57,12 +57,14 @@ const QUERY_CALLABLES = new Set([
   "getArchiveEnrollmentState",
   "previewEnrollmentRoster",
   "listStudentHistoryDictionaryWordsForTeacher",
+  "getAssessmentState",
 ]);
 const SESSION_CONTROL_CALLABLES = new Set([
   "beginApplicationSessionReauthentication",
   "closeApplicationSession",
   "openApplicationSession",
   "touchApplicationSession",
+  "saveAssessmentProgress",
 ]);
 const EFFECT_HOOKS = new Set(["useEffect", "useLayoutEffect"]);
 const LISTENER_APIS = new Set([
