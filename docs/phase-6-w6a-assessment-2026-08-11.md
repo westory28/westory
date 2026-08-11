@@ -191,7 +191,7 @@ Firebase CLI가 남긴 demo Firestore Java 자식은 정확한 `demo-westory-ses
 - Preview URL: `https://westory-staging-owauucx0y-bbbs-projects-44f9da30.vercel.app`
 - Vercel target: Preview, Production 아님
 
-합성 학생·교사, class, Enrollment, Definition/source로 브라우저 E2E를 수행했습니다. 정리 스크립트가 평가·세션·receipt·audit·포인트 지갑/거래와 Auth 계정을 삭제했고, 두 번째 cleanup에서 삭제 대상 0을 확인했습니다. 임시 안정 별칭은 원래 배포 `dpl_FybDPNJbsUUfNW5QMjqT2BdgJbtg`로 복구했고 reCAPTCHA 허용 도메인도 원래 1개로 되돌렸습니다.
+합성 학생·교사, class, Enrollment, Definition/source로 브라우저 E2E를 수행했습니다. 정리 스크립트가 평가·세션·receipt·audit·포인트 지갑/거래와 Auth 계정을 삭제했고, 두 번째 cleanup에서 삭제 대상 0을 확인했습니다. 안정 Staging 별칭 `westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app`은 승인된 W6A Preview `dpl_FyZYUi7vd7ZcfMvp2J8gib48nrNx`를 가리킵니다. reCAPTCHA 허용 도메인은 이 안정 도메인 1개만 유지했습니다.
 
 ## 22. Production Safety
 
@@ -211,7 +211,7 @@ W6B는 immutable Submission과 Result를 평가 근거로 사용해야 합니다
 
 ## 25. Rollback
 
-1. Vercel Preview는 Production alias에 연결하지 않았으므로 삭제하거나 무시할 수 있습니다.
+1. 안정 Staging 별칭을 이전 Preview로 되돌리면 클라이언트 배포를 즉시 복구할 수 있습니다. Production alias에는 연결하지 않았습니다.
 2. Staging Functions/Rules는 W5 배포 artifact 또는 W5 SHA의 파일로 Staging 프로젝트에만 되돌립니다.
 3. W6A canonical 컬렉션은 기존 W5 client가 사용하지 않으며, rollback 시 보존해 forensic evidence로 둘 수 있습니다.
 4. W5 이전 번들은 새 Rules에서 직접 평가 쓰기가 거부되므로, Rules만 되돌려 우회를 다시 열어서는 안 됩니다.
