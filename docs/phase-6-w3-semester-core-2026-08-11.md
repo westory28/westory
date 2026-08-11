@@ -134,6 +134,7 @@ SettingsGeneral의 seed·registry·pointer direct writes와 W12 임시 allowlist
 | TypeScript ratchet | 63 errors / 13 files, 신규 오류 0 |
 | build / format | 425 modules build PASS, Prettier PASS |
 | W1R2 session regression | PASS, `productionAccess=0` |
+| GitHub Safety Baseline | run `31459691592` PASS, 구현 SHA `333031043da23d051ba61f762a948ecb851ac6b6` |
 
 전체 emulator 회귀는 W2와 W3 harness를 한 emulator 수명 안에서 실행해 연속 기동 포트 충돌을 제거했습니다. 종료 뒤 남은 Firestore Java child는 exact demo project 명령행을 확인하고 종료했으며 관련 포트가 모두 비었음을 확인했습니다. `KI-W1-01` 재디버깅은 수행하지 않았습니다.
 
@@ -178,7 +179,7 @@ Archive/Legacy adapter, historical permission, immutable Rules, 2026-1 enrollmen
 
 ## 20. Final W4 Readiness
 
-로컬·emulator·Dedicated Staging·Production 불변 대조는 모두 통과했습니다. GitHub Safety Baseline branch run을 통과하면 다음 판정을 확정합니다.
+로컬·emulator·Dedicated Staging·GitHub Safety Baseline·Production 불변 대조를 모두 통과했습니다. W3 CURRENT-WAVE blocker는 0입니다. 다음 판정을 확정합니다.
 
 `READY FOR W4 ARCHIVE / ENROLLMENT STAGING DEVELOPMENT`
 
