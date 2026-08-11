@@ -67,6 +67,10 @@ const ROLE_SESSION_KEY = "westoryPortalRole";
 const PENDING_LOGIN_MODE_KEY = "westoryPendingLoginMode";
 const REDIRECT_ATTEMPT_KEY = "westoryRedirectAttempt";
 const REDIRECT_ATTEMPT_MAX_AGE_MS = 10 * 60 * 1000;
+const STAGING_TEST_LOGIN_ENABLED =
+  runtimeEnvironment === "staging" ||
+  runtimeEnvironment === "local" ||
+  runtimeEnvironment === "test";
 type LoginMode = "student" | "teacher";
 
 interface SchoolOption {
@@ -1829,8 +1833,7 @@ const Login: React.FC = () => {
     event: React.FormEvent<HTMLFormElement>,
   ) => {
     event.preventDefault();
-    if (!["staging", "local", "test"].includes(runtimeEnvironment) || authBusy)
-      return;
+    if (!STAGING_TEST_LOGIN_ENABLED || authBusy) return;
 
     const email = stagingTestEmail.trim();
     if (!email || !stagingTestPassword) {
@@ -2064,7 +2067,7 @@ const Login: React.FC = () => {
                 다른 계정으로 다시 시도
               </button>
             )}
-            {["staging", "local", "test"].includes(runtimeEnvironment) && (
+            {STAGING_TEST_LOGIN_ENABLED && (
               <form
                 onSubmit={startStagingTestLogin}
                 className="mt-3 rounded-2xl border border-dashed border-blue-300 bg-blue-50 p-4 text-left"
