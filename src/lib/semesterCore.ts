@@ -145,6 +145,9 @@ const CHECK_LABELS: Record<string, string> = {
   blocking_issues: "미해결 차단 문제",
   trusted_shell_complete: "신뢰할 수 있는 학기 shell",
   semester_duration: "학기 운영 기간",
+  archive_readiness: "이전 학기 아카이브 준비",
+  class_readiness: "학급 편성 준비",
+  enrollment_readiness: "학생 학적 준비",
 };
 
 const normalizeManifest = (

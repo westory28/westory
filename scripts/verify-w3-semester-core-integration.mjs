@@ -29,7 +29,7 @@ import {
   httpsCallable,
 } from "firebase/functions";
 
-const projectId = "demo-westory-session-w3";
+const projectId = process.env.WESTORY_TEST_PROJECT_ID || "demo-westory-session-w3";
 const region = "asia-northeast3";
 const adminEmail = "westoria28@gmail.com";
 const rules = readFileSync(resolve("firestore.rules"), "utf8");
@@ -215,6 +215,40 @@ const assertSeedCount = async (testEnv, semesterId, expectedCount) => {
   assert.equal(existing.filter((item) => item.exists).length, expectedCount);
 };
 
+const seedW4ReadinessFixture = (testEnv, semesterId) =>
+  withAdminDb(testEnv, async (db) => {
+    const suffix = semesterId.replace("-", "_");
+    const studentUid = `w4-student-${suffix}`;
+    const teacherUid = `w4-teacher-${suffix}`;
+    const classId = `w4-class-${suffix}`;
+    const enrollmentId = `w4-enrollment-${suffix}`;
+    await Promise.all([
+      setDoc(doc(db, "users", studentUid), { role: "student", studentName: `W4 학생 ${suffix}` }),
+      setDoc(doc(db, "users", teacherUid), { role: "teacher", teacherPortalEnabled: true }),
+      setDoc(doc(db, "student_identities", studentUid), {
+        studentUid, displayName: `W4 학생 ${suffix}`, accountStatus: "ACTIVE",
+        revision: 1, provenance: "CANONICAL", schemaVersion: 1,
+      }),
+      setDoc(doc(db, "semester_classes", classId), {
+        classId, semesterId, grade: "1", classNumber: "1", classKey: "1::1",
+        displayName: "1학년 1반", status: "ACTIVE", homeroomTeacherUid: teacherUid,
+        revision: 1, provenance: "CANONICAL", schemaVersion: 1,
+      }),
+      setDoc(doc(db, "semester_enrollments", enrollmentId), {
+        enrollmentId, studentUid, semesterId, classId, studentNumber: "1",
+        enrollmentStatus: "ACTIVE", revision: 1, provenance: "CANONICAL", schemaVersion: 1,
+      }),
+      setDoc(doc(db, "semester_enrollment_slots", `w4-slot-${suffix}`), {
+        studentUid, semesterId, activeEnrollmentId: enrollmentId, status: "ACTIVE", revision: 1,
+      }),
+      setDoc(doc(db, "enrollment_roster_imports", `w4-roster-${suffix}`), {
+        rosterId: `w4-roster-${suffix}`, semesterId, status: "APPLIED",
+        approvalStatus: "APPROVED", validationStatus: "PASS", importRevision: 1,
+        sourceHash: "c".repeat(64), validationHash: "d".repeat(64), schemaVersion: 1,
+      }),
+    ]);
+  });
+
 const runCommand = async (client, commandType, payload, options = {}) => {
   const commandId = options.commandId || randomUUID();
   const response = await executeCommand(client, {
@@ -246,8 +280,8 @@ const prepareReady = async (testEnv, client, semesterId) => {
   });
   assert.equal(validation.response.status, "SUCCEEDED");
   assert.equal(validation.response.result.status, "PASS");
-  assert.equal(validation.response.result.requiredPassed, 11);
-  assert.equal(validation.response.result.requiredTotal, 11);
+  assert.equal(validation.response.result.requiredPassed, 14);
+  assert.equal(validation.response.result.requiredTotal, 14);
   semester = await readManifest(testEnv, semesterId);
   assert.equal(semester.data.status, "VALIDATING");
   await transition(client, semester, "READY");
@@ -360,16 +394,16 @@ const main = async () => {
       },
     );
     assert.equal(partialValidation.response.result.status, "FAIL");
-    assert.equal(partialValidation.response.result.requiredTotal, 11);
-    assert.ok(partialValidation.response.result.requiredPassed < 11);
+    assert.equal(partialValidation.response.result.requiredTotal, 14);
+    assert.ok(partialValidation.response.result.requiredPassed < 14);
     const partialReport = await withAdminDb(testEnv, (db) =>
       readDocument(db, `semester_readiness_reports/${partialSemesterId}`),
     );
     assert.equal(partialReport.data.status, "FAIL");
     assert.equal(partialReport.data.stale, false);
     assert.equal(partialReport.data.policyVersion, "w3-v1");
-    assert.equal(partialReport.data.requiredTotal, 11);
-    assert.equal(partialReport.data.checks.length, 12);
+    assert.equal(partialReport.data.requiredTotal, 14);
+    assert.equal(partialReport.data.checks.length, 15);
     assert.equal(
       partialReport.data.checks.find(
         (check) => check.checkId === "required_settings",
@@ -406,14 +440,15 @@ const main = async () => {
     assert.deepEqual(await snapshotSemesterState(testEnv), revisionConflictState);
 
     semester = await readManifest(testEnv, semesterId);
+    await seedW4ReadinessFixture(testEnv, semesterId);
     const firstValidation = await runCommand(
       primary,
       "validateSemesterReadiness",
       { semesterId, expectedRevision: semester.data.revision },
     );
     assert.equal(firstValidation.response.result.status, "PASS");
-    assert.equal(firstValidation.response.result.requiredPassed, 11);
-    assert.equal(firstValidation.response.result.requiredTotal, 11);
+    assert.equal(firstValidation.response.result.requiredPassed, 14);
+    assert.equal(firstValidation.response.result.requiredTotal, 14);
     const freshManifest = await readManifest(testEnv, semesterId);
     const freshReport = await withAdminDb(testEnv, (db) =>
       readDocument(db, `semester_readiness_reports/${semesterId}`),
@@ -422,9 +457,9 @@ const main = async () => {
     assert.equal(freshReport.data.stale, false);
     assert.equal(freshReport.data.policyVersion, "w3-v1");
     assert.equal(freshReport.data.evaluatedRevision, freshManifest.data.revision);
-    assert.equal(freshReport.data.requiredPassed, 11);
-    assert.equal(freshReport.data.requiredTotal, 11);
-    assert.equal(freshReport.data.checks.length, 12);
+    assert.equal(freshReport.data.requiredPassed, 14);
+    assert.equal(freshReport.data.requiredTotal, 14);
+    assert.equal(freshReport.data.checks.length, 15);
     const readinessVersionsBeforeUpdate = await withAdminDb(testEnv, (db) =>
       readCollection(db, `semester_readiness_reports/${semesterId}/versions`),
     );
@@ -596,7 +631,7 @@ const main = async () => {
           "TRUSTED_SIX_SEED_TRANSACTION",
           "PARTIAL_SHELL_READINESS_FAIL_AND_READY_ZERO",
           "REVISION_MISMATCH_ZERO_WRITE",
-          "READINESS_REQUIRED_CHECKS_11_PASS",
+          "READINESS_REQUIRED_CHECKS_14_PASS_WITH_W4_ADAPTER",
           "READINESS_IMMUTABLE_VERSION_CREATED",
           "MANIFEST_UPDATE_INVALIDATES_READINESS",
           "STALE_READINESS_ACTIVATION_ZERO",

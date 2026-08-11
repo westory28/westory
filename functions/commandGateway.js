@@ -4,6 +4,7 @@ const { onCall, HttpsError } = require("firebase-functions/v2/https");
 
 const sessionAuthority = require("./sessionAuthority");
 const semesterCore = require("./semesterCore");
+const archiveEnrollment = require("./archiveEnrollment");
 
 const REGION = "asia-northeast3";
 const ADMIN_EMAIL = "westoria28@gmail.com";
@@ -19,6 +20,7 @@ const COMMAND_TYPES = Object.freeze({
   SYNC_KOREAN_PUBLIC_HOLIDAYS: "syncKoreanPublicHolidays",
   ADJUST_TEACHER_POINTS: "adjustTeacherPoints",
   ...semesterCore.SEMESTER_COMMAND_TYPES,
+  ...archiveEnrollment.ARCHIVE_ENROLLMENT_COMMAND_TYPES,
 });
 
 const resolveProjectId = (environment = process.env) => {
@@ -212,6 +214,9 @@ const buildHolidayDocumentId = ({ title, start }) => {
 };
 
 const normalizePayload = (commandType, payload) => {
+  if (Object.values(archiveEnrollment.ARCHIVE_ENROLLMENT_COMMAND_TYPES).includes(commandType)) {
+    return archiveEnrollment.normalizeArchiveEnrollmentPayload(commandType, payload);
+  }
   if (Object.values(semesterCore.SEMESTER_COMMAND_TYPES).includes(commandType)) {
     return semesterCore.normalizeSemesterCommandPayload(commandType, payload);
   }
@@ -706,6 +711,7 @@ const applyBusinessCommand = async ({
   if (
     commandType === COMMAND_TYPES.ADJUST_TEACHER_POINTS
     || Object.values(semesterCore.SEMESTER_COMMAND_TYPES).includes(commandType)
+    || Object.values(archiveEnrollment.ARCHIVE_ENROLLMENT_COMMAND_TYPES).includes(commandType)
   ) {
     fail(
       "failed-precondition",

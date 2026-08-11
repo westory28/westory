@@ -43,7 +43,7 @@ jobs:
       - run: npm run verify:session-policy
       - run: npm run verify:step-up-reauth
       - run: npm run verify:assessment-attempt-safety
-      - run: npm run verify:w3-command-safety
+      - run: npm run verify:w4-command-safety
       - run: npm run format:check
       - run: npm run build
 
@@ -59,4 +59,4 @@ jobs:
           distribution: temurin
           java-version: 21
       - run: npm install --global firebase-tools@15.15.0
-      - run: npm run verify:w3-semester-core
+      - run: npm run verify:w4-archive-enrollment

@@ -779,6 +779,74 @@ const assertReadinessFailureCurrent = ({
   }
 };
 
+const evaluateReadinessAdapters = async ({
+  readinessAdapters,
+  transaction,
+  manifest,
+  evaluatedAt,
+}) => {
+  if (!Array.isArray(readinessAdapters)) {
+    throw new TypeError("readinessAdapters must be an array.");
+  }
+  const rawChecks = [];
+  for (const adapter of readinessAdapters) {
+    if (!adapter || typeof adapter.evaluate !== "function") {
+      fail(
+        "failed-precondition",
+        "Readiness adapter is not callable.",
+        "SEMESTER_READINESS_ADAPTER_INVALID",
+      );
+    }
+    const result = await adapter.evaluate({
+      transaction: {
+        get: (path) => transaction.get(path),
+        query: (collectionPath, filter = null) => transaction.query(collectionPath, filter),
+      },
+      manifest,
+      policyVersion: READINESS_POLICY_VERSION,
+    });
+    const adapterChecks = Array.isArray(result) ? result : result?.checks;
+    if (!Array.isArray(adapterChecks)) {
+      fail(
+        "failed-precondition",
+        "Readiness adapter did not return checks.",
+        "SEMESTER_READINESS_ADAPTER_INVALID",
+      );
+    }
+    rawChecks.push(...adapterChecks);
+  }
+  const checks = rawChecks.map((check) => normalizeExtensionCheck(check, {
+    evaluatedAt,
+    revision: manifest.revision,
+  }));
+  const reservedIds = new Set([
+    "manifest_schema",
+    "semester_identity_unique",
+    "date_range",
+    "required_settings",
+    "status_transition",
+    "schema_version",
+    "readiness_policy_version",
+    "active_semester_conflict",
+    "revision_freshness",
+    "blocking_issues",
+    "trusted_shell_complete",
+    "semester_duration_advisory",
+  ]);
+  checks.forEach((check) => {
+    if (reservedIds.has(check.checkId)) {
+      fail(
+        "failed-precondition",
+        "Readiness adapter checkId is already registered.",
+        "SEMESTER_READINESS_ADAPTER_INVALID",
+        { checkId: check.checkId },
+      );
+    }
+    reservedIds.add(check.checkId);
+  });
+  return checks;
+};
+
 const createSemesterCoreCommandAdapter = ({
   getDefaultPointPolicy = () => ({}),
   projectId = "",
@@ -788,65 +856,8 @@ const createSemesterCoreCommandAdapter = ({
   if (!Array.isArray(readinessAdapters)) {
     throw new TypeError("readinessAdapters must be an array.");
   }
-  const evaluateReadinessExtensions = async ({ transaction, manifest, evaluatedAt }) => {
-    const rawChecks = [];
-    for (const adapter of readinessAdapters) {
-      if (!adapter || typeof adapter.evaluate !== "function") {
-        fail(
-          "failed-precondition",
-          "Readiness adapter is not callable.",
-          "SEMESTER_READINESS_ADAPTER_INVALID",
-        );
-      }
-      const result = await adapter.evaluate({
-        transaction: {
-          get: (path) => transaction.get(path),
-          query: (collectionPath, filter = null) => transaction.query(collectionPath, filter),
-        },
-        manifest,
-        policyVersion: READINESS_POLICY_VERSION,
-      });
-      const adapterChecks = Array.isArray(result) ? result : result?.checks;
-      if (!Array.isArray(adapterChecks)) {
-        fail(
-          "failed-precondition",
-          "Readiness adapter did not return checks.",
-          "SEMESTER_READINESS_ADAPTER_INVALID",
-        );
-      }
-      rawChecks.push(...adapterChecks);
-    }
-    const checks = rawChecks.map((check) => normalizeExtensionCheck(check, {
-      evaluatedAt,
-      revision: manifest.revision,
-    }));
-    const reservedIds = new Set([
-      "manifest_schema",
-      "semester_identity_unique",
-      "date_range",
-      "required_settings",
-      "status_transition",
-      "schema_version",
-      "readiness_policy_version",
-      "active_semester_conflict",
-      "revision_freshness",
-      "blocking_issues",
-      "trusted_shell_complete",
-      "semester_duration_advisory",
-    ]);
-    checks.forEach((check) => {
-      if (reservedIds.has(check.checkId)) {
-        fail(
-          "failed-precondition",
-          "Readiness adapter checkId is already registered.",
-          "SEMESTER_READINESS_ADAPTER_INVALID",
-          { checkId: check.checkId },
-        );
-      }
-      reservedIds.add(check.checkId);
-    });
-    return checks;
-  };
+  const evaluateReadinessExtensions = ({ transaction, manifest, evaluatedAt }) =>
+    evaluateReadinessAdapters({ readinessAdapters, transaction, manifest, evaluatedAt });
 
   const apply = async ({
     transaction,
@@ -1148,6 +1159,18 @@ const createSemesterCoreCommandAdapter = ({
           { fromStatus: manifest.status, targetStatus: payload.targetStatus },
         );
       }
+      for (const adapter of readinessAdapters) {
+        if (typeof adapter?.assertTransition !== "function") continue;
+        await adapter.assertTransition({
+          transaction: {
+            get: (path) => transaction.get(path),
+            query: (collectionPath, filter = null) => transaction.query(collectionPath, filter),
+          },
+          manifest,
+          targetStatus: payload.targetStatus,
+          policyVersion: READINESS_POLICY_VERSION,
+        });
+      }
       if (payload.targetStatus === "READY") {
         assertReadinessCurrent({
           manifest,
@@ -1440,7 +1463,10 @@ const createSemesterCoreCommandAdapter = ({
   return { apply };
 };
 
-const resolveSemesterCoreState = async ({ store, semesterId = null }) => {
+const resolveSemesterCoreState = async ({ store, semesterId = null, readinessAdapters = [] }) => {
+  if (!Array.isArray(readinessAdapters)) {
+    throw new TypeError("readinessAdapters must be an array.");
+  }
   const requestedSemesterId = semesterId === null || semesterId === undefined || semesterId === ""
     ? null
     : normalizeSemesterId(semesterId);
@@ -1501,7 +1527,13 @@ const resolveSemesterCoreState = async ({ store, semesterId = null }) => {
         readinessPath,
         ...seedDefinitions.map((seed) => seed.path),
       ]);
-      const dependencyHash = hashDependencyDocuments(seedDocuments);
+      const extensionChecks = await evaluateReadinessAdapters({
+        readinessAdapters,
+        transaction: reader,
+        manifest: selectedManifest,
+        evaluatedAt: new Date().toISOString(),
+      });
+      const dependencyHash = hashDependencyDocuments(seedDocuments, extensionChecks);
       const report = reportSnapshot.exists ? reportSnapshot.data || {} : null;
       let reason = null;
       if (!report) {
@@ -1566,8 +1598,10 @@ module.exports = {
   TRANSITION_TABLE,
   buildSemesterId,
   createSemesterCoreCommandAdapter,
+  evaluateReadinessAdapters,
   getSemesterSeedDefinitions,
   normalizeSemesterCommandPayload,
+  normalizeSemesterId,
   provenanceForStatus,
   resolveSemesterCoreState,
 };

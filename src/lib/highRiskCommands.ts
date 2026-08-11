@@ -15,6 +15,12 @@ export const HIGH_RISK_COMMANDS = new Set([
   "updateTeacherPointAdjustment",
   "reviewTeacherPointOrder",
   "deleteSourceArchiveAsset",
+  "previewEnrollmentRoster",
+  "importEnrollmentRoster",
+  "moveEnrollment",
+  "closeEnrollment",
+  "prepareSemesterArchive",
+  "freezeSemesterArchive",
 ]);
 
 export const isHighRiskCommand = (commandName: string) =>

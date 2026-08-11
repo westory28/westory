@@ -19,7 +19,15 @@ export type W2CommandType =
   | "updateOperationalSettings"
   | "validateSemesterReadiness"
   | "transitionSemesterStatus"
-  | "activateSemester";
+  | "activateSemester"
+  | "createSemesterClass"
+  | "updateSemesterClass"
+  | "importEnrollmentRoster"
+  | "upsertEnrollment"
+  | "moveEnrollment"
+  | "closeEnrollment"
+  | "prepareSemesterArchive"
+  | "freezeSemesterArchive";
 
 interface ConsentCommandItem {
   id: string;
@@ -35,6 +43,35 @@ interface HolidayCommandItem {
   start: string;
   eventType: "holiday";
   source?: string;
+}
+
+export interface SemesterClassInput {
+  grade: string;
+  classNumber: string;
+  displayName: string;
+  homeroomTeacherUid: string;
+}
+
+export interface EnrollmentRosterEntryInput {
+  studentUid: string;
+  displayName: string;
+  classKey: string;
+  studentNumber: string;
+}
+
+export interface EnrollmentRosterPayload {
+  semesterId: string;
+  expectedSemesterRevision: number;
+  rosterId: string;
+  importRevision: number;
+  sourceLabel: string;
+  sourceHash: string;
+  validationHash?: string;
+  effectiveFrom: string;
+  expectedStudentUids: string[];
+  classes: SemesterClassInput[];
+  entries: EnrollmentRosterEntryInput[];
+  reason: string;
 }
 
 export interface W2CommandPayloads {
@@ -107,6 +144,70 @@ export interface W2CommandPayloads {
     readinessPolicyVersion: string;
     expectedActiveSemesterId: string | null;
   };
+  createSemesterClass: {
+    semesterId: string;
+    expectedSemesterRevision: number;
+    grade: string;
+    classNumber: string;
+    displayName: string;
+    homeroomTeacherUid: string;
+    reason: string;
+  };
+  updateSemesterClass: {
+    semesterId: string;
+    classId: string;
+    expectedRevision: number;
+    displayName: string;
+    homeroomTeacherUid: string;
+    status: "ACTIVE" | "INACTIVE";
+    reason: string;
+  };
+  importEnrollmentRoster: EnrollmentRosterPayload & { validationHash: string };
+  upsertEnrollment: {
+    semesterId: string;
+    expectedSemesterRevision: number;
+    studentUid: string;
+    classId: string;
+    studentNumber: string;
+    displayName: string;
+    effectiveFrom: string;
+    sourceType: "ROSTER_IMPORT" | "MANUAL_EXCEPTION";
+    sourceId: string;
+    reason: string;
+  };
+  moveEnrollment: {
+    semesterId: string;
+    studentUid: string;
+    activeEnrollmentId: string;
+    expectedRevision: number;
+    targetClassId: string;
+    studentNumber: string;
+    effectiveAt: string;
+    reason: string;
+  };
+  closeEnrollment: {
+    semesterId: string;
+    studentUid: string;
+    activeEnrollmentId: string;
+    expectedRevision: number;
+    targetStatus: "WITHDRAWN" | "COMPLETED";
+    effectiveTo: string;
+    reason: string;
+  };
+  prepareSemesterArchive: {
+    semesterId: string;
+    expectedRevision: number;
+    accessPolicy: "ADMIN_ONLY";
+    sourcePaths: string[];
+    unresolvedLegacyItems: string[];
+    reason: string;
+  };
+  freezeSemesterArchive: {
+    semesterId: string;
+    expectedRevision: number;
+    expectedIntegrityHash: string;
+    reason: string;
+  };
 }
 
 export interface W2CommandResults {
@@ -167,6 +268,57 @@ export interface W2CommandResults {
     previousSemesterId: string | null;
     status: "ACTIVE";
     revision: number;
+  };
+  createSemesterClass: {
+    semesterClass: Record<string, unknown>;
+    readinessInvalidated: boolean;
+  };
+  updateSemesterClass: {
+    classId: string;
+    revision: number;
+    status: "ACTIVE" | "INACTIVE";
+    readinessInvalidated: boolean;
+  };
+  importEnrollmentRoster: {
+    rosterId: string;
+    applied: true;
+    replayedImport: boolean;
+    classCount: number;
+    enrollmentCount: number;
+    createdIdentityCount: number;
+    createdEnrollmentCount: number;
+    validationHash: string;
+    readinessInvalidated: boolean;
+  };
+  upsertEnrollment: {
+    enrollmentId: string;
+    revision: number;
+    replayedEnrollment?: boolean;
+    readinessInvalidated?: boolean;
+  };
+  moveEnrollment: {
+    previousEnrollmentId: string;
+    enrollmentId: string;
+    activeEnrollmentCount: 1;
+    readinessInvalidated: boolean;
+  };
+  closeEnrollment: {
+    enrollmentId: string;
+    status: "WITHDRAWN" | "COMPLETED";
+    activeEnrollmentCount: 0;
+    readinessInvalidated: boolean;
+  };
+  prepareSemesterArchive: {
+    semesterId: string;
+    archiveStatus: "PREPARED";
+    integrityHash: string;
+    counts: Record<string, number>;
+  };
+  freezeSemesterArchive: {
+    semesterId: string;
+    archiveStatus: "FROZEN";
+    integrityHash: string;
+    counts: Record<string, number>;
   };
 }
 

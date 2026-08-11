@@ -137,6 +137,27 @@ service cloud.firestore {
       return hasUserProfile() && userProfile().role == 'student';
     }
 
+    function canManageStudentEnrollmentData() {
+      return isAdmin() || hasPermission('student_list_read');
+    }
+
+    function isArchivedSemester(semesterId) {
+      let manifest = get(/databases/$(database)/documents/semester_manifests/$(semesterId)).data;
+      return manifest.status in ['CLOSED', 'ARCHIVED'];
+    }
+
+    function canReadSemesterEnrollmentResource(data) {
+      return isAdmin()
+        || (
+          canUseWestory()
+          && !isArchivedSemester(data.semesterId)
+          && (
+            canManageStudentEnrollmentData()
+            || data.studentUid == request.auth.uid
+          )
+        );
+    }
+
     function developerLogLikePath(logId) {
       return /databases/$(database)/documents/developer_logs/$(logId)/likes/$(request.auth.uid);
     }
@@ -1056,6 +1077,43 @@ service cloud.firestore {
         allow read: if canUseWestory();
         allow create, update, delete: if false;
       }
+    }
+
+    match /student_identities/{studentUid} {
+      allow get: if canUseWestory()
+        && (studentUid == request.auth.uid || canManageStudentEnrollmentData());
+      allow list: if canManageStudentEnrollmentData();
+      allow create, update, delete: if false;
+    }
+
+    match /semester_classes/{classId} {
+      allow read: if isAdmin()
+        || (
+          canUseWestory()
+          && !isArchivedSemester(resource.data.semesterId)
+          && canManageStudentEnrollmentData()
+        );
+      allow create, update, delete: if false;
+    }
+
+    match /semester_enrollments/{enrollmentId} {
+      allow read: if canReadSemesterEnrollmentResource(resource.data);
+      allow create, update, delete: if false;
+    }
+
+    match /semester_enrollment_slots/{slotId} {
+      allow read: if canReadSemesterEnrollmentResource(resource.data);
+      allow create, update, delete: if false;
+    }
+
+    match /enrollment_roster_imports/{rosterId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /semester_archive_manifests/{semesterId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
     }
 
     match /metadata/{docId} {

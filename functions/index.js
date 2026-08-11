@@ -9,6 +9,7 @@ initializeApp();
 const sessionAuthority = require('./sessionAuthority');
 const commandGateway = require('./commandGateway');
 const semesterCore = require('./semesterCore');
+const archiveEnrollment = require('./archiveEnrollment');
 const {
   createLegacyPointV1CommandAdapter,
   createRetiredAdjustTeacherPointsHandler,
@@ -8396,12 +8397,18 @@ const legacyPointV1CommandAdapter = createLegacyPointV1CommandAdapter({
   createTransactionPayload,
 });
 
+const archiveEnrollmentReadinessAdapter = archiveEnrollment.createArchiveEnrollmentReadinessAdapter();
+const readinessAdapters = [archiveEnrollmentReadinessAdapter];
 const semesterCoreCommandAdapter = semesterCore.createSemesterCoreCommandAdapter({
   getDefaultPointPolicy,
   projectId: commandGateway.resolveProjectId(),
+  readinessAdapters,
 });
+const archiveEnrollmentCommandAdapter = archiveEnrollment.createArchiveEnrollmentCommandAdapter();
+const commandGatewayStore = commandGateway.createFirestoreStore(db);
 
 const commandGatewayCore = commandGateway.createCommandGatewayCore({
+  store: commandGatewayStore,
   authorizeCommand: authorizeCommandGatewayActor,
   commandAdapters: {
     [commandGateway.COMMAND_TYPES.ADJUST_TEACHER_POINTS]: legacyPointV1CommandAdapter,
@@ -8411,6 +8418,19 @@ const commandGatewayCore = commandGateway.createCommandGatewayCore({
     [commandGateway.COMMAND_TYPES.VALIDATE_SEMESTER_READINESS]: semesterCoreCommandAdapter,
     [commandGateway.COMMAND_TYPES.TRANSITION_SEMESTER_STATUS]: semesterCoreCommandAdapter,
     [commandGateway.COMMAND_TYPES.ACTIVATE_SEMESTER]: semesterCoreCommandAdapter,
+    ...Object.fromEntries(
+      Object.values(archiveEnrollment.ARCHIVE_ENROLLMENT_COMMAND_TYPES)
+        .map((commandType) => [commandType, archiveEnrollmentCommandAdapter]),
+    ),
   },
+  semesterCoreResolver: ({ store, semesterId }) =>
+    semesterCore.resolveSemesterCoreState({ store, semesterId, readinessAdapters }),
 });
 Object.assign(exports, commandGateway.createCallableExports({ core: commandGatewayCore }));
+const archiveEnrollmentQueryCore = archiveEnrollment.createArchiveEnrollmentQueryCore({
+  store: commandGatewayStore,
+  projectId: commandGateway.resolveProjectId(),
+});
+Object.assign(exports, archiveEnrollment.createArchiveEnrollmentCallableExports({
+  core: archiveEnrollmentQueryCore,
+}));

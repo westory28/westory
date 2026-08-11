@@ -34,7 +34,7 @@ const projectId =
   process.env.WESTORY_TEST_PROJECT_ID || "demo-westory-session-w2a";
 assert.match(
   projectId,
-  /^demo-westory-session-(?:w2a|w3)$/,
+  /^demo-westory-session-(?:w2a|w3|w4)$/,
   "W2A integration may only target an approved demo emulator project.",
 );
 const region = "asia-northeast3";
