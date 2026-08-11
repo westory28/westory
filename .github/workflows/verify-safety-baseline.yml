@@ -53,5 +53,9 @@ jobs:
 
       - run: npm --prefix functions ci --ignore-scripts
       - run: npm --prefix functions run check
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
       - run: npm install --global firebase-tools@15.15.0
       - run: npm run verify:w2a-command-gateway
