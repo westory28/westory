@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 264 72" role="img" aria-labelledby="westory-wordmark-title">
+  <title id="westory-wordmark-title">Westory</title>
+  <text
+    x="132"
+    y="56"
+    text-anchor="middle"
+    font-family="Arial, sans-serif"
+    font-size="58"
+    font-weight="800"
+    letter-spacing="-2"
+  ><tspan fill="#2563EB">We</tspan><tspan fill="#F59E0B">story</tspan></text>
+</svg>

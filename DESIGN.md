@@ -97,7 +97,7 @@ Layout tokens:
 
 - Page max width: `--ws-page-max: 1280px`.
 - Student maintenance content max width: `--ws-maintenance-max: 640px`.
-- Student maintenance brand icon: `--ws-maintenance-icon: 96px`.
+- Student maintenance wordmark width: `--ws-maintenance-wordmark-width: clamp(180px, 48vw, 240px)`.
 - Header height: `--ws-header-height: 64px`.
 - Header dropdown min width: `--ws-header-dropdown-min: 11rem`.
 - Header dropdown max width: `--ws-header-dropdown-max: min(24rem, calc(100vw - 2rem))`.

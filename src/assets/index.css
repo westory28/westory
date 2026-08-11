@@ -26,30 +26,15 @@
 }
 
 .maintenance-brand {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--space-3);
+  display: grid;
+  place-items: center;
   margin-bottom: var(--space-6);
 }
 
-.maintenance-brand__icon {
-  display: block;
-  width: var(--ws-maintenance-icon);
-  height: var(--ws-maintenance-icon);
-  object-fit: contain;
-}
-
 .maintenance-brand__wordmark {
-  margin: 0;
-  font-size: var(--ws-type-logo);
-  font-weight: 800;
-  line-height: 1;
-  letter-spacing: -0.025em;
-}
-
-.maintenance-brand__wordmark .logo-story {
-  color: var(--ws-accent-text);
+  display: block;
+  width: var(--ws-maintenance-wordmark-width);
+  height: auto;
 }
 
 .maintenance-status {
@@ -104,6 +89,27 @@
   margin: 0;
 }
 
+.maintenance-contact {
+  color: var(--ws-primary);
+  font-size: var(--ws-type-small);
+  font-weight: 700;
+  line-height: 1.55;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.maintenance-contact:hover {
+  color: var(--ws-primary-hover);
+  text-decoration: underline;
+  text-underline-offset: var(--space-1);
+}
+
+.maintenance-contact:focus-visible {
+  border-radius: var(--radius-sm);
+  outline: 3px solid var(--ws-ring);
+  outline-offset: var(--space-1);
+}
+
 .maintenance-signout {
   min-height: var(--space-10);
   padding: var(--space-2) var(--space-5);
@@ -135,14 +141,142 @@
   opacity: 0.6;
 }
 
+.maintenance-policy-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-6);
+  color: var(--ws-text-muted);
+  font-size: var(--ws-type-small);
+  line-height: 1.55;
+}
+
+.maintenance-policy-links button {
+  padding: var(--space-1);
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.maintenance-policy-links button:hover {
+  color: var(--ws-text);
+  text-decoration: underline;
+  text-underline-offset: var(--space-1);
+}
+
+.maintenance-policy-links button:focus-visible {
+  border-radius: var(--radius-sm);
+  outline: 3px solid var(--ws-ring);
+  outline-offset: var(--space-1);
+}
+
+.maintenance-policy-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  place-items: center;
+  margin: 0;
+  padding: var(--space-4);
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+
+.maintenance-policy-backdrop::backdrop {
+  background: var(--ws-overlay);
+}
+
+.maintenance-policy-dialog {
+  display: flex;
+  width: 100%;
+  max-width: var(--ws-maintenance-max);
+  max-height: calc(100dvh - var(--space-8));
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--ws-border);
+  border-radius: var(--radius-xl);
+  background: var(--ws-surface);
+  box-shadow: var(--shadow-md);
+  text-align: left;
+}
+
+.maintenance-policy-dialog__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 1px solid var(--ws-border-soft);
+}
+
+.maintenance-policy-dialog__header h2 {
+  margin: 0;
+  color: var(--ws-text-strong);
+  font-size: var(--ws-type-card-title);
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.maintenance-policy-dialog__close {
+  min-width: var(--space-10);
+  min-height: var(--space-10);
+  padding: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--ws-surface);
+  color: var(--ws-text-muted);
+  font-size: var(--ws-type-small);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.maintenance-policy-dialog__close:hover {
+  background: var(--ws-surface-subtle);
+  color: var(--ws-text);
+}
+
+.maintenance-policy-dialog__close:focus-visible {
+  outline: 3px solid var(--ws-ring);
+  outline-offset: var(--space-1);
+}
+
+.maintenance-policy-dialog__body {
+  overflow-y: auto;
+  padding: var(--space-6);
+  color: var(--ws-text);
+  font-size: var(--ws-type-small);
+  line-height: 1.8;
+}
+
+.maintenance-policy-dialog__body > p,
+.maintenance-policy-content {
+  margin: var(--space-2) 0;
+  white-space: pre-wrap;
+}
+
 @media (max-width: 639px) {
   .maintenance-card {
     padding: var(--space-6) var(--space-4);
   }
+
+  .maintenance-policy-dialog__header,
+  .maintenance-policy-dialog__body {
+    padding: var(--space-4);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .maintenance-signout {
+  .maintenance-signout,
+  .maintenance-contact {
     transition: none;
   }
 }
