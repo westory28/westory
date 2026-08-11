@@ -962,11 +962,14 @@ service cloud.firestore {
 
     match /site_settings/{docId} {
       allow read: if docId in ['terms', 'privacy', 'school_config', 'interface_config'] || canUseWestory();
-      allow write: if isRecentlyAuthenticatedAdmin();
+      allow create, update, delete: if !(docId in ['terms', 'consent'])
+        && isRecentlyAuthenticatedAdmin();
 
       match /items/{itemId} {
         allow read: if canUseWestory();
-        allow create, delete: if isRecentlyAuthenticatedAdmin();
+        allow create: if docId != 'consent'
+          && isRecentlyAuthenticatedAdmin();
+        allow delete: if isRecentlyAuthenticatedAdmin();
         allow update: if isRecentlyAuthenticatedAdmin()
           || (
             docId == 'developer_logs'
@@ -1021,6 +1024,14 @@ service cloud.firestore {
       allow create: if isValidTeacherPatchNoteCreate(teacherId);
       allow update: if isValidTeacherPatchNoteUpdate(teacherId);
       allow delete: if isTeacherPatchNoteOwner(teacherId);
+    }
+
+    match /command_receipts/{receiptId} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /command_audit_events/{eventId} {
+      allow read, create, update, delete: if false;
     }
 
     match /metadata/{docId} {
@@ -1192,7 +1203,17 @@ service cloud.firestore {
 
       match /calendar/{docId} {
         allow read: if canUseWestory();
-        allow write: if isAdmin();
+        allow create: if isAdmin()
+          && (!('eventType' in request.resource.data)
+            || request.resource.data.eventType != 'holiday');
+        allow update: if isAdmin()
+          && (!('eventType' in resource.data)
+            || resource.data.eventType != 'holiday')
+          && (!('eventType' in request.resource.data)
+            || request.resource.data.eventType != 'holiday');
+        allow delete: if isAdmin()
+          && (!('eventType' in resource.data)
+            || resource.data.eventType != 'holiday');
       }
 
       match /notices/{docId} {

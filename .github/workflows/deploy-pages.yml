@@ -41,6 +41,21 @@ jobs:
         env:
           VITE_GOOGLE_MAPS_EMBED_API_KEY: ${{ secrets.VITE_GOOGLE_MAPS_EMBED_API_KEY }}
 
+      - name: Setup Functions runtime Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Functions dependencies
+        run: npm --prefix functions ci --ignore-scripts
+
+      - name: Verify Functions and W2A command gateway
+        run: |
+          npm --prefix functions run check
+          npm install --global firebase-tools@15.15.0
+          npm run verify:w2a-command-gateway
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5
         with:

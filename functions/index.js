@@ -8,6 +8,7 @@ const { onSchedule } = require('firebase-functions/v2/scheduler');
 initializeApp();
 const sessionAuthority = require('./sessionAuthority');
 Object.assign(exports, sessionAuthority.callableExports);
+Object.assign(exports, require('./commandGateway').callableExports);
 Object.assign(exports, require('./sourceArchiveBeta'));
 Object.assign(exports, require('./lessonPdfBeta'));
 

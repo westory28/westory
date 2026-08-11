@@ -15,10 +15,13 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import {
-  ensureKoreanPublicHolidaysSynced,
   getKoreanPublicHolidays,
   mergeEventsWithKoreanPublicHolidays,
 } from "../../lib/koreanPublicHolidays";
+import { useAuth } from "../../contexts/AuthContext";
+import { useAppToast } from "../../components/common/AppToastProvider";
+import { isAdminUser } from "../../lib/permissions";
+import { executeWestoryCommand } from "../../lib/commandGateway";
 
 interface CalendarEvent {
   id?: string;
@@ -38,6 +41,8 @@ interface CalendarEvent {
 }
 
 const ManageSchedule = () => {
+  const { currentUser, userData } = useAuth();
+  const { showToast } = useAppToast();
   const [events, setEvents] = useState<any[]>([]);
   const [currentConfig, setCurrentConfig] = useState<{
     year: string;
@@ -61,7 +66,9 @@ const ManageSchedule = () => {
   });
   const [endEnabled, setEndEnabled] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [holidaySyncing, setHolidaySyncing] = useState(false);
   const calendarRef = useRef<FullCalendar>(null);
+  const canSyncHolidays = isAdminUser(userData, currentUser?.email);
 
   const colorMap: { [key: string]: string } = {
     exam: "#ef4444", // Red
@@ -191,16 +198,38 @@ const ManageSchedule = () => {
     fetchEvents();
   }, [currentConfig, filter]);
 
-  useEffect(() => {
-    if (!currentConfig) return;
-    void ensureKoreanPublicHolidaysSynced({
-      db,
-      year: currentConfig.year,
-      semester: currentConfig.semester,
-    }).catch((error) => {
-      console.error("Failed to sync Korean public holidays:", error);
-    });
-  }, [currentConfig]);
+  const handleHolidaySync = async () => {
+    if (!currentConfig || holidaySyncing) return;
+    setHolidaySyncing(true);
+    try {
+      const holidays = await getKoreanPublicHolidays(currentConfig.year);
+      const response = await executeWestoryCommand<{ count: number }>(
+        "syncKoreanPublicHolidays",
+        {
+          year: currentConfig.year,
+          semester: currentConfig.semester,
+          holidays: holidays.map((holiday) => ({
+            ...holiday,
+            eventType: "holiday",
+          })),
+        },
+      );
+      await fetchEvents();
+      showToast({
+        tone: "success",
+        title: "공휴일 일정을 동기화했습니다.",
+        message: `${response.result.count}건을 현재 학기 일정에 반영했습니다.`,
+      });
+    } catch (error: any) {
+      showToast({
+        tone: "error",
+        title: "공휴일 일정 동기화에 실패했습니다.",
+        message: error?.message || "잠시 후 다시 시도해 주세요.",
+      });
+    } finally {
+      setHolidaySyncing(false);
+    }
+  };
 
   const handleDateClick = (arg: any) => {
     setSelectedDate(arg.dateStr);
@@ -350,6 +379,17 @@ const ManageSchedule = () => {
                 </option>
               ))}
             </select>
+            {canSyncHolidays && (
+              <button
+                type="button"
+                onClick={() => void handleHolidaySync()}
+                disabled={holidaySyncing || !currentConfig}
+                className="rounded border border-gray-300 bg-white px-4 py-2 text-sm font-bold text-gray-700 shadow-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+              >
+                <i className="fas fa-rotate mr-1" aria-hidden="true"></i>
+                {holidaySyncing ? "동기화 중..." : "공휴일 동기화"}
+              </button>
+            )}
             <button
               onClick={() => openModal(null)}
               className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-blue-700 shadow-sm ml-2"

@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,
@@ -17,6 +16,7 @@ import { useAppToast } from "../../../components/common/AppToastProvider";
 import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
 import { createManagedNotifications } from "../../../lib/notifications";
+import { executeWestoryCommand } from "../../../lib/commandGateway";
 import QuillEditor from "../../../components/common/QuillEditor";
 
 interface ConsentItem {
@@ -165,9 +165,11 @@ const SettingsPrivacy: React.FC = () => {
   );
   const [termsText, setTermsText] = useState("");
   const [privacyText, setPrivacyText] = useState("");
+  const [termsSaving, setTermsSaving] = useState(false);
   const [privacySaving, setPrivacySaving] = useState(false);
   const [notifyPrivacyChange, setNotifyPrivacyChange] = useState(false);
   const [consentItems, setConsentItems] = useState<ConsentItem[]>([]);
+  const [consentAdding, setConsentAdding] = useState(false);
   const [expandedConsentId, setExpandedConsentId] = useState<string | null>(
     null,
   );
@@ -192,11 +194,11 @@ const SettingsPrivacy: React.FC = () => {
   };
 
   const saveTerms = async () => {
+    if (termsSaving) return;
+    setTermsSaving(true);
     try {
-      await requestStepUpReauthentication("updateTermsSettings");
-      await setDoc(doc(db, "site_settings", "terms"), {
+      await executeWestoryCommand("updateTermsSettings", {
         text: termsText,
-        updatedAt: serverTimestamp(),
       });
       showToast({
         tone: "success",
@@ -208,6 +210,8 @@ const SettingsPrivacy: React.FC = () => {
         title: "이용 약관 저장에 실패했습니다.",
         message: error.message,
       });
+    } finally {
+      setTermsSaving(false);
     }
   };
 
@@ -305,37 +309,32 @@ const SettingsPrivacy: React.FC = () => {
   };
 
   const addConsentItem = async () => {
+    if (consentAdding) return;
+    setConsentAdding(true);
     try {
-      await requestStepUpReauthentication("updateConsentSettings");
-      const newOrder = consentItems.length + 1;
-      const payload = {
+      const response = await executeWestoryCommand<{
+        item: ConsentItem;
+      }>("addConsentItem", {
         title: "새 동의 항목",
         text: "<p>동의 내용을 입력하세요.</p>",
         required: true,
-        order: newOrder,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      };
-      const docRef = await addDoc(
-        collection(db, "site_settings", "consent", "items"),
-        payload,
+      });
+      setConsentItems((prev) =>
+        prev.some((item) => item.id === response.result.item.id)
+          ? prev.map((item) =>
+              item.id === response.result.item.id ? response.result.item : item,
+            )
+          : [...prev, response.result.item],
       );
-      await setDoc(
-        doc(db, "site_settings", "consent"),
-        { updatedAt: serverTimestamp() },
-        { merge: true },
-      );
-      setConsentItems((prev) => [
-        ...prev,
-        { id: docRef.id, ...payload } as ConsentItem,
-      ]);
-      setExpandedConsentId(docRef.id);
+      setExpandedConsentId(response.result.item.id);
     } catch (error: any) {
       showToast({
         tone: "error",
         title: "동의 항목 추가에 실패했습니다.",
         message: error.message,
       });
+    } finally {
+      setConsentAdding(false);
     }
   };
 
@@ -466,9 +465,10 @@ const SettingsPrivacy: React.FC = () => {
             <div className="text-right">
               <button
                 onClick={() => void saveTerms()}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition"
+                disabled={termsSaving}
+                className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition"
               >
-                이용 약관 저장
+                {termsSaving ? "저장 중..." : "이용 약관 저장"}
               </button>
             </div>
           </div>
@@ -536,9 +536,11 @@ const SettingsPrivacy: React.FC = () => {
               </div>
               <button
                 onClick={() => void addConsentItem()}
-                className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2.5 px-5 rounded-xl shadow-lg transition text-sm"
+                disabled={consentAdding}
+                className="bg-purple-600 hover:bg-purple-700 disabled:bg-purple-300 text-white font-bold py-2.5 px-5 rounded-xl shadow-lg transition text-sm"
               >
-                <i className="fas fa-plus mr-1"></i>항목 추가
+                <i className="fas fa-plus mr-1"></i>
+                {consentAdding ? "추가 중..." : "항목 추가"}
               </button>
             </div>
 

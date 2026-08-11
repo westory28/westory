@@ -3,7 +3,8 @@
   "private": true,
   "main": "index.js",
   "scripts": {
-    "check": "node --check index.js",
+    "check": "node --check index.js && node --check commandGateway.js && node --check scripts/verify-command-gateway.cjs && node scripts/verify-command-gateway.cjs",
+    "verify:command-gateway": "node scripts/verify-command-gateway.cjs",
     "verify:session-authority": "node scripts/verify-session-authority.cjs",
     "smoke:source-archive-pdf": "node scripts/smoke-source-archive-pdf.mjs",
     "cleanup:student-teacher-portal": "node scripts/cleanup-student-teacher-portal.cjs",

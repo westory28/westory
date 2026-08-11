@@ -12,9 +12,8 @@ import { useScheduleCategories } from "../../lib/scheduleCategories";
 import { getYearSemester } from "../../lib/semesterScope";
 import ScheduleEventDetailModal from "../../components/common/ScheduleEventDetailModal";
 import WisRankingPanel from "../../components/common/WisRankingPanel";
-import { runAfterNextPaint, runWhenIdle } from "../../lib/browserTasks";
+import { runAfterNextPaint } from "../../lib/browserTasks";
 import {
-  ensureKoreanPublicHolidaysSynced,
   getKoreanPublicHolidays,
   mergeEventsWithKoreanPublicHolidays,
 } from "../../lib/koreanPublicHolidays";
@@ -100,17 +99,6 @@ const TeacherDashboard: React.FC = () => {
       active = false;
       unsubscribe();
     };
-  }, [config]);
-
-  useEffect(() => {
-    const { year, semester } = getYearSemester(config);
-    return runWhenIdle(() => {
-      void ensureKoreanPublicHolidaysSynced({ db, year, semester }).catch(
-        (error) => {
-          console.error("Failed to sync Korean public holidays:", error);
-        },
-      );
-    }, 1200);
   }, [config]);
 
   const availableClassTargets = useMemo(() => {

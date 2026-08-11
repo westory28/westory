@@ -23,6 +23,11 @@
     "verify:teacher-nav": "node scripts/verify-teacher-nav.mjs",
     "verify:score-warning-rules": "node scripts/verify-score-warning-rules.mjs",
     "verify:teacher-patch-notes-rules": "node scripts/verify-teacher-patch-notes-rules.mjs",
+    "verify:w2a-command-gateway-unit": "npm --prefix functions run verify:command-gateway",
+    "verify:w2a-command-gateway-rules": "firebase emulators:exec --project demo-westory-session-w2a --only firestore \"node scripts/verify-w2a-command-gateway-rules.mjs\"",
+    "verify:w2a-command-gateway-integration": "firebase emulators:exec --project demo-westory-session-w2a --only auth,firestore,functions \"node scripts/verify-w2a-command-gateway-integration.mjs\"",
+    "verify:w2a-query-purity": "node scripts/verify-w2a-query-purity.mjs",
+    "verify:w2a-command-gateway": "npm run verify:w2a-command-gateway-unit && npm run verify:w2a-query-purity && firebase emulators:exec --project demo-westory-session-w2a --only auth,firestore,functions \"node scripts/verify-w2a-command-gateway-rules.mjs && node scripts/verify-w2a-command-gateway-integration.mjs\"",
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx}\""
   },

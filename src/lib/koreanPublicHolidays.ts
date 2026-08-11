@@ -1,14 +1,4 @@
 import KoreanLunarCalendar from "korean-lunar-calendar";
-import {
-  collection,
-  doc,
-  getDocs,
-  query,
-  serverTimestamp,
-  type Firestore,
-  where,
-  writeBatch,
-} from "firebase/firestore";
 import type { CalendarEvent } from "../types";
 
 export interface KoreanPublicHoliday {
@@ -338,66 +328,3 @@ export const mergeEventsWithKoreanPublicHolidays = (
   ...events.filter((event) => event.eventType !== "holiday"),
   ...holidays.map(toHolidayCalendarEvent),
 ];
-
-export const syncKoreanPublicHolidaysToFirestore = async ({
-  db,
-  year,
-  semester,
-}: {
-  db: Firestore;
-  year: string | number;
-  semester: string | number;
-}) => {
-  const holidays = await getKoreanPublicHolidays(year);
-  if (holidays.length === 0) return { count: 0 };
-
-  const path = `years/${year}/semesters/${semester}/calendar`;
-  const holidayQuery = query(
-    collection(db, path),
-    where("eventType", "==", "holiday"),
-  );
-  const holidaySnap = await getDocs(holidayQuery);
-  const batch = writeBatch(db);
-
-  holidaySnap.forEach((item) => batch.delete(item.ref));
-  holidays.forEach((holiday) => {
-    const event = toHolidayCalendarEvent(holiday);
-    const ref = doc(db, path, event.id);
-    batch.set(ref, {
-      ...event,
-      targetClass: null,
-      holidaySource: holiday.source,
-      updatedAt: serverTimestamp(),
-      createdAt: serverTimestamp(),
-    });
-  });
-
-  await batch.commit();
-  return { count: holidays.length };
-};
-
-export const ensureKoreanPublicHolidaysSynced = async ({
-  db,
-  year,
-  semester,
-  force = false,
-}: {
-  db: Firestore;
-  year: string | number;
-  semester: string | number;
-  force?: boolean;
-}) => {
-  const markerKey = `westory:holiday-sync:${year}:${semester}`;
-  const today = new Date().toLocaleDateString("en-CA");
-  if (!force && window.localStorage.getItem(markerKey) === today) {
-    return { count: 0, skipped: true };
-  }
-
-  const result = await syncKoreanPublicHolidaysToFirestore({
-    db,
-    year,
-    semester,
-  });
-  window.localStorage.setItem(markerKey, today);
-  return { ...result, skipped: false };
-};

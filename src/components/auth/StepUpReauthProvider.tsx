@@ -56,6 +56,8 @@ const commandLabel = (commandName: string) => {
     updateMenuSettings: "메뉴 설정 변경",
     updateNotificationSettings: "알림 설정 변경",
     updateTermsSettings: "이용약관 변경",
+    addConsentItem: "동의 항목 추가",
+    syncKoreanPublicHolidays: "공휴일 일정 동기화",
     updatePrivacySettings: "개인정보 처리방침 변경",
     updateConsentSettings: "동의 항목 변경",
     updateSchoolSettings: "학교 구조 설정 변경",

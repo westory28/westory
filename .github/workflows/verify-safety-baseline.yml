@@ -4,8 +4,6 @@ on:
   pull_request:
   workflow_dispatch:
   push:
-    branches-ignore:
-      - main
 
 permissions:
   contents: read
@@ -48,5 +46,12 @@ jobs:
       - run: npm run format:check
       - run: npm run build
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
       - run: npm --prefix functions ci --ignore-scripts
       - run: npm --prefix functions run check
+      - run: npm install --global firebase-tools@15.15.0
+      - run: npm run verify:w2a-command-gateway
