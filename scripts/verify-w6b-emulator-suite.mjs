@@ -1,9 +1,11 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 
-const projectId =
-  process.env.WESTORY_TEST_PROJECT_ID || "demo-westory-session-w6a";
-assert.match(projectId, /^demo-/u, "W6A emulator suite requires a demo-* project.");
+const PRODUCTION_PROJECT_ID = "history-quiz-yongsin";
+const projectId = process.env.WESTORY_TEST_PROJECT_ID || "demo-westory-session-w6b";
+assert.notEqual(projectId, PRODUCTION_PROJECT_ID, "Production emulator verification is forbidden.");
+assert.match(projectId, /^demo-/u, "W6B emulator suite requires a demo-* project.");
+
 for (const variable of [
   "FIREBASE_AUTH_EMULATOR_HOST",
   "FIRESTORE_EMULATOR_HOST",
@@ -12,10 +14,14 @@ for (const variable of [
   assert.ok(process.env[variable], `${variable} is required through firebase emulators:exec.`);
 }
 
-const run = (script, args = []) => {
+const run = (script, args = [], overrides = {}) => {
   const result = spawnSync(process.execPath, [script, ...args], {
     cwd: process.cwd(),
-    env: { ...process.env, WESTORY_TEST_PROJECT_ID: projectId },
+    env: {
+      ...process.env,
+      WESTORY_TEST_PROJECT_ID: projectId,
+      ...overrides,
+    },
     stdio: "inherit",
   });
   assert.equal(result.error, undefined, `${script} could not start.`);
@@ -38,16 +44,19 @@ const resetFirestore = async () => {
   assert.equal(response.ok, true, `Firestore emulator reset failed with ${response.status}.`);
 };
 
-run("scripts/verify-w5-emulator-suite.mjs");
-run("scripts/verify-w6a-assessment-rules.mjs");
+run("scripts/verify-w6a-emulator-suite.mjs");
 await Promise.all([resetAuth(), resetFirestore()]);
-run("scripts/verify-w6a-assessment-integration.mjs");
+run("scripts/verify-w6b-grade-rules.mjs");
+await Promise.all([resetAuth(), resetFirestore()]);
+run("scripts/verify-w6b-grade-integration.mjs");
 
-console.log(JSON.stringify({
-  suite: "w6a-single-emulator-regression",
-  passed: true,
-  projectId,
-  w2ToW5Regression: true,
-  quizAndHistoryLifecycle: true,
-  productionAccess: 0,
-}));
+console.log(
+  JSON.stringify({
+    suite: "w6b-single-emulator-regression",
+    passed: true,
+    projectId,
+    w2ToW6aRegression: true,
+    gradeRulesAndIntegration: true,
+    productionAccess: 0,
+  }),
+);

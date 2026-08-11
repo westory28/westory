@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import StudentGradeEvidenceView from "./GradeEvidenceStudentView";
 import { Bar } from "react-chartjs-2";
 import {
   BarElement,
@@ -9,7 +10,7 @@ import {
   Tooltip,
   type TooltipItem,
 } from "chart.js";
-import { doc, getDoc, serverTimestamp, writeBatch } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { PageLoading } from "../../../components/common/LoadingState";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import ExamOmrCard, {
@@ -33,6 +34,7 @@ import {
   WRITTEN_EXAM_SCORE_KIND,
   WRITTEN_EXAM_SECTION_OBJECTIVE,
   formatPerformanceScore,
+  failLegacyPerformanceScoreMutation,
   isPerformanceScoreWarningConsentCurrent,
   loadPerformanceScoreSettings,
   loadUserPerformanceScoreAnswerSheetRequests,
@@ -1947,18 +1949,7 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
       );
 
       if (targetsToWrite.length > 0) {
-        const batch = writeBatch(db);
-        targetsToWrite.forEach(({ record, ref }) => {
-          batch.set(ref, {
-            uid: currentUser.uid,
-            rosterId: record.rosterId,
-            signatureName,
-            signatureImage,
-            confirmedAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-        });
-        await batch.commit();
+        failLegacyPerformanceScoreMutation();
       }
 
       const writtenScoreIds = new Set(
@@ -3622,6 +3613,8 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
   );
 };
 
-const PerformanceScoreView: React.FC = () => <ScoreConfirmationView />;
+const PerformanceScoreView: React.FC = () => (
+  <StudentGradeEvidenceView scoreKind="performance" />
+);
 
 export default PerformanceScoreView;

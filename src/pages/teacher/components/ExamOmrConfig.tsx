@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { db } from "../../../lib/firebase";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { useAuth } from "../../../contexts/AuthContext";
 import { getSemesterDocPath } from "../../../lib/semesterScope";
 import { useAppToast } from "../../../components/common/AppToastProvider";
+import { failLegacyPerformanceScoreMutation } from "../../../lib/performanceScores";
 
 interface ObjectiveItem {
   score: number;
@@ -53,25 +54,13 @@ const ExamOmrConfig: React.FC = () => {
 
   const handleSave = async () => {
     try {
-      await setDoc(
-        doc(db, getSemesterDocPath(config, "exam_config", "final_exam")),
-        {
-          objective,
-          subjective,
-          updatedAt: serverTimestamp(),
-        },
-      );
-      showToast({
-        tone: "success",
-        title: "저장되었습니다.",
-        message: "정기시험 답안 설정을 업데이트했습니다.",
-      });
+      failLegacyPerformanceScoreMutation();
     } catch (e) {
       console.error(e);
       showToast({
         tone: "error",
-        title: "저장에 실패했습니다.",
-        message: "잠시 후 다시 시도해 주세요.",
+        title: "이 화면에서는 저장할 수 없습니다.",
+        message: "새 성적 증거 화면에서 평가 정보를 관리해 주세요.",
       });
     }
   };

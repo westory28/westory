@@ -9,6 +9,7 @@ const sessionAuthority = require("./sessionAuthority");
 const semesterCore = require("./semesterCore");
 const archiveEnrollment = require("./archiveEnrollment");
 const assessmentLifecycle = require("./assessmentLifecycle");
+const gradeEvidence = require("./gradeEvidence");
 
 const REGION = "asia-northeast3";
 const ADMIN_EMAIL = "westoria28@gmail.com";
@@ -26,6 +27,7 @@ const COMMAND_TYPES = Object.freeze({
   ...semesterCore.SEMESTER_COMMAND_TYPES,
   ...archiveEnrollment.ARCHIVE_ENROLLMENT_COMMAND_TYPES,
   ...assessmentLifecycle.ASSESSMENT_COMMAND_TYPES,
+  ...gradeEvidence.GRADE_COMMAND_TYPES,
 });
 
 const resolveProjectId = (environment = process.env) => {
@@ -219,6 +221,9 @@ const buildHolidayDocumentId = ({ title, start }) => {
 };
 
 const normalizePayload = (commandType, payload) => {
+  if (Object.values(gradeEvidence.GRADE_COMMAND_TYPES).includes(commandType)) {
+    return gradeEvidence.normalizeGradePayload(commandType, payload);
+  }
   if (Object.values(assessmentLifecycle.ASSESSMENT_COMMAND_TYPES).includes(commandType)) {
     return assessmentLifecycle.normalizeAssessmentPayload(commandType, payload);
   }
@@ -721,6 +726,7 @@ const applyBusinessCommand = async ({
     || Object.values(semesterCore.SEMESTER_COMMAND_TYPES).includes(commandType)
     || Object.values(archiveEnrollment.ARCHIVE_ENROLLMENT_COMMAND_TYPES).includes(commandType)
     || Object.values(assessmentLifecycle.ASSESSMENT_COMMAND_TYPES).includes(commandType)
+    || Object.values(gradeEvidence.GRADE_COMMAND_TYPES).includes(commandType)
   ) {
     fail(
       "failed-precondition",
@@ -853,10 +859,14 @@ const createCommandGatewayCore = ({
   semesterCoreResolver = semesterCore.resolveSemesterCoreState,
   serverTimestamp = () => FieldValue.serverTimestamp(),
   projectId = resolveProjectId(),
-  getSessionOptions = (commandType) =>
-    assessmentLifecycle.STUDENT_COMMAND_TYPES.has(commandType)
+  getSessionOptions = (commandType) => {
+    if (Object.values(gradeEvidence.GRADE_COMMAND_TYPES).includes(commandType)) {
+      return gradeEvidence.getGradeCommandSessionOptions(commandType);
+    }
+    return assessmentLifecycle.STUDENT_COMMAND_TYPES.has(commandType)
       ? { recentAuth: false, highRisk: false }
-      : { recentAuth: true, highRisk: true },
+      : { recentAuth: true, highRisk: true };
+  },
 } = {}) => {
   const authorize = async (request, commandType) => {
     const identity = await assertSession(request, getSessionOptions(commandType));

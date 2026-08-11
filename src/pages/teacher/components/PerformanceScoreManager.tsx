@@ -12,10 +12,8 @@ import {
   orderBy,
   query,
   serverTimestamp,
-  updateDoc,
   type WithFieldValue,
   where,
-  writeBatch,
 } from "firebase/firestore";
 import {
   InlineLoading,
@@ -52,9 +50,9 @@ import {
   buildStudentLookupKey,
   buildStudentNameLookupKey,
   formatPerformanceScore,
+  failLegacyPerformanceScoreMutation,
   getPerformanceScorePercent,
   loadPerformanceScoreSettings,
-  loadPerformanceScoreConfirmation,
   normalizePerformanceScoreSettings,
   normalizePerformanceScoreKind,
   normalizePerformanceScoreWarningText,
@@ -117,7 +115,6 @@ const DEFAULT_CLASS_OPTIONS = Array.from({ length: 12 }, (_, index) =>
   String(index + 1),
 );
 const PREVIEW_PAGE_SIZE = 20;
-const FIRESTORE_BATCH_WRITE_LIMIT = 450;
 const FIRESTORE_DOCUMENT_SOFT_LIMIT_BYTES = 900 * 1024;
 const FIRESTORE_ROSTER_PAYLOAD_TOO_LARGE =
   "performance-score-roster-payload-too-large";
@@ -782,50 +779,29 @@ const getObjectionReviewErrorMessage = (error: unknown) => {
 };
 
 const createBatchQueue = () => {
-  const batches: Array<ReturnType<typeof writeBatch>> = [];
-  let activeBatch = writeBatch(db);
-  let activeWriteCount = 0;
-
-  const rotateIfFull = () => {
-    if (activeWriteCount < FIRESTORE_BATCH_WRITE_LIMIT) return;
-    batches.push(activeBatch);
-    activeBatch = writeBatch(db);
-    activeWriteCount = 0;
-  };
-
-  const queueWrite = () => {
-    activeWriteCount += 1;
-  };
-
   return {
     set(
       ref: DocumentReference<DocumentData>,
       data: WithFieldValue<DocumentData>,
     ) {
-      rotateIfFull();
-      activeBatch.set(ref, data);
-      queueWrite();
+      void ref;
+      void data;
+      failLegacyPerformanceScoreMutation();
     },
     delete(ref: DocumentReference<DocumentData>) {
-      rotateIfFull();
-      activeBatch.delete(ref);
-      queueWrite();
+      void ref;
+      failLegacyPerformanceScoreMutation();
     },
     update(
       ref: DocumentReference<DocumentData>,
       data: WithFieldValue<DocumentData>,
     ) {
-      rotateIfFull();
-      activeBatch.update(ref, data);
-      queueWrite();
+      void ref;
+      void data;
+      failLegacyPerformanceScoreMutation();
     },
     async commit() {
-      if (activeWriteCount > 0) {
-        batches.push(activeBatch);
-      }
-      for (const batch of batches) {
-        await batch.commit();
-      }
+      return failLegacyPerformanceScoreMutation();
     },
   };
 };
@@ -6906,18 +6882,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     setStudentsLoading(true);
     setStudentLoadError("");
     const loadPromise = (async () => {
-      const snap = await getDocs(collection(db, "users"));
-      const loaded: StudentProfile[] = [];
-      snap.forEach((item) => {
-        const data = item.data() as Record<string, unknown>;
-        const profile = normalizeStudentProfile(item.id, data);
-        if (!profile.name && !profile.number && !profile.class) return;
-        if (data.role === "teacher" && !profile.number) return;
-        loaded.push(profile);
-      });
-      setStudents(loaded);
-      setStudentsLoaded(true);
-      return loaded;
+      return failLegacyPerformanceScoreMutation();
     })();
 
     studentsLoadPromiseRef.current = loadPromise;
@@ -6979,48 +6944,6 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     } finally {
       scoreDocumentRecordPromisesByRosterRef.current.delete(roster.id);
     }
-  };
-
-  const loadScoreDocumentRecordsForLinkedRows = async (
-    roster: PerformanceScoreRoster,
-    linkedRows: PerformanceScoreRosterRow[],
-  ) => {
-    const chunkPromises: Array<Promise<ScoreListRecord[]>> = [];
-    for (let index = 0; index < linkedRows.length; index += 40) {
-      const chunk = linkedRows.slice(index, index + 40);
-      chunkPromises.push(
-        Promise.all(
-          chunk.map((row) =>
-            getDoc(
-              doc(
-                db,
-                "users",
-                row.uid,
-                PERFORMANCE_SCORE_USER_COLLECTION,
-                roster.id,
-              ),
-            ),
-          ),
-        ).then((snaps) =>
-          snaps.flatMap((snap) =>
-            snap.exists()
-              ? [
-                  buildScoreListRecordFromDocument(
-                    snap.id,
-                    snap.data() as PerformanceScoreRecord,
-                  ),
-                ]
-              : [],
-          ),
-        ),
-      );
-    }
-    const loaded = (await Promise.all(chunkPromises)).flat();
-    return sortStudentIdentityRows(
-      loaded.filter((record) =>
-        shouldUseScoreDocumentForRoster(record, roster),
-      ),
-    );
   };
 
   const loadPerformanceScoreConfirmationsForRoster = async (
@@ -7141,19 +7064,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       (row) =>
         row.uid && (!activeStudentUids.size || activeStudentUids.has(row.uid)),
     );
-    let documentRecords: ScoreListRecord[] = [];
-    try {
-      documentRecords = await loadScoreDocumentRecordsForRoster(roster);
-    } catch (error) {
-      console.warn(
-        "Falling back to direct performance score document reads:",
-        error,
-      );
-      documentRecords = await loadScoreDocumentRecordsForLinkedRows(
-        roster,
-        linkedRows,
-      );
-    }
+    const documentRecords = await loadScoreDocumentRecordsForRoster(roster);
 
     const documentRecordsByUid = new Map(
       documentRecords
@@ -7535,13 +7446,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
     setAnswerSheetRequestReviewingId(item.id);
     try {
-      await updateDoc(doc(db, answerSheetRequestCollectionPath, item.id), {
-        status: "reviewed",
-        reviewedAt: serverTimestamp(),
-        reviewedBy: currentUser?.uid || "",
-        reviewMemo: memo.trim().slice(0, 240),
-        updatedAt: serverTimestamp(),
-      });
+      failLegacyPerformanceScoreMutation();
       invalidateRosterReadCaches(item.rosterId || item.scoreId);
       const reviewMemo = memo.trim().slice(0, 240);
       setAnswerSheetRequests((current) =>
@@ -8727,16 +8632,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       (row) =>
         row.uid && (!activeStudentUids.size || activeStudentUids.has(row.uid)),
     );
-    let documentRecords: ScoreListRecord[] = [];
-    try {
-      documentRecords = await loadScoreDocumentRecordsForRoster(roster);
-    } catch (error) {
-      console.warn("Falling back to direct class score document reads:", error);
-      documentRecords = await loadScoreDocumentRecordsForLinkedRows(
-        roster,
-        linkedRows,
-      );
-    }
+    const documentRecords = await loadScoreDocumentRecordsForRoster(roster);
 
     const documentRecordsByUid = new Map(
       documentRecords
@@ -8756,32 +8652,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         loaded.push(buildRecordFromRosterRow(roster, row));
       });
 
-    let confirmationsByUid = new Map<string, PerformanceScoreConfirmation>();
-    try {
-      confirmationsByUid = await loadPerformanceScoreConfirmationsForRoster(
-        roster.id,
-      );
-    } catch (error) {
-      console.warn(
-        "Falling back to direct performance score confirmation reads:",
-        error,
-      );
-      const fallbackPairs = await Promise.all(
-        loaded.map(async (record) =>
-          record.uid
-            ? ([
-                record.uid,
-                await loadPerformanceScoreConfirmation(record.uid, roster.id),
-              ] as const)
-            : null,
-        ),
-      );
-      confirmationsByUid = new Map(
-        fallbackPairs.flatMap((pair) =>
-          pair && pair[1] ? [[pair[0], pair[1]]] : [],
-        ),
-      );
-    }
+    const confirmationsByUid = await loadPerformanceScoreConfirmationsForRoster(
+      roster.id,
+    );
 
     const withConfirmations = loaded.map((record) =>
       record.uid

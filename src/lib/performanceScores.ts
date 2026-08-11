@@ -5,8 +5,6 @@ import {
   getDocs,
   orderBy,
   query,
-  serverTimestamp,
-  setDoc,
   where,
 } from "firebase/firestore";
 import { db } from "./firebase";
@@ -43,6 +41,12 @@ export const DEFAULT_PERFORMANCE_SCORE_WARNING_TEXT =
 export const DEFAULT_PERFORMANCE_SCORE_WARNING_VERSION = "default-20260609";
 
 export const PERFORMANCE_SCORE_WARNING_MAX_LENGTH = 600;
+
+export const failLegacyPerformanceScoreMutation = (): never => {
+  const error = new Error("CLIENT_UPDATE_REQUIRED");
+  error.name = "ClientUpdateRequiredError";
+  throw error;
+};
 
 export const PERFORMANCE_SCORE_KIND = "performance";
 export const WRITTEN_EXAM_SCORE_KIND = "written_exam_essay";
@@ -377,29 +381,10 @@ export const loadPerformanceScoreSettings = async (config: ConfigLike) => {
 export const savePerformanceScoreSettings = async (
   config: ConfigLike,
   input: { warningText: string; updatedBy?: string },
-) => {
-  const warningText = normalizePerformanceScoreWarningText(input.warningText);
-  const warningTextHash = buildPerformanceScoreWarningHash(warningText);
-  const warningVersion = buildPerformanceScoreWarningVersion(warningText);
-  await setDoc(
-    doc(
-      db,
-      getSemesterDocPath(
-        config,
-        "assessment_config",
-        PERFORMANCE_SCORE_SETTINGS_DOC_ID,
-      ),
-    ),
-    {
-      warningText,
-      warningVersion,
-      warningTextHash,
-      updatedBy: String(input.updatedBy || "").slice(0, 160),
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true },
-  );
-  return { warningText, warningVersion, warningTextHash };
+): Promise<PerformanceScoreSettings> => {
+  void config;
+  void input;
+  return failLegacyPerformanceScoreMutation();
 };
 
 export const loadPerformanceScoreWarningConsent = async (uid: string) => {
@@ -424,37 +409,11 @@ export const savePerformanceScoreWarningConsent = async (
   uid: string,
   config: ConfigLike,
   settings: PerformanceScoreSettings,
-) => {
-  const { year, semester } = getYearSemester(config);
-  const warningTextHash =
-    settings.warningTextHash ||
-    buildPerformanceScoreWarningHash(settings.warningText);
-  const payload = {
-    uid,
-    academicYear: year,
-    semester,
-    acknowledged: true,
-    warningVersion: settings.warningVersion,
-    warningTextHash,
-    acknowledgedAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  };
-  await setDoc(
-    doc(
-      db,
-      "users",
-      uid,
-      PERFORMANCE_SCORE_CONSENTS_COLLECTION,
-      PERFORMANCE_SCORE_CONSENT_DOC_ID,
-    ),
-    payload,
-  );
-  return {
-    id: PERFORMANCE_SCORE_CONSENT_DOC_ID,
-    ...payload,
-    acknowledgedAt: new Date(),
-    updatedAt: new Date(),
-  } satisfies PerformanceScoreWarningConsent;
+): Promise<PerformanceScoreWarningConsent> => {
+  void uid;
+  void config;
+  void settings;
+  return failLegacyPerformanceScoreMutation();
 };
 
 export const isPerformanceScoreWarningConsentCurrent = (

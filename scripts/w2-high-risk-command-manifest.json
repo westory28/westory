@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "expectedDispositionCounts": { "W2A_DONE": 2, "W3_DONE": 2, "W6A_DONE": 3, "MIGRATE_NOW": 3, "DOMAIN_WAVE": 16, "TEMPORARY_ALLOWLIST": 2, "REMOVE_IMPLICIT_WRITE": 0, "UNKNOWN": 0 },
-  "expectedCanonicalCounts": { "total": 27, "remainingAfterW2A": 25, "remainingAfterW3": 23, "DOMAIN_WAVE": 16 },
+  "expectedDispositionCounts": { "W2A_DONE": 2, "W3_DONE": 2, "W6A_DONE": 3, "W6B_DONE": 1, "MIGRATE_NOW": 3, "DOMAIN_WAVE": 15, "TEMPORARY_ALLOWLIST": 2, "REMOVE_IMPLICIT_WRITE": 0, "UNKNOWN": 0 },
+  "expectedCanonicalCounts": { "total": 27, "remainingAfterW2A": 25, "remainingAfterW3": 23, "DOMAIN_WAVE": 15 },
   "commands": [
     { "id": "D01", "name": "createSemesterShell", "canonicalGroup": "createSemesterShell", "idempotency": "NON_IDEMPOTENT", "disposition": "W3_DONE", "ownerWave": "W3", "clientMode": "GATEWAY", "dispatchName": "createSemesterManifest" },
     { "id": "D02", "name": "updateOperationalSettings", "canonicalGroup": "updateOperationalSettings", "idempotency": "NATURALLY_IDEMPOTENT", "disposition": "W3_DONE", "ownerWave": "W3", "clientMode": "GATEWAY", "dispatchName": "updateOperationalSettings" },
@@ -24,7 +24,7 @@
     { "id": "C07", "name": "grantHistoryClassroomExemptions", "canonicalGroup": "grantHistoryClassroomExemptions", "idempotency": "NON_IDEMPOTENT", "disposition": "DOMAIN_WAVE", "ownerWave": "W8A", "clientMode": "LEGACY_CALLABLE", "dispatchName": "grantHistoryClassroomExemptions" },
     { "id": "C08", "name": "revokeHistoryClassroomExemptions", "canonicalGroup": "revokeHistoryClassroomExemptions", "idempotency": "NATURALLY_IDEMPOTENT", "disposition": "DOMAIN_WAVE", "ownerWave": "W8A", "clientMode": "LEGACY_CALLABLE", "dispatchName": "revokeHistoryClassroomExemptions" },
     { "id": "C09", "name": "reviewHistoryClassroomExemptionRequest", "canonicalGroup": "reviewHistoryClassroomExemptionRequest", "idempotency": "NATURALLY_IDEMPOTENT", "disposition": "DOMAIN_WAVE", "ownerWave": "W8A", "clientMode": "LEGACY_CALLABLE", "dispatchName": "reviewHistoryClassroomExemptionRequest" },
-    { "id": "C10", "name": "reviewPerformanceScoreObjection", "canonicalGroup": "reviewPerformanceScoreObjection", "idempotency": "NATURALLY_IDEMPOTENT", "disposition": "DOMAIN_WAVE", "ownerWave": "W6B", "clientMode": "LEGACY_CALLABLE", "dispatchName": "reviewPerformanceScoreObjection" },
+    { "id": "C10", "name": "reviewPerformanceScoreObjection", "canonicalGroup": "reviewPerformanceScoreObjection", "idempotency": "NATURALLY_IDEMPOTENT", "disposition": "W6B_DONE", "ownerWave": "W6B", "clientMode": "GATEWAY", "dispatchName": "correctOfficialGrade" },
     { "id": "C11", "name": "saveWisHallOfFameConfig", "canonicalGroup": "saveWisHallOfFameConfig", "idempotency": "NATURALLY_IDEMPOTENT", "disposition": "DOMAIN_WAVE", "ownerWave": "W7B", "clientMode": "LEGACY_CALLABLE", "dispatchName": "saveWisHallOfFameConfig" },
     { "id": "C12", "name": "rebuildPointWalletRankTotals", "canonicalGroup": "rebuildPointWalletRankTotals", "idempotency": "NATURALLY_IDEMPOTENT", "disposition": "DOMAIN_WAVE", "ownerWave": "W7A", "clientMode": "ADAPTER_NO_UI", "dispatchName": "rebuildPointWalletRankTotals" },
     { "id": "C13", "name": "adjustTeacherPoints", "canonicalGroup": "adjustTeacherPoints", "idempotency": "NON_IDEMPOTENT", "disposition": "MIGRATE_NOW", "ownerWave": "W2B", "clientMode": "GATEWAY", "dispatchName": "adjustTeacherPoints" },

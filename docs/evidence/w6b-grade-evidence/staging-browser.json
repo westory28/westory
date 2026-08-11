@@ -1,0 +1,98 @@
+{
+  "fixtureOwner": "w6b-grade-staging-browser",
+  "testRunId": "w6b-20260812-0245-grade",
+  "projectId": "westory-staging-177587430482",
+  "commands": [
+    {
+      "actorUid": "w6b-teacher-f33cebc61f54c2a2c87a",
+      "commandType": "createGradeDraft",
+      "commandId": "c7511ffe-982f-448b-a3fe-4071524318ca"
+    },
+    {
+      "actorUid": "w6b-teacher-f33cebc61f54c2a2c87a",
+      "commandType": "reviewGradeDraft",
+      "commandId": "b0c9e86d-4850-4ecd-be1d-2d78fe3cff2a"
+    },
+    {
+      "actorUid": "w6b-teacher-f33cebc61f54c2a2c87a",
+      "commandType": "finalizeGradeEvidence",
+      "commandId": "d6354c44-1156-450f-bc5f-f051a8c21952"
+    },
+    {
+      "actorUid": "w6b-teacher-f33cebc61f54c2a2c87a",
+      "commandType": "publishOfficialGrade",
+      "commandId": "0f77f2cf-f4fc-447c-b0d4-0a38ebe96aa0"
+    },
+    {
+      "actorUid": "w6b-student-f33cebc61f54c2a2c87a",
+      "commandType": "requestGradeReview",
+      "commandId": "65512179-d6d4-49e1-942d-250430f4ae93"
+    },
+    {
+      "actorUid": "w6b-student-f33cebc61f54c2a2c87a",
+      "commandType": "acknowledgeGradeEvidence",
+      "commandId": "988edd24-15b9-469d-a185-bb9cd8d7e54e"
+    },
+    {
+      "actorUid": "w6b-teacher-f33cebc61f54c2a2c87a",
+      "commandType": "correctOfficialGrade",
+      "commandId": "82db3f91-0484-4cd5-9813-792084ce127e"
+    },
+    {
+      "actorUid": "w6b-teacher-f33cebc61f54c2a2c87a",
+      "commandType": "finalizeGradeEvidence",
+      "commandId": "e20a4237-2911-4cef-b92e-969907e448fc"
+    },
+    {
+      "actorUid": "w6b-teacher-f33cebc61f54c2a2c87a",
+      "commandType": "publishOfficialGrade",
+      "commandId": "4fea0ef3-dee7-4af4-8634-b23555e6d389"
+    },
+    {
+      "actorUid": "w6b-student-f33cebc61f54c2a2c87a",
+      "commandType": "acknowledgeGradeEvidence",
+      "commandId": "67cab0ea-8f1c-46dc-b0bc-b646eab3902a"
+    },
+    {
+      "actorUid": "w6b-student-f33cebc61f54c2a2c87a",
+      "commandType": "signOfficialGrade",
+      "commandId": "2bf72892-10ff-4b93-915b-839a85d74ea4"
+    }
+  ],
+  "canonicalPaths": [
+    "semester_grade_attestations/gradeatt_878ccbd6112b6255da6c938e92d4b07ddb16bd79beb254d22bba5078bc6c51d0",
+    "semester_grade_attestations/gradeatt_ab250196c629906eec1e11eaaea306f974e7e8344960ab9f3a7e6ecedf7e7759",
+    "semester_grade_attestations/gradeatt_f968ff85f9de7de30c3d5f7489c339fe7b68c02233820655691c1a188e6a1cdf",
+    "semester_grade_records/grade_41129f2970ebb0b33a0daf35fc6e367ad943d465747333dc62ea4307d5593b26",
+    "semester_grade_requests/gradereq_d3b7dd2e6769c921888675e55ef9f4356921d988b05ec77553dbab8fe626e7c9",
+    "semester_grade_versions/gradever_1ff0e46c2fa7b50c43c116a2de31c20153d30af2fd64af5eedeeeb5a18db2194",
+    "semester_grade_versions/gradever_aa6afda651a86ecb88a9e30e6bf158102544f43be7dd39868616c21d24d6a2a8",
+    "semester_grade_versions/gradever_d30c408835fbe37b77e7575cc1864f685ad122ea5d84386a5ddf68a0614ee6cc"
+  ],
+  "viewports": [
+    {
+      "actor": "student",
+      "sizes": ["390x844", "768x1024", "1024x768", "1280x800", "1600x900"],
+      "horizontalOverflow": 0,
+      "mainVisible": true,
+      "currentSemesterVisible": true,
+      "signedStateVisible": true
+    },
+    {
+      "actor": "teacher",
+      "sizes": ["390x844", "768x1024", "1024x768", "1280x800", "1600x900"],
+      "horizontalOverflow": 0,
+      "mainVisible": true,
+      "tablistVisible": true,
+      "currentSemesterVisible": true,
+      "requestHistoryVisible": true,
+      "signedStateVisible": true
+    }
+  ],
+  "routeCompatibility": {
+    "afterTabClick": "#/teacher/exam?tab=written-essay",
+    "afterBack": "#/teacher/exam?tab=performance",
+    "afterForward": "#/teacher/exam?tab=written-essay"
+  },
+  "productionAccess": 0
+}

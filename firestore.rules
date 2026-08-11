@@ -1016,19 +1016,16 @@ service cloud.firestore {
 
       match /performance_score_consents/{consentId} {
         allow read: if canUseWestory() && (isOwnUser(userId) || canManagePerformanceScores());
-        allow create, update: if isValidPerformanceScoreConsent(userId, consentId);
-        allow delete: if isAdmin();
+        allow create, update, delete: if false;
       }
 
       match /performance_scores/{scoreId} {
         allow read: if canUseWestory() && (isOwnUser(userId) || canManagePerformanceScores());
-        allow create, update, delete: if canManagePerformanceScores();
+        allow create, update, delete: if false;
 
         match /confirmations/{confirmationId} {
           allow read: if canUseWestory() && (isOwnUser(userId) || canManagePerformanceScores());
-          allow create: if canCreatePerformanceScoreConfirmation(userId, scoreId, confirmationId);
-          allow update: if canRepairPerformanceScoreConfirmation(userId, scoreId, confirmationId);
-          allow delete: if canManagePerformanceScores();
+          allow create, update, delete: if false;
         }
       }
 
@@ -1280,21 +1277,24 @@ service cloud.firestore {
 
     match /assessment_config/{docId} {
       allow read: if canUseWestory();
-      allow write: if docId != 'settings' && (isAdmin() || isTeacherRole());
+      allow write: if docId != 'settings'
+        && docId != 'performance_score'
+        && (isAdmin() || isTeacherRole());
     }
 
     match /grading_plans/{docId} {
       allow read: if canUseWestory();
-      allow write: if isAdmin();
+      allow write: if false;
     }
 
     match /exam_config/{docId} {
       allow read: if canUseWestory();
-      allow write: if isAdmin();
+      allow write: if false;
     }
 
     match /performance_score_rosters/{docId} {
-      allow read, write: if canManagePerformanceScores();
+      allow read: if canManagePerformanceScores();
+      allow create, update, delete: if false;
     }
 
     match /quiz_results/{resultId} {
@@ -1324,6 +1324,26 @@ service cloud.firestore {
     }
 
     match /assessment_legacy_issues/{docId} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /semester_grade_records/{docId} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /semester_grade_versions/{docId} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /semester_grade_requests/{docId} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /semester_grade_attestations/{docId} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /grade_legacy_issues/{docId} {
       allow read, create, update, delete: if false;
     }
 
@@ -1469,21 +1489,24 @@ service cloud.firestore {
 
       match /assessment_config/{docId} {
         allow read: if canUseWestory();
-        allow write: if docId != 'settings' && (isAdmin() || isTeacherRole());
+        allow write: if docId != 'settings'
+          && docId != 'performance_score'
+          && (isAdmin() || isTeacherRole());
       }
 
       match /grading_plans/{docId} {
         allow read: if canUseWestory();
-        allow write: if isAdmin();
+        allow write: if false;
       }
 
       match /exam_config/{docId} {
         allow read: if canUseWestory();
-        allow write: if isAdmin();
+        allow write: if false;
       }
 
       match /performance_score_rosters/{docId} {
-        allow read, write: if canManagePerformanceScores();
+        allow read: if canManagePerformanceScores();
+        allow create, update, delete: if false;
       }
 
       match /performance_score_objections/{docId} {
@@ -1493,8 +1516,7 @@ service cloud.firestore {
 
       match /performance_score_answer_sheet_requests/{docId} {
         allow read: if canReadPerformanceScoreAnswerSheetRequest(resource.data);
-        allow update: if canManagePerformanceScores();
-        allow create, delete: if false;
+        allow create, update, delete: if false;
       }
 
       match /quiz_results/{resultId} {

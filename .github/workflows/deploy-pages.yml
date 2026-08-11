@@ -59,11 +59,11 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - name: Verify Functions and W6A Assessment Lifecycle
+      - name: Verify Functions and W6B Grade Evidence
         run: |
           npm --prefix functions run check
           npm install --global firebase-tools@15.15.0
-          npm run verify:w6a-assessment
+          npm run verify:w6b-grade
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5

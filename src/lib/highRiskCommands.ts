@@ -21,6 +21,12 @@ export const HIGH_RISK_COMMANDS = new Set([
   "closeEnrollment",
   "prepareSemesterArchive",
   "freezeSemesterArchive",
+  "createGradeDraft",
+  "reviewGradeDraft",
+  "finalizeGradeEvidence",
+  "publishOfficialGrade",
+  "correctOfficialGrade",
+  "signOfficialGrade",
 ]);
 
 export const isHighRiskCommand = (commandName: string) =>

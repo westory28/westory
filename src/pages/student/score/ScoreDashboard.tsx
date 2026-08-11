@@ -7,8 +7,6 @@ import {
   getDocs,
   doc,
   getDoc,
-  setDoc,
-  serverTimestamp,
 } from "firebase/firestore";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { PageLoading } from "../../../components/common/LoadingState";
@@ -19,6 +17,7 @@ import {
   getYearSemester,
 } from "../../../lib/semesterScope";
 import { lazyWithRetry } from "../../../lib/lazyWithRetry";
+import { failLegacyPerformanceScoreMutation } from "../../../lib/performanceScores";
 import {
   getAchievementColor,
   getSubjectPriorityIndex,
@@ -119,14 +118,6 @@ const ScoreDashboard: React.FC = () => {
     } catch (error) {
       console.error("Failed to load temporary scores:", error);
       return {};
-    }
-  };
-
-  const clearDraftScores = (targetSemester: string) => {
-    try {
-      localStorage.removeItem(getDraftKey(targetSemester));
-    } catch (error) {
-      console.error("Failed to clear temporary scores:", error);
     }
   };
 
@@ -275,44 +266,16 @@ const ScoreDashboard: React.FC = () => {
     }, 1000);
   };
 
-  const sanitizeScores = (scoresToSave: { [key: string]: string }) => {
-    const sanitized: { [key: string]: string } = {};
-    Object.entries(scoresToSave || {}).forEach(([key, rawValue]) => {
-      if (!key || key.length > 120 || !/^.+_\d+$/.test(key)) return;
-      const numeric = Number(rawValue);
-      if (!Number.isFinite(numeric) || numeric < 0 || numeric > 1000) return;
-      sanitized[key] = String(numeric);
-    });
-    return sanitized;
-  };
-
   const saveScores = async (
     scoresToSave: { [key: string]: string },
     targetSemester: string = semester,
     options?: { announce?: boolean },
   ) => {
     if (!currentUser?.uid) return;
-    const scoreDocId = `${activeYear}_${targetSemester}`;
-    const sanitizedScores = sanitizeScores(scoresToSave);
     try {
-      await setDoc(
-        doc(db, "users", currentUser.uid, "academic_records", scoreDocId),
-        {
-          scores: sanitizedScores,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
-      setLastSavedAt(Date.now());
-      setSaveError(null);
-      clearDraftScores(targetSemester);
-      if (options?.announce) {
-        showToast({
-          tone: "success",
-          title: "성적 계산기가 저장되었습니다.",
-          message: `${activeYear}학년도 ${targetSemester}학기 입력값이 반영되었습니다.`,
-        });
-      }
+      void scoresToSave;
+      void targetSemester;
+      failLegacyPerformanceScoreMutation();
     } catch (e) {
       console.error("Save failed", e);
       setSaveError("저장에 실패했습니다. 잠시 후 다시 시도해 주세요.");
@@ -335,82 +298,12 @@ const ScoreDashboard: React.FC = () => {
   const handleConfirmWarning = async () => {
     if (!agree || !userData) return;
     setWarningSaving(true);
-    let userDocExists: boolean | null = null;
     try {
-      const userRef = doc(db, "users", userData.uid);
-      const userSnap = await getDoc(userRef);
-      userDocExists = userSnap.exists();
-      const warningPayload: Record<string, unknown> = {
-        scoreWarningAcknowledged: true,
-        scoreWarningAcknowledgedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      };
-
-      if (!userDocExists) {
-        const email = (currentUser?.email || userData.email || "").trim();
-        if (!email) {
-          throw new Error(
-            "Missing authenticated email for score warning consent bootstrap.",
-          );
-        }
-
-        warningPayload.uid = userData.uid;
-        warningPayload.email = email;
-        warningPayload.photoURL =
-          currentUser?.photoURL || userData.photoURL || "";
-        warningPayload.role = "student";
-        warningPayload.staffPermissions = [];
-        warningPayload.teacherPortalEnabled = false;
-        warningPayload.createdAt = serverTimestamp();
-        warningPayload.lastLogin = serverTimestamp();
-
-        if (typeof userData.name === "string" && userData.name.trim()) {
-          warningPayload.name = userData.name.trim();
-        }
-        if (typeof userData.grade === "string" && userData.grade.trim()) {
-          warningPayload.grade = userData.grade.trim();
-        }
-        if (typeof userData.class === "string" && userData.class.trim()) {
-          warningPayload.class = userData.class.trim();
-        }
-        if (typeof userData.number === "string" && userData.number.trim()) {
-          warningPayload.number = userData.number.trim();
-        }
-        if (userData.customNameConfirmed === true) {
-          warningPayload.customNameConfirmed = true;
-        }
-        if (userData.privacyAgreed === true) {
-          warningPayload.privacyAgreed = true;
-          if (userData.privacyAgreedAt) {
-            warningPayload.privacyAgreedAt = userData.privacyAgreedAt;
-          }
-        }
-        if (
-          Array.isArray(userData.consentAgreedItems) &&
-          userData.consentAgreedItems.length > 0
-        ) {
-          warningPayload.consentAgreedItems =
-            userData.consentAgreedItems.filter(
-              (item): item is string => typeof item === "string",
-            );
-        }
-      }
-
-      await setDoc(userRef, warningPayload, { merge: true });
-      setWarningAcknowledgedLocal(true);
-      setAgree(true);
-      setSaveError(null);
-      setShowWarning(false);
-      showToast({
-        tone: "success",
-        title: "동의가 저장되었습니다.",
-        message: "이제 성적 계산기를 계속 사용할 수 있습니다.",
-      });
+      failLegacyPerformanceScoreMutation();
     } catch (e) {
       console.error("Warning agreement save failed", {
         uid: userData.uid,
         userDocPath: `users/${userData.uid}`,
-        hasUserDoc: userDocExists,
         code: getFirestoreErrorCode(e),
         error: e,
       });

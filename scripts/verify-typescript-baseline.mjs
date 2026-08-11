@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 const EXPECTED_ERROR_COUNT = 63;
 const EXPECTED_FILE_COUNT = 13;
 const EXPECTED_HEADER_SHA256 =
-  "e1f7237349a280ea0d66ea1cfe16bc620648e118b6f2dffb5b113c6f5424276c";
+  "f431d08138d4a36bf84a0f3ebadb9a315baf1940461a222ec4e28f20cc196477";
 
 let output = "";
 const tscPath = fileURLToPath(

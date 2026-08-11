@@ -13,6 +13,7 @@ const commandGateway = require('./commandGateway');
 const semesterCore = require('./semesterCore');
 const archiveEnrollment = require('./archiveEnrollment');
 const assessmentLifecycle = require('./assessmentLifecycle');
+const gradeEvidence = require('./gradeEvidence');
 const {
   createLegacyPointV1CommandAdapter,
   createRetiredAdjustTeacherPointsHandler,
@@ -5993,6 +5994,12 @@ exports.notifyHistoryClassroomSubmitted = onCall({ region: REGION }, async (requ
 
 exports.notifyPerformanceScoreObjectionRequested = onCall({ region: REGION }, async (request) => {
   const { uid } = await assertAllowedWestoryUser(request);
+  if (uid) {
+    throw new HttpsError('failed-precondition', 'Legacy performance score requests are retired in W6B.', {
+      reason: 'CLIENT_UPDATE_REQUIRED',
+      replacement: 'requestGradeReview via executeCommand',
+    });
+  }
   const { year, semester } = assertYearSemester(request.data);
   const scoreIds = uniqueNonEmptyStrings(request.data?.scoreIds, 20).map((scoreId) =>
     sanitizeNotificationText(scoreId, 160),
@@ -6059,6 +6066,12 @@ exports.notifyPerformanceScoreObjectionRequested = onCall({ region: REGION }, as
 
 exports.notifyPerformanceScoreAnswerSheetRequested = onCall({ region: REGION }, async (request) => {
   const { uid } = await assertAllowedWestoryUser(request);
+  if (uid) {
+    throw new HttpsError('failed-precondition', 'Legacy answer sheet requests are retired in W6B.', {
+      reason: 'CLIENT_UPDATE_REQUIRED',
+      replacement: 'requestGradeReview via executeCommand',
+    });
+  }
   const { year, semester } = assertYearSemester(request.data);
   const scoreIds = uniqueNonEmptyStrings(request.data?.scoreIds, 20).map((scoreId) =>
     sanitizeNotificationText(scoreId, 160),
@@ -6131,6 +6144,12 @@ exports.notifyPerformanceScoreAnswerSheetRequested = onCall({ region: REGION }, 
 
 exports.reviewPerformanceScoreObjection = onCall({ region: REGION }, async (request) => {
   const manager = await assertPerformanceScoreManager(request, { recentAuth: true, highRisk: true });
+  if (manager.uid) {
+    throw new HttpsError('failed-precondition', 'Legacy performance score review is retired in W6B.', {
+      reason: 'CLIENT_UPDATE_REQUIRED',
+      replacement: 'correctOfficialGrade via executeCommand',
+    });
+  }
   const { year, semester } = assertYearSemester(request.data);
   const objectionId = sanitizeNotificationText(request.data?.objectionId, 160);
   const action = String(request.data?.status || '').trim();
@@ -8373,9 +8392,11 @@ exports.updateStudentProfileIcon = onCall({ region: REGION }, async (request) =>
 
 const authorizeCommandGatewayActor = async ({ request, identity, commandType }) => {
   const assessmentCommandTypes = Object.values(assessmentLifecycle.ASSESSMENT_COMMAND_TYPES);
+  const gradeCommandTypes = Object.values(gradeEvidence.GRADE_COMMAND_TYPES);
   if (
     commandType !== commandGateway.COMMAND_TYPES.ADJUST_TEACHER_POINTS
     && !assessmentCommandTypes.includes(commandType)
+    && !gradeCommandTypes.includes(commandType)
   ) {
     return null;
   }
@@ -8389,6 +8410,14 @@ const authorizeCommandGatewayActor = async ({ request, identity, commandType }) 
     });
   }
   if (actorEmail === ADMIN_EMAIL) {
+    if (
+      gradeCommandTypes.includes(commandType)
+      && gradeEvidence.STUDENT_COMMAND_TYPES.has(commandType)
+    ) {
+      throw new HttpsError('permission-denied', 'A student account is required.', {
+        reason: 'GRADE_STUDENT_REQUIRED',
+      });
+    }
     return {
       actorUid,
       actorEmail,
@@ -8398,6 +8427,40 @@ const authorizeCommandGatewayActor = async ({ request, identity, commandType }) 
   }
   const profileSnapshot = await db.doc(`users/${actorUid}`).get();
   const profile = profileSnapshot.exists ? profileSnapshot.data() || {} : {};
+  if (gradeCommandTypes.includes(commandType)) {
+    const isStudentCommand = gradeEvidence.STUDENT_COMMAND_TYPES.has(commandType);
+    const role = String(profile.role || 'student').trim() || 'student';
+    if (isStudentCommand) {
+      if (role !== 'student') {
+        throw new HttpsError('permission-denied', 'A student account is required.', {
+          reason: 'GRADE_STUDENT_REQUIRED',
+        });
+      }
+      return {
+        actorUid,
+        actorEmail,
+        actorRole: 'student',
+        actorCapability: `grade:${commandType}`,
+      };
+    }
+    const permissions = Array.isArray(profile.staffPermissions)
+      ? profile.staffPermissions
+      : [];
+    if (
+      profile.teacherPortalEnabled !== true
+      || !permissions.includes('quiz_read')
+    ) {
+      throw new HttpsError('permission-denied', 'Grade management permission is required.', {
+        reason: 'GRADE_MANAGE_REQUIRED',
+      });
+    }
+    return {
+      actorUid,
+      actorEmail,
+      actorRole: role === 'admin' ? 'admin' : 'teacher',
+      actorCapability: permissions.includes('quiz_read') ? 'quiz_read' : 'grade_manage',
+    };
+  }
   if (assessmentCommandTypes.includes(commandType)) {
     const isStudentCommand = assessmentLifecycle.STUDENT_COMMAND_TYPES.has(commandType);
     const role = String(profile.role || 'student').trim() || 'student';
@@ -8463,7 +8526,12 @@ const legacyPointV1CommandAdapter = createLegacyPointV1CommandAdapter({
 
 const archiveEnrollmentReadinessAdapter = archiveEnrollment.createArchiveEnrollmentReadinessAdapter();
 const assessmentReadinessAdapter = assessmentLifecycle.createAssessmentReadinessAdapter();
-const readinessAdapters = [archiveEnrollmentReadinessAdapter, assessmentReadinessAdapter];
+const gradeEvidenceReadinessAdapter = gradeEvidence.createGradeReadinessAdapter();
+const readinessAdapters = [
+  archiveEnrollmentReadinessAdapter,
+  assessmentReadinessAdapter,
+  gradeEvidenceReadinessAdapter,
+];
 const semesterCoreCommandAdapter = semesterCore.createSemesterCoreCommandAdapter({
   getDefaultPointPolicy,
   projectId: commandGateway.resolveProjectId(),
@@ -8471,6 +8539,7 @@ const semesterCoreCommandAdapter = semesterCore.createSemesterCoreCommandAdapter
 });
 const archiveEnrollmentCommandAdapter = archiveEnrollment.createArchiveEnrollmentCommandAdapter();
 const assessmentCommandAdapter = assessmentLifecycle.createAssessmentCommandAdapter();
+const gradeEvidenceCommandAdapter = gradeEvidence.createGradeCommandAdapter();
 const commandGatewayStore = commandGateway.createFirestoreStore(db);
 
 const commandGatewayCore = commandGateway.createCommandGatewayCore({
@@ -8492,6 +8561,10 @@ const commandGatewayCore = commandGateway.createCommandGatewayCore({
       Object.values(assessmentLifecycle.ASSESSMENT_COMMAND_TYPES)
         .map((commandType) => [commandType, assessmentCommandAdapter]),
     ),
+    ...Object.fromEntries(
+      Object.values(gradeEvidence.GRADE_COMMAND_TYPES)
+        .map((commandType) => [commandType, gradeEvidenceCommandAdapter]),
+    ),
   },
   semesterCoreResolver: ({ store, semesterId }) =>
     semesterCore.resolveSemesterCoreState({ store, semesterId, readinessAdapters }),
@@ -8511,4 +8584,10 @@ const assessmentQueryCore = assessmentLifecycle.createAssessmentQueryCore({
 });
 Object.assign(exports, assessmentLifecycle.createAssessmentCallableExports({
   core: assessmentQueryCore,
+}));
+const gradeEvidenceQueryCore = gradeEvidence.createGradeQueryCore({
+  store: commandGatewayStore,
+});
+Object.assign(exports, gradeEvidence.createGradeCallableExports({
+  core: gradeEvidenceQueryCore,
 }));

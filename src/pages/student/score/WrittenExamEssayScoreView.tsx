@@ -1,9 +1,8 @@
 import React from "react";
-import { ScoreConfirmationView } from "./PerformanceScoreView";
-import { WRITTEN_EXAM_SCORE_KIND } from "../../../lib/performanceScores";
+import StudentGradeEvidenceView from "./GradeEvidenceStudentView";
 
 const WrittenExamEssayScoreView: React.FC = () => (
-  <ScoreConfirmationView scoreKind={WRITTEN_EXAM_SCORE_KIND} />
+  <StudentGradeEvidenceView scoreKind="written_exam_essay" />
 );
 
 export default WrittenExamEssayScoreView;

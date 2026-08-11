@@ -58,6 +58,7 @@ const QUERY_CALLABLES = new Set([
   "previewEnrollmentRoster",
   "listStudentHistoryDictionaryWordsForTeacher",
   "getAssessmentState",
+  "getGradeEvidenceState",
 ]);
 const SESSION_CONTROL_CALLABLES = new Set([
   "beginApplicationSessionReauthentication",

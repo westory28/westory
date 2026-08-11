@@ -1,21 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { db } from "../../../lib/firebase";
-import {
-  collection,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  serverTimestamp,
-  getDocs,
-  query,
-  orderBy,
-} from "firebase/firestore";
+import { collection, getDocs, query, orderBy } from "firebase/firestore";
 import { useAuth } from "../../../contexts/AuthContext";
-import {
-  getSemesterCollectionPath,
-  getSemesterDocPath,
-} from "../../../lib/semesterScope";
+import { getSemesterCollectionPath } from "../../../lib/semesterScope";
+import { failLegacyPerformanceScoreMutation } from "../../../lib/performanceScores";
 import {
   buildScoreRows,
   getScoreKey,
@@ -431,51 +419,14 @@ const ExamGradingPlan: React.FC = () => {
       return;
     }
 
-    const data = {
-      subject,
-      targetGrade: grade,
-      items: validItems,
-      academicYear: userConfig?.year || "2025",
-      semester: userConfig?.semester || "1",
-      updatedAt: serverTimestamp(),
-    };
-
     try {
-      if (editId) {
-        await updateDoc(
-          doc(db, getSemesterDocPath(userConfig, "grading_plans", editId)),
-          data,
-        );
-        showToast({
-          tone: "success",
-          title: "수정되었습니다.",
-          message: "평가 반영 비율을 업데이트했습니다.",
-        });
-      } else {
-        await addDoc(
-          collection(
-            db,
-            getSemesterCollectionPath(userConfig, "grading_plans"),
-          ),
-          {
-            ...data,
-            createdAt: serverTimestamp(),
-          },
-        );
-        showToast({
-          tone: "success",
-          title: "저장되었습니다.",
-          message: "평가 반영 비율을 추가했습니다.",
-        });
-      }
-      resetForm();
-      loadPlans();
+      failLegacyPerformanceScoreMutation();
     } catch (e) {
       console.error(e);
       showToast({
         tone: "error",
-        title: "저장에 실패했습니다.",
-        message: "잠시 후 다시 시도해 주세요.",
+        title: "이 화면에서는 저장할 수 없습니다.",
+        message: "새 성적 증거 화면에서 평가 정보를 관리해 주세요.",
       });
     }
   };
@@ -546,21 +497,14 @@ const ExamGradingPlan: React.FC = () => {
     if (!confirmed) return;
 
     try {
-      await deleteDoc(
-        doc(db, getSemesterDocPath(userConfig, "grading_plans", id)),
-      );
-      setPlans(plans.filter((p) => p.id !== id));
-      showToast({
-        tone: "success",
-        title: "삭제되었습니다.",
-        message: "평가 반영 비율 항목을 삭제했습니다.",
-      });
+      void id;
+      failLegacyPerformanceScoreMutation();
     } catch (e) {
       console.error(e);
       showToast({
         tone: "error",
-        title: "삭제에 실패했습니다.",
-        message: "잠시 후 다시 시도해 주세요.",
+        title: "이 화면에서는 삭제할 수 없습니다.",
+        message: "새 성적 증거 화면에서 평가 정보를 관리해 주세요.",
       });
     }
   };

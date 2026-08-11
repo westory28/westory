@@ -11,7 +11,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       VITE_APP_ENV: staging
       VITE_VERCEL_PROJECT_ROLE: staging
@@ -60,4 +60,4 @@ jobs:
           distribution: temurin
           java-version: 21
       - run: npm install --global firebase-tools@15.15.0
-      - run: npm run verify:w6a-assessment
+      - run: npm run verify:w6b-grade

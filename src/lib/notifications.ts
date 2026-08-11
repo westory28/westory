@@ -233,45 +233,9 @@ export const notifyPerformanceScoreObjectionRequested = async (
   recipientCount: number;
   skippedCount?: number;
 }> => {
-  const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable<
-    {
-      year: string;
-      semester: string;
-      scoreIds: string[];
-      reason: string;
-      scoreKind?: string;
-      targetDetails?: string;
-    },
-    {
-      objectionIds?: string[];
-      objectionSavedCount?: number;
-      objectionSkippedProcessedCount?: number;
-      createdCount?: number;
-      recipientCount?: number;
-      skippedCount?: number;
-    }
-  >("notifyPerformanceScoreObjectionRequested");
-  const result = await callable({
-    year,
-    semester,
-    scoreIds: Array.from(new Set(input.scoreIds || [])).filter(Boolean),
-    reason: input.reason,
-    scoreKind: input.scoreKind,
-    targetDetails: input.targetDetails,
-  });
-  return {
-    objectionIds: Array.isArray(result.data?.objectionIds)
-      ? result.data.objectionIds.map((value) => String(value || ""))
-      : [],
-    objectionSavedCount: Number(result.data?.objectionSavedCount || 0),
-    objectionSkippedProcessedCount: Number(
-      result.data?.objectionSkippedProcessedCount || 0,
-    ),
-    createdCount: Number(result.data?.createdCount || 0),
-    recipientCount: Number(result.data?.recipientCount || 0),
-    skippedCount: Number(result.data?.skippedCount || 0),
-  };
+  void config;
+  void input;
+  throw new Error("CLIENT_UPDATE_REQUIRED");
 };
 
 export const notifyPerformanceScoreAnswerSheetRequested = async (
@@ -290,45 +254,9 @@ export const notifyPerformanceScoreAnswerSheetRequested = async (
   recipientCount: number;
   skippedCount?: number;
 }> => {
-  const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable<
-    {
-      year: string;
-      semester: string;
-      scoreIds: string[];
-      reason: string;
-      scoreKind?: string;
-      targetDetails?: string;
-    },
-    {
-      requestIds?: string[];
-      requestSavedCount?: number;
-      requestSkippedPendingCount?: number;
-      createdCount?: number;
-      recipientCount?: number;
-      skippedCount?: number;
-    }
-  >("notifyPerformanceScoreAnswerSheetRequested");
-  const result = await callable({
-    year,
-    semester,
-    scoreIds: Array.from(new Set(input.scoreIds || [])).filter(Boolean),
-    reason: input.reason,
-    scoreKind: input.scoreKind,
-    targetDetails: input.targetDetails,
-  });
-  return {
-    requestIds: Array.isArray(result.data?.requestIds)
-      ? result.data.requestIds.map((value) => String(value || ""))
-      : [],
-    requestSavedCount: Number(result.data?.requestSavedCount || 0),
-    requestSkippedPendingCount: Number(
-      result.data?.requestSkippedPendingCount || 0,
-    ),
-    createdCount: Number(result.data?.createdCount || 0),
-    recipientCount: Number(result.data?.recipientCount || 0),
-    skippedCount: Number(result.data?.skippedCount || 0),
-  };
+  void config;
+  void input;
+  throw new Error("CLIENT_UPDATE_REQUIRED");
 };
 
 export const reviewPerformanceScoreObjection = async (
@@ -344,35 +272,7 @@ export const reviewPerformanceScoreObjection = async (
   notificationCreated: boolean;
   recipientUid: string;
 }> => {
-  const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable<
-    {
-      year: string;
-      semester: string;
-      objectionId: string;
-      status: "accepted" | "rejected";
-      changedTotalScore?: number | null;
-      reviewMemo?: string;
-    },
-    {
-      status?: "accepted" | "rejected";
-      notificationCreated?: boolean;
-      recipientUid?: string;
-    }
-  >("reviewPerformanceScoreObjection");
-  const result = await callable({
-    year,
-    semester,
-    objectionId: input.objectionId,
-    status: input.status,
-    ...(input.status === "accepted"
-      ? { changedTotalScore: input.changedTotalScore ?? null }
-      : {}),
-    reviewMemo: String(input.reviewMemo || "").slice(0, 240),
-  });
-  return {
-    status: result.data?.status || input.status,
-    notificationCreated: result.data?.notificationCreated === true,
-    recipientUid: String(result.data?.recipientUid || ""),
-  };
+  void config;
+  void input;
+  throw new Error("CLIENT_UPDATE_REQUIRED");
 };

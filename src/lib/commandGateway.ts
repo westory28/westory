@@ -39,7 +39,15 @@ export type W2CommandType =
   | "deleteQuizQuestion"
   | "upsertHistoryClassroomSource"
   | "deleteHistoryClassroomSource"
-  | "updateMapResourceBlanks";
+  | "updateMapResourceBlanks"
+  | "createGradeDraft"
+  | "reviewGradeDraft"
+  | "finalizeGradeEvidence"
+  | "publishOfficialGrade"
+  | "correctOfficialGrade"
+  | "requestGradeReview"
+  | "acknowledgeGradeEvidence"
+  | "signOfficialGrade";
 
 interface ConsentCommandItem {
   id: string;
@@ -84,6 +92,26 @@ export interface EnrollmentRosterPayload {
   classes: SemesterClassInput[];
   entries: EnrollmentRosterEntryInput[];
   reason: string;
+}
+
+export interface GradeEvidenceItemInput {
+  itemId: string;
+  maxScore: number;
+  awardedScore: number;
+  evaluationKind: "AUTO" | "TEACHER";
+  evidence: string;
+  reason: string;
+}
+
+interface GradeCommandBase {
+  semesterId: string;
+  expectedSemesterRevision: number;
+}
+
+interface GradeRecordCommandBase extends GradeCommandBase {
+  recordId: string;
+  expectedRevision: number;
+  expectedGradeRevision: number;
 }
 
 export interface W2CommandPayloads {
@@ -301,6 +329,44 @@ export interface W2CommandPayloads {
     expectedRevision: number;
     reason: string;
   };
+  createGradeDraft: GradeCommandBase & {
+    sourceKind: "ASSESSMENT_RESULT";
+    attemptId: string;
+    scoreKind: "performance" | "written_exam_essay";
+    title: string;
+    rubricVersion: string;
+    reason: string;
+  };
+  reviewGradeDraft: GradeRecordCommandBase & {
+    items: GradeEvidenceItemInput[];
+    reason: string;
+  };
+  finalizeGradeEvidence: GradeRecordCommandBase & {
+    expectedVersionId: string;
+    reason: string;
+  };
+  publishOfficialGrade: GradeRecordCommandBase & {
+    expectedVersionId: string;
+    reason: string;
+    signatureRequired: boolean;
+  };
+  correctOfficialGrade: GradeRecordCommandBase & {
+    resolution: "CORRECT" | "REJECT";
+    requestId?: string;
+    items?: GradeEvidenceItemInput[];
+    reason: string;
+  };
+  requestGradeReview: GradeRecordCommandBase & {
+    requestKind: "OBJECTION" | "ANSWER_SHEET";
+    reason: string;
+  };
+  acknowledgeGradeEvidence: GradeRecordCommandBase & {
+    statementVersion: string;
+  };
+  signOfficialGrade: GradeRecordCommandBase & {
+    signatureName: string;
+    statementVersion: string;
+  };
 }
 
 export interface W2CommandResults {
@@ -452,6 +518,28 @@ export interface W2CommandResults {
     mapResourceId: string;
     contentRevision: number;
   };
+  createGradeDraft: GradeCommandResult;
+  reviewGradeDraft: GradeCommandResult;
+  finalizeGradeEvidence: GradeCommandResult;
+  publishOfficialGrade: GradeCommandResult;
+  correctOfficialGrade: GradeCommandResult;
+  requestGradeReview: GradeCommandResult;
+  acknowledgeGradeEvidence: GradeCommandResult;
+  signOfficialGrade: GradeCommandResult;
+}
+
+export interface GradeCommandResult {
+  recordId: string;
+  versionId?: string;
+  requestId?: string | null;
+  attestationId?: string;
+  revision?: number;
+  gradeRevision: number;
+  status: string;
+  evidenceHash?: string;
+  signatureRequired?: boolean;
+  supersedesVersionId?: string;
+  replayedAttestation?: boolean;
 }
 
 export interface AssessmentAttemptState {
