@@ -12,6 +12,7 @@ import {
   where,
 } from "firebase/firestore";
 import { db, getHttpsCallable } from "./firebase";
+import { executeWestoryCommand } from "./commandGateway";
 import {
   buildPointRankPolicySavePayload,
   buildPointRankEarnedPointsByUid,
@@ -53,11 +54,9 @@ interface AdjustPointsInput {
   config: ConfigLike;
   uid: string;
   delta: number;
-  sourceId?: string;
   sourceLabel?: string;
   policyId?: string;
   mode?: "grant" | "reclaim";
-  actor: ActorInfo;
 }
 
 interface ReviewPointOrderInput {
@@ -1176,34 +1175,24 @@ export const adjustPoints = async ({
   config,
   uid,
   delta,
-  sourceId,
   sourceLabel,
   policyId,
   mode,
-  actor,
 }: AdjustPointsInput) => {
   if (!Number.isFinite(delta) || delta === 0) {
     throw new Error("Point delta must be a non-zero finite number.");
   }
   const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable("adjustTeacherPoints");
-  const result = await callable({
+  const response = await executeWestoryCommand("adjustTeacherPoints", {
     year,
     semester,
     uid,
     delta,
-    sourceId: String(sourceId || "").trim(),
     sourceLabel: String(sourceLabel || "").trim(),
     policyId: String(policyId || "").trim(),
     mode: mode || (delta > 0 ? "grant" : "reclaim"),
-    actorUid: actor.uid,
   });
-  return result.data as {
-    walletId: string;
-    transactionId: string;
-    balance: number;
-    type: Extract<PointTransactionType, "manual_adjust" | "manual_reclaim">;
-  };
+  return response.result;
 };
 
 export const buildPointPolicyPayload = (

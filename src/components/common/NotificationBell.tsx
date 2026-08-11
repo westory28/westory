@@ -182,6 +182,7 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
   const [inbox, setInbox] = useState<WestoryNotificationInbox | null>(null);
   const [inboxReady, setInboxReady] = useState(false);
   const [broadcastReady, setBroadcastReady] = useState(false);
+  const [markingRead, setMarkingRead] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [privacyPolicyOpen, setPrivacyPolicyOpen] = useState(false);
   const [privacyPolicyLoading, setPrivacyPolicyLoading] = useState(false);
@@ -413,23 +414,28 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
     return () => document.removeEventListener("pointerdown", handlePointerDown);
   }, [open]);
 
-  useEffect(() => {
-    if (!open || !config) return;
-    const hasUnreadBroadcast = notifications.some(
-      (notification) => notification.broadcast && !notification.readAt,
-    );
-    if (unreadCount <= 0 && !hasUnreadBroadcast) return;
-    void markNotificationsRead(config)
-      .then(() => setPersonalUnreadCount(0))
-      .catch((error) => {
-        console.error("Failed to mark notifications as read:", error);
-      });
-  }, [config?.semester, config?.year, notifications, open, unreadCount]);
-
   const panelTitle = useMemo(
     () => (unreadCount > 0 ? `새 알림 ${displayUnreadCount}개` : "알림"),
     [displayUnreadCount, unreadCount],
   );
+
+  const handleMarkAllRead = async () => {
+    if (!config || markingRead || unreadCount <= 0) return;
+    setMarkingRead(true);
+    try {
+      await markNotificationsRead(config);
+      setPersonalUnreadCount(0);
+    } catch (error) {
+      console.error("Failed to mark notifications as read:", error);
+      showToast({
+        tone: "error",
+        title: "알림 읽음 처리에 실패했습니다.",
+        message: "잠시 후 다시 시도해 주세요.",
+      });
+    } finally {
+      setMarkingRead(false);
+    }
+  };
 
   const handleClear = async () => {
     if (!config || clearing || !hasNotifications) return;
@@ -607,7 +613,19 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
             })}
           </div>
 
-          <div className="flex items-center justify-end border-t border-stone-100 bg-stone-50 px-4 py-3">
+          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-stone-100 bg-stone-50 px-4 py-3">
+            {unreadCount > 0 && (
+              <button
+                type="button"
+                onClick={handleMarkAllRead}
+                data-session-action="true"
+                disabled={markingRead}
+                className="inline-flex items-center gap-2 rounded-md border border-blue-200 bg-white px-3 py-2 text-xs font-extrabold text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <i className="fas fa-check-double" aria-hidden="true"></i>
+                {markingRead ? "처리 중..." : "모두 읽음"}
+              </button>
+            )}
             <button
               type="button"
               onClick={handleClear}

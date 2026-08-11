@@ -1276,10 +1276,8 @@ const ManagePoints: React.FC = () => {
         config,
         uid: selectedGrantStudent.uid,
         delta: mode === "reclaim" ? -numericAmount : numericAmount,
-        sourceId: `manual_${Date.now()}`,
         sourceLabel: grantReason.trim(),
         mode,
-        actor,
       });
       setGrantAmount("");
       setGrantReason("");

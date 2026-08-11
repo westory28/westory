@@ -68,6 +68,22 @@ try {
       },
     );
     await setDoc(
+      doc(db, "years", "2026", "semesters", "2", "point_wallets", "student-1"),
+      { uid: "student-1", balance: 10 },
+    );
+    await setDoc(
+      doc(
+        db,
+        "years",
+        "2026",
+        "semesters",
+        "2",
+        "point_transactions",
+        "existing-transaction",
+      ),
+      { uid: "student-1", delta: 10, balanceAfter: 10 },
+    );
+    await setDoc(
       doc(
         db,
         "years",
@@ -114,6 +130,18 @@ try {
         required: true,
         order: 2,
       },
+    ),
+  );
+  await assertFails(
+    setDoc(
+      doc(
+        adminDb,
+        "site_settings",
+        "consent",
+        "deleted_items",
+        "direct-tombstone",
+      ),
+      { itemId: "direct-tombstone" },
     ),
   );
   await assertFails(
@@ -170,10 +198,47 @@ try {
     "items",
     "existing-item",
   );
-  await assertSucceeds(updateDoc(existingConsentRef, { title: "수정 허용" }));
-  await assertSucceeds(deleteDoc(existingConsentRef));
+  await assertFails(updateDoc(existingConsentRef, { title: "직접 수정" }));
+  await assertFails(deleteDoc(existingConsentRef));
   await assertSucceeds(
     setDoc(doc(adminDb, "site_settings", "privacy"), { text: "기존 경로" }),
+  );
+
+  const pointWalletRef = doc(
+    adminDb,
+    "years",
+    "2026",
+    "semesters",
+    "2",
+    "point_wallets",
+    "student-1",
+  );
+  const pointTransactionRef = doc(
+    adminDb,
+    "years",
+    "2026",
+    "semesters",
+    "2",
+    "point_transactions",
+    "existing-transaction",
+  );
+  await assertFails(updateDoc(pointWalletRef, { balance: 20 }));
+  await assertFails(deleteDoc(pointWalletRef));
+  await assertFails(updateDoc(pointTransactionRef, { delta: 20 }));
+  await assertFails(deleteDoc(pointTransactionRef));
+  await assertFails(
+    setDoc(
+      doc(
+        adminDb,
+        "years",
+        "2026",
+        "semesters",
+        "2",
+        "point_transactions",
+        "direct-transaction",
+      ),
+      { uid: "student-1", delta: 1, balanceAfter: 11 },
+    ),
   );
 
   const calendarPath = ["years", "2026", "semesters", "2", "calendar"];
@@ -224,9 +289,9 @@ try {
       cases: [
         "DIRECT_TERMS_CREATE_UPDATE_DELETE_DENIED",
         "DIRECT_CONSENT_ROOT_CREATE_UPDATE_DELETE_DENIED",
-        "DIRECT_CONSENT_CREATE_DENIED",
+        "DIRECT_CONSENT_CREATE_UPDATE_DELETE_TOMBSTONE_DENIED",
         "DIRECT_RECEIPT_AND_AUDIT_CREATE_GET_UPDATE_DELETE_DENIED",
-        "LEGACY_CONSENT_UPDATE_DELETE_RETAINED",
+        "DIRECT_POINT_WALLET_AND_LEDGER_WRITE_DENIED",
         "UNMIGRATED_SETTINGS_WRITE_RETAINED",
         "DIRECT_HOLIDAY_CREATE_UPDATE_DELETE_DENIED",
         "ORDINARY_CALENDAR_CRUD_RETAINED",

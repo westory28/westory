@@ -969,8 +969,12 @@ service cloud.firestore {
         allow read: if canUseWestory();
         allow create: if docId != 'consent'
           && isRecentlyAuthenticatedAdmin();
-        allow delete: if isRecentlyAuthenticatedAdmin();
-        allow update: if isRecentlyAuthenticatedAdmin()
+        allow delete: if docId != 'consent'
+          && isRecentlyAuthenticatedAdmin();
+        allow update: if (
+            docId != 'consent'
+            && isRecentlyAuthenticatedAdmin()
+          )
           || (
             docId == 'developer_logs'
             && (

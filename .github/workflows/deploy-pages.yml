@@ -36,6 +36,9 @@ jobs:
       - name: Check supply-chain IOCs
         run: npm run security:check-supply-chain
 
+      - name: Verify W2B client command boundary
+        run: npm run verify:w2b-command-safety
+
       - name: Build
         run: npm run build
         env:
@@ -56,11 +59,11 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - name: Verify Functions and W2A command gateway
+      - name: Verify Functions and W2B command gateway
         run: |
           npm --prefix functions run check
           npm install --global firebase-tools@15.15.0
-          npm run verify:w2a-command-gateway
+          npm run verify:w2b-command-gateway
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5

@@ -155,7 +155,23 @@ const snapshotCommandState = (testEnv) =>
     terms: await readDocument(db, "site_settings/terms"),
     consent: await readDocument(db, "site_settings/consent"),
     consentItems: await readCollection(db, "site_settings/consent/items"),
+    consentTombstones: await readCollection(
+      db,
+      "site_settings/consent/deleted_items",
+    ),
     calendar: await readCollection(db, calendarPath),
+    pointWallets: await readCollection(
+      db,
+      `years/${year}/semesters/${semester}/point_wallets`,
+    ),
+    pointTransactions: await readCollection(
+      db,
+      `years/${year}/semesters/${semester}/point_transactions`,
+    ),
+    wisHallOfFame: await readDocument(
+      db,
+      `years/${year}/semesters/${semester}/point_public/hall_of_fame`,
+    ),
     receipts: await readCollection(db, "command_receipts"),
     audits: await readCollection(db, "command_audit_events"),
   }));
@@ -217,6 +233,48 @@ const main = async () => {
             text: "기존 동의 내용",
             required: true,
             order: 4,
+          },
+        ),
+        setDoc(doc(db, "users", "point-student"), {
+          role: "student",
+          studentName: "포인트 학생",
+          studentGrade: "2",
+          studentClass: "3",
+          studentNumber: "7",
+        }),
+        setDoc(
+          doc(
+            db,
+            "years",
+            year,
+            "semesters",
+            semester,
+            "point_policies",
+            "current",
+          ),
+          {
+            manualAdjustEnabled: true,
+            allowNegativeBalance: false,
+            rankPolicy: { basedOn: "earnedTotal" },
+          },
+        ),
+        setDoc(
+          doc(
+            db,
+            "years",
+            year,
+            "semesters",
+            semester,
+            "point_wallets",
+            "point-student",
+          ),
+          {
+            uid: "point-student",
+            balance: 10,
+            earnedTotal: 10,
+            rankEarnedTotal: 10,
+            spentTotal: 0,
+            adjustedTotal: 0,
           },
         ),
         setDoc(doc(db, calendarPath, "ordinary-event"), {
@@ -398,6 +456,107 @@ const main = async () => {
     assert.equal(concurrentArtifacts.receipts.length, 1);
     assert.equal(concurrentArtifacts.audits.length, 1);
 
+    const updateConsentId = randomUUID();
+    const updateConsentEnvelope = {
+      commandId: updateConsentId,
+      commandType: "updateConsentItem",
+      payload: {
+        itemId: "seed-consent-item",
+        title: "Gateway로 수정한 동의 항목",
+        text: "<p>수정도 한 번만 반영됩니다.</p>",
+        required: false,
+        expectedRevision: null,
+      },
+    };
+    const updateConsentResults = await Promise.all([
+      executeCommand(primary, updateConsentEnvelope),
+      executeCommand(peer, updateConsentEnvelope),
+    ]);
+    assert.deepEqual(
+      updateConsentResults.map((item) => item.data.replayed).sort(),
+      [false, true],
+    );
+    assert.deepEqual(
+      updateConsentResults[0].data.result,
+      updateConsentResults[1].data.result,
+    );
+    const updatedConsentResult = updateConsentResults[0].data.result;
+    assert.match(updatedConsentResult.revision, /^[a-f0-9]{64}$/);
+    const updatedConsentDocument = await withAdminDb(testEnv, (db) =>
+      readDocument(
+        db,
+        "site_settings/consent/items/seed-consent-item",
+      ),
+    );
+    assert.equal(
+      updatedConsentDocument.data.revision,
+      updatedConsentResult.revision,
+    );
+    const updateConsentArtifacts = await commandArtifacts(
+      testEnv,
+      updateConsentId,
+    );
+    assert.equal(updateConsentArtifacts.receipts.length, 1);
+    assert.equal(updateConsentArtifacts.audits.length, 1);
+    const updateConsentState = await snapshotCommandState(testEnv);
+    await expectReason(
+      () =>
+        executeCommand(primary, {
+          ...updateConsentEnvelope,
+          payload: {
+            ...updateConsentEnvelope.payload,
+            title: "같은 ID의 다른 수정",
+          },
+        }),
+      "COMMAND_ID_CONFLICT",
+    );
+    assert.deepEqual(await snapshotCommandState(testEnv), updateConsentState);
+
+    const deleteConsentId = randomUUID();
+    const deleteConsentEnvelope = {
+      commandId: deleteConsentId,
+      commandType: "deleteConsentItem",
+      payload: {
+        itemId: "seed-consent-item",
+        expectedRevision: updatedConsentResult.revision,
+      },
+      _testDropResponseAfterCommit: true,
+    };
+    await expectReason(
+      () => executeCommand(primary, deleteConsentEnvelope),
+      "TEST_RESPONSE_LOSS",
+    );
+    const deleteConsentRecovered = (
+      await executeCommand(peer, deleteConsentEnvelope)
+    ).data;
+    assert.equal(deleteConsentRecovered.replayed, true);
+    assert.equal(deleteConsentRecovered.result.itemId, "seed-consent-item");
+    assert.equal(
+      (
+        await withAdminDb(testEnv, (db) =>
+          readDocument(
+            db,
+            "site_settings/consent/items/seed-consent-item",
+          ),
+        )
+      ).exists,
+      false,
+    );
+    const consentTombstone = await withAdminDb(testEnv, (db) =>
+      readDocument(
+        db,
+        "site_settings/consent/deleted_items/seed-consent-item",
+      ),
+    );
+    assert.equal(consentTombstone.exists, true);
+    assert.equal(consentTombstone.data.commandId, deleteConsentId);
+    const deleteConsentArtifacts = await commandArtifacts(
+      testEnv,
+      deleteConsentId,
+    );
+    assert.equal(deleteConsentArtifacts.receipts.length, 1);
+    assert.equal(deleteConsentArtifacts.audits.length, 1);
+
     const responseLossId = randomUUID();
     const responseLossEnvelope = {
       commandId: responseLossId,
@@ -541,6 +700,114 @@ const main = async () => {
     );
     assert.deepEqual(await snapshotCommandState(testEnv), unregisteredScopeState);
 
+    const pointCommandId = randomUUID();
+    const pointEnvelope = {
+      commandId: pointCommandId,
+      commandType: "adjustTeacherPoints",
+      payload: {
+        year,
+        semester,
+        uid: "point-student",
+        delta: 5,
+        sourceLabel: "교차 기기 수동 지급",
+        policyId: "",
+        mode: "grant",
+      },
+    };
+    const pointConcurrentResults = await Promise.all([
+      executeCommand(primary, pointEnvelope),
+      executeCommand(peer, pointEnvelope),
+    ]);
+    assert.deepEqual(
+      pointConcurrentResults.map((item) => item.data.replayed).sort(),
+      [false, true],
+    );
+    assert.deepEqual(
+      pointConcurrentResults[0].data.result,
+      pointConcurrentResults[1].data.result,
+    );
+    assert.equal(pointConcurrentResults[0].data.result.balance, 15);
+    const pointArtifacts = await commandArtifacts(testEnv, pointCommandId);
+    assert.equal(pointArtifacts.receipts.length, 1);
+    assert.equal(pointArtifacts.audits.length, 1);
+    assert.equal(pointArtifacts.receipts[0].target.adapterVersion, "legacyPointV1");
+    assert.equal(pointArtifacts.receipts[0].actorRole, "admin");
+    assert.equal(
+      pointArtifacts.receipts[0].actorCapability,
+      "command:adjustTeacherPoints",
+    );
+    const pointStateAfterFirst = await snapshotCommandState(testEnv);
+    assert.equal(pointStateAfterFirst.pointWallets[0].data.balance, 15);
+    assert.equal(pointStateAfterFirst.pointTransactions.length, 1);
+    await expectReason(
+      () =>
+        executeCommand(primary, {
+          ...pointEnvelope,
+          payload: { ...pointEnvelope.payload, delta: 7 },
+        }),
+      "COMMAND_ID_CONFLICT",
+    );
+    assert.deepEqual(await snapshotCommandState(testEnv), pointStateAfterFirst);
+
+    const pointResponseLossId = randomUUID();
+    const pointResponseLossEnvelope = {
+      commandId: pointResponseLossId,
+      commandType: "adjustTeacherPoints",
+      payload: {
+        ...pointEnvelope.payload,
+        delta: 3,
+        sourceLabel: "응답 유실 복구 지급",
+      },
+      _testDropResponseAfterCommit: true,
+    };
+    await expectReason(
+      () => executeCommand(primary, pointResponseLossEnvelope),
+      "TEST_RESPONSE_LOSS",
+    );
+    const pointRecovered = (
+      await executeCommand(peer, pointResponseLossEnvelope)
+    ).data;
+    assert.equal(pointRecovered.replayed, true);
+    assert.equal(pointRecovered.result.balance, 18);
+    const pointStateAfterRecovery = await snapshotCommandState(testEnv);
+    assert.equal(pointStateAfterRecovery.pointWallets[0].data.balance, 18);
+    assert.equal(pointStateAfterRecovery.pointTransactions.length, 2);
+    const pointResponseLossArtifacts = await commandArtifacts(
+      testEnv,
+      pointResponseLossId,
+    );
+    assert.equal(pointResponseLossArtifacts.receipts.length, 1);
+    assert.equal(pointResponseLossArtifacts.audits.length, 1);
+
+    const legacyCallableState = await snapshotCommandState(testEnv);
+    await expectReason(
+      () =>
+        httpsCallable(primary.functions, "adjustTeacherPoints")({
+          year,
+          semester,
+          uid: "point-student",
+          delta: 99,
+          sourceLabel: "구형 클라이언트",
+          _session: primary.proof,
+        }),
+      "CLIENT_UPDATE_REQUIRED",
+    );
+    assert.deepEqual(await snapshotCommandState(testEnv), legacyCallableState);
+
+    const unauthorizedPointState = await snapshotCommandState(testEnv);
+    await expectReason(
+      () =>
+        executeCommand(negative, {
+          ...pointEnvelope,
+          commandId: randomUUID(),
+        }),
+      "COMMAND_CAPABILITY_REQUIRED",
+    );
+    assert.deepEqual(
+      await snapshotCommandState(testEnv),
+      unauthorizedPointState,
+    );
+
     const unauthorizedStateBefore = await snapshotCommandState(testEnv);
     await expectReason(
       () =>
@@ -600,6 +867,8 @@ const main = async () => {
           "TERMS_COMMAND_ID_CONFLICT_ZERO_WRITE",
           "CONSENT_SEQUENTIAL_DUPLICATE_ITEM_AND_RECEIPT_ONCE",
           "CONSENT_CROSS_CONTEXT_CONCURRENT_EFFECT_ONCE",
+          "CONSENT_UPDATE_CROSS_CONTEXT_EFFECT_ONCE_AND_CONFLICT_ZERO_WRITE",
+          "CONSENT_DELETE_RESPONSE_LOSS_TOMBSTONE_RECOVERY",
           "DEMO_POST_COMMIT_RESPONSE_LOSS_REPLAY",
           "GET_COMMAND_STATUS_QUERY_ONLY",
           "UNAUTHORIZED_PRE_BUSINESS_ZERO_WRITE",
@@ -607,6 +876,10 @@ const main = async () => {
           "HOLIDAY_EXPLICIT_SYNC_REPLAY",
           "HOLIDAY_ORDINARY_EVENT_PRESERVED",
           "HOLIDAY_UNREGISTERED_SCOPE_REJECTED",
+          "POINT_ADJUST_CROSS_CONTEXT_EFFECT_ONCE_AND_CONFLICT_ZERO_WRITE",
+          "POINT_ADJUST_RESPONSE_LOSS_RECOVERY",
+          "POINT_ADJUST_UNAUTHORIZED_PRE_BUSINESS_ZERO_WRITE",
+          "LEGACY_POINT_CALLABLE_RETIRED_ZERO_WRITE",
         ],
         productionAccess: 0,
       }),

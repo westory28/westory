@@ -203,17 +203,14 @@ const ManageSchedule = () => {
     setHolidaySyncing(true);
     try {
       const holidays = await getKoreanPublicHolidays(currentConfig.year);
-      const response = await executeWestoryCommand<{ count: number }>(
-        "syncKoreanPublicHolidays",
-        {
-          year: currentConfig.year,
-          semester: currentConfig.semester,
-          holidays: holidays.map((holiday) => ({
-            ...holiday,
-            eventType: "holiday",
-          })),
-        },
-      );
+      const response = await executeWestoryCommand("syncKoreanPublicHolidays", {
+        year: currentConfig.year,
+        semester: currentConfig.semester,
+        holidays: holidays.map((holiday) => ({
+          ...holiday,
+          eventType: "holiday",
+        })),
+      });
       await fetchEvents();
       showToast({
         tone: "success",

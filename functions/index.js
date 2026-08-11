@@ -7,8 +7,12 @@ const { onSchedule } = require('firebase-functions/v2/scheduler');
 
 initializeApp();
 const sessionAuthority = require('./sessionAuthority');
+const commandGateway = require('./commandGateway');
+const {
+  createLegacyPointV1CommandAdapter,
+  createRetiredAdjustTeacherPointsHandler,
+} = require('./legacyPointV1CommandAdapter');
 Object.assign(exports, sessionAuthority.callableExports);
-Object.assign(exports, require('./commandGateway').callableExports);
 Object.assign(exports, require('./sourceArchiveBeta'));
 Object.assign(exports, require('./lessonPdfBeta'));
 
@@ -6901,89 +6905,10 @@ exports.createPointPurchaseRequest = onCall({ region: REGION }, async (request) 
   return result;
 });
 
-exports.adjustTeacherPoints = onCall({ region: REGION }, async (request) => {
-  const manager = await assertPointManager(request, { recentAuth: true, highRisk: true });
-  const { year, semester } = assertYearSemester(request.data);
-  const targetUid = String(request.data?.uid || '').trim();
-  const delta = Number(request.data?.delta || 0);
-  const requestedMode = String(request.data?.mode || '').trim();
-  const sourceId = String(request.data?.sourceId || `manual_${Date.now()}`).trim();
-  const sourceLabel = String(request.data?.sourceLabel || '').trim();
-  const policyId = String(request.data?.policyId || '').trim();
-  const mode = requestedMode === 'reclaim'
-    ? 'reclaim'
-    : requestedMode === 'grant'
-      ? 'grant'
-      : delta > 0
-        ? 'grant'
-        : 'reclaim';
-  const transactionType = mode === 'reclaim' ? 'manual_reclaim' : 'manual_adjust';
-
-  if (!targetUid) {
-    throw new HttpsError('invalid-argument', 'Target uid is required.');
-  }
-  if (!Number.isFinite(delta) || delta === 0) {
-    throw new HttpsError('invalid-argument', 'Point delta must be a non-zero finite number.');
-  }
-  if (!sourceLabel) {
-    throw new HttpsError('invalid-argument', 'A reason is required for manual point adjustment.');
-  }
-  if ((mode === 'grant' && delta < 0) || (mode === 'reclaim' && delta > 0)) {
-    throw new HttpsError('invalid-argument', 'Manual adjustment mode does not match the point delta.');
-  }
-
-  const { profile } = await ensureStudentProfile(targetUid);
-
-  const result = await db.runTransaction(async (transaction) => {
-    const { ref: walletRef, wallet } = await ensureWallet(transaction, year, semester, targetUid, profile);
-    const policy = await loadPolicy(transaction, year, semester);
-    const currentRankEarnedTotal = await getCurrentRankEarnedTotal(transaction, year, semester, targetUid, wallet);
-
-    if (!policy.manualAdjustEnabled) {
-      throw new HttpsError('failed-precondition', 'Manual point adjustment is disabled by policy.');
-    }
-
-    const nextBalance = Number(wallet.balance || 0) + delta;
-    const nextRankEarnedTotal = currentRankEarnedTotal + Math.max(0, delta);
-    if (!policy.allowNegativeBalance && nextBalance < 0) {
-      throw new HttpsError('failed-precondition', 'Insufficient point balance.');
-    }
-
-    transaction.set(walletRef, {
-      ...buildWalletBase(targetUid, profile),
-      balance: nextBalance,
-      // Keep cumulative earned aligned with the rank/hall-of-fame metric:
-      // positive manual grants increase it, manual reclaims do not decrease it.
-      earnedTotal: nextRankEarnedTotal,
-      ...buildWalletRankState(nextRankEarnedTotal, policy.rankPolicy),
-      spentTotal: Number(wallet.spentTotal || 0),
-      adjustedTotal: Number(wallet.adjustedTotal || 0) + delta,
-      lastTransactionAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
-
-    const txRef = db.doc(`${getPointCollectionPath(year, semester, 'point_transactions')}/${crypto.randomUUID()}`);
-    transaction.set(txRef, createTransactionPayload({
-      uid: targetUid,
-      type: transactionType,
-      delta,
-      balanceAfter: nextBalance,
-      sourceId,
-      sourceLabel,
-      policyId,
-      createdBy: manager.uid,
-    }));
-
-    return {
-      walletId: walletRef.id,
-      transactionId: txRef.id,
-      balance: nextBalance,
-      type: transactionType,
-    };
-  });
-
-  await markWisHallOfFameDirtySafely(year, semester);
-  return result;
-});
+exports.adjustTeacherPoints = onCall(
+  { region: REGION },
+  createRetiredAdjustTeacherPointsHandler({ assertPointManager }),
+);
 
 exports.updateTeacherPointAdjustment = onCall({ region: REGION }, async (request) => {
   await assertPointManager(request, { recentAuth: true, highRisk: true });
@@ -8417,3 +8342,63 @@ exports.updateStudentProfileIcon = onCall({ region: REGION }, async (request) =>
   await markWisHallOfFameDirtySafely(year, semester);
   return result;
 });
+
+const authorizeCommandGatewayActor = async ({ request, identity, commandType }) => {
+  if (commandType !== commandGateway.COMMAND_TYPES.ADJUST_TEACHER_POINTS) {
+    return null;
+  }
+  const actorUid = String(identity?.uid || '').trim();
+  const authenticatedUid = String(request.auth?.uid || '').trim();
+  const actorEmail = String(identity?.email || '').trim().toLowerCase();
+  const tokenEmail = String(request.auth?.token?.email || '').trim().toLowerCase();
+  if (!actorUid || actorUid !== authenticatedUid || !actorEmail || actorEmail !== tokenEmail) {
+    throw new HttpsError('permission-denied', 'Authenticated actor mismatch.', {
+      reason: 'COMMAND_ACTOR_MISMATCH',
+    });
+  }
+  if (actorEmail === ADMIN_EMAIL) {
+    return {
+      actorUid,
+      actorEmail,
+      actorRole: 'admin',
+      actorCapability: `command:${commandType}`,
+    };
+  }
+  const profileSnapshot = await db.doc(`users/${actorUid}`).get();
+  const profile = profileSnapshot.exists ? profileSnapshot.data() || {} : {};
+  if (!hasStaffPermission(profile, 'point_manage')) {
+    throw new HttpsError('permission-denied', 'point_manage permission is required.', {
+      reason: 'COMMAND_CAPABILITY_REQUIRED',
+      capability: 'point_manage',
+    });
+  }
+  return {
+    actorUid,
+    actorEmail,
+    actorRole: String(profile.role || 'teacher').trim() || 'teacher',
+    actorCapability: 'point_manage',
+  };
+};
+
+const legacyPointV1CommandAdapter = createLegacyPointV1CommandAdapter({
+  db,
+  getPointWalletPath,
+  getPointPolicyPath,
+  getPointTransactionsPath: (year, semester) =>
+    getPointCollectionPath(year, semester, 'point_transactions'),
+  getWisHallOfFamePath,
+  ensureWallet,
+  loadPolicy,
+  getCurrentRankEarnedTotal,
+  buildWalletBase,
+  buildWalletRankState,
+  createTransactionPayload,
+});
+
+const commandGatewayCore = commandGateway.createCommandGatewayCore({
+  authorizeCommand: authorizeCommandGatewayActor,
+  commandAdapters: {
+    [commandGateway.COMMAND_TYPES.ADJUST_TEACHER_POINTS]: legacyPointV1CommandAdapter,
+  },
+});
+Object.assign(exports, commandGateway.createCallableExports({ core: commandGatewayCore }));

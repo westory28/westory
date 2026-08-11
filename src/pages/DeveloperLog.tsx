@@ -58,7 +58,6 @@ const EMPTY_FORM: FormState = {
 };
 
 const MAX_CARD_IMAGE_COUNT = 20;
-const VIEWED_STORAGE_PREFIX = "developerLogViewed:";
 
 const getDeveloperLogItemsCollection = () =>
   collection(
@@ -235,24 +234,6 @@ const DeveloperLog: React.FC = () => {
             doc(getDeveloperLogPostRef(post.id), "likes", currentUser.uid),
           );
           setLiked(likeSnap.exists());
-        }
-
-        const viewedKey = `${VIEWED_STORAGE_PREFIX}${post.id}`;
-        if (
-          typeof window !== "undefined" &&
-          !window.localStorage.getItem(viewedKey)
-        ) {
-          window.localStorage.setItem(viewedKey, "1");
-          void updateDoc(postRef, { viewCount: post.viewCount + 1 }).catch(
-            (error) => {
-              console.warn("Failed to update developer log view count:", error);
-            },
-          );
-          setSelectedPost((prev) =>
-            prev && prev.id === post.id
-              ? { ...prev, viewCount: prev.viewCount + 1 }
-              : prev,
-          );
         }
       })
       .catch((error) => {

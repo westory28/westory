@@ -13,7 +13,10 @@ const MAX_CANONICAL_PAYLOAD_BYTES = 750_000;
 const COMMAND_TYPES = Object.freeze({
   UPDATE_TERMS_SETTINGS: "updateTermsSettings",
   ADD_CONSENT_ITEM: "addConsentItem",
+  UPDATE_CONSENT_ITEM: "updateConsentItem",
+  DELETE_CONSENT_ITEM: "deleteConsentItem",
   SYNC_KOREAN_PUBLIC_HOLIDAYS: "syncKoreanPublicHolidays",
+  ADJUST_TEACHER_POINTS: "adjustTeacherPoints",
 });
 
 const resolveProjectId = (environment = process.env) => {
@@ -100,6 +103,50 @@ const requireTrimmedString = (value, label, maxLength) => {
   return normalized;
 };
 
+const normalizeOptionalTrimmedString = (value, label, maxLength) => {
+  if (value === undefined || value === null || value === "") return "";
+  if (typeof value !== "string") {
+    fail("invalid-argument", `${label} must be a string.`, "COMMAND_PAYLOAD_INVALID");
+  }
+  const normalized = value.trim();
+  if (normalized.length > maxLength) {
+    fail(
+      "invalid-argument",
+      `${label} must contain at most ${maxLength} characters.`,
+      "COMMAND_PAYLOAD_INVALID",
+    );
+  }
+  return normalized;
+};
+
+const normalizeConsentItemId = (value) => {
+  const itemId = requireTrimmedString(value, "itemId", 160);
+  if (!/^[A-Za-z0-9_-]+$/.test(itemId)) {
+    fail("invalid-argument", "itemId is invalid.", "COMMAND_PAYLOAD_INVALID");
+  }
+  return itemId;
+};
+
+const normalizeExpectedRevision = (value) => {
+  if (value === null) return null;
+  const revision = requireTrimmedString(value, "expectedRevision", 64).toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(revision)) {
+    fail(
+      "invalid-argument",
+      "expectedRevision must be a SHA-256 hash or null for a legacy item.",
+      "COMMAND_PAYLOAD_INVALID",
+    );
+  }
+  return revision;
+};
+
+const getStoredRevision = (document) => {
+  const revision = typeof document?.data?.revision === "string"
+    ? document.data.revision.trim().toLowerCase()
+    : "";
+  return revision || null;
+};
+
 const normalizeYear = (value) => {
   const normalized = String(value ?? "").trim();
   if (!/^\d{4}$/.test(normalized)) {
@@ -169,6 +216,79 @@ const normalizePayload = (commandType, payload) => {
       title: requireTrimmedString(payload.title, "title", 200),
       text: requireTrimmedString(payload.text, "text", 100_000),
       required: payload.required,
+    };
+  }
+
+  if (commandType === COMMAND_TYPES.UPDATE_CONSENT_ITEM) {
+    assertAllowedKeys(
+      payload,
+      ["itemId", "title", "text", "required", "expectedRevision"],
+      "updateConsentItem payload",
+    );
+    if (typeof payload.required !== "boolean") {
+      fail("invalid-argument", "required must be a boolean.", "COMMAND_PAYLOAD_INVALID");
+    }
+    return {
+      itemId: normalizeConsentItemId(payload.itemId),
+      title: requireTrimmedString(payload.title, "title", 200),
+      text: requireTrimmedString(payload.text, "text", 100_000),
+      required: payload.required,
+      expectedRevision: normalizeExpectedRevision(payload.expectedRevision),
+    };
+  }
+
+  if (commandType === COMMAND_TYPES.DELETE_CONSENT_ITEM) {
+    assertAllowedKeys(
+      payload,
+      ["itemId", "expectedRevision"],
+      "deleteConsentItem payload",
+    );
+    return {
+      itemId: normalizeConsentItemId(payload.itemId),
+      expectedRevision: normalizeExpectedRevision(payload.expectedRevision),
+    };
+  }
+
+  if (commandType === COMMAND_TYPES.ADJUST_TEACHER_POINTS) {
+    assertAllowedKeys(
+      payload,
+      ["year", "semester", "uid", "delta", "sourceLabel", "policyId", "mode"],
+      "adjustTeacherPoints payload",
+    );
+    const delta = payload.delta;
+    if (
+      typeof delta !== "number"
+      || !Number.isFinite(delta)
+      || delta === 0
+      || Math.abs(delta) > 1_000_000
+    ) {
+      fail(
+        "invalid-argument",
+        "delta must be a non-zero finite number within the supported range.",
+        "COMMAND_PAYLOAD_INVALID",
+      );
+    }
+    if (payload.mode !== "grant" && payload.mode !== "reclaim") {
+      fail("invalid-argument", "mode must be grant or reclaim.", "COMMAND_PAYLOAD_INVALID");
+    }
+    if (
+      (payload.mode === "grant" && delta < 0)
+      || (payload.mode === "reclaim" && delta > 0)
+    ) {
+      fail(
+        "invalid-argument",
+        "mode does not match the sign of delta.",
+        "COMMAND_PAYLOAD_INVALID",
+      );
+    }
+    return {
+      year: normalizeYear(payload.year),
+      semester: normalizeSemester(payload.semester),
+      uid: requireTrimmedString(payload.uid, "uid", 160),
+      delta,
+      sourceLabel: requireTrimmedString(payload.sourceLabel, "sourceLabel", 240),
+      policyId: normalizeOptionalTrimmedString(payload.policyId, "policyId", 160),
+      mode: payload.mode,
     };
   }
 
@@ -294,7 +414,12 @@ const assertAdministrator = (request, identity) => {
   if (!actorUid || actorUid !== String(request.auth?.uid || "").trim()) {
     fail("permission-denied", "Authenticated actor mismatch.", "COMMAND_ACTOR_MISMATCH");
   }
-  return { actorUid, actorEmail: tokenEmail };
+  return {
+    actorUid,
+    actorEmail: tokenEmail,
+    actorRole: "admin",
+    actorCapability: null,
+  };
 };
 
 const buildTarget = (commandType, payload, receiptId) => {
@@ -310,6 +435,17 @@ const buildTarget = (commandType, payload, receiptId) => {
         "site_settings/consent",
       ],
     };
+  }
+  if (
+    commandType === COMMAND_TYPES.UPDATE_CONSENT_ITEM
+    || commandType === COMMAND_TYPES.DELETE_CONSENT_ITEM
+  ) {
+    const itemPath = `site_settings/consent/items/${payload.itemId}`;
+    const refs = [itemPath, "site_settings/consent"];
+    if (commandType === COMMAND_TYPES.DELETE_CONSENT_ITEM) {
+      refs.splice(1, 0, `site_settings/consent/deleted_items/${payload.itemId}`);
+    }
+    return { itemId: payload.itemId, refs };
   }
   return {
     year: payload.year,
@@ -358,6 +494,8 @@ const applyBusinessCommand = async ({
   payloadHash,
   receiptId,
   timestamp,
+  actor,
+  commandAdapters,
 }) => {
   if (commandType === COMMAND_TYPES.UPDATE_TERMS_SETTINGS) {
     transaction.set("site_settings/terms", {
@@ -429,6 +567,139 @@ const applyBusinessCommand = async ({
     };
   }
 
+  if (commandType === COMMAND_TYPES.UPDATE_CONSENT_ITEM) {
+    const target = buildTarget(commandType, payload, receiptId);
+    const itemPath = target.refs[0];
+    const itemDocument = await transaction.get(itemPath);
+    if (!itemDocument.exists) {
+      fail(
+        "not-found",
+        "Consent item does not exist.",
+        "CONSENT_ITEM_NOT_FOUND",
+        { itemId: payload.itemId },
+      );
+    }
+    const currentRevision = getStoredRevision(itemDocument);
+    if (currentRevision !== payload.expectedRevision) {
+      fail(
+        "aborted",
+        "Consent item revision has changed.",
+        "CONSENT_REVISION_CONFLICT",
+        { itemId: payload.itemId, currentRevision },
+      );
+    }
+    const order = Number(itemDocument.data?.order);
+    if (!Number.isSafeInteger(order) || order < 1) {
+      fail(
+        "failed-precondition",
+        "Consent item order is invalid.",
+        "CONSENT_ITEM_ORDER_INVALID",
+        { itemId: payload.itemId },
+      );
+    }
+    const item = {
+      id: payload.itemId,
+      title: payload.title,
+      text: payload.text,
+      required: payload.required,
+      order,
+    };
+    transaction.set(itemPath, {
+      title: item.title,
+      text: item.text,
+      required: item.required,
+      revision: payloadHash,
+      updatedAt: timestamp,
+    }, { merge: true });
+    transaction.set("site_settings/consent", {
+      revision: payloadHash,
+      updatedAt: timestamp,
+    }, { merge: true });
+    return {
+      target,
+      sourceHash: null,
+      result: { item, revision: payloadHash },
+    };
+  }
+
+  if (commandType === COMMAND_TYPES.DELETE_CONSENT_ITEM) {
+    const target = buildTarget(commandType, payload, receiptId);
+    const [itemDocument, tombstoneDocument] = await Promise.all([
+      transaction.get(target.refs[0]),
+      transaction.get(target.refs[1]),
+    ]);
+    if (!itemDocument.exists) {
+      fail(
+        "not-found",
+        "Consent item does not exist.",
+        "CONSENT_ITEM_NOT_FOUND",
+        { itemId: payload.itemId },
+      );
+    }
+    if (tombstoneDocument.exists) {
+      fail(
+        "failed-precondition",
+        "Consent item tombstone already exists.",
+        "CONSENT_TOMBSTONE_EXISTS",
+        { itemId: payload.itemId },
+      );
+    }
+    const currentRevision = getStoredRevision(itemDocument);
+    if (currentRevision !== payload.expectedRevision) {
+      fail(
+        "aborted",
+        "Consent item revision has changed.",
+        "CONSENT_REVISION_CONFLICT",
+        { itemId: payload.itemId, currentRevision },
+      );
+    }
+    transaction.create(target.refs[1], {
+      itemId: payload.itemId,
+      item: itemDocument.data || {},
+      previousRevision: currentRevision,
+      revision: payloadHash,
+      deletedBy: actor.actorUid,
+      commandId,
+      deletedAt: timestamp,
+    });
+    transaction.delete(target.refs[0]);
+    transaction.set(target.refs[2], {
+      revision: payloadHash,
+      updatedAt: timestamp,
+    }, { merge: true });
+    return {
+      target,
+      sourceHash: null,
+      result: {
+        itemId: payload.itemId,
+        revision: payloadHash,
+        tombstoneRef: target.refs[1],
+      },
+    };
+  }
+
+  if (commandType === COMMAND_TYPES.ADJUST_TEACHER_POINTS) {
+    const adapter = commandAdapters?.[commandType];
+    if (!adapter || typeof adapter.apply !== "function") {
+      fail(
+        "failed-precondition",
+        "Command adapter is not available.",
+        "COMMAND_ADAPTER_UNAVAILABLE",
+        { commandType },
+      );
+    }
+    return adapter.apply({
+      transaction,
+      commandId,
+      commandType,
+      payload,
+      payloadHash,
+      receiptId,
+      timestamp,
+      actor,
+    });
+  }
+
   const target = buildTarget(commandType, payload, receiptId);
   const calendarPath = target.refs[0];
   const sourceHash = sha256(canonicalize(payload.holidays));
@@ -481,6 +752,7 @@ const createFirestoreStore = (db = getFirestore()) => ({
   },
   runTransaction: (callback) => db.runTransaction(async (firestoreTransaction) => {
     const transaction = {
+      native: firestoreTransaction,
       get: async (path) => {
         const snapshot = await firestoreTransaction.get(db.doc(path));
         return {
@@ -515,16 +787,36 @@ const createFirestoreStore = (db = getFirestore()) => ({
 const createCommandGatewayCore = ({
   store = createFirestoreStore(),
   assertSession = sessionAuthority.assertActiveApplicationSession,
+  authorizeCommand = null,
+  commandAdapters = {},
   serverTimestamp = () => FieldValue.serverTimestamp(),
   projectId = resolveProjectId(),
 } = {}) => {
-  const authorize = async (request) => {
+  const authorize = async (request, commandType) => {
     const identity = await assertSession(request, { recentAuth: true, highRisk: true });
-    return { identity, actor: assertAdministrator(request, identity) };
+    const commandActor = typeof authorizeCommand === "function"
+      ? await authorizeCommand({ request, identity, commandType })
+      : null;
+    const actor = commandActor || assertAdministrator(request, identity);
+    const authenticatedUid = String(request.auth?.uid || "").trim();
+    if (!actor?.actorUid || actor.actorUid !== authenticatedUid) {
+      fail("permission-denied", "Authenticated actor mismatch.", "COMMAND_ACTOR_MISMATCH");
+    }
+    return {
+      identity,
+      actor: {
+        ...actor,
+        actorRole: String(actor.actorRole || "admin").trim() || "admin",
+        actorCapability: String(
+          actor.actorCapability || `command:${commandType}`,
+        ).trim(),
+      },
+    };
   };
 
   const execute = async (request) => {
-    const { identity, actor } = await authorize(request);
+    const requestedCommandType = String(request.data?.commandType || "").trim();
+    const { identity, actor } = await authorize(request, requestedCommandType);
     const injectResponseLoss = request.data?._testDropResponseAfterCommit === true;
     if (injectResponseLoss && !String(projectId).startsWith("demo-westory-session-")) {
       fail(
@@ -564,8 +856,10 @@ const createCommandGatewayCore = ({
         ...command,
         receiptId,
         timestamp,
+        actor,
+        commandAdapters,
       });
-      const actorCapability = `command:${command.commandType}`;
+      const actorCapability = actor.actorCapability;
       const audit = {
         eventId: receiptId,
         ref: auditPath,
@@ -578,7 +872,7 @@ const createCommandGatewayCore = ({
         status: "SUCCEEDED",
         actorUid: actor.actorUid,
         actorEmail: actor.actorEmail,
-        actorRole: "admin",
+        actorRole: actor.actorRole,
         actorCapability,
         target: business.target,
         payloadHash: command.payloadHash,
@@ -603,7 +897,7 @@ const createCommandGatewayCore = ({
         commandType: command.commandType,
         actorUid: actor.actorUid,
         actorEmail: actor.actorEmail,
-        actorRole: "admin",
+        actorRole: actor.actorRole,
         actorCapability,
         target: business.target,
         payloadHash: command.payloadHash,
@@ -630,7 +924,8 @@ const createCommandGatewayCore = ({
   };
 
   const getStatus = async (request) => {
-    const { actor } = await authorize(request);
+    const requestedCommandType = String(request.data?.commandType || "").trim();
+    const { actor } = await authorize(request, requestedCommandType);
     const command = parseStatusEnvelope(request.data);
     const receiptId = buildReceiptId(actor.actorUid, command.commandType, command.commandId);
     const snapshot = await store.get(`${RECEIPT_COLLECTION}/${receiptId}`);

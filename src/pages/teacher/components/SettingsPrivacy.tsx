@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
   collection,
-  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -9,7 +8,6 @@ import {
   query,
   serverTimestamp,
   setDoc,
-  updateDoc,
 } from "firebase/firestore";
 import { requestStepUpReauthentication } from "../../../lib/stepUpReauth";
 import { useAppToast } from "../../../components/common/AppToastProvider";
@@ -25,6 +23,7 @@ interface ConsentItem {
   text: string;
   required: boolean;
   order: number;
+  revision?: string | null;
 }
 
 const defaultTerms = `<p><strong>[이용 약관]</strong></p><p><br></p><p>제1조(목적)</p><p>본 약관은 Westory 서비스의 이용 조건과 운영 원칙을 규정합니다.</p>`;
@@ -312,21 +311,21 @@ const SettingsPrivacy: React.FC = () => {
     if (consentAdding) return;
     setConsentAdding(true);
     try {
-      const response = await executeWestoryCommand<{
-        item: ConsentItem;
-      }>("addConsentItem", {
+      const response = await executeWestoryCommand("addConsentItem", {
         title: "새 동의 항목",
         text: "<p>동의 내용을 입력하세요.</p>",
         required: true,
       });
+      const savedItem: ConsentItem = {
+        ...response.result.item,
+        revision: response.result.revision,
+      };
       setConsentItems((prev) =>
-        prev.some((item) => item.id === response.result.item.id)
-          ? prev.map((item) =>
-              item.id === response.result.item.id ? response.result.item : item,
-            )
-          : [...prev, response.result.item],
+        prev.some((item) => item.id === savedItem.id)
+          ? prev.map((item) => (item.id === savedItem.id ? savedItem : item))
+          : [...prev, savedItem],
       );
-      setExpandedConsentId(response.result.item.id);
+      setExpandedConsentId(savedItem.id);
     } catch (error: any) {
       showToast({
         tone: "error",
@@ -367,13 +366,23 @@ const SettingsPrivacy: React.FC = () => {
     }
 
     try {
-      await requestStepUpReauthentication("updateConsentSettings");
-      await updateDoc(doc(db, "site_settings", "consent", "items", id), {
+      const response = await executeWestoryCommand("updateConsentItem", {
+        itemId: id,
         title: item.title,
         text: item.text,
         required: item.required,
-        updatedAt: serverTimestamp(),
+        expectedRevision: item.revision ?? null,
       });
+      setConsentItems((prev) =>
+        prev.map((current) =>
+          current.id === id
+            ? {
+                ...response.result.item,
+                revision: response.result.revision,
+              }
+            : current,
+        ),
+      );
       showToast({
         tone: "success",
         title: `'${item.title}' 항목을 저장했습니다.`,
@@ -393,8 +402,10 @@ const SettingsPrivacy: React.FC = () => {
     if (!window.confirm(`'${item.title}' 항목을 삭제하시겠습니까?`)) return;
 
     try {
-      await requestStepUpReauthentication("updateConsentSettings");
-      await deleteDoc(doc(db, "site_settings", "consent", "items", id));
+      await executeWestoryCommand("deleteConsentItem", {
+        itemId: id,
+        expectedRevision: item.revision ?? null,
+      });
       setConsentItems((prev) => prev.filter((x) => x.id !== id));
       if (expandedConsentId === id) setExpandedConsentId(null);
       showToast({
