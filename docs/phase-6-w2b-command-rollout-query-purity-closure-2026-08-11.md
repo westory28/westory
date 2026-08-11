@@ -12,7 +12,7 @@ W2B는 남은 고위험 명령을 실제 책임 Wave로 분류하고, 후속 sch
 
 원본 inventory 28행은 `W2A_DONE 2`, `MIGRATE_NOW 3`, `DOMAIN_WAVE 21`, `TEMPORARY_ALLOWLIST 2`, `REMOVE_IMPLICIT_WRITE 0`, `UNKNOWN 0`입니다. C04/C05가 같은 서버 handler를 가리키므로 canonical 명령은 27개이고, W2A 이후 남은 canonical 명령은 25개입니다. 이 가운데 W2B 이전 3개, Domain Wave 이관 20개, 임시 allowlist 2개로 닫았습니다. W2A의 공휴일 동기화는 고위험 28개 inventory 밖에서 추가로 이전된 명령이라 `W2A_DONE 2` 집계와 모순되지 않습니다.
 
-로컬 build·format·Functions·rules·unit·integration·W1R2 session regression과 Dedicated Staging Functions·Rules·Preview 검증은 통과했습니다. GitHub Safety Baseline은 branch push 뒤 최종 확인합니다. Production 승격과 W3 작업은 수행하지 않습니다.
+로컬 build·format·Functions·rules·unit·integration·W1R2 session regression과 Dedicated Staging Functions·Rules·Preview 검증을 통과했습니다. GitHub Safety Baseline run `31455620904`도 전 단계 PASS했습니다. Production 승격과 W3 작업은 수행하지 않습니다.
 
 ## 2. Baseline
 
@@ -129,7 +129,7 @@ fixture 11종이 Auth/Storage root, transaction/batch alias, cross-file wrapper,
 
 `Verify Safety Baseline`은 모든 push/PR에서 W2B safety guard를 먼저 실행하고, Functions와 emulator 구간을 Node.js 22에서 다시 실행합니다. `Deploy to GitHub Pages`도 main build 전에 W2B safety를 실행하고, artifact upload 전에 Node.js 22 Functions check와 전체 W2B aggregate를 통과해야 합니다. 따라서 direct main push도 W2B 검사를 우회해 Pages로 배포될 수 없습니다.
 
-로컬 W2B aggregate는 PASS입니다. GitHub Safety Baseline의 branch run ID와 최종 상태는 branch push 후 이 보고서에 갱신합니다.
+로컬 W2B aggregate는 PASS입니다. GitHub Safety Baseline run [`31455620904`](https://github.com/westory28/westory/actions/runs/31455620904)는 2분 21초 동안 앱 검증과 Node.js 22 Functions/emulator aggregate를 모두 실행해 PASS했습니다.
 
 ## 10. Command Client Contract
 
@@ -213,7 +213,7 @@ Staging의 Artifact Registry 태그·dry-run policy와 Vercel automation bypass 
 
 ## 15. Remaining Release Blockers
 
-W2B CURRENT-WAVE blocker는 로컬·Staging 기준 0개입니다. GitHub Safety Baseline branch run만 최종 push gate로 남아 있습니다.
+W2B CURRENT-WAVE blocker는 0개입니다. GitHub Safety Baseline branch run까지 통과했습니다.
 
 `KI-W1-01`은 그대로 `RELEASE BLOCKER — NOT A W2B DEVELOPMENT BLOCKER`입니다. 재인증 probe 재설계, W1-R6, viewport 재인증 반복, Production idle enforcement 활성화는 수행하지 않았습니다. 기존 W1R2 session regression이 PASS하여 W2B로 인한 기본 세션 회귀는 발견되지 않았지만, 이 결과로 `KI-W1-01`을 닫지 않습니다.
 
@@ -231,9 +231,9 @@ W2B CURRENT-WAVE blocker는 로컬·Staging 기준 0개입니다. GitHub Safety 
 
 ## 17. Final W3 Readiness
 
-로컬, emulator, Dedicated Staging 조건은 모두 충족했습니다. `UNKNOWN 0`, W2B Gateway 3개, Domain Wave 20개, temporary allowlist 2개, query-side implicit write 제거 3개, direct-write CI guard PASS, TypeScript 신규 오류 0, Production 변경 0입니다.
+로컬, emulator, Dedicated Staging, GitHub Safety Baseline 조건을 모두 충족했습니다. `UNKNOWN 0`, W2B Gateway 3개, Domain Wave 20개, temporary allowlist 2개, query-side implicit write 제거 3개, direct-write CI guard PASS, TypeScript 신규 오류 0, Production 변경 0입니다.
 
-GitHub Safety Baseline branch run이 PASS하면 최종 판정은 다음과 같습니다.
+최종 판정은 다음과 같습니다.
 
 `READY FOR W3 SEMESTER CORE STAGING DEVELOPMENT`
 
