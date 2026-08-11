@@ -257,6 +257,11 @@
   line-height: 1.8;
 }
 
+.maintenance-policy-dialog__body:focus-visible {
+  outline: 3px solid var(--ws-ring);
+  outline-offset: -3px;
+}
+
 .maintenance-policy-dialog__body > p,
 .maintenance-policy-content {
   margin: var(--space-2) 0;

@@ -225,7 +225,11 @@ const Maintenance: React.FC<MaintenanceProps> = ({
                 닫기
               </button>
             </header>
-            <div className="maintenance-policy-dialog__body">
+            <div
+              className="maintenance-policy-dialog__body"
+              tabIndex={0}
+              aria-label={`${POLICY_LABEL[openPolicy]} 내용`}
+            >
               {policyLoading ? (
                 <p role="status">약관을 불러오는 중입니다.</p>
               ) : (
