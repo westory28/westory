@@ -30,7 +30,13 @@ import {
   httpsCallable,
 } from "firebase/functions";
 
-const projectId = "demo-westory-session-w2a";
+const projectId =
+  process.env.WESTORY_TEST_PROJECT_ID || "demo-westory-session-w2a";
+assert.match(
+  projectId,
+  /^demo-westory-session-(?:w2a|w3)$/,
+  "W2A integration may only target an approved demo emulator project.",
+);
 const region = "asia-northeast3";
 const adminEmail = "westoria28@gmail.com";
 const year = "2026";
@@ -152,6 +158,8 @@ const withAdminDb = async (testEnv, operation) => {
 
 const snapshotCommandState = (testEnv) =>
   withAdminDb(testEnv, async (db) => ({
+    activePointer: await readDocument(db, "site_settings/semester_active"),
+    semesterManifests: await readCollection(db, "semester_manifests"),
     terms: await readDocument(db, "site_settings/terms"),
     consent: await readDocument(db, "site_settings/consent"),
     consentItems: await readCollection(db, "site_settings/consent/items"),
@@ -214,9 +222,31 @@ const main = async () => {
         setDoc(doc(db, "site_settings", "config"), {
           year,
           semester,
+          activeSemesterId: `${year}-${semester}`,
+          activeSemesterRevision: 1,
+          semesterLifecycleStatus: "ACTIVE",
+          semesterWritesEnabled: true,
           availableSemesters: [
             { year, semester, shellReady: true },
           ],
+        }),
+        setDoc(doc(db, "site_settings", "semester_active"), {
+          semesterId: `${year}-${semester}`,
+          revision: 1,
+          previousSemesterId: null,
+        }),
+        setDoc(doc(db, "semester_manifests", `${year}-${semester}`), {
+          semesterId: `${year}-${semester}`,
+          schoolYear: year,
+          term: semester,
+          displayName: `${year}학년도 ${semester}학기`,
+          status: "ACTIVE",
+          provenance: "CURRENT",
+          schemaVersion: 1,
+          revision: 1,
+          stateRevision: 1,
+          readinessPolicyVersion: "w3-v1",
+          blockingIssues: [],
         }),
         setDoc(doc(db, "site_settings", "terms"), {
           text: "통합 테스트 이전 약관",
@@ -696,7 +726,7 @@ const main = async () => {
             }],
           },
         }),
-      "HOLIDAY_SCOPE_NOT_CONFIGURED",
+      "HOLIDAY_SCOPE_NOT_ACTIVE",
     );
     assert.deepEqual(await snapshotCommandState(testEnv), unregisteredScopeState);
 

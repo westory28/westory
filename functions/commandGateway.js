@@ -3,6 +3,7 @@ const { getFirestore, FieldValue } = require("firebase-admin/firestore");
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
 
 const sessionAuthority = require("./sessionAuthority");
+const semesterCore = require("./semesterCore");
 
 const REGION = "asia-northeast3";
 const ADMIN_EMAIL = "westoria28@gmail.com";
@@ -17,6 +18,7 @@ const COMMAND_TYPES = Object.freeze({
   DELETE_CONSENT_ITEM: "deleteConsentItem",
   SYNC_KOREAN_PUBLIC_HOLIDAYS: "syncKoreanPublicHolidays",
   ADJUST_TEACHER_POINTS: "adjustTeacherPoints",
+  ...semesterCore.SEMESTER_COMMAND_TYPES,
 });
 
 const resolveProjectId = (environment = process.env) => {
@@ -37,6 +39,14 @@ const fail = (code, message, reason, details = {}) => {
 
 const sha256 = (value) =>
   createHash("sha256").update(String(value), "utf8").digest("hex");
+
+const readDocuments = async (reader, paths) => {
+  if (paths.length === 0) return [];
+  if (typeof reader.getAll === "function") return reader.getAll(paths);
+  const documents = [];
+  for (const path of paths) documents.push(await reader.get(path));
+  return documents;
+};
 
 const isPlainObject = (value) => {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
@@ -202,6 +212,10 @@ const buildHolidayDocumentId = ({ title, start }) => {
 };
 
 const normalizePayload = (commandType, payload) => {
+  if (Object.values(semesterCore.SEMESTER_COMMAND_TYPES).includes(commandType)) {
+    return semesterCore.normalizeSemesterCommandPayload(commandType, payload);
+  }
+
   if (commandType === COMMAND_TYPES.UPDATE_TERMS_SETTINGS) {
     assertAllowedKeys(payload, ["text"], "updateTermsSettings payload");
     return { text: requireTrimmedString(payload.text, "text", 500_000) };
@@ -471,20 +485,14 @@ const buildHolidayDocument = (holiday, commandId, timestamp) => ({
   updatedAt: timestamp,
 });
 
-const isRegisteredSemester = (config, year, semester) => {
-  if (
-    String(config?.year || "").trim() === year
-    && String(config?.semester || "").trim() === semester
-  ) {
-    return true;
-  }
-  if (!Array.isArray(config?.availableSemesters)) return false;
-  return config.availableSemesters.some((item) =>
-    isPlainObject(item)
-    && String(item.year || "").trim() === year
-    && String(item.semester || "").trim() === semester
-    && item.shellReady !== false);
-};
+const isActiveSemester = ({ pointer, manifest, year, semester }) =>
+  pointer?.semesterId === `${year}-${semester}`
+  && manifest?.semesterId === `${year}-${semester}`
+  && String(manifest?.schoolYear || "") === year
+  && String(manifest?.term || "") === semester
+  && manifest?.status === "ACTIVE"
+  && manifest?.provenance === "CURRENT"
+  && Number(pointer?.revision || 0) === Number(manifest?.revision || 0);
 
 const applyBusinessCommand = async ({
   transaction,
@@ -514,10 +522,8 @@ const applyBusinessCommand = async ({
     const target = buildTarget(commandType, payload, receiptId);
     const consentItemsPath = "site_settings/consent/items";
     const consentMetadataPath = "site_settings/consent";
-    const [metadata, existingItems] = await Promise.all([
-      transaction.get(consentMetadataPath),
-      transaction.query(consentItemsPath),
-    ]);
+    const metadata = await transaction.get(consentMetadataPath);
+    const existingItems = await transaction.query(consentItemsPath);
     const maxExistingOrder = existingItems.reduce((maximum, document) => {
       const order = Number(document.data?.order);
       return Number.isSafeInteger(order) && order >= 1
@@ -624,10 +630,7 @@ const applyBusinessCommand = async ({
 
   if (commandType === COMMAND_TYPES.DELETE_CONSENT_ITEM) {
     const target = buildTarget(commandType, payload, receiptId);
-    const [itemDocument, tombstoneDocument] = await Promise.all([
-      transaction.get(target.refs[0]),
-      transaction.get(target.refs[1]),
-    ]);
+    const [itemDocument, tombstoneDocument] = await readDocuments(transaction, target.refs);
     if (!itemDocument.exists) {
       fail(
         "not-found",
@@ -678,8 +681,8 @@ const applyBusinessCommand = async ({
     };
   }
 
-  if (commandType === COMMAND_TYPES.ADJUST_TEACHER_POINTS) {
-    const adapter = commandAdapters?.[commandType];
+  const adapter = commandAdapters?.[commandType];
+  if (adapter) {
     if (!adapter || typeof adapter.apply !== "function") {
       fail(
         "failed-precondition",
@@ -700,15 +703,36 @@ const applyBusinessCommand = async ({
     });
   }
 
+  if (
+    commandType === COMMAND_TYPES.ADJUST_TEACHER_POINTS
+    || Object.values(semesterCore.SEMESTER_COMMAND_TYPES).includes(commandType)
+  ) {
+    fail(
+      "failed-precondition",
+      "Command adapter is not available.",
+      "COMMAND_ADAPTER_UNAVAILABLE",
+      { commandType },
+    );
+  }
+
   const target = buildTarget(commandType, payload, receiptId);
   const calendarPath = target.refs[0];
   const sourceHash = sha256(canonicalize(payload.holidays));
-  const config = await transaction.get("site_settings/config");
-  if (!config.exists || !isRegisteredSemester(config.data, payload.year, payload.semester)) {
+  const semesterId = `${payload.year}-${payload.semester}`;
+  const [pointer, manifest] = await readDocuments(transaction, [
+    semesterCore.ACTIVE_SEMESTER_POINTER_PATH,
+    `${semesterCore.SEMESTER_MANIFEST_COLLECTION}/${semesterId}`,
+  ]);
+  if (!pointer.exists || !manifest.exists || !isActiveSemester({
+    pointer: pointer.data,
+    manifest: manifest.data,
+    year: payload.year,
+    semester: payload.semester,
+  })) {
     fail(
       "failed-precondition",
-      "Holiday synchronization is limited to a configured semester.",
-      "HOLIDAY_SCOPE_NOT_CONFIGURED",
+      "Holiday synchronization is limited to the canonical active semester.",
+      "HOLIDAY_SCOPE_NOT_ACTIVE",
       { year: payload.year, semester: payload.semester },
     );
   }
@@ -718,9 +742,7 @@ const applyBusinessCommand = async ({
     value: "holiday",
   });
   const desiredPaths = payload.holidays.map((holiday) => `${calendarPath}/${holiday.id}`);
-  const desiredDocuments = await Promise.all(
-    desiredPaths.map((path) => transaction.get(path)),
-  );
+  const desiredDocuments = await readDocuments(transaction, desiredPaths);
   desiredDocuments.forEach((document, index) => {
     if (document.exists && document.data?.eventType !== "holiday") {
       fail(
@@ -750,6 +772,16 @@ const createFirestoreStore = (db = getFirestore()) => ({
     const snapshot = await db.doc(path).get();
     return { exists: snapshot.exists, data: snapshot.exists ? snapshot.data() : null, path };
   },
+  query: async (collectionPath, filter = null) => {
+    let query = db.collection(collectionPath);
+    if (filter) query = query.where(filter.field, filter.operator, filter.value);
+    const snapshot = await query.get();
+    return snapshot.docs.map((document) => ({
+      exists: true,
+      data: document.data(),
+      path: document.ref.path,
+    }));
+  },
   runTransaction: (callback) => db.runTransaction(async (firestoreTransaction) => {
     const transaction = {
       native: firestoreTransaction,
@@ -760,6 +792,17 @@ const createFirestoreStore = (db = getFirestore()) => ({
           data: snapshot.exists ? snapshot.data() : null,
           path: snapshot.ref.path,
         };
+      },
+      getAll: async (paths) => {
+        if (paths.length === 0) return [];
+        const snapshots = await firestoreTransaction.getAll(
+          ...paths.map((path) => db.doc(path)),
+        );
+        return snapshots.map((snapshot) => ({
+          exists: snapshot.exists,
+          data: snapshot.exists ? snapshot.data() : null,
+          path: snapshot.ref.path,
+        }));
       },
       query: async (collectionPath, filter = null) => {
         let query = db.collection(collectionPath);
@@ -789,6 +832,7 @@ const createCommandGatewayCore = ({
   assertSession = sessionAuthority.assertActiveApplicationSession,
   authorizeCommand = null,
   commandAdapters = {},
+  semesterCoreResolver = semesterCore.resolveSemesterCoreState,
   serverTimestamp = () => FieldValue.serverTimestamp(),
   projectId = resolveProjectId(),
 } = {}) => {
@@ -947,7 +991,17 @@ const createCommandGatewayCore = ({
     };
   };
 
-  return { execute, getStatus };
+  const getSemesterCoreState = async (request) => {
+    await authorize(request, "getSemesterCoreState");
+    const data = request.data || {};
+    assertAllowedKeys(data, ["semesterId", "_session"], "getSemesterCoreState payload");
+    return semesterCoreResolver({
+      store,
+      semesterId: data.semesterId,
+    });
+  };
+
+  return { execute, getStatus, getSemesterCoreState };
 };
 
 let defaultCore;
@@ -961,6 +1015,8 @@ const createCallableExports = ({ core } = {}) => ({
     (core || getDefaultCore()).execute(request)),
   getCommandStatus: onCall({ region: REGION }, (request) =>
     (core || getDefaultCore()).getStatus(request)),
+  getSemesterCoreState: onCall({ region: REGION }, (request) =>
+    (core || getDefaultCore()).getSemesterCoreState(request)),
 });
 
 module.exports = {

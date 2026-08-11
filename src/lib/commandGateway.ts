@@ -13,7 +13,13 @@ export type W2CommandType =
   | "updateConsentItem"
   | "deleteConsentItem"
   | "syncKoreanPublicHolidays"
-  | "adjustTeacherPoints";
+  | "adjustTeacherPoints"
+  | "createSemesterManifest"
+  | "updateSemesterManifest"
+  | "updateOperationalSettings"
+  | "validateSemesterReadiness"
+  | "transitionSemesterStatus"
+  | "activateSemester";
 
 interface ConsentCommandItem {
   id: string;
@@ -56,6 +62,51 @@ export interface W2CommandPayloads {
     policyId?: string;
     mode: "grant" | "reclaim";
   };
+  createSemesterManifest: {
+    schoolYear: string;
+    term: "1" | "2";
+    displayName: string;
+    startDate: string;
+    endDate: string;
+  };
+  updateSemesterManifest: {
+    semesterId: string;
+    expectedRevision: number;
+    displayName: string;
+    startDate: string;
+    endDate: string;
+    reason: string;
+  };
+  updateOperationalSettings: {
+    showQuiz: boolean;
+    showScore: boolean;
+    showLesson: boolean;
+  };
+  validateSemesterReadiness: {
+    semesterId: string;
+    expectedRevision: number;
+  };
+  transitionSemesterStatus: {
+    semesterId: string;
+    expectedRevision: number;
+    targetStatus:
+      | "PREPARING"
+      | "VALIDATING"
+      | "READY"
+      | "ACTIVE"
+      | "FAILED"
+      | "QUARANTINED"
+      | "CLOSING"
+      | "CLOSED"
+      | "ARCHIVED";
+    reason: string;
+  };
+  activateSemester: {
+    semesterId: string;
+    expectedRevision: number;
+    readinessPolicyVersion: string;
+    expectedActiveSemesterId: string | null;
+  };
 }
 
 export interface W2CommandResults {
@@ -74,6 +125,48 @@ export interface W2CommandResults {
     balance: number;
     type: "manual_adjust" | "manual_reclaim";
     adapterVersion?: "legacyPointV1";
+  };
+  createSemesterManifest: {
+    semester: unknown;
+    seedCount: 6;
+    seedRefs: string[];
+  };
+  updateSemesterManifest: {
+    semester: unknown;
+    readinessInvalidated: boolean;
+  };
+  updateOperationalSettings: {
+    showQuiz: boolean;
+    showScore: boolean;
+    showLesson: boolean;
+  };
+  validateSemesterReadiness: {
+    semesterId: string;
+    status: "PASS" | "FAIL";
+    reportId: string;
+    evaluatedRevision: number;
+    requiredPassed: number;
+    requiredTotal: number;
+  };
+  transitionSemesterStatus: {
+    semesterId: string;
+    status:
+      | "PREPARING"
+      | "VALIDATING"
+      | "READY"
+      | "ACTIVE"
+      | "FAILED"
+      | "QUARANTINED"
+      | "CLOSING"
+      | "CLOSED"
+      | "ARCHIVED";
+    revision: number;
+  };
+  activateSemester: {
+    semesterId: string;
+    previousSemesterId: string | null;
+    status: "ACTIVE";
+    revision: number;
   };
 }
 

@@ -53,6 +53,7 @@ const DIRECT_MUTATIONS = new Map([
 
 const QUERY_CALLABLES = new Set([
   "getCommandStatus",
+  "getSemesterCoreState",
   "listStudentHistoryDictionaryWordsForTeacher",
 ]);
 const SESSION_CONTROL_CALLABLES = new Set([
@@ -936,12 +937,19 @@ export const validateCommandManifest = (manifest, analysis) => {
       );
     }
   }
-  assert.deepEqual(dispositionCounts, manifest.expectedDispositionCounts, "W2B disposition counts changed");
+  assert.deepEqual(dispositionCounts, manifest.expectedDispositionCounts, "command disposition counts changed");
   assert.equal(canonicalGroups.size, manifest.expectedCanonicalCounts.total, "canonical command count changed");
   assert.equal(
     [...canonicalGroups.values()].filter((commands) => commands.every((command) => command.disposition !== "W2A_DONE")).length,
     manifest.expectedCanonicalCounts.remainingAfterW2A,
     "remaining canonical command count changed",
+  );
+  assert.equal(
+    [...canonicalGroups.values()].filter((commands) =>
+      commands.every((command) => !["W2A_DONE", "W3_DONE"].includes(command.disposition)),
+    ).length,
+    manifest.expectedCanonicalCounts.remainingAfterW3,
+    "remaining canonical command count after W3 changed",
   );
   assert.equal(
     [...canonicalGroups.values()].filter((commands) => commands.some((command) => command.disposition === "DOMAIN_WAVE")).length,

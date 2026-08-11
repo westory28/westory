@@ -962,7 +962,12 @@ service cloud.firestore {
 
     match /site_settings/{docId} {
       allow read: if docId in ['terms', 'privacy', 'school_config', 'interface_config'] || canUseWestory();
-      allow create, update, delete: if !(docId in ['terms', 'consent'])
+      allow create, update, delete: if !(docId in [
+          'terms',
+          'consent',
+          'config',
+          'semester_active'
+        ])
         && isRecentlyAuthenticatedAdmin();
 
       match /items/{itemId} {
@@ -1036,6 +1041,21 @@ service cloud.firestore {
 
     match /command_audit_events/{eventId} {
       allow read, create, update, delete: if false;
+    }
+
+    match /semester_manifests/{semesterId} {
+      allow read: if canUseWestory();
+      allow create, update, delete: if false;
+    }
+
+    match /semester_readiness_reports/{semesterId} {
+      allow read: if canUseWestory();
+      allow create, update, delete: if false;
+
+      match /versions/{reportId} {
+        allow read: if canUseWestory();
+        allow create, update, delete: if false;
+      }
     }
 
     match /metadata/{docId} {

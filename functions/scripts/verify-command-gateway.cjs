@@ -15,6 +15,16 @@ const {
   createLegacyPointV1CommandAdapter,
   createRetiredAdjustTeacherPointsHandler,
 } = require("../legacyPointV1CommandAdapter");
+const {
+  ACTIVE_SEMESTER_POINTER_PATH,
+  READINESS_POLICY_VERSION,
+  REQUIRED_READINESS_CHECK_COUNT,
+  SEMESTER_MANIFEST_COLLECTION,
+  SEMESTER_READINESS_REPORT_COLLECTION,
+  TRANSITION_TABLE,
+  createSemesterCoreCommandAdapter,
+  getSemesterSeedDefinitions,
+} = require("../semesterCore");
 
 const deepClone = (value) =>
   value === undefined ? undefined : JSON.parse(JSON.stringify(value));
@@ -26,6 +36,7 @@ class MemoryStore {
     );
     this.committedWrites = new Map();
     this.transactionCalls = 0;
+    this.transactionGetAllCalls = 0;
     this.queryReads = 0;
     this.failNextCommit = false;
     this.lock = Promise.resolve();
@@ -38,6 +49,20 @@ class MemoryStore {
       data: deepClone(this.documents.get(path) || null),
       path,
     };
+  }
+
+  async query(collectionPath, filter = null) {
+    this.queryReads += 1;
+    const prefix = `${collectionPath}/`;
+    return Array.from(this.documents.entries())
+      .filter(([path, data]) =>
+        path.startsWith(prefix)
+        && !path.slice(prefix.length).includes("/")
+        && (!filter || (
+          filter.operator === "=="
+          && data?.[filter.field] === filter.value
+        )))
+      .map(([path, data]) => ({ exists: true, data: deepClone(data), path }));
   }
 
   async runTransaction(callback) {
@@ -58,6 +83,14 @@ class MemoryStore {
         data: deepClone(working.get(path) || null),
         path,
       }),
+      getAll: async (paths) => {
+        this.transactionGetAllCalls += 1;
+        return paths.map((path) => ({
+          exists: working.has(path),
+          data: deepClone(working.get(path) || null),
+          path,
+        }));
+      },
       query: async (collectionPath, filter = null) => {
         const prefix = `${collectionPath}/`;
         return Array.from(working.entries())
@@ -173,6 +206,25 @@ const main = async () => {
       availableSemesters: [
         { year: "2026", semester: "2", shellReady: true },
       ],
+    },
+    [ACTIVE_SEMESTER_POINTER_PATH]: {
+      semesterId: "2026-2",
+      revision: 1,
+    },
+    [`${SEMESTER_MANIFEST_COLLECTION}/2026-2`]: {
+      semesterId: "2026-2",
+      schoolYear: "2026",
+      term: "2",
+      displayName: "2026학년도 2학기",
+      status: "ACTIVE",
+      provenance: "CURRENT",
+      revision: 1,
+      stateRevision: 1,
+      schemaVersion: 1,
+      readinessPolicyVersion: READINESS_POLICY_VERSION,
+      startAt: "2026-08-01",
+      endAt: "2026-12-31",
+      blockingIssues: [],
     },
     "years/2026/semesters/2/calendar/general_event": {
       title: "개학일",
@@ -309,6 +361,14 @@ const main = async () => {
       reason: "COMMAND_CAPABILITY_REQUIRED",
     });
   };
+  const semesterAdapter = createSemesterCoreCommandAdapter({
+    getDefaultPointPolicy: () => ({
+      manualAdjustEnabled: true,
+      allowNegativeBalance: false,
+      rankPolicy: { basedOn: "earnedTotal" },
+    }),
+    projectId: "demo-westory-session-command-gateway",
+  });
   let timestampCounter = 0;
   const core = createCommandGatewayCore({
     store,
@@ -316,11 +376,60 @@ const main = async () => {
     authorizeCommand,
     commandAdapters: {
       [COMMAND_TYPES.ADJUST_TEACHER_POINTS]: pointAdapter,
+      [COMMAND_TYPES.CREATE_SEMESTER_MANIFEST]: semesterAdapter,
+      [COMMAND_TYPES.UPDATE_OPERATIONAL_SETTINGS]: semesterAdapter,
+      [COMMAND_TYPES.UPDATE_SEMESTER_MANIFEST]: semesterAdapter,
+      [COMMAND_TYPES.VALIDATE_SEMESTER_READINESS]: semesterAdapter,
+      [COMMAND_TYPES.TRANSITION_SEMESTER_STATUS]: semesterAdapter,
+      [COMMAND_TYPES.ACTIVATE_SEMESTER]: semesterAdapter,
     },
     serverTimestamp: () => `test-timestamp-${++timestampCounter}`,
     projectId: "demo-westory-session-command-gateway",
   });
   const callable = createCallableExports({ core });
+  let semesterCommandSequence = 300;
+  const nextSemesterCommandId = () => {
+    semesterCommandSequence += 1;
+    return `30000000-0000-4000-8000-${String(semesterCommandSequence).padStart(12, "0")}`;
+  };
+  const executeSemesterCommand = (targetCallable, commandType, payload, extra = {}) =>
+    targetCallable.executeCommand.run(requestFor({
+      commandId: nextSemesterCommandId(),
+      commandType,
+      payload,
+      extra,
+    }));
+  const prepareReadySemester = async ({ targetCallable, schoolYear, term, displayName }) => {
+    const semesterId = `${schoolYear}-${term}`;
+    const startDate = term === "1" ? `${schoolYear}-03-01` : `${schoolYear}-08-01`;
+    const endDate = term === "1" ? `${schoolYear}-07-31` : `${schoolYear}-12-31`;
+    await executeSemesterCommand(targetCallable, COMMAND_TYPES.CREATE_SEMESTER_MANIFEST, {
+      schoolYear,
+      term,
+      displayName,
+      startDate,
+      endDate,
+    });
+    await executeSemesterCommand(targetCallable, COMMAND_TYPES.TRANSITION_SEMESTER_STATUS, {
+      semesterId,
+      expectedRevision: 1,
+      targetStatus: "PREPARING",
+      reason: "단위 검증 준비 시작",
+    });
+    const validation = await executeSemesterCommand(
+      targetCallable,
+      COMMAND_TYPES.VALIDATE_SEMESTER_READINESS,
+      { semesterId, expectedRevision: 1 },
+    );
+    assert.equal(validation.result.status, "PASS");
+    await executeSemesterCommand(targetCallable, COMMAND_TYPES.TRANSITION_SEMESTER_STATUS, {
+      semesterId,
+      expectedRevision: 1,
+      targetStatus: "READY",
+      reason: "단위 검증 READY 전환",
+    });
+    return semesterId;
+  };
 
   const termsId = "aaaaaaaa-1111-4111-8111-111111111111";
   const termsRequest = requestFor({
@@ -418,7 +527,7 @@ const main = async () => {
         },
       }),
     )),
-    "HOLIDAY_SCOPE_NOT_CONFIGURED",
+    "HOLIDAY_SCOPE_NOT_ACTIVE",
   );
   assert.equal(
     Array.from(store.committedWrites.values()).reduce((sum, count) => sum + count, 0),
@@ -949,6 +1058,18 @@ const main = async () => {
       year: "2026",
       semester: "2",
     },
+    [ACTIVE_SEMESTER_POINTER_PATH]: {
+      semesterId: "2026-2",
+      revision: 1,
+    },
+    [`${SEMESTER_MANIFEST_COLLECTION}/2026-2`]: {
+      semesterId: "2026-2",
+      schoolYear: "2026",
+      term: "2",
+      status: "ACTIVE",
+      provenance: "CURRENT",
+      revision: 1,
+    },
     [collisionPath]: { title: "수동 일정", eventType: "school" },
   });
   const collisionCore = createCommandGatewayCore({
@@ -976,7 +1097,929 @@ const main = async () => {
     title: "수동 일정",
     eventType: "school",
   });
-  assert.equal(collisionStore.documents.size, 2);
+  assert.equal(collisionStore.documents.size, 4);
+
+  assert.deepEqual(TRANSITION_TABLE, {
+    DRAFT: ["PREPARING"],
+    PREPARING: [],
+    VALIDATING: ["READY", "FAILED", "PREPARING"],
+    READY: ["PREPARING", "VALIDATING"],
+    ACTIVE: ["CLOSING"],
+    CLOSING: ["ACTIVE", "CLOSED"],
+    CLOSED: ["ARCHIVED"],
+    ARCHIVED: [],
+    FAILED: ["PREPARING", "QUARANTINED"],
+    QUARANTINED: [],
+  });
+
+  const operationalConfigBefore = store.data("site_settings/config");
+  const operationalResult = await executeSemesterCommand(
+    callable,
+    COMMAND_TYPES.UPDATE_OPERATIONAL_SETTINGS,
+    { showQuiz: false, showScore: true, showLesson: false },
+  );
+  assert.deepEqual(operationalResult.result, {
+    showQuiz: false,
+    showScore: true,
+    showLesson: false,
+  });
+  const operationalConfigAfter = store.data("site_settings/config");
+  assert.equal(operationalConfigAfter.year, operationalConfigBefore.year);
+  assert.equal(operationalConfigAfter.semester, operationalConfigBefore.semester);
+  assert.equal(operationalConfigAfter.activeSemesterId, undefined);
+  const w3TransactionsBeforeAuthRejection = store.transactionCalls;
+  assert.equal(
+    await getReason(() => callable.executeCommand.run(requestFor({
+      uid: "teacher-uid",
+      email: "teacher@yongshin-ms.ms.kr",
+      commandId: nextSemesterCommandId(),
+      commandType: COMMAND_TYPES.UPDATE_OPERATIONAL_SETTINGS,
+      payload: { showQuiz: true, showScore: true, showLesson: true },
+    }))),
+    "COMMAND_ADMIN_REQUIRED",
+  );
+  assert.equal(
+    await getReason(() => callable.executeCommand.run(requestFor({
+      uid: "expired-uid",
+      commandId: nextSemesterCommandId(),
+      commandType: COMMAND_TYPES.CREATE_SEMESTER_MANIFEST,
+      payload: {
+        schoolYear: "2040",
+        term: "1",
+        displayName: "만료 세션 학기",
+        startDate: "2040-03-01",
+        endDate: "2040-07-31",
+      },
+    }))),
+    "SESSION_EXPIRED",
+  );
+  assert.equal(store.transactionCalls, w3TransactionsBeforeAuthRejection);
+  const w3TransactionsBeforePayloadRejection = store.transactionCalls;
+  assert.equal(
+    await getReason(() => callable.executeCommand.run(requestFor({
+      commandId: nextSemesterCommandId(),
+      commandType: COMMAND_TYPES.CREATE_SEMESTER_MANIFEST,
+      payload: {
+        schoolYear: "2040",
+        term: "1",
+        displayName: "client-owned status 금지",
+        startDate: "2040-03-01",
+        endDate: "2040-07-31",
+        status: "ACTIVE",
+      },
+    }))),
+    "COMMAND_PAYLOAD_INVALID",
+  );
+  assert.equal(
+    await getReason(() => callable.executeCommand.run(requestFor({
+      commandId: nextSemesterCommandId(),
+      commandType: COMMAND_TYPES.CREATE_SEMESTER_MANIFEST,
+      payload: {
+        schoolYear: "2040",
+        term: "2",
+        displayName: "역전 날짜 금지",
+        startDate: "2040-12-31",
+        endDate: "2040-08-01",
+      },
+    }))),
+    "SEMESTER_DATE_RANGE_INVALID",
+  );
+  assert.equal(store.transactionCalls, w3TransactionsBeforePayloadRejection);
+
+  const semesterCreateId = nextSemesterCommandId();
+  const semesterCreateRequest = requestFor({
+    commandId: semesterCreateId,
+    commandType: COMMAND_TYPES.CREATE_SEMESTER_MANIFEST,
+    payload: {
+      schoolYear: "2027",
+      term: "2",
+      displayName: "2027학년도 2학기",
+      startDate: "2027-08-01",
+      endDate: "2027-12-31",
+    },
+  });
+  const semesterCreate = await callable.executeCommand.run(semesterCreateRequest);
+  assert.equal(semesterCreate.result.seedCount, 6);
+  assert.equal(semesterCreate.result.seedRefs.length, 6);
+  assert.equal(semesterCreate.result.semester.semesterId, "2027-2");
+  assert.equal(semesterCreate.result.semester.status, "DRAFT");
+  assert.equal(semesterCreate.result.semester.revision, 1);
+  assert.equal(semesterCreate.result.semester.startAt, "2027-08-01");
+  assert.equal(semesterCreate.result.semester.endAt, "2027-12-31");
+  getSemesterSeedDefinitions("2027", "2").forEach((seed) => {
+    const document = store.data(seed.path);
+    assert.equal(document.semesterId, "2027-2");
+    assert.equal(document.managedBy, "semesterCore");
+    assert.equal(document.seedState, "COMPLETE");
+  });
+  const semesterCreateReplay = await callable.executeCommand.run(semesterCreateRequest);
+  assert.equal(semesterCreateReplay.replayed, true);
+  assert.deepEqual(semesterCreateReplay.result, semesterCreate.result);
+  assert.equal(
+    await getReason(() => callable.executeCommand.run(requestFor({
+      commandId: semesterCreateId,
+      commandType: COMMAND_TYPES.CREATE_SEMESTER_MANIFEST,
+      payload: {
+        ...semesterCreateRequest.data.payload,
+        displayName: "충돌하는 이름",
+      },
+    }))),
+    "COMMAND_ID_CONFLICT",
+  );
+
+  assert.equal(
+    await getReason(() => executeSemesterCommand(
+      callable,
+      COMMAND_TYPES.TRANSITION_SEMESTER_STATUS,
+      {
+        semesterId: "2027-2",
+        expectedRevision: 1,
+        targetStatus: "ACTIVE",
+        reason: "금지된 직접 활성화",
+      },
+    )),
+    "SEMESTER_TRANSITION_INVALID",
+  );
+  await executeSemesterCommand(callable, COMMAND_TYPES.TRANSITION_SEMESTER_STATUS, {
+    semesterId: "2027-2",
+    expectedRevision: 1,
+    targetStatus: "PREPARING",
+    reason: "준비 시작",
+  });
+  assert.equal(
+    await getReason(() => executeSemesterCommand(
+      callable,
+      COMMAND_TYPES.TRANSITION_SEMESTER_STATUS,
+      {
+        semesterId: "2027-2",
+        expectedRevision: 1,
+        targetStatus: "PREPARING",
+        reason: "중복 상태 전환",
+      },
+    )),
+    "SEMESTER_TRANSITION_INVALID",
+  );
+  const validationFirst = await executeSemesterCommand(
+    callable,
+    COMMAND_TYPES.VALIDATE_SEMESTER_READINESS,
+    { semesterId: "2027-2", expectedRevision: 1 },
+  );
+  assert.equal(validationFirst.result.status, "PASS");
+  assert.equal(validationFirst.result.requiredPassed, REQUIRED_READINESS_CHECK_COUNT);
+  assert.equal(validationFirst.result.requiredTotal, REQUIRED_READINESS_CHECK_COUNT);
+  const readinessPath = `${SEMESTER_READINESS_REPORT_COLLECTION}/2027-2`;
+  const readinessFirst = store.data(readinessPath);
+  assert.equal(readinessFirst.status, "PASS");
+  assert.equal(readinessFirst.stale, false);
+  assert.equal(readinessFirst.policyVersion, READINESS_POLICY_VERSION);
+  assert.equal(readinessFirst.evaluatedRevision, 1);
+  assert.equal(readinessFirst.requiredPassed, 11);
+  assert.equal(readinessFirst.requiredTotal, 11);
+  assert.equal(readinessFirst.checks.filter((check) => check.required).length, 11);
+  assert.equal(readinessFirst.checks.every((check) => [
+    "PASS", "FAIL", "PENDING", "WARNING", "NOT_APPLICABLE",
+  ].includes(check.status)), true);
+  assert.equal(readinessFirst.dependencyHash.length, 64);
+  assert.equal(
+    store.has(`${readinessPath}/versions/${readinessFirst.reportId}`),
+    true,
+  );
+  await executeSemesterCommand(callable, COMMAND_TYPES.TRANSITION_SEMESTER_STATUS, {
+    semesterId: "2027-2",
+    expectedRevision: 1,
+    targetStatus: "READY",
+    reason: "필수 준비도 통과",
+  });
+
+  const manifestUpdate = await executeSemesterCommand(
+    callable,
+    COMMAND_TYPES.UPDATE_SEMESTER_MANIFEST,
+    {
+      semesterId: "2027-2",
+      expectedRevision: 1,
+      displayName: "2027학년도 2학기 수정",
+      startDate: "2027-08-05",
+      endDate: "2027-12-31",
+      reason: "운영 날짜 재확정",
+    },
+  );
+  assert.equal(manifestUpdate.result.semester.revision, 2);
+  assert.equal(manifestUpdate.result.semester.status, "PREPARING");
+  assert.equal(manifestUpdate.result.readinessInvalidated, true);
+  assert.equal(store.data(readinessPath).status, "STALE");
+  assert.equal(store.data(readinessPath).stale, true);
+  assert.equal(
+    await getReason(() => executeSemesterCommand(
+      callable,
+      COMMAND_TYPES.ACTIVATE_SEMESTER,
+      {
+        semesterId: "2027-2",
+        expectedRevision: 2,
+        readinessPolicyVersion: READINESS_POLICY_VERSION,
+        expectedActiveSemesterId: "2026-2",
+      },
+    )),
+    "SEMESTER_READINESS_STALE",
+  );
+
+  const validationSecond = await executeSemesterCommand(
+    callable,
+    COMMAND_TYPES.VALIDATE_SEMESTER_READINESS,
+    { semesterId: "2027-2", expectedRevision: 2 },
+  );
+  assert.equal(validationSecond.result.status, "PASS");
+  assert.equal(validationSecond.result.evaluatedRevision, 2);
+  assert.notEqual(validationSecond.result.reportId, validationFirst.result.reportId);
+  await executeSemesterCommand(callable, COMMAND_TYPES.TRANSITION_SEMESTER_STATUS, {
+    semesterId: "2027-2",
+    expectedRevision: 2,
+    targetStatus: "READY",
+    reason: "재검증 완료",
+  });
+  assert.equal(
+    await getReason(() => executeSemesterCommand(
+      callable,
+      COMMAND_TYPES.ACTIVATE_SEMESTER,
+      {
+        semesterId: "2027-2",
+        expectedRevision: 2,
+        readinessPolicyVersion: "w3-v0",
+        expectedActiveSemesterId: "2026-2",
+      },
+    )),
+    "SEMESTER_POLICY_VERSION_MISMATCH",
+  );
+
+  const activationId = nextSemesterCommandId();
+  const activationRequest = requestFor({
+    commandId: activationId,
+    commandType: COMMAND_TYPES.ACTIVATE_SEMESTER,
+    payload: {
+      semesterId: "2027-2",
+      expectedRevision: 2,
+      readinessPolicyVersion: READINESS_POLICY_VERSION,
+      expectedActiveSemesterId: "2026-2",
+    },
+    extra: { _testDropResponseAfterCommit: true },
+  });
+  assert.equal(
+    await getReason(() => callable.executeCommand.run(activationRequest)),
+    "TEST_RESPONSE_LOSS",
+  );
+  assert.equal(store.data(`${SEMESTER_MANIFEST_COLLECTION}/2026-2`).status, "CLOSED");
+  assert.equal(store.data(`${SEMESTER_MANIFEST_COLLECTION}/2027-2`).status, "ACTIVE");
+  assert.equal(store.data(ACTIVE_SEMESTER_POINTER_PATH).semesterId, "2027-2");
+  assert.equal(store.data("site_settings/config").year, "2027");
+  assert.equal(store.data("site_settings/config").semester, "2");
+  const activationReplay = await callable.executeCommand.run(activationRequest);
+  assert.equal(activationReplay.replayed, true);
+  assert.deepEqual(activationReplay.result, {
+    semesterId: "2027-2",
+    previousSemesterId: "2026-2",
+    status: "ACTIVE",
+    revision: 2,
+  });
+  const activationReceiptId = buildReceiptId(
+    "admin-uid",
+    COMMAND_TYPES.ACTIVATE_SEMESTER,
+    activationId,
+  );
+  const activationReceipt = store.data(`${RECEIPT_COLLECTION}/${activationReceiptId}`);
+  assert.equal(activationReceipt.schemaVersion, 1);
+  assert.equal(activationReceipt.status, "SUCCEEDED");
+  assert.equal(activationReceipt.actorUid, "admin-uid");
+  assert.equal(activationReceipt.actorRole, "admin");
+  assert.equal(activationReceipt.actorCapability, "command:activateSemester");
+  assert.equal(activationReceipt.target.semesterId, "2027-2");
+  assert.equal(activationReceipt.payloadHash.length, 64);
+  assert.equal(activationReceipt.session.revisionHash.length, 64);
+  assert.equal(activationReceipt.audit.ref, `${AUDIT_COLLECTION}/${activationReceiptId}`);
+  assert.deepEqual(activationReceipt.result, activationReplay.result);
+  assert.equal(activationReceipt.error, null);
+  assert.equal(activationReceipt.checkpoint, "COMMITTED");
+  const activationStatus = await callable.getCommandStatus.run(requestFor({
+    commandId: activationId,
+    commandType: COMMAND_TYPES.ACTIVATE_SEMESTER,
+    payload: undefined,
+  }));
+  assert.equal(activationStatus.status, "SUCCEEDED");
+  assert.equal(activationStatus.replayed, true);
+  assert.deepEqual(activationStatus.result, activationReplay.result);
+  assert.equal(
+    await getReason(() => executeSemesterCommand(
+      callable,
+      COMMAND_TYPES.ACTIVATE_SEMESTER,
+      {
+        semesterId: "2027-2",
+        expectedRevision: 2,
+        readinessPolicyVersion: READINESS_POLICY_VERSION,
+        expectedActiveSemesterId: "2027-2",
+      },
+    )),
+    "SEMESTER_ALREADY_ACTIVE",
+  );
+
+  const queryWritesBefore = Array.from(store.committedWrites.values())
+    .reduce((sum, count) => sum + count, 0);
+  const queryTransactionsBefore = store.transactionCalls;
+  const queryGetAllCallsBefore = store.transactionGetAllCalls;
+  const semesterStateRequest = requestFor({});
+  semesterStateRequest.data = {
+    semesterId: "2027-2",
+    _session: semesterStateRequest.data._session,
+  };
+  const semesterState = await callable.getSemesterCoreState.run(semesterStateRequest);
+  assert.equal(semesterState.active.semesterId, "2027-2");
+  assert.equal(semesterState.requested.semesterId, "2027-2");
+  assert.equal(semesterState.provenance, "CURRENT");
+  assert.equal(semesterState.error, null);
+  assert.equal(semesterState.readiness.current, true);
+  assert.equal(semesterState.readiness.reason, null);
+  assert.equal(semesterState.readiness.dependencyHash.length, 64);
+  assert.equal(store.transactionCalls, queryTransactionsBefore + 1);
+  assert.ok(store.transactionGetAllCalls > queryGetAllCallsBefore);
+  assert.equal(
+    Array.from(store.committedWrites.values()).reduce((sum, count) => sum + count, 0),
+    queryWritesBefore,
+  );
+  const resolverDependencyPath = "years/2027/semesters/2/calendar_meta/current";
+  const resolverDependency = store.data(resolverDependencyPath);
+  store.documents.set(resolverDependencyPath, {
+    ...resolverDependency,
+    eventCount: Number(resolverDependency.eventCount || 0) + 1,
+  });
+  const staleDependencyState = await callable.getSemesterCoreState.run(semesterStateRequest);
+  assert.equal(staleDependencyState.readiness.current, false);
+  assert.equal(
+    staleDependencyState.readiness.reason,
+    "SEMESTER_READINESS_DEPENDENCY_CHANGED",
+  );
+  assert.notEqual(
+    staleDependencyState.readiness.dependencyHash,
+    semesterState.readiness.dependencyHash,
+  );
+  assert.equal(
+    Array.from(store.committedWrites.values()).reduce((sum, count) => sum + count, 0),
+    queryWritesBefore,
+  );
+  store.documents.set(resolverDependencyPath, resolverDependency);
+  const restoredDependencyState = await callable.getSemesterCoreState.run(semesterStateRequest);
+  assert.equal(restoredDependencyState.readiness.current, true);
+  assert.equal(restoredDependencyState.readiness.reason, null);
+  store.documents.set(ACTIVE_SEMESTER_POINTER_PATH, {
+    ...store.data(ACTIVE_SEMESTER_POINTER_PATH),
+    revision: 999,
+  });
+  const conflictingSemesterState = await callable.getSemesterCoreState.run(semesterStateRequest);
+  assert.equal(conflictingSemesterState.error, "CONFLICTING_ACTIVE_SEMESTER");
+  assert.equal(conflictingSemesterState.active, null);
+  assert.equal(conflictingSemesterState.provenance, null);
+  assert.equal(conflictingSemesterState.readiness.current, true);
+  store.documents.set(ACTIVE_SEMESTER_POINTER_PATH, {
+    ...store.data(ACTIVE_SEMESTER_POINTER_PATH),
+    revision: 2,
+  });
+  const validPointer = store.data(ACTIVE_SEMESTER_POINTER_PATH);
+  store.documents.delete(ACTIVE_SEMESTER_POINTER_PATH);
+  const missingPointerState = await callable.getSemesterCoreState.run(semesterStateRequest);
+  assert.equal(missingPointerState.error, "CONFLICTING_ACTIVE_SEMESTER");
+  assert.equal(missingPointerState.active, null);
+  assert.equal(missingPointerState.provenance, null);
+  store.documents.set(ACTIVE_SEMESTER_POINTER_PATH, validPointer);
+  const activeManifestPath = `${SEMESTER_MANIFEST_COLLECTION}/2027-2`;
+  const validActiveManifest = store.data(activeManifestPath);
+  store.documents.set(activeManifestPath, {
+    ...validActiveManifest,
+    status: "READY",
+    provenance: "PREPARING",
+  });
+  const pointerWithoutCurrentState = await callable.getSemesterCoreState.run(semesterStateRequest);
+  assert.equal(pointerWithoutCurrentState.error, "CONFLICTING_ACTIVE_SEMESTER");
+  assert.equal(pointerWithoutCurrentState.active, null);
+  assert.equal(pointerWithoutCurrentState.provenance, null);
+  store.documents.set(activeManifestPath, validActiveManifest);
+  const unauthorizedSemesterQuery = requestFor({
+    uid: "teacher-uid",
+    email: "teacher@yongshin-ms.ms.kr",
+  });
+  unauthorizedSemesterQuery.data = {
+    semesterId: "2027-2",
+    _session: unauthorizedSemesterQuery.data._session,
+  };
+  const semesterReadsBeforeUnauthorized = store.queryReads;
+  assert.equal(
+    await getReason(() => callable.getSemesterCoreState.run(unauthorizedSemesterQuery)),
+    "COMMAND_ADMIN_REQUIRED",
+  );
+  assert.equal(store.queryReads, semesterReadsBeforeUnauthorized);
+  const expiredSemesterQuery = requestFor({ uid: "expired-uid" });
+  expiredSemesterQuery.data = {
+    semesterId: "2027-2",
+    _session: expiredSemesterQuery.data._session,
+  };
+  assert.equal(
+    await getReason(() => callable.getSemesterCoreState.run(expiredSemesterQuery)),
+    "SESSION_EXPIRED",
+  );
+  assert.equal(store.queryReads, semesterReadsBeforeUnauthorized);
+
+  assert.equal(
+    await getReason(() => callable.executeCommand.run(requestFor({
+      commandId: nextSemesterCommandId(),
+      commandType: COMMAND_TYPES.SYNC_KOREAN_PUBLIC_HOLIDAYS,
+      payload: holidayPayload,
+    }))),
+    "HOLIDAY_SCOPE_NOT_ACTIVE",
+  );
+
+  await executeSemesterCommand(callable, COMMAND_TYPES.CREATE_SEMESTER_MANIFEST, {
+    schoolYear: "2029",
+    term: "2",
+    displayName: "짧은 기간 경고 fixture",
+    startDate: "2029-08-01",
+    endDate: "2029-08-25",
+  });
+  await executeSemesterCommand(callable, COMMAND_TYPES.TRANSITION_SEMESTER_STATUS, {
+    semesterId: "2029-2",
+    expectedRevision: 1,
+    targetStatus: "PREPARING",
+    reason: "경고 정책 검증",
+  });
+  const warningValidation = await executeSemesterCommand(
+    callable,
+    COMMAND_TYPES.VALIDATE_SEMESTER_READINESS,
+    { semesterId: "2029-2", expectedRevision: 1 },
+  );
+  assert.equal(warningValidation.result.status, "PASS");
+  const warningReadinessPath = `${SEMESTER_READINESS_REPORT_COLLECTION}/2029-2`;
+  assert.equal(store.data(warningReadinessPath).warningCount, 1);
+  assert.equal(
+    store.data(warningReadinessPath).checks.find(
+      (check) => check.checkId === "semester_duration_advisory",
+    ).status,
+    "WARNING",
+  );
+  await executeSemesterCommand(callable, COMMAND_TYPES.TRANSITION_SEMESTER_STATUS, {
+    semesterId: "2029-2",
+    expectedRevision: 1,
+    targetStatus: "READY",
+    reason: "경고는 activation을 차단하지 않음",
+  });
+  await executeSemesterCommand(callable, COMMAND_TYPES.TRANSITION_SEMESTER_STATUS, {
+    semesterId: "2029-2",
+    expectedRevision: 1,
+    targetStatus: "VALIDATING",
+    reason: "검증 evidence 만료",
+  });
+  assert.equal(store.data(warningReadinessPath).status, "STALE");
+  assert.equal(store.data(warningReadinessPath).stale, true);
+  assert.equal(
+    await getReason(() => executeSemesterCommand(
+      callable,
+      COMMAND_TYPES.TRANSITION_SEMESTER_STATUS,
+      {
+        semesterId: "2029-2",
+        expectedRevision: 1,
+        targetStatus: "READY",
+        reason: "재검증 없는 READY 금지",
+      },
+    )),
+    "SEMESTER_READINESS_STALE",
+  );
+  await executeSemesterCommand(
+    callable,
+    COMMAND_TYPES.VALIDATE_SEMESTER_READINESS,
+    { semesterId: "2029-2", expectedRevision: 1 },
+  );
+  await executeSemesterCommand(callable, COMMAND_TYPES.TRANSITION_SEMESTER_STATUS, {
+    semesterId: "2029-2",
+    expectedRevision: 1,
+    targetStatus: "READY",
+    reason: "재검증 완료",
+  });
+  const warningCalendarMetaPath = "years/2029/semesters/2/calendar_meta/current";
+  store.documents.set(warningCalendarMetaPath, {
+    ...store.data(warningCalendarMetaPath),
+    eventCount: 1,
+  });
+  assert.equal(
+    await getReason(() => executeSemesterCommand(
+      callable,
+      COMMAND_TYPES.ACTIVATE_SEMESTER,
+      {
+        semesterId: "2029-2",
+        expectedRevision: 1,
+        readinessPolicyVersion: READINESS_POLICY_VERSION,
+        expectedActiveSemesterId: "2027-2",
+      },
+    )),
+    "SEMESTER_READINESS_STALE",
+  );
+
+  const partialCreate = await executeSemesterCommand(
+    callable,
+    COMMAND_TYPES.CREATE_SEMESTER_MANIFEST,
+    {
+      schoolYear: "2028",
+      term: "1",
+      displayName: "부분 학기 fixture",
+      startDate: "2028-03-01",
+      endDate: "2028-07-31",
+      _testFixture: "PARTIAL_SHELL",
+    },
+  );
+  assert.equal(partialCreate.result.seedCount, 1);
+  assert.equal(partialCreate.result.semester.shellState, "PARTIAL");
+  await executeSemesterCommand(callable, COMMAND_TYPES.TRANSITION_SEMESTER_STATUS, {
+    semesterId: "2028-1",
+    expectedRevision: 1,
+    targetStatus: "PREPARING",
+    reason: "부분 shell 검증",
+  });
+  const partialValidation = await executeSemesterCommand(
+    callable,
+    COMMAND_TYPES.VALIDATE_SEMESTER_READINESS,
+    { semesterId: "2028-1", expectedRevision: 1 },
+  );
+  assert.equal(partialValidation.result.status, "FAIL");
+  const partialReport = store.data(`${SEMESTER_READINESS_REPORT_COLLECTION}/2028-1`);
+  assert.equal(
+    partialReport.checks.find((check) => check.checkId === "required_settings").status,
+    "FAIL",
+  );
+  assert.equal(
+    partialReport.checks.find((check) => check.checkId === "trusted_shell_complete").status,
+    "PENDING",
+  );
+  assert.equal(
+    await getReason(() => executeSemesterCommand(
+      callable,
+      COMMAND_TYPES.TRANSITION_SEMESTER_STATUS,
+      {
+        semesterId: "2028-1",
+        expectedRevision: 1,
+        targetStatus: "READY",
+        reason: "부분 shell READY 금지",
+      },
+    )),
+    "SEMESTER_READINESS_NOT_PASS",
+  );
+  await executeSemesterCommand(callable, COMMAND_TYPES.TRANSITION_SEMESTER_STATUS, {
+    semesterId: "2028-1",
+    expectedRevision: 1,
+    targetStatus: "FAILED",
+    reason: "부분 shell 검증 실패",
+  });
+  await executeSemesterCommand(callable, COMMAND_TYPES.TRANSITION_SEMESTER_STATUS, {
+    semesterId: "2028-1",
+    expectedRevision: 1,
+    targetStatus: "PREPARING",
+    reason: "부분 shell 보완 재시도",
+  });
+  await executeSemesterCommand(
+    callable,
+    COMMAND_TYPES.VALIDATE_SEMESTER_READINESS,
+    { semesterId: "2028-1", expectedRevision: 1 },
+  );
+  await executeSemesterCommand(callable, COMMAND_TYPES.TRANSITION_SEMESTER_STATUS, {
+    semesterId: "2028-1",
+    expectedRevision: 1,
+    targetStatus: "FAILED",
+    reason: "부분 shell 재검증 실패",
+  });
+  await executeSemesterCommand(callable, COMMAND_TYPES.TRANSITION_SEMESTER_STATUS, {
+    semesterId: "2028-1",
+    expectedRevision: 1,
+    targetStatus: "QUARANTINED",
+    reason: "부분 shell 격리",
+  });
+  assert.equal(
+    store.data(`${SEMESTER_MANIFEST_COLLECTION}/2028-1`).provenance,
+    "LEGACY",
+  );
+  assert.equal(
+    await getReason(() => executeSemesterCommand(
+      callable,
+      COMMAND_TYPES.ACTIVATE_SEMESTER,
+      {
+        semesterId: "2028-1",
+        expectedRevision: 1,
+        readinessPolicyVersion: READINESS_POLICY_VERSION,
+        expectedActiveSemesterId: "2027-2",
+      },
+    )),
+    "SEMESTER_READINESS_NOT_PASS",
+  );
+
+  const productionFixtureStore = new MemoryStore();
+  const productionSemesterAdapter = createSemesterCoreCommandAdapter({
+    projectId: "history-quiz-yongsin",
+  });
+  const productionFixtureCore = createCommandGatewayCore({
+    store: productionFixtureStore,
+    assertSession,
+    commandAdapters: {
+      [COMMAND_TYPES.CREATE_SEMESTER_MANIFEST]: productionSemesterAdapter,
+    },
+    serverTimestamp: () => "production-fixture-timestamp",
+    projectId: "history-quiz-yongsin",
+  });
+  assert.equal(
+    await getReason(() => productionFixtureCore.execute(requestFor({
+      commandId: nextSemesterCommandId(),
+      commandType: COMMAND_TYPES.CREATE_SEMESTER_MANIFEST,
+      payload: {
+        schoolYear: "2029",
+        term: "1",
+        displayName: "금지 fixture",
+        startDate: "2029-03-01",
+        endDate: "2029-07-31",
+        _testFixture: "PARTIAL_SHELL",
+      },
+    }))),
+    "SEMESTER_TEST_FIXTURE_FORBIDDEN",
+  );
+  assert.equal(productionFixtureStore.documents.size, 0);
+
+  const stagingPartialStore = new MemoryStore({
+    "years/2027/semesters/2/point_policies/current": {
+      manualAdjustEnabled: false,
+      legacyPartialShell: true,
+    },
+  });
+  const stagingPartialAdapter = createSemesterCoreCommandAdapter({
+    getDefaultPointPolicy: () => ({ manualAdjustEnabled: false }),
+    projectId: "westory-staging-177587430482",
+  });
+  const stagingPartialCore = createCommandGatewayCore({
+    store: stagingPartialStore,
+    assertSession,
+    commandAdapters: Object.fromEntries([
+      COMMAND_TYPES.CREATE_SEMESTER_MANIFEST,
+      COMMAND_TYPES.TRANSITION_SEMESTER_STATUS,
+      COMMAND_TYPES.VALIDATE_SEMESTER_READINESS,
+    ].map((commandType) => [commandType, stagingPartialAdapter])),
+    serverTimestamp: () => "staging-partial-timestamp",
+    projectId: "westory-staging-177587430482",
+  });
+  const stagingPartialCallable = createCallableExports({ core: stagingPartialCore });
+  const adoptedPartial = await executeSemesterCommand(
+    stagingPartialCallable,
+    COMMAND_TYPES.CREATE_SEMESTER_MANIFEST,
+    {
+      schoolYear: "2027",
+      term: "2",
+      displayName: "2027/2 기존 부분 shell 재현",
+      startDate: "2027-08-01",
+      endDate: "2027-12-31",
+      _testFixture: "PARTIAL_SHELL",
+    },
+  );
+  assert.equal(adoptedPartial.result.seedCount, 1);
+  assert.deepEqual(
+    stagingPartialStore.data("years/2027/semesters/2/point_policies/current"),
+    { manualAdjustEnabled: false, legacyPartialShell: true },
+  );
+  await executeSemesterCommand(
+    stagingPartialCallable,
+    COMMAND_TYPES.TRANSITION_SEMESTER_STATUS,
+    {
+      semesterId: "2027-2",
+      expectedRevision: 1,
+      targetStatus: "PREPARING",
+      reason: "기존 부분 shell readiness 검증",
+    },
+  );
+  const adoptedPartialValidation = await executeSemesterCommand(
+    stagingPartialCallable,
+    COMMAND_TYPES.VALIDATE_SEMESTER_READINESS,
+    { semesterId: "2027-2", expectedRevision: 1 },
+  );
+  assert.equal(adoptedPartialValidation.result.status, "FAIL");
+
+  const extensionStore = new MemoryStore();
+  const extensionSemesterAdapter = createSemesterCoreCommandAdapter({
+    getDefaultPointPolicy: () => ({ rankPolicy: {} }),
+    projectId: "demo-westory-session-command-gateway",
+    evaluationClock: () => "2032-01-01T00:00:00.000Z",
+    readinessAdapters: [{
+      evaluate: async () => [{
+        checkId: "archive_adapter_readiness",
+        label: "Archive adapter readiness",
+        category: "DOMAIN",
+        required: true,
+        status: "PENDING",
+        evidence: "W4 adapter is not registered yet",
+        failureReason: "ARCHIVE_ADAPTER_PENDING",
+        ownerWave: "W4",
+      }],
+    }],
+  });
+  const extensionCore = createCommandGatewayCore({
+    store: extensionStore,
+    assertSession,
+    commandAdapters: Object.fromEntries([
+      COMMAND_TYPES.CREATE_SEMESTER_MANIFEST,
+      COMMAND_TYPES.VALIDATE_SEMESTER_READINESS,
+      COMMAND_TYPES.TRANSITION_SEMESTER_STATUS,
+    ].map((commandType) => [commandType, extensionSemesterAdapter])),
+    serverTimestamp: () => "extension-readiness-timestamp",
+    projectId: "demo-westory-session-command-gateway",
+  });
+  const extensionCallable = createCallableExports({ core: extensionCore });
+  await executeSemesterCommand(extensionCallable, COMMAND_TYPES.CREATE_SEMESTER_MANIFEST, {
+    schoolYear: "2032",
+    term: "1",
+    displayName: "확장 readiness fixture",
+    startDate: "2032-03-01",
+    endDate: "2032-07-31",
+  });
+  await executeSemesterCommand(extensionCallable, COMMAND_TYPES.TRANSITION_SEMESTER_STATUS, {
+    semesterId: "2032-1",
+    expectedRevision: 1,
+    targetStatus: "PREPARING",
+    reason: "확장 readiness 준비",
+  });
+  const extensionValidation = await executeSemesterCommand(
+    extensionCallable,
+    COMMAND_TYPES.VALIDATE_SEMESTER_READINESS,
+    { semesterId: "2032-1", expectedRevision: 1 },
+  );
+  assert.equal(extensionValidation.result.status, "FAIL");
+  assert.equal(extensionValidation.result.requiredTotal, 12);
+  const extensionReport = extensionStore.data(
+    `${SEMESTER_READINESS_REPORT_COLLECTION}/2032-1`,
+  );
+  assert.equal(extensionReport.checks.length, 13);
+  assert.equal(
+    extensionReport.checks.find((check) => check.checkId === "archive_adapter_readiness").status,
+    "PENDING",
+  );
+  assert.equal(
+    await getReason(() => executeSemesterCommand(
+      extensionCallable,
+      COMMAND_TYPES.TRANSITION_SEMESTER_STATUS,
+      {
+        semesterId: "2032-1",
+        expectedRevision: 1,
+        targetStatus: "READY",
+        reason: "등록된 후속 필수 check 차단",
+      },
+    )),
+    "SEMESTER_READINESS_NOT_PASS",
+  );
+
+  const concurrentStore = new MemoryStore();
+  const concurrentSemesterAdapter = createSemesterCoreCommandAdapter({
+    getDefaultPointPolicy: () => ({ rankPolicy: {} }),
+    projectId: "demo-westory-session-command-gateway",
+  });
+  const concurrentCore = createCommandGatewayCore({
+    store: concurrentStore,
+    assertSession,
+    commandAdapters: Object.fromEntries([
+      COMMAND_TYPES.CREATE_SEMESTER_MANIFEST,
+      COMMAND_TYPES.UPDATE_OPERATIONAL_SETTINGS,
+      COMMAND_TYPES.UPDATE_SEMESTER_MANIFEST,
+      COMMAND_TYPES.VALIDATE_SEMESTER_READINESS,
+      COMMAND_TYPES.TRANSITION_SEMESTER_STATUS,
+      COMMAND_TYPES.ACTIVATE_SEMESTER,
+    ].map((commandType) => [commandType, concurrentSemesterAdapter])),
+    serverTimestamp: () => "concurrent-semester-timestamp",
+    projectId: "demo-westory-session-command-gateway",
+  });
+  const concurrentCallable = createCallableExports({ core: concurrentCore });
+  const candidateA = await prepareReadySemester({
+    targetCallable: concurrentCallable,
+    schoolYear: "2030",
+    term: "1",
+    displayName: "동시 후보 A",
+  });
+  const candidateB = await prepareReadySemester({
+    targetCallable: concurrentCallable,
+    schoolYear: "2030",
+    term: "2",
+    displayName: "동시 후보 B",
+  });
+  const concurrentActivations = await Promise.allSettled([
+    executeSemesterCommand(concurrentCallable, COMMAND_TYPES.ACTIVATE_SEMESTER, {
+      semesterId: candidateA,
+      expectedRevision: 1,
+      readinessPolicyVersion: READINESS_POLICY_VERSION,
+      expectedActiveSemesterId: null,
+    }),
+    executeSemesterCommand(concurrentCallable, COMMAND_TYPES.ACTIVATE_SEMESTER, {
+      semesterId: candidateB,
+      expectedRevision: 1,
+      readinessPolicyVersion: READINESS_POLICY_VERSION,
+      expectedActiveSemesterId: null,
+    }),
+  ]);
+  assert.equal(concurrentActivations.filter((result) => result.status === "fulfilled").length, 1);
+  assert.equal(concurrentActivations.filter((result) => result.status === "rejected").length, 1);
+  assert.equal(
+    concurrentActivations.find((result) => result.status === "rejected").reason?.details?.reason,
+    "SEMESTER_ACTIVE_EXPECTATION_CONFLICT",
+  );
+  const concurrentActiveDocuments = await concurrentStore.query(
+    SEMESTER_MANIFEST_COLLECTION,
+    { field: "status", operator: "==", value: "ACTIVE" },
+  );
+  assert.equal(concurrentActiveDocuments.length, 1);
+  const preservedActiveId = concurrentStore.data(ACTIVE_SEMESTER_POINTER_PATH).semesterId;
+  const losingCandidateId = preservedActiveId === candidateA ? candidateB : candidateA;
+  concurrentStore.failNextCommit = true;
+  await assert.rejects(
+    () => executeSemesterCommand(concurrentCallable, COMMAND_TYPES.ACTIVATE_SEMESTER, {
+      semesterId: losingCandidateId,
+      expectedRevision: 1,
+      readinessPolicyVersion: READINESS_POLICY_VERSION,
+      expectedActiveSemesterId: preservedActiveId,
+    }),
+    /SIMULATED_COMMIT_FAILURE/,
+  );
+  assert.equal(concurrentStore.data(ACTIVE_SEMESTER_POINTER_PATH).semesterId, preservedActiveId);
+  assert.equal(concurrentStore.data(`${SEMESTER_MANIFEST_COLLECTION}/${preservedActiveId}`).status, "ACTIVE");
+  assert.equal(concurrentStore.data(`${SEMESTER_MANIFEST_COLLECTION}/${losingCandidateId}`).status, "READY");
+
+  await executeSemesterCommand(callable, COMMAND_TYPES.TRANSITION_SEMESTER_STATUS, {
+    semesterId: "2027-2",
+    expectedRevision: 2,
+    targetStatus: "CLOSING",
+    reason: "종료 준비",
+  });
+  assert.equal(store.data("site_settings/config").semesterLifecycleStatus, "CLOSING");
+  assert.equal(store.data("site_settings/config").semesterWritesEnabled, false);
+  const closingSemesterState = await callable.getSemesterCoreState.run(semesterStateRequest);
+  assert.equal(closingSemesterState.error, null);
+  assert.equal(closingSemesterState.active.semesterId, "2027-2");
+  assert.equal(closingSemesterState.active.status, "CLOSING");
+  assert.equal(closingSemesterState.provenance, "CURRENT");
+  assert.equal(closingSemesterState.readiness.current, true);
+  await executeSemesterCommand(callable, COMMAND_TYPES.TRANSITION_SEMESTER_STATUS, {
+    semesterId: "2027-2",
+    expectedRevision: 2,
+    targetStatus: "ACTIVE",
+    reason: "종료 취소",
+  });
+  assert.equal(store.data("site_settings/config").semesterLifecycleStatus, "ACTIVE");
+  assert.equal(store.data("site_settings/config").semesterWritesEnabled, true);
+  await executeSemesterCommand(callable, COMMAND_TYPES.TRANSITION_SEMESTER_STATUS, {
+    semesterId: "2027-2",
+    expectedRevision: 2,
+    targetStatus: "CLOSING",
+    reason: "종료 재개",
+  });
+  await executeSemesterCommand(callable, COMMAND_TYPES.TRANSITION_SEMESTER_STATUS, {
+    semesterId: "2027-2",
+    expectedRevision: 2,
+    targetStatus: "CLOSED",
+    reason: "종료 완료",
+  });
+  assert.equal(store.data(ACTIVE_SEMESTER_POINTER_PATH).semesterId, null);
+  assert.equal(store.data("site_settings/config").semesterLifecycleStatus, "CLOSED");
+  assert.equal(store.data("site_settings/config").semesterWritesEnabled, false);
+  await executeSemesterCommand(callable, COMMAND_TYPES.TRANSITION_SEMESTER_STATUS, {
+    semesterId: "2027-2",
+    expectedRevision: 2,
+    targetStatus: "ARCHIVED",
+    reason: "보관 완료",
+  });
+  assert.equal(
+    await getReason(() => executeSemesterCommand(
+      callable,
+      COMMAND_TYPES.ACTIVATE_SEMESTER,
+      {
+        semesterId: "2027-2",
+        expectedRevision: 2,
+        readinessPolicyVersion: READINESS_POLICY_VERSION,
+        expectedActiveSemesterId: null,
+      },
+    )),
+    "SEMESTER_TRANSITION_INVALID",
+  );
+  const postCloseCandidateId = await prepareReadySemester({
+    targetCallable: callable,
+    schoolYear: "2033",
+    term: "1",
+    displayName: "CLOSED 이후 활성화 후보",
+  });
+  const postCloseActivation = await executeSemesterCommand(
+    callable,
+    COMMAND_TYPES.ACTIVATE_SEMESTER,
+    {
+      semesterId: postCloseCandidateId,
+      expectedRevision: 1,
+      readinessPolicyVersion: READINESS_POLICY_VERSION,
+      expectedActiveSemesterId: null,
+    },
+  );
+  assert.equal(postCloseActivation.result.status, "ACTIVE");
+  assert.equal(postCloseActivation.result.previousSemesterId, null);
+  assert.equal(store.data(ACTIVE_SEMESTER_POINTER_PATH).semesterId, postCloseCandidateId);
+  assert.equal(store.data("site_settings/config").semesterLifecycleStatus, "ACTIVE");
+  assert.equal(store.data("site_settings/config").semesterWritesEnabled, true);
+  assert.equal(store.data(`${SEMESTER_MANIFEST_COLLECTION}/2027-2`).status, "ARCHIVED");
 
   const statusWritesBefore = Array.from(store.committedWrites.values())
     .reduce((sum, count) => sum + count, 0);
@@ -1242,6 +2285,32 @@ const main = async () => {
       "RETIRED_POINT_CALLABLE_AUTHORIZED_NO_WRITE_CLIENT_UPDATE_REQUIRED",
       "QUERY_ONLY_STATUS_AUTH_AND_ZERO_WRITES",
       "SIMULATED_COMMIT_FAILURE_ZERO_PARTIAL_WRITES",
+      "SEMESTER_OPERATIONAL_SETTINGS_EXACT_FIELDS_AND_POINTER_PRESERVATION",
+      "SEMESTER_ADMIN_AND_SESSION_PRE_BUSINESS_REJECTION",
+      "SEMESTER_STRICT_PAYLOAD_SERVER_OWNED_FIELDS_AND_DATE_RANGE",
+      "SEMESTER_CREATE_SIX_SEEDS_ATOMIC_REPLAY_CONFLICT",
+      "SEMESTER_STATE_MACHINE_ALLOWED_FORBIDDEN_AND_DUPLICATE_TRANSITIONS",
+      "SEMESTER_READINESS_REQUIRED_ELEVEN_PASS",
+      "SEMESTER_READINESS_IMMUTABLE_VERSION_AND_LATEST_REPORT",
+      "SEMESTER_OPTIONAL_WARNING_DOES_NOT_BLOCK_READY",
+      "SEMESTER_REQUIRED_FAIL_PENDING_BLOCK_READY_AND_ACTIVE",
+      "SEMESTER_MANIFEST_UPDATE_CAS_AND_STALE_INVALIDATION",
+      "SEMESTER_DEPENDENCY_HASH_STALE_INVALIDATION",
+      "SEMESTER_POLICY_VERSION_MISMATCH_REJECTED",
+      "SEMESTER_PARTIAL_SHELL_STAGING_DEMO_ONLY_PRODUCTION_FORBIDDEN",
+      "SEMESTER_STAGING_EXISTING_2027_2_PARTIAL_POINT_POLICY_ADOPTION_NO_OVERWRITE",
+      "SEMESTER_REGISTERED_FUTURE_REQUIRED_CHECK_BLOCKS_READY",
+      "SEMESTER_ATOMIC_ACTIVATION_CLOSE_PREVIOUS_POINTER_CONFIG_RECEIPT_AUDIT",
+      "SEMESTER_ACTIVATION_RESPONSE_LOSS_STATUS_AND_REPLAY_RECOVERY",
+      "SEMESTER_CONCURRENT_DIFFERENT_TARGET_EXACTLY_ONE_ACTIVE",
+      "SEMESTER_ACTIVATION_COMMIT_FAILURE_PRESERVES_PREVIOUS_ACTIVE",
+      "SEMESTER_ALREADY_ACTIVE_CLOSED_ARCHIVED_REACTIVATION_REJECTED",
+      "SEMESTER_CLOSING_CANCEL_CLOSE_ARCHIVE_LIFECYCLE",
+      "SEMESTER_CLOSED_CONFIG_NOT_LEGACY_ACTIVE_AND_NEXT_READY_ACTIVATES",
+      "SEMESTER_QUERY_ONLY_RESOLVER_AUTH_AND_ZERO_WRITES",
+      "SEMESTER_QUERY_READINESS_DEPENDENCY_FRESHNESS_SAME_TRANSACTION",
+      "SEMESTER_RESOLVER_CLOSING_CURRENT_AND_CONFLICT_FAIL_CLOSED",
+      "HOLIDAY_CANONICAL_ACTIVE_POINTER_AND_MANIFEST_SCOPE_FENCE",
     ],
     productionAccess: 0,
   }));

@@ -8,6 +8,7 @@ const { onSchedule } = require('firebase-functions/v2/scheduler');
 initializeApp();
 const sessionAuthority = require('./sessionAuthority');
 const commandGateway = require('./commandGateway');
+const semesterCore = require('./semesterCore');
 const {
   createLegacyPointV1CommandAdapter,
   createRetiredAdjustTeacherPointsHandler,
@@ -8395,10 +8396,21 @@ const legacyPointV1CommandAdapter = createLegacyPointV1CommandAdapter({
   createTransactionPayload,
 });
 
+const semesterCoreCommandAdapter = semesterCore.createSemesterCoreCommandAdapter({
+  getDefaultPointPolicy,
+  projectId: commandGateway.resolveProjectId(),
+});
+
 const commandGatewayCore = commandGateway.createCommandGatewayCore({
   authorizeCommand: authorizeCommandGatewayActor,
   commandAdapters: {
     [commandGateway.COMMAND_TYPES.ADJUST_TEACHER_POINTS]: legacyPointV1CommandAdapter,
+    [commandGateway.COMMAND_TYPES.CREATE_SEMESTER_MANIFEST]: semesterCoreCommandAdapter,
+    [commandGateway.COMMAND_TYPES.UPDATE_OPERATIONAL_SETTINGS]: semesterCoreCommandAdapter,
+    [commandGateway.COMMAND_TYPES.UPDATE_SEMESTER_MANIFEST]: semesterCoreCommandAdapter,
+    [commandGateway.COMMAND_TYPES.VALIDATE_SEMESTER_READINESS]: semesterCoreCommandAdapter,
+    [commandGateway.COMMAND_TYPES.TRANSITION_SEMESTER_STATUS]: semesterCoreCommandAdapter,
+    [commandGateway.COMMAND_TYPES.ACTIVATE_SEMESTER]: semesterCoreCommandAdapter,
   },
 });
 Object.assign(exports, commandGateway.createCallableExports({ core: commandGatewayCore }));
