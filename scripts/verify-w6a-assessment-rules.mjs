@@ -134,8 +134,8 @@ try {
       answerOptions: ["정답"],
       contentRevision: 1,
     }));
-    await assertSucceeds(updateDoc(doc(adminDb, path), { marker: "metadata-update" }));
-    deniedOperations += 1;
+    await assertFails(updateDoc(doc(adminDb, path), { marker: "metadata-update" }));
+    deniedOperations += 2;
   }
 
   for (const collectionName of [

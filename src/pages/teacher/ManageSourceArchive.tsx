@@ -230,7 +230,10 @@ const getStatusHelp = (asset: SourceArchiveAsset) => {
 const ManageSourceArchive: React.FC = () => {
   const { currentUser, userData } = useAuth();
   const canRead = canReadLessonManagement(userData, currentUser?.email || "");
-  const canWrite = canWriteLessonManagement(userData, currentUser?.email || "");
+  const mutationsUnavailable = true;
+  const canWrite =
+    !mutationsUnavailable &&
+    canWriteLessonManagement(userData, currentUser?.email || "");
   const [assets, setAssets] = useState<SourceArchiveAsset[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
@@ -520,7 +523,7 @@ const ManageSourceArchive: React.FC = () => {
     return (
       <div className="mx-auto max-w-6xl px-4 py-8">
         <div className="rounded-3xl border border-amber-200 bg-amber-50 p-6 text-amber-900 shadow-sm">
-          <h1 className="text-2xl font-extrabold">{UI.title}</h1>
+          <h2 className="text-2xl font-extrabold">{UI.title}</h2>
           <p className="mt-2 text-sm">{UI.noAccess}</p>
         </div>
       </div>
@@ -534,7 +537,7 @@ const ManageSourceArchive: React.FC = () => {
     <div className="mx-auto max-w-7xl px-4 py-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h1 className="text-3xl font-extrabold text-gray-900">{UI.title}</h1>
+          <h2 className="text-3xl font-extrabold text-gray-900">{UI.title}</h2>
           <p className="mt-2 text-sm text-gray-500">{UI.listHint}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -553,11 +556,14 @@ const ManageSourceArchive: React.FC = () => {
         </div>
       </div>
 
-      {!canWrite && (
-        <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
-          {UI.readOnly}
-        </div>
-      )}
+      <StatePanel
+        state="DISABLED"
+        title="사료 창고는 현재 조회 전용입니다."
+        description="사료 등록, 원본 업로드, 수정, 삭제와 이전 자료 승격은 안전한 저장 경로가 마련될 때까지 사용할 수 없습니다."
+        readOnly
+        compact
+        className="mt-4"
+      />
 
       {(message || errorMessage) && (
         <div

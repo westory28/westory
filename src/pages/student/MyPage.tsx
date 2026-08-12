@@ -3039,10 +3039,10 @@ const MyPage: React.FC = () => {
         <aside className="w-full lg:w-64 shrink-0">
           <div className="sticky top-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_14px_35px_rgba(15,23,42,0.06)]">
             <div className="p-6 border-b border-slate-100">
-              <h1 className="text-xl font-extrabold text-gray-800 flex items-center gap-2">
+              <h2 className="text-xl font-extrabold text-gray-800 flex items-center gap-2">
                 <i className="fas fa-user-circle text-gray-400"></i>
                 마이페이지
-              </h1>
+              </h2>
             </div>
             <nav className="flex flex-col">
               {leftMenus

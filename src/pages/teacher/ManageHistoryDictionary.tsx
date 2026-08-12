@@ -7,8 +7,13 @@ import React, {
 } from "react";
 import { useSearchParams } from "react-router-dom";
 import { LoadingOverlay } from "../../components/common/LoadingState";
+import StatePanel from "../../components/common/StatePanel";
 import { useAppToast } from "../../components/common/AppToastProvider";
 import { useAuth } from "../../contexts/AuthContext";
+import {
+  canReadLessonManagement,
+  canWriteLessonManagement,
+} from "../../lib/permissions";
 import {
   approveHistoryDictionaryTermForRequests,
   deleteStudentHistoryDictionaryWordByTeacher,
@@ -209,7 +214,9 @@ const mergeRequestSources = (
 };
 
 const ManageHistoryDictionary: React.FC = () => {
-  const { config, currentUser } = useAuth();
+  const { config, currentUser, userData } = useAuth();
+  const canRead = canReadLessonManagement(userData, currentUser?.email || "");
+  const canWrite = canWriteLessonManagement(userData, currentUser?.email || "");
   const { showToast } = useAppToast();
   const [searchParams, setSearchParams] = useSearchParams();
   const uploadInputRef = useRef<HTMLInputElement>(null);
@@ -251,6 +258,7 @@ const ManageHistoryDictionary: React.FC = () => {
     useState(ALL_INITIAL);
 
   useEffect(() => {
+    if (!canRead) return undefined;
     const unsubscribeRequests =
       subscribeTeacherHistoryDictionaryRequests(setRequests);
     const unsubscribeTerms = subscribeTeacherHistoryDictionaryTerms(
@@ -268,9 +276,13 @@ const ManageHistoryDictionary: React.FC = () => {
       unsubscribeRequests();
       unsubscribeTerms();
     };
-  }, [showToast]);
+  }, [canRead, showToast]);
 
   useEffect(() => {
+    if (!canRead) {
+      setStudentWords([]);
+      return undefined;
+    }
     let cancelled = false;
 
     const loadStudentWords = async () => {
@@ -298,10 +310,10 @@ const ManageHistoryDictionary: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [config?.semester, config?.year, showToast]);
+  }, [canRead, config?.semester, config?.year, showToast]);
 
   useEffect(() => {
-    if (!config || !currentUser?.uid) {
+    if (!canRead || !config || !currentUser?.uid) {
       setNotificationRequests([]);
       return;
     }
@@ -329,12 +341,12 @@ const ManageHistoryDictionary: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [config?.semester, config?.year, currentUser?.uid]);
+  }, [canRead, config?.semester, config?.year, currentUser?.uid]);
 
   useEffect(() => {
     const panel = searchParams.get("panel");
     const requestId = searchParams.get("requestId");
-    if (panel === "upload") {
+    if (panel === "upload" && canWrite) {
       setActivePanel("upload");
       setSelectedRequestId("");
       setSelectedTermId("");
@@ -356,7 +368,7 @@ const ManageHistoryDictionary: React.FC = () => {
       setSelectedStudentWordId("");
       setSelectedRequestId(requestId);
     }
-  }, [searchParams]);
+  }, [canWrite, searchParams]);
 
   const mergedRequests = useMemo(
     () => mergeRequestSources(requests, notificationRequests),
@@ -1181,9 +1193,32 @@ const ManageHistoryDictionary: React.FC = () => {
     }
   };
 
+  if (!canRead) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-8">
+        <StatePanel
+          state="PERMISSION"
+          title="역사 사전 관리 권한이 없습니다."
+          description="수업 자료를 읽을 수 있는 교사 권한을 확인해 주세요."
+          contactAdmin
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 px-4 py-6 lg:px-6 xl:px-8">
       <div className="mx-auto max-w-7xl">
+        {!canWrite && (
+          <StatePanel
+            state="PERMISSION"
+            title="역사 사전을 읽기 전용으로 확인하고 있습니다."
+            description="단어 목록과 요청은 확인할 수 있습니다. 등록·수정·승인·삭제와 Excel 업로드에는 교사 쓰기 권한이 필요합니다."
+            readOnly
+            compact
+            className="mb-4"
+          />
+        )}
         <div className="grid gap-4 xl:grid-cols-[13rem_minmax(30rem,1.25fr)_minmax(24rem,0.95fr)]">
           <aside className="self-start overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             <nav
@@ -1211,58 +1246,60 @@ const ManageHistoryDictionary: React.FC = () => {
                   label: "Excel 업로드",
                   description: "양식 일괄 등록",
                 },
-              ].map((item) => {
-                const active = activePanel === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => {
-                      setActivePanel(item.id);
-                      if (item.id === "terms") {
-                        setSelectedRequestId("");
-                        setSelectedStudentWordId("");
-                        setSearchParams({});
-                      } else if (item.id === "studentWords") {
-                        setSelectedRequestId("");
-                        setSelectedTermId("");
-                        setSearchParams({ panel: "studentWords" });
-                      } else if (item.id === "requests") {
-                        setSelectedTermId("");
-                        setSelectedStudentWordId("");
-                        setSearchParams({ panel: "requests" });
-                      } else {
-                        setSelectedRequestId("");
-                        setSelectedTermId("");
-                        setSelectedStudentWordId("");
-                        setSearchParams({ panel: "upload" });
-                      }
-                    }}
-                    className={`relative block min-h-[3.75rem] w-full px-4 py-3 text-left transition ${
-                      active
-                        ? "bg-blue-50 text-blue-700"
-                        : "bg-white text-slate-800 hover:bg-slate-50"
-                    }`}
-                  >
-                    {active && (
-                      <span
-                        className="absolute inset-y-0 left-0 w-1 bg-blue-600"
-                        aria-hidden="true"
-                      />
-                    )}
-                    <span className="block text-sm font-extrabold">
-                      {item.label}
-                    </span>
-                    <span
-                      className={`mt-1 block text-xs font-bold ${
-                        active ? "text-blue-600" : "text-slate-500"
+              ]
+                .filter((item) => canWrite || item.id !== "upload")
+                .map((item) => {
+                  const active = activePanel === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => {
+                        setActivePanel(item.id);
+                        if (item.id === "terms") {
+                          setSelectedRequestId("");
+                          setSelectedStudentWordId("");
+                          setSearchParams({});
+                        } else if (item.id === "studentWords") {
+                          setSelectedRequestId("");
+                          setSelectedTermId("");
+                          setSearchParams({ panel: "studentWords" });
+                        } else if (item.id === "requests") {
+                          setSelectedTermId("");
+                          setSelectedStudentWordId("");
+                          setSearchParams({ panel: "requests" });
+                        } else {
+                          setSelectedRequestId("");
+                          setSelectedTermId("");
+                          setSelectedStudentWordId("");
+                          setSearchParams({ panel: "upload" });
+                        }
+                      }}
+                      className={`relative block min-h-[3.75rem] w-full px-4 py-3 text-left transition ${
+                        active
+                          ? "bg-blue-50 text-blue-700"
+                          : "bg-white text-slate-800 hover:bg-slate-50"
                       }`}
                     >
-                      {item.description}
-                    </span>
-                  </button>
-                );
-              })}
+                      {active && (
+                        <span
+                          className="absolute inset-y-0 left-0 w-1 bg-blue-600"
+                          aria-hidden="true"
+                        />
+                      )}
+                      <span className="block text-sm font-extrabold">
+                        {item.label}
+                      </span>
+                      <span
+                        className={`mt-1 block text-xs font-bold ${
+                          active ? "text-blue-600" : "text-slate-500"
+                        }`}
+                      >
+                        {item.description}
+                      </span>
+                    </button>
+                  );
+                })}
             </nav>
           </aside>
 
@@ -1275,6 +1312,7 @@ const ManageHistoryDictionary: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleNewTerm}
+                  disabled={!canWrite}
                   className="inline-flex h-9 items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 text-xs font-extrabold text-blue-700 transition hover:bg-blue-100"
                 >
                   <i className="fas fa-plus text-[11px]" aria-hidden="true"></i>
@@ -1733,7 +1771,10 @@ const ManageHistoryDictionary: React.FC = () => {
             </aside>
           )}
 
-          <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:p-7">
+          <fieldset
+            disabled={!canWrite}
+            className="min-w-0 rounded-xl border border-slate-200 bg-white p-5 shadow-sm disabled:opacity-75 lg:p-7"
+          >
             {activePanel === "upload" ? (
               <>
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -2313,7 +2354,7 @@ const ManageHistoryDictionary: React.FC = () => {
                 </div>
               </>
             )}
-          </div>
+          </fieldset>
         </div>
       </div>
 

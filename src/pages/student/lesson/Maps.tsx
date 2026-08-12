@@ -195,9 +195,9 @@ const StudentMaps: React.FC = () => {
                     <div className="mb-3 inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
                       {selectedItem.category}
                     </div>
-                    <h1 className="text-xl font-extrabold text-gray-900 sm:text-2xl">
+                    <h2 className="text-xl font-extrabold text-gray-900 sm:text-2xl">
                       {currentGroup?.title || selectedItem.title}
-                    </h1>
+                    </h2>
                   </div>
                   {externalUrl && (
                     <a

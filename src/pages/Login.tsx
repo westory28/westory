@@ -21,7 +21,7 @@ import {
   setDoc,
   where,
 } from "firebase/firestore";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   auth,
   authPersistenceReady,
@@ -30,6 +30,10 @@ import {
   runtimeEnvironment,
 } from "../lib/firebase";
 import { InlineLoading, PageLoading } from "../components/common/LoadingState";
+import FormField from "../components/common/FormField";
+import ModalSurface from "../components/common/ModalSurface";
+import PublicServiceLinks from "../components/common/PublicServiceLinks";
+import WestoryBrand from "../components/common/WestoryBrand";
 import { markLoginPerf, measureLoginPerf } from "../lib/loginPerf";
 import { readSiteSettingDoc } from "../lib/siteSettings";
 import {
@@ -629,6 +633,8 @@ const isIgnorableRedirectError = (error: unknown): boolean => {
 const Login: React.FC = () => {
   const { currentUser, userData, interfaceConfig, loading } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedPolicy = searchParams.get("policy");
   const restrictedInAppBrowser = isRestrictedInAppBrowser();
   const ddayTitle = String(interfaceConfig?.ddayTitle || "").trim();
   const ddayDate = String(interfaceConfig?.ddayDate || "").trim();
@@ -686,6 +692,7 @@ const Login: React.FC = () => {
   const redirectHandledRef = useRef(false);
   const autoResumeUidRef = useRef<string | null>(null);
   const authActionLockRef = useRef(false);
+  const requestedPolicyOpenedRef = useRef<string | null>(null);
   const latestCurrentUserRef = useRef<User | null>(currentUser);
   const latestUserDataRef = useRef<UserData | null>(userData);
   const preferredRole = getSavedRole();
@@ -1949,22 +1956,30 @@ const Login: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    if (
+      (requestedPolicy !== "terms" && requestedPolicy !== "privacy") ||
+      requestedPolicyOpenedRef.current === requestedPolicy
+    ) {
+      return;
+    }
+    requestedPolicyOpenedRef.current = requestedPolicy;
+    void showPolicy(requestedPolicy);
+  }, [requestedPolicy]);
+
   if (loading)
     return <PageLoading message="로그인 상태를 확인하는 중입니다." />;
 
   return (
-    <div className="relative flex min-h-screen min-h-[100dvh] flex-col bg-gray-50">
+    <div className="ws-login-page">
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 py-10 md:py-12">
-        <div className="text-5xl mb-4 animate-bounce">
-          {interfaceConfig?.mainEmoji || "\u{1F4DA}"}
-        </div>
-        <h1 className="text-6xl font-black tracking-tight mb-3">
-          <span className="text-blue-600">We</span>
-          <span className="text-amber-500">story</span>
-        </h1>
-        <p className="text-gray-500 text-xl font-medium mb-8">
-          {interfaceConfig?.mainSubtitle || "우리가 써 내려가는 이야기"}
-        </p>
+        <WestoryBrand
+          as="h1"
+          className="ws-login-brand"
+          subtitle={
+            interfaceConfig?.mainSubtitle || "우리가 써 내려가는 이야기"
+          }
+        />
 
         {ddayCount !== null && (
           <div
@@ -2079,9 +2094,13 @@ const Login: React.FC = () => {
                 <p className="mt-1 text-xs leading-5 text-blue-700">
                   전용 테스트 환경에서만 표시됩니다.
                 </p>
-                <label className="mt-3 block text-xs font-bold text-gray-700">
-                  이메일
+                <FormField
+                  label="이메일"
+                  htmlFor="staging-test-email"
+                  className="mt-3"
+                >
                   <input
+                    id="staging-test-email"
                     type="email"
                     autoComplete="username"
                     value={stagingTestEmail}
@@ -2090,10 +2109,14 @@ const Login: React.FC = () => {
                     }
                     className="mt-1 min-h-10 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
                   />
-                </label>
-                <label className="mt-3 block text-xs font-bold text-gray-700">
-                  비밀번호
+                </FormField>
+                <FormField
+                  label="비밀번호"
+                  htmlFor="staging-test-password"
+                  className="mt-3"
+                >
                   <input
+                    id="staging-test-password"
                     type="password"
                     autoComplete="current-password"
                     value={stagingTestPassword}
@@ -2102,7 +2125,7 @@ const Login: React.FC = () => {
                     }
                     className="mt-1 min-h-10 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900"
                   />
-                </label>
+                </FormField>
                 <button
                   type="submit"
                   disabled={authBusy}
@@ -2116,21 +2139,11 @@ const Login: React.FC = () => {
         )}
       </div>
 
-      <div className="flex shrink-0 items-center justify-center gap-2 px-4 pb-6 text-xs whitespace-nowrap md:pb-8">
-        <button
-          onClick={() => showPolicy("terms")}
-          className="text-gray-400 hover:text-gray-600"
-        >
-          이용 약관
-        </button>
-        <span className="text-gray-300">|</span>
-        <button
-          onClick={() => showPolicy("privacy")}
-          className="text-gray-400 hover:text-gray-600"
-        >
-          개인정보 처리 방침
-        </button>
-      </div>
+      <PublicServiceLinks
+        className="ws-login-links"
+        onOpenTerms={() => void showPolicy("terms")}
+        onOpenPrivacy={() => void showPolicy("privacy")}
+      />
 
       <div className="fixed bottom-12 right-4 z-30 md:bottom-8 md:right-8">
         <button
@@ -2143,357 +2156,295 @@ const Login: React.FC = () => {
         </button>
       </div>
 
-      {policyOpen && (
-        <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm"
-          onClick={() => setPolicyOpen(false)}
-        >
+      <ModalSurface
+        open={policyOpen}
+        title={policyTitle || "서비스 정책"}
+        onClose={() => setPolicyOpen(false)}
+        size="wide"
+      >
+        {policyLoading ? (
+          <InlineLoading message="약관을 불러오는 중입니다." showWarning />
+        ) : (
           <div
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-xl mx-4 max-h-[80vh] flex flex-col overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between p-5 border-b border-gray-100">
-              <h2 className="text-lg font-bold text-gray-900">{policyTitle}</h2>
-              <button
-                onClick={() => setPolicyOpen(false)}
-                className="text-gray-400 hover:text-gray-700 text-xl transition"
+            className="policy-rich-text"
+            dangerouslySetInnerHTML={{ __html: policyHtml }}
+          />
+        )}
+      </ModalSurface>
+
+      <ModalSurface
+        open={profileModalOpen}
+        title="반가워요!"
+        description="최초 로그인 학생 정보를 입력해 주세요."
+        onClose={handleProfileCancel}
+        size="small"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={handleProfileCancel}
+              className="px-4 py-2 rounded-lg text-sm font-bold text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={handleProfileSubmit}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-xl transition"
+            >
+              입력 완료
+            </button>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <FormField label="이메일" htmlFor="student-profile-email">
+            <input
+              id="student-profile-email"
+              type="text"
+              value={profileForm.email}
+              readOnly
+              className="w-full bg-gray-100 border border-gray-200 rounded-lg p-3 text-gray-500 text-sm font-mono"
+            />
+          </FormField>
+
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <label
+                htmlFor="student-profile-grade"
+                className="block text-xs font-bold text-gray-500 mb-1"
               >
-                <i className="fas fa-times"></i>
-              </button>
+                학년
+              </label>
+              <select
+                id="student-profile-grade"
+                value={profileForm.grade}
+                onChange={(e) =>
+                  setProfileForm((prev) => ({
+                    ...prev,
+                    grade: e.target.value,
+                  }))
+                }
+                className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+              >
+                {gradeOptions.map((grade) => (
+                  <option key={grade.value} value={grade.value}>
+                    {grade.label}
+                  </option>
+                ))}
+              </select>
             </div>
-            <div className="p-6 overflow-y-auto flex-1 text-sm text-gray-700 leading-relaxed">
-              {policyLoading ? (
-                <InlineLoading
-                  message="약관을 불러오는 중입니다."
-                  showWarning
-                />
-              ) : (
-                <div
-                  className="policy-rich-text"
-                  dangerouslySetInnerHTML={{ __html: policyHtml }}
-                />
-              )}
+            <div>
+              <label
+                htmlFor="student-profile-class"
+                className="block text-xs font-bold text-gray-500 mb-1"
+              >
+                반
+              </label>
+              <select
+                id="student-profile-class"
+                value={profileForm.className}
+                onChange={(e) =>
+                  setProfileForm((prev) => ({
+                    ...prev,
+                    className: e.target.value,
+                  }))
+                }
+                className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+              >
+                <option value="">선택</option>
+                {classOptions.map((cls) => (
+                  <option key={cls.value} value={cls.value}>
+                    {cls.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label
+                htmlFor="student-profile-number"
+                className="block text-xs font-bold text-gray-500 mb-1"
+              >
+                번호
+              </label>
+              <select
+                id="student-profile-number"
+                value={profileForm.number}
+                onChange={(e) =>
+                  setProfileForm((prev) => ({
+                    ...prev,
+                    number: e.target.value,
+                  }))
+                }
+                className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+              >
+                <option value="">선택</option>
+                {defaultNumberOptions.map((studentNumber) => (
+                  <option key={studentNumber.value} value={studentNumber.value}>
+                    {studentNumber.label}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
-        </div>
-      )}
 
-      {profileModalOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 md:p-8 mx-4"
-            onClick={(e) => e.stopPropagation()}
+          <FormField
+            label="이름"
+            htmlFor="student-profile-name"
+            description={
+              profileNameInputWarning
+                ? undefined
+                : "숫자, 영문, 특수문자는 입력할 수 없습니다."
+            }
+            error={
+              profileNameInputWarning
+                ? "영어키로 되어 있어요. 한/영키를 눌러 한글로 바꿔 주세요."
+                : undefined
+            }
+            required
           >
-            <div className="text-center mb-5">
-              <h2 className="text-2xl font-bold text-gray-800">
-                {"\u{1F44B} 반가워요!"}
-              </h2>
-              <p className="text-sm text-gray-500 mt-1">
-                최초 로그인 학생 정보를 입력해주세요.
-              </p>
-            </div>
+            <input
+              id="student-profile-name"
+              type="text"
+              value={profileForm.name}
+              maxLength={4}
+              onChange={(e) => handleProfileNameChange(e.target.value)}
+              placeholder="한글 2~4글자"
+              aria-invalid={profileNameInputWarning}
+              className={`w-full rounded-lg border p-3 text-sm outline-none focus:ring-2 ${
+                profileNameInputWarning
+                  ? "border-red-500 focus:border-red-500 focus:ring-red-200"
+                  : "border-gray-300 focus:ring-blue-500"
+              }`}
+            />
+          </FormField>
+        </div>
+      </ModalSurface>
+      <ModalSurface
+        open={consentModalOpen}
+        title="개인정보 활용 동의"
+        description="서비스 이용을 위해 최초 1회 동의가 필요합니다."
+        onClose={handleConsentCancel}
+        size="wide"
+        footer={
+          <>
+            <button
+              type="button"
+              onClick={handleConsentCancel}
+              className="px-4 py-2 rounded-lg text-sm font-bold text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={handleConsentConfirm}
+              disabled={!consentReady}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-xl transition disabled:bg-gray-300 disabled:cursor-not-allowed"
+            >
+              동의하고 시작하기
+            </button>
+          </>
+        }
+      >
+        <div className="bg-gray-50 p-4 md:p-5 rounded-lg text-base text-gray-700 border border-gray-200 leading-relaxed space-y-4">
+          {consentItems.length === 0 && (
+            <p className="text-center text-gray-400 py-6">
+              등록된 동의 항목이 없습니다.
+            </p>
+          )}
 
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1">
-                  이메일
-                </label>
-                <input
-                  type="text"
-                  value={profileForm.email}
-                  readOnly
-                  className="w-full bg-gray-100 border border-gray-200 rounded-lg p-3 text-gray-500 text-sm font-mono"
-                />
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1">
-                    학년
-                  </label>
-                  <select
-                    value={profileForm.grade}
-                    onChange={(e) =>
-                      setProfileForm((prev) => ({
-                        ...prev,
-                        grade: e.target.value,
-                      }))
-                    }
-                    className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                  >
-                    {gradeOptions.map((grade) => (
-                      <option key={grade.value} value={grade.value}>
-                        {grade.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1">
-                    반
-                  </label>
-                  <select
-                    value={profileForm.className}
-                    onChange={(e) =>
-                      setProfileForm((prev) => ({
-                        ...prev,
-                        className: e.target.value,
-                      }))
-                    }
-                    className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                  >
-                    <option value="">선택</option>
-                    {classOptions.map((cls) => (
-                      <option key={cls.value} value={cls.value}>
-                        {cls.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1">
-                    번호
-                  </label>
-                  <select
-                    value={profileForm.number}
-                    onChange={(e) =>
-                      setProfileForm((prev) => ({
-                        ...prev,
-                        number: e.target.value,
-                      }))
-                    }
-                    className="w-full border border-gray-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
-                  >
-                    <option value="">선택</option>
-                    {defaultNumberOptions.map((studentNumber) => (
-                      <option
-                        key={studentNumber.value}
-                        value={studentNumber.value}
-                      >
-                        {studentNumber.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1">
-                  이름
-                </label>
-                <input
-                  type="text"
-                  value={profileForm.name}
-                  maxLength={4}
-                  onChange={(e) => handleProfileNameChange(e.target.value)}
-                  placeholder="한글 2~4글자"
-                  aria-invalid={profileNameInputWarning}
-                  className={`w-full rounded-lg border p-3 text-sm outline-none focus:ring-2 ${
-                    profileNameInputWarning
-                      ? "border-red-500 focus:border-red-500 focus:ring-red-200"
-                      : "border-gray-300 focus:ring-blue-500"
-                  }`}
-                />
-                <p
-                  className={`mt-1 text-xs ${profileNameInputWarning ? "font-semibold text-red-600" : "text-gray-500"}`}
+          {consentItems.map((item, idx) => {
+            const isExpanded = consentExpandedId === item.id;
+            const isChecked = !!consentChecked[item.id];
+            const locked = idx > currentConsentStepIndex && !isChecked;
+            return (
+              <div
+                key={item.id}
+                className={idx > 0 ? "border-t border-gray-200 pt-4" : ""}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (locked) return;
+                    setConsentExpandedId((prev) =>
+                      prev === item.id ? null : item.id,
+                    );
+                  }}
+                  className="w-full text-left"
                 >
-                  {profileNameInputWarning
-                    ? "영어키로 되어 있어요. 한/영키를 눌러 한글로 바꿔주세요."
-                    : "숫자/영문/특수문자는 입력할 수 없습니다."}
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-6 flex items-center justify-end gap-2">
-              <button
-                onClick={handleProfileCancel}
-                className="px-4 py-2 rounded-lg text-sm font-bold text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition"
-              >
-                취소
-              </button>
-              <button
-                onClick={handleProfileSubmit}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-xl transition shadow-lg"
-              >
-                입력 완료
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {consentModalOpen && (
-        <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm"
-          onClick={handleConsentCancel}
-        >
-          <div
-            className="bg-white rounded-xl shadow-2xl w-full max-w-lg md:max-w-4xl p-6 md:p-8 mx-4 max-h-[90vh] flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="text-center mb-5 shrink-0">
-              <div className="bg-blue-100 w-14 h-14 rounded-full flex items-center justify-center mx-auto mb-3 text-2xl">
-                {"\u{1F6E1}\uFE0F"}
-              </div>
-              <h2 className="text-2xl md:text-3xl font-bold text-gray-900">
-                개인정보 활용 동의
-              </h2>
-              <p className="text-gray-600 text-base mt-2 font-medium">
-                서비스 이용을 위해 최초 1회 동의가 필요합니다.
-              </p>
-            </div>
-
-            <div className="bg-gray-50 p-4 md:p-5 rounded-lg text-base text-gray-700 overflow-y-auto mb-5 border border-gray-200 leading-relaxed flex-1 min-h-0 space-y-4">
-              {consentItems.length === 0 && (
-                <p className="text-center text-gray-400 py-6">
-                  등록된 동의 항목이 없습니다.
-                </p>
-              )}
-
-              {consentItems.map((item, idx) => {
-                const isExpanded = consentExpandedId === item.id;
-                const isChecked = !!consentChecked[item.id];
-                const locked = idx > currentConsentStepIndex && !isChecked;
-                return (
-                  <div
-                    key={item.id}
-                    className={idx > 0 ? "border-t border-gray-200 pt-4" : ""}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (locked) return;
-                        setConsentExpandedId((prev) =>
-                          prev === item.id ? null : item.id,
-                        );
-                      }}
-                      className="w-full text-left"
-                    >
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="bg-purple-100 text-purple-700 font-extrabold text-sm px-2.5 py-1 rounded-full">
-                          {idx + 1}
-                        </span>
-                        <span className="font-bold text-gray-900 text-lg">
-                          {item.title || "동의 항목"}
-                        </span>
-                        {item.required ? (
-                          <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-semibold">
-                            필수
-                          </span>
-                        ) : (
-                          <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-semibold">
-                            선택
-                          </span>
-                        )}
-                        {isChecked && (
-                          <span className="ml-auto text-xs md:text-sm font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                            동의 완료
-                          </span>
-                        )}
-                      </div>
-                    </button>
-
-                    {isExpanded && (
-                      <>
-                        <div
-                          id={`consent-scroll-${item.id}`}
-                          onScroll={(e) => handleConsentScroll(item.id, e)}
-                          className="bg-white p-4 md:p-5 rounded-lg text-[15px] md:text-base text-gray-700 border border-gray-200 max-h-56 md:max-h-64 overflow-y-auto mb-3 leading-7"
-                        >
-                          <div
-                            className="policy-rich-text"
-                            dangerouslySetInnerHTML={{
-                              __html: item.text || "",
-                            }}
-                          />
-                        </div>
-                        <div className="flex items-center justify-between gap-3 mb-1">
-                          <span
-                            className={`text-xs md:text-sm font-semibold ${consentReadReady[item.id] ? "text-emerald-700" : "text-amber-700"}`}
-                          >
-                            {consentReadReady[item.id]
-                              ? "읽기 확인됨"
-                              : "끝까지 스크롤하면 동의 버튼이 활성화됩니다."}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleConsentAgreeItem(item, idx)}
-                            disabled={isChecked || !consentReadReady[item.id]}
-                            className="shrink-0 px-4 md:px-5 py-2 rounded-lg text-sm md:text-base font-bold bg-blue-600 text-white disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-700 transition"
-                          >
-                            {isChecked
-                              ? "동의 완료"
-                              : `${item.required ? "필수" : "선택"} 동의`}
-                          </button>
-                        </div>
-                      </>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="ws-consent-step">{idx + 1}</span>
+                    <span className="font-bold text-gray-900 text-lg">
+                      {item.title || "동의 항목"}
+                    </span>
+                    {item.required ? (
+                      <span className="text-xs bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-semibold">
+                        필수
+                      </span>
+                    ) : (
+                      <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-semibold">
+                        선택
+                      </span>
                     )}
-
-                    {!isExpanded && !isChecked && locked && (
-                      <p className="text-xs md:text-sm text-gray-400 mt-1">
-                        이전 항목 동의 후 열 수 있습니다.
-                      </p>
-                    )}
-                    {!isExpanded && !isChecked && !locked && (
-                      <p className="text-xs md:text-sm text-gray-500 mt-1">
-                        클릭하여 내용을 확인하고 동의하세요.
-                      </p>
+                    {isChecked && (
+                      <span className="ml-auto text-xs md:text-sm font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                        동의 완료
+                      </span>
                     )}
                   </div>
-                );
-              })}
-            </div>
+                </button>
 
-            <div className="shrink-0 flex items-center justify-end gap-2">
-              <button
-                onClick={handleConsentCancel}
-                className="px-4 py-2 rounded-lg text-sm font-bold text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition"
-              >
-                취소
-              </button>
-              <button
-                onClick={handleConsentConfirm}
-                disabled={!consentReady}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-6 rounded-xl transition disabled:bg-gray-300 disabled:cursor-not-allowed"
-              >
-                동의하고 시작하기
-              </button>
-            </div>
-          </div>
+                {isExpanded && (
+                  <>
+                    <div
+                      id={`consent-scroll-${item.id}`}
+                      onScroll={(e) => handleConsentScroll(item.id, e)}
+                      className="bg-white p-4 md:p-5 rounded-lg text-[15px] md:text-base text-gray-700 border border-gray-200 max-h-56 md:max-h-64 overflow-y-auto mb-3 leading-7"
+                    >
+                      <div
+                        className="policy-rich-text"
+                        dangerouslySetInnerHTML={{
+                          __html: item.text || "",
+                        }}
+                      />
+                    </div>
+                    <div className="flex items-center justify-between gap-3 mb-1">
+                      <span
+                        className={`text-xs md:text-sm font-semibold ${consentReadReady[item.id] ? "text-emerald-700" : "text-amber-700"}`}
+                      >
+                        {consentReadReady[item.id]
+                          ? "읽기 확인됨"
+                          : "끝까지 스크롤하면 동의 버튼이 활성화됩니다."}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleConsentAgreeItem(item, idx)}
+                        disabled={isChecked || !consentReadReady[item.id]}
+                        className="shrink-0 px-4 md:px-5 py-2 rounded-lg text-sm md:text-base font-bold bg-blue-600 text-white disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-700 transition"
+                      >
+                        {isChecked
+                          ? "동의 완료"
+                          : `${item.required ? "필수" : "선택"} 동의`}
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {!isExpanded && !isChecked && locked && (
+                  <p className="text-xs md:text-sm text-gray-400 mt-1">
+                    이전 항목 동의 후 열 수 있습니다.
+                  </p>
+                )}
+                {!isExpanded && !isChecked && !locked && (
+                  <p className="text-xs md:text-sm text-gray-500 mt-1">
+                    클릭하여 내용을 확인하고 동의하세요.
+                  </p>
+                )}
+              </div>
+            );
+          })}
         </div>
-      )}
-      <style>{`
-                .policy-rich-text {
-                    color: #374151;
-                    line-height: 1.8;
-                }
-                .policy-rich-text p {
-                    margin: 0.35rem 0;
-                    white-space: pre-wrap;
-                }
-                .policy-rich-text ul {
-                    list-style: disc;
-                    padding-left: 1.4rem;
-                    margin: 0.45rem 0;
-                }
-                .policy-rich-text ol {
-                    list-style: decimal;
-                    padding-left: 1.4rem;
-                    margin: 0.45rem 0;
-                }
-                .policy-rich-text li {
-                    margin: 0.25rem 0;
-                    white-space: pre-wrap;
-                }
-                .policy-rich-text li[data-list='bullet'] {
-                    list-style-type: disc;
-                }
-                .policy-rich-text li[data-list='ordered'] {
-                    list-style-type: decimal;
-                }
-                .policy-rich-text .ql-indent-1 { padding-left: 2em; }
-                .policy-rich-text .ql-indent-2 { padding-left: 4em; }
-                .policy-rich-text .ql-indent-3 { padding-left: 6em; }
-            `}</style>
+      </ModalSurface>
     </div>
   );
 };

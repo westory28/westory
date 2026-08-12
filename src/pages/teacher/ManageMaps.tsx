@@ -16,6 +16,7 @@ import {
   uploadBytes,
 } from "firebase/storage";
 import { InlineLoading } from "../../components/common/LoadingState";
+import StatePanel from "../../components/common/StatePanel";
 import MapSidebar from "../../components/common/MapSidebar";
 import MapViewer from "../../components/common/MapViewer";
 import { useAuth } from "../../contexts/AuthContext";
@@ -235,7 +236,10 @@ const ManageMaps: React.FC = () => {
   const [tabRenameSourceKey, setTabRenameSourceKey] = useState("");
   const [tabRenameValue, setTabRenameValue] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const canEdit = canWriteLessonManagement(userData, currentUser?.email || "");
+  const mutationsUnavailable = true;
+  const canEdit =
+    !mutationsUnavailable &&
+    canWriteLessonManagement(userData, currentUser?.email || "");
 
   const collectionPath = useMemo(
     () => getSemesterCollectionPath(config, "map_resources"),
@@ -1499,32 +1503,36 @@ const ManageMaps: React.FC = () => {
             setSelectedId(nextGroup?.items[0]?.id || "");
           }}
           action={
-            <button
-              type="button"
-              onClick={handleCreateNew}
-              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700"
-            >
-              <i className="fas fa-plus"></i>
-              추가
-            </button>
+            canEdit ? (
+              <button
+                type="button"
+                onClick={handleCreateNew}
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700"
+              >
+                <i className="fas fa-plus"></i>
+                추가
+              </button>
+            ) : undefined
           }
           headingAction={
-            <button
-              type="button"
-              onClick={() => setIsReorderMode((prev) => !prev)}
-              className={`inline-flex min-w-[44px] items-center justify-center rounded-lg border px-2 py-1 text-xs font-extrabold leading-none transition ${
-                isReorderMode
-                  ? "border-blue-200 bg-blue-50 text-blue-700"
-                  : "border-transparent text-gray-400 hover:border-gray-200 hover:bg-gray-50 hover:text-gray-700"
-              }`}
-              aria-label="지도 순서 변경"
-              title="지도 순서 변경"
-            >
-              순서
-            </button>
+            canEdit ? (
+              <button
+                type="button"
+                onClick={() => setIsReorderMode((prev) => !prev)}
+                className={`inline-flex min-w-[44px] items-center justify-center rounded-lg border px-2 py-1 text-xs font-extrabold leading-none transition ${
+                  isReorderMode
+                    ? "border-blue-200 bg-blue-50 text-blue-700"
+                    : "border-transparent text-gray-400 hover:border-gray-200 hover:bg-gray-50 hover:text-gray-700"
+                }`}
+                aria-label="지도 순서 변경"
+                title="지도 순서 변경"
+              >
+                순서
+              </button>
+            ) : undefined
           }
           renderItemAction={(item) =>
-            isReorderMode ? (
+            !canEdit ? undefined : isReorderMode ? (
               <div
                 className="flex items-center gap-1"
                 onClick={(e) => e.stopPropagation()}
@@ -1575,6 +1583,13 @@ const ManageMaps: React.FC = () => {
         />
 
         <section className="min-w-0 flex-1 space-y-5 sm:space-y-6">
+          <StatePanel
+            state="DISABLED"
+            title="지도 자료는 현재 조회 전용입니다."
+            description="새 자료 등록, 파일 업로드, 순서·태그·탭 설정, 수정과 삭제는 안전한 저장 경로가 마련될 때까지 사용할 수 없습니다."
+            readOnly
+            compact
+          />
           {loading ? (
             <InlineLoading
               message="지도 자료를 불러오는 중입니다."
@@ -1589,21 +1604,23 @@ const ManageMaps: React.FC = () => {
                       {currentPreviewItem.category}
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
-                      <h1 className="text-xl font-extrabold text-gray-900 sm:text-2xl">
+                      <h2 className="text-xl font-extrabold text-gray-900 sm:text-2xl">
                         {currentDisplayGroup?.title || currentPreviewItem.title}
-                      </h1>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleOpenSettings(currentPreviewItem.id)
-                        }
-                        className="inline-flex items-center rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-bold text-gray-700 hover:bg-gray-50"
-                      >
-                        편집
-                      </button>
+                      </h2>
+                      {canEdit && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleOpenSettings(currentPreviewItem.id)
+                          }
+                          className="inline-flex items-center rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm font-bold text-gray-700 hover:bg-gray-50"
+                        >
+                          편집
+                        </button>
+                      )}
                     </div>
                   </div>
-                  {currentPreviewItem.type === "pdf" && (
+                  {canEdit && currentPreviewItem.type === "pdf" && (
                     <button
                       type="button"
                       onClick={() =>
@@ -1643,7 +1660,7 @@ const ManageMaps: React.FC = () => {
                 <MapViewer
                   item={currentPreviewItem}
                   googleSearchQuery={
-                    currentPreviewItem.type === "google"
+                    canEdit && currentPreviewItem.type === "google"
                       ? currentPreviewItem.googleQuery || ""
                       : undefined
                   }
@@ -1664,7 +1681,7 @@ const ManageMaps: React.FC = () => {
         </section>
       </div>
 
-      {isSettingsOpen && (
+      {canEdit && isSettingsOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
           <div className="max-h-[92vh] w-full max-w-7xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
             <div className="flex items-center justify-between gap-3 p-6 md:p-8">
@@ -2200,7 +2217,7 @@ const ManageMaps: React.FC = () => {
         </div>
       )}
 
-      {isTagManagerOpen && draft.type === "pdf" && (
+      {canEdit && isTagManagerOpen && draft.type === "pdf" && (
         <div className="fixed inset-0 z-[55] flex items-center justify-center bg-slate-900/50 p-4">
           <div className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
             <div className="flex items-center justify-between gap-3 border-b border-gray-100 p-6">
@@ -2402,7 +2419,7 @@ const ManageMaps: React.FC = () => {
         </div>
       )}
 
-      {isTabRenameOpen && (
+      {canEdit && isTabRenameOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-3">

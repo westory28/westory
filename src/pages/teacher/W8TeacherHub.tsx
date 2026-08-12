@@ -178,7 +178,7 @@ const W8TeacherHub: React.FC = () => {
     >
       <header className="w8-domain-page__header">
         <div>
-          <h1 id="w8-teacher-title">
+          <h2 id="w8-teacher-title">
             {domain === "LEARNING"
               ? "학습 운영"
               : domain === "SCHEDULE"
@@ -186,7 +186,7 @@ const W8TeacherHub: React.FC = () => {
                 : domain === "ATTENDANCE"
                   ? "출석 운영"
                   : "공지 운영"}
-          </h1>
+          </h2>
           <p>
             {domain === "LEARNING"
               ? "학습 자료를 준비하고 공개 상태와 진행 현황을 확인합니다."

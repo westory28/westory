@@ -2221,9 +2221,9 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
             <p className="text-sm font-black text-blue-700">
               {resolvedCopy.warningTitle}
             </p>
-            <h1 className="mt-1 text-2xl font-black text-slate-900">
+            <h2 className="mt-1 text-2xl font-black text-slate-900">
               {resolvedCopy.warningSubtitle}
-            </h1>
+            </h2>
             <p className="mt-2 text-sm font-bold leading-6 text-slate-500">
               안내 문구에 동의한 학생만 점수 확인, 서명, 이의 제기를 진행할 수
               있습니다.
@@ -2273,9 +2273,9 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
       <div className="mb-5 rounded-xl border border-slate-200 bg-white px-5 py-5 shadow-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 break-keep">
-            <h1 className="text-2xl font-black text-slate-900">
+            <h2 className="text-2xl font-black text-slate-900">
               {resolvedCopy.pageTitle}
-            </h1>
+            </h2>
             <p className="mt-2 text-sm font-bold leading-6 text-slate-500">
               {year}학년도 {semester}학기 기준으로 교사가 입력한 내 총점과{" "}
               {resolvedCopy.pageDescription}

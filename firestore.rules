@@ -1298,18 +1298,12 @@ service cloud.firestore {
 
     match /map_resources/{docId} {
       allow read: if canUseWestory();
-      allow create, delete: if isAdmin();
-      allow update: if isAdmin()
-        && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-          'pdfBlanks',
-          'answerOptions',
-          'contentRevision'
-        ]);
+      allow create, update, delete: if false;
     }
 
     match /source_archive/{docId} {
       allow read: if canReadSourceArchive();
-      allow write: if canWriteSourceArchive();
+      allow create, update, delete: if false;
     }
 
     match /history_dictionary_terms/{termId} {
@@ -1516,13 +1510,7 @@ service cloud.firestore {
 
       match /map_resources/{docId} {
         allow read: if canUseWestory();
-        allow create, delete: if isAdmin();
-        allow update: if isAdmin()
-          && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
-            'pdfBlanks',
-            'answerOptions',
-            'contentRevision'
-          ]);
+        allow create, update, delete: if false;
       }
 
       match /quiz_questions/{docId} {

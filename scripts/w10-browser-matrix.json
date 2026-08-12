@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "fixtureOwner": "w10-ui-ux-staging",
+  "projectId": "westory-staging-177587430482",
+  "stableAlias": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+  "viewports": [
+    { "id": "mobile", "width": 390, "height": 844 },
+    { "id": "tablet-portrait", "width": 768, "height": 1024 },
+    { "id": "tablet-landscape", "width": 1024, "height": 768 },
+    { "id": "laptop", "width": 1280, "height": 800 },
+    { "id": "large-desktop", "width": 1600, "height": 900 }
+  ],
+  "personas": [
+    { "id": "anonymous", "fixture": false },
+    { "id": "student", "fixture": true },
+    { "id": "teacher", "fixture": true },
+    { "id": "admin", "fixture": false, "existingAuthorizedAccount": true },
+    { "id": "permission-denied", "fixture": true, "reuse": "student" },
+    { "id": "maintenance-student", "fixture": false, "emulatorOnly": true },
+    { "id": "maintenance-bypass", "fixture": false, "emulatorOnly": true },
+    { "id": "session-expired", "fixture": true, "reuse": "teacher" }
+  ],
+  "routeGroups": [
+    {
+      "id": "student-canonical",
+      "inventoryKey": "studentCanonical",
+      "persona": "student",
+      "viewports": "ALL",
+      "expected": "AUTHORIZED",
+      "dispositionOverrides": {
+        "REMOVE_LEGACY_UI": "CANONICAL_REDIRECT_QUERY_PRESERVED"
+      }
+    },
+    {
+      "id": "teacher-canonical",
+      "inventoryKey": "teacherCanonical",
+      "persona": "teacher",
+      "viewports": "ALL",
+      "expected": "AUTHORIZED_OR_CAPABILITY_PERMISSION",
+      "dispositionOverrides": {
+        "REMOVE_LEGACY_UI": "CANONICAL_REDIRECT_QUERY_PRESERVED"
+      }
+    },
+    {
+      "id": "legacy-alias",
+      "inventoryKey": "legacyAliases",
+      "persona": "MATCHING_PORTAL",
+      "viewports": "ALL",
+      "expected": "CANONICAL_REDIRECT_QUERY_PRESERVED"
+    },
+    {
+      "id": "anonymous-protected",
+      "routes": ["/student/dashboard", "/teacher/dashboard"],
+      "persona": "anonymous",
+      "viewports": ["mobile", "large-desktop"],
+      "expected": "AUTHENTICATION_REQUIRED"
+    },
+    {
+      "id": "cross-role-permission",
+      "routes": ["/teacher/settings", "/teacher/students"],
+      "persona": "permission-denied",
+      "viewports": ["mobile", "tablet-landscape", "large-desktop"],
+      "expected": "PERMISSION_OR_SAFE_REDIRECT"
+    },
+    {
+      "id": "session-expired",
+      "routes": ["/teacher/dashboard"],
+      "persona": "session-expired",
+      "viewports": ["mobile", "large-desktop"],
+      "expected": "SESSION_EXPIRED"
+    },
+    {
+      "id": "not-found",
+      "routes": ["/w10-not-found-evidence"],
+      "persona": "anonymous",
+      "viewports": ["mobile", "large-desktop"],
+      "expected": "NOT_FOUND"
+    }
+  ],
+  "stateCases": [
+    "LOADING",
+    "EMPTY",
+    "ERROR",
+    "PERMISSION",
+    "SESSION_EXPIRED",
+    "MAINTENANCE",
+    "ARCHIVED",
+    "LEGACY",
+    "STALE"
+  ],
+  "journeys": [
+    "student-today-learning-grade-wis",
+    "student-archive-legacy-permission",
+    "teacher-home-learning-draft-save-recovery",
+    "teacher-schedule-conflict-resolution",
+    "teacher-attendance-selection-preview-run-retry",
+    "teacher-grade-wis-roster-wide-data",
+    "admin-semester-permission-state",
+    "dialog-keyboard-escape-focus-restore"
+  ],
+  "requiredAssertions": [
+    "horizontalOverflowPx=0",
+    "navigationOverlapCount=0",
+    "dialogViewportEscapeCount=0",
+    "primaryActionReachable=true",
+    "currentLocationVisible=true",
+    "axeCritical=0",
+    "axeSerious=0",
+    "queryMountWriteCount=0",
+    "consoleUnexpectedErrorCount=0"
+  ]
+}

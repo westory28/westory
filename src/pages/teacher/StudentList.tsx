@@ -6,6 +6,7 @@ import StudentDetailModal from "./components/StudentDetailModal";
 import { useAuth } from "../../contexts/AuthContext";
 import { canEditStudentList } from "../../lib/permissions";
 import { deleteStudentData, updateStudentData } from "../../lib/studentData";
+import ResponsiveDataContainer from "../../components/common/ResponsiveDataContainer";
 
 interface Student {
   id: string;
@@ -651,7 +652,10 @@ const StudentList: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex-1 overflow-x-auto">
+          <ResponsiveDataContainer
+            className="flex-1"
+            label="학생 명단과 관리 작업"
+          >
             <table className="w-full min-w-[680px] text-left text-sm md:min-w-0">
               <thead className="bg-gray-100 text-xs font-bold uppercase text-gray-600">
                 <tr>
@@ -799,7 +803,7 @@ const StudentList: React.FC = () => {
                 )}
               </tbody>
             </table>
-          </div>
+          </ResponsiveDataContainer>
 
           {!loading && studentPageGroups.length > 1 && (
             <div className="flex flex-wrap items-center justify-center gap-2 border-t border-gray-100 bg-white px-5 py-3">

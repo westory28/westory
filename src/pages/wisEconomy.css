@@ -13,7 +13,7 @@
   gap: var(--ws-space-4, 1rem);
 }
 
-.wis-page__header h1,
+.wis-page__header :is(h1, h2),
 .wis-panel h2,
 .wis-stack h2 {
   margin: 0;

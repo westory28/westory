@@ -9,9 +9,9 @@ const StudentArchiveOverview: React.FC = () => {
     <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-5 px-5 py-8 sm:px-8 lg:py-12">
       <div>
         <p className="text-sm font-extrabold text-blue-700">지난 학기</p>
-        <h1 className="mt-1 text-2xl font-black text-slate-950 md:text-3xl">
+        <h2 className="mt-1 text-2xl font-black text-slate-950 md:text-3xl">
           학기별 기록
-        </h1>
+        </h2>
       </div>
       <StatePanel
         state="ARCHIVED"

@@ -237,10 +237,10 @@ const Calendar = () => {
     <div className="bg-gray-50 flex flex-col min-h-screen">
       <div className="flex-1 w-full max-w-5xl mx-auto px-4 py-6 h-full flex flex-col">
         <div className="mb-4 shrink-0">
-          <h1 className="text-2xl font-bold text-gray-800">
+          <h2 className="text-2xl font-bold text-gray-800">
             <i className="fas fa-calendar-check text-green-500 mr-2"></i>학사
             일정
-          </h1>
+          </h2>
           <p className="text-sm text-gray-500 mt-1">
             우리 반의 주요 일정과 평가 계획을 확인하세요.
           </p>

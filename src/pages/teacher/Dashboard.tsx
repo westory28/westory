@@ -171,7 +171,7 @@ const TeacherDashboard: React.FC = () => {
     <section className="w8-domain-page" aria-labelledby="teacher-home-title">
       <header className="w8-domain-page__header">
         <div>
-          <h1 id="teacher-home-title">업무 홈</h1>
+          <h2 id="teacher-home-title">업무 홈</h2>
           <p>오늘 처리할 일정과 출석, 학습 자료, 공지를 확인해 주세요.</p>
           <span className="w8-semester-label">{state.semesterId} 학기</span>
         </div>

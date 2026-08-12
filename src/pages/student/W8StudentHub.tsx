@@ -157,7 +157,7 @@ const W8StudentHub: React.FC = () => {
     <section className="w8-domain-page" aria-labelledby="w8-student-title">
       <header className="w8-domain-page__header">
         <div>
-          <h1 id="w8-student-title">
+          <h2 id="w8-student-title">
             {domain === "LEARNING"
               ? "나의 학습"
               : domain === "SCHEDULE"
@@ -165,7 +165,7 @@ const W8StudentHub: React.FC = () => {
                 : domain === "ATTENDANCE"
                   ? "나의 출석"
                   : "공지와 알림"}
-          </h1>
+          </h2>
           <p>
             {domain === "LEARNING"
               ? "배운 내용을 확인하고 완료한 학습을 정리합니다."

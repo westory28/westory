@@ -76,9 +76,9 @@ const Dashboard: React.FC = () => {
     <section className="w8-domain-page" aria-labelledby="student-today-title">
       <header className="w8-domain-page__header">
         <div>
-          <h1 id="student-today-title">
+          <h2 id="student-today-title">
             {userData?.name ? `${userData.name} 학생의 오늘` : "오늘"}
-          </h1>
+          </h2>
           <p>오늘 확인할 학습과 일정, 공지를 차례로 살펴보세요.</p>
           <span className="w8-semester-label">{state.semesterId} 학기</span>
         </div>

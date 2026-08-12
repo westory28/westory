@@ -631,9 +631,9 @@ const TeacherLessonPresentation: React.FC<TeacherLessonPresentationProps> = ({
             <div className="inline-flex rounded-full bg-amber-50 px-2.5 py-1 text-[11px] font-bold text-amber-700">
               교사용 수업 화면
             </div>
-            <h1 className="mt-2 text-xl font-extrabold leading-tight text-slate-900 md:text-2xl">
+            <h2 className="mt-2 text-xl font-extrabold leading-tight text-slate-900 md:text-2xl">
               {lesson.title || fallbackTitle || "제목 없음"}
-            </h1>
+            </h2>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <div className="inline-flex rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-white">
                 현재 반 {classContext.classLabel}

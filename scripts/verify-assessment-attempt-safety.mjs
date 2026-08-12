@@ -144,7 +144,7 @@ assert(
   (rules.match(/match \/quiz_questions\/\{docId\}[\s\S]*?allow create, update, delete: if false;/g) || []).length >= 2 &&
     (rules.match(/match \/history_classrooms\/\{docId\}[\s\S]*?allow create, update, delete: if false;/g) || []).length >= 2 &&
     (rules.match(/match \/assessment_config\/\{docId\}[\s\S]*?docId != 'settings'/g) || []).length >= 2 &&
-    (rules.match(/match \/map_resources\/\{docId\}[\s\S]*?contentRevision/g) || []).length >= 2,
+    (rules.match(/match \/map_resources\/\{docId\}[\s\S]*?allow create, update, delete: if false;/g) || []).length >= 2,
   "Teacher assessment source writes must be fenced behind the command gateway.",
 );
 assert(

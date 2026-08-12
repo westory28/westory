@@ -183,9 +183,9 @@ const MapViewer: React.FC<MapViewerProps> = ({
               <div className="mb-3 inline-flex rounded-full bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">
                 {item.category}
               </div>
-              <h1 className="text-xl font-extrabold text-gray-900 sm:text-2xl">
+              <h2 className="text-xl font-extrabold text-gray-900 sm:text-2xl">
                 {item.title}
-              </h1>
+              </h2>
             </div>
 
             <div className="flex w-full flex-col items-stretch gap-3 lg:w-auto lg:min-w-[20rem] lg:items-end">

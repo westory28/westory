@@ -36,6 +36,7 @@ import {
   SESSION_ACTIVITY_EVENT,
 } from "../../lib/sessionActivity";
 import type { PointRankDisplay } from "../../lib/pointRanks";
+import { useShellViewport } from "../../hooks/useShellViewport";
 import {
   canAccessTeacherPortal,
   canManageSettings,
@@ -146,6 +147,7 @@ const Header: React.FC<HeaderProps> = ({
   const { showToast } = useAppToast();
   const location = useLocation();
   const navigate = useNavigate();
+  const shellViewport = useShellViewport();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [sessionExpiry, setSessionExpiry] = useState<number | null>(null);
   const [remainingSeconds, setRemainingSeconds] = useState(
@@ -921,7 +923,11 @@ const Header: React.FC<HeaderProps> = ({
 
             <React.Suspense fallback={null}>
               <NotificationBell
-                className="hidden xl:block"
+                className={
+                  shellViewport === "desktop"
+                    ? "ws-legacy-header-notification"
+                    : "ws-legacy-header-notification is-compact"
+                }
                 onUnreadCountChange={setMobileUnreadCount}
               />
             </React.Suspense>
@@ -1024,9 +1030,6 @@ const Header: React.FC<HeaderProps> = ({
                         : "새 알림 없음"}
                     </strong>
                   </div>
-                  <React.Suspense fallback={null}>
-                    <NotificationBell className="mobile-menu-notification" />
-                  </React.Suspense>
                 </div>
                 {isSessionEnforced && (
                   <button

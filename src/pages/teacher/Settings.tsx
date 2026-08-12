@@ -52,9 +52,9 @@ const Settings: React.FC = () => {
         <aside className="w-full lg:w-64 shrink-0">
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden sticky top-8">
             <div className="p-6 border-b border-gray-100">
-              <h1 className="text-xl font-extrabold text-gray-800 flex items-center gap-2">
+              <h2 className="text-xl font-extrabold text-gray-800 flex items-center gap-2">
                 <i className="fas fa-cog text-gray-400"></i> 관리자 설정
-              </h1>
+              </h2>
             </div>
             <nav className="flex flex-col">
               <button

@@ -161,9 +161,9 @@ const StudentExamAnswer: React.FC = () => {
             <div className="text-4xl text-gray-300 mb-3">
               <i className="fas fa-file-alt"></i>
             </div>
-            <h1 className="text-2xl font-bold text-gray-800 mb-2">
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">
               정기 시험 답안
-            </h1>
+            </h2>
             <p className="text-gray-500 font-bold">아직 입력된게 없습니다.</p>
             <p className="text-sm text-gray-400 mt-2">
               교사가 정기 시험 답안을 입력하면 이곳에 표시됩니다.
@@ -178,10 +178,10 @@ const StudentExamAnswer: React.FC = () => {
     <div className="min-h-screen bg-gray-50 flex flex-col">
       <div className="flex-1 w-full max-w-4xl mx-auto px-4 py-8">
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm px-6 py-4 mb-6 flex items-center justify-between">
-          <h1 className="text-xl md:text-2xl font-bold text-gray-800 flex items-center gap-2">
+          <h2 className="text-xl md:text-2xl font-bold text-gray-800 flex items-center gap-2">
             <i className="fas fa-clipboard-check text-blue-500"></i>
             정기 시험 답안
-          </h1>
+          </h2>
           <div className="text-right">
             <div className="text-xs text-gray-400 font-bold">내 점수</div>
             <div className="text-2xl font-black text-blue-600">

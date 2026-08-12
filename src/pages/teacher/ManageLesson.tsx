@@ -3906,9 +3906,9 @@ const ManageLesson: React.FC = () => {
     <div className="flex min-h-screen flex-col bg-gray-50">
       <div className="relative flex flex-1 flex-col px-4 py-6 lg:px-6 xl:px-8">
         <div className="mb-4 flex items-center">
-          <h1 className="text-xl font-bold text-gray-800 lg:text-2xl">
+          <h2 className="text-xl font-bold text-gray-800 lg:text-2xl">
             <i className="fas fa-sitemap mr-2 text-blue-500"></i>수업 자료 관리
-          </h1>
+          </h2>
         </div>
         {!canEdit && (
           <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">

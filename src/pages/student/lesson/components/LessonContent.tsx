@@ -1378,9 +1378,9 @@ const LessonContent: React.FC<LessonContentProps> = ({
         className={`rounded-[28px] border border-white/70 bg-white/95 shadow-[0_24px_60px_rgba(15,23,42,0.08)] backdrop-blur ${fullscreenPreview ? "p-4 md:p-5" : "mb-6 p-5 md:p-7"}`}
       >
         <div className="mb-5 flex items-center justify-between gap-4 border-b border-slate-200 pb-4">
-          <h1 className="min-w-0 flex-1 text-2xl font-extrabold leading-tight text-slate-900 md:text-3xl">
+          <h2 className="min-w-0 flex-1 text-2xl font-extrabold leading-tight text-slate-900 md:text-3xl">
             {normalizedLesson.title || fallbackTitle || "제목 없음"}
-          </h1>
+          </h2>
           {fullscreenPreview && onClosePreview && (
             <button
               type="button"

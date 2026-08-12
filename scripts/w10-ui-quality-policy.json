@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "baselineSha": "9f9cf691dc72669384a23bf6a23c5081cf8f09bd",
+  "frontendRoots": ["src/", "assets/css/", "index.html"],
+  "tokenSources": ["DESIGN.md", "assets/css/style.css"],
+  "requiredTokens": [
+    "--ws-primary",
+    "--ws-surface",
+    "--ws-text",
+    "--ws-border",
+    "--ws-ring",
+    "--space-1",
+    "--radius-md",
+    "--shadow-sm",
+    "--motion-fast"
+  ],
+  "antiSlopAdditionPatterns": [
+    {
+      "id": "NO_TRANSITION_ALL",
+      "pattern": "\\btransition(?:-property)?\\s*:\\s*all\\b|\\btransition-all\\b",
+      "reason": "Animate explicit properties only."
+    },
+    {
+      "id": "NO_ARBITRARY_TAILWIND_COLOR",
+      "pattern": "\\b(?:bg|text|border|ring|outline)-\\[(?:#|rgb|hsl)",
+      "reason": "Use the Westory token palette."
+    },
+    {
+      "id": "NO_INLINE_COLOR_LITERAL",
+      "pattern": "(?:color|backgroundColor|borderColor)\\s*:\\s*[\"'](?:#|rgb|hsl)",
+      "reason": "Use a semantic token or shared class."
+    },
+    {
+      "id": "NO_ADDED_CSS_COLOR_LITERAL",
+      "pattern": "^\\s*(?:color|background(?:-color)?|border(?:-[a-z-]+)?-color)\\s*:\\s*(?:#|rgb|hsl)",
+      "reason": "New presentation CSS must consume the Westory semantic token palette."
+    },
+    {
+      "id": "NO_MARKETING_FILLER",
+      "pattern": "\\b(?:AI-powered|revolutionary|game-changing|seamless experience|Transform your)\\b",
+      "reason": "Use concrete school-workflow copy."
+    },
+    {
+      "id": "NO_DECORATIVE_EMOJI",
+      "pattern": "[😀-🙏🌀-🫿]",
+      "reason": "Do not use decorative emoji as interface icons."
+    }
+  ],
+  "approvedAdditionExceptions": []
+}

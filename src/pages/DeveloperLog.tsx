@@ -629,9 +629,9 @@ const DeveloperLog: React.FC = () => {
               )}
               {renderCategoryBadge(post.category)}
             </div>
-            <h1 className="break-keep text-2xl font-black leading-tight text-slate-950 sm:text-3xl">
+            <h2 className="break-keep text-2xl font-black leading-tight text-slate-950 sm:text-3xl">
               {getDisplayTitle(post)}
-            </h1>
+            </h2>
             {post.summary && (
               <p className="mt-3 max-w-3xl break-keep text-sm leading-6 text-slate-600 sm:text-base">
                 {post.summary}
@@ -1179,9 +1179,9 @@ const DeveloperLog: React.FC = () => {
             </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-3">
-                <h1 className="text-2xl font-black text-gray-900">
+                <h2 className="text-2xl font-black text-gray-900">
                   개발자 일지
-                </h1>
+                </h2>
                 {postId && selectedPost && (
                   <>
                     <i

@@ -383,6 +383,7 @@ const HistoryClassroomAssignmentView: React.FC<
   answerChecks = [],
 }) => {
   const isModalPreview = layoutVariant === "modalPreview";
+  const AssignmentHeading = isModalPreview ? "h2" : "h1";
   const showFloatingActions = !isModalPreview;
   const pageCount = assignment.pdfPageImages?.length || 1;
   const pageImage =
@@ -972,9 +973,9 @@ const HistoryClassroomAssignmentView: React.FC<
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="text-sm font-bold text-orange-500">역사교실</div>
-            <h1 className="mt-1 break-words text-3xl font-black text-gray-900">
+            <AssignmentHeading className="mt-1 break-words text-3xl font-black text-gray-900">
               {assignment.title}
-            </h1>
+            </AssignmentHeading>
             <p className="mt-2 text-sm text-gray-600">
               {assignment.description || "설명이 없습니다."}
             </p>

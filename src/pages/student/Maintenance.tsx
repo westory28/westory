@@ -6,6 +6,8 @@ import {
   type StudentMaintenanceConfig,
 } from "../../lib/studentMaintenance";
 import StatePanel from "../../components/common/StatePanel";
+import PublicServiceLinks from "../../components/common/PublicServiceLinks";
+import WestoryBrand from "../../components/common/WestoryBrand";
 
 interface MaintenanceProps {
   config?: StudentMaintenanceConfig | null;
@@ -40,17 +42,7 @@ const Maintenance: React.FC<MaintenanceProps> = ({
   return (
     <main className="ws-maintenance-page" aria-label="학생 서비스 점검 안내">
       <section className="ws-maintenance-card">
-        <div className="ws-maintenance-brand" aria-label="위스토리">
-          <img
-            src={`${import.meta.env.BASE_URL || "/"}icons/westory-icon-192.png`}
-            width="80"
-            height="80"
-            alt=""
-          />
-          <span aria-hidden="true">
-            <strong>We</strong>story
-          </span>
-        </div>
+        <WestoryBrand className="ws-maintenance-brand" />
         <p className="ws-maintenance-eyebrow">
           {unavailable ? "접속 확인 중" : "학생 서비스 점검 중"}
         </p>
@@ -75,6 +67,7 @@ const Maintenance: React.FC<MaintenanceProps> = ({
             {signingOut ? "로그아웃 중입니다" : "다른 계정으로 로그인"}
           </button>
         )}
+        <PublicServiceLinks className="ws-maintenance-links" />
       </section>
     </main>
   );

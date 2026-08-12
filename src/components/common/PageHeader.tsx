@@ -19,7 +19,7 @@ const PageHeader: React.FC = () => {
   return (
     <header className="ws-page-header">
       <div className="ws-page-header__copy">
-        <p className="ws-page-header__eyebrow">{metadata.title}</p>
+        <h1 className="ws-page-header__title">{metadata.title}</h1>
         <p>{metadata.description}</p>
       </div>
       <SemesterContextBar />

@@ -219,7 +219,7 @@ service firebase.storage {
 
     match /map-resources/{resourceId}/{allPaths=**} {
       allow read: if canUseWestory();
-      allow write: if isAdmin();
+      allow write: if false;
     }
 
     match /lesson_pdfs/{unitId}/{allPaths=**} {
@@ -265,19 +265,7 @@ service firebase.storage {
 
     match /source-archive/{assetId}/incoming/{fileName} {
       allow read: if false;
-      allow write: if canWriteSourceArchive()
-        && request.resource != null
-        && request.resource.contentType is string
-        && (
-          (
-            request.resource.contentType.matches('image/.*')
-            && request.resource.size < 6 * 1024 * 1024
-          )
-          || (
-            request.resource.contentType == 'application/pdf'
-            && request.resource.size < 20 * 1024 * 1024
-          )
-        );
+      allow write: if false;
     }
 
     // Processed assets live under a revision folder. Keep incoming uploads private.

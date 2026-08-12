@@ -929,13 +929,13 @@ const ManageThinkCloud: React.FC = () => {
         >
           <div className="flex h-full flex-col overflow-hidden border border-gray-200 bg-white shadow-2xl lg:rounded-xl lg:shadow-sm">
             <div className="flex items-center justify-between border-b border-gray-100 p-5">
-              <h1 className="text-xl font-extrabold text-gray-800 flex items-center gap-2">
+              <h2 className="text-xl font-extrabold text-gray-800 flex items-center gap-2">
                 <i
                   className="fas fa-cloud text-blue-500"
                   aria-hidden="true"
                 ></i>
                 <span>생각모아 목록</span>
-              </h1>
+              </h2>
               <button
                 type="button"
                 onClick={() => setMobileSessionListOpen(false)}

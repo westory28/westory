@@ -352,10 +352,10 @@ const ManageSchedule = () => {
       <div className="flex-1 w-full max-w-7xl mx-auto px-6 py-6 h-full flex flex-col">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4 shrink-0">
           <div>
-            <h1 className="text-xl md:text-2xl font-bold text-gray-800">
+            <h2 className="text-xl md:text-2xl font-bold text-gray-800">
               <i className="fas fa-calendar-alt text-blue-500 mr-2"></i>학사
               일정 관리
-            </h1>
+            </h2>
             <p className="text-xs md:text-sm text-gray-500 mt-1">
               수행평가, 정기 시험 등 주요 학사 일정을 관리하세요.
             </p>

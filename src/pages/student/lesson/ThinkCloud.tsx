@@ -336,9 +336,9 @@ const ThinkCloud: React.FC = () => {
         <aside className="w-full lg:w-72 shrink-0">
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="p-5 border-b border-gray-100">
-              <h1 className="text-xl font-extrabold text-gray-800 flex items-center gap-2">
+              <h2 className="text-xl font-extrabold text-gray-800 flex items-center gap-2">
                 <i className="fas fa-lightbulb text-blue-500"></i> 생각모아
-              </h1>
+              </h2>
               <p className="text-xs text-gray-500 mt-1 font-bold">
                 지금까지 진행한 주제를 확인할 수 있습니다.
               </p>

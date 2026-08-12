@@ -295,7 +295,7 @@ const WisEconomyManager: React.FC = () => {
       <header className="wis-page__header">
         <div>
           <p className="wis-page__eyebrow">학기별 운영</p>
-          <h1 id="wis-teacher-title">위스 운영</h1>
+          <h2 id="wis-teacher-title">위스 운영</h2>
           <p>불변 원장과 학기별 재고를 기준으로 지급·회수·주문을 관리합니다.</p>
         </div>
         {state && (

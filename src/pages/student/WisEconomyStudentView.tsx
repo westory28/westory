@@ -149,7 +149,7 @@ const WisEconomyStudentView: React.FC = () => {
       <header className="wis-page__header">
         <div>
           <p className="wis-page__eyebrow">내 학기 경제</p>
-          <h1 id="wis-student-title">위스</h1>
+          <h2 id="wis-student-title">위스</h2>
           <p>
             내 잔액과 사용 내역을 확인하고, 필요한 상품을 신청할 수 있습니다.
           </p>

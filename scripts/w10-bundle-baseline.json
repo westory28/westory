@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "baselineWave": "W9",
+  "baselineSha": "9f9cf691dc72669384a23bf6a23c5081cf8f09bd",
+  "budgets": {
+    "mainJs": {
+      "pattern": "^main-[^.]+\\.js$",
+      "baselineBytes": 167455,
+      "maxBytes": 205000,
+      "maxGzipBytes": 62000
+    },
+    "mainCss": {
+      "pattern": "^main-[^.]+\\.css$",
+      "baselineBytes": 317021,
+      "maxBytes": 330000,
+      "maxGzipBytes": 65000
+    },
+    "teacherOperations": {
+      "pattern": "^teacherOperations-[^.]+\\.js$",
+      "baselineBytes": 8387,
+      "maxBytes": 12000,
+      "maxGzipBytes": 5000
+    },
+    "teacherHub": {
+      "pattern": "^W8TeacherHub-[^.]+\\.js$",
+      "baselineBytes": 43208,
+      "maxBytes": 56000,
+      "maxGzipBytes": 15000
+    },
+    "pdfVendor": {
+      "pattern": "^vendor-pdf-[^.]+\\.js$",
+      "baselineBytes": 462791,
+      "maxBytes": 480000,
+      "maxGzipBytes": 145000
+    },
+    "excelVendor": {
+      "pattern": "^vendor-excel-[^.]+\\.js$",
+      "baselineBytes": 107438,
+      "maxBytes": 120000,
+      "maxGzipBytes": 34000
+    }
+  },
+  "fontNetworkBudget": {
+    "patterns": [
+      "^fa-regular-400-[^.]+\\.woff2$",
+      "^fa-solid-900-[^.]+\\.woff2$"
+    ],
+    "expectedFiles": 2,
+    "maxBytes": 190000
+  },
+  "requiredLazyImports": [
+    "./pages/teacher/ManageExam",
+    "./pages/teacher/ManageHistoryDictionary",
+    "./pages/teacher/ManageMaps",
+    "./pages/teacher/ManageSourceArchive",
+    "./pages/teacher/W8TeacherHub"
+  ],
+  "forbiddenInitialChunkTerms": [
+    "pdf.worker.min",
+    "read-excel-file/browser",
+    "write-excel-file/browser"
+  ]
+}

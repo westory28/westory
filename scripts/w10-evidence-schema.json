@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "fixtureOwner": "w10-ui-ux-staging",
+  "testRunIdPattern": "^w10-[a-z0-9][a-z0-9-]{7,63}$",
+  "evidenceRoot": "docs/evidence/w10-ui-ux/{testRunId}",
+  "requiredFiles": [
+    "metadata.json",
+    "route-results.json",
+    "viewport-results.json",
+    "journey-results.json",
+    "state-results.json",
+    "accessibility-results.json",
+    "network-write-results.json",
+    "cleanup-results.json"
+  ],
+  "metadataRequired": [
+    "schemaVersion",
+    "fixtureOwner",
+    "testRunId",
+    "projectId",
+    "stableAlias",
+    "deploymentUrl",
+    "branch",
+    "commitSha",
+    "startedAt",
+    "completedAt",
+    "productionAccess",
+    "productionMutationCount",
+    "credentialValueCount",
+    "tokenValueCount"
+  ],
+  "forbiddenEvidenceKeys": [
+    "password",
+    "accessToken",
+    "refreshToken",
+    "idToken",
+    "apiKey",
+    "appCheckToken",
+    "bypassToken",
+    "debugToken",
+    "credential"
+  ],
+  "routeResultRequired": [
+    "caseId",
+    "route",
+    "persona",
+    "viewportId",
+    "expected",
+    "actual",
+    "status",
+    "finalPath",
+    "queryWriteCount",
+    "consoleUnexpectedErrorCount"
+  ],
+  "viewportResultRequired": [
+    "caseId",
+    "route",
+    "persona",
+    "viewportId",
+    "width",
+    "height",
+    "horizontalOverflowPx",
+    "navigationOverlapCount",
+    "dialogViewportEscapeCount",
+    "primaryActionReachable",
+    "currentLocationVisible",
+    "status"
+  ],
+  "journeyResultRequired": ["journeyId", "persona", "viewportId", "status"],
+  "stateResultRequired": ["state", "route", "persona", "viewportId", "status"],
+  "accessibilityResultRequired": [
+    "caseId",
+    "route",
+    "persona",
+    "viewportId",
+    "axeCritical",
+    "axeSerious",
+    "keyboardPass",
+    "focusOrderPass",
+    "status"
+  ],
+  "networkWriteResultRequired": [
+    "caseId",
+    "route",
+    "persona",
+    "viewportId",
+    "mountWriteCount",
+    "listenerWriteCount",
+    "status"
+  ],
+  "cleanupRequiredZeroFields": [
+    "residualAuthUsers",
+    "residualFixtureDocuments",
+    "residualSessions",
+    "residualBusinessDocuments",
+    "residualReceipts",
+    "residualAudits",
+    "residualTokens"
+  ]
+}

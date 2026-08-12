@@ -12,6 +12,13 @@ export type CommonUiState =
   | "LEGACY"
   | "STALE"
   | "PARTIAL"
+  | "SAVING"
+  | "SAVED"
+  | "SAVE_FAILED"
+  | "CONFLICT"
+  | "SUBMITTING"
+  | "PROCESSING"
+  | "PARTIAL_SUCCESS"
   | "OFFLINE"
   | "DISABLED";
 
@@ -97,6 +104,43 @@ const DEFAULTS: Record<
     description: "준비된 범위를 확인하고 나머지는 완료 후 다시 이용해 주세요.",
     iconPath: "M4 12a8 8 0 1 0 8-8v8h8",
   },
+  SAVING: {
+    title: "변경 내용을 저장하고 있습니다.",
+    description: "저장이 끝날 때까지 이 화면을 유지해 주세요.",
+    iconPath: "M12 3a9 9 0 1 0 9 9",
+  },
+  SAVED: {
+    title: "변경 내용을 저장했습니다.",
+    description: "최신 내용이 안전하게 반영되었습니다.",
+    iconPath: "m5 12 4 4L19 6",
+  },
+  SAVE_FAILED: {
+    title: "변경 내용을 저장하지 못했습니다.",
+    description:
+      "입력한 내용은 유지됩니다. 연결 상태를 확인한 뒤 다시 시도해 주세요.",
+    iconPath:
+      "M12 9v4m0 4h.01M10.3 3.8 2.8 17a2 2 0 0 0 1.7 3h15a2 2 0 0 0 1.7-3L13.7 3.8a2 2 0 0 0-3.4 0Z",
+  },
+  CONFLICT: {
+    title: "다른 변경 내용과 충돌했습니다.",
+    description: "최신 자료와 내 작업을 비교한 뒤 적용할 내용을 선택해 주세요.",
+    iconPath: "M8 7h11l-3-3m3 3-3 3M16 17H5l3 3m-3-3 3-3",
+  },
+  SUBMITTING: {
+    title: "요청을 보내고 있습니다.",
+    description: "중복 제출을 막기 위해 결과를 확인하고 있습니다.",
+    iconPath: "M12 3a9 9 0 1 0 9 9",
+  },
+  PROCESSING: {
+    title: "요청을 처리하고 있습니다.",
+    description: "현재 처리 상태를 안전하게 확인하고 있습니다.",
+    iconPath: "M12 3a9 9 0 1 0 9 9",
+  },
+  PARTIAL_SUCCESS: {
+    title: "일부 요청만 처리되었습니다.",
+    description: "처리 결과를 확인한 뒤 실패한 항목만 다시 시도해 주세요.",
+    iconPath: "M4 12a8 8 0 1 0 8-8v8h8",
+  },
   OFFLINE: {
     title: "네트워크 연결을 확인해 주세요.",
     description: "연결이 복구되면 안전하게 다시 시도할 수 있습니다.",
@@ -145,14 +189,23 @@ const StatePanel: React.FC<StatePanelProps> = ({
   headingLevel = 2,
 }) => {
   const preset = DEFAULTS[state];
-  const isUrgent = state === "ERROR" || state === "SESSION_EXPIRED";
+  const isUrgent =
+    state === "ERROR" ||
+    state === "SESSION_EXPIRED" ||
+    state === "SAVE_FAILED" ||
+    state === "CONFLICT";
   const Heading = `h${headingLevel}` as "h1" | "h2" | "h3";
   return (
     <section
       className={`ws-state-panel ws-state-panel--${state.toLowerCase()} ${compact ? "ws-state-panel--compact" : ""} ${className}`}
       role={isUrgent ? "alert" : "status"}
       aria-live={isUrgent ? "assertive" : "polite"}
-      aria-busy={state === "LOADING"}
+      aria-busy={
+        state === "LOADING" ||
+        state === "SAVING" ||
+        state === "SUBMITTING" ||
+        state === "PROCESSING"
+      }
     >
       <span className="ws-state-panel__icon" aria-hidden="true">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">

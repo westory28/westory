@@ -22,7 +22,7 @@
   align-items: flex-start;
 }
 
-.w8-domain-page__header h1,
+.w8-domain-page__header :is(h1, h2),
 .w8-domain-page__header p,
 .w8-panel h2,
 .w8-detail h2,
@@ -32,7 +32,7 @@
   margin: 0;
 }
 
-.w8-domain-page__header h1,
+.w8-domain-page__header :is(h1, h2),
 .w8-panel h2,
 .w8-detail h2 {
   color: var(--ws-text-strong);

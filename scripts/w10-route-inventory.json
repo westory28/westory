@@ -1,0 +1,618 @@
+{
+  "schemaVersion": 1,
+  "wave": "W10",
+  "baselineSha": "9f9cf691dc72669384a23bf6a23c5081cf8f09bd",
+  "sourceOfTruth": {
+    "router": "src/App.tsx",
+    "metadata": "src/constants/routeMetadata.ts",
+    "accessBoundary": "src/components/auth/ProtectedAccessBoundary.tsx",
+    "maintenanceBoundary": "src/components/auth/StudentMaintenanceGate.tsx",
+    "dialogBoundary": "src/components/common/AppDialogProvider.tsx"
+  },
+  "expectedCounts": {
+    "studentCanonical": 17,
+    "teacherCanonical": 13,
+    "legacyAliases": 4,
+    "integrationRoutes": 8,
+    "coreRoutes": 3,
+    "auxiliaryRoutes": 2,
+    "registeredRoutes": 47,
+    "unknown": 0
+  },
+  "studentCanonical": [
+    "/student/dashboard",
+    "/student/lesson/note",
+    "/student/lesson/history-dictionary",
+    "/student/lesson/maps",
+    "/student/lesson/think-cloud",
+    "/student/quiz",
+    "/student/quiz/run",
+    "/student/history-classroom",
+    "/student/history-classroom/run",
+    "/student/score",
+    "/student/score/report",
+    "/student/score/performance",
+    "/student/score/written-exam",
+    "/student/mypage",
+    "/student/history",
+    "/student/points",
+    "/student/calendar"
+  ],
+  "teacherCanonical": [
+    "/teacher/dashboard",
+    "/teacher/students",
+    "/teacher/quiz",
+    "/teacher/quiz/history-classroom",
+    "/teacher/exam",
+    "/teacher/settings",
+    "/teacher/points",
+    "/teacher/schedule",
+    "/teacher/lesson",
+    "/teacher/lesson/history-dictionary",
+    "/teacher/lesson/maps",
+    "/teacher/lesson/source-archive",
+    "/teacher/lesson/think-cloud"
+  ],
+  "legacyAliases": [
+    {
+      "path": "/student/quiz/history2",
+      "target": "/student/quiz"
+    },
+    {
+      "path": "/student/quiz/history2/*",
+      "testPath": "/student/quiz/history2/w10-bookmark",
+      "target": "/student/quiz"
+    },
+    {
+      "path": "/teacher/quiz/history2",
+      "target": "/teacher/quiz"
+    },
+    {
+      "path": "/teacher/quiz/history2/*",
+      "testPath": "/teacher/quiz/history2/w10-bookmark",
+      "target": "/teacher/quiz"
+    }
+  ],
+  "integrationRoutes": [
+    {
+      "path": "/student/mypage/archive",
+      "metadataPath": "/student/mypage",
+      "metadataDisposition": "PARENT_PREFIX"
+    },
+    {
+      "path": "/student/learning",
+      "metadataPath": "/student/learning",
+      "metadataDisposition": "EXACT"
+    },
+    {
+      "path": "/student/schedule",
+      "metadataPath": "/student/schedule",
+      "metadataDisposition": "EXACT"
+    },
+    {
+      "path": "/student/attendance",
+      "metadataPath": "/student/attendance",
+      "metadataDisposition": "EXACT"
+    },
+    {
+      "path": "/student/communication",
+      "metadataPath": "/student/communication",
+      "metadataDisposition": "EXACT"
+    },
+    {
+      "path": "/teacher/learning",
+      "metadataPath": "/teacher/learning",
+      "metadataDisposition": "EXACT"
+    },
+    {
+      "path": "/teacher/attendance",
+      "metadataPath": "/teacher/attendance",
+      "metadataDisposition": "EXACT"
+    },
+    {
+      "path": "/teacher/communication",
+      "metadataPath": "/teacher/communication",
+      "metadataDisposition": "EXACT"
+    }
+  ],
+  "coreRoutes": [
+    {
+      "id": "AUTH",
+      "path": "/",
+      "sourceFile": "src/pages/Login.tsx",
+      "anchor": "const Login"
+    },
+    {
+      "id": "MAINTENANCE",
+      "path": "/maintenance",
+      "sourceFile": "src/components/auth/StudentMaintenanceGate.tsx",
+      "anchor": "STUDENT_MAINTENANCE_ROUTE"
+    },
+    {
+      "id": "NOT_FOUND",
+      "path": "*",
+      "sourceFile": "src/App.tsx",
+      "anchor": "const NotFound"
+    }
+  ],
+  "auxiliaryRoutes": ["/developer-log", "/developer-log/:postId"],
+  "stateSurfaces": [
+    {
+      "id": "AUTHENTICATING",
+      "sourceFile": "src/components/auth/ProtectedAccessBoundary.tsx",
+      "anchor": "decision.status === \"UNKNOWN\" || decision.status === \"AUTHENTICATING\"",
+      "state": "LOADING"
+    },
+    {
+      "id": "SESSION_EXPIRED",
+      "sourceFile": "src/components/auth/ProtectedAccessBoundary.tsx",
+      "anchor": "decision.status === \"SESSION_EXPIRED\"",
+      "state": "SESSION_EXPIRED"
+    },
+    {
+      "id": "PERMISSION",
+      "sourceFile": "src/components/auth/ProtectedAccessBoundary.tsx",
+      "anchor": "state=\"PERMISSION\"",
+      "state": "PERMISSION"
+    },
+    {
+      "id": "ACCESS_ERROR",
+      "sourceFile": "src/components/auth/ProtectedAccessBoundary.tsx",
+      "anchor": "decision.status === \"ERROR\"",
+      "state": "ERROR"
+    },
+    {
+      "id": "ADMIN",
+      "sourceFile": "src/constants/routeMetadata.ts",
+      "anchor": "id: \"teacher-admin\"",
+      "route": "/teacher/settings"
+    },
+    {
+      "id": "MODAL",
+      "sourceFile": "src/components/common/AppDialogProvider.tsx",
+      "anchor": "aria-modal=\"true\"",
+      "semantics": ["dialog", "alertdialog", "Escape", "focus-restore"]
+    }
+  ],
+  "routeDispositions": [
+    {
+      "id": "ROUTE-01",
+      "path": "/student/quiz",
+      "disposition": "COMPLETE",
+      "sourceFile": "src/pages/student/quiz/QuizIndex.tsx",
+      "component": "StudentQuizIndex",
+      "reason": "W5-W9 canonical shell, domain, state, and command contract is complete.",
+      "status": "PRESERVE_AND_VERIFY"
+    },
+    {
+      "id": "ROUTE-02",
+      "path": "/student/quiz/run",
+      "disposition": "COMPLETE",
+      "sourceFile": "src/pages/student/quiz/QuizRunner.tsx",
+      "component": "QuizRunner",
+      "reason": "W5-W9 canonical shell, domain, state, and command contract is complete.",
+      "status": "PRESERVE_AND_VERIFY"
+    },
+    {
+      "id": "ROUTE-03",
+      "path": "/student/history-classroom",
+      "disposition": "COMPLETE",
+      "sourceFile": "src/pages/student/history-classroom/HistoryClassroomIndex.tsx",
+      "component": "HistoryClassroomIndex",
+      "reason": "W5-W9 canonical shell, domain, state, and command contract is complete.",
+      "status": "PRESERVE_AND_VERIFY"
+    },
+    {
+      "id": "ROUTE-04",
+      "path": "/student/history-classroom/run",
+      "disposition": "COMPLETE",
+      "sourceFile": "src/pages/student/history-classroom/HistoryClassroomRunner.tsx",
+      "component": "HistoryClassroomRunner",
+      "reason": "W5-W9 canonical shell, domain, state, and command contract is complete.",
+      "status": "PRESERVE_AND_VERIFY"
+    },
+    {
+      "id": "ROUTE-05",
+      "path": "/student/score/performance",
+      "disposition": "COMPLETE",
+      "sourceFile": "src/pages/student/score/PerformanceScoreView.tsx",
+      "component": "StudentPerformanceScoreView",
+      "reason": "W5-W9 canonical shell, domain, state, and command contract is complete.",
+      "status": "PRESERVE_AND_VERIFY"
+    },
+    {
+      "id": "ROUTE-06",
+      "path": "/student/score/written-exam",
+      "disposition": "COMPLETE",
+      "sourceFile": "src/pages/student/score/WrittenExamEssayScoreView.tsx",
+      "component": "StudentWrittenExamEssayScoreView",
+      "reason": "W5-W9 canonical shell, domain, state, and command contract is complete.",
+      "status": "PRESERVE_AND_VERIFY"
+    },
+    {
+      "id": "ROUTE-07",
+      "path": "/student/mypage/archive",
+      "disposition": "COMPLETE",
+      "sourceFile": "src/pages/student/StudentArchiveOverview.tsx",
+      "component": "StudentArchiveOverview",
+      "reason": "W5-W9 canonical shell, domain, state, and command contract is complete.",
+      "status": "PRESERVE_AND_VERIFY"
+    },
+    {
+      "id": "ROUTE-08",
+      "path": "/student/points",
+      "disposition": "COMPLETE",
+      "sourceFile": "src/pages/student/WisEconomyStudentView.tsx",
+      "component": "StudentPoints",
+      "reason": "W5-W9 canonical shell, domain, state, and command contract is complete.",
+      "status": "PRESERVE_AND_VERIFY"
+    },
+    {
+      "id": "ROUTE-09",
+      "path": "/student/learning",
+      "disposition": "COMPLETE",
+      "sourceFile": "src/pages/student/W8StudentHub.tsx",
+      "component": "W8StudentHub",
+      "reason": "W5-W9 canonical shell, domain, state, and command contract is complete.",
+      "status": "PRESERVE_AND_VERIFY"
+    },
+    {
+      "id": "ROUTE-10",
+      "path": "/student/schedule",
+      "disposition": "COMPLETE",
+      "sourceFile": "src/pages/student/W8StudentHub.tsx",
+      "component": "W8StudentHub",
+      "reason": "W5-W9 canonical shell, domain, state, and command contract is complete.",
+      "status": "PRESERVE_AND_VERIFY"
+    },
+    {
+      "id": "ROUTE-11",
+      "path": "/student/attendance",
+      "disposition": "COMPLETE",
+      "sourceFile": "src/pages/student/W8StudentHub.tsx",
+      "component": "W8StudentHub",
+      "reason": "W5-W9 canonical shell, domain, state, and command contract is complete.",
+      "status": "PRESERVE_AND_VERIFY"
+    },
+    {
+      "id": "ROUTE-12",
+      "path": "/student/communication",
+      "disposition": "COMPLETE",
+      "sourceFile": "src/pages/student/W8StudentHub.tsx",
+      "component": "W8StudentHub",
+      "reason": "W5-W9 canonical shell, domain, state, and command contract is complete.",
+      "status": "PRESERVE_AND_VERIFY"
+    },
+    {
+      "id": "ROUTE-13",
+      "path": "/teacher/dashboard",
+      "disposition": "COMPLETE",
+      "sourceFile": "src/pages/teacher/Dashboard.tsx",
+      "component": "TeacherDashboard",
+      "reason": "W5-W9 canonical shell, domain, state, and command contract is complete.",
+      "status": "PRESERVE_AND_VERIFY"
+    },
+    {
+      "id": "ROUTE-14",
+      "path": "/teacher/points",
+      "disposition": "COMPLETE",
+      "sourceFile": "src/pages/teacher/WisEconomyManager.tsx",
+      "component": "ManagePoints",
+      "reason": "W5-W9 canonical shell, domain, state, and command contract is complete.",
+      "status": "PRESERVE_AND_VERIFY"
+    },
+    {
+      "id": "ROUTE-15",
+      "path": "/teacher/schedule",
+      "disposition": "COMPLETE",
+      "sourceFile": "src/pages/teacher/W8TeacherHub.tsx",
+      "component": "W8TeacherHub",
+      "reason": "W5-W9 canonical shell, domain, state, and command contract is complete.",
+      "status": "PRESERVE_AND_VERIFY"
+    },
+    {
+      "id": "ROUTE-16",
+      "path": "/teacher/learning",
+      "disposition": "COMPLETE",
+      "sourceFile": "src/pages/teacher/W8TeacherHub.tsx",
+      "component": "W8TeacherHub",
+      "reason": "W5-W9 canonical shell, domain, state, and command contract is complete.",
+      "status": "PRESERVE_AND_VERIFY"
+    },
+    {
+      "id": "ROUTE-17",
+      "path": "/teacher/attendance",
+      "disposition": "COMPLETE",
+      "sourceFile": "src/pages/teacher/W8TeacherHub.tsx",
+      "component": "W8TeacherHub",
+      "reason": "W5-W9 canonical shell, domain, state, and command contract is complete.",
+      "status": "PRESERVE_AND_VERIFY"
+    },
+    {
+      "id": "ROUTE-18",
+      "path": "/teacher/communication",
+      "disposition": "COMPLETE",
+      "sourceFile": "src/pages/teacher/W8TeacherHub.tsx",
+      "component": "W8TeacherHub",
+      "reason": "W5-W9 canonical shell, domain, state, and command contract is complete.",
+      "status": "PRESERVE_AND_VERIFY"
+    },
+    {
+      "id": "ROUTE-19",
+      "path": "/",
+      "disposition": "INTEGRATE",
+      "sourceFile": "src/pages/Login.tsx",
+      "component": "Login",
+      "reason": "Canonical data and behavior stay intact while W10 integrates common presentation.",
+      "status": "W10_PRESENTATION_INTEGRATION"
+    },
+    {
+      "id": "ROUTE-20",
+      "path": "/maintenance",
+      "disposition": "INTEGRATE",
+      "sourceFile": "src/pages/student/Maintenance.tsx",
+      "component": "Maintenance",
+      "reason": "Canonical data and behavior stay intact while W10 integrates common presentation.",
+      "status": "W10_PRESENTATION_INTEGRATION"
+    },
+    {
+      "id": "ROUTE-21",
+      "path": "/student/dashboard",
+      "disposition": "INTEGRATE",
+      "sourceFile": "src/pages/student/Dashboard.tsx",
+      "component": "StudentDashboard",
+      "reason": "Canonical data and behavior stay intact while W10 integrates common presentation.",
+      "status": "W10_PRESENTATION_INTEGRATION"
+    },
+    {
+      "id": "ROUTE-22",
+      "path": "/student/score",
+      "disposition": "INTEGRATE",
+      "sourceFile": "src/pages/student/score/ScoreDashboard.tsx",
+      "component": "StudentScoreDashboard",
+      "reason": "Canonical data and behavior stay intact while W10 integrates common presentation.",
+      "status": "W10_PRESENTATION_INTEGRATION"
+    },
+    {
+      "id": "ROUTE-23",
+      "path": "/student/score/report",
+      "disposition": "INTEGRATE",
+      "sourceFile": "src/pages/student/score/ScoreReport.tsx",
+      "component": "StudentScoreReport",
+      "reason": "Canonical data and behavior stay intact while W10 integrates common presentation.",
+      "status": "W10_PRESENTATION_INTEGRATION"
+    },
+    {
+      "id": "ROUTE-24",
+      "path": "/student/mypage",
+      "disposition": "INTEGRATE",
+      "sourceFile": "src/pages/student/MyPage.tsx",
+      "component": "MyPage",
+      "reason": "Canonical data and behavior stay intact while W10 integrates common presentation.",
+      "status": "W10_PRESENTATION_INTEGRATION"
+    },
+    {
+      "id": "ROUTE-25",
+      "path": "/student/calendar",
+      "disposition": "INTEGRATE",
+      "sourceFile": "src/pages/student/W8StudentHub.tsx",
+      "component": "W8StudentHub",
+      "reason": "Canonical data and behavior stay intact while W10 integrates common presentation.",
+      "status": "W10_PRESENTATION_INTEGRATION"
+    },
+    {
+      "id": "ROUTE-26",
+      "path": "/teacher/quiz",
+      "disposition": "INTEGRATE",
+      "sourceFile": "src/pages/teacher/ManageQuiz.tsx",
+      "component": "ManageQuiz",
+      "reason": "Canonical data and behavior stay intact while W10 integrates common presentation.",
+      "status": "W10_PRESENTATION_INTEGRATION"
+    },
+    {
+      "id": "ROUTE-27",
+      "path": "/student/lesson/history-dictionary",
+      "disposition": "REBUILD_PRESENTATION",
+      "sourceFile": "src/pages/student/lesson/HistoryDictionary.tsx",
+      "component": "StudentHistoryDictionary",
+      "reason": "Domain remains authoritative; legacy presentation debt is rebuilt in W10.",
+      "status": "W10_PRESENTATION_REBUILD"
+    },
+    {
+      "id": "ROUTE-28",
+      "path": "/student/lesson/maps",
+      "disposition": "REBUILD_PRESENTATION",
+      "sourceFile": "src/pages/student/lesson/Maps.tsx",
+      "component": "StudentMaps",
+      "reason": "Domain remains authoritative; legacy presentation debt is rebuilt in W10.",
+      "status": "W10_PRESENTATION_REBUILD"
+    },
+    {
+      "id": "ROUTE-29",
+      "path": "/student/history",
+      "disposition": "REBUILD_PRESENTATION",
+      "sourceFile": "src/pages/student/History.tsx",
+      "component": "StudentHistory",
+      "reason": "Domain remains authoritative; legacy presentation debt is rebuilt in W10.",
+      "status": "W10_PRESENTATION_REBUILD"
+    },
+    {
+      "id": "ROUTE-30",
+      "path": "/teacher/students",
+      "disposition": "REBUILD_PRESENTATION",
+      "sourceFile": "src/pages/teacher/StudentList.tsx",
+      "component": "StudentList",
+      "reason": "Domain remains authoritative; legacy presentation debt is rebuilt in W10.",
+      "status": "W10_PRESENTATION_REBUILD"
+    },
+    {
+      "id": "ROUTE-31",
+      "path": "/teacher/quiz/history-classroom",
+      "disposition": "REBUILD_PRESENTATION",
+      "sourceFile": "src/pages/teacher/ManageHistoryClassroom.tsx",
+      "component": "ManageHistoryClassroom",
+      "reason": "Domain remains authoritative; legacy presentation debt is rebuilt in W10.",
+      "status": "W10_PRESENTATION_REBUILD"
+    },
+    {
+      "id": "ROUTE-32",
+      "path": "/teacher/exam",
+      "disposition": "REBUILD_PRESENTATION",
+      "sourceFile": "src/pages/teacher/ManageExam.tsx",
+      "component": "ManageExam",
+      "reason": "Domain remains authoritative; legacy presentation debt is rebuilt in W10.",
+      "status": "W10_PRESENTATION_REBUILD"
+    },
+    {
+      "id": "ROUTE-33",
+      "path": "/teacher/settings",
+      "disposition": "REBUILD_PRESENTATION",
+      "sourceFile": "src/pages/teacher/Settings.tsx",
+      "component": "Settings",
+      "reason": "Domain remains authoritative; legacy presentation debt is rebuilt in W10.",
+      "status": "W10_PRESENTATION_REBUILD"
+    },
+    {
+      "id": "ROUTE-34",
+      "path": "/teacher/lesson/history-dictionary",
+      "disposition": "REBUILD_PRESENTATION",
+      "sourceFile": "src/pages/teacher/ManageHistoryDictionary.tsx",
+      "component": "ManageHistoryDictionary",
+      "reason": "Domain remains authoritative; legacy presentation debt is rebuilt in W10.",
+      "status": "W10_PRESENTATION_REBUILD"
+    },
+    {
+      "id": "ROUTE-35",
+      "path": "/teacher/lesson/maps",
+      "disposition": "REBUILD_PRESENTATION",
+      "sourceFile": "src/pages/teacher/ManageMaps.tsx",
+      "component": "ManageMaps",
+      "reason": "Domain remains authoritative; legacy presentation debt is rebuilt in W10.",
+      "status": "W10_PRESENTATION_REBUILD"
+    },
+    {
+      "id": "ROUTE-36",
+      "path": "/teacher/lesson/source-archive",
+      "disposition": "REBUILD_PRESENTATION",
+      "sourceFile": "src/pages/teacher/ManageSourceArchive.tsx",
+      "component": "ManageSourceArchive",
+      "reason": "Domain remains authoritative; legacy presentation debt is rebuilt in W10.",
+      "status": "W10_PRESENTATION_REBUILD"
+    },
+    {
+      "id": "ROUTE-37",
+      "path": "/student/lesson/note",
+      "disposition": "REMOVE_LEGACY_UI",
+      "sourceFile": "src/App.tsx",
+      "component": "LegacyRouteRedirect",
+      "reason": "Old UI mount is removed while the compatibility alias remains.",
+      "status": "ALIAS_PRESERVED_OLD_UI_MOUNT_ZERO",
+      "target": "/student/learning"
+    },
+    {
+      "id": "ROUTE-38",
+      "path": "/student/lesson/think-cloud",
+      "disposition": "REMOVE_LEGACY_UI",
+      "sourceFile": "src/App.tsx",
+      "component": "LegacyRouteRedirect",
+      "reason": "Old UI mount is removed while the compatibility alias remains.",
+      "status": "ALIAS_PRESERVED_OLD_UI_MOUNT_ZERO",
+      "target": "/student/learning?source=LEGACY"
+    },
+    {
+      "id": "ROUTE-39",
+      "path": "/student/quiz/history2",
+      "disposition": "REMOVE_LEGACY_UI",
+      "sourceFile": "src/App.tsx",
+      "component": "LegacyRouteRedirect",
+      "reason": "Old UI mount is removed while the compatibility alias remains.",
+      "status": "ALIAS_PRESERVED_OLD_UI_MOUNT_ZERO",
+      "target": "/student/quiz"
+    },
+    {
+      "id": "ROUTE-40",
+      "path": "/student/quiz/history2/*",
+      "disposition": "REMOVE_LEGACY_UI",
+      "sourceFile": "src/App.tsx",
+      "component": "LegacyRouteRedirect",
+      "reason": "Old UI mount is removed while the compatibility alias remains.",
+      "status": "ALIAS_PRESERVED_OLD_UI_MOUNT_ZERO",
+      "target": "/student/quiz"
+    },
+    {
+      "id": "ROUTE-41",
+      "path": "/teacher/quiz/history2",
+      "disposition": "REMOVE_LEGACY_UI",
+      "sourceFile": "src/App.tsx",
+      "component": "LegacyRouteRedirect",
+      "reason": "Old UI mount is removed while the compatibility alias remains.",
+      "status": "ALIAS_PRESERVED_OLD_UI_MOUNT_ZERO",
+      "target": "/teacher/quiz"
+    },
+    {
+      "id": "ROUTE-42",
+      "path": "/teacher/quiz/history2/*",
+      "disposition": "REMOVE_LEGACY_UI",
+      "sourceFile": "src/App.tsx",
+      "component": "LegacyRouteRedirect",
+      "reason": "Old UI mount is removed while the compatibility alias remains.",
+      "status": "ALIAS_PRESERVED_OLD_UI_MOUNT_ZERO",
+      "target": "/teacher/quiz"
+    },
+    {
+      "id": "ROUTE-43",
+      "path": "/teacher/lesson",
+      "disposition": "REMOVE_LEGACY_UI",
+      "sourceFile": "src/App.tsx",
+      "component": "LegacyRouteRedirect",
+      "reason": "Old UI mount is removed while the compatibility alias remains.",
+      "status": "ALIAS_PRESERVED_OLD_UI_MOUNT_ZERO",
+      "target": "/teacher/learning"
+    },
+    {
+      "id": "ROUTE-44",
+      "path": "/teacher/lesson/think-cloud",
+      "disposition": "REMOVE_LEGACY_UI",
+      "sourceFile": "src/App.tsx",
+      "component": "LegacyRouteRedirect",
+      "reason": "Old UI mount is removed while the compatibility alias remains.",
+      "status": "ALIAS_PRESERVED_OLD_UI_MOUNT_ZERO",
+      "target": "/teacher/learning?source=LEGACY"
+    },
+    {
+      "id": "ROUTE-45",
+      "path": "/developer-log",
+      "disposition": "RELEASE_DECISION",
+      "sourceFile": "src/pages/DeveloperLog.tsx",
+      "component": "DeveloperLog",
+      "reason": "Auxiliary public exposure or not-found policy requires release governance, not a W10 domain rewrite.",
+      "status": "RELEASE_DECISION"
+    },
+    {
+      "id": "ROUTE-46",
+      "path": "/developer-log/:postId",
+      "disposition": "RELEASE_DECISION",
+      "sourceFile": "src/pages/DeveloperLog.tsx",
+      "component": "DeveloperLog",
+      "reason": "Auxiliary public exposure or not-found policy requires release governance, not a W10 domain rewrite.",
+      "status": "RELEASE_DECISION"
+    },
+    {
+      "id": "ROUTE-47",
+      "path": "*",
+      "disposition": "RELEASE_DECISION",
+      "sourceFile": "src/App.tsx",
+      "component": "NotFound",
+      "reason": "Auxiliary public exposure or not-found policy requires release governance, not a W10 domain rewrite.",
+      "status": "RELEASE_DECISION"
+    }
+  ],
+  "expectedDispositionCounts": {
+    "COMPLETE": 18,
+    "INTEGRATE": 8,
+    "REBUILD_PRESENTATION": 10,
+    "REMOVE_LEGACY_UI": 8,
+    "RELEASE_DECISION": 3,
+    "UNKNOWN": 0
+  }
+}
