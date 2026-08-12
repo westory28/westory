@@ -601,9 +601,10 @@ const StudentList: React.FC = () => {
             )}
             <div className="flex w-full items-center gap-2 overflow-x-auto md:w-auto">
               <select
+                aria-label="학년 필터"
                 value={gradeFilter}
                 onChange={(e) => setGradeFilter(e.target.value)}
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700 focus:border-blue-500 focus:outline-none"
+                className="min-h-11 rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700 focus:border-blue-500 focus:outline-none"
               >
                 <option value="all">전체 학년</option>
                 {gradeOptions.map((grade) => (
@@ -613,9 +614,10 @@ const StudentList: React.FC = () => {
                 ))}
               </select>
               <select
+                aria-label="반 필터"
                 value={classFilter}
                 onChange={(e) => setClassFilter(e.target.value)}
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700 focus:border-blue-500 focus:outline-none"
+                className="min-h-11 rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700 focus:border-blue-500 focus:outline-none"
               >
                 <option value="all">전체 반</option>
                 {classOptions.map((cls) => (
@@ -626,7 +628,8 @@ const StudentList: React.FC = () => {
               </select>
               <button
                 onClick={() => void handleRefreshList()}
-                className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-600 transition hover:border-blue-500 hover:text-blue-600"
+                aria-label="명단 새로고침 및 필터 초기화"
+                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-600 transition hover:border-blue-500 hover:text-blue-600"
                 title="명단 새로고침 및 필터 초기화"
               >
                 <i
@@ -638,14 +641,15 @@ const StudentList: React.FC = () => {
             <div className="flex w-full gap-2 md:w-auto">
               <input
                 type="text"
+                aria-label="학생 이름 또는 이메일 검색"
                 placeholder="이름 또는 이메일 검색"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none md:w-64"
+                className="min-h-11 flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none md:w-64"
               />
               <button
                 onClick={applyFilters}
-                className="whitespace-nowrap rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
+                className="min-h-11 whitespace-nowrap rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
               >
                 <i className="fas fa-search mr-1"></i>검색
               </button>
@@ -662,6 +666,7 @@ const StudentList: React.FC = () => {
                   <th className="w-10 p-4 text-center">
                     <input
                       type="checkbox"
+                      aria-label="현재 학생 목록 전체 선택"
                       onChange={(e) => handleSelectAll(e.target.checked)}
                       checked={
                         pagedStudents.length > 0 &&
@@ -702,6 +707,7 @@ const StudentList: React.FC = () => {
                       <td className="p-4 text-center">
                         <input
                           type="checkbox"
+                          aria-label={`${student.name || "이름 없음"} 학생 선택`}
                           checked={selectedIds.has(student.id)}
                           onChange={() => handleSelect(student.id)}
                           className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500"
@@ -724,7 +730,7 @@ const StudentList: React.FC = () => {
                             setDetailModalOpen(true);
                           }}
                           title="학생 학습 현황 보기"
-                          className="w-full text-left font-bold text-gray-800 hover:text-blue-600 hover:underline group-hover:text-blue-600"
+                          className="min-h-11 w-full text-left font-bold text-gray-800 hover:text-blue-600 hover:underline group-hover:text-blue-600"
                         >
                           <span className="flex items-center">
                             <span>{student.name || "(이름 없음)"}</span>
@@ -750,7 +756,8 @@ const StudentList: React.FC = () => {
                                   setDetailInitialTab("profile");
                                   setDetailModalOpen(true);
                                 }}
-                                className="flex items-center gap-1 rounded bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-blue-600 transition hover:bg-blue-100"
+                                aria-label={`${student.name || "이름 없음"} 학생 정보 수정`}
+                                className="flex min-h-11 min-w-11 items-center justify-center gap-1 rounded bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-blue-600 transition hover:bg-blue-100"
                                 title="수정"
                               >
                                 <i className="fas fa-edit"></i>
@@ -759,7 +766,8 @@ const StudentList: React.FC = () => {
                               <button
                                 onClick={() => void handleDelete(student.id)}
                                 disabled={deletingStudentIds.has(student.id)}
-                                className="flex items-center gap-1 rounded bg-red-50 px-2.5 py-1.5 text-xs font-bold text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                aria-label={`${student.name || "이름 없음"} 학생 정보 삭제`}
+                                className="flex min-h-11 min-w-11 items-center justify-center gap-1 rounded bg-red-50 px-2.5 py-1.5 text-xs font-bold text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
                                 title={
                                   student.isTeacherAccount
                                     ? "학생 정보만 삭제"
@@ -821,7 +829,7 @@ const StudentList: React.FC = () => {
                       onClick={() => setCurrentPage(page)}
                       title={`${page}페이지: ${group.label}`}
                       aria-label={`${page}페이지, ${group.label}`}
-                      className={`min-w-8 h-8 rounded-md px-2 text-xs font-bold transition ${currentPage === page ? "bg-blue-600 text-white shadow-sm" : "bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-blue-600"}`}
+                      className={`h-11 min-w-11 rounded-md px-2 text-xs font-bold transition ${currentPage === page ? "bg-blue-600 text-white shadow-sm" : "bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-blue-600"}`}
                     >
                       {page}
                     </button>
