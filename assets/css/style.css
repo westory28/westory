@@ -62,6 +62,19 @@
     --motion-slow: 300ms;
 }
 
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-width: 0;
+  width: 100%;
+}
+
 body {
     font-family: system-ui, -apple-system, "Segoe UI", "Noto Sans KR", "Malgun Gothic", sans-serif;
     background-color: #f9fafb;
