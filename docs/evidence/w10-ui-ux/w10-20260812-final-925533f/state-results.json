@@ -1,0 +1,65 @@
+[
+  {
+    "state": "LOADING",
+    "route": "/teacher/dashboard",
+    "persona": "teacher",
+    "viewportId": "mobile",
+    "status": "PASS"
+  },
+  {
+    "state": "EMPTY",
+    "route": "/student/learning",
+    "persona": "student",
+    "viewportId": "tablet-landscape",
+    "status": "PASS"
+  },
+  {
+    "state": "ERROR",
+    "route": "/student/calendar",
+    "persona": "student",
+    "viewportId": "tablet-landscape",
+    "status": "PASS"
+  },
+  {
+    "state": "PERMISSION",
+    "route": "/teacher/settings",
+    "persona": "permission-denied",
+    "viewportId": "mobile",
+    "status": "PASS"
+  },
+  {
+    "state": "SESSION_EXPIRED",
+    "route": "/teacher/dashboard",
+    "persona": "session-expired",
+    "viewportId": "large-desktop",
+    "status": "PASS"
+  },
+  {
+    "state": "MAINTENANCE",
+    "route": "/student/dashboard",
+    "persona": "student",
+    "viewportId": "mobile",
+    "status": "PASS"
+  },
+  {
+    "state": "ARCHIVED",
+    "route": "/student/mypage/archive",
+    "persona": "student",
+    "viewportId": "tablet-landscape",
+    "status": "PASS"
+  },
+  {
+    "state": "LEGACY",
+    "route": "/student/lesson/maps",
+    "persona": "student",
+    "viewportId": "tablet-landscape",
+    "status": "PASS"
+  },
+  {
+    "state": "STALE",
+    "route": "/teacher/learning",
+    "persona": "teacher",
+    "viewportId": "mobile",
+    "status": "PASS"
+  }
+]

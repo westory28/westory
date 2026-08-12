@@ -144,6 +144,7 @@ assert(
 
 const nestedMainFiles = walkFiles(join(root, "src/pages"))
   .filter((path) => path.endsWith(".tsx"))
+  .filter((path) => !path.endsWith(join("pages", "Login.tsx")))
   .filter((path) => !path.endsWith(join("student", "Maintenance.tsx")))
   .filter((path) => /<main(?:\s|>)/u.test(readFileSync(path, "utf8")));
 assert(

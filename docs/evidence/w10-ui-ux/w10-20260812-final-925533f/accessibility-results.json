@@ -1,0 +1,57 @@
+[
+  {
+    "caseId": "a11y-login-mobile",
+    "route": "/",
+    "persona": "anonymous",
+    "viewportId": "mobile",
+    "axeCritical": 0,
+    "axeSerious": 0,
+    "keyboardPass": true,
+    "focusOrderPass": true,
+    "status": "PASS"
+  },
+  {
+    "caseId": "a11y-student-nav-tablet",
+    "route": "/student/dashboard",
+    "persona": "student",
+    "viewportId": "tablet-portrait",
+    "axeCritical": 0,
+    "axeSerious": 0,
+    "keyboardPass": true,
+    "focusOrderPass": true,
+    "status": "PASS"
+  },
+  {
+    "caseId": "a11y-grade-landscape",
+    "route": "/student/score/performance",
+    "persona": "student",
+    "viewportId": "tablet-landscape",
+    "axeCritical": 0,
+    "axeSerious": 0,
+    "keyboardPass": true,
+    "focusOrderPass": true,
+    "status": "PASS"
+  },
+  {
+    "caseId": "a11y-teacher-draft-laptop",
+    "route": "/teacher/learning",
+    "persona": "teacher",
+    "viewportId": "laptop",
+    "axeCritical": 0,
+    "axeSerious": 0,
+    "keyboardPass": true,
+    "focusOrderPass": true,
+    "status": "PASS"
+  },
+  {
+    "caseId": "a11y-teacher-bulk-large",
+    "route": "/teacher/attendance",
+    "persona": "teacher",
+    "viewportId": "large-desktop",
+    "axeCritical": 0,
+    "axeSerious": 0,
+    "keyboardPass": true,
+    "focusOrderPass": true,
+    "status": "PASS"
+  }
+]

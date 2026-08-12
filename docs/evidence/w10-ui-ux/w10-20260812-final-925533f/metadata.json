@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "fixtureOwner": "w10-ui-ux-staging",
+  "testRunId": "w10-20260812-final-925533f",
+  "projectId": "westory-staging-177587430482",
+  "stableAlias": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+  "deploymentUrl": "https://westory-staging-7uhwk84kh-bbbs-projects-44f9da30.vercel.app",
+  "branch": "codex/phase6-w10-full-ui-ux-integration",
+  "commitSha": "f7d92d6cc2761acb762a68db9bfe313485139062",
+  "startedAt": "2026-08-12T07:42:00.000Z",
+  "completedAt": "2026-08-12T08:23:52.224Z",
+  "productionAccess": 0,
+  "productionMutationCount": 0,
+  "credentialValueCount": 0,
+  "tokenValueCount": 0
+}

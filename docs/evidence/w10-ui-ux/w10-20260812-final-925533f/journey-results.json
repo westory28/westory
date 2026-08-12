@@ -1,0 +1,50 @@
+[
+  {
+    "journeyId": "student-today-learning-grade-wis",
+    "persona": "student",
+    "viewportId": "mobile",
+    "status": "PASS"
+  },
+  {
+    "journeyId": "student-archive-legacy-permission",
+    "persona": "student",
+    "viewportId": "tablet-landscape",
+    "status": "PASS"
+  },
+  {
+    "journeyId": "teacher-home-learning-draft-save-recovery",
+    "persona": "teacher",
+    "viewportId": "mobile",
+    "status": "PASS"
+  },
+  {
+    "journeyId": "teacher-schedule-conflict-resolution",
+    "persona": "teacher",
+    "viewportId": "tablet-landscape",
+    "status": "PASS"
+  },
+  {
+    "journeyId": "teacher-attendance-selection-preview-run-retry",
+    "persona": "teacher",
+    "viewportId": "mobile",
+    "status": "PASS"
+  },
+  {
+    "journeyId": "teacher-grade-wis-roster-wide-data",
+    "persona": "teacher",
+    "viewportId": "large-desktop",
+    "status": "PASS"
+  },
+  {
+    "journeyId": "admin-semester-permission-state",
+    "persona": "permission-denied",
+    "viewportId": "large-desktop",
+    "status": "PASS"
+  },
+  {
+    "journeyId": "dialog-keyboard-escape-focus-restore",
+    "persona": "teacher",
+    "viewportId": "mobile",
+    "status": "PASS"
+  }
+]
