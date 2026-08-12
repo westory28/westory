@@ -1,22 +1,22 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { doc, getDoc } from "firebase/firestore";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
-import { db } from "../../lib/firebase";
 import {
-  clearNotifications,
-  loadNotifications,
-  markNotificationsRead,
-  subscribeBroadcastNotifications,
-  subscribeNotificationInbox,
-} from "../../lib/notifications";
-import type {
-  WestoryNotification,
-  WestoryNotificationInbox,
-} from "../../types";
-import { useAppDialog } from "./AppDialogProvider";
+  W8DomainError,
+  acknowledgeAllNotices,
+  acknowledgeNotice,
+  formatW8DateTime,
+  getW8DomainState,
+  type W8DomainState,
+  type W8Notice,
+} from "../../lib/w8Domains";
 import { useAppToast } from "./AppToastProvider";
-import { InlineLoading } from "./LoadingState";
 
 interface NotificationBellProps {
   className?: string;
@@ -24,421 +24,90 @@ interface NotificationBellProps {
   onUnreadCountChange?: (count: number) => void;
 }
 
-const formatNotificationTime = (value: unknown) => {
-  const date =
-    value && typeof (value as { toDate?: () => Date }).toDate === "function"
-      ? (value as { toDate: () => Date }).toDate()
-      : null;
-  if (!date) return "";
-
-  const diffMs = Date.now() - date.getTime();
-  const diffMinutes = Math.floor(diffMs / 60000);
-  if (diffMinutes < 1) return "방금";
-  if (diffMinutes < 60) return `${diffMinutes}분 전`;
-  const diffHours = Math.floor(diffMinutes / 60);
-  if (diffHours < 24) return `${diffHours}시간 전`;
-  return new Intl.DateTimeFormat("ko-KR", {
-    month: "short",
-    day: "numeric",
-  }).format(date);
-};
-
-const timestampMs = (value: unknown) => {
-  if (!value) return 0;
-  if (typeof (value as { toMillis?: () => number }).toMillis === "function") {
-    return (value as { toMillis: () => number }).toMillis();
-  }
-  if (typeof (value as { toDate?: () => Date }).toDate === "function") {
-    return (value as { toDate: () => Date }).toDate().getTime();
-  }
-  const seconds = Number((value as { seconds?: number }).seconds || 0);
-  return seconds > 0 ? seconds * 1000 : 0;
-};
-
-const getNotificationIconClassName = (type: WestoryNotification["type"]) => {
-  if (type.startsWith("history_classroom")) return "fas fa-landmark";
-  if (type.startsWith("history_dictionary")) return "fas fa-book-open";
-  if (type.startsWith("performance_score")) return "fas fa-clipboard-check";
-  if (type.startsWith("point_order")) return "fas fa-store";
-  if (type.startsWith("lesson")) return "fas fa-file-lines";
-  if (type.startsWith("privacy_policy")) return "fas fa-user-shield";
-  if (type.startsWith("question")) return "fas fa-circle-question";
-  return "fas fa-circle-info";
-};
-
-const getNotificationBodyText = (notification: WestoryNotification) => {
-  const body = String(notification.body || "").trim();
-  if (notification.type === "history_dictionary_requested") {
-    return body.replace(
-      /학생이\s+"([^"]+)"\s+뜻풀이를 요청했습니다\./g,
-      "학생이 $1 뜻풀이를 요청했습니다.",
-    );
-  }
-  return body;
-};
-
-const getNotificationTargetUrl = (notification: WestoryNotification) => {
-  const targetUrl = String(notification.targetUrl || "").trim();
-  if (
-    notification.type === "history_classroom_submitted" ||
-    notification.type === "history_classroom_passed"
-  ) {
-    if (!targetUrl || targetUrl === "/teacher/quiz?menu=history2") {
-      return "/teacher/quiz/history-classroom";
-    }
-    return targetUrl;
-  }
-  if (notification.type === "point_order_requested") {
-    if (!targetUrl || targetUrl === "/teacher/points") {
-      return "/teacher/points?tab=requests";
-    }
-    return targetUrl;
-  }
-  if (notification.type === "performance_score_objection_requested") {
-    if (
-      !targetUrl ||
-      targetUrl === "/teacher/exam" ||
-      targetUrl === "/teacher/exam?tab=performance"
-    ) {
-      return "/teacher/exam?tab=performance&panel=objections";
-    }
-    if (
-      targetUrl.startsWith("/teacher/exam?") &&
-      !targetUrl.includes("panel=")
-    ) {
-      return `${targetUrl}&panel=objections`;
-    }
-    return targetUrl;
-  }
-  if (notification.type === "performance_score_answer_sheet_requested") {
-    if (
-      !targetUrl ||
-      targetUrl === "/teacher/exam" ||
-      targetUrl === "/teacher/exam?tab=written-essay"
-    ) {
-      return "/teacher/exam?tab=written-essay&panel=answer-sheet-requests";
-    }
-    if (
-      targetUrl.startsWith("/teacher/exam?") &&
-      !targetUrl.includes("panel=")
-    ) {
-      return `${targetUrl}&panel=answer-sheet-requests`;
-    }
-    return targetUrl;
-  }
-  if (
-    notification.type === "performance_score_objection_reviewed" ||
-    notification.type === "performance_score_signature_rejected"
-  ) {
-    if (!targetUrl || targetUrl === "/student/score") {
-      return "/student/score/performance";
-    }
-    return targetUrl;
-  }
-  if (notification.type === "point_order_reviewed") {
-    if (!targetUrl || targetUrl === "/student/points") {
-      return "/student/points?tab=orders";
-    }
-    return targetUrl;
-  }
-  if (notification.type === "history_dictionary_resolved") {
-    if (!targetUrl || targetUrl === "/student/dashboard") {
-      return "/student/lesson/history-dictionary";
-    }
-    return targetUrl;
-  }
-  if (notification.type === "history_dictionary_requested") {
-    const requestId = String(notification.entityId || "").trim();
-    const requestsUrl =
-      !targetUrl || targetUrl === "/teacher/lesson/history-dictionary"
-        ? "/teacher/lesson/history-dictionary?panel=requests"
-        : targetUrl;
-    if (!requestId || requestsUrl.includes("requestId=")) return requestsUrl;
-    return `${requestsUrl}${requestsUrl.includes("?") ? "&" : "?"}requestId=${encodeURIComponent(requestId)}`;
-  }
-  return targetUrl;
-};
-
-const getRealtimeToastKey = (notification: WestoryNotification) =>
-  `${notification.broadcast ? "broadcast" : "personal"}:${notification.id}`;
-
-const shownRealtimeToastKeys = new Set<string>();
-const FOCUSABLE =
-  'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
-const policyHtmlToText = (value: unknown) => {
-  const html = String(value || "");
-  if (!html) return "";
-  if (typeof DOMParser === "undefined") return html.replace(/<[^>]+>/gu, " ");
-  const withLineBreaks = html.replace(
-    /<\/(p|li|h[1-6]|div|section)>/giu,
-    "$&\n",
-  );
-  const parsed = new DOMParser().parseFromString(withLineBreaks, "text/html");
-  return String(parsed.body.textContent || "")
-    .replace(/\n{3,}/gu, "\n\n")
-    .trim();
-};
-
 const NotificationBell: React.FC<NotificationBellProps> = ({
   className = "",
   buttonClassName = "",
   onUnreadCountChange,
 }) => {
   const navigate = useNavigate();
-  const { currentUser, config, userData } = useAuth();
+  const { currentUser, config, configReady, userData } = useAuth();
   const { showToast } = useAppToast();
-  const { confirm } = useAppDialog();
+  const audience = userData?.role === "student" ? "student" : "teacher";
   const [open, setOpen] = useState(false);
-  const [personalUnreadCount, setPersonalUnreadCount] = useState(0);
-  const [broadcastNotifications, setBroadcastNotifications] = useState<
-    WestoryNotification[]
-  >([]);
-  const [notifications, setNotifications] = useState<WestoryNotification[]>([]);
-  const [inbox, setInbox] = useState<WestoryNotificationInbox | null>(null);
-  const [inboxReady, setInboxReady] = useState(false);
-  const [broadcastReady, setBroadcastReady] = useState(false);
-  const [markingRead, setMarkingRead] = useState(false);
-  const [clearing, setClearing] = useState(false);
-  const [privacyPolicyOpen, setPrivacyPolicyOpen] = useState(false);
-  const [privacyPolicyLoading, setPrivacyPolicyLoading] = useState(false);
-  const [privacyPolicyText, setPrivacyPolicyText] = useState("");
+  const [state, setState] = useState<W8DomainState | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState("");
+  const [error, setError] = useState("");
   const rootRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const panelRef = useRef<HTMLDivElement | null>(null);
-  const privacyDialogRef = useRef<HTMLDivElement | null>(null);
-  const privacyCloseRef = useRef<HTMLButtonElement | null>(null);
-  const privacyRequestRef = useRef(0);
-  const realtimeToastStateRef = useRef({
-    initialized: false,
-    scopeKey: "",
-    unreadCount: 0,
-  });
+  const closeRef = useRef<HTMLButtonElement | null>(null);
 
-  const includeBroadcasts = String(userData?.role || "").trim() === "student";
-  const notificationSourcesReady =
-    inboxReady && (!includeBroadcasts || broadcastReady);
-
-  const visibleBroadcastNotifications = useMemo(() => {
-    if (!includeBroadcasts) return [];
-    const lastBroadcastReadMs = timestampMs(inbox?.lastBroadcastReadAt);
-    const broadcastClearedMs = timestampMs(inbox?.broadcastClearedAt);
-    return broadcastNotifications
-      .map((notification) => {
-        const createdMs = timestampMs(notification.createdAt);
-        return {
-          ...notification,
-          recipientUid: currentUser?.uid || notification.recipientUid,
-          readAt:
-            createdMs > 0 && createdMs <= lastBroadcastReadMs
-              ? inbox?.lastBroadcastReadAt
-              : null,
-        };
-      })
-      .filter((notification) => {
-        const createdMs = timestampMs(notification.createdAt);
-        return (
-          !broadcastClearedMs || !createdMs || createdMs > broadcastClearedMs
-        );
-      });
-  }, [
-    broadcastNotifications,
-    currentUser?.uid,
-    includeBroadcasts,
-    inbox?.broadcastClearedAt,
-    inbox?.lastBroadcastReadAt,
-  ]);
-
-  const broadcastUnreadCount = visibleBroadcastNotifications.filter(
-    (notification) => !notification.readAt,
-  ).length;
-  const unreadCount = personalUnreadCount + broadcastUnreadCount;
-  const displayUnreadCount = unreadCount > 99 ? "99+" : String(unreadCount);
-  const hasNotifications = notifications.length > 0;
+  const load = useCallback(async () => {
+    if (!configReady || !currentUser?.uid) return;
+    setLoading(true);
+    setError("");
+    try {
+      setState(
+        await getW8DomainState({
+          config,
+          domain: "COMMUNICATION",
+          audience,
+          studentUid: audience === "student" ? currentUser.uid : undefined,
+          source: "CURRENT",
+        }),
+      );
+    } catch (caught) {
+      setError(
+        caught instanceof W8DomainError
+          ? caught.message
+          : "알림을 불러오지 못했습니다.",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, [audience, config, configReady, currentUser?.uid]);
 
   useEffect(() => {
-    if (!currentUser?.uid || !config) {
-      setPersonalUnreadCount(0);
-      setBroadcastNotifications([]);
-      setNotifications([]);
-      setInbox(null);
-      setInboxReady(false);
-      return undefined;
-    }
+    void load();
+  }, [load]);
 
-    setInboxReady(false);
-    return subscribeNotificationInbox(config, currentUser.uid, (nextInbox) => {
-      setInbox(nextInbox);
-      setPersonalUnreadCount(nextInbox.unreadCount);
-      setInboxReady(true);
-    });
-  }, [config?.semester, config?.year, currentUser?.uid]);
-
-  useEffect(() => {
-    if (!includeBroadcasts || !currentUser?.uid || !config) {
-      setBroadcastNotifications([]);
-      setBroadcastReady(false);
-      return undefined;
-    }
-
-    setBroadcastReady(false);
-    return subscribeBroadcastNotifications(config, (nextNotifications) => {
-      setBroadcastNotifications(nextNotifications);
-      setBroadcastReady(true);
-    });
-  }, [config?.semester, config?.year, currentUser?.uid, includeBroadcasts]);
+  const deliveryNoticeIds = useMemo(
+    () => new Set((state?.deliveries || []).map((item) => item.noticeId)),
+    [state?.deliveries],
+  );
+  const notices = useMemo(
+    () =>
+      (state?.notices || []).filter(
+        (notice) =>
+          audience === "student" || deliveryNoticeIds.has(notice.noticeId),
+      ),
+    [audience, deliveryNoticeIds, state?.notices],
+  );
+  const unread =
+    audience === "student"
+      ? notices.filter((notice) => !notice.acknowledged)
+      : [];
+  const unreadCount = unread.length;
+  const countLabel = unreadCount > 99 ? "99+" : String(unreadCount);
 
   useEffect(() => {
     onUnreadCountChange?.(unreadCount);
   }, [onUnreadCountChange, unreadCount]);
 
   useEffect(() => {
-    if (!currentUser?.uid || !config) {
-      realtimeToastStateRef.current = {
-        initialized: false,
-        scopeKey: "",
-        unreadCount: 0,
-      };
-      return undefined;
-    }
-
-    if (!notificationSourcesReady) return undefined;
-
-    const previousState = realtimeToastStateRef.current;
-    const scopeKey = [
-      currentUser.uid,
-      config.year,
-      config.semester,
-      includeBroadcasts ? "student-broadcasts" : "personal",
-    ].join(":");
-    if (!previousState.initialized || previousState.scopeKey !== scopeKey) {
-      realtimeToastStateRef.current = {
-        initialized: true,
-        scopeKey,
-        unreadCount,
-      };
-      return undefined;
-    }
-
-    realtimeToastStateRef.current = {
-      initialized: true,
-      scopeKey,
-      unreadCount,
-    };
-
-    if (unreadCount <= previousState.unreadCount) return undefined;
-
-    let cancelled = false;
-
-    const showLatestRealtimeNotification = async () => {
-      try {
-        const nextNotifications = await loadNotifications(
-          config,
-          currentUser.uid,
-          {
-            includeBroadcasts,
-            lastBroadcastReadAt: inbox?.lastBroadcastReadAt,
-            broadcastClearedAt: inbox?.broadcastClearedAt,
-          },
-        );
-        if (cancelled) return;
-
-        const notification =
-          nextNotifications.find((item) => !item.readAt) ||
-          nextNotifications[0];
-        if (!notification) return;
-
-        const toastKey = `${scopeKey}:${getRealtimeToastKey(notification)}`;
-        if (shownRealtimeToastKeys.has(toastKey)) return;
-        shownRealtimeToastKeys.add(toastKey);
-
-        showToast({
-          tone: notification.priority === "high" ? "warning" : "info",
-          title: notification.title || "새 알림",
-          message: getNotificationBodyText(notification),
-          durationMs: includeBroadcasts
-            ? notification.priority === "high"
-              ? 5600
-              : 4200
-            : undefined,
-          persistent: includeBroadcasts ? false : true,
-        });
-      } catch (error) {
-        console.error("Failed to show realtime notification toast:", error);
-      }
-    };
-
-    void showLatestRealtimeNotification();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    config?.semester,
-    config?.year,
-    currentUser?.uid,
-    includeBroadcasts,
-    inbox?.broadcastClearedAt,
-    inbox?.lastBroadcastReadAt,
-    showToast,
-    notificationSourcesReady,
-    unreadCount,
-  ]);
-
-  useEffect(() => {
-    if (!open || !currentUser?.uid || !config) return undefined;
-    let cancelled = false;
-
-    const loadItems = async () => {
-      try {
-        const nextNotifications = await loadNotifications(
-          config,
-          currentUser.uid,
-          {
-            includeBroadcasts,
-            lastBroadcastReadAt: inbox?.lastBroadcastReadAt,
-            broadcastClearedAt: inbox?.broadcastClearedAt,
-          },
-        );
-        if (!cancelled) setNotifications(nextNotifications);
-      } catch (error) {
-        console.error("Failed to load notifications:", error);
-      }
-    };
-
-    void loadItems();
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    config?.semester,
-    config?.year,
-    currentUser?.uid,
-    includeBroadcasts,
-    inbox?.broadcastClearedAt,
-    inbox?.lastBroadcastReadAt,
-    open,
-  ]);
-
-  useEffect(() => {
     if (!open) return undefined;
-
+    const frame = window.requestAnimationFrame(() => closeRef.current?.focus());
     const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target;
-      if (!(target instanceof Node)) return;
-      if (!rootRef.current?.contains(target)) {
+      if (
+        event.target instanceof Node &&
+        !rootRef.current?.contains(event.target)
+      ) {
         setOpen(false);
       }
     };
-
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
     };
-    const frame = window.requestAnimationFrame(() => {
-      panelRef.current
-        ?.querySelector<HTMLElement>("[data-notification-close]")
-        ?.focus();
-    });
     document.addEventListener("pointerdown", handlePointerDown);
     document.addEventListener("keydown", handleKeyDown);
     return () => {
@@ -449,327 +118,181 @@ const NotificationBell: React.FC<NotificationBellProps> = ({
     };
   }, [open]);
 
-  useEffect(() => {
-    if (!privacyPolicyOpen) return undefined;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const frame = window.requestAnimationFrame(() => {
-      privacyCloseRef.current?.focus();
-    });
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setPrivacyPolicyOpen(false);
-    };
-    document.addEventListener("keydown", handleEscape);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener("keydown", handleEscape);
-      triggerRef.current?.focus();
-    };
-  }, [privacyPolicyOpen]);
-
-  const panelTitle = useMemo(
-    () => (unreadCount > 0 ? `새 알림 ${displayUnreadCount}개` : "알림"),
-    [displayUnreadCount, unreadCount],
+  const targetByNoticeId = useMemo(
+    () =>
+      new Map(
+        (state?.deliveries || []).map((item) => [
+          item.noticeId,
+          item.targetUrl,
+        ]),
+      ),
+    [state?.deliveries],
   );
 
-  const handleMarkAllRead = async () => {
-    if (!config || markingRead || unreadCount <= 0) return;
-    setMarkingRead(true);
+  const perform = async (key: string, operation: () => Promise<unknown>) => {
+    setBusy(key);
+    setError("");
     try {
-      await markNotificationsRead(config);
-      setPersonalUnreadCount(0);
-    } catch (error) {
-      console.error("Failed to mark notifications as read:", error);
-      showToast({
-        tone: "error",
-        title: "알림 읽음 처리에 실패했습니다.",
-        message: "잠시 후 다시 시도해 주세요.",
-      });
+      await operation();
+      await load();
+    } catch (caught) {
+      const message =
+        caught instanceof W8DomainError
+          ? caught.message
+          : "알림 상태를 변경하지 못했습니다.";
+      setError(message);
+      showToast({ tone: "error", title: "알림 처리 실패", message });
     } finally {
-      setMarkingRead(false);
+      setBusy("");
     }
   };
 
-  const handleClear = async () => {
-    if (!config || clearing || !hasNotifications) return;
-    const confirmed = await confirm({
-      tone: "danger",
-      title: "알림 목록을 모두 삭제할까요?",
-      message: "삭제 후에는 현재 알림 목록에서 다시 볼 수 없습니다.",
-      confirmLabel: "모두 삭제",
-    });
-    if (!confirmed) return;
-
-    setClearing(true);
-    try {
-      await clearNotifications(config);
-      setNotifications([]);
-      setPersonalUnreadCount(0);
-    } catch (error) {
-      console.error("Failed to clear notifications:", error);
-      showToast({
-        tone: "error",
-        title: "알림 삭제 실패",
-        message: "잠시 후 다시 시도해 주세요.",
-      });
-    } finally {
-      setClearing(false);
-    }
-  };
-
-  const openPrivacyPolicyModal = async () => {
-    const requestId = ++privacyRequestRef.current;
-    setOpen(false);
-    setPrivacyPolicyOpen(true);
-    setPrivacyPolicyLoading(true);
-    setPrivacyPolicyText("");
-
-    try {
-      const snap = await getDoc(doc(db, "site_settings", "privacy"));
-      const text = snap.exists()
-        ? String((snap.data() as { text?: unknown }).text || "").trim()
-        : "";
-      if (privacyRequestRef.current !== requestId) return;
-      setPrivacyPolicyText(policyHtmlToText(text) || "등록된 내용이 없습니다.");
-    } catch (error) {
-      if (privacyRequestRef.current !== requestId) return;
-      console.error("Privacy policy load error:", error);
-      setPrivacyPolicyText("내용을 불러오지 못했습니다.");
-    } finally {
-      if (privacyRequestRef.current === requestId) {
-        setPrivacyPolicyLoading(false);
-      }
-    }
-  };
-
-  const closePrivacyPolicy = () => {
-    privacyRequestRef.current += 1;
-    setPrivacyPolicyOpen(false);
-  };
-
-  const trapDialogFocus = (event: React.KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== "Tab") return;
-    const focusable = Array.from(
-      privacyDialogRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) || [],
+  const acknowledgeOne = (notice: W8Notice) => {
+    if (!state || notice.acknowledged) return;
+    void perform(`notice:${notice.noticeId}`, () =>
+      acknowledgeNotice({
+        semesterId: state.semesterId,
+        expectedSemesterRevision: state.manifestRevision,
+        noticeId: notice.noticeId,
+        expectedNoticeRevision: notice.revision,
+      }),
     );
-    if (!focusable.length) return;
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault();
-      last.focus();
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault();
-      first.focus();
-    }
+  };
+
+  const acknowledgeAll = () => {
+    if (!state || unread.length === 0) return;
+    void perform("notice:all", () =>
+      acknowledgeAllNotices({
+        semesterId: state.semesterId,
+        expectedSemesterRevision: state.manifestRevision,
+        notices: unread.map((notice) => ({
+          noticeId: notice.noticeId,
+          expectedNoticeRevision: notice.revision,
+        })),
+      }),
+    );
   };
 
   if (!currentUser) return null;
+  const panelTitle = unreadCount > 0 ? `확인할 알림 ${countLabel}개` : "알림";
 
   return (
-    <div ref={rootRef} className={`relative ${className}`}>
+    <div ref={rootRef} className={`ws-notification ${className}`}>
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => setOpen((current) => !current)}
-        data-session-action="true"
-        className={`relative inline-flex h-11 w-11 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-600 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 ${buttonClassName}`}
+        className={`ws-notification__trigger ${buttonClassName}`}
+        onClick={() => setOpen((value) => !value)}
         aria-label={panelTitle}
         aria-expanded={open}
         aria-controls="westory-notification-panel"
+        data-session-action="true"
       >
-        <i className="fas fa-bell text-sm" aria-hidden="true"></i>
-        {unreadCount > 0 && (
-          <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-rose-500 px-1.5 text-center text-[10px] font-extrabold leading-5 text-white shadow-sm">
-            {displayUnreadCount}
-          </span>
-        )}
+        <i className="fas fa-bell" aria-hidden="true" />
+        {unreadCount > 0 && <span>{countLabel}</span>}
       </button>
-
       {open && (
-        <div
+        <section
           id="westory-notification-panel"
-          ref={panelRef}
+          className="ws-notification__panel"
           role="dialog"
           aria-label={panelTitle}
-          className="fixed inset-x-3 top-[4.25rem] z-[130] flex max-h-[calc(100dvh-5.25rem)] flex-col overflow-hidden rounded-lg border border-stone-200 bg-white shadow-2xl sm:left-auto sm:right-4 sm:w-[360px] lg:absolute lg:right-0 lg:top-11"
         >
-          <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3">
+          <header>
             <div>
-              <div className="text-sm font-extrabold text-stone-900">
-                {panelTitle}
-              </div>
-              <div className="mt-0.5 text-xs font-medium text-stone-500">
-                최근 알림을 확인할 수 있습니다.
-              </div>
+              <strong>{panelTitle}</strong>
+              <p>목록을 여는 것만으로 읽음 처리되지 않습니다.</p>
             </div>
             <button
+              ref={closeRef}
               type="button"
               onClick={() => setOpen(false)}
-              data-session-action="true"
-              data-notification-close="true"
-              className="inline-flex h-11 w-11 items-center justify-center rounded-full text-stone-400 transition hover:bg-stone-100 hover:text-stone-700"
               aria-label="알림 닫기"
             >
-              <i className="fas fa-times text-xs" aria-hidden="true"></i>
+              <i className="fas fa-times" aria-hidden="true" />
             </button>
-          </div>
-
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {!hasNotifications && (
-              <div className="px-4 py-10 text-center">
-                <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-stone-100 text-stone-400">
-                  <i className="fas fa-bell-slash" aria-hidden="true"></i>
-                </div>
-                <div className="mt-3 text-sm font-bold text-stone-700">
-                  받은 알림이 없습니다.
-                </div>
-              </div>
+          </header>
+          {error && (
+            <p className="ws-notification__error" role="alert">
+              {error}
+            </p>
+          )}
+          <div className="ws-notification__list">
+            {loading && (
+              <p className="ws-notification__empty" role="status">
+                알림을 불러오고 있습니다.
+              </p>
             )}
-
-            {notifications.map((notification) => {
-              const unread = !notification.readAt;
-              const bodyText = getNotificationBodyText(notification);
-              const targetUrl = getNotificationTargetUrl(notification);
-              const opensPrivacyPolicy =
-                notification.type === "privacy_policy_updated";
-              const rowClassName = `flex w-full items-start gap-3 px-4 py-3 text-left ${
-                targetUrl || opensPrivacyPolicy
-                  ? "transition hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
-                  : ""
-              }`;
-              const rowContent = (
-                <>
-                  <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-stone-100 text-stone-500">
-                    <i
-                      className={`${getNotificationIconClassName(notification.type)} text-xs`}
-                      aria-hidden="true"
-                    ></i>
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-2">
-                      <span className="truncate text-sm font-extrabold text-stone-900">
-                        {notification.title}
-                      </span>
-                      {unread && (
-                        <span className="h-2 w-2 shrink-0 rounded-full bg-blue-500"></span>
-                      )}
-                    </span>
-                    {bodyText && (
-                      <span className="mt-1 block truncate text-xs font-medium leading-5 text-stone-600">
-                        {bodyText}
-                      </span>
-                    )}
-                    <span className="mt-1 block text-[11px] font-bold text-stone-400">
-                      {formatNotificationTime(notification.createdAt)}
-                    </span>
-                  </span>
-                </>
-              );
+            {!loading && notices.length === 0 && (
+              <p className="ws-notification__empty">받은 알림이 없습니다.</p>
+            )}
+            {notices.map((notice) => {
+              const targetUrl =
+                targetByNoticeId.get(notice.noticeId) ||
+                (audience === "teacher" ? "/teacher/communication" : "");
               return (
-                <div
-                  key={notification.id}
-                  className={`border-b border-stone-100 ${
-                    unread ? "bg-blue-50/60" : "bg-white"
-                  }`}
+                <article
+                  key={notice.noticeId}
+                  className={
+                    audience === "student" && !notice.acknowledged
+                      ? "is-unread"
+                      : ""
+                  }
                 >
-                  {targetUrl || opensPrivacyPolicy ? (
-                    <button
-                      type="button"
-                      className={rowClassName}
-                      onClick={() => {
-                        if (opensPrivacyPolicy) {
-                          void openPrivacyPolicyModal();
-                          return;
-                        }
-                        setOpen(false);
-                        navigate(targetUrl);
-                      }}
-                      data-session-action="true"
-                    >
-                      {rowContent}
-                    </button>
-                  ) : (
-                    <div className={rowClassName}>{rowContent}</div>
-                  )}
-                </div>
+                  <div>
+                    <strong>{notice.title}</strong>
+                    <p>{notice.content}</p>
+                    <span>{formatW8DateTime(notice.publishAt)}</span>
+                  </div>
+                  <div className="ws-notification__actions">
+                    {targetUrl && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOpen(false);
+                          navigate(targetUrl);
+                        }}
+                      >
+                        내용 보기
+                      </button>
+                    )}
+                    {audience === "student" &&
+                      !notice.acknowledged &&
+                      state &&
+                      !state.readOnly && (
+                        <button
+                          type="button"
+                          disabled={busy === `notice:${notice.noticeId}`}
+                          onClick={() => acknowledgeOne(notice)}
+                        >
+                          {busy === `notice:${notice.noticeId}`
+                            ? "처리 중"
+                            : "확인"}
+                        </button>
+                      )}
+                    {audience === "student" && notice.acknowledged && (
+                      <span>확인함</span>
+                    )}
+                  </div>
+                </article>
               );
             })}
           </div>
-
-          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-stone-100 bg-stone-50 px-4 py-3">
-            {unreadCount > 0 && (
-              <button
-                type="button"
-                onClick={handleMarkAllRead}
-                data-session-action="true"
-                disabled={markingRead}
-                className="inline-flex min-h-11 items-center gap-2 rounded-md border border-blue-200 bg-white px-3 py-2 text-xs font-extrabold text-blue-700 transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <i className="fas fa-check-double" aria-hidden="true"></i>
-                {markingRead ? "처리 중..." : "모두 읽음"}
-              </button>
+          {audience === "student" &&
+            unreadCount > 0 &&
+            state &&
+            !state.readOnly && (
+              <footer>
+                <button
+                  type="button"
+                  disabled={busy === "notice:all"}
+                  onClick={acknowledgeAll}
+                >
+                  {busy === "notice:all" ? "처리 중" : "모두 확인"}
+                </button>
+              </footer>
             )}
-            <button
-              type="button"
-              onClick={handleClear}
-              data-session-action="true"
-              disabled={!hasNotifications || clearing}
-              className="inline-flex min-h-11 items-center gap-2 rounded-md border border-stone-200 bg-white px-3 py-2 text-xs font-extrabold text-stone-600 transition hover:border-rose-200 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <i className="fas fa-trash-can" aria-hidden="true"></i>
-              {clearing ? "삭제 중..." : "알림 목록 삭제"}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {privacyPolicyOpen && (
-        <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black bg-opacity-60 backdrop-blur-sm"
-          onClick={closePrivacyPolicy}
-        >
-          <div
-            ref={privacyDialogRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="notification-privacy-policy-title"
-            className="mx-4 flex max-h-[80vh] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
-            onClick={(event) => event.stopPropagation()}
-            onKeyDown={trapDialogFocus}
-          >
-            <div className="flex items-center justify-between border-b border-gray-100 p-5">
-              <h2
-                id="notification-privacy-policy-title"
-                className="text-lg font-bold text-gray-900"
-              >
-                개인정보 처리 방침
-              </h2>
-              <button
-                ref={privacyCloseRef}
-                type="button"
-                onClick={closePrivacyPolicy}
-                className="inline-flex h-11 w-11 items-center justify-center rounded-lg text-xl text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
-                aria-label="개인정보 처리 방침 닫기"
-              >
-                <i className="fas fa-times" aria-hidden="true"></i>
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-6 text-sm leading-relaxed text-gray-700">
-              {privacyPolicyLoading ? (
-                <InlineLoading
-                  message="개인정보 처리 방침을 불러오는 중입니다."
-                  showWarning
-                />
-              ) : (
-                <div className="policy-rich-text whitespace-pre-line">
-                  {privacyPolicyText}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        </section>
       )}
     </div>
   );

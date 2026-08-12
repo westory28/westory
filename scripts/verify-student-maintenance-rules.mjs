@@ -204,8 +204,8 @@ try {
       { contentType: "application/pdf" },
     ),
   );
-  await succeeds(
-    "enabled admin retains baseline Storage write",
+  await fails(
+    "enabled admin previous-bundle lesson Storage write remains fenced",
     uploadBytes(
       ref(clients.admin.storage, "lesson_pdfs/direct-admin/probe.pdf"),
       new Uint8Array([37, 80, 68, 70]),

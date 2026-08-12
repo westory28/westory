@@ -5,11 +5,7 @@ import MoveClassModal from "./components/MoveClassModal";
 import StudentDetailModal from "./components/StudentDetailModal";
 import { useAuth } from "../../contexts/AuthContext";
 import { canEditStudentList } from "../../lib/permissions";
-import {
-  deleteStudentData,
-  resetLessonCorePointProgress,
-  updateStudentData,
-} from "../../lib/studentData";
+import { deleteStudentData, updateStudentData } from "../../lib/studentData";
 
 interface Student {
   id: string;
@@ -569,32 +565,9 @@ const StudentList: React.FC = () => {
 
   const handleResetCorePoints = async (student: Student) => {
     if (readOnly || !isBangTestStudent(student)) return;
-    if (
-      !window.confirm(
-        `${student.name || getStudentIdentityLabel(student)} 학생의 핵심포인트 클릭 기록을 초기화하시겠습니까?\n수업자료 저장 답안은 유지하고, 핵심포인트 발견 기록과 완주 표시만 초기화합니다.`,
-      )
-    ) {
-      return;
-    }
-
-    setResettingCorePointStudentIds((current) =>
-      new Set(current).add(student.id),
+    alert(
+      "이전 핵심포인트 초기화 기능은 종료되었습니다. 학습 운영 화면에서 학생의 학습 진행 기록을 확인해 주세요.",
     );
-    try {
-      const result = await resetLessonCorePointProgress(config, student.userId);
-      alert(
-        `핵심포인트 기록을 초기화했습니다.\n초기화한 수업자료: ${result.resetUnitCount}개\n삭제한 발견 기록: ${result.removedCorePointFindCount}개`,
-      );
-    } catch (error) {
-      console.error("Failed to reset lesson core point progress:", error);
-      alert(getCorePointResetErrorMessage(error));
-    } finally {
-      setResettingCorePointStudentIds((current) => {
-        const next = new Set(current);
-        next.delete(student.id);
-        return next;
-      });
-    }
   };
 
   const handleRefreshList = async () => {

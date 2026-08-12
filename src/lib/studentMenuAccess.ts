@@ -31,7 +31,7 @@ type StudentRouteAccess =
 const STUDENT_SYSTEM_MENU_RULES: StudentSystemMenuRule[] = [
   {
     configKey: "showLesson",
-    blockedPathPrefixes: ["/student/lesson"],
+    blockedPathPrefixes: ["/student/lesson", "/student/learning"],
   },
   {
     configKey: "showQuiz",
@@ -47,6 +47,9 @@ const ALWAYS_ALLOWED_STUDENT_PREFIXES = [
   "/student/dashboard",
   "/student/mypage",
   "/student/calendar",
+  "/student/schedule",
+  "/student/attendance",
+  "/student/communication",
 ];
 
 const MENU_CONFIG_CONTROLLED_STUDENT_PREFIXES = ["/student/points"];
@@ -64,6 +67,10 @@ const VISIBLE_MENU_DESCENDANT_PATHS: Record<string, string[]> = {
 const ROUTE_CONTEXT_QUERY_KEYS: Readonly<Record<string, ReadonlySet<string>>> =
   {
     "/student/points": new Set(["semesterId", "source"]),
+    "/student/learning": new Set(["semesterId", "source", "id", "view"]),
+    "/student/schedule": new Set(["semesterId", "source", "id"]),
+    "/student/attendance": new Set(["semesterId", "source", "id"]),
+    "/student/communication": new Set(["semesterId", "source", "id"]),
   };
 
 const normalizePathname = (value: unknown) => {

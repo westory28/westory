@@ -5,7 +5,6 @@ import { InlineLoading } from "../../../components/common/LoadingState";
 import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
 import {
-  createHistoryClassroomExemptionRequest,
   getHistoryClassroomAssignedStudentUids,
   getHistoryClassroomPublishedAtMs,
   getHistoryClassroomRemainingMs,
@@ -425,54 +424,13 @@ const HistoryClassroomIndex: React.FC = () => {
     assignmentId: string,
     exemptionId: string,
   ) => {
+    void assignmentId;
+    void exemptionId;
     if (!studentUid || requestingAssignmentId) return;
-
-    setRequestingAssignmentId(assignmentId);
-    try {
-      await createHistoryClassroomExemptionRequest(config, {
-        assignmentId,
-        exemptionId,
-      });
-
-      const requestedAt = new Date();
-      setExemptions((previous) =>
-        previous.map((exemption) =>
-          exemption.id === exemptionId
-            ? {
-                ...exemption,
-                assignmentId: exemption.assignmentId || assignmentId,
-                requestedAssignmentId: assignmentId,
-                status: "requested",
-                requestedAt: exemption.requestedAt || requestedAt,
-              }
-            : exemption,
-        ),
-      );
-      setExemptionRequests((previous) => [
-        {
-          id: `local-${assignmentId}-${exemptionId}`,
-          uid: studentUid,
-          studentName: "",
-          assignmentId,
-          assignmentTitle: "",
-          exemptionId,
-          status: "pending",
-          createdAt: requestedAt,
-        },
-        ...previous.filter(
-          (request) =>
-            request.assignmentId !== assignmentId ||
-            request.exemptionId !== exemptionId,
-        ),
-      ]);
-    } catch (error) {
-      console.error("Failed to request history classroom exemption:", error);
-      window.alert(
-        "면제권 사용 요청을 보내지 못했습니다. 잠시 후 다시 시도해 주세요.",
-      );
-    } finally {
-      setRequestingAssignmentId(null);
-    }
+    window.alert(
+      "기존 역사교실 면제권 요청은 종료되었습니다. 나의 학습에서 대상 콘텐츠를 열고 면제를 요청해 주세요.",
+    );
+    navigate("/student/learning");
   };
 
   const classroomItems = useMemo(

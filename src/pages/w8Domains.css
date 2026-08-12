@@ -1,0 +1,504 @@
+.w8-domain-page {
+  --w8-control-min: calc(var(--space-10) + var(--space-1));
+  display: grid;
+  gap: var(--space-5);
+  min-width: 0;
+  color: var(--ws-text);
+}
+
+.w8-domain-page__header,
+.w8-panel__heading,
+.w8-detail__heading,
+.w8-summary-strip,
+.w8-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.w8-domain-page__header {
+  align-items: flex-start;
+}
+
+.w8-domain-page__header h1,
+.w8-domain-page__header p,
+.w8-panel h2,
+.w8-detail h2,
+.w8-detail p,
+.w8-timeline p,
+.w8-help {
+  margin: 0;
+}
+
+.w8-domain-page__header h1,
+.w8-panel h2,
+.w8-detail h2 {
+  color: var(--ws-text-strong);
+  font-size: var(--ws-type-section-title, inherit);
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.w8-domain-page__header p,
+.w8-help {
+  margin-top: var(--space-2);
+  color: var(--ws-text-muted);
+  font-size: var(--ws-type-small, inherit);
+  line-height: 1.55;
+}
+
+.w8-semester-label {
+  display: inline-flex;
+  margin-top: var(--space-3);
+  color: var(--ws-primary-text);
+  font-size: var(--ws-type-label, inherit);
+  font-weight: 700;
+}
+
+.w8-domain-nav,
+.w8-segment {
+  display: flex;
+  max-width: 100%;
+  gap: var(--space-1);
+  overflow-x: auto;
+  border-bottom: 1px solid var(--ws-border);
+  scrollbar-width: thin;
+}
+
+.w8-domain-nav a,
+.w8-segment button {
+  min-height: var(--w8-control-min);
+  flex: 0 0 auto;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: transparent;
+  padding: var(--space-2) var(--space-3);
+  color: var(--ws-text-muted);
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.w8-domain-nav a[aria-current="page"],
+.w8-segment button[aria-pressed="true"] {
+  border-bottom-color: var(--ws-primary);
+  color: var(--ws-primary);
+}
+
+.w8-stack,
+.w8-panel,
+.w8-detail,
+.w8-form,
+.w8-list__copy,
+.w8-timeline li > div,
+.w8-attendance-list li > div {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.w8-workspace,
+.w8-attendance-layout,
+.w8-today-grid {
+  display: grid;
+  gap: var(--space-5);
+  min-width: 0;
+  align-items: start;
+}
+
+.w8-text-link {
+  min-height: calc(var(--space-10) + var(--space-1));
+  display: inline-flex;
+  align-items: center;
+  color: var(--ws-primary-text);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.w8-dashboard-status {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--ws-text-muted);
+  line-height: 1.6;
+}
+
+.w8-dashboard-status strong {
+  color: var(--ws-text-strong);
+  font-size: var(--ws-type-section-title, inherit);
+}
+
+.w8-wis-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.w8-wis-summary > strong {
+  color: var(--ws-text-strong);
+  font-size: var(--ws-type-section-title, inherit);
+}
+
+.w8-wis-summary > span {
+  color: var(--ws-text-muted);
+}
+
+.w8-panel,
+.w8-detail {
+  border: 1px solid var(--ws-border);
+  border-radius: var(--radius-lg);
+  background: var(--ws-surface);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-sm);
+}
+
+.w8-panel__heading {
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--ws-border);
+}
+
+.w8-list,
+.w8-timeline,
+.w8-attendance-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.w8-list li + li,
+.w8-attendance-list li + li {
+  border-top: 1px solid var(--ws-border-soft);
+}
+
+.w8-list__button,
+.w8-list__row,
+.w8-attendance-list li,
+.w8-session-list button {
+  display: flex;
+  width: 100%;
+  min-height: var(--w8-control-min);
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  border: 0;
+  background: var(--ws-surface);
+  padding: var(--space-4);
+  color: var(--ws-text);
+  font: inherit;
+  text-align: left;
+}
+
+.w8-list__button {
+  cursor: pointer;
+  transition:
+    background-color var(--motion-fast) var(--ease-standard, ease),
+    box-shadow var(--motion-fast) var(--ease-standard, ease);
+}
+
+.w8-list__button:hover,
+.w8-session-list button:hover {
+  background: var(--ws-surface-subtle);
+}
+
+.w8-list__button[aria-current="true"],
+.w8-session-list button[aria-current="true"] {
+  background: var(--ws-primary-soft);
+  box-shadow: inset var(--space-1) 0 0 var(--ws-primary);
+}
+
+.w8-list__copy {
+  gap: var(--space-1);
+}
+
+.w8-list__copy strong,
+.w8-attendance-list strong,
+.w8-timeline strong {
+  overflow-wrap: anywhere;
+  color: var(--ws-text-strong);
+}
+
+.w8-list__copy span,
+.w8-attendance-list span,
+.w8-session-list span span,
+.w8-timeline span,
+.w8-timeline p {
+  color: var(--ws-text-muted);
+  font-size: var(--ws-type-small, inherit);
+  line-height: 1.55;
+}
+
+.w8-status {
+  display: inline-flex;
+  min-height: calc(var(--space-6) + var(--space-1));
+  flex: 0 0 auto;
+  align-items: center;
+  border-radius: var(--radius-full);
+  background: var(--ws-surface-subtle);
+  padding: var(--space-1) var(--space-3);
+  color: var(--ws-text);
+  font-size: var(--ws-type-label, inherit);
+  font-weight: 800;
+}
+
+.w8-status--success {
+  background: var(--ws-success-soft);
+  color: var(--ws-success);
+}
+
+.w8-status--danger {
+  background: var(--ws-danger-soft);
+  color: var(--ws-danger-text);
+}
+
+.w8-status--accent {
+  background: var(--ws-accent-soft);
+  color: var(--ws-accent-text);
+}
+
+.w8-button {
+  display: inline-flex;
+  min-height: var(--w8-control-min);
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ws-primary);
+  border-radius: var(--radius-md);
+  background: var(--ws-primary);
+  padding: var(--space-2) var(--space-4);
+  color: var(--ws-surface);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.w8-button--secondary {
+  border-color: var(--ws-border);
+  background: var(--ws-surface);
+  color: var(--ws-text);
+}
+
+.w8-button--danger {
+  border-color: var(--ws-danger);
+  background: var(--ws-danger);
+  color: var(--ws-surface);
+}
+
+.w8-button:disabled,
+.w8-form input:disabled,
+.w8-form textarea:disabled,
+.w8-form select:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.w8-button:focus-visible,
+.w8-domain-nav a:focus-visible,
+.w8-segment button:focus-visible,
+.w8-list__button:focus-visible,
+.w8-session-list button:focus-visible,
+.w8-form input:focus-visible,
+.w8-form textarea:focus-visible,
+.w8-form select:focus-visible,
+.w8-attendance-list select:focus-visible {
+  outline: 3px solid var(--ws-ring);
+  outline-offset: 2px;
+}
+
+.w8-detail__back {
+  justify-self: start;
+}
+
+.w8-reading-content {
+  min-height: var(--space-20);
+  border-top: 1px solid var(--ws-border-soft);
+  border-bottom: 1px solid var(--ws-border-soft);
+  padding: var(--space-5) 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+}
+
+.w8-summary-strip {
+  border: 1px solid var(--ws-border-blue);
+  border-radius: var(--radius-lg);
+  background: var(--ws-primary-soft);
+  padding: var(--space-4);
+  color: var(--ws-primary-text);
+}
+
+.w8-timeline {
+  display: grid;
+}
+
+.w8-timeline li {
+  display: grid;
+  grid-template-columns: minmax(var(--space-20), auto) minmax(0, 1fr);
+  gap: var(--space-4);
+  border-bottom: 1px solid var(--ws-border-soft);
+  padding: var(--space-4) 0;
+}
+
+.w8-timeline time {
+  color: var(--ws-primary-text);
+  font-size: var(--ws-type-small, inherit);
+  font-weight: 700;
+}
+
+.w8-form label {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  color: var(--ws-text);
+  font-weight: 700;
+}
+
+.w8-form input,
+.w8-form textarea,
+.w8-form select,
+.w8-attendance-list select {
+  width: 100%;
+  min-height: var(--w8-control-min);
+  box-sizing: border-box;
+  border: 1px solid var(--ws-border);
+  border-radius: var(--radius-md);
+  background: var(--ws-surface);
+  padding: var(--space-3);
+  color: var(--ws-text);
+  font: inherit;
+}
+
+.w8-form textarea {
+  min-height: calc(var(--space-20) + var(--space-8));
+  resize: vertical;
+}
+
+.w8-form__row,
+.w8-form--inline {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+.w8-actions {
+  justify-content: flex-start;
+}
+
+.w8-actions--bordered {
+  border-top: 1px solid var(--ws-border);
+  padding-top: var(--space-4);
+}
+
+.w8-session-list {
+  padding: 0;
+  overflow: hidden;
+}
+
+.w8-session-list button + button {
+  border-top: 1px solid var(--ws-border-soft);
+}
+
+.w8-session-list button > span {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.w8-attendance-list li {
+  padding-right: 0;
+  padding-left: 0;
+}
+
+.w8-attendance-list label {
+  flex: 0 0 auto;
+}
+
+.w8-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+@media (min-width: 768px) {
+  .w8-form__row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .w8-form--inline {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+    align-items: end;
+  }
+}
+
+@media (min-width: 1024px) {
+  .w8-domain-page--teacher .w8-workspace {
+    grid-template-columns: minmax(0, 4fr) minmax(0, 5fr);
+  }
+
+  .w8-attendance-layout {
+    grid-template-columns: minmax(var(--ws-teacher-sidebar-width), 1fr) minmax(
+        0,
+        3fr
+      );
+  }
+
+  .w8-today-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .w8-panel--wide {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 767px) {
+  .w8-domain-page__header,
+  .w8-detail__heading,
+  .w8-summary-strip,
+  .w8-attendance-list li {
+    align-items: stretch;
+  }
+
+  .w8-domain-page__header,
+  .w8-detail__heading,
+  .w8-summary-strip {
+    display: grid;
+  }
+
+  .w8-timeline li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-2);
+  }
+
+  .w8-list__button,
+  .w8-list__row,
+  .w8-attendance-list li {
+    align-items: flex-start;
+  }
+
+  .w8-attendance-list li {
+    display: grid;
+  }
+
+  .w8-attendance-list label,
+  .w8-attendance-list select,
+  .w8-actions .w8-button {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .w8-domain-page *,
+  .w8-domain-page *::before,
+  .w8-domain-page *::after {
+    scroll-behavior: auto !important;
+    transition: none !important;
+    animation: none !important;
+  }
+}

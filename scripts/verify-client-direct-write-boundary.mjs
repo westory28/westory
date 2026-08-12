@@ -60,6 +60,7 @@ const QUERY_CALLABLES = new Set([
   "getAssessmentState",
   "getGradeEvidenceState",
   "getWisEconomyState",
+  "getW8DomainState",
 ]);
 const SESSION_CONTROL_CALLABLES = new Set([
   "beginApplicationSessionReauthentication",
@@ -96,6 +97,7 @@ const WAVE_ORDER = [
   "W7",
   "W7A",
   "W7B",
+  "W8",
   "W8A",
   "W8B",
   "W9",
@@ -907,7 +909,11 @@ export const validateCommandManifest = (manifest, analysis) => {
     if (command.clientMode === "GATEWAY") {
       assert.ok(
         analysis.observations.some(
-          (entry) => entry.boundary === "GATEWAY" && entry.callable === command.dispatchName,
+          (entry) =>
+            entry.boundary === "GATEWAY" &&
+            String(entry.callable || "")
+              .split("|")
+              .includes(command.dispatchName),
         ),
         `${command.id} gateway dispatch not observed`,
       );
@@ -963,10 +969,52 @@ export const validateCommandManifest = (manifest, analysis) => {
     manifest.expectedCanonicalCounts.DOMAIN_WAVE,
     "DOMAIN_WAVE canonical count changed",
   );
+  assert.equal(
+    [...canonicalGroups.values()].filter((commands) =>
+      commands.every((command) =>
+        ["DOMAIN_WAVE", "TEMPORARY_ALLOWLIST"].includes(command.disposition),
+      ),
+    ).length,
+    manifest.expectedCanonicalCounts.remainingAfterW8,
+    "remaining canonical command count after W8 changed",
+  );
   assert.deepEqual(
     manifest.commands.filter((command) => command.disposition === "TEMPORARY_ALLOWLIST").map(({ id, ownerWave }) => ({ id, ownerWave })),
-    [{ id: "D04", ownerWave: "W5" }, { id: "C02", ownerWave: "W8A" }],
-    "temporary allowlist owners must remain D04/W5 and C02/W8A",
+    [{ id: "D04", ownerWave: "W5" }],
+    "only the W5 interface settings temporary allowlist may remain",
+  );
+  assert.deepEqual(
+    manifest.supplementalW8Migrations,
+    [
+      {
+        legacyWriter: "createHistoryClassroomExemptionRequest",
+        classification: "MIGRATE_IN_W8",
+        disposition: "W8_DONE",
+        replacement: "requestLearningExemption",
+        previousBundleMode: "CLIENT_UPDATE_REQUIRED",
+      },
+    ],
+    "supplemental W8 legacy writer migration changed",
+  );
+  assert.ok(
+    analysis.observations.some(
+      (entry) =>
+        entry.boundary === "GATEWAY" &&
+        String(entry.callable || "")
+          .split("|")
+          .includes("requestLearningExemption"),
+    ),
+    "requestLearningExemption gateway dispatch not observed",
+  );
+  assert.ok(
+    !analysis.observations.some(
+      (entry) =>
+        entry.boundary === "CALLABLE" &&
+        String(entry.callable || "")
+          .split("|")
+          .includes("createHistoryClassroomExemptionRequest"),
+    ),
+    "legacy createHistoryClassroomExemptionRequest writer remains reachable",
   );
 };
 

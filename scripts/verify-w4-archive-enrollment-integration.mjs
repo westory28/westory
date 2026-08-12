@@ -414,12 +414,21 @@ const main = async () => {
       expectedRevision: 1,
     });
     assert.equal(validation.data.result.status, "PASS");
-    assert.equal(validation.data.result.requiredPassed, 17);
-    assert.equal(validation.data.result.requiredTotal, 17);
     const report = await readDocument(
       testEnv,
       "semester_readiness_reports/2027-1",
     );
+    const requiredChecks = report.checks.filter((check) => check.required);
+    const passedRequiredChecks = requiredChecks.filter(
+      (check) => check.status === "PASS",
+    );
+    assert.equal(validation.data.result.requiredTotal, requiredChecks.length);
+    assert.equal(
+      validation.data.result.requiredPassed,
+      passedRequiredChecks.length,
+    );
+    assert.equal(report.requiredTotal, requiredChecks.length);
+    assert.equal(report.requiredPassed, passedRequiredChecks.length);
     assert.deepEqual(
       report.checks
         .filter((check) =>

@@ -13,7 +13,7 @@ import HistoryClassroomAssignmentView from "../../components/common/HistoryClass
 import LessonWorksheetStage from "../../components/common/LessonWorksheetStage";
 import { useAuth } from "../../contexts/AuthContext";
 import { cloneDefaultMenus, sanitizeMenuConfig } from "../../constants/menus";
-import { db, getHttpsCallable } from "../../lib/firebase";
+import { db } from "../../lib/firebase";
 import {
   buildAnswerOptions,
   buildHistoryClassroomPublishWindow,
@@ -2459,192 +2459,33 @@ const ManageHistoryClassroom: React.FC = () => {
   };
 
   const handleGrantExemptions = async () => {
-    const reason = exemptionReason.trim();
-    const { year, semester } = getYearSemester(config);
-    const targetStudents =
-      exemptionGrantMode === "class"
-        ? activeExemptionClassStudents
-        : exemptionSelectedStudents;
-
-    if (
-      exemptionGrantMode === "class" &&
-      (!exemptionTargetGrade || !exemptionTargetClass)
-    ) {
-      alert("학급 단위 부여는 학년과 반을 모두 선택해 주세요.");
-      return;
-    }
-
-    if (!targetStudents.length) {
-      alert(
-        exemptionGrantMode === "class"
-          ? "면제권을 부여할 학급을 선택해 주세요."
-          : "면제권을 부여할 학생을 선택해 주세요.",
-      );
-      return;
-    }
-    if (!reason) {
-      alert("면제권 부여 사유를 입력해 주세요.");
-      return;
-    }
-
-    setGrantingExemption(true);
-    try {
-      const callable = await getHttpsCallable(
-        "grantHistoryClassroomExemptions",
-      );
-      await callable({
-        year,
-        semester,
-        mode: exemptionGrantMode,
-        reason,
-        studentUids: targetStudents.map((student) => student.uid),
-        targetGrade: exemptionGrantMode === "class" ? exemptionTargetGrade : "",
-        targetClass: exemptionGrantMode === "class" ? exemptionTargetClass : "",
-      });
-      setExemptionStudentSearch("");
-      setExemptionSelectedStudentUids([]);
-      setExemptionReason("");
-      await loadExemptionData();
-      alert("면제권을 부여했습니다.");
-    } catch (error) {
-      console.error("Failed to grant history classroom exemptions:", error);
-      alert("면제권 부여에 실패했습니다.");
-    } finally {
-      setGrantingExemption(false);
-    }
+    alert(
+      "이전 역사교실 면제권 쓰기 기능은 종료되었습니다. 새 학습 운영 화면의 면제 관리 기능을 이용해 주세요.",
+    );
   };
 
   const handleReviewExemptionRequest = async (
     requestId: string,
     status: "approved" | "rejected",
   ) => {
-    const { year, semester } = getYearSemester(config);
-    setReviewingExemptionRequestId(requestId);
-    try {
-      const callable = await getHttpsCallable(
-        "reviewHistoryClassroomExemptionRequest",
-      );
-      await callable({
-        year,
-        semester,
-        requestId,
-        status,
-        decision: status,
-        approved: status === "approved",
-      });
-      await loadExemptionData();
-    } catch (error) {
-      console.error("Failed to review history classroom exemption request:", {
-        requestId,
-        status,
-        error,
-      });
-      alert("면제권 사용 요청 처리에 실패했습니다.");
-    } finally {
-      setReviewingExemptionRequestId("");
-    }
+    void requestId;
+    void status;
+    alert(
+      "이전 역사교실 면제 요청 처리는 읽기 전용입니다. 새 학습 운영 화면에서 요청을 처리해 주세요.",
+    );
   };
 
   const handleRevokeExemptions = async (row: ExemptionStudentSummary) => {
-    const revocableItems = row.items.filter((item) => {
-      const status = String(item.status || "").trim() || "available";
-      return status === "available" || status === "active";
-    });
-    if (!revocableItems.length) {
-      alert("회수할 수 있는 보유 면제권이 없습니다.");
-      return;
-    }
-
-    let revokeCount = 1;
-    if (revocableItems.length > 1) {
-      const input = window.prompt(
-        `${row.studentName} 학생의 면제권 ${revocableItems.length}개 중 몇 개를 회수할까요?`,
-        "1",
-      );
-      if (input === null) return;
-      const parsed = Math.floor(Number(input));
-      if (
-        !Number.isFinite(parsed) ||
-        parsed < 1 ||
-        parsed > revocableItems.length
-      ) {
-        alert(`1부터 ${revocableItems.length} 사이의 숫자를 입력해 주세요.`);
-        return;
-      }
-      revokeCount = parsed;
-    }
-
-    const message =
-      revokeCount === revocableItems.length
-        ? `${row.studentName} 학생의 보유 면제권 ${revokeCount}개를 모두 회수할까요?`
-        : `${row.studentName} 학생의 보유 면제권 ${revokeCount}개를 회수할까요?`;
-    if (!window.confirm(message)) return;
-
-    const { year, semester } = getYearSemester(config);
-    setRevokingExemptionStudentKey(row.key);
-    try {
-      const callable = await getHttpsCallable(
-        "revokeHistoryClassroomExemptions",
-      );
-      await callable({
-        year,
-        semester,
-        exemptionIds: revocableItems
-          .slice(0, revokeCount)
-          .map((item) => item.id),
-      });
-      setExpandedExemptionStudentKey("");
-      await loadExemptionData();
-    } catch (error) {
-      console.error("Failed to revoke history classroom exemptions:", {
-        row,
-        error,
-      });
-      alert("면제권 회수에 실패했습니다.");
-    } finally {
-      setRevokingExemptionStudentKey("");
-    }
+    void row;
+    alert(
+      "이전 역사교실 면제권은 이 화면에서 변경할 수 없습니다. 새 학습 운영 화면에서 확인해 주세요.",
+    );
   };
 
   const handleResetGrantedExemptions = async () => {
-    if (!resettableGrantedExemptionIds.length) {
-      alert("초기화할 수 있는 보유 면제권이 없습니다.");
-      return;
-    }
-
-    const studentCount = grantedExemptionStudentRows.filter(
-      (row) => row.availableCount > 0,
-    ).length;
-    const confirmed = window.confirm(
-      `현재 부여되어 보유 중인 면제권 ${resettableGrantedExemptionIds.length}개를 모두 회수할까요?\n대상 학생 ${studentCount}명의 보유 면제권이 초기화됩니다.`,
+    alert(
+      "이전 역사교실 면제권은 일괄 초기화할 수 없습니다. 새 학습 운영 화면에서 필요한 항목을 선택해 처리해 주세요.",
     );
-    if (!confirmed) return;
-
-    const { year, semester } = getYearSemester(config);
-    setResettingGrantedExemptions(true);
-    try {
-      const callable = await getHttpsCallable(
-        "revokeHistoryClassroomExemptions",
-      );
-      for (
-        let index = 0;
-        index < resettableGrantedExemptionIds.length;
-        index += 50
-      ) {
-        await callable({
-          year,
-          semester,
-          exemptionIds: resettableGrantedExemptionIds.slice(index, index + 50),
-        });
-      }
-      setExpandedExemptionStudentKey("");
-      await loadExemptionData();
-    } catch (error) {
-      console.error("Failed to reset history classroom exemptions:", error);
-      alert("면제권 부여 초기화에 실패했습니다.");
-    } finally {
-      setResettingGrantedExemptions(false);
-    }
   };
 
   const handleConfirmDraftBlank = () => {

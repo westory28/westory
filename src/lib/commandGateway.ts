@@ -60,7 +60,30 @@ export type W2CommandType =
   | "upsertWisProduct"
   | "upsertWisInventory"
   | "placeWisOrder"
-  | "reviewWisOrder";
+  | "reviewWisOrder"
+  | "createLearningContent"
+  | "updateLearningContent"
+  | "transitionLearningContent"
+  | "recordLearningProgress"
+  | "resetLearningProgress"
+  | "grantLearningExemptions"
+  | "revokeLearningExemptions"
+  | "requestLearningExemption"
+  | "reviewLearningExemptionRequest"
+  | "createScheduleEvent"
+  | "updateScheduleEvent"
+  | "deleteScheduleEvent"
+  | "createAttendanceSession"
+  | "recordAttendance"
+  | "recordAttendanceBulk"
+  | "correctAttendanceRecord"
+  | "closeAttendanceSession"
+  | "createNotice"
+  | "updateNotice"
+  | "transitionNotice"
+  | "acknowledgeNotice"
+  | "acknowledgeAllNotices"
+  | "updateNotificationSettings";
 
 interface ConsentCommandItem {
   id: string;
@@ -125,6 +148,56 @@ interface GradeRecordCommandBase extends GradeCommandBase {
   recordId: string;
   expectedRevision: number;
   expectedGradeRevision: number;
+}
+
+interface W8CommandBase {
+  semesterId: string;
+  expectedSemesterRevision: number;
+}
+
+interface LearningContentInput {
+  title: string;
+  summary: string;
+  body: string;
+  resourceUrl?: string;
+  contentType: string;
+  audienceRoles: string[];
+  targetClassIds: string[];
+  availableFrom: string;
+  availableUntil: string;
+}
+
+interface ScheduleEventInput {
+  eventType: string;
+  title: string;
+  description: string;
+  startAt: string;
+  endAt: string;
+  allDay: boolean;
+  period: string;
+  targetClassIds: string[];
+  targetUserIds: string[];
+  sourceDomain: string;
+  sourceReference: string;
+}
+
+interface AttendanceRecordInput {
+  studentUid: string;
+  enrollmentId: string;
+  expectedRecordRevision: number | null;
+  attendanceStatus: "PRESENT" | "LATE" | "ABSENT" | "EARLY_LEAVE" | "EXCUSED";
+  reason: string;
+}
+
+interface NoticeInput {
+  title: string;
+  content: string;
+  targetRoles: string[];
+  targetClassIds: string[];
+  targetUserIds: string[];
+  publishAt: string;
+  expireAt: string;
+  priority: "NORMAL" | "HIGH";
 }
 
 export interface W2CommandPayloads {
@@ -457,6 +530,123 @@ export interface W2CommandPayloads {
     action: "APPROVE" | "REJECT" | "FULFILL";
     reason: string;
   };
+  createLearningContent: W8CommandBase & LearningContentInput;
+  updateLearningContent: W8CommandBase &
+    LearningContentInput & {
+      contentId: string;
+      expectedContentRevision: number;
+    };
+  transitionLearningContent: W8CommandBase & {
+    contentId: string;
+    expectedContentRevision: number;
+    targetStatus: "READY" | "PUBLISHED" | "CLOSED" | "ARCHIVED";
+    reason: string;
+  };
+  recordLearningProgress: W8CommandBase & {
+    contentId: string;
+    expectedContentRevision: number;
+    enrollmentId: string;
+    expectedProgressRevision: number | null;
+    event: "START" | "COMPLETE";
+  };
+  resetLearningProgress: W8CommandBase & {
+    studentUid: string;
+    enrollmentId: string;
+    entries: Array<{
+      contentId: string;
+      expectedProgressRevision: number;
+    }>;
+    reason: string;
+  };
+  grantLearningExemptions: W8CommandBase & {
+    contentId: string;
+    expectedContentRevision: number;
+    enrollmentIds: string[];
+    reason: string;
+  };
+  revokeLearningExemptions: W8CommandBase & {
+    items: Array<{
+      exemptionId: string;
+      expectedExemptionRevision: number;
+    }>;
+    reason: string;
+  };
+  requestLearningExemption: W8CommandBase & {
+    contentId: string;
+    expectedContentRevision: number;
+    enrollmentId: string;
+    reason: string;
+  };
+  reviewLearningExemptionRequest: W8CommandBase & {
+    requestId: string;
+    expectedRequestRevision: number;
+    action: "APPROVE" | "REJECT";
+    reason: string;
+  };
+  createScheduleEvent: W8CommandBase & ScheduleEventInput;
+  updateScheduleEvent: W8CommandBase &
+    ScheduleEventInput & {
+      eventId: string;
+      expectedEventRevision: number;
+    };
+  deleteScheduleEvent: W8CommandBase & {
+    eventId: string;
+    expectedEventRevision: number;
+    reason: string;
+  };
+  createAttendanceSession: W8CommandBase & {
+    classId: string;
+    date: string;
+    period: string;
+    sourceEventId: string;
+    expectedSourceEventRevision: number | null;
+  };
+  recordAttendance: W8CommandBase &
+    AttendanceRecordInput & {
+      sessionId: string;
+      expectedSessionRevision: number;
+    };
+  recordAttendanceBulk: W8CommandBase & {
+    sessionId: string;
+    expectedSessionRevision: number;
+    entries: AttendanceRecordInput[];
+    reason: string;
+  };
+  correctAttendanceRecord: W8CommandBase & {
+    recordId: string;
+    expectedRecordRevision: number;
+    attendanceStatus: AttendanceRecordInput["attendanceStatus"];
+    reason: string;
+  };
+  closeAttendanceSession: W8CommandBase & {
+    sessionId: string;
+    expectedSessionRevision: number;
+  };
+  createNotice: W8CommandBase & NoticeInput;
+  updateNotice: W8CommandBase &
+    NoticeInput & {
+      noticeId: string;
+      expectedNoticeRevision: number;
+    };
+  transitionNotice: W8CommandBase & {
+    noticeId: string;
+    expectedNoticeRevision: number;
+    targetStatus: "SCHEDULED" | "PUBLISHED" | "EXPIRED" | "ARCHIVED";
+  };
+  acknowledgeNotice: W8CommandBase & {
+    noticeId: string;
+    expectedNoticeRevision: number;
+  };
+  acknowledgeAllNotices: W8CommandBase & {
+    notices: Array<{ noticeId: string; expectedNoticeRevision: number }>;
+  };
+  updateNotificationSettings: W8CommandBase & {
+    expectedConfigRevision: number | null;
+    enabled: boolean;
+    studentNotificationsEnabled: boolean;
+    teacherNotificationsEnabled: boolean;
+    eventPolicies: Record<string, unknown>;
+  };
 }
 
 interface WisEconomyCommandBase {
@@ -646,6 +836,62 @@ export interface W2CommandResults {
   upsertWisInventory: WisCommandResult;
   placeWisOrder: WisCommandResult;
   reviewWisOrder: WisCommandResult;
+  createLearningContent: W8CommandResult;
+  updateLearningContent: W8CommandResult;
+  transitionLearningContent: W8CommandResult;
+  recordLearningProgress: W8CommandResult;
+  resetLearningProgress: W8CommandResult;
+  grantLearningExemptions: W8CommandResult;
+  revokeLearningExemptions: W8CommandResult;
+  requestLearningExemption: W8CommandResult;
+  reviewLearningExemptionRequest: W8CommandResult;
+  createScheduleEvent: W8CommandResult;
+  updateScheduleEvent: W8CommandResult;
+  deleteScheduleEvent: W8CommandResult;
+  createAttendanceSession: W8CommandResult;
+  recordAttendance: W8CommandResult;
+  recordAttendanceBulk: W8CommandResult;
+  correctAttendanceRecord: W8CommandResult;
+  closeAttendanceSession: W8CommandResult;
+  createNotice: W8CommandResult;
+  updateNotice: W8CommandResult;
+  transitionNotice: W8CommandResult;
+  acknowledgeNotice: W8CommandResult;
+  acknowledgeAllNotices: W8CommandResult;
+  updateNotificationSettings: W8CommandResult;
+}
+
+export interface W8CommandResult {
+  contentId?: string;
+  progressId?: string;
+  exemptionId?: string;
+  exemptionIds?: string[];
+  requestId?: string;
+  eventId?: string;
+  sessionId?: string;
+  recordId?: string;
+  revisionId?: string;
+  noticeId?: string;
+  acknowledgementId?: string;
+  acknowledgementIds?: string[];
+  contentRevision?: number;
+  progressRevision?: number;
+  requestRevision?: number;
+  eventRevision?: number;
+  sessionRevision?: number;
+  recordRevision?: number;
+  noticeRevision?: number;
+  configRevision?: number;
+  resetCount?: number;
+  createdCount?: number;
+  revokedCount?: number;
+  recordedCount?: number;
+  acknowledgedCount?: number;
+  deliveryCount?: number;
+  acknowledged?: boolean;
+  status?: string;
+  progressIds?: string[];
+  records?: Array<{ recordId: string; recordRevision: number }>;
 }
 
 export interface WisCommandResult {

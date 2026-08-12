@@ -1,7 +1,5 @@
 import type { SystemConfig } from "../types";
-import { getHttpsCallable } from "./firebase";
 import type { MapResource } from "./mapResources";
-import { getYearSemester } from "./semesterScope";
 import {
   clampRatio,
   getTightTextRegionBounds,
@@ -514,17 +512,9 @@ export const createHistoryClassroomExemptionRequest = async (
     memo?: string;
   },
 ) => {
-  const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable(
-    "createHistoryClassroomExemptionRequest",
-  );
-  await callable({
-    year,
-    semester,
-    assignmentId: input.assignmentId,
-    exemptionId: input.exemptionId,
-    memo: input.memo || "",
-  });
+  void config;
+  void input;
+  throw new Error("W8_LEGACY_EXEMPTION_REQUEST_RETIRED");
 };
 
 export const grantHistoryClassroomExemptions = async (
@@ -537,17 +527,9 @@ export const grantHistoryClassroomExemptions = async (
     reason: string;
   },
 ) => {
-  const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable("grantHistoryClassroomExemptions");
-  await callable({
-    year,
-    semester,
-    recipientUids: Array.from(new Set(input.recipientUids || [])),
-    classId: input.classId || "",
-    targetGrade: input.targetGrade || "",
-    targetClass: input.targetClass || "",
-    reason: input.reason,
-  });
+  void config;
+  void input;
+  throw new Error("W8_LEGACY_EXEMPTION_GRANT_RETIRED");
 };
 
 export const reviewHistoryClassroomExemptionRequest = async (
@@ -558,17 +540,9 @@ export const reviewHistoryClassroomExemptionRequest = async (
     reviewReason?: string;
   },
 ) => {
-  const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable(
-    "reviewHistoryClassroomExemptionRequest",
-  );
-  await callable({
-    year,
-    semester,
-    requestId: input.requestId,
-    approved: input.approved,
-    reviewReason: input.reviewReason || "",
-  });
+  void config;
+  void input;
+  throw new Error("W8_LEGACY_EXEMPTION_REVIEW_RETIRED");
 };
 
 export const sanitizeHistoryClassroomAssignmentForWrite = (

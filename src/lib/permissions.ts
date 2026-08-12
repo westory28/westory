@@ -99,6 +99,17 @@ export const canWriteLessonManagement = (
   email?: string | null,
 ) => isTeacherUser(userData, email);
 
+export const canManageW8Domains = (
+  userData?: Partial<UserData> | null,
+  email?: string | null,
+) =>
+  isAdminUser(userData, email) ||
+  (userData?.role === "teacher" &&
+    userData?.teacherPortalEnabled === true &&
+    normalizeStaffPermissions(userData?.staffPermissions).includes(
+      "lesson_read",
+    ));
+
 export const canReadQuizManagement = (
   userData?: Partial<UserData> | null,
   email?: string | null,
@@ -157,6 +168,13 @@ export const canAccessTeacherPath = (
     return canManageSettings(userData, email);
   if (pathname.startsWith("/teacher/dashboard"))
     return canAccessTeacherDashboard(userData, email);
+  if (
+    pathname.startsWith("/teacher/learning") ||
+    pathname.startsWith("/teacher/schedule") ||
+    pathname.startsWith("/teacher/attendance") ||
+    pathname.startsWith("/teacher/communication")
+  )
+    return canManageW8Domains(userData, email);
   if (pathname.startsWith("/teacher/lesson"))
     return canReadLessonManagement(userData, email);
   if (pathname.startsWith("/teacher/quiz"))
@@ -167,7 +185,5 @@ export const canAccessTeacherPath = (
     return canReadPoints(userData, email);
   if (pathname.startsWith("/teacher/exam"))
     return isTeacherUser(userData, email);
-  if (pathname.startsWith("/teacher/schedule"))
-    return isAdminUser(userData, email);
   return canAccessTeacherPortal(userData, email);
 };

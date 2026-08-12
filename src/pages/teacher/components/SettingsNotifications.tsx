@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
-import { requestStepUpReauthentication } from "../../../lib/stepUpReauth";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import { InlineLoading } from "../../../components/common/LoadingState";
 import { useAuth } from "../../../contexts/AuthContext";
-import { db } from "../../../lib/firebase";
-import { invalidateSiteSettingDocCache } from "../../../lib/siteSettings";
+import {
+  getW8DomainState,
+  updateNotificationSettings,
+} from "../../../lib/w8Domains";
 
 type NotificationPriority = "normal" | "high";
 type NotificationAudience = "students" | "teachers";
@@ -648,7 +648,7 @@ const TAB_ITEMS: Array<{ key: NotificationTab; label: string }> = [
 ];
 
 const SettingsNotifications: React.FC = () => {
-  const { currentUser, config: semesterConfig } = useAuth();
+  const { config: semesterConfig, configReady } = useAuth();
   const { showToast } = useAppToast();
   const [config, setConfig] = useState<NotificationConfigState>(() =>
     createDefaultConfig(),
@@ -657,15 +657,27 @@ const SettingsNotifications: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<NotificationTab>("overview");
   const [openEventKey, setOpenEventKey] = useState<string | null>(null);
+  const [configRevision, setConfigRevision] = useState<number | null>(null);
+  const [semesterRevision, setSemesterRevision] = useState(0);
 
   useEffect(() => {
     const loadConfig = async () => {
+      if (!configReady) return;
       setLoading(true);
       try {
-        const snapshot = await getDoc(
-          doc(db, "site_settings", "notification_config"),
+        const state = await getW8DomainState({
+          config: semesterConfig,
+          domain: "COMMUNICATION",
+          audience: "teacher",
+          source: "CURRENT",
+        });
+        setConfig(normalizeConfig(state.notificationConfig));
+        setSemesterRevision(state.manifestRevision);
+        setConfigRevision(
+          Number.isFinite(Number(state.notificationConfig.revision))
+            ? Number(state.notificationConfig.revision)
+            : null,
         );
-        setConfig(normalizeConfig(snapshot.exists() ? snapshot.data() : null));
       } catch (error) {
         console.error("Failed to load notification config:", error);
         showToast({
@@ -680,7 +692,7 @@ const SettingsNotifications: React.FC = () => {
     };
 
     void loadConfig();
-  }, [showToast]);
+  }, [configReady, semesterConfig, showToast]);
 
   const connectedCount = useMemo(
     () =>
@@ -747,20 +759,16 @@ const SettingsNotifications: React.FC = () => {
   const saveConfig = async () => {
     setSaving(true);
     try {
-      await requestStepUpReauthentication("updateNotificationSettings");
-      await setDoc(
-        doc(db, "site_settings", "notification_config"),
-        {
-          enabled: config.enabled,
-          studentNotificationsEnabled: config.studentNotificationsEnabled,
-          teacherNotificationsEnabled: config.teacherNotificationsEnabled,
-          eventPolicies: config.eventPolicies,
-          updatedAt: serverTimestamp(),
-          updatedBy: currentUser?.email || currentUser?.uid || "",
-        },
-        { merge: true },
-      );
-      invalidateSiteSettingDocCache("notification_config");
+      const result = await updateNotificationSettings({
+        semesterId: `${semesterConfig?.year || ""}-${semesterConfig?.semester || ""}`,
+        expectedSemesterRevision: semesterRevision,
+        expectedConfigRevision: configRevision,
+        enabled: config.enabled,
+        studentNotificationsEnabled: config.studentNotificationsEnabled,
+        teacherNotificationsEnabled: config.teacherNotificationsEnabled,
+        eventPolicies: config.eventPolicies,
+      });
+      setConfigRevision(result.result.configRevision ?? configRevision);
       showToast({
         tone: "success",
         title: "알림 관리 설정이 저장되었습니다.",

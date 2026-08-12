@@ -15,6 +15,7 @@ const archiveEnrollment = require('./archiveEnrollment');
 const assessmentLifecycle = require('./assessmentLifecycle');
 const gradeEvidence = require('./gradeEvidence');
 const wisEconomy = require('./wisEconomy');
+const w8Domains = require('./w8Domains');
 const {
   createLegacyPointV1CommandAdapter,
   createRetiredAdjustTeacherPointsHandler,
@@ -8434,11 +8435,13 @@ const authorizeCommandGatewayActor = async ({ request, identity, commandType }) 
   const assessmentCommandTypes = Object.values(assessmentLifecycle.ASSESSMENT_COMMAND_TYPES);
   const gradeCommandTypes = Object.values(gradeEvidence.GRADE_COMMAND_TYPES);
   const wisCommandTypes = Object.values(wisEconomy.WIS_COMMAND_TYPES);
+  const w8CommandTypes = Object.values(w8Domains.W8_COMMAND_TYPES);
   if (
     commandType !== commandGateway.COMMAND_TYPES.ADJUST_TEACHER_POINTS
     && !assessmentCommandTypes.includes(commandType)
     && !gradeCommandTypes.includes(commandType)
     && !wisCommandTypes.includes(commandType)
+    && !w8CommandTypes.includes(commandType)
   ) {
     return null;
   }
@@ -8465,6 +8468,11 @@ const authorizeCommandGatewayActor = async ({ request, identity, commandType }) 
         reason: 'WIS_STUDENT_REQUIRED',
       });
     }
+    if (w8CommandTypes.includes(commandType) && w8Domains.STUDENT_COMMAND_TYPES.has(commandType)) {
+      throw new HttpsError('permission-denied', 'A student account is required.', {
+        reason: 'W8_STUDENT_REQUIRED',
+      });
+    }
     return {
       actorUid,
       actorEmail,
@@ -8474,6 +8482,45 @@ const authorizeCommandGatewayActor = async ({ request, identity, commandType }) 
   }
   const profileSnapshot = await db.doc(`users/${actorUid}`).get();
   const profile = profileSnapshot.exists ? profileSnapshot.data() || {} : {};
+  if (w8CommandTypes.includes(commandType)) {
+    const role = String(profile.role || 'student').trim() || 'student';
+    if (w8Domains.STUDENT_COMMAND_TYPES.has(commandType)) {
+      if (role !== 'student') {
+        throw new HttpsError('permission-denied', 'A student account is required.', {
+          reason: 'W8_STUDENT_REQUIRED',
+        });
+      }
+      return {
+        actorUid,
+        actorEmail,
+        actorRole: 'student',
+        actorCapability: `w8:${commandType}`,
+      };
+    }
+    if (w8Domains.ADMIN_COMMAND_TYPES.has(commandType)) {
+      throw new HttpsError('permission-denied', 'Administrator authority is required.', {
+        reason: 'W8_ADMIN_REQUIRED',
+      });
+    }
+    const permissions = Array.isArray(profile.staffPermissions)
+      ? profile.staffPermissions
+      : [];
+    if (
+      role !== 'teacher'
+      || profile.teacherPortalEnabled !== true
+      || !permissions.includes('lesson_read')
+    ) {
+      throw new HttpsError('permission-denied', 'Teacher W8 management authority is required.', {
+        reason: 'W8_MANAGE_REQUIRED',
+      });
+    }
+    return {
+      actorUid,
+      actorEmail,
+      actorRole: 'teacher',
+      actorCapability: 'teacher_role+teacherPortalEnabled+lesson_read',
+    };
+  }
   if (wisCommandTypes.includes(commandType)) {
     const role = String(profile.role || 'student').trim() || 'student';
     if (wisEconomy.STUDENT_COMMAND_TYPES.has(commandType)) {
@@ -8611,11 +8658,13 @@ const archiveEnrollmentReadinessAdapter = archiveEnrollment.createArchiveEnrollm
 const assessmentReadinessAdapter = assessmentLifecycle.createAssessmentReadinessAdapter();
 const gradeEvidenceReadinessAdapter = gradeEvidence.createGradeReadinessAdapter();
 const wisEconomyReadinessAdapter = wisEconomy.createWisReadinessAdapter();
+const w8ReadinessAdapter = w8Domains.createW8ReadinessAdapter();
 const readinessAdapters = [
   archiveEnrollmentReadinessAdapter,
   assessmentReadinessAdapter,
   gradeEvidenceReadinessAdapter,
   wisEconomyReadinessAdapter,
+  w8ReadinessAdapter,
 ];
 const semesterCoreCommandAdapter = semesterCore.createSemesterCoreCommandAdapter({
   getDefaultPointPolicy,
@@ -8626,6 +8675,7 @@ const archiveEnrollmentCommandAdapter = archiveEnrollment.createArchiveEnrollmen
 const assessmentCommandAdapter = assessmentLifecycle.createAssessmentCommandAdapter();
 const gradeEvidenceCommandAdapter = gradeEvidence.createGradeCommandAdapter();
 const wisEconomyCommandAdapter = wisEconomy.createWisCommandAdapter();
+const w8CommandAdapter = w8Domains.createW8CommandAdapter();
 const commandGatewayStore = commandGateway.createFirestoreStore(db);
 
 const commandGatewayCore = commandGateway.createCommandGatewayCore({
@@ -8654,6 +8704,10 @@ const commandGatewayCore = commandGateway.createCommandGatewayCore({
     ...Object.fromEntries(
       Object.values(wisEconomy.WIS_COMMAND_TYPES)
         .map((commandType) => [commandType, wisEconomyCommandAdapter]),
+    ),
+    ...Object.fromEntries(
+      Object.values(w8Domains.W8_COMMAND_TYPES)
+        .map((commandType) => [commandType, w8CommandAdapter]),
     ),
   },
   semesterCoreResolver: ({ store, semesterId }) =>
@@ -8687,3 +8741,24 @@ const wisEconomyQueryCore = wisEconomy.createWisQueryCore({
 Object.assign(exports, wisEconomy.createWisCallableExports({
   core: wisEconomyQueryCore,
 }));
+const w8QueryCore = w8Domains.createW8QueryCore({
+  store: commandGatewayStore,
+});
+Object.assign(exports, w8Domains.createW8CallableExports({
+  core: w8QueryCore,
+}));
+
+const retiredW8LegacyCallable = onCall({ region: REGION }, async () => {
+  throw new HttpsError('failed-precondition', '이전 학습·알림 저장 경로는 종료되었습니다.', {
+    reason: 'CLIENT_UPDATE_REQUIRED',
+    replacement: 'executeCommand/getW8DomainState',
+  });
+});
+exports.resetLessonCorePointProgress = retiredW8LegacyCallable;
+exports.grantHistoryClassroomExemptions = retiredW8LegacyCallable;
+exports.revokeHistoryClassroomExemptions = retiredW8LegacyCallable;
+exports.reviewHistoryClassroomExemptionRequest = retiredW8LegacyCallable;
+exports.createHistoryClassroomExemptionRequest = retiredW8LegacyCallable;
+exports.markNotificationsRead = retiredW8LegacyCallable;
+exports.clearNotifications = retiredW8LegacyCallable;
+exports.createManagedNotifications = retiredW8LegacyCallable;

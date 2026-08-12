@@ -268,6 +268,15 @@ const transition = (client, semester, targetStatus, reason = "W3 integration") =
     reason,
   });
 
+const assertRegistryDerivedReadinessCounts = (result, report) => {
+  const required = report.data.checks.filter((check) => check.required);
+  const passed = required.filter((check) => check.status === "PASS");
+  assert.equal(result.requiredTotal, required.length);
+  assert.equal(result.requiredPassed, passed.length);
+  assert.equal(report.data.requiredTotal, required.length);
+  assert.equal(report.data.requiredPassed, passed.length);
+};
+
 const prepareReady = async (testEnv, client, semesterId) => {
   let semester = await readManifest(testEnv, semesterId);
   if (semester.data.status === "DRAFT") {
@@ -280,8 +289,10 @@ const prepareReady = async (testEnv, client, semesterId) => {
   });
   assert.equal(validation.response.status, "SUCCEEDED");
   assert.equal(validation.response.result.status, "PASS");
-  assert.equal(validation.response.result.requiredPassed, 17);
-  assert.equal(validation.response.result.requiredTotal, 17);
+  const report = await withAdminDb(testEnv, (db) =>
+    readDocument(db, `semester_readiness_reports/${semesterId}`),
+  );
+  assertRegistryDerivedReadinessCounts(validation.response.result, report);
   semester = await readManifest(testEnv, semesterId);
   assert.equal(semester.data.status, "VALIDATING");
   await transition(client, semester, "READY");
@@ -394,16 +405,20 @@ const main = async () => {
       },
     );
     assert.equal(partialValidation.response.result.status, "FAIL");
-    assert.equal(partialValidation.response.result.requiredTotal, 17);
-    assert.ok(partialValidation.response.result.requiredPassed < 17);
     const partialReport = await withAdminDb(testEnv, (db) =>
       readDocument(db, `semester_readiness_reports/${partialSemesterId}`),
     );
     assert.equal(partialReport.data.status, "FAIL");
     assert.equal(partialReport.data.stale, false);
     assert.equal(partialReport.data.policyVersion, "w3-v1");
-    assert.equal(partialReport.data.requiredTotal, 17);
-    assert.equal(partialReport.data.checks.length, 18);
+    assertRegistryDerivedReadinessCounts(
+      partialValidation.response.result,
+      partialReport,
+    );
+    assert.ok(
+      partialValidation.response.result.requiredPassed <
+        partialValidation.response.result.requiredTotal,
+    );
     assert.equal(
       partialReport.data.checks.find(
         (check) => check.checkId === "required_settings",
@@ -447,8 +462,6 @@ const main = async () => {
       { semesterId, expectedRevision: semester.data.revision },
     );
     assert.equal(firstValidation.response.result.status, "PASS");
-    assert.equal(firstValidation.response.result.requiredPassed, 17);
-    assert.equal(firstValidation.response.result.requiredTotal, 17);
     const freshManifest = await readManifest(testEnv, semesterId);
     const freshReport = await withAdminDb(testEnv, (db) =>
       readDocument(db, `semester_readiness_reports/${semesterId}`),
@@ -457,9 +470,10 @@ const main = async () => {
     assert.equal(freshReport.data.stale, false);
     assert.equal(freshReport.data.policyVersion, "w3-v1");
     assert.equal(freshReport.data.evaluatedRevision, freshManifest.data.revision);
-    assert.equal(freshReport.data.requiredPassed, 17);
-    assert.equal(freshReport.data.requiredTotal, 17);
-    assert.equal(freshReport.data.checks.length, 18);
+    assertRegistryDerivedReadinessCounts(
+      firstValidation.response.result,
+      freshReport,
+    );
     const readinessVersionsBeforeUpdate = await withAdminDb(testEnv, (db) =>
       readCollection(db, `semester_readiness_reports/${semesterId}/versions`),
     );

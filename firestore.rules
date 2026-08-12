@@ -1031,15 +1031,7 @@ service cloud.firestore {
 
       match /attendance/{recordId} {
         allow read: if canUseWestory() && (isOwnUser(userId) || isAdmin());
-        allow create, update: if canUseWestory()
-          && isOwnUser(userId)
-          && request.resource.data.keys().hasOnly(['uid', 'scope', 'year', 'semester', 'date', 'checkedAt'])
-          && request.resource.data.uid == request.auth.uid
-          && request.resource.data.scope is string
-          && request.resource.data.year is string
-          && request.resource.data.semester is string
-          && request.resource.data.date is string;
-        allow delete: if isAdmin();
+        allow create, update, delete: if false;
       }
 
       match /history_dictionary_words/{wordId} {
@@ -1075,7 +1067,8 @@ service cloud.firestore {
           'consent',
           'config',
           'semester_active',
-          'student_maintenance'
+          'student_maintenance',
+          'notification_config'
         ])
         && isRecentlyAuthenticatedAdmin();
 
@@ -1190,6 +1183,43 @@ service cloud.firestore {
       allow read, create, update, delete: if false;
     }
 
+    match /semester_learning_contents/{documentId} {
+      allow read, create, update, delete: if false;
+    }
+    match /semester_learning_progress/{documentId} {
+      allow read, create, update, delete: if false;
+    }
+    match /semester_learning_exemptions/{documentId} {
+      allow read, create, update, delete: if false;
+    }
+    match /semester_learning_exemption_requests/{documentId} {
+      allow read, create, update, delete: if false;
+    }
+    match /semester_schedule_events/{documentId} {
+      allow read, create, update, delete: if false;
+    }
+    match /semester_attendance_sessions/{documentId} {
+      allow read, create, update, delete: if false;
+    }
+    match /semester_attendance_records/{documentId} {
+      allow read, create, update, delete: if false;
+    }
+    match /semester_attendance_revisions/{documentId} {
+      allow read, create, update, delete: if false;
+    }
+    match /semester_notices/{documentId} {
+      allow read, create, update, delete: if false;
+    }
+    match /semester_notice_deliveries/{documentId} {
+      allow read, create, update, delete: if false;
+    }
+    match /semester_notice_acknowledgements/{documentId} {
+      allow read, create, update, delete: if false;
+    }
+    match /w8_legacy_issues/{documentId} {
+      allow read, create, update, delete: if false;
+    }
+
     match /semester_manifests/{semesterId} {
       allow read: if canUseWestory();
       allow create, update, delete: if false;
@@ -1254,7 +1284,7 @@ service cloud.firestore {
 
     match /lessons/{docId} {
       allow read: if canUseWestory();
-      allow write: if isAdmin();
+      allow create, update, delete: if false;
     }
 
     match /map_resources/{docId} {
@@ -1382,28 +1412,29 @@ service cloud.firestore {
 
     match /think_cloud_state/{docId} {
       allow read: if canUseWestory();
-      allow write: if isAdmin();
+      allow create, update, delete: if false;
     }
 
     match /lesson_progress/{userId} {
-      allow read, write: if canUseWestory() && (request.auth.uid == userId || isAdmin());
+      allow read: if canUseWestory() && (request.auth.uid == userId || isAdmin());
+      allow create, update, delete: if false;
 
       match /units/{unitId} {
-        allow read, write: if canUseWestory() && (request.auth.uid == userId || isAdmin());
+        allow read: if canUseWestory() && (request.auth.uid == userId || isAdmin());
+        allow create, update, delete: if false;
       }
     }
 
     match /think_cloud_sessions/{sessionId} {
       allow read: if canAccessThinkCloudTarget(resource.data.targetGrade, resource.data.targetClass) || hasPermission('lesson_read');
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if false;
 
       match /responses/{responseId} {
         allow read: if canAccessThinkCloudTarget(
           get(/databases/$(database)/documents/think_cloud_sessions/$(sessionId)).data.targetGrade,
           get(/databases/$(database)/documents/think_cloud_sessions/$(sessionId)).data.targetClass
         );
-        allow create: if isValidRootThinkCloudResponseCreate(sessionId);
-        allow update, delete: if isAdmin();
+        allow create, update, delete: if false;
       }
     }
 
@@ -1456,22 +1487,12 @@ service cloud.firestore {
 
       match /calendar/{docId} {
         allow read: if canUseWestory();
-        allow create: if isAdmin()
-          && (!('eventType' in request.resource.data)
-            || request.resource.data.eventType != 'holiday');
-        allow update: if isAdmin()
-          && (!('eventType' in resource.data)
-            || resource.data.eventType != 'holiday')
-          && (!('eventType' in request.resource.data)
-            || request.resource.data.eventType != 'holiday');
-        allow delete: if isAdmin()
-          && (!('eventType' in resource.data)
-            || resource.data.eventType != 'holiday');
+        allow create, update, delete: if false;
       }
 
       match /notices/{docId} {
         allow read: if canUseWestory();
-        allow write: if isAdmin() || isTeacherRole();
+        allow create, update, delete: if false;
       }
 
       match /curriculum/{docId} {
@@ -1481,7 +1502,7 @@ service cloud.firestore {
 
       match /lessons/{docId} {
         allow read: if canUseWestory();
-        allow write: if isAdmin();
+        allow create, update, delete: if false;
       }
 
       match /map_resources/{docId} {
@@ -1564,14 +1585,16 @@ service cloud.firestore {
 
       match /think_cloud_state/{docId} {
         allow read: if canUseWestory();
-        allow write: if isAdmin();
+        allow create, update, delete: if false;
       }
 
       match /lesson_progress/{userId} {
-        allow read, write: if canUseWestory() && (request.auth.uid == userId || isAdmin());
+        allow read: if canUseWestory() && (request.auth.uid == userId || isAdmin());
+        allow create, update, delete: if false;
 
         match /units/{unitId} {
-          allow read, write: if canUseWestory() && (request.auth.uid == userId || isAdmin());
+          allow read: if canUseWestory() && (request.auth.uid == userId || isAdmin());
+          allow create, update, delete: if false;
         }
       }
 
@@ -1585,15 +1608,14 @@ service cloud.firestore {
 
       match /think_cloud_sessions/{sessionId} {
         allow read: if canAccessThinkCloudTarget(resource.data.targetGrade, resource.data.targetClass);
-        allow create, update, delete: if isAdmin();
+        allow create, update, delete: if false;
 
         match /responses/{responseId} {
           allow read: if canAccessThinkCloudTarget(
             get(/databases/$(database)/documents/years/$(year)/semesters/$(semester)/think_cloud_sessions/$(sessionId)).data.targetGrade,
             get(/databases/$(database)/documents/years/$(year)/semesters/$(semester)/think_cloud_sessions/$(sessionId)).data.targetClass
           );
-          allow create: if isValidSemesterThinkCloudResponseCreate(year, semester, sessionId);
-          allow update, delete: if isAdmin();
+          allow create, update, delete: if false;
         }
       }
     }

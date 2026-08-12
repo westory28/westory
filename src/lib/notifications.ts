@@ -1,35 +1,18 @@
-import {
-  collection,
-  doc,
-  getDocs,
-  limit,
-  onSnapshot,
-  orderBy,
-  query,
-  type Unsubscribe,
-} from "firebase/firestore";
-import { db, getHttpsCallable } from "./firebase";
-import { getSemesterCollectionPath, getYearSemester } from "./semesterScope";
-import type {
-  SystemConfig,
-  WestoryNotification,
-  WestoryNotificationInbox,
-  WestoryNotificationPriority,
-  WestoryNotificationType,
-} from "../types";
+import type { SystemConfig, WestoryNotification } from "../types";
+import { getW8DomainState } from "./w8Domains";
 
 type ConfigLike = Pick<SystemConfig, "year" | "semester"> | null | undefined;
 
 export interface ManagedNotificationInput {
   recipientUids?: string[];
   recipientMode?: "explicit" | "all_students";
-  type: WestoryNotificationType;
+  type: string;
   title: string;
   body?: string;
   targetUrl?: string;
   entityType?: string;
   entityId?: string;
-  priority?: WestoryNotificationPriority;
+  priority?: "normal" | "high";
   dedupeKey?: string;
   templateValues?: Record<string, string | number | boolean | null | undefined>;
 }
@@ -40,181 +23,58 @@ export interface ManagedNotificationResult {
   broadcast?: boolean;
 }
 
-const NOTIFICATION_LIMIT = 10;
-
-const getNotificationInboxPath = (config: ConfigLike, uid: string) =>
-  `${getSemesterCollectionPath(config, "notification_inboxes")}/${uid}`;
-
-const getNotificationItemCollectionPath = (config: ConfigLike, uid: string) =>
-  `${getNotificationInboxPath(config, uid)}/items`;
-
-const getBroadcastNotificationCollectionPath = (config: ConfigLike) =>
-  getSemesterCollectionPath(config, "broadcast_notifications");
-
-const timestampMs = (value: unknown) => {
-  if (!value) return 0;
-  if (typeof (value as { toMillis?: () => number }).toMillis === "function") {
-    return (value as { toMillis: () => number }).toMillis();
-  }
-  if (typeof (value as { toDate?: () => Date }).toDate === "function") {
-    return (value as { toDate: () => Date }).toDate().getTime();
-  }
-  const seconds = Number((value as { seconds?: number }).seconds || 0);
-  return seconds > 0 ? seconds * 1000 : 0;
-};
-
-const normalizeNotification = (
-  id: string,
-  raw: Partial<WestoryNotification>,
-): WestoryNotification => ({
-  id,
-  type: raw.type || "system_notice",
-  title: String(raw.title || "알림").trim() || "알림",
-  body: String(raw.body || "").trim(),
-  targetUrl: String(raw.targetUrl || "").trim(),
-  entityType: String(raw.entityType || "").trim(),
-  entityId: String(raw.entityId || "").trim(),
-  actorUid: String(raw.actorUid || "").trim(),
-  recipientUid: String(raw.recipientUid || "").trim(),
-  priority: raw.priority === "high" ? "high" : "normal",
-  dedupeKey: String(raw.dedupeKey || "").trim(),
-  broadcast: raw.broadcast === true,
-  readAt: raw.readAt || null,
-  createdAt: raw.createdAt || null,
-  expiresAt: raw.expiresAt || null,
-});
-
-export const subscribeNotificationInbox = (
-  config: ConfigLike,
-  uid: string,
-  onChange: (inbox: WestoryNotificationInbox) => void,
-): Unsubscribe => {
-  const inboxRef = doc(db, getNotificationInboxPath(config, uid));
-  return onSnapshot(inboxRef, (snapshot) => {
-    const data = snapshot.data() as
-      | Partial<WestoryNotificationInbox>
-      | undefined;
-    onChange({
-      uid,
-      unreadCount: Math.max(0, Number(data?.unreadCount || 0)),
-      updatedAt: data?.updatedAt || null,
-      lastReadAt: data?.lastReadAt || null,
-      lastBroadcastReadAt: data?.lastBroadcastReadAt || null,
-      broadcastClearedAt: data?.broadcastClearedAt || null,
-    });
-  });
-};
-
-export const subscribeBroadcastNotifications = (
-  config: ConfigLike,
-  onChange: (notifications: WestoryNotification[]) => void,
-): Unsubscribe => {
-  const broadcastQuery = query(
-    collection(db, getBroadcastNotificationCollectionPath(config)),
-    orderBy("createdAt", "desc"),
-    limit(NOTIFICATION_LIMIT),
-  );
-  return onSnapshot(broadcastQuery, (snapshot) => {
-    onChange(
-      snapshot.docs.map((item) =>
-        normalizeNotification(item.id, {
-          ...(item.data() as Partial<WestoryNotification>),
-          broadcast: true,
-        }),
-      ),
-    );
-  });
-};
-
 export const loadNotifications = async (
   config: ConfigLike,
   uid: string,
-  options?: {
-    includeBroadcasts?: boolean;
-    lastBroadcastReadAt?: unknown;
-    broadcastClearedAt?: unknown;
-  },
 ): Promise<WestoryNotification[]> => {
-  const itemsQuery = query(
-    collection(db, getNotificationItemCollectionPath(config, uid)),
-    orderBy("createdAt", "desc"),
-    limit(NOTIFICATION_LIMIT),
+  const state = await getW8DomainState({
+    config,
+    domain: "COMMUNICATION",
+    audience: "teacher",
+    studentUid: uid,
+    source: "CURRENT",
+  });
+  const deliveryByNoticeId = new Map(
+    state.deliveries.map((item) => [item.noticeId, item]),
   );
-  const broadcastQuery = query(
-    collection(db, getBroadcastNotificationCollectionPath(config)),
-    orderBy("createdAt", "desc"),
-    limit(NOTIFICATION_LIMIT),
-  );
-  const [snapshot, broadcastSnapshot] = await Promise.all([
-    getDocs(itemsQuery),
-    options?.includeBroadcasts ? getDocs(broadcastQuery) : null,
-  ]);
-
-  const personalItems = snapshot.docs.map((item) =>
-    normalizeNotification(item.id, item.data() as Partial<WestoryNotification>),
-  );
-  const lastBroadcastReadMs = timestampMs(options?.lastBroadcastReadAt);
-  const broadcastClearedMs = timestampMs(options?.broadcastClearedAt);
-  const broadcastItems = (broadcastSnapshot?.docs || [])
-    .map((item) => {
-      const notification = normalizeNotification(item.id, {
-        ...(item.data() as Partial<WestoryNotification>),
-        broadcast: true,
-      });
-      const createdMs = timestampMs(notification.createdAt);
+  return state.notices
+    .filter((notice) => deliveryByNoticeId.has(notice.noticeId))
+    .map((notice) => {
+      const delivery = deliveryByNoticeId.get(notice.noticeId);
       return {
-        ...notification,
+        id: notice.noticeId,
+        type: "system_notice",
+        title: notice.title,
+        body: notice.content,
+        targetUrl: delivery?.targetUrl || "",
+        entityType: "notice",
+        entityId: notice.noticeId,
+        actorUid: "",
         recipientUid: uid,
-        readAt:
-          createdMs > 0 && createdMs <= lastBroadcastReadMs
-            ? options?.lastBroadcastReadAt
-            : null,
-      };
-    })
-    .filter((item) => {
-      const createdMs = timestampMs(item.createdAt);
-      return (
-        !broadcastClearedMs || !createdMs || createdMs > broadcastClearedMs
-      );
+        priority: notice.priority === "HIGH" ? "high" : "normal",
+        dedupeKey: `notice:${notice.noticeId}`,
+        broadcast: false,
+        readAt: notice.acknowledgedAt || null,
+        createdAt: notice.publishAt || null,
+        expiresAt: notice.expireAt || null,
+      } as WestoryNotification;
     });
-
-  return [...personalItems, ...broadcastItems]
-    .sort((a, b) => timestampMs(b.createdAt) - timestampMs(a.createdAt))
-    .slice(0, NOTIFICATION_LIMIT);
-};
-
-export const markNotificationsRead = async (config: ConfigLike) => {
-  const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable("markNotificationsRead");
-  await callable({ year, semester });
-};
-
-export const clearNotifications = async (config: ConfigLike) => {
-  const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable("clearNotifications");
-  await callable({ year, semester });
 };
 
 export const createManagedNotifications = async (
   config: ConfigLike,
   input: ManagedNotificationInput,
 ): Promise<ManagedNotificationResult> => {
-  const { year, semester } = getYearSemester(config);
-  const callable = await getHttpsCallable<
-    ManagedNotificationInput & {
-      year: string;
-      semester: string;
-      recipientUids: string[];
-    },
-    ManagedNotificationResult
-  >("createManagedNotifications");
-  const result = await callable({
-    year,
-    semester,
-    ...input,
-    recipientUids: Array.from(new Set(input.recipientUids || [])),
-  });
-  return result.data || { createdCount: 0, recipientCount: 0 };
+  void config;
+  console.warn(
+    "W8_NOTIFICATION_EVENT_PENDING: legacy notification dispatch was skipped",
+    { type: input.type, dedupeKey: input.dedupeKey || "" },
+  );
+  return {
+    createdCount: 0,
+    recipientCount: new Set(input.recipientUids || []).size,
+    broadcast: input.recipientMode === "all_students",
+  };
 };
 
 export const notifyPerformanceScoreObjectionRequested = async (

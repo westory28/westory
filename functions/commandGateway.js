@@ -11,6 +11,7 @@ const archiveEnrollment = require("./archiveEnrollment");
 const assessmentLifecycle = require("./assessmentLifecycle");
 const gradeEvidence = require("./gradeEvidence");
 const wisEconomy = require("./wisEconomy");
+const w8Domains = require("./w8Domains");
 
 const REGION = "asia-northeast3";
 const ADMIN_EMAIL = "westoria28@gmail.com";
@@ -30,6 +31,7 @@ const COMMAND_TYPES = Object.freeze({
   ...assessmentLifecycle.ASSESSMENT_COMMAND_TYPES,
   ...gradeEvidence.GRADE_COMMAND_TYPES,
   ...wisEconomy.WIS_COMMAND_TYPES,
+  ...w8Domains.W8_COMMAND_TYPES,
 });
 
 const resolveProjectId = (environment = process.env) => {
@@ -223,6 +225,9 @@ const buildHolidayDocumentId = ({ title, start }) => {
 };
 
 const normalizePayload = (commandType, payload) => {
+  if (Object.values(w8Domains.W8_COMMAND_TYPES).includes(commandType)) {
+    return w8Domains.normalizeW8Payload(commandType, payload);
+  }
   if (Object.values(wisEconomy.WIS_COMMAND_TYPES).includes(commandType)) {
     return wisEconomy.normalizeWisPayload(commandType, payload);
   }
@@ -733,6 +738,7 @@ const applyBusinessCommand = async ({
     || Object.values(assessmentLifecycle.ASSESSMENT_COMMAND_TYPES).includes(commandType)
     || Object.values(gradeEvidence.GRADE_COMMAND_TYPES).includes(commandType)
     || Object.values(wisEconomy.WIS_COMMAND_TYPES).includes(commandType)
+    || Object.values(w8Domains.W8_COMMAND_TYPES).includes(commandType)
   ) {
     fail(
       "failed-precondition",
@@ -866,6 +872,9 @@ const createCommandGatewayCore = ({
   serverTimestamp = () => FieldValue.serverTimestamp(),
   projectId = resolveProjectId(),
   getSessionOptions = (commandType) => {
+    if (Object.values(w8Domains.W8_COMMAND_TYPES).includes(commandType)) {
+      return w8Domains.getW8CommandSessionOptions(commandType);
+    }
     if (Object.values(wisEconomy.WIS_COMMAND_TYPES).includes(commandType)) {
       return wisEconomy.getWisCommandSessionOptions(commandType);
     }

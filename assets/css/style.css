@@ -655,6 +655,7 @@ body {
 
 .ws-shell-brand {
   min-width: 0;
+  min-height: 44px;
   gap: var(--space-2);
   color: var(--ws-text-strong);
   font-size: 1.2rem;

@@ -260,7 +260,7 @@ try {
   await assertFails(deleteDoc(existingHolidayRef));
 
   const ordinaryEventRef = doc(adminDb, ...calendarPath, "ordinary-event");
-  await assertSucceeds(
+  await assertFails(
     setDoc(ordinaryEventRef, {
       title: "일반 일정",
       start: "2026-09-01",
@@ -268,20 +268,20 @@ try {
       targetType: "common",
     }),
   );
-  await assertSucceeds(updateDoc(ordinaryEventRef, { title: "일반 일정 수정" }));
+  await assertFails(updateDoc(ordinaryEventRef, { title: "일반 일정 수정" }));
   await assertFails(updateDoc(ordinaryEventRef, { eventType: "holiday" }));
-  await assertSucceeds(deleteDoc(ordinaryEventRef));
+  await assertFails(deleteDoc(ordinaryEventRef));
 
   const legacyEventRef = doc(adminDb, ...calendarPath, "legacy-event");
-  await assertSucceeds(
+  await assertFails(
     setDoc(legacyEventRef, {
       title: "유형 필드가 없는 기존 일정",
       start: "2026-09-02",
       targetType: "common",
     }),
   );
-  await assertSucceeds(updateDoc(legacyEventRef, { title: "기존 일정 수정" }));
-  await assertSucceeds(deleteDoc(legacyEventRef));
+  await assertFails(updateDoc(legacyEventRef, { title: "기존 일정 수정" }));
+  await assertFails(deleteDoc(legacyEventRef));
 
   console.log(
     JSON.stringify({
@@ -295,8 +295,8 @@ try {
         "DIRECT_POINT_WALLET_AND_LEDGER_WRITE_DENIED",
         "UNMIGRATED_SETTINGS_WRITE_RETAINED",
         "DIRECT_HOLIDAY_CREATE_UPDATE_DELETE_DENIED",
-        "ORDINARY_CALENDAR_CRUD_RETAINED",
-        "LEGACY_CALENDAR_CRUD_RETAINED",
+        "W8_ORDINARY_CALENDAR_DIRECT_CRUD_DENIED",
+        "W8_LEGACY_CALENDAR_DIRECT_CRUD_DENIED",
         "ORDINARY_TO_HOLIDAY_UPDATE_DENIED",
       ],
     }),

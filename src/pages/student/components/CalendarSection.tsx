@@ -18,12 +18,6 @@ type CalendarViewType = "dayGridMonth" | "listMonth";
 
 const LABELS = {
   all: "\uc804\uccb4",
-  attendance: "\ucd9c\uc11d",
-  attendanceAction: "\ucd9c\uc11d \uccb4\ud06c",
-  attendanceDone: "\ucd9c\uc11d \uc644\ub8cc",
-  attendanceDoneTitle: "\uc624\ub298 \ucd9c\uc11d \uc644\ub8cc",
-  attendanceError: "\ucd9c\uc11d \ud655\uc778 \ud544\uc694",
-  attendanceLoading: "\ucc98\ub9ac \uc911...",
   calendar: "\ub2ec\ub825",
   heading: "\ud559\uc0ac \uc77c\uc815",
   holiday: "\uacf5\ud734\uc77c",
@@ -71,14 +65,8 @@ interface CalendarSectionProps {
   onDateClick: (dateStr: string) => void;
   onEventClick: (event: CalendarEvent) => void;
   onSearchClick: () => void;
-  onAttendanceCheck: () => void;
   calendarRef: React.RefObject<FullCalendar>;
   selectedDate?: string | null;
-  attendanceLoading?: boolean;
-  attendanceChecked?: boolean;
-  attendanceMessage?: string;
-  attendanceDates?: string[];
-  attendanceGoalText?: string;
 }
 
 const ChevronLeftIcon = () => (
@@ -199,13 +187,8 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
   onDateClick,
   onEventClick,
   onSearchClick,
-  onAttendanceCheck,
   calendarRef,
   selectedDate,
-  attendanceLoading = false,
-  attendanceChecked = false,
-  attendanceMessage = "",
-  attendanceDates = [],
 }) => {
   const [currentViewType, setCurrentViewType] =
     useState<CalendarViewType>("dayGridMonth");
@@ -219,20 +202,7 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
     anchorRect: ScheduleMorePopoverAnchor;
   } | null>(null);
 
-  const attendanceDateSet = useMemo(
-    () => new Set(attendanceDates),
-    [attendanceDates],
-  );
-  const attendanceHasError = /\uc624\ub958|\uc2e4\ud328/.test(
-    attendanceMessage,
-  );
   const isMonthView = currentViewType === "dayGridMonth";
-
-  const attendanceButtonLabel = attendanceLoading
-    ? LABELS.attendanceLoading
-    : attendanceHasError
-      ? LABELS.attendanceError
-      : LABELS.attendanceAction;
 
   const formatEventTargetLabel = (event?: CalendarEvent) => {
     if (
@@ -505,45 +475,8 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                 </button>
               </div>
             </div>
-
-            <div className="student-calendar-shell__attendance-tools">
-              <span className="student-calendar-shell__attendance-label">
-                {LABELS.attendance}
-              </span>
-              {attendanceChecked ? (
-                <span
-                  className="student-calendar-shell__attendance-indicator"
-                  title={attendanceMessage || LABELS.attendanceDoneTitle}
-                >
-                  {LABELS.attendanceDone}
-                </span>
-              ) : (
-                <button
-                  type="button"
-                  onClick={onAttendanceCheck}
-                  disabled={attendanceLoading}
-                  title={attendanceMessage || LABELS.attendanceAction}
-                  data-tone={
-                    attendanceHasError
-                      ? "error"
-                      : attendanceLoading
-                        ? "loading"
-                        : "default"
-                  }
-                  className="student-calendar-shell__attendance-action"
-                >
-                  {attendanceButtonLabel}
-                </button>
-              )}
-            </div>
           </div>
         </div>
-
-        {attendanceHasError && (
-          <p className="student-calendar-shell__error-message">
-            {attendanceMessage}
-          </p>
-        )}
       </div>
 
       <div
@@ -721,8 +654,6 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             const classes: string[] = [];
             if (holidayDateSet.has(dateStr)) classes.push("fc-day-holiday");
             if (selectedDate === dateStr) classes.push("fc-day-selected");
-            classes.push("student-calendar-attendance-day");
-            if (attendanceDateSet.has(dateStr)) classes.push("is-attended");
             return classes;
           }}
           fixedWeekCount={false}
