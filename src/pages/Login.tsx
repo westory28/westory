@@ -2129,7 +2129,7 @@ const Login: React.FC = () => {
                 <button
                   type="submit"
                   disabled={authBusy}
-                  className="mt-3 inline-flex min-h-10 w-full items-center justify-center rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-blue-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {authBusy ? "확인 중..." : "합성 계정으로 로그인"}
                 </button>
@@ -2149,7 +2149,7 @@ const Login: React.FC = () => {
         <button
           onClick={() => handleLogin("teacher")}
           disabled={authBusy || restrictedInAppBrowser}
-          className="text-gray-400 hover:text-gray-700 text-xs font-semibold px-2 py-1 rounded hover:bg-gray-200/60 transition whitespace-nowrap"
+          className="inline-flex min-h-11 items-center text-gray-400 hover:text-gray-700 text-xs font-semibold px-3 py-2 rounded hover:bg-gray-200/60 transition whitespace-nowrap"
         >
           <i className="fas fa-chalkboard-teacher mr-1"></i>
           관리자 로그인
