@@ -1971,7 +1971,7 @@ const Login: React.FC = () => {
     return <PageLoading message="로그인 상태를 확인하는 중입니다." />;
 
   return (
-    <div className="ws-login-page">
+    <main className="ws-login-page" aria-label="위스토리 로그인">
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-4 py-10 md:py-12">
         <WestoryBrand
           as="h1"
@@ -2445,7 +2445,7 @@ const Login: React.FC = () => {
           })}
         </div>
       </ModalSurface>
-    </div>
+    </main>
   );
 };
 
