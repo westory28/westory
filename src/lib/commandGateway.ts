@@ -91,7 +91,13 @@ export type W2CommandType =
   | "cleanupExpiredTeacherDrafts"
   | "createTeacherBulkJob"
   | "reconcileTeacherBulkJob"
-  | "retryTeacherBulkJob";
+  | "retryTeacherBulkJob"
+  | "createSemesterCutoverPlan"
+  | "dryRunSemesterCutover"
+  | "applySemesterCutoverBatch"
+  | "verifySemesterCutover"
+  | "resumeSemesterCutover"
+  | "createSemesterRollbackPlan";
 
 interface ConsentCommandItem {
   id: string;
@@ -122,6 +128,36 @@ export interface TeacherBulkCommandItem {
   commandType: W2CommandType;
   commandPayload: Record<string, unknown>;
   commandPayloadHash: string;
+}
+
+export interface SemesterCutoverSnapshotPayload {
+  count: number;
+  hash: string;
+}
+
+export interface SemesterCutoverOperationPayload {
+  operationKey: string;
+  operationOrder: number;
+  operationType:
+    | "SEMESTER_MANIFEST"
+    | "SEMESTER_SETTINGS"
+    | "SEMESTER_CLASSES"
+    | "SEMESTER_ENROLLMENTS"
+    | "ASSESSMENT_DEFINITIONS"
+    | "GRADE_MASTER"
+    | "LEARNING_CONTENT"
+    | "SCHEDULE_EVENTS"
+    | "NOTICE_TEMPLATES"
+    | "WIS_CATALOG_REFERENCE"
+    | "WIS_ECONOMY"
+    | "WIS_ACCOUNTS";
+  applicable: boolean;
+  childCommandType: string | null;
+  childCommandId: string | null;
+  childPayloadHash: string | null;
+  sourceSnapshot: SemesterCutoverSnapshotPayload;
+  targetBeforeSnapshot: SemesterCutoverSnapshotPayload;
+  targetAfterSnapshot: SemesterCutoverSnapshotPayload;
 }
 
 interface TeacherOperationsCommandBase {
@@ -731,6 +767,53 @@ export interface W2CommandPayloads {
     expectedJobRevision: number;
     items: TeacherBulkCommandItem[];
   };
+  createSemesterCutoverPlan: {
+    manifestVersion: string;
+    manifestHash: string;
+    sourceSemesterId: string;
+    targetSemesterId: string;
+    sourceManifestRevision: number;
+    targetManifestRevision: number;
+    copyDenylist: string[];
+    operations: SemesterCutoverOperationPayload[];
+  };
+  dryRunSemesterCutover: {
+    planId: string;
+    expectedPlanRevision: number;
+  };
+  applySemesterCutoverBatch: {
+    planId: string;
+    attemptId: string;
+    expectedPlanRevision: number;
+    expectedAttemptRevision: number;
+    operationKeys: string[];
+    failures?: Array<{
+      operationKey: string;
+      errorCode: string;
+      errorReason?: string;
+    }>;
+  };
+  verifySemesterCutover: {
+    planId: string;
+    attemptId: string;
+    expectedPlanRevision: number;
+    expectedAttemptRevision: number;
+  };
+  resumeSemesterCutover: {
+    planId: string;
+    attemptId: string;
+    expectedPlanRevision: number;
+    expectedAttemptRevision: number;
+    operationKeys: string[];
+    reason: string;
+  };
+  createSemesterRollbackPlan: {
+    planId: string;
+    attemptId: string;
+    expectedPlanRevision: number;
+    expectedAttemptRevision: number;
+    reason: string;
+  };
 }
 
 interface WisEconomyCommandBase {
@@ -950,6 +1033,35 @@ export interface W2CommandResults {
   createTeacherBulkJob: TeacherOperationsCommandResult;
   reconcileTeacherBulkJob: TeacherOperationsCommandResult;
   retryTeacherBulkJob: TeacherOperationsCommandResult;
+  createSemesterCutoverPlan: SemesterCutoverCommandResult;
+  dryRunSemesterCutover: SemesterCutoverCommandResult;
+  applySemesterCutoverBatch: SemesterCutoverCommandResult;
+  verifySemesterCutover: SemesterCutoverCommandResult;
+  resumeSemesterCutover: SemesterCutoverCommandResult;
+  createSemesterRollbackPlan: SemesterCutoverCommandResult;
+}
+
+export interface SemesterCutoverCommandResult {
+  planId: string;
+  planRevision: number;
+  attemptId?: string;
+  attemptRevision?: number;
+  evidenceId?: string;
+  rollbackPlanId?: string;
+  status: string;
+  operationCount?: number;
+  manifestHash?: string;
+  dependencyHash?: string;
+  counts?: Record<string, number>;
+  items?: Array<Record<string, unknown>>;
+  diffs?: Array<Record<string, unknown>>;
+  resumedOperationKeys?: string[];
+  childCommandIds?: string[];
+  successfulItemEffectCount?: 0;
+  canonicalBusinessWriteCount?: 0;
+  pointerMutationCount?: 0;
+  activationMutationCount?: 0;
+  steps?: Array<Record<string, unknown>>;
 }
 
 export interface TeacherOperationsCommandResult {

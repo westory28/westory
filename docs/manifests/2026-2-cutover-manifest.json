@@ -1,0 +1,410 @@
+{
+  "schemaVersion": 1,
+  "manifestVersion": "w11-v1",
+  "cutoverId": "westory-2026-2-production-cutover",
+  "sourceSemester": {
+    "semesterId": "2026-1",
+    "schoolYear": 2026,
+    "term": 1,
+    "requiredStatusAtCutover": "CLOSED",
+    "finalStatus": "ARCHIVED",
+    "provenance": "ARCHIVE",
+    "mutationPolicy": "READ_ONLY_IN_PLACE"
+  },
+  "targetSemester": {
+    "semesterId": "2026-2",
+    "schoolYear": 2026,
+    "term": 2,
+    "displayName": "2026학년도 2학기",
+    "requiredStatusBeforeActivation": "READY",
+    "finalStatus": "ACTIVE",
+    "provenanceBeforeActivation": "PREPARING",
+    "provenanceAfterActivation": "CURRENT",
+    "schemaVersion": 1,
+    "readinessPolicyVersion": "w3-v1",
+    "startAt": null,
+    "endAt": null,
+    "timezone": "Asia/Seoul"
+  },
+  "release": {
+    "sourceReleaseSha": "216d3076bcf558a6abdf6e1b02b6c9e09d782d00",
+    "targetReleaseSha": null,
+    "sourceDeploymentId": "dpl_EczpyUAh5VmSdEh8NtWcbZ7kvMKR",
+    "sourceDeploymentAlias": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+    "targetReleaseCandidate": null
+  },
+  "environment": {
+    "productionProjectId": "history-quiz-yongsin",
+    "stagingProjectId": "westory-staging-177587430482",
+    "shadowProjectId": "westory-staging-177587430482",
+    "shadowSourceSemesterId": "2098-1",
+    "shadowTargetSemesterId": "2098-2",
+    "productionExecutionEnabled": false,
+    "productionCredentialAccessAllowed": false
+  },
+  "controlPlane": {
+    "migrationPlanVersion": "w11-v1",
+    "readinessPolicyVersion": "w3-v1",
+    "maintenanceRevision": 3,
+    "maintenanceState": "ENABLED_DOCUMENTED_NOT_QUERIED",
+    "sourceSnapshotAt": null,
+    "sourceBackupIds": [],
+    "approvalState": "DRAFT_NOT_APPROVED_FOR_PRODUCTION",
+    "createdAt": "2026-08-12T00:00:00+09:00",
+    "createdBy": "W11_REPOSITORY_MANIFEST"
+  },
+  "operationPolicy": {
+    "executionModel": "ALLOWLISTED_DOMAIN_COMMAND_RECEIPT_RECONCILIATION",
+    "genericWritesAllowed": false,
+    "callerProvidedPathsAllowed": false,
+    "sourceSemesterWritesAllowed": false,
+    "productionApplyAllowed": false,
+    "modes": ["plan", "dry-run", "apply", "verify", "resume", "rollback-plan"],
+    "partialFailurePolicy": "ITEMIZED_PARTIAL_EXPLICIT_RESUME"
+  },
+  "selectiveClone": [
+    {
+      "dataset": "SEMESTER_MANIFEST",
+      "operationType": "SEMESTER_MANIFEST",
+      "disposition": "RECREATE",
+      "source": "semester_manifests/2026-1",
+      "target": "semester_manifests/2026-2",
+      "excludedFields": ["status", "provenance", "revision", "createdAt", "createdBy", "updatedAt", "updatedBy", "activatedAt", "activatedBy", "closedAt", "closedBy"],
+      "targetRevision": 1,
+      "validation": "identity, date range, schema and policy validation",
+      "rollback": "quarantine or remove the unactivated target only"
+    },
+    {
+      "dataset": "SEMESTER_SETTINGS",
+      "operationType": "SEMESTER_SETTINGS",
+      "disposition": "RECREATE",
+      "source": "approved policy versions",
+      "target": "2026-2 required semester seeds",
+      "excludedFields": ["operational counters", "student state", "timestamps", "actor metadata"],
+      "targetRevision": 1,
+      "validation": "required seed schema and supported policy versions",
+      "rollback": "replace the unactivated target seed through its owning command"
+    },
+    {
+      "dataset": "SEMESTER_CLASSES",
+      "operationType": "SEMESTER_CLASSES",
+      "disposition": "IMPORT",
+      "source": "approved 2026-2 roster source",
+      "target": "semester_classes",
+      "excludedFields": ["2026-1 classId", "legacy current-profile class fields", "source audit metadata"],
+      "targetRevision": 1,
+      "validation": "duplicate class 0 and approved class count exact",
+      "rollback": "target roster revision rollback while the target is not ACTIVE"
+    },
+    {
+      "dataset": "SEMESTER_ENROLLMENTS",
+      "operationType": "SEMESTER_ENROLLMENTS",
+      "disposition": "IMPORT",
+      "source": "approved 2026-2 roster source plus stable student UID",
+      "target": "semester_enrollments",
+      "excludedFields": ["2026-1 enrollmentId", "users.grade", "users.class", "users.number", "historical activity"],
+      "targetRevision": 1,
+      "validation": "one ACTIVE enrollment per student and semester, orphan 0, UID mapping exact",
+      "rollback": "target roster revision rollback without altering identity or 2026-1 enrollment"
+    },
+    {
+      "dataset": "ASSESSMENT_DEFINITIONS",
+      "operationType": "ASSESSMENT_DEFINITIONS",
+      "disposition": "CLONE",
+      "source": "explicitly approved reusable definition revisions",
+      "target": "2026-2 assessment definitions",
+      "excludedFields": ["attempts", "submissions", "results", "student answers", "publication runtime state"],
+      "targetRevision": 1,
+      "validation": "definition schema, target audience and item revision validation",
+      "rollback": "archive or remove unactivated cloned definitions by owning command"
+    },
+    {
+      "dataset": "GRADE_MASTER",
+      "operationType": "GRADE_MASTER",
+      "disposition": "NOT_APPLICABLE",
+      "source": "supported rubric and grade-plan policy",
+      "target": "validation only",
+      "excludedFields": ["official grades", "versions", "corrections", "requests", "attestations"],
+      "targetRevision": null,
+      "validation": "supported policy references only; no W11 grade write",
+      "rollback": "not applicable"
+    },
+    {
+      "dataset": "LEARNING_CONTENT",
+      "operationType": "LEARNING_CONTENT",
+      "disposition": "CLONE",
+      "source": "explicitly approved reusable 2026-1 content revisions",
+      "target": "2026-2 learning content in DRAFT",
+      "excludedFields": ["progress", "completion", "exemptions", "requests", "publication runtime state"],
+      "targetRevision": 1,
+      "validation": "target Class and audience references, DRAFT and PREPARING read-only",
+      "rollback": "archive or remove unactivated target content by owning command"
+    },
+    {
+      "dataset": "SCHEDULE_EVENTS",
+      "operationType": "SCHEDULE_EVENTS",
+      "disposition": "RECREATE",
+      "source": "approved timetable and event plan",
+      "target": "2026-2 schedule events",
+      "excludedFields": ["2026-1 event identity", "delivery state", "attendance sessions", "runtime timestamps"],
+      "targetRevision": 1,
+      "validation": "target date range, sourceReference uniqueness and PREPARING student invisibility",
+      "rollback": "remove or quarantine target events before activation"
+    },
+    {
+      "dataset": "NOTICE_TEMPLATES",
+      "operationType": "NOTICE_TEMPLATES",
+      "disposition": "RECREATE",
+      "source": "explicitly approved communication templates",
+      "target": "2026-2 notices in DRAFT",
+      "excludedFields": ["deliveries", "acknowledgements", "read state", "published runtime state"],
+      "targetRevision": 1,
+      "validation": "DRAFT, valid target references and PREPARING student invisibility",
+      "rollback": "remove unactivated DRAFT notices"
+    },
+    {
+      "dataset": "WIS_CATALOG_REFERENCE",
+      "operationType": "WIS_CATALOG_REFERENCE",
+      "disposition": "CLONE",
+      "source": "explicitly approved catalog metadata revision",
+      "target": "2026-2 catalog reference",
+      "excludedFields": ["inventory", "orders", "usage", "ledger", "balance", "ranking"],
+      "targetRevision": 1,
+      "validation": "catalog identity and schema validation only",
+      "rollback": "detach the unactivated catalog reference"
+    },
+    {
+      "dataset": "WIS_ECONOMY",
+      "operationType": "WIS_ECONOMY",
+      "disposition": "RECREATE",
+      "source": "2026-2 policy and catalog reference",
+      "target": "new 2026-2 economy",
+      "excludedFields": ["2026-1 economyId", "ledger", "balance", "ranking", "orders", "inventory", "initial grant"],
+      "targetRevision": 1,
+      "validation": "PREPARING admin create only, value movement 0 and student visibility 0",
+      "rollback": "quarantine the target economy without altering the source economy"
+    },
+    {
+      "dataset": "WIS_ACCOUNTS",
+      "operationType": "WIS_ACCOUNTS",
+      "disposition": "RECREATE",
+      "source": "2026-2 ACTIVE enrollment set",
+      "target": "one new account per target enrollment",
+      "excludedFields": ["previous accountId", "transactions", "balance", "rank", "initial grant"],
+      "targetRevision": 1,
+      "validation": "account count equals ACTIVE enrollment count; every balance and rank is zero",
+      "rollback": "quarantine target accounts and economy before value movement"
+    }
+  ],
+  "validationOperations": [
+    {
+      "operationType": "COPY_DENYLIST_ACTIVITY_ZERO",
+      "strategy": "ZERO_ASSERTION",
+      "sourcePolicy": "PRESERVE_READ_ONLY",
+      "targetExpectedCount": 0,
+      "targetExpectedHash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "description": "복제 금지 활동 데이터가 target 학기에 한 건도 없는지 검증합니다."
+    }
+  ],
+  "copyDenylist": [
+    "ASSESSMENT_ATTEMPTS",
+    "STUDENT_ANSWERS",
+    "ASSESSMENT_SUBMISSIONS",
+    "ASSESSMENT_RESULTS",
+    "OFFICIAL_GRADES",
+    "GRADE_VERSIONS",
+    "GRADE_CORRECTION_REQUESTS",
+    "GRADE_ATTESTATIONS",
+    "ATTENDANCE_SESSIONS",
+    "ATTENDANCE_RECORDS",
+    "ATTENDANCE_REVISIONS",
+    "LEARNING_PROGRESS",
+    "LEARNING_EXEMPTIONS",
+    "NOTICE_DELIVERIES",
+    "NOTICE_ACKNOWLEDGEMENTS",
+    "NOTIFICATION_READ_STATE",
+    "TEACHER_DRAFTS",
+    "TEACHER_BULK_JOBS",
+    "COMMAND_RECEIPTS",
+    "AUDIT_LOGS",
+    "WIS_LEDGER",
+    "WIS_BALANCES",
+    "WIS_RANKINGS",
+    "WIS_ORDERS",
+    "WIS_INVENTORY",
+    "WIS_ITEM_USAGE",
+    "WIS_INITIAL_GRANTS",
+    "APPLICATION_SESSIONS",
+    "TEMPORARY_FIXTURES",
+    "TEST_DATA",
+    "STORAGE_OBJECTS"
+  ],
+  "domainInitialState": {
+    "assessmentAttempts": 0,
+    "assessmentSubmissions": 0,
+    "assessmentResults": 0,
+    "officialGrades": 0,
+    "gradeCorrectionRequests": 0,
+    "gradeAttestations": 0,
+    "learningProgress": 0,
+    "attendanceSessions": 0,
+    "attendanceRecords": 0,
+    "noticeDeliveries": 0,
+    "noticeAcknowledgements": 0,
+    "teacherDrafts": 0,
+    "teacherBulkJobs": 0,
+    "wisLedgerEntries": 0,
+    "wisOrders": 0,
+    "wisInitialGrants": 0,
+    "wisAccountBalance": 0,
+    "wisAccountRank": 0
+  },
+  "incompleteWorkPolicy": [
+    {
+      "workType": "UNSUBMITTED_ASSESSMENT",
+      "disposition": "CLOSE_WITH_SEMESTER",
+      "targetCopyAllowed": false,
+      "reason": "응시 기간이 끝난 평가는 source 학기 결과로만 보존하며 새 학기로 넘기지 않습니다."
+    },
+    {
+      "workType": "IN_PROGRESS_ATTEMPT",
+      "disposition": "MANUAL_REVIEW",
+      "targetCopyAllowed": false,
+      "reason": "진행 중 응시는 전환 전에 개별 제출·취소 여부를 확인하고 조용히 종료하지 않습니다."
+    },
+    {
+      "workType": "ASSESSMENT_GRADING",
+      "disposition": "COMPLETE_BEFORE_CUTOVER",
+      "targetCopyAllowed": false,
+      "reason": "채점 결과는 source 학기에서 확정한 뒤 Archive에 보존합니다."
+    },
+    {
+      "workType": "UNFINALIZED_GRADE",
+      "disposition": "COMPLETE_BEFORE_CUTOVER",
+      "targetCopyAllowed": false,
+      "reason": "공식 성적 확정 전에는 Production Cutover를 진행하지 않습니다."
+    },
+    {
+      "workType": "GRADE_CORRECTION_REQUEST",
+      "disposition": "COMPLETE_BEFORE_CUTOVER",
+      "targetCopyAllowed": false,
+      "reason": "미처리 정정 요청은 source 학기 감사 흐름에서 종결합니다."
+    },
+    {
+      "workType": "UNSIGNED_GRADE",
+      "disposition": "CARRY_AS_READ_ONLY",
+      "targetCopyAllowed": false,
+      "reason": "확정 성적의 미확인 상태는 source Archive에서만 확인하며 target 상태로 복제하지 않습니다."
+    },
+    {
+      "workType": "INCOMPLETE_LEARNING",
+      "disposition": "CARRY_AS_READ_ONLY",
+      "targetCopyAllowed": false,
+      "reason": "학습 진행 기록은 source Archive에 남기고 새 학기 progress는 0에서 시작합니다."
+    },
+    {
+      "workType": "PENDING_WIS_ORDER",
+      "disposition": "CANCEL_WITH_AUDIT",
+      "targetCopyAllowed": false,
+      "reason": "미처리 주문은 source Economy에서 감사 가능한 취소로 종결하고 target에 복제하지 않습니다."
+    },
+    {
+      "workType": "RUNNING_OR_FAILED_BATCH",
+      "disposition": "COMPLETE_BEFORE_CUTOVER",
+      "targetCopyAllowed": false,
+      "reason": "고위험 batch가 고립된 상태에서는 readiness가 통과할 수 없습니다."
+    },
+    {
+      "workType": "TEACHER_DRAFT",
+      "disposition": "MANUAL_REVIEW",
+      "targetCopyAllowed": false,
+      "reason": "교사가 공식 저장·폐기 여부를 선택하며 Draft를 target 학기로 자동 이월하지 않습니다."
+    },
+    {
+      "workType": "UNRECORDED_ATTENDANCE",
+      "disposition": "COMPLETE_BEFORE_CUTOVER",
+      "targetCopyAllowed": false,
+      "reason": "미입력 출석은 source 학기에서 확인·정정하고 자동 PRESENT를 기록하지 않습니다."
+    },
+    {
+      "workType": "SCHEDULED_NOTICE",
+      "disposition": "CLOSE_WITH_SEMESTER",
+      "targetCopyAllowed": false,
+      "reason": "예약 공지는 source 학기에서 종료하며 승인된 template만 별도 재생성합니다."
+    },
+    {
+      "workType": "UNRESOLVED_READINESS_ISSUE",
+      "disposition": "COMPLETE_BEFORE_CUTOVER",
+      "targetCopyAllowed": false,
+      "reason": "required readiness FAIL·PENDING·STALE가 있으면 Cutover를 HOLD합니다."
+    }
+  ],
+  "expectedDiff": {
+    "production": {
+      "status": "GENERATE_FROM_APPROVED_R0_BEFORE_EXECUTION",
+      "authChanges": 0,
+      "studentUidChanges": 0,
+      "sourceDocumentDeletes": 0,
+      "historicalGradeChanges": 0,
+      "historicalAttendanceChanges": 0,
+      "historicalWisTransactionChanges": 0,
+      "storageChanges": 0
+    },
+    "shadow": {
+      "status": "DERIVE_FROM_APPROVED_SYNTHETIC_ROSTER_AND_OPERATION_PLAN",
+      "unexplainedChangesAllowed": 0,
+      "sourceSemesterChangesAllowed": 0,
+      "activityCopiesAllowed": 0
+    }
+  },
+  "requiredUserDecisions": [
+    {
+      "decisionId": "CUTOVER-SEMESTER-BOUNDARY",
+      "classification": "BLOCKING_PRODUCTION_CUTOVER",
+      "value": null,
+      "requiredBefore": "production manifest approval",
+      "description": "2026학년도 2학기 시작일과 종료일"
+    },
+    {
+      "decisionId": "CUTOVER-ROSTER-SOURCE",
+      "classification": "BLOCKING_PRODUCTION_CUTOVER",
+      "value": null,
+      "requiredBefore": "production roster dry run",
+      "description": "승인된 2026-2 학급 편성 원천과 최종 인원"
+    },
+    {
+      "decisionId": "CUTOVER-EXECUTION-TIME",
+      "classification": "BLOCKING_PRODUCTION_CUTOVER",
+      "value": null,
+      "requiredBefore": "production writer quiescence",
+      "description": "교사 업무 중단 시각과 실제 전환 시각"
+    },
+    {
+      "decisionId": "EX06-GRADE-XLSX-IMPORT",
+      "classification": "BLOCKING_PRODUCTION_CUTOVER",
+      "value": "UNAVAILABLE_UNTIL_CANONICAL_IMPORT_CONTRACT",
+      "requiredBefore": "feature activation, not W11 shadow",
+      "description": "성적 XLSX 저장의 원자성·부분 성공·receipt 정책"
+    },
+    {
+      "decisionId": "MAP01-MAP-ASSET",
+      "classification": "BLOCKING_PRODUCTION_CUTOVER",
+      "value": "EXPLICITLY_UNAVAILABLE",
+      "requiredBefore": "map editing reactivation, not W11 shadow",
+      "description": "지도 파일 staging·검증·promote 정책"
+    },
+    {
+      "decisionId": "MAP02-MAP-TAXONOMY",
+      "classification": "BLOCKING_PRODUCTION_CUTOVER",
+      "value": "EXPLICITLY_UNAVAILABLE",
+      "requiredBefore": "map editing reactivation, not W11 shadow",
+      "description": "지도 지역·태그의 revision·provenance 정책"
+    }
+  ],
+  "approval": {
+    "state": "DRAFT",
+    "approvedBy": null,
+    "approvedAt": null,
+    "productionApplyAuthorized": false
+  }
+}

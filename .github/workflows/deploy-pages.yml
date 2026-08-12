@@ -61,11 +61,11 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - name: Verify Functions and W2 through W10 UI/domain safety
+      - name: Verify Functions and W2 through W11 semester cutover safety
         run: |
           npm --prefix functions run check
           npm install --global firebase-tools@15.15.0
-          npm run verify:w10-ui-ux
+          npm run verify:w11-semester-cutover
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5

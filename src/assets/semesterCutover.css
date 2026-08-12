@@ -1,0 +1,472 @@
+.ws-semester-source {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+  border: 1px solid var(--ws-border);
+  border-radius: var(--radius-lg);
+  background: var(--ws-surface);
+  padding: var(--space-4);
+}
+
+.ws-student-semester-overview {
+  display: flex;
+  width: 100%;
+  max-width: var(--ws-page-max);
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-5);
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-5);
+}
+
+.ws-student-semester-overview__heading p,
+.ws-student-semester-overview__heading h2 {
+  margin: 0;
+}
+
+.ws-student-current-enrollment {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.ws-student-current-enrollment__detail {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  border: 1px solid var(--ws-border-blue);
+  border-radius: var(--radius-md);
+  background: var(--ws-primary-soft);
+  padding: var(--space-3) var(--space-4);
+}
+
+.ws-student-current-enrollment__detail strong,
+.ws-student-current-enrollment__detail span {
+  display: block;
+}
+
+.ws-student-current-enrollment__detail strong {
+  color: var(--ws-text-strong);
+  font-size: var(--ws-type-card-title, 1rem);
+}
+
+.ws-student-current-enrollment__detail span {
+  margin-top: var(--space-1);
+  color: var(--ws-text-muted);
+  font-size: var(--ws-type-meta, 0.72rem);
+  font-weight: 700;
+}
+
+.ws-student-semester-overview__heading p {
+  color: var(--ws-primary-text);
+  font-size: var(--ws-type-small, 0.875rem);
+  font-weight: 800;
+}
+
+.ws-student-semester-overview__heading h2 {
+  margin-top: var(--space-1);
+  color: var(--ws-text-strong);
+  font-size: var(--ws-type-page-title, 1.75rem);
+  font-weight: 800;
+}
+
+.ws-semester-source--current {
+  border-color: var(--ws-border-blue);
+}
+
+.ws-semester-source--preparing {
+  border-color: color-mix(in srgb, var(--ws-accent) 36%, var(--ws-border));
+}
+
+.ws-semester-source__heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.ws-semester-source__label,
+.ws-semester-source__description {
+  margin: 0;
+}
+
+.ws-semester-source__label {
+  color: var(--ws-text-muted);
+  font-size: var(--ws-type-label, 0.75rem);
+  font-weight: 800;
+}
+
+.ws-semester-source h2 {
+  margin: var(--space-1) 0 0;
+  color: var(--ws-text-strong);
+  font-size: var(--ws-type-card-title, 1rem);
+  font-weight: 800;
+}
+
+.ws-semester-source__description {
+  color: var(--ws-text-muted);
+  font-size: var(--ws-type-small, 0.875rem);
+  line-height: 1.55;
+}
+
+.ws-semester-source__metadata {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+  border-top: 1px solid var(--ws-border-soft);
+  padding-top: var(--space-3);
+}
+
+.ws-semester-source__metadata div {
+  min-width: 0;
+}
+
+.ws-semester-source__metadata dt,
+.ws-semester-source__metadata dd {
+  margin: 0;
+}
+
+.ws-semester-source__metadata dt {
+  color: var(--ws-text-soft);
+  font-size: var(--ws-type-meta, 0.72rem);
+  font-weight: 800;
+}
+
+.ws-semester-source__metadata dd {
+  margin-top: var(--space-1);
+  overflow-wrap: anywhere;
+  color: var(--ws-text);
+  font-size: var(--ws-type-small, 0.875rem);
+  font-weight: 700;
+}
+
+.ws-cutover-page {
+  display: grid;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+.ws-cutover-scope {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  border: 1px solid var(--ws-border-blue);
+  border-radius: var(--radius-lg);
+  background: var(--ws-primary-soft);
+  padding: var(--space-4);
+}
+
+.ws-cutover-scope__copy {
+  min-width: 0;
+  flex: 1 1 28rem;
+}
+
+.ws-cutover-scope__copy h2,
+.ws-cutover-scope__copy p {
+  margin: 0;
+}
+
+.ws-cutover-scope__copy h2 {
+  color: var(--ws-primary-text);
+  font-size: var(--ws-type-card-title, 1rem);
+  font-weight: 800;
+}
+
+.ws-cutover-scope__copy p {
+  margin-top: var(--space-1);
+  color: var(--ws-text-muted);
+  font-size: var(--ws-type-small, 0.875rem);
+  line-height: 1.55;
+}
+
+.ws-cutover-scope__flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.ws-cutover-flag {
+  display: inline-flex;
+  min-height: var(--space-8);
+  align-items: center;
+  border: 1px solid var(--ws-border-blue);
+  border-radius: var(--radius-full);
+  background: var(--ws-surface);
+  color: var(--ws-primary-text);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--ws-type-meta, 0.72rem);
+  font-weight: 800;
+}
+
+.ws-cutover-context-grid {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.ws-cutover-section {
+  min-width: 0;
+  border-top: 1px solid var(--ws-border);
+  padding-top: var(--space-5);
+}
+
+.ws-cutover-section__heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.ws-cutover-section__heading h2,
+.ws-cutover-section__heading p {
+  margin: 0;
+}
+
+.ws-cutover-section__heading h2 {
+  color: var(--ws-text-strong);
+  font-size: var(--ws-type-section-title, 1.25rem);
+  font-weight: 800;
+}
+
+.ws-cutover-section__heading p {
+  margin-top: var(--space-1);
+  color: var(--ws-text-muted);
+  font-size: var(--ws-type-small, 0.875rem);
+  line-height: 1.55;
+}
+
+.ws-cutover-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.ws-cutover-summary div {
+  border-left: var(--space-1) solid var(--ws-border);
+  padding: var(--space-2) var(--space-3);
+}
+
+.ws-cutover-summary dt,
+.ws-cutover-summary dd {
+  margin: 0;
+}
+
+.ws-cutover-summary dt {
+  color: var(--ws-text-muted);
+  font-size: var(--ws-type-meta, 0.72rem);
+  font-weight: 800;
+}
+
+.ws-cutover-summary dd {
+  margin-top: var(--space-1);
+  color: var(--ws-text-strong);
+  font-size: var(--ws-type-card-title, 1rem);
+  font-weight: 800;
+}
+
+.ws-cutover-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.ws-cutover-action-notes,
+.ws-cutover-result-list {
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ws-cutover-action-notes {
+  display: grid;
+  gap: var(--space-1);
+  color: var(--ws-text-muted);
+  font-size: var(--ws-type-small, 0.875rem);
+  line-height: 1.55;
+}
+
+.ws-cutover-result-list {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.ws-cutover-result-list li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  border-bottom: 1px solid var(--ws-border-soft);
+  padding: var(--space-3) 0;
+}
+
+.ws-cutover-result-list li:first-child {
+  padding-top: 0;
+}
+
+.ws-cutover-result-list strong,
+.ws-cutover-result-list span {
+  display: block;
+}
+
+.ws-cutover-result-list strong {
+  color: var(--ws-text-strong);
+  font-size: var(--ws-type-small, 0.875rem);
+}
+
+.ws-cutover-result-list span,
+.ws-cutover-result-list p {
+  color: var(--ws-text-muted);
+  font-size: var(--ws-type-meta, 0.72rem);
+  line-height: 1.55;
+}
+
+.ws-cutover-result-list p {
+  margin: var(--space-1) 0 0;
+}
+
+.ws-cutover-action {
+  min-height: calc(var(--space-10) + var(--space-1));
+  border: 1px solid var(--ws-border);
+  border-radius: var(--radius-md);
+  background: var(--ws-surface);
+  color: var(--ws-text);
+  padding: var(--space-2) var(--space-4);
+  font: inherit;
+  font-size: var(--ws-type-small, 0.875rem);
+  font-weight: 800;
+  cursor: pointer;
+  transition:
+    transform var(--motion-fast) ease-out,
+    opacity var(--motion-fast) ease-out;
+}
+
+.ws-cutover-action--primary {
+  border-color: var(--ws-primary);
+  background: var(--ws-primary);
+  color: var(--ws-surface);
+}
+
+.ws-cutover-action:active:not(:disabled) {
+  transform: scale(var(--press-scale, 0.985));
+}
+
+.ws-cutover-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.ws-cutover-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--ws-type-small, 0.875rem);
+}
+
+.ws-cutover-table th,
+.ws-cutover-table td {
+  border-bottom: 1px solid var(--ws-border-soft);
+  padding: var(--space-3);
+  text-align: left;
+  vertical-align: top;
+}
+
+.ws-cutover-table th {
+  color: var(--ws-text-muted);
+  font-size: var(--ws-type-meta, 0.72rem);
+  font-weight: 800;
+}
+
+.ws-cutover-table td {
+  color: var(--ws-text);
+  overflow-wrap: anywhere;
+}
+
+.ws-cutover-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  border: 1px solid var(--ws-border);
+  border-radius: var(--radius-full);
+  background: var(--ws-surface-subtle);
+  color: var(--ws-text);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--ws-type-meta, 0.72rem);
+  font-weight: 800;
+}
+
+.ws-cutover-status--pass,
+.ws-cutover-status--succeeded,
+.ws-cutover-status--verified {
+  border-color: color-mix(in srgb, var(--ws-success) 32%, var(--ws-border));
+  background: var(--ws-success-soft);
+  color: var(--ws-success);
+}
+
+.ws-cutover-status--fail,
+.ws-cutover-status--failed,
+.ws-cutover-status--blocked,
+.ws-cutover-status--stale {
+  border-color: color-mix(in srgb, var(--ws-danger) 28%, var(--ws-border));
+  background: var(--ws-danger-soft);
+  color: var(--ws-danger-text);
+}
+
+.ws-cutover-empty {
+  margin: 0;
+  border: 1px dashed var(--ws-border);
+  border-radius: var(--radius-md);
+  color: var(--ws-text-muted);
+  padding: var(--space-4);
+  font-size: var(--ws-type-small, 0.875rem);
+  line-height: 1.55;
+}
+
+@media (min-width: 768px) {
+  .ws-student-semester-overview {
+    padding-right: var(--space-8);
+    padding-left: var(--space-8);
+  }
+
+  .ws-cutover-context-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .ws-cutover-summary {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .ws-cutover-page {
+    grid-template-columns: minmax(16rem, 0.75fr) minmax(0, 2fr);
+    align-items: start;
+  }
+
+  .ws-cutover-scope,
+  .ws-cutover-context-grid,
+  .ws-cutover-page > .ws-state-panel {
+    grid-column: 1 / -1;
+  }
+
+  .ws-cutover-section--actions,
+  .ws-cutover-section--readiness {
+    grid-column: 1;
+  }
+
+  .ws-cutover-section--datasets,
+  .ws-cutover-section--attempts {
+    grid-column: 2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ws-cutover-action {
+    transition: none;
+  }
+}

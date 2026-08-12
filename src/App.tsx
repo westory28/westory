@@ -95,6 +95,10 @@ const Settings = lazyWithRetry(
   () => import("./pages/teacher/Settings"),
   "settings",
 );
+const SemesterCutoverCenter = lazyWithRetry(
+  () => import("./pages/teacher/SemesterCutoverCenter"),
+  "semester-cutover-center",
+);
 const W8TeacherHub = lazyWithRetry(
   () => import("./pages/teacher/W8TeacherHub"),
   "w8-teacher-hub",
@@ -333,6 +337,13 @@ const App: React.FC = () => {
                       element={renderWithLayout(
                         <ManageExam />,
                         "평가 관리 화면을 준비하는 중입니다.",
+                      )}
+                    />
+                    <Route
+                      path="/teacher/settings/cutover"
+                      element={renderWithLayout(
+                        <SemesterCutoverCenter />,
+                        "학기 전환 준비 상태를 불러오는 중입니다.",
                       )}
                     />
                     <Route

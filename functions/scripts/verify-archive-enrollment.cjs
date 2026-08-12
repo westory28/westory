@@ -455,6 +455,115 @@ const main = async () => {
       .status,
     "FAIL",
   );
+
+  const cutoverSourceSemesterId = "2025-2";
+  const cutoverPlanId = "cutplan_" + "1".repeat(64);
+  const cutoverAttemptId = "cutattempt_" + "2".repeat(64);
+  const cutoverEvidenceId = "cutevidence_" + "3".repeat(64);
+  const cutoverDependencyHash = "4".repeat(64);
+  store.documents.set(
+    `${semesterCore.SEMESTER_MANIFEST_COLLECTION}/${cutoverSourceSemesterId}`,
+    {
+      semesterId: cutoverSourceSemesterId,
+      revision: 1,
+      status: "ARCHIVED",
+      provenance: "ARCHIVE",
+    },
+  );
+  store.documents.set(
+    `${archiveEnrollment.ARCHIVE_MANIFEST_COLLECTION}/${cutoverSourceSemesterId}`,
+    {
+      semesterId: cutoverSourceSemesterId,
+      archiveStatus: "FROZEN",
+      writeFenceVersion: "w4-v1",
+      unresolvedBlockingCount: 0,
+      integrityHash: "5".repeat(64),
+    },
+  );
+  store.documents.set(`semester_cutover_targets/${semesterId}`, {
+    schemaVersion: 1,
+    policyVersion: "w11-v1",
+    targetSemesterId: semesterId,
+    status: "VERIFIED",
+    latestPlanId: cutoverPlanId,
+    latestAttemptId: cutoverAttemptId,
+    latestEvidenceId: cutoverEvidenceId,
+    manifestHash: "6".repeat(64),
+    targetManifestRevision: 1,
+    dependencyHash: cutoverDependencyHash,
+  });
+  store.documents.set(`semester_cutover_plans/${cutoverPlanId}`, {
+    schemaVersion: 1,
+    policyVersion: "w11-v1",
+    planId: cutoverPlanId,
+    status: "VERIFIED",
+    sourceSemesterId: cutoverSourceSemesterId,
+    targetSemesterId: semesterId,
+    sourceManifestRevision: 1,
+    targetManifestRevision: 1,
+    manifestHash: "6".repeat(64),
+    dependencyHash: cutoverDependencyHash,
+  });
+  store.documents.set(`semester_cutover_attempts/${cutoverAttemptId}`, {
+    schemaVersion: 1,
+    policyVersion: "w11-v1",
+    attemptId: cutoverAttemptId,
+    planId: cutoverPlanId,
+    status: "VERIFIED",
+    sourceSemesterId: cutoverSourceSemesterId,
+    targetSemesterId: semesterId,
+    sourceManifestRevision: 1,
+    targetManifestRevision: 1,
+    manifestHash: "6".repeat(64),
+    dependencyHash: cutoverDependencyHash,
+  });
+  store.documents.set(`semester_cutover_evidence/${cutoverEvidenceId}`, {
+    schemaVersion: 1,
+    policyVersion: "w11-v1",
+    evidenceId: cutoverEvidenceId,
+    planId: cutoverPlanId,
+    attemptId: cutoverAttemptId,
+    status: "PASS",
+    sourceSemesterId: cutoverSourceSemesterId,
+    targetSemesterId: semesterId,
+    sourceManifestRevision: 1,
+    targetManifestRevision: 1,
+    sourceStatus: "ARCHIVED",
+    manifestHash: "6".repeat(64),
+    dependencyHash: cutoverDependencyHash,
+  });
+  const verifiedCutoverArchiveChecks = await store.runTransaction(
+    (transaction) =>
+      readinessAdapter.evaluate({
+        transaction,
+        manifest: store.data(manifestPath),
+      }),
+  );
+  const verifiedCutoverArchive = verifiedCutoverArchiveChecks.find(
+    (check) => check.checkId === "archive_readiness",
+  );
+  assert.equal(verifiedCutoverArchive.status, "PASS");
+  assert.match(verifiedCutoverArchive.evidence, /source=VERIFIED_CUTOVER_PLAN/u);
+  assert.match(
+    verifiedCutoverArchive.evidence,
+    new RegExp(`semester=${cutoverSourceSemesterId}`, "u"),
+  );
+
+  store.documents.set(`semester_cutover_evidence/${cutoverEvidenceId}`, {
+    ...store.data(`semester_cutover_evidence/${cutoverEvidenceId}`),
+    dependencyHash: "7".repeat(64),
+  });
+  const staleCutoverArchiveChecks = await store.runTransaction((transaction) =>
+    readinessAdapter.evaluate({
+      transaction,
+      manifest: store.data(manifestPath),
+    }),
+  );
+  const staleCutoverArchive = staleCutoverArchiveChecks.find(
+    (check) => check.checkId === "archive_readiness",
+  );
+  assert.equal(staleCutoverArchive.status, "FAIL");
+  assert.match(staleCutoverArchive.evidence, /source=ACTIVE_POINTER/u);
   store.documents.set(semesterCore.ACTIVE_SEMESTER_POINTER_PATH, {
     semesterId,
     revision: 1,
@@ -746,6 +855,8 @@ const main = async () => {
         "RECEIPT_AUDIT_SCHEMA",
         "W4_REQUIRED_READINESS_THREE_PASS",
         "W4_REQUIRED_READINESS_THREE_FAIL_CLOSED",
+        "W4_VERIFIED_CUTOVER_SOURCE_ARCHIVE_OVERRIDES_GLOBAL_ACTIVE_POINTER",
+        "W4_STALE_CUTOVER_EVIDENCE_FALLS_BACK_TO_ACTIVE_POINTER",
         "W4_DEPENDENCY_CHANGE_STALES_READINESS",
         "W4_RESPONSE_LOSS_STATUS_AND_REPLAY_RECOVERY",
         "CURRENT_EXPLICIT_PROVENANCE_QUERY_ZERO_WRITE",

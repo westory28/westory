@@ -3,6 +3,7 @@ const { HttpsError } = require("firebase-functions/v2/https");
 
 const semesterCore = require("./semesterCore");
 const archiveEnrollment = require("./archiveEnrollment");
+const cutoverAuthorization = require("./cutoverAuthorization");
 const sessionAuthority = require("./sessionAuthority");
 const { onCallWithStudentMaintenance: onCall } = require("./studentMaintenance");
 
@@ -153,6 +154,15 @@ const commonPayload = (payload) => ({
   semesterId: semesterId(payload.semesterId),
   expectedSemesterRevision: revision(payload.expectedSemesterRevision, "expectedSemesterRevision"),
 });
+const cutoverContext = (payload) => {
+  const cutoverPlanId = optionalText(payload.cutoverPlanId, "cutoverPlanId", 80);
+  const cutoverOperationKey = optionalText(payload.cutoverOperationKey, "cutoverOperationKey", 80);
+  if (!cutoverPlanId && !cutoverOperationKey) return {};
+  if (!cutoverPlanId || !cutoverOperationKey) {
+    fail("invalid-argument", "cutoverPlanId and cutoverOperationKey must be provided together.", "W8_PAYLOAD_INVALID");
+  }
+  return { cutoverPlanId, cutoverOperationKey };
+};
 const editableLearning = (payload) => {
   const availableFrom = iso(payload.availableFrom, "availableFrom", true);
   const availableUntil = iso(payload.availableUntil, "availableUntil", true);
@@ -211,8 +221,8 @@ const normalizeW8Payload = (commandType, raw) => {
   const payload = raw || {};
   const common = ["semesterId", "expectedSemesterRevision"];
   if (commandType === W8_COMMAND_TYPES.CREATE_LEARNING_CONTENT) {
-    allowed(payload, [...common, "title", "summary", "body", "resourceUrl", "contentType", "audienceRoles", "targetClassIds", "availableFrom", "availableUntil"], "createLearningContent payload");
-    return { ...commonPayload(payload), ...editableLearning(payload) };
+    allowed(payload, [...common, "cutoverPlanId", "cutoverOperationKey", "title", "summary", "body", "resourceUrl", "contentType", "audienceRoles", "targetClassIds", "availableFrom", "availableUntil"], "createLearningContent payload");
+    return { ...commonPayload(payload), ...cutoverContext(payload), ...editableLearning(payload) };
   }
   if (commandType === W8_COMMAND_TYPES.UPDATE_LEARNING_CONTENT) {
     allowed(payload, [...common, "contentId", "expectedContentRevision", "title", "summary", "body", "resourceUrl", "contentType", "audienceRoles", "targetClassIds", "availableFrom", "availableUntil"], "updateLearningContent payload");
@@ -253,8 +263,8 @@ const normalizeW8Payload = (commandType, raw) => {
     return { ...commonPayload(payload), requestId: text(payload.requestId, "requestId", 80), expectedRequestRevision: revision(payload.expectedRequestRevision, "expectedRequestRevision"), action: enumValue(payload.action, ["APPROVE", "REJECT"], "action"), reason: text(payload.reason, "reason", 500, true) };
   }
   if (commandType === W8_COMMAND_TYPES.CREATE_SCHEDULE_EVENT) {
-    allowed(payload, [...common, "eventType", "title", "description", "startAt", "endAt", "allDay", "period", "targetClassIds", "targetUserIds", "sourceDomain", "sourceReference"], "createScheduleEvent payload");
-    return { ...commonPayload(payload), ...editableSchedule(payload) };
+    allowed(payload, [...common, "cutoverPlanId", "cutoverOperationKey", "eventType", "title", "description", "startAt", "endAt", "allDay", "period", "targetClassIds", "targetUserIds", "sourceDomain", "sourceReference"], "createScheduleEvent payload");
+    return { ...commonPayload(payload), ...cutoverContext(payload), ...editableSchedule(payload) };
   }
   if (commandType === W8_COMMAND_TYPES.UPDATE_SCHEDULE_EVENT) {
     allowed(payload, [...common, "eventId", "expectedEventRevision", "eventType", "title", "description", "startAt", "endAt", "allDay", "period", "targetClassIds", "targetUserIds", "sourceDomain", "sourceReference"], "updateScheduleEvent payload");
@@ -290,8 +300,8 @@ const normalizeW8Payload = (commandType, raw) => {
     return { ...commonPayload(payload), sessionId: text(payload.sessionId, "sessionId", 80), expectedSessionRevision: revision(payload.expectedSessionRevision, "expectedSessionRevision") };
   }
   if (commandType === W8_COMMAND_TYPES.CREATE_NOTICE) {
-    allowed(payload, [...common, "title", "content", "targetRoles", "targetClassIds", "targetUserIds", "publishAt", "expireAt", "priority"], "createNotice payload");
-    return { ...commonPayload(payload), ...editableNotice(payload) };
+    allowed(payload, [...common, "cutoverPlanId", "cutoverOperationKey", "title", "content", "targetRoles", "targetClassIds", "targetUserIds", "publishAt", "expireAt", "priority"], "createNotice payload");
+    return { ...commonPayload(payload), ...cutoverContext(payload), ...editableNotice(payload) };
   }
   if (commandType === W8_COMMAND_TYPES.UPDATE_NOTICE) {
     allowed(payload, [...common, "noticeId", "expectedNoticeRevision", "title", "content", "targetRoles", "targetClassIds", "targetUserIds", "publishAt", "expireAt", "priority"], "updateNotice payload");
@@ -335,12 +345,18 @@ const assertTeacher = (actor) => {
 const assertStudent = (actor) => {
   if (!actor?.actorUid || actor.actorRole !== "student") fail("permission-denied", "A student account is required.", "W8_STUDENT_REQUIRED");
 };
-const assertManifest = async (transaction, payload) => {
+const assertManifest = async (transaction, payload, commandType, actor, commandId, payloadHash) => {
   const snapshot = await transaction.get(manifestPath(payload.semesterId));
   const manifest = snapshot.data || {};
   if (!snapshot.exists) fail("not-found", "Semester Manifest does not exist.", "SEMESTER_NOT_FOUND");
   if (Number(manifest.revision || 0) !== payload.expectedSemesterRevision) fail("aborted", "Semester revision changed.", "SEMESTER_REVISION_CONFLICT");
-  if (manifest.status !== "ACTIVE") fail("failed-precondition", "W8 writes require the active semester.", ["CLOSED", "ARCHIVED"].includes(manifest.status) ? "SEMESTER_ARCHIVED_WRITE_FORBIDDEN" : "SEMESTER_WRITE_STATE_INVALID");
+  if (manifest.status !== "ACTIVE") {
+    const preparingCreate = [W8_COMMAND_TYPES.CREATE_LEARNING_CONTENT, W8_COMMAND_TYPES.CREATE_SCHEDULE_EVENT, W8_COMMAND_TYPES.CREATE_NOTICE].includes(commandType)
+      && ["PREPARING", "READY"].includes(manifest.status);
+    if (!preparingCreate) fail("failed-precondition", "W8 writes require the active semester.", ["CLOSED", "ARCHIVED"].includes(manifest.status) ? "SEMESTER_ARCHIVED_WRITE_FORBIDDEN" : "SEMESTER_WRITE_STATE_INVALID");
+    const operationType = commandType === W8_COMMAND_TYPES.CREATE_LEARNING_CONTENT ? "LEARNING_CONTENT" : commandType === W8_COMMAND_TYPES.CREATE_SCHEDULE_EVENT ? "SCHEDULE_EVENTS" : "NOTICE_TEMPLATES";
+    await cutoverAuthorization.assertPreparingCutoverCreateIfTargeted({ transaction, semesterId: payload.semesterId, actor, commandType, commandId, payloadHash, cutoverPlanId: payload.cutoverPlanId, cutoverOperationKey: payload.cutoverOperationKey, operationType });
+  }
   return manifest;
 };
 const assertDatesWithinSemester = (manifest, commandType, payload) => {
@@ -386,8 +402,8 @@ const assertRevision = (snapshot, expected, reason) => {
 const baseDocument = (scope) => ({ schemaVersion: W8_SCHEMA_VERSION, policyVersion: W8_POLICY_VERSION, semesterId: scope, provenance: "CURRENT" });
 
 const createW8CommandAdapter = ({ now = () => new Date().toISOString() } = {}) => ({
-  apply: async ({ transaction, commandId, commandType, payload, receiptId, timestamp, actor }) => {
-    const manifest = await assertManifest(transaction, payload);
+  apply: async ({ transaction, commandId, commandType, payload, payloadHash, receiptId, timestamp, actor }) => {
+    const manifest = await assertManifest(transaction, payload, commandType, actor, commandId, payloadHash);
     assertDatesWithinSemester(manifest, commandType, payload);
     const teacherCommand = !STUDENT_COMMAND_TYPES.has(commandType);
     if (teacherCommand) assertTeacher(actor); else assertStudent(actor);
@@ -395,7 +411,7 @@ const createW8CommandAdapter = ({ now = () => new Date().toISOString() } = {}) =
     if (commandType === W8_COMMAND_TYPES.CREATE_LEARNING_CONTENT) {
       await assertClasses(transaction, payload.targetClassIds, payload.semesterId);
       const contentId = hashId("learn", payload.semesterId, commandId);
-      transaction.create(path(LEARNING_CONTENT_COLLECTION, contentId), { ...baseDocument(payload.semesterId), contentId, revision: 1, status: "DRAFT", ...editableLearning(payload), createdAt: timestamp, createdBy: actor.actorUid, updatedAt: timestamp, updatedBy: actor.actorUid });
+      transaction.create(path(LEARNING_CONTENT_COLLECTION, contentId), { ...baseDocument(payload.semesterId), provenance: manifest.status === "ACTIVE" ? "CURRENT" : "PREPARING", readOnly: manifest.status !== "ACTIVE", cutoverPlanId: payload.cutoverPlanId || null, contentId, revision: 1, status: "DRAFT", ...editableLearning(payload), createdAt: timestamp, createdBy: actor.actorUid, updatedAt: timestamp, updatedBy: actor.actorUid });
       return { target: { kind: "learning-content", id: contentId, refs: [path(LEARNING_CONTENT_COLLECTION, contentId)] }, sourceHash: sha256(canonicalJson(payload)), result: { contentId, contentRevision: 1, status: "DRAFT" } };
     }
     if (commandType === W8_COMMAND_TYPES.UPDATE_LEARNING_CONTENT) {
@@ -455,7 +471,7 @@ const createW8CommandAdapter = ({ now = () => new Date().toISOString() } = {}) =
     if (commandType === W8_COMMAND_TYPES.CREATE_SCHEDULE_EVENT) {
       await assertClasses(transaction, payload.targetClassIds, payload.semesterId); await assertTargetUsers(transaction, payload.targetUserIds, payload.semesterId); if (payload.eventType === "HOLIDAY" || payload.sourceDomain === "HOLIDAY") fail("failed-precondition", "Holiday events use syncKoreanPublicHolidays.", "W8_HOLIDAY_COMMAND_REQUIRED");
       if (payload.sourceReference) { const existing = await transaction.query(SCHEDULE_EVENT_COLLECTION, { field: "sourceReference", operator: "==", value: payload.sourceReference }); if (existing.some((row) => row.data?.semesterId === payload.semesterId && row.data?.status !== "ARCHIVED")) fail("already-exists", "Schedule source already exists.", "W8_SCHEDULE_SOURCE_DUPLICATE"); }
-      const eventId = hashId("schedule", payload.semesterId, commandId); const targetPath = path(SCHEDULE_EVENT_COLLECTION, eventId); transaction.create(targetPath, { ...baseDocument(payload.semesterId), eventId, revision: 1, status: "ACTIVE", ...editableSchedule(payload), createdAt: timestamp, createdBy: actor.actorUid, updatedAt: timestamp, updatedBy: actor.actorUid });
+      const eventId = hashId("schedule", payload.semesterId, commandId); const targetPath = path(SCHEDULE_EVENT_COLLECTION, eventId); transaction.create(targetPath, { ...baseDocument(payload.semesterId), provenance: manifest.status === "ACTIVE" ? "CURRENT" : "PREPARING", readOnly: manifest.status !== "ACTIVE", cutoverPlanId: payload.cutoverPlanId || null, eventId, revision: 1, status: "ACTIVE", ...editableSchedule(payload), createdAt: timestamp, createdBy: actor.actorUid, updatedAt: timestamp, updatedBy: actor.actorUid });
       return { target: { kind: "schedule-event", id: eventId, refs: [targetPath] }, sourceHash: sha256(canonicalJson(payload)), result: { eventId, eventRevision: 1, status: "ACTIVE" } };
     }
     if (commandType === W8_COMMAND_TYPES.UPDATE_SCHEDULE_EVENT) {
@@ -484,7 +500,7 @@ const createW8CommandAdapter = ({ now = () => new Date().toISOString() } = {}) =
       const targetPath = path(ATTENDANCE_SESSION_COLLECTION, payload.sessionId); const session = await transaction.get(targetPath); assertRevision(session, payload.expectedSessionRevision, "W8_ATTENDANCE_SESSION_REVISION_CONFLICT"); if (session.data?.semesterId !== payload.semesterId || session.data?.status !== "OPEN") fail("failed-precondition", "Attendance Session is not open.", "W8_ATTENDANCE_SESSION_STATE_INVALID"); const records = await transaction.query(ATTENDANCE_RECORD_COLLECTION, { field: "sessionId", operator: "==", value: payload.sessionId }); const enrollments = await transaction.query(archiveEnrollment.SEMESTER_ENROLLMENT_COLLECTION, { field: "semesterId", operator: "==", value: payload.semesterId }); const recordedUids = new Set(records.map((row) => row.data?.studentUid)); const unrecordedCount = enrollments.filter((row) => row.data?.enrollmentStatus === "ACTIVE" && row.data?.classId === session.data.classId && !recordedUids.has(row.data?.studentUid)).length; const next = payload.expectedSessionRevision + 1; transaction.set(targetPath, { revision: next, status: "CLOSED", unrecordedCountAtClose: unrecordedCount, closedAt: timestamp, closedBy: actor.actorUid, updatedAt: timestamp }, { merge: true }); return { target: { kind: "attendance-session-close", id: payload.sessionId, refs: [targetPath] }, sourceHash: sha256(`${payload.sessionId}\nCLOSED\n${unrecordedCount}`), result: { sessionId: payload.sessionId, sessionRevision: next, status: "CLOSED", unrecordedCount } };
     }
     if (commandType === W8_COMMAND_TYPES.CREATE_NOTICE) {
-      await assertClasses(transaction, payload.targetClassIds, payload.semesterId); await assertTargetUsers(transaction, payload.targetUserIds, payload.semesterId); const noticeId = hashId("notice", payload.semesterId, commandId); const targetPath = path(NOTICE_COLLECTION, noticeId); transaction.create(targetPath, { ...baseDocument(payload.semesterId), noticeId, revision: 1, status: "DRAFT", ...editableNotice(payload), createdAt: timestamp, createdBy: actor.actorUid, updatedAt: timestamp, updatedBy: actor.actorUid }); return { target: { kind: "notice", id: noticeId, refs: [targetPath] }, sourceHash: sha256(canonicalJson(payload)), result: { noticeId, noticeRevision: 1, status: "DRAFT" } };
+      await assertClasses(transaction, payload.targetClassIds, payload.semesterId); await assertTargetUsers(transaction, payload.targetUserIds, payload.semesterId); const noticeId = hashId("notice", payload.semesterId, commandId); const targetPath = path(NOTICE_COLLECTION, noticeId); transaction.create(targetPath, { ...baseDocument(payload.semesterId), provenance: manifest.status === "ACTIVE" ? "CURRENT" : "PREPARING", readOnly: manifest.status !== "ACTIVE", cutoverPlanId: payload.cutoverPlanId || null, noticeId, revision: 1, status: "DRAFT", ...editableNotice(payload), createdAt: timestamp, createdBy: actor.actorUid, updatedAt: timestamp, updatedBy: actor.actorUid }); return { target: { kind: "notice", id: noticeId, refs: [targetPath] }, sourceHash: sha256(canonicalJson(payload)), result: { noticeId, noticeRevision: 1, status: "DRAFT" } };
     }
     if (commandType === W8_COMMAND_TYPES.UPDATE_NOTICE) {
       await assertClasses(transaction, payload.targetClassIds, payload.semesterId); await assertTargetUsers(transaction, payload.targetUserIds, payload.semesterId); const targetPath = path(NOTICE_COLLECTION, payload.noticeId); const notice = await transaction.get(targetPath); assertRevision(notice, payload.expectedNoticeRevision, "W8_NOTICE_REVISION_CONFLICT"); if (notice.data?.semesterId !== payload.semesterId || notice.data?.status !== "DRAFT") fail("failed-precondition", "Only a Draft Notice can be edited.", "W8_NOTICE_STATE_INVALID"); const next = payload.expectedNoticeRevision + 1; transaction.set(targetPath, { ...editableNotice(payload), revision: next, updatedAt: timestamp, updatedBy: actor.actorUid }, { merge: true }); return { target: { kind: "notice", id: payload.noticeId, refs: [targetPath] }, sourceHash: sha256(canonicalJson(payload)), result: { noticeId: payload.noticeId, noticeRevision: next } };
@@ -552,6 +568,7 @@ const createW8QueryCore = ({
       if (query.source === "ARCHIVE" && lifecycleProvenance !== "ARCHIVE") fail("failed-precondition", "Requested ARCHIVE source does not match the Semester lifecycle.", "W8_SOURCE_MISMATCH");
       const provenance = query.source === "EXPLICIT" ? "EXPLICIT" : lifecycleProvenance;
       const readOnly = query.source === "EXPLICIT" || lifecycleProvenance !== "CURRENT";
+      if (query.audience === "student" && lifecycleProvenance === "PREPARING") return { ...base, manifestRevision: Number(manifest.data?.revision || 0), provenance: query.source === "EXPLICIT" ? "EXPLICIT" : "PREPARING", source: query.source, readOnly: true, status: "EMPTY", reason: "PREPARING_STUDENT_DATA_HIDDEN" };
       const selectedUid = query.audience === "student" ? uid : query.studentUid;
       let enrollment = null;
       let enrollmentRows = [];

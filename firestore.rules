@@ -1229,6 +1229,25 @@ service cloud.firestore {
       allow read, create, update, delete: if false;
     }
 
+    // W11 Cutover control-plane documents are callable-only. They reconcile
+    // allowlisted Domain command receipts and never accept client SDK writes.
+    match /semester_cutover_plans/{planId} {
+      allow read, create, update, delete: if false;
+    }
+    match /semester_cutover_attempts/{attemptId} {
+      allow read, create, update, delete: if false;
+
+      match /items/{itemId} {
+        allow read, create, update, delete: if false;
+      }
+    }
+    match /semester_cutover_evidence/{evidenceId} {
+      allow read, create, update, delete: if false;
+    }
+    match /semester_cutover_targets/{semesterId} {
+      allow read, create, update, delete: if false;
+    }
+
     match /semester_manifests/{semesterId} {
       allow read: if canUseWestory();
       allow create, update, delete: if false;

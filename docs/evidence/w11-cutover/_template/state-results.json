@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "testRunId": "w11-cutover-replace-me",
+  "requiredStates": [
+    "CURRENT",
+    "PREPARING",
+    "ARCHIVE",
+    "LEGACY",
+    "EXPLICIT",
+    "STALE",
+    "ERROR"
+  ],
+  "results": []
+}

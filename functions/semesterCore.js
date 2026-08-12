@@ -800,6 +800,9 @@ const evaluateReadinessAdapters = async ({
     const result = await adapter.evaluate({
       transaction: {
         get: (path) => transaction.get(path),
+        getAll: (paths) => typeof transaction.getAll === "function"
+          ? transaction.getAll(paths)
+          : Promise.all(paths.map((path) => transaction.get(path))),
         query: (collectionPath, filter = null) => transaction.query(collectionPath, filter),
       },
       manifest,
@@ -1161,6 +1164,9 @@ const createSemesterCoreCommandAdapter = ({
         await adapter.assertTransition({
           transaction: {
             get: (path) => transaction.get(path),
+            getAll: (paths) => typeof transaction.getAll === "function"
+              ? transaction.getAll(paths)
+              : Promise.all(paths.map((path) => transaction.get(path))),
             query: (collectionPath, filter = null) => transaction.query(collectionPath, filter),
           },
           manifest,

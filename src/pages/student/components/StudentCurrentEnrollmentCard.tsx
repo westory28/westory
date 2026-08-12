@@ -5,6 +5,8 @@ import {
   type SemesterEnrollmentRecord,
 } from "../../../lib/archiveEnrollment";
 import StatePanel from "../../../components/common/StatePanel";
+import SemesterSourceSummary from "../../../components/common/SemesterSourceSummary";
+import "../../../assets/semesterCutover.css";
 
 interface StudentCurrentEnrollmentCardProps {
   studentUid: string;
@@ -89,19 +91,24 @@ const StudentCurrentEnrollmentCard: React.FC<
   }
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4">
-      <div>
-        <div className="text-xs font-extrabold text-emerald-700">
-          CURRENT · {semesterId}
-        </div>
-        <div className="mt-1 text-lg font-black text-emerald-950">
-          {enrollment.snapshot?.classDisplayName || "현재 학급"}
-          {enrollment.studentNumber ? ` · ${enrollment.studentNumber}번` : ""}
+    <div className="ws-student-current-enrollment">
+      <SemesterSourceSummary
+        label="현재 학기"
+        semesterId={semesterId}
+        provenance="CURRENT"
+        readOnly
+        audience="student"
+        description="지금 이용 중인 학기와 학적입니다."
+      />
+      <div className="ws-student-current-enrollment__detail">
+        <div>
+          <strong>
+            {enrollment.snapshot?.classDisplayName || "현재 학급"}
+            {enrollment.studentNumber ? ` · ${enrollment.studentNumber}번` : ""}
+          </strong>
+          <span>서버에서 확인한 현재 학적</span>
         </div>
       </div>
-      <span className="rounded-full bg-white px-3 py-1 text-xs font-extrabold text-emerald-800 shadow-sm">
-        서버 확인 학적
-      </span>
     </div>
   );
 };

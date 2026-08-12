@@ -85,6 +85,12 @@ const COMMAND_GATEWAY_HIGH_RISK_COMMANDS = [
   "createTeacherBulkJob",
   "reconcileTeacherBulkJob",
   "retryTeacherBulkJob",
+  "createSemesterCutoverPlan",
+  "dryRunSemesterCutover",
+  "applySemesterCutoverBatch",
+  "verifySemesterCutover",
+  "resumeSemesterCutover",
+  "createSemesterRollbackPlan",
 ] as const;
 
 export const HIGH_RISK_COMMANDS = new Set<string>([

@@ -223,6 +223,11 @@ const seedW4ReadinessFixture = (testEnv, semesterId) =>
     const classId = `w4-class-${suffix}`;
     const enrollmentId = `w4-enrollment-${suffix}`;
     await Promise.all([
+      setDoc(
+        doc(db, "semester_manifests", semesterId),
+        { cutoverApplicability: "NOT_APPLICABLE" },
+        { merge: true },
+      ),
       setDoc(doc(db, "users", studentUid), { role: "student", studentName: `W4 학생 ${suffix}` }),
       setDoc(doc(db, "users", teacherUid), { role: "teacher", teacherPortalEnabled: true }),
       setDoc(doc(db, "student_identities", studentUid), {

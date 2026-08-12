@@ -1,0 +1,135 @@
+{
+  "schemaVersion": 1,
+  "wave": "W11",
+  "baselineSha": "216d3076bcf558a6abdf6e1b02b6c9e09d782d00",
+  "productionProjectId": "history-quiz-yongsin",
+  "stagingProjectId": "westory-staging-177587430482",
+  "emulatorProjectId": "demo-westory-session-w11",
+  "cutoverManifestPath": "docs/manifests/2026-2-cutover-manifest.json",
+  "sourceSemesterId": "2026-1",
+  "targetSemesterId": "2026-2",
+  "stagingRehearsal": {
+    "sourceSemesterId": "2098-1",
+    "targetSemesterId": "2098-2",
+    "canonicalBaselineSemesterId": "2026-2",
+    "canonicalBaselineAccess": "READ_ONLY_SNAPSHOT",
+    "fixtureOwnerRequired": true,
+    "testRunIdRequired": true,
+    "baselineRestoreRequired": true
+  },
+  "query": "getSemesterCutoverState",
+  "commands": [
+    "createSemesterCutoverPlan",
+    "dryRunSemesterCutover",
+    "applySemesterCutoverBatch",
+    "verifySemesterCutover",
+    "resumeSemesterCutover",
+    "createSemesterRollbackPlan"
+  ],
+  "collections": [
+    "semester_cutover_plans",
+    "semester_cutover_attempts",
+    "semester_cutover_evidence",
+    "semester_cutover_targets"
+  ],
+  "nestedCollections": ["semester_cutover_attempts/{attemptId}/items"],
+  "readinessCheckId": "semester_cutover_readiness",
+  "preparingExpansion": {
+    "allowedActor": "admin",
+    "targetManifestStatuses": ["PREPARING", "READY"],
+    "operations": [
+      {
+        "dataset": "LEARNING_CONTENT",
+        "commandType": "createLearningContent",
+        "resultStatus": "DRAFT"
+      },
+      {
+        "dataset": "SCHEDULE_EVENTS",
+        "commandType": "createScheduleEvent",
+        "resultStatus": "ACTIVE_PREPARING_READ_ONLY"
+      },
+      {
+        "dataset": "NOTICE_TEMPLATES",
+        "commandType": "createNotice",
+        "resultStatus": "DRAFT"
+      },
+      {
+        "dataset": "WIS_ECONOMY",
+        "commandType": "createSemesterEconomy",
+        "resultStatus": "ZERO_VALUE"
+      },
+      {
+        "dataset": "WIS_ACCOUNTS",
+        "commandType": "createWisAccounts",
+        "resultStatus": "ZERO_VALUE"
+      }
+    ],
+    "forbiddenEffects": [
+      "TEACHER_PREPARING_WRITE",
+      "STUDENT_PREPARING_VISIBILITY",
+      "PREPARING_UPDATE_TRANSITION_DELETE",
+      "PREPARING_VALUE_MOVEMENT",
+      "PREPARING_WIS_LEDGER",
+      "PREPARING_WIS_INITIAL_GRANT",
+      "PREPARING_WIS_ORDER",
+      "PREPARING_WIS_MARKET_OPEN"
+    ]
+  },
+  "requiredPhases": [
+    "PLAN",
+    "DRY_RUN",
+    "APPLY",
+    "VERIFY",
+    "RESUME",
+    "ROLLBACK_PLAN"
+  ],
+  "requiredScenarios": [
+    "PRODUCTION_FENCE_BEFORE_CREDENTIAL_ACCESS",
+    "ADMIN_HIGH_RISK_RECENT_AUTH",
+    "ACTIVE_SOURCE_ONLY",
+    "PREPARING_OR_READY_TARGET_ONLY",
+    "ARCHIVE_TARGET_IMMUTABLE",
+    "LEGACY_TARGET_IMMUTABLE",
+    "MANIFEST_REVISION_CAS",
+    "DETERMINISTIC_PLAN_ATTEMPT_ITEM_IDS",
+    "PLAN_QUERY_ZERO_WRITE",
+    "DRY_RUN_ZERO_CANONICAL_WRITE",
+    "APPLY_BOUNDED_ITEMIZED_PARTIAL",
+    "PARTIAL_FAILURE_EXPLICIT",
+    "RESPONSE_LOSS_RECEIPT_RECOVERY",
+    "RESUME_FAILED_OR_PENDING_ONLY",
+    "RESUME_SUCCEEDED_ITEM_EFFECT_ZERO",
+    "REPEAT_FULL_REHEARSAL_TWICE_EFFECT_ONCE",
+    "VERIFY_COUNT_JOIN_HASH",
+    "CROSS_SEMESTER_LEAKAGE_ZERO",
+    "ROLLBACK_PLAN_METADATA_ONLY",
+    "PREPARING_ADMIN_SAFE_MASTER_CREATE_ONLY",
+    "PREPARING_TEACHER_WRITE_DENIED",
+    "PREPARING_STUDENT_QUERY_INVISIBLE",
+    "PREPARING_UPDATE_TRANSITION_DELETE_DENIED",
+    "PREPARING_VALUE_MOVEMENT_DENIED",
+    "PREPARING_WIS_ZERO_ACCOUNT_BALANCE_RANK",
+    "PREPARING_WIS_LEDGER_GRANT_ORDER_OPEN_ZERO",
+    "READINESS_LATEST_VERIFIED_FRESH",
+    "READINESS_STALE_ON_DEPENDENCY_CHANGE",
+    "PREVIOUS_BUNDLE_DIRECT_WRITE_DENIED",
+    "CLIENT_DIRECT_SDK_DENIED",
+    "FIXTURE_RECEIPT_AUDIT_SESSION_TOKEN_CLEANUP_ZERO"
+  ],
+  "requiredEvidence": [
+    "metadata.json",
+    "phase-results.json",
+    "attempt-results.json",
+    "dataset-results.json",
+    "readiness-results.json",
+    "cleanup-results.json"
+  ],
+  "expected": {
+    "commandCount": 6,
+    "phaseCount": 6,
+    "scenarioCount": 31,
+    "unknown": 0,
+    "productionAccess": 0,
+    "productionWrites": 0
+  }
+}

@@ -233,6 +233,19 @@ export const TEACHER_GLOBAL_NAVIGATION: ShellNavigationItem[] = [
     iconPath: ICONS.settings,
     matchPrefixes: ["/teacher/settings"],
     allowed: canManageSettings,
+    children: [
+      {
+        label: "관리자 설정",
+        to: "/teacher/settings",
+        description: "권한과 사이트 운영 설정을 확인합니다.",
+      },
+      {
+        label: "학기 전환 준비",
+        to: "/teacher/settings/cutover",
+        description:
+          "Dedicated Staging의 합성 리허설과 검증 근거를 확인합니다.",
+      },
+    ],
   },
 ];
 
@@ -497,6 +510,17 @@ export const ROUTE_METADATA: RouteMetadata[] = [
     description: "평가 기준, 점수, 요청과 확인 상태를 관리합니다.",
     portal: "teacher",
     navigationId: "teacher-grade",
+  },
+  {
+    id: "teacher-semester-cutover",
+    path: "/teacher/settings/cutover",
+    title: "학기 전환 준비",
+    shortTitle: "전환 준비",
+    description: "Dedicated Staging의 합성 리허설과 검증 상태를 확인합니다.",
+    portal: "teacher",
+    navigationId: "teacher-admin",
+    provenance: "PREPARING",
+    readOnly: true,
   },
   {
     id: "teacher-settings",

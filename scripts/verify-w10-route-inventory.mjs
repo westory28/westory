@@ -64,7 +64,36 @@ const registeredRoutes = [
   ...app.matchAll(/<Route\b[\s\S]*?\bpath="([^"]+)"/gu),
 ].map((match) => match[1]);
 unique(registeredRoutes, "registered App routes");
-assert.equal(registeredRoutes.length, manifest.expectedCounts.registeredRoutes);
+const postW10RouteExtensions = manifest.postW10RouteExtensions || [];
+assert.equal(
+  postW10RouteExtensions.length,
+  manifest.expectedCounts.postW10AddedRoutes,
+);
+unique(
+  postW10RouteExtensions.map((item) => item.path),
+  "post-W10 route extensions",
+);
+assert.equal(
+  registeredRoutes.length,
+  manifest.expectedCounts.registeredRoutes + postW10RouteExtensions.length,
+);
+assert.deepEqual(postW10RouteExtensions, [
+  {
+    id: "W11-CUTOVER-ROUTE",
+    path: "/teacher/settings/cutover",
+    wave: "W11",
+    disposition: "COMPLETE",
+    sourceFile: "src/App.tsx",
+    component: "SemesterCutoverCenter",
+    authority: "ADMIN_ONLY",
+    reason:
+      "W11 reserved rehearsal Cutover Center; canonical activation and Production controls remain unavailable.",
+    status: "W11_COMPLETE",
+  },
+]);
+assert.match(app, /path="\/teacher\/settings\/cutover"/u);
+assert.match(app, /<SemesterCutoverCenter\s*\/>/u);
+assert.match(metadata, /\/teacher\/settings\/cutover/u);
 
 const inventoriedRoutes = [
   ...manifest.coreRoutes.map((item) => item.path),
@@ -73,6 +102,7 @@ const inventoriedRoutes = [
   ...manifest.legacyAliases.map((item) => item.path),
   ...manifest.integrationRoutes.map((item) => item.path),
   ...manifest.auxiliaryRoutes,
+  ...postW10RouteExtensions.map((item) => item.path),
 ];
 unique(inventoriedRoutes, "combined route inventory");
 assert.deepEqual(
@@ -91,7 +121,7 @@ const allowedDispositions = new Set([
 assert.equal(
   manifest.routeDispositions.length,
   manifest.expectedCounts.registeredRoutes,
-  "Each registered route must have exactly one explicit W10 disposition row.",
+  "The frozen W10 baseline must retain exactly 47 disposition rows.",
 );
 unique(
   manifest.routeDispositions.map((item) => item.id),
@@ -103,8 +133,12 @@ unique(
 );
 assert.deepEqual(
   manifest.routeDispositions.map((item) => item.path).sort(),
-  [...registeredRoutes].sort(),
-  "The disposition manifest must exactly cover the registered route set.",
+  inventoriedRoutes
+    .filter(
+      (path) => !postW10RouteExtensions.some((item) => item.path === path),
+    )
+    .sort(),
+  "The W10 disposition manifest must remain an exact 47-route baseline.",
 );
 
 const dispositionCounts = Object.fromEntries(

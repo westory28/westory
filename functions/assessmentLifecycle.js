@@ -3,6 +3,7 @@ const { HttpsError } = require("firebase-functions/v2/https");
 
 const semesterCore = require("./semesterCore");
 const archiveEnrollment = require("./archiveEnrollment");
+const cutoverAuthorization = require("./cutoverAuthorization");
 const sessionAuthority = require("./sessionAuthority");
 const { onCallWithStudentMaintenance: onCall } = require("./studentMaintenance");
 
@@ -202,7 +203,12 @@ const normalizeAssessmentPayload = (commandType, rawPayload) => {
     commandType === ASSESSMENT_COMMAND_TYPES.CREATE_ASSESSMENT_DEFINITION
     || commandType === ASSESSMENT_COMMAND_TYPES.UPDATE_ASSESSMENT_DEFINITION
   ) {
-    assertAllowedKeys(payload, ["definitionId", "semesterId", "assessmentKind", "title", "sourceId", "category", "examRound", "questionCount", "durationSeconds", "maxAttempts", "cooldownMinutes", "opensAt", "closesAt", "assignedClassIds", "legacyConfigKey", "presentationSettings", "expectedRevision", "reason"], "assessment definition payload");
+    const definitionKeys = ["definitionId", "semesterId", "assessmentKind", "title", "sourceId", "category", "examRound", "questionCount", "durationSeconds", "maxAttempts", "cooldownMinutes", "opensAt", "closesAt", "assignedClassIds", "legacyConfigKey", "presentationSettings", "expectedRevision", "reason"];
+    if (commandType === ASSESSMENT_COMMAND_TYPES.CREATE_ASSESSMENT_DEFINITION) definitionKeys.push("cutoverPlanId", "cutoverOperationKey");
+    assertAllowedKeys(payload, definitionKeys, "assessment definition payload");
+    if (commandType === ASSESSMENT_COMMAND_TYPES.CREATE_ASSESSMENT_DEFINITION && Boolean(payload.cutoverPlanId) !== Boolean(payload.cutoverOperationKey)) {
+      fail("invalid-argument", "cutoverPlanId and cutoverOperationKey must be provided together.", "ASSESSMENT_PAYLOAD_INVALID");
+    }
     const assignedClassIds = Array.isArray(payload.assignedClassIds)
       ? payload.assignedClassIds.map((item) => text(String(item), "assignedClassId", 180))
       : fail("invalid-argument", "assignedClassIds must be an array.", "ASSESSMENT_PAYLOAD_INVALID");
@@ -237,6 +243,9 @@ const normalizeAssessmentPayload = (commandType, rawPayload) => {
       presentationSettings: payload.assessmentKind === "QUIZ"
         ? normalizePresentationSettings(payload.presentationSettings)
         : null,
+      ...(commandType === ASSESSMENT_COMMAND_TYPES.CREATE_ASSESSMENT_DEFINITION && payload.cutoverPlanId && payload.cutoverOperationKey
+        ? { cutoverPlanId: text(payload.cutoverPlanId, "cutoverPlanId", 80), cutoverOperationKey: text(payload.cutoverOperationKey, "cutoverOperationKey", 80) }
+        : {}),
       ...(commandType === ASSESSMENT_COMMAND_TYPES.UPDATE_ASSESSMENT_DEFINITION
         ? {
             expectedRevision: positiveInteger(payload.expectedRevision, "expectedRevision"),
@@ -675,6 +684,9 @@ const createAssessmentCommandAdapter = ({ now = () => new Date() } = {}) => ({
       const [existing, manifest] = await transaction.getAll([path, manifestPath(payload.semesterId)]);
       if (existing.exists) fail("already-exists", "Assessment definition already exists.", "ASSESSMENT_DEFINITION_EXISTS");
       assertAssessmentDefinitionSemesterWritable(manifest, payload.semesterId);
+      if (["PREPARING", "READY"].includes(manifest.data?.status)) {
+        await cutoverAuthorization.assertPreparingCutoverCreateIfTargeted({ transaction, semesterId: payload.semesterId, actor, commandType, commandId, payloadHash, cutoverPlanId: payload.cutoverPlanId, cutoverOperationKey: payload.cutoverOperationKey, operationType: "ASSESSMENT_DEFINITIONS", allowWithoutMarker: true });
+      }
       const source = await loadDefinitionSource(transaction, payload);
       if (payload.assessmentKind === "QUIZ" && payload.questionCount > source.itemCount) {
         fail("invalid-argument", "questionCount exceeds the canonical question set.", "ASSESSMENT_QUESTION_SET_INVALID");

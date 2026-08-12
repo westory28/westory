@@ -62,6 +62,7 @@ const QUERY_CALLABLES = new Set([
   "getWisEconomyState",
   "getW8DomainState",
   "getTeacherOperationsState",
+  "getSemesterCutoverState",
 ]);
 const SESSION_CONTROL_CALLABLES = new Set([
   "beginApplicationSessionReauthentication",
@@ -103,6 +104,7 @@ const WAVE_ORDER = [
   "W8B",
   "W9",
   "W10",
+  "W11",
   "W12",
 ];
 const REQUIRED_COMMANDS = new Map([
@@ -1120,6 +1122,33 @@ export const validateCommandManifest = (manifest, analysis) => {
       entry.names.includes("getTeacherOperationsState"),
     ),
     "W9 query callable not observed",
+  );
+  const expectedW11Commands = [
+    "createSemesterCutoverPlan",
+    "dryRunSemesterCutover",
+    "applySemesterCutoverBatch",
+    "verifySemesterCutover",
+    "resumeSemesterCutover",
+    "createSemesterRollbackPlan",
+  ];
+  const cutoverGateway = analysis.observations.find(
+    (entry) =>
+      entry.file === "src/lib/semesterCutover.ts" &&
+      entry.function === "executeCutoverCommand" &&
+      entry.boundary === "GATEWAY",
+  );
+  assert.ok(cutoverGateway, "W11 Cutover gateway wrapper was not observed");
+  assert.deepEqual(
+    String(cutoverGateway.callable || "").split("|").sort(),
+    expectedW11Commands.sort(),
+    "W11 Cutover gateway command union changed",
+  );
+  assert.deepEqual(cutoverGateway.triggers, ["USER_EVENT"]);
+  assert.ok(
+    analysis.queryCallables.some((entry) =>
+      entry.names.includes("getSemesterCutoverState"),
+    ),
+    "W11 query callable not observed",
   );
 };
 

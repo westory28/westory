@@ -13,6 +13,7 @@ const gradeEvidence = require("./gradeEvidence");
 const wisEconomy = require("./wisEconomy");
 const w8Domains = require("./w8Domains");
 const teacherOperations = require("./teacherOperations");
+const semesterCutover = require("./semesterCutover");
 
 const REGION = "asia-northeast3";
 const ADMIN_EMAIL = "westoria28@gmail.com";
@@ -34,6 +35,7 @@ const COMMAND_TYPES = Object.freeze({
   ...wisEconomy.WIS_COMMAND_TYPES,
   ...w8Domains.W8_COMMAND_TYPES,
   ...teacherOperations.TEACHER_OPERATIONS_COMMAND_TYPES,
+  ...semesterCutover.CUTOVER_COMMAND_TYPES,
 });
 
 const resolveProjectId = (environment = process.env) => {
@@ -227,6 +229,9 @@ const buildHolidayDocumentId = ({ title, start }) => {
 };
 
 const normalizePayload = (commandType, payload) => {
+  if (Object.values(semesterCutover.CUTOVER_COMMAND_TYPES).includes(commandType)) {
+    return semesterCutover.normalizeCutoverPayload(commandType, payload);
+  }
   if (Object.values(teacherOperations.TEACHER_OPERATIONS_COMMAND_TYPES).includes(commandType)) {
     return teacherOperations.normalizeTeacherOperationsPayload(commandType, payload);
   }
@@ -745,6 +750,7 @@ const applyBusinessCommand = async ({
     || Object.values(wisEconomy.WIS_COMMAND_TYPES).includes(commandType)
     || Object.values(w8Domains.W8_COMMAND_TYPES).includes(commandType)
     || Object.values(teacherOperations.TEACHER_OPERATIONS_COMMAND_TYPES).includes(commandType)
+    || Object.values(semesterCutover.CUTOVER_COMMAND_TYPES).includes(commandType)
   ) {
     fail(
       "failed-precondition",
@@ -890,6 +896,9 @@ const createCommandGatewayCore = ({
   serverTimestamp = () => FieldValue.serverTimestamp(),
   projectId = resolveProjectId(),
   getSessionOptions = (commandType) => {
+    if (Object.values(semesterCutover.CUTOVER_COMMAND_TYPES).includes(commandType)) {
+      return semesterCutover.getSemesterCutoverCommandSessionOptions(commandType);
+    }
     if (Object.values(teacherOperations.TEACHER_OPERATIONS_COMMAND_TYPES).includes(commandType)) {
       return teacherOperations.getTeacherOperationsCommandSessionOptions(commandType);
     }
@@ -908,6 +917,9 @@ const createCommandGatewayCore = ({
   },
 } = {}) => {
   const authorize = async (request, commandType) => {
+    if (Object.values(semesterCutover.CUTOVER_COMMAND_TYPES).includes(commandType)) {
+      semesterCutover.assertCutoverProject(projectId);
+    }
     const identity = await assertSession(request, getSessionOptions(commandType));
     const commandActor = typeof authorizeCommand === "function"
       ? await authorizeCommand({ request, identity, commandType })

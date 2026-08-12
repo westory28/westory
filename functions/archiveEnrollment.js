@@ -6,6 +6,7 @@ const {
 
 const sessionAuthority = require("./sessionAuthority");
 const semesterCore = require("./semesterCore");
+const cutoverAuthorization = require("./cutoverAuthorization");
 
 const REGION = "asia-northeast3";
 const ADMIN_EMAIL = "westoria28@gmail.com";
@@ -20,6 +21,12 @@ const SEMESTER_ENROLLMENT_COLLECTION = "semester_enrollments";
 const ENROLLMENT_SLOT_COLLECTION = "semester_enrollment_slots";
 const ROSTER_IMPORT_COLLECTION = "enrollment_roster_imports";
 const ARCHIVE_MANIFEST_COLLECTION = "semester_archive_manifests";
+const CUTOVER_TARGET_COLLECTION = "semester_cutover_targets";
+const CUTOVER_PLAN_COLLECTION = "semester_cutover_plans";
+const CUTOVER_ATTEMPT_COLLECTION = "semester_cutover_attempts";
+const CUTOVER_EVIDENCE_COLLECTION = "semester_cutover_evidence";
+const CUTOVER_SCHEMA_VERSION = 1;
+const CUTOVER_POLICY_VERSION = "w11-v1";
 
 const ARCHIVE_ENROLLMENT_COMMAND_TYPES = Object.freeze({
   CREATE_SEMESTER_CLASS: "createSemesterClass",
@@ -298,6 +305,8 @@ const normalizeRosterContract = (payload, label = "roster") => {
       "classes",
       "entries",
       "reason",
+      "cutoverPlanId",
+      "cutoverOperationKey",
     ],
     label,
   );
@@ -340,6 +349,9 @@ const normalizeRosterContract = (payload, label = "roster") => {
   const entries = payload.entries.map((entry, index) =>
     normalizeRosterEntry(entry, `${label}.entries[${index}]`),
   );
+  if (Boolean(payload.cutoverPlanId) !== Boolean(payload.cutoverOperationKey)) {
+    fail("invalid-argument", "cutoverPlanId and cutoverOperationKey must be provided together.", "COMMAND_PAYLOAD_INVALID");
+  }
   return {
     semesterId: semesterCore.normalizeSemesterId(payload.semesterId),
     expectedSemesterRevision: normalizeExpectedRevision(
@@ -364,6 +376,7 @@ const normalizeRosterContract = (payload, label = "roster") => {
     classes,
     entries,
     reason: requireTrimmedString(payload.reason, "reason", 500),
+    ...(payload.cutoverPlanId ? { cutoverPlanId: requireTrimmedString(payload.cutoverPlanId, "cutoverPlanId", 80), cutoverOperationKey: requireTrimmedString(payload.cutoverOperationKey, "cutoverOperationKey", 80) } : {}),
   };
 };
 
@@ -379,11 +392,14 @@ const normalizeArchiveEnrollmentPayload = (commandType, payload) => {
         "displayName",
         "homeroomTeacherUid",
         "reason",
+        "cutoverPlanId",
+        "cutoverOperationKey",
       ],
       "createSemesterClass payload",
     );
     const grade = normalizeClassPart(payload.grade, "grade");
     const classNumber = normalizeClassPart(payload.classNumber, "classNumber");
+    if (Boolean(payload.cutoverPlanId) !== Boolean(payload.cutoverOperationKey)) fail("invalid-argument", "cutoverPlanId and cutoverOperationKey must be provided together.", "COMMAND_PAYLOAD_INVALID");
     return {
       semesterId: semesterCore.normalizeSemesterId(payload.semesterId),
       expectedSemesterRevision: normalizeExpectedRevision(
@@ -403,6 +419,7 @@ const normalizeArchiveEnrollmentPayload = (commandType, payload) => {
         "homeroomTeacherUid",
       ),
       reason: requireTrimmedString(payload.reason, "reason", 500),
+      ...(payload.cutoverPlanId ? { cutoverPlanId: requireTrimmedString(payload.cutoverPlanId, "cutoverPlanId", 80), cutoverOperationKey: requireTrimmedString(payload.cutoverOperationKey, "cutoverOperationKey", 80) } : {}),
     };
   }
 
@@ -983,6 +1000,7 @@ const createArchiveEnrollmentCommandAdapter = () => {
     commandId,
     commandType,
     payload,
+    payloadHash,
     receiptId,
     timestamp,
     actor,
@@ -1012,6 +1030,7 @@ const createArchiveEnrollmentCommandAdapter = () => {
         payload.expectedSemesterRevision,
         ["DRAFT", "PREPARING", "VALIDATING", "READY", "FAILED", "ACTIVE"],
       );
+      if (["PREPARING", "READY"].includes(manifest.status)) await cutoverAuthorization.assertPreparingCutoverCreateIfTargeted({ transaction, semesterId: payload.semesterId, actor, commandType, commandId, payloadHash, cutoverPlanId: payload.cutoverPlanId, cutoverOperationKey: payload.cutoverOperationKey, operationType: "SEMESTER_CLASSES", allowWithoutMarker: true });
       if (classSnapshot.exists) {
         fail(
           "already-exists",
@@ -1173,6 +1192,7 @@ const createArchiveEnrollmentCommandAdapter = () => {
         payload.expectedSemesterRevision,
         ["DRAFT", "PREPARING", "VALIDATING", "READY", "FAILED", "ACTIVE"],
       );
+      if (["PREPARING", "READY"].includes(manifest.status)) await cutoverAuthorization.assertPreparingCutoverCreateIfTargeted({ transaction, semesterId: payload.semesterId, actor, commandType, commandId, payloadHash, cutoverPlanId: payload.cutoverPlanId, cutoverOperationKey: payload.cutoverOperationKey, operationType: "SEMESTER_ENROLLMENTS", allowWithoutMarker: true });
       const validation = await validateRoster({ reader: transaction, payload });
       if (!validation.passed) {
         fail(
@@ -2220,12 +2240,107 @@ const createArchiveEnrollmentReadinessAdapter = () => ({
       pointerSnapshot.exists && pointerSnapshot.data?.previousSemesterId
         ? pointerSnapshot.data.previousSemesterId
         : null;
-    const priorSemesterId =
+    let priorSemesterId =
       pointerSemesterId && pointerSemesterId !== manifest.semesterId
         ? pointerSemesterId
         : previousSemesterId && previousSemesterId !== manifest.semesterId
           ? previousSemesterId
           : null;
+    let priorSemesterSource = "ACTIVE_POINTER";
+    const cutoverPointer = await transaction.get(
+      `${CUTOVER_TARGET_COLLECTION}/${manifest.semesterId}`,
+    );
+    if (
+      cutoverPointer.exists &&
+      cutoverPointer.data?.status === "VERIFIED" &&
+      cutoverPointer.data?.targetSemesterId === manifest.semesterId &&
+      cutoverPointer.data?.latestPlanId &&
+      cutoverPointer.data?.latestAttemptId &&
+      cutoverPointer.data?.latestEvidenceId &&
+      cutoverPointer.data?.dependencyHash
+    ) {
+      const cutoverPlan = await transaction.get(
+        `${CUTOVER_PLAN_COLLECTION}/${cutoverPointer.data.latestPlanId}`,
+      );
+      const cutoverAttempt = await transaction.get(
+        `${CUTOVER_ATTEMPT_COLLECTION}/${cutoverPointer.data.latestAttemptId}`,
+      );
+      const cutoverEvidence = await transaction.get(
+        `${CUTOVER_EVIDENCE_COLLECTION}/${cutoverPointer.data.latestEvidenceId}`,
+      );
+      const sourceSemesterId = String(
+        cutoverPlan.data?.sourceSemesterId || "",
+      );
+      const sourceManifest = sourceSemesterId
+        ? await transaction.get(
+            `${semesterCore.SEMESTER_MANIFEST_COLLECTION}/${sourceSemesterId}`,
+          )
+        : { exists: false, data: null };
+      const dependencyHash = cutoverPointer.data.dependencyHash;
+      const cutoverSourceIsVerified =
+        Number(cutoverPointer.data?.schemaVersion || 0) ===
+          CUTOVER_SCHEMA_VERSION &&
+        cutoverPointer.data?.policyVersion === CUTOVER_POLICY_VERSION &&
+        cutoverPlan.exists &&
+        cutoverAttempt.exists &&
+        cutoverEvidence.exists &&
+        sourceManifest.exists &&
+        Number(cutoverPlan.data?.schemaVersion || 0) ===
+          CUTOVER_SCHEMA_VERSION &&
+        Number(cutoverAttempt.data?.schemaVersion || 0) ===
+          CUTOVER_SCHEMA_VERSION &&
+        Number(cutoverEvidence.data?.schemaVersion || 0) ===
+          CUTOVER_SCHEMA_VERSION &&
+        cutoverPlan.data?.policyVersion === CUTOVER_POLICY_VERSION &&
+        cutoverAttempt.data?.policyVersion === CUTOVER_POLICY_VERSION &&
+        cutoverEvidence.data?.policyVersion === CUTOVER_POLICY_VERSION &&
+        cutoverPlan.data?.status === "VERIFIED" &&
+        cutoverAttempt.data?.status === "VERIFIED" &&
+        cutoverEvidence.data?.status === "PASS" &&
+        cutoverPlan.data?.planId === cutoverPointer.data.latestPlanId &&
+        cutoverAttempt.data?.attemptId ===
+          cutoverPointer.data.latestAttemptId &&
+        cutoverAttempt.data?.planId === cutoverPointer.data.latestPlanId &&
+        cutoverEvidence.data?.evidenceId ===
+          cutoverPointer.data.latestEvidenceId &&
+        cutoverEvidence.data?.planId === cutoverPointer.data.latestPlanId &&
+        cutoverEvidence.data?.attemptId ===
+          cutoverPointer.data.latestAttemptId &&
+        sourceSemesterId.length > 0 &&
+        sourceSemesterId !== manifest.semesterId &&
+        cutoverPlan.data?.targetSemesterId === manifest.semesterId &&
+        cutoverAttempt.data?.sourceSemesterId === sourceSemesterId &&
+        cutoverAttempt.data?.targetSemesterId === manifest.semesterId &&
+        cutoverEvidence.data?.sourceSemesterId === sourceSemesterId &&
+        cutoverEvidence.data?.targetSemesterId === manifest.semesterId &&
+        cutoverPointer.data?.manifestHash === cutoverPlan.data?.manifestHash &&
+        cutoverPlan.data?.manifestHash === cutoverEvidence.data?.manifestHash &&
+        cutoverAttempt.data?.manifestHash === cutoverPlan.data?.manifestHash &&
+        cutoverPlan.data?.dependencyHash === dependencyHash &&
+        cutoverAttempt.data?.dependencyHash === dependencyHash &&
+        cutoverEvidence.data?.dependencyHash === dependencyHash &&
+        Number(cutoverPlan.data?.targetManifestRevision || 0) ===
+          Number(manifest.revision || 0) &&
+        Number(cutoverPointer.data?.targetManifestRevision || 0) ===
+          Number(manifest.revision || 0) &&
+        Number(cutoverAttempt.data?.targetManifestRevision || 0) ===
+          Number(manifest.revision || 0) &&
+        Number(cutoverEvidence.data?.targetManifestRevision || 0) ===
+          Number(manifest.revision || 0) &&
+        Number(cutoverPlan.data?.sourceManifestRevision || 0) ===
+          Number(sourceManifest.data?.revision || 0) &&
+        Number(cutoverAttempt.data?.sourceManifestRevision || 0) ===
+          Number(sourceManifest.data?.revision || 0) &&
+        Number(cutoverEvidence.data?.sourceManifestRevision || 0) ===
+          Number(sourceManifest.data?.revision || 0) &&
+        sourceManifest.data?.semesterId === sourceSemesterId &&
+        sourceManifest.data?.status === "ARCHIVED" &&
+        cutoverEvidence.data?.sourceStatus === "ARCHIVED";
+      if (cutoverSourceIsVerified) {
+        priorSemesterId = sourceSemesterId;
+        priorSemesterSource = "VERIFIED_CUTOVER_PLAN";
+      }
+    }
     const archiveSnapshot = priorSemesterId
       ? await transaction.get(archivePathFor(priorSemesterId))
       : { exists: false, data: null, path: "" };
@@ -2237,7 +2352,7 @@ const createArchiveEnrollmentReadinessAdapter = () => ({
         archiveSnapshot.data?.writeFenceVersion === WRITE_FENCE_VERSION &&
         Number(archiveSnapshot.data?.unresolvedBlockingCount || 0) === 0);
     const archiveEvidence = archiveApplicable
-      ? `semester=${priorSemesterId}; status=${archiveSnapshot.data?.archiveStatus || "missing"}; fence=${archiveSnapshot.data?.writeFenceVersion || "missing"}; blockers=${Number(archiveSnapshot.data?.unresolvedBlockingCount || 0)}; integrity=${archiveSnapshot.data?.integrityHash || "missing"}`
+      ? `semester=${priorSemesterId}; source=${priorSemesterSource}; status=${archiveSnapshot.data?.archiveStatus || "missing"}; fence=${archiveSnapshot.data?.writeFenceVersion || "missing"}; blockers=${Number(archiveSnapshot.data?.unresolvedBlockingCount || 0)}; integrity=${archiveSnapshot.data?.integrityHash || "missing"}`
       : "noPreviousActiveSemester=true; registry=w4-v1";
 
     return [

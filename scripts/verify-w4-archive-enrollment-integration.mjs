@@ -238,6 +238,7 @@ const main = async () => {
           startAt: "2026-08-01",
           endAt: "2026-12-31",
           blockingIssues: [],
+          cutoverApplicability: "NOT_APPLICABLE",
         }),
         setDoc(doc(db, "site_settings", "semester_active"), {
           semesterId: "2026-2",
@@ -390,6 +391,13 @@ const main = async () => {
       startDate: "2027-03-01",
       endDate: "2027-07-31",
     });
+    await withAdminDb(testEnv, (db) =>
+      setDoc(
+        doc(db, "semester_manifests", "2027-1"),
+        { cutoverApplicability: "NOT_APPLICABLE" },
+        { merge: true },
+      ),
+    );
     const future = roster(
       "2027-1",
       "w4-future-roster-v1",

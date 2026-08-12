@@ -17,6 +17,7 @@ const gradeEvidence = require('./gradeEvidence');
 const wisEconomy = require('./wisEconomy');
 const w8Domains = require('./w8Domains');
 const teacherOperations = require('./teacherOperations');
+const semesterCutover = require('./semesterCutover');
 const {
   createLegacyPointV1CommandAdapter,
   createRetiredAdjustTeacherPointsHandler,
@@ -8440,6 +8441,9 @@ const authorizeCommandGatewayActor = async ({ request, identity, commandType }) 
   const teacherOperationsCommandTypes = Object.values(
     teacherOperations.TEACHER_OPERATIONS_COMMAND_TYPES,
   );
+  const semesterCutoverCommandTypes = Object.values(
+    semesterCutover.CUTOVER_COMMAND_TYPES,
+  );
   if (
     commandType !== commandGateway.COMMAND_TYPES.ADJUST_TEACHER_POINTS
     && !assessmentCommandTypes.includes(commandType)
@@ -8447,6 +8451,7 @@ const authorizeCommandGatewayActor = async ({ request, identity, commandType }) 
     && !wisCommandTypes.includes(commandType)
     && !w8CommandTypes.includes(commandType)
     && !teacherOperationsCommandTypes.includes(commandType)
+    && !semesterCutoverCommandTypes.includes(commandType)
   ) {
     return null;
   }
@@ -8487,6 +8492,11 @@ const authorizeCommandGatewayActor = async ({ request, identity, commandType }) 
   }
   const profileSnapshot = await db.doc(`users/${actorUid}`).get();
   const profile = profileSnapshot.exists ? profileSnapshot.data() || {} : {};
+  if (semesterCutoverCommandTypes.includes(commandType)) {
+    throw new HttpsError('permission-denied', 'Highest administrator authority is required.', {
+      reason: 'W11_ADMIN_REQUIRED',
+    });
+  }
   if (teacherOperationsCommandTypes.includes(commandType)) {
     const role = String(profile.role || 'student').trim() || 'student';
     if (teacherOperations.ADMIN_COMMAND_TYPES.has(commandType)) {
@@ -8691,6 +8701,7 @@ const gradeEvidenceReadinessAdapter = gradeEvidence.createGradeReadinessAdapter(
 const wisEconomyReadinessAdapter = wisEconomy.createWisReadinessAdapter();
 const w8ReadinessAdapter = w8Domains.createW8ReadinessAdapter();
 const teacherOperationsReadinessAdapter = teacherOperations.createTeacherOperationsReadinessAdapter();
+const semesterCutoverReadinessAdapter = semesterCutover.createSemesterCutoverReadinessAdapter();
 const readinessAdapters = [
   archiveEnrollmentReadinessAdapter,
   assessmentReadinessAdapter,
@@ -8698,6 +8709,7 @@ const readinessAdapters = [
   wisEconomyReadinessAdapter,
   w8ReadinessAdapter,
   teacherOperationsReadinessAdapter,
+  semesterCutoverReadinessAdapter,
 ];
 const semesterCoreCommandAdapter = semesterCore.createSemesterCoreCommandAdapter({
   getDefaultPointPolicy,
@@ -8710,6 +8722,9 @@ const gradeEvidenceCommandAdapter = gradeEvidence.createGradeCommandAdapter();
 const wisEconomyCommandAdapter = wisEconomy.createWisCommandAdapter();
 const w8CommandAdapter = w8Domains.createW8CommandAdapter();
 const teacherOperationsCommandAdapter = teacherOperations.createTeacherOperationsCommandAdapter();
+const semesterCutoverCommandAdapter = semesterCutover.createSemesterCutoverCommandAdapter({
+  projectId: commandGateway.resolveProjectId(),
+});
 const commandGatewayStore = commandGateway.createFirestoreStore(db);
 
 const commandGatewayCore = commandGateway.createCommandGatewayCore({
@@ -8746,6 +8761,10 @@ const commandGatewayCore = commandGateway.createCommandGatewayCore({
     ...Object.fromEntries(
       Object.values(teacherOperations.TEACHER_OPERATIONS_COMMAND_TYPES)
         .map((commandType) => [commandType, teacherOperationsCommandAdapter]),
+    ),
+    ...Object.fromEntries(
+      Object.values(semesterCutover.CUTOVER_COMMAND_TYPES)
+        .map((commandType) => [commandType, semesterCutoverCommandAdapter]),
     ),
   },
   semesterCoreResolver: ({ store, semesterId }) =>
@@ -8790,6 +8809,13 @@ const teacherOperationsQueryCore = teacherOperations.createTeacherOperationsQuer
 });
 Object.assign(exports, teacherOperations.createTeacherOperationsCallableExports({
   core: teacherOperationsQueryCore,
+}));
+const semesterCutoverQueryCore = semesterCutover.createSemesterCutoverQueryCore({
+  store: commandGatewayStore,
+  projectId: commandGateway.resolveProjectId(),
+});
+Object.assign(exports, semesterCutover.createSemesterCutoverCallableExports({
+  core: semesterCutoverQueryCore,
 }));
 
 const retiredW8LegacyCallable = onCall({ region: REGION }, async () => {

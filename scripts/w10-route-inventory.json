@@ -17,6 +17,7 @@
     "coreRoutes": 3,
     "auxiliaryRoutes": 2,
     "registeredRoutes": 47,
+    "postW10AddedRoutes": 1,
     "unknown": 0
   },
   "studentCanonical": [
@@ -136,6 +137,19 @@
     }
   ],
   "auxiliaryRoutes": ["/developer-log", "/developer-log/:postId"],
+  "postW10RouteExtensions": [
+    {
+      "id": "W11-CUTOVER-ROUTE",
+      "path": "/teacher/settings/cutover",
+      "wave": "W11",
+      "disposition": "COMPLETE",
+      "sourceFile": "src/App.tsx",
+      "component": "SemesterCutoverCenter",
+      "authority": "ADMIN_ONLY",
+      "reason": "W11 reserved rehearsal Cutover Center; canonical activation and Production controls remain unavailable.",
+      "status": "W11_COMPLETE"
+    }
+  ],
   "stateSurfaces": [
     {
       "id": "AUTHENTICATING",
