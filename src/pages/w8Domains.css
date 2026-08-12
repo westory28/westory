@@ -415,6 +415,284 @@
   flex: 0 0 auto;
 }
 
+.teacher-draft-status {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--space-3);
+  border: 1px solid var(--ws-border);
+  border-radius: var(--radius-md);
+  background: var(--ws-surface-subtle);
+  padding: var(--space-3) var(--space-4);
+  color: var(--ws-text);
+}
+
+.teacher-draft-status__indicator {
+  width: var(--space-3);
+  height: var(--space-3);
+  flex: 0 0 auto;
+  border-radius: var(--radius-full);
+  background: var(--ws-text-soft);
+}
+
+.teacher-draft-status--dirty .teacher-draft-status__indicator,
+.teacher-draft-status--saving .teacher-draft-status__indicator,
+.teacher-draft-status--recoverable .teacher-draft-status__indicator {
+  background: var(--ws-accent);
+}
+
+.teacher-draft-status--saved .teacher-draft-status__indicator {
+  background: var(--ws-success);
+}
+
+.teacher-draft-status--offline .teacher-draft-status__indicator,
+.teacher-draft-status--conflict .teacher-draft-status__indicator,
+.teacher-draft-status--error .teacher-draft-status__indicator {
+  background: var(--ws-danger);
+}
+
+.teacher-draft-status__copy {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: var(--space-1);
+}
+
+.teacher-draft-status__copy strong {
+  color: var(--ws-text-strong);
+  font-size: var(--ws-type-small);
+}
+
+.teacher-draft-status__copy span,
+.teacher-draft-status__copy time {
+  color: var(--ws-text-muted);
+  font-size: var(--ws-type-label);
+}
+
+.teacher-draft-status button,
+.teacher-bulk-workflow__toolbar button,
+.teacher-operation-queue a {
+  min-height: var(--w8-control-min);
+  border: 1px solid var(--ws-border);
+  border-radius: var(--radius-md);
+  background: var(--ws-surface);
+  padding: var(--space-2) var(--space-3);
+  color: var(--ws-primary-text);
+  font: inherit;
+  font-size: var(--ws-type-small);
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.teacher-operation-dialog {
+  width: min(var(--ws-context-panel-width), calc(100% - var(--space-8)));
+  max-height: calc(100dvh - var(--space-8));
+  box-sizing: border-box;
+  overflow: auto;
+  border: 1px solid var(--ws-border);
+  border-radius: var(--radius-xl);
+  background: var(--ws-surface);
+  padding: var(--space-6);
+  color: var(--ws-text);
+  box-shadow: var(--shadow-xl);
+}
+
+.teacher-operation-dialog::backdrop {
+  background: var(--ws-overlay);
+}
+
+.teacher-operation-dialog__heading,
+.teacher-operation-dialog__actions,
+.teacher-bulk-workflow__heading,
+.teacher-bulk-workflow__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.teacher-operation-dialog h2,
+.teacher-operation-dialog p,
+.teacher-bulk-workflow h3,
+.teacher-bulk-workflow p {
+  margin: 0;
+}
+
+.teacher-operation-dialog h2,
+.teacher-bulk-workflow h3 {
+  color: var(--ws-text-strong);
+  font-size: var(--ws-type-card-title);
+  font-weight: 800;
+}
+
+.teacher-operation-dialog > p,
+.teacher-bulk-workflow p {
+  margin-top: var(--space-4);
+  color: var(--ws-text-muted);
+  font-size: var(--ws-type-small);
+  line-height: 1.6;
+}
+
+.teacher-operation-dialog__eyebrow {
+  margin-bottom: var(--space-1) !important;
+  color: var(--ws-primary-text) !important;
+  font-size: var(--ws-type-label) !important;
+  font-weight: 800;
+}
+
+.teacher-operation-dialog__warning {
+  border: 1px solid var(--ws-border-blue);
+  border-radius: var(--radius-md);
+  background: var(--ws-primary-soft);
+  padding: var(--space-3);
+  color: var(--ws-primary-text) !important;
+}
+
+.teacher-operation-dialog__meta {
+  display: grid;
+  gap: var(--space-2);
+  margin: var(--space-5) 0;
+}
+
+.teacher-operation-dialog__meta div {
+  display: grid;
+  grid-template-columns: minmax(var(--space-20), auto) minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+.teacher-operation-dialog__meta dt {
+  color: var(--ws-text-muted);
+  font-size: var(--ws-type-small);
+  font-weight: 700;
+}
+
+.teacher-operation-dialog__meta dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--ws-text);
+  font-size: var(--ws-type-small);
+}
+
+.teacher-operation-dialog__actions {
+  justify-content: flex-end;
+  border-top: 1px solid var(--ws-border);
+  padding-top: var(--space-4);
+}
+
+.teacher-operation-queue,
+.teacher-bulk-workflow__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.teacher-operation-queue li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) 0;
+}
+
+.teacher-operation-queue li + li,
+.teacher-bulk-workflow__list li + li {
+  border-top: 1px solid var(--ws-border-soft);
+}
+
+.teacher-operation-queue__copy {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+}
+
+.teacher-operation-queue__copy strong {
+  color: var(--ws-text-strong);
+}
+
+.teacher-operation-queue__copy span {
+  color: var(--ws-text-muted);
+  font-size: var(--ws-type-small);
+}
+
+.teacher-operation-queue__section {
+  display: grid;
+  gap: var(--space-2);
+  border-top: 1px solid var(--ws-border);
+  padding-top: var(--space-4);
+}
+
+.teacher-operation-queue__section h3 {
+  color: var(--ws-text-strong);
+  font-size: var(--ws-type-body);
+  font-weight: 800;
+}
+
+.teacher-bulk-workflow {
+  display: grid;
+  gap: var(--space-4);
+  border-top: 1px solid var(--ws-border);
+  padding-top: var(--space-4);
+}
+
+.teacher-bulk-workflow__heading > strong {
+  color: var(--ws-primary-text);
+  font-size: var(--ws-type-small);
+}
+
+.teacher-bulk-workflow__toolbar {
+  justify-content: flex-start;
+}
+
+.teacher-bulk-workflow__toolbar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.teacher-bulk-workflow__list {
+  max-height: calc(var(--space-20) * 4);
+  overflow: auto;
+  border-top: 1px solid var(--ws-border);
+  border-bottom: 1px solid var(--ws-border);
+}
+
+.teacher-bulk-workflow__list label {
+  display: flex;
+  min-height: var(--w8-control-min);
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  cursor: pointer;
+}
+
+.teacher-bulk-workflow__list input {
+  width: var(--space-5);
+  height: var(--space-5);
+  flex: 0 0 auto;
+  accent-color: var(--ws-primary);
+}
+
+.teacher-bulk-workflow__list label > span {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+}
+
+.teacher-bulk-workflow__list label > span > span,
+.teacher-bulk-workflow__result {
+  color: var(--ws-text-muted);
+  font-size: var(--ws-type-small);
+  line-height: 1.55;
+}
+
+.teacher-bulk-workflow__result {
+  border-radius: var(--radius-md);
+  background: var(--ws-surface-subtle);
+  padding: var(--space-3);
+}
+
 .w8-visually-hidden {
   position: absolute;
   width: 1px;
@@ -488,8 +766,21 @@
 
   .w8-attendance-list label,
   .w8-attendance-list select,
-  .w8-actions .w8-button {
+  .w8-actions .w8-button,
+  .teacher-operation-dialog__actions .w8-button,
+  .teacher-bulk-workflow > .w8-button {
     width: 100%;
+  }
+
+  .teacher-draft-status,
+  .teacher-operation-queue li,
+  .teacher-operation-dialog__actions {
+    align-items: stretch;
+  }
+
+  .teacher-draft-status,
+  .teacher-operation-queue li {
+    display: grid;
   }
 }
 

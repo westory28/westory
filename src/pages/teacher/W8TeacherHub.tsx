@@ -2,10 +2,23 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
 import ProvenanceBadge from "../../components/common/ProvenanceBadge";
 import StatePanel from "../../components/common/StatePanel";
+import TeacherBulkWorkflow from "../../components/common/TeacherBulkWorkflow";
+import TeacherDraftRecoveryDialog from "../../components/common/TeacherDraftRecoveryDialog";
+import TeacherDraftStatus from "../../components/common/TeacherDraftStatus";
 import W8DomainNavigation from "../../components/common/W8DomainNavigation";
 import W8ReadOnlyState from "../../components/common/W8ReadOnlyState";
 import W8StatusBadge from "../../components/common/W8StatusBadge";
 import { useAuth } from "../../contexts/AuthContext";
+import {
+  createTeacherOperationClientId,
+  getTeacherOperationsState,
+  hashTeacherOperationPayload,
+  resumePendingTeacherBulkOperation,
+  retryFailedTeacherBulkOperation,
+  runTeacherBulkOperation,
+  type TeacherBulkJob,
+} from "../../lib/teacherOperations";
+import { useTeacherDraft } from "../../lib/useTeacherDraft";
 import {
   W8DomainError,
   closeAttendanceSession,
@@ -239,6 +252,41 @@ type Perform = (
   operation: () => Promise<unknown>,
 ) => Promise<void>;
 
+interface LearningEditorDraft extends Record<string, unknown> {
+  title: string;
+  summary: string;
+  body: string;
+  resourceUrl: string;
+  classIds: string;
+  availableFrom: string;
+  availableUntil: string;
+}
+
+interface ScheduleEditorDraft extends Record<string, unknown> {
+  title: string;
+  description: string;
+  startAt: string;
+  endAt: string;
+  classIds: string;
+  targetUserIds: string;
+}
+
+interface NoticeEditorDraft extends Record<string, unknown> {
+  title: string;
+  content: string;
+  classIds: string;
+  targetUserIds: string;
+  publishAt: string;
+  expireAt: string;
+  priority: "NORMAL" | "HIGH";
+}
+
+const splitTargetIds = (value: string) =>
+  value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
 const TeacherLearning: React.FC<{
   state: W8DomainState;
   selectedId: string;
@@ -248,6 +296,9 @@ const TeacherLearning: React.FC<{
 }> = ({ state, selectedId, busy, onSelect, onPerform }) => {
   const selected = state.learningContents.find(
     (content) => content.contentId === selectedId,
+  );
+  const [newDraftId, setNewDraftId] = useState(() =>
+    createTeacherOperationClientId(),
   );
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
@@ -259,6 +310,114 @@ const TeacherLearning: React.FC<{
   const [studentUid, setStudentUid] = useState("");
   const [enrollmentId, setEnrollmentId] = useState("");
   const [operationReason, setOperationReason] = useState("");
+  const baseEditorPayload = useMemo<LearningEditorDraft>(
+    () => ({
+      title: selected?.title || "",
+      summary: selected?.summary || "",
+      body: selected?.body || "",
+      resourceUrl: selected?.resourceUrl || "",
+      classIds: selected?.classIds.join(", ") || "",
+      availableFrom: toW8LocalDateTimeInput(selected?.availableFrom || ""),
+      availableUntil: toW8LocalDateTimeInput(selected?.availableUntil || ""),
+    }),
+    [selected],
+  );
+  const editorPayload = useMemo<LearningEditorDraft>(
+    () => ({
+      title,
+      summary,
+      body,
+      resourceUrl,
+      classIds,
+      availableFrom,
+      availableUntil,
+    }),
+    [
+      availableFrom,
+      availableUntil,
+      body,
+      classIds,
+      resourceUrl,
+      summary,
+      title,
+    ],
+  );
+  const commandPayload = useMemo(
+    () => ({
+      semesterId: state.semesterId,
+      expectedSemesterRevision: state.manifestRevision,
+      title,
+      summary,
+      body,
+      resourceUrl,
+      contentType: selected?.contentType || "LESSON",
+      audienceRoles: ["student"],
+      targetClassIds: splitTargetIds(classIds),
+      availableFrom: toW8ServerDateTime(availableFrom),
+      availableUntil: toW8ServerDateTime(availableUntil),
+      ...(selected
+        ? {
+            contentId: selected.contentId,
+            expectedContentRevision: selected.revision,
+          }
+        : {}),
+    }),
+    [
+      availableFrom,
+      availableUntil,
+      body,
+      classIds,
+      resourceUrl,
+      selected,
+      state.manifestRevision,
+      state.semesterId,
+      summary,
+      title,
+    ],
+  );
+  const recoverEditor = useCallback((draft: LearningEditorDraft) => {
+    setTitle(String(draft.title || ""));
+    setSummary(String(draft.summary || ""));
+    setBody(String(draft.body || ""));
+    setResourceUrl(String(draft.resourceUrl || ""));
+    setClassIds(String(draft.classIds || ""));
+    setAvailableFrom(String(draft.availableFrom || ""));
+    setAvailableUntil(String(draft.availableUntil || ""));
+  }, []);
+  const draftBinding = useTeacherDraft<LearningEditorDraft>({
+    semesterId: state.semesterId,
+    manifestRevision: state.manifestRevision,
+    source: state.source,
+    enabled:
+      !state.readOnly &&
+      (!selected || ["DRAFT", "READY"].includes(selected.status)),
+    key: {
+      routeKey: "/teacher/learning",
+      surfaceKey: "learning-content-editor",
+      entityType: "learning-content",
+      entityId: selected?.contentId || "new",
+      clientDraftId: selected
+        ? `${selected.contentId}-r${selected.revision}`
+        : newDraftId,
+    },
+    baseEntityRevision: selected?.revision || null,
+    basePayload: baseEditorPayload,
+    payload: editorPayload,
+    intendedCommandType: selected
+      ? "updateLearningContent"
+      : "createLearningContent",
+    commandPayload,
+    onRecover: recoverEditor,
+  });
+  const switchLearningEditor = async (id: string) => {
+    try {
+      await draftBinding.flush();
+      if (!id) setNewDraftId(createTeacherOperationClientId());
+      onSelect(id);
+    } catch {
+      // The hook keeps the draft and exposes the retry state. Stay on this editor.
+    }
+  };
   useEffect(() => {
     setTitle(selected?.title || "");
     setSummary(selected?.summary || "");
@@ -271,30 +430,22 @@ const TeacherLearning: React.FC<{
 
   const save = (event: React.FormEvent) => {
     event.preventDefault();
-    const input = {
-      semesterId: state.semesterId,
-      expectedSemesterRevision: state.manifestRevision,
-      title,
-      summary,
-      body,
-      resourceUrl,
-      contentType: selected?.contentType || "LESSON",
-      audienceRoles: ["student"],
-      targetClassIds: classIds
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean),
-      availableFrom: toW8ServerDateTime(availableFrom),
-      availableUntil: toW8ServerDateTime(availableUntil),
-    };
     void onPerform("learning:save", () =>
-      selected
-        ? updateLearningContent({
-            ...input,
-            contentId: selected.contentId,
-            expectedContentRevision: selected.revision,
-          })
-        : createLearningContent(input),
+      draftBinding
+        .commit(() =>
+          selected
+            ? updateLearningContent(
+                commandPayload as Parameters<typeof updateLearningContent>[0],
+              )
+            : createLearningContent(
+                commandPayload as Parameters<typeof createLearningContent>[0],
+              ),
+        )
+        .then((response) => {
+          const createdId = String(response.result.contentId || "");
+          if (!selected && createdId) onSelect(createdId);
+          return response;
+        }),
     );
   };
 
@@ -340,7 +491,7 @@ const TeacherLearning: React.FC<{
           <button
             type="button"
             className="w8-button w8-button--secondary"
-            onClick={() => onSelect("")}
+            onClick={() => void switchLearningEditor("")}
           >
             새 콘텐츠
           </button>
@@ -355,7 +506,7 @@ const TeacherLearning: React.FC<{
                   type="button"
                   className="w8-list__button"
                   aria-current={selected?.contentId === content.contentId}
-                  onClick={() => onSelect(content.contentId)}
+                  onClick={() => void switchLearningEditor(content.contentId)}
                 >
                   <span className="w8-list__copy">
                     <strong>{content.title}</strong>
@@ -373,6 +524,12 @@ const TeacherLearning: React.FC<{
           <h2>{selected ? "학습 수정" : "학습 생성"}</h2>
           {selected && <W8StatusBadge value={selected.status} />}
         </div>
+        <TeacherDraftStatus
+          state={draftBinding.state}
+          message={draftBinding.message}
+          savedAt={draftBinding.savedAt}
+          onRetry={() => void draftBinding.retry().catch(() => undefined)}
+        />
         <label>
           제목
           <input
@@ -651,6 +808,12 @@ const TeacherLearning: React.FC<{
           </section>
         )}
       </form>
+      <TeacherDraftRecoveryDialog
+        draft={draftBinding.recoveryDraft}
+        onRecover={draftBinding.recover}
+        onDiscard={() => void draftBinding.discard().catch(() => undefined)}
+        onKeepCurrent={draftBinding.keepCurrent}
+      />
     </div>
   );
 };
@@ -665,12 +828,73 @@ const TeacherSchedule: React.FC<{
   const selected = state.scheduleEvents.find(
     (event) => event.eventId === selectedId,
   );
+  const [newDraftId, setNewDraftId] = useState(() =>
+    createTeacherOperationClientId(),
+  );
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [startAt, setStartAt] = useState("");
   const [endAt, setEndAt] = useState("");
   const [classIds, setClassIds] = useState("");
   const [targetUserIds, setTargetUserIds] = useState("");
+  const baseEditorPayload = useMemo<ScheduleEditorDraft>(
+    () => ({
+      title: selected?.title || "",
+      description: selected?.description || "",
+      startAt: toW8LocalDateTimeInput(selected?.startAt || ""),
+      endAt: toW8LocalDateTimeInput(selected?.endAt || ""),
+      classIds: selected?.classIds.join(", ") || "",
+      targetUserIds: selected?.targetUserIds.join(", ") || "",
+    }),
+    [selected],
+  );
+  const editorPayload = useMemo<ScheduleEditorDraft>(
+    () => ({ title, description, startAt, endAt, classIds, targetUserIds }),
+    [classIds, description, endAt, startAt, targetUserIds, title],
+  );
+  const commandPayload = useMemo(
+    () => ({
+      semesterId: state.semesterId,
+      expectedSemesterRevision: state.manifestRevision,
+      eventType: selected?.eventType || "SCHOOL",
+      title,
+      description,
+      startAt: toW8ServerDateTime(startAt),
+      endAt: toW8ServerDateTime(endAt),
+      allDay: false,
+      period: selected?.period || "",
+      targetClassIds: splitTargetIds(classIds),
+      targetUserIds: splitTargetIds(targetUserIds),
+      sourceDomain: "USER",
+      sourceReference:
+        selected?.sourceReference || `teacher:${title}:${startAt}`,
+      ...(selected
+        ? {
+            eventId: selected.eventId,
+            expectedEventRevision: selected.revision,
+          }
+        : {}),
+    }),
+    [
+      classIds,
+      description,
+      endAt,
+      selected,
+      startAt,
+      state.manifestRevision,
+      state.semesterId,
+      targetUserIds,
+      title,
+    ],
+  );
+  const recoverEditor = useCallback((draft: ScheduleEditorDraft) => {
+    setTitle(String(draft.title || ""));
+    setDescription(String(draft.description || ""));
+    setStartAt(String(draft.startAt || ""));
+    setEndAt(String(draft.endAt || ""));
+    setClassIds(String(draft.classIds || ""));
+    setTargetUserIds(String(draft.targetUserIds || ""));
+  }, []);
   useEffect(() => {
     setTitle(selected?.title || "");
     setDescription(selected?.description || "");
@@ -682,38 +906,56 @@ const TeacherSchedule: React.FC<{
   const systemProjection = Boolean(
     selected && selected.sourceDomain !== "USER",
   );
+  const draftBinding = useTeacherDraft<ScheduleEditorDraft>({
+    semesterId: state.semesterId,
+    manifestRevision: state.manifestRevision,
+    source: state.source,
+    enabled: !state.readOnly && !systemProjection,
+    key: {
+      routeKey: "/teacher/schedule",
+      surfaceKey: "schedule-event-editor",
+      entityType: "schedule-event",
+      entityId: selected?.eventId || "new",
+      clientDraftId: selected
+        ? `${selected.eventId}-r${selected.revision}`
+        : newDraftId,
+    },
+    baseEntityRevision: selected?.revision || null,
+    basePayload: baseEditorPayload,
+    payload: editorPayload,
+    intendedCommandType: selected
+      ? "updateScheduleEvent"
+      : "createScheduleEvent",
+    commandPayload,
+    onRecover: recoverEditor,
+  });
+  const switchScheduleEditor = async (id: string) => {
+    try {
+      await draftBinding.flush();
+      if (!id) setNewDraftId(createTeacherOperationClientId());
+      onSelect(id);
+    } catch {
+      // The hook keeps the draft and exposes the retry state. Stay on this editor.
+    }
+  };
   const save = (event: React.FormEvent) => {
     event.preventDefault();
-    const input = {
-      semesterId: state.semesterId,
-      expectedSemesterRevision: state.manifestRevision,
-      eventType: selected?.eventType || "SCHOOL",
-      title,
-      description,
-      startAt: toW8ServerDateTime(startAt),
-      endAt: toW8ServerDateTime(endAt),
-      allDay: false,
-      period: selected?.period || "",
-      targetClassIds: classIds
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean),
-      targetUserIds: targetUserIds
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean),
-      sourceDomain: "USER",
-      sourceReference:
-        selected?.sourceReference || `teacher:${title}:${startAt}`,
-    };
     void onPerform("schedule:save", () =>
-      selected
-        ? updateScheduleEvent({
-            ...input,
-            eventId: selected.eventId,
-            expectedEventRevision: selected.revision,
-          })
-        : createScheduleEvent(input),
+      draftBinding
+        .commit(() =>
+          selected
+            ? updateScheduleEvent(
+                commandPayload as Parameters<typeof updateScheduleEvent>[0],
+              )
+            : createScheduleEvent(
+                commandPayload as Parameters<typeof createScheduleEvent>[0],
+              ),
+        )
+        .then((response) => {
+          const createdId = String(response.result.eventId || "");
+          if (!selected && createdId) onSelect(createdId);
+          return response;
+        }),
     );
   };
   const remove = (item: W8ScheduleEvent) =>
@@ -734,7 +976,7 @@ const TeacherSchedule: React.FC<{
           <button
             type="button"
             className="w8-button w8-button--secondary"
-            onClick={() => onSelect("")}
+            onClick={() => void switchScheduleEditor("")}
           >
             새 일정
           </button>
@@ -746,7 +988,7 @@ const TeacherSchedule: React.FC<{
                 type="button"
                 className="w8-list__button"
                 aria-current={selected?.eventId === item.eventId}
-                onClick={() => onSelect(item.eventId)}
+                onClick={() => void switchScheduleEditor(item.eventId)}
               >
                 <span className="w8-list__copy">
                   <strong>{item.title}</strong>
@@ -763,6 +1005,12 @@ const TeacherSchedule: React.FC<{
         <div className="w8-panel__heading">
           <h2>{selected ? "일정 수정" : "일정 생성"}</h2>
         </div>
+        <TeacherDraftStatus
+          state={draftBinding.state}
+          message={draftBinding.message}
+          savedAt={draftBinding.savedAt}
+          onRetry={() => void draftBinding.retry().catch(() => undefined)}
+        />
         <label>
           제목
           <input
@@ -844,6 +1092,12 @@ const TeacherSchedule: React.FC<{
           </div>
         )}
       </form>
+      <TeacherDraftRecoveryDialog
+        draft={draftBinding.recoveryDraft}
+        onRecover={draftBinding.recover}
+        onDiscard={() => void draftBinding.discard().catch(() => undefined)}
+        onKeepCurrent={draftBinding.keepCurrent}
+      />
     </div>
   );
 };
@@ -866,6 +1120,7 @@ const TeacherAttendance: React.FC<{
   onSelect: (id: string) => void;
   onPerform: Perform;
 }> = ({ state, selectedId, busy, onSelect, onPerform }) => {
+  const { config } = useAuth();
   const selected =
     state.attendanceSessions.find(
       (session) => session.sessionId === selectedId,
@@ -873,9 +1128,56 @@ const TeacherAttendance: React.FC<{
   const [classId, setClassId] = useState("");
   const [date, setDate] = useState(getW8KstDateKey);
   const [period, setPeriod] = useState("1교시");
+  const [selectedBulkIds, setSelectedBulkIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [bulkJobs, setBulkJobs] = useState<TeacherBulkJob[]>([]);
+  const [bulkStatus, setBulkStatus] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
   const records = state.attendanceRecords.filter(
     (record) => !selected || record.sessionId === selected.sessionId,
   );
+  const unrecordedRecords = records.filter(
+    (record) => record.attendanceStatus === "UNRECORDED",
+  );
+  const unrecordedSignature = unrecordedRecords
+    .map(
+      (record) =>
+        `${record.studentUid}:${record.enrollmentId}:${record.revision}`,
+    )
+    .sort()
+    .join("|");
+  useEffect(() => {
+    setSelectedBulkIds(
+      new Set(unrecordedRecords.map((record) => record.studentUid)),
+    );
+  }, [selected?.sessionId, unrecordedSignature]);
+  const loadBulkJobs = useCallback(async () => {
+    try {
+      const operations = await getTeacherOperationsState({
+        config,
+        semesterId: state.semesterId,
+        source: state.source,
+        includeTerminal: false,
+      });
+      setBulkJobs(
+        operations.bulkJobs.filter(
+          (job) =>
+            job.domain === "ATTENDANCE" &&
+            String(job.filter.sessionId || "") === selected?.sessionId,
+        ),
+      );
+    } catch (error) {
+      setBulkStatus(
+        error instanceof Error
+          ? error.message
+          : "이전 일괄 작업 상태를 확인하지 못했습니다.",
+      );
+    }
+  }, [config, selected?.sessionId, state.semesterId, state.source]);
+  useEffect(() => {
+    void loadBulkJobs();
+  }, [loadBulkJobs]);
   const create = (event: React.FormEvent) => {
     event.preventDefault();
     void onPerform("attendance:create", () =>
@@ -918,10 +1220,10 @@ const TeacherAttendance: React.FC<{
           }),
     );
   };
-  const markUnrecordedPresent = () => {
-    if (!selected) return Promise.resolve();
-    const entries = records
-      .filter((record) => record.attendanceStatus === "UNRECORDED")
+  const markSelectedPresent = async () => {
+    if (!selected || selected.status !== "OPEN") return;
+    const entries = unrecordedRecords
+      .filter((record) => selectedBulkIds.has(record.studentUid))
       .map((record) => ({
         studentUid: record.studentUid,
         enrollmentId: record.enrollmentId,
@@ -929,16 +1231,105 @@ const TeacherAttendance: React.FC<{
         attendanceStatus: "PRESENT" as const,
         reason: "교사가 미입력 학생을 확인 후 출석으로 일괄 입력함",
       }));
-    return onPerform("attendance:bulk", () =>
-      recordAttendanceBulk({
+    if (!entries.length) return;
+    const commandPayload = {
+      semesterId: state.semesterId,
+      expectedSemesterRevision: state.manifestRevision,
+      sessionId: selected.sessionId,
+      expectedSessionRevision: selected.revision,
+      entries,
+      reason: "선택한 미입력 학생 출석 일괄 입력",
+    };
+    setBulkBusy(true);
+    setBulkStatus("선택한 학생의 출석을 기록하고 있습니다.");
+    try {
+      const result = await runTeacherBulkOperation({
         semesterId: state.semesterId,
         expectedSemesterRevision: state.manifestRevision,
-        sessionId: selected.sessionId,
-        expectedSessionRevision: selected.revision,
-        entries,
-        reason: "미입력 학생 출석 일괄 입력",
-      }),
+        clientBulkId: createTeacherOperationClientId(),
+        domain: "ATTENDANCE",
+        operationType: "미입력 학생 출석 일괄 기록",
+        policy: "ALL_OR_NOTHING",
+        filter: {
+          sessionId: selected.sessionId,
+          classId: selected.classId,
+          selectedStudentUids: entries.map((entry) => entry.studentUid),
+        },
+        items: [
+          {
+            itemKey: `session:${selected.sessionId}`,
+            commandType: "recordAttendanceBulk",
+            commandPayload,
+            commandPayloadHash:
+              await hashTeacherOperationPayload(commandPayload),
+          },
+        ],
+      });
+      const counts = result.result.counts;
+      setBulkStatus(
+        counts
+          ? `${counts.succeeded}건 완료, ${counts.failed}건 실패했습니다.`
+          : "출석 일괄 기록을 마쳤습니다.",
+      );
+      await loadBulkJobs();
+      await onPerform("attendance:bulk-refresh", () => Promise.resolve());
+    } catch (error) {
+      setBulkStatus(
+        error instanceof Error
+          ? error.message
+          : "출석 일괄 기록을 마치지 못했습니다.",
+      );
+      await loadBulkJobs();
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+  const activeBulkJob =
+    bulkJobs.find((job) =>
+      job.items.some((item) => item.status === "PENDING"),
+    ) ||
+    bulkJobs.find((job) =>
+      job.items.some((item) => item.status === "FAILED"),
+    ) ||
+    null;
+  const resumeBulkJob = async (mode: "resume" | "retry") => {
+    if (!activeBulkJob) return;
+    setBulkBusy(true);
+    setBulkStatus(
+      mode === "resume"
+        ? "기존 command ID로 대기 작업을 이어 실행합니다."
+        : "실패한 항목만 새 command ID로 다시 실행합니다.",
     );
+    try {
+      const response =
+        mode === "resume"
+          ? await resumePendingTeacherBulkOperation({
+              semesterId: state.semesterId,
+              manifestRevision: state.manifestRevision,
+              job: activeBulkJob,
+            })
+          : await retryFailedTeacherBulkOperation({
+              semesterId: state.semesterId,
+              manifestRevision: state.manifestRevision,
+              job: activeBulkJob,
+            });
+      const counts = response.result.counts;
+      setBulkStatus(
+        counts
+          ? `${counts.succeeded}건 완료, ${counts.failed}건 실패했습니다.`
+          : "일괄 작업 상태를 확인했습니다.",
+      );
+      await loadBulkJobs();
+      await onPerform("attendance:bulk-refresh", () => Promise.resolve());
+    } catch (error) {
+      setBulkStatus(
+        error instanceof Error
+          ? error.message
+          : "일괄 작업을 이어 실행하지 못했습니다.",
+      );
+    } finally {
+      setBulkBusy(false);
+    }
   };
   return (
     <div className="w8-stack">
@@ -957,6 +1348,7 @@ const TeacherAttendance: React.FC<{
           <input
             type="date"
             value={date}
+            onInput={(event) => setDate(event.currentTarget.value)}
             onChange={(event) => setDate(event.target.value)}
             required
             disabled={state.readOnly}
@@ -1007,13 +1399,6 @@ const TeacherAttendance: React.FC<{
               <div className="w8-actions">
                 <button
                   type="button"
-                  className="w8-button w8-button--secondary"
-                  onClick={() => void markUnrecordedPresent()}
-                >
-                  미입력 학생을 출석으로 일괄 기록
-                </button>
-                <button
-                  type="button"
                   className="w8-button"
                   onClick={() =>
                     void onPerform("attendance:close", () =>
@@ -1032,9 +1417,71 @@ const TeacherAttendance: React.FC<{
             )}
           </div>
           {selected && !state.readOnly && selected.status === "OPEN" && (
-            <p className="w8-help">
-              버튼을 누르기 전에는 미입력 학생의 출석 기록이 생성되지 않습니다.
-            </p>
+            <TeacherBulkWorkflow
+              title="미입력 학생 출석 일괄 기록"
+              description="현재 조회 목록의 미입력 학생이 기본 선택됩니다. 학급이나 출석부가 바뀌면 선택을 새로 계산하며, 선택한 학생만 하나의 원자 명령으로 기록합니다."
+              rows={unrecordedRecords.map((record) => ({
+                id: record.studentUid,
+                label: record.studentName,
+                description: record.enrollmentId,
+                ...(record.enrollmentId
+                  ? {}
+                  : { error: "Enrollment 확인 필요" }),
+              }))}
+              selectedIds={selectedBulkIds}
+              statusMessage={bulkStatus}
+              busy={bulkBusy}
+              onToggle={(studentUid) =>
+                setSelectedBulkIds((current) => {
+                  const next = new Set(current);
+                  if (next.has(studentUid)) next.delete(studentUid);
+                  else next.add(studentUid);
+                  return next;
+                })
+              }
+              onSelectAll={() =>
+                setSelectedBulkIds(
+                  new Set(
+                    unrecordedRecords
+                      .filter((record) => record.enrollmentId)
+                      .map((record) => record.studentUid),
+                  ),
+                )
+              }
+              onClear={() => setSelectedBulkIds(new Set())}
+              onRun={() => void markSelectedPresent()}
+            />
+          )}
+          {activeBulkJob && (
+            <div className="teacher-bulk-workflow__result" role="status">
+              <strong>
+                {activeBulkJob.items.some((item) => item.status === "PENDING")
+                  ? "이어 실행할 일괄 작업이 있습니다."
+                  : "실패한 일괄 작업이 있습니다."}
+              </strong>
+              <p>
+                대기 작업은 기존 command ID를 사용해 결과를 복구합니다. 실패
+                재실행은 실패 항목에 새 command ID를 사용합니다.
+              </p>
+              <button
+                type="button"
+                className="w8-button w8-button--secondary"
+                disabled={bulkBusy}
+                onClick={() =>
+                  void resumeBulkJob(
+                    activeBulkJob.items.some(
+                      (item) => item.status === "PENDING",
+                    )
+                      ? "resume"
+                      : "retry",
+                  )
+                }
+              >
+                {activeBulkJob.items.some((item) => item.status === "PENDING")
+                  ? "대기 작업 이어 실행"
+                  : "실패 항목 다시 실행"}
+              </button>
+            </div>
           )}
           <ul className="w8-attendance-list">
             {records.map((record) => (
@@ -1099,6 +1546,9 @@ const TeacherCommunication: React.FC<{
   const selected = state.notices.find(
     (notice) => notice.noticeId === selectedId,
   );
+  const [newDraftId, setNewDraftId] = useState(() =>
+    createTeacherOperationClientId(),
+  );
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [classIds, setClassIds] = useState("");
@@ -1106,6 +1556,71 @@ const TeacherCommunication: React.FC<{
   const [publishAt, setPublishAt] = useState("");
   const [expireAt, setExpireAt] = useState("");
   const [priority, setPriority] = useState<"NORMAL" | "HIGH">("NORMAL");
+  const baseEditorPayload = useMemo<NoticeEditorDraft>(
+    () => ({
+      title: selected?.title || "",
+      content: selected?.content || "",
+      classIds: selected?.classIds.join(", ") || "",
+      targetUserIds: selected?.targetUserIds.join(", ") || "",
+      publishAt: toW8LocalDateTimeInput(selected?.publishAt || ""),
+      expireAt: toW8LocalDateTimeInput(selected?.expireAt || ""),
+      priority: selected?.priority || "NORMAL",
+    }),
+    [selected],
+  );
+  const editorPayload = useMemo<NoticeEditorDraft>(
+    () => ({
+      title,
+      content,
+      classIds,
+      targetUserIds,
+      publishAt,
+      expireAt,
+      priority,
+    }),
+    [classIds, content, expireAt, priority, publishAt, targetUserIds, title],
+  );
+  const commandPayload = useMemo(
+    () => ({
+      semesterId: state.semesterId,
+      expectedSemesterRevision: state.manifestRevision,
+      title,
+      content,
+      targetRoles: ["student"],
+      targetClassIds: splitTargetIds(classIds),
+      targetUserIds: splitTargetIds(targetUserIds),
+      publishAt: toW8ServerDateTime(publishAt),
+      expireAt: toW8ServerDateTime(expireAt),
+      priority,
+      ...(selected
+        ? {
+            noticeId: selected.noticeId,
+            expectedNoticeRevision: selected.revision,
+          }
+        : {}),
+    }),
+    [
+      classIds,
+      content,
+      expireAt,
+      priority,
+      publishAt,
+      selected,
+      state.manifestRevision,
+      state.semesterId,
+      targetUserIds,
+      title,
+    ],
+  );
+  const recoverEditor = useCallback((draft: NoticeEditorDraft) => {
+    setTitle(String(draft.title || ""));
+    setContent(String(draft.content || ""));
+    setClassIds(String(draft.classIds || ""));
+    setTargetUserIds(String(draft.targetUserIds || ""));
+    setPublishAt(String(draft.publishAt || ""));
+    setExpireAt(String(draft.expireAt || ""));
+    setPriority(draft.priority === "HIGH" ? "HIGH" : "NORMAL");
+  }, []);
   useEffect(() => {
     setTitle(selected?.title || "");
     setContent(selected?.content || "");
@@ -1115,34 +1630,52 @@ const TeacherCommunication: React.FC<{
     setExpireAt(toW8LocalDateTimeInput(selected?.expireAt || ""));
     setPriority(selected?.priority || "NORMAL");
   }, [selected]);
+  const draftBinding = useTeacherDraft<NoticeEditorDraft>({
+    semesterId: state.semesterId,
+    manifestRevision: state.manifestRevision,
+    source: state.source,
+    enabled: !state.readOnly && (!selected || selected.status === "DRAFT"),
+    key: {
+      routeKey: "/teacher/communication",
+      surfaceKey: "notice-editor",
+      entityType: "notice",
+      entityId: selected?.noticeId || "new",
+      clientDraftId: selected
+        ? `${selected.noticeId}-r${selected.revision}`
+        : newDraftId,
+    },
+    baseEntityRevision: selected?.revision || null,
+    basePayload: baseEditorPayload,
+    payload: editorPayload,
+    intendedCommandType: selected ? "updateNotice" : "createNotice",
+    commandPayload,
+    onRecover: recoverEditor,
+  });
+  const switchNoticeEditor = async (id: string) => {
+    try {
+      await draftBinding.flush();
+      if (!id) setNewDraftId(createTeacherOperationClientId());
+      onSelect(id);
+    } catch {
+      // The hook keeps the draft and exposes the retry state. Stay on this editor.
+    }
+  };
   const save = (event: React.FormEvent) => {
     event.preventDefault();
-    const input = {
-      semesterId: state.semesterId,
-      expectedSemesterRevision: state.manifestRevision,
-      title,
-      content,
-      targetRoles: ["student"],
-      targetClassIds: classIds
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean),
-      targetUserIds: targetUserIds
-        .split(",")
-        .map((item) => item.trim())
-        .filter(Boolean),
-      publishAt: toW8ServerDateTime(publishAt),
-      expireAt: toW8ServerDateTime(expireAt),
-      priority,
-    };
     void onPerform("notice:save", () =>
-      selected
-        ? updateNotice({
-            ...input,
-            noticeId: selected.noticeId,
-            expectedNoticeRevision: selected.revision,
-          })
-        : createNotice(input),
+      draftBinding
+        .commit(() =>
+          selected
+            ? updateNotice(commandPayload as Parameters<typeof updateNotice>[0])
+            : createNotice(
+                commandPayload as Parameters<typeof createNotice>[0],
+              ),
+        )
+        .then((response) => {
+          const createdId = String(response.result.noticeId || "");
+          if (!selected && createdId) onSelect(createdId);
+          return response;
+        }),
     );
   };
   const transition = (
@@ -1171,7 +1704,7 @@ const TeacherCommunication: React.FC<{
           <button
             type="button"
             className="w8-button w8-button--secondary"
-            onClick={() => onSelect("")}
+            onClick={() => void switchNoticeEditor("")}
           >
             새 공지
           </button>
@@ -1183,7 +1716,7 @@ const TeacherCommunication: React.FC<{
                 type="button"
                 className="w8-list__button"
                 aria-current={selected?.noticeId === notice.noticeId}
-                onClick={() => onSelect(notice.noticeId)}
+                onClick={() => void switchNoticeEditor(notice.noticeId)}
               >
                 <span className="w8-list__copy">
                   <strong>{notice.title}</strong>
@@ -1200,6 +1733,12 @@ const TeacherCommunication: React.FC<{
           <h2>{selected ? "공지 수정" : "공지 생성"}</h2>
           {selected && <W8StatusBadge value={selected.status} />}
         </div>
+        <TeacherDraftStatus
+          state={draftBinding.state}
+          message={draftBinding.message}
+          savedAt={draftBinding.savedAt}
+          onRetry={() => void draftBinding.retry().catch(() => undefined)}
+        />
         <label>
           제목
           <input
@@ -1332,6 +1871,12 @@ const TeacherCommunication: React.FC<{
           </div>
         )}
       </form>
+      <TeacherDraftRecoveryDialog
+        draft={draftBinding.recoveryDraft}
+        onRecover={draftBinding.recover}
+        onDiscard={() => void draftBinding.discard().catch(() => undefined)}
+        onKeepCurrent={draftBinding.keepCurrent}
+      />
     </div>
   );
 };

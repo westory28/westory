@@ -3,7 +3,7 @@
   "private": true,
   "main": "index.js",
   "scripts": {
-    "check": "node --check index.js && node --check sessionAuthority.js && node --check studentMaintenance.js && node --check commandGateway.js && node --check semesterCore.js && node --check archiveEnrollment.js && node --check assessmentLifecycle.js && node --check gradeEvidence.js && node --check wisEconomy.js && node --check w8Domains.js && node --check sourceArchiveBeta.js && node --check scripts/verify-student-maintenance.cjs && node --check scripts/verify-command-gateway.cjs && node --check scripts/verify-archive-enrollment.cjs && node --check scripts/verify-assessment-lifecycle.cjs && node --check scripts/verify-grade-evidence.cjs && node --check scripts/verify-wis-economy.cjs && node --check scripts/verify-w8-domains.cjs && node scripts/verify-student-maintenance.cjs && node scripts/verify-command-gateway.cjs && node scripts/verify-archive-enrollment.cjs && node scripts/verify-assessment-lifecycle.cjs && node scripts/verify-grade-evidence.cjs && node scripts/verify-wis-economy.cjs && node scripts/verify-w8-domains.cjs",
+    "check": "node --check index.js && node --check sessionAuthority.js && node --check studentMaintenance.js && node --check commandGateway.js && node --check semesterCore.js && node --check archiveEnrollment.js && node --check assessmentLifecycle.js && node --check gradeEvidence.js && node --check wisEconomy.js && node --check w8Domains.js && node --check teacherOperations.js && node --check sourceArchiveBeta.js && node --check scripts/verify-student-maintenance.cjs && node --check scripts/verify-command-gateway.cjs && node --check scripts/verify-archive-enrollment.cjs && node --check scripts/verify-assessment-lifecycle.cjs && node --check scripts/verify-grade-evidence.cjs && node --check scripts/verify-wis-economy.cjs && node --check scripts/verify-w8-domains.cjs && node --check scripts/verify-teacher-operations.cjs && node scripts/verify-student-maintenance.cjs && node scripts/verify-command-gateway.cjs && node scripts/verify-archive-enrollment.cjs && node scripts/verify-assessment-lifecycle.cjs && node scripts/verify-grade-evidence.cjs && node scripts/verify-wis-economy.cjs && node scripts/verify-w8-domains.cjs && node scripts/verify-teacher-operations.cjs",
     "verify:student-maintenance": "node scripts/verify-student-maintenance.cjs",
     "verify:student-maintenance-integration": "node scripts/verify-student-maintenance.cjs --integration",
     "verify:command-gateway": "node scripts/verify-command-gateway.cjs",
@@ -12,6 +12,7 @@
     "verify:grade-evidence": "node scripts/verify-grade-evidence.cjs",
     "verify:wis-economy": "node scripts/verify-wis-economy.cjs",
     "verify:w8-domains": "node scripts/verify-w8-domains.cjs",
+    "verify:teacher-operations": "node scripts/verify-teacher-operations.cjs",
     "verify:session-authority": "node scripts/verify-session-authority.cjs",
     "smoke:source-archive-pdf": "node scripts/smoke-source-archive-pdf.mjs",
     "cleanup:student-teacher-portal": "node scripts/cleanup-student-teacher-portal.cjs",

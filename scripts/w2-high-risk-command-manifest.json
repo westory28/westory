@@ -29,6 +29,20 @@
       "previousBundleMode": "CLIENT_UPDATE_REQUIRED"
     }
   ],
+  "w9TeacherOperations": {
+    "query": "getTeacherOperationsState",
+    "readinessCheckId": "teacher_operations_readiness",
+    "commands": [
+      "saveTeacherDraft",
+      "discardTeacherDraft",
+      "resolveTeacherDraft",
+      "cleanupExpiredTeacherDrafts",
+      "createTeacherBulkJob",
+      "reconcileTeacherBulkJob",
+      "retryTeacherBulkJob"
+    ],
+    "unknown": 0
+  },
   "commands": [
     {
       "id": "D01",

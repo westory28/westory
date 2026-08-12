@@ -1,4 +1,5 @@
 import { auth, getHttpsCallable } from "./firebase";
+import { requiresCommandGatewayStepUpReauthentication } from "./highRiskCommands";
 import {
   createHighRiskCommandFlightKey,
   createHighRiskCommandLockName,
@@ -83,7 +84,14 @@ export type W2CommandType =
   | "transitionNotice"
   | "acknowledgeNotice"
   | "acknowledgeAllNotices"
-  | "updateNotificationSettings";
+  | "updateNotificationSettings"
+  | "saveTeacherDraft"
+  | "discardTeacherDraft"
+  | "resolveTeacherDraft"
+  | "cleanupExpiredTeacherDrafts"
+  | "createTeacherBulkJob"
+  | "reconcileTeacherBulkJob"
+  | "retryTeacherBulkJob";
 
 interface ConsentCommandItem {
   id: string;
@@ -99,6 +107,26 @@ interface HolidayCommandItem {
   start: string;
   eventType: "holiday";
   source?: string;
+}
+
+export interface TeacherDraftCommandKey {
+  routeKey: string;
+  surfaceKey: string;
+  entityType: string;
+  entityId: string;
+  clientDraftId: string;
+}
+
+export interface TeacherBulkCommandItem {
+  itemKey: string;
+  commandType: W2CommandType;
+  commandPayload: Record<string, unknown>;
+  commandPayloadHash: string;
+}
+
+interface TeacherOperationsCommandBase {
+  semesterId: string;
+  expectedSemesterRevision: number;
 }
 
 export interface SemesterClassInput {
@@ -647,6 +675,62 @@ export interface W2CommandPayloads {
     teacherNotificationsEnabled: boolean;
     eventPolicies: Record<string, unknown>;
   };
+  saveTeacherDraft: TeacherOperationsCommandBase & {
+    payloadSchemaVersion: number;
+    key: TeacherDraftCommandKey;
+    expectedDraftRevision: number | null;
+    baseEntityRevision: number | null;
+    basePayloadHash: string | null;
+    intendedCommandType: W2CommandType;
+    expectedCommandPayloadHash: string;
+    payload: Record<string, unknown>;
+    stagedAssets: Array<{ uploadId: string; checksum: string }>;
+  };
+  discardTeacherDraft: TeacherOperationsCommandBase & {
+    draftId: string;
+    expectedDraftRevision: number;
+    reason: string;
+  };
+  resolveTeacherDraft: TeacherOperationsCommandBase & {
+    draftId: string;
+    expectedDraftRevision: number;
+    canonicalCommandType: W2CommandType;
+    canonicalCommandId: string;
+    expectedCommandPayloadHash: string;
+  };
+  cleanupExpiredTeacherDrafts: TeacherOperationsCommandBase & {
+    limit: number;
+  };
+  createTeacherBulkJob: TeacherOperationsCommandBase & {
+    clientBulkId: string;
+    domain:
+      | "ASSESSMENT"
+      | "GRADE"
+      | "WIS"
+      | "LEARNING"
+      | "SCHEDULE"
+      | "ATTENDANCE"
+      | "COMMUNICATION";
+    operationType: string;
+    policy: "ALL_OR_NOTHING" | "ITEMIZED_PARTIAL";
+    filter: Record<string, unknown>;
+    items: TeacherBulkCommandItem[];
+  };
+  reconcileTeacherBulkJob: TeacherOperationsCommandBase & {
+    jobId: string;
+    expectedJobRevision: number;
+    reportedFailures: Array<{
+      itemKey: string;
+      childCommandId: string;
+      errorCode: string;
+      errorReason: string;
+    }>;
+  };
+  retryTeacherBulkJob: TeacherOperationsCommandBase & {
+    jobId: string;
+    expectedJobRevision: number;
+    items: TeacherBulkCommandItem[];
+  };
 }
 
 interface WisEconomyCommandBase {
@@ -859,6 +943,55 @@ export interface W2CommandResults {
   acknowledgeNotice: W8CommandResult;
   acknowledgeAllNotices: W8CommandResult;
   updateNotificationSettings: W8CommandResult;
+  saveTeacherDraft: TeacherOperationsCommandResult;
+  discardTeacherDraft: TeacherOperationsCommandResult;
+  resolveTeacherDraft: TeacherOperationsCommandResult;
+  cleanupExpiredTeacherDrafts: TeacherOperationsCommandResult;
+  createTeacherBulkJob: TeacherOperationsCommandResult;
+  reconcileTeacherBulkJob: TeacherOperationsCommandResult;
+  retryTeacherBulkJob: TeacherOperationsCommandResult;
+}
+
+export interface TeacherOperationsCommandResult {
+  draftId?: string;
+  draftRevision?: number;
+  saved?: boolean;
+  payloadHash?: string;
+  conflictReason?: string;
+  expiresAt?: string;
+  canonicalReceiptId?: string;
+  expiredCount?: number;
+  draftIds?: string[];
+  cutoff?: string;
+  canonicalMutationCount?: number;
+  payloadPurged?: boolean;
+  payloadPurgedCount?: number;
+  jobId?: string;
+  jobRevision?: number;
+  status?: string;
+  policy?: "ALL_OR_NOTHING" | "ITEMIZED_PARTIAL";
+  filterHash?: string;
+  previewHash?: string;
+  itemCount?: number;
+  retriedCount?: number;
+  counts?: {
+    total: number;
+    succeeded: number;
+    failed: number;
+    pending: number;
+  };
+  items?: Array<{
+    itemKey: string;
+    commandType?: W2CommandType;
+    commandPayload?: Record<string, unknown>;
+    commandPayloadHash?: string;
+    attempt: number;
+    childCommandId: string;
+    status: "PENDING" | "SUCCEEDED" | "FAILED";
+    receiptId?: string | null;
+    errorCode?: string | null;
+    errorReason?: string | null;
+  }>;
 }
 
 export interface W8CommandResult {
@@ -1323,7 +1456,9 @@ export const executeWestoryCommand = async <CommandType extends W2CommandType>(
       await rememberPendingCommandHandle(logicalCommandKey, handle);
 
       try {
-        await requestStepUpReauthentication(commandType);
+        if (requiresCommandGatewayStepUpReauthentication(commandType)) {
+          await requestStepUpReauthentication(commandType);
+        }
         if (auth.currentUser?.uid !== ownerUid) {
           throw new StepUpReauthError(
             "IDENTITY_CHANGED",
@@ -1378,6 +1513,8 @@ export const getWestoryCommandStatus = async <
   commandId: string,
   commandType: CommandType,
 ) => {
-  await requestStepUpReauthentication(commandType);
+  if (requiresCommandGatewayStepUpReauthentication(commandType)) {
+    await requestStepUpReauthentication(commandType);
+  }
   return fetchCommandStatus(commandId, commandType);
 };

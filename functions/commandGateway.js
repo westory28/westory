@@ -12,6 +12,7 @@ const assessmentLifecycle = require("./assessmentLifecycle");
 const gradeEvidence = require("./gradeEvidence");
 const wisEconomy = require("./wisEconomy");
 const w8Domains = require("./w8Domains");
+const teacherOperations = require("./teacherOperations");
 
 const REGION = "asia-northeast3";
 const ADMIN_EMAIL = "westoria28@gmail.com";
@@ -32,6 +33,7 @@ const COMMAND_TYPES = Object.freeze({
   ...gradeEvidence.GRADE_COMMAND_TYPES,
   ...wisEconomy.WIS_COMMAND_TYPES,
   ...w8Domains.W8_COMMAND_TYPES,
+  ...teacherOperations.TEACHER_OPERATIONS_COMMAND_TYPES,
 });
 
 const resolveProjectId = (environment = process.env) => {
@@ -225,6 +227,9 @@ const buildHolidayDocumentId = ({ title, start }) => {
 };
 
 const normalizePayload = (commandType, payload) => {
+  if (Object.values(teacherOperations.TEACHER_OPERATIONS_COMMAND_TYPES).includes(commandType)) {
+    return teacherOperations.normalizeTeacherOperationsPayload(commandType, payload);
+  }
   if (Object.values(w8Domains.W8_COMMAND_TYPES).includes(commandType)) {
     return w8Domains.normalizeW8Payload(commandType, payload);
   }
@@ -739,6 +744,7 @@ const applyBusinessCommand = async ({
     || Object.values(gradeEvidence.GRADE_COMMAND_TYPES).includes(commandType)
     || Object.values(wisEconomy.WIS_COMMAND_TYPES).includes(commandType)
     || Object.values(w8Domains.W8_COMMAND_TYPES).includes(commandType)
+    || Object.values(teacherOperations.TEACHER_OPERATIONS_COMMAND_TYPES).includes(commandType)
   ) {
     fail(
       "failed-precondition",
@@ -810,7 +816,14 @@ const createFirestoreStore = (db = getFirestore()) => ({
   },
   query: async (collectionPath, filter = null) => {
     let query = db.collection(collectionPath);
-    if (filter) query = query.where(filter.field, filter.operator, filter.value);
+    if (filter?.filters) {
+      for (const clause of filter.filters) query = query.where(clause.field, clause.operator, clause.value);
+    } else if (filter?.field) {
+      query = query.where(filter.field, filter.operator, filter.value);
+    }
+    const orderBy = Array.isArray(filter?.orderBy) ? filter.orderBy : filter?.orderBy ? [filter.orderBy] : [];
+    for (const ordering of orderBy) query = query.orderBy(ordering.field, ordering.direction || "asc");
+    if (Number.isSafeInteger(filter?.limit) && filter.limit > 0) query = query.limit(filter.limit);
     const snapshot = await query.get();
     return snapshot.docs.map((document) => ({
       exists: true,
@@ -842,9 +855,14 @@ const createFirestoreStore = (db = getFirestore()) => ({
       },
       query: async (collectionPath, filter = null) => {
         let query = db.collection(collectionPath);
-        if (filter) {
+        if (filter?.filters) {
+          for (const clause of filter.filters) query = query.where(clause.field, clause.operator, clause.value);
+        } else if (filter?.field) {
           query = query.where(filter.field, filter.operator, filter.value);
         }
+        const orderBy = Array.isArray(filter?.orderBy) ? filter.orderBy : filter?.orderBy ? [filter.orderBy] : [];
+        for (const ordering of orderBy) query = query.orderBy(ordering.field, ordering.direction || "asc");
+        if (Number.isSafeInteger(filter?.limit) && filter.limit > 0) query = query.limit(filter.limit);
         const snapshot = await firestoreTransaction.get(query);
         return snapshot.docs.map((document) => ({
           exists: true,
@@ -872,6 +890,9 @@ const createCommandGatewayCore = ({
   serverTimestamp = () => FieldValue.serverTimestamp(),
   projectId = resolveProjectId(),
   getSessionOptions = (commandType) => {
+    if (Object.values(teacherOperations.TEACHER_OPERATIONS_COMMAND_TYPES).includes(commandType)) {
+      return teacherOperations.getTeacherOperationsCommandSessionOptions(commandType);
+    }
     if (Object.values(w8Domains.W8_COMMAND_TYPES).includes(commandType)) {
       return w8Domains.getW8CommandSessionOptions(commandType);
     }

@@ -2,10 +2,12 @@ import React, { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import ProvenanceBadge from "../../components/common/ProvenanceBadge";
 import StatePanel from "../../components/common/StatePanel";
+import TeacherOperationsQueue from "../../components/common/TeacherOperationsQueue";
 import W8ReadOnlyState from "../../components/common/W8ReadOnlyState";
 import W8StatusBadge from "../../components/common/W8StatusBadge";
 import WisRankingPanel from "../../components/common/WisRankingPanel";
 import { useAuth } from "../../contexts/AuthContext";
+import { getServerSemesterCoreState } from "../../lib/semesterCore";
 import {
   W8DomainError,
   formatW8DateTime,
@@ -13,28 +15,74 @@ import {
   toW8StatePanelState,
   type W8DomainState,
 } from "../../lib/w8Domains";
+import {
+  getTeacherOperationsState,
+  type TeacherOperationsState,
+} from "../../lib/teacherOperations";
 import "../w8Domains.css";
+
+interface TeacherDomainWorkload {
+  readinessCurrent: boolean | null;
+}
+
+const emptyWorkload: TeacherDomainWorkload = {
+  readinessCurrent: null,
+};
 
 const TeacherDashboard: React.FC = () => {
   const { config, configReady } = useAuth();
   const [state, setState] = useState<W8DomainState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<W8DomainError | null>(null);
+  const [operations, setOperations] = useState<TeacherOperationsState | null>(
+    null,
+  );
+  const [operationsError, setOperationsError] = useState("");
+  const [workload, setWorkload] =
+    useState<TeacherDomainWorkload>(emptyWorkload);
 
   const load = useCallback(async () => {
     if (!configReady) return;
     setLoading(true);
     setError(null);
     try {
-      setState(
-        await getW8DomainState({
+      const dashboardState = await getW8DomainState({
+        config,
+        domain: "DASHBOARD",
+        audience: "teacher",
+        source: "CURRENT",
+      });
+      setState(dashboardState);
+      const [operationsResult, readinessResult] = await Promise.allSettled([
+        getTeacherOperationsState({
           config,
-          domain: "DASHBOARD",
-          audience: "teacher",
+          semesterId: dashboardState.semesterId,
           source: "CURRENT",
+          includeTerminal: true,
+          limit: 8,
         }),
-      );
+        getServerSemesterCoreState(dashboardState.semesterId),
+      ]);
+
+      if (operationsResult.status === "fulfilled") {
+        setOperations(operationsResult.value);
+        setOperationsError("");
+      } else {
+        setOperations(null);
+        setOperationsError(
+          operationsResult.reason instanceof Error
+            ? operationsResult.reason.message
+            : "이어 할 업무를 불러오지 못했습니다.",
+        );
+      }
+      setWorkload({
+        readinessCurrent:
+          readinessResult.status === "fulfilled"
+            ? (readinessResult.value.readiness?.current ?? null)
+            : null,
+      });
     } catch (caught) {
+      setWorkload(emptyWorkload);
       setError(
         caught instanceof W8DomainError
           ? caught
@@ -66,6 +114,59 @@ const TeacherDashboard: React.FC = () => {
   if (!state) return null;
 
   const summary = state.dashboard;
+  const domainWork = [
+    {
+      id: "attendance",
+      label: "출석 미처리",
+      value: `${summary.attendancePendingCount.toLocaleString("ko-KR")}건`,
+      description: "교사가 아직 입력하거나 마감하지 않은 출석입니다.",
+      route: "/teacher/attendance",
+    },
+    {
+      id: "grade",
+      label: "성적 검토 요청",
+      value: "운영 화면에서 확인",
+      description: "업무 홈에서 성적 자료 전체를 읽지 않습니다.",
+      route: "/teacher/exam?tab=performance",
+    },
+    {
+      id: "wis",
+      label: "위스 주문 요청",
+      value: "운영 화면에서 확인",
+      description: "업무 홈에서 주문 자료 전체를 읽지 않습니다.",
+      route: "/teacher/points",
+    },
+    {
+      id: "learning",
+      label: "공개 예정 학습",
+      value: `${summary.upcomingLearning.length.toLocaleString("ko-KR")}건`,
+      description: "공개 시각이나 상태를 확인할 학습 자료입니다.",
+      route: "/teacher/learning",
+    },
+    {
+      id: "notice",
+      label: "예약 상태 공지",
+      value: "운영 화면에서 확인",
+      description:
+        "공지 전체를 읽지 않고 운영 화면에서 공개 상태를 확인합니다.",
+      route: "/teacher/communication",
+    },
+    {
+      id: "readiness",
+      label: "학기 준비도",
+      value:
+        workload.readinessCurrent === null
+          ? "미확인"
+          : workload.readinessCurrent
+            ? "최신"
+            : "확인 필요",
+      description:
+        workload.readinessCurrent === false
+          ? "준비도 차단 사유를 관리자 학기 관리에서 확인해 주세요."
+          : "현재 학기의 운영 준비도 상태입니다.",
+      route: "/teacher/settings?tab=semester",
+    },
+  ];
   return (
     <section className="w8-domain-page" aria-labelledby="teacher-home-title">
       <header className="w8-domain-page__header">
@@ -87,6 +188,24 @@ const TeacherDashboard: React.FC = () => {
       )}
 
       <div className="w8-today-grid">
+        {operations ? (
+          <TeacherOperationsQueue
+            drafts={operations.drafts}
+            bulkJobs={operations.bulkJobs}
+            warningCount={operations.warnings.length}
+            domainWork={domainWork}
+          />
+        ) : operationsError ? (
+          <section className="w8-panel w8-panel--wide">
+            <StatePanel
+              state="ERROR"
+              compact
+              title="이어 할 업무를 불러오지 못했습니다."
+              description={operationsError}
+              action={{ label: "다시 불러오기", onClick: () => void load() }}
+            />
+          </section>
+        ) : null}
         <section className="w8-panel">
           <div className="w8-panel__heading">
             <h2>오늘 일정</h2>

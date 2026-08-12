@@ -1220,6 +1220,15 @@ service cloud.firestore {
       allow read, create, update, delete: if false;
     }
 
+    // W9 Teacher Operations are callable-only. Owner checks, application-session
+    // authority, CAS, TTL, receipts, and audit cannot be expressed safely here.
+    match /teacher_drafts/{draftId} {
+      allow read, create, update, delete: if false;
+    }
+    match /teacher_bulk_jobs/{jobId} {
+      allow read, create, update, delete: if false;
+    }
+
     match /semester_manifests/{semesterId} {
       allow read: if canUseWestory();
       allow create, update, delete: if false;

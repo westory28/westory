@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "expectedCount": 10,
+  "expectedDispositionCounts": {
+    "BULK_FRAMEWORK": 2,
+    "DOMAIN_ATOMIC": 2,
+    "SINGLE_COMMAND": 1,
+    "NOT_APPLICABLE": 1,
+    "RELEASE_DECISION": 4,
+    "UNKNOWN": 0
+  },
+  "surfaces": [
+    {"id":"BULK-ATT-01","disposition":"BULK_FRAMEWORK","file":"src/pages/teacher/W8TeacherHub.tsx","anchors":["markSelectedPresent","recordAttendanceBulk"]},
+    {"id":"BULK-WIS-01","disposition":"DOMAIN_ATOMIC","file":"src/pages/teacher/WisEconomyManager.tsx","anchors":["createAccounts","createWisAccounts"]},
+    {"id":"BULK-GRADE-01","disposition":"BULK_FRAMEWORK","file":"src/pages/teacher/components/GradeEvidenceManager.tsx","anchors":["executeLifecycleAction","finalize","publish"]},
+    {"id":"BULK-NOTICE-01","disposition":"SINGLE_COMMAND","file":"src/pages/teacher/W8TeacherHub.tsx","anchors":["targetClassIds","targetUserIds","createNotice"]},
+    {"id":"BULK-ROSTER-01","disposition":"DOMAIN_ATOMIC","file":"src/pages/teacher/components/SettingsArchiveEnrollment.tsx","anchors":["importEnrollmentRoster"]},
+    {"id":"BULK-STUDENT-DELETE","disposition":"RELEASE_DECISION","file":"src/pages/teacher/StudentList.tsx","anchors":["handleBulkDelete"]},
+    {"id":"BULK-STUDENT-PROMOTE","disposition":"RELEASE_DECISION","file":"src/pages/teacher/StudentList.tsx","anchors":["handleBulkPromote"]},
+    {"id":"BULK-DIC-XLSX","disposition":"RELEASE_DECISION","file":"src/lib/historyDictionary.ts","anchors":["saveHistoryDictionaryTermsBulk"]},
+    {"id":"BULK-SCORE-XLSX","disposition":"RELEASE_DECISION","file":"src/pages/teacher/components/PerformanceScoreManager.tsx","anchors":["saveParsedScores"]},
+    {"id":"BULK-NOTICE-REORDER","disposition":"NOT_APPLICABLE","file":"src/pages/teacher/components/TeacherNoticeBoard.tsx","anchors":["TeacherNoticeBoard"]}
+  ]
+}

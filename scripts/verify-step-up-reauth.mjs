@@ -19,6 +19,9 @@ const loadTypeScriptModule = async (relativePath) => {
 const { module: stepUp, source: stepUpSource } = await loadTypeScriptModule(
   "src/lib/stepUpReauth.ts",
 );
+const { module: highRiskPolicy } = await loadTypeScriptModule(
+  "src/lib/highRiskCommands.ts",
+);
 const [
   providerSource,
   authContextSource,
@@ -26,6 +29,7 @@ const [
   sessionSource,
   protectedGateSource,
   headerSource,
+  commandGatewaySource,
 ] = await Promise.all([
   readFile(
     new URL("../src/components/auth/StepUpReauthProvider.tsx", import.meta.url),
@@ -45,6 +49,7 @@ const [
     new URL("../src/components/common/Header.tsx", import.meta.url),
     "utf8",
   ),
+  readFile(new URL("../src/lib/commandGateway.ts", import.meta.url), "utf8"),
 ]);
 
 const {
@@ -57,6 +62,48 @@ const {
   requestStepUpReauthentication,
   runHighRiskCommandSingleFlight,
 } = stepUp;
+
+for (const commandType of [
+  "saveTeacherDraft",
+  "discardTeacherDraft",
+  "resolveTeacherDraft",
+]) {
+  assert.equal(
+    highRiskPolicy.requiresCommandGatewayStepUpReauthentication(commandType),
+    false,
+    `${commandType} must use the server general-session policy`,
+  );
+  assert.equal(highRiskPolicy.isHighRiskCommand(commandType), false);
+}
+for (const commandType of [
+  "cleanupExpiredTeacherDrafts",
+  "createTeacherBulkJob",
+  "reconcileTeacherBulkJob",
+  "retryTeacherBulkJob",
+  "createLearningContent",
+  "recordAttendanceBulk",
+  "createSemesterEconomy",
+  "reviewWisOrder",
+]) {
+  assert.equal(
+    highRiskPolicy.requiresCommandGatewayStepUpReauthentication(commandType),
+    true,
+    `${commandType} must retain step-up reauthentication`,
+  );
+  assert.equal(highRiskPolicy.isHighRiskCommand(commandType), true);
+}
+assert.equal(
+  highRiskPolicy.requiresCommandGatewayStepUpReauthentication(
+    "unknownFutureCommand",
+  ),
+  true,
+  "unknown gateway commands must fail closed",
+);
+assert.match(
+  commandGatewaySource,
+  /if \(requiresCommandGatewayStepUpReauthentication\(commandType\)\) \{\s*await requestStepUpReauthentication\(commandType\);\s*\}/,
+  "the command gateway must request step-up only when its server-aligned policy requires it",
+);
 
 assert.equal(
   createHighRiskCommandFlightKey("deleteStudentData", { b: 2, a: 1 }),

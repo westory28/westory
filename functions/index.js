@@ -16,6 +16,7 @@ const assessmentLifecycle = require('./assessmentLifecycle');
 const gradeEvidence = require('./gradeEvidence');
 const wisEconomy = require('./wisEconomy');
 const w8Domains = require('./w8Domains');
+const teacherOperations = require('./teacherOperations');
 const {
   createLegacyPointV1CommandAdapter,
   createRetiredAdjustTeacherPointsHandler,
@@ -8436,12 +8437,16 @@ const authorizeCommandGatewayActor = async ({ request, identity, commandType }) 
   const gradeCommandTypes = Object.values(gradeEvidence.GRADE_COMMAND_TYPES);
   const wisCommandTypes = Object.values(wisEconomy.WIS_COMMAND_TYPES);
   const w8CommandTypes = Object.values(w8Domains.W8_COMMAND_TYPES);
+  const teacherOperationsCommandTypes = Object.values(
+    teacherOperations.TEACHER_OPERATIONS_COMMAND_TYPES,
+  );
   if (
     commandType !== commandGateway.COMMAND_TYPES.ADJUST_TEACHER_POINTS
     && !assessmentCommandTypes.includes(commandType)
     && !gradeCommandTypes.includes(commandType)
     && !wisCommandTypes.includes(commandType)
     && !w8CommandTypes.includes(commandType)
+    && !teacherOperationsCommandTypes.includes(commandType)
   ) {
     return null;
   }
@@ -8482,6 +8487,32 @@ const authorizeCommandGatewayActor = async ({ request, identity, commandType }) 
   }
   const profileSnapshot = await db.doc(`users/${actorUid}`).get();
   const profile = profileSnapshot.exists ? profileSnapshot.data() || {} : {};
+  if (teacherOperationsCommandTypes.includes(commandType)) {
+    const role = String(profile.role || 'student').trim() || 'student';
+    if (teacherOperations.ADMIN_COMMAND_TYPES.has(commandType)) {
+      throw new HttpsError('permission-denied', 'Administrator authority is required.', {
+        reason: 'W9_ADMIN_REQUIRED',
+      });
+    }
+    const permissions = Array.isArray(profile.staffPermissions)
+      ? profile.staffPermissions
+      : [];
+    if (
+      role !== 'teacher'
+      || profile.teacherPortalEnabled !== true
+      || !permissions.some((permission) => ['lesson_read', 'quiz_read', 'point_manage'].includes(permission))
+    ) {
+      throw new HttpsError('permission-denied', 'Teacher Operations authority is required.', {
+        reason: 'W9_MANAGE_REQUIRED',
+      });
+    }
+    return {
+      actorUid,
+      actorEmail,
+      actorRole: 'teacher',
+      actorCapability: 'teacher_role+teacherPortalEnabled+domain_manage',
+    };
+  }
   if (w8CommandTypes.includes(commandType)) {
     const role = String(profile.role || 'student').trim() || 'student';
     if (w8Domains.STUDENT_COMMAND_TYPES.has(commandType)) {
@@ -8659,12 +8690,14 @@ const assessmentReadinessAdapter = assessmentLifecycle.createAssessmentReadiness
 const gradeEvidenceReadinessAdapter = gradeEvidence.createGradeReadinessAdapter();
 const wisEconomyReadinessAdapter = wisEconomy.createWisReadinessAdapter();
 const w8ReadinessAdapter = w8Domains.createW8ReadinessAdapter();
+const teacherOperationsReadinessAdapter = teacherOperations.createTeacherOperationsReadinessAdapter();
 const readinessAdapters = [
   archiveEnrollmentReadinessAdapter,
   assessmentReadinessAdapter,
   gradeEvidenceReadinessAdapter,
   wisEconomyReadinessAdapter,
   w8ReadinessAdapter,
+  teacherOperationsReadinessAdapter,
 ];
 const semesterCoreCommandAdapter = semesterCore.createSemesterCoreCommandAdapter({
   getDefaultPointPolicy,
@@ -8676,6 +8709,7 @@ const assessmentCommandAdapter = assessmentLifecycle.createAssessmentCommandAdap
 const gradeEvidenceCommandAdapter = gradeEvidence.createGradeCommandAdapter();
 const wisEconomyCommandAdapter = wisEconomy.createWisCommandAdapter();
 const w8CommandAdapter = w8Domains.createW8CommandAdapter();
+const teacherOperationsCommandAdapter = teacherOperations.createTeacherOperationsCommandAdapter();
 const commandGatewayStore = commandGateway.createFirestoreStore(db);
 
 const commandGatewayCore = commandGateway.createCommandGatewayCore({
@@ -8708,6 +8742,10 @@ const commandGatewayCore = commandGateway.createCommandGatewayCore({
     ...Object.fromEntries(
       Object.values(w8Domains.W8_COMMAND_TYPES)
         .map((commandType) => [commandType, w8CommandAdapter]),
+    ),
+    ...Object.fromEntries(
+      Object.values(teacherOperations.TEACHER_OPERATIONS_COMMAND_TYPES)
+        .map((commandType) => [commandType, teacherOperationsCommandAdapter]),
     ),
   },
   semesterCoreResolver: ({ store, semesterId }) =>
@@ -8746,6 +8784,12 @@ const w8QueryCore = w8Domains.createW8QueryCore({
 });
 Object.assign(exports, w8Domains.createW8CallableExports({
   core: w8QueryCore,
+}));
+const teacherOperationsQueryCore = teacherOperations.createTeacherOperationsQueryCore({
+  store: commandGatewayStore,
+});
+Object.assign(exports, teacherOperations.createTeacherOperationsCallableExports({
+  core: teacherOperationsQueryCore,
 }));
 
 const retiredW8LegacyCallable = onCall({ region: REGION }, async () => {

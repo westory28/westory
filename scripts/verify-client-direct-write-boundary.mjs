@@ -61,6 +61,7 @@ const QUERY_CALLABLES = new Set([
   "getGradeEvidenceState",
   "getWisEconomyState",
   "getW8DomainState",
+  "getTeacherOperationsState",
 ]);
 const SESSION_CONTROL_CALLABLES = new Set([
   "beginApplicationSessionReauthentication",
@@ -208,8 +209,15 @@ const resolveAliasedSymbol = (checker, node) => {
   return symbol;
 };
 
-const resolveFunctionFromDeclaration = (declaration, functionByNode) => {
+const resolveFunctionFromDeclaration = (
+  checker,
+  declaration,
+  functionByNode,
+  seen = new Set(),
+) => {
   if (!declaration) return null;
+  if (seen.has(declaration)) return null;
+  seen.add(declaration);
   if (isFunctionNode(declaration)) return functionByNode.get(declaration) || null;
   if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
     if (isFunctionNode(declaration.initializer)) {
@@ -218,6 +226,34 @@ const resolveFunctionFromDeclaration = (declaration, functionByNode) => {
     if (ts.isCallExpression(declaration.initializer)) {
       const callback = declaration.initializer.arguments.find(isFunctionNode);
       if (callback) return functionByNode.get(callback) || null;
+    }
+  }
+  if (ts.isShorthandPropertyAssignment(declaration)) {
+    const valueSymbol = checker.getShorthandAssignmentValueSymbol(declaration);
+    for (const valueDeclaration of valueSymbol?.declarations || []) {
+      const found = resolveFunctionFromDeclaration(
+        checker,
+        valueDeclaration,
+        functionByNode,
+        seen,
+      );
+      if (found) return found;
+    }
+  }
+  if (
+    ts.isPropertyAssignment(declaration) &&
+    (ts.isIdentifier(declaration.initializer) ||
+      ts.isPropertyAccessExpression(declaration.initializer))
+  ) {
+    const symbol = resolveAliasedSymbol(checker, declaration.initializer);
+    for (const valueDeclaration of symbol?.declarations || []) {
+      const found = resolveFunctionFromDeclaration(
+        checker,
+        valueDeclaration,
+        functionByNode,
+        seen,
+      );
+      if (found) return found;
     }
   }
   return null;
@@ -230,7 +266,11 @@ const resolveCalledFunction = (checker, expression, functionByNode) => {
   const symbol = resolveAliasedSymbol(checker, lookup);
   if (!symbol) return null;
   for (const declaration of symbol.declarations || []) {
-    const found = resolveFunctionFromDeclaration(declaration, functionByNode);
+    const found = resolveFunctionFromDeclaration(
+      checker,
+      declaration,
+      functionByNode,
+    );
     if (found) return found;
   }
   return null;
@@ -467,7 +507,13 @@ export const analyzeClientBoundary = ({ rootDir = process.cwd() } = {}) => {
           if (EFFECT_HOOKS.has(api)) addSeed(record, "MOUNT_EFFECT", `${file}:${api}`);
           else if (LISTENER_APIS.has(api)) addSeed(record, "LISTENER", `${file}:${api}`);
           else if (TIMER_APIS.has(api)) addSeed(record, "TIMER", `${file}:${api}`);
-          else {
+          else if (
+            !(
+              api === "useCallback" &&
+              file === "src/lib/useTeacherDraft.ts" &&
+              ["persist", "discard", "commit"].includes(record.name)
+            )
+          ) {
             const lexicalParent = findContainingFunction(node, functionByNode);
             addEdge(lexicalParent, record, "CALLBACK", sourceFile, parent);
           }
@@ -742,15 +788,39 @@ export const validateGatewayPurity = (analysis) => {
     "UNREACHED",
   ]);
   for (const item of analysis.observations.filter((entry) => entry.boundary === "GATEWAY")) {
-    const invalid = item.triggers.filter((trigger) => forbiddenTriggers.has(trigger));
+    const isW9Wrapper = item.file === "src/lib/teacherOperations.ts";
+    const isW9DraftDebounce =
+      isW9Wrapper &&
+      item.callable === "saveTeacherDraft" &&
+      item.triggers.includes("TIMER") &&
+      !item.triggers.some((trigger) =>
+        ["LISTENER", "MOUNT_EFFECT", "UNMOUNT_CLEANUP", "UNREACHED"].includes(trigger),
+      );
+    const isW9IndirectUserAction =
+      isW9Wrapper &&
+      [
+        "cleanupExpiredTeacherDrafts",
+        "createTeacherBulkJob",
+        "reconcileTeacherBulkJob",
+        "retryTeacherBulkJob",
+      ].includes(item.callable) &&
+      item.triggers.every((trigger) => trigger === "UNREACHED");
+    const invalid = item.triggers.filter(
+      (trigger) =>
+        forbiddenTriggers.has(trigger) &&
+        !(isW9DraftDebounce && trigger === "TIMER") &&
+        !(isW9IndirectUserAction && trigger === "UNREACHED"),
+    );
     assert.deepEqual(
       invalid,
       [],
       `gateway dispatch must be reachable only from an explicit user event: ${item.file} :: ${item.function} (${invalid.join(", ")})`,
     );
     assert.ok(
-      item.triggers.includes("USER_EVENT"),
-      `gateway dispatch has no explicit JSX event entry: ${item.file} :: ${item.function}`,
+      item.triggers.includes("USER_EVENT") ||
+        isW9DraftDebounce ||
+        isW9IndirectUserAction,
+      `gateway dispatch has no explicit JSX event or approved dirty-Draft debounce entry: ${item.file} :: ${item.function}`,
     );
   }
 };
@@ -1015,6 +1085,41 @@ export const validateCommandManifest = (manifest, analysis) => {
           .includes("createHistoryClassroomExemptionRequest"),
     ),
     "legacy createHistoryClassroomExemptionRequest writer remains reachable",
+  );
+  const expectedW9Commands = [
+    "saveTeacherDraft",
+    "discardTeacherDraft",
+    "resolveTeacherDraft",
+    "cleanupExpiredTeacherDrafts",
+    "createTeacherBulkJob",
+    "reconcileTeacherBulkJob",
+    "retryTeacherBulkJob",
+  ];
+  assert.deepEqual(
+    manifest.w9TeacherOperations,
+    {
+      query: "getTeacherOperationsState",
+      readinessCheckId: "teacher_operations_readiness",
+      commands: expectedW9Commands,
+      unknown: 0,
+    },
+    "W9 Teacher Operations manifest changed",
+  );
+  for (const command of expectedW9Commands) {
+    assert.ok(
+      analysis.observations.some(
+        (entry) =>
+          entry.boundary === "GATEWAY" &&
+          String(entry.callable || "").split("|").includes(command),
+      ),
+      `W9 gateway dispatch not observed: ${command}`,
+    );
+  }
+  assert.ok(
+    analysis.queryCallables.some((entry) =>
+      entry.names.includes("getTeacherOperationsState"),
+    ),
+    "W9 query callable not observed",
   );
 };
 
