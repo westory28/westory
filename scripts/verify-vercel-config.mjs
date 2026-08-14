@@ -20,11 +20,19 @@ const loadConfig = (projectId, vercelEnvironment = "") => {
 
 const assertDestination = (projectId) => {
   const config = loadConfig(projectId);
-  const destination = config.rewrites?.[0]?.destination;
-  const expected = `https://${projectId}.firebaseapp.com/__/auth/:path*`;
-  if (destination !== expected) {
+  const expected = [
+    {
+      source: "/__/firebase/init.json",
+      destination: `https://${projectId}.firebaseapp.com/__/firebase/init.json`,
+    },
+    {
+      source: "/__/auth/:path*",
+      destination: `https://${projectId}.firebaseapp.com/__/auth/:path*`,
+    },
+  ];
+  if (JSON.stringify(config.rewrites) !== JSON.stringify(expected)) {
     throw new Error(
-      `Unexpected Auth helper destination for ${projectId}: ${destination}`,
+      `Unexpected Auth helper rewrites for ${projectId}: ${JSON.stringify(config.rewrites)}`,
     );
   }
 };
@@ -59,4 +67,4 @@ if (ignoredPreviewConfig.rewrites?.length !== 0) {
   );
 }
 
-console.log("Vercel Firebase Auth rewrite isolation: PASS (5 cases)");
+console.log("Vercel Firebase Auth rewrite isolation: PASS (5 cases, 2 routes)");

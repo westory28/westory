@@ -22,6 +22,10 @@ export const config = {
     ? []
     : [
         {
+          source: "/__/firebase/init.json",
+          destination: `https://${firebaseProjectId}.firebaseapp.com/__/firebase/init.json`,
+        },
+        {
           source: "/__/auth/:path*",
           destination: `https://${firebaseProjectId}.firebaseapp.com/__/auth/:path*`,
         },
