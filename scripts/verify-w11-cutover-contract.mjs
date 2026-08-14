@@ -199,6 +199,7 @@ assert.deepEqual(
 
 for (const required of [
   "PRODUCTION_FENCE_BEFORE_CREDENTIAL_ACCESS",
+  "ACTIVE_CLOSING_CLOSED_OR_ARCHIVED_SOURCE",
   "ARCHIVE_TARGET_IMMUTABLE",
   "CROSS_SEMESTER_LEAKAGE_ZERO",
   "RESPONSE_LOSS_RECEIPT_RECOVERY",
@@ -207,6 +208,7 @@ for (const required of [
 ]) {
   assert.ok(contract.requiredScenarios.includes(required));
 }
+assert.equal(contract.requiredScenarios.includes("ACTIVE_SOURCE_ONLY"), false);
 
 console.log(
   JSON.stringify({

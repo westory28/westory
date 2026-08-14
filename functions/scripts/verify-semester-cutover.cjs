@@ -122,6 +122,21 @@ class MemoryTransaction {
   constructor(documents) { this.documents = documents; }
   async get(path) { return { exists: this.documents.has(path), data: this.documents.get(path) || null, path }; }
   async getAll(paths) { return Promise.all(paths.map((path) => this.get(path))); }
+  async query(collection, filter = null) {
+    return [...this.documents.entries()]
+      .filter(([path]) => path.startsWith(`${collection}/`) && path.split("/").length === 2)
+      .map(([path, data]) => ({ exists: true, data, path }))
+      .filter((row) => !filter?.field || row.data?.[filter.field] === filter.value)
+      .slice(0, filter?.limit || Number.MAX_SAFE_INTEGER);
+  }
+  create(path, data) {
+    if (this.documents.has(path)) throw new Error(`Document already exists: ${path}`);
+    this.documents.set(path, clone(data));
+  }
+  set(path, data, options = {}) {
+    const current = this.documents.get(path) || {};
+    this.documents.set(path, clone(options.merge ? { ...current, ...data } : data));
+  }
 }
 const planId = `cutplan_${"c".repeat(64)}`;
 const attemptId = cutoverAuthorization.attemptIdFor(planId);
@@ -129,16 +144,16 @@ const operationKey = "learning-clone-1";
 const commandId = uuid(90);
 const payloadHash = "d".repeat(64);
 const documents = new Map([
-  [`semester_cutover_targets/2098-2`, { latestPlanId: planId }],
-  [`semester_cutover_plans/${planId}`, { targetSemesterId: "2098-2", status: "DRY_RUN_PASSED" }],
+  [`semester_cutover_targets/2098-2`, { targetSemesterId: "2098-2", latestPlanId: planId, latestAttemptId: attemptId }],
+  [`semester_cutover_plans/${planId}`, { targetSemesterId: "2098-2", latestAttemptId: attemptId, status: "DRY_RUN_PASSED" }],
   [`semester_cutover_attempts/${attemptId}`, { planId, status: "DRY_RUN_PASSED" }],
   [`semester_cutover_attempts/${attemptId}/items/${cutoverAuthorization.itemIdFor(attemptId, operationKey)}`, { operationKey, operationType: "LEARNING_CONTENT", status: "PENDING", childCommandType: "createLearningContent", childCommandId: commandId, childPayloadHash: payloadHash }],
 ]);
 const authorized = awaitable(cutoverAuthorization.assertPreparingCutoverCreateIfTargeted({ transaction: new MemoryTransaction(documents), semesterId: "2098-2", actor: { actorRole: "admin", actorEmail: "westoria28@gmail.com" }, commandType: "createLearningContent", commandId, payloadHash, cutoverPlanId: planId, cutoverOperationKey: operationKey, operationType: "LEARNING_CONTENT" }));
 const boundAttemptId = cutoverAuthorization.attemptIdFor(precomputablePlanId);
 const boundDocuments = new Map([
-  [`semester_cutover_targets/2098-2`, { latestPlanId: precomputablePlanId }],
-  [`semester_cutover_plans/${precomputablePlanId}`, { targetSemesterId: "2098-2", status: "DRY_RUN_PASSED", manifestHash: boundPlan.manifestHash }],
+  [`semester_cutover_targets/2098-2`, { targetSemesterId: "2098-2", latestPlanId: precomputablePlanId, latestAttemptId: boundAttemptId }],
+  [`semester_cutover_plans/${precomputablePlanId}`, { targetSemesterId: "2098-2", latestAttemptId: boundAttemptId, status: "DRY_RUN_PASSED", manifestHash: boundPlan.manifestHash }],
   [`semester_cutover_attempts/${boundAttemptId}`, { planId: precomputablePlanId, status: "DRY_RUN_PASSED" }],
   [`semester_cutover_attempts/${boundAttemptId}/items/${cutoverAuthorization.itemIdFor(boundAttemptId, learningBound.operationKey)}`, { operationKey: learningBound.operationKey, operationType: "LEARNING_CONTENT", status: "PENDING", childCommandType: learningBound.childCommandType, childCommandId: learningBound.childCommandId, childPayloadHash: childHashWithPlan }],
 ]);
@@ -224,6 +239,61 @@ function activeLearningPlaceholder() { return { title: "합성 자료", summary:
   await assert.rejects(() => productionCore.execute({ data: { commandType: "createSemesterCutoverPlan" } }), (error) => error.details?.reason === "W11_PROJECT_FORBIDDEN");
   assert.equal(productionSessionReads, 0);
   assert.deepEqual(cutover.getSemesterCutoverCommandSessionOptions(), { recentAuth: true, highRisk: true });
+  assert.doesNotThrow(() => cutover.assertProjectSemesterPair("demo-westory-session-w11", "2026-1", "2026-2"));
+  assert.throws(
+    () => cutover.assertProjectSemesterPair("westory-staging-177587430482", "2026-1", "2026-2"),
+    (error) => error.details?.reason === "W11_STAGING_SCOPE_FORBIDDEN",
+  );
+  assert.doesNotThrow(() => cutover.assertProjectSemesterPair("westory-staging-177587430482", "2098-1", "2098-2"));
+
+  const runtimeSource = { semesterId: "2098-1", revision: 1, status: "ARCHIVED", provenance: "ARCHIVE" };
+  const runtimeTarget = { semesterId: "2098-2", revision: 1, status: "PREPARING", provenance: "PREPARING" };
+  const runtimeOperations = clone(baseOperations);
+  const runtimeManifestOperation = runtimeOperations.find((operation) => operation.operationType === "SEMESTER_MANIFEST");
+  const runtimeSourceSnapshot = cutover.snapshotFromRows(
+    [{ path: "semester_manifests/2098-1", data: runtimeSource }],
+    { operationType: "SEMESTER_MANIFEST", scope: "2098-1" },
+  );
+  const runtimeTargetSnapshot = cutover.snapshotFromRows(
+    [{ path: "semester_manifests/2098-2", data: runtimeTarget }],
+    { operationType: "SEMESTER_MANIFEST", scope: "2098-2" },
+  );
+  runtimeManifestOperation.sourceSnapshot = { count: runtimeSourceSnapshot.count, hash: runtimeSourceSnapshot.hash };
+  runtimeManifestOperation.targetBeforeSnapshot = { count: runtimeTargetSnapshot.count, hash: runtimeTargetSnapshot.hash };
+  const runtimePayload = cutover.normalizeCutoverPayload(
+    cutover.CUTOVER_COMMAND_TYPES.CREATE_PLAN,
+    createPayload(runtimeOperations),
+  );
+  const blockedActivityPath = "semester_learning_progress/w11-blocked-dry-run";
+  const runtimeDocuments = new Map([
+    ["semester_manifests/2098-1", runtimeSource],
+    ["semester_manifests/2098-2", runtimeTarget],
+    [blockedActivityPath, { semesterId: "2098-2", progressId: "w11-blocked-dry-run" }],
+  ]);
+  const runtimeTransaction = new MemoryTransaction(runtimeDocuments);
+  const runtimeActor = { actorUid: "admin-1", actorRole: "admin", actorEmail: "westoria28@gmail.com" };
+  const runtimeAdapter = cutover.createSemesterCutoverCommandAdapter({ projectId: "demo-westory-session-w11" });
+  const runtimePlan = await runtimeAdapter.apply({ transaction: runtimeTransaction, commandId: uuid(91), commandType: cutover.CUTOVER_COMMAND_TYPES.CREATE_PLAN, payload: runtimePayload, payloadHash: runtimePayload.manifestHash, timestamp: "2026-08-14T00:00:00.000Z", actor: runtimeActor });
+  const runtimePlanId = runtimePlan.result.planId;
+  const firstDry = await runtimeAdapter.apply({ transaction: runtimeTransaction, commandId: uuid(92), commandType: cutover.CUTOVER_COMMAND_TYPES.DRY_RUN, payload: cutover.normalizeCutoverPayload(cutover.CUTOVER_COMMAND_TYPES.DRY_RUN, { planId: runtimePlanId, expectedPlanRevision: 1 }), payloadHash: "e".repeat(64), timestamp: "2026-08-14T00:01:00.000Z", actor: runtimeActor });
+  assert.equal(firstDry.result.status, "BLOCKED");
+  assert.equal(firstDry.result.attemptRevision, 1);
+  assert.equal(firstDry.result.deterministicAttemptReused, false);
+  await assert.rejects(
+    () => runtimeAdapter.apply({ transaction: runtimeTransaction, commandId: uuid(93), commandType: cutover.CUTOVER_COMMAND_TYPES.DRY_RUN, payload: cutover.normalizeCutoverPayload(cutover.CUTOVER_COMMAND_TYPES.DRY_RUN, { planId: runtimePlanId, expectedPlanRevision: 2 }), payloadHash: "f".repeat(64), timestamp: "2026-08-14T00:02:00.000Z", actor: runtimeActor }),
+    (error) => error.details?.reason === "W11_ATTEMPT_REVISION_REQUIRED",
+  );
+  runtimeDocuments.delete(blockedActivityPath);
+  const retryDry = await runtimeAdapter.apply({ transaction: runtimeTransaction, commandId: uuid(94), commandType: cutover.CUTOVER_COMMAND_TYPES.DRY_RUN, payload: cutover.normalizeCutoverPayload(cutover.CUTOVER_COMMAND_TYPES.DRY_RUN, { planId: runtimePlanId, expectedPlanRevision: 2, expectedAttemptRevision: 1 }), payloadHash: "1".repeat(64), timestamp: "2026-08-14T00:03:00.000Z", actor: runtimeActor });
+  assert.equal(retryDry.result.status, "DRY_RUN_PASSED");
+  assert.equal(retryDry.result.attemptId, firstDry.result.attemptId);
+  assert.equal(retryDry.result.attemptRevision, 2);
+  assert.equal(retryDry.result.deterministicAttemptReused, true);
+  runtimeDocuments.set("semester_cutover_targets/2098-2", { ...runtimeDocuments.get("semester_cutover_targets/2098-2"), latestPlanId: `cutplan_${"9".repeat(64)}` });
+  await assert.rejects(
+    () => runtimeAdapter.apply({ transaction: runtimeTransaction, commandId: uuid(95), commandType: cutover.CUTOVER_COMMAND_TYPES.APPLY_BATCH, payload: cutover.normalizeCutoverPayload(cutover.CUTOVER_COMMAND_TYPES.APPLY_BATCH, { planId: runtimePlanId, attemptId: retryDry.result.attemptId, expectedPlanRevision: 3, expectedAttemptRevision: 2, operationKeys: [runtimeOperations[0].operationKey], failures: [] }), payloadHash: "2".repeat(64), timestamp: "2026-08-14T00:04:00.000Z", actor: runtimeActor }),
+    (error) => error.details?.reason === "W11_CUTOVER_TARGET_PLAN_MISMATCH",
+  );
   const source = readFileSync(resolve(__dirname, "../semesterCutover.js"), "utf8");
   assert.equal(source.includes("canonicalBusinessWriteCount: 0"), true);
   assert.equal(source.includes("activationMutationCount: 0"), true);
@@ -238,5 +308,5 @@ function activeLearningPlaceholder() { return { title: "합성 자료", summary:
   assert.equal(semesterCoreSource.includes('getAll: (paths) => typeof transaction.getAll === "function"'), true);
   const rules = readFileSync(resolve(__dirname, "../../firestore.rules"), "utf8");
   for (const collection of ["semester_cutover_plans", "semester_cutover_attempts", "semester_cutover_evidence", "semester_cutover_targets"]) assert.equal(rules.includes(`match /${collection}/`), true);
-  console.log(JSON.stringify({ passed: true, cases: 27, commands: 6, datasets: 12, maxOperations: 100, applyBatchLimit: 25, snapshotByteLimit: cutover.SNAPSHOT_TOTAL_BYTE_LIMIT, snapshotTransactionByteLimit: cutover.SNAPSHOT_TRANSACTION_BYTE_LIMIT, readinessChecks: 1, productionAccess: 0, productionWrites: 0 }));
+  console.log(JSON.stringify({ passed: true, cases: 35, commands: 6, datasets: 12, maxOperations: 100, applyBatchLimit: 25, blockedDryRunRetry: true, latestPlanFence: true, stagingScopeFence: true, snapshotByteLimit: cutover.SNAPSHOT_TOTAL_BYTE_LIMIT, snapshotTransactionByteLimit: cutover.SNAPSHOT_TRANSACTION_BYTE_LIMIT, readinessChecks: 1, productionAccess: 0, productionWrites: 0 }));
 })().catch((error) => { console.error(error); process.exitCode = 1; });

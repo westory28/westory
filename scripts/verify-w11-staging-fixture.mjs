@@ -10,6 +10,8 @@ const FIXTURE_OWNER = "w11-semester-cutover-staging";
 const SOURCE_SEMESTER_ID = "2098-1";
 const TARGET_SEMESTER_ID = "2098-2";
 const CANONICAL_BASELINE_SEMESTER_ID = "2026-2";
+const ADMIN_EMAIL = "westoria28@gmail.com";
+const STORAGE_BUCKET = `${STAGING_PROJECT_ID}.firebasestorage.app`;
 const args = process.argv.slice(2);
 const valueArg = (name) =>
   String(
@@ -46,7 +48,7 @@ assert.match(
   /^w11-[a-z0-9][a-z0-9-]{7,63}$/u,
   "A scoped W11 testRunId is required.",
 );
-if (["collect-evidence", "verify", "cleanup"].includes(mode)) {
+if (["collect-evidence", "verify"].includes(mode)) {
   const requiredEvidencePath =
     mode === "collect-evidence" ? runnerEvidencePath : commandEvidencePath;
   assert.ok(
@@ -57,8 +59,15 @@ if (["collect-evidence", "verify", "cleanup"].includes(mode)) {
   );
   assert.equal(existsSync(resolve(requiredEvidencePath)), true);
 }
-if (["verify", "cleanup"].includes(mode)) {
+if (mode === "verify") {
   assert.ok(commandEvidencePath, "--command-evidence is required.");
+}
+if (mode === "cleanup") {
+  for (const path of [commandEvidencePath, runnerEvidencePath].filter(
+    Boolean,
+  )) {
+    assert.equal(existsSync(resolve(path)), true);
+  }
 }
 if (mode === "dry-run") {
   console.log(
@@ -95,11 +104,13 @@ const { getAuth } = requireFromFunctions("firebase-admin/auth");
 const { FieldPath, getFirestore } = requireFromFunctions(
   "firebase-admin/firestore",
 );
+const { getStorage } = requireFromFunctions("firebase-admin/storage");
 const cutover = requireFromFunctions("./semesterCutover.js");
 const semesterCore = requireFromFunctions("./semesterCore.js");
 const sha256 = (value) =>
   createHash("sha256").update(String(value), "utf8").digest("hex");
 const suffix = sha256(testRunId).slice(0, 20);
+const storagePrefix = `w11-staging-fixtures/${testRunId}/`;
 const teacherUid = `w11-teacher-${suffix}`;
 const studentUid = `w11-student-${suffix}`;
 const teacherEmail = `w11.teacher.${suffix}@yongshin-ms.ms.kr`;
@@ -136,11 +147,16 @@ const reservedControlPaths = [
   `semester_cutover_attempts/${reservedAttemptId}`,
 ];
 const app = initializeApp(
-  { credential: applicationDefault(), projectId },
+  {
+    credential: applicationDefault(),
+    projectId,
+    storageBucket: STORAGE_BUCKET,
+  },
   `w11-fixture-${suffix.slice(0, 12)}`,
 );
 const auth = getAuth(app);
 const db = getFirestore(app);
+const bucket = getStorage(app).bucket(STORAGE_BUCKET);
 
 const canonicalCollections = [
   "semester_classes",
@@ -156,6 +172,7 @@ const canonicalCollections = [
   "semester_wis_accounts",
   "semester_wis_balances",
   "semester_wis_rankings",
+  ...cutover.ACTIVITY_COLLECTIONS,
 ];
 const reservedRootCollections = [
   ...canonicalCollections,
@@ -171,6 +188,34 @@ const W11_COMMAND_TYPES = new Set([
   "resumeSemesterCutover",
   "createSemesterRollbackPlan",
 ]);
+const W11_COMMAND_SPECS = [
+  ["bootstrap-target-manifest", "createSemesterManifest"],
+  ["bootstrap-target-preparing", "transitionSemesterStatus"],
+  ["source-archive-write-deny", "createSemesterClass"],
+  ["parent-plan", "createSemesterCutoverPlan"],
+  ["parent-dry", "dryRunSemesterCutover"],
+  ["child-class", "createSemesterClass"],
+  ["child-roster", "importEnrollmentRoster"],
+  ["child-learning", "createLearningContent"],
+  ["parent-apply-partial", "applySemesterCutoverBatch"],
+  ["parent-resume", "resumeSemesterCutover"],
+  ["child-schedule", "createScheduleEvent"],
+  ["parent-apply-complete", "applySemesterCutoverBatch"],
+  ["parent-verify", "verifySemesterCutover"],
+  ["readiness-validate", "validateSemesterReadiness"],
+  ["readiness-ready", "transitionSemesterStatus"],
+  ["parent-rollback", "createSemesterRollbackPlan"],
+].map(([label, commandType]) => ({
+  label,
+  commandType,
+  commandId: (() => {
+    const hash = sha256(`${testRunId}\n${label}`);
+    return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-4${hash.slice(13, 16)}-8${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
+  })(),
+}));
+const commandSpecByLabel = new Map(
+  W11_COMMAND_SPECS.map((command) => [command.label, command]),
+);
 const canonicalize = (value) => {
   if (
     value === null ||
@@ -203,6 +248,7 @@ const baselineSnapshot = async () => {
   for (const path of [
     "site_settings/semester_active",
     "site_settings/config",
+    "site_settings/student_maintenance",
   ]) {
     const snapshot = await db.doc(path).get();
     if (snapshot.exists) {
@@ -223,6 +269,20 @@ const baselineSnapshot = async () => {
   }
   rows.sort((left, right) => left.path.localeCompare(right.path));
   return { count: rows.length, hash: sha256(JSON.stringify(rows)) };
+};
+const maintenanceSnapshot = async () => {
+  const snapshot = await db.doc("site_settings/student_maintenance").get();
+  const row = snapshot.exists
+    ? { path: snapshot.ref.path, data: canonicalize(snapshot.data()) }
+    : { path: snapshot.ref.path, exists: false };
+  return {
+    exists: snapshot.exists,
+    hash: sha256(JSON.stringify(row)),
+  };
+};
+const listStorageObjects = async () => {
+  const [files] = await bucket.getFiles({ prefix: storagePrefix });
+  return files.sort((left, right) => left.name.localeCompare(right.name));
 };
 const ensureExactOwner = (snapshot, label) => {
   assert.equal(snapshot.exists, true, `${label} is missing.`);
@@ -248,6 +308,8 @@ const readCommandEvidence = () => {
   assert.equal(Array.isArray(evidence.businessPaths), true);
   assert.equal(Array.isArray(evidence.sourcePaths), true);
   assert.equal(Array.isArray(evidence.sessionPaths), true);
+  assert.equal(Array.isArray(evidence.controlPaths), true);
+  assert.equal(Array.isArray(evidence.itemIds), true);
   assert.equal(typeof evidence.runnerPassed, "boolean");
   return evidence;
 };
@@ -284,7 +346,13 @@ const readRunnerEvidence = () => {
     );
   }
   assert.equal(Array.isArray(evidence.commands), true);
-  assert.ok(evidence.commands.length > 0);
+  if (evidence.passed) assert.ok(evidence.commands.length > 0);
+  for (const command of evidence.commands) {
+    const expected = commandSpecByLabel.get(String(command.label || ""));
+    assert.ok(expected, `Unexpected W11 runner command: ${command.label}.`);
+    assert.equal(command.commandId, expected.commandId);
+    assert.equal(command.commandType, expected.commandType);
+  }
   return evidence;
 };
 const assertBusinessPath = (path) => {
@@ -309,8 +377,157 @@ const assertBusinessPath = (path) => {
     assert.equal(documentId, studentUid);
   }
 };
+const controlPrefixes = [
+  "semester_cutover_plans/",
+  "semester_cutover_attempts/",
+  `semester_cutover_targets/${TARGET_SEMESTER_ID}`,
+  "semester_cutover_evidence/",
+];
+const isControlPath = (path) =>
+  controlPrefixes.some((prefix) => String(path).startsWith(prefix));
+const assertDocumentPath = (path) => {
+  assert.equal(typeof path, "string");
+  const segments = path.split("/");
+  assert.equal(
+    segments.length % 2,
+    0,
+    `A document path was required: ${path}.`,
+  );
+  assert.equal(
+    segments.every((segment) => segment.length > 0),
+    true,
+    `Empty document path segment: ${path}.`,
+  );
+};
+const resolveAdminActorUid = async (...evidenceDocuments) => {
+  const actor = await auth.getUserByEmail(ADMIN_EMAIL);
+  for (const evidence of evidenceDocuments.filter(Boolean)) {
+    if (evidence.adminUid) assert.equal(evidence.adminUid, actor.uid);
+    if (evidence.actorUid) assert.equal(evidence.actorUid, actor.uid);
+  }
+  return actor.uid;
+};
+const loadOwnedCommandArtifacts = async ({ actorUid, createdAfter }) => {
+  const candidates = W11_COMMAND_SPECS.map((command) => ({
+    ...command,
+    receiptId: `cmd_${sha256(`${actorUid}\n${command.commandType}\n${command.commandId}`)}`,
+  }));
+  const [receiptRows, auditRows] = await Promise.all([
+    db.getAll(
+      ...candidates.map((command) =>
+        db.doc(`command_receipts/${command.receiptId}`),
+      ),
+    ),
+    db.getAll(
+      ...candidates.map((command) =>
+        db.doc(`command_audit_events/${command.receiptId}`),
+      ),
+    ),
+  ]);
+  const live = [];
+  candidates.forEach((command, index) => {
+    const receipt = receiptRows[index];
+    const audit = auditRows[index];
+    assert.equal(
+      audit.exists && !receipt.exists,
+      false,
+      `An audit exists without its W11 receipt: ${command.receiptId}.`,
+    );
+    if (!receipt.exists) return;
+    assert.equal(receipt.data()?.status, "SUCCEEDED");
+    assert.equal(receipt.data()?.actorUid, actorUid);
+    assert.equal(receipt.data()?.actorEmail, ADMIN_EMAIL);
+    assert.equal(receipt.data()?.commandType, command.commandType);
+    assert.equal(receipt.data()?.commandId, command.commandId);
+    assert.ok(toMillis(receipt.data()?.createdAt) >= createdAfter);
+    assert.equal(audit.exists, true);
+    assert.equal(audit.data()?.actorUid, actorUid);
+    assert.equal(audit.data()?.actorEmail, ADMIN_EMAIL);
+    assert.equal(audit.data()?.commandType, command.commandType);
+    assert.equal(audit.data()?.commandId, command.commandId);
+    assert.equal(audit.data()?.receiptRef, receipt.ref.path);
+    assert.ok(toMillis(audit.data()?.createdAt) >= createdAfter);
+    const refs = Array.isArray(receipt.data()?.target?.refs)
+      ? receipt.data().target.refs
+      : [];
+    refs.forEach(assertDocumentPath);
+    const authTime = Number(receipt.data()?.session?.authTime || 0);
+    assert.equal(Number.isSafeInteger(authTime) && authTime > 0, true);
+    live.push({ ...command, receipt, audit, refs, authTime });
+  });
+  return { candidates, live };
+};
+const validateOwnedDocument = ({
+  snapshot,
+  actorUid,
+  createdAfter,
+  fixturePathSet,
+  sessionPathSet,
+  targetOwners,
+  receiptPathSet,
+  auditPathSet,
+  artifactOwners,
+}) => {
+  if (!snapshot.exists) return;
+  const path = snapshot.ref.path;
+  const data = snapshot.data() || {};
+  if (fixturePathSet.has(path)) {
+    ensureExactOwner(snapshot, path);
+    return;
+  }
+  if (sessionPathSet.has(path)) {
+    const match = path.match(
+      /^application_sessions\/([^/]+)\/sessions\/([1-9][0-9]*)$/u,
+    );
+    assert.ok(match);
+    assert.equal(data.uid, match[1]);
+    assert.equal(Number(data.authTime), Number(match[2]));
+    assert.ok(toMillis(data.createdAt) >= createdAfter);
+    return;
+  }
+  if (receiptPathSet.has(path) || auditPathSet.has(path)) {
+    const owner = artifactOwners.get(path);
+    assert.ok(owner, `No deterministic command owner exists for ${path}.`);
+    assert.equal(data.actorUid, actorUid);
+    assert.equal(data.actorEmail, ADMIN_EMAIL);
+    assert.equal(data.commandId, owner.commandId);
+    assert.equal(data.commandType, owner.commandType);
+    if (receiptPathSet.has(path)) assert.equal(data.status, "SUCCEEDED");
+    if (auditPathSet.has(path)) {
+      assert.equal(data.receiptRef, owner.receipt.ref.path);
+    }
+    assert.ok(toMillis(data.createdAt) >= createdAfter);
+    return;
+  }
+  const owners = targetOwners.get(path) || [];
+  assert.ok(owners.length > 0, `No live W11 command owns ${path}.`);
+  if (data.semesterId) {
+    assert.equal(
+      [SOURCE_SEMESTER_ID, TARGET_SEMESTER_ID].includes(data.semesterId),
+      true,
+    );
+  }
+  const ownerCommandIds = new Set(owners.map((owner) => owner.commandId));
+  const ownerReceiptIds = new Set(owners.map((owner) => owner.receiptId));
+  if (data.commandId) assert.equal(ownerCommandIds.has(data.commandId), true);
+  if (data.receiptId) assert.equal(ownerReceiptIds.has(data.receiptId), true);
+  for (const field of [
+    "createdBy",
+    "updatedBy",
+    "approvedBy",
+    "appliedBy",
+    "verifiedBy",
+  ]) {
+    if (data[field]) assert.equal(data[field], actorUid, `${path}.${field}`);
+  }
+};
 
 const setup = async () => {
+  assert.deepEqual(
+    (await listStorageObjects()).map((file) => file.name),
+    [],
+    "Reserved W11 Storage prefix is not empty.",
+  );
   const exactReservedPaths = [
     ...fixturePaths,
     `semester_manifests/${TARGET_SEMESTER_ID}`,
@@ -363,6 +580,7 @@ const setup = async () => {
     );
   }
   const baseline = await baselineSnapshot();
+  const maintenanceBaseline = await maintenanceSnapshot();
   const createdAuthUids = [];
   try {
     await auth.createUser({
@@ -474,6 +692,10 @@ const setup = async () => {
       canonicalBaselineSemesterId: CANONICAL_BASELINE_SEMESTER_ID,
       canonicalBaselineCount: baseline.count,
       canonicalBaselineHash: baseline.hash,
+      maintenanceBaselineExists: maintenanceBaseline.exists,
+      maintenanceBaselineHash: maintenanceBaseline.hash,
+      storageBucket: STORAGE_BUCKET,
+      storagePrefix,
       teacherUid,
       studentUid,
       classId,
@@ -494,6 +716,14 @@ const setup = async () => {
         canonicalBaselineSemesterId: CANONICAL_BASELINE_SEMESTER_ID,
         canonicalBaselineCount: baseline.count,
         canonicalBaselineHash: baseline.hash,
+        maintenanceBaselineExists: maintenanceBaseline.exists,
+        maintenanceBaselineHash: maintenanceBaseline.hash,
+        maintenanceMutationCount: 0,
+        maintenanceMeasurementBasis:
+          "EXACT_SITE_SETTINGS_STUDENT_MAINTENANCE_SNAPSHOT_HASH",
+        storageBucket: STORAGE_BUCKET,
+        storagePrefix,
+        storageObjectsBeforeSetup: 0,
         authUsersCreated: createdAuthUids.length,
         firestoreDocumentsCreated: fixturePaths.length,
         targetDirectSeedCount: 0,
@@ -508,7 +738,10 @@ const setup = async () => {
     const batch = db.batch();
     snapshots
       .filter((item) => item.exists)
-      .forEach((item) => batch.delete(item.ref));
+      .forEach((item) => {
+        ensureExactOwner(item, item.ref.path);
+        batch.delete(item.ref);
+      });
     await batch.commit().catch(() => undefined);
     await Promise.all(
       createdAuthUids.map((uid) => auth.deleteUser(uid).catch(() => undefined)),
@@ -521,21 +754,24 @@ const collectEvidence = async () => {
   const runner = readRunnerEvidence();
   const run = await db.doc(runPath).get();
   ensureExactOwner(run, "W11 run marker");
+  const createdAfter = toMillis(run.data()?.createdAt);
+  assert.equal(Number.isFinite(createdAfter), true);
+  const actorUid = await resolveAdminActorUid(runner);
+  if (runner.planId) assert.equal(runner.planId, reservedPlanId);
+  if (runner.attemptId) assert.equal(runner.attemptId, reservedAttemptId);
   const pointer = await db
     .doc(`semester_cutover_targets/${TARGET_SEMESTER_ID}`)
     .get();
-  const planId = String(pointer.data()?.latestPlanId || runner.planId || "");
-  const attemptId = String(
-    pointer.data()?.latestAttemptId || runner.attemptId || "",
-  );
-  assert.match(planId, /^cutplan_[a-f0-9]{64}$/u);
-  assert.match(attemptId, /^cutattempt_[a-f0-9]{64}$/u);
+  const planId = reservedPlanId;
+  const attemptId = reservedAttemptId;
   const [plan, attempt] = await db.getAll(
     db.doc(`semester_cutover_plans/${planId}`),
     db.doc(`semester_cutover_attempts/${attemptId}`),
   );
   if (runner.passed) {
     assert.equal(pointer.exists, true, "W11 target pointer is missing.");
+    assert.equal(pointer.data()?.latestPlanId, planId);
+    assert.equal(pointer.data()?.latestAttemptId, attemptId);
     assert.equal(plan.data()?.sourceSemesterId, SOURCE_SEMESTER_ID);
     assert.equal(plan.data()?.targetSemesterId, TARGET_SEMESTER_ID);
     assert.equal(attempt.data()?.planId, planId);
@@ -544,50 +780,17 @@ const collectEvidence = async () => {
     .collection(`semester_cutover_attempts/${attemptId}/items`)
     .get();
   if (runner.passed) assert.equal(items.size, 12);
-  const createdAfter = toMillis(run.data()?.createdAt);
-  assert.equal(Number.isFinite(createdAfter), true);
-  const exactCommands = [
-    ...new Map(
-      runner.commands.map((command) => [
-        `${command.commandType}\n${command.commandId}`,
-        command,
-      ]),
-    ).values(),
-  ];
-  const receiptIds = exactCommands.map(
-    (command) =>
-      `cmd_${sha256(`${runner.adminUid}\n${command.commandType}\n${command.commandId}`)}`,
-  );
-  const [receipts, audits] = receiptIds.length
-    ? await Promise.all([
-        db.getAll(...receiptIds.map((id) => db.doc(`command_receipts/${id}`))),
-        db.getAll(
-          ...receiptIds.map((id) => db.doc(`command_audit_events/${id}`)),
-        ),
-      ])
-    : [[], []];
+  const { candidates, live } = await loadOwnedCommandArtifacts({
+    actorUid,
+    createdAfter,
+  });
+  const receiptIds = live.map((command) => command.receiptId);
   const businessPaths = [];
   const sourcePaths = [];
   const controlPathsSeen = [];
-  const controlPrefixes = [
-    "semester_cutover_plans/",
-    "semester_cutover_attempts/",
-    `semester_cutover_targets/${TARGET_SEMESTER_ID}`,
-    "semester_cutover_evidence/",
-  ];
-  receipts.forEach((receipt, index) => {
-    const expected = exactCommands[index];
-    assert.equal(receipt.exists, true);
-    assert.equal(receipt.data()?.status, "SUCCEEDED");
-    assert.equal(receipt.data()?.actorUid, runner.adminUid);
-    assert.equal(receipt.data()?.commandType, expected.commandType);
-    assert.equal(receipt.data()?.commandId, expected.commandId);
-    assert.ok(toMillis(receipt.data()?.createdAt) >= createdAfter);
-    const refs = Array.isArray(receipt.data()?.target?.refs)
-      ? receipt.data().target.refs
-      : [];
-    refs.forEach((path) => {
-      if (controlPrefixes.some((prefix) => path.startsWith(prefix))) {
+  live.forEach((command) => {
+    command.refs.forEach((path) => {
+      if (isControlPath(path)) {
         controlPathsSeen.push(path);
         return;
       }
@@ -603,19 +806,19 @@ const collectEvidence = async () => {
       }
     });
   });
-  audits.forEach((audit, index) => {
-    const expected = exactCommands[index];
-    assert.equal(audit.exists, true);
-    assert.equal(audit.data()?.actorUid, runner.adminUid);
-    assert.equal(audit.data()?.commandType, expected.commandType);
-    assert.equal(audit.data()?.commandId, expected.commandId);
-    assert.ok(toMillis(audit.data()?.createdAt) >= createdAfter);
-  });
   if (runner.passed) {
+    assert.deepEqual(
+      live.map((command) => command.label).sort(),
+      candidates
+        .filter((command) => command.label !== "source-archive-write-deny")
+        .map((command) => command.label)
+        .sort(),
+      "The complete deterministic W11 receipt set is missing.",
+    );
     assert.equal(
       new Set(
-        receipts
-          .map((item) => item.data()?.commandType)
+        live
+          .map((item) => item.commandType)
           .filter((type) => W11_COMMAND_TYPES.has(type)),
       ).size,
       W11_COMMAND_TYPES.size,
@@ -626,21 +829,55 @@ const collectEvidence = async () => {
         .map((item) => String(item.data()?.receiptId || ""))
         .filter(Boolean)
         .sort(),
-      receipts
-        .filter((receipt) =>
+      live
+        .filter((command) =>
           [
             "createSemesterClass",
             "importEnrollmentRoster",
             "createLearningContent",
             "createScheduleEvent",
-          ].includes(receipt.data()?.commandType),
+          ].includes(command.commandType),
         )
-        .map((receipt) => receipt.id)
+        .filter((command) => command.label.startsWith("child-"))
+        .map((command) => command.receiptId)
         .sort(),
     );
   }
   const currentBaseline = await baselineSnapshot();
   assert.equal(currentBaseline.hash, run.data()?.canonicalBaselineHash);
+  const currentMaintenance = await maintenanceSnapshot();
+  const maintenanceMutationCount = Number(
+    currentMaintenance.hash !== run.data()?.maintenanceBaselineHash,
+  );
+  assert.equal(
+    maintenanceMutationCount,
+    0,
+    "site_settings/student_maintenance changed during the W11 rehearsal.",
+  );
+  const sessionPaths = [
+    ...new Set([
+      ...live.map(
+        (command) =>
+          `application_sessions/${actorUid}/sessions/${command.authTime}`,
+      ),
+      ...(runner.sessionPath ? [runner.sessionPath] : []),
+    ]),
+  ].sort();
+  sessionPaths.forEach((path) => {
+    assert.match(
+      path,
+      new RegExp(
+        `^application_sessions/${actorUid.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/sessions/[1-9][0-9]*$`,
+        "u",
+      ),
+    );
+  });
+  const currentStorageObjects = await listStorageObjects();
+  assert.equal(
+    currentStorageObjects.length,
+    0,
+    "The W11 Storage prefix changed during a no-Storage rehearsal.",
+  );
   const evidence = {
     fixtureOwner: FIXTURE_OWNER,
     testRunId,
@@ -649,8 +886,14 @@ const collectEvidence = async () => {
     targetSemesterId: TARGET_SEMESTER_ID,
     canonicalBaselineSemesterId: CANONICAL_BASELINE_SEMESTER_ID,
     canonicalBaselineHash: currentBaseline.hash,
+    maintenanceSnapshotHashBefore: run.data()?.maintenanceBaselineHash,
+    maintenanceSnapshotHashAfter: currentMaintenance.hash,
+    maintenanceMutationCount,
+    maintenanceMeasurementBasis:
+      "EXACT_SITE_SETTINGS_STUDENT_MAINTENANCE_SNAPSHOT_HASH",
     fixtureStartedAt: new Date(createdAfter).toISOString(),
     runnerPassed: runner.passed,
+    actorUid,
     planId,
     attemptId,
     evidenceId: String(pointer.data()?.latestEvidenceId || ""),
@@ -659,16 +902,14 @@ const collectEvidence = async () => {
     itemIds: items.docs.map((item) => item.id).sort(),
     receiptIds: [...new Set(receiptIds)].sort(),
     auditIds: [...new Set(receiptIds)].sort(),
-    commandResults: exactCommands.map((command, index) => ({
+    commandResults: live.map((command) => ({
       label: command.label,
       commandId: command.commandId,
       commandType: command.commandType,
-      payloadHash: String(receipts[index].data()?.payloadHash || ""),
-      receiptStatus: String(receipts[index].data()?.status || ""),
-      targetKind: String(receipts[index].data()?.target?.kind || ""),
-      targetRefs: Array.isArray(receipts[index].data()?.target?.refs)
-        ? receipts[index].data().target.refs
-        : [],
+      payloadHash: String(command.receipt.data()?.payloadHash || ""),
+      receiptStatus: String(command.receipt.data()?.status || ""),
+      targetKind: String(command.receipt.data()?.target?.kind || ""),
+      targetRefs: command.refs,
       replayObservations: runner.commands
         .filter(
           (observation) =>
@@ -679,21 +920,11 @@ const collectEvidence = async () => {
     })),
     businessPaths: [...new Set(businessPaths)].sort(),
     sourcePaths: [...new Set(sourcePaths)].sort(),
-    sessionPaths: runner.sessionPath ? [runner.sessionPath] : [],
-    controlPaths: [
-      ...new Set([
-        ...controlPathsSeen,
-        `semester_cutover_targets/${TARGET_SEMESTER_ID}`,
-        `semester_cutover_plans/${planId}`,
-        `semester_cutover_attempts/${attemptId}`,
-        ...(pointer.data()?.latestEvidenceId
-          ? [`semester_cutover_evidence/${pointer.data().latestEvidenceId}`]
-          : []),
-        ...(plan.data()?.rollbackPlanId
-          ? [`semester_cutover_plans/${plan.data().rollbackPlanId}`]
-          : []),
-      ]),
-    ].sort(),
+    sessionPaths,
+    controlPaths: [...new Set(controlPathsSeen)].sort(),
+    storageBucket: STORAGE_BUCKET,
+    storagePrefix,
+    storageObjectCount: currentStorageObjects.length,
     collectedAt: new Date().toISOString(),
     productionAccess: 0,
     productionWrites: 0,
@@ -712,6 +943,10 @@ const verify = async () => {
   const currentBaseline = await baselineSnapshot();
   assert.equal(currentBaseline.hash, run.data()?.canonicalBaselineHash);
   assert.equal(currentBaseline.hash, evidence.canonicalBaselineHash);
+  const currentMaintenance = await maintenanceSnapshot();
+  assert.equal(currentMaintenance.hash, run.data()?.maintenanceBaselineHash);
+  assert.equal(currentMaintenance.hash, evidence.maintenanceSnapshotHashBefore);
+  assert.equal(evidence.maintenanceMutationCount, 0);
   for (const path of evidence.businessPaths) {
     assertBusinessPath(path);
     const snapshot = await db.doc(path).get();
@@ -745,6 +980,9 @@ const verify = async () => {
       attempts: 1,
       items: evidence.itemIds.length,
       canonicalBaselineUnchanged: true,
+      maintenanceMutationCount: 0,
+      maintenanceMeasurementBasis:
+        "EXACT_SITE_SETTINGS_STUDENT_MAINTENANCE_SNAPSHOT_HASH",
       productionAccess: 0,
       productionWrites: 0,
     }),
@@ -752,49 +990,240 @@ const verify = async () => {
 };
 
 const cleanup = async () => {
-  const evidence = readCommandEvidence();
+  const evidence = commandEvidencePath ? readCommandEvidence() : null;
+  const runner = runnerEvidencePath ? readRunnerEvidence() : null;
   const run = await db.doc(runPath).get();
   ensureExactOwner(run, "W11 run marker");
-  const deletable = new Set([
-    ...evidence.businessPaths,
-    ...evidence.sourcePaths,
-    ...evidence.sessionPaths,
-    ...evidence.controlPaths,
-    ...evidence.itemIds.map(
-      (id) => `semester_cutover_attempts/${evidence.attemptId}/items/${id}`,
+  const runData = run.data() || {};
+  const createdAfter = toMillis(runData.createdAt);
+  assert.equal(Number.isFinite(createdAfter), true);
+  const actorUid = await resolveAdminActorUid(evidence, runner);
+  if (evidence?.planId) assert.equal(evidence.planId, reservedPlanId);
+  if (evidence?.attemptId) assert.equal(evidence.attemptId, reservedAttemptId);
+  if (runner?.planId) assert.equal(runner.planId, reservedPlanId);
+  if (runner?.attemptId) assert.equal(runner.attemptId, reservedAttemptId);
+  const { candidates, live } = await loadOwnedCommandArtifacts({
+    actorUid,
+    createdAfter,
+  });
+  const targetOwners = new Map();
+  for (const command of live) {
+    for (const path of command.refs) {
+      if (!isControlPath(path)) assertBusinessPath(path);
+      const owners = targetOwners.get(path) || [];
+      owners.push(command);
+      targetOwners.set(path, owners);
+    }
+  }
+  const liveReceiptIds = new Set(live.map((command) => command.receiptId));
+  const receiptPathSet = new Set(
+    [...liveReceiptIds].map((id) => `command_receipts/${id}`),
+  );
+  const auditPathSet = new Set(
+    [...liveReceiptIds].map((id) => `command_audit_events/${id}`),
+  );
+  const artifactOwners = new Map(
+    live.flatMap((command) => [
+      [command.receipt.ref.path, command],
+      [command.audit.ref.path, command],
+    ]),
+  );
+  const sessionPathSet = new Set(
+    live.map(
+      (command) =>
+        `application_sessions/${actorUid}/sessions/${command.authTime}`,
     ),
-    ...evidence.receiptIds.map((id) => `command_receipts/${id}`),
-    ...evidence.auditIds.map((id) => `command_audit_events/${id}`),
-    ...fixturePaths,
-  ]);
-  for (const path of evidence.businessPaths) assertBusinessPath(path);
-  for (const path of evidence.sourcePaths) assertBusinessPath(path);
-  const fixtureSessions = [];
+  );
+  for (const path of runner?.sessionPath ? [runner.sessionPath] : []) {
+    assert.match(
+      path,
+      new RegExp(
+        `^application_sessions/${actorUid.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}/sessions/[1-9][0-9]*$`,
+        "u",
+      ),
+    );
+    sessionPathSet.add(path);
+  }
   for (const uid of [teacherUid, studentUid]) {
     const sessions = await db
       .collection(`application_sessions/${uid}/sessions`)
       .get();
-    fixtureSessions.push(...sessions.docs.map((item) => item.ref.path));
+    sessions.docs.forEach((item) => {
+      assert.equal(item.data()?.uid, uid);
+      assert.equal(Number(item.data()?.authTime), Number(item.id));
+      assert.ok(toMillis(item.data()?.createdAt) >= createdAfter);
+      sessionPathSet.add(item.ref.path);
+    });
   }
-  fixtureSessions.forEach((path) => deletable.add(path));
-  const documents = await db.getAll(
-    ...[...deletable].map((path) => db.doc(path)),
+  const targetScopedPaths = new Set(targetOwners.keys());
+  const exactTargetDocuments = await db.getAll(
+    ...[
+      `semester_manifests/${TARGET_SEMESTER_ID}`,
+      ...reservedTargetSeedPaths,
+      ...reservedControlPaths,
+    ].map((path) => db.doc(path)),
   );
-  for (let index = 0; index < documents.length; index += 400) {
-    const batch = db.batch();
-    documents
-      .slice(index, index + 400)
-      .filter((item) => item.exists)
-      .forEach((item) => batch.delete(item.ref));
-    await batch.commit();
+  exactTargetDocuments
+    .filter((item) => item.exists)
+    .forEach((item) => {
+      assert.equal(
+        targetOwners.has(item.ref.path),
+        true,
+        `Reserved target document has no deterministic W11 receipt owner: ${item.ref.path}.`,
+      );
+      targetScopedPaths.add(item.ref.path);
+    });
+  for (const collectionName of canonicalCollections) {
+    const snapshot = await db
+      .collection(collectionName)
+      .where("semesterId", "==", TARGET_SEMESTER_ID)
+      .get();
+    snapshot.docs.forEach((item) => {
+      assert.equal(
+        targetOwners.has(item.ref.path),
+        true,
+        `Target document has no deterministic W11 receipt owner: ${item.ref.path}.`,
+      );
+      targetScopedPaths.add(item.ref.path);
+    });
   }
-  await Promise.all(
-    [teacherUid, studentUid].map((uid) =>
-      auth.deleteUser(uid).catch((error) => {
-        if (error?.code !== "auth/user-not-found") throw error;
-      }),
+  for (const collectionName of [
+    "semester_cutover_plans",
+    "semester_cutover_attempts",
+    "semester_cutover_evidence",
+  ]) {
+    const snapshot = await db
+      .collection(collectionName)
+      .where("targetSemesterId", "==", TARGET_SEMESTER_ID)
+      .get();
+    snapshot.docs.forEach((item) => {
+      assert.equal(
+        targetOwners.has(item.ref.path),
+        true,
+        `Control document has no deterministic W11 receipt owner: ${item.ref.path}.`,
+      );
+      targetScopedPaths.add(item.ref.path);
+    });
+  }
+  const attemptItems = await db
+    .collection(`semester_cutover_attempts/${reservedAttemptId}/items`)
+    .get();
+  attemptItems.docs.forEach((item) => {
+    assert.equal(item.data()?.attemptId, reservedAttemptId);
+    assert.equal(item.data()?.planId, reservedPlanId);
+    assert.equal(
+      targetOwners.has(item.ref.path),
+      true,
+      `Attempt item has no deterministic W11 receipt owner: ${item.ref.path}.`,
+    );
+    targetScopedPaths.add(item.ref.path);
+  });
+  const deletable = new Set([
+    ...targetScopedPaths,
+    ...sessionPathSet,
+    ...receiptPathSet,
+    ...auditPathSet,
+    ...fixturePaths,
+  ]);
+  if (evidence) {
+    const claimedPaths = [
+      ...evidence.businessPaths,
+      ...evidence.sourcePaths,
+      ...evidence.sessionPaths,
+      ...evidence.controlPaths,
+      ...evidence.itemIds.map(
+        (id) => `semester_cutover_attempts/${reservedAttemptId}/items/${id}`,
+      ),
+      ...evidence.receiptIds.map((id) => `command_receipts/${id}`),
+      ...evidence.auditIds.map((id) => `command_audit_events/${id}`),
+    ];
+    claimedPaths.forEach((path) => {
+      assertDocumentPath(path);
+      assert.equal(
+        deletable.has(path),
+        true,
+        `External evidence path has no live W11 ownership proof: ${path}.`,
+      );
+    });
+  }
+  const fixturePathSet = new Set(fixturePaths);
+  const storageObjects = await listStorageObjects();
+  for (const file of storageObjects) {
+    assert.equal(file.name.startsWith(storagePrefix), true);
+    const [metadata] = await file.getMetadata();
+    const custom = metadata.metadata || {};
+    assert.equal(custom.fixtureOwner, FIXTURE_OWNER);
+    assert.equal(custom.testRunId, testRunId);
+    assert.equal(custom.actorUid, actorUid);
+    assert.equal(
+      candidates.some(
+        (command) =>
+          command.commandId === custom.commandId &&
+          command.commandType === custom.commandType,
+      ),
+      true,
+      `Storage object has no deterministic W11 command owner: ${file.name}.`,
+    );
+  }
+  const ownedAuthUsers = [];
+  const authUserMarkers = await db.getAll(
+    db.doc(`users/${teacherUid}`),
+    db.doc(`users/${studentUid}`),
+  );
+  for (const uid of [teacherUid, studentUid]) {
+    const user = await auth.getUser(uid).catch((error) => {
+      if (error?.code === "auth/user-not-found") return null;
+      throw error;
+    });
+    if (user) {
+      const marker = authUserMarkers.find((item) => item.id === uid);
+      ensureExactOwner(marker, `Auth deletion marker for ${uid}`);
+      assert.equal(
+        user.email,
+        uid === teacherUid ? teacherEmail : studentEmail,
+      );
+      ownedAuthUsers.push(user);
+    }
+  }
+  for (const file of storageObjects) {
+    await file.delete({ ignoreNotFound: true });
+  }
+  await Promise.all(ownedAuthUsers.map((user) => auth.deleteUser(user.uid)));
+  const deleteOrder = [
+    ...[...deletable].filter(
+      (path) =>
+        !receiptPathSet.has(path) &&
+        !auditPathSet.has(path) &&
+        path !== runPath,
     ),
-  );
+    ...receiptPathSet,
+    ...auditPathSet,
+    runPath,
+  ];
+  for (let index = 0; index < deleteOrder.length; index += 200) {
+    const paths = deleteOrder.slice(index, index + 200);
+    await db.runTransaction(async (transaction) => {
+      const documents = await transaction.getAll(
+        ...paths.map((path) => db.doc(path)),
+      );
+      documents.forEach((snapshot) =>
+        validateOwnedDocument({
+          snapshot,
+          actorUid,
+          createdAfter,
+          fixturePathSet,
+          sessionPathSet,
+          targetOwners,
+          receiptPathSet,
+          auditPathSet,
+          artifactOwners,
+        }),
+      );
+      documents
+        .filter((snapshot) => snapshot.exists)
+        .forEach((snapshot) => transaction.delete(snapshot.ref));
+    });
+  }
   const residualDocuments = await db.getAll(
     ...[...deletable].map((path) => db.doc(path)),
   );
@@ -842,7 +1271,19 @@ const cleanup = async () => {
     );
   }
   const currentBaseline = await baselineSnapshot();
-  assert.equal(currentBaseline.hash, evidence.canonicalBaselineHash);
+  assert.equal(currentBaseline.hash, runData.canonicalBaselineHash);
+  if (evidence)
+    assert.equal(currentBaseline.hash, evidence.canonicalBaselineHash);
+  const currentMaintenance = await maintenanceSnapshot();
+  assert.equal(currentMaintenance.hash, runData.maintenanceBaselineHash);
+  if (evidence?.maintenanceSnapshotHashBefore) {
+    assert.equal(
+      currentMaintenance.hash,
+      evidence.maintenanceSnapshotHashBefore,
+    );
+  }
+  const residualStorageObjects = await listStorageObjects();
+  assert.equal(residualStorageObjects.length, 0);
   console.log(
     JSON.stringify({
       suite: "w11-staging-fixture-cleanup",
@@ -861,9 +1302,24 @@ const cleanup = async () => {
       residualAudits: 0,
       residualSessions: 0,
       residualTokens: 0,
-      residualStorageObjects: 0,
+      residualTokenValueRecords: 0,
+      residualTokensBasis:
+        "PERSISTED_TOKEN_VALUES_ONLY; RUNNER_TOKEN_VALUES_ARE_DISCARDED_IN_MEMORY",
+      validTokenRevocationMeasured: false,
+      validTokenRevocationStatus:
+        "NOT_MEASURED; ADMIN_ID_AND_APP_CHECK_TOKENS_ARE_EPHEMERAL_AND_NOT_RETAINED",
+      residualStorageObjects: residualStorageObjects.length,
+      storageBucket: STORAGE_BUCKET,
+      storagePrefix,
+      storageObjectsInspected: storageObjects.length,
+      storageObjectsDeleted: storageObjects.length,
       canonicalBaselineUnchanged: true,
       canonicalBaselineHash: currentBaseline.hash,
+      maintenanceSnapshotHashBefore: runData.maintenanceBaselineHash,
+      maintenanceSnapshotHashAfter: currentMaintenance.hash,
+      maintenanceMutationCount: 0,
+      maintenanceMeasurementBasis:
+        "EXACT_SITE_SETTINGS_STUDENT_MAINTENANCE_SNAPSHOT_HASH",
       completedAt: new Date().toISOString(),
       productionAccess: 0,
       productionWrites: 0,

@@ -10,6 +10,8 @@ const SOURCE_SEMESTER_ID = "2098-1";
 const TARGET_SEMESTER_ID = "2098-2";
 const FIXTURE_OWNER = "w11-semester-cutover-staging";
 const ADMIN_EMAIL = "westoria28@gmail.com";
+const ADMIN_SIGNER_SERVICE_ACCOUNT =
+  "firebase-adminsdk-fbsvc@westory-staging-177587430482.iam.gserviceaccount.com";
 const args = process.argv.slice(2);
 const valueArg = (name) =>
   String(
@@ -45,6 +47,10 @@ assert.equal(
 
 const apiKey = String(process.env.WESTORY_W11_STAGING_API_KEY || "").trim();
 const appId = String(process.env.WESTORY_W11_STAGING_APP_ID || "").trim();
+let suppliedAppCheckToken = String(
+  process.env.WESTORY_W11_STAGING_APP_CHECK_TOKEN || "",
+).trim();
+delete process.env.WESTORY_W11_STAGING_APP_CHECK_TOKEN;
 assert.ok(apiKey, "WESTORY_W11_STAGING_API_KEY is required in memory.");
 assert.ok(appId, "WESTORY_W11_STAGING_APP_ID is required in memory.");
 
@@ -92,7 +98,11 @@ const snapshot = (path, data, operationType) => {
 const stripScan = ({ count, hash }) => ({ count, hash });
 
 const app = initializeApp(
-  { credential: applicationDefault(), projectId },
+  {
+    credential: applicationDefault(),
+    projectId,
+    serviceAccountId: ADMIN_SIGNER_SERVICE_ACCOUNT,
+  },
   `w11-runner-${sha256(testRunId).slice(0, 12)}`,
 );
 const auth = getAuth(app);
@@ -103,6 +113,8 @@ let idToken = "";
 let appCheckToken = "";
 let session = null;
 let adminUid = "";
+let candidateSessionPath = null;
+let runnerStage = "INITIALIZE";
 const commandEvidence = [];
 
 const callable = async (name, data) => {
@@ -158,9 +170,12 @@ const queryCutover = (payload) =>
   callable("getSemesterCutoverState", { ...payload, _session: session });
 
 const authenticate = async () => {
+  runnerStage = "ADMIN_UID_RESOLUTION";
   const user = await auth.getUserByEmail(ADMIN_EMAIL);
   adminUid = user.uid;
+  runnerStage = "CUSTOM_AUTH_TOKEN_CREATION";
   const customToken = await auth.createCustomToken(user.uid);
+  runnerStage = "CUSTOM_AUTH_TOKEN_EXCHANGE";
   const exchange = await fetch(
     `https://identitytoolkit.googleapis.com/v1/accounts:signInWithCustomToken?key=${encodeURIComponent(apiKey)}`,
     {
@@ -170,22 +185,57 @@ const authenticate = async () => {
     },
   );
   const exchanged = await exchange.json();
-  assert.equal(exchange.ok, true, "Staging custom-token exchange failed.");
+  if (!exchange.ok) {
+    const exchangeError = new Error("Staging custom-token exchange failed.");
+    exchangeError.reason = `CUSTOM_TOKEN_EXCHANGE_${String(
+      exchanged?.error?.message || exchange.status,
+    ).replace(/[^A-Z0-9_-]/giu, "_")}`;
+    throw exchangeError;
+  }
   idToken = String(exchanged.idToken || "");
-  assert.ok(idToken);
+  if (!idToken) {
+    const tokenError = new Error("Staging ID token is missing.");
+    tokenError.reason = "CUSTOM_TOKEN_EXCHANGE_ID_TOKEN_MISSING";
+    throw tokenError;
+  }
+  runnerStage = "SESSION_PATH_DERIVATION";
+  const tokenSegments = idToken.split(".");
+  assert.equal(tokenSegments.length, 3, "Staging ID token is malformed.");
+  const tokenPayload = JSON.parse(
+    Buffer.from(tokenSegments[1], "base64url").toString("utf8"),
+  );
+  const authTime = Number(tokenPayload.auth_time || 0);
+  assert.equal(Number.isSafeInteger(authTime) && authTime > 0, true);
+  candidateSessionPath = `application_sessions/${adminUid}/sessions/${authTime}`;
+  if (suppliedAppCheckToken) {
+    appCheckToken = suppliedAppCheckToken;
+    suppliedAppCheckToken = "";
+    runnerStage = "BROWSER_APP_CHECK_TOKEN_ACCEPTED";
+    return;
+  }
+  runnerStage = "CUSTOM_APP_CHECK_TOKEN_CREATION";
   appCheckToken = String(
     (await getAppCheck(app).createToken(appId, { ttlMillis: 1_800_000 }))
       .token || "",
   );
-  assert.ok(appCheckToken);
+  if (!appCheckToken) {
+    const appCheckError = new Error("Staging App Check token is missing.");
+    appCheckError.reason = "APP_CHECK_TOKEN_MISSING";
+    throw appCheckError;
+  }
 };
 
 const openSession = async () => {
+  runnerStage = "OPEN_APPLICATION_SESSION";
   session = await callable("openApplicationSession", {
     authorityGeneration: "w1r2-2026-08-09",
     protocolVersion: 2,
   });
   assert.equal(session.protocolVersion, 2);
+  assert.equal(
+    `application_sessions/${adminUid}/sessions/${session.authTime}`,
+    candidateSessionPath,
+  );
 };
 
 const bootstrapTarget = async () => {
@@ -485,6 +535,7 @@ const authorPlan = async () => {
                 type: "ROSTER_IMPORT",
                 sourceId: roster.rosterId,
                 revision: 1,
+                sourceHash: roster.sourceHash,
               },
               revision: 1,
               provenance: "CANONICAL",
@@ -854,6 +905,7 @@ try {
     );
   } else {
     await openSession();
+    runnerStage = "REHEARSAL_COMMANDS";
     const result = await run();
     console.log(
       JSON.stringify({
@@ -866,7 +918,7 @@ try {
         targetSemesterId: TARGET_SEMESTER_ID,
         ...result,
         adminUid,
-        sessionPath: `application_sessions/${adminUid}/sessions/${session.authTime}`,
+        sessionPath: candidateSessionPath,
         commands: commandEvidence,
         tokenValuesWritten: 0,
         directCanonicalWrites: 0,
@@ -895,12 +947,13 @@ try {
       planId: failedPlanId,
       attemptId: cutover.attemptIdFor(failedPlanId),
       adminUid,
-      sessionPath:
-        session && adminUid
-          ? `application_sessions/${adminUid}/sessions/${session.authTime}`
-          : null,
+      sessionPath: candidateSessionPath,
       commands: commandEvidence,
-      failureReason: String(error?.reason || error?.code || "RUNNER_FAILED"),
+      failureReason: `${runnerStage}:${String(
+        error?.reason ||
+          [error?.code, error?.message].filter(Boolean).join(":") ||
+          "RUNNER_FAILED",
+      ).replace(/[^A-Z0-9_:/ .-]/giu, "_")}`,
       cleanupRequired: true,
       tokenValuesWritten: 0,
       directCanonicalWrites: 0,
@@ -920,6 +973,8 @@ try {
   // outside authenticate() and never write it to output or evidence.
   idToken = "";
   appCheckToken = "";
+  suppliedAppCheckToken = "";
   session = null;
+  candidateSessionPath = null;
   await deleteApp(app);
 }

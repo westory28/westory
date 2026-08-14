@@ -147,6 +147,7 @@
   display: grid;
   gap: var(--space-6);
   min-width: 0;
+  padding: 0 var(--ws-shell-gutter-mobile) var(--space-6);
 }
 
 .ws-cutover-scope {
@@ -272,9 +273,36 @@
 }
 
 .ws-cutover-actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
   gap: var(--space-2);
+}
+
+.ws-cutover-recovery {
+  margin-top: var(--space-5);
+  border-top: 1px solid var(--ws-border-soft);
+  padding-top: var(--space-4);
+}
+
+.ws-cutover-recovery h3,
+.ws-cutover-recovery p {
+  margin: 0;
+}
+
+.ws-cutover-recovery h3 {
+  color: var(--ws-text-strong);
+  font-size: var(--ws-type-card-title, 1rem);
+  font-weight: 800;
+}
+
+.ws-cutover-recovery > p {
+  margin-top: var(--space-1);
+  color: var(--ws-text-muted);
+  font-size: var(--ws-type-small, 0.875rem);
+  line-height: 1.55;
+}
+
+.ws-cutover-actions--recovery {
+  margin-top: var(--space-3);
 }
 
 .ws-cutover-action-notes,
@@ -332,6 +360,8 @@
 }
 
 .ws-cutover-action {
+  display: grid;
+  gap: var(--space-1);
   min-height: calc(var(--space-10) + var(--space-1));
   border: 1px solid var(--ws-border);
   border-radius: var(--radius-md);
@@ -341,16 +371,71 @@
   font: inherit;
   font-size: var(--ws-type-small, 0.875rem);
   font-weight: 800;
+  line-height: 1.4;
+  text-align: left;
   cursor: pointer;
   transition:
     transform var(--motion-fast) ease-out,
     opacity var(--motion-fast) ease-out;
 }
 
+.ws-cutover-action strong,
+.ws-cutover-action span {
+  display: block;
+}
+
+.ws-cutover-action strong {
+  font-size: var(--ws-type-small, 0.875rem);
+}
+
+.ws-cutover-action span {
+  color: var(--ws-text-muted);
+  font-size: var(--ws-type-meta, 0.72rem);
+  font-weight: 600;
+}
+
 .ws-cutover-action--primary {
   border-color: var(--ws-primary);
   background: var(--ws-primary);
   color: var(--ws-surface);
+}
+
+.ws-cutover-action--primary span {
+  color: var(--ws-surface);
+}
+
+.ws-cutover-action--danger {
+  border-color: var(--ws-danger);
+  background: var(--ws-danger-soft);
+  color: var(--ws-danger-text);
+}
+
+.ws-cutover-action--danger span {
+  color: var(--ws-danger-text);
+}
+
+.ws-cutover-action:hover:not(:disabled) {
+  border-color: var(--ws-primary);
+  background: var(--ws-primary-soft);
+}
+
+.ws-cutover-action--primary:hover:not(:disabled) {
+  background: var(--ws-primary-hover);
+}
+
+.ws-cutover-action--danger:hover:not(:disabled) {
+  border-color: var(--ws-danger-text);
+  background: var(--ws-danger-soft);
+}
+
+.ws-cutover-action:focus-visible {
+  outline: 3px solid var(--ws-ring);
+  outline-offset: 2px;
+}
+
+.ws-cutover-action.is-busy {
+  cursor: progress;
+  opacity: 0.8;
 }
 
 .ws-cutover-action:active:not(:disabled) {
@@ -364,6 +449,11 @@
 
 .ws-cutover-table {
   width: 100%;
+  min-width: calc(
+    var(--space-20) + var(--space-20) + var(--space-20) + var(--space-20) +
+      var(--space-20) + var(--space-20) + var(--space-20) + var(--space-20) +
+      var(--space-20) + var(--space-20)
+  );
   border-collapse: collapse;
   font-size: var(--ws-type-small, 0.875rem);
 }
@@ -384,7 +474,17 @@
 
 .ws-cutover-table td {
   color: var(--ws-text);
+  overflow-wrap: break-word;
+  word-break: keep-all;
+}
+
+.ws-cutover-table td:first-child .ws-cutover-status {
+  margin-top: var(--space-1);
+}
+
+.ws-cutover-table td:last-child {
   overflow-wrap: anywhere;
+  word-break: break-all;
 }
 
 .ws-cutover-status {
@@ -410,6 +510,7 @@
 
 .ws-cutover-status--fail,
 .ws-cutover-status--failed,
+.ws-cutover-status--partial,
 .ws-cutover-status--blocked,
 .ws-cutover-status--stale {
   border-color: color-mix(in srgb, var(--ws-danger) 28%, var(--ws-border));
@@ -437,8 +538,24 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .ws-cutover-page {
+    padding-right: var(--ws-shell-gutter-tablet);
+    padding-left: var(--ws-shell-gutter-tablet);
+  }
+
+  .ws-cutover-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .ws-cutover-summary {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
+  .ws-cutover-page {
+    padding-right: var(--ws-shell-gutter-desktop);
+    padding-left: var(--ws-shell-gutter-desktop);
   }
 }
 

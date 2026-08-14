@@ -24,7 +24,7 @@ const CANONICAL_TARGET_SEMESTER_ID = "2026-2";
 const SYNTHETIC_REHEARSAL_TARGET_SEMESTER_ID = "2098-2";
 
 const OPERATION_LABELS: Record<string, string> = {
-  SEMESTER_MANIFEST: "학기 Manifest",
+  SEMESTER_MANIFEST: "학기 기준 정보",
   SEMESTER_SETTINGS: "학기 설정",
   SEMESTER_CLASSES: "학급",
   SEMESTER_ENROLLMENTS: "학적",
@@ -50,6 +50,45 @@ const SUGGESTED_PLAN_REASON_LABELS: Record<string, string> = {
   PLAN_ALREADY_EXISTS: "이미 생성된 합성 계획을 사용합니다.",
 };
 
+const OPERATOR_ERROR_MESSAGES: Array<[RegExp, string]> = [
+  [
+    /W11_(ADMIN|PREPARING_ADMIN)_REQUIRED/u,
+    "관리자 권한과 최근 인증 상태를 확인한 뒤 다시 시도해 주세요.",
+  ],
+  [
+    /W11_(PLAN|ATTEMPT)_REVISION_CONFLICT|W11_.*MISMATCH/u,
+    "계획이나 학기 정보가 바뀌었습니다. 최신 상태를 불러온 뒤 다시 확인해 주세요.",
+  ],
+  [
+    /W11_(PROJECT_FORBIDDEN|TARGET_READ_ONLY)/u,
+    "이 작업은 Dedicated Staging의 예약된 합성 학기에서만 실행할 수 있습니다.",
+  ],
+  [
+    /W11_(DRY_RUN_DIFF|VERIFY_DIFF|ACTIVITY_ZERO_REQUIRED|ITEMS_NOT_COMPLETE)/u,
+    "비교 결과에 차단 항목이 남아 있습니다. 데이터 비교와 준비도 결과를 확인해 주세요.",
+  ],
+  [
+    /W11_(CHILD_RECEIPT|RECEIPT_OPERATION)/u,
+    "적용 작업의 실행 근거가 서로 맞지 않습니다. 서버 실행 기록을 다시 확인해 주세요.",
+  ],
+  [
+    /W11_(PLAN|ATTEMPT)_STATE_INVALID|W11_RESUME_ITEM_INVALID/u,
+    "현재 단계에서는 이 작업을 실행할 수 없습니다. 리허설 순서와 최신 상태를 확인해 주세요.",
+  ],
+  [
+    /W11_(RESOURCE_NOT_FOUND|ITEM_NOT_FOUND)/u,
+    "필요한 계획이나 실행 기록을 찾지 못했습니다. 최신 상태를 다시 불러와 주세요.",
+  ],
+  [
+    /W11_(ROLLBACK_NOT_REQUIRED|ROLLBACK_TARGET_MISSING)/u,
+    "되돌릴 성공 항목이나 안전한 복구 기준이 없습니다. 실행 결과와 대상 데이터를 다시 확인해 주세요.",
+  ],
+  [
+    /W11_SNAPSHOT_OVERFLOW/u,
+    "비교할 데이터가 안전한 처리 범위를 넘었습니다. 데이터를 나누어 준비해 주세요.",
+  ],
+];
+
 const errorReason = (error: unknown) =>
   String(
     (error as { reason?: unknown })?.reason ||
@@ -58,6 +97,14 @@ const errorReason = (error: unknown) =>
       (error as { message?: unknown })?.message ||
       "W11_CUTOVER_REQUEST_FAILED",
   );
+
+const operatorErrorMessage = (error: unknown) => {
+  const reason = errorReason(error);
+  return (
+    OPERATOR_ERROR_MESSAGES.find(([pattern]) => pattern.test(reason))?.[1] ||
+    "요청을 처리하지 못했습니다. 최신 상태를 다시 불러온 뒤 한 단계씩 진행해 주세요."
+  );
+};
 
 const formatTimestamp = (value: unknown) => {
   const date =
@@ -88,11 +135,14 @@ const SemesterCutoverCenter: React.FC = () => {
   const [state, setState] = useState<SemesterCutoverState | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  const [permissionError, setPermissionError] = useState(false);
   const [busyAction, setBusyAction] = useState<CutoverActionId | "">("");
+  const actionInFlightRef = React.useRef(false);
 
   const reload = useCallback(async () => {
     setLoading(true);
     setLoadError("");
+    setPermissionError(false);
     try {
       const next = await getSemesterCutoverState({
         targetSemesterId,
@@ -109,7 +159,10 @@ const SemesterCutoverCenter: React.FC = () => {
         setSearchParams(nextParams, { replace: true });
       }
     } catch (error) {
-      setLoadError(errorReason(error));
+      setPermissionError(
+        /W11_(ADMIN|PREPARING_ADMIN)_REQUIRED/u.test(errorReason(error)),
+      );
+      setLoadError(operatorErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -136,15 +189,50 @@ const SemesterCutoverCenter: React.FC = () => {
     state?.items
       .filter((item) => ["FAILED", "PENDING"].includes(item.status))
       .map((item) => item.operationKey) || [];
+  const evidenceStale = Boolean(
+    (state?.plan &&
+      state.plan.targetManifestRevision !== state.manifestRevision) ||
+    (state?.evidence &&
+      state.evidence.targetManifestRevision !== state.manifestRevision),
+  );
 
   const runAction = async (action: CutoverActionId) => {
-    if (!state?.plan || action === "CREATE_PLAN") return;
+    if (!state?.plan || action === "CREATE_PLAN" || actionInFlightRef.current)
+      return;
+    if (evidenceStale) {
+      showToast({
+        tone: "error",
+        title: "최신 학기 정보를 먼저 확인해 주세요.",
+        message: "현재 근거의 revision이 대상 학기와 달라 작업을 차단했습니다.",
+      });
+      return;
+    }
+    actionInFlightRef.current = true;
     setBusyAction(action);
     try {
       if (action === "DRY_RUN") {
+        const expectedAttemptRevision =
+          state.plan.status === "BLOCKED"
+            ? state.attempt?.attemptRevision
+            : undefined;
+        if (
+          state.plan.status === "BLOCKED" &&
+          !Number.isSafeInteger(expectedAttemptRevision)
+        ) {
+          showToast({
+            tone: "error",
+            title: "차단된 실행 기록을 다시 확인해 주세요.",
+            message:
+              "재시도에 필요한 실행 revision이 없어 사전 비교를 시작하지 않았습니다.",
+          });
+          return;
+        }
         await dryRunSemesterCutover({
           planId: state.plan.planId,
           expectedPlanRevision: state.plan.planRevision,
+          ...(expectedAttemptRevision !== undefined
+            ? { expectedAttemptRevision }
+            : {}),
         });
       } else if (action === "APPLY_SYNTHETIC_BATCH" && context) {
         await applySemesterCutoverBatch({
@@ -171,16 +259,17 @@ const SemesterCutoverCenter: React.FC = () => {
       showToast({
         tone: "success",
         title: "합성 리허설 단계를 처리했습니다.",
-        message: "서버 receipt와 최신 상태를 다시 확인합니다.",
+        message: "서버 실행 근거와 최신 상태를 다시 확인합니다.",
       });
       await reload();
     } catch (error) {
       showToast({
         tone: "error",
         title: "합성 리허설 단계를 처리하지 못했습니다.",
-        message: errorReason(error),
+        message: operatorErrorMessage(error),
       });
     } finally {
+      actionInFlightRef.current = false;
       setBusyAction("");
     }
   };
@@ -190,7 +279,7 @@ const SemesterCutoverCenter: React.FC = () => {
     const rows: CutoverSourceView[] = [];
     if (state.plan) {
       rows.push({
-        label: "Source",
+        label: "원본 학기",
         semesterId: state.plan.sourceSemesterId,
         provenance:
           state.plan.sourceStatus === "ARCHIVED" ? "ARCHIVE" : "CURRENT",
@@ -203,7 +292,7 @@ const SemesterCutoverCenter: React.FC = () => {
       });
     }
     rows.push({
-      label: "Target",
+      label: "대상 학기",
       semesterId: state.targetSemesterId,
       provenance: state.provenance,
       readOnly: state.readOnly,
@@ -216,7 +305,7 @@ const SemesterCutoverCenter: React.FC = () => {
     });
     if (state.evidence) {
       rows.push({
-        label: "Verified evidence",
+        label: "검증 근거",
         semesterId: state.targetSemesterId,
         provenance: "EXPLICIT",
         readOnly: true,
@@ -232,80 +321,107 @@ const SemesterCutoverCenter: React.FC = () => {
   const actions = useMemo<CutoverActionView[]>(() => {
     const planStatus = state?.plan?.status || "";
     const attemptStatus = state?.attempt?.status || "";
-    const rehearsalWritable = isSyntheticTarget && state?.readOnly === false;
+    const rehearsalWritable =
+      isSyntheticTarget && state?.readOnly === false && !evidenceStale;
     const common = (id: CutoverActionId, busy = busyAction === id) => ({
       id,
       busy,
+      locked: Boolean(busyAction),
     });
-    return [
+    const nextActions: CutoverActionView[] = [
       {
         ...common("CREATE_PLAN"),
-        label: "공식 계획 대기",
-        description: "승인된 runner가 Gateway로 만든 계획만 사용합니다.",
+        label: "계획 준비 상태",
+        description: "승인된 서버 리허설에서 만든 계획만 사용합니다.",
         allowed: false,
         disabledReason: state?.plan?.planId
           ? "공식 runner가 만든 기존 계획을 사용합니다."
           : SUGGESTED_PLAN_REASON_LABELS[
               state?.suggestedPlanUnavailableReason || ""
-            ] || "공식 runner가 Gateway receipt와 함께 계획을 준비합니다.",
-        primary: true,
+            ] || "공식 리허설이 서버 실행 근거와 함께 계획을 준비합니다.",
+        group: "flow",
       },
       {
         ...common("DRY_RUN"),
-        label: "드라이런",
-        description: "canonical write 없이 snapshot을 비교합니다.",
+        label: "사전 비교 실행",
+        description: "실제 데이터를 쓰지 않고 source와 target을 비교합니다.",
         allowed:
           rehearsalWritable &&
           !!state?.plan &&
-          ["CREATED", "BLOCKED"].includes(planStatus),
-        disabledReason: rehearsalWritable
-          ? "CREATED 또는 BLOCKED 계획이 필요합니다."
-          : "예약된 합성 target에서만 실행할 수 있습니다.",
+          (planStatus === "CREATED" ||
+            (planStatus === "BLOCKED" && attemptStatus === "BLOCKED")),
+        disabledReason: evidenceStale
+          ? "대상 학기의 최신 revision을 다시 확인해야 합니다."
+          : rehearsalWritable
+            ? "생성됨 또는 차단 상태의 계획이 필요합니다."
+            : "예약된 합성 target에서만 실행할 수 있습니다.",
+        group: "flow",
       },
       {
         ...common("APPLY_SYNTHETIC_BATCH"),
-        label: "Operation evidence 맞추기",
-        description: "기존 Domain command receipt와 operation 상태를 맞춥니다.",
+        label: "적용 근거 맞추기",
+        description: "기존 도메인 명령의 실행 근거와 작업 상태를 맞춥니다.",
         allowed:
           rehearsalWritable &&
           !!context &&
           pendingKeys.length > 0 &&
           ["DRY_RUN_PASSED", "APPLYING", "PARTIAL"].includes(attemptStatus),
-        disabledReason:
-          "먼저 기존 Domain command runner에서 합성 operation을 실행해야 합니다.",
+        disabledReason: evidenceStale
+          ? "대상 학기의 최신 revision을 다시 확인해야 합니다."
+          : "먼저 기존 도메인 명령 runner에서 합성 작업을 실행해야 합니다.",
+        group: "flow",
       },
       {
         ...common("VERIFY"),
         label: "결과 검증",
-        description: "count, join, hash와 activity 0을 확인합니다.",
+        description: "건수, 연결, hash와 새 활동 0건을 확인합니다.",
         allowed: rehearsalWritable && !!context && attemptStatus === "APPLIED",
-        disabledReason: "모든 적용 operation이 완료되어야 합니다.",
+        disabledReason: evidenceStale
+          ? "대상 학기의 최신 revision을 다시 확인해야 합니다."
+          : "모든 적용 작업이 완료되어야 합니다.",
+        group: "flow",
       },
       {
         ...common("RESUME"),
         label: "미완료 항목 복구",
-        description: "실패·대기 item만 같은 ID로 복구합니다.",
+        description: "실패하거나 대기 중인 항목만 같은 ID로 다시 처리합니다.",
         allowed:
           rehearsalWritable &&
           !!context &&
           recoverableKeys.length > 0 &&
           ["PARTIAL", "FAILED", "APPLYING"].includes(attemptStatus),
-        disabledReason: "복구할 실패 또는 대기 항목이 없습니다.",
+        disabledReason: evidenceStale
+          ? "대상 학기의 최신 revision을 다시 확인해야 합니다."
+          : "복구할 실패 또는 대기 항목이 없습니다.",
+        group: "recovery",
       },
       {
         ...common("CREATE_ROLLBACK_PLAN"),
-        label: "Rollback plan 만들기",
-        description: "자동 mutation 없는 수동 복구 순서만 기록합니다.",
+        label: "복구 계획 기록",
+        description:
+          "실제 데이터를 되돌리지 않고 운영자가 확인할 수동 복구 순서만 기록합니다.",
         allowed:
           rehearsalWritable &&
           !!context &&
           ["APPLIED", "VERIFIED", "PARTIAL", "FAILED"].includes(attemptStatus),
-        disabledReason: "rollback 계획의 기준이 될 실행 결과가 없습니다.",
+        disabledReason: evidenceStale
+          ? "대상 학기의 최신 revision을 다시 확인해야 합니다."
+          : "복구 계획의 기준이 될 실행 결과가 없습니다.",
+        group: "recovery",
+        tone: "danger",
       },
     ];
+    const primaryAction = nextActions.find(
+      (action) => action.group === "flow" && action.allowed,
+    );
+    return nextActions.map((action) => ({
+      ...action,
+      primary: action.id === primaryAction?.id,
+    }));
   }, [
     busyAction,
     context,
+    evidenceStale,
     isSyntheticTarget,
     pendingKeys.length,
     recoverableKeys.length,
@@ -351,9 +467,11 @@ const SemesterCutoverCenter: React.FC = () => {
               ? "PENDING"
               : "NOT_APPLICABLE"),
         detail:
-          resultItem?.errorReason ||
+          (resultItem?.errorReason
+            ? operatorErrorMessage({ reason: resultItem.errorReason })
+            : undefined) ||
           (evidenceDiff?.status === "FAIL"
-            ? `source ${evidenceDiff.sourceStatus}, target ${evidenceDiff.targetStatus}`
+            ? `원본 상태 ${evidenceDiff.sourceStatus} · 대상 상태 ${evidenceDiff.targetStatus}`
             : undefined),
       };
     });
@@ -371,24 +489,21 @@ const SemesterCutoverCenter: React.FC = () => {
           state.evidence.targetManifestRevision === state.manifestRevision
             ? "PASS"
             : "STALE",
-        evidence: `evidence ${state.evidence.evidenceId} · dependency ${state.evidence.dependencyHash}`,
+        evidence: `검증 근거 ID ${state.evidence.evidenceId} · 의존성 해시 ${state.evidence.dependencyHash}`,
       },
     ];
   }, [state]);
 
-  const permission = loadError.includes("W11_ADMIN_REQUIRED");
   return (
     <SemesterCutoverCenterView
       status={
         loading
           ? "LOADING"
-          : permission
+          : permissionError
             ? "PERMISSION"
             : loadError
               ? "ERROR"
-              : state?.evidence &&
-                  state.evidence.targetManifestRevision !==
-                    state.manifestRevision
+              : evidenceStale
                 ? "STALE"
                 : state?.plan
                   ? "CONTENT"
@@ -416,6 +531,7 @@ const SemesterCutoverCenter: React.FC = () => {
           : []
       }
       selectedPlanLabel={state?.plan?.status}
+      targetLabel={`${targetSemesterId}${isSyntheticTarget ? " · 합성 리허설" : " · 조회 전용"}`}
       writeCount={state?.writeCount ?? 0}
       onReload={() => void reload()}
       onAction={(action) => void runAction(action)}

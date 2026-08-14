@@ -465,6 +465,7 @@ export const createSemesterCutoverPlan = (payload: CreateCutoverPlanPayload) =>
 export const dryRunSemesterCutover = (input: {
   planId: string;
   expectedPlanRevision: number;
+  expectedAttemptRevision?: number;
 }) => executeCutoverCommand("dryRunSemesterCutover", input);
 export const applySemesterCutoverBatch = (
   input: CutoverCommandContext & {

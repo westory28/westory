@@ -4,10 +4,33 @@ import { useAuth } from "../../contexts/AuthContext";
 import type { ProvenanceKind } from "../../constants/routeMetadata";
 import ProvenanceBadge from "./ProvenanceBadge";
 
-const getTrustedContext = (pathname: string, search: string) => {
+interface TrustedSemesterContext {
+  provenance: ProvenanceKind;
+  acceptsSemester: boolean;
+  semesterParam: "semesterId" | "target";
+  readOnly: boolean;
+}
+
+const getTrustedContext = (
+  pathname: string,
+  search: string,
+): TrustedSemesterContext => {
   const params = new URLSearchParams(search);
   if (pathname === "/student/mypage/archive") {
-    return { provenance: "ARCHIVE" as ProvenanceKind, acceptsSemester: true };
+    return {
+      provenance: "ARCHIVE",
+      acceptsSemester: true,
+      semesterParam: "semesterId",
+      readOnly: true,
+    };
+  }
+  if (pathname === "/teacher/settings/cutover") {
+    return {
+      provenance: "PREPARING" as ProvenanceKind,
+      acceptsSemester: true,
+      semesterParam: "target",
+      readOnly: true,
+    };
   }
   if (pathname === "/teacher/settings") {
     const tab = params.get("tab");
@@ -15,16 +38,25 @@ const getTrustedContext = (pathname: string, search: string) => {
       return {
         provenance: "ARCHIVE" as ProvenanceKind,
         acceptsSemester: true,
+        semesterParam: "semesterId",
+        readOnly: true,
       };
     }
     if (tab === "semester") {
       return {
         provenance: "PREPARING" as ProvenanceKind,
         acceptsSemester: true,
+        semesterParam: "semesterId",
+        readOnly: false,
       };
     }
   }
-  return { provenance: "CURRENT" as ProvenanceKind, acceptsSemester: false };
+  return {
+    provenance: "CURRENT" as ProvenanceKind,
+    acceptsSemester: false,
+    semesterParam: "semesterId",
+    readOnly: false,
+  };
 };
 
 const SemesterContextBar: React.FC = () => {
@@ -32,7 +64,7 @@ const SemesterContextBar: React.FC = () => {
   const location = useLocation();
   const params = new URLSearchParams(location.search);
   const context = getTrustedContext(location.pathname, location.search);
-  const requestedSemesterId = params.get("semesterId") || "";
+  const requestedSemesterId = params.get(context.semesterParam) || "";
   const explicitSemesterId =
     context.acceptsSemester && /^\d{4}-[12]$/u.test(requestedSemesterId)
       ? requestedSemesterId
@@ -48,7 +80,7 @@ const SemesterContextBar: React.FC = () => {
       : context.provenance === "PREPARING"
         ? "준비 학기"
         : currentSemesterId;
-  const readOnly = context.provenance === "ARCHIVE";
+  const readOnly = context.provenance === "ARCHIVE" || context.readOnly;
 
   return (
     <div className="ws-semester-context" aria-label="학기와 자료 출처">

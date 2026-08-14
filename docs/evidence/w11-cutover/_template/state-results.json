@@ -1,14 +1,18 @@
 {
   "schemaVersion": 1,
   "testRunId": "w11-cutover-replace-me",
-  "requiredStates": [
-    "CURRENT",
-    "PREPARING",
-    "ARCHIVE",
-    "LEGACY",
-    "EXPLICIT",
-    "STALE",
-    "ERROR"
-  ],
+  "projectId": "westory-staging-177587430482",
+  "stableAlias": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+  "observedAliasOrigin": "",
+  "deploymentUrl": "",
+  "immutableDeploymentUrl": "",
+  "deploymentId": "",
+  "vercelProjectId": "prj_XMo7TjPKno80BKCnx0YW3JoGXY8B",
+  "vercelOrgId": "team_M4QjuJFt5l0Lc34XpUxFjEW3",
+  "aliasTargetDeploymentId": "",
+  "inspectedAt": "",
+  "commitSha": "",
+  "sourceCommitSha": "",
+  "requiredStates": ["ARCHIVE", "EXPLICIT", "PREPARING"],
   "results": []
 }

@@ -31,7 +31,10 @@ export interface CutoverActionView {
   allowed: boolean;
   disabledReason?: string;
   busy?: boolean;
+  locked?: boolean;
   primary?: boolean;
+  group: "flow" | "recovery";
+  tone?: "danger";
 }
 
 export interface CutoverDatasetView {
@@ -76,6 +79,7 @@ export interface SemesterCutoverCenterViewProps {
   readiness: CutoverReadinessView[];
   attempts: CutoverAttemptView[];
   selectedPlanLabel?: string;
+  targetLabel: string;
   writeCount: number;
   onReload: () => void;
   onAction: (action: CutoverActionId) => void;
@@ -94,6 +98,11 @@ const STATUS_LABELS: Record<string, string> = {
   VERIFIED: "검증 완료",
   PENDING: "대기",
   NOT_APPLICABLE: "해당 없음",
+  CREATED: "계획 생성됨",
+  DRY_RUN_PASSED: "사전 비교 통과",
+  APPLYING: "적용 확인 중",
+  APPLIED: "적용 근거 확인",
+  ROLLBACK_PLANNED: "복구 계획 기록됨",
 };
 
 const statusClassName = (status: string) =>
@@ -122,6 +131,7 @@ const SemesterCutoverCenterView: React.FC<SemesterCutoverCenterViewProps> = ({
   readiness,
   attempts,
   selectedPlanLabel,
+  targetLabel,
   writeCount,
   onReload,
   onAction,
@@ -173,9 +183,10 @@ const SemesterCutoverCenterView: React.FC<SemesterCutoverCenterViewProps> = ({
           </p>
         </div>
         <div className="ws-cutover-scope__flags" aria-label="안전 범위">
+          <span className="ws-cutover-flag">대상 {targetLabel}</span>
           <span className="ws-cutover-flag">Production 작업 0</span>
           <span className="ws-cutover-flag">활성화 제어 0</span>
-          <span className="ws-cutover-flag">조회 write {writeCount}</span>
+          <span className="ws-cutover-flag">조회 중 쓰기 {writeCount}</span>
         </div>
       </section>
 
@@ -219,20 +230,49 @@ const SemesterCutoverCenterView: React.FC<SemesterCutoverCenterViewProps> = ({
           {selectedPlanLabel && <CutoverStatus status={selectedPlanLabel} />}
         </div>
         <div className="ws-cutover-actions">
-          {actions.map((action) => (
-            <button
-              key={action.id}
-              type="button"
-              className={`ws-cutover-action${action.primary ? " ws-cutover-action--primary" : ""}`}
-              disabled={!action.allowed || action.busy}
-              title={!action.allowed ? action.disabledReason : undefined}
-              aria-label={`${action.label}. ${action.description}`}
-              aria-busy={action.busy || undefined}
-              onClick={() => onAction(action.id)}
-            >
-              {action.busy ? "처리 중" : action.label}
-            </button>
-          ))}
+          {actions
+            .filter((action) => action.group === "flow")
+            .map((action) => (
+              <button
+                key={action.id}
+                type="button"
+                className={`ws-cutover-action${action.primary ? " ws-cutover-action--primary" : ""}${action.busy ? " is-busy" : ""}`}
+                disabled={!action.allowed || action.locked}
+                title={!action.allowed ? action.disabledReason : undefined}
+                aria-label={`${action.label}. ${action.description}`}
+                aria-busy={action.busy || undefined}
+                onClick={() => onAction(action.id)}
+              >
+                <strong>{action.busy ? "처리 중" : action.label}</strong>
+                <span>{action.description}</span>
+              </button>
+            ))}
+        </div>
+        <div className="ws-cutover-recovery">
+          <h3>문제가 있을 때</h3>
+          <p>
+            일반 진행과 분리된 복구 작업입니다. 최신 상태를 확인한 뒤
+            실행하세요.
+          </p>
+          <div className="ws-cutover-actions ws-cutover-actions--recovery">
+            {actions
+              .filter((action) => action.group === "recovery")
+              .map((action) => (
+                <button
+                  key={action.id}
+                  type="button"
+                  className={`ws-cutover-action${action.tone === "danger" ? " ws-cutover-action--danger" : ""}${action.busy ? " is-busy" : ""}`}
+                  disabled={!action.allowed || action.locked}
+                  title={!action.allowed ? action.disabledReason : undefined}
+                  aria-label={`${action.label}. ${action.description}`}
+                  aria-busy={action.busy || undefined}
+                  onClick={() => onAction(action.id)}
+                >
+                  <strong>{action.busy ? "처리 중" : action.label}</strong>
+                  <span>{action.description}</span>
+                </button>
+              ))}
+          </div>
         </div>
         {actions.some((action) => !action.allowed && action.disabledReason) && (
           <ul className="ws-cutover-action-notes" aria-label="비활성 단계 안내">
@@ -248,71 +288,13 @@ const SemesterCutoverCenterView: React.FC<SemesterCutoverCenterViewProps> = ({
       </section>
 
       <section
-        className="ws-cutover-section ws-cutover-section--datasets"
-        aria-labelledby="cutover-dataset-title"
-      >
-        <div className="ws-cutover-section__heading">
-          <div>
-            <h2 id="cutover-dataset-title">데이터 비교</h2>
-            <p>
-              source와 target의 count, join, hash 차이를 조회 결과로 확인합니다.
-            </p>
-          </div>
-        </div>
-        {datasets.length === 0 ? (
-          <p className="ws-cutover-empty">
-            아직 비교 결과가 없습니다. 계획을 선택하고 드라이런을 실행해 주세요.
-          </p>
-        ) : (
-          <ResponsiveDataContainer label="학기 전환 데이터 비교 표">
-            <table className="ws-cutover-table">
-              <thead>
-                <tr>
-                  <th scope="col">영역</th>
-                  <th scope="col">작업</th>
-                  <th scope="col">Source</th>
-                  <th scope="col">Target</th>
-                  <th scope="col">Orphan</th>
-                  <th scope="col">Duplicate</th>
-                  <th scope="col">Hash</th>
-                  <th scope="col">상태</th>
-                </tr>
-              </thead>
-              <tbody>
-                {datasets.map((dataset) => (
-                  <tr key={dataset.id}>
-                    <td>
-                      <strong>{dataset.label}</strong>
-                      {dataset.detail && <div>{dataset.detail}</div>}
-                    </td>
-                    <td>{dataset.operation}</td>
-                    <td>{dataset.sourceCount ?? "미확인"}</td>
-                    <td>{dataset.targetCount ?? "미확인"}</td>
-                    <td>{dataset.orphanCount ?? "미확인"}</td>
-                    <td>{dataset.duplicateCount ?? "미확인"}</td>
-                    <td>
-                      {compactHash(dataset.sourceHash)} →{" "}
-                      {compactHash(dataset.targetHash)}
-                    </td>
-                    <td>
-                      <CutoverStatus status={dataset.status} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </ResponsiveDataContainer>
-        )}
-      </section>
-
-      <section
         className="ws-cutover-section ws-cutover-section--readiness"
         aria-labelledby="cutover-readiness-title"
       >
         <div className="ws-cutover-section__heading">
           <div>
-            <h2 id="cutover-readiness-title">Readiness와 차단 항목</h2>
-            <p>registry check ID와 서버 evidence를 그대로 표시합니다.</p>
+            <h2 id="cutover-readiness-title">준비도와 차단 항목</h2>
+            <p>필수 검증 결과와 지금 해결해야 할 문제를 먼저 확인합니다.</p>
           </div>
         </div>
         {readiness.length === 0 ? (
@@ -336,13 +318,67 @@ const SemesterCutoverCenterView: React.FC<SemesterCutoverCenterViewProps> = ({
       </section>
 
       <section
+        className="ws-cutover-section ws-cutover-section--datasets"
+        aria-labelledby="cutover-dataset-title"
+      >
+        <div className="ws-cutover-section__heading">
+          <div>
+            <h2 id="cutover-dataset-title">데이터 비교</h2>
+            <p>원본과 대상의 건수, 연결 상태, 해시 차이를 확인합니다.</p>
+          </div>
+        </div>
+        {datasets.length === 0 ? (
+          <p className="ws-cutover-empty">
+            아직 비교 결과가 없습니다. 계획을 선택하고 사전 비교를 실행해
+            주세요.
+          </p>
+        ) : (
+          <ResponsiveDataContainer label="학기 전환 데이터 비교 표">
+            <table className="ws-cutover-table">
+              <thead>
+                <tr>
+                  <th scope="col">영역과 상태</th>
+                  <th scope="col">작업</th>
+                  <th scope="col">원본</th>
+                  <th scope="col">대상</th>
+                  <th scope="col">연결 끊김</th>
+                  <th scope="col">중복</th>
+                  <th scope="col">해시</th>
+                </tr>
+              </thead>
+              <tbody>
+                {datasets.map((dataset) => (
+                  <tr key={dataset.id}>
+                    <td>
+                      <strong>{dataset.label}</strong>
+                      <CutoverStatus status={dataset.status} />
+                      {dataset.detail && <div>{dataset.detail}</div>}
+                    </td>
+                    <td>{dataset.operation}</td>
+                    <td>{dataset.sourceCount ?? "미확인"}</td>
+                    <td>{dataset.targetCount ?? "미확인"}</td>
+                    <td>{dataset.orphanCount ?? "미확인"}</td>
+                    <td>{dataset.duplicateCount ?? "미확인"}</td>
+                    <td>
+                      {compactHash(dataset.sourceHash)} →{" "}
+                      {compactHash(dataset.targetHash)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </ResponsiveDataContainer>
+        )}
+      </section>
+
+      <section
         className="ws-cutover-section ws-cutover-section--attempts"
         aria-labelledby="cutover-attempt-title"
       >
         <div className="ws-cutover-section__heading">
           <div>
             <h2 id="cutover-attempt-title">최근 합성 실행</h2>
-            <p>응답 유실 뒤에도 같은 item ID와 receipt를 사용해 복구합니다.</p>
+            <p>응답이 끊겨도 같은 항목 ID와 실행 근거를 사용해 복구합니다.</p>
           </div>
         </div>
         {attempts.length === 0 ? (

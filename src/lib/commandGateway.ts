@@ -780,6 +780,7 @@ export interface W2CommandPayloads {
   dryRunSemesterCutover: {
     planId: string;
     expectedPlanRevision: number;
+    expectedAttemptRevision?: number;
   };
   applySemesterCutoverBatch: {
     planId: string;

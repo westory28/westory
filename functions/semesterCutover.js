@@ -44,6 +44,7 @@ const CUTOVER_ATTEMPT_COLLECTION = "semester_cutover_attempts";
 const CUTOVER_EVIDENCE_COLLECTION = "semester_cutover_evidence";
 const CUTOVER_TARGET_COLLECTION = "semester_cutover_targets";
 const RECEIPT_COLLECTION = "command_receipts";
+const AUDIT_COLLECTION = "command_audit_events";
 
 const CUTOVER_COMMAND_TYPES = Object.freeze({
   CREATE_PLAN: "createSemesterCutoverPlan",
@@ -294,8 +295,14 @@ const normalizeCutoverPayload = (type, raw) => {
   }
   const common = ["planId", "attemptId", "expectedPlanRevision", "expectedAttemptRevision"];
   if (type === CUTOVER_COMMAND_TYPES.DRY_RUN) {
-    allowed(raw, ["planId", "expectedPlanRevision"], "dryRunSemesterCutover payload");
-    return { planId: text(raw.planId, "planId", 80), expectedPlanRevision: integer(raw.expectedPlanRevision, "expectedPlanRevision", 1) };
+    allowed(raw, ["planId", "expectedPlanRevision", "expectedAttemptRevision"], "dryRunSemesterCutover payload");
+    return {
+      planId: text(raw.planId, "planId", 80),
+      expectedPlanRevision: integer(raw.expectedPlanRevision, "expectedPlanRevision", 1),
+      expectedAttemptRevision: raw.expectedAttemptRevision == null
+        ? null
+        : integer(raw.expectedAttemptRevision, "expectedAttemptRevision", 1),
+    };
   }
   if (type === CUTOVER_COMMAND_TYPES.APPLY_BATCH) {
     allowed(raw, [...common, "operationKeys", "failures"], "applySemesterCutoverBatch payload");
@@ -329,6 +336,27 @@ const assertProject = (projectId) => {
   }
 };
 const assertCutoverProject = assertProject;
+const assertProjectSemesterPair = (projectId, sourceSemesterId, targetSemesterId) => {
+  if (
+    String(projectId || "").trim() === STAGING_PROJECT_ID
+    && (
+      sourceSemesterId !== REHEARSAL_SOURCE_SEMESTER_ID
+      || targetSemesterId !== REHEARSAL_TARGET_SEMESTER_ID
+    )
+  ) {
+    fail(
+      "failed-precondition",
+      "Dedicated Staging W11 plans are limited to the isolated rehearsal semester pair.",
+      "W11_STAGING_SCOPE_FORBIDDEN",
+      {
+        sourceSemesterId,
+        targetSemesterId,
+        requiredSourceSemesterId: REHEARSAL_SOURCE_SEMESTER_ID,
+        requiredTargetSemesterId: REHEARSAL_TARGET_SEMESTER_ID,
+      },
+    );
+  }
+};
 const assertManifestRevision = (snapshot, semester, expectedRevision, statuses, label) => {
   if (!snapshot.exists || snapshot.data?.semesterId !== semester) fail("not-found", `${label} Manifest was not found.`, "SEMESTER_NOT_FOUND", { semesterId: semester });
   if (Number(snapshot.data?.revision || 0) !== expectedRevision) fail("aborted", `${label} Manifest revision changed.`, "SEMESTER_REVISION_CONFLICT", { semesterId: semester, currentRevision: Number(snapshot.data?.revision || 0) });
@@ -338,6 +366,45 @@ const assertManifestRevision = (snapshot, semester, expectedRevision, statuses, 
 const assertRevision = (snapshot, field, expected, reason) => {
   if (!snapshot.exists) fail("not-found", "W11 resource was not found.", "W11_RESOURCE_NOT_FOUND");
   if (Number(snapshot.data?.[field] || 0) !== expected) fail("aborted", "W11 resource revision changed.", reason, { currentRevision: Number(snapshot.data?.[field] || 0) });
+};
+const assertLatestTargetMarker = async (transaction, plan, planId, attemptId = null) => {
+  const targetSemesterId = plan.data?.targetSemesterId;
+  const marker = await transaction.get(targetPath(targetSemesterId));
+  if (
+    !marker.exists
+    || marker.data?.targetSemesterId !== targetSemesterId
+    || marker.data?.latestPlanId !== planId
+  ) {
+    fail(
+      "failed-precondition",
+      "Cutover Plan is not the latest plan for its target semester.",
+      "W11_CUTOVER_TARGET_PLAN_MISMATCH",
+      {
+        planId,
+        targetSemesterId,
+        latestPlanId: marker.data?.latestPlanId || null,
+      },
+    );
+  }
+  if (
+    attemptId
+    && (
+      marker.data?.latestAttemptId !== attemptId
+      || plan.data?.latestAttemptId !== attemptId
+    )
+  ) {
+    fail(
+      "failed-precondition",
+      "Cutover Attempt is not the latest attempt for its target plan.",
+      "W11_CUTOVER_TARGET_ATTEMPT_MISMATCH",
+      {
+        planId,
+        attemptId,
+        latestAttemptId: marker.data?.latestAttemptId || null,
+      },
+    );
+  }
+  return marker;
 };
 
 const VOLATILE_FIELDS = new Set([
@@ -512,8 +579,87 @@ const assertReceiptTargetScope = ({ receipt, operation, targetSemesterId, docume
   for (const ref of refs) {
     if (typeof ref !== "string" || !policy.prefixes.some((prefix) => ref.startsWith(prefix)) || !refBelongsToSemester(ref, targetSemesterId)) fail("failed-precondition", "Child receipt ref is outside the target dataset.", "W11_CHILD_RECEIPT_SCOPE_MISMATCH", { operationKey: operation.operationKey, ref });
     const document = documentsByPath.get(ref);
+    if (!document?.exists) fail("failed-precondition", "Child receipt target document is missing.", "W11_CHILD_RECEIPT_TARGET_MISSING", { operationKey: operation.operationKey, ref });
     if (document?.exists && document.data?.semesterId && document.data.semesterId !== targetSemesterId) fail("failed-precondition", "Child receipt ref document belongs to another semester.", "W11_CHILD_RECEIPT_SCOPE_MISMATCH", { operationKey: operation.operationKey, ref, documentSemesterId: document.data.semesterId });
   }
+};
+const assertReceiptAuditAuthoritySummary = ({ receiptId, receipt, audit, operation, actor }) => {
+  const auditPath = `${AUDIT_COLLECTION}/${receiptId}`;
+  const session = receipt.session;
+  if (
+    receipt.actorUid !== actor.actorUid
+    || String(receipt.actorEmail || "").trim().toLowerCase() !== ADMIN_EMAIL
+    || receipt.actorRole !== "admin"
+    || typeof receipt.actorCapability !== "string"
+    || !receipt.actorCapability.trim()
+    || !isObject(session)
+    || !Number.isSafeInteger(session.authTime)
+    || session.authTime <= 0
+    || session.ref !== `application_sessions/${actor.actorUid}/sessions/${session.authTime}`
+    || typeof session.authorityMode !== "string"
+    || !session.authorityMode
+    || typeof session.authorityGeneration !== "string"
+    || !session.authorityGeneration
+    || !Number.isSafeInteger(session.protocolVersion)
+    || session.protocolVersion < 1
+    || (typeof session.revisionHash !== "string" || !/^[0-9a-f]{64}$/.test(session.revisionHash))
+    || !Object.prototype.hasOwnProperty.call(session, "observedFailure")
+  ) {
+    fail(
+      "failed-precondition",
+      "Child command authority or session summary is incomplete.",
+      "W11_CHILD_RECEIPT_AUTHORITY_MISMATCH",
+      { operationKey: operation.operationKey, receiptId },
+    );
+  }
+  if (
+    !isObject(receipt.audit)
+    || receipt.audit.eventId !== receiptId
+    || receipt.audit.ref !== auditPath
+    || receipt.audit.eventType !== "COMMAND_SUCCEEDED"
+    || !audit?.exists
+    || audit.data?.eventId !== receiptId
+    || audit.data?.eventType !== "COMMAND_SUCCEEDED"
+    || audit.data?.receiptRef !== `${RECEIPT_COLLECTION}/${receiptId}`
+    || audit.data?.commandId !== receipt.commandId
+    || audit.data?.commandType !== receipt.commandType
+    || audit.data?.actorUid !== receipt.actorUid
+    || audit.data?.actorEmail !== receipt.actorEmail
+    || audit.data?.actorRole !== receipt.actorRole
+    || audit.data?.actorCapability !== receipt.actorCapability
+    || audit.data?.payloadHash !== receipt.payloadHash
+    || audit.data?.sourceHash !== receipt.sourceHash
+    || canonicalJson(audit.data?.target) !== canonicalJson(receipt.target)
+    || canonicalJson(audit.data?.result) !== canonicalJson(receipt.result)
+  ) {
+    fail(
+      "failed-precondition",
+      "Child command audit does not match its receipt.",
+      "W11_CHILD_AUDIT_MISMATCH",
+      { operationKey: operation.operationKey, receiptId },
+    );
+  }
+};
+const assertReconciledChildReceipt = ({ receiptId, receipt, audit, operation, actor, targetSemesterId, documentsByPath }) => {
+  if (
+    !receipt?.exists
+    || receipt.data?.status !== "SUCCEEDED"
+    || receipt.data?.actorUid !== actor.actorUid
+    || receipt.data?.commandType !== operation.childCommandType
+    || receipt.data?.commandId !== operation.childCommandId
+    || receipt.data?.payloadHash !== operation.childPayloadHash
+  ) {
+    fail("failed-precondition", "Child command receipt does not match the Cutover Plan.", "W11_CHILD_RECEIPT_MISMATCH", { operationKey: operation.operationKey });
+  }
+  assertReceiptTargetScope({ receipt: receipt.data, operation, targetSemesterId, documentsByPath });
+  assertReceiptAuditAuthoritySummary({ receiptId, receipt: receipt.data, audit, operation, actor });
+};
+const revisionEvidenceFor = (document) => {
+  for (const field of ["revision", "stateRevision", "manifestRevision", "recordRevision", "sessionRevision"]) {
+    const value = document?.data?.[field];
+    if (Number.isSafeInteger(value) && value >= 0) return { field, value };
+  }
+  return null;
 };
 
 const createSemesterCutoverCommandAdapter = ({ projectId = "" } = {}) => ({
@@ -522,13 +668,17 @@ const createSemesterCutoverCommandAdapter = ({ projectId = "" } = {}) => ({
     if (actor?.actorRole !== "admin" || String(actor?.actorEmail || "").toLowerCase() !== ADMIN_EMAIL) fail("permission-denied", "Highest administrator authority is required.", "W11_ADMIN_REQUIRED");
 
     if (commandType === CUTOVER_COMMAND_TYPES.CREATE_PLAN) {
+      assertProjectSemesterPair(projectId, payload.sourceSemesterId, payload.targetSemesterId);
       const [sourceSnapshot, targetSnapshot] = await transaction.getAll([manifestPath(payload.sourceSemesterId), manifestPath(payload.targetSemesterId)]);
       const source = assertManifestRevision(sourceSnapshot, payload.sourceSemesterId, payload.sourceManifestRevision, ["ACTIVE", "CLOSING", "CLOSED", "ARCHIVED"], "Source");
       const target = assertManifestRevision(targetSnapshot, payload.targetSemesterId, payload.targetManifestRevision, ["PREPARING", "READY"], "Target");
       if (["CLOSED", "ARCHIVED", "QUARANTINED"].includes(target.status)) fail("failed-precondition", "Archive or Legacy cannot be a cutover target.", "W11_TARGET_READ_ONLY");
       const planId = planIdFor(payload.manifestVersion, payload.sourceSemesterId, payload.targetSemesterId);
       const path = planPath(planId);
-      const existing = await transaction.get(path);
+      const [existing, marker] = await transaction.getAll([path, targetPath(payload.targetSemesterId)]);
+      if (marker.exists && marker.data?.latestPlanId !== planId) {
+        fail("aborted", "Another Cutover Plan already owns this target semester.", "W11_CUTOVER_TARGET_PLAN_CONFLICT", { planId, latestPlanId: marker.data?.latestPlanId || null });
+      }
       if (existing.exists) {
         const samePlan = existing.data?.manifestHash === payload.manifestHash
           && existing.data?.sourceSemesterId === payload.sourceSemesterId
@@ -545,6 +695,13 @@ const createSemesterCutoverCommandAdapter = ({ projectId = "" } = {}) => ({
     const plan = await transaction.get(planPath(payload.planId));
     assertRevision(plan, "planRevision", payload.expectedPlanRevision, "W11_PLAN_REVISION_CONFLICT");
     if (plan.data?.planType !== "CUTOVER") fail("failed-precondition", "Rollback plan is not executable.", "W11_PLAN_TYPE_INVALID");
+    assertProjectSemesterPair(projectId, plan.data.sourceSemesterId, plan.data.targetSemesterId);
+    await assertLatestTargetMarker(
+      transaction,
+      plan,
+      payload.planId,
+      commandType === CUTOVER_COMMAND_TYPES.DRY_RUN ? null : payload.attemptId,
+    );
     const [sourceManifest, targetManifest] = await transaction.getAll([manifestPath(plan.data.sourceSemesterId), manifestPath(plan.data.targetSemesterId)]);
     assertManifestRevision(sourceManifest, plan.data.sourceSemesterId, plan.data.sourceManifestRevision, ["ACTIVE", "CLOSING", "CLOSED", "ARCHIVED"], "Source");
     const target = assertManifestRevision(targetManifest, plan.data.targetSemesterId, plan.data.targetManifestRevision, ["PREPARING", "READY"], "Target");
@@ -554,7 +711,28 @@ const createSemesterCutoverCommandAdapter = ({ projectId = "" } = {}) => ({
       if (!["CREATED", "BLOCKED"].includes(plan.data.status)) fail("failed-precondition", "Plan cannot be dry-run in its current state.", "W11_PLAN_STATE_INVALID");
       const attemptId = attemptIdFor(payload.planId);
       const existingAttempt = await transaction.get(attemptPath(attemptId));
-      if (existingAttempt.exists) fail("already-exists", "Cutover attempt already exists.", "W11_ATTEMPT_EXISTS", { attemptId });
+      const rerun = existingAttempt.exists;
+      if (rerun) {
+        await assertLatestTargetMarker(transaction, plan, payload.planId, attemptId);
+        if (
+          plan.data.status !== "BLOCKED"
+          || existingAttempt.data?.planId !== payload.planId
+          || existingAttempt.data?.targetSemesterId !== plan.data.targetSemesterId
+          || existingAttempt.data?.status !== "BLOCKED"
+        ) {
+          fail("failed-precondition", "Only a blocked deterministic attempt can be dry-run again.", "W11_ATTEMPT_STATE_INVALID", { attemptId });
+        }
+        if (payload.expectedAttemptRevision == null) {
+          fail("failed-precondition", "Blocked dry-run retry requires Attempt revision CAS.", "W11_ATTEMPT_REVISION_REQUIRED", { attemptId });
+        }
+        assertRevision(existingAttempt, "attemptRevision", payload.expectedAttemptRevision, "W11_ATTEMPT_REVISION_CONFLICT");
+      } else {
+        if (plan.data.status !== "CREATED") fail("failed-precondition", "Blocked plan lost its deterministic attempt.", "W11_ATTEMPT_NOT_FOUND", { attemptId });
+        if (payload.expectedAttemptRevision != null) fail("failed-precondition", "Initial dry-run cannot declare an Attempt revision.", "W11_ATTEMPT_REVISION_UNEXPECTED", { attemptId });
+      }
+      const existingItems = rerun
+        ? await transaction.getAll(operations.map((operation) => itemPath(attemptId, operation.operationKey)))
+        : [];
       const inspected = await inspectDatasets(transaction, operations, plan.data.sourceSemesterId, plan.data.targetSemesterId);
       const deniedActivitySnapshot = await activitySnapshot(transaction, plan.data.targetSemesterId);
       const activityZero = deniedActivitySnapshot.count === 0 && deniedActivitySnapshot.hash === EMPTY_SNAPSHOT_HASH;
@@ -567,15 +745,23 @@ const createSemesterCutoverCommandAdapter = ({ projectId = "" } = {}) => ({
       const blocked = results.some((result) => result.status === "FAILED") || !activityZero;
       const attemptStatus = blocked ? "BLOCKED" : "DRY_RUN_PASSED";
       const planRevision = payload.expectedPlanRevision + 1;
-      const attempt = { schemaVersion: CUTOVER_SCHEMA_VERSION, policyVersion: CUTOVER_POLICY_VERSION, attemptId, attemptRevision: 1, planId: payload.planId, planRevision, manifestHash: plan.data.manifestHash, sourceSemesterId: plan.data.sourceSemesterId, targetSemesterId: plan.data.targetSemesterId, sourceManifestRevision: plan.data.sourceManifestRevision, targetManifestRevision: plan.data.targetManifestRevision, status: attemptStatus, operationCount: operations.length, succeededCount: results.filter((result) => result.status === "NOT_APPLICABLE").length, failedCount: results.filter((result) => result.status === "FAILED").length + (activityZero ? 0 : 1), pendingCount: results.filter((result) => result.status === "PENDING").length, copyDenylist: plan.data.copyDenylist, deniedActivitySnapshot, activityZero, createdAt: timestamp, createdBy: actor.actorUid, updatedAt: timestamp };
-      transaction.create(attemptPath(attemptId), attempt);
-      results.forEach((result) => {
+      const attemptRevision = rerun ? payload.expectedAttemptRevision + 1 : 1;
+      const attempt = { schemaVersion: CUTOVER_SCHEMA_VERSION, policyVersion: CUTOVER_POLICY_VERSION, attemptId, attemptRevision, planId: payload.planId, planRevision, manifestHash: plan.data.manifestHash, sourceSemesterId: plan.data.sourceSemesterId, targetSemesterId: plan.data.targetSemesterId, sourceManifestRevision: plan.data.sourceManifestRevision, targetManifestRevision: plan.data.targetManifestRevision, status: attemptStatus, operationCount: operations.length, succeededCount: results.filter((result) => result.status === "NOT_APPLICABLE").length, failedCount: results.filter((result) => result.status === "FAILED").length + (activityZero ? 0 : 1), pendingCount: results.filter((result) => result.status === "PENDING").length, copyDenylist: plan.data.copyDenylist, deniedActivitySnapshot, activityZero, createdAt: rerun ? existingAttempt.data.createdAt : timestamp, createdBy: rerun ? existingAttempt.data.createdBy : actor.actorUid, updatedAt: timestamp };
+      if (rerun) transaction.set(attemptPath(attemptId), attempt, { merge: true });
+      else transaction.create(attemptPath(attemptId), attempt);
+      results.forEach((result, index) => {
         const operation = operations.find((item) => item.operationKey === result.operationKey);
-        transaction.create(itemPath(attemptId, result.operationKey), { schemaVersion: CUTOVER_SCHEMA_VERSION, policyVersion: CUTOVER_POLICY_VERSION, itemId: itemIdFor(attemptId, result.operationKey), attemptId, planId: payload.planId, ...operation, itemRevision: 1, status: result.status, dryRun: result, receiptId: null, errorCode: result.status === "FAILED" ? "W11_DRY_RUN_DIFF" : null, errorReason: result.errorReason, createdAt: timestamp, updatedAt: timestamp });
+        const existingItem = existingItems[index];
+        if (rerun && (!existingItem?.exists || existingItem.data?.planId !== payload.planId || existingItem.data?.operationKey !== result.operationKey)) {
+          fail("failed-precondition", "Blocked dry-run item set is incomplete.", "W11_ITEM_SCOPE_MISMATCH", { attemptId, operationKey: result.operationKey });
+        }
+        const item = { schemaVersion: CUTOVER_SCHEMA_VERSION, policyVersion: CUTOVER_POLICY_VERSION, itemId: itemIdFor(attemptId, result.operationKey), attemptId, planId: payload.planId, ...operation, itemRevision: rerun ? Number(existingItem.data?.itemRevision || 0) + 1 : 1, status: result.status, dryRun: result, receiptId: null, errorCode: result.status === "FAILED" ? "W11_DRY_RUN_DIFF" : null, errorReason: result.errorReason, createdAt: rerun ? existingItem.data.createdAt : timestamp, updatedAt: timestamp };
+        if (rerun) transaction.set(existingItem.path, item, { merge: true });
+        else transaction.create(itemPath(attemptId, result.operationKey), item);
       });
       transaction.set(planPath(payload.planId), { planRevision, status: attemptStatus, latestAttemptId: attemptId, updatedAt: timestamp, updatedBy: actor.actorUid }, { merge: true });
       transaction.set(targetPath(plan.data.targetSemesterId), { latestAttemptId: attemptId, status: attemptStatus, updatedAt: timestamp }, { merge: true });
-      return { target: { kind: "semester-cutover-dry-run", id: attemptId, refs: [attemptPath(attemptId), ...results.map((result) => itemPath(attemptId, result.operationKey))] }, sourceHash: plan.data.manifestHash, result: { planId: payload.planId, planRevision, attemptId, attemptRevision: 1, status: attemptStatus, counts: { total: results.length, pending: results.filter((result) => result.status === "PENDING").length, failed: results.filter((result) => result.status === "FAILED").length + (activityZero ? 0 : 1), notApplicable: results.filter((result) => result.status === "NOT_APPLICABLE").length }, activityZero, deniedActivitySnapshot, items: results } };
+      return { target: { kind: "semester-cutover-dry-run", id: attemptId, refs: [attemptPath(attemptId), ...results.map((result) => itemPath(attemptId, result.operationKey))] }, sourceHash: plan.data.manifestHash, result: { planId: payload.planId, planRevision, attemptId, attemptRevision, deterministicAttemptReused: rerun, status: attemptStatus, counts: { total: results.length, pending: results.filter((result) => result.status === "PENDING").length, failed: results.filter((result) => result.status === "FAILED").length + (activityZero ? 0 : 1), notApplicable: results.filter((result) => result.status === "NOT_APPLICABLE").length }, activityZero, deniedActivitySnapshot, items: results } };
     }
 
     const attempt = await transaction.get(attemptPath(payload.attemptId));
@@ -585,12 +771,16 @@ const createSemesterCutoverCommandAdapter = ({ projectId = "" } = {}) => ({
     if (commandType === CUTOVER_COMMAND_TYPES.APPLY_BATCH) {
       if (!["DRY_RUN_PASSED", "APPLYING", "PARTIAL"].includes(attempt.data.status)) fail("failed-precondition", "Attempt cannot reconcile child commands.", "W11_ATTEMPT_STATE_INVALID");
       const allItems = await transaction.getAll(operations.map((operation) => itemPath(payload.attemptId, operation.operationKey)));
+      if (allItems.some((row, index) => !row.exists || row.data?.planId !== payload.planId || row.data?.attemptId !== payload.attemptId || row.data?.operationKey !== operations[index].operationKey)) fail("failed-precondition", "Cutover item set does not match the Plan and Attempt.", "W11_ITEM_SCOPE_MISMATCH");
       const allItemByKey = new Map(allItems.map((row) => [row.data?.operationKey, row]));
       const itemRows = payload.operationKeys.map((key) => allItemByKey.get(key) || { exists: false, data: null, path: itemPath(payload.attemptId, key) });
       const failureMap = new Map(payload.failures.map((failure) => [failure.operationKey, failure]));
       const receiptPaths = itemRows.map((row) => row.data?.childCommandType ? `${RECEIPT_COLLECTION}/${receiptIdFor(actor.actorUid, row.data.childCommandType, row.data.childCommandId)}` : null);
       const receiptRows = await transaction.getAll(receiptPaths.filter(Boolean));
       const receiptByPath = new Map(receiptRows.map((row) => [row.path, row]));
+      const auditPaths = receiptRows.map((row) => `${AUDIT_COLLECTION}/${String(row.path).split("/").at(-1)}`);
+      const auditRows = await transaction.getAll(auditPaths);
+      const auditByPath = new Map(auditRows.map((row) => [row.path, row]));
       const targetRefPaths = [...new Set(receiptRows.filter((row) => row.exists).flatMap((row) => Array.isArray(row.data?.target?.refs) ? row.data.target.refs : []))];
       const targetRefRows = await transaction.getAll(targetRefPaths);
       const targetDocumentsByPath = new Map(targetRefRows.map((row) => [row.path, row]));
@@ -605,15 +795,20 @@ const createSemesterCutoverCommandAdapter = ({ projectId = "" } = {}) => ({
         const row = itemRows[index];
         const key = payload.operationKeys[index];
         if (!row.exists || row.data?.operationKey !== key) fail("not-found", "Cutover item was not found.", "W11_ITEM_NOT_FOUND", { operationKey: key });
-        if (["SUCCEEDED", "NOT_APPLICABLE"].includes(row.data.status)) { results.push({ operationKey: key, status: row.data.status, replayed: true, receiptId: row.data.receiptId || null }); continue; }
+        if (["SUCCEEDED", "NOT_APPLICABLE"].includes(row.data.status)) {
+          if (row.data.status === "SUCCEEDED" && row.data.childCommandType) {
+            const receiptId = receiptIdFor(actor.actorUid, row.data.childCommandType, row.data.childCommandId);
+            assertReconciledChildReceipt({ receiptId, receipt: receiptByPath.get(`${RECEIPT_COLLECTION}/${receiptId}`), audit: auditByPath.get(`${AUDIT_COLLECTION}/${receiptId}`), operation: row.data, actor, targetSemesterId: plan.data.targetSemesterId, documentsByPath: targetDocumentsByPath });
+          }
+          results.push({ operationKey: key, status: row.data.status, replayed: true, receiptId: row.data.receiptId || null }); continue;
+        }
         const failure = failureMap.get(key);
         let status = "PENDING"; let receiptId = null; let errorCode = null; let errorReason = null;
         if (row.data.childCommandType) {
           receiptId = receiptIdFor(actor.actorUid, row.data.childCommandType, row.data.childCommandId);
           const receipt = receiptByPath.get(`${RECEIPT_COLLECTION}/${receiptId}`);
           if (receipt?.exists) {
-            if (receipt.data?.status !== "SUCCEEDED" || receipt.data?.actorUid !== actor.actorUid || receipt.data?.commandType !== row.data.childCommandType || receipt.data?.commandId !== row.data.childCommandId || receipt.data?.payloadHash !== row.data.childPayloadHash) fail("failed-precondition", "Child command receipt does not match the Cutover Plan.", "W11_CHILD_RECEIPT_MISMATCH", { operationKey: key });
-            assertReceiptTargetScope({ receipt: receipt.data, operation: row.data, targetSemesterId: plan.data.targetSemesterId, documentsByPath: targetDocumentsByPath });
+            assertReconciledChildReceipt({ receiptId, receipt, audit: auditByPath.get(`${AUDIT_COLLECTION}/${receiptId}`), operation: row.data, actor, targetSemesterId: plan.data.targetSemesterId, documentsByPath: targetDocumentsByPath });
             status = "SUCCEEDED";
           } else if (failure) { status = "FAILED"; errorCode = failure.errorCode; errorReason = failure.errorReason; }
         } else {
@@ -681,7 +876,60 @@ const createSemesterCutoverCommandAdapter = ({ projectId = "" } = {}) => ({
       const rollbackPlanId = rollbackPlanIdFor(payload.planId, payload.attemptId);
       const rollbackPath = planPath(rollbackPlanId);
       if ((await transaction.get(rollbackPath)).exists) fail("already-exists", "Rollback plan already exists.", "W11_ROLLBACK_PLAN_EXISTS", { rollbackPlanId });
-      const steps = operations.filter((operation) => operation.applicable).slice().reverse().map((operation, index) => ({ order: index + 1, operationKey: operation.operationKey, operationType: operation.operationType, disposition: operation.strategy === "REFERENCE" || operation.strategy === "VALIDATE_ONLY" || operation.strategy === "ZERO_ASSERTION" ? "NO_ACTION" : "DOMAIN_COMPENSATION_REQUIRED", automaticMutation: false }));
+      const itemRows = await transaction.getAll(operations.map((operation) => itemPath(payload.attemptId, operation.operationKey)));
+      if (itemRows.some((row) => !row.exists || row.data?.planId !== payload.planId || row.data?.attemptId !== payload.attemptId)) fail("failed-precondition", "Rollback item set does not match the Cutover Attempt.", "W11_ITEM_SCOPE_MISMATCH");
+      const succeededItems = itemRows
+        .filter((row) => row.data?.status === "SUCCEEDED")
+        .sort((left, right) => Number(right.data?.operationOrder || 0) - Number(left.data?.operationOrder || 0));
+      if (succeededItems.length === 0) fail("failed-precondition", "No succeeded Cutover item requires compensation.", "W11_ROLLBACK_NOT_REQUIRED");
+      const receiptIds = succeededItems
+        .filter((row) => row.data?.childCommandType)
+        .map((row) => receiptIdFor(actor.actorUid, row.data.childCommandType, row.data.childCommandId));
+      const receiptRows = await transaction.getAll(receiptIds.map((receiptId) => `${RECEIPT_COLLECTION}/${receiptId}`));
+      const auditRows = await transaction.getAll(receiptIds.map((receiptId) => `${AUDIT_COLLECTION}/${receiptId}`));
+      const receiptById = new Map(receiptRows.map((row) => [String(row.path).split("/").at(-1), row]));
+      const auditById = new Map(auditRows.map((row) => [String(row.path).split("/").at(-1), row]));
+      const targetRefs = [...new Set(receiptRows.filter((row) => row.exists).flatMap((row) => Array.isArray(row.data?.target?.refs) ? row.data.target.refs : []))];
+      const targetDocuments = await transaction.getAll(targetRefs);
+      const targetDocumentsByPath = new Map(targetDocuments.map((row) => [row.path, row]));
+      const steps = succeededItems.map((row, index) => {
+        const operation = row.data;
+        const receiptId = operation.childCommandType
+          ? receiptIdFor(actor.actorUid, operation.childCommandType, operation.childCommandId)
+          : null;
+        const receipt = receiptId ? receiptById.get(receiptId) : null;
+        if (receiptId) {
+          assertReconciledChildReceipt({ receiptId, receipt, audit: auditById.get(receiptId), operation, actor, targetSemesterId: plan.data.targetSemesterId, documentsByPath: targetDocumentsByPath });
+          if (operation.receiptId !== receiptId) fail("failed-precondition", "Succeeded item receipt reference changed.", "W11_CHILD_RECEIPT_MISMATCH", { operationKey: operation.operationKey });
+        }
+        const refs = receiptId && Array.isArray(receipt.data?.target?.refs) ? receipt.data.target.refs : [];
+        const targetPreconditions = refs.map((ref) => {
+          const document = targetDocumentsByPath.get(ref);
+          if (!document?.exists) fail("failed-precondition", "Rollback target document is missing.", "W11_ROLLBACK_TARGET_MISSING", { operationKey: operation.operationKey, ref });
+          const revision = revisionEvidenceFor(document);
+          return revision
+            ? { ref, kind: "REVISION", revisionField: revision.field, expectedRevision: revision.value }
+            : { ref, kind: "DOCUMENT_HASH", expectedHash: sha256(canonicalJson(document.data)) };
+        });
+        const expectedTargetRevisions = targetPreconditions
+          .filter((precondition) => precondition.kind === "REVISION")
+          .map(({ ref, revisionField, expectedRevision }) => ({ ref, revisionField, expectedRevision }));
+        const noAction = operation.strategy === "REFERENCE" || operation.strategy === "VALIDATE_ONLY" || operation.strategy === "ZERO_ASSERTION";
+        return {
+          order: index + 1,
+          operationKey: operation.operationKey,
+          operationType: operation.operationType,
+          disposition: noAction ? "NO_ACTION" : "DOMAIN_COMPENSATION_REQUIRED",
+          automaticMutation: false,
+          receiptId,
+          targetRefs: refs,
+          expectedTargetRevisions,
+          targetPreconditions,
+          compensationBasis: receiptId
+            ? { type: "SUCCEEDED_COMMAND_RECEIPT", payloadHash: receipt.data.payloadHash, sourceHash: receipt.data.sourceHash, auditEventId: receipt.data.audit.eventId }
+            : { type: "VERIFIED_TARGET_SNAPSHOT", targetAfterSnapshot: operation.targetAfterSnapshot },
+        };
+      });
       transaction.create(rollbackPath, { schemaVersion: CUTOVER_SCHEMA_VERSION, policyVersion: CUTOVER_POLICY_VERSION, planId: rollbackPlanId, planRevision: 1, planType: "ROLLBACK_PLAN_ONLY", status: "ROLLBACK_PLANNED", parentPlanId: payload.planId, attemptId: payload.attemptId, sourceSemesterId: plan.data.sourceSemesterId, targetSemesterId: plan.data.targetSemesterId, reason: payload.reason, steps, createdAt: timestamp, createdBy: actor.actorUid });
       const attemptRevision = payload.expectedAttemptRevision + 1; const planRevision = payload.expectedPlanRevision + 1;
       transaction.set(attemptPath(payload.attemptId), { attemptRevision, status: "ROLLBACK_PLANNED", rollbackPlanId, updatedAt: timestamp }, { merge: true });
@@ -783,6 +1031,8 @@ module.exports = {
   SNAPSHOT_TOTAL_BYTE_LIMIT,
   SNAPSHOT_TRANSACTION_BYTE_LIMIT,
   attemptIdFor,
+  assertProjectSemesterPair,
+  assertReceiptAuditAuthoritySummary,
   assertReceiptTargetScope,
   assertCutoverProject,
   computeManifestHash,

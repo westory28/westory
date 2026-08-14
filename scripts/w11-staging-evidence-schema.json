@@ -12,6 +12,7 @@
     "preview-results.json",
     "state-results.json",
     "viewport-results.json",
+    "screenshot-manifest.json",
     "accessibility-results.json",
     "network-write-results.json",
     "cleanup-results.json"
@@ -22,9 +23,17 @@
     "testRunId",
     "projectId",
     "stableAlias",
+    "observedAliasOrigin",
     "deploymentUrl",
+    "immutableDeploymentUrl",
+    "deploymentId",
+    "vercelProjectId",
+    "vercelOrgId",
+    "aliasTargetDeploymentId",
+    "inspectedAt",
     "branch",
     "commitSha",
+    "sourceCommitSha",
     "sourceSemesterId",
     "targetSemesterId",
     "canonicalBaselineSemesterId",
@@ -110,6 +119,8 @@
     "persona",
     "width",
     "height",
+    "dpr",
+    "fullPage",
     "horizontalOverflowPx",
     "navigationOverlapCount",
     "dialogViewportEscapeCount",
@@ -117,6 +128,85 @@
     "maintenanceControlCount",
     "status"
   ],
+  "browserProvenanceRequired": [
+    "projectId",
+    "stableAlias",
+    "observedAliasOrigin",
+    "deploymentUrl",
+    "immutableDeploymentUrl",
+    "deploymentId",
+    "vercelProjectId",
+    "vercelOrgId",
+    "aliasTargetDeploymentId",
+    "inspectedAt",
+    "commitSha",
+    "sourceCommitSha"
+  ],
+  "requiredViewports": [
+    {
+      "width": 390,
+      "height": 844
+    },
+    {
+      "width": 768,
+      "height": 1024
+    },
+    {
+      "width": 1024,
+      "height": 768
+    },
+    {
+      "width": 1280,
+      "height": 800
+    },
+    {
+      "width": 1600,
+      "height": 900
+    }
+  ],
+  "requiredDpr": 1,
+  "requiredFullPage": false,
+  "requiredScreenshotRoute": "/teacher/settings/cutover",
+  "requiredBrowserStates": ["ARCHIVE", "EXPLICIT", "PREPARING"],
+  "screenshotManifestRequired": [
+    "schemaVersion",
+    "testRunId",
+    "status",
+    "projectId",
+    "stableAlias",
+    "observedAliasOrigin",
+    "deploymentUrl",
+    "immutableDeploymentUrl",
+    "deploymentId",
+    "vercelProjectId",
+    "vercelOrgId",
+    "aliasTargetDeploymentId",
+    "inspectedAt",
+    "commitSha",
+    "sourceCommitSha",
+    "screenshots"
+  ],
+  "screenshotRequired": [
+    "fileName",
+    "route",
+    "viewport",
+    "dpr",
+    "fullPage",
+    "actualPixelSize",
+    "sha256",
+    "capturedAt",
+    "sourceCommitSha",
+    "observedOrigin",
+    "status"
+  ],
+  "deploymentProvenance": {
+    "firebaseProjectId": "westory-staging-177587430482",
+    "stableAlias": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+    "immutableDeploymentUrlPattern": "^https://westory-staging-[a-z0-9]{9,}-bbbs-projects-44f9da30\\.vercel\\.app/?$",
+    "deploymentIdPattern": "^dpl_[A-Za-z0-9]{20,}$",
+    "vercelProjectId": "prj_XMo7TjPKno80BKCnx0YW3JoGXY8B",
+    "vercelOrgId": "team_M4QjuJFt5l0Lc34XpUxFjEW3"
+  },
   "accessibilityResultRequired": [
     "caseId",
     "route",

@@ -1,5 +1,5 @@
 import React from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import SettingsGeneral from "./components/SettingsGeneral";
 import SettingsSchool from "./components/SettingsSchool";
 import SettingsInterface from "./components/SettingsInterface";
@@ -7,6 +7,7 @@ import SettingsPrivacy from "./components/SettingsPrivacy";
 import SettingsAccess from "./components/SettingsAccess";
 import SettingsNotifications from "./components/SettingsNotifications";
 import SettingsArchiveEnrollment from "./components/SettingsArchiveEnrollment";
+import { useAuth } from "../../contexts/AuthContext";
 
 type SettingsTab =
   | "general"
@@ -33,8 +34,13 @@ const normalizeSettingsTab = (value: string | null): SettingsTab =>
     : "general";
 
 const Settings: React.FC = () => {
+  const { currentUser } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = normalizeSettingsTab(searchParams.get("tab"));
+  const canOpenCutoverCenter =
+    String(currentUser?.email || "")
+      .trim()
+      .toLowerCase() === "westoria28@gmail.com";
 
   const setActiveTab = (tab: SettingsTab) => {
     const next = new URLSearchParams(searchParams);
@@ -75,6 +81,17 @@ const Settings: React.FC = () => {
                 </div>
                 학교/학년/학기
               </button>
+              {canOpenCutoverCenter && (
+                <Link
+                  to="/teacher/settings/cutover"
+                  className="p-4 text-left font-bold text-sm transition-colors flex items-center gap-3 text-gray-600 hover:bg-gray-50 border-l-4 border-transparent"
+                >
+                  <div className="w-6 text-center" aria-hidden="true">
+                    <i className="fas fa-right-left"></i>
+                  </div>
+                  학기 전환 준비
+                </Link>
+              )}
               <button
                 onClick={() => setActiveTab("interface")}
                 className={`p-4 text-left font-bold text-sm transition-colors flex items-center gap-3 ${activeTab === "interface" ? "bg-blue-50 text-blue-600 border-l-4 border-blue-600" : "text-gray-600 hover:bg-gray-50 border-l-4 border-transparent"}`}

@@ -28,12 +28,24 @@
 - 상태 필터와 행동 버튼은 44px 이상이며 화면 밖으로 밀리지 않습니다.
 - Production 활성화, Maintenance 변경, arbitrary data editor는 0개입니다.
 
+## 768 × 1024
+
+- 세로형 태블릿에서도 한 열의 읽기 순서를 유지하되, provenance와 readiness 요약은 두 열까지 허용합니다.
+- rail, 본문, dialog가 겹치지 않아야 하며 가로 스크롤은 이름 있는 dataset region 안에서만 허용합니다.
+- 터치 대상은 44px 이상을 유지하고 keyboard focus도 같은 순서로 이동해야 합니다.
+
 ## 1024 × 768
 
 - compact teacher rail과 충돌하지 않는 두 영역 layout을 사용합니다.
 - 왼쪽은 계획·attempt 목록, 오른쪽은 선택한 diff·readiness·report 세부 정보입니다.
 - header, filter, table에 중복 sticky 축을 만들지 않습니다.
 - dialog와 result panel은 viewport 안에 머물며 Escape와 focus restore를 지원합니다.
+
+## 1280 × 800
+
+- teacher rail과 작업 본문 사이의 간격을 유지하면서 계획, diff, readiness를 한 화면에서 비교할 수 있게 배치합니다.
+- 표의 핵심 열은 잘리지 않아야 하며 보조 정보 때문에 별도 가로 스크롤 영역이 늘어나지 않게 합니다.
+- 고정 header와 dialog가 겹치지 않는지 확인합니다.
 
 ## 1600 × 900
 
@@ -54,10 +66,9 @@
 실제 UI가 Staging에 준비된 뒤 다음 파일을 실행별 evidence 폴더에 저장합니다.
 
 - `teacher-cutover-390x844.png`
+- `teacher-cutover-768x1024.png`
 - `teacher-cutover-1024x768.png`
+- `teacher-cutover-1280x800.png`
 - `teacher-cutover-1600x900.png`
-- `student-current-390x844.png`
-- `student-archive-1024x768.png`
-- `student-preparing-390x844.png`
 
-각 화면은 horizontal overflow, navigation overlap, focus visibility, 상태의 비색상 표현, activation control 0을 함께 검토합니다. 캡처 전 PASS를 기록하지 않습니다.
+다섯 화면은 DPR 1과 `fullPage: false`로 캡처합니다. `screenshot-manifest.json`에는 파일명, route, viewport, DPR, 실제 픽셀 크기, SHA-256, 캡처 시각, 40자 source commit SHA를 기록합니다. PNG signature와 IHDR, 파일명·manifest·실제 크기, SHA-256이 모두 일치해야 PASS로 인정합니다. 각 화면은 horizontal overflow, navigation overlap, focus visibility, 상태의 비색상 표현, activation control 0도 함께 검토합니다. 캡처 전 PASS를 기록하지 않습니다.

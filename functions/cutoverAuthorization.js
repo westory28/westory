@@ -34,10 +34,16 @@ const assertPreparingCutoverCreate = async ({
   const planPath = `semester_cutover_plans/${cutoverPlanId}`;
   const attemptPath = `semester_cutover_attempts/${attemptId}`;
   const itemPath = `semester_cutover_attempts/${attemptId}/items/${itemIdFor(attemptId, cutoverOperationKey)}`;
-  const [plan, attempt, item] = await transaction.getAll([planPath, attemptPath, itemPath]);
+  const targetPath = `semester_cutover_targets/${semesterId}`;
+  const [target, plan, attempt, item] = await transaction.getAll([targetPath, planPath, attemptPath, itemPath]);
   if (
-    !plan.exists
+    !target.exists
+    || target.data?.targetSemesterId !== semesterId
+    || target.data?.latestPlanId !== cutoverPlanId
+    || target.data?.latestAttemptId !== attemptId
+    || !plan.exists
     || plan.data?.targetSemesterId !== semesterId
+    || plan.data?.latestAttemptId !== attemptId
     || !["DRY_RUN_PASSED", "APPLYING", "PARTIAL"].includes(plan.data?.status)
     || !attempt.exists
     || attempt.data?.planId !== cutoverPlanId
@@ -67,6 +73,9 @@ const assertPreparingCutoverCreateIfTargeted = async (options) => {
   if (!marker.exists || !marker.data?.latestPlanId) {
     if (options.allowWithoutMarker) return { required: false, marker: null };
     fail("W11_CUTOVER_TARGET_REQUIRED", { semesterId: options.semesterId });
+  }
+  if (marker.data?.targetSemesterId !== options.semesterId) {
+    fail("W11_CUTOVER_TARGET_SCOPE_MISMATCH", { semesterId: options.semesterId, markerSemesterId: marker.data?.targetSemesterId || null });
   }
   if (options.cutoverPlanId && options.cutoverPlanId !== marker.data.latestPlanId) {
     fail("W11_CUTOVER_TARGET_PLAN_MISMATCH", { cutoverPlanId: options.cutoverPlanId, latestPlanId: marker.data.latestPlanId });

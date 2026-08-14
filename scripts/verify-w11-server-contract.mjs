@@ -242,6 +242,53 @@ assert.deepEqual(cutover.getSemesterCutoverCommandSessionOptions(), {
   recentAuth: true,
   highRisk: true,
 });
+assert.doesNotThrow(() =>
+  cutover.assertProjectSemesterPair(
+    contract.emulatorProjectId,
+    contract.sourceSemesterId,
+    contract.targetSemesterId,
+  ),
+);
+assert.throws(
+  () =>
+    cutover.assertProjectSemesterPair(
+      contract.stagingProjectId,
+      contract.sourceSemesterId,
+      contract.targetSemesterId,
+    ),
+  (error) => error.details?.reason === "W11_STAGING_SCOPE_FORBIDDEN",
+);
+assert.doesNotThrow(() =>
+  cutover.assertProjectSemesterPair(
+    contract.stagingProjectId,
+    contract.stagingRehearsal.sourceSemesterId,
+    contract.stagingRehearsal.targetSemesterId,
+  ),
+);
+assert.equal(
+  cutover.normalizeCutoverPayload(cutover.CUTOVER_COMMAND_TYPES.DRY_RUN, {
+    planId: deterministicPlanId,
+    expectedPlanRevision: 2,
+    expectedAttemptRevision: 1,
+  }).expectedAttemptRevision,
+  1,
+);
+assert.match(serverSource, /W11_CUTOVER_TARGET_PLAN_MISMATCH/u);
+assert.match(serverSource, /W11_ATTEMPT_REVISION_REQUIRED/u);
+assert.match(serverSource, /command_audit_events/u);
+assert.match(serverSource, /W11_CHILD_RECEIPT_AUTHORITY_MISMATCH/u);
+assert.match(serverSource, /W11_CHILD_AUDIT_MISMATCH/u);
+assert.match(serverSource, /W11_CHILD_RECEIPT_TARGET_MISSING/u);
+assert.match(serverSource, /status === "SUCCEEDED"/u);
+assert.match(serverSource, /expectedTargetRevisions/u);
+assert.match(serverSource, /targetPreconditions/u);
+assert.match(serverSource, /W11_ROLLBACK_NOT_REQUIRED/u);
+assert.match(serverSource, /W11_ROLLBACK_TARGET_MISSING/u);
+assert.match(
+  serverSource,
+  /allItems\.some\([\s\S]{0,300}W11_ITEM_SCOPE_MISMATCH/u,
+);
+assert.match(serverSource, /canonicalBusinessWriteCount: 0/u);
 
 console.log(
   JSON.stringify({
@@ -252,6 +299,11 @@ console.log(
     copyDenylist: normalized.copyDenylist.length,
     applyBatchLimit: cutover.APPLY_BATCH_LIMIT,
     deterministicPlanId: true,
+    blockedDryRunRetry: true,
+    latestPlanFence: true,
+    receiptAuditAuthorityReconciliation: true,
+    rollbackSucceededItemsOnly: true,
+    stagingScopeFence: true,
     suggestedPlanGenerated: false,
     readinessCheckId: cutover.READINESS_CHECK_ID,
     productionAccess: 0,

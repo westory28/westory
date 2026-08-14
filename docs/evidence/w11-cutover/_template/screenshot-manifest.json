@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "testRunId": "w11-cutover-replace-me",
+  "status": "NOT_RUN",
   "projectId": "westory-staging-177587430482",
   "stableAlias": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
   "observedAliasOrigin": "",
@@ -13,5 +14,10 @@
   "inspectedAt": "",
   "commitSha": "",
   "sourceCommitSha": "",
-  "results": []
+  "captureContract": {
+    "viewports": ["390x844", "768x1024", "1024x768", "1280x800", "1600x900"],
+    "dpr": 1,
+    "fullPage": false
+  },
+  "screenshots": []
 }

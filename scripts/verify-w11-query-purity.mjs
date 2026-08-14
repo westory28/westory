@@ -32,6 +32,7 @@ const ownedText = strictOwnedFiles
   .join("\n");
 const adapter = textByFile.get("src/lib/semesterCutover.ts");
 const container = textByFile.get("src/pages/teacher/SemesterCutoverCenter.tsx");
+const view = textByFile.get("src/pages/teacher/SemesterCutoverCenterView.tsx");
 const route = textByFile.get("src/App.tsx");
 
 for (const forbidden of [
@@ -81,12 +82,44 @@ assert.equal(
   0,
   "Mounted W11 UI must not author a Cutover Plan; the approved authenticated runner owns that action.",
 );
-assert.match(container, /action\s*===\s*"CREATE_PLAN"\)\s*return/u);
+assert.match(container, /action\s*===\s*"CREATE_PLAN"/u);
 assert.match(
   container,
   /common\("CREATE_PLAN"\)[\s\S]{0,300}allowed:\s*false/u,
   "CREATE_PLAN must remain visibly fail-closed in the mounted UI.",
 );
+assert.match(
+  container,
+  /state\.evidence\.targetManifestRevision\s*!==\s*state\.manifestRevision/u,
+  "W11 UI must derive a stale revision fence from server evidence.",
+);
+assert.match(
+  container,
+  /state\?\.readOnly\s*===\s*false\s*&&\s*!evidenceStale/u,
+  "Stale evidence must fail-close every synthetic rehearsal action.",
+);
+assert.match(
+  container,
+  /state\.plan\.targetManifestRevision\s*!==\s*state\.manifestRevision/u,
+  "Plan-to-target revision drift must fail-close every rehearsal action.",
+);
+assert.match(
+  container,
+  /expectedAttemptRevision[\s\S]{0,500}dryRunSemesterCutover/u,
+  "A BLOCKED dry-run retry must carry the deterministic Attempt revision CAS.",
+);
+assert.match(
+  container,
+  /actionInFlightRef\.current/u,
+  "High-risk W11 actions must share one client-side in-flight fence.",
+);
+assert.match(
+  view,
+  /disabled=\{!action\.allowed\s*\|\|\s*action\.locked\}/u,
+  "Every W11 action button must honor the shared in-flight lock.",
+);
+assert.match(view, /group\s*===\s*"recovery"/u);
+assert.match(view, /ws-cutover-action--danger/u);
 assert.doesNotMatch(adapter, /useEffect|componentDidMount|onSnapshot/u);
 assert.doesNotMatch(
   ownedText,

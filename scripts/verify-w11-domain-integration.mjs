@@ -14,6 +14,7 @@ import {
 import {
   collection,
   connectFirestoreEmulator,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -607,7 +608,8 @@ const main = async () => {
 
     const commandIds = {
       plan: randomUUID(),
-      dry: randomUUID(),
+      dryBlocked: randomUUID(),
+      dryRetry: randomUUID(),
       applyPartial: randomUUID(),
       resume: randomUUID(),
       applyComplete: randomUUID(),
@@ -715,14 +717,65 @@ const main = async () => {
     const planId = plan.planId;
     assert.equal(planId, expectedPlanId);
     const attemptId = plan.attemptId;
-    const dryPayload = { planId, expectedPlanRevision: 1 };
+    const blockedActivityPath = `semester_learning_progress/w11-blocked-dry-run-${admin.user.uid}`;
+    await withAdminDb(testEnv, (db) =>
+      setDoc(doc(db, blockedActivityPath), {
+        semesterId: targetSemesterId,
+        progressId: "w11-blocked-dry-run",
+        studentUid: admin.user.uid,
+      }),
+    );
+    const blockedDryPayload = { planId, expectedPlanRevision: 1 };
+    const blockedDry = (
+      await execute(admin, "dryRunSemesterCutover", blockedDryPayload, {
+        commandId: commandIds.dryBlocked,
+      })
+    ).data.result;
+    assert.equal(blockedDry.status, "BLOCKED");
+    assert.equal(blockedDry.activityZero, false);
+    assert.equal(blockedDry.attemptRevision, 1);
+    assert.equal(blockedDry.deterministicAttemptReused, false);
+    await expectReason(
+      execute(admin, "dryRunSemesterCutover", {
+        planId,
+        expectedPlanRevision: 2,
+      }),
+      "W11_ATTEMPT_REVISION_REQUIRED",
+    );
+    await withAdminDb(testEnv, (db) => deleteDoc(doc(db, blockedActivityPath)));
+    const dryPayload = {
+      planId,
+      expectedPlanRevision: 2,
+      expectedAttemptRevision: 1,
+    };
+    await withAdminDb(testEnv, (db) =>
+      setDoc(
+        doc(db, "semester_cutover_targets", targetSemesterId),
+        { latestAttemptId: `cutattempt_${"e".repeat(64)}` },
+        { merge: true },
+      ),
+    );
+    await expectReason(
+      execute(admin, "dryRunSemesterCutover", dryPayload),
+      "W11_CUTOVER_TARGET_ATTEMPT_MISMATCH",
+    );
+    await withAdminDb(testEnv, (db) =>
+      setDoc(
+        doc(db, "semester_cutover_targets", targetSemesterId),
+        { latestAttemptId: attemptId },
+        { merge: true },
+      ),
+    );
     const dry = (
       await execute(admin, "dryRunSemesterCutover", dryPayload, {
-        commandId: commandIds.dry,
+        commandId: commandIds.dryRetry,
       })
     ).data.result;
     assert.equal(dry.status, "DRY_RUN_PASSED");
     assert.equal(dry.activityZero, true);
+    assert.equal(dry.attemptId, blockedDry.attemptId);
+    assert.equal(dry.attemptRevision, 2);
+    assert.equal(dry.deterministicAttemptReused, true);
     assert.equal(dry.counts.pending, 2);
     assert.equal(dry.counts.notApplicable, 10);
 
@@ -759,6 +812,34 @@ const main = async () => {
       learningOperation.childPayloadHash,
     );
     assert.deepEqual(learningReceipt.target.refs, [learningPath]);
+    const learningAudit = await readDocument(
+      testEnv,
+      `command_audit_events/${learningReceiptId}`,
+    );
+    assert.equal(learningReceipt.audit.eventId, learningReceiptId);
+    assert.equal(
+      learningReceipt.audit.ref,
+      `command_audit_events/${learningReceiptId}`,
+    );
+    assert.equal(
+      learningAudit.receiptRef,
+      `command_receipts/${learningReceiptId}`,
+    );
+    assert.equal(learningAudit.payloadHash, learningReceipt.payloadHash);
+    assert.equal(learningAudit.actorUid, learningReceipt.actorUid);
+    assert.equal(learningReceipt.actorRole, "admin");
+    assert.equal(learningReceipt.actorEmail, "westoria28@gmail.com");
+    assert.ok(learningReceipt.actorCapability);
+    assert.equal(
+      learningReceipt.session.ref,
+      `application_sessions/${learningReceipt.actorUid}/sessions/${learningReceipt.session.authTime}`,
+    );
+    assert.ok(learningReceipt.session.authTime > 0);
+    assert.ok(learningReceipt.session.authorityMode);
+    assert.ok(learningReceipt.session.authorityGeneration);
+    assert.ok(learningReceipt.session.protocolVersion > 0);
+    assert.match(learningReceipt.session.revisionHash, /^[0-9a-f]{64}$/u);
+    assert.equal("observedFailure" in learningReceipt.session, true);
     assert.equal(
       hashDocument(learningPath, await readDocument(testEnv, learningPath))
         .hash,
@@ -768,8 +849,8 @@ const main = async () => {
     const partialPayload = {
       planId,
       attemptId,
-      expectedPlanRevision: 2,
-      expectedAttemptRevision: 1,
+      expectedPlanRevision: 3,
+      expectedAttemptRevision: 2,
       operationKeys: [
         learningOperation.operationKey,
         scheduleOperation.operationKey,
@@ -782,6 +863,24 @@ const main = async () => {
         },
       ],
     };
+    await withAdminDb(testEnv, (db) =>
+      setDoc(
+        doc(db, "semester_cutover_targets", targetSemesterId),
+        { latestPlanId: `cutplan_${"f".repeat(64)}` },
+        { merge: true },
+      ),
+    );
+    await expectReason(
+      execute(admin, "applySemesterCutoverBatch", partialPayload),
+      "W11_CUTOVER_TARGET_PLAN_MISMATCH",
+    );
+    await withAdminDb(testEnv, (db) =>
+      setDoc(
+        doc(db, "semester_cutover_targets", targetSemesterId),
+        { latestPlanId: planId },
+        { merge: true },
+      ),
+    );
     const partial = (
       await execute(admin, "applySemesterCutoverBatch", partialPayload, {
         commandId: commandIds.applyPartial,
@@ -795,8 +894,8 @@ const main = async () => {
     const resumePayload = {
       planId,
       attemptId,
-      expectedPlanRevision: 3,
-      expectedAttemptRevision: 2,
+      expectedPlanRevision: 4,
+      expectedAttemptRevision: 3,
       operationKeys: [scheduleOperation.operationKey],
       reason: "실패한 합성 일정만 복구합니다.",
     };
@@ -812,8 +911,8 @@ const main = async () => {
     await expectReason(
       execute(admin, "resumeSemesterCutover", {
         ...resumePayload,
-        expectedPlanRevision: 4,
-        expectedAttemptRevision: 3,
+        expectedPlanRevision: 5,
+        expectedAttemptRevision: 4,
         operationKeys: [learningOperation.operationKey],
       }),
       "W11_RESUME_ITEM_INVALID",
@@ -846,8 +945,8 @@ const main = async () => {
     const completePayload = {
       planId,
       attemptId,
-      expectedPlanRevision: 4,
-      expectedAttemptRevision: 3,
+      expectedPlanRevision: 5,
+      expectedAttemptRevision: 4,
       operationKeys: [scheduleOperation.operationKey],
       failures: [],
     };
@@ -867,8 +966,8 @@ const main = async () => {
     const verifyPayload = {
       planId,
       attemptId,
-      expectedPlanRevision: 5,
-      expectedAttemptRevision: 4,
+      expectedPlanRevision: 6,
+      expectedAttemptRevision: 5,
     };
     const verified = (
       await execute(admin, "verifySemesterCutover", verifyPayload, {
@@ -982,8 +1081,8 @@ const main = async () => {
     const rollbackPayload = {
       planId,
       attemptId,
-      expectedPlanRevision: 6,
-      expectedAttemptRevision: 5,
+      expectedPlanRevision: 7,
+      expectedAttemptRevision: 6,
       reason: "합성 target 보상 순서만 계획합니다.",
     };
     const rollback = (
@@ -995,6 +1094,44 @@ const main = async () => {
     assert.equal(rollback.canonicalBusinessWriteCount, 0);
     assert.equal(rollback.pointerMutationCount, 0);
     assert.equal(rollback.activationMutationCount, 0);
+    assert.deepEqual(
+      rollback.steps.map((step) => step.operationKey),
+      [scheduleOperation.operationKey, learningOperation.operationKey],
+    );
+    assert.deepEqual(
+      rollback.steps.map((step) => step.receiptId),
+      [scheduleReceiptId, learningReceiptId],
+    );
+    assert.deepEqual(rollback.steps[0].targetRefs, [schedulePath]);
+    assert.deepEqual(rollback.steps[1].targetRefs, [learningPath]);
+    assert.equal(
+      rollback.steps.every(
+        (step) =>
+          Array.isArray(step.expectedTargetRevisions) &&
+          step.expectedTargetRevisions.every(
+            (revision) =>
+              step.targetRefs.includes(revision.ref) &&
+              typeof revision.revisionField === "string" &&
+              revision.revisionField.length > 0 &&
+              Number.isSafeInteger(revision.expectedRevision) &&
+              revision.expectedRevision >= 0,
+          ) &&
+          Array.isArray(step.targetPreconditions) &&
+          step.targetPreconditions.length === step.targetRefs.length &&
+          step.targetPreconditions.every(
+            (precondition) =>
+              step.targetRefs.includes(precondition.ref) &&
+              (precondition.kind === "REVISION"
+                ? Number.isSafeInteger(precondition.expectedRevision) &&
+                  precondition.expectedRevision >= 0
+                : precondition.kind === "DOCUMENT_HASH" &&
+                  /^[a-f0-9]{64}$/u.test(precondition.expectedHash)),
+          ) &&
+          step.compensationBasis.type === "SUCCEEDED_COMMAND_RECEIPT" &&
+          step.automaticMutation === false,
+      ),
+      true,
+    );
     assert.equal(
       hashDocument(
         `semester_manifests/${archiveSemesterId}`,
@@ -1005,7 +1142,8 @@ const main = async () => {
 
     const replayCases = [
       [commandIds.plan, "createSemesterCutoverPlan", planPayload],
-      [commandIds.dry, "dryRunSemesterCutover", dryPayload],
+      [commandIds.dryBlocked, "dryRunSemesterCutover", blockedDryPayload],
+      [commandIds.dryRetry, "dryRunSemesterCutover", dryPayload],
       [
         learningOperation.childCommandId,
         learningOperation.childCommandType,
@@ -1118,6 +1256,10 @@ const main = async () => {
         readinessRegistryDerived: true,
         readyTransitionPassed: true,
         dependencyRevisionStaleDetected: true,
+        blockedDryRunRetry: true,
+        latestPlanFence: true,
+        receiptAuditAuthorityReconciled: true,
+        rollbackSucceededItemsOnly: true,
         activationMutationCount: 0,
         productionAccess: 0,
         productionWrites: 0,

@@ -1,6 +1,16 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import { resolve } from "node:path";
+import {
+  assertW11DeploymentProvenance,
+  verifyW11ScreenshotManifest,
+} from "./verify-w11-screenshot-manifest.mjs";
 
 const STAGING_PROJECT_ID = "westory-staging-177587430482";
 const FIXTURE_OWNER = "w11-semester-cutover-staging";
@@ -36,14 +46,40 @@ const collectedPath = valueArg("--collected-evidence");
 const cleanupPath = valueArg("--cleanup-evidence");
 const browserRoot = valueArg("--browser-evidence-root");
 const deploymentUrl = valueArg("--deployment-url");
+const immutableDeploymentUrl =
+  valueArg("--immutable-deployment-url") || deploymentUrl;
+const deploymentId = valueArg("--deployment-id");
+const vercelProjectId = valueArg("--vercel-project-id");
+const vercelOrgId = valueArg("--vercel-org-id");
+const aliasTargetDeploymentId = valueArg("--alias-target-deployment-id");
+const inspectedAt = valueArg("--inspected-at");
 const branch = valueArg("--branch");
-const commitSha = valueArg("--commit-sha");
+const commitSha = valueArg("--source-commit-sha") || valueArg("--commit-sha");
+const sourceCommitSha = commitSha;
 
 assert.match(testRunId, new RegExp(schema.testRunIdPattern, "u"));
-assert.equal(
+assert.notEqual(
   deploymentUrl,
   STABLE_ALIAS,
-  "Use the fixed Dedicated Staging alias.",
+  "A mutable Dedicated Staging alias cannot be the deployment evidence URL.",
+);
+assert.equal(deploymentUrl, immutableDeploymentUrl);
+assertW11DeploymentProvenance(
+  {
+    projectId: STAGING_PROJECT_ID,
+    stableAlias: STABLE_ALIAS,
+    observedAliasOrigin: STABLE_ALIAS,
+    deploymentUrl,
+    immutableDeploymentUrl,
+    deploymentId,
+    vercelProjectId,
+    vercelOrgId,
+    aliasTargetDeploymentId,
+    inspectedAt,
+    commitSha,
+    sourceCommitSha,
+  },
+  "generator deployment arguments",
 );
 assert.ok(branch.startsWith("codex/"), "A codex/ branch is required.");
 assert.match(commitSha, /^[a-f0-9]{40}$/u);
@@ -103,6 +139,21 @@ for (const field of schema.cleanupRequiredZeroFields) {
   assert.equal(cleanup[field], 0, `${field} must remain zero.`);
 }
 
+const deploymentProvenance = {
+  projectId: STAGING_PROJECT_ID,
+  stableAlias: STABLE_ALIAS,
+  observedAliasOrigin: STABLE_ALIAS,
+  deploymentUrl,
+  immutableDeploymentUrl,
+  deploymentId,
+  vercelProjectId,
+  vercelOrgId,
+  aliasTargetDeploymentId,
+  inspectedAt,
+  commitSha,
+  sourceCommitSha,
+};
+
 const browser = Object.fromEntries(
   BROWSER_FILES.map((file) => {
     const path = resolve(browserRoot, file);
@@ -129,6 +180,14 @@ const browser = Object.fromEntries(
       commitSha,
       `${file} commit provenance drift.`,
     );
+    for (const field of schema.browserProvenanceRequired) {
+      assert.equal(
+        document[field],
+        deploymentProvenance[field],
+        `${file} ${field} provenance drift.`,
+      );
+    }
+    assertW11DeploymentProvenance(document, file);
     assert.equal(
       Array.isArray(document.results),
       true,
@@ -156,6 +215,13 @@ const browser = Object.fromEntries(
   }),
 );
 
+const screenshotEvidence = verifyW11ScreenshotManifest({
+  manifestPath: resolve(browserRoot, "screenshot-manifest.json"),
+  screenshotsRoot: browserRoot,
+  expected: { testRunId, ...deploymentProvenance },
+  completedAt: cleanup.completedAt,
+});
+
 for (const row of browser["preview-results.json"].results) {
   assert.equal(row.writeCount, 0);
   assert.equal(row.activationControlCount, 0);
@@ -165,16 +231,25 @@ assert.deepEqual(
   [
     ...new Set(browser["state-results.json"].results.map((row) => row.state)),
   ].sort(),
-  ["ARCHIVE", "CURRENT", "ERROR", "EXPLICIT", "LEGACY", "PREPARING", "STALE"],
-  "Actual Browser evidence must cover every W11 source/error state.",
+  [...schema.requiredBrowserStates].sort(),
+  "Actual Browser evidence must cover the source states rendered by the W11 cutover center.",
 );
+for (const row of browser["state-results.json"].results) {
+  assert.equal(row.route, schema.requiredScreenshotRoute);
+  assert.equal(row.status, "PASS");
+}
 const viewportRows = browser["viewport-results.json"].results;
 assert.deepEqual(
   [...new Set(viewportRows.map((row) => `${row.width}x${row.height}`))].sort(),
-  ["1024x768", "1600x900", "390x844"],
-  "Actual Browser evidence must cover the three representative viewports.",
+  schema.requiredViewports
+    .map((viewport) => `${viewport.width}x${viewport.height}`)
+    .sort(),
+  "Actual Browser evidence must cover exactly the five required viewports.",
 );
 for (const row of viewportRows) {
+  assert.equal(row.route, schema.requiredScreenshotRoute);
+  assert.equal(row.dpr, schema.requiredDpr);
+  assert.equal(row.fullPage, schema.requiredFullPage);
   assert.equal(row.horizontalOverflowPx, 0);
   assert.equal(row.navigationOverlapCount, 0);
   assert.equal(row.dialogViewportEscapeCount, 0);
@@ -199,11 +274,21 @@ const forbiddenKeys = new Set(
     key.toLowerCase().replace(/[^a-z0-9]/gu, ""),
   ),
 );
-const safeZeroAttestationKeys = new Set([
-  "tokenvalueswritten",
-  "residualtokens",
-  "credentialvaluecount",
-  "tokenvaluecount",
+const safeAttestationValues = new Map([
+  ["tokenvalueswritten", 0],
+  ["residualtokens", 0],
+  ["credentialvaluecount", 0],
+  ["tokenvaluecount", 0],
+  ["residualtokenvaluerecords", 0],
+  [
+    "residualtokensbasis",
+    "PERSISTED_TOKEN_VALUES_ONLY; RUNNER_TOKEN_VALUES_ARE_DISCARDED_IN_MEMORY",
+  ],
+  ["validtokenrevocationmeasured", false],
+  [
+    "validtokenrevocationstatus",
+    "NOT_MEASURED; ADMIN_ID_AND_APP_CHECK_TOKENS_ARE_EPHEMERAL_AND_NOT_RETAINED",
+  ],
 ]);
 const assertNoSecrets = (node, path = "evidence") => {
   if (Array.isArray(node)) {
@@ -226,15 +311,15 @@ const assertNoSecrets = (node, path = "evidence") => {
     ].some((fragment) => normalizedKey.includes(fragment));
     assert.equal(
       forbiddenKeys.has(normalizedKey) ||
-        (sensitiveFragment && !safeZeroAttestationKeys.has(normalizedKey)),
+        (sensitiveFragment && !safeAttestationValues.has(normalizedKey)),
       false,
       `Forbidden key: ${path}.${key}`,
     );
-    if (safeZeroAttestationKeys.has(normalizedKey)) {
-      assert.equal(
+    if (safeAttestationValues.has(normalizedKey)) {
+      assert.deepEqual(
         value,
-        0,
-        `${path}.${key} must be an exact zero attestation.`,
+        safeAttestationValues.get(normalizedKey),
+        `${path}.${key} is not an approved exact-value safety attestation.`,
       );
     }
     if (typeof value === "string") {
@@ -257,7 +342,13 @@ const assertNoSecrets = (node, path = "evidence") => {
     assertNoSecrets(value, `${path}.${key}`);
   }
 };
-assertNoSecrets({ runner, collected, cleanup, browser });
+assertNoSecrets({
+  runner,
+  collected,
+  cleanup,
+  browser,
+  screenshotManifest: screenshotEvidence.manifest,
+});
 
 const commands = new Map(
   collected.commandResults.map((command) => [command.label, command]),
@@ -397,9 +488,17 @@ const metadata = {
   testRunId,
   projectId: STAGING_PROJECT_ID,
   stableAlias: STABLE_ALIAS,
+  observedAliasOrigin: STABLE_ALIAS,
   deploymentUrl,
+  immutableDeploymentUrl,
+  deploymentId,
+  vercelProjectId,
+  vercelOrgId,
+  aliasTargetDeploymentId,
+  inspectedAt,
   branch,
   commitSha,
+  sourceCommitSha,
   sourceSemesterId: runner.sourceSemesterId,
   targetSemesterId: runner.targetSemesterId,
   canonicalBaselineSemesterId: collected.canonicalBaselineSemesterId,
@@ -420,6 +519,7 @@ const metadata = {
 assert.equal(Number.isNaN(Date.parse(metadata.startedAt)), false);
 assert.equal(Number.isNaN(Date.parse(metadata.completedAt)), false);
 assert.ok(Date.parse(metadata.completedAt) >= Date.parse(metadata.startedAt));
+assert.ok(Date.parse(metadata.inspectedAt) <= Date.parse(metadata.completedAt));
 
 const cleanupResults = {
   schemaVersion: 1,
@@ -437,6 +537,10 @@ writeJson(outputRoot, "attempt-results.json", attemptResults);
 writeJson(outputRoot, "dataset-results.json", datasetResults);
 writeJson(outputRoot, "readiness-results.json", readinessResults);
 for (const file of BROWSER_FILES) writeJson(outputRoot, file, browser[file]);
+writeJson(outputRoot, "screenshot-manifest.json", screenshotEvidence.manifest);
+for (const file of screenshotEvidence.screenshotFiles) {
+  copyFileSync(resolve(browserRoot, file), resolve(outputRoot, file));
+}
 writeJson(outputRoot, "cleanup-results.json", cleanupResults);
 
 console.log(
@@ -447,6 +551,7 @@ console.log(
     outputRoot,
     generatedFiles: schema.requiredFiles.length,
     browserFilesAccepted: BROWSER_FILES.length,
+    screenshotFilesAccepted: screenshotEvidence.screenshotFiles.length,
     rehearsalRuns: 2,
     productionAccess: 0,
     productionWrites: 0,
