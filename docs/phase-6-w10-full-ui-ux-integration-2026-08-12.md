@@ -1,210 +1,277 @@
-# PHASE 6 — W10 전체 UI·UX 통합 및 시각적 완성
+# PHASE 6 W10 전체 UI·UX 통합 결과 정정 보고서
 
-작성일: 2026-08-12
+최초 작성일: 2026-08-12
+
+정정일: 2026-08-14
 
 작업 branch: `codex/phase6-w10-full-ui-ux-integration`
 
-기준 W9 SHA: `9f9cf691dc72669384a23bf6a23c5081cf8f09bd`
+W10 Full SHA: `216d3076bcf558a6abdf6e1b02b6c9e09d782d00`
 
-최종 UI 배포 기준 SHA: `f7d92d6cc2761acb762a68db9bfe313485139062`
+W10 UI 배포 기준 SHA: `f7d92d6cc2761acb762a68db9bfe313485139062`
 
 ## 1. Executive Summary
 
-W2부터 W9까지 나뉘어 구축한 기능을 학생·교사 Shell 안에서 같은 정보 위계와 상태 표현으로 정리했습니다. 학생 canonical route 17개, 교사 canonical route 13개, alias 4개를 포함한 등록 화면 47개의 분류를 확정했고 `UNKNOWN=0`을 달성했습니다. 로그인, Maintenance, 공통 상태, Form, Dialog, Table, Draft, Bulk, 학기·출처 표현을 하나의 디자인 기반에 맞췄습니다.
+W10은 W2부터 W9까지 구축한 기능을 공통 Shell, 상태 표현, 반응형 컨테이너와 디자인 토큰에 연결했습니다. route inventory, Query Purity, direct-write 차단, Rules, Functions, build, TypeScript 기준선과 이전 Wave 회귀는 통과했습니다. 이 기능·안전 기반은 유효합니다.
 
-Dedicated Staging에서 184개 route·viewport 조합과 8개 대표 journey, 9개 공통 상태, 5개 viewport 접근성 증거를 수집했습니다. 화면 가로 넘침, Navigation 겹침, Dialog 화면 이탈, 조회 중 write, 예상하지 못한 console 오류는 모두 0이었습니다. W10 CURRENT-WAVE blocker는 0입니다.
+그러나 UI·UX 통합과 시각적 완성은 통과하지 못했습니다. 2026-08-14 실제 Staging 화면을 확인한 사용자는 다음과 같이 평가했습니다.
 
-최종 판정은 다음과 같습니다.
+> 지금 UI UX가 엉망이야. 진짜 전에 디자인이 훨씬 나을 정도야. 너무 별로야.
 
-`READY FOR W11 SEMESTER CUTOVER PREPARATION STAGING DEVELOPMENT`
-이 판정은 Dedicated Staging의 UI·UX 통합 완료를 뜻하며, Production 출시나 2026-2 데이터 전환 완료를 뜻하지 않습니다.
+이 평가는 취향 차이로 축소할 수 없습니다. W10의 목표 자체가 전체 화면의 UI·UX 통합과 시각적 완성이었으므로 사용자 검수 실패는 완료 조건 실패입니다. 대표 화면을 다시 확인한 결과, 정보 위계가 약하고 빈 공간이 과도하며, 기존 화면과 새 공통 component가 섞여 보이고, 모바일 화면에는 겹침과 잘림이 남아 있습니다.
+
+기존 보고서는 route와 쓰기 안전성 검증을 시각 품질 검증처럼 확대 해석했습니다. screenshot 파일도 32개 중 25개가 파일명에 표시된 viewport 크기와 실제 이미지 크기가 달랐습니다. 따라서 기존의 “5개 viewport PASS”, “W10 CURRENT-WAVE blocker 0”, “READY FOR W11” 판정을 철회합니다.
+
+정정된 최종 판정은 다음과 같습니다.
+
+`NOT READY FOR W11 SEMESTER CUTOVER PREPARATION STAGING DEVELOPMENT`
+
+이 판정은 W11의 서버·데이터 준비 작업을 폐기한다는 뜻이 아닙니다. W10의 시각 완성도를 통과한 것으로 간주할 수 없다는 의미입니다.
 
 ## 2. Baseline
 
 - W9 branch: `codex/phase6-w9-teacher-operations-draft-bulk`
 - W9 Full SHA: `9f9cf691dc72669384a23bf6a23c5081cf8f09bd`
 - W10 branch: `codex/phase6-w10-full-ui-ux-integration`
+- W10 Full SHA: `216d3076bcf558a6abdf6e1b02b6c9e09d782d00`
 - Dedicated Staging Firebase: `westory-staging-177587430482`
 - 고정 alias: `https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app`
-- 최종 Staging deployment: `dpl_EczpyUAh5VmSdEh8NtWcbZ7kvMKR`
-- TypeScript 기준선: 기존 63 errors / 13 files, W10 신규 오류 0
+- W10 최초 Staging deployment: `dpl_EczpyUAh5VmSdEh8NtWcbZ7kvMKR`
+- W10 evidence root: `docs/evidence/w10-ui-ux/w10-20260812-final-925533f`
+- TypeScript 기준선: 63 errors / 13 files, W10 신규 오류 0
 
-사용자 문서, W1 evidence, `tmp/`와 다른 작업의 미추적 파일은 삭제하거나 W10 commit에 포함하지 않았습니다. Production 상태는 조회하거나 변경하지 않았습니다.
+정정 작업은 현재 W11 branch에서 문서만 바로잡습니다. W10 branch의 Git 기록을 다시 쓰지 않습니다. 사용자 문서, W1 evidence와 `tmp/`는 변경하거나 W10 보고서 commit에 포함하지 않습니다.
 
 ## 3. Route / Screen Inventory
 
-`scripts/w10-route-inventory.json`을 최종 기준으로 삼았습니다.
+`scripts/w10-route-inventory.json`에는 등록 화면 47개가 분류되어 있고 `UNKNOWN=0`입니다.
 
-| 분류 | 수 | 처리 |
-| --- | ---: | --- |
-| COMPLETE | 18 | 현재 canonical 표현 유지 |
-| INTEGRATE | 8 | 공통 Shell·상태·레이아웃 연결 |
-| REBUILD_PRESENTATION | 10 | Domain 계약을 유지하고 표현만 재구성 |
-| REMOVE_LEGACY_UI | 8 | canonical redirect·alias만 남기고 구형 UI mount 제거 |
-| RELEASE_DECISION | 3 | 정책 경계를 명시하고 안전한 화면만 유지 |
+| 분류                 |  수 | 현재 판단                                    |
+| -------------------- | --: | -------------------------------------------- |
+| COMPLETE             |  18 | 기능 계약은 유지되지만 시각 완료 판정은 철회 |
+| INTEGRATE            |   8 | Shell 연결 완료, 사용자 검수 필요            |
+| REBUILD_PRESENTATION |  10 | 표현 재구성 품질이 충분하지 않음             |
+| REMOVE_LEGACY_UI     |   8 | redirect·alias 보존 여부는 통과              |
+| RELEASE_DECISION     |   3 | 정책 경계 유지                               |
 
-학생 canonical 17개, 교사 canonical 13개, alias 4개를 포함한 등록 화면은 총 47개입니다. 로그인, Maintenance, 권한 없음, 세션 만료, Not Found, Developer Log도 별도 상태로 검증했습니다. alias는 query와 bookmark를 보존하며 canonical 화면으로 이동합니다.
+학생 canonical route 17개, 교사 canonical route 13개, alias 4개의 존재와 접근 경로는 확인했습니다. 다만 route가 열린다는 사실은 화면이 사용하기 좋거나 시각적으로 완성됐다는 증거가 아닙니다.
 
 ## 4. Design Foundation
 
-주요 파랑 `#2563EB`, 강조 노랑 `#F59E0B`, Westory wordmark를 기준으로 색상·간격·테두리·radius·focus·motion·breakpoint·safe area를 정리했습니다. 깊이는 과한 그림자보다 border와 옅은 배경 차이로 표현했습니다. 학생 화면은 행동 우선, 교사 화면은 정보 밀도와 빠른 판단을 우선했습니다.
+`DESIGN.md`에는 Westory 파랑 `#2563EB`, 강조 노랑 `#F59E0B`, Noto Sans KR, spacing, radius, border, motion과 breakpoint 기준이 있습니다. 공통 component도 `WestoryBrand`, `FormField`, `ModalSurface`, `StatePanel`, `ResponsiveDataContainer`, `PageHeader` 등으로 정리했습니다.
 
-공통 component로 `WestoryBrand`, `FormField`, `ModalSurface`, `PublicServiceLinks`, `StatePanel`, `ResponsiveDataContainer`, `PageHeader`를 정리했습니다. 기존 Domain component는 그대로 활용했고, 모든 책임을 하나의 범용 component에 합치지 않았습니다.
+문제는 토큰의 존재를 디자인 완성으로 오판했다는 점입니다. 실제 화면에서는 다음 결함이 확인됩니다.
+
+- 페이지 제목과 본문 제목이 반복되어 위계가 흐립니다.
+- 흰색과 옅은 회색 면이 넓게 이어져 화면이 비어 보입니다.
+- 카드, 표, 버튼과 입력 요소의 밀도와 스타일이 화면마다 다릅니다.
+- 기능 구획보다 테두리와 박스가 먼저 보여 업무 흐름이 끊깁니다.
+- 기존 구형 control과 새 Shell이 한 화면에 함께 남아 통합된 제품처럼 보이지 않습니다.
+- 작은 로고, 낮은 대비의 보조 텍스트와 넓은 여백 때문에 큰 화면의 공간을 제대로 쓰지 못합니다.
+
+Design Foundation은 구현 기반으로는 남기되, 실제 화면에 일관되게 적용됐다는 판정은 취소합니다.
 
 ## 5. Login / Auth
 
-로그인 화면은 실제 서버 role을 그대로 사용하며 학생·교사 역할 선택으로 권한이 생기지 않습니다. loading 중 중복 제출을 막고, 이메일·비밀번호에 label과 autocomplete를 적용했습니다. 보호 route에서 익명 사용자는 로그인 화면으로 안전하게 돌아오며 return path를 유지합니다.
+로그인 화면의 label, autocomplete, loading 중 중복 제출 차단, role 서버 권위와 return path는 유지됩니다. 로그인에서 학생·교사 역할을 선택해 권한을 얻는 경로도 없습니다.
 
-모바일·PC 로그인에서 44px touch target, keyboard focus, 정책 Dialog, Escape, main landmark, page heading을 확인했습니다. 세션 만료 화면은 원인과 다시 로그인 행동을 안내합니다. KI-W1-01은 기존 Release blocker로 유지하며 인증 구조를 다시 설계하지 않았습니다.
+W10 종료 뒤 실제 관리자 로그인을 시도하면서 Dedicated Staging의 Google 공급자가 비활성 상태였음이 드러났습니다. `auth/operation-not-allowed`와 빈 popup이 발생했고, 2026-08-13부터 14일까지 Staging Auth 공급자와 redirect 흐름을 별도로 점검했습니다. Google 공급자는 Dedicated Staging에만 활성화했으며 Production Auth는 변경하지 않았습니다.
+
+이 문제는 W10 로그인 검증이 실제 관리자 경로를 충분히 확인하지 못했다는 뜻입니다. W10 보고서의 “로그인 최종 통합” 표현은 과장됐습니다. KI-W1-01은 기존 Release blocker로 유지합니다.
 
 ## 6. Student UI Integration
 
-학생 Today는 학습, 위스, 일정, 출석, 공지를 read-only projection으로 묶었습니다. 학습·평가·성적의 메뉴와 상태 문구를 구분했고, Archive·Legacy는 수정 가능한 Current처럼 보이지 않도록 했습니다. 모바일 Bottom Navigation의 오늘·학습·평가·성적·더보기 명칭과 현재 위치를 맞췄습니다.
+학생 Today, 학습, 평가, 성적, 위스, 일정, 출석, 공지, Archive route의 기능 연결은 유지됩니다. 화면 진입으로 business write가 발생하지 않는 계약도 유효합니다.
 
-학생 canonical route 17개를 다섯 viewport에서 확인했습니다. 오늘, 학습, 평가, 성적·근거, 위스, 일정, 출석, 공지, 역사사전, 지난 학기 화면의 대표 screenshot을 남겼습니다.
+시각 검수는 실패했습니다. `student-today-390x844.png`에는 제목·학기 정보가 반복되고 본문이 좁은 폭에서 어색하게 줄바꿈됩니다. 떠 있는 버튼과 하단 Navigation이 콘텐츠와 경쟁하며, 화면을 한 번에 읽기 어렵습니다. 학생이 지금 해야 할 일을 먼저 이해하도록 만든다는 목표도 충분히 달성되지 않았습니다.
+
+학생 route 17개는 “기능 연결 완료, 시각 통합 미완료”로 정정합니다.
 
 ## 7. Teacher / Admin UI Integration
 
-교사 IA는 업무 홈, 학생과 학급, 수업 운영, 평가 운영, 성적 운영, 위스 운영, 일정과 소통을 기준으로 정리했습니다. 업무 홈은 미처리 출석, 성적·위스 업무 경로, 공개 예정 학습·공지, Draft·Bulk 상태, readiness를 읽기 전용으로 보여 줍니다.
+업무 홈, 학생과 학급, 수업·평가·성적·위스·일정 운영 route는 연결되어 있습니다. Draft, Bulk, readiness와 각 Domain 바로가기도 기능적으로 남아 있습니다.
 
-학생 목록은 responsive data container와 명확한 행 동작을 사용합니다. 학습·일정·출석·공지 운영은 W8 canonical 화면을, Draft·Bulk 상태는 W9 공통 component를 사용합니다. 교사 canonical route 13개를 다섯 viewport에서 확인했습니다.
+교사 화면은 정보 밀도와 업무 효율을 우선해야 하지만 실제 화면은 반대 문제가 있습니다.
+
+- 업무 홈의 loading 상태는 화면 대부분을 빈 공간으로 남깁니다.
+- 업무 우선순위와 다음 행동보다 큰 컨테이너와 약한 구분선이 먼저 보입니다.
+- 학생 명단 표는 구형 입력창, 버튼과 새 Shell이 섞여 있습니다.
+- 표의 시선 흐름과 행 동작이 촘촘하지 않고, 화면 폭을 효율적으로 쓰지 못합니다.
+- Footer와 떠 있는 버튼이 업무 화면의 주의 흐름을 분산합니다.
+
+교사 canonical route 13개 역시 시각 완료로 볼 수 없습니다.
 
 ## 8. Navigation
 
-학생 Bottom Navigation과 교사 Sidebar·mobile drawer는 viewport별로 하나만 mount합니다. Header의 NotificationBell도 한 번만 mount하며 drawer에는 같은 query를 다시 실행하지 않는 숫자 요약만 둡니다. skip link와 `aria-current`를 유지하고, role에 맞지 않는 route는 권한 상태 또는 안전한 기본 화면으로 보냅니다.
+학생 Bottom Navigation, 교사 Sidebar, mobile drawer와 Header의 중복 mount 차단은 기능적으로 통과했습니다. `aria-current`와 route 권한도 유지됩니다.
+
+하지만 메뉴의 크기, 여백, 활성 상태와 본문 사이의 시각 연결이 약합니다. 교사 Sidebar는 넓은 데스크톱에서 지나치게 비어 보이고, 본문은 좌측 Navigation과 별개의 화면처럼 보입니다. Navigation 기능은 유지되지만 W10 시각 통합 완료 항목에서는 제외합니다.
 
 ## 9. Page Layout / Information Hierarchy
 
-주요 화면은 Page Title, 학기·출처, 상태, 요약, 본문, 관련 이동 순서를 따릅니다. `PageHeader`가 page-level `h1`을 소유하고, standalone 응시 화면만 자체 `h1`을 사용합니다. Primary Action을 제한하고 위험한 작업은 문구·확인 단계·색상을 함께 사용합니다.
+`PageHeader`와 학기 badge를 도입했지만 실제 화면에서는 페이지 제목, Domain 제목, 학기 제목이 반복됩니다. 같은 정보가 여러 계층에 나타나며, 핵심 행동과 보조 설명의 강조 차이도 부족합니다.
+
+사용자가 현재 위치와 다음 행동을 짧은 시간 안에 파악할 수 있어야 한다는 완료 조건은 통과하지 못했습니다.
 
 ## 10. Common UI States
 
-`LOADING`, `CONTENT`, `EMPTY`, `ERROR`, `PERMISSION`, `SESSION_EXPIRED`, `MAINTENANCE`, `ARCHIVED`, `LEGACY`, `STALE`, `OFFLINE`, `SAVING`, `SAVED`, `SAVE_FAILED`, `CONFLICT`, `SUBMITTING`, `PROCESSING`, `PARTIAL_SUCCESS`를 공통 상태 체계에 포함했습니다.
+Loading, Empty, Error, Permission, Archived, Legacy, Stale, Saving, Conflict, Processing과 Partial Success 상태 component는 존재합니다. Query Purity도 유지됩니다.
 
-각 상태는 제목, 설명, 다음 행동, 문의 필요 여부와 read-only 의미를 함께 전달합니다. loading과 empty, error를 같은 화면으로 처리하지 않으며, Draft와 공식 저장, Bulk 부분 성공과 전체 성공을 구분합니다.
+공통 상태가 있다고 해서 상태 화면이 좋은 것은 아닙니다. 실제 Staging 업무 홈의 loading 화면은 작은 안내 카드 하나와 큰 빈 공간으로 구성됩니다. 콘텐츠 구조를 예상하게 하는 skeleton, 섹션별 진행 상태와 다음 행동이 없습니다. 상태 component의 계약은 유지하되 표현은 다시 설계해야 합니다.
 
 ## 11. Form / Dialog / Table
 
-Form은 항상 보이는 label, required 표시, field 설명, 서버 오류, Draft 상태와 저장 행동을 구분합니다. Dialog는 focus trap, Escape, 배경 scroll 차단, focus restore를 갖추고, Drawer·mobile Sheet는 상세와 간단한 선택에만 사용합니다.
+label, required 표시, focus, Escape, focus restore와 overflow container는 일부 공통화했습니다. 그러나 대표 교사 표는 여전히 버튼, 입력창, 필터와 페이지 이동 모양이 서로 다른 시각 체계를 사용합니다. 데이터 밀도와 조작 우선순위도 화면별 편차가 큽니다.
 
-대표 학생·교사 표에는 `ResponsiveDataContainer`를 적용해 keyboard로 overflow 영역에 접근할 수 있게 했습니다. 390px에서는 핵심 열과 동작을 우선하며, 1024px 이상에서는 정보 밀도를 높였습니다.
+Form, Dialog, Table 패턴은 코드 수준 통합에 머물렀습니다. 제품 수준 통합은 미완료입니다.
 
 ## 12. Semester / Provenance
 
-모든 W6~W9 화면은 `CURRENT`, `PREPARING`, `ARCHIVE`, `LEGACY`, `EXPLICIT`을 같은 badge와 설명으로 표시합니다. 학년도·학기, 출처, 수정 가능 여부를 색상 외 텍스트로 전달합니다. ACTIVE CURRENT만 수정할 수 있으며, CURRENT가 비었다는 이유로 Legacy를 조용히 표시하지 않습니다.
+`CURRENT`, `PREPARING`, `ARCHIVE`, `LEGACY`, `EXPLICIT`의 서버·UI 경계와 read-only 차단은 유지됩니다. 다만 학기 badge와 현재 학기 표시는 여러 위치에서 반복되어 정보 밀도를 떨어뜨립니다. 상태 의미는 맞지만 표현 방식은 다시 정리해야 합니다.
 
 ## 13. Maintenance Page
 
-Maintenance 화면은 새 아이콘을 만들지 않고 Westory wordmark를 크게 사용합니다. 파랑·노랑 브랜드 색상, 이용약관, 개인정보 보호 약관, `westoria28@gmail.com` 문의를 유지했습니다. 재개 시각이 정해지지 않은 경우 임의 시간을 표시하지 않습니다.
+Westory wordmark, 파랑·노랑 브랜드 색상, 이용약관, 개인정보 보호 약관과 문의 이메일은 유지됩니다. Production Maintenance를 변경하지 않았다는 안전 판정도 유효합니다.
 
-Staging에서만 Maintenance를 일시 활성화해 390×844와 1600×900을 확인했습니다. 학생 route가 모두 Maintenance로 귀결되는 것을 확인한 뒤 원래의 Staging 비활성 상태로 즉시 복구했습니다. Production Maintenance는 마지막 확정값 `enabled=true`, revision `3`을 문서 근거로만 유지했으며 조회·변경하지 않았습니다.
+Maintenance 화면은 기능 검증을 통과했으나 전체 사이트의 새 디자인 기준으로 승인받지 못했습니다. W10 시각 완료 근거로 사용하지 않습니다.
 
 ## 14. Responsive Integration
 
-정확한 390×844, 768×1024, 1024×768, 1280×800, 1600×900 viewport를 사용했습니다. 학생 17개와 교사 13개 canonical route, alias 4개를 다섯 크기에서 모두 확인했습니다.
+기존 보고서의 5개 viewport PASS 판정을 철회합니다.
 
-총 184개 route·viewport 증거에서 horizontal overflow, Navigation overlap, Dialog viewport escape가 모두 0이었습니다. 1280px 역사사전 workspace의 sidebar 포함 가용 폭 문제와 전역 box sizing 누락을 실제 화면에서 찾아 수정했습니다.
+evidence root의 PNG 32개를 파일명과 실제 이미지 크기로 다시 확인했습니다.
+
+- 일치: 7개
+- 불일치: 25개
+- `teacher-dashboard-1600x900.png`: 실제 1585×1933
+- `student-today-390x844.png`: 실제 375×1712
+- `teacher-draft-recovery-dialog-390x844.png`: 실제 375×1876
+- `student-history-dictionary-1024x768.png`: 실제 1009×1241
+
+전체 페이지 screenshot과 viewport screenshot이 섞였고 브라우저 scrollbar 폭을 제외한 이미지도 같은 파일명으로 기록됐습니다. 이 상태에서는 정확한 viewport별 레이아웃 판정을 재현할 수 없습니다.
+
+기존 JSON의 horizontal overflow 0도 사용자 화면의 겹침, 잘림과 낮은 공간 활용도를 설명하지 못합니다. Responsive는 미통과입니다.
 
 ## 15. Accessibility
 
-정적 접근성 gate 22개와 실제 keyboard 흐름을 함께 확인했습니다. login label·autocomplete, skip link, landmark, heading, visible focus, 44px touch target, 저장 상태 live text, 색상 외 상태 표현을 점검했습니다.
+정적 접근성 gate 22개, label, landmark, heading과 focus 관련 코드는 유지됩니다. 이 결과는 가치가 있습니다.
 
-Draft 복구 Dialog에서 focus 진입과 Escape 종료를 실제로 수행했고, destructive `임시 저장 폐기`와 `작성 내용 복구`를 명확히 구분했습니다. 다섯 viewport 접근성 결과에서 critical·serious 항목은 0입니다.
+다만 실제 화면의 visual focus, 읽기 순서, 반복 heading, 모바일 Navigation과 떠 있는 action의 경쟁은 사용자 경험을 해칩니다. 자동 검사 결과만으로 WCAG 2.2 AA 핵심 흐름을 통과했다고 기록한 것은 부정확했습니다. 수동 keyboard와 screen reader 흐름을 실제 최종 화면에서 다시 검증해야 합니다.
 
 ## 16. Microcopy
 
-학생 안내는 짧고 행동 중심으로, 교사 안내는 업무 의미가 분명하게 정리했습니다. `임시 저장`, `공식 저장`, `Archive`, `Legacy`, `정정`, `확인`, `서명`, `부분 성공`을 서로 바꾸어 쓰지 않았습니다. 오류는 원인과 다음 행동을 함께 안내합니다.
+Draft와 공식 저장, Archive와 삭제, 부분 성공과 전체 성공을 구분한 문구는 유지됩니다. 반면 화면 곳곳의 설명이 비슷한 내용을 반복하고, 제목과 보조 문구가 좁은 화면에서 과도하게 줄바꿈됩니다.
+
+문구 자체만 고칠 문제가 아닙니다. 정보 구조와 함께 다시 편집해야 합니다.
 
 ## 17. Performance / Bundle
 
-전역 Tailwind와 Font Awesome CDN 의존성을 제거하고 local build로 고정했습니다. route-level lazy loading과 Domain chunk 분리는 유지했습니다.
-
-최종 gate 기준 주요 수치는 다음과 같습니다.
+W10 bundle gate의 수치는 유지합니다.
 
 - main JavaScript: 168,282 bytes, W9 대비 +827 bytes
 - main CSS: 317,064 bytes, gzip 59,114 bytes
 - 초기 WOFF2 network: 183,692 bytes / 190,000-byte gate
 - 외부 전역 CDN: 0
 
-PDF worker, PDF·Chart·Excel, Settings·Assessment의 큰 chunk는 초기 로그인 bundle에 합치지 않았습니다. tab-level 추가 분할은 W11/W12 성능 개선 후보로 넘깁니다.
+route-level lazy loading과 Domain chunk 분리는 유지됩니다. 성능 수치가 통과했다고 시각 품질까지 통과하는 것은 아닙니다.
 
 ## 18. Storage Staging Path
 
-W10 판정은 `EXPLICITLY_UNAVAILABLE`입니다. 지도와 사료 보관함은 owner binding, checksum, TTL, promote, receipt, semester·Archive fence를 모두 갖춘 완결된 staging 경로가 없습니다.
-
-UI는 업로드·수정·삭제를 작동하는 것처럼 표시하지 않고 조회 전용 제한을 안내합니다. Firestore·Storage Rules는 이전 번들의 지도·사료 직접 mutation 54개를 거부하며 기존 immutable read는 유지합니다. Production Storage 접근은 0입니다.
+Storage 판정은 `EXPLICITLY_UNAVAILABLE`을 유지합니다. 지도와 사료 보관함은 완결된 owner, checksum, TTL, promote, receipt와 Archive fence가 없으므로 조회 전용입니다. fake success와 Production Storage 대체 경로는 없습니다.
 
 ## 19. Release Decisions
 
-8개 항목을 모두 분류했습니다.
+8개 Release Decision 분류는 유지합니다.
 
-- ALREADY_DECIDED: DIC01, DIC02, PATCH01 — 3개
-- SAFE_CONFIGURABLE_DEFAULT: EX03, SRC01 — 2개
-- USER_DECISION_REQUIRED: EX06, MAP01, MAP02 — 3개
+- ALREADY_DECIDED: DIC01, DIC02, PATCH01, 3개
+- SAFE_CONFIGURABLE_DEFAULT: EX03, SRC01, 2개
+- USER_DECISION_REQUIRED: EX06, MAP01, MAP02, 3개
 
-자세한 근거와 재활성화 조건은 `docs/handoff/w10-release-decision-register.md`에 기록했습니다. 결정되지 않은 공개·성적·Storage 정책을 W10이 임의로 정하지 않았습니다.
+세부 근거는 `docs/handoff/w10-release-decision-register.md`를 따릅니다.
 
 ## 20. Route / Visual Regression
 
-route 결과 184개, viewport 결과 184개, network write 결과 184개가 모두 PASS했습니다. 학생·교사 canonical, alias, 익명 보호 route, 교차 role, 세션 만료, Not Found를 포함합니다. direct URL, 새로고침, role 차단과 canonical redirect를 확인했습니다.
+route 접근, alias, role 차단과 Query Purity는 통과했습니다. Visual Regression은 통과하지 못했습니다.
 
-버튼이 보이지만 실행할 수 없는 fake success, Archive 편집 버튼, Legacy의 Current 오표시, hidden NotificationBell 중복 query는 제거했습니다. 실제 screenshot과 JSON 결과는 `docs/evidence/w10-ui-ux/w10-20260812-final-925533f`에 있습니다.
+기존 gate는 버튼 존재, route 이동, overflow 수치와 write 수를 확인했습니다. 다음 항목은 충분히 평가하지 않았습니다.
 
-## 21. W2–W9 Regression
+- 이전 화면보다 실제로 나아졌는가
+- 첫 화면에서 업무 우선순위가 보이는가
+- 새 component와 legacy control이 하나의 제품처럼 보이는가
+- 빈 공간과 정보 밀도가 역할에 맞는가
+- 모바일에서 제목, badge, action과 Navigation이 경쟁하지 않는가
+- 실제 사용자가 시각 결과를 승인했는가
 
-`npm run verify:w10-ui-ux`가 W2~W9 command·query·Rules·Functions·emulator 회귀와 W10 UI·Rules·bundle·TypeScript·format을 순서대로 실행합니다. 최종 검증에서 direct-write boundary는 156개 승인 항목, command inventory 28개, `UNKNOWN=0`이었습니다.
+W10 visual acceptance는 FAIL입니다.
 
-W8·W9 query purity와 W10 presentation query purity에서 mount, list, detail, listener, preview, unmount business write가 모두 0이었습니다. Functions와 Rules의 previous-bundle 차단도 유지했습니다.
+## 21. W2-W9 Regression
+
+`npm run verify:w10-ui-ux`가 확인한 Command Gateway, Rules, Functions, query purity, direct-write boundary와 previous-bundle 차단 결과는 유지합니다. `UNKNOWN=0`, TypeScript 신규 오류 0과 이전 Wave 기능 회귀 통과도 유효합니다.
+
+이 결과는 W10의 기능·안전 기반이 보존됐다는 증거입니다. UI·UX 완료 증거는 아닙니다.
 
 ## 22. Dedicated Staging
 
-최종 UI는 `dpl_EczpyUAh5VmSdEh8NtWcbZ7kvMKR`에 배포하고 고정 Staging alias에 연결했습니다. Firestore Rules, Storage Rules와 필요한 index는 Dedicated Staging에만 반영했습니다. Functions 변경은 없어 배포하지 않았습니다.
+W10 최초 배포와 고정 alias 연결은 수행했습니다. 이후 실제 관리자 로그인 검증에서 Staging Google 공급자 누락이 발견되어 Dedicated Staging Auth에만 Google 로그인을 활성화했습니다. 이 과정에서 Production Auth, 데이터, Rules, Functions와 Maintenance는 변경하지 않았습니다.
 
-합성 학생·교사로 Staging 로그인, 학생 Today, 교사 업무 홈, Draft 저장·동일 UID 재로그인 복구, 세션 만료, Maintenance, 권한 없음, Not Found를 확인했습니다. App Check allowlist나 임시 Preview 허용 domain을 추가하지 않았습니다.
+2026-08-14 현재 고정 alias 화면은 기능 검증용으로 접근할 수 있지만, 사용자 시각 승인을 받지 못했습니다. Dedicated Staging UI 판정은 FAIL입니다.
 
 ## 23. Fixture / Token Cleanup
 
-합성 Auth 계정 2개, fixture 문서 6개, application session, 합성 Draft, command receipt·audit를 exact owner와 `testRunId`로 정리했습니다. 최종 residual Auth, fixture, session, business document, receipt, audit, token은 모두 0입니다.
+W10 당시 합성 Auth, fixture, session, Draft, receipt와 audit cleanup 기록은 유지합니다. W11 로그인 진단 중 access token과 OAuth secret 값은 파일, 보고서와 Git에 저장하지 않았습니다.
 
-임시 비밀번호 파일과 Maintenance 복구 state를 삭제했습니다. App Check debug token, Vercel bypass token, 임시 domain은 생성하지 않았습니다. emulator·Java·Node 잔존 process와 5001·8080·9099·9150·9199 listener도 0입니다.
+Staging Google 공급자 배포에 사용한 임시 `firebase.json` Auth block은 공용 설정에서 제거했습니다. 외부 Staging 공급자는 실제 관리자 검증에 필요한 환경 기능이므로 유지합니다. Production provider는 조회하거나 변경하지 않았습니다.
 
 ## 24. Production Safety
 
-Production Firestore, Storage, Auth, Rules, Functions, Vercel, alias, environment variable, Maintenance, 활성 학기, App Check, GitHub Pages 변경은 모두 0입니다. `history-quiz-yongsin` 접근은 safety fence가 차단합니다. main branch에는 push하지 않습니다.
+W10과 이번 정정에서 Production Firestore, Storage, Auth, Rules, Functions, Vercel, alias, environment variable, Maintenance, 활성 학기와 App Check 변경은 0입니다. main branch에는 push하지 않습니다.
 
 ## 25. W11 Handoff
 
-`docs/handoff/w11-semester-cutover-preparation-handoff.md`에 최종 route, 2026-2 master data, selector row, source·read-only 표현, Dashboard projection, 2026-1 Archive 조건, Storage 제한, Release Decision, KI-W1-01, shadow validation과 acceptance criteria를 기록했습니다.
+기존 W11 handoff의 master data, Current·Preparing·Archive·Legacy 경계, selector, shadow validation과 Storage 제한은 유효합니다.
 
-W11은 UI 구조를 다시 설계하지 않고 2026-2 master 생성, selective clone, count·join·hash shadow validation과 cutover readiness에 집중합니다.
+다만 “W11은 UI 구조를 다시 설계하지 않는다”는 전제는 철회해야 합니다. W11 데이터 전환 기능을 개발하더라도, 사용자가 보는 전환 화면과 공통 Shell을 완료로 판정할 수 없습니다. 시각 수정 작업은 별도 하위 Wave를 무한히 만드는 대신 현재 UI 부채 목록으로 관리해야 합니다.
 
 ## 26. Release Blockers
 
-- `KI-W1-01`: 일부 환경에서 재인증 뒤 `users/{uid}` probe가 permission-denied로 실패합니다. W10 변경으로 기본 세션 회귀가 악화되지는 않았습니다.
-- EX06, MAP01, MAP02, SRC01: 운영 출시 범위에 포함하려면 canonical command·Storage 계약이 필요합니다.
-- DIC01, DIC02, PATCH01: Production 승격 전 W12 Gateway·receipt migration이 필요합니다.
+W10 정정으로 다음 blocker를 추가합니다.
 
-이 항목들은 W10 UI·UX 통합과 W11 Staging shadow validation 진입을 막지 않습니다.
+- `UI-W10-01`: 사용자 시각 검수 실패. 이전 디자인보다 나빠졌다는 명시적 평가
+- `UI-W10-02`: screenshot 32개 중 25개의 declared viewport와 실제 크기 불일치
+- `UI-W10-03`: 학생 모바일 Today의 반복 heading, 잘림, action·Navigation 경쟁
+- `UI-W10-04`: 교사 업무 홈과 데이터 화면의 낮은 공간 활용, 약한 정보 위계와 legacy 혼재
+- `UI-W10-05`: 자동 gate 중심 판정으로 실제 사용자 승인 절차 누락
+
+기존 Release blocker도 유지합니다.
+
+- `KI-W1-01`: 일부 환경에서 재인증 뒤 `users/{uid}` probe permission-denied
+- EX06, MAP01, MAP02, SRC01: 공식 command·Storage 계약 필요
+- DIC01, DIC02, PATCH01: Production 전 Gateway·receipt migration 필요
 
 ## 27. Rollback
 
-UI rollback은 W9 Full SHA 또는 W10 이전 Vercel deployment로 고정 alias를 되돌리는 방식입니다. W10의 지도·사료 deny-only Rules를 되돌리면 이전 번들의 직접 mutation 경로가 다시 열리므로 일반 rollback 대상이 아닙니다. UI만 되돌리더라도 안전 fence는 유지합니다.
+기능과 보안 fence를 함께 되돌리지는 않습니다. UI를 되돌릴 경우 W9 Full SHA와 W10 이전 화면을 실제 사용자와 나란히 비교하고, 더 나은 presentation만 선택적으로 복원해야 합니다.
 
-W10은 canonical Domain data migration을 수행하지 않았으므로 데이터 rollback은 필요하지 않습니다. 합성 fixture는 모두 제거했습니다.
+지도·사료 direct mutation deny, Query Purity와 canonical Domain 계약은 유지합니다. 시각 rollback이 보안 rollback이 되어서는 안 됩니다.
 
 ## 28. Final W11 Readiness
 
-- 전체 route inventory와 분류: PASS, `UNKNOWN=0`
-- 학생 17개·교사 13개 canonical UI: PASS
-- alias·직접 URL·role·session·Not Found: PASS
-- 다섯 viewport·접근성·공통 상태: PASS
-- Query Purity·direct SDK·previous bundle 차단: PASS
-- W2~W9 aggregate 회귀: PASS
-- Dedicated Staging·evidence·cleanup: PASS
-- Production 변경: 0
-- TypeScript: 기존 63 errors / 13 files, W10 신규 0
-- W10 CURRENT-WAVE blocker: 0
+| 항목                            | 결과    |
+| ------------------------------- | ------- |
+| route inventory·UNKNOWN 0       | PASS    |
+| Query Purity·direct-write guard | PASS    |
+| W2-W9 기능·Rules·Functions 회귀 | PASS    |
+| TypeScript 신규 오류 0          | PASS    |
+| Design Foundation 코드 기반     | PARTIAL |
+| 학생 UI 시각 통합               | FAIL    |
+| 교사·관리자 UI 시각 통합        | FAIL    |
+| 정확한 5 viewport evidence      | FAIL    |
+| 실제 사용자 visual acceptance   | FAIL    |
+| W10 CURRENT-WAVE blocker 0      | FAIL    |
+| Production 변경 0               | PASS    |
 
-최종 판정:
+정정된 최종 판정:
 
-`READY FOR W11 SEMESTER CUTOVER PREPARATION STAGING DEVELOPMENT`
+`NOT READY FOR W11 SEMESTER CUTOVER PREPARATION STAGING DEVELOPMENT`
+
+W10은 기능·안전 통합 기반을 만들었지만 UI·UX 통합과 시각적 완성에는 실패했습니다. 다음 판정은 정적 검사만으로 내리지 않습니다. 실제 Staging에서 390, 768, 1024, 1280, 1600 viewport를 정확히 캡처하고, 핵심 학생·교사 흐름을 사용자가 직접 승인한 뒤에만 갱신합니다.
