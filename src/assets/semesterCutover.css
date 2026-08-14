@@ -338,6 +338,10 @@
   padding-top: 0;
 }
 
+.ws-cutover-result-list li > div {
+  min-width: 0;
+}
+
 .ws-cutover-result-list strong,
 .ws-cutover-result-list span {
   display: block;
@@ -353,6 +357,14 @@
   color: var(--ws-text-muted);
   font-size: var(--ws-type-meta, 0.72rem);
   line-height: 1.55;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.ws-cutover-result-list li > .ws-cutover-status {
+  flex: 0 0 auto;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .ws-cutover-result-list p {
