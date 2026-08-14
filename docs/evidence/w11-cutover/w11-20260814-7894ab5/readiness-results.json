@@ -1,0 +1,10 @@
+[
+  {
+    "checkId": "semester_cutover_readiness",
+    "attemptId": "cutattempt_35aef913362c7296061577e1503ef05f09f85aa322ec241722b8579ed2cfb291",
+    "manifestRevision": 1,
+    "dependencyHash": "7837e4e1544d60fdd4c0ca3399b3167472cd883ebbd3c2585a5612b92ae9f9bc",
+    "fresh": true,
+    "status": "PASS"
+  }
+]

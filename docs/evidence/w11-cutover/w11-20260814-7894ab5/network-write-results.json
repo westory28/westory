@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "testRunId": "w11-20260814-7894ab5",
+  "status": "PASS",
+  "projectId": "westory-staging-177587430482",
+  "stableAlias": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+  "observedAliasOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+  "deploymentUrl": "https://westory-staging-hkyxmtk59-bbbs-projects-44f9da30.vercel.app",
+  "immutableDeploymentUrl": "https://westory-staging-hkyxmtk59-bbbs-projects-44f9da30.vercel.app",
+  "deploymentId": "dpl_GR6oaj6VvQAbXeyvrApCzS2FXmcD",
+  "vercelProjectId": "prj_XMo7TjPKno80BKCnx0YW3JoGXY8B",
+  "vercelOrgId": "team_M4QjuJFt5l0Lc34XpUxFjEW3",
+  "aliasTargetDeploymentId": "dpl_GR6oaj6VvQAbXeyvrApCzS2FXmcD",
+  "inspectedAt": "2026-08-14T11:33:09.440Z",
+  "commitSha": "d0043ea3679bcf85c639d333e0a2f512077973f0",
+  "sourceCommitSha": "d0043ea3679bcf85c639d333e0a2f512077973f0",
+  "results": [
+    {
+      "caseId": "fixed-alias-mount-query-preview",
+      "route": "/teacher/settings/cutover",
+      "operation": "MOUNT_QUERY_PREVIEW_OBSERVATION",
+      "mountWriteCount": 0,
+      "queryWriteCount": 0,
+      "previewWriteCount": 0,
+      "productionRequestCount": 0,
+      "commandInvocationCount": 0,
+      "observationBasis": "ACTUAL_ADMIN_BROWSER_PLUS_QUERY_PURITY_CONTRACT",
+      "status": "PASS"
+    }
+  ]
+}

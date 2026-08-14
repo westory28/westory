@@ -1,0 +1,139 @@
+{
+  "schemaVersion": 1,
+  "testRunId": "w11-20260814-7894ab5",
+  "status": "PASS",
+  "projectId": "westory-staging-177587430482",
+  "stableAlias": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+  "observedAliasOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+  "deploymentUrl": "https://westory-staging-hkyxmtk59-bbbs-projects-44f9da30.vercel.app",
+  "immutableDeploymentUrl": "https://westory-staging-hkyxmtk59-bbbs-projects-44f9da30.vercel.app",
+  "deploymentId": "dpl_GR6oaj6VvQAbXeyvrApCzS2FXmcD",
+  "vercelProjectId": "prj_XMo7TjPKno80BKCnx0YW3JoGXY8B",
+  "vercelOrgId": "team_M4QjuJFt5l0Lc34XpUxFjEW3",
+  "aliasTargetDeploymentId": "dpl_GR6oaj6VvQAbXeyvrApCzS2FXmcD",
+  "inspectedAt": "2026-08-14T11:33:09.440Z",
+  "commitSha": "d0043ea3679bcf85c639d333e0a2f512077973f0",
+  "sourceCommitSha": "d0043ea3679bcf85c639d333e0a2f512077973f0",
+  "screenshots": [
+    {
+      "fileName": "teacher-cutover-390x844.png",
+      "route": "/teacher/settings/cutover",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "actualPixelSize": {
+        "width": 390,
+        "height": 844
+      },
+      "captureContentPixelSize": {
+        "width": 375,
+        "height": 812
+      },
+      "gutterPolicy": "BROWSER_OMITTED_SCROLLBAR_GUTTER_FILLED_WITH_PAGE_BACKGROUND",
+      "sha256": "fb1d9d69859b04e60986817f5b7b17fee0a253c947d763e34ddb4417bd75f232",
+      "capturedAt": "2026-08-14T11:39:43.720Z",
+      "sourceCommitSha": "d0043ea3679bcf85c639d333e0a2f512077973f0",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    },
+    {
+      "fileName": "teacher-cutover-768x1024.png",
+      "route": "/teacher/settings/cutover",
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "actualPixelSize": {
+        "width": 768,
+        "height": 1024
+      },
+      "captureContentPixelSize": {
+        "width": 753,
+        "height": 1004
+      },
+      "gutterPolicy": "BROWSER_OMITTED_SCROLLBAR_GUTTER_FILLED_WITH_PAGE_BACKGROUND",
+      "sha256": "6aee81a507c85db943481310e23278336831e45900fd7242ee248e7750e36868",
+      "capturedAt": "2026-08-14T11:39:44.199Z",
+      "sourceCommitSha": "d0043ea3679bcf85c639d333e0a2f512077973f0",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    },
+    {
+      "fileName": "teacher-cutover-1024x768.png",
+      "route": "/teacher/settings/cutover",
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "actualPixelSize": {
+        "width": 1024,
+        "height": 768
+      },
+      "captureContentPixelSize": {
+        "width": 1009,
+        "height": 757
+      },
+      "gutterPolicy": "BROWSER_OMITTED_SCROLLBAR_GUTTER_FILLED_WITH_PAGE_BACKGROUND",
+      "sha256": "9a4482e16398804dad80fcf360a5bd2bbdf5c0bb5989248448d8b9322545a3e5",
+      "capturedAt": "2026-08-14T11:39:44.663Z",
+      "sourceCommitSha": "d0043ea3679bcf85c639d333e0a2f512077973f0",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    },
+    {
+      "fileName": "teacher-cutover-1280x800.png",
+      "route": "/teacher/settings/cutover",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "actualPixelSize": {
+        "width": 1280,
+        "height": 800
+      },
+      "captureContentPixelSize": {
+        "width": 1265,
+        "height": 791
+      },
+      "gutterPolicy": "BROWSER_OMITTED_SCROLLBAR_GUTTER_FILLED_WITH_PAGE_BACKGROUND",
+      "sha256": "4e7f35a308a953170589b8934156a14e3ed6a3244f2ac66cd8511a92d635fadb",
+      "capturedAt": "2026-08-14T11:39:45.137Z",
+      "sourceCommitSha": "d0043ea3679bcf85c639d333e0a2f512077973f0",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    },
+    {
+      "fileName": "teacher-cutover-1600x900.png",
+      "route": "/teacher/settings/cutover",
+      "viewport": {
+        "width": 1600,
+        "height": 900
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "actualPixelSize": {
+        "width": 1600,
+        "height": 900
+      },
+      "captureContentPixelSize": {
+        "width": 1585,
+        "height": 892
+      },
+      "gutterPolicy": "BROWSER_OMITTED_SCROLLBAR_GUTTER_FILLED_WITH_PAGE_BACKGROUND",
+      "sha256": "48d2510f3f9f5e06c08a43314ed5cf088a60ae417e633ed6148f7d0ffa532f6a",
+      "capturedAt": "2026-08-14T11:39:45.622Z",
+      "sourceCommitSha": "d0043ea3679bcf85c639d333e0a2f512077973f0",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    }
+  ]
+}

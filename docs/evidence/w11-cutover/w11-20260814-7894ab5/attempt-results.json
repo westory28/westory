@@ -1,0 +1,24 @@
+[
+  {
+    "attemptId": "cutattempt_35aef913362c7296061577e1503ef05f09f85aa322ec241722b8579ed2cfb291",
+    "planId": "cutplan_e0da6611858b49296bfe7a3a83b442e69083aa160648d337e9e90358a9153071",
+    "rehearsalNumber": 1,
+    "result": "EXECUTED",
+    "partialFailureCount": 1,
+    "responseLossRecovered": true,
+    "resumeAttemptedItemCount": 1,
+    "resumeSucceededItemEffectCount": 0,
+    "status": "PASS"
+  },
+  {
+    "attemptId": "cutattempt_35aef913362c7296061577e1503ef05f09f85aa322ec241722b8579ed2cfb291",
+    "planId": "cutplan_e0da6611858b49296bfe7a3a83b442e69083aa160648d337e9e90358a9153071",
+    "rehearsalNumber": 2,
+    "result": "REPLAYED",
+    "partialFailureCount": 1,
+    "responseLossRecovered": true,
+    "resumeAttemptedItemCount": 1,
+    "resumeSucceededItemEffectCount": 0,
+    "status": "PASS"
+  }
+]

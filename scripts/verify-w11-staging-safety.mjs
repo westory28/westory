@@ -27,6 +27,11 @@ assert.match(
 );
 assert.match(fixture, /validateOwnedDocument/u);
 assert.match(fixture, /transaction\.getAll/u);
+assert.match(
+  fixture,
+  /cutover\.receiptIdFor\(\s*actorUid,\s*data\.childCommandType,\s*data\.childCommandId,/u,
+);
+assert.match(fixture, /liveReceiptIds\.has\(data\.receiptId\)/u);
 assert.match(fixture, /ensureExactOwner\(marker,/u);
 assert.match(fixture, /"site_settings\/student_maintenance"/u);
 assert.match(fixture, /EXACT_SITE_SETTINGS_STUDENT_MAINTENANCE_SNAPSHOT_HASH/u);
@@ -58,6 +63,7 @@ console.log(
     passed: true,
     evidenceOptionalCleanup: true,
     liveOwnershipRevalidation: true,
+    reconciledChildReceiptValidation: true,
     maintenanceSnapshotMeasured: true,
     storagePrefixMeasured: true,
     tokenRevocationClaimAccurate: true,

@@ -464,6 +464,7 @@ const validateOwnedDocument = ({
   fixturePathSet,
   sessionPathSet,
   targetOwners,
+  liveReceiptIds,
   receiptPathSet,
   auditPathSet,
   artifactOwners,
@@ -510,7 +511,30 @@ const validateOwnedDocument = ({
   const ownerCommandIds = new Set(owners.map((owner) => owner.commandId));
   const ownerReceiptIds = new Set(owners.map((owner) => owner.receiptId));
   if (data.commandId) assert.equal(ownerCommandIds.has(data.commandId), true);
-  if (data.receiptId) assert.equal(ownerReceiptIds.has(data.receiptId), true);
+  if (data.receiptId) {
+    if (/^semester_cutover_attempts\/[^/]+\/items\/[^/]+$/u.test(path)) {
+      assert.equal(
+        data.receiptId,
+        cutover.receiptIdFor(
+          actorUid,
+          data.childCommandType,
+          data.childCommandId,
+        ),
+        `${path}.receiptId does not match its reconciled child command.`,
+      );
+      assert.equal(
+        liveReceiptIds.has(data.receiptId),
+        true,
+        `${path}.receiptId has no live W11 child command receipt.`,
+      );
+    } else {
+      assert.equal(
+        ownerReceiptIds.has(data.receiptId),
+        true,
+        `${path}.receiptId is not owned by a live W11 command receipt.`,
+      );
+    }
+  }
   for (const field of [
     "createdBy",
     "updatedBy",
@@ -1214,6 +1238,7 @@ const cleanup = async () => {
           fixturePathSet,
           sessionPathSet,
           targetOwners,
+          liveReceiptIds,
           receiptPathSet,
           auditPathSet,
           artifactOwners,

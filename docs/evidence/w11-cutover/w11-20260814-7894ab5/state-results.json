@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "testRunId": "w11-20260814-7894ab5",
+  "status": "PASS",
+  "projectId": "westory-staging-177587430482",
+  "stableAlias": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+  "observedAliasOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+  "deploymentUrl": "https://westory-staging-hkyxmtk59-bbbs-projects-44f9da30.vercel.app",
+  "immutableDeploymentUrl": "https://westory-staging-hkyxmtk59-bbbs-projects-44f9da30.vercel.app",
+  "deploymentId": "dpl_GR6oaj6VvQAbXeyvrApCzS2FXmcD",
+  "vercelProjectId": "prj_XMo7TjPKno80BKCnx0YW3JoGXY8B",
+  "vercelOrgId": "team_M4QjuJFt5l0Lc34XpUxFjEW3",
+  "aliasTargetDeploymentId": "dpl_GR6oaj6VvQAbXeyvrApCzS2FXmcD",
+  "inspectedAt": "2026-08-14T11:33:09.440Z",
+  "commitSha": "d0043ea3679bcf85c639d333e0a2f512077973f0",
+  "sourceCommitSha": "d0043ea3679bcf85c639d333e0a2f512077973f0",
+  "requiredStates": [
+    "ARCHIVE",
+    "EXPLICIT",
+    "PREPARING"
+  ],
+  "results": [
+    {
+      "state": "ARCHIVE",
+      "persona": "ADMIN",
+      "route": "/teacher/settings/cutover",
+      "provenance": "ARCHIVE",
+      "readOnly": true,
+      "status": "PASS"
+    },
+    {
+      "state": "EXPLICIT",
+      "persona": "ADMIN",
+      "route": "/teacher/settings/cutover",
+      "provenance": "EXPLICIT",
+      "readOnly": true,
+      "status": "PASS"
+    },
+    {
+      "state": "PREPARING",
+      "persona": "ADMIN",
+      "route": "/teacher/settings/cutover",
+      "provenance": "PREPARING",
+      "readOnly": false,
+      "status": "PASS"
+    }
+  ]
+}
