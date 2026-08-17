@@ -13,6 +13,9 @@ import { useAuth } from "../../../contexts/AuthContext";
 import MatchingConnectionLines from "../../../components/common/MatchingConnectionLines";
 import { LoadingOverlay } from "../../../components/common/LoadingState";
 import QuizPassage from "../../../components/common/QuizPassage";
+import StatePanel from "../../../components/common/StatePanel";
+import { useAppDialog } from "../../../components/common/AppDialogProvider";
+import { useAppToast } from "../../../components/common/AppToastProvider";
 import {
   getSemesterCollectionPath,
   getSemesterDocPath,
@@ -151,6 +154,26 @@ type SortDirection = "asc" | "desc";
 type AnalyticsScope = "all" | "class";
 type StatusFilter = "" | "weak" | "no_attempt" | "data_short" | "stable";
 type ClassComparisonSort = "class" | "rateAsc" | "rateDesc";
+type PrimaryDataLoadStatus = "loading" | "ready" | "error" | "permission";
+type PrimaryDataFailureStatus = Extract<
+  PrimaryDataLoadStatus,
+  "error" | "permission"
+>;
+type PrimaryDataLoadResult<T> =
+  | { status: "ready"; data: T }
+  | { status: PrimaryDataFailureStatus };
+
+const getPrimaryDataFailureStatus = (
+  error: unknown,
+): PrimaryDataFailureStatus => {
+  const code =
+    typeof error === "object" && error !== null && "code" in error
+      ? String((error as { code?: unknown }).code || "")
+      : "";
+  return code === "permission-denied" || code === "firestore/permission-denied"
+    ? "permission"
+    : "error";
+};
 const supportsQuestionPassage = (questionType: QuestionType | string) =>
   questionType === "choice" || questionType === "word";
 
@@ -319,6 +342,8 @@ const getWrongAnswerLabel = (value: unknown) => {
 
 const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const { config } = useAuth();
+  const { confirm: confirmAction } = useAppDialog();
+  const { showToast } = useAppToast();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [questionStats, setQuestionStats] = useState<
     Record<string, QuestionAggregate>
@@ -336,7 +361,12 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const [rosterAccessLimited, setRosterAccessLimited] = useState(false);
   const [lastAttemptAt, setLastAttemptAt] = useState(0);
   const [treeData, setTreeData] = useState<TreeUnit[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [questionLoadStatus, setQuestionLoadStatus] =
+    useState<PrimaryDataLoadStatus>("loading");
+  const [analyticsLoadStatus, setAnalyticsLoadStatus] =
+    useState<PrimaryDataLoadStatus>("loading");
+  const [primaryDataReloadRequest, setPrimaryDataReloadRequest] = useState(0);
+  const [analyticsReloadRequest, setAnalyticsReloadRequest] = useState(0);
   const [filters, setFilters] = useState<BankFilterState>(
     createEmptyBankFilters,
   );
@@ -363,6 +393,14 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   const optimizingImage = optimizingImageCount > 0;
   const userTouchedClassScopeRef = React.useRef(false);
   const savingEditRef = useRef(false);
+
+  const showEditorMessage = (message: string) => {
+    showToast({
+      tone: "warning",
+      title: "입력 내용을 확인해 주세요.",
+      message,
+    });
+  };
 
   const toRoman = (value: number) => {
     const romans = [
@@ -539,32 +577,54 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   }, [config]);
 
   useEffect(() => {
+    let active = true;
     const loadAll = async () => {
-      setLoading(true);
-      try {
-        const [questionsResult, treeResult, statsResult, rosterResult] =
-          await Promise.all([
-            loadQuestions(),
-            loadTreeData(),
-            loadQuestionAnalytics(),
-            loadStudentRoster(),
-          ]);
-        setQuestions(questionsResult);
-        setTreeData(treeResult);
-        setQuestionStats(statsResult.questionStats);
-        setClassAverageByClass(statsResult.classAverageByClass);
-        setParticipationByClass(statsResult.participationByClass);
-        setTotalParticipants(statsResult.totalParticipants);
-        setRecentClassFocus(statsResult.recentClassFocus);
-        setLastAttemptAt(statsResult.lastAttemptAt);
-        setStudentRoster(rosterResult.students);
-        setRosterAccessLimited(rosterResult.accessLimited);
+      setQuestionLoadStatus("loading");
+      setAnalyticsLoadStatus("loading");
+      const [questionsResult, treeResult, statsResult, rosterResult] =
+        await Promise.all([
+          loadQuestions(),
+          loadTreeData(),
+          loadQuestionAnalytics(
+            isMockExamCategory(categoryFilter) ? examRoundFilter : undefined,
+          ),
+          loadStudentRoster(),
+        ]);
+      if (!active) return;
+
+      setTreeData(treeResult);
+      setStudentRoster(rosterResult.students);
+      setRosterAccessLimited(rosterResult.accessLimited);
+
+      if (questionsResult.status !== "ready") {
+        setQuestionLoadStatus(questionsResult.status);
+      } else {
+        setQuestions(questionsResult.data);
+        setQuestionLoadStatus("ready");
+      }
+
+      if (statsResult.status !== "ready") {
+        setAnalyticsLoadStatus(statsResult.status);
+      } else {
+        setQuestionStats(statsResult.data.questionStats);
+        setClassAverageByClass(statsResult.data.classAverageByClass);
+        setParticipationByClass(statsResult.data.participationByClass);
+        setTotalParticipants(statsResult.data.totalParticipants);
+        setRecentClassFocus(statsResult.data.recentClassFocus);
+        setLastAttemptAt(statsResult.data.lastAttemptAt);
+        setAnalyticsLoadStatus("ready");
+      }
+
+      if (
+        questionsResult.status === "ready" &&
+        statsResult.status === "ready"
+      ) {
         const nextDefaultFocus = buildDefaultFocus(
-          questionsResult,
+          questionsResult.data,
           treeResult,
-          statsResult.questionStats,
-          statsResult.recentClassFocus?.classOnly,
-          statsResult.recentExamRoundFocus,
+          statsResult.data.questionStats,
+          statsResult.data.recentClassFocus?.classOnly,
+          statsResult.data.recentExamRoundFocus,
         );
         setDefaultFocus(nextDefaultFocus);
         if (nextDefaultFocus) {
@@ -576,14 +636,18 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
           setCategoryFilter(nextDefaultFocus.category);
           setExamRoundFilter(nextDefaultFocus.examRound || "");
         }
-      } finally {
-        setLoading(false);
       }
     };
     void loadAll();
-  }, [config]);
 
-  const loadQuestions = async () => {
+    return () => {
+      active = false;
+    };
+  }, [config, primaryDataReloadRequest]);
+
+  const loadQuestions = async (): Promise<
+    PrimaryDataLoadResult<Question[]>
+  > => {
     try {
       const snap = await getDocs(
         collection(db, getSemesterCollectionPath(config, "quiz_questions")),
@@ -598,10 +662,10 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
           ...(d.data() as Omit<Question, "id" | "docId">),
         });
       });
-      return list;
+      return { status: "ready", data: list };
     } catch (error) {
       console.error(error);
-      return [];
+      return { status: getPrimaryDataFailureStatus(error) };
     }
   };
 
@@ -783,7 +847,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
 
   const loadQuestionAnalytics = async (
     examRound?: string,
-  ): Promise<BankAnalyticsResult> => {
+  ): Promise<PrimaryDataLoadResult<BankAnalyticsResult>> => {
     try {
       const snap = await getDocs(
         query(
@@ -933,65 +997,60 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       });
 
       return {
-        questionStats: questionStatsResult,
-        classAverageByClass: Object.fromEntries(
-          Object.entries(classScoreTotals).map(([classOnly, item]) => [
-            classOnly,
-            {
-              average: item.scoreCount
-                ? Math.round(item.scoreSum / item.scoreCount)
-                : null,
-            },
-          ]),
-        ),
-        participationByClass: Object.fromEntries(
-          Object.entries(classParticipants).map(([classOnly, classSet]) => [
-            classOnly,
-            classSet.size,
-          ]),
-        ),
-        totalParticipants: participants.size,
-        lastAttemptAt: latestAttemptAt,
-        recentClassFocus:
-          Object.entries(recentClassCandidates)
-            .filter(
-              ([, item]) =>
-                item.studentKeys.size >= RECENT_CLASS_FOCUS_MIN_STUDENTS,
-            )
-            .map(([classOnly, item]) => ({
+        status: "ready",
+        data: {
+          questionStats: questionStatsResult,
+          classAverageByClass: Object.fromEntries(
+            Object.entries(classScoreTotals).map(([classOnly, item]) => [
               classOnly,
-              studentCount: item.studentKeys.size,
-              latestMs: item.latestMs,
-              thresholdMs: item.thresholdMs,
-            }))
-            .sort((a, b) => {
-              if (a.thresholdMs !== b.thresholdMs)
-                return b.thresholdMs - a.thresholdMs;
-              if (a.latestMs !== b.latestMs) return b.latestMs - a.latestMs;
-              return Number(a.classOnly) - Number(b.classOnly);
-            })[0] || null,
-        recentExamRoundFocus:
-          Object.entries(recentExamRoundCandidates).sort(([, a], [, b]) => {
-            if (a.studentKeys.size !== b.studentKeys.size) {
-              return b.studentKeys.size - a.studentKeys.size;
-            }
-            if (a.attemptCount !== b.attemptCount) {
-              return b.attemptCount - a.attemptCount;
-            }
-            return b.latestMs - a.latestMs;
-          })[0]?.[0] || "",
+              {
+                average: item.scoreCount
+                  ? Math.round(item.scoreSum / item.scoreCount)
+                  : null,
+              },
+            ]),
+          ),
+          participationByClass: Object.fromEntries(
+            Object.entries(classParticipants).map(([classOnly, classSet]) => [
+              classOnly,
+              classSet.size,
+            ]),
+          ),
+          totalParticipants: participants.size,
+          lastAttemptAt: latestAttemptAt,
+          recentClassFocus:
+            Object.entries(recentClassCandidates)
+              .filter(
+                ([, item]) =>
+                  item.studentKeys.size >= RECENT_CLASS_FOCUS_MIN_STUDENTS,
+              )
+              .map(([classOnly, item]) => ({
+                classOnly,
+                studentCount: item.studentKeys.size,
+                latestMs: item.latestMs,
+                thresholdMs: item.thresholdMs,
+              }))
+              .sort((a, b) => {
+                if (a.thresholdMs !== b.thresholdMs)
+                  return b.thresholdMs - a.thresholdMs;
+                if (a.latestMs !== b.latestMs) return b.latestMs - a.latestMs;
+                return Number(a.classOnly) - Number(b.classOnly);
+              })[0] || null,
+          recentExamRoundFocus:
+            Object.entries(recentExamRoundCandidates).sort(([, a], [, b]) => {
+              if (a.studentKeys.size !== b.studentKeys.size) {
+                return b.studentKeys.size - a.studentKeys.size;
+              }
+              if (a.attemptCount !== b.attemptCount) {
+                return b.attemptCount - a.attemptCount;
+              }
+              return b.latestMs - a.latestMs;
+            })[0]?.[0] || "",
+        },
       };
     } catch (error) {
       console.error(error);
-      return {
-        questionStats: {},
-        classAverageByClass: {},
-        participationByClass: {},
-        totalParticipants: 0,
-        lastAttemptAt: 0,
-        recentClassFocus: null,
-        recentExamRoundFocus: "",
-      };
+      return { status: getPrimaryDataFailureStatus(error) };
     }
   };
 
@@ -1030,22 +1089,26 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
   };
 
   useEffect(() => {
-    if (!isMockExamCategory(categoryFilter)) return;
+    if (!isMockExamCategory(categoryFilter) && analyticsReloadRequest === 0)
+      return;
     let active = true;
 
     const reloadRoundAnalytics = async () => {
-      setLoading(true);
-      try {
-        const statsResult = await loadQuestionAnalytics(examRoundFilter);
-        if (!active) return;
-        setQuestionStats(statsResult.questionStats);
-        setClassAverageByClass(statsResult.classAverageByClass);
-        setParticipationByClass(statsResult.participationByClass);
-        setTotalParticipants(statsResult.totalParticipants);
-        setRecentClassFocus(statsResult.recentClassFocus);
-        setLastAttemptAt(statsResult.lastAttemptAt);
-      } finally {
-        if (active) setLoading(false);
+      setAnalyticsLoadStatus("loading");
+      const statsResult = await loadQuestionAnalytics(
+        isMockExamCategory(categoryFilter) ? examRoundFilter : undefined,
+      );
+      if (!active) return;
+      if (statsResult.status !== "ready") {
+        setAnalyticsLoadStatus(statsResult.status);
+      } else {
+        setQuestionStats(statsResult.data.questionStats);
+        setClassAverageByClass(statsResult.data.classAverageByClass);
+        setParticipationByClass(statsResult.data.participationByClass);
+        setTotalParticipants(statsResult.data.totalParticipants);
+        setRecentClassFocus(statsResult.data.recentClassFocus);
+        setLastAttemptAt(statsResult.data.lastAttemptAt);
+        setAnalyticsLoadStatus("ready");
       }
     };
 
@@ -1053,7 +1116,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     return () => {
       active = false;
     };
-  }, [categoryFilter, config, examRoundFilter]);
+  }, [analyticsReloadRequest, categoryFilter, config, examRoundFilter]);
 
   const selectedBig = useMemo(
     () => treeData.find((big) => big.id === filters.big),
@@ -1330,7 +1393,11 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         }
       }
 
-      if (statusFilter && getQuestionStatus(q).key !== statusFilter)
+      if (
+        analyticsLoadStatus === "ready" &&
+        statusFilter &&
+        getQuestionStatus(q).key !== statusFilter
+      )
         return false;
 
       const search = searchTerm.trim().toLowerCase();
@@ -1367,7 +1434,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
         if (am.seq !== bm.seq)
           return sortDirection === "asc" ? am.seq - bm.seq : bm.seq - am.seq;
       }
-      if (sortKey === "rate") {
+      if (analyticsLoadStatus === "ready" && sortKey === "rate") {
         const aRate = getRateInfo(a).rate;
         const bRate = getRateInfo(b).rate;
         if (aRate !== bRate)
@@ -1396,6 +1463,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     return list;
   }, [
     activeClassFilter,
+    analyticsLoadStatus,
     categoryFilter,
     filters,
     questionDisplayCodes,
@@ -1997,11 +2065,14 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       );
     } catch (error) {
       console.error("Quiz image optimization failed", error);
-      alert(
-        error instanceof Error
-          ? error.message
-          : "이미지 용량을 줄이지 못했습니다.",
-      );
+      showToast({
+        tone: "error",
+        title: "이미지를 처리하지 못했습니다.",
+        message:
+          error instanceof Error
+            ? error.message
+            : "이미지 용량을 줄이지 못했습니다.",
+      });
     } finally {
       setOptimizingImageCount((prev) => Math.max(0, prev - 1));
       e.currentTarget.value = "";
@@ -2025,11 +2096,14 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       })
       .catch((error) => {
         console.error("Quiz choice option image optimization failed", error);
-        alert(
-          error instanceof Error
-            ? error.message
-            : "이미지 용량을 줄이지 못했습니다.",
-        );
+        showToast({
+          tone: "error",
+          title: "보기 이미지를 처리하지 못했습니다.",
+          message:
+            error instanceof Error
+              ? error.message
+              : "이미지 용량을 줄이지 못했습니다.",
+        });
       })
       .finally(() => {
         setOptimizingImageCount((prev) => Math.max(0, prev - 1));
@@ -2054,11 +2128,14 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       })
       .catch((error) => {
         console.error("Quiz matching image optimization failed", error);
-        alert(
-          error instanceof Error
-            ? error.message
-            : "이미지 용량을 줄이지 못했습니다.",
-        );
+        showToast({
+          tone: "error",
+          title: "연결 이미지를 처리하지 못했습니다.",
+          message:
+            error instanceof Error
+              ? error.message
+              : "이미지 용량을 줄이지 못했습니다.",
+        });
       })
       .finally(() => {
         setOptimizingImageCount((prev) => Math.max(0, prev - 1));
@@ -2367,12 +2444,15 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     editHintText,
   ]);
 
-  const closeEditModal = (force = false) => {
+  const closeEditModal = async (force = false) => {
     if (savingEdit || optimizingImage) return;
     if (!force && hasUnsavedEditChanges) {
-      const confirmed = window.confirm(
-        "수정 중인 내용이 있습니다. 정말로 닫으시겠습니까?",
-      );
+      const confirmed = await confirmAction({
+        title: "문항 수정을 닫을까요?",
+        message: "저장하지 않은 수정 내용은 사라집니다.",
+        confirmLabel: "저장하지 않고 닫기",
+        tone: "warning",
+      });
       if (!confirmed) return;
     }
     setEditingQuestion(null);
@@ -2408,11 +2488,13 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     if (!editingQuestion) return;
     if (savingEditRef.current) return;
     if (optimizingImage) {
-      alert("이미지 용량을 줄이는 중입니다. 잠시 후 다시 저장해 주세요.");
+      showEditorMessage(
+        "이미지 용량을 줄이는 중입니다. 잠시 후 다시 저장해 주세요.",
+      );
       return;
     }
     if (!editQuestionText.trim()) {
-      alert("문제 내용을 입력하세요.");
+      showEditorMessage("문제 내용을 입력하세요.");
       return;
     }
 
@@ -2429,45 +2511,45 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
 
     if (editType === "choice") {
       if (choiceOptions.length < 2) {
-        alert("객관식 보기는 최소 2개 이상 필요합니다.");
+        showEditorMessage("객관식 보기는 최소 2개 이상 필요합니다.");
         return;
       }
       if (editChoiceAnswerIndex === null) {
-        alert("객관식 정답 보기를 선택하세요.");
+        showEditorMessage("객관식 정답 보기를 선택하세요.");
         return;
       }
       answer =
         choiceItems.find((item) => item.sourceIndex === editChoiceAnswerIndex)
           ?.text || "";
       if (!answer) {
-        alert("정답으로 선택한 보기에 내용을 입력하세요.");
+        showEditorMessage("정답으로 선택한 보기에 내용을 입력하세요.");
         return;
       }
       options = choiceOptions;
     } else if (editType === "ox") {
       if (!editOxAnswer) {
-        alert("O/X 정답을 선택하세요.");
+        showEditorMessage("O/X 정답을 선택하세요.");
         return;
       }
       answer = editOxAnswer;
       options = ["O", "X"];
     } else if (editType === "word") {
       if (!editWordAnswer.trim()) {
-        alert("단답형 정답을 입력하세요.");
+        showEditorMessage("단답형 정답을 입력하세요.");
         return;
       }
       answer = editWordAnswer.trim();
       options = [];
     } else if (editType === "matching") {
       if (matchingOptions.length < 2) {
-        alert("단어 연결하기 항목은 최소 2쌍 이상 필요합니다.");
+        showEditorMessage("단어 연결하기 항목은 최소 2쌍 이상 필요합니다.");
         return;
       }
       answer = encodeMatchingAnswer(matchingOptions);
       options = matchingOptions.map((pair) => pair.right);
     } else {
       if (orderOptions.length < 2) {
-        alert("순서 나열형 항목은 최소 2개 이상 필요합니다.");
+        showEditorMessage("순서 나열형 항목은 최소 2개 이상 필요합니다.");
         return;
       }
       answer = orderOptions.join(ORDER_DELIMITER);
@@ -2475,7 +2557,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     }
 
     if (editHintEnabled && !editHintText.trim()) {
-      alert("힌트 제공을 선택한 경우 힌트 내용을 입력하세요.");
+      showEditorMessage("힌트 제공을 선택한 경우 힌트 내용을 입력하세요.");
       return;
     }
 
@@ -2527,14 +2609,14 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
       setQuestions((prev) =>
         prev.map((q) => (q.docId === editingQuestion.docId ? payload : q)),
       );
-      closeEditModal(true);
+      await closeEditModal(true);
     } catch (error: any) {
       console.error(error);
-      const message =
-        error instanceof Error && error.message ? `\n${error.message}` : "";
-      alert(
-        `문제 수정에 실패했습니다${error?.code ? ` (${error.code})` : ""}.${message}`,
-      );
+      showToast({
+        tone: "error",
+        title: "문항 수정을 저장하지 못했습니다.",
+        message: "현재 내용을 확인한 뒤 잠시 후 다시 시도해 주세요.",
+      });
     } finally {
       savingEditRef.current = false;
       setSavingEdit(false);
@@ -2550,6 +2632,27 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
     editType === "choice" && (!!editImage || !!editPreviewPassageText);
   const hasEditPreviewChoiceOptionImages =
     editType === "choice" && editPreviewChoiceItems.some((item) => item.image);
+  const loading = questionLoadStatus === "loading";
+  const hasPrimaryDataError =
+    questionLoadStatus === "error" || questionLoadStatus === "permission";
+  const hasNoAnalyticsData =
+    analyticsLoadStatus === "ready" &&
+    totalParticipants === 0 &&
+    lastAttemptAt === 0;
+  const analyticsUnavailableLabel =
+    analyticsLoadStatus === "loading"
+      ? "응시 분석 불러오는 중"
+      : analyticsLoadStatus === "permission"
+        ? "응시 분석 권한 없음"
+        : analyticsLoadStatus === "error"
+          ? "응시 분석 확인 불가"
+          : "";
+  const retryPrimaryData = () => {
+    setPrimaryDataReloadRequest((request) => request + 1);
+  };
+  const retryAnalyticsData = () => {
+    setAnalyticsReloadRequest((request) => request + 1);
+  };
 
   return (
     <div>
@@ -2558,890 +2661,1202 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
           읽기 전용 권한입니다. 문제 수정은 관리자만 가능합니다.
         </div>
       )}
-      <div className="shrink-0 pb-3">
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-            <div>
-              <h2 className="text-xl font-black text-slate-900">문제 은행</h2>
-              <p className="mt-1 text-sm text-slate-500">
-                {activeClassFilter
-                  ? `${activeClassFilter}반 기준`
-                  : "전체 응시 기록 기준"}
-                {activeExamRoundLabel ? ` · ${activeExamRoundLabel}` : ""}
-                으로 문항, 단원, 오답 흐름을 함께 봅니다.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500">
-              <span className="rounded-full bg-slate-100 px-3 py-1.5">
-                총 {questions.length}문항
-              </span>
-              <span className="rounded-full bg-blue-50 px-3 py-1.5 text-blue-700">
-                분석 {filteredQuestions.length}문항
-              </span>
-              <span className="rounded-full bg-slate-100 px-3 py-1.5">
-                마지막 응시{" "}
-                {lastAttemptAt
-                  ? new Date(lastAttemptAt).toLocaleString("ko-KR")
-                  : "-"}
-              </span>
-            </div>
-          </div>
+      {loading ? (
+        <StatePanel
+          state="LOADING"
+          title="문제와 응시 분석을 불러오고 있습니다."
+          description="화면을 닫지 않아도 완료되면 자동으로 표시됩니다."
+        />
+      ) : hasPrimaryDataError ? (
+        <StatePanel
+          state={questionLoadStatus === "permission" ? "PERMISSION" : "ERROR"}
+          title={
+            questionLoadStatus === "permission"
+              ? "문제 목록을 볼 권한이 없습니다."
+              : "문제 목록을 불러오지 못했습니다."
+          }
+          description={
+            questionLoadStatus === "permission"
+              ? "현재 계정의 평가 관리 권한을 관리자에게 확인해 주세요."
+              : "등록된 문제는 변경되지 않습니다. 잠시 후 다시 시도해 주세요."
+          }
+          action={
+            questionLoadStatus === "error"
+              ? { label: "문제 목록 다시 불러오기", onClick: retryPrimaryData }
+              : undefined
+          }
+          retryable={questionLoadStatus === "error"}
+          contactAdmin={questionLoadStatus === "permission"}
+        />
+      ) : (
+        <>
+          <section
+            className="shrink-0 pb-3"
+            aria-labelledby="quiz-bank-filter-title"
+          >
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                <div>
+                  <h2
+                    id="quiz-bank-filter-title"
+                    className="text-base font-black text-slate-900"
+                  >
+                    {analyticsLoadStatus === "ready"
+                      ? "분석 조건"
+                      : "문제 검색 조건"}
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {analyticsLoadStatus === "ready" ? (
+                      <>
+                        {activeClassFilter
+                          ? `${activeClassFilter}반 기준`
+                          : "전체 응시 기록 기준"}
+                        {activeExamRoundLabel
+                          ? ` · ${activeExamRoundLabel}`
+                          : ""}
+                        으로 문항, 단원, 오답 흐름을 함께 봅니다.
+                      </>
+                    ) : (
+                      "문제 목록은 검색어, 단원, 평가 유형으로 계속 확인할 수 있습니다."
+                    )}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-slate-500">
+                  <span className="rounded-full bg-slate-100 px-3 py-1.5">
+                    총 {questions.length}문항
+                  </span>
+                  <span className="rounded-full bg-blue-50 px-3 py-1.5 text-blue-700">
+                    {analyticsLoadStatus === "ready" ? "분석" : "목록"}{" "}
+                    {filteredQuestions.length}문항
+                  </span>
+                  <span className="rounded-full bg-slate-100 px-3 py-1.5">
+                    마지막 응시{" "}
+                    {analyticsLoadStatus !== "ready"
+                      ? "확인 불가"
+                      : lastAttemptAt
+                        ? new Date(lastAttemptAt).toLocaleString("ko-KR")
+                        : "-"}
+                  </span>
+                </div>
+              </div>
 
-          <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-5">
-            <div className="flex min-w-0 rounded-lg border border-slate-200 bg-slate-100 p-1">
-              {(["all", "class"] as AnalyticsScope[]).map((scope) => (
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-5">
+                <div
+                  className="ws-quiz-bank-filter-scope min-w-0"
+                  role="group"
+                  aria-label="응시 결과 범위"
+                >
+                  {(["all", "class"] as AnalyticsScope[]).map((scope) => (
+                    <button
+                      key={scope}
+                      type="button"
+                      aria-pressed={analyticsScope === scope}
+                      disabled={analyticsLoadStatus !== "ready"}
+                      onClick={() => {
+                        userTouchedClassScopeRef.current = true;
+                        setAnalyticsScope(scope);
+                      }}
+                      className={`ws-quiz-bank-filter-scope__option${analyticsScope === scope ? " is-active" : ""}`}
+                    >
+                      {scope === "all" ? "전체" : "학급별"}
+                    </button>
+                  ))}
+                </div>
+                <select
+                  value={classFilter}
+                  onChange={(e) => {
+                    userTouchedClassScopeRef.current = true;
+                    setClassFilter(e.target.value);
+                  }}
+                  disabled={
+                    analyticsLoadStatus !== "ready" ||
+                    analyticsScope !== "class" ||
+                    classOptions.length === 0
+                  }
+                  className="ws-quiz-bank-filter-control min-w-0"
+                  aria-label="학급 선택"
+                >
+                  {classOptions.length === 0 && (
+                    <option value="">학급 없음</option>
+                  )}
+                  {classOptions.map((classOnly) => (
+                    <option key={classOnly} value={classOnly}>
+                      {classOnly}반
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={filters.big}
+                  onChange={(e) => handleBigChange(e.target.value)}
+                  className="ws-quiz-bank-filter-control min-w-0"
+                  aria-label="대단원"
+                >
+                  <option value="">대단원 전체</option>
+                  {treeData.map((big) => (
+                    <option key={big.id} value={big.id}>
+                      {big.title}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={filters.mid}
+                  onChange={(e) => handleMidChange(e.target.value)}
+                  className="ws-quiz-bank-filter-control min-w-0"
+                  aria-label="중단원"
+                >
+                  <option value="">중단원 전체</option>
+                  {midOptions.map((mid) => (
+                    <option key={mid.id} value={mid.id}>
+                      {mid.title}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={filters.small}
+                  onChange={(e) =>
+                    setFilters((prev) => ({ ...prev, small: e.target.value }))
+                  }
+                  className="ws-quiz-bank-filter-control min-w-0"
+                  aria-label="소단원"
+                >
+                  <option value="">소단원 전체</option>
+                  {smallOptions.map((small) => (
+                    <option key={small.id} value={small.id}>
+                      {small.title}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={categoryFilter}
+                  onChange={(e) => handleCategoryFilterChange(e.target.value)}
+                  className="ws-quiz-bank-filter-control min-w-0"
+                  aria-label="평가 유형"
+                >
+                  <option value="">평가 유형 전체</option>
+                  <option value="diagnostic">진단평가</option>
+                  <option value="formative">형성평가</option>
+                  <option value="exam_prep">모의고사</option>
+                </select>
+                <select
+                  value={examRoundFilter}
+                  onChange={(e) => setExamRoundFilter(e.target.value)}
+                  disabled={
+                    analyticsLoadStatus !== "ready" ||
+                    !isMockExamCategory(categoryFilter)
+                  }
+                  className="ws-quiz-bank-filter-control min-w-0"
+                  aria-label="모의고사 회차"
+                >
+                  <option value="">전체 회차</option>
+                  {examRoundOptions.map((round) => (
+                    <option key={round} value={round}>
+                      {formatMockExamRoundLabel(round)}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={typeFilter}
+                  onChange={(e) => setTypeFilter(e.target.value)}
+                  className="ws-quiz-bank-filter-control min-w-0"
+                  aria-label="문항 유형"
+                >
+                  <option value="">문항 유형 전체</option>
+                  <option value="choice">객관식</option>
+                  <option value="ox">O/X</option>
+                  <option value="word">단답형</option>
+                  <option value="order">순서 나열형</option>
+                </select>
+                <select
+                  value={analyticsLoadStatus === "ready" ? statusFilter : ""}
+                  onChange={(e) =>
+                    setStatusFilter(e.target.value as StatusFilter)
+                  }
+                  disabled={analyticsLoadStatus !== "ready"}
+                  className="ws-quiz-bank-filter-control min-w-0"
+                  aria-label="분석 상태"
+                >
+                  <option value="">상태 전체</option>
+                  <option value="weak">우선 확인</option>
+                  <option value="no_attempt">응시 없음</option>
+                  <option value="data_short">데이터 부족</option>
+                  <option value="stable">안정</option>
+                </select>
+                <div className="relative min-w-0 md:col-span-2 xl:col-span-1">
+                  <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400"></i>
+                  <input
+                    type="search"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="문항번호, 문제, 정답, 해설 검색"
+                    className="ws-quiz-bank-filter-control w-full pl-9"
+                    aria-label="문항 검색"
+                  />
+                </div>
                 <button
-                  key={scope}
                   type="button"
                   onClick={() => {
-                    userTouchedClassScopeRef.current = true;
-                    setAnalyticsScope(scope);
+                    applyDefaultFocus();
+                    setTypeFilter("");
+                    setStatusFilter("");
+                    setSearchTerm("");
                   }}
-                  className={`flex-1 rounded-md px-2 py-2 text-xs font-black transition ${
-                    analyticsScope === scope
-                      ? "bg-white text-blue-700 shadow-sm"
-                      : "text-slate-500 hover:text-slate-800"
-                  }`}
+                  className="ws-quiz-bank-filter-reset"
                 >
-                  {scope === "all" ? "전체" : "학급별"}
+                  <i className="fas fa-sync-alt mr-1.5"></i>
+                  초기화
                 </button>
-              ))}
+              </div>
             </div>
-            <select
-              value={classFilter}
-              onChange={(e) => {
-                userTouchedClassScopeRef.current = true;
-                setClassFilter(e.target.value);
-              }}
-              disabled={analyticsScope !== "class" || classOptions.length === 0}
-              className="min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[13px] font-bold text-slate-700 disabled:bg-slate-100 disabled:text-slate-400"
-              aria-label="학급 선택"
-            >
-              {classOptions.length === 0 && <option value="">학급 없음</option>}
-              {classOptions.map((classOnly) => (
-                <option key={classOnly} value={classOnly}>
-                  {classOnly}반
-                </option>
-              ))}
-            </select>
-            <select
-              value={filters.big}
-              onChange={(e) => handleBigChange(e.target.value)}
-              className="min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[13px] font-bold text-slate-700"
-            >
-              <option value="">대단원 전체</option>
-              {treeData.map((big) => (
-                <option key={big.id} value={big.id}>
-                  {big.title}
-                </option>
-              ))}
-            </select>
-            <select
-              value={filters.mid}
-              onChange={(e) => handleMidChange(e.target.value)}
-              className="min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[13px] font-bold text-slate-700"
-            >
-              <option value="">중단원 전체</option>
-              {midOptions.map((mid) => (
-                <option key={mid.id} value={mid.id}>
-                  {mid.title}
-                </option>
-              ))}
-            </select>
-            <select
-              value={filters.small}
-              onChange={(e) =>
-                setFilters((prev) => ({ ...prev, small: e.target.value }))
-              }
-              className="min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[13px] font-bold text-slate-700"
-            >
-              <option value="">소단원 전체</option>
-              {smallOptions.map((small) => (
-                <option key={small.id} value={small.id}>
-                  {small.title}
-                </option>
-              ))}
-            </select>
-            <select
-              value={categoryFilter}
-              onChange={(e) => handleCategoryFilterChange(e.target.value)}
-              className="min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[13px] font-bold text-slate-700"
-            >
-              <option value="">평가 유형 전체</option>
-              <option value="diagnostic">진단평가</option>
-              <option value="formative">형성평가</option>
-              <option value="exam_prep">모의고사</option>
-            </select>
-            <select
-              value={examRoundFilter}
-              onChange={(e) => setExamRoundFilter(e.target.value)}
-              disabled={!isMockExamCategory(categoryFilter)}
-              className="min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[13px] font-bold text-slate-700 disabled:bg-slate-100 disabled:text-slate-400"
-              aria-label="모의고사 회차"
-            >
-              <option value="">전체 회차</option>
-              {examRoundOptions.map((round) => (
-                <option key={round} value={round}>
-                  {formatMockExamRoundLabel(round)}
-                </option>
-              ))}
-            </select>
-            <select
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value)}
-              className="min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[13px] font-bold text-slate-700"
-            >
-              <option value="">문항 유형 전체</option>
-              <option value="choice">객관식</option>
-              <option value="ox">O/X</option>
-              <option value="word">단답형</option>
-              <option value="order">순서 나열형</option>
-            </select>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-              className="min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[13px] font-bold text-slate-700"
-            >
-              <option value="">상태 전체</option>
-              <option value="weak">우선 확인</option>
-              <option value="no_attempt">응시 없음</option>
-              <option value="data_short">데이터 부족</option>
-              <option value="stable">안정</option>
-            </select>
-            <div className="relative min-w-0 md:col-span-2 xl:col-span-1">
-              <i className="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-xs text-slate-400"></i>
-              <input
-                type="search"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="문항번호, 문제, 정답, 해설 검색"
-                className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-[13px] font-bold text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-blue-400"
+          </section>
+
+          <div className="pb-4">
+            {analyticsLoadStatus === "loading" && (
+              <StatePanel
+                state="LOADING"
+                compact
+                className="mb-4"
+                title="응시 분석을 불러오고 있습니다."
+                description="문제 목록은 계속 확인하고 수정할 수 있습니다."
               />
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                applyDefaultFocus();
-                setTypeFilter("");
-                setStatusFilter("");
-                setSearchTerm("");
-              }}
-              className="rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[13px] font-black text-slate-600 transition hover:border-blue-300 hover:text-blue-700"
-            >
-              <i className="fas fa-sync-alt mr-1.5"></i>
-              초기화
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="pb-4">
-        <section className="rounded-lg border border-slate-200 bg-white">
-          <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <h3 className="font-black text-slate-900">{scopeTitle}</h3>
-              <p className="mt-1 text-xs font-bold text-slate-500">
-                현재 필터 기준으로 단원, 유형, 학급 격차와 재출제 후보를 함께
-                봅니다.
-              </p>
-            </div>
-            <div className="text-xs font-black text-slate-400">
-              마지막 응시{" "}
-              {lastAttemptAt
-                ? new Date(lastAttemptAt).toLocaleString("ko-KR")
-                : "-"}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2 xl:grid-cols-4">
-            {[
-              {
-                label: "취약 소단원",
-                value: weakestSmallUnit
-                  ? formatPercent(weakestSmallUnit.rate)
-                  : "-",
-                sub: weakestSmallUnit
-                  ? weakestSmallUnit.question
-                    ? `${weakestSmallUnit.title} · 문항 ${
-                        questionDisplayCodes[weakestSmallUnit.question.docId] ||
-                        weakestSmallUnit.question.id
-                      } 수정`
-                    : `${weakestSmallUnit.title} · ${weakestSmallUnit.attempts}응시`
-                  : "분석할 소단원 없음",
-                icon: "fa-layer-group",
-                tone: "text-orange-700 bg-orange-50",
-                onClick: weakestSmallUnit?.question
-                  ? () => openEditModal(weakestSmallUnit.question as Question)
-                  : undefined,
-              },
-              {
-                label: "학급 간 격차",
-                value: classGapSummary ? `${classGapSummary.gap}%p` : "-",
-                sub: classGapSummary
-                  ? `${classGapSummary.lowest.classOnly}반 ${classGapSummary.lowest.rate}% / ${classGapSummary.highest.classOnly}반 ${classGapSummary.highest.rate}%`
-                  : "비교할 학급 데이터 부족",
-                icon: "fa-users",
-                tone: "text-emerald-700 bg-emerald-50",
-              },
-              {
-                label: "재출제 후보",
-                value: `${reissueCandidates.length}문항`,
-                sub:
-                  reissueCandidates[0]?.rate !== null &&
-                  reissueCandidates[0]?.rate !== undefined
-                    ? `최저 정답률 ${reissueCandidates[0].rate}%`
-                    : "정답률 60% 미만 문항",
-                icon: "fa-redo-alt",
-                tone: "text-blue-700 bg-blue-50",
-              },
-              {
-                label: "응시 없음",
-                value: `${visibleSummary.noAttemptQuestions}문항`,
-                sub: "배포/응시 확인 필요",
-                icon: "fa-inbox",
-                tone: "text-slate-600 bg-slate-100",
-              },
-            ].map((item) => (
-              <div
-                key={item.label}
-                className={`rounded-lg bg-slate-50 p-4 transition ${
-                  item.onClick && canEdit
-                    ? "cursor-pointer hover:bg-blue-50"
-                    : ""
-                }`}
-                role={item.onClick && canEdit ? "button" : undefined}
-                tabIndex={item.onClick && canEdit ? 0 : undefined}
-                onClick={item.onClick && canEdit ? item.onClick : undefined}
-                onKeyDown={(event) => {
-                  if (!item.onClick || !canEdit) return;
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    item.onClick();
-                  }
-                }}
+            )}
+            {(analyticsLoadStatus === "error" ||
+              analyticsLoadStatus === "permission") && (
+              <StatePanel
+                state={
+                  analyticsLoadStatus === "permission" ? "PERMISSION" : "ERROR"
+                }
+                compact
+                className="mb-4"
                 title={
-                  item.onClick && canEdit
-                    ? "가장 취약한 문항 수정창 열기"
+                  analyticsLoadStatus === "permission"
+                    ? "응시 분석을 볼 권한이 없습니다."
+                    : "응시 분석을 불러오지 못했습니다."
+                }
+                description={
+                  analyticsLoadStatus === "permission"
+                    ? "문제 목록은 확인할 수 있습니다. 응시 결과 조회 권한은 관리자에게 확인해 주세요."
+                    : "문제 목록과 저장된 응시 기록은 그대로 유지됩니다. 잠시 후 다시 시도해 주세요."
+                }
+                action={
+                  analyticsLoadStatus === "error"
+                    ? {
+                        label: "응시 분석 다시 불러오기",
+                        onClick: retryAnalyticsData,
+                      }
                     : undefined
                 }
+                retryable={analyticsLoadStatus === "error"}
+                contactAdmin={analyticsLoadStatus === "permission"}
+              />
+            )}
+            {questions.length > 0 && hasNoAnalyticsData && (
+              <StatePanel
+                state="EMPTY"
+                compact
+                className="mb-4"
+                title="아직 응시 기록이 없습니다."
+                description="학생이 평가에 응시하면 정답률과 오답 분석이 이 화면에 자동으로 표시됩니다."
+              />
+            )}
+            {analyticsLoadStatus === "ready" && (
+              <section
+                className="rounded-lg border border-slate-200 bg-white"
+                aria-labelledby="quiz-bank-summary-title"
               >
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
                   <div>
-                    <div className="text-xs font-black text-slate-400">
-                      {item.label}
-                    </div>
-                    <div className="mt-1 text-2xl font-black text-slate-900">
-                      {item.value}
-                    </div>
-                  </div>
-                  <div
-                    className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${item.tone}`}
-                  >
-                    <i className={`fas ${item.icon}`}></i>
-                  </div>
-                </div>
-                <div className="mt-2 truncate text-xs font-bold text-slate-500">
-                  {item.sub}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 border-t border-slate-100 bg-slate-50/70 p-4 xl:grid-cols-[minmax(360px,1.25fr)_minmax(300px,0.82fr)_minmax(320px,0.92fr)]">
-            <section className="min-w-0 rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-100">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-black text-slate-900">
-                  단원별 평균 정답률
-                </h4>
-                <span className="text-xs font-black text-slate-400">
-                  응시 많은 순
-                </span>
-              </div>
-              <div className="mt-3 space-y-3">
-                {unitInsightPreview.length === 0 && (
-                  <div className="rounded-lg bg-slate-50 p-4 text-center text-xs font-bold text-slate-400">
-                    단원별 응시 데이터가 없습니다.
-                  </div>
-                )}
-                {unitInsightPreview.map((unit, index) => {
-                  const rate = unit.rate ?? 0;
-                  const tone =
-                    unit.rate !== null && unit.rate < 50
-                      ? "bg-red-500"
-                      : unit.rate !== null && unit.rate < 65
-                        ? "bg-orange-400"
-                        : "bg-blue-500";
-                  return (
-                    <div
-                      key={unit.key}
-                      className="grid grid-cols-[24px_minmax(0,1fr)_48px] items-center gap-3"
+                    <h3
+                      id="quiz-bank-summary-title"
+                      className="font-black text-slate-900"
                     >
-                      <div className="text-xs font-black text-slate-400">
-                        {toRoman(index + 1)}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center justify-between gap-3">
-                          <div className="truncate text-xs font-black text-slate-700">
-                            {unit.title}
+                      요약 지표 · {scopeTitle}
+                    </h3>
+                    <p className="mt-1 text-xs font-bold text-slate-500">
+                      현재 필터 기준으로 단원, 유형, 학급 격차와 재출제 후보를
+                      함께 봅니다.
+                    </p>
+                  </div>
+                  <div className="text-xs font-black text-slate-400">
+                    마지막 응시{" "}
+                    {lastAttemptAt
+                      ? new Date(lastAttemptAt).toLocaleString("ko-KR")
+                      : "-"}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-3 p-4 md:grid-cols-2 xl:grid-cols-4">
+                  {[
+                    {
+                      label: "취약 소단원",
+                      value: weakestSmallUnit
+                        ? formatPercent(weakestSmallUnit.rate)
+                        : "-",
+                      sub: weakestSmallUnit
+                        ? weakestSmallUnit.question
+                          ? `${weakestSmallUnit.title} · 문항 ${
+                              questionDisplayCodes[
+                                weakestSmallUnit.question.docId
+                              ] || weakestSmallUnit.question.id
+                            } 수정`
+                          : `${weakestSmallUnit.title} · ${weakestSmallUnit.attempts}응시`
+                        : "분석할 소단원 없음",
+                      icon: "fa-layer-group",
+                      tone: "text-orange-700 bg-orange-50",
+                      onClick: weakestSmallUnit?.question
+                        ? () =>
+                            openEditModal(weakestSmallUnit.question as Question)
+                        : undefined,
+                    },
+                    {
+                      label: "학급 간 격차",
+                      value: classGapSummary ? `${classGapSummary.gap}%p` : "-",
+                      sub: classGapSummary
+                        ? `${classGapSummary.lowest.classOnly}반 ${classGapSummary.lowest.rate}% / ${classGapSummary.highest.classOnly}반 ${classGapSummary.highest.rate}%`
+                        : "비교할 학급 데이터 부족",
+                      icon: "fa-users",
+                      tone: "text-emerald-700 bg-emerald-50",
+                    },
+                    {
+                      label: "재출제 후보",
+                      value: `${reissueCandidates.length}문항`,
+                      sub:
+                        reissueCandidates[0]?.rate !== null &&
+                        reissueCandidates[0]?.rate !== undefined
+                          ? `최저 정답률 ${reissueCandidates[0].rate}%`
+                          : "정답률 60% 미만 문항",
+                      icon: "fa-redo-alt",
+                      tone: "text-blue-700 bg-blue-50",
+                    },
+                    {
+                      label: "응시 없음",
+                      value: `${visibleSummary.noAttemptQuestions}문항`,
+                      sub: "배포/응시 확인 필요",
+                      icon: "fa-inbox",
+                      tone: "text-slate-600 bg-slate-100",
+                    },
+                  ].map((item) => (
+                    <div
+                      key={item.label}
+                      className={`rounded-lg bg-slate-50 p-4 transition ${
+                        item.onClick && canEdit
+                          ? "cursor-pointer hover:bg-blue-50"
+                          : ""
+                      }`}
+                      role={item.onClick && canEdit ? "button" : undefined}
+                      tabIndex={item.onClick && canEdit ? 0 : undefined}
+                      onClick={
+                        item.onClick && canEdit ? item.onClick : undefined
+                      }
+                      onKeyDown={(event) => {
+                        if (!item.onClick || !canEdit) return;
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          item.onClick();
+                        }
+                      }}
+                      title={
+                        item.onClick && canEdit
+                          ? "가장 취약한 문항 수정창 열기"
+                          : undefined
+                      }
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-xs font-black text-slate-400">
+                            {item.label}
                           </div>
-                          <div className="shrink-0 text-[11px] font-bold text-slate-400">
-                            {unit.attempts}응시
+                          <div className="mt-1 text-2xl font-black text-slate-900">
+                            {item.value}
                           </div>
                         </div>
-                        <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-100">
-                          <div
-                            className={`h-full rounded-full ${tone}`}
-                            style={{ width: `${rate}%` }}
-                          ></div>
+                        <div
+                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${item.tone}`}
+                        >
+                          <i className={`fas ${item.icon}`}></i>
                         </div>
                       </div>
-                      <div className="text-right text-xs font-black text-slate-700">
-                        {formatPercent(unit.rate)}
+                      <div className="mt-2 truncate text-xs font-bold text-slate-500">
+                        {item.sub}
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-
-            <section className="min-w-0 rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-100">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-black text-slate-900">
-                  문항 유형별 정답률
-                </h4>
-                <span className="text-xs font-black text-slate-400">
-                  응시 많은 순
-                </span>
-              </div>
-              <div className="mt-4 flex items-center gap-4">
-                <div
-                  className="relative h-28 w-28 shrink-0 rounded-full"
-                  style={{ background: typePerformanceGradient }}
-                >
-                  <div className="absolute inset-5 rounded-full bg-white"></div>
-                </div>
-                <div className="min-w-0 flex-1 space-y-2">
-                  {typePerformance.length === 0 && (
-                    <div className="rounded-lg bg-slate-50 p-4 text-xs font-bold text-slate-400">
-                      유형별 응시 데이터 없음
-                    </div>
-                  )}
-                  {typePerformance.map((item) => (
-                    <div
-                      key={item.key}
-                      className="flex items-center justify-between gap-3 text-xs"
-                    >
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span
-                          className="h-2.5 w-2.5 shrink-0 rounded-full"
-                          style={{ backgroundColor: item.color }}
-                        ></span>
-                        <span className="truncate font-bold text-slate-600">
-                          {item.label}
-                        </span>
-                        <span className="shrink-0 text-[11px] font-bold text-slate-400">
-                          {item.attempts}응시
-                        </span>
-                      </div>
-                      <span className="shrink-0 font-black text-slate-800">
-                        {formatPercent(item.rate)}
-                      </span>
                     </div>
                   ))}
                 </div>
-              </div>
-            </section>
 
-            <section className="min-w-0 rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-100">
-              <div className="flex items-center justify-between">
-                <h4 className="text-sm font-black text-slate-900">
-                  학습 활용 제안 Top 3
-                </h4>
-                <span className="text-xs font-black text-slate-400">
-                  수업 연결
-                </span>
-              </div>
-              <div className="mt-3 space-y-2">
-                {actionSuggestions.slice(0, 3).map((item, index) => (
-                  <div
-                    key={`${item.title}-${item.description}`}
-                    className="grid grid-cols-[28px_minmax(0,1fr)] gap-3 rounded-lg bg-slate-50 p-3"
-                  >
+                <div className="grid grid-cols-1 gap-4 border-t border-slate-100 bg-slate-50/70 p-4 xl:grid-cols-[minmax(360px,1.25fr)_minmax(300px,0.82fr)_minmax(320px,0.92fr)]">
+                  <section className="min-w-0 rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-100">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-black text-slate-900">
+                        단원별 평균 정답률
+                      </h4>
+                      <span className="text-xs font-black text-slate-400">
+                        응시 많은 순
+                      </span>
+                    </div>
                     <div
-                      className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-black ${item.tone}`}
+                      className="mt-3 space-y-3"
+                      role="img"
+                      aria-label={
+                        unitInsightPreview.length
+                          ? `단원별 평균 정답률. ${unitInsightPreview
+                              .map(
+                                (unit) =>
+                                  `${unit.title} ${formatPercent(unit.rate)}, ${unit.attempts}회 응시`,
+                              )
+                              .join(". ")}`
+                          : "단원별 응시 데이터가 없습니다."
+                      }
                     >
-                      {index + 1}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="truncate text-xs font-black text-slate-800">
-                        {item.title}
-                      </div>
-                      <div className="mt-1 line-clamp-2 text-[11px] font-bold leading-4 text-slate-500">
-                        {item.description}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          </div>
-        </section>
-
-        <div className="mt-4 grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white">
-            <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h3 className="font-black text-slate-900">문항별 분석</h3>
-                <p className="mt-1 text-xs font-bold text-slate-500">
-                  행을 선택하면 문제를 수정할 수 있습니다. 학급별 선택 시 해당
-                  반 응시 결과만 반영합니다.
-                </p>
-              </div>
-              <div className="text-xs font-black text-slate-500">
-                {activeClassFilter
-                  ? `${activeClassFilter}반 기준`
-                  : "전체 응시 기록"}
-                {activeExamRoundLabel ? ` · ${activeExamRoundLabel}` : ""} ·{" "}
-                {visibleSummary.attemptedQuestions}문항 응시 /{" "}
-                {visibleSummary.totalQuestions}문항
-              </div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="min-w-[900px] w-full table-fixed text-left text-sm">
-                <colgroup>
-                  <col className="w-[8%]" />
-                  <col className="w-[14%]" />
-                  <col className="w-[8%]" />
-                  <col className="w-[8%]" />
-                  <col />
-                  <col className="w-[13%]" />
-                  <col className="w-[12%]" />
-                  <col className="w-[12%]" />
-                </colgroup>
-                <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-black text-slate-500 shadow-sm">
-                  <tr>
-                    <th className="whitespace-nowrap px-4 py-3.5 text-center">
-                      <button
-                        type="button"
-                        onClick={() => toggleSort("code")}
-                        className="inline-flex items-center gap-1 whitespace-nowrap hover:text-blue-600"
-                      >
-                        번호{" "}
-                        <i
-                          className={`fas ${sortIndicator("code")} text-xs`}
-                        ></i>
-                      </button>
-                    </th>
-                    <th className="px-4 py-3.5">단원</th>
-                    <th className="whitespace-nowrap px-4 py-3.5">
-                      <button
-                        type="button"
-                        onClick={() => toggleSort("category")}
-                        className="inline-flex items-center gap-1 whitespace-nowrap hover:text-blue-600"
-                      >
-                        평가{" "}
-                        <i
-                          className={`fas ${sortIndicator("category")} text-xs`}
-                        ></i>
-                      </button>
-                    </th>
-                    <th className="whitespace-nowrap px-4 py-3.5">
-                      <button
-                        type="button"
-                        onClick={() => toggleSort("type")}
-                        className="inline-flex items-center gap-1 whitespace-nowrap hover:text-blue-600"
-                      >
-                        유형{" "}
-                        <i
-                          className={`fas ${sortIndicator("type")} text-xs`}
-                        ></i>
-                      </button>
-                    </th>
-                    <th className="px-4 py-3.5">문제</th>
-                    <th className="whitespace-nowrap px-4 py-3.5">
-                      <button
-                        type="button"
-                        onClick={() => toggleSort("rate")}
-                        className="inline-flex items-center gap-1 whitespace-nowrap hover:text-blue-600"
-                      >
-                        정답률{" "}
-                        <i
-                          className={`fas ${sortIndicator("rate")} text-xs`}
-                        ></i>
-                      </button>
-                    </th>
-                    <th className="whitespace-nowrap px-4 py-3.5">주요 오답</th>
-                    <th className="whitespace-nowrap px-4 py-3.5">활용</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 bg-white">
-                  {loading && (
-                    <tr>
-                      <td
-                        colSpan={8}
-                        className="px-4 py-12 text-center text-sm font-bold text-slate-400"
-                      >
-                        문제와 응시 데이터를 불러오는 중...
-                      </td>
-                    </tr>
-                  )}
-
-                  {!loading && filteredQuestions.length === 0 && (
-                    <tr>
-                      <td colSpan={8} className="px-4 py-12 text-center">
-                        <div className="font-black text-slate-500">
-                          조건에 맞는 문제가 없습니다.
+                      {unitInsightPreview.length === 0 && (
+                        <div className="rounded-lg bg-slate-50 p-4 text-center text-xs font-bold text-slate-400">
+                          단원별 응시 데이터가 없습니다.
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            applyDefaultFocus();
-                            setTypeFilter("");
-                            setStatusFilter("");
-                            setSearchTerm("");
-                          }}
-                          className="mt-3 rounded-lg border border-slate-200 px-3 py-2 text-xs font-black text-blue-700 hover:border-blue-300"
-                        >
-                          필터 초기화
-                        </button>
-                      </td>
-                    </tr>
-                  )}
-
-                  {!loading &&
-                    paginatedQuestions.map((q) => {
-                      const stat = getScopedQuestionStat(q);
-                      const rateInfo = getRateInfo(q);
-                      const status = getQuestionStatus(q);
-                      const wrong = getTopWrongAnswer(stat);
-                      const unitMeta = getQuestionUnitMeta(q);
-                      const passageText = String(q.passage || "").trim();
-                      const passagePreviewText =
-                        stripQuizPassageMarkup(passageText);
-                      return (
-                        <tr
-                          key={`${q.docId}-${q.question.slice(0, 10)}`}
-                          className={`transition ${canEdit ? "cursor-pointer hover:bg-blue-50/70" : ""}`}
-                          onClick={() => openEditModal(q)}
-                        >
-                          <td
-                            className="whitespace-nowrap px-4 py-5 text-center text-xs font-black text-slate-500"
-                            title={`문항 ID: ${q.docId}`}
+                      )}
+                      {unitInsightPreview.map((unit, index) => {
+                        const rate = unit.rate ?? 0;
+                        const tone =
+                          unit.rate !== null && unit.rate < 50
+                            ? "bg-red-500"
+                            : unit.rate !== null && unit.rate < 65
+                              ? "bg-orange-400"
+                              : "bg-blue-500";
+                        return (
+                          <div
+                            key={unit.key}
+                            className="grid grid-cols-[24px_minmax(0,1fr)_48px] items-center gap-3"
                           >
-                            {questionDisplayCodes[q.docId] || "-"}
-                          </td>
-                          <td className="overflow-hidden px-4 py-5 align-top">
-                            <div
-                              className="min-w-0 truncate text-sm font-black text-slate-800"
-                              title={unitMeta.focusTitle}
-                            >
-                              {unitMeta.focusTitle}
+                            <div className="text-xs font-black text-slate-400">
+                              {toRoman(index + 1)}
                             </div>
-                            <div
-                              className="mt-2 min-w-0 truncate text-[11px] font-bold text-slate-400"
-                              title={`${unitMeta.bigTitle} > ${unitMeta.midTitle}`}
-                            >
-                              {unitMeta.bigTitle} &gt; {unitMeta.midTitle}
-                            </div>
-                          </td>
-                          <td className="overflow-hidden px-4 py-5 align-top">
-                            <span
-                              className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-black ${
-                                q.category === "diagnostic"
-                                  ? "bg-emerald-50 text-emerald-700"
-                                  : q.category === "formative"
-                                    ? "bg-amber-50 text-amber-700"
-                                    : "bg-violet-50 text-violet-700"
-                              }`}
-                            >
-                              {getCategoryLabel(q.category)}
-                            </span>
-                          </td>
-                          <td className="whitespace-nowrap px-4 py-5 align-top text-xs font-black text-slate-600">
-                            {QUESTION_TYPE_LABEL[q.type] || q.type}
-                          </td>
-                          <td className="overflow-hidden px-4 py-5 align-top">
                             <div className="min-w-0">
-                              <div className="flex items-start gap-3">
-                                {(q.image ||
-                                  q.choiceOptionImages?.some(Boolean)) && (
-                                  <i
-                                    className="fas fa-image mt-1 text-blue-500"
-                                    title={
-                                      q.image
-                                        ? "이미지 문항"
-                                        : "보기 이미지 포함"
-                                    }
-                                  ></i>
-                                )}
-                                {passageText && (
-                                  <i
-                                    className="fas fa-align-left mt-1 text-slate-400"
-                                    title="읽기 자료 문항"
-                                  ></i>
-                                )}
-                                {q.hintEnabled && (
-                                  <i
-                                    className="fas fa-lightbulb mt-1 text-amber-500"
-                                    title="힌트 제공"
-                                  ></i>
-                                )}
-                                <div className="min-w-0 break-words font-black leading-6 text-slate-800">
-                                  {q.question}
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="truncate text-xs font-black text-slate-700">
+                                  {unit.title}
+                                </div>
+                                <div className="shrink-0 text-xs font-bold text-slate-400">
+                                  {unit.attempts}응시
                                 </div>
                               </div>
-                              {passageText && (
+                              <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-100">
                                 <div
-                                  className="mt-2 min-w-0 truncate rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] font-bold text-slate-500"
-                                  title={passagePreviewText}
-                                >
-                                  {passagePreviewText}
-                                </div>
-                              )}
-                              <div className="mt-2 min-w-0 truncate text-xs font-bold text-blue-700">
-                                정답:{" "}
-                                {String(q.answer || "-")
-                                  .split(ORDER_DELIMITER)
-                                  .join(" > ")}
+                                  className={`h-full rounded-full ${tone}`}
+                                  style={{ width: `${rate}%` }}
+                                ></div>
                               </div>
                             </div>
-                          </td>
-                          <td className="overflow-hidden px-4 py-5 align-top">
-                            <div className="text-xs font-black text-slate-700">
-                              {rateInfo.text}
+                            <div className="text-right text-xs font-black text-slate-700">
+                              {formatPercent(unit.rate)}
                             </div>
-                            <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
-                              <div
-                                className={`h-full rounded-full ${rateInfo.attempts && rateInfo.rate < 60 ? "bg-red-500" : "bg-blue-500"}`}
-                                style={{
-                                  width: `${rateInfo.attempts ? rateInfo.rate : 0}%`,
-                                }}
-                              ></div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+
+                  <section className="min-w-0 rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-100">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-black text-slate-900">
+                        문항 유형별 정답률
+                      </h4>
+                      <span className="text-xs font-black text-slate-400">
+                        응시 많은 순
+                      </span>
+                    </div>
+                    <div className="mt-4 flex items-center gap-4">
+                      <div
+                        className="relative h-28 w-28 shrink-0 rounded-full"
+                        style={{ background: typePerformanceGradient }}
+                        role="img"
+                        aria-label={
+                          typePerformance.length
+                            ? `문항 유형별 정답률. ${typePerformance
+                                .map(
+                                  (item) =>
+                                    `${item.label} ${formatPercent(item.rate)}, ${item.attempts}회 응시`,
+                                )
+                                .join(". ")}`
+                            : "문항 유형별 응시 데이터가 없습니다."
+                        }
+                      >
+                        <div className="absolute inset-5 rounded-full bg-white"></div>
+                      </div>
+                      <div className="min-w-0 flex-1 space-y-2">
+                        {typePerformance.length === 0 && (
+                          <div className="rounded-lg bg-slate-50 p-4 text-xs font-bold text-slate-400">
+                            유형별 응시 데이터 없음
+                          </div>
+                        )}
+                        {typePerformance.map((item) => (
+                          <div
+                            key={item.key}
+                            className="flex items-center justify-between gap-3 text-xs"
+                          >
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span
+                                className="h-2.5 w-2.5 shrink-0 rounded-full"
+                                style={{ backgroundColor: item.color }}
+                              ></span>
+                              <span className="truncate font-bold text-slate-600">
+                                {item.label}
+                              </span>
+                              <span className="shrink-0 text-xs font-bold text-slate-400">
+                                {item.attempts}응시
+                              </span>
                             </div>
-                          </td>
-                          <td className="overflow-hidden px-4 py-5 align-top">
-                            <div className="text-xs font-black text-slate-700">
-                              {stat.uniqueWrongStudents}명 오답
-                            </div>
-                            <div className="mt-2 min-w-0 truncate text-[11px] font-bold text-slate-400">
-                              {wrong.count
-                                ? `${wrong.answer} ${wrong.count}회`
-                                : "반복 오답 없음"}
-                            </div>
-                          </td>
-                          <td className="overflow-hidden px-4 py-5 align-top">
-                            <div className="min-w-0 rounded-lg bg-slate-50 px-2.5 py-2">
-                              <div
-                                className={`inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-black ${status.tone}`}
-                              >
-                                {status.label}
-                              </div>
-                              <div
-                                className="mt-1 truncate text-[11px] font-black text-slate-700"
-                                title={getRecommendation(q, stat)}
-                              >
-                                {getRecommendation(q, stat)}
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                </tbody>
-              </table>
-            </div>
-            {!loading && filteredQuestions.length > QUESTION_PAGE_SIZE && (
-              <div className="flex flex-col gap-3 border-t border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="text-xs font-bold text-slate-500">
-                  {Math.min(
-                    (questionPage - 1) * QUESTION_PAGE_SIZE + 1,
-                    filteredQuestions.length,
-                  )}
-                  -
-                  {Math.min(
-                    questionPage * QUESTION_PAGE_SIZE,
-                    filteredQuestions.length,
-                  )}
-                  번 / 총 {filteredQuestions.length}문항
-                </div>
-                <div className="flex flex-wrap items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setQuestionPage((prev) => Math.max(1, prev - 1))
-                    }
-                    disabled={questionPage <= 1}
-                    className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-black text-slate-600 transition hover:border-blue-300 hover:text-blue-700 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-300"
-                  >
-                    이전
-                  </button>
-                  {Array.from(
-                    { length: totalQuestionPages },
-                    (_, index) => index + 1,
-                  )
-                    .filter(
-                      (page) =>
-                        page === 1 ||
-                        page === totalQuestionPages ||
-                        Math.abs(page - questionPage) <= 2,
-                    )
-                    .map((page, index, pages) => {
-                      const prevPage = pages[index - 1];
-                      const showGap = prevPage && page - prevPage > 1;
-                      return (
-                        <React.Fragment key={page}>
-                          {showGap && (
-                            <span className="px-1 text-xs font-black text-slate-300">
-                              ...
+                            <span className="shrink-0 font-black text-slate-800">
+                              {formatPercent(item.rate)}
                             </span>
-                          )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="min-w-0 rounded-lg bg-white p-4 shadow-sm ring-1 ring-slate-100">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-black text-slate-900">
+                        학습 활용 제안 Top 3
+                      </h4>
+                      <span className="text-xs font-black text-slate-400">
+                        수업 연결
+                      </span>
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      {actionSuggestions.slice(0, 3).map((item, index) => (
+                        <div
+                          key={`${item.title}-${item.description}`}
+                          className="grid grid-cols-[28px_minmax(0,1fr)] gap-3 rounded-lg bg-slate-50 p-3"
+                        >
+                          <div
+                            className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-black ${item.tone}`}
+                          >
+                            {index + 1}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="truncate text-xs font-black text-slate-800">
+                              {item.title}
+                            </div>
+                            <div className="mt-1 line-clamp-2 text-xs font-bold leading-4 text-slate-500">
+                              {item.description}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                </div>
+              </section>
+            )}
+
+            <div
+              className={
+                analyticsLoadStatus === "ready"
+                  ? "mt-4 grid grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1fr)_320px]"
+                  : "mt-4 grid grid-cols-1 gap-4"
+              }
+            >
+              <div className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white">
+                <div className="flex flex-col gap-2 border-b border-slate-100 px-4 py-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <h3 className="font-black text-slate-900">
+                      {analyticsLoadStatus === "ready"
+                        ? "문항별 분석"
+                        : "문제 목록"}
+                    </h3>
+                    <p className="mt-1 text-xs font-bold text-slate-500">
+                      {analyticsLoadStatus === "ready"
+                        ? "행을 선택하면 문제를 수정할 수 있습니다. 학급별 선택 시 해당 반 응시 결과만 반영합니다."
+                        : "문제 내용은 계속 확인하고 수정할 수 있습니다. 응시 분석이 준비되면 정답률과 오답 정보가 다시 표시됩니다."}
+                    </p>
+                  </div>
+                  <div className="text-xs font-black text-slate-500">
+                    {analyticsLoadStatus === "ready" ? (
+                      <>
+                        {activeClassFilter
+                          ? `${activeClassFilter}반 기준`
+                          : "전체 응시 기록"}
+                        {activeExamRoundLabel
+                          ? ` · ${activeExamRoundLabel}`
+                          : ""}{" "}
+                        · {visibleSummary.attemptedQuestions}문항 응시 /{" "}
+                        {visibleSummary.totalQuestions}문항
+                      </>
+                    ) : (
+                      <>
+                        {analyticsUnavailableLabel} · {filteredQuestions.length}
+                        문항
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-[900px] w-full table-fixed text-left text-sm">
+                    <caption className="sr-only">
+                      {analyticsLoadStatus === "ready"
+                        ? "현재 분석 조건에 따른 문항별 정답률과 주요 오답, 수업 활용 제안"
+                        : "응시 분석을 제외한 문제 목록"}
+                    </caption>
+                    <colgroup>
+                      <col className="w-[8%]" />
+                      <col className="w-[14%]" />
+                      <col className="w-[8%]" />
+                      <col className="w-[8%]" />
+                      <col />
+                      <col className="w-[13%]" />
+                      <col className="w-[12%]" />
+                      <col className="w-[12%]" />
+                    </colgroup>
+                    <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-black text-slate-500 shadow-sm">
+                      <tr>
+                        <th
+                          className="whitespace-nowrap px-4 py-3.5 text-center"
+                          aria-sort={
+                            sortKey === "code"
+                              ? sortDirection === "asc"
+                                ? "ascending"
+                                : "descending"
+                              : "none"
+                          }
+                        >
                           <button
                             type="button"
-                            onClick={() => setQuestionPage(page)}
-                            className={`h-8 min-w-8 rounded-md border px-2 text-xs font-black transition ${
-                              questionPage === page
-                                ? "border-blue-500 bg-blue-600 text-white"
-                                : "border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-700"
-                            }`}
+                            onClick={() => toggleSort("code")}
+                            className="inline-flex min-h-11 items-center gap-1 whitespace-nowrap hover:text-blue-600"
+                            aria-label="문항 번호로 정렬"
                           >
-                            {page}
+                            번호{" "}
+                            <i
+                              className={`fas ${sortIndicator("code")} text-xs`}
+                            ></i>
                           </button>
-                        </React.Fragment>
-                      );
-                    })}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setQuestionPage((prev) =>
-                        Math.min(totalQuestionPages, prev + 1),
-                      )
-                    }
-                    disabled={questionPage >= totalQuestionPages}
-                    className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-black text-slate-600 transition hover:border-blue-300 hover:text-blue-700 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-300"
-                  >
-                    다음
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+                        </th>
+                        <th className="px-4 py-3.5">단원</th>
+                        <th
+                          className="whitespace-nowrap px-4 py-3.5"
+                          aria-sort={
+                            sortKey === "category"
+                              ? sortDirection === "asc"
+                                ? "ascending"
+                                : "descending"
+                              : "none"
+                          }
+                        >
+                          <button
+                            type="button"
+                            onClick={() => toggleSort("category")}
+                            className="inline-flex min-h-11 items-center gap-1 whitespace-nowrap hover:text-blue-600"
+                            aria-label="평가 유형으로 정렬"
+                          >
+                            평가{" "}
+                            <i
+                              className={`fas ${sortIndicator("category")} text-xs`}
+                            ></i>
+                          </button>
+                        </th>
+                        <th
+                          className="whitespace-nowrap px-4 py-3.5"
+                          aria-sort={
+                            sortKey === "type"
+                              ? sortDirection === "asc"
+                                ? "ascending"
+                                : "descending"
+                              : "none"
+                          }
+                        >
+                          <button
+                            type="button"
+                            onClick={() => toggleSort("type")}
+                            className="inline-flex min-h-11 items-center gap-1 whitespace-nowrap hover:text-blue-600"
+                            aria-label="문항 유형으로 정렬"
+                          >
+                            유형{" "}
+                            <i
+                              className={`fas ${sortIndicator("type")} text-xs`}
+                            ></i>
+                          </button>
+                        </th>
+                        <th className="px-4 py-3.5">문제</th>
+                        <th
+                          className="whitespace-nowrap px-4 py-3.5"
+                          aria-sort={
+                            analyticsLoadStatus === "ready" &&
+                            sortKey === "rate"
+                              ? sortDirection === "asc"
+                                ? "ascending"
+                                : "descending"
+                              : "none"
+                          }
+                        >
+                          <button
+                            type="button"
+                            onClick={() => toggleSort("rate")}
+                            disabled={analyticsLoadStatus !== "ready"}
+                            className="inline-flex min-h-11 items-center gap-1 whitespace-nowrap hover:text-blue-600"
+                            aria-label={
+                              analyticsLoadStatus === "ready"
+                                ? "정답률로 정렬"
+                                : analyticsUnavailableLabel
+                            }
+                          >
+                            정답률{" "}
+                            <i
+                              className={`fas ${
+                                analyticsLoadStatus === "ready"
+                                  ? sortIndicator("rate")
+                                  : "fa-sort text-gray-300"
+                              } text-xs`}
+                            ></i>
+                          </button>
+                        </th>
+                        <th className="whitespace-nowrap px-4 py-3.5">
+                          주요 오답
+                        </th>
+                        <th className="whitespace-nowrap px-4 py-3.5">활용</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white">
+                      {loading && (
+                        <tr>
+                          <td
+                            colSpan={8}
+                            className="px-4 py-12 text-center text-sm font-bold text-slate-400"
+                          >
+                            문제와 응시 데이터를 불러오는 중...
+                          </td>
+                        </tr>
+                      )}
 
-          <aside className="space-y-4">
-            <section className="rounded-lg border border-slate-200 bg-white p-4">
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="font-black text-slate-900">학급 간 비교</h3>
-                <span className="shrink-0 text-xs font-black text-slate-400">
-                  {classComparisons.length}개 반
-                </span>
-              </div>
-              <div className="mt-3">
-                <select
-                  value={classComparisonSort}
-                  onChange={(event) =>
-                    setClassComparisonSort(
-                      event.target.value as ClassComparisonSort,
-                    )
-                  }
-                  className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-black text-slate-700"
-                  aria-label="학급 간 비교 정렬"
-                >
-                  <option value="class">반 번호순</option>
-                  <option value="rateAsc">정답률 낮은 순</option>
-                  <option value="rateDesc">정답률 높은 순</option>
-                </select>
-              </div>
-              <div className="mt-4 space-y-3">
-                {classComparisons.length === 0 && (
-                  <div className="rounded-lg bg-slate-50 p-4 text-center text-xs font-bold text-slate-400">
-                    비교할 학급 데이터가 없습니다.
+                      {!loading && filteredQuestions.length === 0 && (
+                        <tr>
+                          <td colSpan={8} className="px-4 py-6">
+                            <StatePanel
+                              state="EMPTY"
+                              compact
+                              headingLevel={3}
+                              title={
+                                questions.length === 0
+                                  ? "아직 등록된 문제가 없습니다."
+                                  : "조건에 맞는 문제가 없습니다."
+                              }
+                              description={
+                                questions.length === 0
+                                  ? canEdit
+                                    ? "문제 등록 탭에서 첫 문제를 등록해 주세요."
+                                    : "문제 등록 권한이 있는 관리자에게 등록을 요청해 주세요."
+                                  : "검색어와 분석 조건을 초기화한 뒤 다시 확인해 주세요."
+                              }
+                              action={
+                                questions.length === 0
+                                  ? canEdit
+                                    ? {
+                                        label: "문제 등록으로 이동",
+                                        href: "#/teacher/quiz?tab=manage",
+                                      }
+                                    : undefined
+                                  : {
+                                      label: "필터 초기화",
+                                      onClick: () => {
+                                        applyDefaultFocus();
+                                        setTypeFilter("");
+                                        setStatusFilter("");
+                                        setSearchTerm("");
+                                      },
+                                    }
+                              }
+                              contactAdmin={questions.length === 0 && !canEdit}
+                            />
+                          </td>
+                        </tr>
+                      )}
+
+                      {!loading &&
+                        paginatedQuestions.map((q) => {
+                          const stat = getScopedQuestionStat(q);
+                          const rateInfo = getRateInfo(q);
+                          const status = getQuestionStatus(q);
+                          const wrong = getTopWrongAnswer(stat);
+                          const unitMeta = getQuestionUnitMeta(q);
+                          const passageText = String(q.passage || "").trim();
+                          const passagePreviewText =
+                            stripQuizPassageMarkup(passageText);
+                          return (
+                            <tr
+                              key={`${q.docId}-${q.question.slice(0, 10)}`}
+                              className={`transition ${canEdit ? "cursor-pointer hover:bg-blue-50/70" : ""}`}
+                              onClick={() => openEditModal(q)}
+                            >
+                              <td
+                                className="whitespace-nowrap px-4 py-5 text-center text-xs font-black text-slate-500"
+                                title={`문항 ID: ${q.docId}`}
+                              >
+                                {questionDisplayCodes[q.docId] || "-"}
+                              </td>
+                              <td className="overflow-hidden px-4 py-5 align-top">
+                                <div
+                                  className="min-w-0 truncate text-sm font-black text-slate-800"
+                                  title={unitMeta.focusTitle}
+                                >
+                                  {unitMeta.focusTitle}
+                                </div>
+                                <div
+                                  className="mt-2 min-w-0 truncate text-xs font-bold text-slate-400"
+                                  title={`${unitMeta.bigTitle} > ${unitMeta.midTitle}`}
+                                >
+                                  {unitMeta.bigTitle} &gt; {unitMeta.midTitle}
+                                </div>
+                              </td>
+                              <td className="overflow-hidden px-4 py-5 align-top">
+                                <span
+                                  className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-black ${
+                                    q.category === "diagnostic"
+                                      ? "bg-emerald-50 text-emerald-700"
+                                      : q.category === "formative"
+                                        ? "bg-amber-50 text-amber-700"
+                                        : "bg-violet-50 text-violet-700"
+                                  }`}
+                                >
+                                  {getCategoryLabel(q.category)}
+                                </span>
+                              </td>
+                              <td className="whitespace-nowrap px-4 py-5 align-top text-xs font-black text-slate-600">
+                                {QUESTION_TYPE_LABEL[q.type] || q.type}
+                              </td>
+                              <td className="overflow-hidden px-4 py-5 align-top">
+                                <div className="min-w-0">
+                                  <div className="flex items-start gap-3">
+                                    {(q.image ||
+                                      q.choiceOptionImages?.some(Boolean)) && (
+                                      <i
+                                        className="fas fa-image mt-1 text-blue-500"
+                                        title={
+                                          q.image
+                                            ? "이미지 문항"
+                                            : "보기 이미지 포함"
+                                        }
+                                      ></i>
+                                    )}
+                                    {passageText && (
+                                      <i
+                                        className="fas fa-align-left mt-1 text-slate-400"
+                                        title="읽기 자료 문항"
+                                      ></i>
+                                    )}
+                                    {q.hintEnabled && (
+                                      <i
+                                        className="fas fa-lightbulb mt-1 text-amber-500"
+                                        title="힌트 제공"
+                                      ></i>
+                                    )}
+                                    {canEdit ? (
+                                      <button
+                                        type="button"
+                                        className="ws-quiz-bank-question-button min-h-11 min-w-0 break-words text-left font-black leading-6"
+                                        aria-label={`${questionDisplayCodes[q.docId] || q.id}번 문항 수정`}
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          openEditModal(q);
+                                        }}
+                                      >
+                                        {q.question}
+                                      </button>
+                                    ) : (
+                                      <div className="min-w-0 break-words font-black leading-6 text-slate-800">
+                                        {q.question}
+                                      </div>
+                                    )}
+                                  </div>
+                                  {passageText && (
+                                    <div
+                                      className="mt-2 min-w-0 truncate rounded border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-bold text-slate-500"
+                                      title={passagePreviewText}
+                                    >
+                                      {passagePreviewText}
+                                    </div>
+                                  )}
+                                  <div className="mt-2 min-w-0 truncate text-xs font-bold text-blue-700">
+                                    정답:{" "}
+                                    {String(q.answer || "-")
+                                      .split(ORDER_DELIMITER)
+                                      .join(" > ")}
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="overflow-hidden px-4 py-5 align-top">
+                                {analyticsLoadStatus === "ready" ? (
+                                  <>
+                                    <div className="text-xs font-black text-slate-700">
+                                      {rateInfo.text}
+                                    </div>
+                                    <div
+                                      className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-slate-100"
+                                      role="img"
+                                      aria-label={`${questionDisplayCodes[q.docId] || q.id}번 문항 정답률 ${rateInfo.attempts ? `${rateInfo.rate}%` : "응시 없음"}`}
+                                    >
+                                      <div
+                                        className={`h-full rounded-full ${rateInfo.attempts && rateInfo.rate < 60 ? "bg-red-500" : "bg-blue-500"}`}
+                                        style={{
+                                          width: `${rateInfo.attempts ? rateInfo.rate : 0}%`,
+                                        }}
+                                      ></div>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <div
+                                    className="text-xs font-black text-slate-500"
+                                    aria-label={`정답률 ${analyticsUnavailableLabel}`}
+                                  >
+                                    {analyticsUnavailableLabel}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="overflow-hidden px-4 py-5 align-top">
+                                {analyticsLoadStatus === "ready" ? (
+                                  <>
+                                    <div className="text-xs font-black text-slate-700">
+                                      {stat.uniqueWrongStudents}명 오답
+                                    </div>
+                                    <div className="mt-2 min-w-0 truncate text-xs font-bold text-slate-400">
+                                      {wrong.count
+                                        ? `${wrong.answer} ${wrong.count}회`
+                                        : "반복 오답 없음"}
+                                    </div>
+                                  </>
+                                ) : (
+                                  <div className="text-xs font-black text-slate-500">
+                                    {analyticsUnavailableLabel}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="overflow-hidden px-4 py-5 align-top">
+                                {analyticsLoadStatus === "ready" ? (
+                                  <div className="min-w-0 rounded-lg bg-slate-50 px-2.5 py-2">
+                                    <div
+                                      className={`inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-black ${status.tone}`}
+                                    >
+                                      {status.label}
+                                    </div>
+                                    <div
+                                      className="mt-1 truncate text-xs font-black text-slate-700"
+                                      title={getRecommendation(q, stat)}
+                                    >
+                                      {getRecommendation(q, stat)}
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="text-xs font-black text-slate-500">
+                                    {analyticsUnavailableLabel}
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+                {!loading && filteredQuestions.length > QUESTION_PAGE_SIZE && (
+                  <div className="flex flex-col gap-3 border-t border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="text-xs font-bold text-slate-500">
+                      {Math.min(
+                        (questionPage - 1) * QUESTION_PAGE_SIZE + 1,
+                        filteredQuestions.length,
+                      )}
+                      -
+                      {Math.min(
+                        questionPage * QUESTION_PAGE_SIZE,
+                        filteredQuestions.length,
+                      )}
+                      번 / 총 {filteredQuestions.length}문항
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setQuestionPage((prev) => Math.max(1, prev - 1))
+                        }
+                        disabled={questionPage <= 1}
+                        className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-black text-slate-600 transition hover:border-blue-300 hover:text-blue-700 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-300"
+                      >
+                        이전
+                      </button>
+                      {Array.from(
+                        { length: totalQuestionPages },
+                        (_, index) => index + 1,
+                      )
+                        .filter(
+                          (page) =>
+                            page === 1 ||
+                            page === totalQuestionPages ||
+                            Math.abs(page - questionPage) <= 2,
+                        )
+                        .map((page, index, pages) => {
+                          const prevPage = pages[index - 1];
+                          const showGap = prevPage && page - prevPage > 1;
+                          return (
+                            <React.Fragment key={page}>
+                              {showGap && (
+                                <span className="px-1 text-xs font-black text-slate-300">
+                                  ...
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setQuestionPage(page)}
+                                className={`h-8 min-w-8 rounded-md border px-2 text-xs font-black transition ${
+                                  questionPage === page
+                                    ? "border-blue-500 bg-blue-600 text-white"
+                                    : "border-slate-200 text-slate-600 hover:border-blue-300 hover:text-blue-700"
+                                }`}
+                              >
+                                {page}
+                              </button>
+                            </React.Fragment>
+                          );
+                        })}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setQuestionPage((prev) =>
+                            Math.min(totalQuestionPages, prev + 1),
+                          )
+                        }
+                        disabled={questionPage >= totalQuestionPages}
+                        className="rounded-md border border-slate-200 px-3 py-1.5 text-xs font-black text-slate-600 transition hover:border-blue-300 hover:text-blue-700 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-300"
+                      >
+                        다음
+                      </button>
+                    </div>
                   </div>
                 )}
-                {sortedClassComparisons.map((item) => {
-                  const isSelected = activeClassFilter === item.classOnly;
-                  const rate = item.rate ?? 0;
-                  return (
-                    <button
-                      key={item.classOnly}
-                      type="button"
-                      onClick={() => {
-                        userTouchedClassScopeRef.current = true;
-                        setAnalyticsScope("class");
-                        setClassFilter(item.classOnly);
-                      }}
-                      className={`w-full rounded-lg border p-3 text-left transition ${
-                        isSelected
-                          ? "border-blue-300 bg-blue-50"
-                          : "border-slate-100 hover:border-blue-200 hover:bg-slate-50"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="font-black text-slate-800">
-                          {item.classOnly}반
-                        </div>
-                        <div
-                          className={`font-black ${item.rate !== null && item.rate < 60 ? "text-red-600" : "text-blue-700"}`}
-                        >
-                          {formatPercent(item.rate)}
-                        </div>
-                      </div>
-                      <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
-                        <div
-                          className={`h-full rounded-full ${item.rate !== null && item.rate < 60 ? "bg-red-500" : "bg-blue-500"}`}
-                          style={{ width: `${rate}%` }}
-                        ></div>
-                      </div>
-                      <div className="mt-2 flex items-center justify-end text-[11px] font-bold text-slate-500">
-                        <span>평균 정답률</span>
-                      </div>
-                    </button>
-                  );
-                })}
               </div>
-              {classGapSummary && (
-                <div className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold leading-5 text-emerald-700">
-                  {classGapSummary.lowest.classOnly}반과{" "}
-                  {classGapSummary.highest.classOnly}반의 정답률 격차가{" "}
-                  {classGapSummary.gap}%p입니다.
-                </div>
-              )}
-            </section>
 
-            <section className="rounded-lg border border-slate-200 bg-white p-4">
-              <h3 className="font-black text-slate-900">수업 활용 제안</h3>
-              <div className="mt-4 space-y-2">
-                {actionSuggestions.map((item) => (
-                  <div
-                    key={`${item.title}-${item.description}`}
-                    className="flex gap-3 rounded-lg border border-slate-100 p-3"
-                  >
-                    <div
-                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${item.tone}`}
-                    >
-                      <i className={`fas ${item.icon} text-xs`}></i>
+              {analyticsLoadStatus === "ready" && (
+                <aside className="space-y-4">
+                  <section className="rounded-lg border border-slate-200 bg-white p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="font-black text-slate-900">
+                        학급 간 비교
+                      </h3>
+                      <span className="shrink-0 text-xs font-black text-slate-400">
+                        {classComparisons.length}개 반
+                      </span>
                     </div>
-                    <div className="min-w-0">
-                      <div className="font-black text-slate-800">
-                        {item.title}
-                      </div>
-                      <div className="mt-1 text-xs font-bold leading-5 text-slate-500">
-                        {item.description}
-                      </div>
+                    <div className="mt-3">
+                      <select
+                        value={classComparisonSort}
+                        onChange={(event) =>
+                          setClassComparisonSort(
+                            event.target.value as ClassComparisonSort,
+                          )
+                        }
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-black text-slate-700"
+                        aria-label="학급 간 비교 정렬"
+                      >
+                        <option value="class">반 번호순</option>
+                        <option value="rateAsc">정답률 낮은 순</option>
+                        <option value="rateDesc">정답률 높은 순</option>
+                      </select>
                     </div>
-                  </div>
-                ))}
-              </div>
-              {rosterAccessLimited && (
-                <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-700">
-                  학생 명단 권한이 없어 참여율은 응시 기록 기준으로 표시합니다.
-                </div>
+                    <div className="mt-4 space-y-3">
+                      {classComparisons.length === 0 && (
+                        <div className="rounded-lg bg-slate-50 p-4 text-center text-xs font-bold text-slate-400">
+                          비교할 학급 데이터가 없습니다.
+                        </div>
+                      )}
+                      {sortedClassComparisons.map((item) => {
+                        const isSelected = activeClassFilter === item.classOnly;
+                        const rate = item.rate ?? 0;
+                        return (
+                          <button
+                            key={item.classOnly}
+                            type="button"
+                            onClick={() => {
+                              userTouchedClassScopeRef.current = true;
+                              setAnalyticsScope("class");
+                              setClassFilter(item.classOnly);
+                            }}
+                            className={`w-full rounded-lg border p-3 text-left transition ${
+                              isSelected
+                                ? "border-blue-300 bg-blue-50"
+                                : "border-slate-100 hover:border-blue-200 hover:bg-slate-50"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="font-black text-slate-800">
+                                {item.classOnly}반
+                              </div>
+                              <div
+                                className={`font-black ${item.rate !== null && item.rate < 60 ? "text-red-600" : "text-blue-700"}`}
+                              >
+                                {formatPercent(item.rate)}
+                              </div>
+                            </div>
+                            <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
+                              <div
+                                className={`h-full rounded-full ${item.rate !== null && item.rate < 60 ? "bg-red-500" : "bg-blue-500"}`}
+                                style={{ width: `${rate}%` }}
+                              ></div>
+                            </div>
+                            <div className="mt-2 flex items-center justify-end text-xs font-bold text-slate-500">
+                              <span>평균 정답률</span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {classGapSummary && (
+                      <div className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold leading-5 text-emerald-700">
+                        {classGapSummary.lowest.classOnly}반과{" "}
+                        {classGapSummary.highest.classOnly}반의 정답률 격차가{" "}
+                        {classGapSummary.gap}%p입니다.
+                      </div>
+                    )}
+                  </section>
+
+                  <section className="rounded-lg border border-slate-200 bg-white p-4">
+                    <h3 className="font-black text-slate-900">
+                      수업 활용 제안
+                    </h3>
+                    <div className="mt-4 space-y-2">
+                      {actionSuggestions.map((item) => (
+                        <div
+                          key={`${item.title}-${item.description}`}
+                          className="flex gap-3 rounded-lg border border-slate-100 p-3"
+                        >
+                          <div
+                            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${item.tone}`}
+                          >
+                            <i className={`fas ${item.icon} text-xs`}></i>
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-black text-slate-800">
+                              {item.title}
+                            </div>
+                            <div className="mt-1 text-xs font-bold leading-5 text-slate-500">
+                              {item.description}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {rosterAccessLimited && (
+                      <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-bold leading-5 text-amber-700">
+                        학생 명단 권한이 없어 참여율은 응시 기록 기준으로
+                        표시합니다.
+                      </div>
+                    )}
+                  </section>
+                </aside>
               )}
-            </section>
-          </aside>
-        </div>
-      </div>
+            </div>
+          </div>
+        </>
+      )}
 
       {editingQuestion && (
-        <div className="fixed inset-0 z-50" onClick={() => closeEditModal()}>
+        <div
+          className="fixed inset-0 z-50"
+          onClick={() => void closeEditModal()}
+        >
           <div className="absolute inset-0 bg-black/45" />
           <div className="absolute inset-0 flex items-center justify-center p-4">
             <div
@@ -3465,7 +3880,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                 </div>
                 <button
                   type="button"
-                  onClick={() => closeEditModal()}
+                  onClick={() => void closeEditModal()}
                   className="text-gray-400 hover:text-gray-700"
                 >
                   <i className="fas fa-times text-lg"></i>
@@ -3860,7 +4275,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                             placeholder="오른쪽 단어"
                             className="w-full rounded border p-2 text-sm"
                           />
-                          <label className="inline-flex cursor-pointer items-center gap-1 rounded border border-blue-100 bg-blue-50 px-2 py-1 text-[11px] font-bold text-blue-700 hover:bg-blue-100">
+                          <label className="inline-flex cursor-pointer items-center gap-1 rounded border border-blue-100 bg-blue-50 px-2 py-1 text-xs font-bold text-blue-700 hover:bg-blue-100">
                             <i className="fas fa-image"></i> 우측 그림
                             <input
                               type="file"
@@ -4281,7 +4696,7 @@ const QuizBankTab: React.FC<{ canEdit: boolean }> = ({ canEdit }) => {
                   </button>
                   <button
                     type="button"
-                    onClick={() => closeEditModal()}
+                    onClick={() => void closeEditModal()}
                     className="bg-gray-100 text-gray-700 font-bold py-2 rounded hover:bg-gray-200 transition"
                   >
                     취소

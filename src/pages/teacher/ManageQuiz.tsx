@@ -23,10 +23,18 @@ interface TreeUnit {
 const ManageQuiz: React.FC = () => {
   const { config, userData, currentUser } = useAuth();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState<"manage" | "log" | "bank">(
-    "manage",
-  );
+  const [searchParams, setSearchParams] = useSearchParams();
+  const canRead = canReadQuizManagement(userData, currentUser?.email || "");
+  const canWrite = canWriteQuizManagement(userData, currentUser?.email || "");
+  const requestedTab = searchParams.get("tab");
+  const activeTab: "manage" | "log" | "bank" =
+    requestedTab === "bank" || requestedTab === "log"
+      ? requestedTab
+      : requestedTab === "manage" && canWrite
+        ? "manage"
+        : canWrite
+          ? "manage"
+          : "log";
   const [selectedNode, setSelectedNode] = useState<{
     id: string;
     title: string;
@@ -39,17 +47,19 @@ const ManageQuiz: React.FC = () => {
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [settingsCategory, setSettingsCategory] = useState("diagnostic");
   const [mobileTreeOpen, setMobileTreeOpen] = useState(false);
-  const canRead = canReadQuizManagement(userData, currentUser?.email || "");
-  const canWrite = canWriteQuizManagement(userData, currentUser?.email || "");
   const isManageTab = activeTab === "manage";
 
   useEffect(() => {
-    const requestedTab = searchParams.get("tab");
-    if (requestedTab === "log") setActiveTab("log");
-    else if (requestedTab === "bank") setActiveTab("bank");
-    else setActiveTab(canWrite ? "manage" : "log");
+    if (!canRead) return;
+    if (requestedTab === activeTab) return;
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("tab", activeTab);
+    setSearchParams(nextParams, { replace: true });
+  }, [activeTab, canRead, requestedTab, searchParams, setSearchParams]);
+
+  useEffect(() => {
     setMobileTreeOpen(false);
-  }, [canWrite, searchParams]);
+  }, [activeTab]);
 
   useEffect(() => {
     const loadTree = async () => {
@@ -75,6 +85,12 @@ const ManageQuiz: React.FC = () => {
 
   if (!canRead) return null;
 
+  const selectTab = (tab: "manage" | "log" | "bank") => {
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("tab", tab);
+    setSearchParams(nextParams);
+  };
+
   const handleNodeSelect = (
     node: TreeUnit,
     type: "special" | "normal",
@@ -88,32 +104,49 @@ const ManageQuiz: React.FC = () => {
 
   return (
     <div
-      className={`flex flex-col bg-gray-50 ${isManageTab ? "h-[calc(100dvh-64px)] min-h-[760px] overflow-hidden" : "min-h-[calc(100dvh-64px)]"}`}
+      className={`flex min-h-0 flex-1 flex-col bg-gray-50 ${isManageTab ? "overflow-hidden" : ""}`}
     >
       <div
         className={`w-full max-w-7xl mx-auto px-4 lg:px-6 py-4 lg:py-3 ${isManageTab ? "flex-1 flex flex-col min-h-0 overflow-hidden" : "pb-8"}`}
       >
         <div className="flex border-b border-gray-200 mb-3 bg-white rounded-t-lg px-2 shrink-0 overflow-x-auto">
-          {canWrite && (
+          <div className="flex" role="tablist" aria-label="문제 관리 화면">
+            {canWrite && (
+              <button
+                id="quiz-tab-manage"
+                type="button"
+                role="tab"
+                aria-selected={activeTab === "manage"}
+                aria-controls="quiz-panel-manage"
+                onClick={() => selectTab("manage")}
+                className={`min-h-11 shrink-0 whitespace-nowrap py-3 px-6 font-bold text-sm border-b-2 transition ${activeTab === "manage" ? "border-blue-500 text-blue-600" : "border-transparent text-gray-600 hover:bg-gray-50"}`}
+              >
+                문제 등록
+              </button>
+            )}
             <button
-              onClick={() => setActiveTab("manage")}
-              className={`shrink-0 whitespace-nowrap py-3 px-6 font-bold text-sm border-b-2 transition ${activeTab === "manage" ? "border-blue-500 text-blue-600" : "border-transparent text-gray-600 hover:bg-gray-50"}`}
+              id="quiz-tab-log"
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "log"}
+              aria-controls="quiz-panel-log"
+              onClick={() => selectTab("log")}
+              className={`min-h-11 shrink-0 whitespace-nowrap py-3 px-6 font-bold text-sm border-b-2 transition ${activeTab === "log" ? "border-blue-500 text-blue-600" : "border-transparent text-gray-600 hover:bg-gray-50"}`}
             >
-              문제 등록
+              응시 현황
             </button>
-          )}
-          <button
-            onClick={() => setActiveTab("log")}
-            className={`shrink-0 whitespace-nowrap py-3 px-6 font-bold text-sm border-b-2 transition ${activeTab === "log" ? "border-blue-500 text-blue-600" : "border-transparent text-gray-600 hover:bg-gray-50"}`}
-          >
-            응시 현황
-          </button>
-          <button
-            onClick={() => setActiveTab("bank")}
-            className={`shrink-0 whitespace-nowrap py-3 px-6 font-bold text-sm border-b-2 transition ${activeTab === "bank" ? "border-blue-500 text-blue-600" : "border-transparent text-gray-600 hover:bg-gray-50"}`}
-          >
-            문제 은행
-          </button>
+            <button
+              id="quiz-tab-bank"
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "bank"}
+              aria-controls="quiz-panel-bank"
+              onClick={() => selectTab("bank")}
+              className={`min-h-11 shrink-0 whitespace-nowrap py-3 px-6 font-bold text-sm border-b-2 transition ${activeTab === "bank" ? "border-blue-500 text-blue-600" : "border-transparent text-gray-600 hover:bg-gray-50"}`}
+            >
+              문제 은행
+            </button>
+          </div>
           {canWrite && (
             <button
               type="button"
@@ -132,7 +165,12 @@ const ManageQuiz: React.FC = () => {
         )}
 
         {canWrite && activeTab === "manage" && (
-          <div className="flex-1 flex flex-col lg:flex-row lg:items-stretch gap-6 overflow-hidden relative min-h-0">
+          <div
+            id="quiz-panel-manage"
+            role="tabpanel"
+            aria-labelledby="quiz-tab-manage"
+            className="flex-1 flex flex-col lg:flex-row lg:items-stretch gap-6 overflow-hidden relative min-h-0"
+          >
             {mobileTreeOpen && (
               <button
                 type="button"
@@ -198,12 +236,20 @@ const ManageQuiz: React.FC = () => {
         )}
 
         {activeTab === "log" && (
-          <div>
+          <div
+            id="quiz-panel-log"
+            role="tabpanel"
+            aria-labelledby="quiz-tab-log"
+          >
             <QuizLogTab />
           </div>
         )}
         {activeTab === "bank" && (
-          <div>
+          <div
+            id="quiz-panel-bank"
+            role="tabpanel"
+            aria-labelledby="quiz-tab-bank"
+          >
             <QuizBankTab canEdit={canWrite} />
           </div>
         )}

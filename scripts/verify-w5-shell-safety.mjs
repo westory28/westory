@@ -82,19 +82,28 @@ for (const alias of [
   assert(app.includes(`path="${alias}"`), `legacy alias missing: ${alias}`);
 }
 
-for (const label of ["오늘", "학습", "평가", "성적", "더보기"]) {
+for (const label of [
+  "학습",
+  "평가",
+  "점수",
+  "위스",
+  "마이페이지",
+  "일정·출석·공지",
+  "오늘",
+]) {
   assert(
     metadata.includes(`label: "${label}"`),
     `student IA missing: ${label}`,
   );
 }
+assert(shell.includes('label: "더보기"'), "student mobile More entry missing");
 for (const label of [
+  "학습 자료 관리",
+  "평가 관리",
+  "점수 관리",
+  "위스 관리",
+  "학생 관리",
   "업무 홈",
-  "학생과 학급",
-  "수업 운영",
-  "평가 운영",
-  "성적 운영",
-  "위스 운영",
   "일정과 소통",
   "관리자",
 ]) {
@@ -134,6 +143,12 @@ assert(
   shell.includes("getStudentRouteAccess") &&
     shell.includes("getVisibleStudentNavigation(config, menuConfig)"),
   "student navigation must consume the in-memory visibility contract",
+);
+assert(
+  shell.includes("mergeConfiguredNavigation") &&
+    shell.includes("menuConfig?.student") &&
+    shell.includes("menuConfig?.teacher"),
+  "shell navigation must preserve the stored menu name, order, and hierarchy contract",
 );
 assert(
   !semesterContext.includes('params.get("source")') &&

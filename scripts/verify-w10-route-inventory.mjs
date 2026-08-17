@@ -190,12 +190,25 @@ for (const item of manifest.routeDispositions) {
     `Registered route does not mount its declared component: ${item.id} (${item.component})`,
   );
   if (item.disposition === "REMOVE_LEGACY_UI") {
-    assert.equal(item.component, "LegacyRouteRedirect");
-    assert.equal(typeof item.target, "string");
-    assert.ok(
-      slice.includes(`LegacyRouteRedirect to="${item.target}"`),
-      `Legacy alias target drift: ${item.path} -> ${item.target}`,
-    );
+    if (item.path === "/teacher/lesson") {
+      assert.equal(item.component, "TeacherLessonLegacyRedirect");
+      assert.deepEqual(item.targets, [
+        "/teacher/learning",
+        "/teacher/lesson/history-dictionary",
+      ]);
+      assert.match(
+        app,
+        /const TeacherLessonLegacyRedirect[\s\S]*canManageW8Domains[\s\S]*"\/teacher\/learning"[\s\S]*canReadLessonManagement[\s\S]*"\/teacher\/lesson\/history-dictionary"/u,
+        "Teacher lesson alias must resolve by lesson capability.",
+      );
+    } else {
+      assert.equal(item.component, "LegacyRouteRedirect");
+      assert.equal(typeof item.target, "string");
+      assert.ok(
+        slice.includes(`LegacyRouteRedirect to="${item.target}"`),
+        `Legacy alias target drift: ${item.path} -> ${item.target}`,
+      );
+    }
   }
 }
 
@@ -208,7 +221,8 @@ for (const path of protectedRoutes) {
   const slice = routeSlice(path);
   assert.equal(
     slice.includes("renderWithLayout(") ||
-      slice.includes("LegacyRouteRedirect"),
+      slice.includes("LegacyRouteRedirect") ||
+      slice.includes("TeacherLessonLegacyRedirect"),
     true,
     `Protected route bypasses the access boundary: ${path}`,
   );

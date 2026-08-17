@@ -148,6 +148,133 @@
   color: var(--ws-text-muted);
 }
 
+.w8-list__row--linked {
+  align-items: flex-start;
+}
+
+.w8-list__primary-link {
+  display: grid;
+  min-width: 0;
+  min-height: var(--w8-control-min);
+  flex: 1;
+  align-content: center;
+  gap: var(--space-1);
+  border-radius: var(--radius-sm);
+  color: var(--ws-text);
+  text-decoration: none;
+}
+
+.w8-list__primary-link strong {
+  overflow-wrap: anywhere;
+  color: var(--ws-text-strong);
+  line-height: 1.5;
+  word-break: keep-all;
+}
+
+.w8-list__primary-link span {
+  overflow-wrap: anywhere;
+  color: var(--ws-text-muted);
+  font-size: var(--ws-type-small, inherit);
+  line-height: 1.55;
+}
+
+.w8-list__primary-link .w8-list__link-label {
+  color: var(--ws-primary-text);
+  font-weight: 700;
+}
+
+.w8-inline-empty {
+  margin: 0;
+  color: var(--ws-text-muted);
+  line-height: 1.6;
+}
+
+.w8-operational-status,
+.w8-support-list {
+  display: grid;
+  min-width: 0;
+  margin: 0;
+}
+
+.w8-operational-status > section,
+.w8-support-list > div {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-4) 0;
+}
+
+.w8-operational-status > section + section,
+.w8-support-list > div + div {
+  border-top: 1px solid var(--ws-border-soft);
+}
+
+.w8-operational-status > section > div,
+.w8-operational-status__heading > div,
+.w8-support-list dd {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+}
+
+.w8-operational-status h3,
+.w8-operational-status p,
+.w8-support-list dt,
+.w8-support-list dd {
+  margin: 0;
+}
+
+.w8-operational-status h3,
+.w8-support-list dt {
+  color: var(--ws-text-strong);
+  font-size: var(--ws-type-card-title, inherit);
+  font-weight: 800;
+}
+
+.w8-operational-status strong,
+.w8-support-list dd strong {
+  overflow-wrap: anywhere;
+  color: var(--ws-text-strong);
+  font-size: var(--ws-type-body-strong, inherit);
+}
+
+.w8-operational-status p,
+.w8-support-list dd span {
+  overflow-wrap: anywhere;
+  color: var(--ws-text-muted);
+  font-size: var(--ws-type-small, inherit);
+  line-height: 1.55;
+}
+
+.w8-operational-status > .w8-operational-status__learning {
+  display: grid;
+}
+
+.w8-operational-status__heading {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.w8-support-list > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.w8-support-list dt {
+  grid-column: 1 / -1;
+}
+
+.w8-support-list dd {
+  align-self: center;
+}
+
 .w8-panel,
 .w8-detail {
   border: 1px solid var(--ws-border);
@@ -303,7 +430,16 @@
 .w8-form input:focus-visible,
 .w8-form textarea:focus-visible,
 .w8-form select:focus-visible,
-.w8-attendance-list select:focus-visible {
+.w8-attendance-list select:focus-visible,
+.w8-list__primary-link:focus-visible,
+.teacher-operation-history summary:focus-visible,
+.teacher-operation-queue a:focus-visible,
+.student-roster__field select:focus-visible,
+.student-roster__field input:focus-visible,
+.student-roster__checkbox input:focus-visible,
+.student-roster__name-button:focus-visible,
+.student-roster__action:focus-visible,
+.student-roster__pages button:focus-visible {
   outline: 3px solid var(--ws-ring);
   outline-offset: 2px;
 }
@@ -625,9 +761,40 @@
 }
 
 .teacher-operation-queue__section h3 {
+  margin: 0;
   color: var(--ws-text-strong);
   font-size: var(--ws-type-body);
   font-weight: 800;
+}
+
+.teacher-operation-history {
+  border-top: 1px solid var(--ws-border);
+}
+
+.teacher-operation-history summary {
+  display: flex;
+  min-height: var(--w8-control-min);
+  align-items: center;
+  color: var(--ws-text-muted);
+  font-size: var(--ws-type-small);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.teacher-operation-history summary::before {
+  margin-right: var(--space-2);
+  color: var(--ws-primary-text);
+  content: "+";
+}
+
+.teacher-operation-history[open] summary::before {
+  content: "−";
+}
+
+.teacher-operation-history__body {
+  display: grid;
+  gap: var(--space-3);
+  padding-bottom: var(--space-3);
 }
 
 .teacher-bulk-workflow {
@@ -693,6 +860,351 @@
   padding: var(--space-3);
 }
 
+.student-roster__notice {
+  margin: 0;
+  border: 1px solid var(--ws-accent);
+  border-radius: var(--radius-md);
+  background: var(--ws-accent-soft);
+  padding: var(--space-3) var(--space-4);
+  color: var(--ws-accent-text);
+  font-size: var(--ws-type-small, inherit);
+  font-weight: 700;
+  line-height: 1.55;
+}
+
+.student-roster__controls,
+.student-roster__table-section {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-4);
+  border: 1px solid var(--ws-border);
+  border-radius: var(--radius-lg);
+  background: var(--ws-surface);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-sm);
+}
+
+.student-roster__section-heading,
+.student-roster__bulk,
+.student-roster__bulk-actions,
+.student-roster__pagination,
+.student-roster__pages,
+.student-roster__row-actions {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.student-roster__section-heading {
+  justify-content: space-between;
+}
+
+.student-roster__section-heading h2,
+.student-roster__section-heading p {
+  margin: 0;
+}
+
+.student-roster__section-heading h2 {
+  color: var(--ws-text-strong);
+  font-size: var(--ws-type-section-title, inherit);
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.student-roster__section-heading p {
+  margin-top: var(--space-1);
+  color: var(--ws-text-muted);
+  font-size: var(--ws-type-small, inherit);
+  line-height: 1.55;
+}
+
+.student-roster__count {
+  display: inline-flex;
+  min-height: calc(var(--space-6) + var(--space-1));
+  align-items: center;
+  border-radius: var(--radius-full);
+  background: var(--ws-primary-soft);
+  padding: var(--space-1) var(--space-3);
+  color: var(--ws-primary-text);
+  font-size: var(--ws-type-small, inherit);
+  font-weight: 800;
+}
+
+.student-roster__filter-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  align-items: end;
+}
+
+.student-roster__field {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-2);
+  color: var(--ws-text);
+  font-size: var(--ws-type-small, inherit);
+  font-weight: 700;
+}
+
+.student-roster__field--search {
+  grid-column: 1 / -1;
+}
+
+.student-roster__field select,
+.student-roster__field input {
+  width: 100%;
+  min-height: var(--w8-control-min);
+  box-sizing: border-box;
+  border: 1px solid var(--ws-border);
+  border-radius: var(--radius-md);
+  background: var(--ws-surface);
+  padding: var(--space-2) var(--space-3);
+  color: var(--ws-text);
+  font: inherit;
+}
+
+.student-roster__filter-form > .w8-button {
+  width: 100%;
+}
+
+.student-roster__bulk {
+  justify-content: space-between;
+  border: 1px solid var(--ws-border-blue);
+  border-radius: var(--radius-lg);
+  background: var(--ws-primary-soft);
+  padding: var(--space-3) var(--space-4);
+}
+
+.student-roster__bulk-copy {
+  display: grid;
+  min-width: 0;
+  gap: var(--space-1);
+}
+
+.student-roster__bulk-copy strong {
+  color: var(--ws-primary-text);
+}
+
+.student-roster__bulk-copy span {
+  color: var(--ws-text-muted);
+  font-size: var(--ws-type-small, inherit);
+}
+
+.student-roster__bulk-actions {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.student-roster__table-shell {
+  min-width: 0;
+}
+
+.student-roster__table {
+  width: 100%;
+  min-width: calc(
+    var(--ws-context-panel-width) + var(--ws-context-panel-width)
+  );
+  border-collapse: collapse;
+  table-layout: fixed;
+  color: var(--ws-text);
+  font-size: var(--ws-type-small, inherit);
+}
+
+.student-roster__table th,
+.student-roster__table td {
+  padding: var(--space-3);
+  vertical-align: middle;
+}
+
+.student-roster__table th {
+  background: var(--ws-surface-subtle);
+  color: var(--ws-text-muted);
+  font-size: var(--ws-type-label, inherit);
+  font-weight: 800;
+  text-align: left;
+}
+
+.student-roster__table tbody tr {
+  border-top: 1px solid var(--ws-border-soft);
+  transition: background-color var(--motion-fast) var(--ease-standard, ease);
+}
+
+.student-roster__table tbody tr:hover {
+  background: var(--ws-primary-soft);
+}
+
+th.student-roster__select-column,
+td.student-roster__select-column {
+  width: var(--space-12);
+  text-align: center;
+}
+
+th.student-roster__short-column,
+td.student-roster__short-column {
+  width: calc(var(--space-16) + var(--space-2));
+  text-align: center;
+  white-space: nowrap;
+}
+
+.student-roster__name-column {
+  width: 28%;
+}
+
+.student-roster__email-column {
+  display: none;
+  width: 28%;
+}
+
+th.student-roster__actions-column,
+td.student-roster__actions-column {
+  width: 36%;
+  text-align: center;
+}
+
+.student-roster__checkbox {
+  display: inline-flex;
+  width: var(--w8-control-min);
+  min-height: var(--w8-control-min);
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.student-roster__checkbox input {
+  width: var(--space-5);
+  height: var(--space-5);
+  accent-color: var(--ws-primary);
+}
+
+.student-roster__checkbox input:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.student-roster__name-button {
+  display: grid;
+  width: 100%;
+  min-height: var(--w8-control-min);
+  min-width: 0;
+  align-content: center;
+  gap: var(--space-1);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  padding: 0;
+  color: var(--ws-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.student-roster__name-button strong,
+.student-roster__name-button span,
+.student-roster__email {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.student-roster__name-button strong {
+  color: var(--ws-text-strong);
+  font-weight: 800;
+}
+
+.student-roster__name-button span,
+.student-roster__email {
+  color: var(--ws-text-muted);
+  font-size: var(--ws-type-label, inherit);
+  line-height: 1.5;
+}
+
+.student-roster__email-inline {
+  display: block;
+}
+
+.student-roster__row-actions {
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.student-roster__action {
+  min-height: var(--w8-control-min);
+  border: 1px solid var(--ws-border-blue);
+  border-radius: var(--radius-md);
+  background: var(--ws-primary-soft);
+  padding: var(--space-2) var(--space-3);
+  color: var(--ws-primary-text);
+  font: inherit;
+  font-size: var(--ws-type-label, inherit);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.student-roster__action--danger {
+  border-color: var(--ws-danger);
+  background: var(--ws-danger-soft);
+  color: var(--ws-danger-text);
+}
+
+.student-roster__action--accent {
+  border-color: var(--ws-accent);
+  background: var(--ws-accent-soft);
+  color: var(--ws-accent-text);
+}
+
+.student-roster__action:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.student-roster__readonly-label {
+  color: var(--ws-text-muted);
+  font-size: var(--ws-type-label, inherit);
+  font-weight: 700;
+}
+
+.student-roster__table td.student-roster__table-state {
+  padding: var(--space-12) var(--space-4);
+  color: var(--ws-text-muted);
+  line-height: 1.6;
+  text-align: center;
+}
+
+.student-roster__pagination {
+  justify-content: center;
+  border-top: 1px solid var(--ws-border-soft);
+  padding-top: var(--space-4);
+  color: var(--ws-text-muted);
+  font-size: var(--ws-type-small, inherit);
+  font-weight: 700;
+}
+
+.student-roster__pages {
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.student-roster__pages button {
+  min-width: var(--w8-control-min);
+  min-height: var(--w8-control-min);
+  border: 1px solid var(--ws-border);
+  border-radius: var(--radius-md);
+  background: var(--ws-surface-subtle);
+  color: var(--ws-text-muted);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.student-roster__pages button[aria-current="page"] {
+  border-color: var(--ws-primary);
+  background: var(--ws-primary);
+  color: var(--ws-surface);
+}
+
 .w8-visually-hidden {
   position: absolute;
   width: 1px;
@@ -711,6 +1223,37 @@
   .w8-form--inline {
     grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
     align-items: end;
+  }
+
+  .w8-operational-status,
+  .w8-support-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--space-6);
+  }
+
+  .w8-operational-status > section + section,
+  .w8-support-list > div + div {
+    border-top: 0;
+  }
+
+  .w8-operational-status > .w8-operational-status__learning {
+    grid-column: 1 / -1;
+    border-top: 1px solid var(--ws-border-soft);
+  }
+
+  .teacher-operation-queue--work {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--space-6);
+  }
+
+  .teacher-operation-queue--work li {
+    border-top: 1px solid var(--ws-border-soft);
+  }
+
+  .student-roster__bulk-actions {
+    display: flex;
+    width: auto;
   }
 }
 
@@ -732,6 +1275,28 @@
 
   .w8-panel--wide {
     grid-column: 1 / -1;
+  }
+
+  .student-roster__filter-form {
+    grid-template-columns:
+      minmax(0, 1fr) minmax(0, 1fr) minmax(0, 2fr)
+      auto auto;
+  }
+
+  .student-roster__field--search {
+    grid-column: auto;
+  }
+
+  .student-roster__filter-form > .w8-button {
+    width: auto;
+  }
+
+  .student-roster__email-column {
+    display: table-cell;
+  }
+
+  .student-roster__email-inline {
+    display: none;
   }
 }
 
@@ -781,6 +1346,28 @@
   .teacher-draft-status,
   .teacher-operation-queue li {
     display: grid;
+  }
+
+  .w8-list__row--linked {
+    display: grid;
+  }
+
+  .w8-operational-status > section,
+  .w8-support-list > div {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .w8-operational-status__heading {
+    display: grid;
+  }
+
+  .student-roster__bulk {
+    align-items: stretch;
+  }
+
+  .student-roster__bulk-copy {
+    width: 100%;
   }
 }
 

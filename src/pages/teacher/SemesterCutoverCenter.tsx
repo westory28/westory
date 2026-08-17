@@ -38,15 +38,35 @@ const OPERATION_LABELS: Record<string, string> = {
   WIS_ACCOUNTS: "위스 계정",
 };
 
+const STRATEGY_LABELS: Record<string, string> = {
+  RECREATE: "새 학기용으로 다시 생성",
+  IMPORT: "준비 학기로 가져오기",
+  CLONE: "동일하게 복제",
+  VALIDATE_ONLY: "검증만 수행",
+  REFERENCE: "기존 기준 참조",
+};
+
+const OPERATOR_STATUS_LABELS: Record<string, string> = {
+  ACTIVE: "운영 중",
+  ARCHIVED: "보관됨",
+  PREPARING: "준비 중",
+  PARTIAL_SHELL: "일부 화면만 준비됨",
+  PASS: "통과",
+  FAIL: "실패",
+};
+
+const operatorStatusLabel = (status: string | null | undefined) =>
+  OPERATOR_STATUS_LABELS[String(status || "")] || "확인 필요";
+
 const SUGGESTED_PLAN_REASON_LABELS: Record<string, string> = {
   CANONICAL_TARGET_QUERY_ONLY:
     "실제 학기는 조회만 할 수 있습니다. 합성 계획을 만들 수 없습니다.",
   REHEARSAL_MANIFESTS_REQUIRED:
-    "예약된 source와 target의 합성 학기 manifest가 모두 필요합니다.",
+    "예약된 원본 학기와 준비 학기의 기준 정보가 모두 필요합니다.",
   REHEARSAL_LIFECYCLE_INVALID:
-    "합성 source와 target의 학기 상태가 리허설 조건에 맞지 않습니다.",
+    "합성 원본 학기와 준비 학기의 상태가 리허설 조건에 맞지 않습니다.",
   APPROVED_CHILD_COMMAND_BLUEPRINT_REQUIRED:
-    "승인된 Domain command blueprint가 아직 준비되지 않았습니다.",
+    "승인된 하위 작업 절차가 아직 준비되지 않았습니다.",
   PLAN_ALREADY_EXISTS: "이미 생성된 합성 계획을 사용합니다.",
 };
 
@@ -203,7 +223,8 @@ const SemesterCutoverCenter: React.FC = () => {
       showToast({
         tone: "error",
         title: "최신 학기 정보를 먼저 확인해 주세요.",
-        message: "현재 근거의 revision이 대상 학기와 달라 작업을 차단했습니다.",
+        message:
+          "현재 확인 근거의 기준 버전이 준비 학기와 달라 작업을 차단했습니다.",
       });
       return;
     }
@@ -223,7 +244,7 @@ const SemesterCutoverCenter: React.FC = () => {
             tone: "error",
             title: "차단된 실행 기록을 다시 확인해 주세요.",
             message:
-              "재시도에 필요한 실행 revision이 없어 사전 비교를 시작하지 않았습니다.",
+              "재시도에 필요한 실행 기준 버전이 없어 사전 비교를 시작하지 않았습니다.",
           });
           return;
         }
@@ -279,7 +300,7 @@ const SemesterCutoverCenter: React.FC = () => {
     const rows: CutoverSourceView[] = [];
     if (state.plan) {
       rows.push({
-        label: "원본 학기",
+        label: "현재 운영 학기",
         semesterId: state.plan.sourceSemesterId,
         provenance:
           state.plan.sourceStatus === "ARCHIVED" ? "ARCHIVE" : "CURRENT",
@@ -288,11 +309,11 @@ const SemesterCutoverCenter: React.FC = () => {
         revision: state.plan.sourceManifestRevision,
         schemaVersion: state.schemaVersion,
         description:
-          "리허설의 기준 snapshot입니다. 이 화면에서 수정하지 않습니다.",
+          "리허설의 비교 기준입니다. 이 화면에서는 변경할 수 없습니다.",
       });
     }
     rows.push({
-      label: "대상 학기",
+      label: "준비 학기",
       semesterId: state.targetSemesterId,
       provenance: state.provenance,
       readOnly: state.readOnly,
@@ -300,19 +321,20 @@ const SemesterCutoverCenter: React.FC = () => {
       revision: state.manifestRevision,
       schemaVersion: state.schemaVersion,
       description: isSyntheticTarget
-        ? "Dedicated Staging의 예약된 합성 target입니다."
-        : "실제 학기 상태를 변경하지 않고 조회만 하는 기준 target입니다.",
+        ? "전용 검증 환경에 예약된 합성 학기입니다."
+        : "실제 학기 상태를 변경하지 않고 조회만 하는 준비 학기입니다.",
     });
     if (state.evidence) {
       rows.push({
-        label: "검증 근거",
+        label: "최근 검증 기준",
         semesterId: state.targetSemesterId,
         provenance: "EXPLICIT",
         readOnly: true,
         status: state.evidence.status,
         revision: state.evidence.targetManifestRevision,
         schemaVersion: state.schemaVersion,
-        description: "검증 당시 target revision에 고정된 읽기 전용 근거입니다.",
+        description:
+          "검증 당시 준비 학기의 기준 버전에 고정된 읽기 전용 자료입니다.",
       });
     }
     return rows;
@@ -335,7 +357,7 @@ const SemesterCutoverCenter: React.FC = () => {
         description: "승인된 서버 리허설에서 만든 계획만 사용합니다.",
         allowed: false,
         disabledReason: state?.plan?.planId
-          ? "공식 runner가 만든 기존 계획을 사용합니다."
+          ? "공식 서버 절차에서 만든 기존 계획을 사용합니다."
           : SUGGESTED_PLAN_REASON_LABELS[
               state?.suggestedPlanUnavailableReason || ""
             ] || "공식 리허설이 서버 실행 근거와 함께 계획을 준비합니다.",
@@ -344,17 +366,18 @@ const SemesterCutoverCenter: React.FC = () => {
       {
         ...common("DRY_RUN"),
         label: "사전 비교 실행",
-        description: "실제 데이터를 쓰지 않고 source와 target을 비교합니다.",
+        description:
+          "실제 데이터를 쓰지 않고 현재 학기와 준비 학기를 비교합니다.",
         allowed:
           rehearsalWritable &&
           !!state?.plan &&
           (planStatus === "CREATED" ||
             (planStatus === "BLOCKED" && attemptStatus === "BLOCKED")),
         disabledReason: evidenceStale
-          ? "대상 학기의 최신 revision을 다시 확인해야 합니다."
+          ? "준비 학기의 최신 기준 버전을 다시 확인해야 합니다."
           : rehearsalWritable
             ? "생성됨 또는 차단 상태의 계획이 필요합니다."
-            : "예약된 합성 target에서만 실행할 수 있습니다.",
+            : "예약된 합성 학기에서만 실행할 수 있습니다.",
         group: "flow",
       },
       {
@@ -367,31 +390,32 @@ const SemesterCutoverCenter: React.FC = () => {
           pendingKeys.length > 0 &&
           ["DRY_RUN_PASSED", "APPLYING", "PARTIAL"].includes(attemptStatus),
         disabledReason: evidenceStale
-          ? "대상 학기의 최신 revision을 다시 확인해야 합니다."
-          : "먼저 기존 도메인 명령 runner에서 합성 작업을 실행해야 합니다.",
+          ? "준비 학기의 최신 기준 버전을 다시 확인해야 합니다."
+          : "먼저 승인된 서버 절차에서 합성 작업을 실행해야 합니다.",
         group: "flow",
       },
       {
         ...common("VERIFY"),
         label: "결과 검증",
-        description: "건수, 연결, hash와 새 활동 0건을 확인합니다.",
+        description: "건수, 연결, 내용 일치값과 새 활동 0건을 확인합니다.",
         allowed: rehearsalWritable && !!context && attemptStatus === "APPLIED",
         disabledReason: evidenceStale
-          ? "대상 학기의 최신 revision을 다시 확인해야 합니다."
+          ? "준비 학기의 최신 기준 버전을 다시 확인해야 합니다."
           : "모든 적용 작업이 완료되어야 합니다.",
         group: "flow",
       },
       {
         ...common("RESUME"),
         label: "미완료 항목 복구",
-        description: "실패하거나 대기 중인 항목만 같은 ID로 다시 처리합니다.",
+        description:
+          "실패하거나 대기 중인 항목만 같은 실행 기록으로 다시 처리합니다.",
         allowed:
           rehearsalWritable &&
           !!context &&
           recoverableKeys.length > 0 &&
           ["PARTIAL", "FAILED", "APPLYING"].includes(attemptStatus),
         disabledReason: evidenceStale
-          ? "대상 학기의 최신 revision을 다시 확인해야 합니다."
+          ? "준비 학기의 최신 기준 버전을 다시 확인해야 합니다."
           : "복구할 실패 또는 대기 항목이 없습니다.",
         group: "recovery",
       },
@@ -405,7 +429,7 @@ const SemesterCutoverCenter: React.FC = () => {
           !!context &&
           ["APPLIED", "VERIFIED", "PARTIAL", "FAILED"].includes(attemptStatus),
         disabledReason: evidenceStale
-          ? "대상 학기의 최신 revision을 다시 확인해야 합니다."
+          ? "준비 학기의 최신 기준 버전을 다시 확인해야 합니다."
           : "복구 계획의 기준이 될 실행 결과가 없습니다.",
         group: "recovery",
         tone: "danger",
@@ -439,8 +463,8 @@ const SemesterCutoverCenter: React.FC = () => {
       const evidenceDiff = evidenceDiffs.get(item.operationKey);
       return {
         id: item.operationKey,
-        label: OPERATION_LABELS[item.operationType] || item.operationType,
-        operation: item.strategy || "확인",
+        label: OPERATION_LABELS[item.operationType] || "기타 운영 항목",
+        operation: STRATEGY_LABELS[item.strategy || ""] || "운영 절차 확인",
         sourceCount:
           evidenceDiff?.actualSource.count ??
           resultItem?.dryRun?.actualSource?.count ??
@@ -471,7 +495,7 @@ const SemesterCutoverCenter: React.FC = () => {
             ? operatorErrorMessage({ reason: resultItem.errorReason })
             : undefined) ||
           (evidenceDiff?.status === "FAIL"
-            ? `원본 상태 ${evidenceDiff.sourceStatus} · 대상 상태 ${evidenceDiff.targetStatus}`
+            ? `현재 학기 ${operatorStatusLabel(evidenceDiff.sourceStatus)} · 준비 학기 ${operatorStatusLabel(evidenceDiff.targetStatus)}`
             : undefined),
       };
     });
@@ -489,7 +513,10 @@ const SemesterCutoverCenter: React.FC = () => {
           state.evidence.targetManifestRevision === state.manifestRevision
             ? "PASS"
             : "STALE",
-        evidence: `검증 근거 ID ${state.evidence.evidenceId} · 의존성 해시 ${state.evidence.dependencyHash}`,
+        evidence:
+          state.evidence.targetManifestRevision === state.manifestRevision
+            ? "준비 학기의 현재 기준 버전과 최근 검증 결과가 일치합니다."
+            : "준비 학기의 기준 버전이 달라 다시 검증해야 합니다.",
       },
     ];
   }, [state]);

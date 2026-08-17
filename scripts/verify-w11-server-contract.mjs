@@ -39,8 +39,8 @@ const packageDocument = JSON.parse(
   readFileSync(resolve("package.json"), "utf8"),
 );
 
-const productionFenceIndex = runnerSource.indexOf(
-  "assert.notEqual(\n  projectId,\n  PRODUCTION_PROJECT_ID",
+const productionFenceIndex = runnerSource.search(
+  /assert\.notEqual\(\s*projectId,\s*PRODUCTION_PROJECT_ID/u,
 );
 const credentialImportIndex = runnerSource.indexOf(
   'createRequire(resolve("functions/package.json"))',

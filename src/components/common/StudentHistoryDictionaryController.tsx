@@ -50,9 +50,7 @@ const StudentHistoryDictionaryController: React.FC = () => {
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const isStudentRoute =
-    location.pathname.startsWith("/student") &&
-    !location.pathname.startsWith("/student/lesson/history-dictionary");
+  const isStudentRoute = location.pathname.startsWith("/student/lesson/note");
   const currentWord = word.trim();
   const normalizedCurrentWord = normalizeHistoryDictionaryWord(currentWord);
   const currentSavedWord = useMemo(

@@ -8,7 +8,7 @@ Westory는 중학교 수업 운영과 학생 학습 경험을 함께 담는 밝�
 
 Design Read: 교육 현장용 React 앱, 학생과 교사가 함께 쓰는 운영 UI, calm school utility 방향.
 
-- `DESIGN_VARIANCE`: 3/10. 기존 화면을 전면 재배치하지 않고 한 화면, 한 섹션, 한 패턴씩 개선한다.
+- `DESIGN_VARIANCE`: 4/10. W10R에서는 실패한 전역 Shell을 W5 이전의 상단 Navigation 기반으로 복구하되, 승인 전에는 5개 canonical screen과 공통 foundation만 변경한다.
 - `MOTION_INTENSITY`: 3/10. 상태 변화와 메뉴 전환은 빠르고 절제한다.
 - `VISUAL_DENSITY`: 학생 4/10, 교사 7/10. 학생은 한 열 흐름, 교사는 정보 밀도를 허용하되 구조를 선명하게 한다.
 
@@ -102,6 +102,10 @@ Layout tokens:
 - Teacher compact rail width: `--ws-teacher-rail-width: 72px`.
 - Teacher labeled sidebar width: `--ws-teacher-sidebar-width: 248px`.
 - Context panel width: `--ws-context-panel-width: 360px`.
+- Standard control height: `--ws-control-height: 44px`.
+- Compact teacher control height: `--ws-control-height-compact: 40px`; 보조 필터와 표 행 조작에만 사용한다.
+- Global navigation height: `--ws-global-nav-height: 48px`.
+- Contextual sidebar width: `--ws-context-sidebar-width: 224px`; 설정 또는 목록+상세 화면 내부에서만 사용한다.
 - Shell mobile gutter: `--ws-shell-gutter-mobile: 16px`.
 - Shell tablet gutter: `--ws-shell-gutter-tablet: 24px`.
 - Shell desktop gutter: `--ws-shell-gutter-desktop: 32px`.
@@ -114,12 +118,12 @@ Layout tokens:
 - Student page default: one column first.
 - Teacher page default: dense grid allowed only when labels, actions, and overflow remain clear.
 
-W5 shell breakpoints are behavioral contracts rather than device labels:
+W10R shell breakpoints are behavioral contracts rather than device labels:
 
-- Below `768px`: student bottom navigation, teacher app bar and one drawer, one-column content.
-- `768px` to `1023px`: student bottom navigation, teacher compact rail, full-width detail when selected.
-- `1024px` to `1279px`: student top navigation, teacher compact rail, controlled master-detail layout.
-- `1280px` and above: student top navigation, teacher labeled sidebar, wider data workspace.
+- Below `768px`: student bottom navigation, teacher app bar and one complete drawer, one-column content.
+- `768px` to `1023px`: student bottom navigation, teacher app bar and one complete drawer, full-width detail when selected.
+- `1024px` and above: student와 교사 모두 상단 global navigation을 사용한다. 전역 좌측 sidebar는 두지 않는다.
+- 설정 또는 목록+상세 화면 안의 contextual sidebar는 업무 관계가 분명할 때만 사용하며 전역 메뉴를 대신하지 않는다.
 - `1600px` and above: the workspace may add a context pane; reading content does not stretch merely to fill space.
 
 Only one responsive navigation variant may be mounted at a time. CSS-hidden duplicate navigation, notification, query, and listener instances are not allowed.
@@ -250,7 +254,7 @@ Depth strategy: light surfaces use borders first, then restrained shadows only w
 | `--shadow-danger` | `0 4px 10px rgba(239, 68, 68, 0.22)` | notification or danger badge |
 | `--shadow-accent` | `0 10px 24px rgba(146, 64, 14, 0.14)` | amber reward emphasis only |
 
-## Superloopy Frontend Gate
+## Frontend Verification
 
 For visible frontend work, use this sequence before editing UI code:
 
@@ -259,6 +263,6 @@ For visible frontend work, use this sequence before editing UI code:
 3. Add or adjust tokens here before writing new values in code.
 4. Run the anti-slop pre-flight: no generic purple glow, no unsupported font/palette drift, no hidden raw hex outside approved legacy areas, no unmanaged spacing.
 5. Capture real-browser evidence for changed screens at 390px, 768px, and 1280px when UI pixels change.
-6. Record evidence under `.superloopy/sessions/<session-id>/evidence/` or the active Superloopy evidence root.
+6. 화면 이름, route, 역할, viewport, DPR, commit SHA, 촬영 시각과 실제 PNG 크기를 screenshot manifest에 기록한다.
 
 No visible UI work is complete until the design contract and verification evidence agree.

@@ -1,7 +1,10 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import type { ShellNavigationItem } from "../../constants/routeMetadata";
-import { isNavigationItemActive } from "../../constants/routeMetadata";
+import {
+  getActiveNavigationItemId,
+  isNavigationChildActive,
+} from "../../constants/routeMetadata";
 import NavigationIcon from "./NavigationIcon";
 
 const FOCUSABLE =
@@ -19,6 +22,7 @@ const NavigationDrawer: React.FC<{
 }> = ({ open, onClose, title, items, pathname, search, mode, opener }) => {
   const drawerRef = React.useRef<HTMLDivElement | null>(null);
   const titleId = React.useId();
+  const activeItemId = getActiveNavigationItemId(items, pathname, search);
 
   React.useEffect(() => {
     if (!open) return undefined;
@@ -101,26 +105,48 @@ const NavigationDrawer: React.FC<{
         </div>
         <nav className="ws-nav-drawer__nav" aria-label={title}>
           {items.map((item) => {
-            const active = isNavigationItemActive(item, pathname, search);
+            const active = item.id === activeItemId;
+            const children = item.children || [];
+            const hasActiveChild = children.some((child) =>
+              isNavigationChildActive(child, children, pathname, search),
+            );
             return (
               <div key={item.id} className="ws-nav-drawer__group">
                 <Link
                   to={item.to}
                   className={`ws-nav-drawer__link ${active ? "is-active" : ""}`}
-                  aria-current={active ? "page" : undefined}
+                  aria-current={active && !hasActiveChild ? "page" : undefined}
                   onClick={onClose}
                 >
                   <NavigationIcon path={item.iconPath} />
                   <span>{item.label}</span>
                 </Link>
-                {item.children && mode === "student-more" && (
+                {children.length > 0 && (
                   <div className="ws-nav-drawer__children">
-                    {item.children.map((child) => (
-                      <Link key={child.to} to={child.to} onClick={onClose}>
-                        <strong>{child.label}</strong>
-                        {child.description && <span>{child.description}</span>}
-                      </Link>
-                    ))}
+                    {children.map((child, childIndex) => {
+                      const childActive =
+                        active &&
+                        isNavigationChildActive(
+                          child,
+                          children,
+                          pathname,
+                          search,
+                        );
+                      return (
+                        <Link
+                          key={`${child.to}:${child.label}:${childIndex}`}
+                          to={child.to}
+                          className={childActive ? "is-active" : undefined}
+                          aria-current={childActive ? "page" : undefined}
+                          onClick={onClose}
+                        >
+                          <strong>{child.label}</strong>
+                          {child.description && (
+                            <span>{child.description}</span>
+                          )}
+                        </Link>
+                      );
+                    })}
                   </div>
                 )}
               </div>

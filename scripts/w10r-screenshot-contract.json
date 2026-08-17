@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "phase": "W10R",
+  "projectId": "westory-staging-177587430482",
+  "stableAlias": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+  "requiredDpr": 1,
+  "requiredFullPage": false,
+  "viewports": [
+    { "width": 320, "height": 800 },
+    { "width": 390, "height": 844 },
+    { "width": 768, "height": 1024 },
+    { "width": 1024, "height": 768 },
+    { "width": 1280, "height": 800 },
+    { "width": 1440, "height": 900 }
+  ],
+  "screens": [
+    {
+      "id": "teacher-dashboard",
+      "role": "teacher",
+      "route": "/teacher/dashboard"
+    },
+    {
+      "id": "teacher-students",
+      "role": "teacher",
+      "route": "/teacher/students"
+    },
+    {
+      "id": "teacher-quiz-bank",
+      "role": "teacher",
+      "route": "/teacher/quiz?tab=bank"
+    },
+    {
+      "id": "teacher-cutover",
+      "role": "admin",
+      "route": "/teacher/settings/cutover"
+    },
+    {
+      "id": "student-today",
+      "role": "student",
+      "route": "/student/dashboard"
+    }
+  ]
+}

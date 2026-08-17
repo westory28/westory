@@ -578,10 +578,13 @@
       "path": "/teacher/lesson",
       "disposition": "REMOVE_LEGACY_UI",
       "sourceFile": "src/App.tsx",
-      "component": "LegacyRouteRedirect",
-      "reason": "Old UI mount is removed while the compatibility alias remains.",
-      "status": "ALIAS_PRESERVED_OLD_UI_MOUNT_ZERO",
-      "target": "/teacher/learning"
+        "component": "TeacherLessonLegacyRedirect",
+        "reason": "Old UI mount is removed while the compatibility alias resolves by the signed-in teacher's lesson capability.",
+        "status": "PERMISSION_AWARE_ALIAS_PRESERVED_OLD_UI_MOUNT_ZERO",
+        "targets": [
+          "/teacher/learning",
+          "/teacher/lesson/history-dictionary"
+        ]
     },
     {
       "id": "ROUTE-44",

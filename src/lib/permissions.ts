@@ -152,7 +152,8 @@ export const getDefaultTeacherRoute = (
   email?: string | null,
 ) => {
   if (canAccessTeacherDashboard(userData, email)) return "/teacher/dashboard";
-  if (canReadLessonManagement(userData, email)) return "/teacher/lesson";
+  if (canReadLessonManagement(userData, email))
+    return "/teacher/lesson/history-dictionary";
   if (canReadQuizManagement(userData, email)) return "/teacher/quiz?tab=log";
   if (canReadStudentList(userData, email)) return "/teacher/students";
   if (canReadPoints(userData, email)) return "/teacher/points";
@@ -174,6 +175,8 @@ export const canAccessTeacherPath = (
     pathname.startsWith("/teacher/attendance") ||
     pathname.startsWith("/teacher/communication")
   )
+    return canManageW8Domains(userData, email);
+  if (pathname.startsWith("/teacher/lesson/think-cloud"))
     return canManageW8Domains(userData, email);
   if (pathname.startsWith("/teacher/lesson"))
     return canReadLessonManagement(userData, email);

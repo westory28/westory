@@ -1,12 +1,18 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { collection, doc, getDoc, getDocs } from "firebase/firestore";
-import { db } from "../../lib/firebase";
-import MoveClassModal from "./components/MoveClassModal";
-import StudentDetailModal from "./components/StudentDetailModal";
+import ResponsiveDataContainer from "../../components/common/ResponsiveDataContainer";
+import StatePanel, {
+  type CommonUiState,
+} from "../../components/common/StatePanel";
+import { useAppDialog } from "../../components/common/AppDialogProvider";
+import { useAppToast } from "../../components/common/AppToastProvider";
 import { useAuth } from "../../contexts/AuthContext";
+import { db } from "../../lib/firebase";
 import { canEditStudentList } from "../../lib/permissions";
 import { deleteStudentData, updateStudentData } from "../../lib/studentData";
-import ResponsiveDataContainer from "../../components/common/ResponsiveDataContainer";
+import MoveClassModal from "./components/MoveClassModal";
+import StudentDetailModal from "./components/StudentDetailModal";
+import "../w8Domains.css";
 
 interface Student {
   id: string;
@@ -33,6 +39,11 @@ interface StudentPageGroup {
   key: string;
   label: string;
   students: Student[];
+}
+
+interface StudentListReadError {
+  state: Extract<CommonUiState, "ERROR" | "PERMISSION">;
+  message: string;
 }
 
 const normalizeOptionText = (value: unknown) => String(value ?? "").trim();
@@ -150,11 +161,36 @@ const getCorePointResetErrorMessage = (error: unknown) => {
   return "핵심포인트 초기화에 실패했습니다. 잠시 후 다시 시도해 주세요.";
 };
 
+const getStudentListReadError = (error: unknown): StudentListReadError => {
+  const code = String((error as { code?: string })?.code || "");
+  if (code.includes("permission-denied")) {
+    return {
+      state: "PERMISSION",
+      message:
+        "학생 명단을 볼 권한이 없습니다. 담당 관리자에게 명단 조회 권한을 확인해 주세요.",
+    };
+  }
+  if (code.includes("unavailable") || code.includes("deadline-exceeded")) {
+    return {
+      state: "ERROR",
+      message:
+        "네트워크 연결이 불안정해 학생 명단을 불러오지 못했습니다. 연결을 확인한 뒤 다시 시도해 주세요.",
+    };
+  }
+  return {
+    state: "ERROR",
+    message: "학생 명단을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+  };
+};
+
 const StudentList: React.FC = () => {
   const { userData, currentUser, config } = useAuth();
+  const { confirm: confirmAction } = useAppDialog();
+  const { showToast } = useAppToast();
   const [students, setStudents] = useState<Student[]>([]);
   const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
+  const [readError, setReadError] = useState<StudentListReadError | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
 
   const [gradeFilter, setGradeFilter] = useState("all");
@@ -211,6 +247,7 @@ const StudentList: React.FC = () => {
 
   const fetchStudents = async (options: { silent?: boolean } = {}) => {
     if (!options.silent) setLoading(true);
+    setReadError(null);
     try {
       const snap = await getDocs(collection(db, "users"));
       const list: Student[] = [];
@@ -291,6 +328,7 @@ const StudentList: React.FC = () => {
       setFilteredStudents(list);
     } catch (error) {
       console.error("Error fetching students:", error);
+      setReadError(getStudentListReadError(error));
     } finally {
       if (!options.silent) setLoading(false);
     }
@@ -430,9 +468,16 @@ const StudentList: React.FC = () => {
 
   const handleDelete = async (id: string) => {
     if (readOnly) return;
-    if (!window.confirm("정말 삭제하시겠습니까? (복구 불가)")) return;
     const target = students.find((student) => student.id === id);
     if (!target) return;
+    const confirmed = await confirmAction({
+      title: `${target.name} 학생을 삭제할까요?`,
+      message:
+        "학생 정보와 연결된 계정 데이터를 삭제합니다. 이 작업은 되돌릴 수 없습니다.",
+      confirmLabel: "학생 삭제",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     const previousStudents = students;
     const previousFilteredStudents = filteredStudents;
     setDeletingStudentIds((current) => new Set(current).add(id));
@@ -448,7 +493,11 @@ const StudentList: React.FC = () => {
       setStudents(previousStudents);
       setFilteredStudents(previousFilteredStudents);
       void fetchStudents({ silent: true });
-      alert(getStudentDeleteErrorMessage(error));
+      showToast({
+        tone: "error",
+        title: "학생을 삭제하지 못했습니다.",
+        message: getStudentDeleteErrorMessage(error),
+      });
     } finally {
       setDeletingStudentIds((current) => {
         const next = new Set(current);
@@ -460,10 +509,14 @@ const StudentList: React.FC = () => {
 
   const handleBulkDelete = async () => {
     if (readOnly) return;
-    if (
-      !window.confirm(`선택한 ${selectedIds.size}명을 정말 삭제하시겠습니까?`)
-    )
-      return;
+    const confirmed = await confirmAction({
+      title: `선택한 학생 ${selectedIds.size}명을 삭제할까요?`,
+      message:
+        "선택한 학생 정보와 연결된 계정 데이터를 차례로 삭제합니다. 이 작업은 되돌릴 수 없습니다.",
+      confirmLabel: `${selectedIds.size}명 삭제`,
+      tone: "danger",
+    });
+    if (!confirmed) return;
     const targets = Array.from(selectedIds)
       .map((id) => students.find((student) => student.id === id))
       .filter((student): student is Student => Boolean(student));
@@ -486,7 +539,11 @@ const StudentList: React.FC = () => {
       setStudents(previousStudents);
       setFilteredStudents(previousFilteredStudents);
       void fetchStudents({ silent: true });
-      alert(getStudentDeleteErrorMessage(error));
+      showToast({
+        tone: "error",
+        title: "선택한 학생을 모두 삭제하지 못했습니다.",
+        message: getStudentDeleteErrorMessage(error),
+      });
     } finally {
       setDeletingStudentIds(new Set());
     }
@@ -494,10 +551,13 @@ const StudentList: React.FC = () => {
 
   const handleBulkPromote = async () => {
     if (readOnly) return;
-    if (
-      !window.confirm(`선택한 ${selectedIds.size}명의 학년을 1 올리시겠습니까?`)
-    )
-      return;
+    const confirmed = await confirmAction({
+      title: `선택한 학생 ${selectedIds.size}명을 진급 처리할까요?`,
+      message: "선택한 학생의 학년을 각각 1학년씩 올립니다.",
+      confirmLabel: "진급 처리",
+      tone: "warning",
+    });
+    if (!confirmed) return;
     const targets = Array.from(selectedIds)
       .map((id) => students.find((student) => student.id === id))
       .filter((student): student is Student => Boolean(student))
@@ -560,15 +620,21 @@ const StudentList: React.FC = () => {
       setStudents(previousStudents);
       setFilteredStudents(previousFilteredStudents);
       void fetchStudents({ silent: true });
-      alert("진급 처리 중 오류가 발생했습니다.");
+      showToast({
+        tone: "error",
+        title: "진급 처리를 완료하지 못했습니다.",
+        message: "학생 명단을 새로고침한 뒤 다시 시도해 주세요.",
+      });
     }
   };
 
   const handleResetCorePoints = async (student: Student) => {
     if (readOnly || !isBangTestStudent(student)) return;
-    alert(
-      "이전 핵심포인트 초기화 기능은 종료되었습니다. 학습 운영 화면에서 학생의 학습 진행 기록을 확인해 주세요.",
-    );
+    showToast({
+      tone: "info",
+      title: "핵심포인트 초기화 기능이 종료되었습니다.",
+      message: "학습 운영 화면에서 학생의 학습 진행 기록을 확인해 주세요.",
+    });
   };
 
   const handleRefreshList = async () => {
@@ -580,231 +646,332 @@ const StudentList: React.FC = () => {
     await fetchStudents();
   };
 
+  const allPagedStudentsSelected =
+    pagedStudents.length > 0 &&
+    pagedStudents.every((student) => selectedIds.has(student.id));
+  const showRoster = !readError || students.length > 0;
+
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
-      <div className="mx-auto flex w-full max-w-6xl flex-1 animate-fadeIn flex-col px-3 py-6">
-        <div className="flex min-h-[600px] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-          <div className="flex flex-col items-start justify-between gap-3 border-b bg-gray-50 p-5 md:flex-row md:items-center">
-            <h2 className="whitespace-nowrap text-lg font-bold text-gray-800">
-              <i className="fas fa-users mr-2 text-blue-500"></i> 학생 명단
-              <span className="ml-2 text-sm font-normal text-gray-500">
-                ({filteredStudents.length}명)
-              </span>
-            </h2>
+    <section
+      className="w8-domain-page student-roster"
+      aria-label="학생과 학급 명단"
+    >
+      {readOnly && (
+        <p className="student-roster__notice" role="status">
+          읽기 전용 권한입니다. 학생 정보는 확인할 수 있지만 수정하거나 삭제할
+          수 없습니다.
+        </p>
+      )}
+
+      <section
+        className="student-roster__controls"
+        aria-labelledby="student-roster-filter-title"
+      >
+        <div className="student-roster__section-heading">
+          <div>
+            <h2 id="student-roster-filter-title">학생 찾기</h2>
+            <p>학년과 반을 고르거나 이름·이메일로 검색하세요.</p>
           </div>
+          <span className="student-roster__count" aria-live="polite">
+            {filteredStudents.length.toLocaleString("ko-KR")}명
+          </span>
+        </div>
 
-          <div className="flex flex-col items-center justify-between gap-3 border-b border-gray-100 p-5 md:flex-row">
-            {readOnly && (
-              <div className="w-full rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-700">
-                읽기 전용 권한입니다. 학생 명단 조회만 가능합니다.
-              </div>
-            )}
-            <div className="flex w-full items-center gap-2 overflow-x-auto md:w-auto">
-              <select
-                aria-label="학년 필터"
-                value={gradeFilter}
-                onChange={(e) => setGradeFilter(e.target.value)}
-                className="min-h-11 rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700 focus:border-blue-500 focus:outline-none"
-              >
-                <option value="all">전체 학년</option>
-                {gradeOptions.map((grade) => (
-                  <option key={grade.value} value={grade.value}>
-                    {grade.label}
-                  </option>
-                ))}
-              </select>
-              <select
-                aria-label="반 필터"
-                value={classFilter}
-                onChange={(e) => setClassFilter(e.target.value)}
-                className="min-h-11 rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700 focus:border-blue-500 focus:outline-none"
-              >
-                <option value="all">전체 반</option>
-                {classOptions.map((cls) => (
-                  <option key={cls.value} value={cls.value}>
-                    {cls.label}
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={() => void handleRefreshList()}
-                aria-label="명단 새로고침 및 필터 초기화"
-                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-600 transition hover:border-blue-500 hover:text-blue-600"
-                title="명단 새로고침 및 필터 초기화"
-              >
-                <i
-                  className={`fas fa-sync-alt ${loading ? "animate-spin" : ""}`}
-                ></i>
-              </button>
-            </div>
+        <form
+          className="student-roster__filter-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            applyFilters();
+          }}
+        >
+          <label className="student-roster__field">
+            <span>학년</span>
+            <select
+              value={gradeFilter}
+              onChange={(event) => setGradeFilter(event.target.value)}
+            >
+              <option value="all">전체 학년</option>
+              {gradeOptions.map((grade) => (
+                <option key={grade.value} value={grade.value}>
+                  {grade.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="student-roster__field">
+            <span>반</span>
+            <select
+              value={classFilter}
+              onChange={(event) => setClassFilter(event.target.value)}
+            >
+              <option value="all">전체 반</option>
+              {classOptions.map((cls) => (
+                <option key={cls.value} value={cls.value}>
+                  {cls.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="student-roster__field student-roster__field--search">
+            <span>이름 또는 이메일</span>
+            <input
+              type="search"
+              placeholder="검색어 입력"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+            />
+          </label>
+          <button type="submit" className="w8-button">
+            검색
+          </button>
+          <button
+            type="button"
+            className="w8-button w8-button--secondary"
+            onClick={() => void handleRefreshList()}
+            disabled={loading}
+          >
+            {loading ? "새로고침 중" : "초기화·새로고침"}
+          </button>
+        </form>
+      </section>
 
-            <div className="flex w-full gap-2 md:w-auto">
-              <input
-                type="text"
-                aria-label="학생 이름 또는 이메일 검색"
-                placeholder="이름 또는 이메일 검색"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="min-h-11 flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none md:w-64"
-              />
-              <button
-                onClick={applyFilters}
-                className="min-h-11 whitespace-nowrap rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
-              >
-                <i className="fas fa-search mr-1"></i>검색
-              </button>
+      {readError && (
+        <StatePanel
+          state={readError.state}
+          compact
+          headingLevel={2}
+          title={
+            students.length > 0 ? "명단을 새로고침하지 못했습니다." : undefined
+          }
+          description={readError.message}
+          action={
+            readError.state === "ERROR"
+              ? { label: "다시 불러오기", onClick: () => void fetchStudents() }
+              : undefined
+          }
+          retryable={readError.state === "ERROR"}
+          contactAdmin={readError.state === "PERMISSION"}
+        />
+      )}
+
+      {!readOnly && selectedIds.size > 0 && (
+        <section
+          className="student-roster__bulk"
+          aria-label={`선택한 학생 ${selectedIds.size}명 일괄 작업`}
+        >
+          <div className="student-roster__bulk-copy">
+            <strong>{selectedIds.size.toLocaleString("ko-KR")}명 선택됨</strong>
+            <span>선택한 학생에게 적용할 작업을 고르세요.</span>
+          </div>
+          <div className="student-roster__bulk-actions">
+            <button
+              type="button"
+              className="w8-button"
+              onClick={() => void handleBulkPromote()}
+            >
+              1학년 진급
+            </button>
+            <button
+              type="button"
+              className="w8-button w8-button--secondary"
+              onClick={() => setMoveClassModalOpen(true)}
+            >
+              반 이동
+            </button>
+            <button
+              type="button"
+              className="w8-button w8-button--danger"
+              onClick={() => void handleBulkDelete()}
+              disabled={deletingStudentIds.size > 0}
+            >
+              {deletingStudentIds.size > 0 ? "학생 삭제 중" : "학생 삭제"}
+            </button>
+            <button
+              type="button"
+              className="w8-button w8-button--secondary"
+              onClick={() => setSelectedIds(new Set())}
+            >
+              선택 해제
+            </button>
+          </div>
+        </section>
+      )}
+
+      {showRoster && (
+        <section
+          className="student-roster__table-section"
+          aria-labelledby="student-roster-result-title"
+          aria-busy={loading}
+        >
+          <div className="student-roster__section-heading">
+            <div>
+              <h2 id="student-roster-result-title">조회 결과</h2>
+              <p>
+                {currentPageGroup
+                  ? `${currentPageGroup.label} 학생을 표시하고 있습니다.`
+                  : "현재 조건에 맞는 학생을 표시합니다."}
+              </p>
             </div>
           </div>
 
           <ResponsiveDataContainer
-            className="flex-1"
+            className="student-roster__table-shell"
             label="학생 명단과 관리 작업"
+            description="좁은 화면에서는 표를 좌우로 이동해 모든 항목을 확인할 수 있습니다."
           >
-            <table className="w-full min-w-[680px] text-left text-sm md:min-w-0">
-              <thead className="bg-gray-100 text-xs font-bold uppercase text-gray-600">
+            <table className="student-roster__table">
+              <caption className="w8-visually-hidden">
+                현재 필터에 맞는 학생 명단
+              </caption>
+              <thead>
                 <tr>
-                  <th className="w-10 p-4 text-center">
-                    <input
-                      type="checkbox"
-                      aria-label="현재 학생 목록 전체 선택"
-                      onChange={(e) => handleSelectAll(e.target.checked)}
-                      checked={
-                        pagedStudents.length > 0 &&
-                        pagedStudents.every((student) =>
-                          selectedIds.has(student.id),
-                        )
-                      }
-                      className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500"
-                    />
+                  <th scope="col" className="student-roster__select-column">
+                    <label className="student-roster__checkbox">
+                      <input
+                        type="checkbox"
+                        aria-label="현재 페이지 학생 전체 선택"
+                        onChange={(event) =>
+                          handleSelectAll(event.target.checked)
+                        }
+                        checked={allPagedStudentsSelected}
+                        disabled={readOnly || pagedStudents.length === 0}
+                      />
+                    </label>
                   </th>
-                  <th className="w-16 p-4 text-center">학년</th>
-                  <th className="w-16 p-4 text-center">반</th>
-                  <th className="w-16 p-4 text-center">번호</th>
-                  <th className="w-32 p-4">이름</th>
-                  <th className="hidden w-64 p-4 lg:table-cell">이메일</th>
-                  <th className="w-64 p-4 text-center">관리</th>
+                  <th scope="col" className="student-roster__short-column">
+                    학년
+                  </th>
+                  <th scope="col" className="student-roster__short-column">
+                    반
+                  </th>
+                  <th scope="col" className="student-roster__short-column">
+                    번호
+                  </th>
+                  <th scope="col" className="student-roster__name-column">
+                    이름
+                  </th>
+                  <th scope="col" className="student-roster__email-column">
+                    이메일
+                  </th>
+                  <th scope="col" className="student-roster__actions-column">
+                    관리
+                  </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 bg-white">
+              <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={7} className="p-10 text-center text-gray-400">
-                      데이터를 불러오는 중...
+                    <td colSpan={7} className="student-roster__table-state">
+                      학생 명단을 불러오고 있습니다.
                     </td>
                   </tr>
                 ) : filteredStudents.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="p-10 text-center text-gray-400">
-                      학생 데이터가 없습니다.
+                    <td colSpan={7} className="student-roster__table-state">
+                      {students.length === 0
+                        ? "아직 등록된 학생이 없습니다."
+                        : "검색 조건에 맞는 학생이 없습니다. 필터를 바꿔 보세요."}
                     </td>
                   </tr>
                 ) : (
                   pagedStudents.map((student) => (
-                    <tr
-                      key={student.id}
-                      className="group transition hover:bg-blue-50"
-                    >
-                      <td className="p-4 text-center">
-                        <input
-                          type="checkbox"
-                          aria-label={`${student.name || "이름 없음"} 학생 선택`}
-                          checked={selectedIds.has(student.id)}
-                          onChange={() => handleSelect(student.id)}
-                          className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500"
-                        />
+                    <tr key={student.id}>
+                      <td className="student-roster__select-column">
+                        <label className="student-roster__checkbox">
+                          <input
+                            type="checkbox"
+                            aria-label={`${student.name || "이름 없음"} 학생 선택`}
+                            checked={selectedIds.has(student.id)}
+                            onChange={() => handleSelect(student.id)}
+                            disabled={readOnly}
+                          />
+                        </label>
                       </td>
-                      <td className="p-4 text-center font-bold text-gray-700">
+                      <td className="student-roster__short-column">
                         {getGradeLabel(student.grade)}
                       </td>
-                      <td className="p-4 text-center font-bold text-gray-600">
+                      <td className="student-roster__short-column">
                         {getClassLabel(student.class)}
                       </td>
-                      <td className="p-4 text-center font-bold text-gray-600">
+                      <td className="student-roster__short-column">
                         {student.number}
                       </td>
-                      <td className="whitespace-nowrap p-4">
+                      <td className="student-roster__name-column">
                         <button
+                          type="button"
+                          className="student-roster__name-button"
                           onClick={() => {
                             setSelectedStudent(student);
                             setDetailInitialTab("summary");
                             setDetailModalOpen(true);
                           }}
                           title="학생 학습 현황 보기"
-                          className="min-h-11 w-full text-left font-bold text-gray-800 hover:text-blue-600 hover:underline group-hover:text-blue-600"
                         >
-                          <span className="flex items-center">
-                            <span>{student.name || "(이름 없음)"}</span>
-                            <i className="fas fa-folder-open ml-2 text-xs text-gray-300 group-hover:text-blue-400"></i>
-                          </span>
+                          <strong>{student.name || "(이름 없음)"}</strong>
                           {!student.name && (
-                            <span className="mt-1 font-mono text-xs font-normal text-gray-500 group-hover:text-blue-500">
-                              {getStudentIdentityLabel(student)}
-                            </span>
+                            <span>{getStudentIdentityLabel(student)}</span>
                           )}
+                          <span className="student-roster__email-inline">
+                            {student.email || "이메일 없음"}
+                          </span>
                         </button>
                       </td>
-                      <td className="hidden p-4 font-mono text-xs text-gray-500 lg:table-cell">
-                        {student.email}
+                      <td className="student-roster__email-column">
+                        <span className="student-roster__email">
+                          {student.email || "-"}
+                        </span>
                       </td>
-                      <td className="p-4 text-center">
-                        <div className="flex flex-wrap justify-center gap-1">
-                          {!readOnly && (
-                            <>
+                      <td className="student-roster__actions-column">
+                        {readOnly ? (
+                          <span className="student-roster__readonly-label">
+                            조회 전용
+                          </span>
+                        ) : (
+                          <div className="student-roster__row-actions">
+                            <button
+                              type="button"
+                              className="student-roster__action"
+                              onClick={() => {
+                                setSelectedStudent(student);
+                                setDetailInitialTab("profile");
+                                setDetailModalOpen(true);
+                              }}
+                              aria-label={`${student.name || "이름 없음"} 학생 정보 수정`}
+                            >
+                              수정
+                            </button>
+                            <button
+                              type="button"
+                              className="student-roster__action student-roster__action--danger"
+                              onClick={() => void handleDelete(student.id)}
+                              disabled={deletingStudentIds.has(student.id)}
+                              aria-label={`${student.name || "이름 없음"} 학생 정보 삭제`}
+                              title={
+                                student.isTeacherAccount
+                                  ? "학생 정보만 삭제"
+                                  : "학생 정보 삭제"
+                              }
+                            >
+                              {deletingStudentIds.has(student.id)
+                                ? "삭제 중"
+                                : "삭제"}
+                            </button>
+                            {isBangTestStudent(student) && (
                               <button
-                                onClick={() => {
-                                  setSelectedStudent(student);
-                                  setDetailInitialTab("profile");
-                                  setDetailModalOpen(true);
-                                }}
-                                aria-label={`${student.name || "이름 없음"} 학생 정보 수정`}
-                                className="flex min-h-11 min-w-11 items-center justify-center gap-1 rounded bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-blue-600 transition hover:bg-blue-100"
-                                title="수정"
-                              >
-                                <i className="fas fa-edit"></i>
-                                <span className="hidden lg:inline">수정</span>
-                              </button>
-                              <button
-                                onClick={() => void handleDelete(student.id)}
-                                disabled={deletingStudentIds.has(student.id)}
-                                aria-label={`${student.name || "이름 없음"} 학생 정보 삭제`}
-                                className="flex min-h-11 min-w-11 items-center justify-center gap-1 rounded bg-red-50 px-2.5 py-1.5 text-xs font-bold text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
-                                title={
-                                  student.isTeacherAccount
-                                    ? "학생 정보만 삭제"
-                                    : "삭제"
+                                type="button"
+                                className="student-roster__action student-roster__action--accent"
+                                onClick={() =>
+                                  void handleResetCorePoints(student)
                                 }
+                                disabled={resettingCorePointStudentIds.has(
+                                  student.id,
+                                )}
                               >
-                                <i className="fas fa-trash"></i>
-                                <span className="hidden lg:inline">삭제</span>
+                                학습 기록 안내
                               </button>
-                              {isBangTestStudent(student) && (
-                                <button
-                                  onClick={() =>
-                                    void handleResetCorePoints(student)
-                                  }
-                                  disabled={resettingCorePointStudentIds.has(
-                                    student.id,
-                                  )}
-                                  className="flex items-center gap-1 rounded bg-amber-50 px-2.5 py-1.5 text-xs font-bold text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
-                                  title="방테스트 핵심포인트 클릭 기록 초기화"
-                                >
-                                  <i
-                                    className={`fas ${
-                                      resettingCorePointStudentIds.has(
-                                        student.id,
-                                      )
-                                        ? "fa-spinner fa-spin"
-                                        : "fa-undo"
-                                    }`}
-                                  ></i>
-                                  <span className="hidden lg:inline">
-                                    핵심초기화
-                                  </span>
-                                </button>
-                              )}
-                            </>
-                          )}
-                        </div>
+                            )}
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))
@@ -814,100 +981,53 @@ const StudentList: React.FC = () => {
           </ResponsiveDataContainer>
 
           {!loading && studentPageGroups.length > 1 && (
-            <div className="flex flex-wrap items-center justify-center gap-2 border-t border-gray-100 bg-white px-5 py-3">
-              {currentPageGroup && (
-                <span className="mr-1 text-xs font-bold text-gray-500">
-                  현재 {currentPageGroup.label}
-                </span>
-              )}
-              <div className="flex flex-wrap justify-center gap-1.5">
+            <nav
+              className="student-roster__pagination"
+              aria-label="학급별 학생 명단 페이지"
+            >
+              {currentPageGroup && <span>현재 {currentPageGroup.label}</span>}
+              <div className="student-roster__pages">
                 {studentPageGroups.map((group, index) => {
                   const page = index + 1;
                   return (
                     <button
                       key={group.key}
+                      type="button"
                       onClick={() => setCurrentPage(page)}
                       title={`${page}페이지: ${group.label}`}
                       aria-label={`${page}페이지, ${group.label}`}
-                      className={`h-11 min-w-11 rounded-md px-2 text-xs font-bold transition ${currentPage === page ? "bg-blue-600 text-white shadow-sm" : "bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-blue-600"}`}
+                      aria-current={currentPage === page ? "page" : undefined}
                     >
                       {page}
                     </button>
                   );
                 })}
               </div>
-            </div>
+            </nav>
           )}
-        </div>
+        </section>
+      )}
 
-        {!readOnly && selectedIds.size > 0 && (
-          <div className="fixed bottom-4 left-1/2 z-40 flex w-[calc(100%-1rem)] max-w-[720px] -translate-x-1/2 animate-slideUp flex-wrap items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-3 py-2.5 shadow-2xl md:bottom-8 md:w-auto md:flex-nowrap md:gap-4 md:rounded-full md:px-6 md:py-3">
-            <div className="flex items-center justify-center gap-2 whitespace-nowrap leading-tight">
-              <span className="rounded-full bg-blue-600 px-2 py-0.5 text-xs font-bold text-white">
-                {selectedIds.size}명
-              </span>
-              <span className="text-xs font-bold text-gray-700">선택됨</span>
-            </div>
-            <div className="hidden h-4 w-px bg-gray-300 md:block"></div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => void handleBulkPromote()}
-                className="flex items-center gap-1 rounded-lg px-3 py-2 text-blue-600 transition hover:bg-gray-100"
-              >
-                <i className="fas fa-level-up-alt"></i>
-                <span className="text-[11px] font-bold md:text-xs">진급</span>
-              </button>
-              <button
-                onClick={() => setMoveClassModalOpen(true)}
-                className="flex items-center gap-1 rounded-lg px-3 py-2 text-green-600 transition hover:bg-gray-100"
-              >
-                <i className="fas fa-exchange-alt"></i>
-                <span className="text-[11px] font-bold md:text-xs">
-                  반 이동
-                </span>
-              </button>
-              <button
-                onClick={() => void handleBulkDelete()}
-                disabled={deletingStudentIds.size > 0}
-                className="flex items-center gap-1 rounded-lg px-3 py-2 text-red-600 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <i className="fas fa-trash"></i>
-                <span className="text-[11px] font-bold md:text-xs">
-                  {deletingStudentIds.size > 0 ? "삭제 중" : "삭제"}
-                </span>
-              </button>
-            </div>
-            <div className="hidden h-4 w-px bg-gray-300 md:block"></div>
-            <button
-              onClick={() => setSelectedIds(new Set())}
-              className="p-1 text-gray-400 transition hover:text-gray-600"
-            >
-              <i className="fas fa-times"></i>
-            </button>
-          </div>
-        )}
+      <StudentDetailModal
+        isOpen={detailModalOpen}
+        onClose={() => setDetailModalOpen(false)}
+        student={selectedStudent}
+        onUpdate={fetchStudents}
+        readOnly={readOnly}
+        initialTab={detailInitialTab}
+      />
 
-        <StudentDetailModal
-          isOpen={detailModalOpen}
-          onClose={() => setDetailModalOpen(false)}
-          student={selectedStudent}
-          onUpdate={fetchStudents}
-          readOnly={readOnly}
-          initialTab={detailInitialTab}
-        />
-
-        <MoveClassModal
-          isOpen={!readOnly && moveClassModalOpen}
-          onClose={() => setMoveClassModalOpen(false)}
-          selectedIds={selectedIds}
-          students={students}
-          onComplete={() => {
-            setSelectedIds(new Set());
-            void fetchStudents({ silent: true });
-          }}
-        />
-      </div>
-    </div>
+      <MoveClassModal
+        isOpen={!readOnly && moveClassModalOpen}
+        onClose={() => setMoveClassModalOpen(false)}
+        selectedIds={selectedIds}
+        students={students}
+        onComplete={() => {
+          setSelectedIds(new Set());
+          void fetchStudents({ silent: true });
+        }}
+      />
+    </section>
   );
 };
 

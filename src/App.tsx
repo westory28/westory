@@ -7,7 +7,7 @@ import {
   useLocation,
   useNavigate,
 } from "react-router-dom";
-import { AuthProvider } from "./contexts/AuthContext";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import MainLayout from "./components/layout/MainLayout";
 import { AppToastProvider } from "./components/common/AppToastProvider";
 import { AppDialogProvider } from "./components/common/AppDialogProvider";
@@ -16,6 +16,7 @@ import ProtectedAccessGate from "./components/auth/ProtectedAccessGate";
 import StudentMaintenanceGate from "./components/auth/StudentMaintenanceGate";
 import StatePanel from "./components/common/StatePanel";
 import { lazyWithRetry } from "./lib/lazyWithRetry";
+import { canManageW8Domains, canReadLessonManagement } from "./lib/permissions";
 
 const Login = lazyWithRetry(() => import("./pages/Login"), "login");
 const Maintenance = lazyWithRetry(
@@ -147,6 +148,22 @@ const LegacyRouteRedirect: React.FC<{ to: string }> = ({ to }) => {
   });
   const search = params.toString();
   return <Navigate to={`${pathname}${search ? `?${search}` : ""}`} replace />;
+};
+
+const TeacherLessonLegacyRedirect: React.FC = () => {
+  const { currentUser, userData, loading } = useAuth();
+  if (loading) {
+    return (
+      <RouteContentFallback message="이전 수업 주소를 확인하는 중입니다." />
+    );
+  }
+  const email = currentUser?.email || "";
+  const target = canManageW8Domains(userData, email)
+    ? "/teacher/learning"
+    : canReadLessonManagement(userData, email)
+      ? "/teacher/lesson/history-dictionary"
+      : "/";
+  return <LegacyRouteRedirect to={target} />;
 };
 
 const RouteContentFallback: React.FC<{ message?: string }> = ({ message }) => (
@@ -369,7 +386,7 @@ const App: React.FC = () => {
                     />
                     <Route
                       path="/teacher/lesson"
-                      element={<LegacyRouteRedirect to="/teacher/learning" />}
+                      element={<TeacherLessonLegacyRedirect />}
                     />
                     <Route
                       path="/teacher/lesson/history-dictionary"

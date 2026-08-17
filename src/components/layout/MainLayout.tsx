@@ -44,7 +44,6 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
   const isStudentRoute = location.pathname.startsWith("/student");
   const isTeacherRoute = location.pathname.startsWith("/teacher");
-  const isStudentQuizRunRoute = location.pathname === "/student/quiz/run";
   const canUseTeacherPatchMemo = Boolean(
     currentUser && isTeacherRoute && isTeacherUser(userData, currentUser.email),
   );
@@ -176,13 +175,7 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           <TeacherPatchMemoController />
         </React.Suspense>
       )}
-      <div
-        className={`min-h-0 w-full flex-1 ${
-          isStudentQuizRunRoute ? "flex flex-col" : ""
-        }`}
-      >
-        {children}
-      </div>
+      <div className="flex min-h-0 w-full flex-1 flex-col">{children}</div>
     </AppShell>
   );
 };

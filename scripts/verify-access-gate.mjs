@@ -36,6 +36,14 @@ try {
   );
   assert.match(appSource, /LegacyRouteRedirect to="\/student\/quiz"/);
   assert.match(appSource, /LegacyRouteRedirect to="\/teacher\/quiz"/);
+  assert.match(
+    appSource,
+    /path="\/teacher\/lesson"[\s\S]*?TeacherLessonLegacyRedirect/,
+  );
+  assert.match(
+    appSource,
+    /const TeacherLessonLegacyRedirect[\s\S]*canManageW8Domains[\s\S]*"\/teacher\/learning"[\s\S]*canReadLessonManagement[\s\S]*"\/teacher\/lesson\/history-dictionary"/,
+  );
   assert.match(loginSource, /runtimeEnvironment === "staging"/);
   assert.match(loginSource, /signInWithEmailAndPassword/);
   assert.match(headerSource, /runtimeEnvironment === "staging"/);
@@ -46,6 +54,9 @@ try {
   );
   const { ProtectedAccessBoundary } = await server.ssrLoadModule(
     "/src/components/auth/ProtectedAccessBoundary.tsx",
+  );
+  const { getDefaultTeacherRoute } = await server.ssrLoadModule(
+    "/src/lib/permissions.ts",
   );
 
   const profile = (uid, role, extras = {}) => ({
@@ -165,6 +176,19 @@ try {
       pathname: "/teacher/lesson",
     }).status,
     "AUTHORIZED",
+  );
+  assert.equal(
+    getDefaultTeacherRoute(staffProfile, staffProfile.email),
+    "/teacher/lesson/history-dictionary",
+  );
+  assert.equal(
+    decide({
+      uid: "staff-1",
+      email: "staff-1@yongshin-ms.ms.kr",
+      userData: staffProfile,
+      pathname: "/teacher/lesson/think-cloud",
+    }).status,
+    "UNAUTHORIZED",
   );
   assert.equal(
     decide({

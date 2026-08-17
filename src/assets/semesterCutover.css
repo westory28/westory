@@ -111,6 +111,10 @@
   line-height: 1.55;
 }
 
+.ws-semester-source > .ws-cutover-status {
+  justify-self: start;
+}
+
 .ws-semester-source__metadata {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -277,32 +281,38 @@
   gap: var(--space-2);
 }
 
-.ws-cutover-recovery {
-  margin-top: var(--space-5);
-  border-top: 1px solid var(--ws-border-soft);
-  padding-top: var(--space-4);
-}
-
-.ws-cutover-recovery h3,
-.ws-cutover-recovery p {
-  margin: 0;
-}
-
-.ws-cutover-recovery h3 {
-  color: var(--ws-text-strong);
-  font-size: var(--ws-type-card-title, 1rem);
-  font-weight: 800;
-}
-
-.ws-cutover-recovery > p {
-  margin-top: var(--space-1);
-  color: var(--ws-text-muted);
-  font-size: var(--ws-type-small, 0.875rem);
-  line-height: 1.55;
-}
-
 .ws-cutover-actions--recovery {
-  margin-top: var(--space-3);
+  border: 1px solid var(--ws-danger-soft);
+  border-radius: var(--radius-lg);
+  background: var(--ws-surface-subtle);
+  padding: var(--space-3);
+}
+
+.ws-cutover-evidence {
+  margin-top: var(--space-2);
+  color: var(--ws-text-muted);
+  font-size: var(--ws-type-meta, 0.72rem);
+}
+
+.ws-cutover-evidence summary {
+  display: inline-flex;
+  min-height: var(--ws-control-height, 44px);
+  align-items: center;
+  color: var(--ws-primary-text);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.ws-cutover-evidence summary:focus-visible {
+  border-radius: var(--radius-sm);
+  outline: 3px solid var(--ws-ring);
+  outline-offset: 2px;
+}
+
+.ws-cutover-evidence span {
+  display: block;
+  margin-top: var(--space-1);
+  overflow-wrap: anywhere;
 }
 
 .ws-cutover-action-notes,
@@ -523,6 +533,7 @@
 .ws-cutover-status--fail,
 .ws-cutover-status--failed,
 .ws-cutover-status--partial,
+.ws-cutover-status--partial-shell,
 .ws-cutover-status--blocked,
 .ws-cutover-status--stale {
   border-color: color-mix(in srgb, var(--ws-danger) 28%, var(--ws-border));
@@ -591,6 +602,10 @@
   .ws-cutover-section--datasets,
   .ws-cutover-section--attempts {
     grid-column: 2;
+  }
+
+  .ws-cutover-section--recovery {
+    grid-column: 1 / -1;
   }
 }
 

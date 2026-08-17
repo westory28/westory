@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import ProvenanceBadge from "../../components/common/ProvenanceBadge";
 import StatePanel from "../../components/common/StatePanel";
 import W8ReadOnlyState from "../../components/common/W8ReadOnlyState";
 import W8StatusBadge from "../../components/common/W8StatusBadge";
 import { useAuth } from "../../contexts/AuthContext";
+import { getStudentRouteAccess } from "../../lib/studentMenuAccess";
 import {
   W8DomainError,
   formatW8DateTime,
@@ -16,7 +16,7 @@ import { getWisEconomyState, type WisEconomyState } from "../../lib/wisEconomy";
 import "../w8Domains.css";
 
 const Dashboard: React.FC = () => {
-  const { config, configReady, currentUser, userData } = useAuth();
+  const { config, configReady, currentUser, menuConfig } = useAuth();
   const [state, setState] = useState<W8DomainState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<W8DomainError | null>(null);
@@ -72,18 +72,24 @@ const Dashboard: React.FC = () => {
   if (!state) return null;
 
   const summary = state.dashboard;
+  const learningAccess = getStudentRouteAccess(
+    { pathname: "/student/learning" },
+    config,
+    menuConfig,
+  );
+  const pointsRankingAccess = getStudentRouteAccess(
+    { pathname: "/student/points", search: "?tab=ranking" },
+    config,
+    menuConfig,
+  );
+  const myWisRank = wis?.account
+    ? wis.rankings.find((row) => row.accountId === wis.account?.accountId)?.rank
+    : null;
   return (
-    <section className="w8-domain-page" aria-labelledby="student-today-title">
-      <header className="w8-domain-page__header">
-        <div>
-          <h2 id="student-today-title">
-            {userData?.name ? `${userData.name} 학생의 오늘` : "오늘"}
-          </h2>
-          <p>오늘 확인할 학습과 일정, 공지를 차례로 살펴보세요.</p>
-          <span className="w8-semester-label">{state.semesterId} 학기</span>
-        </div>
-        <ProvenanceBadge value={state.provenance} readOnly={state.readOnly} />
-      </header>
+    <section
+      className="w8-domain-page w8-dashboard-page w8-student-today"
+      aria-label="오늘 학습 내용"
+    >
       <W8ReadOnlyState state={state} />
       {error && (
         <StatePanel
@@ -94,13 +100,15 @@ const Dashboard: React.FC = () => {
         />
       )}
 
-      <div className="w8-today-grid">
-        <section className="w8-panel">
+      <div className="w8-today-grid w8-today-grid--student">
+        <section className="w8-panel w8-student-today__primary">
           <div className="w8-panel__heading">
             <h2>이어 할 학습</h2>
-            <Link className="w8-text-link" to="/student/learning">
-              전체 학습
-            </Link>
+            {learningAccess.allowed && (
+              <Link className="w8-text-link" to="/student/learning">
+                전체 학습
+              </Link>
+            )}
           </div>
           {summary.upcomingLearning.length === 0 ? (
             <StatePanel
@@ -110,51 +118,50 @@ const Dashboard: React.FC = () => {
             />
           ) : (
             <ul className="w8-list">
-              {summary.upcomingLearning.slice(0, 3).map((content) => (
-                <li key={content.contentId} className="w8-list__row">
-                  <span className="w8-list__copy">
-                    <strong>{content.title}</strong>
-                    <span>{content.summary}</span>
-                  </span>
-                  <W8StatusBadge value={content.status} />
-                </li>
-              ))}
+              {summary.upcomingLearning.slice(0, 3).map((content) => {
+                const search = `?id=${encodeURIComponent(content.contentId)}`;
+                const contentAccess = getStudentRouteAccess(
+                  { pathname: "/student/learning", search },
+                  config,
+                  menuConfig,
+                );
+                return (
+                  <li
+                    key={content.contentId}
+                    className="w8-list__row w8-list__row--linked"
+                  >
+                    {contentAccess.allowed ? (
+                      <Link
+                        className="w8-list__primary-link"
+                        to={`/student/learning${search}`}
+                      >
+                        <strong>{content.title}</strong>
+                        <span>
+                          {content.summary || "학습 내용을 확인합니다."}
+                        </span>
+                        <span className="w8-list__link-label">
+                          이어서 학습하기
+                        </span>
+                      </Link>
+                    ) : (
+                      <div
+                        className="w8-list__primary-link"
+                        aria-disabled="true"
+                      >
+                        <strong>{content.title}</strong>
+                        <span>
+                          {content.summary || "학습 내용을 확인합니다."}
+                        </span>
+                        <span className="w8-list__link-label">
+                          현재 이용할 수 없습니다.
+                        </span>
+                      </div>
+                    )}
+                    <W8StatusBadge value={content.status} />
+                  </li>
+                );
+              })}
             </ul>
-          )}
-        </section>
-
-        <section className="w8-panel">
-          <div className="w8-panel__heading">
-            <h2>내 위스</h2>
-            <Link className="w8-text-link" to="/student/points">
-              위스 화면
-            </Link>
-          </div>
-          {wis?.account ? (
-            <div className="w8-wis-summary">
-              <strong>
-                {wis.account.balance.toLocaleString("ko-KR")} 위스
-              </strong>
-              <span>
-                {wis.rankings.find(
-                  (row) => row.accountId === wis.account?.accountId,
-                )?.rank
-                  ? `이번 학기 ${wis.rankings.find((row) => row.accountId === wis.account?.accountId)?.rank}위`
-                  : "순위 집계 전"}
-              </span>
-              <Link
-                className="w8-button w8-button--secondary"
-                to="/student/points?tab=ranking"
-              >
-                이번 학기 순위
-              </Link>
-            </div>
-          ) : (
-            <StatePanel
-              state="EMPTY"
-              compact
-              title="이번 학기 위스가 아직 열리지 않았습니다."
-            />
           )}
         </section>
 
@@ -190,19 +197,6 @@ const Dashboard: React.FC = () => {
 
         <section className="w8-panel">
           <div className="w8-panel__heading">
-            <h2>출석 상태</h2>
-            <Link className="w8-text-link" to="/student/attendance">
-              출석 기록
-            </Link>
-          </div>
-          <p className="w8-dashboard-status">
-            출석은 교사가 수업별로 기록합니다. 학생 로그인이나 화면 방문은
-            출석으로 처리되지 않습니다.
-          </p>
-        </section>
-
-        <section className="w8-panel">
-          <div className="w8-panel__heading">
             <h2>중요 공지</h2>
             <Link className="w8-text-link" to="/student/communication">
               모든 공지
@@ -217,16 +211,67 @@ const Dashboard: React.FC = () => {
           ) : (
             <ul className="w8-list">
               {summary.importantNotices.slice(0, 3).map((notice) => (
-                <li key={notice.noticeId} className="w8-list__row">
-                  <span className="w8-list__copy">
+                <li
+                  key={notice.noticeId}
+                  className="w8-list__row w8-list__row--linked"
+                >
+                  <Link
+                    className="w8-list__primary-link"
+                    to={`/student/communication?id=${encodeURIComponent(notice.noticeId)}`}
+                  >
                     <strong>{notice.title}</strong>
                     <span>{formatW8DateTime(notice.publishAt)}</span>
-                  </span>
+                  </Link>
                   <W8StatusBadge value={notice.priority} />
                 </li>
               ))}
             </ul>
           )}
+        </section>
+
+        <section
+          className="w8-panel w8-panel--wide w8-student-today__support"
+          aria-labelledby="student-support-title"
+        >
+          <div className="w8-panel__heading">
+            <h2 id="student-support-title">내 상태</h2>
+          </div>
+          <dl className="w8-support-list">
+            <div>
+              <dt>내 위스</dt>
+              <dd>
+                {wis?.account ? (
+                  <>
+                    <strong>
+                      {wis.account.balance.toLocaleString("ko-KR")} 위스
+                    </strong>
+                    <span>
+                      {myWisRank ? `이번 학기 ${myWisRank}위` : "순위 집계 전"}
+                    </span>
+                  </>
+                ) : (
+                  <span>이번 학기 위스가 아직 열리지 않았습니다.</span>
+                )}
+              </dd>
+              {pointsRankingAccess.allowed && (
+                <Link className="w8-text-link" to="/student/points?tab=ranking">
+                  위스와 순위 보기
+                </Link>
+              )}
+            </div>
+            <div>
+              <dt>출석 기록</dt>
+              <dd>
+                <span>
+                  출석은 교사가 수업별로 기록하며, 화면 방문만으로 처리되지
+                  않습니다.
+                </span>
+              </dd>
+              <Link className="w8-text-link" to="/student/attendance">
+                기록 보기
+              </Link>
+            </div>
+          </dl>
         </section>
       </div>
     </section>

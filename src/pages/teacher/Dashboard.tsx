@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import ProvenanceBadge from "../../components/common/ProvenanceBadge";
 import StatePanel from "../../components/common/StatePanel";
 import TeacherOperationsQueue from "../../components/common/TeacherOperationsQueue";
 import W8ReadOnlyState from "../../components/common/W8ReadOnlyState";
 import W8StatusBadge from "../../components/common/W8StatusBadge";
 import WisRankingPanel from "../../components/common/WisRankingPanel";
 import { useAuth } from "../../contexts/AuthContext";
+import { canManageSettings, canManageW8Domains } from "../../lib/permissions";
 import { getServerSemesterCoreState } from "../../lib/semesterCore";
 import {
   W8DomainError,
@@ -29,8 +29,33 @@ const emptyWorkload: TeacherDomainWorkload = {
   readinessCurrent: null,
 };
 
+const W8_OPERATION_ROUTE_PREFIXES = [
+  "/teacher/learning",
+  "/teacher/schedule",
+  "/teacher/attendance",
+  "/teacher/communication",
+] as const;
+
+const W8_OPERATION_DOMAINS = [
+  "LEARNING",
+  "SCHEDULE",
+  "ATTENDANCE",
+  "COMMUNICATION",
+] as const;
+
+const isW8OperationRoute = (route: string) =>
+  W8_OPERATION_ROUTE_PREFIXES.some(
+    (prefix) =>
+      route === prefix ||
+      route.startsWith(`${prefix}/`) ||
+      route.startsWith(`${prefix}?`),
+  );
+
+const isW8OperationDomain = (domain: string) =>
+  W8_OPERATION_DOMAINS.some((item) => item === domain);
+
 const TeacherDashboard: React.FC = () => {
-  const { config, configReady } = useAuth();
+  const { config, configReady, currentUser, userData } = useAuth();
   const [state, setState] = useState<W8DomainState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<W8DomainError | null>(null);
@@ -113,15 +138,36 @@ const TeacherDashboard: React.FC = () => {
   }
   if (!state) return null;
 
+  const hasSettingsAccess = canManageSettings(userData, currentUser?.email);
+  const hasW8ManagementAccess = canManageW8Domains(
+    userData,
+    currentUser?.email,
+  );
+  const visibleOperations =
+    operations && !hasW8ManagementAccess
+      ? {
+          ...operations,
+          drafts: operations.drafts.filter(
+            (draft) => !isW8OperationRoute(draft.key.routeKey),
+          ),
+          bulkJobs: operations.bulkJobs.filter(
+            (job) => !isW8OperationDomain(job.domain),
+          ),
+        }
+      : operations;
   const summary = state.dashboard;
   const domainWork = [
-    {
-      id: "attendance",
-      label: "출석 미처리",
-      value: `${summary.attendancePendingCount.toLocaleString("ko-KR")}건`,
-      description: "교사가 아직 입력하거나 마감하지 않은 출석입니다.",
-      route: "/teacher/attendance",
-    },
+    ...(hasW8ManagementAccess
+      ? [
+          {
+            id: "attendance",
+            label: "출석 미처리",
+            value: `${summary.attendancePendingCount.toLocaleString("ko-KR")}건`,
+            description: "교사가 아직 입력하거나 마감하지 않은 출석입니다.",
+            route: "/teacher/attendance",
+          },
+        ]
+      : []),
     {
       id: "grade",
       label: "성적 검토 요청",
@@ -136,47 +182,50 @@ const TeacherDashboard: React.FC = () => {
       description: "업무 홈에서 주문 자료 전체를 읽지 않습니다.",
       route: "/teacher/points",
     },
-    {
-      id: "learning",
-      label: "공개 예정 학습",
-      value: `${summary.upcomingLearning.length.toLocaleString("ko-KR")}건`,
-      description: "공개 시각이나 상태를 확인할 학습 자료입니다.",
-      route: "/teacher/learning",
-    },
-    {
-      id: "notice",
-      label: "예약 상태 공지",
-      value: "운영 화면에서 확인",
-      description:
-        "공지 전체를 읽지 않고 운영 화면에서 공개 상태를 확인합니다.",
-      route: "/teacher/communication",
-    },
-    {
-      id: "readiness",
-      label: "학기 준비도",
-      value:
-        workload.readinessCurrent === null
-          ? "미확인"
-          : workload.readinessCurrent
-            ? "최신"
-            : "확인 필요",
-      description:
-        workload.readinessCurrent === false
-          ? "준비도 차단 사유를 관리자 학기 관리에서 확인해 주세요."
-          : "현재 학기의 운영 준비도 상태입니다.",
-      route: "/teacher/settings?tab=semester",
-    },
+    ...(hasW8ManagementAccess
+      ? [
+          {
+            id: "learning",
+            label: "공개 예정 학습",
+            value: `${summary.upcomingLearning.length.toLocaleString("ko-KR")}건`,
+            description: "공개 시각이나 상태를 확인할 학습 자료입니다.",
+            route: "/teacher/learning",
+          },
+          {
+            id: "notice",
+            label: "예약 상태 공지",
+            value: "운영 화면에서 확인",
+            description:
+              "공지 전체를 읽지 않고 운영 화면에서 공개 상태를 확인합니다.",
+            route: "/teacher/communication",
+          },
+        ]
+      : []),
+    ...(hasSettingsAccess
+      ? [
+          {
+            id: "readiness",
+            label: "학기 준비도",
+            value:
+              workload.readinessCurrent === null
+                ? "미확인"
+                : workload.readinessCurrent
+                  ? "최신"
+                  : "확인 필요",
+            description:
+              workload.readinessCurrent === false
+                ? "준비도 차단 사유를 관리자 학기 관리에서 확인해 주세요."
+                : "현재 학기의 운영 준비도 상태입니다.",
+            route: "/teacher/settings?tab=semester",
+          },
+        ]
+      : []),
   ];
   return (
-    <section className="w8-domain-page" aria-labelledby="teacher-home-title">
-      <header className="w8-domain-page__header">
-        <div>
-          <h2 id="teacher-home-title">업무 홈</h2>
-          <p>오늘 처리할 일정과 출석, 학습 자료, 공지를 확인해 주세요.</p>
-          <span className="w8-semester-label">{state.semesterId} 학기</span>
-        </div>
-        <ProvenanceBadge value={state.provenance} readOnly={state.readOnly} />
-      </header>
+    <section
+      className="w8-domain-page w8-domain-page--teacher w8-dashboard-page"
+      aria-label="업무 홈 내용"
+    >
       <W8ReadOnlyState state={state} />
       {error && (
         <StatePanel
@@ -187,12 +236,12 @@ const TeacherDashboard: React.FC = () => {
         />
       )}
 
-      <div className="w8-today-grid">
-        {operations ? (
+      <div className="w8-today-grid w8-today-grid--teacher">
+        {visibleOperations ? (
           <TeacherOperationsQueue
-            drafts={operations.drafts}
-            bulkJobs={operations.bulkJobs}
-            warningCount={operations.warnings.length}
+            drafts={visibleOperations.drafts}
+            bulkJobs={visibleOperations.bulkJobs}
+            warningCount={visibleOperations.warnings.length}
             domainWork={domainWork}
           />
         ) : operationsError ? (
@@ -206,12 +255,14 @@ const TeacherDashboard: React.FC = () => {
             />
           </section>
         ) : null}
-        <section className="w8-panel">
+        <section className="w8-panel w8-dashboard-card--schedule">
           <div className="w8-panel__heading">
             <h2>오늘 일정</h2>
-            <Link className="w8-text-link" to="/teacher/schedule">
-              일정 관리
-            </Link>
+            {hasW8ManagementAccess && (
+              <Link className="w8-text-link" to="/teacher/schedule">
+                일정 관리
+              </Link>
+            )}
           </div>
           {summary.todaySchedule.length === 0 ? (
             <StatePanel
@@ -236,57 +287,14 @@ const TeacherDashboard: React.FC = () => {
           )}
         </section>
 
-        <section className="w8-panel">
-          <div className="w8-panel__heading">
-            <h2>출석 미처리</h2>
-            <Link className="w8-text-link" to="/teacher/attendance">
-              출석 운영
-            </Link>
-          </div>
-          <div className="w8-dashboard-status">
-            <strong>
-              {summary.attendancePendingCount.toLocaleString("ko-KR")}건
-            </strong>
-            <span>
-              업무 홈에서는 조회만 하며 출석 입력은 출석 운영에서 합니다.
-            </span>
-          </div>
-        </section>
-
-        <section className="w8-panel">
-          <div className="w8-panel__heading">
-            <h2>공개 예정 학습</h2>
-            <Link className="w8-text-link" to="/teacher/learning">
-              학습 운영
-            </Link>
-          </div>
-          {summary.upcomingLearning.length === 0 ? (
-            <StatePanel
-              state="EMPTY"
-              compact
-              title="공개를 앞둔 학습 자료가 없습니다."
-            />
-          ) : (
-            <ul className="w8-list">
-              {summary.upcomingLearning.slice(0, 3).map((content) => (
-                <li key={content.contentId} className="w8-list__row">
-                  <span className="w8-list__copy">
-                    <strong>{content.title}</strong>
-                    <span>{content.summary}</span>
-                  </span>
-                  <W8StatusBadge value={content.status} />
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <section className="w8-panel">
+        <section className="w8-panel w8-dashboard-card--notice">
           <div className="w8-panel__heading">
             <h2>중요 공지</h2>
-            <Link className="w8-text-link" to="/teacher/communication">
-              공지 운영
-            </Link>
+            {hasW8ManagementAccess && (
+              <Link className="w8-text-link" to="/teacher/communication">
+                공지 운영
+              </Link>
+            )}
           </div>
           {summary.importantNotices.length === 0 ? (
             <StatePanel
@@ -307,6 +315,95 @@ const TeacherDashboard: React.FC = () => {
               ))}
             </ul>
           )}
+        </section>
+
+        <section
+          className="w8-panel w8-panel--wide"
+          aria-labelledby="teacher-status-title"
+        >
+          <div className="w8-panel__heading">
+            <h2 id="teacher-status-title">운영 상태</h2>
+          </div>
+          <div className="w8-operational-status">
+            <section aria-labelledby="attendance-status-title">
+              <div>
+                <h3 id="attendance-status-title">출석 미처리</h3>
+                <strong>
+                  {summary.attendancePendingCount.toLocaleString("ko-KR")}건
+                </strong>
+                <p>출석 입력과 마감은 출석 운영에서 진행합니다.</p>
+              </div>
+              {hasW8ManagementAccess && (
+                <Link className="w8-text-link" to="/teacher/attendance">
+                  출석 운영
+                </Link>
+              )}
+            </section>
+
+            <section aria-labelledby="readiness-status-title">
+              <div>
+                <h3 id="readiness-status-title">학기 준비도</h3>
+                <strong>
+                  {workload.readinessCurrent === null
+                    ? "미확인"
+                    : workload.readinessCurrent
+                      ? "최신"
+                      : "확인 필요"}
+                </strong>
+                <p>
+                  {workload.readinessCurrent === false
+                    ? hasSettingsAccess
+                      ? "차단 사유를 학기 관리에서 확인해 주세요."
+                      : "학기 관리 권한이 있는 관리자에게 확인해 주세요."
+                    : "현재 학기의 운영 준비 상태입니다."}
+                </p>
+              </div>
+              {hasSettingsAccess && (
+                <Link
+                  className="w8-text-link"
+                  to="/teacher/settings?tab=semester"
+                >
+                  학기 관리
+                </Link>
+              )}
+            </section>
+
+            <section
+              className="w8-operational-status__learning"
+              aria-labelledby="learning-status-title"
+            >
+              <div className="w8-operational-status__heading">
+                <div>
+                  <h3 id="learning-status-title">공개 예정 학습</h3>
+                  <strong>
+                    {summary.upcomingLearning.length.toLocaleString("ko-KR")}건
+                  </strong>
+                </div>
+                {hasW8ManagementAccess && (
+                  <Link className="w8-text-link" to="/teacher/learning">
+                    학습 운영
+                  </Link>
+                )}
+              </div>
+              {summary.upcomingLearning.length === 0 ? (
+                <p className="w8-inline-empty">
+                  공개를 앞둔 학습 자료가 없습니다.
+                </p>
+              ) : (
+                <ul className="w8-list">
+                  {summary.upcomingLearning.slice(0, 3).map((content) => (
+                    <li key={content.contentId} className="w8-list__row">
+                      <span className="w8-list__copy">
+                        <strong>{content.title}</strong>
+                        <span>{content.summary}</span>
+                      </span>
+                      <W8StatusBadge value={content.status} />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          </div>
         </section>
 
         <section className="w8-panel w8-panel--wide">

@@ -285,7 +285,7 @@ const TeacherPatchMemoController: React.FC = () => {
   const [hoverRect, setHoverRect] = useState<TeacherPatchNoteTargetRect | null>(
     null,
   );
-  const buttonRef = useRef<HTMLButtonElement | null>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
   const bodyRef = useRef<HTMLTextAreaElement | null>(null);
 
   const uid = currentUser?.uid || "";
@@ -310,7 +310,7 @@ const TeacherPatchMemoController: React.FC = () => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !selectingTarget) {
         setOpen(false);
-        buttonRef.current?.focus();
+        openerRef.current?.focus();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -378,6 +378,30 @@ const TeacherPatchMemoController: React.FC = () => {
     setHoverRect(null);
   }, [location.pathname, location.search]);
 
+  useEffect(() => {
+    if (!uid || !isTeacherRoute || !canUsePatchMemo) return undefined;
+    const handleOpen = () => {
+      openerRef.current =
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null;
+      setEditingNoteId(null);
+      setBody("");
+      setType("bug");
+      setPriority("normal");
+      setSourcePath(currentPath);
+      setTargetLabel("");
+      setTargetText("");
+      setTargetSelector("");
+      setTargetRect(null);
+      setSelectingTarget(false);
+      setOpen(true);
+    };
+    window.addEventListener("westory:open-patch-memo", handleOpen);
+    return () =>
+      window.removeEventListener("westory:open-patch-memo", handleOpen);
+  }, [canUsePatchMemo, currentPath, isTeacherRoute, uid]);
+
   if (!currentUser || !isTeacherRoute || !canUsePatchMemo) return null;
 
   const resetForm = (nextPath = currentPath) => {
@@ -390,21 +414,6 @@ const TeacherPatchMemoController: React.FC = () => {
     setTargetText("");
     setTargetSelector("");
     setTargetRect(null);
-  };
-
-  const openPanel = () => {
-    if (selectingTarget) {
-      setSelectingTarget(false);
-      setOpen(true);
-      return;
-    }
-    if (!open) {
-      resetForm(currentPath);
-      setOpen(true);
-      return;
-    }
-    setOpen(false);
-    setSelectingTarget(false);
   };
 
   const startEdit = (note: TeacherPatchNote) => {
@@ -561,6 +570,7 @@ const TeacherPatchMemoController: React.FC = () => {
 
       {open && (
         <aside
+          id="teacher-patch-memo-panel"
           data-patch-memo-root="true"
           role="dialog"
           aria-modal="false"
@@ -584,7 +594,7 @@ const TeacherPatchMemoController: React.FC = () => {
               onClick={() => {
                 setOpen(false);
                 setSelectingTarget(false);
-                buttonRef.current?.focus();
+                openerRef.current?.focus();
               }}
               className="inline-flex h-9 w-9 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100"
               aria-label="패치 메모 닫기"
@@ -903,31 +913,6 @@ const TeacherPatchMemoController: React.FC = () => {
           </div>
         </aside>
       )}
-
-      <button
-        ref={buttonRef}
-        data-patch-memo-root="true"
-        type="button"
-        onClick={openPanel}
-        className={`fixed bottom-[calc(env(safe-area-inset-bottom,0px)+1rem)] right-[calc(env(safe-area-inset-right,0px)+1rem)] z-[112] inline-flex h-14 w-14 items-center justify-center rounded-full border shadow-[0_18px_42px_rgba(37,99,235,0.30)] transition focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-100 sm:bottom-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] sm:right-[calc(env(safe-area-inset-right,0px)+1.5rem)] ${
-          open
-            ? "border-blue-500 bg-blue-600 text-white hover:bg-blue-700"
-            : "border-blue-100 bg-white text-blue-700 hover:bg-blue-50"
-        }`}
-        aria-label={open ? "패치 메모 닫기" : "패치 메모 열기"}
-        aria-expanded={open}
-        title="패치 메모"
-      >
-        <i
-          className={`fas ${open ? "fa-times" : "fa-pen"} text-lg`}
-          aria-hidden="true"
-        ></i>
-        {openCount > 0 && !open && (
-          <span className="absolute -right-1 -top-1 inline-flex min-w-6 items-center justify-center rounded-full border-2 border-white bg-rose-500 px-1.5 py-0.5 text-[11px] font-extrabold text-white">
-            {openCount > 99 ? "99+" : openCount}
-          </span>
-        )}
-      </button>
     </>
   );
 };
