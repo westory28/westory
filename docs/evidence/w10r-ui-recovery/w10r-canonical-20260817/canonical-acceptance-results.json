@@ -1,0 +1,450 @@
+{
+  "schemaVersion": 1,
+  "phase": "W10R",
+  "testRunId": "w10r-canonical-20260817",
+  "status": "PASS",
+  "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+  "projectId": "westory-staging-177587430482",
+  "stableAlias": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+  "deploymentId": "dpl_DFvjkFTw4knYS3ZR34ixcdHqtTJM",
+  "evaluatedAt": "2026-08-17T06:59:38.181Z",
+  "evidenceScope": {
+    "browser": "정상 렌더, 역할별 navigation, click, refresh, back, new tab, mobile drawer/bottom navigation, keyboard focus, 30개 exact PNG와 1600px 비교 화면을 검증했습니다.",
+    "implementationAndRegression": "loading, empty, error, permission, disabled, 긴 문구, 위험 확인은 실제 화면의 상태 분기와 공통 컴포넌트 계약, W2~W11 회귀 및 정적 gate로 검증했습니다.",
+    "limitation": "모든 오류·권한·위험 상태를 브라우저에서 강제로 발생시킨 screenshot 모음은 아닙니다. 합성 fixture를 정리한 뒤에는 destructive browser action을 다시 실행하지 않았습니다."
+  },
+  "requiredStateIds": [
+    "normal",
+    "empty",
+    "loading",
+    "error",
+    "disabled",
+    "permission",
+    "long-korean",
+    "dangerous-confirmation",
+    "small-screen",
+    "large-screen"
+  ],
+  "screens": [
+    {
+      "id": "teacher-dashboard",
+      "role": "teacher",
+      "route": "/teacher/dashboard",
+      "screenshotCount": 6,
+      "stateEvidence": [
+        {
+          "id": "normal",
+          "method": "browser",
+          "status": "PASS",
+          "reference": "screenshot-manifest.json#teacher-dashboard"
+        },
+        {
+          "id": "empty",
+          "method": "browser-and-source",
+          "status": "PASS",
+          "reference": "src/pages/teacher/Dashboard.tsx#todaySchedule-EMPTY"
+        },
+        {
+          "id": "loading",
+          "method": "source-and-regression",
+          "status": "PASS",
+          "reference": "src/pages/teacher/Dashboard.tsx#loading-StatePanel"
+        },
+        {
+          "id": "error",
+          "method": "source-and-regression",
+          "status": "PASS",
+          "reference": "src/pages/teacher/Dashboard.tsx#error-StatePanel"
+        },
+        {
+          "id": "disabled",
+          "method": "not-applicable-safe-absence",
+          "status": "PASS",
+          "reference": "이 화면에는 비활성화 상태가 필요한 입력 또는 위험 제어가 없습니다. 권한 없는 링크는 노출하지 않습니다."
+        },
+        {
+          "id": "permission",
+          "method": "source-and-access-gate",
+          "status": "PASS",
+          "reference": "src/pages/teacher/Dashboard.tsx#permission-aware-StatePanel"
+        },
+        {
+          "id": "long-korean",
+          "method": "browser-and-source",
+          "status": "PASS",
+          "reference": "teacher-dashboard-320x800.png"
+        },
+        {
+          "id": "dangerous-confirmation",
+          "method": "not-applicable-safe-absence",
+          "status": "PASS",
+          "reference": "이 화면에는 파괴적 작업이 없습니다."
+        },
+        {
+          "id": "small-screen",
+          "method": "browser",
+          "status": "PASS",
+          "reference": "teacher-dashboard-320x800.png"
+        },
+        {
+          "id": "large-screen",
+          "method": "browser",
+          "status": "PASS",
+          "reference": "comparison/visual-comparison-results.json#recovered-w10r"
+        }
+      ]
+    },
+    {
+      "id": "teacher-students",
+      "role": "teacher",
+      "route": "/teacher/students",
+      "screenshotCount": 6,
+      "stateEvidence": [
+        {
+          "id": "normal",
+          "method": "browser",
+          "status": "PASS",
+          "reference": "screenshot-manifest.json#teacher-students"
+        },
+        {
+          "id": "empty",
+          "method": "source-and-regression",
+          "status": "PASS",
+          "reference": "src/pages/teacher/StudentList.tsx#filteredStudents-empty"
+        },
+        {
+          "id": "loading",
+          "method": "source-and-regression",
+          "status": "PASS",
+          "reference": "src/pages/teacher/StudentList.tsx#loading-table-state"
+        },
+        {
+          "id": "error",
+          "method": "source-and-regression",
+          "status": "PASS",
+          "reference": "src/pages/teacher/StudentList.tsx#read-error-classification"
+        },
+        {
+          "id": "disabled",
+          "method": "source-and-regression",
+          "status": "PASS",
+          "reference": "src/pages/teacher/StudentList.tsx#readOnly-controls"
+        },
+        {
+          "id": "permission",
+          "method": "source-and-access-gate",
+          "status": "PASS",
+          "reference": "src/pages/teacher/StudentList.tsx#read-error-permission"
+        },
+        {
+          "id": "long-korean",
+          "method": "browser-and-source",
+          "status": "PASS",
+          "reference": "teacher-students-320x800.png"
+        },
+        {
+          "id": "dangerous-confirmation",
+          "method": "source-and-regression",
+          "status": "PASS",
+          "reference": "src/pages/teacher/StudentList.tsx#handleDelete-confirmAction"
+        },
+        {
+          "id": "small-screen",
+          "method": "browser",
+          "status": "PASS",
+          "reference": "teacher-students-320x800.png"
+        },
+        {
+          "id": "large-screen",
+          "method": "browser",
+          "status": "PASS",
+          "reference": "teacher-students-1440x900.png"
+        }
+      ]
+    },
+    {
+      "id": "teacher-quiz-bank",
+      "role": "teacher",
+      "route": "/teacher/quiz?tab=bank",
+      "screenshotCount": 6,
+      "stateEvidence": [
+        {
+          "id": "normal",
+          "method": "browser",
+          "status": "PASS",
+          "reference": "screenshot-manifest.json#teacher-quiz-bank"
+        },
+        {
+          "id": "empty",
+          "method": "source-and-regression",
+          "status": "PASS",
+          "reference": "src/pages/teacher/components/QuizBankTab.tsx#filteredQuestions-empty-StatePanel"
+        },
+        {
+          "id": "loading",
+          "method": "source-and-regression",
+          "status": "PASS",
+          "reference": "src/pages/teacher/components/QuizBankTab.tsx#question-loading-StatePanel"
+        },
+        {
+          "id": "error",
+          "method": "source-and-regression",
+          "status": "PASS",
+          "reference": "src/pages/teacher/components/QuizBankTab.tsx#question-error-StatePanel"
+        },
+        {
+          "id": "disabled",
+          "method": "source-and-regression",
+          "status": "PASS",
+          "reference": "src/pages/teacher/components/QuizBankTab.tsx#analytics-filters-disabled"
+        },
+        {
+          "id": "permission",
+          "method": "source-and-access-gate",
+          "status": "PASS",
+          "reference": "src/pages/teacher/components/QuizBankTab.tsx#question-permission-StatePanel"
+        },
+        {
+          "id": "long-korean",
+          "method": "browser-and-source",
+          "status": "PASS",
+          "reference": "teacher-quiz-bank-320x800.png"
+        },
+        {
+          "id": "dangerous-confirmation",
+          "method": "source-and-regression",
+          "status": "PASS",
+          "reference": "src/pages/teacher/components/QuizBankTab.tsx#closeEditModal-confirmAction"
+        },
+        {
+          "id": "small-screen",
+          "method": "browser",
+          "status": "PASS",
+          "reference": "teacher-quiz-bank-320x800.png"
+        },
+        {
+          "id": "large-screen",
+          "method": "browser",
+          "status": "PASS",
+          "reference": "teacher-quiz-bank-1440x900.png"
+        }
+      ]
+    },
+    {
+      "id": "teacher-cutover",
+      "role": "admin",
+      "route": "/teacher/settings/cutover",
+      "screenshotCount": 6,
+      "stateEvidence": [
+        {
+          "id": "normal",
+          "method": "browser",
+          "status": "PASS",
+          "reference": "screenshot-manifest.json#teacher-cutover"
+        },
+        {
+          "id": "empty",
+          "method": "source-and-regression",
+          "status": "PASS",
+          "reference": "src/pages/teacher/SemesterCutoverCenterView.tsx#readiness-empty"
+        },
+        {
+          "id": "loading",
+          "method": "source-and-regression",
+          "status": "PASS",
+          "reference": "src/pages/teacher/SemesterCutoverCenterView.tsx#loading-StatePanel"
+        },
+        {
+          "id": "error",
+          "method": "source-and-regression",
+          "status": "PASS",
+          "reference": "src/pages/teacher/SemesterCutoverCenterView.tsx#error-StatePanel"
+        },
+        {
+          "id": "disabled",
+          "method": "browser-and-source",
+          "status": "PASS",
+          "reference": "src/pages/teacher/SemesterCutoverCenterView.tsx#action-allowed-lock"
+        },
+        {
+          "id": "permission",
+          "method": "source-and-access-gate",
+          "status": "PASS",
+          "reference": "src/pages/teacher/SemesterCutoverCenterView.tsx#permission-StatePanel"
+        },
+        {
+          "id": "long-korean",
+          "method": "browser-and-source",
+          "status": "PASS",
+          "reference": "teacher-cutover-320x800.png"
+        },
+        {
+          "id": "dangerous-confirmation",
+          "method": "disabled-read-only-staging",
+          "status": "PASS",
+          "reference": "src/pages/teacher/SemesterCutoverCenterView.tsx#staging-read-only-action-lock"
+        },
+        {
+          "id": "small-screen",
+          "method": "browser",
+          "status": "PASS",
+          "reference": "teacher-cutover-320x800.png"
+        },
+        {
+          "id": "large-screen",
+          "method": "browser",
+          "status": "PASS",
+          "reference": "teacher-cutover-1440x900.png"
+        }
+      ]
+    },
+    {
+      "id": "student-today",
+      "role": "student",
+      "route": "/student/dashboard",
+      "screenshotCount": 6,
+      "stateEvidence": [
+        {
+          "id": "normal",
+          "method": "browser",
+          "status": "PASS",
+          "reference": "screenshot-manifest.json#student-today"
+        },
+        {
+          "id": "empty",
+          "method": "browser-and-source",
+          "status": "PASS",
+          "reference": "src/pages/student/Dashboard.tsx#learning-empty-StatePanel"
+        },
+        {
+          "id": "loading",
+          "method": "source-and-regression",
+          "status": "PASS",
+          "reference": "src/pages/student/Dashboard.tsx#loading-StatePanel"
+        },
+        {
+          "id": "error",
+          "method": "source-and-regression",
+          "status": "PASS",
+          "reference": "src/pages/student/Dashboard.tsx#error-StatePanel"
+        },
+        {
+          "id": "disabled",
+          "method": "browser-and-source",
+          "status": "PASS",
+          "reference": "src/pages/student/Dashboard.tsx#unavailable-learning-link"
+        },
+        {
+          "id": "permission",
+          "method": "source-and-access-gate",
+          "status": "PASS",
+          "reference": "src/pages/student/Dashboard.tsx#permission-aware-StatePanel"
+        },
+        {
+          "id": "long-korean",
+          "method": "browser-and-source",
+          "status": "PASS",
+          "reference": "student-today-320x800.png"
+        },
+        {
+          "id": "dangerous-confirmation",
+          "method": "not-applicable-safe-absence",
+          "status": "PASS",
+          "reference": "이 화면에는 파괴적 작업이 없습니다."
+        },
+        {
+          "id": "small-screen",
+          "method": "browser",
+          "status": "PASS",
+          "reference": "student-today-320x800.png"
+        },
+        {
+          "id": "large-screen",
+          "method": "browser",
+          "status": "PASS",
+          "reference": "student-today-1440x900.png"
+        }
+      ]
+    }
+  ],
+  "accessibilityChecks": [
+    {
+      "id": "keyboard-navigation",
+      "method": "browser",
+      "status": "PASS",
+      "reference": "browser-navigation-results.json"
+    },
+    {
+      "id": "visible-focus",
+      "method": "browser-and-static",
+      "status": "PASS",
+      "reference": "browser-navigation-results.json"
+    },
+    {
+      "id": "heading-hierarchy",
+      "method": "source-contract",
+      "status": "PASS",
+      "reference": "src/components/common/PageHeader.tsx#single-h1"
+    },
+    {
+      "id": "form-labels",
+      "method": "source-contract",
+      "status": "PASS",
+      "reference": "StudentList labels and QuizBank aria-label controls"
+    },
+    {
+      "id": "icon-control-names",
+      "method": "source-contract",
+      "status": "PASS",
+      "reference": "Header and NavigationDrawer icon control aria-labels"
+    },
+    {
+      "id": "touch-targets",
+      "method": "source-gate",
+      "status": "PASS",
+      "reference": "verify:w10-ui-quality#44px-minimum"
+    },
+    {
+      "id": "contrast",
+      "method": "token-contrast-check",
+      "status": "PASS",
+      "reference": "DESIGN.md#color-tokens"
+    },
+    {
+      "id": "zoom-200-reflow",
+      "method": "screenshot-manifest-equivalent-reflow",
+      "status": "PASS",
+      "reference": "all five screens at 768x1024, 390x844 and 320x800"
+    },
+    {
+      "id": "reduced-motion",
+      "method": "source-gate",
+      "status": "PASS",
+      "reference": "verify:w10-ui-quality#prefers-reduced-motion"
+    }
+  ],
+  "contrastChecks": [
+    { "foreground": "#1f2937", "background": "#ffffff", "minimumRatio": 4.5 },
+    { "foreground": "#6b7280", "background": "#ffffff", "minimumRatio": 4.5 },
+    { "foreground": "#2563eb", "background": "#ffffff", "minimumRatio": 4.5 },
+    { "foreground": "#1e3a8a", "background": "#eff6ff", "minimumRatio": 4.5 },
+    { "foreground": "#b91c1c", "background": "#fef2f2", "minimumRatio": 4.5 }
+  ],
+  "responsiveChecks": {
+    "exactViewportScreenshots": 30,
+    "viewports": [
+      "320x800",
+      "390x844",
+      "768x1024",
+      "1024x768",
+      "1280x800",
+      "1440x900"
+    ],
+    "additionalDesktopLayoutViewport": "1600x900",
+    "horizontalOverflowFailures": 0,
+    "clippedActionFailures": 0,
+    "fixedElementCollisionFailures": 0
+  },
+  "productionAccess": 0,
+  "productionWrites": 0
+}

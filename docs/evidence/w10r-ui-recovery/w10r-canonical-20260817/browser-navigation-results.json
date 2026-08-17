@@ -1,0 +1,331 @@
+{
+  "schemaVersion": 1,
+  "phase": "W10R",
+  "status": "PASS",
+  "testRunId": "w10r-canonical-20260817",
+  "branch": "codex/phase6-w10r-ui-recovery",
+  "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+  "projectId": "westory-staging-177587430482",
+  "stableAlias": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+  "deploymentUrl": "https://westory-staging-gvy3mj1s3-bbbs-projects-44f9da30.vercel.app",
+  "deploymentId": "dpl_DFvjkFTw4knYS3ZR34ixcdHqtTJM",
+  "executedAt": "2026-08-17T06:17:19.081Z",
+  "browser": "Codex in-app Browser",
+  "productionAccess": 0,
+  "productionWrites": 0,
+  "scenarios": [
+    {
+      "id": "student.desktop-child-menu-click",
+      "role": "student",
+      "viewport": {
+        "width": 1440,
+        "height": 900,
+        "dpr": 1
+      },
+      "actions": [
+        "일정·출석·공지 메뉴 열기",
+        "일정 하위 메뉴 클릭"
+      ],
+      "activeParentCount": 1,
+      "focusTarget": "main#westory-main-content",
+      "heading": "일정",
+      "horizontalOverflow": 0,
+      "navigationMountCount": 1,
+      "finalRoute": "/student/schedule",
+      "consoleErrorCount": 0,
+      "status": "PASS"
+    },
+    {
+      "id": "student.mobile-bottom-nav",
+      "role": "student",
+      "viewport": {
+        "width": 390,
+        "height": 844,
+        "dpr": 1
+      },
+      "actions": [
+        "학생 하단 평가 메뉴 클릭"
+      ],
+      "activeParentCount": 1,
+      "focusTarget": "main#westory-main-content",
+      "heading": "평가",
+      "horizontalOverflow": 0,
+      "navigationMountCount": 1,
+      "finalRoute": "/student/quiz",
+      "consoleErrorCount": 0,
+      "status": "PASS"
+    },
+    {
+      "id": "student.mobile-more-drawer",
+      "role": "student",
+      "viewport": {
+        "width": 390,
+        "height": 844,
+        "dpr": 1
+      },
+      "actions": [
+        "더보기 버튼 클릭",
+        "전체 메뉴 drawer에서 공지 클릭"
+      ],
+      "activeParentCount": 1,
+      "focusTarget": "main#westory-main-content",
+      "heading": "공지와 알림",
+      "horizontalOverflow": 0,
+      "navigationMountCount": 1,
+      "finalRoute": "/student/communication",
+      "consoleErrorCount": 0,
+      "status": "PASS"
+    },
+    {
+      "id": "student.route-refresh",
+      "role": "student",
+      "viewport": {
+        "width": 390,
+        "height": 844,
+        "dpr": 1
+      },
+      "actions": [
+        "학생 오늘 직접 이동",
+        "현재 URL 새로고침"
+      ],
+      "activeParentCount": 1,
+      "focusTarget": "main#westory-main-content",
+      "heading": "오늘",
+      "horizontalOverflow": 0,
+      "navigationMountCount": 1,
+      "finalRoute": "/student/dashboard",
+      "consoleErrorCount": 0,
+      "status": "PASS"
+    },
+    {
+      "id": "student.history-back",
+      "role": "student",
+      "viewport": {
+        "width": 390,
+        "height": 844,
+        "dpr": 1
+      },
+      "actions": [
+        "하단 평가 클릭",
+        "하단 점수 클릭",
+        "브라우저 뒤로가기"
+      ],
+      "activeParentCount": 1,
+      "focusTarget": "main#westory-main-content",
+      "heading": "평가",
+      "horizontalOverflow": 0,
+      "navigationMountCount": 1,
+      "finalRoute": "/student/quiz",
+      "consoleErrorCount": 0,
+      "status": "PASS"
+    },
+    {
+      "id": "student.direct-new-tab",
+      "role": "student",
+      "viewport": {
+        "width": 390,
+        "height": 844,
+        "dpr": 1
+      },
+      "actions": [
+        "새 탭에서 학생 오늘 직접 주소 열기"
+      ],
+      "activeParentCount": 1,
+      "focusTarget": "main#westory-main-content",
+      "heading": "오늘",
+      "horizontalOverflow": 0,
+      "navigationMountCount": 1,
+      "finalRoute": "/student/dashboard",
+      "consoleErrorCount": 0,
+      "status": "PASS"
+    },
+    {
+      "id": "teacher.desktop-child-menu-click",
+      "role": "teacher",
+      "viewport": {
+        "width": 1440,
+        "height": 900,
+        "dpr": 1
+      },
+      "actions": [
+        "평가 관리 메뉴 열기",
+        "문제 은행 하위 메뉴 클릭"
+      ],
+      "activeParentCount": 1,
+      "focusTarget": "main#westory-main-content",
+      "heading": "평가 운영",
+      "horizontalOverflow": 0,
+      "navigationMountCount": 1,
+      "finalRoute": "/teacher/quiz?tab=bank",
+      "consoleErrorCount": 0,
+      "status": "PASS"
+    },
+    {
+      "id": "teacher.query-tab-history-back",
+      "role": "teacher",
+      "viewport": {
+        "width": 1440,
+        "height": 900,
+        "dpr": 1
+      },
+      "actions": [
+        "응시 현황 탭 클릭",
+        "문제 은행 탭 클릭",
+        "브라우저 뒤로가기"
+      ],
+      "activeParentCount": 1,
+      "focusTarget": "button#quiz-tab-bank",
+      "heading": "평가 운영",
+      "horizontalOverflow": 0,
+      "navigationMountCount": 1,
+      "finalRoute": "/teacher/quiz?tab=log",
+      "consoleErrorCount": 0,
+      "status": "PASS"
+    },
+    {
+      "id": "teacher.route-refresh",
+      "role": "teacher",
+      "viewport": {
+        "width": 1440,
+        "height": 900,
+        "dpr": 1
+      },
+      "actions": [
+        "학생 관리 직접 이동",
+        "현재 URL 새로고침"
+      ],
+      "activeParentCount": 1,
+      "focusTarget": "main#westory-main-content",
+      "heading": "학생과 학급",
+      "horizontalOverflow": 0,
+      "navigationMountCount": 1,
+      "finalRoute": "/teacher/students",
+      "consoleErrorCount": 0,
+      "status": "PASS"
+    },
+    {
+      "id": "teacher.direct-new-tab",
+      "role": "teacher",
+      "viewport": {
+        "width": 1440,
+        "height": 900,
+        "dpr": 1
+      },
+      "actions": [
+        "새 탭에서 문제 은행 직접 주소 열기"
+      ],
+      "activeParentCount": 1,
+      "focusTarget": "main#westory-main-content",
+      "heading": "평가 운영",
+      "horizontalOverflow": 0,
+      "navigationMountCount": 1,
+      "finalRoute": "/teacher/quiz?tab=bank",
+      "consoleErrorCount": 0,
+      "status": "PASS"
+    },
+    {
+      "id": "teacher.mobile-drawer-child",
+      "role": "teacher",
+      "viewport": {
+        "width": 390,
+        "height": 844,
+        "dpr": 1
+      },
+      "actions": [
+        "업무 메뉴 열기",
+        "문제 은행 하위 메뉴 클릭",
+        "이동 후 drawer 재열어 활성 상위 확인"
+      ],
+      "activeParentCount": 1,
+      "focusTarget": "button[메뉴 닫기]",
+      "heading": "평가 운영",
+      "horizontalOverflow": 0,
+      "navigationMountCount": 1,
+      "finalRoute": "/teacher/quiz?tab=bank",
+      "consoleErrorCount": 0,
+      "status": "PASS"
+    },
+    {
+      "id": "teacher.keyboard-dropdown-focus",
+      "role": "teacher",
+      "viewport": {
+        "width": 1440,
+        "height": 900,
+        "dpr": 1
+      },
+      "actions": [
+        "평가 관리 trigger에서 ArrowDown",
+        "첫 하위 링크 자동 포커스 확인",
+        "Escape로 닫고 trigger 포커스 복귀"
+      ],
+      "activeParentCount": 1,
+      "focusTarget": "button",
+      "heading": "업무 홈",
+      "horizontalOverflow": 0,
+      "navigationMountCount": 1,
+      "finalRoute": "/teacher/dashboard",
+      "consoleErrorCount": 0,
+      "status": "PASS"
+    },
+    {
+      "id": "teacher.unauthorized-admin-hidden",
+      "role": "teacher",
+      "viewport": {
+        "width": 1440,
+        "height": 900,
+        "dpr": 1
+      },
+      "actions": [
+        "일반 교사 navigation에서 관리자 메뉴 비노출 확인"
+      ],
+      "activeParentCount": 1,
+      "focusTarget": "button",
+      "heading": "업무 홈",
+      "horizontalOverflow": 0,
+      "navigationMountCount": 1,
+      "finalRoute": "/teacher/dashboard",
+      "consoleErrorCount": 0,
+      "status": "PASS"
+    },
+    {
+      "id": "admin.cutover-direct",
+      "role": "admin",
+      "viewport": {
+        "width": 1440,
+        "height": 900,
+        "dpr": 1
+      },
+      "actions": [
+        "관리자 세션에서 학기 전환 준비 직접 주소 열기"
+      ],
+      "activeParentCount": 1,
+      "focusTarget": "main#westory-main-content",
+      "heading": "학기 전환 준비",
+      "horizontalOverflow": 0,
+      "navigationMountCount": 1,
+      "finalRoute": "/teacher/settings/cutover",
+      "consoleErrorCount": 0,
+      "status": "PASS"
+    },
+    {
+      "id": "admin.cutover-refresh",
+      "role": "admin",
+      "viewport": {
+        "width": 1440,
+        "height": 900,
+        "dpr": 1
+      },
+      "actions": [
+        "학기 전환 준비 새로고침"
+      ],
+      "activeParentCount": 1,
+      "focusTarget": "main#westory-main-content",
+      "heading": "학기 전환 준비",
+      "horizontalOverflow": 0,
+      "navigationMountCount": 1,
+      "finalRoute": "/teacher/settings/cutover?target=2026-2",
+      "consoleErrorCount": 0,
+      "status": "PASS"
+    }
+  ]
+}

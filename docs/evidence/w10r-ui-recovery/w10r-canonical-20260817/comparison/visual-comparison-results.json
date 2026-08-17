@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "phase": "W10R",
+  "testRunId": "w10r-canonical-20260817",
+  "screenId": "teacher-dashboard",
+  "route": "/teacher/dashboard",
+  "role": "admin",
+  "browser": "Codex in-app Browser",
+  "projectId": "westory-staging-177587430482",
+  "layoutViewport": {
+    "width": 1600,
+    "height": 900,
+    "dpr": 1
+  },
+  "captureContract": {
+    "purpose": "same-layout-viewport visual comparison",
+    "format": "jpeg",
+    "canonicalManifestEvidence": false,
+    "note": "브라우저 스크롤바가 캡처 영역에서 제외되어 JPEG 픽셀 크기는 layout viewport와 다를 수 있습니다. 정확한 viewport PNG 증거는 상위 screenshot-manifest.json에서 별도로 검증합니다."
+  },
+  "productionAccess": 0,
+  "productionWrites": 0,
+  "comparisons": [
+    {
+      "stage": "legacy-visual-baseline",
+      "sourceCommitSha": "c735055608cdc06bd2b6324f92662f88149f6966",
+      "deploymentId": "dpl_AD8J8r2jDQspSg6hsxno3f8xFsx5",
+      "deploymentUrl": "https://westory-staging-lm1x4vclu-bbbs-projects-44f9da30.vercel.app",
+      "capturedAt": "2026-08-17T06:50:10.613Z",
+      "fileName": "legacy-c735-teacher-dashboard-1600x900.jpg",
+      "actualPixelSize": {
+        "width": 1585,
+        "height": 892
+      },
+      "sha256": "1436782a44f1cbf0b60a947c0d7763df23644be32c0ca6049f559cf3c60a83c3",
+      "heading": "대시보드",
+      "horizontalOverflow": 0,
+      "loadingIndicatorCount": 0,
+      "observation": "상단 전역 메뉴와 넓은 본문 폭을 유지한 W10 이전 시각 기준입니다."
+    },
+    {
+      "stage": "failed-w10",
+      "sourceCommitSha": "925533fd1d1af5880ba246e58493d787c28bb352",
+      "deploymentId": "dpl_7qoYcByCtSSaYtPMzzDLkbVtRpyC",
+      "deploymentUrl": "https://westory-staging-o3ymwnveb-bbbs-projects-44f9da30.vercel.app",
+      "capturedAt": "2026-08-17T06:51:49.802Z",
+      "fileName": "failed-w10-925533f-teacher-dashboard-1600x900.jpg",
+      "actualPixelSize": {
+        "width": 1573,
+        "height": 885
+      },
+      "sha256": "c750eb103f5bb7d4f93c7d6a87bfdd96ec2cd459d1fa4d9bb67b0d532aef9d4e",
+      "heading": "업무 홈",
+      "horizontalOverflow": 64,
+      "loadingIndicatorCount": 1,
+      "observation": "248px 전역 sidebar와 가로 overflow가 남고, 12초 뒤에도 loading 상태가 해소되지 않은 실패 W10 화면입니다."
+    },
+    {
+      "stage": "recovered-w10r",
+      "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+      "deploymentId": "dpl_DFvjkFTw4knYS3ZR34ixcdHqtTJM",
+      "deploymentUrl": "https://westory-staging-gvy3mj1s3-bbbs-projects-44f9da30.vercel.app",
+      "capturedAt": "2026-08-17T06:52:46.564Z",
+      "fileName": "recovered-w10r-7ddfd72-teacher-dashboard-1600x900.jpg",
+      "actualPixelSize": {
+        "width": 1585,
+        "height": 892
+      },
+      "sha256": "1d9ef05238695f2b2468da2ddabebcc080fc41f603a261169454c82cd8af84a7",
+      "heading": "업무 홈",
+      "horizontalOverflow": 0,
+      "loadingIndicatorCount": 0,
+      "observation": "상단 전역 메뉴를 복구하고 오늘의 우선 업무를 첫 정보로 배치했으며, 1600px desktop에서 가로 overflow와 고정 요소 충돌이 없습니다."
+    }
+  ],
+  "status": "PASS"
+}

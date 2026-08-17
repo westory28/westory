@@ -1,0 +1,708 @@
+{
+  "schemaVersion": 1,
+  "phase": "W10R",
+  "testRunId": "w10r-canonical-20260817",
+  "branch": "codex/phase6-w10r-ui-recovery",
+  "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+  "functionalBaselineSha": "ef74b571a6964ddbc61eb7877a98d21b3c7c8c85",
+  "visualBaselineSha": "c735055608cdc06bd2b6324f92662f88149f6966",
+  "projectId": "westory-staging-177587430482",
+  "stableAlias": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+  "deploymentUrl": "https://westory-staging-gvy3mj1s3-bbbs-projects-44f9da30.vercel.app",
+  "deploymentId": "dpl_DFvjkFTw4knYS3ZR34ixcdHqtTJM",
+  "capturedAt": "2026-08-17T06:20:50.106Z",
+  "captureMode": "authenticated-batch",
+  "captureTimestampSemantics": "각 entry의 capturedAt은 동일한 브라우저 배치 시작 시각입니다.",
+  "productionAccess": 0,
+  "productionWrites": 0,
+  "status": "PASS",
+  "uxCritiques": [
+    {
+      "screenId": "teacher-dashboard",
+      "summary": "오늘 해야 할 업무를 첫 순서로 올리고 일정·공지·운영 상태를 뒤에 배치해 교사의 판단 흐름을 단순화했습니다. 모바일 플로팅 메모 버튼도 헤더의 명시적 동작으로 통합했습니다.",
+      "status": "PASS"
+    },
+    {
+      "screenId": "teacher-students",
+      "summary": "필터·검색·새로고침을 한 도구 영역으로 묶고 명단을 중심에 유지했습니다. 긴 이메일과 좁은 화면에서도 학년·반이 비정상적으로 분절되지 않고 표 이동 안내가 유지됩니다.",
+      "status": "PASS"
+    },
+    {
+      "screenId": "teacher-quiz-bank",
+      "summary": "문제 은행의 필터와 요약 지표, 목록 순서를 분명히 하고 URL 탭·뒤로가기 상태를 맞췄습니다. 문항과 응시 분석 오류를 분리해 부분 장애에서도 문제 수정 기능을 보존했습니다.",
+      "status": "PASS"
+    },
+    {
+      "screenId": "teacher-cutover",
+      "summary": "학기 전환을 준비 학기·검증 상태·다음 단계 중심의 학교 운영 언어로 바꾸고 위험 작업은 비활성화했습니다. 내부 상태 코드와 식별자는 사용자 화면에서 제거했습니다.",
+      "status": "PASS"
+    },
+    {
+      "screenId": "student-today",
+      "summary": "이어 할 학습을 가장 먼저, 일정과 공지를 다음에 배치하고 보조 상태는 뒤로 내렸습니다. 모바일 하단 메뉴와 경쟁하던 플로팅 동작을 제거하고 안전 여백을 확보했습니다.",
+      "status": "PASS"
+    }
+  ],
+  "screenshots": [
+    {
+      "screenId": "teacher-dashboard",
+      "role": "teacher",
+      "route": "/teacher/dashboard",
+      "viewport": {
+        "width": 320,
+        "height": 800
+      },
+      "actualPixelSize": {
+        "width": 320,
+        "height": 800
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "overflowX": 0,
+      "fileName": "teacher-dashboard-320x800.png",
+      "sha256": "d5d7b2f0070f0141b7126103be0ab4475d1c7e9dba9dd292426118d618a38a90",
+      "capturedAt": "2026-08-17T06:20:50.106Z",
+      "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    },
+    {
+      "screenId": "teacher-dashboard",
+      "role": "teacher",
+      "route": "/teacher/dashboard",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "actualPixelSize": {
+        "width": 390,
+        "height": 844
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "overflowX": 0,
+      "fileName": "teacher-dashboard-390x844.png",
+      "sha256": "e425febe7bd5490ad61d5e969b593630d5551e04b8dbd35d89a72becfa53a89a",
+      "capturedAt": "2026-08-17T06:20:50.106Z",
+      "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    },
+    {
+      "screenId": "teacher-dashboard",
+      "role": "teacher",
+      "route": "/teacher/dashboard",
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "actualPixelSize": {
+        "width": 768,
+        "height": 1024
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "overflowX": 0,
+      "fileName": "teacher-dashboard-768x1024.png",
+      "sha256": "81bf3298c9388acf9346d586ba17cdb1e26785a80ea1920bbc5d6468e64420f1",
+      "capturedAt": "2026-08-17T06:20:50.106Z",
+      "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    },
+    {
+      "screenId": "teacher-dashboard",
+      "role": "teacher",
+      "route": "/teacher/dashboard",
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "actualPixelSize": {
+        "width": 1024,
+        "height": 768
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "overflowX": 0,
+      "fileName": "teacher-dashboard-1024x768.png",
+      "sha256": "9cef39e5e3172916f500ef4e3856b1eaddb930194d724a2db2934b7a2b271ee3",
+      "capturedAt": "2026-08-17T06:20:50.106Z",
+      "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    },
+    {
+      "screenId": "teacher-dashboard",
+      "role": "teacher",
+      "route": "/teacher/dashboard",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "actualPixelSize": {
+        "width": 1280,
+        "height": 800
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "overflowX": 0,
+      "fileName": "teacher-dashboard-1280x800.png",
+      "sha256": "8182d94838c361bf94ec76ea06720e6019820b89fc2c72b262cbbbaae412d127",
+      "capturedAt": "2026-08-17T06:20:50.106Z",
+      "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    },
+    {
+      "screenId": "teacher-dashboard",
+      "role": "teacher",
+      "route": "/teacher/dashboard",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "actualPixelSize": {
+        "width": 1440,
+        "height": 900
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "overflowX": 0,
+      "fileName": "teacher-dashboard-1440x900.png",
+      "sha256": "d7fec268f8f3df47ad7a42dca46895b88cb9dd574ee4fb325361c411a2a81366",
+      "capturedAt": "2026-08-17T06:20:50.106Z",
+      "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    },
+    {
+      "screenId": "teacher-students",
+      "role": "teacher",
+      "route": "/teacher/students",
+      "viewport": {
+        "width": 320,
+        "height": 800
+      },
+      "actualPixelSize": {
+        "width": 320,
+        "height": 800
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "overflowX": 0,
+      "fileName": "teacher-students-320x800.png",
+      "sha256": "0a6115acae0d8b06ec4a402a73fee69aae6675ff94be5e9a34627e241143a332",
+      "capturedAt": "2026-08-17T06:20:50.106Z",
+      "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    },
+    {
+      "screenId": "teacher-students",
+      "role": "teacher",
+      "route": "/teacher/students",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "actualPixelSize": {
+        "width": 390,
+        "height": 844
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "overflowX": 0,
+      "fileName": "teacher-students-390x844.png",
+      "sha256": "77f90719bd2161788e86da8cbbf2c4fadfc08f55969bbd21fa9d3396276e338c",
+      "capturedAt": "2026-08-17T06:20:50.106Z",
+      "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    },
+    {
+      "screenId": "teacher-students",
+      "role": "teacher",
+      "route": "/teacher/students",
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "actualPixelSize": {
+        "width": 768,
+        "height": 1024
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "overflowX": 0,
+      "fileName": "teacher-students-768x1024.png",
+      "sha256": "556cad27b0db4b3beed96ec81157a4d192b3c24a4422eb1406aa8323b72a848c",
+      "capturedAt": "2026-08-17T06:20:50.106Z",
+      "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    },
+    {
+      "screenId": "teacher-students",
+      "role": "teacher",
+      "route": "/teacher/students",
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "actualPixelSize": {
+        "width": 1024,
+        "height": 768
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "overflowX": 0,
+      "fileName": "teacher-students-1024x768.png",
+      "sha256": "957b2150364923df616ad05f7f92a39d9b0837170aa0737d63a8138b3df41a96",
+      "capturedAt": "2026-08-17T06:20:50.106Z",
+      "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    },
+    {
+      "screenId": "teacher-students",
+      "role": "teacher",
+      "route": "/teacher/students",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "actualPixelSize": {
+        "width": 1280,
+        "height": 800
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "overflowX": 0,
+      "fileName": "teacher-students-1280x800.png",
+      "sha256": "c56694092517d427ab92a4489d4e49679ca9af216b69402053cf217ddcf085a2",
+      "capturedAt": "2026-08-17T06:20:50.106Z",
+      "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    },
+    {
+      "screenId": "teacher-students",
+      "role": "teacher",
+      "route": "/teacher/students",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "actualPixelSize": {
+        "width": 1440,
+        "height": 900
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "overflowX": 0,
+      "fileName": "teacher-students-1440x900.png",
+      "sha256": "6f68f69c5e35e12e075db9ea3c0192f9137f928e59907a8ff659e2d3be156c08",
+      "capturedAt": "2026-08-17T06:20:50.106Z",
+      "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    },
+    {
+      "screenId": "teacher-quiz-bank",
+      "role": "teacher",
+      "route": "/teacher/quiz?tab=bank",
+      "viewport": {
+        "width": 320,
+        "height": 800
+      },
+      "actualPixelSize": {
+        "width": 320,
+        "height": 800
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "overflowX": 0,
+      "fileName": "teacher-quiz-bank-320x800.png",
+      "sha256": "3b9eaba3845bc8079e1b4ec2894b931d9acac5b9513bfd9ed91d2445baa10dc6",
+      "capturedAt": "2026-08-17T06:20:50.106Z",
+      "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    },
+    {
+      "screenId": "teacher-quiz-bank",
+      "role": "teacher",
+      "route": "/teacher/quiz?tab=bank",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "actualPixelSize": {
+        "width": 390,
+        "height": 844
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "overflowX": 0,
+      "fileName": "teacher-quiz-bank-390x844.png",
+      "sha256": "191d87dcec0367e8f6a1a31ffa568290048fa04f6beb2292c7338ca4725b90d0",
+      "capturedAt": "2026-08-17T06:20:50.106Z",
+      "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    },
+    {
+      "screenId": "teacher-quiz-bank",
+      "role": "teacher",
+      "route": "/teacher/quiz?tab=bank",
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "actualPixelSize": {
+        "width": 768,
+        "height": 1024
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "overflowX": 0,
+      "fileName": "teacher-quiz-bank-768x1024.png",
+      "sha256": "6704048c1d557f60012b42b2276e54ffa8d1706b5baeb8c310f8bebfab3b99fa",
+      "capturedAt": "2026-08-17T06:20:50.106Z",
+      "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    },
+    {
+      "screenId": "teacher-quiz-bank",
+      "role": "teacher",
+      "route": "/teacher/quiz?tab=bank",
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "actualPixelSize": {
+        "width": 1024,
+        "height": 768
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "overflowX": 0,
+      "fileName": "teacher-quiz-bank-1024x768.png",
+      "sha256": "07f1ac6209f952c173b6a6e20e73de4c49df41a7c4584a27b29511ac263b5f8e",
+      "capturedAt": "2026-08-17T06:20:50.106Z",
+      "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    },
+    {
+      "screenId": "teacher-quiz-bank",
+      "role": "teacher",
+      "route": "/teacher/quiz?tab=bank",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "actualPixelSize": {
+        "width": 1280,
+        "height": 800
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "overflowX": 0,
+      "fileName": "teacher-quiz-bank-1280x800.png",
+      "sha256": "ac9d85ebb7e3ca5ce7e507fcc815658ebca79460cec13682d589b96c2666b9eb",
+      "capturedAt": "2026-08-17T06:20:50.106Z",
+      "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    },
+    {
+      "screenId": "teacher-quiz-bank",
+      "role": "teacher",
+      "route": "/teacher/quiz?tab=bank",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "actualPixelSize": {
+        "width": 1440,
+        "height": 900
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "overflowX": 0,
+      "fileName": "teacher-quiz-bank-1440x900.png",
+      "sha256": "6afc1cccecc60666a08e6a0e0c2aa6dbf1dc82a6fb04a500ad7d22fd2dd69183",
+      "capturedAt": "2026-08-17T06:20:50.106Z",
+      "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    },
+    {
+      "screenId": "teacher-cutover",
+      "role": "admin",
+      "route": "/teacher/settings/cutover",
+      "viewport": {
+        "width": 320,
+        "height": 800
+      },
+      "actualPixelSize": {
+        "width": 320,
+        "height": 800
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "overflowX": 0,
+      "fileName": "teacher-cutover-320x800.png",
+      "sha256": "ed686335960c467683790df4cbd9d2615070ef2ad50e72eeb10af244557e71bb",
+      "capturedAt": "2026-08-17T06:20:50.106Z",
+      "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    },
+    {
+      "screenId": "teacher-cutover",
+      "role": "admin",
+      "route": "/teacher/settings/cutover",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "actualPixelSize": {
+        "width": 390,
+        "height": 844
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "overflowX": 0,
+      "fileName": "teacher-cutover-390x844.png",
+      "sha256": "710a75b9f994ea3eca2ec96adf86c34811d397a2b754cfaf31b68f8866edcc80",
+      "capturedAt": "2026-08-17T06:20:50.106Z",
+      "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    },
+    {
+      "screenId": "teacher-cutover",
+      "role": "admin",
+      "route": "/teacher/settings/cutover",
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "actualPixelSize": {
+        "width": 768,
+        "height": 1024
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "overflowX": 0,
+      "fileName": "teacher-cutover-768x1024.png",
+      "sha256": "5a3e4ae34220d4310e209f3fc80b810aa1a7cb8d954fee01f3b77dbec4a5dea8",
+      "capturedAt": "2026-08-17T06:20:50.106Z",
+      "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    },
+    {
+      "screenId": "teacher-cutover",
+      "role": "admin",
+      "route": "/teacher/settings/cutover",
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "actualPixelSize": {
+        "width": 1024,
+        "height": 768
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "overflowX": 0,
+      "fileName": "teacher-cutover-1024x768.png",
+      "sha256": "e6e9d3968551c0edc94290bc1be89989fd589d3bf2fe8281ad64894aa6055f82",
+      "capturedAt": "2026-08-17T06:20:50.106Z",
+      "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    },
+    {
+      "screenId": "teacher-cutover",
+      "role": "admin",
+      "route": "/teacher/settings/cutover",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "actualPixelSize": {
+        "width": 1280,
+        "height": 800
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "overflowX": 0,
+      "fileName": "teacher-cutover-1280x800.png",
+      "sha256": "aa987de28beb1e0c7ef5939b5853e03ecb846500de6449f2b1bef91a95321b93",
+      "capturedAt": "2026-08-17T06:20:50.106Z",
+      "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    },
+    {
+      "screenId": "teacher-cutover",
+      "role": "admin",
+      "route": "/teacher/settings/cutover",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "actualPixelSize": {
+        "width": 1440,
+        "height": 900
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "overflowX": 0,
+      "fileName": "teacher-cutover-1440x900.png",
+      "sha256": "b8c5bef1820c12dd6e16a0208a824f01f3028e2f93635f7739c9c24e644df891",
+      "capturedAt": "2026-08-17T06:20:50.106Z",
+      "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    },
+    {
+      "screenId": "student-today",
+      "role": "student",
+      "route": "/student/dashboard",
+      "viewport": {
+        "width": 320,
+        "height": 800
+      },
+      "actualPixelSize": {
+        "width": 320,
+        "height": 800
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "overflowX": 0,
+      "fileName": "student-today-320x800.png",
+      "sha256": "83dea192885cae85d16a00c64e54daa791783b621ede2b308af791417125f750",
+      "capturedAt": "2026-08-17T06:20:50.106Z",
+      "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    },
+    {
+      "screenId": "student-today",
+      "role": "student",
+      "route": "/student/dashboard",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "actualPixelSize": {
+        "width": 390,
+        "height": 844
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "overflowX": 0,
+      "fileName": "student-today-390x844.png",
+      "sha256": "d7225ae75538f2be5e430bd6b764537c022306eea053fca1f177dcfb33b9c950",
+      "capturedAt": "2026-08-17T06:20:50.106Z",
+      "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    },
+    {
+      "screenId": "student-today",
+      "role": "student",
+      "route": "/student/dashboard",
+      "viewport": {
+        "width": 768,
+        "height": 1024
+      },
+      "actualPixelSize": {
+        "width": 768,
+        "height": 1024
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "overflowX": 0,
+      "fileName": "student-today-768x1024.png",
+      "sha256": "96569f63f821d23bd1ad810b66dbf6bf1e3267d84b3197a1c7193631f059cfbd",
+      "capturedAt": "2026-08-17T06:20:50.106Z",
+      "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    },
+    {
+      "screenId": "student-today",
+      "role": "student",
+      "route": "/student/dashboard",
+      "viewport": {
+        "width": 1024,
+        "height": 768
+      },
+      "actualPixelSize": {
+        "width": 1024,
+        "height": 768
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "overflowX": 0,
+      "fileName": "student-today-1024x768.png",
+      "sha256": "e6d81b43a415242a688723a73045a63974597b75dda6051dd94d0782445b4a31",
+      "capturedAt": "2026-08-17T06:20:50.106Z",
+      "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    },
+    {
+      "screenId": "student-today",
+      "role": "student",
+      "route": "/student/dashboard",
+      "viewport": {
+        "width": 1280,
+        "height": 800
+      },
+      "actualPixelSize": {
+        "width": 1280,
+        "height": 800
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "overflowX": 0,
+      "fileName": "student-today-1280x800.png",
+      "sha256": "5cf27e7bed27f8a8f283cc89c3ef3b33bfbb5c49108377f52a258fbf938e8397",
+      "capturedAt": "2026-08-17T06:20:50.106Z",
+      "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    },
+    {
+      "screenId": "student-today",
+      "role": "student",
+      "route": "/student/dashboard",
+      "viewport": {
+        "width": 1440,
+        "height": 900
+      },
+      "actualPixelSize": {
+        "width": 1440,
+        "height": 900
+      },
+      "dpr": 1,
+      "fullPage": false,
+      "overflowX": 0,
+      "fileName": "student-today-1440x900.png",
+      "sha256": "b8b3c9a081d1ade60f49b39be374b57336fdec5330bbe0f13d044d4533bbe94b",
+      "capturedAt": "2026-08-17T06:20:50.106Z",
+      "sourceCommitSha": "7ddfd7202ba3e59eb9e9ded5d105dde4d604693b",
+      "observedOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+      "status": "PASS"
+    }
+  ]
+}
