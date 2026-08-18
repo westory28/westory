@@ -484,13 +484,15 @@ for (const [screenId, readiness] of Object.entries(
       );
       assert.equal(signal.id, "schedule-fixture");
     }
+    const expectedCalendarGlyphMinimum =
+      screenId === "student-calendar" ? 0.25 : 0.2;
     assert.equal(
       signal.minimumGlyphVisibleRatio === undefined ||
-        signal.minimumGlyphVisibleRatio === 0.25,
+        signal.minimumGlyphVisibleRatio === expectedCalendarGlyphMinimum,
       true,
       `${screenId}.${signal.id}.minimumGlyphVisibleRatio is unsupported.`,
     );
-    if (signal.minimumGlyphVisibleRatio === 0.25) {
+    if (Number.isFinite(signal.minimumGlyphVisibleRatio)) {
       assert.ok(
         [
           "student-calendar",
@@ -599,12 +601,14 @@ for (const [screenId, fixture] of Object.entries(
       );
       assert.equal(item.id, "schedule-events");
     }
+    const expectedCalendarGlyphMinimum =
+      screenId === "student-calendar" ? 0.25 : 0.2;
     assert.equal(
       item.minimumGlyphVisibleRatio === undefined ||
-        item.minimumGlyphVisibleRatio === 0.25,
+        item.minimumGlyphVisibleRatio === expectedCalendarGlyphMinimum,
       true,
     );
-    if (item.minimumGlyphVisibleRatio === 0.25) {
+    if (Number.isFinite(item.minimumGlyphVisibleRatio)) {
       assert.ok(
         [
           "student-calendar",

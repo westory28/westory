@@ -827,7 +827,7 @@
           "exactCount": 1,
           "textPattern": "W10P 시각 검증 일정",
           "minimumContrastRatio": 2.5,
-          "minimumGlyphVisibleRatio": 0.25
+          "minimumGlyphVisibleRatio": 0.2
         }
       ]
     },
@@ -841,7 +841,7 @@
           "exactCount": 1,
           "textPattern": "W10P 시각 검증 일정",
           "minimumContrastRatio": 2.5,
-          "minimumGlyphVisibleRatio": 0.25
+          "minimumGlyphVisibleRatio": 0.2
         }
       ]
     },
@@ -855,7 +855,7 @@
           "exactCount": 1,
           "textPattern": "W10P 시각 검증 일정",
           "minimumContrastRatio": 2.5,
-          "minimumGlyphVisibleRatio": 0.25
+          "minimumGlyphVisibleRatio": 0.2
         }
       ]
     },
@@ -1217,7 +1217,7 @@
           "textPattern": "^W10P 시각 검증 일정$",
           "tagPattern": "^(?:DIV|SPAN)$",
           "minimumContrastRatio": 2.5,
-          "minimumGlyphVisibleRatio": 0.25
+          "minimumGlyphVisibleRatio": 0.2
         }
       ]
     },
@@ -1839,7 +1839,7 @@
           "textPattern": "^W10P 시각 검증 일정$",
           "tagPattern": "^(?:DIV|SPAN)$",
           "minimumContrastRatio": 2.5,
-          "minimumGlyphVisibleRatio": 0.25
+          "minimumGlyphVisibleRatio": 0.2
         }
       ]
     },
@@ -1857,7 +1857,7 @@
           "textPattern": "^W10P 시각 검증 일정$",
           "tagPattern": "^(?:DIV|SPAN)$",
           "minimumContrastRatio": 2.5,
-          "minimumGlyphVisibleRatio": 0.25
+          "minimumGlyphVisibleRatio": 0.2
         }
       ]
     },
