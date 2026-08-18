@@ -1,20 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import {
-  collection,
-  deleteDoc,
-  doc,
-  getDocs,
-  orderBy,
-  query,
-  serverTimestamp,
-  setDoc,
-} from "firebase/firestore";
-import {
-  deleteObject,
-  getDownloadURL,
-  ref,
-  uploadBytes,
-} from "firebase/storage";
+import { collection, doc, getDocs, orderBy, query } from "firebase/firestore";
+import { getDownloadURL, ref } from "firebase/storage";
 import { InlineLoading } from "../../components/common/LoadingState";
 import StatePanel from "../../components/common/StatePanel";
 import MapSidebar from "../../components/common/MapSidebar";
@@ -39,6 +25,11 @@ import {
 import type { ProcessedPdfMap } from "../../lib/pdfMapProcessor";
 import { getSemesterCollectionPath } from "../../lib/semesterScope";
 import { canWriteLessonManagement } from "../../lib/permissions";
+import {
+  LEGACY_LESSON_MANAGEMENT_HASH_ROUTE,
+  buildLegacyLessonManagementHandoffMessage,
+  shouldHandoffLegacyLessonManagementMutation,
+} from "../../lib/legacyLessonManagementHandoff";
 
 type StorageScope = "semester" | "legacy";
 
@@ -235,11 +226,17 @@ const ManageMaps: React.FC = () => {
   >({});
   const [tabRenameSourceKey, setTabRenameSourceKey] = useState("");
   const [tabRenameValue, setTabRenameValue] = useState("");
+  const [handoffAction, setHandoffAction] = useState("");
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const mutationsUnavailable = true;
-  const canEdit =
-    !mutationsUnavailable &&
-    canWriteLessonManagement(userData, currentUser?.email || "");
+  const canEdit = canWriteLessonManagement(userData, currentUser?.email || "");
+
+  const blockLegacyMapMutationAsync = async <T = never,>(
+    actionLabel: string,
+    ..._ignored: unknown[]
+  ): Promise<T> => {
+    setHandoffAction(actionLabel);
+    throw new Error(buildLegacyLessonManagementHandoffMessage(actionLabel));
+  };
 
   const collectionPath = useMemo(
     () => getSemesterCollectionPath(config, "map_resources"),
@@ -624,6 +621,7 @@ const ManageMaps: React.FC = () => {
   const handleOpenTagManager = (itemId: string) => {
     const target = items.find((item) => item.id === itemId);
     if (!target || target.type !== "pdf") return;
+    setHandoffAction("");
     setSelectedId(itemId);
     setDraft(target);
     setSectionTagInputs({});
@@ -743,6 +741,7 @@ const ManageMaps: React.FC = () => {
   };
 
   const handleCreateNew = () => {
+    setHandoffAction("");
     setSelectedId("");
     resetFileInput();
     setDraft(createDraft());
@@ -750,6 +749,7 @@ const ManageMaps: React.FC = () => {
   };
 
   const handleOpenSettings = (itemId: string) => {
+    setHandoffAction("");
     if (!loading) {
       setSelectedId(itemId);
     }
@@ -758,6 +758,12 @@ const ManageMaps: React.FC = () => {
 
   const handleSaveTagManager = async () => {
     if (!canEdit || draft.type !== "pdf" || !draft.id) return;
+
+    if (shouldHandoffLegacyLessonManagementMutation()) {
+      setHandoffAction("지도 태그 설정 저장");
+      setIsTagManagerOpen(false);
+      return;
+    }
 
     setSaving(true);
     try {
@@ -774,6 +780,7 @@ const ManageMaps: React.FC = () => {
 
   const handleOpenTabRename = (groupKey: string) => {
     const targetGroup = displayGroupMap.get(groupKey);
+    setHandoffAction("");
     setTabRenameSourceKey(groupKey);
     setTabRenameValue(targetGroup?.title || "");
     setIsTabRenameOpen(true);
@@ -793,6 +800,10 @@ const ManageMaps: React.FC = () => {
 
   const handleMoveItem = async (itemId: string, direction: "up" | "down") => {
     if (!canEdit) return;
+    if (shouldHandoffLegacyLessonManagementMutation()) {
+      setHandoffAction("지도 순서 변경");
+      return;
+    }
     const currentGroups = groupMapResourcesForDisplay(items);
     const currentGroupIndex = currentGroups.findIndex(
       (group) =>
@@ -833,11 +844,11 @@ const ManageMaps: React.FC = () => {
   const persistToScope = async (scope: StorageScope, payload: MapResource) => {
     const path = scope === "semester" ? collectionPath : legacyCollectionPath;
 
-    await setDoc(
+    await blockLegacyMapMutationAsync(
+      "지도 자료 저장",
       doc(db, `${path}/${payload.id}`),
       {
         ...payload,
-        updatedAt: serverTimestamp(),
       },
       { merge: true },
     );
@@ -859,10 +870,15 @@ const ManageMaps: React.FC = () => {
       const pagePath = `map-resources/${resourceId}/page-${page.page}.${pageExtension}`;
       const pageRef = ref(storage, pagePath);
       await withTimeout(
-        uploadBytes(pageRef, page.blob, {
-          contentType: page.blob.type || "image/png",
-          cacheControl: PDF_PAGE_UPLOAD_CACHE_CONTROL,
-        }),
+        blockLegacyMapMutationAsync(
+          "지도 PDF 페이지 업로드",
+          pageRef,
+          page.blob,
+          {
+            contentType: page.blob.type || "image/png",
+            cacheControl: PDF_PAGE_UPLOAD_CACHE_CONTROL,
+          },
+        ),
         20000,
         `storage-upload-page-${page.page}`,
       );
@@ -897,7 +913,10 @@ const ManageMaps: React.FC = () => {
         Array.from(new Set(cleanupPaths)).map(async (path) => {
           if (uploadedPagePaths.has(path)) return;
           try {
-            await deleteObject(ref(storage, path));
+            await blockLegacyMapMutationAsync(
+              "이전 지도 PDF 페이지 정리",
+              ref(storage, path),
+            );
           } catch {
             // Missing old page objects are fine; cleanup is best effort.
           }
@@ -982,7 +1001,7 @@ const ManageMaps: React.FC = () => {
     );
 
     await withTimeout(
-      uploadBytes(objectRef, targetFile, {
+      blockLegacyMapMutationAsync("지도 파일 업로드", objectRef, targetFile, {
         contentType: targetFile.type || undefined,
       }),
       20000,
@@ -1080,6 +1099,14 @@ const ManageMaps: React.FC = () => {
           ? "PDF 파일을 선택해 주세요."
           : "이미지 파일을 선택해 주세요.",
       );
+      return;
+    }
+
+    if (shouldHandoffLegacyLessonManagementMutation()) {
+      setHandoffAction(
+        draft.id ? "지도 자료 수정 저장" : "새 지도 자료 등록 저장",
+      );
+      setIsSettingsOpen(false);
       return;
     }
 
@@ -1266,6 +1293,12 @@ const ManageMaps: React.FC = () => {
     if (!canEdit) return;
     if (draft.type !== "pdf" || !draft.id) return;
 
+    if (shouldHandoffLegacyLessonManagementMutation()) {
+      setHandoffAction("지도 PDF 재처리");
+      setIsSettingsOpen(false);
+      return;
+    }
+
     let sourceFile = selectedFile;
     if (!sourceFile) {
       alert("PDF 재처리를 위해 같은 PDF 파일을 다시 선택해 주세요.");
@@ -1314,6 +1347,12 @@ const ManageMaps: React.FC = () => {
       return;
     }
 
+    if (shouldHandoffLegacyLessonManagementMutation()) {
+      setHandoffAction("지도 자료 삭제");
+      setIsSettingsOpen(false);
+      return;
+    }
+
     try {
       const preferredScope: StorageScope = draft.storageScope || "semester";
       const fallbackScope: StorageScope =
@@ -1324,13 +1363,19 @@ const ManageMaps: React.FC = () => {
         fallbackScope === "semester" ? collectionPath : legacyCollectionPath;
 
       try {
-        await deleteDoc(doc(db, `${primaryPath}/${draft.id}`));
+        await blockLegacyMapMutationAsync(
+          "지도 자료 삭제",
+          doc(db, `${primaryPath}/${draft.id}`),
+        );
       } catch (primaryError) {
         console.error(
           `Failed to delete map resource from ${primaryPath}:`,
           primaryError,
         );
-        await deleteDoc(doc(db, `${fallbackPath}/${draft.id}`));
+        await blockLegacyMapMutationAsync(
+          "지도 자료 삭제",
+          doc(db, `${fallbackPath}/${draft.id}`),
+        );
       }
 
       const nextItems = mergeMapResources(
@@ -1356,6 +1401,12 @@ const ManageMaps: React.FC = () => {
     const nextTabGroup = tabRenameValue.trim();
     if (!tabRenameSourceKey || !nextTabGroup) {
       alert("지도 탭 이름을 입력해 주세요.");
+      return;
+    }
+
+    if (shouldHandoffLegacyLessonManagementMutation()) {
+      setHandoffAction("지도 탭 이름 변경");
+      setIsTabRenameOpen(false);
       return;
     }
 
@@ -1583,13 +1634,29 @@ const ManageMaps: React.FC = () => {
         />
 
         <section className="min-w-0 flex-1 space-y-5 sm:space-y-6">
-          <StatePanel
-            state="DISABLED"
-            title="지도 자료는 현재 조회 전용입니다."
-            description="새 자료 등록, 파일 업로드, 순서·태그·탭 설정, 수정과 삭제는 안전한 저장 경로가 마련될 때까지 사용할 수 없습니다."
-            readOnly
-            compact
-          />
+          {!canEdit && (
+            <StatePanel
+              state="DISABLED"
+              title="지도 자료는 읽기 전용입니다."
+              description="현재 계정은 저장 권한이 없어 지도 자료를 조회만 할 수 있습니다."
+              readOnly
+              compact
+            />
+          )}
+          {handoffAction && (
+            <StatePanel
+              state="DISABLED"
+              title={`${handoffAction}은 학습 운영에서 진행해 주세요.`}
+              description={buildLegacyLessonManagementHandoffMessage(
+                handoffAction,
+              )}
+              action={{
+                label: "학습 운영으로 이동",
+                href: LEGACY_LESSON_MANAGEMENT_HASH_ROUTE,
+              }}
+              compact
+            />
+          )}
           {loading ? (
             <InlineLoading
               message="지도 자료를 불러오는 중입니다."

@@ -3370,9 +3370,9 @@ const ManageHistoryClassroom: React.FC = () => {
               <DashboardIcon name="calendar" className="h-6 w-6" />
             </div>
             <div>
-              <h2 className="text-2xl font-black text-gray-900">
+              <h1 className="text-2xl font-black text-gray-900">
                 역사교실 제출 현황 대시보드
-              </h2>
+              </h1>
               <p className="mt-2 text-sm leading-6 text-gray-600">
                 날짜별로 과제와 학생 제출 현황을 한눈에 확인하세요.
               </p>

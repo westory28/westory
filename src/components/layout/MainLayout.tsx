@@ -3,7 +3,8 @@ import {
   inferToastFromAlertMessage,
   useAppToast,
 } from "../common/AppToastProvider";
-import AppShell from "../shell/AppShell";
+import Header from "../common/Header";
+import Footer from "../common/Footer";
 import { PageLoading } from "../common/LoadingState";
 import { useAuth } from "../../contexts/AuthContext";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -164,7 +165,8 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   }
 
   return (
-    <AppShell>
+    <div className="flex min-h-screen flex-col bg-gray-50">
+      <Header />
       {studentEnhancementsReady && (
         <React.Suspense fallback={null}>
           <StudentRankPromotionController />
@@ -176,14 +178,17 @@ const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
           <TeacherPatchMemoController />
         </React.Suspense>
       )}
-      <div
+      <main
+        id="main-content"
+        tabIndex={-1}
         className={`min-h-0 w-full flex-1 ${
           isStudentQuizRunRoute ? "flex flex-col" : ""
         }`}
       >
         {children}
-      </div>
-    </AppShell>
+      </main>
+      <Footer />
+    </div>
   );
 };
 

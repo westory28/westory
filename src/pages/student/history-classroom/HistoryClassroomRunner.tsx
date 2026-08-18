@@ -10,7 +10,6 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import HistoryClassroomAssignmentView from "../../../components/common/HistoryClassroomAssignmentView";
 import { PageLoading } from "../../../components/common/LoadingState";
-import StatePanel from "../../../components/common/StatePanel";
 import { useAuth } from "../../../contexts/AuthContext";
 import { notifyPointsUpdated } from "../../../lib/appEvents";
 import { db } from "../../../lib/firebase";
@@ -248,6 +247,7 @@ const HistoryClassroomRunner: React.FC = () => {
   const [completed, setCompleted] = useState(false);
   const [error, setError] = useState("");
   const [legacySource, setLegacySource] = useState(false);
+  const [legacyNoticeOpen, setLegacyNoticeOpen] = useState(true);
   const [resultText, setResultText] = useState("");
   const [resultSummary, setResultSummary] =
     useState<HistoryClassroomResultModalSummary | null>(null);
@@ -305,6 +305,7 @@ const HistoryClassroomRunner: React.FC = () => {
       setLoading(true);
       setError("");
       setLegacySource(false);
+      setLegacyNoticeOpen(true);
 
       try {
         const { year, semester } = getYearSemester(config);
@@ -1441,17 +1442,7 @@ const HistoryClassroomRunner: React.FC = () => {
 
   if (legacySource) {
     return (
-      <div className="mx-auto w-full max-w-5xl space-y-6 px-4 py-8 sm:py-12">
-        <StatePanel
-          state="LEGACY"
-          title={assignment.title || "이전 역사교실 자료"}
-          description="이 자료는 이전 저장 구조에서 확인되었습니다. 새 응시 기록은 만들지 않으며 읽기 전용으로만 안내합니다."
-          readOnly
-          action={{
-            label: "역사교실 목록으로 돌아가기",
-            onClick: () => navigate("/student/history-classroom"),
-          }}
-        />
+      <>
         <HistoryClassroomAssignmentView
           assignment={assignment}
           currentPage={currentPage}
@@ -1464,7 +1455,54 @@ const HistoryClassroomRunner: React.FC = () => {
             "답안 입력과 제출은 지원하지 않습니다.",
           ]}
         />
-      </div>
+        {legacyNoticeOpen && (
+          <div
+            className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-950/55 px-4 py-6 backdrop-blur-sm"
+            data-state="LEGACY"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="history-classroom-legacy-title"
+            aria-describedby="history-classroom-legacy-description"
+          >
+            <div className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.32)]">
+              <div className="px-5 py-5 sm:px-6">
+                <div className="text-xs font-bold uppercase tracking-[0.18em] text-amber-600">
+                  이전 자료 · 읽기 전용
+                </div>
+                <h2
+                  id="history-classroom-legacy-title"
+                  className="mt-2 text-xl font-black text-slate-900"
+                >
+                  {assignment.title || "이전 역사교실 자료"}
+                </h2>
+                <p
+                  id="history-classroom-legacy-description"
+                  className="mt-3 text-sm leading-6 text-slate-600"
+                >
+                  이 자료는 이전 저장 구조에서 확인되었습니다. 새 응시 기록은
+                  만들지 않으며 읽기 전용으로만 안내합니다.
+                </p>
+              </div>
+              <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:px-6">
+                <button
+                  type="button"
+                  onClick={() => navigate("/student/history-classroom")}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-100"
+                >
+                  목록으로 돌아가기
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLegacyNoticeOpen(false)}
+                  className="rounded-xl border border-blue-600 bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700"
+                >
+                  읽기 전용으로 보기
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
     );
   }
 
@@ -1476,37 +1514,85 @@ const HistoryClassroomRunner: React.FC = () => {
       ),
     );
     return (
-      <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:py-12">
-        <StatePanel
-          state="CONTENT"
-          title={assignment.title || "역사교실 응시"}
-          description={
-            hasRecoverableAttempt
-              ? "서버에 저장된 답안과 종료 시각이 있습니다. 이어하기를 누르면 같은 응시를 계속합니다."
-              : "응시를 시작하기 전까지 답안이나 응시 기록은 만들어지지 않습니다. 제한 시간과 제출 기준을 확인해 주세요."
-          }
-          action={{
-            label: startingAttempt
-              ? "응시 상태 확인 중"
-              : hasRecoverableAttempt
-                ? "저장된 응시 이어하기"
-                : "역사교실 시작하기",
-            onClick: () => void beginOrResumeAttempt(),
-          }}
-          secondaryAction={{
-            label: "목록으로 돌아가기",
-            onClick: () => navigate("/student/history-classroom"),
-          }}
+      <>
+        <HistoryClassroomAssignmentView
+          assignment={assignment}
+          currentPage={currentPage}
+          onCurrentPageChange={handleCurrentPageChange}
+          answers={answers}
+          interactiveViewport
+          answerChecks={resultSummary?.answerChecks || []}
+          onAnswerChange={handleAnswerChange}
+          onSubmit={() => void submitAnswers()}
+          submitting={submitting || pendingSubmitAfterOnline}
+          completed={completed}
+          resultText={resultSummary ? "" : resultText}
+          pointNotice={pointNotice}
+          countdownLabel={countdownLabel}
+          timeProgressPercent={timeProgressPercent}
+          dueStatusLabel={dueStatus.label}
+          dueStatusTone={dueStatus.tone}
         />
-        {resultText && (
-          <p
-            className="mt-4 text-center text-sm font-semibold text-rose-700"
-            role="alert"
-          >
-            {resultText}
-          </p>
-        )}
-      </div>
+        <div
+          className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-950/55 px-4 py-6 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="history-classroom-start-title"
+          aria-describedby="history-classroom-start-description"
+        >
+          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.32)]">
+            <div className="px-5 py-5 sm:px-6">
+              <div className="text-xs font-bold uppercase tracking-[0.18em] text-blue-500">
+                {hasRecoverableAttempt ? "응시 복구" : "응시 준비"}
+              </div>
+              <h2
+                id="history-classroom-start-title"
+                className="mt-2 text-xl font-black text-slate-900"
+              >
+                {assignment.title || "역사교실 응시"}
+              </h2>
+              <p
+                id="history-classroom-start-description"
+                className="mt-3 text-sm leading-6 text-slate-600"
+              >
+                {hasRecoverableAttempt
+                  ? "서버에 저장된 답안과 종료 시각이 있습니다. 이어하기를 누르면 같은 응시를 계속합니다."
+                  : "응시를 시작하기 전까지 답안이나 응시 기록은 만들어지지 않습니다. 제한 시간과 제출 기준을 확인해 주세요."}
+              </p>
+              {resultText && (
+                <p
+                  className="mt-3 text-sm font-semibold leading-6 text-rose-700"
+                  role="alert"
+                >
+                  {resultText}
+                </p>
+              )}
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 px-5 py-4 sm:px-6">
+              <button
+                type="button"
+                onClick={() => navigate("/student/history-classroom")}
+                disabled={startingAttempt}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                목록으로 돌아가기
+              </button>
+              <button
+                type="button"
+                onClick={() => void beginOrResumeAttempt()}
+                disabled={startingAttempt}
+                className="rounded-xl border border-blue-600 bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {startingAttempt
+                  ? "응시 상태 확인 중"
+                  : hasRecoverableAttempt
+                    ? "저장된 응시 이어하기"
+                    : "역사교실 시작하기"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </>
     );
   }
 

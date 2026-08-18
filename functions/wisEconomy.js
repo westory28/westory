@@ -5,7 +5,9 @@ const semesterCore = require("./semesterCore");
 const archiveEnrollment = require("./archiveEnrollment");
 const cutoverAuthorization = require("./cutoverAuthorization");
 const sessionAuthority = require("./sessionAuthority");
-const { onCallWithStudentMaintenance: onCall } = require("./studentMaintenance");
+const {
+  onCallWithStudentMaintenance: onCall,
+} = require("./studentMaintenance");
 
 const REGION = "asia-northeast3";
 const WIS_SCHEMA_VERSION = 1;
@@ -21,6 +23,14 @@ const WIS_INVENTORY_COLLECTION = "semester_wis_inventory";
 const WIS_ORDER_COLLECTION = "semester_wis_orders";
 const WIS_RECONCILIATION_COLLECTION = "semester_wis_reconciliation_reports";
 const WIS_LEGACY_ISSUE_COLLECTION = "wis_legacy_issues";
+const WIS_HALL_OF_FAME_CONFIG_PATH = "site_settings/interface_config";
+const WIS_QUERY_DEFAULT_LIMIT = 100;
+const WIS_QUERY_MAX_LIMIT = 200;
+const WIS_RECENT_LEDGER_LIMIT = 100;
+const WIS_HALL_ACCOUNT_LIMIT = 2_000;
+const WIS_REBUILD_LEDGER_LIMIT = 400;
+const WIS_INTEGRITY_VERSION = "w10p-aggregate-v1";
+const WIS_MANUAL_REVERSIBLE_TYPES = new Set(["GRANT", "DEDUCT", "ADJUST"]);
 
 const WIS_COMMAND_TYPES = Object.freeze({
   CREATE_SEMESTER_ECONOMY: "createSemesterEconomy",
@@ -36,53 +46,91 @@ const WIS_COMMAND_TYPES = Object.freeze({
   UPSERT_WIS_INVENTORY: "upsertWisInventory",
   PLACE_WIS_ORDER: "placeWisOrder",
   REVIEW_WIS_ORDER: "reviewWisOrder",
+  SAVE_WIS_HALL_OF_FAME_CONFIG: "saveWisHallOfFameConfig",
 });
 
 const STUDENT_COMMAND_TYPES = new Set([WIS_COMMAND_TYPES.PLACE_WIS_ORDER]);
 const HIGH_RISK_COMMAND_TYPES = new Set(
-  Object.values(WIS_COMMAND_TYPES).filter((type) => !STUDENT_COMMAND_TYPES.has(type)),
+  Object.values(WIS_COMMAND_TYPES).filter(
+    (type) => !STUDENT_COMMAND_TYPES.has(type),
+  ),
 );
 
 const fail = (code, message, reason, details = {}) => {
   throw new HttpsError(code, message, { reason, ...details });
 };
-const sha256 = (value) => createHash("sha256").update(String(value), "utf8").digest("hex");
+const sha256 = (value) =>
+  createHash("sha256").update(String(value), "utf8").digest("hex");
 const canonicalJson = (value) => {
   const visit = (current) => {
     if (Array.isArray(current)) return current.map(visit);
     if (current && typeof current === "object") {
-      return Object.fromEntries(Object.keys(current).sort().filter((key) => current[key] !== undefined)
-        .map((key) => [key, visit(current[key])]));
+      return Object.fromEntries(
+        Object.keys(current)
+          .sort()
+          .filter((key) => current[key] !== undefined)
+          .map((key) => [key, visit(current[key])]),
+      );
     }
     return current;
   };
   return JSON.stringify(visit(value));
 };
-const isObject = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+const isObject = (value) =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
 const allowed = (value, keys, label) => {
-  if (!isObject(value)) fail("invalid-argument", `${label} must be an object.`, "WIS_PAYLOAD_INVALID");
+  if (!isObject(value))
+    fail(
+      "invalid-argument",
+      `${label} must be an object.`,
+      "WIS_PAYLOAD_INVALID",
+    );
   const extra = Object.keys(value).filter((key) => !keys.includes(key));
-  if (extra.length) fail("invalid-argument", `${label} contains unsupported fields.`, "WIS_PAYLOAD_INVALID", { fields: extra });
+  if (extra.length)
+    fail(
+      "invalid-argument",
+      `${label} contains unsupported fields.`,
+      "WIS_PAYLOAD_INVALID",
+      { fields: extra },
+    );
 };
 const text = (value, label, max = 160) => {
-  if (typeof value !== "string" || !value || value !== value.trim() || value.length > max || value.includes("/")) {
-    fail("invalid-argument", `${label} is invalid.`, "WIS_PAYLOAD_INVALID", { field: label });
+  if (
+    typeof value !== "string" ||
+    !value ||
+    value !== value.trim() ||
+    value.length > max ||
+    value.includes("/")
+  ) {
+    fail("invalid-argument", `${label} is invalid.`, "WIS_PAYLOAD_INVALID", {
+      field: label,
+    });
   }
   return value;
 };
-const optionalText = (value, label, max = 500) => value === undefined || value === null || value === "" ? "" : text(value, label, max);
+const optionalText = (value, label, max = 500) =>
+  value === undefined || value === null || value === ""
+    ? ""
+    : text(value, label, max);
 const integer = (value, label, { min = 0, max = 1_000_000 } = {}) => {
-  if (!Number.isSafeInteger(value) || value < min || value > max) fail("invalid-argument", `${label} is invalid.`, "WIS_PAYLOAD_INVALID", { field: label });
+  if (!Number.isSafeInteger(value) || value < min || value > max)
+    fail("invalid-argument", `${label} is invalid.`, "WIS_PAYLOAD_INVALID", {
+      field: label,
+    });
   return value;
 };
-const revision = (value, label = "expectedRevision") => integer(value, label, { min: 1, max: Number.MAX_SAFE_INTEGER });
-const nullableRevision = (value, label) => value === null ? null : revision(value, label);
+const revision = (value, label = "expectedRevision") =>
+  integer(value, label, { min: 1, max: Number.MAX_SAFE_INTEGER });
+const nullableRevision = (value, label) =>
+  value === null ? null : revision(value, label);
 const semesterId = (value) => semesterCore.normalizeSemesterId(value);
 const hashId = (prefix, ...parts) => `${prefix}_${sha256(parts.join("\n"))}`;
 const accountIdFor = (scope, uid) => hashId("wisacct", scope, uid);
 const inventoryIdFor = (scope, productId) => hashId("wisinv", scope, productId);
-const ledgerIdFor = (scope, accountId, type, sourceId) => hashId("wisled", scope, accountId, type, sourceId);
-const orderIdFor = (scope, accountId, inventoryId, commandId) => hashId("wisord", scope, accountId, inventoryId, commandId);
+const ledgerIdFor = (scope, accountId, type, sourceId) =>
+  hashId("wisled", scope, accountId, type, sourceId);
+const orderIdFor = (scope, accountId, inventoryId, commandId) =>
+  hashId("wisord", scope, accountId, inventoryId, commandId);
 const economyPath = (scope) => `${WIS_ECONOMY_COLLECTION}/${scope}`;
 const accountPath = (id) => `${WIS_ACCOUNT_COLLECTION}/${id}`;
 const balancePath = (id) => `${WIS_BALANCE_COLLECTION}/${id}`;
@@ -91,270 +139,3292 @@ const ledgerPath = (id) => `${WIS_LEDGER_COLLECTION}/${id}`;
 const inventoryPath = (id) => `${WIS_INVENTORY_COLLECTION}/${id}`;
 const productPath = (id) => `${WIS_PRODUCT_COLLECTION}/${id}`;
 const orderPath = (id) => `${WIS_ORDER_COLLECTION}/${id}`;
-const manifestPath = (scope) => `${semesterCore.SEMESTER_MANIFEST_COLLECTION}/${scope}`;
-const enrollmentPath = (id) => `${archiveEnrollment.SEMESTER_ENROLLMENT_COLLECTION}/${id}`;
+const manifestPath = (scope) =>
+  `${semesterCore.SEMESTER_MANIFEST_COLLECTION}/${scope}`;
+const enrollmentPath = (id) =>
+  `${archiveEnrollment.SEMESTER_ENROLLMENT_COLLECTION}/${id}`;
+const enrollmentSlotPath = (scope, studentUid) =>
+  `${archiveEnrollment.ENROLLMENT_SLOT_COLLECTION}/${archiveEnrollment.buildEnrollmentSlotId(scope, studentUid)}`;
+const classPath = (id) =>
+  `${archiveEnrollment.SEMESTER_CLASS_COLLECTION}/${id}`;
+
+const readCanonicalActiveEnrollment = async (
+  transaction,
+  scope,
+  studentUid,
+) => {
+  const slot = await transaction.get(enrollmentSlotPath(scope, studentUid));
+  const activeEnrollmentId = String(slot.data?.activeEnrollmentId || "").trim();
+  if (!slot.exists || !activeEnrollmentId) return null;
+  const enrollment = await transaction.get(enrollmentPath(activeEnrollmentId));
+  const data = enrollment.data || {};
+  if (
+    !enrollment.exists ||
+    String(data.enrollmentId || "") !== activeEnrollmentId ||
+    String(data.semesterId || "") !== scope ||
+    String(data.studentUid || "") !== studentUid ||
+    data.enrollmentStatus !== "ACTIVE"
+  )
+    return null;
+  return data;
+};
+
+const DEFAULT_WIS_HALL_OF_FAME_CONFIG = Object.freeze({
+  podiumImageUrl: "",
+  podiumStoragePath: "",
+  positionPreset: "classic_podium_v1",
+  positions: {
+    desktop: {
+      first: { leftPercent: 50, topPercent: 26, widthPercent: 21 },
+      second: { leftPercent: 26.5, topPercent: 40.5, widthPercent: 18 },
+      third: { leftPercent: 73.5, topPercent: 40.5, widthPercent: 18 },
+    },
+    mobile: {
+      first: { leftPercent: 50, topPercent: 28, widthPercent: 28 },
+      second: { leftPercent: 28, topPercent: 46, widthPercent: 21 },
+      third: { leftPercent: 72, topPercent: 46, widthPercent: 21 },
+    },
+  },
+  leaderboardPanel: {
+    desktop: { leftPercent: 71, topPercent: 0, widthPercent: 29 },
+    mobile: { leftPercent: 50, topPercent: 0, widthPercent: 100 },
+  },
+  publicRange: { gradeRankLimit: 10, classRankLimit: 10, includeTies: true },
+  recognitionPopup: { enabled: true, gradeEnabled: true, classEnabled: true },
+});
+
+const boundedNumber = (value, label, minimum, maximum, fallback) => {
+  if (value === undefined || value === null || value === "") return fallback;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < minimum || parsed > maximum) {
+    fail("invalid-argument", `${label} is invalid.`, "WIS_PAYLOAD_INVALID", {
+      field: label,
+    });
+  }
+  return parsed;
+};
+
+const displayText = (value, label, max, fallback = "") => {
+  if (value === undefined || value === null) return fallback;
+  if (
+    typeof value !== "string" ||
+    value !== value.trim() ||
+    value.length > max ||
+    /[\u0000-\u001f\u007f]/u.test(value)
+  ) {
+    fail("invalid-argument", `${label} is invalid.`, "WIS_PAYLOAD_INVALID", {
+      field: label,
+    });
+  }
+  return value;
+};
+
+const normalizeHallPosition = (value, fallback, label, strict) => {
+  const input = isObject(value) ? value : {};
+  if (strict)
+    allowed(input, ["leftPercent", "topPercent", "widthPercent"], label);
+  return {
+    leftPercent: boundedNumber(
+      input.leftPercent,
+      `${label}.leftPercent`,
+      0,
+      100,
+      fallback.leftPercent,
+    ),
+    topPercent: boundedNumber(
+      input.topPercent,
+      `${label}.topPercent`,
+      0,
+      100,
+      fallback.topPercent,
+    ),
+    widthPercent: boundedNumber(
+      input.widthPercent,
+      `${label}.widthPercent`,
+      8,
+      100,
+      fallback.widthPercent,
+    ),
+  };
+};
+
+const normalizeHallDevicePositions = (value, fallback, label, strict) => {
+  const input = isObject(value) ? value : {};
+  if (strict) allowed(input, ["first", "second", "third"], label);
+  return {
+    first: normalizeHallPosition(
+      input.first,
+      fallback.first,
+      `${label}.first`,
+      strict,
+    ),
+    second: normalizeHallPosition(
+      input.second,
+      fallback.second,
+      `${label}.second`,
+      strict,
+    ),
+    third: normalizeHallPosition(
+      input.third,
+      fallback.third,
+      `${label}.third`,
+      strict,
+    ),
+  };
+};
+
+const normalizeWisHallOfFameConfig = (value, { strict = false } = {}) => {
+  const input = isObject(value) ? value : {};
+  if (strict) {
+    allowed(
+      input,
+      [
+        "podiumImageUrl",
+        "podiumStoragePath",
+        "positionPreset",
+        "positions",
+        "leaderboardPanel",
+        "publicRange",
+        "recognitionPopup",
+      ],
+      "hallOfFame",
+    );
+  }
+  const positions = isObject(input.positions) ? input.positions : {};
+  const leaderboardPanel = isObject(input.leaderboardPanel)
+    ? input.leaderboardPanel
+    : {};
+  const publicRange = isObject(input.publicRange) ? input.publicRange : {};
+  const recognitionPopup = isObject(input.recognitionPopup)
+    ? input.recognitionPopup
+    : {};
+  if (strict) {
+    allowed(positions, ["desktop", "mobile"], "hallOfFame.positions");
+    allowed(
+      leaderboardPanel,
+      ["desktop", "mobile"],
+      "hallOfFame.leaderboardPanel",
+    );
+    allowed(
+      publicRange,
+      ["gradeRankLimit", "classRankLimit", "includeTies"],
+      "hallOfFame.publicRange",
+    );
+    allowed(
+      recognitionPopup,
+      ["enabled", "gradeEnabled", "classEnabled"],
+      "hallOfFame.recognitionPopup",
+    );
+  }
+  const booleanValue = (raw, fallback, label) => {
+    if (raw === undefined || raw === null) return fallback;
+    if (typeof raw !== "boolean")
+      fail("invalid-argument", `${label} is invalid.`, "WIS_PAYLOAD_INVALID", {
+        field: label,
+      });
+    return raw;
+  };
+  return {
+    podiumImageUrl: displayText(
+      input.podiumImageUrl,
+      "hallOfFame.podiumImageUrl",
+      2000,
+      "",
+    ),
+    podiumStoragePath: displayText(
+      input.podiumStoragePath,
+      "hallOfFame.podiumStoragePath",
+      500,
+      "",
+    ),
+    positionPreset:
+      displayText(
+        input.positionPreset,
+        "hallOfFame.positionPreset",
+        80,
+        DEFAULT_WIS_HALL_OF_FAME_CONFIG.positionPreset,
+      ) || DEFAULT_WIS_HALL_OF_FAME_CONFIG.positionPreset,
+    positions: {
+      desktop: normalizeHallDevicePositions(
+        positions.desktop,
+        DEFAULT_WIS_HALL_OF_FAME_CONFIG.positions.desktop,
+        "hallOfFame.positions.desktop",
+        strict,
+      ),
+      mobile: normalizeHallDevicePositions(
+        positions.mobile,
+        DEFAULT_WIS_HALL_OF_FAME_CONFIG.positions.mobile,
+        "hallOfFame.positions.mobile",
+        strict,
+      ),
+    },
+    leaderboardPanel: {
+      desktop: normalizeHallPosition(
+        leaderboardPanel.desktop,
+        DEFAULT_WIS_HALL_OF_FAME_CONFIG.leaderboardPanel.desktop,
+        "hallOfFame.leaderboardPanel.desktop",
+        strict,
+      ),
+      mobile: normalizeHallPosition(
+        leaderboardPanel.mobile,
+        DEFAULT_WIS_HALL_OF_FAME_CONFIG.leaderboardPanel.mobile,
+        "hallOfFame.leaderboardPanel.mobile",
+        strict,
+      ),
+    },
+    publicRange: {
+      gradeRankLimit: Math.round(
+        boundedNumber(
+          publicRange.gradeRankLimit,
+          "hallOfFame.publicRange.gradeRankLimit",
+          4,
+          20,
+          10,
+        ),
+      ),
+      classRankLimit: Math.round(
+        boundedNumber(
+          publicRange.classRankLimit,
+          "hallOfFame.publicRange.classRankLimit",
+          4,
+          20,
+          10,
+        ),
+      ),
+      includeTies: booleanValue(
+        publicRange.includeTies,
+        true,
+        "hallOfFame.publicRange.includeTies",
+      ),
+    },
+    recognitionPopup: {
+      enabled: booleanValue(
+        recognitionPopup.enabled,
+        true,
+        "hallOfFame.recognitionPopup.enabled",
+      ),
+      gradeEnabled: booleanValue(
+        recognitionPopup.gradeEnabled,
+        true,
+        "hallOfFame.recognitionPopup.gradeEnabled",
+      ),
+      classEnabled: booleanValue(
+        recognitionPopup.classEnabled,
+        true,
+        "hallOfFame.recognitionPopup.classEnabled",
+      ),
+    },
+  };
+};
 
 const normalizeWisPayload = (commandType, raw) => {
   const payload = raw || {};
   const common = ["semesterId", "expectedSemesterRevision"];
-  const cutoverPlanId = optionalText(payload.cutoverPlanId, "cutoverPlanId", 80);
-  const cutoverOperationKey = optionalText(payload.cutoverOperationKey, "cutoverOperationKey", 80);
+  const cutoverPlanId = optionalText(
+    payload.cutoverPlanId,
+    "cutoverPlanId",
+    80,
+  );
+  const cutoverOperationKey = optionalText(
+    payload.cutoverOperationKey,
+    "cutoverOperationKey",
+    80,
+  );
   if (Boolean(cutoverPlanId) !== Boolean(cutoverOperationKey)) {
-    fail("invalid-argument", "cutoverPlanId and cutoverOperationKey must be provided together.", "WIS_PAYLOAD_INVALID");
+    fail(
+      "invalid-argument",
+      "cutoverPlanId and cutoverOperationKey must be provided together.",
+      "WIS_PAYLOAD_INVALID",
+    );
   }
   const cutover = cutoverPlanId ? { cutoverPlanId, cutoverOperationKey } : {};
   if (commandType === WIS_COMMAND_TYPES.CREATE_SEMESTER_ECONOMY) {
-    allowed(payload, [...common, "cutoverPlanId", "cutoverOperationKey", "displayName", "currencyName", "initialGrantAmount"], "createSemesterEconomy payload");
-    return { semesterId: semesterId(payload.semesterId), expectedSemesterRevision: revision(payload.expectedSemesterRevision, "expectedSemesterRevision"), ...cutover, displayName: text(payload.displayName, "displayName", 120), currencyName: text(payload.currencyName, "currencyName", 20), initialGrantAmount: integer(payload.initialGrantAmount, "initialGrantAmount") };
+    allowed(
+      payload,
+      [
+        ...common,
+        "cutoverPlanId",
+        "cutoverOperationKey",
+        "displayName",
+        "currencyName",
+        "initialGrantAmount",
+      ],
+      "createSemesterEconomy payload",
+    );
+    return {
+      semesterId: semesterId(payload.semesterId),
+      expectedSemesterRevision: revision(
+        payload.expectedSemesterRevision,
+        "expectedSemesterRevision",
+      ),
+      ...cutover,
+      displayName: text(payload.displayName, "displayName", 120),
+      currencyName: text(payload.currencyName, "currencyName", 20),
+      initialGrantAmount: integer(
+        payload.initialGrantAmount,
+        "initialGrantAmount",
+      ),
+    };
   }
   if (commandType === WIS_COMMAND_TYPES.CREATE_WIS_ACCOUNTS) {
-    allowed(payload, [...common, "cutoverPlanId", "cutoverOperationKey", "expectedEconomyRevision", "enrollmentIds", "reason"], "createWisAccounts payload");
-    if (!Array.isArray(payload.enrollmentIds) || payload.enrollmentIds.length < 1 || payload.enrollmentIds.length > 100) fail("invalid-argument", "enrollmentIds is invalid.", "WIS_PAYLOAD_INVALID");
-    const enrollmentIds = payload.enrollmentIds.map((id, index) => text(id, `enrollmentIds[${index}]`, 180));
-    if (new Set(enrollmentIds).size !== enrollmentIds.length) fail("invalid-argument", "enrollmentIds contains duplicates.", "WIS_PAYLOAD_INVALID");
-    return { semesterId: semesterId(payload.semesterId), expectedSemesterRevision: revision(payload.expectedSemesterRevision, "expectedSemesterRevision"), ...cutover, expectedEconomyRevision: revision(payload.expectedEconomyRevision, "expectedEconomyRevision"), enrollmentIds, reason: text(payload.reason, "reason", 500) };
+    allowed(
+      payload,
+      [
+        ...common,
+        "cutoverPlanId",
+        "cutoverOperationKey",
+        "expectedEconomyRevision",
+        "enrollmentIds",
+        "reason",
+      ],
+      "createWisAccounts payload",
+    );
+    if (
+      !Array.isArray(payload.enrollmentIds) ||
+      payload.enrollmentIds.length < 1 ||
+      payload.enrollmentIds.length > 100
+    )
+      fail(
+        "invalid-argument",
+        "enrollmentIds is invalid.",
+        "WIS_PAYLOAD_INVALID",
+      );
+    const enrollmentIds = payload.enrollmentIds.map((id, index) =>
+      text(id, `enrollmentIds[${index}]`, 180),
+    );
+    if (new Set(enrollmentIds).size !== enrollmentIds.length)
+      fail(
+        "invalid-argument",
+        "enrollmentIds contains duplicates.",
+        "WIS_PAYLOAD_INVALID",
+      );
+    return {
+      semesterId: semesterId(payload.semesterId),
+      expectedSemesterRevision: revision(
+        payload.expectedSemesterRevision,
+        "expectedSemesterRevision",
+      ),
+      ...cutover,
+      expectedEconomyRevision: revision(
+        payload.expectedEconomyRevision,
+        "expectedEconomyRevision",
+      ),
+      enrollmentIds,
+      reason: text(payload.reason, "reason", 500),
+    };
   }
-  if ([WIS_COMMAND_TYPES.GRANT_INITIAL_WIS, WIS_COMMAND_TYPES.GRANT_WIS, WIS_COMMAND_TYPES.DEDUCT_WIS].includes(commandType)) {
-    allowed(payload, [...common, "expectedEconomyRevision", "accountId", "expectedAccountRevision", "amount", "sourceId", "reason"], `${commandType} payload`);
-    return { semesterId: semesterId(payload.semesterId), expectedSemesterRevision: revision(payload.expectedSemesterRevision, "expectedSemesterRevision"), expectedEconomyRevision: revision(payload.expectedEconomyRevision, "expectedEconomyRevision"), accountId: text(payload.accountId, "accountId", 80), expectedAccountRevision: revision(payload.expectedAccountRevision, "expectedAccountRevision"), amount: integer(payload.amount, "amount", { min: 1 }), sourceId: text(payload.sourceId, "sourceId", 180), reason: text(payload.reason, "reason", 500) };
+  if (
+    [
+      WIS_COMMAND_TYPES.GRANT_INITIAL_WIS,
+      WIS_COMMAND_TYPES.GRANT_WIS,
+      WIS_COMMAND_TYPES.DEDUCT_WIS,
+    ].includes(commandType)
+  ) {
+    allowed(
+      payload,
+      [
+        ...common,
+        "expectedEconomyRevision",
+        "accountId",
+        "expectedAccountRevision",
+        "amount",
+        "sourceId",
+        "reason",
+      ],
+      `${commandType} payload`,
+    );
+    return {
+      semesterId: semesterId(payload.semesterId),
+      expectedSemesterRevision: revision(
+        payload.expectedSemesterRevision,
+        "expectedSemesterRevision",
+      ),
+      expectedEconomyRevision: revision(
+        payload.expectedEconomyRevision,
+        "expectedEconomyRevision",
+      ),
+      accountId: text(payload.accountId, "accountId", 80),
+      expectedAccountRevision: revision(
+        payload.expectedAccountRevision,
+        "expectedAccountRevision",
+      ),
+      amount: integer(payload.amount, "amount", { min: 1 }),
+      sourceId: text(payload.sourceId, "sourceId", 180),
+      reason: text(payload.reason, "reason", 500),
+    };
   }
   if (commandType === WIS_COMMAND_TYPES.ADJUST_WIS) {
-    allowed(payload, [...common, "expectedEconomyRevision", "accountId", "expectedAccountRevision", "delta", "sourceId", "reason"], "adjustWis payload");
-    const delta = integer(Math.abs(payload.delta), "delta", { min: 1 }) * Math.sign(payload.delta || 0);
-    if (!delta) fail("invalid-argument", "delta is invalid.", "WIS_PAYLOAD_INVALID");
-    return { semesterId: semesterId(payload.semesterId), expectedSemesterRevision: revision(payload.expectedSemesterRevision, "expectedSemesterRevision"), expectedEconomyRevision: revision(payload.expectedEconomyRevision, "expectedEconomyRevision"), accountId: text(payload.accountId, "accountId", 80), expectedAccountRevision: revision(payload.expectedAccountRevision, "expectedAccountRevision"), delta, sourceId: text(payload.sourceId, "sourceId", 180), reason: text(payload.reason, "reason", 500) };
+    allowed(
+      payload,
+      [
+        ...common,
+        "expectedEconomyRevision",
+        "accountId",
+        "expectedAccountRevision",
+        "delta",
+        "sourceId",
+        "reason",
+      ],
+      "adjustWis payload",
+    );
+    const delta =
+      integer(Math.abs(payload.delta), "delta", { min: 1 }) *
+      Math.sign(payload.delta || 0);
+    if (!delta)
+      fail("invalid-argument", "delta is invalid.", "WIS_PAYLOAD_INVALID");
+    return {
+      semesterId: semesterId(payload.semesterId),
+      expectedSemesterRevision: revision(
+        payload.expectedSemesterRevision,
+        "expectedSemesterRevision",
+      ),
+      expectedEconomyRevision: revision(
+        payload.expectedEconomyRevision,
+        "expectedEconomyRevision",
+      ),
+      accountId: text(payload.accountId, "accountId", 80),
+      expectedAccountRevision: revision(
+        payload.expectedAccountRevision,
+        "expectedAccountRevision",
+      ),
+      delta,
+      sourceId: text(payload.sourceId, "sourceId", 180),
+      reason: text(payload.reason, "reason", 500),
+    };
   }
   if (commandType === WIS_COMMAND_TYPES.REVERSE_WIS_ENTRY) {
-    allowed(payload, [...common, "expectedEconomyRevision", "accountId", "expectedAccountRevision", "ledgerEntryId", "reason"], "reverseWisEntry payload");
-    return { semesterId: semesterId(payload.semesterId), expectedSemesterRevision: revision(payload.expectedSemesterRevision, "expectedSemesterRevision"), expectedEconomyRevision: revision(payload.expectedEconomyRevision, "expectedEconomyRevision"), accountId: text(payload.accountId, "accountId", 80), expectedAccountRevision: revision(payload.expectedAccountRevision, "expectedAccountRevision"), ledgerEntryId: text(payload.ledgerEntryId, "ledgerEntryId", 80), reason: text(payload.reason, "reason", 500) };
+    allowed(
+      payload,
+      [
+        ...common,
+        "expectedEconomyRevision",
+        "accountId",
+        "expectedAccountRevision",
+        "ledgerEntryId",
+        "reason",
+      ],
+      "reverseWisEntry payload",
+    );
+    return {
+      semesterId: semesterId(payload.semesterId),
+      expectedSemesterRevision: revision(
+        payload.expectedSemesterRevision,
+        "expectedSemesterRevision",
+      ),
+      expectedEconomyRevision: revision(
+        payload.expectedEconomyRevision,
+        "expectedEconomyRevision",
+      ),
+      accountId: text(payload.accountId, "accountId", 80),
+      expectedAccountRevision: revision(
+        payload.expectedAccountRevision,
+        "expectedAccountRevision",
+      ),
+      ledgerEntryId: text(payload.ledgerEntryId, "ledgerEntryId", 80),
+      reason: text(payload.reason, "reason", 500),
+    };
   }
   if (commandType === WIS_COMMAND_TYPES.REBUILD_WIS_PROJECTION) {
-    allowed(payload, [...common, "expectedEconomyRevision", "accountId", "reason"], "rebuildWisProjection payload");
-    return { semesterId: semesterId(payload.semesterId), expectedSemesterRevision: revision(payload.expectedSemesterRevision, "expectedSemesterRevision"), expectedEconomyRevision: revision(payload.expectedEconomyRevision, "expectedEconomyRevision"), accountId: text(payload.accountId, "accountId", 80), reason: text(payload.reason, "reason", 500) };
+    allowed(
+      payload,
+      [...common, "expectedEconomyRevision", "accountId", "reason"],
+      "rebuildWisProjection payload",
+    );
+    return {
+      semesterId: semesterId(payload.semesterId),
+      expectedSemesterRevision: revision(
+        payload.expectedSemesterRevision,
+        "expectedSemesterRevision",
+      ),
+      expectedEconomyRevision: revision(
+        payload.expectedEconomyRevision,
+        "expectedEconomyRevision",
+      ),
+      accountId: text(payload.accountId, "accountId", 80),
+      reason: text(payload.reason, "reason", 500),
+    };
   }
   if (commandType === WIS_COMMAND_TYPES.TRANSITION_WIS_ECONOMY) {
-    allowed(payload, [...common, "expectedEconomyRevision", "targetStatus", "reason"], "transitionWisEconomy payload");
-    if (!["ACTIVE_INITIALIZING", "ACTIVE_OPEN", "CLOSED", "ARCHIVED"].includes(payload.targetStatus)) fail("invalid-argument", "targetStatus is invalid.", "WIS_PAYLOAD_INVALID");
-    return { semesterId: semesterId(payload.semesterId), expectedSemesterRevision: revision(payload.expectedSemesterRevision, "expectedSemesterRevision"), expectedEconomyRevision: revision(payload.expectedEconomyRevision, "expectedEconomyRevision"), targetStatus: payload.targetStatus, reason: text(payload.reason, "reason", 500) };
+    allowed(
+      payload,
+      [...common, "expectedEconomyRevision", "targetStatus", "reason"],
+      "transitionWisEconomy payload",
+    );
+    if (
+      !["ACTIVE_INITIALIZING", "ACTIVE_OPEN", "CLOSED", "ARCHIVED"].includes(
+        payload.targetStatus,
+      )
+    )
+      fail(
+        "invalid-argument",
+        "targetStatus is invalid.",
+        "WIS_PAYLOAD_INVALID",
+      );
+    return {
+      semesterId: semesterId(payload.semesterId),
+      expectedSemesterRevision: revision(
+        payload.expectedSemesterRevision,
+        "expectedSemesterRevision",
+      ),
+      expectedEconomyRevision: revision(
+        payload.expectedEconomyRevision,
+        "expectedEconomyRevision",
+      ),
+      targetStatus: payload.targetStatus,
+      reason: text(payload.reason, "reason", 500),
+    };
   }
   if (commandType === WIS_COMMAND_TYPES.UPSERT_WIS_PRODUCT) {
-    allowed(payload, [...common, "expectedEconomyRevision", "productId", "expectedProductRevision", "name", "description", "imageUrl", "active", "reason"], "upsertWisProduct payload");
-    if (typeof payload.active !== "boolean") fail("invalid-argument", "active is invalid.", "WIS_PAYLOAD_INVALID");
+    allowed(
+      payload,
+      [
+        ...common,
+        "expectedEconomyRevision",
+        "productId",
+        "expectedProductRevision",
+        "name",
+        "description",
+        "imageUrl",
+        "active",
+        "reason",
+      ],
+      "upsertWisProduct payload",
+    );
+    if (typeof payload.active !== "boolean")
+      fail("invalid-argument", "active is invalid.", "WIS_PAYLOAD_INVALID");
     const name = text(payload.name, "name", 120);
-    return { semesterId: semesterId(payload.semesterId), expectedSemesterRevision: revision(payload.expectedSemesterRevision, "expectedSemesterRevision"), expectedEconomyRevision: revision(payload.expectedEconomyRevision, "expectedEconomyRevision"), productId: payload.productId ? text(payload.productId, "productId", 80) : hashId("wisprod", name), expectedProductRevision: nullableRevision(payload.expectedProductRevision, "expectedProductRevision"), name, description: optionalText(payload.description, "description", 1000), imageUrl: optionalText(payload.imageUrl, "imageUrl", 1000), active: payload.active, reason: text(payload.reason, "reason", 500) };
+    return {
+      semesterId: semesterId(payload.semesterId),
+      expectedSemesterRevision: revision(
+        payload.expectedSemesterRevision,
+        "expectedSemesterRevision",
+      ),
+      expectedEconomyRevision: revision(
+        payload.expectedEconomyRevision,
+        "expectedEconomyRevision",
+      ),
+      productId: payload.productId
+        ? text(payload.productId, "productId", 80)
+        : hashId("wisprod", name),
+      expectedProductRevision: nullableRevision(
+        payload.expectedProductRevision,
+        "expectedProductRevision",
+      ),
+      name,
+      description: optionalText(payload.description, "description", 1000),
+      imageUrl: optionalText(payload.imageUrl, "imageUrl", 1000),
+      active: payload.active,
+      reason: text(payload.reason, "reason", 500),
+    };
   }
   if (commandType === WIS_COMMAND_TYPES.UPSERT_WIS_INVENTORY) {
-    allowed(payload, [...common, "expectedEconomyRevision", "productId", "expectedInventoryRevision", "price", "stock", "active", "reason"], "upsertWisInventory payload");
-    if (typeof payload.active !== "boolean") fail("invalid-argument", "active is invalid.", "WIS_PAYLOAD_INVALID");
-    const scope = semesterId(payload.semesterId); const productId = text(payload.productId, "productId", 80);
-    return { semesterId: scope, expectedSemesterRevision: revision(payload.expectedSemesterRevision, "expectedSemesterRevision"), expectedEconomyRevision: revision(payload.expectedEconomyRevision, "expectedEconomyRevision"), productId, inventoryId: inventoryIdFor(scope, productId), expectedInventoryRevision: nullableRevision(payload.expectedInventoryRevision, "expectedInventoryRevision"), price: integer(payload.price, "price", { min: 1 }), stock: integer(payload.stock, "stock"), active: payload.active, reason: text(payload.reason, "reason", 500) };
+    allowed(
+      payload,
+      [
+        ...common,
+        "expectedEconomyRevision",
+        "productId",
+        "expectedInventoryRevision",
+        "price",
+        "stock",
+        "active",
+        "reason",
+      ],
+      "upsertWisInventory payload",
+    );
+    if (typeof payload.active !== "boolean")
+      fail("invalid-argument", "active is invalid.", "WIS_PAYLOAD_INVALID");
+    const scope = semesterId(payload.semesterId);
+    const productId = text(payload.productId, "productId", 80);
+    return {
+      semesterId: scope,
+      expectedSemesterRevision: revision(
+        payload.expectedSemesterRevision,
+        "expectedSemesterRevision",
+      ),
+      expectedEconomyRevision: revision(
+        payload.expectedEconomyRevision,
+        "expectedEconomyRevision",
+      ),
+      productId,
+      inventoryId: inventoryIdFor(scope, productId),
+      expectedInventoryRevision: nullableRevision(
+        payload.expectedInventoryRevision,
+        "expectedInventoryRevision",
+      ),
+      price: integer(payload.price, "price", { min: 1 }),
+      stock: integer(payload.stock, "stock"),
+      active: payload.active,
+      reason: text(payload.reason, "reason", 500),
+    };
   }
   if (commandType === WIS_COMMAND_TYPES.PLACE_WIS_ORDER) {
-    allowed(payload, [...common, "expectedEconomyRevision", "inventoryId", "expectedInventoryRevision", "expectedAccountRevision", "quantity"], "placeWisOrder payload");
-    return { semesterId: semesterId(payload.semesterId), expectedSemesterRevision: revision(payload.expectedSemesterRevision, "expectedSemesterRevision"), expectedEconomyRevision: revision(payload.expectedEconomyRevision, "expectedEconomyRevision"), inventoryId: text(payload.inventoryId, "inventoryId", 80), expectedInventoryRevision: revision(payload.expectedInventoryRevision, "expectedInventoryRevision"), expectedAccountRevision: revision(payload.expectedAccountRevision, "expectedAccountRevision"), quantity: integer(payload.quantity, "quantity", { min: 1, max: 99 }) };
+    allowed(
+      payload,
+      [
+        ...common,
+        "expectedEconomyRevision",
+        "inventoryId",
+        "expectedInventoryRevision",
+        "expectedAccountRevision",
+        "quantity",
+      ],
+      "placeWisOrder payload",
+    );
+    return {
+      semesterId: semesterId(payload.semesterId),
+      expectedSemesterRevision: revision(
+        payload.expectedSemesterRevision,
+        "expectedSemesterRevision",
+      ),
+      expectedEconomyRevision: revision(
+        payload.expectedEconomyRevision,
+        "expectedEconomyRevision",
+      ),
+      inventoryId: text(payload.inventoryId, "inventoryId", 80),
+      expectedInventoryRevision: revision(
+        payload.expectedInventoryRevision,
+        "expectedInventoryRevision",
+      ),
+      expectedAccountRevision: revision(
+        payload.expectedAccountRevision,
+        "expectedAccountRevision",
+      ),
+      quantity: integer(payload.quantity, "quantity", { min: 1, max: 99 }),
+    };
   }
   if (commandType === WIS_COMMAND_TYPES.REVIEW_WIS_ORDER) {
-    allowed(payload, [...common, "expectedEconomyRevision", "orderId", "expectedOrderRevision", "action", "reason"], "reviewWisOrder payload");
-    if (!["APPROVE", "REJECT", "FULFILL"].includes(payload.action)) fail("invalid-argument", "action is invalid.", "WIS_PAYLOAD_INVALID");
-    return { semesterId: semesterId(payload.semesterId), expectedSemesterRevision: revision(payload.expectedSemesterRevision, "expectedSemesterRevision"), expectedEconomyRevision: revision(payload.expectedEconomyRevision, "expectedEconomyRevision"), orderId: text(payload.orderId, "orderId", 80), expectedOrderRevision: revision(payload.expectedOrderRevision, "expectedOrderRevision"), action: payload.action, reason: text(payload.reason, "reason", 500) };
+    allowed(
+      payload,
+      [
+        ...common,
+        "expectedEconomyRevision",
+        "orderId",
+        "expectedOrderRevision",
+        "action",
+        "reason",
+      ],
+      "reviewWisOrder payload",
+    );
+    if (!["APPROVE", "REJECT", "FULFILL"].includes(payload.action))
+      fail("invalid-argument", "action is invalid.", "WIS_PAYLOAD_INVALID");
+    return {
+      semesterId: semesterId(payload.semesterId),
+      expectedSemesterRevision: revision(
+        payload.expectedSemesterRevision,
+        "expectedSemesterRevision",
+      ),
+      expectedEconomyRevision: revision(
+        payload.expectedEconomyRevision,
+        "expectedEconomyRevision",
+      ),
+      orderId: text(payload.orderId, "orderId", 80),
+      expectedOrderRevision: revision(
+        payload.expectedOrderRevision,
+        "expectedOrderRevision",
+      ),
+      action: payload.action,
+      reason: text(payload.reason, "reason", 500),
+    };
   }
-  fail("invalid-argument", "Unsupported Wis command.", "WIS_COMMAND_UNSUPPORTED");
+  if (commandType === WIS_COMMAND_TYPES.SAVE_WIS_HALL_OF_FAME_CONFIG) {
+    allowed(
+      payload,
+      [
+        ...common,
+        "expectedEconomyRevision",
+        "expectedHallOfFameRevision",
+        "hallOfFame",
+        "reason",
+      ],
+      "saveWisHallOfFameConfig payload",
+    );
+    return {
+      semesterId: semesterId(payload.semesterId),
+      expectedSemesterRevision: revision(
+        payload.expectedSemesterRevision,
+        "expectedSemesterRevision",
+      ),
+      expectedEconomyRevision: revision(
+        payload.expectedEconomyRevision,
+        "expectedEconomyRevision",
+      ),
+      expectedHallOfFameRevision: integer(
+        payload.expectedHallOfFameRevision,
+        "expectedHallOfFameRevision",
+        { min: 0, max: Number.MAX_SAFE_INTEGER },
+      ),
+      hallOfFame: normalizeWisHallOfFameConfig(payload.hallOfFame, {
+        strict: true,
+      }),
+      reason: text(payload.reason, "reason", 500),
+    };
+  }
+  fail(
+    "invalid-argument",
+    "Unsupported Wis command.",
+    "WIS_COMMAND_UNSUPPORTED",
+  );
 };
 
 const assertTeacher = (actor) => {
-  if (!actor?.actorUid || !["teacher", "admin"].includes(actor.actorRole)) fail("permission-denied", "Wis management permission is required.", "WIS_MANAGE_REQUIRED");
+  if (!actor?.actorUid || !["teacher", "admin"].includes(actor.actorRole))
+    fail(
+      "permission-denied",
+      "Wis management permission is required.",
+      "WIS_MANAGE_REQUIRED",
+    );
 };
 const assertStudent = (actor) => {
-  if (!actor?.actorUid || actor.actorRole !== "student") fail("permission-denied", "A student account is required.", "WIS_STUDENT_REQUIRED");
+  if (!actor?.actorUid || actor.actorRole !== "student")
+    fail(
+      "permission-denied",
+      "A student account is required.",
+      "WIS_STUDENT_REQUIRED",
+    );
 };
-const assertManifest = async (transaction, payload, commandType, actor, commandId, payloadHash) => {
+const assertManifest = async (
+  transaction,
+  payload,
+  commandType,
+  actor,
+  commandId,
+  payloadHash,
+) => {
   const snapshot = await transaction.get(manifestPath(payload.semesterId));
   const manifest = snapshot.data || {};
-  if (!snapshot.exists) fail("not-found", "Semester Manifest does not exist.", "SEMESTER_NOT_FOUND");
-  if (Number(manifest.revision || 0) !== payload.expectedSemesterRevision) fail("aborted", "Semester revision changed.", "SEMESTER_REVISION_CONFLICT");
+  if (!snapshot.exists)
+    fail(
+      "not-found",
+      "Semester Manifest does not exist.",
+      "SEMESTER_NOT_FOUND",
+    );
+  if (Number(manifest.revision || 0) !== payload.expectedSemesterRevision)
+    fail("aborted", "Semester revision changed.", "SEMESTER_REVISION_CONFLICT");
   if (manifest.status !== "ACTIVE") {
-    const preparingCreate = [WIS_COMMAND_TYPES.CREATE_SEMESTER_ECONOMY, WIS_COMMAND_TYPES.CREATE_WIS_ACCOUNTS].includes(commandType) && ["PREPARING", "READY"].includes(manifest.status);
-    if (!preparingCreate) fail("failed-precondition", "Wis writes require the active semester.", ["CLOSED", "ARCHIVED"].includes(manifest.status) ? "SEMESTER_ARCHIVED_WRITE_FORBIDDEN" : "SEMESTER_WRITE_STATE_INVALID");
-    await cutoverAuthorization.assertPreparingCutoverCreateIfTargeted({ transaction, semesterId: payload.semesterId, actor, commandType, commandId, payloadHash, cutoverPlanId: payload.cutoverPlanId, cutoverOperationKey: payload.cutoverOperationKey, operationType: commandType === WIS_COMMAND_TYPES.CREATE_SEMESTER_ECONOMY ? "WIS_ECONOMY" : "WIS_ACCOUNTS" });
+    const preparingCreate =
+      [
+        WIS_COMMAND_TYPES.CREATE_SEMESTER_ECONOMY,
+        WIS_COMMAND_TYPES.CREATE_WIS_ACCOUNTS,
+      ].includes(commandType) &&
+      ["PREPARING", "READY"].includes(manifest.status);
+    if (!preparingCreate)
+      fail(
+        "failed-precondition",
+        "Wis writes require the active semester.",
+        ["CLOSED", "ARCHIVED"].includes(manifest.status)
+          ? "SEMESTER_ARCHIVED_WRITE_FORBIDDEN"
+          : "SEMESTER_WRITE_STATE_INVALID",
+      );
+    await cutoverAuthorization.assertPreparingCutoverCreateIfTargeted({
+      transaction,
+      semesterId: payload.semesterId,
+      actor,
+      commandType,
+      commandId,
+      payloadHash,
+      cutoverPlanId: payload.cutoverPlanId,
+      cutoverOperationKey: payload.cutoverOperationKey,
+      operationType:
+        commandType === WIS_COMMAND_TYPES.CREATE_SEMESTER_ECONOMY
+          ? "WIS_ECONOMY"
+          : "WIS_ACCOUNTS",
+    });
   }
   return manifest;
 };
-const assertEconomy = async (transaction, payload, statuses = ["ACTIVE_INITIALIZING", "ACTIVE_OPEN"]) => {
+const assertEconomy = async (
+  transaction,
+  payload,
+  statuses = ["ACTIVE_INITIALIZING", "ACTIVE_OPEN"],
+) => {
   const snapshot = await transaction.get(economyPath(payload.semesterId));
-  if (!snapshot.exists) fail("not-found", "Semester Wis economy does not exist.", "WIS_ECONOMY_NOT_FOUND");
+  if (!snapshot.exists)
+    fail(
+      "not-found",
+      "Semester Wis economy does not exist.",
+      "WIS_ECONOMY_NOT_FOUND",
+    );
   const economy = snapshot.data || {};
-  if (Number(economy.revision || 0) !== payload.expectedEconomyRevision) fail("aborted", "Wis economy revision changed.", "WIS_ECONOMY_REVISION_CONFLICT", { currentRevision: Number(economy.revision || 0) });
-  if (!statuses.includes(economy.status)) fail("failed-precondition", "Wis economy state does not allow this command.", "WIS_ECONOMY_STATE_INVALID", { status: economy.status });
+  if (Number(economy.revision || 0) !== payload.expectedEconomyRevision)
+    fail(
+      "aborted",
+      "Wis economy revision changed.",
+      "WIS_ECONOMY_REVISION_CONFLICT",
+      { currentRevision: Number(economy.revision || 0) },
+    );
+  if (!statuses.includes(economy.status))
+    fail(
+      "failed-precondition",
+      "Wis economy state does not allow this command.",
+      "WIS_ECONOMY_STATE_INVALID",
+      { status: economy.status },
+    );
   return economy;
 };
-const writeProjection = (transaction, account, balance, timestamp, actorUid) => {
+const writeProjection = (
+  transaction,
+  account,
+  balance,
+  timestamp,
+  actorUid,
+  totals = {
+    earnedTotal: Number(account.earnedTotal || 0),
+    rankEarnedTotal: Number(account.rankEarnedTotal || 0),
+    spentTotal: Number(account.spentTotal || 0),
+    adjustedTotal: Number(account.adjustedTotal || 0),
+  },
+  recentLedgerEntries = Array.isArray(account.recentLedgerEntries)
+    ? account.recentLedgerEntries.slice(0, WIS_RECENT_LEDGER_LIMIT)
+    : [],
+) => {
   const revisionValue = Number(account.revision || 0) + 1;
-  const patch = { revision: revisionValue, balance, updatedAt: timestamp, updatedBy: actorUid };
+  const patch = {
+    revision: revisionValue,
+    balance,
+    ...totals,
+    recentLedgerEntries,
+    updatedAt: timestamp,
+    updatedBy: actorUid,
+  };
   transaction.set(accountPath(account.accountId), patch, { merge: true });
-  transaction.set(balancePath(account.accountId), { schemaVersion: WIS_SCHEMA_VERSION, policyVersion: WIS_POLICY_VERSION, accountId: account.accountId, semesterId: account.semesterId, studentUid: account.studentUid, balance, ledgerRevision: revisionValue, updatedAt: timestamp }, { merge: true });
-  transaction.set(rankingPath(account.accountId), { schemaVersion: WIS_SCHEMA_VERSION, policyVersion: WIS_POLICY_VERSION, accountId: account.accountId, semesterId: account.semesterId, studentUid: account.studentUid, displayName: account.displayName, balance, ledgerRevision: revisionValue, updatedAt: timestamp }, { merge: true });
+  transaction.set(
+    balancePath(account.accountId),
+    {
+      schemaVersion: WIS_SCHEMA_VERSION,
+      policyVersion: WIS_POLICY_VERSION,
+      accountId: account.accountId,
+      semesterId: account.semesterId,
+      studentUid: account.studentUid,
+      balance,
+      ...totals,
+      ledgerRevision: revisionValue,
+      updatedAt: timestamp,
+    },
+    { merge: true },
+  );
+  transaction.set(
+    rankingPath(account.accountId),
+    {
+      schemaVersion: WIS_SCHEMA_VERSION,
+      policyVersion: WIS_POLICY_VERSION,
+      accountId: account.accountId,
+      semesterId: account.semesterId,
+      studentUid: account.studentUid,
+      displayName: account.displayName,
+      classId: account.classId || "",
+      grade: String(account.grade || ""),
+      classNumber: String(account.classNumber || ""),
+      balance,
+      rankEarnedTotal: totals.rankEarnedTotal,
+      ledgerRevision: revisionValue,
+      updatedAt: timestamp,
+    },
+    { merge: true },
+  );
   return revisionValue;
 };
-const postLedger = async ({ transaction, account, delta, type, sourceId, reason, commandId, receiptId, timestamp, actor }) => {
-  const entryId = ledgerIdFor(account.semesterId, account.accountId, type, sourceId);
+const zeroAccountTotals = () => ({
+  earnedTotal: 0,
+  rankEarnedTotal: 0,
+  spentTotal: 0,
+  adjustedTotal: 0,
+});
+const ledgerTotalsContribution = (type, delta) => {
+  const contribution = zeroAccountTotals();
+  if (type === "INITIAL_GRANT" && delta > 0) {
+    contribution.earnedTotal = delta;
+  } else if (type === "GRANT" && delta > 0) {
+    contribution.earnedTotal = delta;
+    contribution.rankEarnedTotal = delta;
+    contribution.adjustedTotal = delta;
+  } else if (type === "DEDUCT") {
+    contribution.adjustedTotal = delta;
+  } else if (type === "ADJUST") {
+    if (delta > 0) {
+      contribution.earnedTotal = delta;
+      contribution.rankEarnedTotal = delta;
+    }
+    contribution.adjustedTotal = delta;
+  } else if (type === "ORDER_DEBIT" && delta < 0) {
+    contribution.spentTotal = Math.abs(delta);
+  } else if (type === "ORDER_REFUND" && delta > 0) {
+    contribution.spentTotal = -delta;
+  }
+  return contribution;
+};
+const addAccountTotals = (account, contribution) => ({
+  earnedTotal:
+    Number(account.earnedTotal || 0) + Number(contribution.earnedTotal || 0),
+  rankEarnedTotal:
+    Number(account.rankEarnedTotal || 0) +
+    Number(contribution.rankEarnedTotal || 0),
+  spentTotal:
+    Number(account.spentTotal || 0) + Number(contribution.spentTotal || 0),
+  adjustedTotal:
+    Number(account.adjustedTotal || 0) +
+    Number(contribution.adjustedTotal || 0),
+});
+const negateAccountTotals = (contribution) =>
+  Object.fromEntries(
+    Object.entries(contribution).map(([key, value]) => [
+      key,
+      -Number(value || 0),
+    ]),
+  );
+const nextAccountTotals = (
+  account,
+  delta,
+  type,
+  { reversedType = "", reversedDelta = 0 } = {},
+) =>
+  addAccountTotals(
+    account,
+    type === "REVERSAL"
+      ? negateAccountTotals(
+          ledgerTotalsContribution(reversedType, Number(reversedDelta || 0)),
+        )
+      : ledgerTotalsContribution(type, delta),
+  );
+const totalsFromLedgerEntries = (entries) => {
+  const normalized = entries.map((row) => row.data || row);
+  const byId = new Map(
+    normalized.map((entry) => [String(entry.ledgerEntryId || ""), entry]),
+  );
+  return normalized.reduce((totals, entry) => {
+    if (entry.type !== "REVERSAL") {
+      return addAccountTotals(
+        totals,
+        ledgerTotalsContribution(entry.type, Number(entry.delta || 0)),
+      );
+    }
+    const source = byId.get(String(entry.sourceId || "")) || {};
+    const reversedType = String(entry.reversedType || source.type || "");
+    const reversedDelta = Number(
+      entry.reversedDelta === undefined
+        ? source.delta || 0
+        : entry.reversedDelta,
+    );
+    return addAccountTotals(
+      totals,
+      negateAccountTotals(
+        ledgerTotalsContribution(reversedType, reversedDelta),
+      ),
+    );
+  }, zeroAccountTotals());
+};
+const postLedger = async ({
+  transaction,
+  account,
+  delta,
+  type,
+  sourceId,
+  reason,
+  commandId,
+  receiptId,
+  timestamp,
+  actor,
+  economy,
+  reversedType = "",
+  reversedDelta = 0,
+}) => {
+  const entryId = ledgerIdFor(
+    account.semesterId,
+    account.accountId,
+    type,
+    sourceId,
+  );
   const existing = await transaction.get(ledgerPath(entryId));
-  if (existing.exists) fail("already-exists", "A ledger entry already exists for this source.", "WIS_LEDGER_SOURCE_EXISTS", { ledgerEntryId: entryId });
-  const before = Number(account.balance || 0); const after = before + delta;
-  if (after < 0) fail("failed-precondition", "Wis balance is insufficient.", "WIS_INSUFFICIENT_BALANCE", { balance: before, required: Math.abs(delta) });
-  const accountRevision = writeProjection(transaction, account, after, timestamp, actor.actorUid);
-  transaction.create(ledgerPath(entryId), { schemaVersion: WIS_SCHEMA_VERSION, policyVersion: WIS_POLICY_VERSION, ledgerEntryId: entryId, semesterId: account.semesterId, accountId: account.accountId, studentUid: account.studentUid, type, delta, balanceBefore: before, balanceAfter: after, sourceId, reason, actorUid: actor.actorUid, actorRole: actor.actorRole, commandId, receiptId, createdAt: timestamp });
+  if (existing.exists)
+    fail(
+      "already-exists",
+      "A ledger entry already exists for this source.",
+      "WIS_LEDGER_SOURCE_EXISTS",
+      { ledgerEntryId: entryId },
+    );
+  const before = Number(account.balance || 0);
+  const after = before + delta;
+  if (after < 0)
+    fail(
+      "failed-precondition",
+      "Wis balance is insufficient.",
+      "WIS_INSUFFICIENT_BALANCE",
+      { balance: before, required: Math.abs(delta) },
+    );
+  const ledgerEntry = {
+    schemaVersion: WIS_SCHEMA_VERSION,
+    policyVersion: WIS_POLICY_VERSION,
+    ledgerEntryId: entryId,
+    semesterId: account.semesterId,
+    accountId: account.accountId,
+    studentUid: account.studentUid,
+    type,
+    delta,
+    balanceBefore: before,
+    balanceAfter: after,
+    sourceId,
+    reason,
+    actorUid: actor.actorUid,
+    actorRole: actor.actorRole,
+    commandId,
+    receiptId,
+    createdAt: timestamp,
+    ...(type === "REVERSAL" ? { reversedType, reversedDelta } : {}),
+  };
+  const accountRevision = writeProjection(
+    transaction,
+    account,
+    after,
+    timestamp,
+    actor.actorUid,
+    nextAccountTotals(account, delta, type, { reversedType, reversedDelta }),
+    [
+      ledgerEntry,
+      ...(Array.isArray(account.recentLedgerEntries)
+        ? account.recentLedgerEntries
+        : []),
+    ].slice(0, WIS_RECENT_LEDGER_LIMIT),
+  );
+  transaction.create(ledgerPath(entryId), ledgerEntry);
+  transaction.set(
+    economyPath(account.semesterId),
+    {
+      ledgerEntryCount: Number(economy?.ledgerEntryCount || 0) + 1,
+      updatedAt: timestamp,
+      updatedBy: actor.actorUid,
+    },
+    { merge: true },
+  );
   return { ledgerEntryId: entryId, balance: after, accountRevision };
 };
 
 const createWisCommandAdapter = () => ({
-  apply: async ({ transaction, commandId, commandType, payload, payloadHash, receiptId, timestamp, actor }) => {
-    const manifest = await assertManifest(transaction, payload, commandType, actor, commandId, payloadHash);
+  apply: async ({
+    transaction,
+    commandId,
+    commandType,
+    payload,
+    payloadHash,
+    receiptId,
+    timestamp,
+    concreteTimestamp,
+    actor,
+  }) => {
+    const projectionTimestamp = concreteTimestamp || timestamp;
+    const manifest = await assertManifest(
+      transaction,
+      payload,
+      commandType,
+      actor,
+      commandId,
+      payloadHash,
+    );
     if (commandType === WIS_COMMAND_TYPES.CREATE_SEMESTER_ECONOMY) {
-      assertTeacher(actor); const path = economyPath(payload.semesterId); const existing = await transaction.get(path);
-      if (existing.exists) fail("already-exists", "Semester Wis economy already exists.", "WIS_ECONOMY_EXISTS");
-      const status = manifest.status === "ACTIVE" ? "ACTIVE_INITIALIZING" : "PREPARING_INITIALIZING";
-      transaction.create(path, { schemaVersion: WIS_SCHEMA_VERSION, policyVersion: WIS_POLICY_VERSION, semesterId: payload.semesterId, revision: 1, status, displayName: payload.displayName, currencyName: payload.currencyName, initialGrantAmount: payload.initialGrantAmount, provenance: manifest.status === "ACTIVE" ? "CURRENT" : "PREPARING", readOnly: manifest.status !== "ACTIVE", cutoverPlanId: payload.cutoverPlanId || null, createdBy: actor.actorUid, createdAt: timestamp, updatedAt: timestamp });
-      return { target: { kind: "wis-economy", id: payload.semesterId, refs: [path] }, sourceHash: sha256(canonicalJson(payload)), result: { semesterId: payload.semesterId, revision: 1, status } };
+      assertTeacher(actor);
+      const path = economyPath(payload.semesterId);
+      const existing = await transaction.get(path);
+      if (existing.exists)
+        fail(
+          "already-exists",
+          "Semester Wis economy already exists.",
+          "WIS_ECONOMY_EXISTS",
+        );
+      const status =
+        manifest.status === "ACTIVE"
+          ? "ACTIVE_INITIALIZING"
+          : "PREPARING_INITIALIZING";
+      transaction.create(path, {
+        schemaVersion: WIS_SCHEMA_VERSION,
+        policyVersion: WIS_POLICY_VERSION,
+        semesterId: payload.semesterId,
+        revision: 1,
+        status,
+        displayName: payload.displayName,
+        currencyName: payload.currencyName,
+        initialGrantAmount: payload.initialGrantAmount,
+        integrityVersion: WIS_INTEGRITY_VERSION,
+        accountCount: 0,
+        initializedAccountCount: 0,
+        ledgerEntryCount: 0,
+        inventoryCount: 0,
+        orderCount: 0,
+        unresolvedLegacyIssueCount: 0,
+        provenance: manifest.status === "ACTIVE" ? "CURRENT" : "PREPARING",
+        readOnly: manifest.status !== "ACTIVE",
+        cutoverPlanId: payload.cutoverPlanId || null,
+        createdBy: actor.actorUid,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      });
+      return {
+        target: { kind: "wis-economy", id: payload.semesterId, refs: [path] },
+        sourceHash: sha256(canonicalJson(payload)),
+        result: { semesterId: payload.semesterId, revision: 1, status },
+      };
     }
-    const economyStatuses = commandType === WIS_COMMAND_TYPES.CREATE_WIS_ACCOUNTS && ["PREPARING", "READY"].includes(manifest.status) ? ["PREPARING_INITIALIZING"] : commandType === WIS_COMMAND_TYPES.TRANSITION_WIS_ECONOMY ? ["PREPARING_INITIALIZING", "ACTIVE_INITIALIZING", "ACTIVE_OPEN", "CLOSED"] : ["ACTIVE_INITIALIZING", "ACTIVE_OPEN"];
+    const economyStatuses =
+      commandType === WIS_COMMAND_TYPES.CREATE_WIS_ACCOUNTS &&
+      ["PREPARING", "READY"].includes(manifest.status)
+        ? ["PREPARING_INITIALIZING"]
+        : commandType === WIS_COMMAND_TYPES.TRANSITION_WIS_ECONOMY
+          ? [
+              "PREPARING_INITIALIZING",
+              "ACTIVE_INITIALIZING",
+              "ACTIVE_OPEN",
+              "CLOSED",
+            ]
+          : ["ACTIVE_INITIALIZING", "ACTIVE_OPEN"];
     const economy = await assertEconomy(transaction, payload, economyStatuses);
     if (commandType === WIS_COMMAND_TYPES.CREATE_WIS_ACCOUNTS) {
-      assertTeacher(actor); const enrollments = await transaction.getAll(payload.enrollmentIds.map(enrollmentPath)); const refs = [];
+      assertTeacher(actor);
+      const enrollments = await transaction.getAll(
+        payload.enrollmentIds.map(enrollmentPath),
+      );
+      const enrollmentData = enrollments.map((snapshot) => snapshot.data || {});
+      const classIds = [
+        ...new Set(
+          enrollmentData
+            .map((data) => String(data.classId || ""))
+            .filter(Boolean),
+        ),
+      ];
+      const accountIds = enrollmentData.map((data) =>
+        accountIdFor(payload.semesterId, data.studentUid),
+      );
+      const [
+        classSnapshots,
+        existingAccountSnapshots,
+        enrollmentSlotSnapshots,
+      ] = await Promise.all([
+        transaction.getAll(classIds.map(classPath)),
+        transaction.getAll(accountIds.map(accountPath)),
+        transaction.getAll(
+          enrollmentData.map((data) =>
+            enrollmentSlotPath(
+              payload.semesterId,
+              String(data.studentUid || ""),
+            ),
+          ),
+        ),
+      ]);
+      const classes = new Map(
+        classSnapshots
+          .filter((snapshot) => snapshot.exists)
+          .map((snapshot) => [
+            String(snapshot.data?.classId || ""),
+            snapshot.data || {},
+          ]),
+      );
+      const refs = [];
+      let createdCount = 0;
+      let syncedCount = 0;
       for (let index = 0; index < enrollments.length; index += 1) {
-        const enrollment = enrollments[index]; const data = enrollment.data || {};
-        if (!enrollment.exists || data.semesterId !== payload.semesterId || ![data.status, data.enrollmentStatus].includes("ACTIVE")) fail("failed-precondition", "Enrollment is not active in this semester.", "WIS_ENROLLMENT_INVALID", { enrollmentId: payload.enrollmentIds[index] });
-        const accountId = accountIdFor(payload.semesterId, data.studentUid); const path = accountPath(accountId); const existing = await transaction.get(path);
-        if (existing.exists) continue;
-        const account = { schemaVersion: WIS_SCHEMA_VERSION, policyVersion: WIS_POLICY_VERSION, accountId, semesterId: payload.semesterId, studentUid: data.studentUid, enrollmentId: data.enrollmentId, classId: data.classId, displayName: data.displayName || data.studentName || data.snapshot?.displayName || "학생", status: manifest.status === "ACTIVE" ? "ACTIVE" : "PREPARING", provenance: manifest.status === "ACTIVE" ? "CURRENT" : "PREPARING", readOnly: manifest.status !== "ACTIVE", revision: 1, balance: 0, initialGrantLedgerEntryId: null, cutoverPlanId: payload.cutoverPlanId || null, createdAt: timestamp, updatedAt: timestamp };
-        transaction.create(path, account); transaction.create(balancePath(accountId), { ...account, ledgerRevision: 1 }); transaction.create(rankingPath(accountId), { schemaVersion: WIS_SCHEMA_VERSION, policyVersion: WIS_POLICY_VERSION, accountId, semesterId: payload.semesterId, studentUid: data.studentUid, displayName: account.displayName, balance: 0, ledgerRevision: 1, updatedAt: timestamp }); refs.push(path, balancePath(accountId), rankingPath(accountId));
+        const enrollment = enrollments[index];
+        const data = enrollment.data || {};
+        const enrollmentId = String(data.enrollmentId || "");
+        const enrollmentSlot = enrollmentSlotSnapshots[index];
+        if (
+          !enrollment.exists ||
+          data.semesterId !== payload.semesterId ||
+          data.enrollmentStatus !== "ACTIVE" ||
+          enrollmentId !== payload.enrollmentIds[index] ||
+          !enrollmentSlot.exists ||
+          String(enrollmentSlot.data?.activeEnrollmentId || "") !== enrollmentId
+        )
+          fail(
+            "failed-precondition",
+            "Enrollment is not active in this semester.",
+            "WIS_ENROLLMENT_INVALID",
+            { enrollmentId: payload.enrollmentIds[index] },
+          );
+        const accountId = accountIds[index];
+        const path = accountPath(accountId);
+        const existing = existingAccountSnapshots[index];
+        const semesterClass = classes.get(String(data.classId || "")) || {};
+        const snapshot = isObject(data.snapshot) ? data.snapshot : {};
+        const accountMetadata = {
+          enrollmentId,
+          classId: data.classId,
+          grade: String(
+            snapshot.grade || data.grade || semesterClass.grade || "",
+          ),
+          classNumber: String(
+            snapshot.classNumber ||
+              data.classNumber ||
+              semesterClass.classNumber ||
+              "",
+          ),
+          studentNumber: String(
+            data.studentNumber || snapshot.studentNumber || "",
+          ),
+          displayName:
+            data.displayName ||
+            data.studentName ||
+            data.snapshot?.displayName ||
+            "학생",
+          status: manifest.status === "ACTIVE" ? "ACTIVE" : "PREPARING",
+          provenance: manifest.status === "ACTIVE" ? "CURRENT" : "PREPARING",
+          readOnly: manifest.status !== "ACTIVE",
+          updatedAt: timestamp,
+        };
+        if (existing.exists) {
+          const existingAccount = existing.data || {};
+          transaction.set(path, accountMetadata, { merge: true });
+          transaction.set(balancePath(accountId), accountMetadata, {
+            merge: true,
+          });
+          transaction.set(
+            rankingPath(accountId),
+            {
+              enrollmentId,
+              classId: data.classId,
+              grade: accountMetadata.grade,
+              classNumber: accountMetadata.classNumber,
+              displayName: accountMetadata.displayName,
+              updatedAt: timestamp,
+            },
+            { merge: true },
+          );
+          if (
+            String(existingAccount.enrollmentId || "") !== enrollmentId ||
+            String(existingAccount.classId || "") !== String(data.classId || "")
+          )
+            syncedCount += 1;
+          refs.push(path, balancePath(accountId), rankingPath(accountId));
+          continue;
+        }
+        const account = {
+          schemaVersion: WIS_SCHEMA_VERSION,
+          policyVersion: WIS_POLICY_VERSION,
+          accountId,
+          semesterId: payload.semesterId,
+          studentUid: data.studentUid,
+          ...accountMetadata,
+          revision: 1,
+          balance: 0,
+          earnedTotal: 0,
+          rankEarnedTotal: 0,
+          spentTotal: 0,
+          adjustedTotal: 0,
+          recentLedgerEntries: [],
+          initialGrantLedgerEntryId: null,
+          cutoverPlanId: payload.cutoverPlanId || null,
+          createdAt: timestamp,
+        };
+        transaction.create(path, account);
+        transaction.create(balancePath(accountId), {
+          ...account,
+          ledgerRevision: 1,
+        });
+        transaction.create(rankingPath(accountId), {
+          schemaVersion: WIS_SCHEMA_VERSION,
+          policyVersion: WIS_POLICY_VERSION,
+          accountId,
+          semesterId: payload.semesterId,
+          studentUid: data.studentUid,
+          displayName: account.displayName,
+          enrollmentId,
+          balance: 0,
+          rankEarnedTotal: 0,
+          classId: data.classId,
+          ledgerRevision: 1,
+          updatedAt: timestamp,
+        });
+        createdCount += 1;
+        refs.push(path, balancePath(accountId), rankingPath(accountId));
       }
-      const nextRevision = economy.revision + 1; transaction.set(economyPath(payload.semesterId), { revision: nextRevision, updatedAt: timestamp, updatedBy: actor.actorUid }, { merge: true });
-      return { target: { kind: "wis-accounts", id: payload.semesterId, refs }, sourceHash: sha256(canonicalJson(payload.enrollmentIds)), result: { semesterId: payload.semesterId, createdCount: refs.length / 3, economyRevision: nextRevision } };
+      const nextRevision = economy.revision + 1;
+      transaction.set(
+        economyPath(payload.semesterId),
+        {
+          revision: nextRevision,
+          accountCount: Number(economy.accountCount || 0) + createdCount,
+          updatedAt: timestamp,
+          updatedBy: actor.actorUid,
+        },
+        { merge: true },
+      );
+      return {
+        target: { kind: "wis-accounts", id: payload.semesterId, refs },
+        sourceHash: sha256(canonicalJson(payload.enrollmentIds)),
+        result: {
+          semesterId: payload.semesterId,
+          createdCount,
+          syncedCount,
+          economyRevision: nextRevision,
+        },
+      };
     }
-    if ([WIS_COMMAND_TYPES.GRANT_INITIAL_WIS, WIS_COMMAND_TYPES.GRANT_WIS, WIS_COMMAND_TYPES.DEDUCT_WIS, WIS_COMMAND_TYPES.ADJUST_WIS].includes(commandType)) {
-      assertTeacher(actor); const snapshot = await transaction.get(accountPath(payload.accountId)); const account = snapshot.data || {};
-      if (!snapshot.exists || account.semesterId !== payload.semesterId) fail("not-found", "Wis account was not found.", "WIS_ACCOUNT_NOT_FOUND");
-      if (Number(account.revision || 0) !== payload.expectedAccountRevision) fail("aborted", "Wis account revision changed.", "WIS_ACCOUNT_REVISION_CONFLICT");
-      if (commandType === WIS_COMMAND_TYPES.GRANT_INITIAL_WIS && (economy.status !== "ACTIVE_INITIALIZING" || account.initialGrantLedgerEntryId)) fail("failed-precondition", "Initial grant is allowed exactly once during initialization.", "WIS_INITIAL_GRANT_ALREADY_APPLIED");
-      if (commandType === WIS_COMMAND_TYPES.GRANT_INITIAL_WIS && payload.amount !== economy.initialGrantAmount) fail("failed-precondition", "Initial grant amount must match the semester economy policy.", "WIS_INITIAL_GRANT_AMOUNT_MISMATCH");
-      const delta = commandType === WIS_COMMAND_TYPES.DEDUCT_WIS ? -payload.amount : commandType === WIS_COMMAND_TYPES.ADJUST_WIS ? payload.delta : payload.amount;
-      const type = commandType === WIS_COMMAND_TYPES.GRANT_INITIAL_WIS ? "INITIAL_GRANT" : commandType === WIS_COMMAND_TYPES.GRANT_WIS ? "GRANT" : commandType === WIS_COMMAND_TYPES.DEDUCT_WIS ? "DEDUCT" : "ADJUST";
-      const posted = await postLedger({ transaction, account, delta, type, sourceId: payload.sourceId, reason: payload.reason, commandId, receiptId, timestamp, actor });
-      if (type === "INITIAL_GRANT") transaction.set(accountPath(account.accountId), { initialGrantLedgerEntryId: posted.ledgerEntryId }, { merge: true });
-      return { target: { kind: "wis-ledger", id: posted.ledgerEntryId, refs: [ledgerPath(posted.ledgerEntryId), accountPath(account.accountId), balancePath(account.accountId), rankingPath(account.accountId)] }, sourceHash: sha256(`${type}\n${payload.sourceId}`), result: { accountId: account.accountId, ...posted, type } };
+    if (
+      [
+        WIS_COMMAND_TYPES.GRANT_INITIAL_WIS,
+        WIS_COMMAND_TYPES.GRANT_WIS,
+        WIS_COMMAND_TYPES.DEDUCT_WIS,
+        WIS_COMMAND_TYPES.ADJUST_WIS,
+      ].includes(commandType)
+    ) {
+      assertTeacher(actor);
+      const snapshot = await transaction.get(accountPath(payload.accountId));
+      const account = snapshot.data || {};
+      if (!snapshot.exists || account.semesterId !== payload.semesterId)
+        fail(
+          "not-found",
+          "Wis account was not found.",
+          "WIS_ACCOUNT_NOT_FOUND",
+        );
+      if (Number(account.revision || 0) !== payload.expectedAccountRevision)
+        fail(
+          "aborted",
+          "Wis account revision changed.",
+          "WIS_ACCOUNT_REVISION_CONFLICT",
+        );
+      if (
+        commandType === WIS_COMMAND_TYPES.GRANT_INITIAL_WIS &&
+        (economy.status !== "ACTIVE_INITIALIZING" ||
+          account.initialGrantLedgerEntryId)
+      )
+        fail(
+          "failed-precondition",
+          "Initial grant is allowed exactly once during initialization.",
+          "WIS_INITIAL_GRANT_ALREADY_APPLIED",
+        );
+      if (
+        commandType === WIS_COMMAND_TYPES.GRANT_INITIAL_WIS &&
+        payload.amount !== economy.initialGrantAmount
+      )
+        fail(
+          "failed-precondition",
+          "Initial grant amount must match the semester economy policy.",
+          "WIS_INITIAL_GRANT_AMOUNT_MISMATCH",
+        );
+      const delta =
+        commandType === WIS_COMMAND_TYPES.DEDUCT_WIS
+          ? -payload.amount
+          : commandType === WIS_COMMAND_TYPES.ADJUST_WIS
+            ? payload.delta
+            : payload.amount;
+      const type =
+        commandType === WIS_COMMAND_TYPES.GRANT_INITIAL_WIS
+          ? "INITIAL_GRANT"
+          : commandType === WIS_COMMAND_TYPES.GRANT_WIS
+            ? "GRANT"
+            : commandType === WIS_COMMAND_TYPES.DEDUCT_WIS
+              ? "DEDUCT"
+              : "ADJUST";
+      const posted = await postLedger({
+        transaction,
+        account,
+        economy,
+        delta,
+        type,
+        sourceId: payload.sourceId,
+        reason: payload.reason,
+        commandId,
+        receiptId,
+        timestamp: projectionTimestamp,
+        actor,
+      });
+      if (type === "INITIAL_GRANT") {
+        transaction.set(
+          accountPath(account.accountId),
+          { initialGrantLedgerEntryId: posted.ledgerEntryId },
+          { merge: true },
+        );
+        transaction.set(
+          economyPath(payload.semesterId),
+          {
+            initializedAccountCount:
+              Number(economy.initializedAccountCount || 0) + 1,
+            updatedAt: timestamp,
+            updatedBy: actor.actorUid,
+          },
+          { merge: true },
+        );
+      }
+      return {
+        target: {
+          kind: "wis-ledger",
+          id: posted.ledgerEntryId,
+          refs: [
+            ledgerPath(posted.ledgerEntryId),
+            accountPath(account.accountId),
+            balancePath(account.accountId),
+            rankingPath(account.accountId),
+          ],
+        },
+        sourceHash: sha256(`${type}\n${payload.sourceId}`),
+        result: { accountId: account.accountId, ...posted, type },
+      };
     }
     if (commandType === WIS_COMMAND_TYPES.REVERSE_WIS_ENTRY) {
-      assertTeacher(actor); const [accountSnapshot, original] = await transaction.getAll([accountPath(payload.accountId), ledgerPath(payload.ledgerEntryId)]); const account = accountSnapshot.data || {}; const source = original.data || {};
-      if (!accountSnapshot.exists || account.semesterId !== payload.semesterId || Number(account.revision || 0) !== payload.expectedAccountRevision) fail("aborted", "Wis account revision changed.", "WIS_ACCOUNT_REVISION_CONFLICT");
-      if (!original.exists || source.accountId !== account.accountId || source.type === "REVERSAL") fail("failed-precondition", "Ledger entry cannot be reversed.", "WIS_REVERSAL_INVALID");
-      const posted = await postLedger({ transaction, account, delta: -Number(source.delta || 0), type: "REVERSAL", sourceId: payload.ledgerEntryId, reason: payload.reason, commandId, receiptId, timestamp, actor });
-      return { target: { kind: "wis-reversal", id: posted.ledgerEntryId, refs: [ledgerPath(payload.ledgerEntryId), ledgerPath(posted.ledgerEntryId)] }, sourceHash: sha256(payload.ledgerEntryId), result: { accountId: account.accountId, ...posted, reversedLedgerEntryId: payload.ledgerEntryId } };
+      assertTeacher(actor);
+      const [accountSnapshot, original] = await transaction.getAll([
+        accountPath(payload.accountId),
+        ledgerPath(payload.ledgerEntryId),
+      ]);
+      const account = accountSnapshot.data || {};
+      const source = original.data || {};
+      if (
+        !accountSnapshot.exists ||
+        account.semesterId !== payload.semesterId ||
+        Number(account.revision || 0) !== payload.expectedAccountRevision
+      )
+        fail(
+          "aborted",
+          "Wis account revision changed.",
+          "WIS_ACCOUNT_REVISION_CONFLICT",
+        );
+      if (
+        !original.exists ||
+        source.accountId !== account.accountId ||
+        !WIS_MANUAL_REVERSIBLE_TYPES.has(source.type) ||
+        !["teacher", "admin"].includes(String(source.actorRole || "")) ||
+        String(source.sourceId || "") === "lesson-core-points-all"
+      )
+        fail(
+          "failed-precondition",
+          "Ledger entry cannot be reversed.",
+          "WIS_REVERSAL_INVALID",
+        );
+      const posted = await postLedger({
+        transaction,
+        account,
+        economy,
+        delta: -Number(source.delta || 0),
+        type: "REVERSAL",
+        sourceId: payload.ledgerEntryId,
+        reason: payload.reason,
+        commandId,
+        receiptId,
+        timestamp: projectionTimestamp,
+        actor,
+        reversedType: source.type,
+        reversedDelta: Number(source.delta || 0),
+      });
+      return {
+        target: {
+          kind: "wis-reversal",
+          id: posted.ledgerEntryId,
+          refs: [
+            ledgerPath(payload.ledgerEntryId),
+            ledgerPath(posted.ledgerEntryId),
+          ],
+        },
+        sourceHash: sha256(payload.ledgerEntryId),
+        result: {
+          accountId: account.accountId,
+          ...posted,
+          reversedLedgerEntryId: payload.ledgerEntryId,
+        },
+      };
     }
     if (commandType === WIS_COMMAND_TYPES.REBUILD_WIS_PROJECTION) {
-      assertTeacher(actor); const accountSnapshot = await transaction.get(accountPath(payload.accountId)); const account = accountSnapshot.data || {};
-      if (!accountSnapshot.exists || account.semesterId !== payload.semesterId) fail("not-found", "Wis account was not found.", "WIS_ACCOUNT_NOT_FOUND");
-      const entries = await transaction.query(WIS_LEDGER_COLLECTION, { field: "accountId", operator: "==", value: payload.accountId });
-      const balance = entries.reduce((sum, entry) => sum + Number(entry.data?.delta || 0), 0); if (balance < 0) fail("failed-precondition", "Ledger produces a negative balance.", "WIS_LEDGER_INVALID");
-      const accountRevision = writeProjection(transaction, account, balance, timestamp, actor.actorUid); const reportId = hashId("wisrec", payload.semesterId, payload.accountId, String(accountRevision), sha256(canonicalJson(entries.map((entry) => entry.data))));
-      transaction.create(`${WIS_RECONCILIATION_COLLECTION}/${reportId}`, { schemaVersion: WIS_SCHEMA_VERSION, policyVersion: WIS_POLICY_VERSION, reportId, semesterId: payload.semesterId, accountId: payload.accountId, accountRevision, ledgerCount: entries.length, balance, status: "PASS", dependencyHash: sha256(canonicalJson(entries.map((entry) => entry.data))), createdBy: actor.actorUid, createdAt: timestamp });
-      return { target: { kind: "wis-projection", id: payload.accountId, refs: [accountPath(payload.accountId), balancePath(payload.accountId), rankingPath(payload.accountId), `${WIS_RECONCILIATION_COLLECTION}/${reportId}`] }, sourceHash: sha256(canonicalJson(entries.map((entry) => entry.data))), result: { accountId: payload.accountId, accountRevision, balance, reportId, status: "PASS" } };
+      assertTeacher(actor);
+      const accountSnapshot = await transaction.get(
+        accountPath(payload.accountId),
+      );
+      const account = accountSnapshot.data || {};
+      if (!accountSnapshot.exists || account.semesterId !== payload.semesterId)
+        fail(
+          "not-found",
+          "Wis account was not found.",
+          "WIS_ACCOUNT_NOT_FOUND",
+        );
+      const entries = await transaction.query(WIS_LEDGER_COLLECTION, {
+        field: "accountId",
+        operator: "==",
+        value: payload.accountId,
+        orderBy: { field: "createdAt", direction: "desc" },
+        limit: WIS_REBUILD_LEDGER_LIMIT + 1,
+      });
+      if (entries.length > WIS_REBUILD_LEDGER_LIMIT)
+        fail(
+          "resource-exhausted",
+          "Wis projection rebuild requires a bounded migration workflow.",
+          "WIS_REBUILD_LEDGER_LIMIT_EXCEEDED",
+          { limit: WIS_REBUILD_LEDGER_LIMIT },
+        );
+      const balance = entries.reduce(
+        (sum, entry) => sum + Number(entry.data?.delta || 0),
+        0,
+      );
+      if (balance < 0)
+        fail(
+          "failed-precondition",
+          "Ledger produces a negative balance.",
+          "WIS_LEDGER_INVALID",
+        );
+      const accountRevision = writeProjection(
+        transaction,
+        account,
+        balance,
+        projectionTimestamp,
+        actor.actorUid,
+        totalsFromLedgerEntries(entries),
+        entries
+          .map((entry) => entry.data || {})
+          .slice(0, WIS_RECENT_LEDGER_LIMIT),
+      );
+      const reportId = hashId(
+        "wisrec",
+        payload.semesterId,
+        payload.accountId,
+        String(accountRevision),
+        sha256(canonicalJson(entries.map((entry) => entry.data))),
+      );
+      transaction.create(`${WIS_RECONCILIATION_COLLECTION}/${reportId}`, {
+        schemaVersion: WIS_SCHEMA_VERSION,
+        policyVersion: WIS_POLICY_VERSION,
+        reportId,
+        semesterId: payload.semesterId,
+        accountId: payload.accountId,
+        accountRevision,
+        ledgerCount: entries.length,
+        balance,
+        status: "PASS",
+        dependencyHash: sha256(
+          canonicalJson(entries.map((entry) => entry.data)),
+        ),
+        createdBy: actor.actorUid,
+        createdAt: timestamp,
+      });
+      return {
+        target: {
+          kind: "wis-projection",
+          id: payload.accountId,
+          refs: [
+            accountPath(payload.accountId),
+            balancePath(payload.accountId),
+            rankingPath(payload.accountId),
+            `${WIS_RECONCILIATION_COLLECTION}/${reportId}`,
+          ],
+        },
+        sourceHash: sha256(canonicalJson(entries.map((entry) => entry.data))),
+        result: {
+          accountId: payload.accountId,
+          accountRevision,
+          balance,
+          reportId,
+          status: "PASS",
+        },
+      };
     }
     if (commandType === WIS_COMMAND_TYPES.TRANSITION_WIS_ECONOMY) {
-      assertTeacher(actor); const transitions = { PREPARING_INITIALIZING: ["ACTIVE_INITIALIZING"], ACTIVE_INITIALIZING: ["ACTIVE_OPEN"], ACTIVE_OPEN: ["CLOSED"], CLOSED: ["ARCHIVED"] };
-      if (!(transitions[economy.status] || []).includes(payload.targetStatus)) fail("failed-precondition", "Wis economy transition is invalid.", "WIS_ECONOMY_TRANSITION_INVALID");
-      let preparedAccounts = [];
-      if (economy.status === "PREPARING_INITIALIZING" && payload.targetStatus === "ACTIVE_INITIALIZING") preparedAccounts = await transaction.query(WIS_ACCOUNT_COLLECTION, { field: "semesterId", operator: "==", value: payload.semesterId });
+      assertTeacher(actor);
+      const transitions = {
+        PREPARING_INITIALIZING: ["ACTIVE_INITIALIZING"],
+        ACTIVE_INITIALIZING: ["ACTIVE_OPEN"],
+        ACTIVE_OPEN: ["CLOSED"],
+        CLOSED: ["ARCHIVED"],
+      };
+      if (!(transitions[economy.status] || []).includes(payload.targetStatus))
+        fail(
+          "failed-precondition",
+          "Wis economy transition is invalid.",
+          "WIS_ECONOMY_TRANSITION_INVALID",
+        );
       if (payload.targetStatus === "ACTIVE_OPEN") {
-        const accounts = await transaction.query(WIS_ACCOUNT_COLLECTION, { field: "semesterId", operator: "==", value: payload.semesterId });
-        const missing = accounts.filter((row) => economy.initialGrantAmount > 0 && !row.data?.initialGrantLedgerEntryId);
-        if (accounts.length === 0 || missing.length) fail("failed-precondition", "All active accounts require their exactly-once initial grant.", "WIS_INITIALIZATION_INCOMPLETE", { accountCount: accounts.length, missingGrantCount: missing.length });
+        const accountCount = Number(economy.accountCount || 0);
+        const initializedAccountCount = Number(
+          economy.initializedAccountCount || 0,
+        );
+        const missingGrantCount =
+          economy.initialGrantAmount > 0
+            ? Math.max(0, accountCount - initializedAccountCount)
+            : 0;
+        if (accountCount === 0 || missingGrantCount)
+          fail(
+            "failed-precondition",
+            "All active accounts require their exactly-once initial grant.",
+            "WIS_INITIALIZATION_INCOMPLETE",
+            {
+              accountCount,
+              missingGrantCount,
+            },
+          );
       }
-      preparedAccounts.forEach((row) => transaction.set(row.path, { status: "ACTIVE", provenance: "CURRENT", readOnly: false, updatedAt: timestamp }, { merge: true }));
-      const economyRevision = economy.revision + 1; transaction.set(economyPath(payload.semesterId), { revision: economyRevision, status: payload.targetStatus, transitionReason: payload.reason, updatedAt: timestamp, updatedBy: actor.actorUid }, { merge: true });
-      return { target: { kind: "wis-economy-transition", id: payload.semesterId, refs: [economyPath(payload.semesterId)] }, sourceHash: sha256(`${economy.status}\n${payload.targetStatus}`), result: { semesterId: payload.semesterId, revision: economyRevision, status: payload.targetStatus } };
+      const economyRevision = economy.revision + 1;
+      transaction.set(
+        economyPath(payload.semesterId),
+        {
+          revision: economyRevision,
+          status: payload.targetStatus,
+          transitionReason: payload.reason,
+          updatedAt: timestamp,
+          updatedBy: actor.actorUid,
+        },
+        { merge: true },
+      );
+      return {
+        target: {
+          kind: "wis-economy-transition",
+          id: payload.semesterId,
+          refs: [economyPath(payload.semesterId)],
+        },
+        sourceHash: sha256(`${economy.status}\n${payload.targetStatus}`),
+        result: {
+          semesterId: payload.semesterId,
+          revision: economyRevision,
+          status: payload.targetStatus,
+        },
+      };
     }
     if (commandType === WIS_COMMAND_TYPES.UPSERT_WIS_PRODUCT) {
-      assertTeacher(actor); const path = productPath(payload.productId); const existing = await transaction.get(path); const currentRevision = Number(existing.data?.revision || 0);
-      if ((existing.exists && payload.expectedProductRevision !== currentRevision) || (!existing.exists && payload.expectedProductRevision !== null)) fail("aborted", "Product revision changed.", "WIS_PRODUCT_REVISION_CONFLICT");
-      const nextRevision = currentRevision + 1; transaction.set(path, { schemaVersion: WIS_SCHEMA_VERSION, policyVersion: WIS_POLICY_VERSION, productId: payload.productId, revision: nextRevision, name: payload.name, description: payload.description, imageUrl: payload.imageUrl, active: payload.active, updatedAt: timestamp, updatedBy: actor.actorUid, ...(existing.exists ? {} : { createdAt: timestamp, createdBy: actor.actorUid }) }, { merge: true });
-      return { target: { kind: "wis-product", id: payload.productId, refs: [path] }, sourceHash: sha256(canonicalJson(payload)), result: { productId: payload.productId, revision: nextRevision, active: payload.active } };
+      assertTeacher(actor);
+      const path = productPath(payload.productId);
+      const linkedInventoryPath = inventoryPath(
+        inventoryIdFor(payload.semesterId, payload.productId),
+      );
+      const [existing, linkedInventory] = await transaction.getAll([
+        path,
+        linkedInventoryPath,
+      ]);
+      const currentRevision = Number(existing.data?.revision || 0);
+      if (
+        (existing.exists &&
+          payload.expectedProductRevision !== currentRevision) ||
+        (!existing.exists && payload.expectedProductRevision !== null)
+      )
+        fail(
+          "aborted",
+          "Product revision changed.",
+          "WIS_PRODUCT_REVISION_CONFLICT",
+        );
+      const nextRevision = currentRevision + 1;
+      transaction.set(
+        path,
+        {
+          schemaVersion: WIS_SCHEMA_VERSION,
+          policyVersion: WIS_POLICY_VERSION,
+          productId: payload.productId,
+          revision: nextRevision,
+          name: payload.name,
+          description: payload.description,
+          imageUrl: payload.imageUrl,
+          active: payload.active,
+          updatedAt: timestamp,
+          updatedBy: actor.actorUid,
+          ...(existing.exists
+            ? {}
+            : { createdAt: timestamp, createdBy: actor.actorUid }),
+        },
+        { merge: true },
+      );
+      let inventoryRevision = null;
+      if (
+        linkedInventory.exists &&
+        linkedInventory.data?.semesterId === payload.semesterId
+      ) {
+        inventoryRevision = Number(linkedInventory.data?.revision || 0) + 1;
+        transaction.set(
+          linkedInventoryPath,
+          {
+            productName: payload.name,
+            productRevision: nextRevision,
+            revision: inventoryRevision,
+            updatedAt: timestamp,
+            updatedBy: actor.actorUid,
+          },
+          { merge: true },
+        );
+      }
+      return {
+        target: {
+          kind: "wis-product",
+          id: payload.productId,
+          refs: [
+            path,
+            ...(linkedInventory.exists ? [linkedInventoryPath] : []),
+          ],
+        },
+        sourceHash: sha256(canonicalJson(payload)),
+        result: {
+          productId: payload.productId,
+          revision: nextRevision,
+          inventoryRevision,
+          active: payload.active,
+        },
+      };
     }
     if (commandType === WIS_COMMAND_TYPES.UPSERT_WIS_INVENTORY) {
-      assertTeacher(actor); const [product, existing] = await transaction.getAll([productPath(payload.productId), inventoryPath(payload.inventoryId)]); if (!product.exists) fail("not-found", "Product was not found.", "WIS_PRODUCT_NOT_FOUND");
-      const currentRevision = Number(existing.data?.revision || 0); if ((existing.exists && currentRevision !== payload.expectedInventoryRevision) || (!existing.exists && payload.expectedInventoryRevision !== null)) fail("aborted", "Inventory revision changed.", "WIS_INVENTORY_REVISION_CONFLICT");
-      const reserved = Number(existing.data?.reserved || 0); if (payload.stock < reserved) fail("failed-precondition", "Stock cannot be below reserved quantity.", "WIS_INVENTORY_RESERVED_CONFLICT");
-      const nextRevision = currentRevision + 1; transaction.set(inventoryPath(payload.inventoryId), { schemaVersion: WIS_SCHEMA_VERSION, policyVersion: WIS_POLICY_VERSION, inventoryId: payload.inventoryId, semesterId: payload.semesterId, productId: payload.productId, productRevision: product.data?.revision, productName: product.data?.name, revision: nextRevision, price: payload.price, stock: payload.stock, available: payload.stock - reserved, reserved, sold: Number(existing.data?.sold || 0), active: payload.active, updatedAt: timestamp, updatedBy: actor.actorUid, ...(existing.exists ? {} : { createdAt: timestamp }) }, { merge: true });
-      return { target: { kind: "wis-inventory", id: payload.inventoryId, refs: [inventoryPath(payload.inventoryId), productPath(payload.productId)] }, sourceHash: sha256(canonicalJson(payload)), result: { inventoryId: payload.inventoryId, revision: nextRevision, available: payload.stock - reserved, reserved } };
+      assertTeacher(actor);
+      const [product, existing] = await transaction.getAll([
+        productPath(payload.productId),
+        inventoryPath(payload.inventoryId),
+      ]);
+      if (!product.exists)
+        fail("not-found", "Product was not found.", "WIS_PRODUCT_NOT_FOUND");
+      const currentRevision = Number(existing.data?.revision || 0);
+      if (
+        (existing.exists &&
+          currentRevision !== payload.expectedInventoryRevision) ||
+        (!existing.exists && payload.expectedInventoryRevision !== null)
+      )
+        fail(
+          "aborted",
+          "Inventory revision changed.",
+          "WIS_INVENTORY_REVISION_CONFLICT",
+        );
+      const reserved = Number(existing.data?.reserved || 0);
+      if (payload.stock < reserved)
+        fail(
+          "failed-precondition",
+          "Stock cannot be below reserved quantity.",
+          "WIS_INVENTORY_RESERVED_CONFLICT",
+        );
+      const nextRevision = currentRevision + 1;
+      transaction.set(
+        inventoryPath(payload.inventoryId),
+        {
+          schemaVersion: WIS_SCHEMA_VERSION,
+          policyVersion: WIS_POLICY_VERSION,
+          inventoryId: payload.inventoryId,
+          semesterId: payload.semesterId,
+          productId: payload.productId,
+          productRevision: product.data?.revision,
+          productName: product.data?.name,
+          revision: nextRevision,
+          price: payload.price,
+          stock: payload.stock,
+          available: payload.stock - reserved,
+          reserved,
+          sold: Number(existing.data?.sold || 0),
+          active: payload.active,
+          updatedAt: timestamp,
+          updatedBy: actor.actorUid,
+          ...(existing.exists ? {} : { createdAt: timestamp }),
+        },
+        { merge: true },
+      );
+      if (!existing.exists)
+        transaction.set(
+          economyPath(payload.semesterId),
+          {
+            inventoryCount: Number(economy.inventoryCount || 0) + 1,
+            updatedAt: timestamp,
+            updatedBy: actor.actorUid,
+          },
+          { merge: true },
+        );
+      return {
+        target: {
+          kind: "wis-inventory",
+          id: payload.inventoryId,
+          refs: [
+            inventoryPath(payload.inventoryId),
+            productPath(payload.productId),
+          ],
+        },
+        sourceHash: sha256(canonicalJson(payload)),
+        result: {
+          inventoryId: payload.inventoryId,
+          revision: nextRevision,
+          available: payload.stock - reserved,
+          reserved,
+        },
+      };
     }
     if (commandType === WIS_COMMAND_TYPES.PLACE_WIS_ORDER) {
-      assertStudent(actor); if (economy.status !== "ACTIVE_OPEN") fail("failed-precondition", "Wis shop is not open.", "WIS_ECONOMY_STATE_INVALID");
-      const accountId = accountIdFor(payload.semesterId, actor.actorUid); const [accountSnapshot, inventorySnapshot] = await transaction.getAll([accountPath(accountId), inventoryPath(payload.inventoryId)]); const account = accountSnapshot.data || {}; const inventory = inventorySnapshot.data || {};
-      if (!accountSnapshot.exists || account.status !== "ACTIVE") fail("not-found", "Wis account was not found.", "WIS_ACCOUNT_NOT_FOUND"); if (Number(account.revision || 0) !== payload.expectedAccountRevision) fail("aborted", "Wis account revision changed.", "WIS_ACCOUNT_REVISION_CONFLICT");
-      if (!inventorySnapshot.exists || inventory.semesterId !== payload.semesterId || inventory.active !== true || Number(inventory.revision || 0) !== payload.expectedInventoryRevision) fail("aborted", "Inventory changed.", "WIS_INVENTORY_REVISION_CONFLICT");
-      if (Number(inventory.available || 0) < payload.quantity) fail("failed-precondition", "Inventory is insufficient.", "WIS_INSUFFICIENT_STOCK"); const totalPrice = Number(inventory.price || 0) * payload.quantity;
-      const orderId = orderIdFor(payload.semesterId, accountId, payload.inventoryId, commandId); const posted = await postLedger({ transaction, account, delta: -totalPrice, type: "ORDER_DEBIT", sourceId: orderId, reason: `상품 주문: ${inventory.productName || inventory.productId}`, commandId, receiptId, timestamp, actor });
-      transaction.set(inventoryPath(payload.inventoryId), { revision: payload.expectedInventoryRevision + 1, available: inventory.available - payload.quantity, reserved: Number(inventory.reserved || 0) + payload.quantity, updatedAt: timestamp }, { merge: true });
-      transaction.create(orderPath(orderId), { schemaVersion: WIS_SCHEMA_VERSION, policyVersion: WIS_POLICY_VERSION, orderId, semesterId: payload.semesterId, accountId, studentUid: actor.actorUid, enrollmentId: account.enrollmentId, classId: account.classId, inventoryId: payload.inventoryId, productId: inventory.productId, productName: inventory.productName, quantity: payload.quantity, unitPrice: inventory.price, totalPrice, debitLedgerEntryId: posted.ledgerEntryId, revision: 1, status: "REQUESTED", createdAt: timestamp, updatedAt: timestamp });
-      return { target: { kind: "wis-order", id: orderId, refs: [orderPath(orderId), inventoryPath(payload.inventoryId), ledgerPath(posted.ledgerEntryId), accountPath(accountId)] }, sourceHash: sha256(canonicalJson({ inventoryId: payload.inventoryId, quantity: payload.quantity, totalPrice })), result: { orderId, status: "REQUESTED", orderRevision: 1, inventoryRevision: payload.expectedInventoryRevision + 1, accountRevision: posted.accountRevision, balance: posted.balance, ledgerEntryId: posted.ledgerEntryId } };
+      assertStudent(actor);
+      if (economy.status !== "ACTIVE_OPEN")
+        fail(
+          "failed-precondition",
+          "Wis shop is not open.",
+          "WIS_ECONOMY_STATE_INVALID",
+        );
+      const accountId = accountIdFor(payload.semesterId, actor.actorUid);
+      const activeEnrollment = await readCanonicalActiveEnrollment(
+        transaction,
+        payload.semesterId,
+        actor.actorUid,
+      );
+      const [accountSnapshot, inventorySnapshot] = await transaction.getAll([
+        accountPath(accountId),
+        inventoryPath(payload.inventoryId),
+      ]);
+      const account = accountSnapshot.data || {};
+      const inventory = inventorySnapshot.data || {};
+      const productSnapshot = inventory.productId
+        ? await transaction.get(productPath(String(inventory.productId)))
+        : { exists: false, data: null };
+      const product = productSnapshot.data || {};
+      if (
+        !activeEnrollment ||
+        !accountSnapshot.exists ||
+        account.semesterId !== payload.semesterId ||
+        account.studentUid !== actor.actorUid
+      )
+        fail(
+          "not-found",
+          "An active enrollment and Wis account are required.",
+          "WIS_ACTIVE_ENROLLMENT_REQUIRED",
+        );
+      if (Number(account.revision || 0) !== payload.expectedAccountRevision)
+        fail(
+          "aborted",
+          "Wis account revision changed.",
+          "WIS_ACCOUNT_REVISION_CONFLICT",
+        );
+      if (
+        !inventorySnapshot.exists ||
+        inventory.semesterId !== payload.semesterId ||
+        inventory.active !== true ||
+        Number(inventory.revision || 0) !== payload.expectedInventoryRevision
+      )
+        fail(
+          "aborted",
+          "Inventory changed.",
+          "WIS_INVENTORY_REVISION_CONFLICT",
+        );
+      if (
+        !productSnapshot.exists ||
+        product.active !== true ||
+        String(product.productId || "") !== String(inventory.productId || "") ||
+        Number(product.revision || 0) !== Number(inventory.productRevision || 0)
+      )
+        fail(
+          "failed-precondition",
+          "Product is not available for ordering.",
+          "WIS_PRODUCT_UNAVAILABLE",
+        );
+      if (Number(inventory.available || 0) < payload.quantity)
+        fail(
+          "failed-precondition",
+          "Inventory is insufficient.",
+          "WIS_INSUFFICIENT_STOCK",
+        );
+      const totalPrice = Number(inventory.price || 0) * payload.quantity;
+      const orderId = orderIdFor(
+        payload.semesterId,
+        accountId,
+        payload.inventoryId,
+        commandId,
+      );
+      const posted = await postLedger({
+        transaction,
+        account,
+        economy,
+        delta: -totalPrice,
+        type: "ORDER_DEBIT",
+        sourceId: orderId,
+        reason: `상품 주문: ${inventory.productName || inventory.productId}`,
+        commandId,
+        receiptId,
+        timestamp: projectionTimestamp,
+        actor,
+      });
+      transaction.set(
+        inventoryPath(payload.inventoryId),
+        {
+          revision: payload.expectedInventoryRevision + 1,
+          available: inventory.available - payload.quantity,
+          reserved: Number(inventory.reserved || 0) + payload.quantity,
+          updatedAt: timestamp,
+        },
+        { merge: true },
+      );
+      transaction.create(orderPath(orderId), {
+        schemaVersion: WIS_SCHEMA_VERSION,
+        policyVersion: WIS_POLICY_VERSION,
+        orderId,
+        semesterId: payload.semesterId,
+        accountId,
+        studentUid: actor.actorUid,
+        enrollmentId: account.enrollmentId,
+        classId: account.classId,
+        inventoryId: payload.inventoryId,
+        productId: inventory.productId,
+        productName: inventory.productName,
+        quantity: payload.quantity,
+        unitPrice: inventory.price,
+        totalPrice,
+        debitLedgerEntryId: posted.ledgerEntryId,
+        revision: 1,
+        status: "REQUESTED",
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      });
+      transaction.set(
+        economyPath(payload.semesterId),
+        {
+          orderCount: Number(economy.orderCount || 0) + 1,
+          updatedAt: timestamp,
+          updatedBy: actor.actorUid,
+        },
+        { merge: true },
+      );
+      return {
+        target: {
+          kind: "wis-order",
+          id: orderId,
+          refs: [
+            orderPath(orderId),
+            inventoryPath(payload.inventoryId),
+            ledgerPath(posted.ledgerEntryId),
+            accountPath(accountId),
+          ],
+        },
+        sourceHash: sha256(
+          canonicalJson({
+            inventoryId: payload.inventoryId,
+            quantity: payload.quantity,
+            totalPrice,
+          }),
+        ),
+        result: {
+          orderId,
+          status: "REQUESTED",
+          orderRevision: 1,
+          inventoryRevision: payload.expectedInventoryRevision + 1,
+          accountRevision: posted.accountRevision,
+          balance: posted.balance,
+          ledgerEntryId: posted.ledgerEntryId,
+        },
+      };
     }
     if (commandType === WIS_COMMAND_TYPES.REVIEW_WIS_ORDER) {
-      assertTeacher(actor); const orderSnapshot = await transaction.get(orderPath(payload.orderId)); const order = orderSnapshot.data || {}; if (!orderSnapshot.exists || order.semesterId !== payload.semesterId) fail("not-found", "Order was not found.", "WIS_ORDER_NOT_FOUND"); if (Number(order.revision || 0) !== payload.expectedOrderRevision) fail("aborted", "Order revision changed.", "WIS_ORDER_REVISION_CONFLICT");
-      const nextStatus = payload.action === "APPROVE" ? "APPROVED" : payload.action === "FULFILL" ? "FULFILLED" : "REJECTED"; const allowedStatus = payload.action === "APPROVE" || payload.action === "REJECT" ? "REQUESTED" : "APPROVED"; if (order.status !== allowedStatus) fail("failed-precondition", "Order state is invalid.", "WIS_ORDER_STATE_INVALID");
-      const refs = [orderPath(payload.orderId)]; const result = { orderId: payload.orderId, status: nextStatus, orderRevision: payload.expectedOrderRevision + 1 };
+      assertTeacher(actor);
+      const orderSnapshot = await transaction.get(orderPath(payload.orderId));
+      const order = orderSnapshot.data || {};
+      if (!orderSnapshot.exists || order.semesterId !== payload.semesterId)
+        fail("not-found", "Order was not found.", "WIS_ORDER_NOT_FOUND");
+      if (Number(order.revision || 0) !== payload.expectedOrderRevision)
+        fail(
+          "aborted",
+          "Order revision changed.",
+          "WIS_ORDER_REVISION_CONFLICT",
+        );
+      const nextStatus =
+        payload.action === "APPROVE"
+          ? "APPROVED"
+          : payload.action === "FULFILL"
+            ? "FULFILLED"
+            : "REJECTED";
+      const allowedStatus =
+        payload.action === "APPROVE" || payload.action === "REJECT"
+          ? "REQUESTED"
+          : "APPROVED";
+      if (order.status !== allowedStatus)
+        fail(
+          "failed-precondition",
+          "Order state is invalid.",
+          "WIS_ORDER_STATE_INVALID",
+        );
+      const refs = [orderPath(payload.orderId)];
+      const result = {
+        orderId: payload.orderId,
+        status: nextStatus,
+        orderRevision: payload.expectedOrderRevision + 1,
+      };
       if (payload.action === "REJECT") {
-        const [inventorySnapshot, accountSnapshot] = await transaction.getAll([inventoryPath(order.inventoryId), accountPath(order.accountId)]); const inventory = inventorySnapshot.data || {}; const account = accountSnapshot.data || {}; if (!inventorySnapshot.exists || !accountSnapshot.exists) fail("failed-precondition", "Order dependencies are missing.", "WIS_ORDER_DEPENDENCY_INVALID");
-        const posted = await postLedger({ transaction, account, delta: Number(order.totalPrice || 0), type: "ORDER_REFUND", sourceId: payload.orderId, reason: payload.reason, commandId, receiptId, timestamp, actor }); transaction.set(inventoryPath(order.inventoryId), { revision: Number(inventory.revision || 0) + 1, available: Number(inventory.available || 0) + order.quantity, reserved: Number(inventory.reserved || 0) - order.quantity, updatedAt: timestamp }, { merge: true }); Object.assign(result, { refundLedgerEntryId: posted.ledgerEntryId, balance: posted.balance }); refs.push(inventoryPath(order.inventoryId), ledgerPath(posted.ledgerEntryId), accountPath(order.accountId));
+        const [inventorySnapshot, accountSnapshot] = await transaction.getAll([
+          inventoryPath(order.inventoryId),
+          accountPath(order.accountId),
+        ]);
+        const inventory = inventorySnapshot.data || {};
+        const account = accountSnapshot.data || {};
+        if (!inventorySnapshot.exists || !accountSnapshot.exists)
+          fail(
+            "failed-precondition",
+            "Order dependencies are missing.",
+            "WIS_ORDER_DEPENDENCY_INVALID",
+          );
+        const posted = await postLedger({
+          transaction,
+          account,
+          economy,
+          delta: Number(order.totalPrice || 0),
+          type: "ORDER_REFUND",
+          sourceId: payload.orderId,
+          reason: payload.reason,
+          commandId,
+          receiptId,
+          timestamp: projectionTimestamp,
+          actor,
+        });
+        transaction.set(
+          inventoryPath(order.inventoryId),
+          {
+            revision: Number(inventory.revision || 0) + 1,
+            available: Number(inventory.available || 0) + order.quantity,
+            reserved: Number(inventory.reserved || 0) - order.quantity,
+            updatedAt: timestamp,
+          },
+          { merge: true },
+        );
+        Object.assign(result, {
+          refundLedgerEntryId: posted.ledgerEntryId,
+          balance: posted.balance,
+        });
+        refs.push(
+          inventoryPath(order.inventoryId),
+          ledgerPath(posted.ledgerEntryId),
+          accountPath(order.accountId),
+        );
       } else if (payload.action === "FULFILL") {
-        const inventorySnapshot = await transaction.get(inventoryPath(order.inventoryId)); const inventory = inventorySnapshot.data || {}; if (!inventorySnapshot.exists || Number(inventory.reserved || 0) < order.quantity) fail("failed-precondition", "Reserved inventory is inconsistent.", "WIS_ORDER_DEPENDENCY_INVALID"); transaction.set(inventoryPath(order.inventoryId), { revision: Number(inventory.revision || 0) + 1, reserved: inventory.reserved - order.quantity, sold: Number(inventory.sold || 0) + order.quantity, updatedAt: timestamp }, { merge: true }); refs.push(inventoryPath(order.inventoryId));
+        const inventorySnapshot = await transaction.get(
+          inventoryPath(order.inventoryId),
+        );
+        const inventory = inventorySnapshot.data || {};
+        if (
+          !inventorySnapshot.exists ||
+          Number(inventory.reserved || 0) < order.quantity
+        )
+          fail(
+            "failed-precondition",
+            "Reserved inventory is inconsistent.",
+            "WIS_ORDER_DEPENDENCY_INVALID",
+          );
+        transaction.set(
+          inventoryPath(order.inventoryId),
+          {
+            revision: Number(inventory.revision || 0) + 1,
+            reserved: inventory.reserved - order.quantity,
+            sold: Number(inventory.sold || 0) + order.quantity,
+            updatedAt: timestamp,
+          },
+          { merge: true },
+        );
+        refs.push(inventoryPath(order.inventoryId));
       }
-      transaction.set(orderPath(payload.orderId), { revision: payload.expectedOrderRevision + 1, status: nextStatus, reviewReason: payload.reason, reviewedBy: actor.actorUid, reviewedAt: timestamp, updatedAt: timestamp }, { merge: true });
-      return { target: { kind: "wis-order-review", id: payload.orderId, refs }, sourceHash: sha256(`${payload.orderId}\n${payload.action}`), result };
+      transaction.set(
+        orderPath(payload.orderId),
+        {
+          revision: payload.expectedOrderRevision + 1,
+          status: nextStatus,
+          reviewReason: payload.reason,
+          reviewedBy: actor.actorUid,
+          reviewedAt: timestamp,
+          updatedAt: timestamp,
+        },
+        { merge: true },
+      );
+      return {
+        target: { kind: "wis-order-review", id: payload.orderId, refs },
+        sourceHash: sha256(`${payload.orderId}\n${payload.action}`),
+        result,
+      };
     }
-    fail("invalid-argument", "Unsupported Wis command.", "WIS_COMMAND_UNSUPPORTED");
+    if (commandType === WIS_COMMAND_TYPES.SAVE_WIS_HALL_OF_FAME_CONFIG) {
+      assertTeacher(actor);
+      const configSnapshot = await transaction.get(
+        WIS_HALL_OF_FAME_CONFIG_PATH,
+      );
+      const currentRevision = Number(
+        configSnapshot.data?.hallOfFameRevision || 0,
+      );
+      if (currentRevision !== payload.expectedHallOfFameRevision) {
+        fail(
+          "aborted",
+          "Hall of fame configuration revision changed.",
+          "WIS_HALL_OF_FAME_REVISION_CONFLICT",
+          { currentRevision },
+        );
+      }
+      const nextRevision = currentRevision + 1;
+      transaction.set(
+        WIS_HALL_OF_FAME_CONFIG_PATH,
+        {
+          hallOfFame: payload.hallOfFame,
+          hallOfFameRevision: nextRevision,
+          updatedAt: timestamp,
+          updatedBy: actor.actorUid,
+        },
+        { merge: true },
+      );
+      return {
+        target: {
+          kind: "wis-hall-of-fame-config",
+          id: payload.semesterId,
+          refs: [WIS_HALL_OF_FAME_CONFIG_PATH],
+        },
+        sourceHash: sha256(canonicalJson(payload.hallOfFame)),
+        result: {
+          semesterId: payload.semesterId,
+          hallOfFameRevision: nextRevision,
+          hallOfFame: payload.hallOfFame,
+        },
+      };
+    }
+    fail(
+      "invalid-argument",
+      "Unsupported Wis command.",
+      "WIS_COMMAND_UNSUPPORTED",
+    );
   },
 });
 
 const normalizeQuery = (raw) => {
-  const value = raw || {}; allowed(value, ["audience", "semesterId", "source", "provenance", "accountId", "orderStatus", "_session"], "getWisEconomyState payload"); const source = value.provenance || value.source;
-  if (!["CURRENT", "ARCHIVE", "LEGACY", "EXPLICIT"].includes(source)) fail("invalid-argument", "source is invalid.", "WIS_QUERY_INVALID");
-  return { audience: value.audience === "teacher" ? "teacher" : "student", semesterId: semesterId(value.semesterId), source, accountId: value.accountId ? text(value.accountId, "accountId", 80) : "", orderStatus: value.orderStatus ? text(value.orderStatus, "orderStatus", 40) : "" };
+  const value = raw || {};
+  allowed(
+    value,
+    [
+      "audience",
+      "semesterId",
+      "source",
+      "provenance",
+      "projection",
+      "accountId",
+      "ledgerEntryId",
+      "orderStatus",
+      "cursor",
+      "limit",
+      "_session",
+    ],
+    "getWisEconomyState payload",
+  );
+  const source = value.provenance || value.source;
+  if (!["CURRENT", "ARCHIVE", "LEGACY", "EXPLICIT"].includes(source))
+    fail("invalid-argument", "source is invalid.", "WIS_QUERY_INVALID");
+  const audience = value.audience === "teacher" ? "teacher" : "student";
+  const allowedProjections =
+    audience === "teacher"
+      ? ["summary", "overview", "account", "orders", "catalog", "hall-of-fame"]
+      : ["summary", "student-core", "orders", "catalog", "hall-of-fame"];
+  const projection =
+    value.projection || (audience === "teacher" ? "overview" : "student-core");
+  if (!allowedProjections.includes(projection))
+    fail("invalid-argument", "projection is invalid.", "WIS_QUERY_INVALID");
+  const cursor = value.cursor ? text(value.cursor, "cursor", 160) : "";
+  if (cursor && !/^[A-Za-z0-9_-]+$/.test(cursor)) {
+    fail("invalid-argument", "cursor is invalid.", "WIS_QUERY_INVALID");
+  }
+  return {
+    audience,
+    semesterId: semesterId(value.semesterId),
+    source,
+    projection,
+    accountId: value.accountId ? text(value.accountId, "accountId", 80) : "",
+    ledgerEntryId: value.ledgerEntryId
+      ? text(value.ledgerEntryId, "ledgerEntryId", 80)
+      : "",
+    orderStatus: value.orderStatus
+      ? text(value.orderStatus, "orderStatus", 40)
+      : "",
+    cursor,
+    limit:
+      value.limit === undefined
+        ? WIS_QUERY_DEFAULT_LIMIT
+        : integer(value.limit, "limit", { min: 1, max: WIS_QUERY_MAX_LIMIT }),
+  };
 };
-const createWisQueryCore = ({ store, assertSession = sessionAuthority.assertActiveApplicationSession } = {}) => {
+const projectTeacherRosterFields = async (transaction, accounts, scope) => {
+  const studentUids = [
+    ...new Set(
+      accounts
+        .map((account) => String(account?.studentUid || "").trim())
+        .filter(Boolean),
+    ),
+  ];
+  const slotSnapshots = studentUids.length
+    ? await transaction.getAll(
+        studentUids.map((studentUid) => enrollmentSlotPath(scope, studentUid)),
+      )
+    : [];
+  const activeEnrollmentIdByStudentUid = new Map(
+    slotSnapshots
+      .map((slot, index) => [
+        studentUids[index],
+        slot.exists ? String(slot.data?.activeEnrollmentId || "").trim() : "",
+      ])
+      .filter(([, enrollmentId]) => Boolean(enrollmentId)),
+  );
+  const enrollmentIds = [...new Set(activeEnrollmentIdByStudentUid.values())];
+  const enrollmentSnapshots = enrollmentIds.length
+    ? await transaction.getAll(enrollmentIds.map(enrollmentPath))
+    : [];
+  const enrollments = new Map(
+    enrollmentSnapshots
+      .filter((snapshot) => snapshot.exists)
+      .map((snapshot) => [
+        String(snapshot.data?.enrollmentId || ""),
+        snapshot.data || {},
+      ]),
+  );
+  const classIds = [
+    ...new Set(
+      [...enrollments.values()]
+        .map((enrollment) => String(enrollment?.classId || "").trim())
+        .filter(Boolean),
+    ),
+  ];
+  const classSnapshots = classIds.length
+    ? await transaction.getAll(classIds.map(classPath))
+    : [];
+  const classes = new Map(
+    classSnapshots
+      .filter((snapshot) => snapshot.exists)
+      .map((snapshot) => [
+        String(snapshot.data?.classId || ""),
+        snapshot.data || {},
+      ]),
+  );
+  return accounts.map((account) => {
+    const studentUid = String(account?.studentUid || "");
+    const activeEnrollmentId = String(
+      activeEnrollmentIdByStudentUid.get(studentUid) || "",
+    );
+    const enrollment = enrollments.get(activeEnrollmentId);
+    const canonicalClassId = String(enrollment?.classId || "").trim();
+    const semesterClass = classes.get(canonicalClassId);
+    const validEnrollment =
+      Boolean(enrollment) &&
+      String(enrollment.enrollmentId || "") === activeEnrollmentId &&
+      String(enrollment.semesterId || "") === scope &&
+      String(enrollment.studentUid || "") === studentUid &&
+      enrollment.enrollmentStatus === "ACTIVE";
+    const validClass =
+      validEnrollment &&
+      Boolean(semesterClass) &&
+      String(semesterClass.semesterId || "") === scope;
+    const snapshot =
+      validEnrollment &&
+      enrollment.snapshot &&
+      typeof enrollment.snapshot === "object"
+        ? enrollment.snapshot
+        : {};
+    return {
+      ...account,
+      enrollmentId: validEnrollment ? activeEnrollmentId : "",
+      classId: validEnrollment ? canonicalClassId : "",
+      displayName: validEnrollment
+        ? String(
+            enrollment.displayName ||
+              enrollment.studentName ||
+              snapshot.displayName ||
+              account?.displayName ||
+              "학생",
+          )
+        : String(account?.displayName || "학생"),
+      grade: validEnrollment
+        ? String(
+            snapshot.grade ||
+              enrollment.grade ||
+              (validClass ? semesterClass.grade : "") ||
+              "",
+          )
+        : "",
+      classNumber: validEnrollment
+        ? String(
+            snapshot.classNumber ||
+              enrollment.classNumber ||
+              (validClass ? semesterClass.classNumber : "") ||
+              "",
+          )
+        : "",
+      studentNumber: validEnrollment
+        ? String(enrollment.studentNumber || snapshot.studentNumber || "")
+        : "",
+    };
+  });
+};
+
+const paginatePresortedRows = (rows, { cursor, limit, id }) => {
+  const cursorIndex = cursor
+    ? rows.findIndex((row) => String(id(row)) === cursor)
+    : -1;
+  const startIndex = cursorIndex >= 0 ? cursorIndex + 1 : 0;
+  const page = rows.slice(startIndex, startIndex + limit);
+  return {
+    rows: page,
+    nextCursor:
+      startIndex + page.length < rows.length && page.length
+        ? String(id(page[page.length - 1]))
+        : "",
+  };
+};
+
+const documentIdFromPath = (path) =>
+  String(path || "")
+    .split("/")
+    .pop() || "";
+
+const queryBoundedDocumentPage = async (
+  transaction,
+  collection,
+  { cursor, limit, field = "", operator = "==", value },
+) => {
+  const rows = await transaction.query(collection, {
+    ...(field ? { field, operator, value } : {}),
+    documentIdOrder: "asc",
+    ...(cursor ? { startAfterId: cursor } : {}),
+    limit: limit + 1,
+  });
+  const page = rows.slice(0, limit);
+  return {
+    rows: page.map((row) => row.data || {}),
+    nextCursor:
+      rows.length > limit && page.length
+        ? documentIdFromPath(page[page.length - 1].path)
+        : "",
+  };
+};
+
+const queryBoundedCreatedAtPage = async (
+  transaction,
+  collection,
+  { cursor, limit, filters },
+) => {
+  const rows = await transaction.query(collection, {
+    filters,
+    orderBy: { field: "createdAt", direction: "desc" },
+    documentIdOrder: "desc",
+    ...(cursor ? { startAfterPath: `${collection}/${cursor}` } : {}),
+    limit: limit + 1,
+  });
+  const page = rows.slice(0, limit);
+  return {
+    rows: page.map((row) => row.data || {}),
+    nextCursor:
+      rows.length > limit && page.length
+        ? documentIdFromPath(page[page.length - 1].path)
+        : "",
+  };
+};
+
+const queryHallAccounts = async (transaction, scope) => {
+  const rows = await transaction.query(WIS_ACCOUNT_COLLECTION, {
+    field: "semesterId",
+    operator: "==",
+    value: scope,
+    limit: WIS_HALL_ACCOUNT_LIMIT + 1,
+  });
+  if (rows.length > WIS_HALL_ACCOUNT_LIMIT) {
+    fail(
+      "resource-exhausted",
+      "Wis hall-of-fame account limit was exceeded.",
+      "WIS_HALL_ACCOUNT_LIMIT_EXCEEDED",
+      { limit: WIS_HALL_ACCOUNT_LIMIT },
+    );
+  }
+  return rows.map((row) => row.data || {});
+};
+
+const projectWisAccount = (account) =>
+  account
+    ? {
+        accountId: String(account.accountId || ""),
+        semesterId: String(account.semesterId || ""),
+        studentUid: String(account.studentUid || ""),
+        displayName: String(account.displayName || "학생"),
+        enrollmentId: String(account.enrollmentId || ""),
+        classId: String(account.classId || ""),
+        status: String(account.status || ""),
+        provenance: String(account.provenance || ""),
+        readOnly: Boolean(account.readOnly),
+        revision: Number(account.revision || 0),
+        balance: Number(account.balance || 0),
+        initialGrantLedgerEntryId: String(
+          account.initialGrantLedgerEntryId || "",
+        ),
+        grade: String(account.grade || ""),
+        classNumber: String(account.classNumber || ""),
+        studentNumber: String(account.studentNumber || ""),
+        earnedTotal: Number(account.earnedTotal || 0),
+        rankEarnedTotal: Number(account.rankEarnedTotal || 0),
+        spentTotal: Number(account.spentTotal || 0),
+        adjustedTotal: Number(account.adjustedTotal || 0),
+      }
+    : null;
+
+const projectStudentLedgerEntry = (entry) => ({
+  ledgerEntryId: String(entry?.ledgerEntryId || ""),
+  type: String(entry?.type || ""),
+  delta: Number(entry?.delta || 0),
+  balanceBefore: Number(entry?.balanceBefore || 0),
+  balanceAfter: Number(entry?.balanceAfter || 0),
+  reason: String(entry?.reason || ""),
+  createdAt: entry?.createdAt || null,
+  ...(String(entry?.sourceId || "") === "lesson-core-points-all"
+    ? { sourceId: "lesson-core-points-all" }
+    : {}),
+});
+
+const projectStudentOrder = (order) => ({
+  orderId: String(order?.orderId || ""),
+  inventoryId: String(order?.inventoryId || ""),
+  productId: String(order?.productId || ""),
+  productName: String(order?.productName || ""),
+  quantity: Number(order?.quantity || 0),
+  unitPrice: Number(order?.unitPrice || 0),
+  totalPrice: Number(order?.totalPrice || 0),
+  revision: Number(order?.revision || 0),
+  status: String(order?.status || ""),
+  reviewReason: String(order?.reviewReason || ""),
+  createdAt: order?.createdAt || null,
+  reviewedAt: order?.reviewedAt || null,
+  updatedAt: order?.updatedAt || null,
+});
+
+const projectStudentProduct = (product) => ({
+  productId: String(product?.productId || ""),
+  revision: Number(product?.revision || 0),
+  name: String(product?.name || ""),
+  description: String(product?.description || ""),
+  imageUrl: String(product?.imageUrl || ""),
+  active: product?.active === true,
+});
+
+const projectStudentInventory = (inventory) => ({
+  inventoryId: String(inventory?.inventoryId || ""),
+  productId: String(inventory?.productId || ""),
+  productRevision: Number(inventory?.productRevision || 0),
+  productName: String(inventory?.productName || ""),
+  revision: Number(inventory?.revision || 0),
+  price: Number(inventory?.price || 0),
+  stock: Number(inventory?.stock || 0),
+  available: Number(inventory?.available || 0),
+  reserved: Number(inventory?.reserved || 0),
+  sold: Number(inventory?.sold || 0),
+  active: inventory?.active === true,
+});
+
+const projectStudentEconomy = (economy) =>
+  economy
+    ? {
+        semesterId: String(economy.semesterId || ""),
+        revision: Number(economy.revision || 0),
+        status: String(economy.status || ""),
+        displayName: String(economy.displayName || ""),
+        currencyName: String(economy.currencyName || ""),
+        initialGrantAmount: Number(economy.initialGrantAmount || 0),
+        provenance: String(economy.provenance || ""),
+        readOnly: Boolean(economy.readOnly),
+      }
+    : null;
+
+const maskStudentName = (value) => {
+  const normalized = String(value || "학생").trim() || "학생";
+  const characters = Array.from(normalized);
+  if (characters.length < 2) return "학생";
+  return `${characters[0]}${"*".repeat(Math.min(2, characters.length - 1))}`;
+};
+
+const rankHallEntries = (entries) => {
+  const sorted = [...entries].sort(
+    (left, right) =>
+      Number(right.cumulativeEarned || 0) -
+        Number(left.cumulativeEarned || 0) ||
+      String(left.uid).localeCompare(String(right.uid)),
+  );
+  let previousScore = null;
+  let previousRank = 0;
+  return sorted.map((entry, index) => {
+    const score = Number(entry.cumulativeEarned || 0);
+    const rank = previousScore === score ? previousRank : index + 1;
+    previousScore = score;
+    previousRank = rank;
+    return { ...entry, rank, ...(rank <= 3 ? { podiumSlot: rank } : {}) };
+  });
+};
+
+const limitHallEntries = (entries, limit, includeTies) => {
+  const ranked = rankHallEntries(entries);
+  if (!includeTies) return ranked.slice(0, limit);
+  return ranked.filter((entry) => entry.rank <= limit);
+};
+
+const buildWisHallOfFameProjection = ({
+  accounts,
+  config,
+  scope,
+  studentAccount = null,
+}) => {
+  const entries = accounts
+    .map((account) => {
+      const grade = String(account?.grade || "").trim();
+      const className = String(account?.classNumber || "").trim();
+      if (!grade || !className || !account?.studentUid) return null;
+      const publicId = `wispublic_${sha256(`${scope}\n${account.studentUid}`).slice(0, 24)}`;
+      const publicName = maskStudentName(account.displayName);
+      return {
+        uid: publicId,
+        rank: 1,
+        grade,
+        class: className,
+        classKey: `${grade}-${className}`,
+        studentName: publicName,
+        displayName: publicName,
+        currentBalance: 0,
+        cumulativeEarned: Math.max(0, Number(account.rankEarnedTotal || 0)),
+        profileIcon: "😀",
+      };
+    })
+    .filter(Boolean);
+  const studentGrade = String(studentAccount?.grade || "").trim();
+  const studentClassKey =
+    studentGrade && studentAccount?.classNumber
+      ? `${studentGrade}-${String(studentAccount.classNumber).trim()}`
+      : "";
+  const gradeEntries = studentAccount
+    ? entries.filter((entry) => entry.grade === studentGrade)
+    : entries;
+  const classEntries = studentAccount
+    ? entries.filter((entry) => entry.classKey === studentClassKey)
+    : entries;
+  const group = (rows, key) =>
+    rows.reduce((result, entry) => {
+      const groupKey = entry[key];
+      if (!result[groupKey]) result[groupKey] = [];
+      result[groupKey].push(entry);
+      return result;
+    }, {});
+  const gradeGroups = group(gradeEntries, "grade");
+  const classGroups = group(classEntries, "classKey");
+  const gradeLeaderboardByGrade = Object.fromEntries(
+    Object.entries(gradeGroups).map(([key, rows]) => [
+      key,
+      limitHallEntries(
+        rows,
+        config.publicRange.gradeRankLimit,
+        config.publicRange.includeTies,
+      ),
+    ]),
+  );
+  const classLeaderboardByClassKey = Object.fromEntries(
+    Object.entries(classGroups).map(([key, rows]) => [
+      key,
+      limitHallEntries(
+        rows,
+        config.publicRange.classRankLimit,
+        config.publicRange.includeTies,
+      ),
+    ]),
+  );
+  const gradeTop3ByGrade = Object.fromEntries(
+    Object.entries(gradeLeaderboardByGrade).map(([key, rows]) => [
+      key,
+      rows.filter((entry) => entry.rank <= 3),
+    ]),
+  );
+  const classTop3ByClassKey = Object.fromEntries(
+    Object.entries(classLeaderboardByClassKey).map(([key, rows]) => [
+      key,
+      rows.filter((entry) => entry.rank <= 3),
+    ]),
+  );
+  const [year = "", semester = ""] = scope.split("-");
+  const snapshotBody = { gradeLeaderboardByGrade, classLeaderboardByClassKey };
+  const now = Date.now();
+  return {
+    year,
+    semester,
+    snapshotVersion: 7,
+    snapshotKey: `w7_${sha256(canonicalJson(snapshotBody)).slice(0, 32)}`,
+    rankingMetric: "cumulativeEarned",
+    primaryGradeKey:
+      studentGrade || Object.keys(gradeLeaderboardByGrade).sort()[0] || "3",
+    gradeTop3ByGrade,
+    classTop3ByClassKey,
+    gradeLeaderboardByGrade,
+    classLeaderboardByClassKey,
+    leaderboardPolicy: {
+      ...config.publicRange,
+      storedRankLimit: 20,
+    },
+    updatedAt: new Date(now).toISOString(),
+    updatedAtMs: now,
+    sourceUpdatedAtMs: now,
+  };
+};
+
+const emptyWisState = ({
+  query,
+  provenance,
+  readOnly,
+  economy = null,
+  manifestRevision = 0,
+  reason = "",
+}) => ({
+  audience: query.audience,
+  semesterId: query.semesterId,
+  manifestRevision,
+  provenance,
+  readOnly,
+  status: "EMPTY",
+  economy,
+  account: null,
+  accounts: [],
+  ledger: [],
+  products: [],
+  inventory: [],
+  orders: [],
+  rankings: [],
+  hallOfFame: null,
+  hallOfFameConfig: null,
+  hallOfFameConfigRevision: 0,
+  nextCursor: "",
+  reason,
+  writeCount: 0,
+});
+
+const createWisQueryCore = ({
+  store,
+  assertSession = sessionAuthority.assertActiveApplicationSession,
+} = {}) => {
   if (!store) throw new TypeError("store is required.");
   const getWisEconomyState = async (request) => {
-    const identity = await assertSession(request, { recentAuth: false, highRisk: false }); const uid = String(identity?.uid || request.auth?.uid || "").trim(); if (!uid || uid !== String(request.auth?.uid || "").trim()) fail("permission-denied", "Authenticated actor mismatch.", "COMMAND_ACTOR_MISMATCH");
-    const query = normalizeQuery(request.data || {}); const profile = await store.get(`users/${uid}`); const permissions = Array.isArray(profile.data?.staffPermissions) ? profile.data.staffPermissions : []; const isAdmin = String(identity?.email || request.auth?.token?.email || "").toLowerCase() === "westoria28@gmail.com"; const canManage = isAdmin || (profile.data?.teacherPortalEnabled === true && permissions.includes("point_manage"));
-    if (query.audience === "teacher" && !canManage) fail("permission-denied", "Wis management permission is required.", "WIS_MANAGE_REQUIRED");
-    if (query.source === "LEGACY") return { audience: query.audience, semesterId: query.semesterId, provenance: "LEGACY", readOnly: true, status: "LEGACY", economy: null, account: null, accounts: [], ledger: [], products: [], inventory: [], orders: [], rankings: [], reason: "LEGACY_SOURCE_REQUIRES_EXPLICIT_READ_ONLY_ADAPTER", writeCount: 0 };
+    const identity = await assertSession(request, {
+      recentAuth: false,
+      highRisk: false,
+    });
+    const uid = String(identity?.uid || request.auth?.uid || "").trim();
+    if (!uid || uid !== String(request.auth?.uid || "").trim())
+      fail(
+        "permission-denied",
+        "Authenticated actor mismatch.",
+        "COMMAND_ACTOR_MISMATCH",
+      );
+    const query = normalizeQuery(request.data || {});
+    const profile = await store.get(`users/${uid}`);
+    const profileData = profile.data || {};
+    const permissions = Array.isArray(profileData.staffPermissions)
+      ? profileData.staffPermissions
+      : [];
+    const role = String(profileData.role || "student");
+    const isAdmin =
+      String(
+        identity?.email || request.auth?.token?.email || "",
+      ).toLowerCase() === "westoria28@gmail.com";
+    const portalEligible =
+      role === "teacher" || profileData.teacherPortalEnabled === true;
+    const canRead =
+      isAdmin ||
+      (portalEligible &&
+        permissions.some((permission) =>
+          ["point_read", "point_manage"].includes(permission),
+        ));
+    const canManage =
+      isAdmin || (portalEligible && permissions.includes("point_manage"));
+    if (query.audience === "teacher" && !canRead)
+      fail(
+        "permission-denied",
+        "Wis read permission is required.",
+        "WIS_MANAGE_REQUIRED",
+      );
+    if (query.source === "LEGACY")
+      return {
+        ...emptyWisState({
+          query,
+          provenance: "LEGACY",
+          readOnly: true,
+          reason: "LEGACY_SOURCE_REQUIRES_EXPLICIT_READ_ONLY_ADAPTER",
+        }),
+        status: "LEGACY",
+      };
     return store.runTransaction(async (transaction) => {
-      const [manifest, economySnapshot] = await transaction.getAll([manifestPath(query.semesterId), economyPath(query.semesterId)]); const manifestStatus = String(manifest.data?.status || ""); const provenance = ["CLOSED", "ARCHIVED"].includes(manifestStatus) ? "ARCHIVE" : manifestStatus === "ACTIVE" ? "CURRENT" : "PREPARING"; const readOnly = manifestStatus !== "ACTIVE" || (query.audience === "student" && economySnapshot.data?.status !== "ACTIVE_OPEN");
-      if (query.audience === "student" && provenance === "PREPARING") return { audience: query.audience, semesterId: query.semesterId, manifestRevision: Number(manifest.data?.revision || 0), provenance: query.source === "EXPLICIT" ? "EXPLICIT" : "PREPARING", readOnly: true, status: "EMPTY", economy: null, account: null, accounts: [], ledger: [], products: [], inventory: [], orders: [], rankings: [], reason: "PREPARING_STUDENT_DATA_HIDDEN", writeCount: 0 };
-      if (!manifest.exists || !economySnapshot.exists) return { audience: query.audience, semesterId: query.semesterId, provenance, readOnly: true, status: "EMPTY", economy: economySnapshot.data || null, account: null, accounts: [], ledger: [], products: [], inventory: [], orders: [], rankings: [], reason: manifest.exists ? "WIS_ECONOMY_NOT_CREATED" : "SEMESTER_NOT_FOUND", writeCount: 0 };
-      const accountId = query.audience === "student" ? accountIdFor(query.semesterId, uid) : query.accountId; let account = null; let ledger = []; let accounts = []; let orders = [];
-      if (query.audience === "student" || accountId) { const snapshot = await transaction.get(accountPath(accountId)); if (snapshot.exists && (canManage || snapshot.data?.studentUid === uid)) { account = snapshot.data; ledger = (await transaction.query(WIS_LEDGER_COLLECTION, { field: "accountId", operator: "==", value: accountId })).map((row) => row.data); orders = (await transaction.query(WIS_ORDER_COLLECTION, { field: "accountId", operator: "==", value: accountId })).map((row) => row.data); } }
-      if (query.audience === "teacher") { accounts = (await transaction.query(WIS_ACCOUNT_COLLECTION, { field: "semesterId", operator: "==", value: query.semesterId })).map((row) => row.data); if (!accountId) { ledger = (await transaction.query(WIS_LEDGER_COLLECTION, { field: "semesterId", operator: "==", value: query.semesterId })).map((row) => row.data); orders = (await transaction.query(WIS_ORDER_COLLECTION, { field: "semesterId", operator: "==", value: query.semesterId })).map((row) => row.data); } }
-      if (query.orderStatus) orders = orders.filter((order) => order.status === query.orderStatus);
-      const inventory = (await transaction.query(WIS_INVENTORY_COLLECTION, { field: "semesterId", operator: "==", value: query.semesterId })).map((row) => row.data); const productDocs = await transaction.query(WIS_PRODUCT_COLLECTION); const products = productDocs.map((row) => row.data).filter((product) => query.audience === "teacher" || product.active === true); const sortedRankings = (await transaction.query(WIS_RANKING_COLLECTION, { field: "semesterId", operator: "==", value: query.semesterId })).map((row) => row.data).sort((a, b) => Number(b.balance || 0) - Number(a.balance || 0) || String(a.studentUid).localeCompare(String(b.studentUid))); let previousBalance = null; let previousRank = 0; const rankingRows = sortedRankings.map((row, index) => { const balance = Number(row.balance || 0); const rank = previousBalance === balance ? previousRank : index + 1; previousBalance = balance; previousRank = rank; return { ...row, rank }; });
-      return { audience: query.audience, semesterId: query.semesterId, manifestRevision: Number(manifest.data?.revision || 0), provenance, readOnly, status: account || accounts.length || inventory.length ? "CONTENT" : "EMPTY", economy: economySnapshot.data, account, accounts, ledger: ledger.sort((a, b) => String(b.ledgerEntryId).localeCompare(String(a.ledgerEntryId))), products, inventory, orders, rankings: rankingRows, reason: "", writeCount: 0 };
+      const [manifest, economySnapshot, interfaceSnapshot] =
+        await transaction.getAll([
+          manifestPath(query.semesterId),
+          economyPath(query.semesterId),
+          WIS_HALL_OF_FAME_CONFIG_PATH,
+        ]);
+      const manifestStatus = String(manifest.data?.status || "");
+      const lifecycle = ["CLOSED", "ARCHIVED"].includes(manifestStatus)
+        ? "ARCHIVE"
+        : manifestStatus === "ACTIVE"
+          ? "CURRENT"
+          : "PREPARING";
+      const provenance = query.source === "EXPLICIT" ? "EXPLICIT" : lifecycle;
+      const readOnly =
+        manifestStatus !== "ACTIVE" ||
+        (query.audience === "student" &&
+          economySnapshot.data?.status !== "ACTIVE_OPEN") ||
+        (query.audience === "teacher" && !canManage);
+      const manifestRevision = Number(manifest.data?.revision || 0);
+      if (query.audience === "student" && lifecycle === "PREPARING") {
+        return emptyWisState({
+          query,
+          provenance,
+          readOnly: true,
+          manifestRevision,
+          reason: "PREPARING_STUDENT_DATA_HIDDEN",
+        });
+      }
+      if (!manifest.exists || !economySnapshot.exists) {
+        return emptyWisState({
+          query,
+          provenance,
+          readOnly: true,
+          economy: economySnapshot.data || null,
+          manifestRevision,
+          reason: manifest.exists
+            ? "WIS_ECONOMY_NOT_CREATED"
+            : "SEMESTER_NOT_FOUND",
+        });
+      }
+      let hallOfFameConfig;
+      try {
+        hallOfFameConfig = normalizeWisHallOfFameConfig(
+          interfaceSnapshot.data?.hallOfFame || {},
+        );
+      } catch (_error) {
+        hallOfFameConfig = structuredClone(DEFAULT_WIS_HALL_OF_FAME_CONFIG);
+      }
+      const base = {
+        audience: query.audience,
+        semesterId: query.semesterId,
+        manifestRevision,
+        provenance,
+        readOnly,
+        status: "CONTENT",
+        economy: economySnapshot.data,
+        account: null,
+        accounts: [],
+        ledger: [],
+        products: [],
+        inventory: [],
+        orders: [],
+        rankings: [],
+        hallOfFame: null,
+        hallOfFameConfig:
+          query.projection === "hall-of-fame" ? hallOfFameConfig : null,
+        hallOfFameConfigRevision: Number(
+          interfaceSnapshot.data?.hallOfFameRevision || 0,
+        ),
+        nextCursor: "",
+        reason: "",
+        writeCount: 0,
+      };
+
+      if (query.audience === "student") {
+        const studentBase = {
+          ...base,
+          economy: projectStudentEconomy(economySnapshot.data),
+        };
+        const ownAccountId = accountIdFor(query.semesterId, uid);
+        const [accountSnapshot, activeEnrollment] = await Promise.all([
+          transaction.get(accountPath(ownAccountId)),
+          readCanonicalActiveEnrollment(transaction, query.semesterId, uid),
+        ]);
+        const account =
+          activeEnrollment &&
+          accountSnapshot.exists &&
+          accountSnapshot.data?.studentUid === uid &&
+          accountSnapshot.data?.semesterId === query.semesterId
+            ? {
+                ...accountSnapshot.data,
+                enrollmentId: activeEnrollment.enrollmentId,
+                classId: activeEnrollment.classId,
+                displayName:
+                  activeEnrollment.displayName ||
+                  activeEnrollment.studentName ||
+                  activeEnrollment.snapshot?.displayName ||
+                  accountSnapshot.data?.displayName,
+                grade:
+                  activeEnrollment.snapshot?.grade ||
+                  activeEnrollment.grade ||
+                  accountSnapshot.data?.grade,
+                classNumber:
+                  activeEnrollment.snapshot?.classNumber ||
+                  activeEnrollment.classNumber ||
+                  accountSnapshot.data?.classNumber,
+                studentNumber:
+                  activeEnrollment.studentNumber ||
+                  activeEnrollment.snapshot?.studentNumber ||
+                  accountSnapshot.data?.studentNumber,
+              }
+            : null;
+        if (!account) {
+          return emptyWisState({
+            query,
+            provenance,
+            readOnly: true,
+            economy: projectStudentEconomy(economySnapshot.data),
+            manifestRevision,
+            reason: "WIS_ACTIVE_ENROLLMENT_REQUIRED",
+          });
+        }
+        if (query.projection === "student-core") {
+          const recentLedger = Array.isArray(account?.recentLedgerEntries)
+            ? account.recentLedgerEntries
+            : account
+              ? (
+                  await transaction.query(WIS_LEDGER_COLLECTION, {
+                    field: "accountId",
+                    operator: "==",
+                    value: ownAccountId,
+                    orderBy: { field: "createdAt", direction: "desc" },
+                    limit: Math.min(query.limit, WIS_RECENT_LEDGER_LIMIT),
+                  })
+                ).map((row) => row.data)
+              : [];
+          const ledgerRows = recentLedger.slice(0, WIS_RECENT_LEDGER_LIMIT);
+          const page = paginatePresortedRows(ledgerRows, {
+            cursor: query.cursor,
+            limit: query.limit,
+            id: (row) => row.ledgerEntryId,
+          });
+          const ownRankingSnapshot = account
+            ? await transaction.get(rankingPath(ownAccountId))
+            : { exists: false, data: null };
+          const ownRanking =
+            ownRankingSnapshot.exists &&
+            ownRankingSnapshot.data?.studentUid === uid &&
+            ownRankingSnapshot.data?.semesterId === query.semesterId
+              ? ownRankingSnapshot.data
+              : null;
+          return {
+            ...studentBase,
+            account: projectWisAccount(account),
+            ledger: page.rows.map(projectStudentLedgerEntry),
+            rankings: ownRanking
+              ? [
+                  {
+                    accountId: ownAccountId,
+                    semesterId: query.semesterId,
+                    studentUid: uid,
+                    balance: Number(ownRanking.balance || 0),
+                    rankEarnedTotal: Number(
+                      ownRanking.rankEarnedTotal ||
+                        account?.rankEarnedTotal ||
+                        0,
+                    ),
+                    ledgerRevision: Number(ownRanking.ledgerRevision || 0),
+                  },
+                ]
+              : [],
+            nextCursor: page.nextCursor,
+            status: account ? "CONTENT" : "EMPTY",
+          };
+        }
+        if (query.projection === "orders") {
+          const page = account
+            ? await queryBoundedCreatedAtPage(
+                transaction,
+                WIS_ORDER_COLLECTION,
+                {
+                  cursor: query.cursor,
+                  limit: query.limit,
+                  filters: [
+                    {
+                      field: "accountId",
+                      operator: "==",
+                      value: ownAccountId,
+                    },
+                    ...(query.orderStatus
+                      ? [
+                          {
+                            field: "status",
+                            operator: "==",
+                            value: query.orderStatus,
+                          },
+                        ]
+                      : []),
+                  ],
+                },
+              )
+            : { rows: [], nextCursor: "" };
+          return {
+            ...studentBase,
+            account: projectWisAccount(account),
+            orders: page.rows.map(projectStudentOrder),
+            nextCursor: page.nextCursor,
+            status: account || page.rows.length ? "CONTENT" : "EMPTY",
+          };
+        }
+        if (query.projection === "catalog") {
+          const productPage = await queryBoundedDocumentPage(
+            transaction,
+            WIS_PRODUCT_COLLECTION,
+            {
+              cursor: query.cursor,
+              limit: query.limit,
+              field: "active",
+              value: true,
+            },
+          );
+          const inventorySnapshots = await transaction.getAll(
+            productPage.rows.map((product) =>
+              inventoryPath(
+                inventoryIdFor(query.semesterId, product.productId),
+              ),
+            ),
+          );
+          const productInventory = productPage.rows
+            .map((product, index) => ({
+              product,
+              inventory: inventorySnapshots[index],
+            }))
+            .filter(
+              ({ inventory }) =>
+                inventory.exists &&
+                inventory.data?.semesterId === query.semesterId,
+            );
+          return {
+            ...studentBase,
+            account: projectWisAccount(account),
+            products: productInventory.map(({ product }) =>
+              projectStudentProduct(product),
+            ),
+            inventory: productInventory.map(({ inventory }) =>
+              projectStudentInventory(inventory.data),
+            ),
+            nextCursor: productPage.nextCursor,
+            status: productInventory.length ? "CONTENT" : "EMPTY",
+          };
+        }
+        if (query.projection === "hall-of-fame") {
+          const projectedAccounts = await projectTeacherRosterFields(
+            transaction,
+            await queryHallAccounts(transaction, query.semesterId),
+            query.semesterId,
+          );
+          const studentAccount =
+            projectedAccounts.find((item) => item.studentUid === uid) || null;
+          return {
+            ...studentBase,
+            account: projectWisAccount(account),
+            hallOfFame: buildWisHallOfFameProjection({
+              accounts: projectedAccounts,
+              config: hallOfFameConfig,
+              scope: query.semesterId,
+              studentAccount,
+            }),
+            status: studentAccount ? "CONTENT" : "EMPTY",
+          };
+        }
+        return {
+          ...studentBase,
+          account: projectWisAccount(account),
+          status: account ? "CONTENT" : "EMPTY",
+        };
+      }
+
+      if (query.projection === "overview") {
+        const page = await queryBoundedDocumentPage(
+          transaction,
+          WIS_ACCOUNT_COLLECTION,
+          {
+            cursor: query.cursor,
+            limit: query.limit,
+            field: "semesterId",
+            value: query.semesterId,
+          },
+        );
+        const accounts = (
+          await projectTeacherRosterFields(
+            transaction,
+            page.rows,
+            query.semesterId,
+          )
+        ).map(projectWisAccount);
+        return {
+          ...base,
+          accounts,
+          nextCursor: page.nextCursor,
+          status: accounts.length ? "CONTENT" : "EMPTY",
+        };
+      }
+      if (query.projection === "account") {
+        let ledgerEntry = null;
+        let targetAccountId = query.accountId;
+        if (query.ledgerEntryId) {
+          const entrySnapshot = await transaction.get(
+            ledgerPath(query.ledgerEntryId),
+          );
+          if (
+            entrySnapshot.exists &&
+            entrySnapshot.data?.semesterId === query.semesterId
+          ) {
+            ledgerEntry = entrySnapshot.data;
+            targetAccountId = String(ledgerEntry.accountId || "");
+          }
+        }
+        const accountSnapshot = targetAccountId
+          ? await transaction.get(accountPath(targetAccountId))
+          : { exists: false, data: null };
+        const rawAccount =
+          accountSnapshot.exists &&
+          accountSnapshot.data?.semesterId === query.semesterId
+            ? accountSnapshot.data
+            : null;
+        const recentLedger = Array.isArray(rawAccount?.recentLedgerEntries)
+          ? rawAccount.recentLedgerEntries
+          : rawAccount
+            ? (
+                await transaction.query(WIS_LEDGER_COLLECTION, {
+                  field: "accountId",
+                  operator: "==",
+                  value: targetAccountId,
+                  orderBy: { field: "createdAt", direction: "desc" },
+                  limit: Math.min(query.limit, WIS_RECENT_LEDGER_LIMIT),
+                })
+              ).map((row) => row.data)
+            : [];
+        const filteredLedger = ledgerEntry
+          ? [ledgerEntry]
+          : recentLedger.slice(0, WIS_RECENT_LEDGER_LIMIT);
+        const page = paginatePresortedRows(filteredLedger, {
+          cursor: query.cursor,
+          limit: query.limit,
+          id: (row) => row.ledgerEntryId,
+        });
+        const accounts = rawAccount
+          ? (
+              await projectTeacherRosterFields(
+                transaction,
+                [rawAccount],
+                query.semesterId,
+              )
+            ).map(projectWisAccount)
+          : [];
+        return {
+          ...base,
+          account: accounts[0] || null,
+          accounts,
+          ledger: page.rows,
+          nextCursor: page.nextCursor,
+          status: accounts.length ? "CONTENT" : "EMPTY",
+        };
+      }
+      if (query.projection === "orders") {
+        const page = await queryBoundedCreatedAtPage(
+          transaction,
+          WIS_ORDER_COLLECTION,
+          {
+            cursor: query.cursor,
+            limit: query.limit,
+            filters: [
+              {
+                field: "semesterId",
+                operator: "==",
+                value: query.semesterId,
+              },
+              ...(query.orderStatus
+                ? [
+                    {
+                      field: "status",
+                      operator: "==",
+                      value: query.orderStatus,
+                    },
+                  ]
+                : []),
+            ],
+          },
+        );
+        const accountIds = [
+          ...new Set(
+            page.rows
+              .map((order) => String(order.accountId || ""))
+              .filter(Boolean),
+          ),
+        ];
+        const accountSnapshots = accountIds.length
+          ? await transaction.getAll(accountIds.map(accountPath))
+          : [];
+        const accounts = (
+          await projectTeacherRosterFields(
+            transaction,
+            accountSnapshots
+              .filter((snapshot) => snapshot.exists)
+              .map((snapshot) => snapshot.data),
+            query.semesterId,
+          )
+        ).map(projectWisAccount);
+        return {
+          ...base,
+          accounts,
+          orders: page.rows,
+          nextCursor: page.nextCursor,
+          status: page.rows.length ? "CONTENT" : "EMPTY",
+        };
+      }
+      if (query.projection === "catalog") {
+        const productPage = await queryBoundedDocumentPage(
+          transaction,
+          WIS_PRODUCT_COLLECTION,
+          { cursor: query.cursor, limit: query.limit },
+        );
+        const inventorySnapshots = await transaction.getAll(
+          productPage.rows.map((product) =>
+            inventoryPath(inventoryIdFor(query.semesterId, product.productId)),
+          ),
+        );
+        const productInventory = productPage.rows
+          .map((product, index) => ({
+            product,
+            inventory: inventorySnapshots[index],
+          }))
+          .filter(
+            ({ inventory }) =>
+              inventory.exists &&
+              inventory.data?.semesterId === query.semesterId,
+          );
+        return {
+          ...base,
+          products: productInventory.map(({ product }) => product),
+          inventory: productInventory.map(({ inventory }) => inventory.data),
+          nextCursor: productPage.nextCursor,
+          status: productInventory.length ? "CONTENT" : "EMPTY",
+        };
+      }
+      if (query.projection === "hall-of-fame") {
+        const projectedAccounts = await projectTeacherRosterFields(
+          transaction,
+          await queryHallAccounts(transaction, query.semesterId),
+          query.semesterId,
+        );
+        return {
+          ...base,
+          hallOfFame: buildWisHallOfFameProjection({
+            accounts: projectedAccounts,
+            config: hallOfFameConfig,
+            scope: query.semesterId,
+          }),
+          status: projectedAccounts.length ? "CONTENT" : "EMPTY",
+        };
+      }
+      return base;
     });
   };
   return { getWisEconomyState };
 };
-const createWisCallableExports = ({ core }) => ({ getWisEconomyState: onCall({ region: REGION }, (request) => core.getWisEconomyState(request)) });
+const createWisCallableExports = ({ core }) => ({
+  getWisEconomyState: onCall({ region: REGION }, (request) =>
+    core.getWisEconomyState(request),
+  ),
+});
 
 const createWisReadinessAdapter = () => ({
   evaluate: async ({ transaction, manifest }) => {
-    const scope = String(manifest?.semesterId || ""); const economy = await transaction.get(economyPath(scope)); const accounts = await transaction.query(WIS_ACCOUNT_COLLECTION, { field: "semesterId", operator: "==", value: scope }); const ledger = await transaction.query(WIS_LEDGER_COLLECTION, { field: "semesterId", operator: "==", value: scope }); const balances = await transaction.query(WIS_BALANCE_COLLECTION, { field: "semesterId", operator: "==", value: scope }); const rankings = await transaction.query(WIS_RANKING_COLLECTION, { field: "semesterId", operator: "==", value: scope }); const inventory = await transaction.query(WIS_INVENTORY_COLLECTION, { field: "semesterId", operator: "==", value: scope }); const orders = await transaction.query(WIS_ORDER_COLLECTION, { field: "semesterId", operator: "==", value: scope }); const issues = await transaction.query(WIS_LEGACY_ISSUE_COLLECTION, { field: "semesterId", operator: "==", value: scope });
-    if (!economy.exists && accounts.length === 0 && ledger.length === 0 && inventory.length === 0 && orders.length === 0) return [{ checkId: "wis_economy_readiness", label: "Wis economy readiness", category: "WIS_ECONOMY", required: true, status: "PASS", evidence: "applicability=NOT_APPLICABLE; dependency=none", failureReason: null, ownerWave: "W7" }];
-    const sums = new Map(); const sources = new Set(); let invalid = 0; for (const row of ledger) { const entry = row.data || {}; sums.set(entry.accountId, (sums.get(entry.accountId) || 0) + Number(entry.delta || 0)); const key = `${entry.accountId}:${entry.type}:${entry.sourceId}`; if (sources.has(key)) invalid += 1; sources.add(key); }
-    const preparing = ["PREPARING", "VALIDATING", "READY"].includes(manifest?.status); if (preparing && economy.data?.status !== "PREPARING_INITIALIZING") invalid += 1; if (!preparing && !["ACTIVE_INITIALIZING", "ACTIVE_OPEN", "CLOSED", "ARCHIVED"].includes(economy.data?.status)) invalid += 1;
-    const balanceById = new Map(balances.map((row) => [row.data?.accountId, row.data])); const rankingById = new Map(rankings.map((row) => [row.data?.accountId, row.data])); for (const row of accounts) { const account = row.data || {}; if (Number(account.balance || 0) !== (sums.get(account.accountId) || 0) || Number(balanceById.get(account.accountId)?.balance) !== Number(account.balance || 0) || Number(rankingById.get(account.accountId)?.balance) !== Number(account.balance || 0)) invalid += 1; if (!preparing && Number(economy.data?.initialGrantAmount || 0) > 0 && !account.initialGrantLedgerEntryId) invalid += 1; if (preparing && (Number(account.balance || 0) !== 0 || account.initialGrantLedgerEntryId || ledger.length > 0)) invalid += 1; }
-    invalid += inventory.filter((row) => Number(row.data?.available || 0) + Number(row.data?.reserved || 0) + Number(row.data?.sold || 0) !== Number(row.data?.stock || 0)).length; invalid += orders.filter((row) => !["REQUESTED", "APPROVED", "REJECTED", "FULFILLED"].includes(row.data?.status)).length; invalid += issues.filter((row) => !["RESOLVED", "DISMISSED"].includes(row.data?.status)).length;
-    const dependencyHash = sha256(canonicalJson({ economy: economy.data, accounts: accounts.map((row) => row.data), ledger: ledger.map((row) => row.data), inventory: inventory.map((row) => row.data), orders: orders.map((row) => row.data) }));
-    return [{ checkId: "wis_economy_readiness", label: "Wis economy readiness", category: "WIS_ECONOMY", required: true, status: invalid === 0 ? "PASS" : "FAIL", evidence: `applicability=APPLICABLE; accounts=${accounts.length}; ledger=${ledger.length}; inventory=${inventory.length}; orders=${orders.length}; invalid=${invalid}; dependency=${dependencyHash}`, failureReason: invalid === 0 ? null : "WIS_ECONOMY_READINESS_NOT_PASS", ownerWave: "W7" }];
+    const scope = String(manifest?.semesterId || "");
+    const economy = await transaction.get(economyPath(scope));
+    const collectionCounters = [
+      [WIS_ACCOUNT_COLLECTION, "accountCount"],
+      [WIS_LEDGER_COLLECTION, "ledgerEntryCount"],
+      [WIS_BALANCE_COLLECTION, "accountCount"],
+      [WIS_RANKING_COLLECTION, "accountCount"],
+      [WIS_INVENTORY_COLLECTION, "inventoryCount"],
+      [WIS_ORDER_COLLECTION, "orderCount"],
+      [WIS_LEGACY_ISSUE_COLLECTION, "unresolvedLegacyIssueCount"],
+    ];
+    const boundedPresence = await Promise.all(
+      collectionCounters.map(([collection]) =>
+        transaction.query(collection, {
+          field: "semesterId",
+          operator: "==",
+          value: scope,
+          limit: 1,
+        }),
+      ),
+    );
+    const orphanCollectionCount = boundedPresence.filter(
+      (rows) => rows.length > 0,
+    ).length;
+    if (!economy.exists) {
+      const applicable = orphanCollectionCount > 0;
+      return [
+        {
+          checkId: "wis_economy_readiness",
+          label: "Wis economy readiness",
+          category: "WIS_ECONOMY",
+          required: true,
+          status: applicable ? "FAIL" : "PASS",
+          evidence: applicable
+            ? `applicability=ORPHANED; collections=${orphanCollectionCount}; dependency=none`
+            : "applicability=NOT_APPLICABLE; dependency=none",
+          failureReason: applicable ? "WIS_ECONOMY_READINESS_NOT_PASS" : null,
+          ownerWave: "W7",
+        },
+      ];
+    }
+    const economyData = economy.data || {};
+    const counts = Object.fromEntries(
+      [
+        "accountCount",
+        "initializedAccountCount",
+        "ledgerEntryCount",
+        "inventoryCount",
+        "orderCount",
+        "unresolvedLegacyIssueCount",
+      ].map((key) => [key, Number(economyData[key] || 0)]),
+    );
+    let invalid =
+      economyData.integrityVersion === WIS_INTEGRITY_VERSION ? 0 : 1;
+    invalid += Object.values(counts).filter(
+      (value) => !Number.isSafeInteger(value) || value < 0,
+    ).length;
+    if (counts.initializedAccountCount > counts.accountCount) invalid += 1;
+    collectionCounters.forEach(([, counter], index) => {
+      if (counts[counter] > 0 && boundedPresence[index].length === 0)
+        invalid += 1;
+    });
+    const preparing = ["PREPARING", "VALIDATING", "READY"].includes(
+      manifest?.status,
+    );
+    if (preparing && economyData.status !== "PREPARING_INITIALIZING")
+      invalid += 1;
+    if (
+      !preparing &&
+      !["ACTIVE_INITIALIZING", "ACTIVE_OPEN", "CLOSED", "ARCHIVED"].includes(
+        economyData.status,
+      )
+    )
+      invalid += 1;
+    if (
+      preparing &&
+      (counts.initializedAccountCount || counts.ledgerEntryCount)
+    )
+      invalid += 1;
+    if (
+      !preparing &&
+      Number(economyData.initialGrantAmount || 0) > 0 &&
+      counts.initializedAccountCount !== counts.accountCount
+    )
+      invalid += 1;
+    if (counts.unresolvedLegacyIssueCount > 0) invalid += 1;
+    const dependencyHash = sha256(
+      canonicalJson({
+        integrityVersion: economyData.integrityVersion,
+        revision: economyData.revision,
+        status: economyData.status,
+        initialGrantAmount: economyData.initialGrantAmount,
+        ...counts,
+      }),
+    );
+    return [
+      {
+        checkId: "wis_economy_readiness",
+        label: "Wis economy readiness",
+        category: "WIS_ECONOMY",
+        required: true,
+        status: invalid === 0 ? "PASS" : "FAIL",
+        evidence: `applicability=APPLICABLE; accounts=${counts.accountCount}; initialized=${counts.initializedAccountCount}; ledger=${counts.ledgerEntryCount}; inventory=${counts.inventoryCount}; orders=${counts.orderCount}; invalid=${invalid}; integrity=${economyData.integrityVersion || "missing"}; dependency=${dependencyHash}`,
+        failureReason: invalid === 0 ? null : "WIS_ECONOMY_READINESS_NOT_PASS",
+        ownerWave: "W7",
+      },
+    ];
   },
 });
 
-const getWisCommandSessionOptions = (commandType) => ({ recentAuth: HIGH_RISK_COMMAND_TYPES.has(commandType), highRisk: HIGH_RISK_COMMAND_TYPES.has(commandType) });
+const getWisCommandSessionOptions = (commandType) => ({
+  recentAuth: HIGH_RISK_COMMAND_TYPES.has(commandType),
+  highRisk: HIGH_RISK_COMMAND_TYPES.has(commandType),
+});
 
-module.exports = { HIGH_RISK_COMMAND_TYPES, STUDENT_COMMAND_TYPES, WIS_ACCOUNT_COLLECTION, WIS_BALANCE_COLLECTION, WIS_COMMAND_TYPES, WIS_ECONOMY_COLLECTION, WIS_INVENTORY_COLLECTION, WIS_LEDGER_COLLECTION, WIS_LEGACY_ISSUE_COLLECTION, WIS_ORDER_COLLECTION, WIS_POLICY_VERSION, WIS_PRODUCT_COLLECTION, WIS_RANKING_COLLECTION, WIS_RECONCILIATION_COLLECTION, WIS_SCHEMA_VERSION, accountIdFor, createWisCallableExports, createWisCommandAdapter, createWisQueryCore, createWisReadinessAdapter, getWisCommandSessionOptions, inventoryIdFor, normalizeWisPayload };
+module.exports = {
+  HIGH_RISK_COMMAND_TYPES,
+  STUDENT_COMMAND_TYPES,
+  WIS_ACCOUNT_COLLECTION,
+  WIS_BALANCE_COLLECTION,
+  WIS_COMMAND_TYPES,
+  WIS_ECONOMY_COLLECTION,
+  WIS_INVENTORY_COLLECTION,
+  WIS_LEDGER_COLLECTION,
+  WIS_LEGACY_ISSUE_COLLECTION,
+  WIS_ORDER_COLLECTION,
+  WIS_POLICY_VERSION,
+  WIS_PRODUCT_COLLECTION,
+  WIS_RANKING_COLLECTION,
+  WIS_RECONCILIATION_COLLECTION,
+  WIS_SCHEMA_VERSION,
+  accountIdFor,
+  createWisCallableExports,
+  createWisCommandAdapter,
+  createWisQueryCore,
+  createWisReadinessAdapter,
+  getWisCommandSessionOptions,
+  inventoryIdFor,
+  normalizeWisPayload,
+};

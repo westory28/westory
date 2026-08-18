@@ -1,0 +1,2872 @@
+{
+  "schemaVersion": 2,
+  "phase": "W10P",
+  "functionalBaselineSha": "ef74b571a6964ddbc61eb7877a98d21b3c7c8c85",
+  "productionPresentationSha": "676869fa289d3e7ecef234cbb5cca65c60ec4597",
+  "branch": "codex/phase6-w10p-presentation-freeze",
+  "firebaseProjectId": "westory-staging-177587430482",
+  "vercelProjectId": "prj_XMo7TjPKno80BKCnx0YW3JoGXY8B",
+  "networkBoundary": {
+    "forbiddenFirebaseProjectIds": ["history-quiz-yongsin"],
+    "forbiddenWebHosts": ["westory.kr", "www.westory.kr"],
+    "requiredMeasuredFirebaseProjectIds": ["westory-staging-177587430482"]
+  },
+  "stableAlias": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+  "fixtureId": "w10p-visual-fixture-v1",
+  "fixtureRevision": 1,
+  "fixturePlanHash": "ba116361a6c7fb765d0f8a3c8467bc5fb538aa18f3553e17ddd92e82b2f5b4a4",
+  "fixedTime": "2026-08-17T06:00:00.000Z",
+  "evidenceRootPrefix": "docs/evidence/w10p-presentation-freeze",
+  "finalReportPath": "docs/phase-6-w10p-presentation-freeze-functional-modernization.md",
+  "captureRunner": {
+    "scriptPath": "scripts/capture-w10p-visual-parity.mjs",
+    "playwrightCoreVersion": "1.62.1",
+    "browser": "Microsoft Edge via Playwright"
+  },
+  "readiness": {
+    "timeoutMs": 60000,
+    "settleIntervalMs": 250,
+    "requiredStableSamples": 3,
+    "maxSettleSamples": 20,
+    "blockingVisibleTextPattern": "(?:불러오는 중|준비하는 중|^준비 중\\.\\.\\.$|로딩 중|잠시만 기다려|불러오지 못했습니다|접근 권한이 없습니다|권한이 부족합니다|문제가 발생했습니다)"
+  },
+  "requiredDpr": 1,
+  "fullPageViewportKeys": ["390x844", "1440x900"],
+  "viewports": [
+    { "width": 390, "height": 844 },
+    { "width": 768, "height": 1024 },
+    { "width": 1024, "height": 768 },
+    { "width": 1440, "height": 900 },
+    { "width": 1600, "height": 900 }
+  ],
+  "minimumViewportKeys": ["390x844", "1440x900"],
+  "keyScreenIds": [
+    "login",
+    "maintenance",
+    "student-dashboard",
+    "student-lesson-note",
+    "student-quiz",
+    "student-score",
+    "student-points",
+    "student-learning",
+    "teacher-dashboard",
+    "teacher-students",
+    "teacher-lesson",
+    "teacher-quiz",
+    "teacher-exam",
+    "teacher-points",
+    "teacher-settings",
+    "teacher-settings-cutover",
+    "teacher-learning"
+  ],
+  "productionRoutePatterns": [
+    "/",
+    "/maintenance",
+    "/student/dashboard",
+    "/student/lesson/note",
+    "/student/lesson/history-dictionary",
+    "/student/lesson/maps",
+    "/student/lesson/think-cloud",
+    "/student/quiz",
+    "/student/quiz/run",
+    "/student/history-classroom",
+    "/student/history-classroom/run",
+    "/student/score",
+    "/student/score/report",
+    "/student/score/performance",
+    "/student/score/written-exam",
+    "/student/mypage",
+    "/student/history",
+    "/student/points",
+    "/student/calendar",
+    "/teacher/dashboard",
+    "/teacher/students",
+    "/teacher/quiz",
+    "/teacher/quiz/history-classroom",
+    "/teacher/exam",
+    "/teacher/settings",
+    "/teacher/points",
+    "/teacher/schedule",
+    "/teacher/lesson",
+    "/teacher/lesson/history-dictionary",
+    "/teacher/lesson/maps",
+    "/teacher/lesson/source-archive",
+    "/teacher/lesson/think-cloud",
+    "/developer-log",
+    "/developer-log/:postId"
+  ],
+  "captureOverrides": {
+    "/student/lesson/note": "/student/lesson/note?id=w10p-lesson-unit&title=W10P%20수업%20자료",
+    "/student/quiz/run": "/student/quiz/run?unitId=w10p-quiz-unit&category=formative&title=W10P%20평가",
+    "/student/history-classroom/run": "/student/history-classroom/run?id=w10p-history-classroom",
+    "/developer-log/:postId": "/developer-log/w10p-visual-fixture",
+    "*": "/w10p-visual-not-found"
+  },
+  "captureAuthenticationRoles": {
+    "developer-log": "teacher",
+    "developer-log-postid": "teacher"
+  },
+  "captureIdentities": {
+    "adminEmailSha256": "e0704874f65563b0d7f1b75520d0f28c01bde74606e9a9aedcdb6c80e49493fe",
+    "roles": {
+      "student": {
+        "uid": "w10p-visual-student",
+        "profileRole": "student",
+        "teacherPortalEnabled": false,
+        "requiredStaffPermissions": []
+      },
+      "teacher": {
+        "uid": "w10p-visual-teacher",
+        "profileRole": "teacher",
+        "teacherPortalEnabled": true,
+        "requiredStaffPermissions": [
+          "lesson_read",
+          "point_manage",
+          "quiz_read",
+          "student_list_read"
+        ]
+      },
+      "admin": {
+        "uid": "w10p-visual-admin",
+        "profileRole": "teacher",
+        "teacherPortalEnabled": true,
+        "requiredStaffPermissions": []
+      }
+    }
+  },
+  "fixtureMarkers": {
+    "student-calendar": "W10P 시각 검증 일정",
+    "student-history-classroom-run": "W10P 역사교실",
+    "student-attendance": "W10P 출석 사유",
+    "student-communication": "W10P 시각 검증 공지",
+    "student-learning": "W10P 수업 자료",
+    "student-lesson-history-dictionary": "W10P 역사 용어",
+    "student-lesson-note": "W10P 수업 자료",
+    "student-lesson-think-cloud": "W10P 생각모아",
+    "student-mypage": "W10P 학생",
+    "student-history": "37점",
+    "student-points": "W10P 위스 기록",
+    "student-points-hall-of-fame": "W**",
+    "student-points-shop": "W10P 위스 상품",
+    "student-points-orders": "W10P 위스 상품",
+    "student-quiz-run": "W10P 평가",
+    "student-schedule": "W10P 시각 검증 일정",
+    "student-score-performance-evidence": "W10P 수행평가 근거",
+    "student-score-written-evidence": "W10P 정기시험 근거",
+    "teacher-exam": "W10P 사회",
+    "teacher-exam-evidence-performance": "W10P 학생",
+    "teacher-exam-evidence-written": "W10P 학생",
+    "teacher-exam-omr": "W10P 서술형 채점 기준",
+    "teacher-exam-performance": "W10P 수행평가 점수표",
+    "teacher-exam-written-essay": "W10P 정기시험 점수표",
+    "teacher-attendance": "W10P 시각 검증 학급",
+    "teacher-communication": "W10P 시각 검증 공지",
+    "teacher-learning": "W10P 수업 자료",
+    "teacher-lesson": "W10P 수업 자료",
+    "teacher-lesson-history-dictionary": "W10P 역사 용어",
+    "teacher-lesson-source-archive": "W10P 사료",
+    "teacher-lesson-think-cloud": "W10P 생각모아",
+    "teacher-points": "W10P 학생",
+    "teacher-points-grant": "W10P 학생",
+    "teacher-points-policy": "교사 직접 지급 및 환수 허용",
+    "teacher-points-hall-of-fame": "W**",
+    "teacher-points-products": "W10P 위스 상품",
+    "teacher-points-requests": "W10P 위스 상품",
+    "teacher-quiz": "W10P 평가 단원",
+    "teacher-quiz-bank": "W10P 평가 문항",
+    "teacher-quiz-history-classroom": "W10P 역사교실",
+    "teacher-quiz-log": "W10P 학생",
+    "teacher-schedule": "W10P 시각 검증 일정",
+    "teacher-schedule-holiday-tools": "W10P 시각 검증 일정",
+    "teacher-settings-access": "W10P 교사",
+    "teacher-students": "W10P 학생",
+    "admin-teacher-schedule": "W10P 시각 검증 일정",
+    "developer-log": "W10P 시각 검증 일지",
+    "developer-log-postid": "W10P 시각 검증 일지"
+  },
+  "screenFixtureActions": {
+    "teacher-exam-performance": [
+      {
+        "id": "select-performance-roster",
+        "type": "select-option-text",
+        "selector": "select",
+        "text": "W10P 수행평가 점수표",
+        "exactMatchCount": 1
+      }
+    ],
+    "teacher-exam-written-essay": [
+      {
+        "id": "select-written-roster",
+        "type": "select-option-text",
+        "selector": "select",
+        "text": "W10P 정기시험 점수표",
+        "exactMatchCount": 1
+      }
+    ],
+    "teacher-points-grant": [
+      {
+        "id": "filter-wis-student",
+        "type": "fill",
+        "selector": "input[placeholder='이름 또는 일부 검색']",
+        "value": "W10P 학생",
+        "exactMatchCount": 1
+      }
+    ],
+    "teacher-points-hall-of-fame": [
+      {
+        "id": "open-mobile-hall-preview",
+        "type": "click",
+        "selector": "button:has(> i.fa-mobile-alt)",
+        "maxViewportWidth": 390,
+        "exactMatchCount": 1
+      }
+    ],
+    "teacher-quiz": [
+      {
+        "id": "open-quiz-unit-drawer",
+        "type": "click",
+        "selector": "button[aria-label='문제 등록 패널 열기']",
+        "maxViewportWidth": 768,
+        "exactMatchCount": 1
+      }
+    ],
+    "teacher-quiz-bank": [
+      {
+        "id": "reveal-question-fixture",
+        "type": "scroll-text-into-view",
+        "selector": "table[class*='min-w-[900px]'] > tbody > tr > td:nth-child(5) div.break-words",
+        "text": "W10P 평가 문항",
+        "maxViewportWidth": 390,
+        "exactMatchCount": 1
+      }
+    ],
+    "teacher-quiz-log": [
+      {
+        "id": "reveal-quiz-student-fixture",
+        "type": "scroll-text-into-view",
+        "selector": "table[class*='min-w-[880px]'] > tbody > tr > td:nth-child(2) button, table[class*='min-w-[880px]'] > tbody > tr > td:nth-child(2) > div:first-child",
+        "text": "W10P 학생",
+        "maxViewportWidth": 390,
+        "exactMatchCount": 1
+      }
+    ],
+    "teacher-settings-access": [
+      {
+        "id": "filter-synthetic-teacher",
+        "type": "fill",
+        "selector": "input[placeholder='이름 또는 이메일 검색']",
+        "value": "W10P 교사",
+        "exactMatchCount": 1
+      }
+    ],
+    "teacher-students": [
+      {
+        "id": "reveal-student-fixture",
+        "type": "scroll-text-into-view",
+        "selector": "table[class*='min-w-[680px]'] > tbody > tr > td:nth-child(5) button",
+        "text": "W10P 학생",
+        "maxViewportWidth": 390,
+        "exactMatchCount": 1
+      }
+    ]
+  },
+  "fixturePrivacy": {
+    "allowedVisibleEmails": [
+      "westoria28@gmail.com",
+      "w10p-visual-student@yongshin-ms.ms.kr",
+      "w10p-visual-teacher@yongshin-ms.ms.kr"
+    ],
+    "personLabelPattern": "W10P (?:학생|교사|관리자)(?: 2)?",
+    "forbiddenVisibleTextPatterns": {
+      "phone": "01[016789]-?\\d{3,4}-?\\d{4}",
+      "resident-id": "\\d{6}-?[1-4]\\d{6}",
+      "jwt": "eyJ[a-zA-Z0-9_-]{20,}\\.[a-zA-Z0-9_-]{20,}\\.[a-zA-Z0-9_-]{20,}"
+    }
+  },
+  "fixtureDomAssertions": {
+    "student-calendar": {
+      "allowedPersonLabels": [],
+      "items": [
+        {
+          "id": "schedule-events",
+          "selector": ".fc-daygrid-event:not(.holiday-text-event)",
+          "tagPattern": "^(?:A|DIV)$",
+          "exactCount": 1,
+          "textPattern": "W10P 시각 검증 일정",
+          "minimumContrastRatio": 2.5
+        }
+      ]
+    },
+    "student-history-classroom-run": {
+      "allowedPersonLabels": [],
+      "items": [
+        {
+          "id": "runner-intro",
+          "selector": "[role='dialog'][aria-labelledby='history-classroom-start-title']",
+          "tagPattern": "^DIV$",
+          "exactCount": 1,
+          "textPattern": "W10P 역사교실"
+        }
+      ]
+    },
+    "student-attendance": {
+      "allowedPersonLabels": [],
+      "items": [
+        {
+          "id": "attendance-rows",
+          "selector": ".w8-list > li.w8-list__row",
+          "tagPattern": "^LI$",
+          "exactCount": 1,
+          "textPattern": "W10P 출석 사유"
+        }
+      ]
+    },
+    "student-communication": {
+      "allowedPersonLabels": [],
+      "items": [
+        {
+          "id": "notice-rows",
+          "selector": ".w8-list > li > .w8-list__button",
+          "tagPattern": "^BUTTON$",
+          "exactCount": 1,
+          "textPattern": "W10P 시각 검증 공지"
+        }
+      ]
+    },
+    "student-learning": {
+      "allowedPersonLabels": [],
+      "items": [
+        {
+          "id": "learning-rows",
+          "selector": ".w8-list > li > .w8-list__button",
+          "tagPattern": "^BUTTON$",
+          "exactCount": 1,
+          "textPattern": "W10P 수업 자료"
+        }
+      ]
+    },
+    "student-lesson-history-dictionary": {
+      "allowedPersonLabels": [],
+      "items": [
+        {
+          "id": "dictionary-rows",
+          "selector": "aside:has(input[placeholder='단어 검색']) section > div.space-y-2 > button",
+          "tagPattern": "^BUTTON$",
+          "exactCount": 1,
+          "textPattern": "W10P 역사 용어"
+        }
+      ]
+    },
+    "student-lesson-note": {
+      "allowedPersonLabels": [],
+      "items": [
+        {
+          "id": "lesson-heading",
+          "selector": "#main-content div[class~='max-w-4xl'] h2",
+          "tagPattern": "^H2$",
+          "exactCount": 1,
+          "textPattern": "^W10P 수업 자료$"
+        }
+      ]
+    },
+    "student-lesson-think-cloud": {
+      "allowedPersonLabels": ["W10P 학생"],
+      "items": [
+        {
+          "id": "session-heading",
+          "selector": "#main-content h2",
+          "tagPattern": "^H2$",
+          "exactCount": 1,
+          "textPattern": "^W10P 생각모아$"
+        },
+        {
+          "id": "word-cloud-responses",
+          "selector": "svg[aria-label='word cloud'] > text",
+          "tagPattern": "^text$",
+          "exactCount": 2,
+          "textPattern": "^W10P 응답 (?:하나|둘)$"
+        }
+      ]
+    },
+    "student-mypage": {
+      "allowedPersonLabels": ["W10P 학생"],
+      "items": [
+        {
+          "id": "profile-name",
+          "selector": "#main-content h2 + div.grid > div:first-child div.text-3xl.font-black",
+          "tagPattern": "^DIV$",
+          "exactCount": 1,
+          "textPattern": "^W10P 학생$"
+        }
+      ]
+    },
+    "student-history": {
+      "allowedPersonLabels": [],
+      "items": [
+        {
+          "id": "released-answer-row",
+          "selector": "[data-testid='student-exam-objective-item-0']",
+          "tagPattern": "^DIV$",
+          "exactCount": 1,
+          "textPattern": "37점"
+        }
+      ]
+    },
+    "student-points": {
+      "allowedPersonLabels": [],
+      "items": [
+        {
+          "id": "ledger-rows",
+          "selector": "#main-content section[class~='overflow-hidden'] > div[class~='divide-y'] > article",
+          "tagPattern": "^ARTICLE$",
+          "exactCount": 1,
+          "textPattern": "W10P 위스 기록"
+        }
+      ]
+    },
+    "student-points-hall-of-fame": {
+      "allowedPersonLabels": [],
+      "items": [
+        {
+          "id": "hall-entries",
+          "selector": ".wis-hall-podium-entry",
+          "tagPattern": "^DIV$",
+          "exactCount": 1,
+          "textPattern": "W\\*\\*"
+        }
+      ]
+    },
+    "student-points-shop": {
+      "allowedPersonLabels": [],
+      "items": [
+        {
+          "id": "shop-products",
+          "selector": "#main-content article[role='button'][aria-label$=' 상세 보기']",
+          "tagPattern": "^ARTICLE$",
+          "exactCount": 1,
+          "textPattern": "W10P 위스 상품"
+        }
+      ]
+    },
+    "student-points-orders": {
+      "allowedPersonLabels": [],
+      "items": [
+        {
+          "id": "order-rows",
+          "selector": "#main-content div[class~='space-y-5'] > div[class~='space-y-4'] > article",
+          "tagPattern": "^ARTICLE$",
+          "exactCount": 1,
+          "textPattern": "W10P 위스 상품"
+        }
+      ]
+    },
+    "student-quiz-run": {
+      "allowedPersonLabels": [],
+      "items": [
+        {
+          "id": "quiz-intro",
+          "selector": ".student-quiz-intro > div section:first-child > h1",
+          "tagPattern": "^H1$",
+          "exactCount": 1,
+          "textPattern": "^W10P 평가$"
+        }
+      ]
+    },
+    "student-schedule": {
+      "allowedPersonLabels": [],
+      "items": [
+        {
+          "id": "schedule-rows",
+          "selector": ".w8-timeline > li",
+          "tagPattern": "^LI$",
+          "exactCount": 1,
+          "textPattern": "W10P 시각 검증 일정"
+        }
+      ]
+    },
+    "student-score-performance-evidence": {
+      "allowedPersonLabels": [],
+      "items": [
+        {
+          "id": "grade-records",
+          "selector": "section[aria-labelledby='my-grades'] .ws-grade-evidence__list-items > li",
+          "tagPattern": "^LI$",
+          "exactCount": 1,
+          "textPattern": "W10P 수행평가 근거"
+        }
+      ]
+    },
+    "student-score-written-evidence": {
+      "allowedPersonLabels": [],
+      "items": [
+        {
+          "id": "grade-records",
+          "selector": "section[aria-labelledby='my-grades'] .ws-grade-evidence__list-items > li",
+          "tagPattern": "^LI$",
+          "exactCount": 1,
+          "textPattern": "W10P 정기시험 근거"
+        }
+      ]
+    },
+    "teacher-exam": {
+      "allowedPersonLabels": [],
+      "items": [
+        {
+          "id": "grading-plans",
+          "selector": "h3 + div.space-y-4 > div.group",
+          "tagPattern": "^DIV$",
+          "exactCount": 1,
+          "textPattern": "W10P 사회"
+        }
+      ]
+    },
+    "teacher-exam-evidence-performance": {
+      "allowedPersonLabels": ["W10P 학생"],
+      "items": [
+        {
+          "id": "grade-records",
+          "selector": "section[aria-labelledby='grade-list-performance'] .ws-grade-evidence__list-items > li",
+          "tagPattern": "^LI$",
+          "exactCount": 1,
+          "textPattern": "W10P 학생"
+        }
+      ]
+    },
+    "teacher-exam-evidence-written": {
+      "allowedPersonLabels": ["W10P 학생"],
+      "items": [
+        {
+          "id": "grade-records",
+          "selector": "section[aria-labelledby='grade-list-written_exam_essay'] .ws-grade-evidence__list-items > li",
+          "tagPattern": "^LI$",
+          "exactCount": 1,
+          "textPattern": "W10P 학생"
+        }
+      ]
+    },
+    "teacher-exam-omr": {
+      "allowedPersonLabels": [],
+      "items": [
+        {
+          "id": "essay-answer",
+          "selector": "textarea[placeholder='모범 답안 입력']",
+          "tagPattern": "^TEXTAREA$",
+          "exactCount": 1,
+          "textPattern": "^W10P 서술형 채점 기준$"
+        }
+      ]
+    },
+    "teacher-exam-performance": {
+      "allowedPersonLabels": ["W10P 학생"],
+      "items": [
+        {
+          "id": "selected-roster",
+          "selector": "#main-content div.mt-5.space-y-5 > div:first-child label:first-child > select",
+          "tagPattern": "^SELECT$",
+          "exactCount": 1,
+          "textPattern": "W10P 수행평가 점수표",
+          "exactOptionCount": 2
+        }
+      ]
+    },
+    "teacher-exam-written-essay": {
+      "allowedPersonLabels": ["W10P 학생"],
+      "items": [
+        {
+          "id": "selected-roster",
+          "selector": "#main-content div.mt-5.space-y-5 > div:first-child label:first-child > select",
+          "tagPattern": "^SELECT$",
+          "exactCount": 1,
+          "textPattern": "W10P 정기시험 점수표",
+          "exactOptionCount": 2
+        }
+      ]
+    },
+    "teacher-attendance": {
+      "allowedPersonLabels": ["W10P 학생"],
+      "items": [
+        {
+          "id": "class-sessions",
+          "selector": ".w8-session-list > button",
+          "tagPattern": "^BUTTON$",
+          "exactCount": 1,
+          "textPattern": "W10P 시각 검증 학급"
+        }
+      ]
+    },
+    "teacher-communication": {
+      "allowedPersonLabels": [],
+      "items": [
+        {
+          "id": "notice-rows",
+          "selector": ".w8-workspace > section.w8-panel .w8-list > li",
+          "tagPattern": "^LI$",
+          "exactCount": 1,
+          "textPattern": "W10P 시각 검증 공지"
+        }
+      ]
+    },
+    "teacher-learning": {
+      "allowedPersonLabels": [],
+      "items": [
+        {
+          "id": "learning-rows",
+          "selector": "section[aria-labelledby='learning-list-title'] .w8-list > li",
+          "tagPattern": "^LI$",
+          "exactCount": 1,
+          "textPattern": "W10P 수업 자료"
+        }
+      ]
+    },
+    "teacher-lesson": {
+      "allowedPersonLabels": [],
+      "items": [
+        {
+          "id": "selected-lesson",
+          "selector": "input[placeholder='수업 자료 제목을 입력하세요']",
+          "tagPattern": "^INPUT$",
+          "exactCount": 1,
+          "textPattern": "^W10P 수업 자료$"
+        }
+      ]
+    },
+    "teacher-lesson-history-dictionary": {
+      "allowedPersonLabels": [],
+      "items": [
+        {
+          "id": "dictionary-rows",
+          "selector": "aside:has(input[placeholder='단어, 뜻풀이 검색']) section > div.space-y-2 > button",
+          "tagPattern": "^BUTTON$",
+          "exactCount": 1,
+          "textPattern": "W10P 역사 용어"
+        }
+      ]
+    },
+    "teacher-lesson-source-archive": {
+      "allowedPersonLabels": [],
+      "items": [
+        {
+          "id": "source-rows",
+          "selector": "#main-content section button:has(h3)",
+          "tagPattern": "^BUTTON$",
+          "exactCount": 1,
+          "textPattern": "W10P 사료"
+        }
+      ]
+    },
+    "teacher-lesson-think-cloud": {
+      "allowedPersonLabels": ["W10P 학생"],
+      "items": [
+        {
+          "id": "session-heading",
+          "selector": "#main-content h2",
+          "tagPattern": "^H2$",
+          "exactCount": 1,
+          "textPattern": "^W10P 생각모아$"
+        },
+        {
+          "id": "word-cloud-responses",
+          "selector": "svg[aria-label='word cloud'] > text",
+          "tagPattern": "^text$",
+          "exactCount": 2,
+          "textPattern": "^W10P 응답 (?:하나|둘)$"
+        }
+      ]
+    },
+    "teacher-points": {
+      "allowedPersonLabels": ["W10P 학생"],
+      "items": [
+        {
+          "id": "selected-wallet",
+          "selector": "#main-content h3[class~='text-xl'][class~='font-extrabold']",
+          "tagPattern": "^H3$",
+          "exactCount": 1,
+          "textPattern": "^W10P 학생$"
+        },
+        {
+          "id": "wallet-result-count",
+          "selector": "#main-content div:has(> h2) + div",
+          "tagPattern": "^DIV$",
+          "exactCount": 1,
+          "textPattern": "^검색 결과 1명$"
+        }
+      ]
+    },
+    "teacher-points-grant": {
+      "allowedPersonLabels": ["W10P 학생"],
+      "items": [
+        {
+          "id": "selected-student",
+          "selector": "#main-content h3[class~='text-xl'][class~='font-extrabold']",
+          "tagPattern": "^H3$",
+          "exactCount": 1,
+          "textPattern": "^W10P 학생$"
+        },
+        {
+          "id": "student-result-count",
+          "selector": "#main-content div:has(> h2) + div",
+          "tagPattern": "^DIV$",
+          "exactCount": 1,
+          "textPattern": "^검색 결과 1명$"
+        }
+      ]
+    },
+    "teacher-points-policy": {
+      "allowedPersonLabels": [],
+      "items": [
+        {
+          "id": "manual-adjust-policy",
+          "selector": "#main-content form[class~='space-y-6'] > div[class~='xl:grid-cols-3'] > label:nth-child(2):has(input[type='checkbox']:checked)",
+          "tagPattern": "^LABEL$",
+          "exactCount": 1,
+          "textPattern": "교사 직접 지급 및 환수 허용"
+        }
+      ]
+    },
+    "teacher-points-hall-of-fame": {
+      "allowedPersonLabels": [],
+      "items": [
+        {
+          "id": "hall-preview-entries",
+          "selector": ".wis-hall-podium-entry",
+          "tagPattern": "^DIV$",
+          "exactCount": 1,
+          "textPattern": "W\\*\\*"
+        }
+      ]
+    },
+    "teacher-points-products": {
+      "allowedPersonLabels": [],
+      "items": [
+        {
+          "id": "product-rows",
+          "selector": "#main-content table[class*='min-w-[720px]'] > tbody > tr > td:nth-child(2) div.truncate.font-bold",
+          "tagPattern": "^DIV$",
+          "exactCount": 1,
+          "textPattern": "^W10P 위스 상품$"
+        }
+      ]
+    },
+    "teacher-points-requests": {
+      "allowedPersonLabels": ["W10P 학생"],
+      "items": [
+        {
+          "id": "order-requests",
+          "selector": "#main-content div[class~='md:hidden'] > div:has(> button[aria-expanded]), #main-content div[class~='md:block'] table > tbody > tr[role='button']",
+          "tagPattern": "^(?:DIV|TR)$",
+          "exactCount": 1,
+          "textPattern": "W10P 위스 상품"
+        },
+        {
+          "id": "order-student",
+          "selector": "#main-content div[class~='md:hidden'] button[aria-expanded] div.truncate.text-sm.font-extrabold, #main-content div[class~='md:block'] tr[role='button'] > td:first-child div.truncate.font-bold",
+          "tagPattern": "^DIV$",
+          "exactCount": 1,
+          "textPattern": "^W10P 학생$"
+        }
+      ]
+    },
+    "teacher-quiz": {
+      "allowedPersonLabels": [],
+      "items": [
+        {
+          "id": "quiz-units",
+          "selector": "[title='W10P 평가 단원']",
+          "tagPattern": "^(?:DIV|BUTTON|SPAN)$",
+          "exactCount": 1,
+          "textPattern": "W10P 평가 단원"
+        }
+      ]
+    },
+    "teacher-quiz-bank": {
+      "allowedPersonLabels": [],
+      "items": [
+        {
+          "id": "question-rows",
+          "selector": "table[class*='min-w-[900px]'] > tbody > tr",
+          "tagPattern": "^TR$",
+          "exactCount": 1,
+          "countMode": "rendered",
+          "textPattern": "W10P 평가 문항"
+        }
+      ]
+    },
+    "teacher-quiz-history-classroom": {
+      "allowedPersonLabels": [],
+      "items": [
+        {
+          "id": "assignment-cards",
+          "selector": "#main-content article",
+          "tagPattern": "^ARTICLE$",
+          "exactCount": 1,
+          "textPattern": "W10P 역사교실"
+        }
+      ]
+    },
+    "teacher-quiz-log": {
+      "allowedPersonLabels": ["W10P 학생"],
+      "items": [
+        {
+          "id": "attempt-rows",
+          "selector": "table[class*='min-w-[880px]'] > tbody > tr",
+          "tagPattern": "^TR$",
+          "exactCount": 1,
+          "countMode": "rendered",
+          "textPattern": "W10P 학생"
+        }
+      ]
+    },
+    "teacher-schedule": {
+      "allowedPersonLabels": [],
+      "items": [
+        {
+          "id": "schedule-events",
+          "selector": ".fc-daygrid-event:not(.holiday-text-event)",
+          "tagPattern": "^(?:A|DIV)$",
+          "exactCount": 1,
+          "textPattern": "W10P 시각 검증 일정",
+          "minimumContrastRatio": 2.5
+        }
+      ]
+    },
+    "teacher-schedule-holiday-tools": {
+      "allowedPersonLabels": [],
+      "items": [
+        {
+          "id": "schedule-events",
+          "selector": ".fc-daygrid-event:not(.holiday-text-event)",
+          "tagPattern": "^(?:A|DIV)$",
+          "exactCount": 1,
+          "textPattern": "W10P 시각 검증 일정",
+          "minimumContrastRatio": 2.5
+        }
+      ]
+    },
+    "admin-teacher-schedule": {
+      "allowedPersonLabels": [],
+      "items": [
+        {
+          "id": "schedule-events",
+          "selector": ".fc-daygrid-event:not(.holiday-text-event)",
+          "tagPattern": "^(?:A|DIV)$",
+          "exactCount": 1,
+          "textPattern": "W10P 시각 검증 일정",
+          "minimumContrastRatio": 2.5
+        }
+      ]
+    },
+    "teacher-settings-access": {
+      "allowedPersonLabels": ["W10P 교사"],
+      "items": [
+        {
+          "id": "staff-rows",
+          "selector": "table[class*='min-w-[1040px]'] > tbody > tr",
+          "tagPattern": "^TR$",
+          "exactCount": 1,
+          "countMode": "rendered",
+          "textPattern": "W10P 교사"
+        }
+      ]
+    },
+    "teacher-students": {
+      "allowedPersonLabels": ["W10P 학생"],
+      "items": [
+        {
+          "id": "student-rows",
+          "selector": "table[class*='min-w-[680px]'] > tbody > tr",
+          "tagPattern": "^TR$",
+          "exactCount": 1,
+          "countMode": "rendered",
+          "textPattern": "W10P 학생"
+        }
+      ]
+    },
+    "developer-log": {
+      "allowedPersonLabels": [],
+      "items": [
+        {
+          "id": "post-links",
+          "selector": "a[href$='/developer-log/w10p-visual-fixture']",
+          "tagPattern": "^A$",
+          "exactCount": 1,
+          "textPattern": "W10P 시각 검증 일지"
+        }
+      ]
+    },
+    "developer-log-postid": {
+      "allowedPersonLabels": ["W10P 교사"],
+      "items": [
+        {
+          "id": "post-detail",
+          "selector": "#main-content article",
+          "tagPattern": "^ARTICLE$",
+          "exactCount": 1,
+          "textPattern": "W10P 시각 검증 일지"
+        }
+      ]
+    }
+  },
+  "screenReadyStates": {
+    "login": {
+      "signals": [
+        {
+          "id": "brand-title",
+          "selector": "h1",
+          "textPattern": "^Westory$",
+          "tagPattern": "^H1$"
+        },
+        {
+          "id": "login-action",
+          "selector": "button",
+          "textPattern": "^(?:학생 로그인(?: \\(계정 선택\\))?|계속하기)$",
+          "tagPattern": "^BUTTON$"
+        }
+      ]
+    },
+    "maintenance": {
+      "signals": [
+        {
+          "id": "maintenance-guidance",
+          "selector": "main[aria-labelledby='maintenance-title'] p",
+          "textPattern": "^이용 안내가 필요하면 담당 교사에게 문의해 주세요\\.$",
+          "tagPattern": "^P$"
+        }
+      ]
+    },
+    "student-dashboard": {
+      "signals": [
+        {
+          "id": "dashboard-title",
+          "selector": "h1",
+          "textPattern": "^.+의 대시보드$",
+          "tagPattern": "^H1$"
+        }
+      ]
+    },
+    "student-lesson-note": {
+      "signals": [
+        {
+          "id": "lesson-fixture",
+          "selector": "h1, h2, h3",
+          "textPattern": "^W10P 수업 자료$",
+          "tagPattern": "^H[1-3]$"
+        }
+      ]
+    },
+    "student-lesson-history-dictionary": {
+      "signals": [
+        {
+          "id": "dictionary-fixture",
+          "selector": "button, h2, h3, span",
+          "textPattern": "^W10P 역사 용어$",
+          "tagPattern": "^(?:BUTTON|H[23]|SPAN)$"
+        }
+      ]
+    },
+    "student-lesson-maps": {
+      "signals": [
+        {
+          "id": "map-open-action",
+          "selector": "a[target='_blank']",
+          "textPattern": "^새 창에서\\s*열기$",
+          "tagPattern": "^A$"
+        }
+      ]
+    },
+    "student-lesson-think-cloud": {
+      "signals": [
+        {
+          "id": "think-cloud-fixture",
+          "selector": "h1, h2, h3, button",
+          "textPattern": "^W10P 생각모아$",
+          "tagPattern": "^(?:H[1-3]|BUTTON)$"
+        },
+        {
+          "id": "think-cloud-response-state",
+          "selector": "span, p",
+          "textPattern": "^응답 2개$",
+          "tagPattern": "^SPAN$"
+        }
+      ]
+    },
+    "student-quiz": {
+      "signals": [
+        {
+          "id": "mock-exam-section",
+          "selector": "h2",
+          "textPattern": "^모의고사$",
+          "tagPattern": "^H2$"
+        },
+        {
+          "id": "unit-quiz-section",
+          "selector": "h2",
+          "textPattern": "^단원별 평가$",
+          "tagPattern": "^H2$"
+        }
+      ]
+    },
+    "student-quiz-run": {
+      "signals": [
+        {
+          "id": "quiz-fixture",
+          "selector": "h1, h2",
+          "textPattern": "^W10P 평가$",
+          "tagPattern": "^H[12]$"
+        },
+        {
+          "id": "quiz-start-state",
+          "selector": "button, span",
+          "textPattern": "^(?:평가 시작하기|이어하기|응시 불가)$",
+          "tagPattern": "^(?:BUTTON|SPAN)$"
+        }
+      ]
+    },
+    "student-history-classroom": {
+      "signals": [
+        {
+          "id": "history-classroom-title",
+          "selector": "h1",
+          "textPattern": "^역사교실$",
+          "tagPattern": "^H1$"
+        }
+      ]
+    },
+    "student-history-classroom-run": {
+      "signals": [
+        {
+          "id": "history-run-fixture",
+          "selector": "#history-classroom-start-title",
+          "textPattern": "^W10P 역사교실$",
+          "tagPattern": "^H[1-3]$"
+        },
+        {
+          "id": "history-run-action",
+          "selector": "button",
+          "textPattern": "^(?:역사교실 시작하기|저장된 응시 이어하기)$",
+          "tagPattern": "^BUTTON$"
+        }
+      ]
+    },
+    "student-score": {
+      "signals": [
+        {
+          "id": "achievement-chart",
+          "selector": "div",
+          "textPattern": "^성취도 그래프$",
+          "tagPattern": "^DIV$"
+        },
+        {
+          "id": "achievement-canvas",
+          "selector": "canvas",
+          "textPattern": "^$",
+          "tagPattern": "^CANVAS$",
+          "allowEmptyText": true,
+          "paintMode": "canvas"
+        }
+      ]
+    },
+    "student-score-report": {
+      "signals": [
+        {
+          "id": "subject-analysis",
+          "selector": "h2",
+          "textPattern": "^교과별 성적 분석$",
+          "tagPattern": "^H2$"
+        },
+        {
+          "id": "report-analysis",
+          "selector": "h2",
+          "textPattern": "^분석 리포트$",
+          "tagPattern": "^H2$"
+        }
+      ]
+    },
+    "student-score-performance": {
+      "signals": [
+        {
+          "id": "performance-title",
+          "selector": "h1",
+          "textPattern": "^내 수행평가 점수$",
+          "tagPattern": "^H1$"
+        }
+      ]
+    },
+    "student-score-written-exam": {
+      "signals": [
+        {
+          "id": "written-title",
+          "selector": "h1",
+          "textPattern": "^내 정기시험 점수$",
+          "tagPattern": "^H1$"
+        }
+      ]
+    },
+    "teacher-dashboard": {
+      "signals": [
+        {
+          "id": "dashboard-title",
+          "selector": "h1",
+          "textPattern": "^대시보드$",
+          "tagPattern": "^H1$"
+        }
+      ]
+    },
+    "teacher-students": {
+      "signals": [
+        {
+          "id": "student-fixture",
+          "selector": "tbody td, tbody button, tbody span",
+          "textPattern": "^W10P 학생$",
+          "tagPattern": "^(?:TD|BUTTON|SPAN)$"
+        }
+      ]
+    },
+    "teacher-quiz": {
+      "signals": [
+        {
+          "id": "quiz-unit-fixture",
+          "selector": "[title], button, span",
+          "textPattern": "^W10P 평가 단원$",
+          "tagPattern": "^(?:DIV|BUTTON|SPAN)$"
+        }
+      ]
+    },
+    "teacher-quiz-history-classroom": {
+      "signals": [
+        {
+          "id": "history-dashboard-title",
+          "selector": "h1",
+          "textPattern": "^역사교실 제출 현황 대시보드$",
+          "tagPattern": "^H1$"
+        },
+        {
+          "id": "history-fixture",
+          "selector": "article h2, article h3, article button",
+          "textPattern": "^W10P 역사교실$",
+          "tagPattern": "^(?:H[23]|BUTTON)$"
+        }
+      ]
+    },
+    "teacher-exam": {
+      "signals": [
+        {
+          "id": "criteria-list",
+          "selector": "h3",
+          "textPattern": "^등록된 기준 목록$",
+          "tagPattern": "^H3$"
+        },
+        {
+          "id": "criteria-fixture",
+          "selector": "h4, button, span",
+          "textPattern": "^W10P 사회$",
+          "tagPattern": "^(?:H4|BUTTON|SPAN)$"
+        }
+      ]
+    },
+    "teacher-settings-cutover": {
+      "signals": [
+        {
+          "id": "cutover-actions",
+          "selector": "#cutover-actions-title",
+          "textPattern": "^리허설 단계$",
+          "tagPattern": "^H[1-3]$"
+        },
+        {
+          "id": "cutover-readiness",
+          "selector": "#cutover-readiness-title",
+          "textPattern": "^준비도와 차단 항목$",
+          "tagPattern": "^H[1-3]$"
+        }
+      ]
+    },
+    "teacher-settings": {
+      "signals": [
+        {
+          "id": "general-settings-title",
+          "selector": "h3",
+          "textPattern": "^시스템 기본 설정$",
+          "tagPattern": "^H3$"
+        }
+      ]
+    },
+    "teacher-points": {
+      "signals": [
+        {
+          "id": "wis-overview-title",
+          "selector": "h2",
+          "textPattern": "^학생별 위스 현황$",
+          "tagPattern": "^H2$"
+        },
+        {
+          "id": "wis-student-fixture",
+          "selector": "#main-content h3[class~='text-xl'][class~='font-extrabold']",
+          "textPattern": "^W10P 학생$",
+          "tagPattern": "^H3$"
+        }
+      ]
+    },
+    "teacher-schedule": {
+      "signals": [
+        {
+          "id": "schedule-fixture",
+          "selector": ".fc-event-title, .fc-segment-title",
+          "textPattern": "^W10P 시각 검증 일정$",
+          "tagPattern": "^(?:DIV|SPAN)$",
+          "minimumContrastRatio": 2.5
+        }
+      ]
+    },
+    "teacher-lesson": {
+      "signals": [
+        {
+          "id": "lesson-fixture",
+          "selector": "[title], button, span",
+          "textPattern": "^W10P 수업 자료$",
+          "tagPattern": "^(?:DIV|BUTTON|SPAN)$"
+        }
+      ]
+    },
+    "teacher-lesson-history-dictionary": {
+      "signals": [
+        {
+          "id": "dictionary-fixture",
+          "selector": "button, span, h2, h3",
+          "textPattern": "^W10P 역사 용어$",
+          "tagPattern": "^(?:BUTTON|SPAN|H[23])$"
+        }
+      ]
+    },
+    "teacher-lesson-maps": {
+      "signals": [
+        {
+          "id": "map-title",
+          "selector": "h2",
+          "textPattern": "^구글 지도$",
+          "tagPattern": "^H2$"
+        }
+      ]
+    },
+    "teacher-lesson-source-archive": {
+      "signals": [
+        {
+          "id": "source-fixture",
+          "selector": "h3, button, span",
+          "textPattern": "^W10P 사료$",
+          "tagPattern": "^(?:H3|BUTTON|SPAN)$"
+        }
+      ]
+    },
+    "teacher-lesson-think-cloud": {
+      "signals": [
+        {
+          "id": "think-cloud-fixture",
+          "selector": "button, h2, h3",
+          "textPattern": "^W10P 생각모아$",
+          "tagPattern": "^(?:BUTTON|H[23])$"
+        },
+        {
+          "id": "think-cloud-live-state",
+          "selector": "span",
+          "textPattern": "^응답 2개$",
+          "tagPattern": "^SPAN$"
+        }
+      ]
+    },
+    "student-mypage": {
+      "signals": [
+        {
+          "id": "profile-section",
+          "selector": "h2",
+          "textPattern": "^나의 기본 정보$",
+          "tagPattern": "^H2$"
+        },
+        {
+          "id": "student-fixture",
+          "selector": "div, span, strong",
+          "textPattern": "^W10P 학생$",
+          "tagPattern": "^(?:DIV|SPAN|STRONG)$"
+        }
+      ]
+    },
+    "student-mypage-archive": {
+      "signals": [
+        {
+          "id": "archive-title",
+          "selector": "h1, h2, h3",
+          "textPattern": "^학기별 기록$",
+          "tagPattern": "^H[1-3]$"
+        },
+        {
+          "id": "mypage-return",
+          "selector": "a, button",
+          "textPattern": "^현재 마이페이지로 돌아가기$",
+          "tagPattern": "^(?:A|BUTTON)$"
+        }
+      ]
+    },
+    "student-history": {
+      "signals": [
+        {
+          "id": "answer-title",
+          "selector": "h2",
+          "textPattern": "^정기 시험 답안$",
+          "tagPattern": "^H2$"
+        },
+        {
+          "id": "released-objective-fixture",
+          "selector": "[data-testid='student-exam-objective-item-0'] span",
+          "textPattern": "^37점$",
+          "tagPattern": "^SPAN$"
+        }
+      ]
+    },
+    "student-points": {
+      "signals": [
+        {
+          "id": "balance-label",
+          "selector": "div, span, p",
+          "textPattern": "^보유 위스$",
+          "tagPattern": "^(?:DIV|SPAN|P)$"
+        },
+        {
+          "id": "wis-history-title",
+          "selector": "h2",
+          "textPattern": "^위스 기록$",
+          "tagPattern": "^H2$"
+        },
+        {
+          "id": "wis-ledger-fixture",
+          "selector": "#main-content section[class~='overflow-hidden'] > div[class~='divide-y'] > article div.mt-2.truncate.font-bold",
+          "textPattern": "^W10P 위스 기록$",
+          "tagPattern": "^DIV$"
+        }
+      ]
+    },
+    "student-calendar": {
+      "signals": [
+        {
+          "id": "schedule-fixture",
+          "selector": ".fc-event-title, .fc-segment-title",
+          "textPattern": "^W10P 시각 검증 일정$",
+          "tagPattern": "^(?:DIV|SPAN)$",
+          "minimumContrastRatio": 2.5
+        }
+      ]
+    },
+    "student-learning": {
+      "signals": [
+        {
+          "id": "hub-title",
+          "selector": "#w8-student-title",
+          "textPattern": "^나의 학습$",
+          "tagPattern": "^H[1-3]$"
+        },
+        {
+          "id": "learning-fixture",
+          "selector": ".w8-list__copy > strong",
+          "textPattern": "^W10P 수업 자료$",
+          "tagPattern": "^STRONG$"
+        }
+      ]
+    },
+    "student-schedule": {
+      "signals": [
+        {
+          "id": "hub-title",
+          "selector": "#w8-student-title",
+          "textPattern": "^일정$",
+          "tagPattern": "^H[1-3]$"
+        },
+        {
+          "id": "schedule-fixture",
+          "selector": ".w8-timeline strong",
+          "textPattern": "^W10P 시각 검증 일정$",
+          "tagPattern": "^STRONG$"
+        }
+      ]
+    },
+    "student-attendance": {
+      "signals": [
+        {
+          "id": "hub-title",
+          "selector": "#w8-student-title",
+          "textPattern": "^나의 출석$",
+          "tagPattern": "^H[1-3]$"
+        },
+        {
+          "id": "attendance-fixture",
+          "selector": ".w8-list__copy > span",
+          "textPattern": "^W10P 출석 사유$",
+          "tagPattern": "^SPAN$"
+        }
+      ]
+    },
+    "student-communication": {
+      "signals": [
+        {
+          "id": "hub-title",
+          "selector": "#w8-student-title",
+          "textPattern": "^공지와 알림$",
+          "tagPattern": "^H[1-3]$"
+        },
+        {
+          "id": "notice-fixture",
+          "selector": ".w8-list__copy > strong",
+          "textPattern": "^W10P 시각 검증 공지$",
+          "tagPattern": "^STRONG$"
+        }
+      ]
+    },
+    "teacher-learning": {
+      "signals": [
+        {
+          "id": "hub-title",
+          "selector": "#w8-teacher-title",
+          "textPattern": "^학습 운영$",
+          "tagPattern": "^H[1-3]$"
+        },
+        {
+          "id": "learning-list",
+          "selector": "#learning-list-title",
+          "textPattern": "^학습 콘텐츠$",
+          "tagPattern": "^H[1-3]$"
+        },
+        {
+          "id": "learning-fixture",
+          "selector": ".w8-list__copy > strong",
+          "textPattern": "^W10P 수업 자료$",
+          "tagPattern": "^STRONG$"
+        }
+      ]
+    },
+    "teacher-attendance": {
+      "signals": [
+        {
+          "id": "hub-title",
+          "selector": "#w8-teacher-title",
+          "textPattern": "^출석 운영$",
+          "tagPattern": "^H[1-3]$"
+        },
+        {
+          "id": "attendance-action",
+          "selector": "button, a",
+          "textPattern": "^출석부 열기$",
+          "tagPattern": "^(?:BUTTON|A)$"
+        },
+        {
+          "id": "attendance-fixture",
+          "selector": ".w8-session-list button span > span",
+          "textPattern": "^W10P 시각 검증 학급$",
+          "tagPattern": "^SPAN$"
+        }
+      ]
+    },
+    "teacher-communication": {
+      "signals": [
+        {
+          "id": "hub-title",
+          "selector": "#w8-teacher-title",
+          "textPattern": "^공지 운영$",
+          "tagPattern": "^H[1-3]$"
+        },
+        {
+          "id": "notice-list",
+          "selector": "h2",
+          "textPattern": "^공지 목록$",
+          "tagPattern": "^H2$"
+        },
+        {
+          "id": "notice-fixture",
+          "selector": ".w8-list__copy > strong",
+          "textPattern": "^W10P 시각 검증 공지$",
+          "tagPattern": "^STRONG$"
+        }
+      ]
+    },
+    "developer-log": {
+      "signals": [
+        {
+          "id": "developer-log-title",
+          "selector": "h2",
+          "textPattern": "^개발자 일지$",
+          "tagPattern": "^H2$"
+        },
+        {
+          "id": "developer-log-fixture",
+          "selector": "a, h2, h3",
+          "textPattern": "^W10P 시각 검증 일지$",
+          "tagPattern": "^(?:A|H[23])$"
+        }
+      ]
+    },
+    "developer-log-postid": {
+      "signals": [
+        {
+          "id": "developer-log-title",
+          "selector": "h2",
+          "textPattern": "^개발자 일지$",
+          "tagPattern": "^H2$"
+        },
+        {
+          "id": "developer-log-fixture",
+          "selector": "article h2, article h3, main h2, main h3",
+          "textPattern": "^W10P 시각 검증 일지$",
+          "tagPattern": "^H[23]$"
+        }
+      ]
+    },
+    "not-found": {
+      "signals": [
+        {
+          "id": "not-found-title",
+          "selector": "main h1, main h2, main h3",
+          "textPattern": "^요청한 화면을 찾지 못했습니다\\.$",
+          "tagPattern": "^H[1-3]$"
+        },
+        {
+          "id": "not-found-action",
+          "selector": "main a, main button",
+          "textPattern": "^첫 화면으로 이동$",
+          "tagPattern": "^(?:A|BUTTON)$"
+        }
+      ]
+    },
+    "student-points-hall-of-fame": {
+      "signals": [
+        {
+          "id": "hall-grade",
+          "selector": "button, h2, h3",
+          "textPattern": "^\\d+학년 전교 랭킹$",
+          "tagPattern": "^(?:BUTTON|H[23])$"
+        },
+        {
+          "id": "hall-class-action",
+          "selector": "button",
+          "textPattern": "^우리 학급 보기$",
+          "tagPattern": "^BUTTON$"
+        },
+        {
+          "id": "hall-fixture",
+          "selector": ".wis-hall-podium-entry__name > div:nth-child(2)",
+          "textPattern": "^W\\*\\*$",
+          "tagPattern": "^DIV$"
+        }
+      ]
+    },
+    "student-points-shop": {
+      "signals": [
+        {
+          "id": "shop-title",
+          "selector": "h2",
+          "textPattern": "^위스 상점$",
+          "tagPattern": "^H2$"
+        },
+        {
+          "id": "shop-fixture",
+          "selector": "article[aria-label='W10P 위스 상품 상세 보기'] h3",
+          "textPattern": "^W10P 위스 상품$",
+          "tagPattern": "^H3$"
+        }
+      ]
+    },
+    "student-points-orders": {
+      "signals": [
+        {
+          "id": "orders-title",
+          "selector": "h2",
+          "textPattern": "^구매 내역$",
+          "tagPattern": "^H2$"
+        },
+        {
+          "id": "order-fixture",
+          "selector": "#main-content div[class~='space-y-5'] > div[class~='space-y-4'] > article h3",
+          "textPattern": "^W10P 위스 상품$",
+          "tagPattern": "^H3$"
+        }
+      ]
+    },
+    "teacher-quiz-log": {
+      "signals": [
+        {
+          "id": "quiz-log-title",
+          "selector": "h2",
+          "textPattern": "^응시 현황$",
+          "tagPattern": "^H2$"
+        },
+        {
+          "id": "student-fixture",
+          "selector": "td, button, span",
+          "textPattern": "^W10P 학생$",
+          "tagPattern": "^(?:TD|BUTTON|SPAN)$"
+        }
+      ]
+    },
+    "teacher-quiz-bank": {
+      "signals": [
+        {
+          "id": "quiz-bank-title",
+          "selector": "h2",
+          "textPattern": "^문제 은행$",
+          "tagPattern": "^H2$"
+        },
+        {
+          "id": "question-fixture",
+          "selector": "table[class*='min-w-[900px]'] > tbody > tr > td:nth-child(5) div.break-words",
+          "textPattern": "^W10P 평가 문항$",
+          "tagPattern": "^DIV$"
+        }
+      ]
+    },
+    "teacher-exam-omr": {
+      "signals": [
+        {
+          "id": "objective-title",
+          "selector": "h2, h3",
+          "textPattern": "^객관식 문항$",
+          "tagPattern": "^H[23]$"
+        },
+        {
+          "id": "omr-fixture",
+          "selector": "textarea, select",
+          "textPattern": "W10P 서술형 채점 기준",
+          "tagPattern": "^(?:TEXTAREA|SELECT)$"
+        }
+      ]
+    },
+    "teacher-exam-performance": {
+      "signals": [
+        {
+          "id": "performance-manager-title",
+          "selector": "h2",
+          "textPattern": "^수행평가 점수 관리$",
+          "tagPattern": "^H2$"
+        },
+        {
+          "id": "performance-roster-fixture",
+          "selector": "select, h3, h4",
+          "textPattern": "W10P 수행평가 점수표",
+          "tagPattern": "^(?:SELECT|H[34])$"
+        }
+      ]
+    },
+    "teacher-exam-written-essay": {
+      "signals": [
+        {
+          "id": "written-manager-title",
+          "selector": "h2",
+          "textPattern": "^정기시험 점수 관리$",
+          "tagPattern": "^H2$"
+        },
+        {
+          "id": "written-roster-fixture",
+          "selector": "select, h3, h4",
+          "textPattern": "W10P 정기시험 점수표",
+          "tagPattern": "^(?:SELECT|H[34])$"
+        }
+      ]
+    },
+    "teacher-points-grant": {
+      "signals": [
+        {
+          "id": "grant-title",
+          "selector": "h2",
+          "textPattern": "^지급 및 환수 대상 선택$",
+          "tagPattern": "^H2$"
+        },
+        {
+          "id": "grant-student-fixture",
+          "selector": "#main-content h3[class~='text-xl'][class~='font-extrabold']",
+          "textPattern": "^W10P 학생$",
+          "tagPattern": "^H3$"
+        }
+      ]
+    },
+    "teacher-points-policy": {
+      "signals": [
+        {
+          "id": "policy-title",
+          "selector": "h2",
+          "textPattern": "^위스 운영 정책$",
+          "tagPattern": "^H2$"
+        },
+        {
+          "id": "manual-adjust-fixture",
+          "selector": "#main-content form[class~='space-y-6'] > div[class~='xl:grid-cols-3'] > label:nth-child(2):has(input[type='checkbox']:checked)",
+          "textPattern": "교사 직접 지급 및 환수 허용",
+          "tagPattern": "^LABEL$"
+        }
+      ]
+    },
+    "teacher-points-hall-of-fame": {
+      "signals": [
+        {
+          "id": "hall-preview-title",
+          "selector": "h3",
+          "textPattern": "^학생 화면 미리보기$",
+          "tagPattern": "^H3$"
+        },
+        {
+          "id": "hall-preview-fixture",
+          "selector": ".wis-hall-podium-entry__name > div:nth-child(2)",
+          "textPattern": "^W\\*\\*$",
+          "tagPattern": "^DIV$"
+        }
+      ]
+    },
+    "teacher-points-products": {
+      "signals": [
+        {
+          "id": "products-title",
+          "selector": "h2",
+          "textPattern": "^상점 상품 목록$",
+          "tagPattern": "^H2$"
+        },
+        {
+          "id": "product-editor-title",
+          "selector": "h2, h3",
+          "textPattern": "^(?:새 상품 등록|상품 정보 수정)$",
+          "tagPattern": "^H[23]$"
+        },
+        {
+          "id": "product-fixture",
+          "selector": "#main-content table[class*='min-w-[720px]'] > tbody > tr > td:nth-child(2) div.truncate.font-bold",
+          "textPattern": "^W10P 위스 상품$",
+          "tagPattern": "^DIV$"
+        }
+      ]
+    },
+    "teacher-points-requests": {
+      "signals": [
+        {
+          "id": "requests-title",
+          "selector": "h2",
+          "textPattern": "^구매 요청 목록$",
+          "tagPattern": "^H2$"
+        },
+        {
+          "id": "request-fixture",
+          "selector": "#main-content div[class~='md:hidden'] button[aria-expanded] > div:nth-child(2), #main-content div[class~='md:block'] tr[role='button'] > td:nth-child(2)",
+          "textPattern": "W10P 위스 상품",
+          "tagPattern": "^(?:DIV|TD)$"
+        }
+      ]
+    },
+    "teacher-settings-school": {
+      "signals": [
+        {
+          "id": "school-level-title",
+          "selector": "h3",
+          "textPattern": "^학교급 설정$",
+          "tagPattern": "^H3$"
+        },
+        {
+          "id": "grade-management-title",
+          "selector": "h3",
+          "textPattern": "^학년 관리$",
+          "tagPattern": "^H3$"
+        }
+      ]
+    },
+    "teacher-settings-interface": {
+      "signals": [
+        {
+          "id": "main-interface-title",
+          "selector": "h3",
+          "textPattern": "^메인 화면 설정$",
+          "tagPattern": "^H3$"
+        },
+        {
+          "id": "footer-settings-title",
+          "selector": "h3",
+          "textPattern": "^푸터 설정$",
+          "tagPattern": "^H3$"
+        }
+      ]
+    },
+    "teacher-settings-access": {
+      "signals": [
+        {
+          "id": "access-title",
+          "selector": "h3",
+          "textPattern": "^세부 권한 관리$",
+          "tagPattern": "^H3$"
+        },
+        {
+          "id": "teacher-fixture",
+          "selector": "td, button, span, div",
+          "textPattern": "^W10P 교사$",
+          "tagPattern": "^(?:TD|BUTTON|SPAN|DIV)$"
+        }
+      ]
+    },
+    "teacher-settings-notifications": {
+      "signals": [
+        {
+          "id": "notification-manager-title",
+          "selector": "h3",
+          "textPattern": "^알림 관리$",
+          "tagPattern": "^H3$"
+        },
+        {
+          "id": "notification-settings-title",
+          "selector": "h4",
+          "textPattern": "^알림 설정$",
+          "tagPattern": "^H4$"
+        }
+      ]
+    },
+    "teacher-settings-privacy": {
+      "signals": [
+        {
+          "id": "terms-title",
+          "selector": "h3",
+          "textPattern": "^이용 약관 관리$",
+          "tagPattern": "^H3$"
+        }
+      ]
+    },
+    "admin-teacher-schedule": {
+      "signals": [
+        {
+          "id": "schedule-fixture",
+          "selector": ".fc-event-title, .fc-segment-title",
+          "textPattern": "^W10P 시각 검증 일정$",
+          "tagPattern": "^(?:DIV|SPAN)$",
+          "minimumContrastRatio": 2.5
+        }
+      ]
+    },
+    "teacher-schedule-holiday-tools": {
+      "signals": [
+        {
+          "id": "holiday-action",
+          "selector": "button",
+          "textPattern": "^공휴일 동기화$",
+          "tagPattern": "^BUTTON$"
+        },
+        {
+          "id": "schedule-fixture",
+          "selector": ".fc-event-title, .fc-segment-title",
+          "textPattern": "^W10P 시각 검증 일정$",
+          "tagPattern": "^(?:DIV|SPAN)$",
+          "minimumContrastRatio": 2.5
+        }
+      ]
+    },
+    "teacher-exam-evidence-performance": {
+      "signals": [
+        {
+          "id": "evidence-tab",
+          "selector": "button[aria-current='page']",
+          "textPattern": "^수행평가 성적 증거$",
+          "tagPattern": "^BUTTON$"
+        },
+        {
+          "id": "evidence-list",
+          "selector": "#grade-list-performance",
+          "textPattern": "^성적 작업 목록$",
+          "tagPattern": "^H[1-3]$"
+        },
+        {
+          "id": "student-fixture",
+          "selector": "button, td, span",
+          "textPattern": "^W10P 학생$",
+          "tagPattern": "^(?:BUTTON|TD|SPAN)$"
+        }
+      ]
+    },
+    "teacher-exam-evidence-written": {
+      "signals": [
+        {
+          "id": "evidence-tab",
+          "selector": "button[aria-current='page']",
+          "textPattern": "^정기시험 성적 증거$",
+          "tagPattern": "^BUTTON$"
+        },
+        {
+          "id": "evidence-list",
+          "selector": "#grade-list-written_exam_essay",
+          "textPattern": "^성적 작업 목록$",
+          "tagPattern": "^H[1-3]$"
+        },
+        {
+          "id": "student-fixture",
+          "selector": "button, td, span",
+          "textPattern": "^W10P 학생$",
+          "tagPattern": "^(?:BUTTON|TD|SPAN)$"
+        }
+      ]
+    },
+    "student-score-performance-evidence": {
+      "signals": [
+        {
+          "id": "score-kind",
+          "selector": "nav[aria-label='성적 종류'] a[aria-current='page']",
+          "textPattern": "^수행평가$",
+          "tagPattern": "^A$"
+        },
+        {
+          "id": "evidence-heading",
+          "selector": "#evidence-heading",
+          "textPattern": "^점수 근거$",
+          "tagPattern": "^H3$"
+        },
+        {
+          "id": "evidence-fixture",
+          "selector": "h2, h3, p",
+          "textPattern": "^W10P 수행평가 근거$",
+          "tagPattern": "^(?:H[23]|P)$"
+        }
+      ]
+    },
+    "student-score-written-evidence": {
+      "signals": [
+        {
+          "id": "score-kind",
+          "selector": "nav[aria-label='성적 종류'] a[aria-current='page']",
+          "textPattern": "^정기시험$",
+          "tagPattern": "^A$"
+        },
+        {
+          "id": "evidence-heading",
+          "selector": "#evidence-heading",
+          "textPattern": "^점수 근거$",
+          "tagPattern": "^H3$"
+        },
+        {
+          "id": "evidence-fixture",
+          "selector": "h2, h3, p",
+          "textPattern": "^W10P 정기시험 근거$",
+          "tagPattern": "^(?:H[23]|P)$"
+        }
+      ]
+    },
+    "teacher-settings-archive-enrollment": {
+      "signals": [
+        {
+          "id": "archive-heading",
+          "selector": "#archive-enrollment-heading",
+          "textPattern": "^학급·학적·아카이브$",
+          "tagPattern": "^H[1-3]$"
+        },
+        {
+          "id": "archive-apply-title",
+          "selector": "h2",
+          "textPattern": "^승인 명단 검증·적용$",
+          "tagPattern": "^H2$"
+        }
+      ]
+    }
+  },
+  "newSurfaceReferences": {
+    "not-found": "login",
+    "student-mypage-archive": "student-mypage",
+    "student-learning": "student-lesson-note",
+    "student-schedule": "student-calendar",
+    "student-attendance": "student-dashboard",
+    "student-communication": "student-dashboard",
+    "teacher-settings-cutover": "teacher-settings",
+    "teacher-learning": "teacher-lesson",
+    "teacher-attendance": "teacher-schedule",
+    "teacher-communication": "teacher-dashboard",
+    "teacher-schedule-holiday-tools": "admin-teacher-schedule",
+    "teacher-exam-evidence-performance": "teacher-exam-performance",
+    "teacher-exam-evidence-written": "teacher-exam-written-essay",
+    "student-score-performance-evidence": "student-score-performance",
+    "student-score-written-evidence": "student-score-written-exam",
+    "teacher-settings-archive-enrollment": "teacher-settings"
+  },
+  "newSurfaceRequiredAnchors": {
+    "not-found": [
+      { "id": "heading", "textPattern": "요청한 화면을 찾지 못했습니다" },
+      { "id": "primary-action", "textPattern": "첫 화면으로 이동" }
+    ],
+    "student-mypage-archive": [
+      { "id": "heading", "textPattern": "학기별 기록|준비 중인 학기" },
+      { "id": "primary-action", "textPattern": "현재 마이페이지로 돌아가기" }
+    ],
+    "student-learning": [
+      { "id": "heading", "textPattern": "나의 학습" },
+      { "id": "content", "textPattern": "학습" }
+    ],
+    "student-schedule": [
+      { "id": "heading", "textPattern": "일정" },
+      { "id": "content", "textPattern": "일정" }
+    ],
+    "student-attendance": [
+      { "id": "heading", "textPattern": "나의 출석" },
+      { "id": "content", "textPattern": "출석" }
+    ],
+    "student-communication": [
+      { "id": "heading", "textPattern": "공지와 알림" },
+      { "id": "content", "textPattern": "공지" }
+    ],
+    "teacher-settings-cutover": [
+      { "id": "heading", "textPattern": "리허설 단계" },
+      { "id": "content", "textPattern": "준비도와 차단 항목" }
+    ],
+    "teacher-learning": [
+      { "id": "heading", "textPattern": "학습 운영" },
+      { "id": "content", "textPattern": "학습 콘텐츠" }
+    ],
+    "teacher-attendance": [
+      { "id": "heading", "textPattern": "출석 운영" },
+      { "id": "content", "textPattern": "출석부" }
+    ],
+    "teacher-communication": [
+      { "id": "heading", "textPattern": "공지 운영" },
+      { "id": "content", "textPattern": "공지 목록" }
+    ],
+    "teacher-schedule-holiday-tools": [
+      { "id": "heading", "textPattern": "일정" },
+      { "id": "primary-action", "textPattern": "공휴일 동기화" }
+    ],
+    "teacher-exam-evidence-performance": [
+      { "id": "heading", "textPattern": "수행평가 성적 증거" },
+      { "id": "content", "textPattern": "성적 작업 목록" }
+    ],
+    "teacher-exam-evidence-written": [
+      { "id": "heading", "textPattern": "정기시험 성적 증거" },
+      { "id": "content", "textPattern": "성적 작업 목록" }
+    ],
+    "student-score-performance-evidence": [
+      { "id": "heading", "textPattern": "내 수행평가 점수" },
+      { "id": "content", "textPattern": "점수 근거" }
+    ],
+    "student-score-written-evidence": [
+      { "id": "heading", "textPattern": "내 정기시험 점수" },
+      { "id": "content", "textPattern": "점수 근거" }
+    ],
+    "teacher-settings-archive-enrollment": [
+      { "id": "heading", "textPattern": "학급·학적·아카이브" },
+      { "id": "content", "textPattern": "승인 명단 검증·적용" }
+    ]
+  },
+  "newSurfaceRequiredPrimitives": {
+    "not-found": [
+      {
+        "id": "state-panel",
+        "selector": "main.ws-access-state > section.ws-state-panel",
+        "tagPattern": "^SECTION$",
+        "exactCount": 1,
+        "referenceSelector": "#root div.w-full.max-w-sm.flex.flex-col.gap-3",
+        "referenceTagPattern": "^DIV$",
+        "referenceExactCount": 1
+      },
+      {
+        "id": "primary-action",
+        "selector": ".ws-state-panel__actions > button.ws-state-panel__action",
+        "tagPattern": "^BUTTON$",
+        "exactCount": 1,
+        "referenceSelector": "#root div.w-full.max-w-sm.flex.flex-col.gap-3 > button",
+        "referenceTagPattern": "^BUTTON$",
+        "referenceExactCount": 1
+      }
+    ],
+    "student-mypage-archive": [
+      {
+        "id": "state-panel",
+        "selector": ".ws-student-semester-overview > section.ws-state-panel",
+        "tagPattern": "^SECTION$",
+        "exactCount": 1,
+        "referenceSelector": "#main-content section.min-w-0.flex-1 div[class~='border-blue-200'][class~='rounded-2xl'][class~='bg-white']",
+        "referenceTagPattern": "^DIV$",
+        "referenceExactCount": 1
+      },
+      {
+        "id": "return-action",
+        "selector": ".ws-student-semester-overview > section.ws-state-panel button.ws-state-panel__action",
+        "tagPattern": "^BUTTON$",
+        "exactCount": 1,
+        "referenceSelector": "#main-content section.min-w-0.flex-1 div[class~='border-blue-200'] button",
+        "referenceTagPattern": "^BUTTON$",
+        "referenceExactCount": 1
+      }
+    ],
+    "student-learning": [
+      {
+        "id": "domain-navigation",
+        "selector": "nav.w8-domain-nav",
+        "tagPattern": "^NAV$",
+        "exactCount": 1,
+        "referenceSelector": "#main-content aside, #main-content button[aria-label='수업 목차 열기']",
+        "referenceTagPattern": "^(?:ASIDE|BUTTON)$",
+        "referenceExactCount": 1
+      },
+      {
+        "id": "segment-control",
+        "selector": ".w8-domain-page > .w8-stack > .w8-segment[role='group']",
+        "tagPattern": "^DIV$",
+        "exactCount": 1,
+        "referenceSelector": "#main-content div.relative.min-w-0.flex-1.rounded-2xl.border.bg-white",
+        "referenceTagPattern": "^DIV$",
+        "referenceExactCount": 1
+      },
+      {
+        "id": "learning-list",
+        "selector": ".w8-domain-page > .w8-stack > ul.w8-list > li > .w8-list__button",
+        "tagPattern": "^BUTTON$",
+        "exactCount": 1,
+        "referenceSelector": "#main-content div.relative.min-w-0.flex-1.rounded-2xl.border.bg-white > div",
+        "referenceTagPattern": "^DIV$",
+        "referenceExactCount": 1
+      }
+    ],
+    "student-schedule": [
+      {
+        "id": "schedule-summary",
+        "selector": "section.w8-summary-strip[aria-label='일정 안내']",
+        "tagPattern": "^SECTION$",
+        "exactCount": 1,
+        "referenceSelector": "#main-content div[class~='min-h-[600px]'][class~='rounded-xl'][class~='bg-white']",
+        "referenceTagPattern": "^DIV$",
+        "referenceExactCount": 1
+      },
+      {
+        "id": "schedule-timeline",
+        "selector": "ol.w8-timeline > li",
+        "tagPattern": "^LI$",
+        "exactCount": 1,
+        "referenceSelector": "#main-content .calendar-wrapper",
+        "referenceTagPattern": "^DIV$",
+        "referenceExactCount": 1
+      }
+    ],
+    "student-attendance": [
+      {
+        "id": "attendance-summary",
+        "selector": "section.w8-summary-strip[aria-label='출석 요약']",
+        "tagPattern": "^SECTION$",
+        "exactCount": 1,
+        "referenceSelector": "#main-content .student-dashboard-calendar",
+        "referenceTagPattern": "^DIV$",
+        "referenceExactCount": 1
+      },
+      {
+        "id": "attendance-list",
+        "selector": "ul.w8-list > li.w8-list__row",
+        "tagPattern": "^LI$",
+        "exactCount": 1,
+        "referenceSelector": "#main-content .student-dashboard-grid",
+        "referenceTagPattern": "^DIV$",
+        "referenceExactCount": 1
+      }
+    ],
+    "student-communication": [
+      {
+        "id": "communication-summary",
+        "selector": "section.w8-summary-strip[aria-label='공지 확인 상태']",
+        "tagPattern": "^SECTION$",
+        "exactCount": 1,
+        "referenceSelector": "#main-content .student-dashboard-notice",
+        "referenceTagPattern": "^DIV$",
+        "referenceExactCount": 1
+      },
+      {
+        "id": "notice-list",
+        "selector": "ul.w8-list > li > .w8-list__button",
+        "tagPattern": "^BUTTON$",
+        "exactCount": 1,
+        "referenceSelector": "#main-content .student-dashboard-notice > div",
+        "referenceTagPattern": "^DIV$",
+        "referenceExactCount": 1
+      }
+    ],
+    "teacher-settings-cutover": [
+      {
+        "id": "cutover-actions",
+        "selector": ".ws-cutover-page > section.ws-cutover-section--actions",
+        "tagPattern": "^SECTION$",
+        "exactCount": 1,
+        "referenceSelector": "#main-content main > div.flex-1 > div[class~='max-w-3xl'][class~='rounded-xl'][class~='bg-white']",
+        "referenceTagPattern": "^DIV$",
+        "referenceExactCount": 1
+      },
+      {
+        "id": "cutover-readiness",
+        "selector": ".ws-cutover-page > section.ws-cutover-section--readiness",
+        "tagPattern": "^SECTION$",
+        "exactCount": 1,
+        "referenceSelector": "#main-content main > aside > div[class~='rounded-xl'][class~='bg-white']",
+        "referenceTagPattern": "^DIV$",
+        "referenceExactCount": 1
+      }
+    ],
+    "teacher-learning": [
+      {
+        "id": "learning-list",
+        "selector": ".w8-workspace > section.w8-panel[aria-labelledby='learning-list-title']",
+        "tagPattern": "^SECTION$",
+        "exactCount": 1,
+        "referenceSelector": "#main-content div[class~='min-h-[600px]'][class~='rounded-xl'][class~='bg-white']",
+        "referenceTagPattern": "^DIV$",
+        "referenceExactCount": 1
+      },
+      {
+        "id": "learning-form",
+        "selector": ".w8-workspace > form.w8-panel.w8-form",
+        "tagPattern": "^FORM$",
+        "exactCount": 1,
+        "referenceSelector": "#main-content div[class~='min-h-[600px]'][class~='rounded-xl'][class~='bg-white'] > div[class~='flex-1']",
+        "referenceTagPattern": "^DIV$",
+        "referenceExactCount": 1
+      }
+    ],
+    "teacher-attendance": [
+      {
+        "id": "attendance-form",
+        "selector": "form.w8-panel.w8-form--inline",
+        "tagPattern": "^FORM$",
+        "exactCount": 1,
+        "referenceSelector": "#main-content div.student-calendar-section.student-calendar-shell",
+        "referenceTagPattern": "^DIV$",
+        "referenceExactCount": 1
+      },
+      {
+        "id": "create-action",
+        "selector": ".w8-form--inline > button.w8-button",
+        "tagPattern": "^BUTTON$",
+        "exactCount": 1,
+        "referenceSelector": "#main-content button[class~='bg-blue-600'][class~='ml-2']",
+        "referenceTagPattern": "^BUTTON$",
+        "referenceExactCount": 1
+      },
+      {
+        "id": "attendance-sessions",
+        "selector": ".w8-attendance-layout > nav.w8-session-list > button",
+        "tagPattern": "^BUTTON$",
+        "exactCount": 1,
+        "referenceSelector": "#main-content .calendar-wrapper",
+        "referenceTagPattern": "^DIV$",
+        "referenceExactCount": 1
+      }
+    ],
+    "teacher-communication": [
+      {
+        "id": "notice-list",
+        "selector": ".w8-workspace > section.w8-panel",
+        "tagPattern": "^SECTION$",
+        "exactCount": 1,
+        "referenceSelector": "#main-content .teacher-dashboard-notice",
+        "referenceTagPattern": "^DIV$",
+        "referenceExactCount": 1
+      },
+      {
+        "id": "notice-form",
+        "selector": ".w8-workspace > form.w8-panel.w8-form",
+        "tagPattern": "^FORM$",
+        "exactCount": 1,
+        "referenceSelector": "#main-content .teacher-dashboard-notice > div",
+        "referenceTagPattern": "^DIV$",
+        "referenceExactCount": 1
+      },
+      {
+        "id": "communication-workspace",
+        "selector": ".w8-workspace",
+        "tagPattern": "^DIV$",
+        "exactCount": 1,
+        "referenceSelector": "#main-content .teacher-dashboard-grid",
+        "referenceTagPattern": "^DIV$",
+        "referenceExactCount": 1
+      }
+    ],
+    "teacher-schedule-holiday-tools": [
+      {
+        "id": "calendar-shell",
+        "selector": "#main-content .student-calendar-section.student-calendar-shell",
+        "tagPattern": "^DIV$",
+        "exactCount": 1,
+        "referenceSelector": "#main-content .student-calendar-section.student-calendar-shell",
+        "referenceTagPattern": "^DIV$",
+        "referenceExactCount": 1
+      },
+      {
+        "id": "holiday-action",
+        "selector": "#main-content button[class~='border-gray-300'][class~='shadow-sm']",
+        "tagPattern": "^BUTTON$",
+        "exactCount": 1,
+        "referenceSelector": "#main-content button[class~='bg-blue-600'][class~='ml-2']",
+        "referenceTagPattern": "^BUTTON$",
+        "referenceExactCount": 1
+      }
+    ],
+    "teacher-exam-evidence-performance": [
+      {
+        "id": "tab-strip",
+        "selector": "main > div[class~='overflow-x-auto'][class~='rounded-t-lg']",
+        "tagPattern": "^DIV$",
+        "exactCount": 1,
+        "referenceSelector": "main > div[class~='overflow-x-auto'][class~='rounded-t-lg']",
+        "referenceTagPattern": "^DIV$",
+        "referenceExactCount": 1
+      },
+      {
+        "id": "selected-tab",
+        "selector": "main > div[class~='overflow-x-auto'][class~='rounded-t-lg'] button[aria-current='page'][class~='border-blue-500']",
+        "tagPattern": "^BUTTON$",
+        "exactCount": 1,
+        "referenceSelector": "main > div[class~='overflow-x-auto'][class~='rounded-t-lg'] button[class~='border-blue-500']",
+        "referenceTagPattern": "^BUTTON$",
+        "referenceExactCount": 1
+      },
+      {
+        "id": "evidence-root",
+        "selector": "main > div.relative[class~='min-h-[500px]'] > section.ws-grade-evidence",
+        "tagPattern": "^SECTION$",
+        "exactCount": 1,
+        "referenceSelector": "main > div.relative[class~='min-h-[500px]'] > div.space-y-6",
+        "referenceTagPattern": "^DIV$",
+        "referenceExactCount": 1
+      },
+      {
+        "id": "evidence-list",
+        "selector": ".ws-grade-evidence__workspace > section.ws-grade-evidence__list",
+        "tagPattern": "^SECTION$",
+        "exactCount": 1,
+        "referenceSelector": "main > div.relative[class~='min-h-[500px]'] > div.space-y-6 > section.min-w-0",
+        "referenceTagPattern": "^SECTION$",
+        "referenceExactCount": 1
+      }
+    ],
+    "teacher-exam-evidence-written": [
+      {
+        "id": "tab-strip",
+        "selector": "main > div[class~='overflow-x-auto'][class~='rounded-t-lg']",
+        "tagPattern": "^DIV$",
+        "exactCount": 1,
+        "referenceSelector": "main > div[class~='overflow-x-auto'][class~='rounded-t-lg']",
+        "referenceTagPattern": "^DIV$",
+        "referenceExactCount": 1
+      },
+      {
+        "id": "selected-tab",
+        "selector": "main > div[class~='overflow-x-auto'][class~='rounded-t-lg'] button[aria-current='page'][class~='border-blue-500']",
+        "tagPattern": "^BUTTON$",
+        "exactCount": 1,
+        "referenceSelector": "main > div[class~='overflow-x-auto'][class~='rounded-t-lg'] button[class~='border-blue-500']",
+        "referenceTagPattern": "^BUTTON$",
+        "referenceExactCount": 1
+      },
+      {
+        "id": "evidence-root",
+        "selector": "main > div.relative[class~='min-h-[500px]'] > section.ws-grade-evidence",
+        "tagPattern": "^SECTION$",
+        "exactCount": 1,
+        "referenceSelector": "main > div.relative[class~='min-h-[500px]'] > div.space-y-6",
+        "referenceTagPattern": "^DIV$",
+        "referenceExactCount": 1
+      },
+      {
+        "id": "evidence-list",
+        "selector": ".ws-grade-evidence__workspace > section.ws-grade-evidence__list",
+        "tagPattern": "^SECTION$",
+        "exactCount": 1,
+        "referenceSelector": "main > div.relative[class~='min-h-[500px]'] > div.space-y-6 > section.min-w-0",
+        "referenceTagPattern": "^SECTION$",
+        "referenceExactCount": 1
+      }
+    ],
+    "student-score-performance-evidence": [
+      {
+        "id": "evidence-routes",
+        "selector": "nav.ws-grade-evidence__route-tabs",
+        "tagPattern": "^NAV$",
+        "exactCount": 1,
+        "referenceSelector": "#main-content aside nav",
+        "referenceTagPattern": "^NAV$",
+        "referenceExactCount": 1
+      },
+      {
+        "id": "evidence-list",
+        "selector": ".ws-grade-evidence__workspace > section.ws-grade-evidence__list",
+        "tagPattern": "^SECTION$",
+        "exactCount": 1,
+        "referenceSelector": "#main-content aside",
+        "referenceTagPattern": "^ASIDE$",
+        "referenceExactCount": 1
+      },
+      {
+        "id": "evidence-detail",
+        "selector": ".ws-grade-evidence__workspace > article.ws-grade-evidence__detail",
+        "tagPattern": "^ARTICLE$",
+        "exactCount": 1,
+        "referenceSelector": "#main-content aside + section.min-w-0.flex-1",
+        "referenceTagPattern": "^SECTION$",
+        "referenceExactCount": 1
+      }
+    ],
+    "student-score-written-evidence": [
+      {
+        "id": "evidence-routes",
+        "selector": "nav.ws-grade-evidence__route-tabs",
+        "tagPattern": "^NAV$",
+        "exactCount": 1,
+        "referenceSelector": "#main-content aside nav",
+        "referenceTagPattern": "^NAV$",
+        "referenceExactCount": 1
+      },
+      {
+        "id": "evidence-list",
+        "selector": ".ws-grade-evidence__workspace > section.ws-grade-evidence__list",
+        "tagPattern": "^SECTION$",
+        "exactCount": 1,
+        "referenceSelector": "#main-content aside",
+        "referenceTagPattern": "^ASIDE$",
+        "referenceExactCount": 1
+      },
+      {
+        "id": "evidence-detail",
+        "selector": ".ws-grade-evidence__workspace > article.ws-grade-evidence__detail",
+        "tagPattern": "^ARTICLE$",
+        "exactCount": 1,
+        "referenceSelector": "#main-content aside + section.min-w-0.flex-1",
+        "referenceTagPattern": "^SECTION$",
+        "referenceExactCount": 1
+      }
+    ],
+    "teacher-settings-archive-enrollment": [
+      {
+        "id": "settings-navigation",
+        "selector": "#main-content main > aside nav > button[class~='bg-blue-50']",
+        "tagPattern": "^BUTTON$",
+        "exactCount": 1,
+        "referenceSelector": "#main-content main > aside nav > button[class~='bg-blue-50']",
+        "referenceTagPattern": "^BUTTON$",
+        "referenceExactCount": 1
+      },
+      {
+        "id": "archive-root",
+        "selector": "section[aria-labelledby='archive-enrollment-heading'] > header",
+        "tagPattern": "^HEADER$",
+        "exactCount": 1,
+        "referenceSelector": "#main-content main > div.flex-1 > div[class~='max-w-3xl'][class~='rounded-xl'][class~='bg-white']",
+        "referenceTagPattern": "^DIV$",
+        "referenceExactCount": 1
+      },
+      {
+        "id": "archive-form-section",
+        "selector": "section[aria-labelledby='archive-enrollment-heading'] section:has(> div label select)",
+        "tagPattern": "^SECTION$",
+        "exactCount": 1,
+        "referenceSelector": "#main-content main > div.flex-1 > div[class~='max-w-3xl'][class~='rounded-xl'][class~='bg-white'] > div.space-y-6 > div[class~='grid'][class~='md:grid-cols-2'][class~='gap-6']",
+        "referenceTagPattern": "^DIV$",
+        "referenceExactCount": 1
+      },
+      {
+        "id": "archive-action",
+        "selector": "section[aria-labelledby='archive-enrollment-heading'] > section:has(> div label select) button[class~='bg-gray-900']",
+        "tagPattern": "^BUTTON$",
+        "exactCount": 1,
+        "referenceSelector": "#main-content main > div.flex-1 button[class~='bg-blue-600']",
+        "referenceTagPattern": "^BUTTON$",
+        "referenceExactCount": 1
+      }
+    ]
+  },
+  "newSurfacePrimitiveGrammar": {
+    "not-found": {
+      "state-panel": ["background", "border", "radius", "padding", "gap"],
+      "primary-action": ["background", "border", "radius", "padding"]
+    },
+    "student-mypage-archive": {
+      "state-panel": ["background", "border", "radius", "padding", "gap"],
+      "return-action": ["background", "border", "radius", "padding"]
+    },
+    "student-learning": {
+      "domain-navigation": ["border", "gap"],
+      "segment-control": ["border", "gap"],
+      "learning-list": ["background", "padding", "gap"]
+    },
+    "student-schedule": {
+      "schedule-summary": ["background", "border", "radius", "padding"],
+      "schedule-timeline": ["border", "padding", "gap"]
+    },
+    "student-attendance": {
+      "attendance-summary": ["background", "border", "radius", "padding"],
+      "attendance-list": ["background", "padding", "gap"]
+    },
+    "student-communication": {
+      "communication-summary": ["background", "border", "radius", "padding"],
+      "notice-list": ["background", "padding", "gap"]
+    },
+    "teacher-settings-cutover": {
+      "cutover-actions": ["border", "padding"],
+      "cutover-readiness": ["border", "padding"]
+    },
+    "teacher-learning": {
+      "learning-list": ["background", "border", "radius", "padding", "gap"],
+      "learning-form": ["background", "border", "radius", "padding", "gap"]
+    },
+    "teacher-attendance": {
+      "attendance-form": ["background", "border", "radius", "padding", "gap"],
+      "create-action": ["background", "border", "radius", "padding"],
+      "attendance-sessions": ["background", "padding", "gap"]
+    },
+    "teacher-communication": {
+      "notice-list": ["background", "border", "radius", "padding", "gap"],
+      "notice-form": ["background", "border", "radius", "padding", "gap"],
+      "communication-workspace": ["gap"]
+    },
+    "teacher-schedule-holiday-tools": {
+      "calendar-shell": ["background", "border", "radius", "padding", "gap"],
+      "holiday-action": ["background", "border", "radius", "padding"]
+    },
+    "teacher-exam-evidence-performance": {
+      "tab-strip": ["background", "border", "radius"],
+      "selected-tab": ["border", "padding"],
+      "evidence-root": ["gap"],
+      "evidence-list": ["background", "border", "radius"]
+    },
+    "teacher-exam-evidence-written": {
+      "tab-strip": ["background", "border", "radius"],
+      "selected-tab": ["border", "padding"],
+      "evidence-root": ["gap"],
+      "evidence-list": ["background", "border", "radius"]
+    },
+    "student-score-performance-evidence": {
+      "evidence-routes": ["padding", "gap"],
+      "evidence-list": ["background", "border", "radius"],
+      "evidence-detail": ["background", "border", "radius"]
+    },
+    "student-score-written-evidence": {
+      "evidence-routes": ["padding", "gap"],
+      "evidence-list": ["background", "border", "radius"],
+      "evidence-detail": ["background", "border", "radius"]
+    },
+    "teacher-settings-archive-enrollment": {
+      "settings-navigation": ["background", "radius", "padding"],
+      "archive-root": ["background", "border", "radius", "padding"],
+      "archive-form-section": ["background", "border", "radius", "padding"],
+      "archive-action": ["background", "radius", "padding"]
+    }
+  },
+  "primitiveComparisonProfiles": {
+    "structure": {
+      "compareComputedStyleProperties": [
+        "fontFamily",
+        "fontSize",
+        "lineHeight",
+        "opacity"
+      ],
+      "minimumWidthViewportRatio": 0.12,
+      "minimumHeightPx": 32,
+      "minimumAreaViewportRatio": 0.004
+    },
+    "control": {
+      "compareComputedStyleProperties": ["fontFamily", "opacity"],
+      "minimumWidthPx": 64,
+      "minimumHeightPx": 32,
+      "minimumAreaViewportRatio": 0.001
+    },
+    "aligned-surface": {
+      "compareComputedStyleProperties": [
+        "fontFamily",
+        "fontSize",
+        "fontWeight",
+        "lineHeight",
+        "color",
+        "backgroundColor",
+        "borderRadius",
+        "paddingTop",
+        "paddingRight",
+        "paddingBottom",
+        "paddingLeft",
+        "opacity"
+      ],
+      "compareBoxProperties": ["x", "width", "height"],
+      "minimumWidthViewportRatio": 0.12,
+      "minimumHeightPx": 32,
+      "minimumAreaViewportRatio": 0.004
+    },
+    "exact": {
+      "compareComputedStyleProperties": [
+        "fontFamily",
+        "fontSize",
+        "fontWeight",
+        "lineHeight",
+        "color",
+        "backgroundColor",
+        "borderRadius",
+        "paddingTop",
+        "paddingRight",
+        "paddingBottom",
+        "paddingLeft",
+        "opacity"
+      ],
+      "compareBoxProperties": ["x", "y", "width", "height"],
+      "minimumWidthViewportRatio": 0.12,
+      "minimumHeightPx": 32,
+      "minimumAreaViewportRatio": 0.004
+    }
+  },
+  "newSurfacePrimitiveProfiles": {
+    "not-found": { "state-panel": "structure", "primary-action": "control" },
+    "student-mypage-archive": {
+      "state-panel": "structure",
+      "return-action": "control"
+    },
+    "student-learning": {
+      "domain-navigation": "structure",
+      "segment-control": "structure",
+      "learning-list": "structure"
+    },
+    "student-schedule": {
+      "schedule-summary": "structure",
+      "schedule-timeline": "structure"
+    },
+    "student-attendance": {
+      "attendance-summary": "structure",
+      "attendance-list": "structure"
+    },
+    "student-communication": {
+      "communication-summary": "structure",
+      "notice-list": "structure"
+    },
+    "teacher-settings-cutover": {
+      "cutover-actions": "structure",
+      "cutover-readiness": "structure"
+    },
+    "teacher-learning": {
+      "learning-list": "structure",
+      "learning-form": "structure"
+    },
+    "teacher-attendance": {
+      "attendance-form": "structure",
+      "create-action": "control",
+      "attendance-sessions": "structure"
+    },
+    "teacher-communication": {
+      "notice-list": "structure",
+      "notice-form": "structure",
+      "communication-workspace": "structure"
+    },
+    "teacher-schedule-holiday-tools": {
+      "calendar-shell": "aligned-surface",
+      "holiday-action": "control"
+    },
+    "teacher-exam-evidence-performance": {
+      "tab-strip": "exact",
+      "selected-tab": "control",
+      "evidence-root": "structure",
+      "evidence-list": "structure"
+    },
+    "teacher-exam-evidence-written": {
+      "tab-strip": "exact",
+      "selected-tab": "control",
+      "evidence-root": "structure",
+      "evidence-list": "structure"
+    },
+    "student-score-performance-evidence": {
+      "evidence-routes": "structure",
+      "evidence-list": "structure",
+      "evidence-detail": "structure"
+    },
+    "student-score-written-evidence": {
+      "evidence-routes": "structure",
+      "evidence-list": "structure",
+      "evidence-detail": "structure"
+    },
+    "teacher-settings-archive-enrollment": {
+      "settings-navigation": "aligned-surface",
+      "archive-root": "structure",
+      "archive-form-section": "structure",
+      "archive-action": "control"
+    }
+  },
+  "queryVariants": [
+    {
+      "id": "student-points-hall-of-fame",
+      "role": "student",
+      "route": "/student/points?tab=hall-of-fame",
+      "productionPresentation": true
+    },
+    {
+      "id": "student-points-shop",
+      "role": "student",
+      "route": "/student/points?tab=shop",
+      "productionPresentation": true
+    },
+    {
+      "id": "student-points-orders",
+      "role": "student",
+      "route": "/student/points?tab=orders",
+      "productionPresentation": true
+    },
+    {
+      "id": "teacher-quiz-log",
+      "role": "teacher",
+      "route": "/teacher/quiz?tab=log",
+      "productionPresentation": true
+    },
+    {
+      "id": "teacher-quiz-bank",
+      "role": "teacher",
+      "route": "/teacher/quiz?tab=bank",
+      "productionPresentation": true
+    },
+    {
+      "id": "teacher-exam-omr",
+      "role": "teacher",
+      "route": "/teacher/exam?tab=omr",
+      "productionPresentation": true
+    },
+    {
+      "id": "teacher-exam-performance",
+      "role": "teacher",
+      "route": "/teacher/exam?tab=performance",
+      "productionPresentation": true
+    },
+    {
+      "id": "teacher-exam-written-essay",
+      "role": "teacher",
+      "route": "/teacher/exam?tab=written-essay",
+      "productionPresentation": true
+    },
+    {
+      "id": "teacher-points-grant",
+      "role": "teacher",
+      "route": "/teacher/points?tab=grant",
+      "productionPresentation": true
+    },
+    {
+      "id": "teacher-points-policy",
+      "role": "teacher",
+      "route": "/teacher/points?tab=policy",
+      "productionPresentation": true
+    },
+    {
+      "id": "teacher-points-hall-of-fame",
+      "role": "teacher",
+      "route": "/teacher/points?tab=hall-of-fame",
+      "productionPresentation": true
+    },
+    {
+      "id": "teacher-points-products",
+      "role": "teacher",
+      "route": "/teacher/points?tab=products",
+      "productionPresentation": true
+    },
+    {
+      "id": "teacher-points-requests",
+      "role": "teacher",
+      "route": "/teacher/points?tab=requests",
+      "productionPresentation": true
+    },
+    {
+      "id": "teacher-settings-school",
+      "role": "admin",
+      "route": "/teacher/settings?tab=school",
+      "productionPresentation": true
+    },
+    {
+      "id": "teacher-settings-interface",
+      "role": "admin",
+      "route": "/teacher/settings?tab=interface",
+      "productionPresentation": true
+    },
+    {
+      "id": "teacher-settings-access",
+      "role": "admin",
+      "route": "/teacher/settings?tab=access",
+      "productionPresentation": true
+    },
+    {
+      "id": "teacher-settings-notifications",
+      "role": "admin",
+      "route": "/teacher/settings?tab=notifications",
+      "productionPresentation": true
+    },
+    {
+      "id": "teacher-settings-privacy",
+      "role": "admin",
+      "route": "/teacher/settings?tab=privacy",
+      "productionPresentation": true
+    },
+    {
+      "id": "admin-teacher-schedule",
+      "role": "admin",
+      "route": "/teacher/schedule",
+      "productionPresentation": true
+    },
+    {
+      "id": "teacher-schedule-holiday-tools",
+      "role": "admin",
+      "route": "/teacher/schedule?adminTools=holidays",
+      "productionPresentation": false
+    },
+    {
+      "id": "teacher-exam-evidence-performance",
+      "role": "teacher",
+      "route": "/teacher/exam?tab=evidence-performance",
+      "productionPresentation": false
+    },
+    {
+      "id": "teacher-exam-evidence-written",
+      "role": "teacher",
+      "route": "/teacher/exam?tab=evidence-written",
+      "productionPresentation": false
+    },
+    {
+      "id": "student-score-performance-evidence",
+      "role": "student",
+      "route": "/student/score/performance?view=evidence",
+      "productionPresentation": false
+    },
+    {
+      "id": "student-score-written-evidence",
+      "role": "student",
+      "route": "/student/score/written-exam?view=evidence",
+      "productionPresentation": false
+    },
+    {
+      "id": "teacher-settings-archive-enrollment",
+      "role": "admin",
+      "route": "/teacher/settings?tab=archive-enrollment",
+      "productionPresentation": false
+    }
+  ],
+  "pixelDiff": {
+    "channelTolerance": 0,
+    "maxDifferentPixelRatio": 0,
+    "maxMeanChannelDelta": 0,
+    "maxMaskedPixelRatio": 0,
+    "maskPaddingPx": 0,
+    "allowedMaskElementTags": [],
+    "allowedMaskKinds": []
+  },
+  "layoutDiff": {
+    "maxBoxCoordinateDeltaPx": 1,
+    "maxBoxSizeDeltaPx": 1,
+    "requiredAuthenticatedElements": ["header", "content"],
+    "requiredDesktopElement": "desktopNavigation",
+    "requiredMobileElement": "mobileNavigationTrigger",
+    "computedStyleProperties": [
+      "fontFamily",
+      "fontSize",
+      "fontWeight",
+      "lineHeight",
+      "color",
+      "backgroundColor",
+      "backgroundImage",
+      "borderRadius",
+      "paddingTop",
+      "paddingRight",
+      "paddingBottom",
+      "paddingLeft",
+      "borderTopWidth",
+      "borderRightWidth",
+      "borderBottomWidth",
+      "borderLeftWidth",
+      "borderTopColor",
+      "borderRightColor",
+      "borderBottomColor",
+      "borderLeftColor",
+      "display",
+      "rowGap",
+      "columnGap",
+      "opacity",
+      "textShadow",
+      "boxShadow"
+    ]
+  }
+}

@@ -1,18 +1,28 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { MENUS } from "../../constants/menus";
 import { useAuth } from "../../contexts/AuthContext";
 import ExamGradingPlan from "./components/ExamGradingPlan";
 import ExamOmrConfig from "./components/ExamOmrConfig";
+import PerformanceScoreManager from "./components/PerformanceScoreManager";
+import WrittenExamEssayScoreManager from "./components/WrittenExamEssayScoreManager";
 import GradeEvidenceManager from "./components/GradeEvidenceManager";
 
-type ExamTab = "preview" | "omr" | "performance" | "written-essay";
+type ExamTab =
+  | "preview"
+  | "omr"
+  | "performance"
+  | "written-essay"
+  | "evidence-performance"
+  | "evidence-written";
 
 const TAB_QUERY_VALUES = new Set<ExamTab>([
   "preview",
   "omr",
   "performance",
   "written-essay",
+  "evidence-performance",
+  "evidence-written",
 ]);
 
 const resolveTab = (value: string | null): ExamTab =>
@@ -25,6 +35,7 @@ const ManageExam: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const rawTab = searchParams.get("tab");
   const activeTab = resolveTab(rawTab);
+  const activeEvidenceTabRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     if (!rawTab) return;
@@ -33,6 +44,20 @@ const ManageExam: React.FC = () => {
     next.delete("tab");
     setSearchParams(next, { replace: true });
   }, [rawTab, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (
+      activeTab !== "evidence-performance" &&
+      activeTab !== "evidence-written"
+    ) {
+      return;
+    }
+    activeEvidenceTabRef.current?.scrollIntoView({
+      behavior: "auto",
+      block: "nearest",
+      inline: "nearest",
+    });
+  }, [activeTab]);
 
   const tabLabels = useMemo(() => {
     const teacherMenus = menuConfig?.teacher || MENUS.teacher;
@@ -51,6 +76,14 @@ const ManageExam: React.FC = () => {
         "/teacher/exam?tab=written-essay",
         "정기시험 점수 관리",
       ),
+      evidencePerformance: labelFor(
+        "/teacher/exam?tab=evidence-performance",
+        "수행평가 성적 증거",
+      ),
+      evidenceWritten: labelFor(
+        "/teacher/exam?tab=evidence-written",
+        "정기시험 성적 증거",
+      ),
     };
   }, [menuConfig]);
 
@@ -61,66 +94,115 @@ const ManageExam: React.FC = () => {
     setSearchParams(next);
   };
 
-  const tabs: Array<{ id: ExamTab; label: string }> = [
-    { id: "preview", label: tabLabels.preview },
-    { id: "omr", label: tabLabels.omr },
-    { id: "performance", label: tabLabels.performance },
-    { id: "written-essay", label: tabLabels.writtenEssay },
-  ];
-
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50">
-      <div
-        className={`mx-auto flex w-full flex-1 flex-col px-4 py-6 ${
-          activeTab === "performance" || activeTab === "written-essay"
-            ? "max-w-[1600px]"
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      <main
+        className={`w-full ${
+          activeTab === "performance" ||
+          activeTab === "written-essay" ||
+          activeTab === "evidence-performance" ||
+          activeTab === "evidence-written"
+            ? "max-w-[1500px]"
             : "max-w-7xl"
-        }`}
+        } mx-auto px-4 py-6 flex-1 flex flex-col`}
       >
-        <div
-          className="mb-4 flex shrink-0 overflow-x-auto rounded-t-lg border-b border-gray-200 bg-white px-2"
-          role="tablist"
-          aria-label="점수 관리 화면"
-        >
-          {tabs.map((tab) => {
-            const selected = activeTab === tab.id;
-            return (
+        <div className="mb-4 flex shrink-0 overflow-x-auto rounded-t-lg border-b border-gray-200 bg-white px-2">
+          <button
+            onClick={() => selectTab("preview")}
+            className={`py-3 px-6 font-bold text-sm border-b-2 transition whitespace-nowrap ${
+              activeTab === "preview"
+                ? "border-blue-500 text-blue-600"
+                : "border-transparent text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            {tabLabels.preview}
+          </button>
+          <button
+            onClick={() => selectTab("omr")}
+            className={`py-3 px-6 font-bold text-sm border-b-2 transition whitespace-nowrap ${
+              activeTab === "omr"
+                ? "border-blue-500 text-blue-600"
+                : "border-transparent text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            {tabLabels.omr}
+          </button>
+          <button
+            onClick={() => selectTab("performance")}
+            className={`py-3 px-6 font-bold text-sm border-b-2 transition whitespace-nowrap ${
+              activeTab === "performance"
+                ? "border-blue-500 text-blue-600"
+                : "border-transparent text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            {tabLabels.performance}
+          </button>
+          <button
+            onClick={() => selectTab("written-essay")}
+            className={`py-3 px-6 font-bold text-sm border-b-2 transition whitespace-nowrap ${
+              activeTab === "written-essay"
+                ? "border-blue-500 text-blue-600"
+                : "border-transparent text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            {tabLabels.writtenEssay}
+          </button>
+          {(activeTab === "evidence-performance" ||
+            activeTab === "evidence-written") && (
+            <>
               <button
-                key={tab.id}
-                id={`exam-tab-${tab.id}`}
-                type="button"
-                role="tab"
-                aria-selected={selected}
-                aria-controls={`exam-panel-${tab.id}`}
-                onClick={() => selectTab(tab.id)}
-                className={`min-h-11 whitespace-nowrap border-b-2 px-6 py-3 text-sm font-bold transition ${
-                  selected
+                ref={
+                  activeTab === "evidence-performance"
+                    ? activeEvidenceTabRef
+                    : undefined
+                }
+                aria-current={
+                  activeTab === "evidence-performance" ? "page" : undefined
+                }
+                onClick={() => selectTab("evidence-performance")}
+                className={`py-3 px-6 font-bold text-sm border-b-2 transition whitespace-nowrap ${
+                  activeTab === "evidence-performance"
                     ? "border-blue-500 text-blue-600"
                     : "border-transparent text-gray-600 hover:bg-gray-50"
                 }`}
               >
-                {tab.label}
+                {tabLabels.evidencePerformance}
               </button>
-            );
-          })}
+              <button
+                ref={
+                  activeTab === "evidence-written"
+                    ? activeEvidenceTabRef
+                    : undefined
+                }
+                aria-current={
+                  activeTab === "evidence-written" ? "page" : undefined
+                }
+                onClick={() => selectTab("evidence-written")}
+                className={`py-3 px-6 font-bold text-sm border-b-2 transition whitespace-nowrap ${
+                  activeTab === "evidence-written"
+                    ? "border-blue-500 text-blue-600"
+                    : "border-transparent text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                {tabLabels.evidenceWritten}
+              </button>
+            </>
+          )}
         </div>
 
-        <section
-          id={`exam-panel-${activeTab}`}
-          role="tabpanel"
-          aria-labelledby={`exam-tab-${activeTab}`}
-          className="relative min-h-[500px] flex-1 overflow-hidden rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:p-6"
-        >
+        <div className="relative min-h-[500px] flex-1 overflow-hidden rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:p-6">
           {activeTab === "preview" && <ExamGradingPlan />}
           {activeTab === "omr" && <ExamOmrConfig />}
-          {activeTab === "performance" && (
+          {activeTab === "performance" && <PerformanceScoreManager />}
+          {activeTab === "written-essay" && <WrittenExamEssayScoreManager />}
+          {activeTab === "evidence-performance" && (
             <GradeEvidenceManager scoreKind="performance" />
           )}
-          {activeTab === "written-essay" && (
+          {activeTab === "evidence-written" && (
             <GradeEvidenceManager scoreKind="written_exam_essay" />
           )}
-        </section>
-      </div>
+        </div>
+      </main>
     </div>
   );
 };

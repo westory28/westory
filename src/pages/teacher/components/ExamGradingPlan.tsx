@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { db } from "../../../lib/firebase";
-import { collection, getDocs, query, orderBy } from "firebase/firestore";
+import { collection, doc, getDocs, query, orderBy } from "firebase/firestore";
 import { useAuth } from "../../../contexts/AuthContext";
 import { getSemesterCollectionPath } from "../../../lib/semesterScope";
-import { failLegacyPerformanceScoreMutation } from "../../../lib/performanceScores";
+import { saveLegacyGradeConfig } from "../../../lib/legacyGradeEvidenceAdapter";
 import {
   buildScoreRows,
   getScoreKey,
@@ -29,6 +29,7 @@ interface GradingPlan {
   academicYear?: string;
   semester?: string;
   createdAt?: any;
+  revision?: number;
 }
 
 const isRegularExamItem = (type: string) =>
@@ -306,7 +307,10 @@ const ExamGradingPlan: React.FC = () => {
   const { confirm } = useAppDialog();
   const { showToast } = useAppToast();
   const [plans, setPlans] = useState<GradingPlan[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "error">(
+    "loading",
+  );
+  const [mutationPending, setMutationPending] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewPlan, setPreviewPlan] = useState<Omit<
     GradingPlan,
@@ -335,11 +339,11 @@ const ExamGradingPlan: React.FC = () => {
   };
 
   useEffect(() => {
-    loadPlans();
+    void loadPlans();
   }, [userConfig]);
 
   const loadPlans = async () => {
-    setLoading(true);
+    setLoadState("loading");
     try {
       const snap = await getDocs(
         query(
@@ -353,10 +357,10 @@ const ExamGradingPlan: React.FC = () => {
       const list: GradingPlan[] = [];
       snap.forEach((d) => list.push({ id: d.id, ...d.data() } as GradingPlan));
       setPlans(list);
+      setLoadState("ready");
     } catch (e) {
       console.error(e);
-    } finally {
-      setLoading(false);
+      setLoadState("error");
     }
   };
 
@@ -388,6 +392,14 @@ const ExamGradingPlan: React.FC = () => {
   };
 
   const handleSave = async () => {
+    if (loadState !== "ready") {
+      showToast({
+        tone: "error",
+        title: "등록된 기준을 먼저 불러와 주세요.",
+        message: "기존 기준을 확인하기 전에는 새 기준을 저장할 수 없습니다.",
+      });
+      return;
+    }
     if (!subject) {
       showToast({
         tone: "warning",
@@ -419,15 +431,52 @@ const ExamGradingPlan: React.FC = () => {
       return;
     }
 
+    setMutationPending(true);
     try {
-      failLegacyPerformanceScoreMutation();
-    } catch (e) {
-      console.error(e);
+      const currentPlan = editId
+        ? plans.find((plan) => plan.id === editId)
+        : undefined;
+      const configId =
+        editId ||
+        doc(
+          collection(
+            db,
+            getSemesterCollectionPath(userConfig, "grading_plans"),
+          ),
+        ).id;
+      await saveLegacyGradeConfig({
+        config: userConfig,
+        scoreKind: "performance",
+        configKind: "GRADING_PLAN",
+        configId,
+        expectedRevision: Math.max(0, Number(currentPlan?.revision || 0)),
+        operation: "UPSERT",
+        data: {
+          subject: subject.trim(),
+          targetGrade: grade,
+          items: validItems,
+        },
+        reason: editId ? "평가 반영 비율 수정" : "평가 반영 비율 저장",
+      });
+      showToast({
+        tone: "success",
+        title: editId ? "수정되었습니다." : "저장되었습니다.",
+        message: "평가 반영 비율을 업데이트했습니다.",
+      });
+      resetForm();
+      await loadPlans();
+    } catch (error) {
+      console.error(error);
       showToast({
         tone: "error",
-        title: "이 화면에서는 저장할 수 없습니다.",
-        message: "새 성적 증거 화면에서 평가 정보를 관리해 주세요.",
+        title: "저장하지 못했습니다.",
+        message:
+          error instanceof Error
+            ? error.message
+            : "평가 반영 비율을 다시 확인해 주세요.",
       });
+    } finally {
+      setMutationPending(false);
     }
   };
 
@@ -488,6 +537,7 @@ const ExamGradingPlan: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
+    if (loadState !== "ready" || mutationPending) return;
     const confirmed = await confirm({
       title: "평가 반영 비율을 삭제할까요?",
       message: "삭제한 항목은 다시 불러올 수 없습니다.",
@@ -496,16 +546,38 @@ const ExamGradingPlan: React.FC = () => {
     });
     if (!confirmed) return;
 
+    const targetPlan = plans.find((plan) => plan.id === id);
+    if (!targetPlan) return;
+    setMutationPending(true);
     try {
-      void id;
-      failLegacyPerformanceScoreMutation();
-    } catch (e) {
-      console.error(e);
+      await saveLegacyGradeConfig({
+        config: userConfig,
+        scoreKind: "performance",
+        configKind: "GRADING_PLAN",
+        configId: id,
+        expectedRevision: Math.max(0, Number(targetPlan.revision || 0)),
+        operation: "DELETE",
+        reason: "평가 반영 비율 삭제",
+      });
+      showToast({
+        tone: "success",
+        title: "삭제되었습니다.",
+        message: "평가 반영 비율을 삭제했습니다.",
+      });
+      if (editId === id) resetForm();
+      await loadPlans();
+    } catch (error) {
+      console.error(error);
       showToast({
         tone: "error",
-        title: "이 화면에서는 삭제할 수 없습니다.",
-        message: "새 성적 증거 화면에서 평가 정보를 관리해 주세요.",
+        title: "삭제하지 못했습니다.",
+        message:
+          error instanceof Error
+            ? error.message
+            : "평가 반영 비율을 다시 불러온 뒤 시도해 주세요.",
       });
+    } finally {
+      setMutationPending(false);
     }
   };
 
@@ -993,9 +1065,14 @@ const ExamGradingPlan: React.FC = () => {
               </button>
               <button
                 onClick={handleSave}
+                disabled={loadState !== "ready" || mutationPending}
                 className={`w-full text-white font-bold py-3 rounded-lg shadow-md transition transform active:scale-95 ${editId ? "bg-amber-500 hover:bg-amber-600" : "bg-blue-600 hover:bg-blue-700"}`}
               >
-                {editId ? "수정사항 저장" : "기준 저장하기"}
+                {mutationPending
+                  ? "처리 중..."
+                  : editId
+                    ? "수정사항 저장"
+                    : "기준 저장하기"}
               </button>
             </div>
           </div>
@@ -1021,9 +1098,25 @@ const ExamGradingPlan: React.FC = () => {
         </div>
 
         <div className="space-y-4 lg:h-[calc(100vh-300px)] lg:overflow-y-auto lg:pr-2">
-          {loading ? (
+          {loadState === "loading" ? (
             <div className="text-center p-10 text-gray-400">
               데이터를 불러오는 중...
+            </div>
+          ) : loadState === "error" ? (
+            <div className="text-center py-12 text-red-700 bg-red-50 rounded-xl border border-red-200">
+              <p className="font-bold">
+                등록된 평가 기준을 불러오지 못했습니다.
+              </p>
+              <p className="mt-2 text-sm text-gray-500">
+                기존 기준을 보호하기 위해 저장과 삭제를 중지했습니다.
+              </p>
+              <button
+                type="button"
+                onClick={() => void loadPlans()}
+                className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700"
+              >
+                다시 불러오기
+              </button>
             </div>
           ) : filteredPlans.length === 0 ? (
             <div className="text-center py-20 text-gray-400 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
@@ -1117,12 +1210,14 @@ const ExamGradingPlan: React.FC = () => {
                   </button>
                   <button
                     onClick={() => handleEdit(p)}
+                    disabled={mutationPending}
                     className="text-blue-500 hover:bg-blue-50 p-2 rounded flex items-center text-xs font-bold bg-white border border-blue-100 shadow-sm"
                   >
                     <i className="fas fa-pen mr-1"></i>수정
                   </button>
                   <button
                     onClick={() => handleDelete(p.id)}
+                    disabled={mutationPending}
                     className="text-red-500 hover:bg-red-50 p-2 rounded flex items-center text-xs font-bold bg-white border border-red-100 shadow-sm"
                   >
                     <i className="fas fa-trash mr-1"></i>삭제

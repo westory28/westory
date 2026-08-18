@@ -18,6 +18,7 @@ type CalendarViewType = "dayGridMonth" | "listMonth";
 
 const LABELS = {
   all: "\uc804\uccb4",
+  attendance: "\ucd9c\uc11d",
   calendar: "\ub2ec\ub825",
   heading: "\ud559\uc0ac \uc77c\uc815",
   holiday: "\uacf5\ud734\uc77c",
@@ -65,8 +66,12 @@ interface CalendarSectionProps {
   onDateClick: (dateStr: string) => void;
   onEventClick: (event: CalendarEvent) => void;
   onSearchClick: () => void;
+  onAttendanceCheck?: () => void;
   calendarRef: React.RefObject<FullCalendar>;
   selectedDate?: string | null;
+  attendanceDates?: string[];
+  attendanceStatusLabel?: string;
+  attendanceStatusTitle?: string;
 }
 
 const ChevronLeftIcon = () => (
@@ -187,8 +192,12 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
   onDateClick,
   onEventClick,
   onSearchClick,
+  onAttendanceCheck,
   calendarRef,
   selectedDate,
+  attendanceDates = [],
+  attendanceStatusLabel = "기록 없음",
+  attendanceStatusTitle = "오늘 등록된 출석 기록이 없습니다.",
 }) => {
   const [currentViewType, setCurrentViewType] =
     useState<CalendarViewType>("dayGridMonth");
@@ -202,6 +211,10 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
     anchorRect: ScheduleMorePopoverAnchor;
   } | null>(null);
 
+  const attendanceDateSet = useMemo(
+    () => new Set(attendanceDates),
+    [attendanceDates],
+  );
   const isMonthView = currentViewType === "dayGridMonth";
 
   const formatEventTargetLabel = (event?: CalendarEvent) => {
@@ -475,6 +488,31 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
                 </button>
               </div>
             </div>
+
+            <div className="student-calendar-shell__attendance-tools">
+              <span className="student-calendar-shell__attendance-label">
+                {LABELS.attendance}
+              </span>
+              {onAttendanceCheck &&
+              ["기록 없음", "확인 전"].includes(attendanceStatusLabel) ? (
+                <button
+                  type="button"
+                  onClick={onAttendanceCheck}
+                  title="출석 체크"
+                  data-tone="default"
+                  className="student-calendar-shell__attendance-action"
+                >
+                  출석 체크
+                </button>
+              ) : (
+                <span
+                  className="student-calendar-shell__attendance-indicator"
+                  title={attendanceStatusTitle}
+                >
+                  {attendanceStatusLabel}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -654,6 +692,8 @@ const CalendarSection: React.FC<CalendarSectionProps> = ({
             const classes: string[] = [];
             if (holidayDateSet.has(dateStr)) classes.push("fc-day-holiday");
             if (selectedDate === dateStr) classes.push("fc-day-selected");
+            classes.push("student-calendar-attendance-day");
+            if (attendanceDateSet.has(dateStr)) classes.push("is-attended");
             return classes;
           }}
           fixedWeekCount={false}

@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { doc, getDoc } from "firebase/firestore";
 import { PageLoading } from "../../components/common/LoadingState";
 import { useAuth } from "../../contexts/AuthContext";
-import { db } from "../../lib/firebase";
-import { getSemesterDocPath } from "../../lib/semesterScope";
+import {
+  getReleasedExamAnswers,
+  GradeEvidenceError,
+  type ReleasedExamAnswersStatus,
+} from "../../lib/gradeEvidence";
 
 interface ObjectiveItem {
   score: number;
@@ -32,7 +34,13 @@ interface ObjectiveMark {
 const StudentExamAnswer: React.FC = () => {
   const { config } = useAuth();
   const [examConfig, setExamConfig] = useState<ExamConfig | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loadState, setLoadState] = useState<
+    "loading" | "ready" | "permission" | "error"
+  >("loading");
+  const [answerStatus, setAnswerStatus] =
+    useState<ReleasedExamAnswersStatus>("EMPTY");
+  const [loadErrorMessage, setLoadErrorMessage] = useState("");
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [objectiveMarks, setObjectiveMarks] = useState<
     Record<number, ObjectiveMark>
   >({});
@@ -44,38 +52,52 @@ const StudentExamAnswer: React.FC = () => {
   >({});
 
   useEffect(() => {
+    let cancelled = false;
     const loadExamConfig = async () => {
-      setLoading(true);
+      if (!config) {
+        setLoadState("loading");
+        return;
+      }
+      setLoadState("loading");
+      setLoadErrorMessage("");
       try {
-        if (!config) {
-          setExamConfig(null);
-          return;
-        }
-
-        const snap = await getDoc(
-          doc(db, getSemesterDocPath(config, "exam_config", "final_exam")),
+        const state = await getReleasedExamAnswers({ config });
+        if (cancelled) return;
+        setAnswerStatus(state.status);
+        setExamConfig(
+          state.status === "RELEASED"
+            ? {
+                objective: state.objective,
+                subjective: state.subjective,
+              }
+            : null,
         );
-
-        if (!snap.exists()) {
-          setExamConfig(null);
-          return;
-        }
-
-        const data = snap.data();
-        setExamConfig({
-          objective: Array.isArray(data.objective) ? data.objective : [],
-          subjective: Array.isArray(data.subjective) ? data.subjective : [],
-        });
+        setObjectiveMarks({});
+        setSubjectiveRevealed({});
+        setSubjectiveGrades({});
+        setLoadState("ready");
       } catch (error) {
+        if (cancelled) return;
         console.error("Failed to load exam config:", error);
         setExamConfig(null);
-      } finally {
-        setLoading(false);
+        setLoadErrorMessage(
+          error instanceof Error
+            ? error.message
+            : "시험 답안을 불러오지 못했습니다.",
+        );
+        setLoadState(
+          error instanceof GradeEvidenceError && error.kind === "PERMISSION"
+            ? "permission"
+            : "error",
+        );
       }
     };
 
     void loadExamConfig();
-  }, [config]);
+    return () => {
+      cancelled = true;
+    };
+  }, [config, loadAttempt]);
 
   const maxScore = useMemo(() => {
     if (!examConfig) return 0;
@@ -149,13 +171,95 @@ const StudentExamAnswer: React.FC = () => {
     setSubjectiveGrades((prev) => ({ ...prev, [key]: isCorrect }));
   };
 
-  if (loading) {
+  if (loadState === "loading") {
     return <PageLoading message="시험 답안을 불러오는 중입니다." />;
+  }
+
+  if (loadState === "permission") {
+    return (
+      <div
+        className="min-h-screen bg-gray-50 flex flex-col"
+        data-testid="student-exam-answers-permission"
+      >
+        <div className="flex-1 w-full max-w-4xl mx-auto px-4 py-8">
+          <div className="bg-white rounded-2xl border border-amber-200 shadow-sm p-10 text-center">
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">
+              정기 시험 답안
+            </h2>
+            <p className="font-bold text-amber-700">
+              현재 학기 답안을 확인할 수 없습니다.
+            </p>
+            <p className="text-sm text-gray-500 mt-2">
+              로그인한 학생의 현재 학기 학적을 확인해 주세요.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (loadState === "error") {
+    return (
+      <div
+        className="min-h-screen bg-gray-50 flex flex-col"
+        data-testid="student-exam-answers-error"
+      >
+        <div className="flex-1 w-full max-w-4xl mx-auto px-4 py-8">
+          <div className="bg-white rounded-2xl border border-red-200 shadow-sm p-10 text-center">
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">
+              정기 시험 답안
+            </h2>
+            <p className="font-bold text-red-700">
+              시험 답안을 불러오지 못했습니다.
+            </p>
+            <p className="text-sm text-gray-500 mt-2">
+              {loadErrorMessage || "잠시 후 다시 시도해 주세요."}
+            </p>
+            <button
+              type="button"
+              onClick={() => setLoadAttempt((attempt) => attempt + 1)}
+              className="mt-4 rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-700"
+            >
+              다시 불러오기
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (answerStatus === "NOT_RELEASED") {
+    return (
+      <div
+        className="min-h-screen bg-gray-50 flex flex-col"
+        data-testid="student-exam-answers-not-released"
+      >
+        <div className="flex-1 w-full max-w-4xl mx-auto px-4 py-8">
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-10 text-center">
+            <div className="text-4xl text-gray-300 mb-3">
+              <i className="fas fa-lock"></i>
+            </div>
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">
+              정기 시험 답안
+            </h2>
+            <p className="text-gray-600 font-bold">
+              아직 학생에게 공개되지 않았습니다.
+            </p>
+            <p className="text-sm text-gray-400 mt-2">
+              교사가 정답을 공개하면 이곳에서 확인할 수 있습니다.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (!hasAnyInput) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col">
+      <div
+        className="min-h-screen bg-gray-50 flex flex-col"
+        data-testid="student-exam-answers-empty"
+      >
         <div className="flex-1 w-full max-w-4xl mx-auto px-4 py-8">
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-10 text-center">
             <div className="text-4xl text-gray-300 mb-3">
@@ -175,7 +279,10 @@ const StudentExamAnswer: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div
+      className="min-h-screen bg-gray-50 flex flex-col"
+      data-testid="student-exam-answers-ready"
+    >
       <div className="flex-1 w-full max-w-4xl mx-auto px-4 py-8">
         <div className="bg-white rounded-2xl border border-gray-200 shadow-sm px-6 py-4 mb-6 flex items-center justify-between">
           <h2 className="text-xl md:text-2xl font-bold text-gray-800 flex items-center gap-2">
@@ -210,6 +317,7 @@ const StudentExamAnswer: React.FC = () => {
                 return (
                   <div
                     key={index}
+                    data-testid={`student-exam-objective-item-${index}`}
                     className="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0"
                   >
                     <div className="flex items-center gap-4">

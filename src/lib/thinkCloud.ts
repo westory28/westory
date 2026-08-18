@@ -27,6 +27,7 @@ export interface ThinkCloudSession {
   createdAt?: unknown;
   activatedAt?: unknown;
   closedAt?: unknown;
+  revision?: number;
 }
 
 export interface ThinkCloudResponse {

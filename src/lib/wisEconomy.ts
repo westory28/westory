@@ -4,7 +4,11 @@ import {
 } from "./commandGateway";
 import { getHttpsCallable } from "./firebase";
 import { getYearSemester } from "./semesterScope";
-import type { SystemConfig } from "../types";
+import type {
+  HallOfFameInterfaceConfig,
+  SystemConfig,
+  WisHallOfFameSnapshot,
+} from "../types";
 
 type ConfigLike = Pick<SystemConfig, "year" | "semester"> | null | undefined;
 type JsonRecord = Record<string, unknown>;
@@ -26,11 +30,19 @@ export interface WisAccount {
   revision: number;
   balance: number;
   initialGrantLedgerEntryId: string;
+  grade: string;
+  classNumber: string;
+  studentNumber: string;
+  earnedTotal: number;
+  rankEarnedTotal: number;
+  spentTotal: number;
+  adjustedTotal: number;
 }
 
 export interface WisLedgerEntry {
   ledgerEntryId: string;
   accountId: string;
+  studentUid: string;
   type: string;
   delta: number;
   balanceBefore: number;
@@ -38,6 +50,11 @@ export interface WisLedgerEntry {
   sourceId: string;
   reason: string;
   reversalEntryId: string;
+  actorUid: string;
+  actorRole: string;
+  commandId: string;
+  receiptId: string;
+  createdAt: unknown;
 }
 
 export interface WisProduct {
@@ -66,12 +83,19 @@ export interface WisOrder {
   orderId: string;
   accountId: string;
   studentUid: string;
+  inventoryId: string;
+  productId: string;
   productName: string;
   quantity: number;
   unitPrice: number;
   totalPrice: number;
   revision: number;
   status: "REQUESTED" | "APPROVED" | "REJECTED" | "FULFILLED";
+  reviewReason: string;
+  reviewedBy: string;
+  createdAt: unknown;
+  reviewedAt: unknown;
+  updatedAt: unknown;
 }
 
 export interface WisRankingRow {
@@ -103,6 +127,10 @@ export interface WisEconomyState {
   inventory: WisInventory[];
   orders: WisOrder[];
   rankings: WisRankingRow[];
+  hallOfFame: WisHallOfFameSnapshot | null;
+  hallOfFameConfig: HallOfFameInterfaceConfig | null;
+  hallOfFameConfigRevision: number;
+  nextCursor: string;
 }
 
 export class WisEconomyError extends Error {
@@ -176,6 +204,13 @@ const normalizeAccount = (value: unknown): WisAccount => {
     revision: number(item.revision),
     balance: number(item.balance),
     initialGrantLedgerEntryId: string(item.initialGrantLedgerEntryId),
+    grade: string(item.grade),
+    classNumber: string(item.classNumber),
+    studentNumber: string(item.studentNumber),
+    earnedTotal: number(item.earnedTotal),
+    rankEarnedTotal: number(item.rankEarnedTotal),
+    spentTotal: number(item.spentTotal),
+    adjustedTotal: number(item.adjustedTotal),
   };
 };
 
@@ -189,8 +224,19 @@ export const getWisEconomyState = async (input: {
   audience: "student" | "teacher";
   semesterId?: string;
   provenance?: "CURRENT" | "ARCHIVE" | "LEGACY" | "EXPLICIT";
+  projection?:
+    | "summary"
+    | "overview"
+    | "student-core"
+    | "account"
+    | "orders"
+    | "catalog"
+    | "hall-of-fame";
   accountId?: string;
+  ledgerEntryId?: string;
   orderStatus?: string;
+  cursor?: string;
+  limit?: number;
 }): Promise<WisEconomyState> => {
   const activeSemesterId = currentSemesterId(input.config);
   const requestedSemesterId = string(input.semesterId) || activeSemesterId;
@@ -212,8 +258,12 @@ export const getWisEconomyState = async (input: {
         audience: "student" | "teacher";
         semesterId: string;
         source: "CURRENT" | "ARCHIVE" | "LEGACY" | "EXPLICIT";
+        projection?: string;
         accountId?: string;
+        ledgerEntryId?: string;
         orderStatus?: string;
+        cursor?: string;
+        limit?: number;
       },
       unknown
     >("getWisEconomyState");
@@ -221,8 +271,12 @@ export const getWisEconomyState = async (input: {
       audience: input.audience,
       semesterId: requestedSemesterId,
       source,
+      ...(input.projection ? { projection: input.projection } : {}),
       ...(input.accountId ? { accountId: input.accountId } : {}),
+      ...(input.ledgerEntryId ? { ledgerEntryId: input.ledgerEntryId } : {}),
       ...(input.orderStatus ? { orderStatus: input.orderStatus } : {}),
+      ...(input.cursor ? { cursor: input.cursor } : {}),
+      ...(input.limit ? { limit: input.limit } : {}),
     });
     const raw = record(response.data);
     const economyRaw = record(raw.economy);
@@ -258,6 +312,7 @@ export const getWisEconomyState = async (input: {
       ledger: rows(raw.ledger).map((item) => ({
         ledgerEntryId: string(item.ledgerEntryId),
         accountId: string(item.accountId),
+        studentUid: string(item.studentUid),
         type: string(item.type),
         delta: number(item.delta),
         balanceBefore: number(item.balanceBefore),
@@ -265,6 +320,11 @@ export const getWisEconomyState = async (input: {
         sourceId: string(item.sourceId),
         reason: string(item.reason),
         reversalEntryId: string(item.reversalEntryId),
+        actorUid: string(item.actorUid),
+        actorRole: string(item.actorRole),
+        commandId: string(item.commandId),
+        receiptId: string(item.receiptId),
+        createdAt: item.createdAt ?? null,
       })),
       products: rows(raw.products).map((item) => ({
         productId: string(item.productId),
@@ -290,12 +350,19 @@ export const getWisEconomyState = async (input: {
         orderId: string(item.orderId),
         accountId: string(item.accountId),
         studentUid: string(item.studentUid),
+        inventoryId: string(item.inventoryId),
+        productId: string(item.productId),
         productName: string(item.productName),
         quantity: number(item.quantity),
         unitPrice: number(item.unitPrice),
         totalPrice: number(item.totalPrice),
         revision: number(item.revision),
         status: string(item.status) as WisOrder["status"],
+        reviewReason: string(item.reviewReason),
+        reviewedBy: string(item.reviewedBy),
+        createdAt: item.createdAt ?? null,
+        reviewedAt: item.reviewedAt ?? null,
+        updatedAt: item.updatedAt ?? null,
       })),
       rankings: rows(raw.rankings).map((item) => ({
         accountId: string(item.accountId),
@@ -304,6 +371,14 @@ export const getWisEconomyState = async (input: {
         balance: number(item.balance),
         rank: number(item.rank),
       })),
+      hallOfFame: Object.keys(record(raw.hallOfFame)).length
+        ? (raw.hallOfFame as WisHallOfFameSnapshot)
+        : null,
+      hallOfFameConfig: Object.keys(record(raw.hallOfFameConfig)).length
+        ? (raw.hallOfFameConfig as HallOfFameInterfaceConfig)
+        : null,
+      hallOfFameConfigRevision: number(raw.hallOfFameConfigRevision),
+      nextCursor: string(raw.nextCursor),
     };
   } catch (error) {
     throw error instanceof WisEconomyError ? error : mapError(error);
@@ -327,10 +402,14 @@ export const createWisAccounts = (
 export const grantInitialWis = (
   payload: W2CommandPayloads["grantInitialWis"],
 ) => mapped(executeWestoryCommand("grantInitialWis", payload));
-export const grantWis = (payload: W2CommandPayloads["grantWis"]) =>
-  mapped(executeWestoryCommand("grantWis", payload));
-export const deductWis = (payload: W2CommandPayloads["deductWis"]) =>
-  mapped(executeWestoryCommand("deductWis", payload));
+export const grantWis = (
+  payload: W2CommandPayloads["grantWis"],
+  options: { commandId?: string } = {},
+) => mapped(executeWestoryCommand("grantWis", payload, options));
+export const deductWis = (
+  payload: W2CommandPayloads["deductWis"],
+  options: { commandId?: string } = {},
+) => mapped(executeWestoryCommand("deductWis", payload, options));
 export const adjustWis = (payload: W2CommandPayloads["adjustWis"]) =>
   mapped(executeWestoryCommand("adjustWis", payload));
 export const reverseWisEntry = (
@@ -348,9 +427,15 @@ export const upsertWisProduct = (
 export const upsertWisInventory = (
   payload: W2CommandPayloads["upsertWisInventory"],
 ) => mapped(executeWestoryCommand("upsertWisInventory", payload));
-export const placeWisOrder = (payload: W2CommandPayloads["placeWisOrder"]) =>
-  mapped(executeWestoryCommand("placeWisOrder", payload));
+export const placeWisOrder = (
+  payload: W2CommandPayloads["placeWisOrder"],
+  options: { commandId?: string } = {},
+) => mapped(executeWestoryCommand("placeWisOrder", payload, options));
 export const reviewWisOrder = (payload: W2CommandPayloads["reviewWisOrder"]) =>
   mapped(executeWestoryCommand("reviewWisOrder", payload));
+export const saveWisHallOfFameConfig = (
+  payload: W2CommandPayloads["saveWisHallOfFameConfig"],
+  options: { commandId?: string } = {},
+) => mapped(executeWestoryCommand("saveWisHallOfFameConfig", payload, options));
 
 export { currentSemesterId };

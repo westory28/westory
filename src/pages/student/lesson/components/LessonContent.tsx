@@ -2,15 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useAppToast } from "../../../../components/common/AppToastProvider";
 import LessonFootnoteDialog from "../../../../components/common/LessonFootnoteDialog";
 import { InlineLoading } from "../../../../components/common/LoadingState";
-import {
-  collection,
-  deleteField,
-  doc,
-  getDoc,
-  getDocs,
-  serverTimestamp,
-  setDoc,
-} from "firebase/firestore";
+import { collection, doc, getDoc, getDocs } from "firebase/firestore";
 import { useAuth } from "../../../../contexts/AuthContext";
 import { notifyPointsUpdated } from "../../../../lib/appEvents";
 import { db } from "../../../../lib/firebase";
@@ -24,7 +16,6 @@ import {
   type LessonFootnote,
 } from "../../../../lib/lessonData";
 import { buildLessonAnswerSnapshot } from "../../../../lib/lessonProgressAnswers";
-import { claimPointActivityReward } from "../../../../lib/points";
 import { emitSessionActivity } from "../../../../lib/sessionActivity";
 import { getSemesterCollectionPath } from "../../../../lib/semesterScope";
 import {
@@ -32,6 +23,13 @@ import {
   readStudentVisibleLessons,
 } from "../../../../lib/studentLessonReadCache";
 import { lazyWithRetry } from "../../../../lib/lazyWithRetry";
+import { recordLessonCorePointFind } from "../../../../lib/lessonCorePointReward";
+import { recordLegacyLessonCompletion } from "../../../../lib/legacyLessonSafetyAdapter";
+import {
+  requestLegacyLessonCorePointReward,
+  resolveLegacyLessonRewardFailure,
+  resolveLegacyLessonRewardSafetyState,
+} from "../../../../lib/legacyLessonRewardSafety";
 
 const LessonWorksheetStage = lazyWithRetry(
   () => import("../../../../components/common/LessonWorksheetStage"),
@@ -61,7 +59,6 @@ interface LessonContentProps {
 }
 
 const EMPTY_BLANK_LABEL = "빈칸";
-const LESSON_CORE_POINTS_ALL_SOURCE_ID = "lesson-core-points-all";
 const LESSON_CORE_POINTS_REWARD_LABEL = "500위스";
 const EMPTY_CORE_POINT_OVERVIEW: CorePointOverviewState = {
   loaded: false,
@@ -125,6 +122,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
   const [highlightedFootnoteAnchorKey, setHighlightedFootnoteAnchorKey] =
     useState("");
   const [foundCorePointIds, setFoundCorePointIds] = useState<string[]>([]);
+  const [pendingCorePointIds, setPendingCorePointIds] = useState<string[]>([]);
   const [corePointRewardPending, setCorePointRewardPending] = useState(false);
   const [corePointRewardSettled, setCorePointRewardSettled] = useState(false);
   const [corePointOverview, setCorePointOverview] =
@@ -145,6 +143,14 @@ const LessonContent: React.FC<LessonContentProps> = ({
   const viewStartedAtRef = useRef(Date.now());
   const interactedRef = useRef(false);
   const canPersist = Boolean(!disablePersistence && currentUser?.uid && unitId);
+  const corePointRewardSafety = useMemo(
+    () =>
+      resolveLegacyLessonRewardSafetyState({
+        authenticated: Boolean(currentUser?.uid),
+        persistenceEnabled: canPersist,
+      }),
+    [canPersist, currentUser?.uid],
+  );
   const interactiveFootnoteMap = useMemo(() => {
     if (!lesson) return new Map<string, LessonFootnote>();
     const normalized = normalizeLessonData(lesson, {
@@ -217,6 +223,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
     setActiveFootnoteAnchorKey("");
     setHighlightedFootnoteAnchorKey("");
     setFoundCorePointIds([]);
+    setPendingCorePointIds([]);
     setCorePointRewardPending(false);
     setCorePointRewardSettled(false);
     setCorePointOverview(EMPTY_CORE_POINT_OVERVIEW);
@@ -262,6 +269,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
         setActiveFootnoteAnchorKey("");
         setHighlightedFootnoteAnchorKey("");
         setFoundCorePointIds([]);
+        setPendingCorePointIds([]);
         setCorePointRewardPending(false);
         setCorePointRewardSettled(false);
         setCorePointOverview(EMPTY_CORE_POINT_OVERVIEW);
@@ -367,24 +375,6 @@ const LessonContent: React.FC<LessonContentProps> = ({
     return nextOverview;
   };
 
-  const persistCorePointProgress = async (
-    nextFoundIds: string[],
-    options?: { completed?: boolean },
-  ) => {
-    const progressRef = getProgressRef();
-    if (!progressRef || !currentUser?.uid || !unitId) return;
-    const payload = {
-      userId: currentUser.uid,
-      unitId,
-      corePointFinds: nextFoundIds,
-      updatedAt: serverTimestamp(),
-      ...(options?.completed
-        ? { corePointCompletedAt: serverTimestamp() }
-        : {}),
-    };
-    await setDoc(progressRef, payload, { merge: true });
-  };
-
   const getAnswerSnapshot = (options?: { finalize?: boolean }) => {
     const finalize = Boolean(options?.finalize);
     const container = contentRef.current;
@@ -488,9 +478,8 @@ const LessonContent: React.FC<LessonContentProps> = ({
     });
   };
 
-  const saveProgressToFirestore = async () => {
-    const progressRef = getProgressRef();
-    if (!progressRef || !currentUser?.uid || !unitId) return;
+  const saveProgressSafely = async () => {
+    if (!currentUser?.uid || !unitId) return;
     const answerSnapshot = getAnswerSnapshot({ finalize: true });
     const correctCount = Object.values(answerSnapshot.answers).filter(
       (answer) => answer.status === "correct",
@@ -502,71 +491,44 @@ const LessonContent: React.FC<LessonContentProps> = ({
     const accuracyMessage =
       answerSnapshot.totalCount > 0
         ? `정답률 ${accuracyPercent}% · 정답 ${correctCount}/${answerSnapshot.totalCount}`
-        : "저장되었습니다.";
+        : "학습 완료를 반영했습니다.";
     try {
       emitSessionActivity();
       setIsSaving(true);
-      await setDoc(
-        progressRef,
-        {
-          userId: currentUser.uid,
-          unitId,
-          answers: answerSnapshot.answers,
-          corePointFinds: foundCorePointIds,
-          annotations: deleteField(),
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true },
-      );
+      await recordLegacyLessonCompletion({
+        config,
+        studentUid: currentUser.uid,
+        unitId,
+      });
       setStudentAnswers(answerSnapshot.answers);
       applyAnswerStatusesToInputs(answerSnapshot.answers);
       setHasUnsavedChanges(false);
-      setSaveMessage("저장됨");
-      let toastTitle = "수업 자료 저장 완료";
-      let toastMessage = accuracyMessage;
-      let awardedPointAmount = 0;
+      setSaveMessage("완료 반영됨");
+      const toastTitle = "학습 완료 반영";
+      let toastMessage = `${accuracyMessage} 입력 내용은 현재 화면에만 유지됩니다.`;
       if (lesson && interactedRef.current && unitId) {
         const elapsedMs = Date.now() - viewStartedAtRef.current;
         if (elapsedMs >= 30000) {
-          try {
-            const pointResult = await claimPointActivityReward({
-              config,
-              activityType: "lesson",
-              sourceId: `lesson-${unitId}`,
-              sourceLabel: lesson.title || "수업 자료 학습",
-            });
-            if (pointResult.awarded && pointResult.amount > 0) {
-              awardedPointAmount =
-                Number(pointResult.totalAwarded || pointResult.amount) || 0;
-              notifyPointsUpdated();
-              toastTitle = "수업 자료 저장 완료";
-              toastMessage =
-                answerSnapshot.totalCount > 0
-                  ? `${accuracyMessage} · +${awardedPointAmount}위스`
-                  : `저장되었습니다. · +${awardedPointAmount}위스`;
-            }
-          } catch (pointError) {
-            console.error("Failed to claim lesson point reward:", pointError);
-            toastTitle = "수업 자료 저장 완료";
-            toastMessage =
-              "입력 내용은 저장됐지만 위스 반영 상태를 바로 확인하지 못했습니다.";
-          }
+          toastMessage = `${accuracyMessage} 현재 이 화면에서는 위스 보상을 지급하지 않습니다.`;
         }
       }
       setSaveCompletionPopup(null);
       showToast({
-        tone: awardedPointAmount > 0 ? "success" : "info",
+        tone: "info",
         title: toastTitle,
         message: toastMessage,
       });
     } catch (saveError) {
-      console.error("Failed to save lesson progress:", saveError);
-      setSaveMessage("저장 실패");
+      console.error("Failed to record legacy lesson completion:", saveError);
+      setSaveMessage("저장 불가");
       setSaveCompletionPopup(null);
       showToast({
         tone: "error",
-        title: "수업 자료 저장에 실패했습니다.",
-        message: "네트워크 상태를 확인한 뒤 다시 시도해 주세요.",
+        title: "학습 완료를 반영하지 못했습니다.",
+        message:
+          saveError instanceof Error
+            ? saveError.message
+            : "네트워크 상태를 확인한 뒤 다시 시도해 주세요.",
       });
     } finally {
       setIsSaving(false);
@@ -575,7 +537,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
 
   const handleSaveAction = () => {
     if (!isSaving && hasUnsavedChanges) {
-      void saveProgressToFirestore();
+      void saveProgressSafely();
     }
   };
 
@@ -1013,6 +975,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
     if (
       !canPersist ||
       !currentUser?.uid ||
+      !corePointRewardSafety.claimable ||
       corePointRewardPending ||
       corePointRewardSettled
     )
@@ -1040,57 +1003,89 @@ const LessonContent: React.FC<LessonContentProps> = ({
         return;
       }
 
-      const pointResult = await claimPointActivityReward({
+      const rewardResult = await requestLegacyLessonCorePointReward({
         config,
-        activityType: "lesson_core_points",
-        sourceId: LESSON_CORE_POINTS_ALL_SOURCE_ID,
-        sourceLabel: "전체 수업자료 핵심포인트 완주",
+        authenticated: Boolean(currentUser?.uid),
+        persistenceEnabled: canPersist,
       });
-      const totalAwarded = Number(
-        pointResult.totalAwarded || pointResult.amount || 0,
-      );
-      if (pointResult.awarded && totalAwarded > 0) {
+      if (rewardResult.awarded && rewardResult.amount > 0) {
         notifyPointsUpdated();
-        showToast({
-          tone: "reward",
-          title: "핵심포인트 완주",
-          message: `+${totalAwarded}위스가 반영되었습니다.`,
-        });
+      }
+      if (rewardResult.settled) {
         setCorePointRewardSettled(true);
-        await persistCorePointProgress(nextFoundIds, { completed: true });
-        await refreshCorePointOverview(nextFoundIds);
-      } else if (pointResult.duplicate) {
-        showToast({
-          tone: "info",
-          title: "핵심포인트 완주",
-          message:
-            pointResult.blockedMessage ||
-            "핵심포인트 완주 보상은 이미 반영되었습니다.",
-        });
-        setCorePointRewardSettled(true);
-        await persistCorePointProgress(nextFoundIds, { completed: true });
-        await refreshCorePointOverview(nextFoundIds);
-      } else {
-        showToast({
-          tone: "info",
-          title: "핵심포인트 완주",
-          message:
-            pointResult.blockedMessage ||
-            "전체 핵심포인트를 확인했지만 추가 위스는 지급되지 않았습니다.",
-        });
-        setCorePointRewardSettled(true);
-        await persistCorePointProgress(nextFoundIds, { completed: true });
         await refreshCorePointOverview(nextFoundIds);
       }
+      showToast({
+        tone: rewardResult.awarded ? "reward" : "info",
+        title: "핵심포인트 완주",
+        message: rewardResult.message,
+      });
     } catch (pointError) {
-      console.error("Failed to claim core point reward:", pointError);
+      console.error("Failed to confirm core point completion:", pointError);
+      const failure = resolveLegacyLessonRewardFailure(pointError);
       showToast({
         tone: "warning",
         title: "핵심포인트를 모두 찾았습니다.",
-        message: "위스 반영 상태를 바로 확인하지 못했습니다.",
+        message: failure.message,
       });
     } finally {
       setCorePointRewardPending(false);
+    }
+  };
+
+  const persistCorePointFindSafely = async (
+    highlightId: string,
+    optimisticFoundIds: string[],
+  ) => {
+    if (!canPersist || !unitId) return;
+    setPendingCorePointIds((current) =>
+      current.includes(highlightId) ? current : [...current, highlightId],
+    );
+    try {
+      await recordLessonCorePointFind({
+        config,
+        unitId,
+        corePointId: highlightId,
+      });
+      const overview = await refreshCorePointOverview(
+        foundCorePointIdsRef.current.length
+          ? foundCorePointIdsRef.current
+          : optimisticFoundIds,
+      );
+      if (
+        overview.loaded &&
+        overview.totalCount > 0 &&
+        overview.foundCount >= overview.totalCount
+      ) {
+        showToast({
+          tone: "reward",
+          title: "핵심포인트를 모두 찾았습니다.",
+          message: `빛나는 핵심포인트 버튼을 눌러 ${LESSON_CORE_POINTS_REWARD_LABEL}를 받으세요.`,
+        });
+      }
+    } catch (persistError) {
+      console.error("Failed to record lesson core point:", persistError);
+      const nextFoundIds = foundCorePointIdsRef.current.filter(
+        (id) => id !== highlightId,
+      );
+      foundCorePointIdsRef.current = nextFoundIds;
+      setFoundCorePointIds(nextFoundIds);
+      const currentOverview = corePointOverviewRef.current;
+      const nextOverview = {
+        ...currentOverview,
+        foundCount: Math.max(0, currentOverview.foundCount - 1),
+      };
+      corePointOverviewRef.current = nextOverview;
+      setCorePointOverview(nextOverview);
+      showToast({
+        tone: "warning",
+        title: "핵심포인트 기록을 반영하지 못했습니다.",
+        message: "네트워크 상태를 확인한 뒤 핵심포인트를 다시 눌러 주세요.",
+      });
+    } finally {
+      setPendingCorePointIds((current) =>
+        current.filter((id) => id !== highlightId),
+      );
     }
   };
 
@@ -1133,19 +1128,14 @@ const LessonContent: React.FC<LessonContentProps> = ({
         };
     corePointOverviewRef.current = nextOverview;
     setCorePointOverview(nextOverview);
+    if (canPersist) {
+      void persistCorePointFindSafely(highlightId, nextFoundIds);
+    }
 
     const remainingCount = Math.max(
       0,
       nextOverview.totalCount - nextOverview.foundCount,
     );
-    if (canPersist) {
-      void persistCorePointProgress(nextFoundIds, {
-        completed: currentCorePointIds.length === nextFoundIds.length,
-      }).catch((persistError) => {
-        console.warn("Failed to persist core point progress:", persistError);
-      });
-    }
-
     if (remainingCount > 0) {
       showToast({
         tone: "reward",
@@ -1154,11 +1144,6 @@ const LessonContent: React.FC<LessonContentProps> = ({
           ? `전체 수업자료에서 남은 핵심포인트 ${remainingCount}개`
           : "전체 핵심포인트 진행률을 확인하고 있습니다.",
       });
-      if (!nextOverview.loaded && canPersist) {
-        void refreshCorePointOverview(nextFoundIds).catch((overviewError) => {
-          console.warn("Failed to refresh core point overview:", overviewError);
-        });
-      }
       return;
     }
 
@@ -1168,28 +1153,6 @@ const LessonContent: React.FC<LessonContentProps> = ({
         title: "핵심포인트 발견",
         message: "전체 핵심포인트 진행률을 확인하고 있습니다.",
       });
-      if (canPersist) {
-        void refreshCorePointOverview(nextFoundIds)
-          .then((overview) => {
-            if (
-              overview.loaded &&
-              overview.totalCount > 0 &&
-              overview.foundCount >= overview.totalCount
-            ) {
-              showToast({
-                tone: "reward",
-                title: "핵심포인트를 모두 찾았습니다.",
-                message: `빛나는 핵심포인트 버튼을 눌러 ${LESSON_CORE_POINTS_REWARD_LABEL}를 받으세요.`,
-              });
-            }
-          })
-          .catch((overviewError) => {
-            console.warn(
-              "Failed to refresh core point overview:",
-              overviewError,
-            );
-          });
-      }
       return;
     }
 
@@ -1197,7 +1160,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
       tone: "reward",
       title: "핵심포인트를 모두 찾았습니다.",
       message: canPersist
-        ? `빛나는 핵심포인트 버튼을 눌러 ${LESSON_CORE_POINTS_REWARD_LABEL}를 받으세요.`
+        ? "핵심포인트 진행률을 반영하고 있습니다."
         : "완료했습니다.",
     });
   };
@@ -1206,8 +1169,8 @@ const LessonContent: React.FC<LessonContentProps> = ({
     ? "저장 중..."
     : hasUnsavedChanges
       ? "저장 가능"
-      : saveMessage === "저장됨"
-        ? "저장됨"
+      : saveMessage === "완료 반영됨"
+        ? "완료 반영됨"
         : "저장";
   const displayedCorePointTotalCount = corePointOverview.loaded
     ? corePointOverview.totalCount
@@ -1221,7 +1184,10 @@ const LessonContent: React.FC<LessonContentProps> = ({
     displayedCorePointTotalCount > 0 &&
     displayedCorePointFoundCount >= displayedCorePointTotalCount;
   const corePointRewardReady =
-    isCorePointCompletionReady && !corePointRewardSettled;
+    isCorePointCompletionReady &&
+    corePointRewardSafety.claimable &&
+    pendingCorePointIds.length === 0 &&
+    !corePointRewardSettled;
   const handleCorePointRewardClaim = () => {
     if (!corePointRewardReady || corePointRewardPending) return;
     void claimCorePointCompletionReward(
@@ -1306,7 +1272,7 @@ const LessonContent: React.FC<LessonContentProps> = ({
               ? "bg-blue-600 text-white focus-visible:ring-blue-100"
               : hasUnsavedChanges
                 ? "bg-blue-600 text-white hover:bg-blue-700 focus-visible:ring-blue-100"
-                : saveMessage === "저장됨"
+                : saveMessage === "완료 반영됨"
                   ? "cursor-default bg-blue-50 text-blue-700 focus-visible:ring-blue-100"
                   : "cursor-not-allowed bg-slate-100 text-slate-400 focus-visible:ring-slate-100"
           }`}

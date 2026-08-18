@@ -206,6 +206,34 @@ service cloud.firestore {
           && targetClass == userClass());
     }
 
+    function isAnonymousThinkCloudSession(session) {
+      return session.keys().hasAny(['options'])
+        && session.options is map
+        && session.options.keys().hasAny(['anonymous'])
+        && session.options.anonymous == true;
+    }
+
+    function canReadThinkCloudResponse(session) {
+      let profile = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return canUseWestory()
+        && (
+          request.auth.token.email == "westoria28@gmail.com"
+          || (
+            session.targetGrade == profile.grade
+            && session.targetClass == profile.class
+            && (
+              profile.role == 'teacher'
+              || (
+                profile.teacherPortalEnabled == true
+                && profile.staffPermissions is list
+                && 'lesson_read' in profile.staffPermissions
+              )
+              || !isAnonymousThinkCloudSession(session)
+            )
+          )
+        );
+    }
+
     function canReadPointData() {
       return isAdmin() || hasPermission('point_read') || hasPermission('point_manage');
     }
@@ -1373,7 +1401,7 @@ service cloud.firestore {
     }
 
     match /exam_config/{docId} {
-      allow read: if canUseWestory();
+      allow read: if canManagePerformanceScores();
       allow write: if false;
     }
 
@@ -1433,7 +1461,7 @@ service cloud.firestore {
     }
 
     match /think_cloud_state/{docId} {
-      allow read: if canUseWestory();
+      allow read: if false;
       allow create, update, delete: if false;
     }
 
@@ -1448,14 +1476,11 @@ service cloud.firestore {
     }
 
     match /think_cloud_sessions/{sessionId} {
-      allow read: if canAccessThinkCloudTarget(resource.data.targetGrade, resource.data.targetClass) || hasPermission('lesson_read');
+      allow read: if false;
       allow create, update, delete: if false;
 
       match /responses/{responseId} {
-        allow read: if canAccessThinkCloudTarget(
-          get(/databases/$(database)/documents/think_cloud_sessions/$(sessionId)).data.targetGrade,
-          get(/databases/$(database)/documents/think_cloud_sessions/$(sessionId)).data.targetClass
-        );
+        allow read: if false;
         allow create, update, delete: if false;
       }
     }
@@ -1570,7 +1595,7 @@ service cloud.firestore {
       }
 
       match /exam_config/{docId} {
-        allow read: if canUseWestory();
+        allow read: if canManagePerformanceScores();
         allow write: if false;
       }
 
@@ -1600,7 +1625,7 @@ service cloud.firestore {
       }
 
       match /think_cloud_state/{docId} {
-        allow read: if canUseWestory();
+        allow read: if false;
         allow create, update, delete: if false;
       }
 
@@ -1623,14 +1648,11 @@ service cloud.firestore {
       }
 
       match /think_cloud_sessions/{sessionId} {
-        allow read: if canAccessThinkCloudTarget(resource.data.targetGrade, resource.data.targetClass);
+        allow read: if false;
         allow create, update, delete: if false;
 
         match /responses/{responseId} {
-          allow read: if canAccessThinkCloudTarget(
-            get(/databases/$(database)/documents/years/$(year)/semesters/$(semester)/think_cloud_sessions/$(sessionId)).data.targetGrade,
-            get(/databases/$(database)/documents/years/$(year)/semesters/$(semester)/think_cloud_sessions/$(sessionId)).data.targetClass
-          );
+          allow read: if false;
           allow create, update, delete: if false;
         }
       }

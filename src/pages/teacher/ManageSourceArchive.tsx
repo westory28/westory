@@ -12,16 +12,14 @@ import {
   SOURCE_ARCHIVE_TYPE_LABELS,
   buildSourceArchiveDraft,
   createEmptySourceArchiveDraft,
-  deleteSourceArchiveAsset,
   getSourceArchiveDownloadUrl,
-  saveSourceArchiveAsset,
   subscribeSourceArchiveAssets,
 } from "../../lib/sourceArchive";
-import { buildSourceArchiveUpload } from "../../lib/sourceArchiveImage";
+import { isSourceArchivePdfFile } from "../../lib/sourceArchivePdf";
 import {
-  buildSourceArchivePdfUpload,
-  isSourceArchivePdfFile,
-} from "../../lib/sourceArchivePdf";
+  LEGACY_LESSON_MANAGEMENT_HASH_ROUTE,
+  buildLegacyLessonManagementHandoffMessage,
+} from "../../lib/legacyLessonManagementHandoff";
 import type {
   SourceArchiveAsset,
   SourceArchiveAssetType,
@@ -230,10 +228,7 @@ const getStatusHelp = (asset: SourceArchiveAsset) => {
 const ManageSourceArchive: React.FC = () => {
   const { currentUser, userData } = useAuth();
   const canRead = canReadLessonManagement(userData, currentUser?.email || "");
-  const mutationsUnavailable = true;
-  const canWrite =
-    !mutationsUnavailable &&
-    canWriteLessonManagement(userData, currentUser?.email || "");
+  const canWrite = canWriteLessonManagement(userData, currentUser?.email || "");
   const [assets, setAssets] = useState<SourceArchiveAsset[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
@@ -260,6 +255,7 @@ const ManageSourceArchive: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [openingOriginalId, setOpeningOriginalId] = useState("");
+  const [handoffAction, setHandoffAction] = useState("");
   const deferredSearchText = useDeferredValue(searchText);
   const selectedAsset = useMemo(
     () => assets.find((item) => item.id === selectedId) || null,
@@ -387,6 +383,7 @@ const ManageSourceArchive: React.FC = () => {
   const openCreate = () => {
     if (!confirmDiscardIfDirty()) return;
     resetEditor();
+    setHandoffAction("");
     setMessage("");
     setErrorMessage("");
     setPanelMode("create");
@@ -397,6 +394,7 @@ const ManageSourceArchive: React.FC = () => {
     clearPreview();
     const nextDraft = buildSourceArchiveDraft(asset);
     applyEditorState(nextDraft, asset.tags.join(", "));
+    setHandoffAction("");
     setMessage("");
     setErrorMessage("");
     setPanelMode("edit");
@@ -445,62 +443,21 @@ const ManageSourceArchive: React.FC = () => {
   const handleSave = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!canWrite || !currentUser?.uid) return;
-    setSaving(true);
     setMessage("");
     setErrorMessage("");
-    try {
-      const fileUpload = selectedFile
-        ? selectedFileIsPdf
-          ? await buildSourceArchivePdfUpload(selectedFile)
-          : await buildSourceArchiveUpload(selectedFile)
-        : null;
-      const assetId = await saveSourceArchiveAsset({
-        draft: {
-          ...draft,
-          mediaKind: editorMediaKind,
-          tags: normalizeTagInput(tagInput),
-        },
-        actorUid: currentUser.uid,
-        fileUpload,
-      });
-      setSelectedId(assetId);
-      resetEditor();
-      setPanelMode("view");
-      setMessage(
-        fileUpload
-          ? fileUpload.kind === "pdf"
-            ? UI.savePdfProcessing
-            : UI.saveProcessing
-          : UI.saveDone,
-      );
-    } catch (error) {
-      console.error("Failed to save source archive asset:", error);
-      setErrorMessage(
-        String((error as { message?: string })?.message || UI.loadingError),
-      );
-    } finally {
-      setSaving(false);
-    }
+    setHandoffAction(
+      panelMode === "edit" ? "사료 수정 저장" : "사료 등록 저장",
+    );
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleDelete = async (asset: SourceArchiveAsset) => {
     if (!canWrite) return;
     if (!window.confirm(`"${asset.title}" 사료를 삭제할까요?`)) return;
-    setDeleting(true);
     setMessage("");
     setErrorMessage("");
-    try {
-      await deleteSourceArchiveAsset(asset.id);
-      if (selectedId === asset.id) setSelectedId("");
-      setMessage(UI.deleteDone);
-    } catch (error) {
-      console.error("Failed to delete source archive asset:", error);
-      setErrorMessage(
-        String((error as { message?: string })?.message || UI.loadingError),
-      );
-    } finally {
-      setDeleting(false);
-    }
+    setHandoffAction("사료 삭제");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleOpenOriginal = async (asset: SourceArchiveAsset) => {
@@ -556,14 +513,30 @@ const ManageSourceArchive: React.FC = () => {
         </div>
       </div>
 
-      <StatePanel
-        state="DISABLED"
-        title="사료 창고는 현재 조회 전용입니다."
-        description="사료 등록, 원본 업로드, 수정, 삭제와 이전 자료 승격은 안전한 저장 경로가 마련될 때까지 사용할 수 없습니다."
-        readOnly
-        compact
-        className="mt-4"
-      />
+      {!canWrite && (
+        <StatePanel
+          state="DISABLED"
+          title="사료 창고는 읽기 전용입니다."
+          description={UI.readOnly}
+          readOnly
+          compact
+          className="mt-4"
+        />
+      )}
+
+      {handoffAction && (
+        <StatePanel
+          state="DISABLED"
+          title={`${handoffAction}은 학습 운영에서 진행해 주세요.`}
+          description={buildLegacyLessonManagementHandoffMessage(handoffAction)}
+          action={{
+            label: "학습 운영으로 이동",
+            href: LEGACY_LESSON_MANAGEMENT_HASH_ROUTE,
+          }}
+          compact
+          className="mt-4"
+        />
+      )}
 
       {(message || errorMessage) && (
         <div

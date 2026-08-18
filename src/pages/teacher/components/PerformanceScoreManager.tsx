@@ -3,16 +3,12 @@ import { useSearchParams } from "react-router-dom";
 import {
   collection,
   collectionGroup,
-  deleteField,
   doc,
-  type DocumentData,
-  type DocumentReference,
   getDoc,
   getDocs,
   orderBy,
   query,
   serverTimestamp,
-  type WithFieldValue,
   where,
 } from "firebase/firestore";
 import {
@@ -31,6 +27,15 @@ import { useAppToast } from "../../../components/common/AppToastProvider";
 import { useAuth } from "../../../contexts/AuthContext";
 import { db } from "../../../lib/firebase";
 import {
+  deleteLegacyGradeRoster,
+  LEGACY_GRADE_ATOMIC_RECORD_LIMIT,
+  loadLegacyGradeEvidenceStudentProfiles,
+  rejectLegacyGradeSignatures,
+  reviewLegacyGradeRequest,
+  saveLegacyGradeRoster,
+  saveLegacyGradeWarningSettings,
+} from "../../../lib/legacyGradeEvidenceAdapter";
+import {
   getSemesterCollectionPath,
   getYearSemester,
 } from "../../../lib/semesterScope";
@@ -47,10 +52,11 @@ import {
   WRITTEN_EXAM_SECTION_ESSAY,
   WRITTEN_EXAM_SECTION_OBJECTIVE,
   applyPerformanceScoreConfirmation,
+  buildPerformanceScoreWarningHash,
+  buildPerformanceScoreWarningVersion,
   buildStudentLookupKey,
   buildStudentNameLookupKey,
   formatPerformanceScore,
-  failLegacyPerformanceScoreMutation,
   getPerformanceScorePercent,
   loadPerformanceScoreSettings,
   normalizePerformanceScoreSettings,
@@ -59,7 +65,6 @@ import {
   normalizeSchoolValue,
   normalizeStudentName,
   roundScore,
-  savePerformanceScoreSettings,
   sortPerformanceScoreRecords,
   type PerformanceScoreConfirmation,
   type PerformanceScoreSettings,
@@ -75,11 +80,7 @@ import {
   type ParsedPerformanceScoreUpload,
 } from "../../../lib/performanceScoreWorkbook";
 import { parseWrittenExamEssayScoreWorkbook } from "../../../lib/writtenExamEssayScoreWorkbook";
-import {
-  createManagedNotifications,
-  reviewPerformanceScoreObjection,
-} from "../../../lib/notifications";
-import { deleteStudentData } from "../../../lib/studentData";
+import { createManagedNotifications } from "../../../lib/notifications";
 
 interface StudentProfile {
   uid: string;
@@ -778,34 +779,6 @@ const getObjectionReviewErrorMessage = (error: unknown) => {
   return "권한, 네트워크 상태, 저장된 점수표 상태를 확인한 뒤 다시 시도해 주세요.";
 };
 
-const createBatchQueue = () => {
-  return {
-    set(
-      ref: DocumentReference<DocumentData>,
-      data: WithFieldValue<DocumentData>,
-    ) {
-      void ref;
-      void data;
-      failLegacyPerformanceScoreMutation();
-    },
-    delete(ref: DocumentReference<DocumentData>) {
-      void ref;
-      failLegacyPerformanceScoreMutation();
-    },
-    update(
-      ref: DocumentReference<DocumentData>,
-      data: WithFieldValue<DocumentData>,
-    ) {
-      void ref;
-      void data;
-      failLegacyPerformanceScoreMutation();
-    },
-    async commit() {
-      return failLegacyPerformanceScoreMutation();
-    },
-  };
-};
-
 const readWorkbookRows = async (file: File) => {
   const { default: readXlsxFile } = await import("read-excel-file/browser");
   const workbookRows = (await readXlsxFile(file)) as unknown;
@@ -1201,6 +1174,7 @@ interface PerformanceScoreObjection {
   reviewMemo?: string;
   changedTotalScore?: number | null;
   changedScoreLabel?: string;
+  revision: number;
 }
 
 interface PerformanceScoreAnswerSheetRequest {
@@ -1224,6 +1198,7 @@ interface PerformanceScoreAnswerSheetRequest {
   requestedAt?: unknown;
   reviewedAt?: unknown;
   reviewMemo?: string;
+  revision: number;
 }
 
 const SCORE_DISTRIBUTION_BUCKETS = [
@@ -1241,7 +1216,7 @@ const getFiniteNumber = (value: unknown) => {
 
 const getScoreItemBasePayload = (
   item: Partial<PerformanceScoreItem> & { name?: string },
-) => {
+): Omit<PerformanceScoreItem, "score"> => {
   const shortName = toText(item.shortName);
   const itemKey = toText(item.itemKey);
   const groupKey = toText(item.groupKey);
@@ -1276,7 +1251,7 @@ const getScoreItemBasePayload = (
     maxScore: getFiniteNumber(item.maxScore) ?? 0,
     ...(item.ratio !== undefined ? { ratio: item.ratio } : {}),
     ...(feedback ? { feedback } : {}),
-  };
+  } as Omit<PerformanceScoreItem, "score">;
 };
 
 const buildScoreItemFromDefinition = (
@@ -1517,6 +1492,7 @@ const normalizePerformanceScoreObjection = (
     reviewMemo: toText(data.reviewMemo),
     changedTotalScore: getFiniteNumber(data.changedTotalScore),
     changedScoreLabel: toText(data.changedScoreLabel),
+    revision: Math.max(1, Number(data.revision || 1)),
   };
 };
 
@@ -1544,6 +1520,7 @@ const normalizePerformanceScoreAnswerSheetRequest = (
   requestedAt: data.requestedAt,
   reviewedAt: data.reviewedAt,
   reviewMemo: toText(data.reviewMemo),
+  revision: Math.max(1, Number(data.revision || 1)),
 });
 
 const sortPerformanceScoreObjections = (
@@ -2849,7 +2826,7 @@ const clonePerformanceScoreConfirmationMap = (
 const getRecordItemsForRoster = (
   record: PerformanceScoreRecord,
   roster: PerformanceScoreRoster,
-) =>
+): PerformanceScoreItem[] =>
   (roster.items || []).map((item, index) => {
     const existing = record.items?.[index];
     const existingScore = getFiniteNumber(existing?.score);
@@ -6841,18 +6818,31 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     }
     setScoreWarningSaving(true);
     try {
-      const saved = await savePerformanceScoreSettings(config, {
-        warningText: normalizedText,
-        updatedBy: currentUser?.uid,
+      const warningTextHash = buildPerformanceScoreWarningHash(normalizedText);
+      const warningVersion =
+        buildPerformanceScoreWarningVersion(normalizedText);
+      const result = await saveLegacyGradeWarningSettings({
+        config,
+        scoreKind: activeScoreKind,
+        settings: {
+          ...scoreWarningSettings,
+          warningText: normalizedText,
+          warningTextHash,
+          warningVersion,
+        },
+        reason: `${managerCopy.scoreKindLabel} 확인 경고 문구 저장`,
       });
       const nextSettings = {
         ...scoreWarningSettings,
-        ...saved,
+        warningText: normalizedText,
+        warningTextHash,
+        warningVersion,
+        revision: result.revision,
         updatedAt: new Date(),
         updatedBy: currentUser?.uid || "",
       };
       setScoreWarningSettings(nextSettings);
-      setScoreWarningDraft(saved.warningText);
+      setScoreWarningDraft(normalizedText);
       showToast({
         tone: "success",
         title: "경고 문구를 저장했습니다.",
@@ -6882,7 +6872,13 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     setStudentsLoading(true);
     setStudentLoadError("");
     const loadPromise = (async () => {
-      return failLegacyPerformanceScoreMutation();
+      const loaded = await loadLegacyGradeEvidenceStudentProfiles({
+        config,
+        scoreKind: activeScoreKind,
+      });
+      setStudents(loaded);
+      setStudentsLoaded(true);
+      return loaded;
     })();
 
     studentsLoadPromiseRef.current = loadPromise;
@@ -7446,9 +7442,16 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
     setAnswerSheetRequestReviewingId(item.id);
     try {
-      failLegacyPerformanceScoreMutation();
-      invalidateRosterReadCaches(item.rosterId || item.scoreId);
       const reviewMemo = memo.trim().slice(0, 240);
+      const result = await reviewLegacyGradeRequest({
+        config,
+        scoreKind: activeScoreKind,
+        requestId: item.id,
+        expectedRequestRevision: item.revision || 1,
+        resolution: "REVIEWED",
+        reviewMemo,
+      });
+      invalidateRosterReadCaches(item.rosterId || item.scoreId);
       setAnswerSheetRequests((current) =>
         sortPerformanceScoreAnswerSheetRequests(
           current.map((requestItem) =>
@@ -7456,6 +7459,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
               ? {
                   ...requestItem,
                   status: "reviewed",
+                  revision: result.revision,
                   reviewedAt: new Date(),
                   reviewMemo,
                 }
@@ -7614,9 +7618,12 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
     setObjectionReviewingAction({ id: objection.id, status });
     try {
-      const result = await reviewPerformanceScoreObjection(config, {
-        objectionId: objection.id,
-        status,
+      const result = await reviewLegacyGradeRequest({
+        config,
+        scoreKind: activeScoreKind,
+        requestId: objection.id,
+        expectedRequestRevision: objection.revision || 1,
+        resolution: status === "accepted" ? "ACCEPTED" : "REJECTED",
         changedTotalScore,
         reviewMemo,
       });
@@ -7632,6 +7639,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
               ? {
                   ...item,
                   status,
+                  revision: result.revision,
                   reviewedAt: new Date(),
                   reviewMemo,
                   changedTotalScore:
@@ -7654,11 +7662,10 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           status === "accepted"
             ? "이의 제기를 수용했습니다."
             : "이의 제기를 반려했습니다.",
-        message: result.notificationCreated
-          ? status === "accepted"
-            ? `학생에게 변경 후 점수 ${changedScoreLabel} 안내를 보냈습니다.`
-            : "학생에게 반려 알림을 보냈습니다."
-          : "처리 상태는 저장했지만 알림 설정 때문에 학생 알림은 새로 생성되지 않았습니다.",
+        message:
+          status === "accepted"
+            ? `변경 후 점수 ${changedScoreLabel} 처리 상태를 저장했습니다.`
+            : "학생이 확인할 수 있도록 반려 상태를 저장했습니다.",
       });
     } catch (error) {
       console.error("Failed to review performance score objection:", error);
@@ -7758,28 +7765,23 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
     const registeredUids = Array.from(
       new Set(registeredRecords.map((record) => record.uid).filter(Boolean)),
     );
-    const manualSelectedCount =
-      selectedRecords.length - registeredRecords.length;
     const selectedCount = selectedKeys.size;
+    if (registeredUids.length > 0) {
+      showToast({
+        tone: "warning",
+        title: "등록 학생은 이 화면에서 삭제할 수 없습니다.",
+        message:
+          "학생 명단에서 학적과 권한을 확인한 뒤 안전한 삭제 절차를 이용해 주세요.",
+      });
+      return;
+    }
     const confirmed = await confirm({
-      title:
-        registeredUids.length > 0 ? "선택 학생 전체 삭제" : "선택 학생 삭제",
-      message:
-        registeredUids.length > 0
-          ? [
-              `선택한 학생 ${selectedCount}명 중 등록 학생 ${registeredUids.length}명은 학생 명단과 연결된 모든 영역에서 삭제됩니다.`,
-              manualSelectedCount > 0
-                ? `수동 추가 학생 ${manualSelectedCount}명은 이 점수표에서만 삭제됩니다.`
-                : "",
-              "삭제 후 복구할 수 없습니다.",
-            ]
-              .filter(Boolean)
-              .join("\n")
-          : [
-              `선택한 학생 ${selectedCount}명을 이 ${managerCopy.scoreKindLabel} 점수표에서 삭제합니다.`,
-              `변경 저장을 눌러야 DB와 다른 ${managerCopy.scoreKindLabel} 명단에 반영됩니다.`,
-            ].join("\n"),
-      confirmLabel: registeredUids.length > 0 ? "전체 삭제" : "학생 삭제",
+      title: "선택 학생 삭제",
+      message: [
+        `선택한 학생 ${selectedCount}명을 이 ${managerCopy.scoreKindLabel} 점수표에서 삭제합니다.`,
+        `변경 저장을 눌러야 DB와 다른 ${managerCopy.scoreKindLabel} 명단에 반영됩니다.`,
+      ].join("\n"),
+      confirmLabel: "학생 삭제",
       tone: "danger",
     });
     if (!confirmed) return;
@@ -7795,63 +7797,6 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       ),
     );
     setSelectedScoreListRecordKeys(new Set<string>());
-
-    if (registeredUids.length === 0) return;
-
-    const deletedUidSet = new Set(registeredUids);
-    setSavingScoreEdits(true);
-    setStudents((current) =>
-      current.filter((student) => !deletedUidSet.has(student.uid)),
-    );
-    setRosters((current) =>
-      sortPerformanceScoreRosters(
-        current.map((roster) => {
-          const nextRows = (roster.rows || []).filter(
-            (row) => !deletedUidSet.has(row.uid),
-          );
-          if (nextRows.length === (roster.rows || []).length) return roster;
-          const meta = buildRosterRowsMeta(roster, nextRows);
-          return {
-            ...roster,
-            rows: nextRows,
-            classes: meta.classes,
-            targetClass: meta.targetClass,
-            rowCount: meta.rowCount,
-            matchedCount: meta.matchedCount,
-            unmatchedCount: meta.unmatchedCount,
-            updatedAt: new Date(),
-          };
-        }),
-      ),
-    );
-
-    try {
-      for (const uid of registeredUids) {
-        await deleteStudentData(config, uid);
-      }
-      setScoreStatsRecords([]);
-      setScoreStatsLoadedRosterId("");
-      setClassSheetPreviewStudents([]);
-      setClassSheetPreviewLoadedKey("");
-      showToast({
-        tone: "success",
-        title: "학생 데이터를 삭제했습니다.",
-        message: `학생 명단과 ${managerCopy.scoreKindLabel}, 위스, 평가 기록에 남은 연결 데이터를 함께 정리했습니다.`,
-      });
-      void loadStudents({ force: true });
-      void loadRosters();
-    } catch (error) {
-      console.error("Failed to delete selected score list students:", error);
-      showToast({
-        tone: "error",
-        title: "학생 삭제에 실패했습니다.",
-        message: getFirestoreWriteErrorMessage(error),
-      });
-      void loadStudents({ force: true });
-      void loadRosters();
-    } finally {
-      setSavingScoreEdits(false);
-    }
   };
 
   const updateScoreListIdentity = (
@@ -8188,9 +8133,6 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
     setSavingScoreEdits(true);
     try {
-      const timestamp = serverTimestamp();
-      const editedBy = currentUser?.uid || "";
-      const editedByEmail = currentUser?.email || "";
       const recordByUid = new Map(
         persistableScoreListRecords
           .filter((record) => record.uid)
@@ -8335,27 +8277,22 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         unmatchedCount: selectedRowsMeta.unmatchedCount,
         updatedAt: "",
       });
-      const batchQueue = createBatchQueue();
-
-      batchQueue.update(doc(db, rosterCollectionPath, selectedScoreRoster.id), {
+      const updatedRoster: PerformanceScoreRoster = {
+        ...selectedScoreRoster,
         rows: finalUpdatedRows,
         classes: selectedRowsMeta.classes,
         targetClass: selectedRowsMeta.targetClass,
         rowCount: selectedRowsMeta.rowCount,
         matchedCount: selectedRowsMeta.matchedCount,
         unmatchedCount: selectedRowsMeta.unmatchedCount,
-        updatedAt: timestamp,
-      });
-
-      syncedRosterRowsById.forEach((rows, rosterId) => {
-        if (rosterId === selectedScoreRoster.id) return;
-        const roster = rostersWithEditedRows.find(
-          (item) => item.id === rosterId,
-        );
-        if (!roster) return;
+        updatedAt: new Date(),
+      };
+      const relatedRosterUpdates = latestOtherRosters.flatMap((roster) => {
+        const rows = syncedRosterRowsById.get(roster.id);
+        if (!rows) return [];
         const storageRows = getRosterRowsForStorage(rows);
         const meta = buildRosterRowsMeta(roster, storageRows);
-        assertRosterPayloadFitsFirestore({
+        const relatedRoster: PerformanceScoreRoster = {
           ...roster,
           rows: storageRows,
           classes: meta.classes,
@@ -8363,146 +8300,80 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           rowCount: meta.rowCount,
           matchedCount: meta.matchedCount,
           unmatchedCount: meta.unmatchedCount,
+          updatedAt: new Date(),
+        };
+        assertRosterPayloadFitsFirestore({
+          ...relatedRoster,
           updatedAt: "",
         });
-        batchQueue.update(doc(db, rosterCollectionPath, rosterId), {
-          rows: storageRows,
-          classes: meta.classes,
-          targetClass: meta.targetClass,
-          rowCount: meta.rowCount,
-          matchedCount: meta.matchedCount,
-          unmatchedCount: meta.unmatchedCount,
-          updatedAt: timestamp,
-        });
+        return [relatedRoster];
       });
-
-      deletedRecords.forEach((record) => {
-        if (!record.uid) return;
-        const scoreId = selectedScoreRoster.id;
-        const scoreRef = doc(
-          db,
-          "users",
-          record.uid,
-          PERFORMANCE_SCORE_USER_COLLECTION,
-          scoreId,
-        );
-        const confirmationRef = doc(
-          db,
-          "users",
-          record.uid,
-          PERFORMANCE_SCORE_USER_COLLECTION,
-          scoreId,
-          PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
-          record.uid,
-        );
-        batchQueue.delete(confirmationRef);
-        batchQueue.delete(scoreRef);
-      });
-
-      recordsToWrite.forEach((record) => {
-        if (!record.uid) return;
-        const scoreId = selectedScoreRoster.id;
-        const scoreRef = doc(
-          db,
-          "users",
-          record.uid,
-          PERFORMANCE_SCORE_USER_COLLECTION,
-          scoreId,
-        );
-        const confirmationRef = doc(
-          db,
-          "users",
-          record.uid,
-          PERFORMANCE_SCORE_USER_COLLECTION,
-          scoreId,
-          PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
-          record.uid,
-        );
-        const original = originalByKey.get(getScoreListRecordKey(record));
-        const hadSignature = Boolean(
-          record.signatureImage ||
-          record.confirmation?.signatureImage ||
-          original?.signatureImage ||
-          original?.confirmation?.signatureImage,
-        );
+      const commandRecords = persistableScoreListRecords.flatMap((record) => {
+        if (!record.uid) return [];
         const academicStatus = getAcademicStatusLabel(record);
         const hasAcademicStatus = Boolean(academicStatus);
         const items = getRecordItemsForRoster(record, selectedScoreRoster).map(
           (item) =>
             hasAcademicStatus
-              ? {
-                  ...item,
-                  score: 0,
-                  scoreEntered: false,
-                }
+              ? { ...item, score: 0, scoreEntered: false }
               : item,
         );
         const itemTotalScore = getEnteredItemsTotalScore(items);
         const totalScore = hasAcademicStatus
           ? 0
           : (itemTotalScore ?? getScoreRecordFallbackTotalScore(record));
-        const enteredScoreCount = getScoreRecordEnteredScoreCount(
-          record,
-          items,
-        );
-
-        if (hadSignature) {
-          batchQueue.delete(confirmationRef);
-        }
-
-        if (!hasAcademicStatus && totalScore === null) {
-          batchQueue.delete(scoreRef);
-          return;
-        }
-
-        const payload: PerformanceScoreRecord = {
-          scoreKind: normalizePerformanceScoreKind(
-            selectedScoreRoster.scoreKind,
-          ),
-          ...(selectedScoreRoster.scoreContentKind
-            ? { scoreContentKind: selectedScoreRoster.scoreContentKind }
-            : {}),
-          rosterId: scoreId,
-          title: selectedScoreRoster.title,
-          subject: selectedScoreRoster.subject,
-          ...(selectedScoreRoster.assessmentOrder
-            ? { assessmentOrder: selectedScoreRoster.assessmentOrder }
-            : {}),
-          academicYear: selectedScoreRoster.academicYear || year,
-          semester: selectedScoreRoster.semester || semester,
-          grade: record.grade,
-          class: record.class,
-          number: record.number,
-          studentName: record.studentName,
-          uid: record.uid,
-          items,
-          enteredScoreCount,
-          totalScore: totalScore ?? 0,
-          totalMaxScore:
-            getRecordTotalMaxScore(record) ||
-            selectedScoreRoster.totalMaxScore ||
-            0,
-          feedback: String(record.feedback || "").slice(0, 1000),
-          evidence: String(record.evidence || record.feedback || "").slice(
-            0,
-            1000,
-          ),
-          sourceFileName: selectedScoreRoster.sourceFileName,
-          uploadedBy:
-            record.uploadedBy || selectedScoreRoster.uploadedBy || editedBy,
-          uploadedByEmail:
-            record.uploadedByEmail ||
-            selectedScoreRoster.uploadedByEmail ||
-            editedByEmail,
-          uploadedAt:
-            record.uploadedAt || selectedScoreRoster.createdAt || timestamp,
-          updatedAt: timestamp,
-          ...getAcademicStatusRecordMeta(academicStatus),
-        };
-        batchQueue.set(scoreRef, payload);
+        if (!hasAcademicStatus && totalScore === null) return [];
+        return [
+          {
+            ...record,
+            id: selectedScoreRoster.id,
+            rosterId: selectedScoreRoster.id,
+            scoreKind: normalizePerformanceScoreKind(
+              selectedScoreRoster.scoreKind,
+            ),
+            items,
+            enteredScoreCount: getScoreRecordEnteredScoreCount(record, items),
+            totalScore: totalScore ?? 0,
+            totalMaxScore:
+              getRecordTotalMaxScore(record) ||
+              selectedScoreRoster.totalMaxScore ||
+              0,
+            feedback: String(record.feedback || "").slice(0, 1000),
+            evidence: String(record.evidence || record.feedback || "").slice(
+              0,
+              1000,
+            ),
+            ...getAcademicStatusRecordMeta(academicStatus),
+          } satisfies PerformanceScoreRecord,
+        ];
       });
-
-      await batchQueue.commit();
+      if (commandRecords.length > LEGACY_GRADE_ATOMIC_RECORD_LIMIT) {
+        showToast({
+          tone: "warning",
+          title: "한 번에 저장할 학생이 너무 많습니다.",
+          message: `점수 저장은 원자성을 위해 ${LEGACY_GRADE_ATOMIC_RECORD_LIMIT}명까지 가능합니다. 학급별 명단으로 나누어 저장해 주세요.`,
+        });
+        return;
+      }
+      const commandResult = await saveLegacyGradeRoster({
+        config,
+        scoreKind: activeScoreKind,
+        mode: "UPDATE",
+        roster: updatedRoster,
+        records: commandRecords,
+        relatedRosters: relatedRosterUpdates,
+        reason: `${managerCopy.scoreKindLabel} 점수표 수정`,
+      });
+      updatedRoster.revision = commandResult.revision;
+      const relatedRosterRevisionById = new Map(
+        commandResult.relatedRosterRevisions.map((entry) => [
+          entry.rosterId,
+          entry.revision,
+        ]),
+      );
+      const commandRecordMetaByUid = new Map(
+        commandResult.records.map((record) => [record.uid, record]),
+      );
 
       const persistedRecordKeys = new Set(
         recordsToWrite.map((record) => getScoreListRecordKey(record)),
@@ -8536,6 +8407,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
             getScoreRecordEnteredScoreCount(record) > 0 ||
             getEnteredTotalScore(record) !== null;
           const cleared = clearRecordSignature(record) || record;
+          const commandRecordMeta = record.uid
+            ? commandRecordMetaByUid.get(record.uid)
+            : undefined;
           return {
             ...keyedRecord,
             ...cleared,
@@ -8546,12 +8420,21 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
               keyedRecord.uid && hasScore ? "student-doc" : "roster-row",
             scoreDocumentExists: Boolean(keyedRecord.uid && hasScore),
             updatedAt: new Date(),
+            ...(commandRecordMeta
+              ? {
+                  gradeRecordId: commandRecordMeta.recordId,
+                  gradeVersionId: commandRecordMeta.versionId,
+                  gradeRecordRevision: commandRecordMeta.revision,
+                  gradeRevision: commandRecordMeta.gradeRevision,
+                  projectionRevision: commandRecordMeta.projectionRevision,
+                }
+              : {}),
           };
         });
 
       const changedRosterIds = new Set<string>([
         selectedScoreRoster.id,
-        ...syncedRosterRowsById.keys(),
+        ...relatedRosterUpdates.map((roster) => roster.id),
       ]);
       invalidateRosterReadCaches(...changedRosterIds);
       scoreDocumentRecordsByRosterCacheRef.current.set(
@@ -8573,22 +8456,16 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       setRosters((current) =>
         sortPerformanceScoreRosters(
           current.map((roster) => {
-            const rows =
-              roster.id === selectedScoreRoster.id
-                ? finalUpdatedRows
-                : syncedRosterRowsById.get(roster.id);
-            if (!rows) return roster;
-            const storageRows = getRosterRowsForStorage(rows);
-            const meta = buildRosterRowsMeta(roster, storageRows);
+            if (roster.id === selectedScoreRoster.id) return updatedRoster;
+            const relatedRoster = relatedRosterUpdates.find(
+              (item) => item.id === roster.id,
+            );
+            if (!relatedRoster) return roster;
             return {
-              ...roster,
-              rows: storageRows,
-              classes: meta.classes,
-              targetClass: meta.targetClass,
-              rowCount: meta.rowCount,
-              matchedCount: meta.matchedCount,
-              unmatchedCount: meta.unmatchedCount,
-              updatedAt: new Date(),
+              ...relatedRoster,
+              revision:
+                relatedRosterRevisionById.get(relatedRoster.id) ??
+                relatedRoster.revision,
             };
           }),
         ),
@@ -8972,36 +8849,13 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       : "performance_score_signature_rejected";
     setRejectingSignatureKey(studentKey);
     try {
-      const batchQueue = createBatchQueue();
-      signedRecords.forEach((record) => {
-        const scoreId = getRecordScoreId(record);
-        batchQueue.update(
-          doc(
-            db,
-            "users",
-            student.uid,
-            PERFORMANCE_SCORE_USER_COLLECTION,
-            scoreId,
-          ),
-          {
-            signatureName: deleteField(),
-            signatureImage: deleteField(),
-            signedAt: deleteField(),
-          },
-        );
-        batchQueue.delete(
-          doc(
-            db,
-            "users",
-            student.uid,
-            PERFORMANCE_SCORE_USER_COLLECTION,
-            scoreId,
-            PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
-            student.uid,
-          ),
-        );
+      await rejectLegacyGradeSignatures({
+        config,
+        scoreKind: activeScoreKind,
+        studentUid: student.uid,
+        records: signedRecords,
+        reason: `${rejectedScoreKindLabel} 점수 확인 서명 반려`,
       });
-      await batchQueue.commit();
 
       const rejectedScoreTitles = signedRecords
         .map((record) => record.title)
@@ -9276,6 +9130,15 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       return;
     }
 
+    if (saveableRows.length > LEGACY_GRADE_ATOMIC_RECORD_LIMIT) {
+      showToast({
+        tone: "warning",
+        title: "한 번에 저장할 학생이 너무 많습니다.",
+        message: `점수 저장은 원자성을 위해 ${LEGACY_GRADE_ATOMIC_RECORD_LIMIT}명까지 가능합니다. 학급별 명단으로 나누어 저장해 주세요.`,
+      });
+      return;
+    }
+
     const connectedBlankScoreCount = linkedRows.length - saveableRows.length;
     const unmatchedRows = parsed.rows.filter((row) => !row.uid);
     const warningRows = parsed.rows.filter(
@@ -9388,18 +9251,9 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       };
 
       assertRosterPayloadFitsFirestore(rosterPayload);
-      const batchQueue = createBatchQueue();
-      batchQueue.set(rosterRef, rosterPayload);
 
       const savedScoreRecords: ScoreListRecord[] = [];
       saveableRows.forEach((row) => {
-        const userScoreRef = doc(
-          db,
-          "users",
-          row.uid,
-          PERFORMANCE_SCORE_USER_COLLECTION,
-          rosterId,
-        );
         const payload: PerformanceScoreRecord = {
           scoreKind: activeScoreKind,
           ...(parsed.scoreContentKind
@@ -9428,7 +9282,6 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
           uploadedAt: timestamp,
           updatedAt: timestamp,
         };
-        batchQueue.set(userScoreRef, payload);
         savedScoreRecords.push({
           id: rosterId,
           ...payload,
@@ -9437,11 +9290,35 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
         });
       });
 
-      await batchQueue.commit();
+      const commandResult = await saveLegacyGradeRoster({
+        config,
+        scoreKind: activeScoreKind,
+        mode: "CREATE",
+        roster: localRoster,
+        records: savedScoreRecords,
+        reason: `${managerCopy.scoreKindLabel} 점수표 업로드`,
+      });
+      localRoster.revision = commandResult.revision;
+      const commandRecordMetaByUid = new Map(
+        commandResult.records.map((record) => [record.uid, record]),
+      );
+      const canonicalSavedScoreRecords = savedScoreRecords.map((record) => {
+        const commandRecordMeta = commandRecordMetaByUid.get(record.uid);
+        return commandRecordMeta
+          ? {
+              ...record,
+              gradeRecordId: commandRecordMeta.recordId,
+              gradeVersionId: commandRecordMeta.versionId,
+              gradeRecordRevision: commandRecordMeta.revision,
+              gradeRevision: commandRecordMeta.gradeRevision,
+              projectionRevision: commandRecordMeta.projectionRevision,
+            }
+          : record;
+      });
       invalidateRosterReadCaches(rosterId);
       scoreDocumentRecordsByRosterCacheRef.current.set(
         rosterId,
-        cloneScoreListRecords(savedScoreRecords),
+        cloneScoreListRecords(canonicalSavedScoreRecords),
       );
       setParsed(null);
       setScoreListRosterId(rosterId);
@@ -9454,7 +9331,7 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
       setScoreListSearch("");
       setScoreListSummaryStudents([]);
       setScoreListSummaryLoadedKey("");
-      setScoreListRecords(sortStudentIdentityRows(savedScoreRecords));
+      setScoreListRecords(sortStudentIdentityRows(canonicalSavedScoreRecords));
       setRosters((current) =>
         sortPerformanceScoreRosters([
           localRoster,
@@ -9490,54 +9367,12 @@ const PerformanceScoreManager: React.FC<PerformanceScoreManagerProps> = ({
 
     setDeletingRosterId(roster.id);
     try {
-      const batchQueue = createBatchQueue();
-      batchQueue.delete(doc(db, rosterCollectionPath, roster.id));
-      const staleScoreDocs = await getDocs(
-        query(
-          collectionGroup(db, PERFORMANCE_SCORE_USER_COLLECTION),
-          where("rosterId", "==", roster.id),
-        ),
-      );
-      staleScoreDocs.forEach((scoreDoc) => {
-        const ownerUid =
-          scoreDoc.ref.parent.parent?.id ||
-          String((scoreDoc.data() as PerformanceScoreRecord).uid || "");
-        if (ownerUid) {
-          batchQueue.delete(
-            doc(
-              scoreDoc.ref,
-              PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
-              ownerUid,
-            ),
-          );
-        }
-        batchQueue.delete(scoreDoc.ref);
+      await deleteLegacyGradeRoster({
+        config,
+        scoreKind: activeScoreKind,
+        roster,
+        reason: `${managerCopy.scoreKindLabel} 점수표 삭제`,
       });
-      (roster.rows || [])
-        .filter((row) => row.uid)
-        .forEach((row) => {
-          batchQueue.delete(
-            doc(
-              db,
-              "users",
-              row.uid,
-              PERFORMANCE_SCORE_USER_COLLECTION,
-              roster.id,
-              PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
-              row.uid,
-            ),
-          );
-          batchQueue.delete(
-            doc(
-              db,
-              "users",
-              row.uid,
-              PERFORMANCE_SCORE_USER_COLLECTION,
-              roster.id,
-            ),
-          );
-        });
-      await batchQueue.commit();
       invalidateRosterReadCaches(roster.id);
       if (scoreListRosterId === roster.id || scoreListAllSelected) {
         setScoreListLoadedRosterId("");

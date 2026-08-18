@@ -1,29 +1,36 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
-import { getFirebaseStorage } from "../../lib/firebase";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useSearchParams } from "react-router-dom";
 import { TEACHER_POINT_TAB_LABELS } from "../../constants/pointLabels";
 import { useAppToast } from "../../components/common/AppToastProvider";
 import { InlineLoading } from "../../components/common/LoadingState";
 import { useAuth } from "../../contexts/AuthContext";
 import {
-  adjustPoints,
-  deletePointProduct,
-  getPointSchoolOptions,
-  getPointPolicy,
-  getPointRankManualAdjustEarnedPointsMap,
-  listPointStudentTargets,
-  listPointOrders,
-  listPointProducts,
-  listPointStudentTargetsByClass,
-  listPointTransactionsByUid,
-  listPointWallets,
-  POINT_POLICY_FALLBACK,
-  reviewPointOrder,
-  updatePointAdjustment,
-  upsertPointPolicy,
-  upsertPointProduct,
-} from "../../lib/points";
+  adjustLegacyTeacherWis as adjustPoints,
+  deleteLegacyTeacherPointProduct as deletePointProduct,
+  getLegacyTeacherPointPolicy as getPointPolicy,
+  getLegacyTeacherPointSchoolOptions as getPointSchoolOptions,
+  getLegacyTeacherRankEarnedPointsMap as getPointRankManualAdjustEarnedPointsMap,
+  getLegacyTeacherWisHallOfFameState,
+  listLegacyTeacherPointOrders as listPointOrders,
+  listLegacyTeacherPointProducts as listPointProducts,
+  listLegacyTeacherPointStudentTargets as listPointStudentTargets,
+  listLegacyTeacherPointStudentTargetsByClass as listPointStudentTargetsByClass,
+  listLegacyTeacherPointTransactionsByUid as listPointTransactionsByUid,
+  listLegacyTeacherPointWallets as listPointWallets,
+  reviewLegacyTeacherPointOrder as reviewPointOrder,
+  saveLegacyTeacherPointPolicy as upsertPointPolicy,
+  saveLegacyTeacherPointProduct as upsertPointProduct,
+  saveLegacyTeacherWisHallOfFameConfig,
+  updateLegacyTeacherPointAdjustment as updatePointAdjustment,
+} from "../../lib/legacyWisPresentationAdapter";
+import { createStableLegacyMutationActionKey } from "../../lib/legacyWisMutationIntent";
+import { POINT_POLICY_FALLBACK } from "../../lib/points";
 import {
   getPointRankPolicyValidationError,
   getPointWalletCumulativeEarned,
@@ -31,7 +38,6 @@ import {
   resolvePointRankPolicyDraft,
 } from "../../lib/pointRanks";
 import { canManagePoints, canReadPoints } from "../../lib/permissions";
-import { getYearSemester } from "../../lib/semesterScope";
 import type {
   PointOrder,
   PointOrderStatus,
@@ -282,132 +288,8 @@ const createRankEmojiCollectionDraft = (
   };
 };
 
-const loadImageElement = (file: File) =>
-  new Promise<HTMLImageElement>((resolve, reject) => {
-    const objectUrl = URL.createObjectURL(file);
-    const image = new Image();
-    image.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-      resolve(image);
-    };
-    image.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error("상품 이미지를 읽지 못했습니다."));
-    };
-    image.src = objectUrl;
-  });
-
-const canvasToBlob = (
-  canvas: HTMLCanvasElement,
-  quality: number,
-  contentType = "image/jpeg",
-) =>
-  new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (blob) => {
-        if (!blob) {
-          reject(new Error("상품 이미지를 압축하지 못했습니다."));
-          return;
-        }
-        resolve(blob);
-      },
-      contentType,
-      quality,
-    );
-  });
-
-interface ProductImageOptimizationOptions {
-  maxSize: number;
-  baselineQuality: number;
-  targetSizeRatio: number;
-  minQuality: number;
-}
-
-const drawProductImageCanvas = (image: HTMLImageElement, maxSize: number) => {
-  const scale = Math.min(1, maxSize / Math.max(image.width, image.height));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(image.width * scale));
-  canvas.height = Math.max(1, Math.round(image.height * scale));
-  const context = canvas.getContext("2d", { alpha: false });
-  if (!context) {
-    throw new Error("상품 이미지 캔버스를 준비하지 못했습니다.");
-  }
-  context.imageSmoothingEnabled = true;
-  context.imageSmoothingQuality = "high";
-  context.fillStyle = "#ffffff";
-  context.fillRect(0, 0, canvas.width, canvas.height);
-  context.drawImage(image, 0, 0, canvas.width, canvas.height);
-  return canvas;
-};
-
-const buildOptimizedImageBlob = async (
-  file: File,
-  {
-    maxSize,
-    baselineQuality,
-    targetSizeRatio,
-    minQuality,
-  }: ProductImageOptimizationOptions,
-) => {
-  const image = await loadImageElement(file);
-  const baselineCanvas = drawProductImageCanvas(image, maxSize);
-  const baselineBlob = await canvasToBlob(
-    baselineCanvas,
-    baselineQuality,
-    "image/jpeg",
-  );
-  const targetBytes = Math.ceil(baselineBlob.size * targetSizeRatio);
-  const candidates: Blob[] = [baselineBlob];
-
-  for (const sizeRatio of [1, 0.92, 0.84]) {
-    const candidateCanvas =
-      sizeRatio === 1
-        ? baselineCanvas
-        : drawProductImageCanvas(
-            image,
-            Math.max(1, Math.round(maxSize * sizeRatio)),
-          );
-
-    for (
-      let quality = Math.min(0.92, baselineQuality + 0.08);
-      quality >= minQuality;
-      quality -= 0.06
-    ) {
-      const candidateBlob = await canvasToBlob(
-        candidateCanvas,
-        quality,
-        "image/webp",
-      );
-      if (candidateBlob.type === "image/webp") {
-        candidates.push(candidateBlob);
-        if (candidateBlob.size <= targetBytes) {
-          return candidateBlob;
-        }
-      }
-    }
-  }
-
-  return candidates.reduce(
-    (bestBlob, candidateBlob) =>
-      candidateBlob.size <= targetBytes && candidateBlob.size > bestBlob.size
-        ? candidateBlob
-        : bestBlob,
-    candidates.find((candidateBlob) => candidateBlob.size <= targetBytes) ||
-      baselineBlob,
-  );
-};
-
-const getProductImageExtension = (blob: Blob) =>
-  blob.type === "image/webp" ? "webp" : "jpg";
-
 const ManagePoints: React.FC = () => {
-  const {
-    config,
-    currentUser,
-    userData,
-    interfaceConfig,
-    refreshInterfaceConfig,
-  } = useAuth();
+  const { config, currentUser, userData, interfaceConfig } = useAuth();
   const { showToast } = useAppToast();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -416,6 +298,7 @@ const ManagePoints: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<TeacherPointTab>("overview");
   const [loading, setLoading] = useState(true);
+  const [loadErrorMessage, setLoadErrorMessage] = useState("");
   const [wallets, setWallets] = useState<PointWallet[]>([]);
   const [students, setStudents] = useState<PointStudentTarget[]>([]);
   const [grantLoading, setGrantLoading] = useState(false);
@@ -475,6 +358,27 @@ const ManagePoints: React.FC = () => {
   const [grantFeedback, setGrantFeedback] = useState("");
   const [grantSubmittingMode, setGrantSubmittingMode] =
     useState<GrantMode | null>(null);
+  const grantMutationIntentRef = useRef<{
+    signature: string;
+    actionKey: string;
+  } | null>(null);
+  const loadHallOfFameState = useCallback(
+    () => getLegacyTeacherWisHallOfFameState(config),
+    [config],
+  );
+  const saveHallOfFameConfig = (
+    hallOfFame: Parameters<
+      typeof saveLegacyTeacherWisHallOfFameConfig
+    >[0]["hallOfFame"],
+    expectedRevision: number,
+    actionKey: string,
+  ) =>
+    saveLegacyTeacherWisHallOfFameConfig({
+      config,
+      hallOfFame,
+      expectedRevision,
+      actionKey,
+    });
   const [grantGradeOptions, setGrantGradeOptions] = useState<SchoolOption[]>([
     { value: "1", label: "1학년" },
     { value: "2", label: "2학년" },
@@ -798,6 +702,7 @@ const ManagePoints: React.FC = () => {
     }
 
     setLoading(true);
+    setLoadErrorMessage("");
     try {
       const [
         nextWallets,
@@ -807,7 +712,7 @@ const ManagePoints: React.FC = () => {
         nextOrders,
       ] = await Promise.all([
         listPointWallets(config),
-        getPointSchoolOptions(),
+        getPointSchoolOptions(config),
         getPointPolicy(config),
         listPointProducts(config, false),
         listPointOrders(config, { limitCount: 200 }),
@@ -852,6 +757,12 @@ const ManagePoints: React.FC = () => {
           ? selectedUid
           : nextWallets[0]?.uid || "";
       setSelectedUid(nextSelectedUid);
+    } catch (error: any) {
+      console.error("Failed to load W7 wis state:", error);
+      setLoadErrorMessage(
+        error?.message ||
+          "위스 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      );
     } finally {
       setLoading(false);
     }
@@ -995,8 +906,9 @@ const ManagePoints: React.FC = () => {
       setGrantLoading(true);
       try {
         const nextStudents = isGlobalGrantSearch
-          ? await listPointStudentTargets()
+          ? await listPointStudentTargets(config)
           : await listPointStudentTargetsByClass(
+              config,
               grantGradeFilter,
               grantClassFilter,
             );
@@ -1138,36 +1050,11 @@ const ManagePoints: React.FC = () => {
   const handleSaveProductOrder = async () => {
     if (!canManage || !productOrderDirty || productOrderSaving) return;
 
-    const orderedProducts = resequencePointProducts(
-      sortPointProducts(products),
-    );
     setProductOrderSaving(true);
-    setProductOrderFeedback("");
-
-    try {
-      await Promise.all(
-        orderedProducts.map((product) =>
-          upsertPointProduct(
-            config,
-            {
-              ...product,
-              sortOrder: product.sortOrder,
-            },
-            actor,
-          ),
-        ),
-      );
-      setProducts(orderedProducts);
-      setProductOrderDirty(false);
-      setProductOrderFeedback("상품 순서를 저장했습니다.");
-    } catch (error: any) {
-      console.error("Failed to save product order:", error);
-      setProductOrderFeedback(
-        error?.message || "상품 순서 저장에 실패했습니다.",
-      );
-    } finally {
-      setProductOrderSaving(false);
-    }
+    setProductOrderFeedback(
+      "현재 위스 원장은 상품 순서를 저장하지 않습니다. 상품명으로 검색해 관리해 주세요.",
+    );
+    setProductOrderSaving(false);
   };
 
   const getGrantFailureMessage = (error: any, mode: GrantMode) => {
@@ -1198,7 +1085,10 @@ const ManagePoints: React.FC = () => {
       if (normalizedMessage.includes("manual point adjustment is disabled")) {
         return "현재 위스 정책에서 지급 및 환수가 잠겨 있습니다. 정책 설정을 확인해 주세요.";
       }
-      if (normalizedMessage.includes("insufficient point balance")) {
+      if (
+        normalizedMessage.includes("insufficient point balance") ||
+        normalizedMessage.includes("balance is insufficient")
+      ) {
         return "환수할 위스가 부족합니다. 현재 보유 위스를 확인한 뒤 다시 시도해 주세요.";
       }
       if (normalizedMessage.includes("reason is required")) {
@@ -1269,6 +1159,26 @@ const ManagePoints: React.FC = () => {
     }
 
     const actionLabel = mode === "grant" ? "지급" : "환수";
+    const intentSignature = [
+      selectedGrantStudent.uid,
+      mode,
+      numericAmount,
+      grantReason.trim(),
+    ].join("|");
+    const actionKey =
+      grantMutationIntentRef.current?.signature === intentSignature
+        ? grantMutationIntentRef.current.actionKey
+        : createStableLegacyMutationActionKey("teacher-wis-adjust", {
+            actorUid: actor.uid,
+            semesterId: `${String(config?.year || "")}-${String(
+              config?.semester || "",
+            )}`,
+            studentUid: selectedGrantStudent.uid,
+            mode,
+            amount: numericAmount,
+            reason: grantReason.trim(),
+          });
+    grantMutationIntentRef.current = { signature: intentSignature, actionKey };
     setGrantSubmittingMode(mode);
     setGrantFeedback("");
     try {
@@ -1278,39 +1188,57 @@ const ManagePoints: React.FC = () => {
         delta: mode === "reclaim" ? -numericAmount : numericAmount,
         sourceLabel: grantReason.trim(),
         mode,
+        actionKey,
       });
+      grantMutationIntentRef.current = null;
       setGrantAmount("");
       setGrantReason("");
       setGrantFeedback(
         mode === "grant" ? "지급되었습니다." : "환수되었습니다.",
       );
 
-      const nextWallets = await listPointWallets(config);
-      const nextRankManualAdjustEarnedPointsByUid = nextWallets.some((wallet) =>
-        needsPointRankLegacyFallback(wallet),
-      )
-        ? await getPointRankManualAdjustEarnedPointsMap(config)
-        : {};
-      setWallets(nextWallets);
-      setRankManualAdjustEarnedPointsByUid(
-        nextRankManualAdjustEarnedPointsByUid,
-      );
+      try {
+        const nextWallets = await listPointWallets(config);
+        const nextRankManualAdjustEarnedPointsByUid = nextWallets.some(
+          (wallet) => needsPointRankLegacyFallback(wallet),
+        )
+          ? await getPointRankManualAdjustEarnedPointsMap(config)
+          : {};
+        setWallets(nextWallets);
+        setRankManualAdjustEarnedPointsByUid(
+          nextRankManualAdjustEarnedPointsByUid,
+        );
 
-      const nextSelectedUid = nextWallets.some(
-        (wallet) => wallet.uid === selectedGrantStudent.uid,
-      )
-        ? selectedGrantStudent.uid
-        : selectedUid &&
-            nextWallets.some((wallet) => wallet.uid === selectedUid)
-          ? selectedUid
-          : nextWallets[0]?.uid || "";
-      setSelectedUid(nextSelectedUid);
-      await loadTransactionsForWallet(nextSelectedUid);
-      showToast({
-        tone: "success",
-        title: `${actionLabel}되었습니다.`,
-        message: `${selectedGrantStudent.studentName} 학생의 위스 현황을 최신 상태로 반영했습니다.`,
-      });
+        const nextSelectedUid = nextWallets.some(
+          (wallet) => wallet.uid === selectedGrantStudent.uid,
+        )
+          ? selectedGrantStudent.uid
+          : selectedUid &&
+              nextWallets.some((wallet) => wallet.uid === selectedUid)
+            ? selectedUid
+            : nextWallets[0]?.uid || "";
+        setSelectedUid(nextSelectedUid);
+        await loadTransactionsForWallet(nextSelectedUid);
+        showToast({
+          tone: "success",
+          title: `${actionLabel}되었습니다.`,
+          message: `${selectedGrantStudent.studentName} 학생의 위스 현황을 최신 상태로 반영했습니다.`,
+        });
+      } catch (refreshError) {
+        console.error(
+          "Wis adjustment succeeded, but refreshing Wis state failed:",
+          refreshError,
+        );
+        setGrantFeedback(
+          `${actionLabel}은 완료되었습니다. 최신 위스 현황을 불러오지 못했습니다. 페이지를 새로고침해 주세요.`,
+        );
+        showToast({
+          tone: "warning",
+          title: `위스 ${actionLabel}은 완료되었습니다.`,
+          message:
+            "최신 위스 현황을 불러오지 못했습니다. 페이지를 새로고침해 확인해 주세요.",
+        });
+      }
     } catch (error: any) {
       console.error("Failed to adjust points:", error);
       const failureMessage = getGrantFailureMessage(error, mode);
@@ -1346,7 +1274,8 @@ const ManagePoints: React.FC = () => {
       console.error("Failed to save point policy:", error);
       setPolicyFeedbackTone("error");
       setPolicyFeedbackMessage(
-        "저장 중 문제가 발생했습니다. 입력값을 확인한 뒤 다시 시도해 주세요.",
+        error?.message ||
+          "저장 중 문제가 발생했습니다. 입력값을 확인한 뒤 다시 시도해 주세요.",
       );
     }
   };
@@ -1378,7 +1307,7 @@ const ManagePoints: React.FC = () => {
       console.error("Failed to save rank theme:", error);
       setRankThemeFeedbackTone("error");
       setRankThemeFeedbackMessage(
-        "테마 설정 저장에 실패했습니다. 다시 시도해 주세요.",
+        error?.message || "테마 설정 저장에 실패했습니다. 다시 시도해 주세요.",
       );
     }
   };
@@ -1427,7 +1356,7 @@ const ManagePoints: React.FC = () => {
       console.error("Failed to save rank settings:", error);
       setRankSettingsFeedbackTone("error");
       setRankSettingsFeedbackMessage(
-        "등급 관리 저장에 실패했습니다. 다시 시도해 주세요.",
+        error?.message || "등급 관리 저장에 실패했습니다. 다시 시도해 주세요.",
       );
     }
   };
@@ -1470,7 +1399,8 @@ const ManagePoints: React.FC = () => {
       console.error("Failed to save rank emoji collection:", error);
       setRankEmojiFeedbackTone("error");
       setRankEmojiFeedbackMessage(
-        "이모지 모음 저장에 실패했습니다. 다시 시도해 주세요.",
+        error?.message ||
+          "이모지 모음 저장에 실패했습니다. 다시 시도해 주세요.",
       );
     }
   };
@@ -1545,7 +1475,7 @@ const ManagePoints: React.FC = () => {
         productForm.id,
         productForm.sortOrder,
       );
-      let imagePayload = {
+      const imagePayload = {
         imageUrl: productForm.imageUrl.trim(),
         previewImageUrl: productForm.previewImageUrl.trim(),
         imageStoragePath: productForm.imageStoragePath.trim(),
@@ -1553,46 +1483,10 @@ const ManagePoints: React.FC = () => {
       };
 
       if (productImageFile) {
-        setProductImageUploading(true);
-        const { year, semester } = getYearSemester(config);
-        const basePath = `years/${year}/semesters/${semester}/point_products/${productId}`;
-        const compressedBlob = await buildOptimizedImageBlob(productImageFile, {
-          maxSize: 960,
-          baselineQuality: 0.82,
-          targetSizeRatio: 1.03,
-          minQuality: 0.64,
-        });
-        const previewBlob = await buildOptimizedImageBlob(productImageFile, {
-          maxSize: 320,
-          baselineQuality: 0.62,
-          targetSizeRatio: 1.03,
-          minQuality: 0.58,
-        });
-        const storage = await getFirebaseStorage();
-        const imageRef = ref(
-          storage,
-          `${basePath}/image.${getProductImageExtension(compressedBlob)}`,
+        setProductFeedback(
+          "현재 위스 원장은 상품 이미지 업로드를 지원하지 않습니다. 선택한 이미지를 제거한 뒤 저장해 주세요.",
         );
-        const previewRef = ref(
-          storage,
-          `${basePath}/preview.${getProductImageExtension(previewBlob)}`,
-        );
-
-        await uploadBytes(imageRef, compressedBlob, {
-          contentType: compressedBlob.type || "image/jpeg",
-          cacheControl: "public,max-age=86400",
-        });
-        await uploadBytes(previewRef, previewBlob, {
-          contentType: previewBlob.type || "image/jpeg",
-          cacheControl: "public,max-age=86400",
-        });
-
-        imagePayload = {
-          imageUrl: await getDownloadURL(imageRef),
-          previewImageUrl: await getDownloadURL(previewRef),
-          imageStoragePath: imageRef.fullPath,
-          previewStoragePath: previewRef.fullPath,
-        };
+        return;
       }
 
       await upsertPointProduct(
@@ -1838,6 +1732,7 @@ const ManagePoints: React.FC = () => {
     activeTab !== "policy" &&
     activeTab !== "ranks" &&
     activeTab !== "hall-of-fame";
+  const dataReady = !loading && !loadErrorMessage;
 
   return (
     <div className="flex min-h-screen flex-col bg-gray-50">
@@ -1886,7 +1781,13 @@ const ManagePoints: React.FC = () => {
             />
           )}
 
-          {!loading && activeTab === "overview" && (
+          {!loading && !!loadErrorMessage && (
+            <div className="rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-bold text-red-700">
+              {loadErrorMessage}
+            </div>
+          )}
+
+          {dataReady && activeTab === "overview" && (
             <PointsOverviewTab
               wallets={paginatedWallets}
               totalWalletCount={sortedWallets.length}
@@ -1927,7 +1828,7 @@ const ManagePoints: React.FC = () => {
             />
           )}
 
-          {!loading && activeTab === "grant" && (
+          {dataReady && activeTab === "grant" && (
             <PointGrantTab
               students={filteredGrantStudents}
               selectedStudent={selectedGrantStudent}
@@ -1962,7 +1863,7 @@ const ManagePoints: React.FC = () => {
             />
           )}
 
-          {!loading && activeTab === "policy" && (
+          {dataReady && activeTab === "policy" && (
             <PointPolicyTab
               policy={policyDraft}
               canManage={canManage}
@@ -1974,7 +1875,7 @@ const ManagePoints: React.FC = () => {
             />
           )}
 
-          {!loading && activeTab === "ranks" && (
+          {dataReady && activeTab === "ranks" && (
             <PointRanksTab
               savedRankPolicy={savedRankPolicy}
               canManage={canManage}
@@ -1999,16 +1900,17 @@ const ManagePoints: React.FC = () => {
             />
           )}
 
-          {!loading && activeTab === "hall-of-fame" && (
+          {dataReady && activeTab === "hall-of-fame" && (
             <HallOfFameManagementTab
               config={config}
               interfaceConfig={interfaceConfig}
               canManage={canManage}
-              onInterfaceConfigRefresh={refreshInterfaceConfig}
+              onLoadHallOfFameState={loadHallOfFameState}
+              onSaveHallOfFameConfig={saveHallOfFameConfig}
             />
           )}
 
-          {!loading && activeTab === "products" && (
+          {dataReady && activeTab === "products" && (
             <PointProductsTab
               products={products}
               productForm={productForm}
@@ -2057,7 +1959,7 @@ const ManagePoints: React.FC = () => {
             />
           )}
 
-          {!loading && activeTab === "requests" && (
+          {dataReady && activeTab === "requests" && (
             <PointRequestsTab
               orders={filteredOrders}
               orderFilter={orderFilter}

@@ -26,7 +26,7 @@ const safetyWorkflow = readFileSync(
 const runnerSource = readFileSync(
   resolve("scripts/run-w11-staging-rehearsal.mjs"),
   "utf8",
-);
+).replace(/\r\n?/gu, "\n");
 const fixtureSource = readFileSync(
   resolve("scripts/verify-w11-staging-fixture.mjs"),
   "utf8",

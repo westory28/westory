@@ -71,6 +71,17 @@ const SESSION_CONTROL_CALLABLES = new Set([
   "touchApplicationSession",
   "saveAssessmentProgress",
 ]);
+const USER_EVENT_COMMAND_CALLABLES = new Map([
+  [
+    "executeLessonCorePointCommand",
+    {
+      file: "src/lib/lessonCorePointReward.ts",
+      function: "executeLessonCorePointCommand",
+      symbolId:
+        "src/lib/lessonCorePointReward.ts::executeLessonCorePointCommand#1",
+    },
+  ],
+]);
 const EFFECT_HOOKS = new Set(["useEffect", "useLayoutEffect"]);
 const LISTENER_APIS = new Set([
   "addEventListener",
@@ -827,20 +838,66 @@ export const validateGatewayPurity = (analysis) => {
   }
 };
 
+const isPermanentCallable = (callable) =>
+  String(callable || "")
+    .split("|")
+    .every(
+      (name) =>
+        SESSION_CONTROL_CALLABLES.has(name) ||
+        name === "executeCommand" ||
+        USER_EVENT_COMMAND_CALLABLES.has(name),
+    );
+
+export const validateUserEventCommandCallablePurity = (analysis) => {
+  for (const item of analysis.observations.filter(
+    (entry) =>
+      entry.boundary === "CALLABLE" &&
+      String(entry.callable || "")
+        .split("|")
+        .some((name) => USER_EVENT_COMMAND_CALLABLES.has(name)),
+  )) {
+    const callableNames = String(item.callable || "").split("|");
+    assert.equal(
+      callableNames.length,
+      1,
+      `approved user-event command callable may not share a dynamic callable factory: ${item.file} :: ${item.function}`,
+    );
+    const expected = USER_EVENT_COMMAND_CALLABLES.get(callableNames[0]);
+    assert.ok(
+      expected,
+      `unknown user-event command callable: ${item.callable}`,
+    );
+    assert.equal(item.file, expected.file);
+    assert.equal(item.function, expected.function);
+    assert.equal(item.symbolId, expected.symbolId);
+    assert.equal(item.api, "westory#getHttpsCallable");
+    assert.equal(item.rootCount, 1);
+    assert.deepEqual(
+      item.triggers,
+      ["USER_EVENT"],
+      `${item.callable} must never dispatch from render, mount, listener, timer, cleanup, or an implicit/unreached path`,
+    );
+  }
+};
+
 export const buildProposedPolicy = (analysis) => {
   const entries = analysis.observations.map((item, index) => {
+    const userEventCommandCallable =
+      item.boundary === "CALLABLE" &&
+      String(item.callable || "")
+        .split("|")
+        .every((name) => USER_EVENT_COMMAND_CALLABLES.has(name));
     const permanent =
       item.boundary === "AUTH" ||
       item.boundary === "GATEWAY" ||
-      (item.boundary === "CALLABLE" &&
-        String(item.callable || "")
-          .split("|")
-          .every((name) => SESSION_CONTROL_CALLABLES.has(name) || name === "executeCommand"));
+      (item.boundary === "CALLABLE" && isPermanentCallable(item.callable));
     const reason = item.boundary === "AUTH"
-      ? "Firebase Auth 로그인·로그아웃·재인증 수명주기"
-      : item.boundary === "GATEWAY"
-        ? "명시적 사용자 동작에서 W2 command gateway 호출"
-        : item.boundary === "CALLABLE" && permanent
+        ? "Firebase Auth 로그인·로그아웃·재인증 수명주기"
+        : item.boundary === "GATEWAY"
+          ? "명시적 사용자 동작에서 W2 command gateway 호출"
+          : userEventCommandCallable
+            ? "명시적 사용자 동작에서 멱등 command callable 호출"
+          : item.boundary === "CALLABLE" && permanent
           ? "애플리케이션 세션 권한 control-plane callable"
           : item.boundary === "CALLABLE"
             ? "기존 callable command adapter; gateway 이전 전 임시 허용"
@@ -857,7 +914,11 @@ export const buildProposedPolicy = (analysis) => {
       callable: item.callable,
       triggers: item.triggers,
       reason,
-      introducedWave: permanent && item.boundary === "GATEWAY" ? "W2A" : "LEGACY",
+      introducedWave: userEventCommandCallable
+        ? "W10"
+        : permanent && item.boundary === "GATEWAY"
+          ? "W2A"
+          : "LEGACY",
       migrationWave: permanent ? "PERMANENT" : "W12",
       expiresAfterWave: permanent ? "PERMANENT" : "W12",
       owner: "westory-maintainers",
@@ -880,8 +941,10 @@ export const validatePolicy = (policy, analysis) => {
   assert.deepEqual(analysis.forbidden, [], "forbidden direct firebase/functions usage detected");
   assert.deepEqual(analysis.unknown, [], "UNKNOWN client mutation boundary detected");
   validateGatewayPurity(analysis);
+  validateUserEventCommandCallablePurity(analysis);
 
   const byKey = new Map();
+  const entryIds = new Set();
   for (const entry of policy.entries) {
     for (const field of [
       "id",
@@ -905,14 +968,14 @@ export const validatePolicy = (policy, analysis) => {
     const key = entryKey(entry);
     assert.ok(!byKey.has(key), `duplicate allowlist boundary: ${entry.file} :: ${entry.function}`);
     byKey.set(key, entry);
+    assert.equal(entryIds.has(entry.id), false, `duplicate allowlist ID: ${entry.id}`);
+    entryIds.add(entry.id);
     if (entry.expiresAfterWave === "PERMANENT") {
       assert.ok(
         entry.boundary === "AUTH" ||
           entry.boundary === "GATEWAY" ||
           (entry.boundary === "CALLABLE" &&
-            String(entry.callable || "")
-              .split("|")
-              .every((name) => SESSION_CONTROL_CALLABLES.has(name) || name === "executeCommand")),
+            isPermanentCallable(entry.callable)),
         `${entry.id} may not use PERMANENT expiry`,
       );
     } else {

@@ -27,6 +27,10 @@ const StudentDashboard = lazyWithRetry(
   () => import("./pages/student/Dashboard"),
   "student-dashboard",
 );
+const StudentNote = lazyWithRetry(
+  () => import("./pages/student/lesson/Note"),
+  "student-note",
+);
 const StudentHistoryDictionary = lazyWithRetry(
   () => import("./pages/student/lesson/HistoryDictionary"),
   "student-history-dictionary",
@@ -34,6 +38,10 @@ const StudentHistoryDictionary = lazyWithRetry(
 const StudentMaps = lazyWithRetry(
   () => import("./pages/student/lesson/Maps"),
   "student-maps",
+);
+const StudentThinkCloud = lazyWithRetry(
+  () => import("./pages/student/lesson/ThinkCloud"),
+  "student-think-cloud",
 );
 const W8StudentHub = lazyWithRetry(
   () => import("./pages/student/W8StudentHub"),
@@ -99,6 +107,14 @@ const SemesterCutoverCenter = lazyWithRetry(
   () => import("./pages/teacher/SemesterCutoverCenter"),
   "semester-cutover-center",
 );
+const ManageSchedule = lazyWithRetry(
+  () => import("./pages/teacher/ManageSchedule"),
+  "manage-schedule",
+);
+const ManageLesson = lazyWithRetry(
+  () => import("./pages/teacher/ManageLesson"),
+  "manage-lesson",
+);
 const W8TeacherHub = lazyWithRetry(
   () => import("./pages/teacher/W8TeacherHub"),
   "w8-teacher-hub",
@@ -115,6 +131,10 @@ const ManageSourceArchive = lazyWithRetry(
   () => import("./pages/teacher/ManageSourceArchive"),
   "manage-source-archive",
 );
+const ManageThinkCloud = lazyWithRetry(
+  () => import("./pages/teacher/ManageThinkCloud"),
+  "manage-think-cloud",
+);
 const MyPage = lazyWithRetry(() => import("./pages/student/MyPage"), "my-page");
 const StudentArchiveOverview = lazyWithRetry(
   () => import("./pages/student/StudentArchiveOverview"),
@@ -124,12 +144,16 @@ const StudentHistory = lazyWithRetry(
   () => import("./pages/student/History"),
   "student-history",
 );
+const Calendar = lazyWithRetry(
+  () => import("./pages/student/Calendar"),
+  "student-calendar",
+);
 const ManagePoints = lazyWithRetry(
-  () => import("./pages/teacher/WisEconomyManager"),
+  () => import("./pages/teacher/ManagePoints"),
   "manage-points",
 );
 const StudentPoints = lazyWithRetry(
-  () => import("./pages/student/WisEconomyStudentView"),
+  () => import("./pages/student/Points"),
   "student-points",
 );
 const DeveloperLog = lazyWithRetry(
@@ -210,7 +234,10 @@ const App: React.FC = () => {
                     />
                     <Route
                       path="/student/lesson/note"
-                      element={<LegacyRouteRedirect to="/student/learning" />}
+                      element={renderWithLayout(
+                        <StudentNote />,
+                        "수업 자료를 준비하는 중입니다.",
+                      )}
                     />
                     <Route
                       path="/student/lesson/history-dictionary"
@@ -228,9 +255,10 @@ const App: React.FC = () => {
                     />
                     <Route
                       path="/student/lesson/think-cloud"
-                      element={
-                        <LegacyRouteRedirect to="/student/learning?source=LEGACY" />
-                      }
+                      element={renderWithLayout(
+                        <StudentThinkCloud />,
+                        "생각 구름을 준비하는 중입니다.",
+                      )}
                     />
                     <Route
                       path="/student/quiz"
@@ -363,13 +391,16 @@ const App: React.FC = () => {
                     <Route
                       path="/teacher/schedule"
                       element={renderWithLayout(
-                        <W8TeacherHub />,
+                        <ManageSchedule />,
                         "일정 관리 화면을 준비하는 중입니다.",
                       )}
                     />
                     <Route
                       path="/teacher/lesson"
-                      element={<LegacyRouteRedirect to="/teacher/learning" />}
+                      element={renderWithLayout(
+                        <ManageLesson />,
+                        "수업자료 관리 화면을 준비하는 중입니다.",
+                      )}
                     />
                     <Route
                       path="/teacher/lesson/history-dictionary"
@@ -394,9 +425,10 @@ const App: React.FC = () => {
                     />
                     <Route
                       path="/teacher/lesson/think-cloud"
-                      element={
-                        <LegacyRouteRedirect to="/teacher/learning?source=LEGACY" />
-                      }
+                      element={renderWithLayout(
+                        <ManageThinkCloud />,
+                        "생각 구름 관리 화면을 준비하는 중입니다.",
+                      )}
                     />
                     <Route
                       path="/student/mypage"
@@ -429,7 +461,7 @@ const App: React.FC = () => {
                     <Route
                       path="/student/calendar"
                       element={renderWithLayout(
-                        <W8StudentHub />,
+                        <Calendar />,
                         "일정을 준비하는 중입니다.",
                       )}
                     />

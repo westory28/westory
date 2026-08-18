@@ -121,6 +121,11 @@ export interface PerformanceScoreRecord {
   academicStatus?: string;
   isTransferred?: boolean;
   transferStatus?: "transferred";
+  gradeRecordId?: string;
+  gradeVersionId?: string;
+  gradeRecordRevision?: number;
+  gradeRevision?: number;
+  projectionRevision?: number;
 }
 
 export interface PerformanceScoreConfirmation {
@@ -139,6 +144,7 @@ export interface PerformanceScoreSettings {
   warningTextHash: string;
   updatedAt?: unknown;
   updatedBy?: string;
+  revision?: number;
 }
 
 export interface PerformanceScoreWarningConsent {
@@ -151,6 +157,7 @@ export interface PerformanceScoreWarningConsent {
   warningTextHash: string;
   acknowledgedAt?: unknown;
   updatedAt?: unknown;
+  revision?: number;
 }
 
 export type PerformanceScoreObjectionStatus =
@@ -172,6 +179,7 @@ export interface PerformanceScoreObjection {
   reviewedAt?: unknown;
   changedScoreLabel?: string;
   reviewMemo?: string;
+  revision?: number;
 }
 
 export type PerformanceScoreAnswerSheetRequestStatus = "pending" | "reviewed";
@@ -189,6 +197,7 @@ export interface PerformanceScoreAnswerSheetRequest {
   requestedAt?: unknown;
   reviewedAt?: unknown;
   reviewMemo?: string;
+  revision?: number;
 }
 
 export interface PerformanceScoreRosterRow {
@@ -253,6 +262,7 @@ export interface PerformanceScoreRoster {
   uploadedByEmail: string;
   createdAt?: unknown;
   updatedAt?: unknown;
+  revision?: number;
 }
 
 export const normalizeSchoolValue = (value: unknown) =>
@@ -359,6 +369,7 @@ export const normalizePerformanceScoreSettings = (
     updatedAt: data.updatedAt,
     updatedBy:
       typeof data.updatedBy === "string" ? data.updatedBy.slice(0, 160) : "",
+    revision: Math.max(0, Number(data.revision || 0)),
   };
 };
 
@@ -479,6 +490,7 @@ export const loadUserPerformanceScoreObjections = async (
         reviewedAt: data.reviewedAt,
         changedScoreLabel: String(data.changedScoreLabel || ""),
         reviewMemo: String(data.reviewMemo || ""),
+        revision: Math.max(0, Number(data.revision || 0)),
       } satisfies PerformanceScoreObjection;
     })
     .filter(
@@ -528,6 +540,7 @@ export const loadUserPerformanceScoreAnswerSheetRequests = async (
         requestedAt: data.requestedAt,
         reviewedAt: data.reviewedAt,
         reviewMemo: String(data.reviewMemo || ""),
+        revision: Math.max(0, Number(data.revision || 0)),
       } satisfies PerformanceScoreAnswerSheetRequest;
     })
     .filter(

@@ -4,7 +4,7 @@ import { doc, getDoc } from "firebase/firestore";
 import { useAuth } from "../../../contexts/AuthContext";
 import { getSemesterDocPath } from "../../../lib/semesterScope";
 import { useAppToast } from "../../../components/common/AppToastProvider";
-import { failLegacyPerformanceScoreMutation } from "../../../lib/performanceScores";
+import { saveLegacyGradeConfig } from "../../../lib/legacyGradeEvidenceAdapter";
 
 interface ObjectiveItem {
   score: number;
@@ -20,19 +20,28 @@ interface SubjectiveItem {
   subItems: SubjectiveSubItem[];
 }
 
+const ANSWER_RELEASE_POLICY_VERSION = "w6b-answer-release-v1";
+
 const ExamOmrConfig: React.FC = () => {
   const { config } = useAuth();
   const { showToast } = useAppToast();
   const [objective, setObjective] = useState<ObjectiveItem[]>([]);
   const [subjective, setSubjective] = useState<SubjectiveItem[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "error">(
+    "loading",
+  );
+  const [saving, setSaving] = useState(false);
+  const [revision, setRevision] = useState(0);
+  const [releaseStatus, setReleaseStatus] = useState<"HIDDEN" | "RELEASED">(
+    "HIDDEN",
+  );
 
   useEffect(() => {
-    loadConfig();
+    void loadConfig();
   }, [config]);
 
   const loadConfig = async () => {
-    setLoading(true);
+    setLoadState("loading");
     try {
       const snap = await getDoc(
         doc(db, getSemesterDocPath(config, "exam_config", "final_exam")),
@@ -41,27 +50,67 @@ const ExamOmrConfig: React.FC = () => {
         const d = snap.data();
         setObjective(d.objective || []);
         setSubjective(d.subjective || []);
+        setReleaseStatus(
+          d.releaseStatus === "RELEASED" ? "RELEASED" : "HIDDEN",
+        );
+        setRevision(Math.max(0, Number(d.revision || 0)));
       } else {
         setObjective([]);
         setSubjective([]);
+        setReleaseStatus("HIDDEN");
+        setRevision(0);
       }
+      setLoadState("ready");
     } catch (e) {
       console.error(e);
-    } finally {
-      setLoading(false);
+      setLoadState("error");
     }
   };
 
   const handleSave = async () => {
-    try {
-      failLegacyPerformanceScoreMutation();
-    } catch (e) {
-      console.error(e);
+    if (loadState !== "ready") {
       showToast({
         tone: "error",
-        title: "이 화면에서는 저장할 수 없습니다.",
-        message: "새 성적 증거 화면에서 평가 정보를 관리해 주세요.",
+        title: "설정을 먼저 불러와 주세요.",
+        message: "기존 답안 설정을 확인하기 전에는 저장할 수 없습니다.",
       });
+      return;
+    }
+    setSaving(true);
+    try {
+      const result = await saveLegacyGradeConfig({
+        config,
+        scoreKind: "written_exam_essay",
+        configKind: "OMR",
+        configId: "final_exam",
+        expectedRevision: revision,
+        operation: "UPSERT",
+        data: {
+          objective,
+          subjective,
+          releaseStatus,
+          releasePolicyVersion: ANSWER_RELEASE_POLICY_VERSION,
+        },
+        reason: "정기시험 답안 설정 저장",
+      });
+      setRevision(result.revision);
+      showToast({
+        tone: "success",
+        title: "저장되었습니다.",
+        message: "정기시험 답안 설정을 업데이트했습니다.",
+      });
+    } catch (error) {
+      console.error(error);
+      showToast({
+        tone: "error",
+        title: "저장하지 못했습니다.",
+        message:
+          error instanceof Error
+            ? error.message
+            : "정기시험 답안 설정을 다시 확인해 주세요.",
+      });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -119,6 +168,38 @@ const ExamOmrConfig: React.FC = () => {
     setSubjective(newSub);
   };
 
+  if (loadState === "loading") {
+    return (
+      <div className="h-full relative pb-20">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 text-center text-gray-400">
+          정기시험 답안 설정을 불러오는 중입니다.
+        </div>
+      </div>
+    );
+  }
+
+  if (loadState === "error") {
+    return (
+      <div className="h-full relative pb-20">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-red-200 text-center">
+          <p className="font-bold text-red-700">
+            정기시험 답안 설정을 불러오지 못했습니다.
+          </p>
+          <p className="mt-2 text-sm text-gray-500">
+            기존 설정을 보호하기 위해 저장을 중지했습니다.
+          </p>
+          <button
+            type="button"
+            onClick={() => void loadConfig()}
+            className="mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-xl text-sm transition"
+          >
+            다시 불러오기
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-full relative pb-20">
       {/* Bottom Floater */}
@@ -137,10 +218,32 @@ const ExamOmrConfig: React.FC = () => {
         </div>
         <button
           onClick={handleSave}
+          disabled={saving}
           className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 md:px-5 py-2 rounded-xl text-sm transition shadow-md whitespace-nowrap"
         >
-          <i className="fas fa-save mr-1"></i>저장
+          <i className="fas fa-save mr-1"></i>
+          {saving ? "저장 중..." : "저장"}
         </button>
+      </div>
+
+      <div className="mb-6 flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="font-bold text-gray-700">학생 답안 공개</h2>
+          <p className="mt-1 text-sm text-gray-500">
+            공개로 저장하면 현재 학기 활성 학생이 정답을 확인할 수 있습니다.
+          </p>
+        </div>
+        <label className="inline-flex cursor-pointer items-center gap-2 font-bold text-gray-700">
+          <input
+            type="checkbox"
+            checked={releaseStatus === "RELEASED"}
+            onChange={(event) =>
+              setReleaseStatus(event.target.checked ? "RELEASED" : "HIDDEN")
+            }
+            className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          />
+          학생에게 공개
+        </label>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 pb-32">
@@ -156,9 +259,6 @@ const ExamOmrConfig: React.FC = () => {
             </button>
           </div>
           <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
-            {loading && (
-              <div className="text-center text-gray-400">로딩 중...</div>
-            )}
             {objective.map((item, i) => (
               <div
                 key={i}

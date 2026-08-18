@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import StudentGradeEvidenceView from "./GradeEvidenceStudentView";
+import { useSearchParams } from "react-router-dom";
 import { Bar } from "react-chartjs-2";
 import {
   BarElement,
@@ -10,7 +11,6 @@ import {
   Tooltip,
   type TooltipItem,
 } from "chart.js";
-import { doc, getDoc } from "firebase/firestore";
 import { PageLoading } from "../../../components/common/LoadingState";
 import { useAppToast } from "../../../components/common/AppToastProvider";
 import ExamOmrCard, {
@@ -21,20 +21,17 @@ import {
   type ExamOmrQuestionResult,
 } from "../../../components/common/examOmr";
 import { useAuth } from "../../../contexts/AuthContext";
-import { db } from "../../../lib/firebase";
 import {
-  notifyPerformanceScoreAnswerSheetRequested,
-  notifyPerformanceScoreObjectionRequested,
-} from "../../../lib/notifications";
+  acknowledgeLegacyGradeWarning,
+  signLegacyGradeRecords,
+  submitLegacyGradeRequest,
+} from "../../../lib/legacyGradeEvidenceAdapter";
 import { getYearSemester } from "../../../lib/semesterScope";
 import {
-  PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
   PERFORMANCE_SCORE_KIND,
-  PERFORMANCE_SCORE_USER_COLLECTION,
   WRITTEN_EXAM_SCORE_KIND,
   WRITTEN_EXAM_SECTION_OBJECTIVE,
   formatPerformanceScore,
-  failLegacyPerformanceScoreMutation,
   isPerformanceScoreWarningConsentCurrent,
   loadPerformanceScoreSettings,
   loadUserPerformanceScoreAnswerSheetRequests,
@@ -44,7 +41,6 @@ import {
   normalizeSchoolValue,
   normalizeStudentName,
   normalizePerformanceScoreSettings,
-  savePerformanceScoreWarningConsent,
   type PerformanceScoreAnswerSheetRequest,
   type PerformanceScoreItem,
   type PerformanceScoreKind,
@@ -387,6 +383,17 @@ interface ScoreConfirmationViewProps {
   copy?: Partial<ScoreConfirmationViewCopy>;
 }
 
+type ScoreConfirmationLoadState = "loading" | "ready" | "permission" | "error";
+
+const getScoreLoadErrorCode = (error: unknown) => {
+  if (!error || typeof error !== "object" || !("code" in error)) return "";
+  return (
+    String((error as { code?: unknown }).code || "")
+      .split("/")
+      .pop() || ""
+  );
+};
+
 interface SignatureScoreDetail {
   key: string;
   label: string;
@@ -487,7 +494,11 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
       : PERFORMANCE_SCORE_COPY),
     ...copy,
   };
-  const [loading, setLoading] = useState(true);
+  const [loadState, setLoadState] =
+    useState<ScoreConfirmationLoadState>("loading");
+  const [loadErrorMessage, setLoadErrorMessage] = useState("");
+  const [gateLoadError, setGateLoadError] = useState("");
+  const [auxiliaryLoadError, setAuxiliaryLoadError] = useState("");
   const [records, setRecords] = useState<PerformanceScoreRecord[]>([]);
   const [scoreSettings, setScoreSettings] = useState<PerformanceScoreSettings>(
     () => normalizePerformanceScoreSettings(),
@@ -545,7 +556,8 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
 
   useEffect(() => {
     if (!currentUser?.uid) {
-      setLoading(false);
+      setLoadState("permission");
+      setLoadErrorMessage("로그인한 학생 정보를 확인할 수 없습니다.");
       return;
     }
     void loadScores();
@@ -553,34 +565,17 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
 
   const loadScores = async () => {
     if (!currentUser?.uid) return;
-    setLoading(true);
+    setLoadState("loading");
+    setLoadErrorMessage("");
+    setGateLoadError("");
+    setAuxiliaryLoadError("");
     try {
-      const [
-        loaded,
-        settings,
-        consent,
-        loadedObjections,
-        loadedAnswerSheetRequests,
-      ] = await Promise.all([
-        loadUserPerformanceScoreRecords(currentUser.uid, {
-          year,
-          semester,
-          scoreKind,
-        }),
-        loadPerformanceScoreSettings(config),
-        loadPerformanceScoreWarningConsent(currentUser.uid),
-        loadUserPerformanceScoreObjections(config, currentUser.uid, {
-          scoreKind,
-        }),
-        loadUserPerformanceScoreAnswerSheetRequests(config, currentUser.uid, {
-          scoreKind,
-        }),
-      ]);
+      const loaded = await loadUserPerformanceScoreRecords(currentUser.uid, {
+        year,
+        semester,
+        scoreKind,
+      });
       setRecords(loaded);
-      setScoreSettings(settings);
-      setWarningConsent(consent);
-      setObjections(loadedObjections);
-      setAnswerSheetRequests(loadedAnswerSheetRequests);
       setWarningConsentChecked(false);
       const defaultRecord =
         scoreKind === WRITTEN_EXAM_SCORE_KIND
@@ -613,10 +608,53 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
         }
         return nextSelectedId;
       });
+
+      const [settings, consent, loadedObjections, loadedAnswerSheetRequests] =
+        await Promise.allSettled([
+          loadPerformanceScoreSettings(config),
+          loadPerformanceScoreWarningConsent(currentUser.uid),
+          loadUserPerformanceScoreObjections(config, currentUser.uid, {
+            scoreKind,
+          }),
+          loadUserPerformanceScoreAnswerSheetRequests(config, currentUser.uid, {
+            scoreKind,
+          }),
+        ]);
+      if (settings.status === "fulfilled") setScoreSettings(settings.value);
+      if (consent.status === "fulfilled") setWarningConsent(consent.value);
+      if (loadedObjections.status === "fulfilled") {
+        setObjections(loadedObjections.value);
+      }
+      if (loadedAnswerSheetRequests.status === "fulfilled") {
+        setAnswerSheetRequests(loadedAnswerSheetRequests.value);
+      }
+      const gateFailures = [settings, consent].filter(
+        (result) => result.status === "rejected",
+      );
+      const auxiliaryFailures = [
+        loadedObjections,
+        loadedAnswerSheetRequests,
+      ].filter((result) => result.status === "rejected");
+      if (gateFailures.length > 0) {
+        setGateLoadError(
+          "점수 확인 안내와 동의 상태를 불러오지 못했습니다. 기존 점수는 유지되며, 다시 불러오기 전에는 확인 절차를 진행할 수 없습니다.",
+        );
+      }
+      if (auxiliaryFailures.length > 0) {
+        setAuxiliaryLoadError(
+          "이의 신청 또는 답안지 요청 상태를 일부 불러오지 못했습니다. 점수는 그대로 표시되지만 관련 작업은 다시 불러온 뒤 진행해 주세요.",
+        );
+      }
+      setLoadState("ready");
     } catch (error) {
       console.error("Failed to load performance scores:", error);
-    } finally {
-      setLoading(false);
+      const permission = getScoreLoadErrorCode(error) === "permission-denied";
+      setLoadState(permission ? "permission" : "error");
+      setLoadErrorMessage(
+        permission
+          ? "내 점수 자료를 볼 권한이 없습니다. 로그인한 학생 정보를 확인해 주세요."
+          : "내 점수 자료를 불러오지 못했습니다. 네트워크 상태를 확인한 뒤 다시 시도해 주세요.",
+      );
     }
   };
 
@@ -924,7 +962,10 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     signatureScoreSections.map((section) => section.label).join("과 ") ||
     resolvedCopy.scoreLabel;
   const signatureActionPending =
-    confirming || objecting || answerSheetRequesting;
+    confirming ||
+    objecting ||
+    answerSheetRequesting ||
+    Boolean(auxiliaryLoadError);
   const warningConsentCurrent = currentUser?.uid
     ? isPerformanceScoreWarningConsentCurrent(
         warningConsent,
@@ -1541,20 +1582,26 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
       return;
     }
 
+    const selectedRecords = records.filter((record) =>
+      selectedScoreIds.includes(getRecordScoreId(record)),
+    );
     setAnswerSheetRequesting(true);
     setAnswerSheetRequestError("");
     try {
       const targetDetails = buildWrittenExamTargetDetails(
         answerSheetRequestSelectedItemKeys,
-        records.filter((record) =>
-          selectedScoreIds.includes(getRecordScoreId(record)),
-        ),
+        selectedRecords,
       );
-      const result = await notifyPerformanceScoreAnswerSheetRequested(config, {
-        scoreIds: selectedScoreIds,
-        reason,
+      const targetDetailsByScoreId = new Map(
+        selectedScoreIds.map((scoreId) => [scoreId, targetDetails]),
+      );
+      await submitLegacyGradeRequest({
+        config,
         scoreKind,
-        targetDetails,
+        requestKind: "ANSWER_SHEET",
+        records: selectedRecords,
+        reason,
+        targetDetailsByScoreId,
       });
       const latestRequests = await loadUserPerformanceScoreAnswerSheetRequests(
         config,
@@ -1565,27 +1612,17 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
       setAnswerSheetRequestModalOpen(false);
       setAnswerSheetRequestSelectedIds([]);
       setAnswerSheetRequestSelectedItemKeys([]);
-      if (result.requestSavedCount <= 0) {
-        showToast({
-          title: "이미 확인 요청 중입니다.",
-          message:
-            "기존 요청이 처리되기 전에는 같은 점수로 다시 요청할 수 없습니다.",
-          tone: "info",
-        });
-        return;
-      }
       showToast({
         title: "답안지 확인 요청을 보냈습니다.",
-        message:
-          result.createdCount > 0
-            ? "담당 교사에게 알림이 전송되었습니다."
-            : "요청은 저장했지만 알림 설정 때문에 새 알림은 만들지 않았습니다.",
+        message: "요청이 담당 교사의 처리 목록에 저장되었습니다.",
         tone: "success",
       });
     } catch (error) {
       console.error("Failed to request answer sheet check:", error);
       setAnswerSheetRequestError(
-        "답안지 확인 요청을 보내지 못했습니다. 잠시 후 다시 시도해 주세요.",
+        error instanceof Error && error.message
+          ? error.message
+          : "답안지 확인 요청을 보내지 못했습니다. 잠시 후 다시 시도해 주세요.",
       );
     } finally {
       setAnswerSheetRequesting(false);
@@ -1604,12 +1641,23 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     }
     setWarningConsentSaving(true);
     try {
-      const saved = await savePerformanceScoreWarningConsent(
-        currentUser.uid,
+      const result = await acknowledgeLegacyGradeWarning({
         config,
-        scoreSettings,
-      );
-      setWarningConsent(saved);
+        scoreKind,
+        settings: scoreSettings,
+      });
+      setWarningConsent({
+        id: "current",
+        uid: currentUser.uid,
+        academicYear: year,
+        semester,
+        acknowledged: true,
+        warningVersion: scoreSettings.warningVersion,
+        warningTextHash: scoreSettings.warningTextHash,
+        acknowledgedAt: new Date(),
+        updatedAt: new Date(),
+        revision: result.revision,
+      });
       setWarningConsentChecked(false);
       showToast({
         title: "동의 내용을 저장했습니다.",
@@ -1621,7 +1669,9 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
       showToast({
         title: "동의 저장에 실패했습니다.",
         message:
-          "네트워크와 로그인 상태를 확인한 뒤 다시 시도해 주세요. 저장 전에는 점수를 확인할 수 없습니다.",
+          error instanceof Error && error.message
+            ? error.message
+            : "네트워크와 로그인 상태를 확인한 뒤 다시 시도해 주세요. 저장 전에는 점수를 확인할 수 없습니다.",
         tone: "error",
       });
     } finally {
@@ -1786,78 +1836,42 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
         objectionSelectedItemKeys,
         selectedRecords,
       );
-      const result = await notifyPerformanceScoreObjectionRequested(config, {
-        scoreIds: selectedScoreIds,
-        reason,
+      const targetDetailsByScoreId = new Map(
+        selectedScoreIds.map((scoreId) => [scoreId, targetDetails]),
+      );
+      await submitLegacyGradeRequest({
+        config,
         scoreKind,
-        targetDetails,
+        requestKind: "OBJECTION",
+        records: selectedRecords,
+        reason,
+        targetDetailsByScoreId,
       });
-      if (result.objectionSavedCount > 0) {
-        const latestObjections = await loadUserPerformanceScoreObjections(
-          config,
-          currentUser.uid,
-          { scoreKind },
-        );
-        setObjections(latestObjections);
-      }
-      if (
-        result.objectionSavedCount <= 0 &&
-        result.objectionSkippedProcessedCount > 0
-      ) {
-        setObjectionError(
-          "이미 처리된 이의 제기입니다. 최신 점수를 확인한 뒤 추가 확인이 필요하면 담당 교사에게 직접 문의해 주세요.",
-        );
-        return;
-      }
-      if (
-        result.recipientCount <= 0 ||
-        (result.skippedCount || 0) >= result.recipientCount
-      ) {
-        if (result.objectionSavedCount > 0) {
-          setObjectionModalOpen(false);
-          setObjectionResultModalOpen(true);
-          setSignatureModalOpen(false);
-          setObjectionReason("");
-          setObjectionSelectedIds([]);
-          setObjectionSelectedItemKeys([]);
-          showToast({
-            title: "이의 목록에 접수했습니다.",
-            message:
-              "교사 알림 설정 때문에 새 알림은 생성되지 않았습니다. 필요하면 담당 교사에게 직접 알려 주세요.",
-            tone: "warning",
-            durationMs: 5200,
-          });
-        } else {
-          setObjectionError(
-            "교사 알림 설정 때문에 이의 제기를 전달하지 못했습니다. 담당 교사에게 직접 알려 주세요.",
-          );
-        }
-        return;
-      }
+      const latestObjections = await loadUserPerformanceScoreObjections(
+        config,
+        currentUser.uid,
+        { scoreKind },
+      );
+      setObjections(latestObjections);
       setObjectionModalOpen(false);
-      setObjectionResultModalOpen(result.objectionSavedCount > 0);
+      setObjectionResultModalOpen(true);
       setSignatureModalOpen(false);
       setObjectionReason("");
       setObjectionSelectedIds([]);
       setObjectionSelectedItemKeys([]);
-      if (result.createdCount > 0) {
-        showToast({
-          title: "이의 제기를 전달했습니다.",
-          message: `선택한 ${resolvedCopy.scoreLabel} 점수와 사유가 담당 교사에게 알림으로 전송되었습니다.`,
-          tone: "warning",
-          durationMs: 4800,
-        });
-      } else {
-        showToast({
-          title: "이미 이의 제기가 전달되어 있습니다.",
-          message: `같은 ${resolvedCopy.scoreLabel} 점수에 대한 기존 알림이 있어 새 알림은 만들지 않았습니다.`,
-          tone: "info",
-          durationMs: 4600,
-        });
-      }
+      showToast({
+        title: "이의 제기를 전달했습니다.",
+        message: `선택한 ${resolvedCopy.scoreLabel} 점수와 사유가 담당 교사의 처리 목록에 저장되었습니다.`,
+        tone: "warning",
+        durationMs: 4800,
+      });
     } catch (error) {
-      console.error("Failed to request performance score objection:", error);
-      setObjectionError(getPerformanceScoreObjectionErrorMessage(error));
+      console.error("Failed to submit performance score objection:", error);
+      setObjectionError(
+        error instanceof Error && error.message
+          ? error.message
+          : "이의 제기를 보내지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      );
     } finally {
       setObjecting(false);
     }
@@ -1922,71 +1936,35 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     setConfirming(true);
     setSignatureError("");
     try {
-      const saveTargets = await Promise.all(
-        recordsToConfirm.map(async (record) => {
-          const scoreId = getRecordScoreId(record);
-          const ref = doc(
-            db,
-            "users",
-            currentUser.uid,
-            PERFORMANCE_SCORE_USER_COLLECTION,
-            scoreId,
-            PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION,
-            currentUser.uid,
-          );
-          const snap = await getDoc(ref);
-          return {
-            record,
-            scoreId,
-            ref,
-            alreadyConfirmed:
-              snap.exists() && hasStoredSignatureImage(snap.data()),
-          };
-        }),
-      );
-      const targetsToWrite = saveTargets.filter(
-        (target) => !target.alreadyConfirmed,
-      );
-
-      if (targetsToWrite.length > 0) {
-        failLegacyPerformanceScoreMutation();
-      }
-
-      const writtenScoreIds = new Set(
-        targetsToWrite.map((target) => target.scoreId),
-      );
-      const alreadyConfirmedScoreIds = new Set(
-        saveTargets
-          .filter((target) => target.alreadyConfirmed)
-          .map((target) => target.scoreId),
-      );
+      await signLegacyGradeRecords({
+        config,
+        scoreKind,
+        records: recordsToConfirm,
+        signatureName,
+        signatureImage,
+      });
+      const confirmedScoreIds = new Set(recordsToConfirm.map(getRecordScoreId));
       const localConfirmedAt = new Date();
       setRecords((current) =>
         current.map((record) => {
           const scoreId = getRecordScoreId(record);
-          if (
-            alreadyConfirmedScoreIds.has(scoreId) ||
-            isRecordConfirmed(record)
-          ) {
-            return record;
-          }
-          return writtenScoreIds.has(scoreId)
-            ? {
-                ...record,
-                signatureName,
-                signatureImage,
-                signedAt: localConfirmedAt,
-                confirmation: {
-                  id: currentUser.uid,
-                  uid: currentUser.uid,
-                  rosterId: record.rosterId,
-                  signatureName,
-                  signatureImage,
-                  confirmedAt: localConfirmedAt,
-                  updatedAt: localConfirmedAt,
-                },
-              }
-            : record;
+          if (!confirmedScoreIds.has(scoreId)) return record;
+          return {
+            ...record,
+            gradeRecordRevision: Number(record.gradeRecordRevision || 0) + 1,
+            signatureName,
+            signatureImage,
+            signedAt: localConfirmedAt,
+            confirmation: {
+              id: currentUser.uid,
+              uid: currentUser.uid,
+              rosterId: record.rosterId,
+              signatureName,
+              signatureImage,
+              confirmedAt: localConfirmedAt,
+              updatedAt: localConfirmedAt,
+            },
+          };
         }),
       );
       setSignatureModalOpen(false);
@@ -1996,7 +1974,11 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
       }, 0);
     } catch (error) {
       console.error("Failed to confirm performance score:", error);
-      setSignatureError(getSignatureSaveErrorMessage(error));
+      setSignatureError(
+        error instanceof Error && error.message
+          ? error.message
+          : getSignatureSaveErrorMessage(error),
+      );
     } finally {
       setConfirming(false);
     }
@@ -2209,8 +2191,56 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
     );
   };
 
-  if (loading) {
+  if (loadState === "loading") {
     return <PageLoading message={resolvedCopy.loadingMessage} />;
+  }
+
+  if (loadState === "permission" || loadState === "error") {
+    return (
+      <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 lg:px-10">
+        <div className="rounded-xl border border-rose-200 bg-white px-5 py-5 text-center shadow-sm">
+          <h1 className="text-lg font-black text-slate-900">
+            {loadState === "permission"
+              ? "점수 자료를 볼 수 없습니다."
+              : "점수 자료를 불러오지 못했습니다."}
+          </h1>
+          <p className="mt-2 break-keep text-sm font-bold leading-6 text-slate-500">
+            {loadErrorMessage}
+          </p>
+          {loadState === "error" && (
+            <button
+              type="button"
+              onClick={() => void loadScores()}
+              className="mt-4 inline-flex min-h-11 items-center justify-center rounded-lg bg-blue-600 px-5 py-2 text-sm font-black text-white shadow-sm transition hover:bg-blue-700"
+            >
+              다시 불러오기
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (gateLoadError) {
+    return (
+      <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6 lg:px-10">
+        <div className="rounded-xl border border-amber-200 bg-white px-5 py-5 text-center shadow-sm">
+          <h1 className="text-lg font-black text-slate-900">
+            점수 확인 정보를 모두 불러오지 못했습니다.
+          </h1>
+          <p className="mt-2 break-keep text-sm font-bold leading-6 text-slate-500">
+            {gateLoadError}
+          </p>
+          <button
+            type="button"
+            onClick={() => void loadScores()}
+            className="mt-4 inline-flex min-h-11 items-center justify-center rounded-lg bg-blue-600 px-5 py-2 text-sm font-black text-white shadow-sm transition hover:bg-blue-700"
+          >
+            다시 불러오기
+          </button>
+        </div>
+      </div>
+    );
   }
 
   if (!warningConsentCurrent) {
@@ -2221,9 +2251,9 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
             <p className="text-sm font-black text-blue-700">
               {resolvedCopy.warningTitle}
             </p>
-            <h2 className="mt-1 text-2xl font-black text-slate-900">
+            <h1 className="mt-1 text-2xl font-black text-slate-900">
               {resolvedCopy.warningSubtitle}
-            </h2>
+            </h1>
             <p className="mt-2 text-sm font-bold leading-6 text-slate-500">
               안내 문구에 동의한 학생만 점수 확인, 서명, 이의 제기를 진행할 수
               있습니다.
@@ -2273,9 +2303,9 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
       <div className="mb-5 rounded-xl border border-slate-200 bg-white px-5 py-5 shadow-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 break-keep">
-            <h2 className="text-2xl font-black text-slate-900">
+            <h1 className="text-2xl font-black text-slate-900">
               {resolvedCopy.pageTitle}
-            </h2>
+            </h1>
             <p className="mt-2 text-sm font-bold leading-6 text-slate-500">
               {year}학년도 {semester}학기 기준으로 교사가 입력한 내 총점과{" "}
               {resolvedCopy.pageDescription}
@@ -2358,6 +2388,24 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
           </div>
         )}
       </div>
+
+      {auxiliaryLoadError && (
+        <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 shadow-sm">
+          <p
+            className="break-keep text-sm font-bold leading-6 text-amber-800"
+            role="alert"
+          >
+            {auxiliaryLoadError}
+          </p>
+          <button
+            type="button"
+            onClick={() => void loadScores()}
+            className="mt-3 inline-flex min-h-10 items-center justify-center rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-black text-amber-800 transition hover:bg-amber-100"
+          >
+            다시 불러오기
+          </button>
+        </div>
+      )}
 
       {!selectedRecord ? (
         <div className="break-keep rounded-xl border border-dashed border-slate-200 bg-white px-4 py-16 text-center shadow-sm">
@@ -3613,8 +3661,13 @@ export const ScoreConfirmationView: React.FC<ScoreConfirmationViewProps> = ({
   );
 };
 
-const PerformanceScoreView: React.FC = () => (
-  <StudentGradeEvidenceView scoreKind="performance" />
-);
+const PerformanceScoreView: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  return searchParams.get("view") === "evidence" ? (
+    <StudentGradeEvidenceView scoreKind="performance" />
+  ) : (
+    <ScoreConfirmationView />
+  );
+};
 
 export default PerformanceScoreView;

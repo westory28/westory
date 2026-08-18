@@ -1,11 +1,13 @@
 import { execFileSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const EXPECTED_ERROR_COUNT = 63;
-const EXPECTED_FILE_COUNT = 13;
-const EXPECTED_HEADER_SHA256 =
-  "72dd635c1ce1bf11caeb9c9bca58361aa570f65460ab86cf506c77208ef006ed";
+const baseline = JSON.parse(
+  readFileSync(
+    fileURLToPath(new URL("./typescript-baseline-w11.json", import.meta.url)),
+    "utf8",
+  ),
+);
 
 let output = "";
 const tscPath = fileURLToPath(
@@ -21,29 +23,58 @@ try {
   output = `${error.stdout || ""}${error.stderr || ""}`;
 }
 
+const normalizeMessage = (message) =>
+  message
+    .replace(
+      /import\("[A-Za-z]:\/[^"\r\n]+?\/src\//gu,
+      'import("<workspace>/src/',
+    )
+    .replace(
+      /Pick<PerformanceScoreItem,\s*"[^>]+">/gu,
+      "Pick<PerformanceScoreItem, <keys>>",
+    );
 const diagnostics = output
   .split(/\r?\n/)
-  .map((line) => line.match(/^(.+?\(\d+,\d+\): error TS\d+:)/)?.[1])
+  .map((line) =>
+    line.match(/^(.+?)\(\d+,\d+\): error (TS\d+): (.+)$/),
+  )
   .filter(Boolean)
-  .map((header) => header.replaceAll("\\", "/"))
-  .sort();
+  .map((match) => ({
+    file: match[1].replaceAll("\\", "/"),
+    code: match[2],
+    message: normalizeMessage(match[3]),
+  }));
 const files = new Set(
-  diagnostics.map((header) => header.replace(/\(\d+,\d+\): error TS\d+:$/, "")),
+  diagnostics.map((diagnostic) => diagnostic.file),
 );
-const fingerprint = createHash("sha256")
-  .update(`${diagnostics.join("\n")}\n`)
-  .digest("hex");
-
+const actualCounts = new Map();
+for (const diagnostic of diagnostics) {
+  const signature = `${diagnostic.file}|${diagnostic.code}|${diagnostic.message}`;
+  actualCounts.set(signature, (actualCounts.get(signature) || 0) + 1);
+}
+const allowedCounts = new Map(
+  baseline.signatures.map((item) => [normalizeMessage(item.signature), item.count]),
+);
+const newDiagnostics = [...actualCounts]
+  .filter(
+    ([signature, count]) =>
+      !allowedCounts.has(signature) || count > allowedCounts.get(signature),
+  )
+  .map(([signature, count]) => ({
+    signature,
+    count,
+    allowed: allowedCounts.get(signature) || 0,
+  }));
 if (
-  diagnostics.length !== EXPECTED_ERROR_COUNT ||
-  files.size !== EXPECTED_FILE_COUNT ||
-  fingerprint !== EXPECTED_HEADER_SHA256
+  diagnostics.length > baseline.expectedErrors ||
+  files.size > baseline.expectedFiles ||
+  newDiagnostics.length > 0
 ) {
   throw new Error(
-    `TypeScript baseline drift: errors=${diagnostics.length}, files=${files.size}, fingerprint=${fingerprint}`,
+    `TypeScript baseline drift: errors=${diagnostics.length}/${baseline.expectedErrors}, files=${files.size}/${baseline.expectedFiles}, new=${JSON.stringify(newDiagnostics)}`,
   );
 }
 
 console.log(
-  `TypeScript baseline: PASS (${diagnostics.length} errors / ${files.size} files / ${fingerprint})`,
+  `TypeScript baseline: PASS (${diagnostics.length} errors / ${files.size} files / new 0 / removed ${baseline.expectedErrors - diagnostics.length})`,
 );

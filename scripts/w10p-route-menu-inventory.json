@@ -1,0 +1,173 @@
+{
+  "schemaVersion": 1,
+  "functionalBaseline": "ef74b571a6964ddbc61eb7877a98d21b3c7c8c85",
+  "presentationBaseline": "676869fa289d3e7ecef234cbb5cca65c60ec4597",
+  "rawRouteCount": 48,
+  "canonicalCounts": {
+    "student": 22,
+    "teacher": 15,
+    "admin": 2,
+    "support": 5
+  },
+  "routes": [
+    { "path": "/", "role": "support", "component": "Login" },
+    { "path": "/maintenance", "role": "support", "component": "Maintenance" },
+    { "path": "/student/dashboard", "role": "student", "component": "StudentDashboard" },
+    { "path": "/student/lesson/note", "role": "student", "component": "StudentNote" },
+    { "path": "/student/lesson/history-dictionary", "role": "student", "component": "StudentHistoryDictionary" },
+    { "path": "/student/lesson/maps", "role": "student", "component": "StudentMaps" },
+    { "path": "/student/lesson/think-cloud", "role": "student", "component": "StudentThinkCloud" },
+    { "path": "/student/quiz", "role": "student", "component": "StudentQuizIndex" },
+    { "path": "/student/quiz/history2", "role": "alias", "component": "LegacyRouteRedirect", "target": "/student/quiz" },
+    { "path": "/student/quiz/history2/*", "role": "alias", "component": "LegacyRouteRedirect", "target": "/student/quiz" },
+    { "path": "/student/quiz/run", "role": "student", "component": "QuizRunner", "contextual": true },
+    { "path": "/student/history-classroom", "role": "student", "component": "HistoryClassroomIndex" },
+    { "path": "/student/history-classroom/run", "role": "student", "component": "HistoryClassroomRunner", "contextual": true },
+    { "path": "/student/score", "role": "student", "component": "StudentScoreDashboard" },
+    { "path": "/student/score/report", "role": "student", "component": "StudentScoreReport" },
+    { "path": "/student/score/performance", "role": "student", "component": "StudentPerformanceScoreView" },
+    { "path": "/student/score/written-exam", "role": "student", "component": "StudentWrittenExamEssayScoreView" },
+    { "path": "/teacher/dashboard", "role": "teacher", "component": "TeacherDashboard" },
+    { "path": "/teacher/students", "role": "teacher", "component": "StudentList" },
+    { "path": "/teacher/quiz", "role": "teacher", "component": "ManageQuiz" },
+    { "path": "/teacher/quiz/history2", "role": "alias", "component": "LegacyRouteRedirect", "target": "/teacher/quiz" },
+    { "path": "/teacher/quiz/history2/*", "role": "alias", "component": "LegacyRouteRedirect", "target": "/teacher/quiz" },
+    { "path": "/teacher/quiz/history-classroom", "role": "teacher", "component": "ManageHistoryClassroom" },
+    { "path": "/teacher/exam", "role": "teacher", "component": "ManageExam" },
+    { "path": "/teacher/settings/cutover", "role": "admin", "component": "SemesterCutoverCenter", "contextual": true },
+    { "path": "/teacher/settings", "role": "admin", "component": "Settings", "contextual": true },
+    { "path": "/teacher/points", "role": "teacher", "component": "ManagePoints" },
+    { "path": "/teacher/schedule", "role": "teacher", "component": "ManageSchedule" },
+    { "path": "/teacher/lesson", "role": "teacher", "component": "ManageLesson" },
+    { "path": "/teacher/lesson/history-dictionary", "role": "teacher", "component": "ManageHistoryDictionary" },
+    { "path": "/teacher/lesson/maps", "role": "teacher", "component": "ManageMaps" },
+    { "path": "/teacher/lesson/source-archive", "role": "teacher", "component": "ManageSourceArchive" },
+    { "path": "/teacher/lesson/think-cloud", "role": "teacher", "component": "ManageThinkCloud" },
+    { "path": "/student/mypage", "role": "student", "component": "MyPage" },
+    { "path": "/student/mypage/archive", "role": "student", "component": "StudentArchiveOverview" },
+    { "path": "/student/history", "role": "student", "component": "StudentHistory" },
+    { "path": "/student/points", "role": "student", "component": "StudentPoints" },
+    { "path": "/student/calendar", "role": "student", "component": "Calendar" },
+    { "path": "/student/learning", "role": "student", "component": "W8StudentHub" },
+    { "path": "/student/schedule", "role": "student", "component": "W8StudentHub" },
+    { "path": "/student/attendance", "role": "student", "component": "W8StudentHub" },
+    { "path": "/student/communication", "role": "student", "component": "W8StudentHub" },
+    { "path": "/teacher/learning", "role": "teacher", "component": "W8TeacherHub" },
+    { "path": "/teacher/attendance", "role": "teacher", "component": "W8TeacherHub" },
+    { "path": "/teacher/communication", "role": "teacher", "component": "W8TeacherHub" },
+    { "path": "/developer-log", "role": "support", "component": "DeveloperLog", "contextual": true },
+    { "path": "/developer-log/:postId", "role": "support", "component": "DeveloperLog", "contextual": true },
+    { "path": "*", "role": "support", "component": "NotFound", "contextual": true }
+  ],
+  "productionMenus": {
+    "student": [
+      {
+        "name": "학습",
+        "url": "/student/lesson/note",
+        "productionChildren": [
+          ["수업 자료", "/student/lesson/note"],
+          ["역사 사전", "/student/lesson/history-dictionary"],
+          ["지도", "/student/lesson/maps"],
+          ["싱크 클라우드", "/student/lesson/think-cloud"]
+        ],
+        "appendedChildren": [
+          ["학습 현황", "/student/learning"],
+          ["일정", "/student/schedule"],
+          ["학사 일정", "/student/calendar"],
+          ["출석", "/student/attendance"],
+          ["공지·소통", "/student/communication"],
+          ["지난 학기", "/student/mypage/archive"]
+        ]
+      },
+      {
+        "name": "평가",
+        "url": "/student/quiz",
+        "productionChildren": [
+          ["문제 풀이", "/student/quiz"],
+          ["역사교실", "/student/history-classroom"]
+        ],
+        "appendedChildren": []
+      },
+      {
+        "name": "점수",
+        "url": "/student/score",
+        "productionChildren": [
+          ["성적 계산기", "/student/score"],
+          ["나의 성적 리포트", "/student/score/report"],
+          ["내 수행평가 점수", "/student/score/performance"],
+          ["내 정기시험 점수", "/student/score/written-exam"],
+          ["정기 시험 답안", "/student/history"]
+        ],
+        "appendedChildren": []
+      },
+      {
+        "name": "위스",
+        "url": "/student/points",
+        "productionChildren": [
+          ["내 위스", "/student/points"],
+          ["화랑의 전당", "/student/points?tab=hall-of-fame"],
+          ["위스 상점", "/student/points?tab=shop"],
+          ["구매 내역", "/student/points?tab=orders"]
+        ],
+        "appendedChildren": []
+      },
+      { "name": "마이페이지", "url": "/student/mypage", "productionChildren": [], "appendedChildren": [] }
+    ],
+    "teacher": [
+      {
+        "name": "학습 자료 관리",
+        "url": "/teacher/lesson",
+        "productionChildren": [
+          ["수업 자료", "/teacher/lesson"],
+          ["역사 사전 관리", "/teacher/lesson/history-dictionary"],
+          ["지도", "/teacher/lesson/maps"],
+          ["사료 창고", "/teacher/lesson/source-archive"],
+          ["싱크 클라우드 관리", "/teacher/lesson/think-cloud"]
+        ],
+        "appendedChildren": [
+          ["학습 운영", "/teacher/learning"],
+          ["일정", "/teacher/schedule"],
+          ["공휴일 동기화", "/teacher/schedule?adminTools=holidays"],
+          ["출석", "/teacher/attendance"],
+          ["공지·소통", "/teacher/communication"]
+        ]
+      },
+      {
+        "name": "평가 관리",
+        "url": "/teacher/quiz",
+        "productionChildren": [
+          ["문제 등록", "/teacher/quiz"],
+          ["응시 현황", "/teacher/quiz?tab=log"],
+          ["문제 은행", "/teacher/quiz?tab=bank"],
+          ["역사교실", "/teacher/quiz/history-classroom"]
+        ],
+        "appendedChildren": []
+      },
+      {
+        "name": "점수 관리",
+        "url": "/teacher/exam",
+        "productionChildren": [
+          ["평가 반영 비율", "/teacher/exam"],
+          ["정기시험 답안", "/teacher/exam?tab=omr"],
+          ["수행평가 점수 관리", "/teacher/exam?tab=performance"],
+          ["정기시험 점수 관리", "/teacher/exam?tab=written-essay"]
+        ],
+        "appendedChildren": []
+      },
+      {
+        "name": "위스 관리",
+        "url": "/teacher/points",
+        "productionChildren": [
+          ["위스 현황", "/teacher/points"],
+          ["지급 및 환수", "/teacher/points?tab=grant"],
+          ["운영 정책", "/teacher/points?tab=policy"],
+          ["화랑의 전당 관리", "/teacher/points?tab=hall-of-fame"],
+          ["상품 관리", "/teacher/points?tab=products"],
+          ["구매 요청 관리", "/teacher/points?tab=requests"]
+        ],
+        "appendedChildren": []
+      },
+      { "name": "학생 관리", "url": "/teacher/students", "productionChildren": [], "appendedChildren": [] }
+    ]
+  }
+}

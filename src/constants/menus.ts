@@ -18,13 +18,19 @@ export const MENUS: MenuConfig = {
   student: [
     {
       name: "학습",
-      url: "/student/learning",
+      url: "/student/lesson/note",
       icon: "M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253",
       children: [
-        { name: "나의 학습", url: "/student/learning" },
+        { name: "수업 자료", url: "/student/lesson/note" },
         { name: "역사 사전", url: "/student/lesson/history-dictionary" },
         { name: "지도", url: "/student/lesson/maps" },
         { name: "싱크 클라우드", url: "/student/lesson/think-cloud" },
+        { name: "학습 현황", url: "/student/learning" },
+        { name: "일정", url: "/student/schedule" },
+        { name: "학사 일정", url: "/student/calendar" },
+        { name: "출석", url: "/student/attendance" },
+        { name: "공지·소통", url: "/student/communication" },
+        { name: "지난 학기", url: "/student/mypage/archive" },
       ],
     },
     {
@@ -71,14 +77,22 @@ export const MENUS: MenuConfig = {
   teacher: [
     {
       name: "학습 자료 관리",
-      url: "/teacher/learning",
+      url: "/teacher/lesson",
       icon: "M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253",
       children: [
-        { name: "학습 운영", url: "/teacher/learning" },
+        { name: "수업 자료", url: "/teacher/lesson" },
         { name: "역사 사전 관리", url: "/teacher/lesson/history-dictionary" },
         { name: "지도", url: "/teacher/lesson/maps" },
         { name: "사료 창고", url: "/teacher/lesson/source-archive" },
         { name: "싱크 클라우드 관리", url: "/teacher/lesson/think-cloud" },
+        { name: "학습 운영", url: "/teacher/learning" },
+        { name: "일정", url: "/teacher/schedule" },
+        {
+          name: "공휴일 동기화",
+          url: "/teacher/schedule?adminTools=holidays",
+        },
+        { name: "출석", url: "/teacher/attendance" },
+        { name: "공지·소통", url: "/teacher/communication" },
       ],
     },
     {
@@ -181,6 +195,20 @@ const normalizeMenuUrl = (value: unknown) => {
     : canonicalPath;
 };
 
+const W11_PARENT_URL_ALIASES: Record<PortalType, Record<string, string>> = {
+  student: {
+    "/student/learning": "/student/lesson/note",
+  },
+  teacher: {
+    "/teacher/learning": "/teacher/lesson",
+  },
+};
+
+const normalizeParentMenuUrl = (portal: PortalType, value: unknown) => {
+  const normalized = normalizeMenuUrl(value);
+  return W11_PARENT_URL_ALIASES[portal][normalized] || normalized;
+};
+
 const isLegacyRemovedUrl = (value: unknown) => {
   const normalized = normalizeMenuUrl(value);
   if (!normalized) return false;
@@ -220,10 +248,31 @@ const mergeFallbackChildren = (
     if (!fallbackItem?.children?.length) return item;
 
     const currentChildren = item.children || [];
-    const mergedChildren = [...currentChildren];
-    fallbackItem.children.forEach((fallbackChild) => {
-      if (!mergedChildren.some((child) => child.url === fallbackChild.url)) {
-        mergedChildren.push(fallbackChild);
+    const migratedModernParentUrl =
+      fallbackItem.url === "/student/lesson/note"
+        ? "/student/learning"
+        : fallbackItem.url === "/teacher/lesson"
+          ? "/teacher/learning"
+          : "";
+    const preserveProductionChildOrder =
+      migratedModernParentUrl !== "" &&
+      currentChildren.some((child) => child.url === migratedModernParentUrl);
+    const mergedChildren = preserveProductionChildOrder
+      ? fallbackItem.children.map((fallbackChild) => {
+          const savedChild = currentChildren.find(
+            (child) => child.url === fallbackChild.url,
+          );
+          return savedChild?.hidden === true
+            ? { ...fallbackChild, hidden: true }
+            : { ...fallbackChild };
+        })
+      : [...currentChildren];
+    const supplementalChildren = preserveProductionChildOrder
+      ? currentChildren
+      : fallbackItem.children;
+    supplementalChildren.forEach((child) => {
+      if (!mergedChildren.some((current) => current.url === child.url)) {
+        mergedChildren.push(child);
       }
     });
 
@@ -251,7 +300,7 @@ export const sanitizeMenuConfig = (raw: unknown): MenuConfig => {
     const sanitized = source
       .map((item) => ({
         name: toSafeText((item as MenuItem)?.name),
-        url: normalizeMenuUrl((item as MenuItem)?.url),
+        url: normalizeParentMenuUrl(portal, (item as MenuItem)?.url),
         icon: toSafeText((item as MenuItem)?.icon),
         children: sanitizeChildren((item as MenuItem)?.children),
       }))

@@ -1,21 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { db } from "../../../lib/firebase";
 import { getScheduleCategoryMeta } from "../../../lib/scheduleCategories";
 import {
   compareCalendarSchedule,
   getSchedulePeriodRangeLabel,
 } from "../../../lib/schedulePeriods";
 import type { ScheduleCategory } from "../../../lib/scheduleCategories";
-import { useAuth } from "../../../contexts/AuthContext";
 import { CalendarEvent } from "../../../types";
-import {
-  getKoreanPublicHolidays,
-  mergeEventsWithKoreanPublicHolidays,
-} from "../../../lib/koreanPublicHolidays";
-import {
-  getStudentClassKey,
-  loadVisibleCalendarEvents,
-} from "../../../lib/visibleSchedule";
 
 const LABELS = {
   close: "\uAC80\uC0C9 \uB2EB\uAE30",
@@ -33,6 +23,7 @@ const LABELS = {
 
 interface SearchModalProps {
   categories: ScheduleCategory[];
+  events: CalendarEvent[];
   isOpen: boolean;
   onClose: () => void;
   onSelectEvent: (dateStr: string) => void;
@@ -40,11 +31,11 @@ interface SearchModalProps {
 
 const SearchModal: React.FC<SearchModalProps> = ({
   categories,
+  events,
   isOpen,
   onClose,
   onSelectEvent,
 }) => {
-  const { config, userData } = useAuth();
   const [q, setQ] = useState("");
   const [results, setResults] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(false);
@@ -64,26 +55,14 @@ const SearchModal: React.FC<SearchModalProps> = ({
   if (!isOpen) return null;
 
   const handleSearch = async () => {
-    if (!q.trim() || !config || !userData) return;
+    if (!q.trim()) return;
     setLoading(true);
     setSearched(true);
     setResults([]);
 
     try {
-      const path = `years/${config.year}/semesters/${config.semester}/calendar`;
-      const userClassStr = getStudentClassKey(userData.grade, userData.class);
-      const visibleEvents = await loadVisibleCalendarEvents(
-        db,
-        path,
-        userClassStr,
-      );
       const qLower = q.toLowerCase();
-
-      const holidays = await getKoreanPublicHolidays(config.year);
-      const matched = mergeEventsWithKoreanPublicHolidays(
-        visibleEvents,
-        holidays,
-      )
+      const matched = events
         .filter((event) => {
           const titleMatch = event.title?.toLowerCase().includes(qLower);
           const descMatch = event.description?.toLowerCase().includes(qLower);

@@ -1,19 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import listPlugin from "@fullcalendar/list";
-import { db } from "../../lib/firebase";
-import {
-  doc,
-  getDoc,
-  collection,
-  getDocs,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  serverTimestamp,
-} from "firebase/firestore";
 import {
   getKoreanPublicHolidays,
   mergeEventsWithKoreanPublicHolidays,
@@ -22,9 +12,20 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useAppToast } from "../../components/common/AppToastProvider";
 import { isAdminUser } from "../../lib/permissions";
 import { executeWestoryCommand } from "../../lib/commandGateway";
+import {
+  W8DomainError,
+  createScheduleEvent,
+  deleteScheduleEvent,
+  getW8DomainState,
+  toW8LocalDateTimeInput,
+  toW8ServerDateTime,
+  updateScheduleEvent,
+  type W8DomainState,
+  type W8ScheduleEvent,
+} from "../../lib/w8Domains";
 
 interface CalendarEvent {
-  id?: string;
+  id: string;
   title: string;
   start: string;
   end?: string;
@@ -38,12 +39,105 @@ interface CalendarEvent {
   targetType: "common" | "class";
   targetClass?: string;
   description?: string;
+  revision?: number;
+  sourceDomain?: string;
+  sourceReference?: string;
+  provenance?: string;
+  readOnly?: boolean;
 }
 
+type ScheduleFormData = Omit<
+  CalendarEvent,
+  | "id"
+  | "revision"
+  | "sourceDomain"
+  | "sourceReference"
+  | "provenance"
+  | "readOnly"
+>;
+
+interface SelectedEventIdentity {
+  revision: number;
+  sourceDomain: string;
+  sourceReference: string;
+  readOnly: boolean;
+}
+
+const LEGACY_EVENT_TYPES = new Set<CalendarEvent["eventType"]>([
+  "exam",
+  "performance",
+  "event",
+  "diagnosis",
+  "formative",
+  "holiday",
+]);
+
+const legacyEventTypeFromW8 = (event: W8ScheduleEvent) => {
+  const sourceMatch = event.sourceReference.match(
+    /^legacy-calendar:(exam|performance|event|diagnosis|formative):/u,
+  );
+  if (
+    sourceMatch &&
+    LEGACY_EVENT_TYPES.has(sourceMatch[1] as CalendarEvent["eventType"])
+  ) {
+    return sourceMatch[1] as CalendarEvent["eventType"];
+  }
+  if (event.eventType === "HOLIDAY") return "holiday";
+  if (event.eventType === "ASSESSMENT") return "performance";
+  if (event.eventType === "LEARNING_DEADLINE") return "formative";
+  return "event";
+};
+
+const w8EventTypeFromLegacy = (eventType: CalendarEvent["eventType"]) => {
+  if (["exam", "performance", "diagnosis", "formative"].includes(eventType)) {
+    return "ASSESSMENT";
+  }
+  return "SCHOOL";
+};
+
+const newScheduleSourceKey = () => {
+  const randomId = globalThis.crypto?.randomUUID?.();
+  return randomId || `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+};
+
+const sourceReferenceForEventType = (
+  sourceReference: string,
+  eventType: CalendarEvent["eventType"],
+  sourceKey: string,
+) => {
+  const existing = sourceReference.match(
+    /^legacy-calendar:(?:exam|performance|event|diagnosis|formative):(.+)$/u,
+  );
+  if (existing) return `legacy-calendar:${eventType}:${existing[1]}`;
+  return sourceReference || `legacy-calendar:${eventType}:${sourceKey}`;
+};
+
+const w8ClassIdForLegacyClass = async (
+  semesterId: string,
+  legacyClass: string,
+) => {
+  if (!/^\d+-\d+$/u.test(legacyClass)) return legacyClass;
+  const [grade, classNumber] = legacyClass
+    .split("-")
+    .map((item) => item.normalize("NFKC").trim().toLowerCase());
+  if (!grade || !classNumber || !globalThis.crypto?.subtle) {
+    return legacyClass;
+  }
+  const digest = await globalThis.crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(`${semesterId}\n${grade}::${classNumber}`),
+  );
+  const hash = Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+  return `class_${hash.slice(0, 32)}`;
+};
+
 const ManageSchedule = () => {
-  const { currentUser, userData } = useAuth();
+  const { currentUser, userData, config, configReady } = useAuth();
   const { showToast } = useAppToast();
   const [events, setEvents] = useState<any[]>([]);
+  const [domainState, setDomainState] = useState<W8DomainState | null>(null);
   const [currentConfig, setCurrentConfig] = useState<{
     year: string;
     semester: string;
@@ -55,7 +149,7 @@ const ManageSchedule = () => {
   // Modal State
   const [modalOpen, setModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
-  const [formData, setFormData] = useState<CalendarEvent>({
+  const [formData, setFormData] = useState<ScheduleFormData>({
     title: "",
     start: "",
     end: "",
@@ -66,9 +160,15 @@ const ManageSchedule = () => {
   });
   const [endEnabled, setEndEnabled] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [selectedEventIdentity, setSelectedEventIdentity] =
+    useState<SelectedEventIdentity | null>(null);
+  const [createSourceKey, setCreateSourceKey] = useState(newScheduleSourceKey);
   const [holidaySyncing, setHolidaySyncing] = useState(false);
   const calendarRef = useRef<FullCalendar>(null);
   const canSyncHolidays = isAdminUser(userData, currentUser?.email);
+  const [searchParams] = useSearchParams();
+  const showHolidaySync =
+    canSyncHolidays && searchParams.get("adminTools") === "holidays";
 
   const colorMap: { [key: string]: string } = {
     exam: "#ef4444", // Red
@@ -115,55 +215,77 @@ const ManageSchedule = () => {
     return set;
   }, [events]);
 
-  useEffect(() => {
-    const fetchConfig = async () => {
-      try {
-        const configDoc = await getDoc(doc(db, "site_settings", "config"));
-        if (configDoc.exists()) {
-          setCurrentConfig(
-            configDoc.data() as { year: string; semester: string },
-          );
-        }
-      } catch (error) {
-        console.error("Error fetching config:", error);
-      }
-    };
-    fetchConfig();
-  }, []);
-
   const fetchEvents = async () => {
-    if (!currentConfig) return;
-    const calRef = collection(
-      db,
-      "years",
-      currentConfig.year,
-      "semesters",
-      currentConfig.semester,
-      "calendar",
-    );
+    if (!configReady || !config) return;
     try {
-      const snap = await getDocs(calRef);
-      const loadedEvents: CalendarEvent[] = [];
-
-      snap.forEach((docData) => {
-        const d = docData.data() as CalendarEvent;
-
-        let isVisible = true;
-        if (filter !== "all") {
-          if (filter === "common") {
-            if (d.targetType !== "common") isVisible = false;
-          } else {
-            // Filter is a specific class like '2-1'
-            if (d.targetType === "class" && d.targetClass !== filter)
-              isVisible = false;
-          }
-        }
-
-        if (isVisible) {
-          loadedEvents.push({ id: docData.id, ...d });
-        }
+      const nextState = await getW8DomainState({
+        config,
+        domain: "SCHEDULE",
+        audience: "teacher",
+        source: "CURRENT",
       });
-      const holidays = await getKoreanPublicHolidays(currentConfig.year);
+      setDomainState(nextState);
+      const [year, semester] = nextState.semesterId.split("-");
+      const nextConfig = {
+        year: year || config.year,
+        semester: semester || config.semester,
+      };
+      setCurrentConfig(nextConfig);
+      const loadedEvents: CalendarEvent[] = [];
+      const legacyClasses = [...Array(12)].map((_, index) => `2-${index + 1}`);
+      const classIdPairs = await Promise.all(
+        legacyClasses.map(
+          async (legacyClass) =>
+            [
+              await w8ClassIdForLegacyClass(nextState.semesterId, legacyClass),
+              legacyClass,
+            ] as const,
+        ),
+      );
+      const legacyClassByW8Id = new Map(classIdPairs);
+
+      nextState.scheduleEvents
+        .filter((scheduleEvent) => scheduleEvent.status === "ACTIVE")
+        .forEach((scheduleEvent) => {
+          const eventType = legacyEventTypeFromW8(scheduleEvent);
+          const d: CalendarEvent = {
+            id: scheduleEvent.eventId,
+            title: scheduleEvent.title,
+            start:
+              toW8LocalDateTimeInput(scheduleEvent.startAt).split("T")[0] ||
+              toDateKey(scheduleEvent.startAt),
+            end:
+              toW8LocalDateTimeInput(scheduleEvent.endAt).split("T")[0] ||
+              toDateKey(scheduleEvent.endAt),
+            eventType,
+            targetType: scheduleEvent.classIds.length ? "class" : "common",
+            targetClass:
+              legacyClassByW8Id.get(scheduleEvent.classIds[0]) ||
+              scheduleEvent.classIds[0],
+            description: scheduleEvent.description,
+            revision: scheduleEvent.revision,
+            sourceDomain: scheduleEvent.sourceDomain,
+            sourceReference: scheduleEvent.sourceReference,
+            provenance: scheduleEvent.provenance,
+            readOnly: nextState.readOnly,
+          };
+
+          let isVisible = true;
+          if (filter !== "all") {
+            if (filter === "common") {
+              if (d.targetType !== "common") isVisible = false;
+            } else {
+              // Filter is a specific class like '2-1'
+              if (d.targetType === "class" && d.targetClass !== filter)
+                isVisible = false;
+            }
+          }
+
+          if (isVisible) {
+            loadedEvents.push(d);
+          }
+        });
+      const holidays = await getKoreanPublicHolidays(nextConfig.year);
       const mergedEvents = mergeEventsWithKoreanPublicHolidays(
         loadedEvents,
         holidays,
@@ -191,12 +313,20 @@ const ManageSchedule = () => {
       );
     } catch (e) {
       console.error("Error fetching events:", e);
+      showToast({
+        tone: "error",
+        title: "학사 일정을 불러오지 못했습니다.",
+        message:
+          e instanceof W8DomainError
+            ? e.message
+            : "잠시 후 다시 시도해 주세요.",
+      });
     }
   };
 
   useEffect(() => {
     fetchEvents();
-  }, [currentConfig, filter]);
+  }, [config, configReady, filter]);
 
   const handleHolidaySync = async () => {
     if (!currentConfig || holidaySyncing) return;
@@ -229,6 +359,10 @@ const ManageSchedule = () => {
   };
 
   const handleDateClick = (arg: any) => {
+    if (domainState?.readOnly) {
+      alert("현재 학기 일정은 읽기 전용입니다.");
+      return;
+    }
     setSelectedDate(arg.dateStr);
     openModal(null, arg.dateStr);
   };
@@ -236,13 +370,31 @@ const ManageSchedule = () => {
   const handleEventClick = (info: any) => {
     if (info.event.classNames.includes("holiday-text-event")) return;
     const props = info.event.extendedProps;
+    if (
+      domainState?.readOnly ||
+      props.readOnly ||
+      props.sourceDomain !== "USER"
+    ) {
+      alert("이 일정은 이 화면에서 수정할 수 없습니다.");
+      return;
+    }
     openModal({ ...props, id: info.event.id });
   };
 
   const openModal = (eventData: any | null, dateStr?: string) => {
+    if (!eventData && domainState?.readOnly) {
+      alert("현재 학기 일정은 읽기 전용입니다.");
+      return;
+    }
     if (eventData) {
       setIsEditMode(true);
       setSelectedEventId(eventData.id);
+      setSelectedEventIdentity({
+        revision: Number(eventData.revision || 0),
+        sourceDomain: String(eventData.sourceDomain || ""),
+        sourceReference: String(eventData.sourceReference || ""),
+        readOnly: Boolean(eventData.readOnly),
+      });
       setFormData({
         title: eventData.title,
         start: eventData.start,
@@ -258,6 +410,8 @@ const ManageSchedule = () => {
     } else {
       setIsEditMode(false);
       setSelectedEventId(null);
+      setSelectedEventIdentity(null);
+      setCreateSourceKey(newScheduleSourceKey());
       setFormData({
         title: "",
         start: dateStr || new Date().toISOString().split("T")[0],
@@ -274,6 +428,7 @@ const ManageSchedule = () => {
 
   const closeModal = () => {
     setModalOpen(false);
+    setSelectedEventIdentity(null);
   };
 
   useEffect(() => {
@@ -290,60 +445,101 @@ const ManageSchedule = () => {
       alert("제목과 시작 날짜는 필수입니다.");
       return;
     }
-    if (!currentConfig) return;
+    if (!domainState || domainState.readOnly) {
+      alert("현재 학기 일정은 읽기 전용입니다.");
+      return;
+    }
+    if (
+      isEditMode &&
+      (!selectedEventId ||
+        !selectedEventIdentity ||
+        selectedEventIdentity.readOnly ||
+        selectedEventIdentity.sourceDomain !== "USER")
+    ) {
+      alert("이 일정은 이 화면에서 수정할 수 없습니다.");
+      return;
+    }
 
-    const calRef = collection(
-      db,
-      "years",
-      currentConfig.year,
-      "semesters",
-      currentConfig.semester,
-      "calendar",
-    );
     const finalEnd = endEnabled
       ? formData.end || formData.start
       : formData.start;
-    const dataToSave = {
-      ...formData,
-      end: finalEnd,
-      updatedAt: serverTimestamp(),
+    const sourceReference = sourceReferenceForEventType(
+      selectedEventIdentity?.sourceReference || "",
+      formData.eventType,
+      createSourceKey,
+    );
+    const targetClassId =
+      formData.targetType === "class" && formData.targetClass
+        ? await w8ClassIdForLegacyClass(
+            domainState.semesterId,
+            formData.targetClass,
+          )
+        : "";
+    const commandPayload = {
+      semesterId: domainState.semesterId,
+      expectedSemesterRevision: domainState.manifestRevision,
+      eventType: w8EventTypeFromLegacy(formData.eventType),
+      title: formData.title,
+      description: formData.description || "",
+      startAt: toW8ServerDateTime(`${formData.start}T00:00`),
+      endAt: toW8ServerDateTime(`${finalEnd}T00:00`),
+      allDay: true,
+      period: "",
+      targetClassIds: targetClassId ? [targetClassId] : [],
+      targetUserIds: [],
+      sourceDomain: selectedEventIdentity?.sourceDomain || "USER",
+      sourceReference,
     };
 
     try {
-      if (isEditMode && selectedEventId) {
-        await updateDoc(doc(calRef, selectedEventId), dataToSave);
+      if (isEditMode && selectedEventId && selectedEventIdentity) {
+        await updateScheduleEvent({
+          ...commandPayload,
+          eventId: selectedEventId,
+          expectedEventRevision: selectedEventIdentity.revision,
+        });
       } else {
-        // @ts-ignore
-        dataToSave.createdAt = serverTimestamp();
-        await addDoc(calRef, dataToSave);
+        await createScheduleEvent(commandPayload);
       }
       closeModal();
-      fetchEvents();
+      await fetchEvents();
     } catch (e: any) {
       alert("저장 실패: " + e.message);
+      if (e instanceof W8DomainError && e.kind === "CONFLICT") {
+        await fetchEvents();
+      }
     }
   };
 
   const handleDelete = async () => {
-    if (!selectedEventId || !currentConfig) return;
+    if (
+      !selectedEventId ||
+      !selectedEventIdentity ||
+      !domainState ||
+      domainState.readOnly ||
+      selectedEventIdentity.readOnly ||
+      selectedEventIdentity.sourceDomain !== "USER"
+    ) {
+      alert("이 일정은 이 화면에서 삭제할 수 없습니다.");
+      return;
+    }
     if (!window.confirm("정말 삭제하시겠습니까?")) return;
 
     try {
-      await deleteDoc(
-        doc(
-          db,
-          "years",
-          currentConfig.year,
-          "semesters",
-          currentConfig.semester,
-          "calendar",
-          selectedEventId,
-        ),
-      );
+      await deleteScheduleEvent({
+        semesterId: domainState.semesterId,
+        expectedSemesterRevision: domainState.manifestRevision,
+        eventId: selectedEventId,
+        expectedEventRevision: selectedEventIdentity.revision,
+        reason: "교사가 기존 일정 관리 화면에서 삭제를 명시적으로 선택함",
+      });
       closeModal();
-      fetchEvents();
+      await fetchEvents();
     } catch (e: any) {
       alert("삭제 실패: " + e.message);
+      if (e instanceof W8DomainError && e.kind === "CONFLICT") {
+        await fetchEvents();
+      }
     }
   };
 
@@ -376,7 +572,7 @@ const ManageSchedule = () => {
                 </option>
               ))}
             </select>
-            {canSyncHolidays && (
+            {showHolidaySync && (
               <button
                 type="button"
                 onClick={() => void handleHolidaySync()}

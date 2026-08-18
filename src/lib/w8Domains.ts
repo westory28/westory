@@ -5,6 +5,12 @@ import {
 } from "./commandGateway";
 import { getHttpsCallable } from "./firebase";
 import { getYearSemester } from "./semesterScope";
+import {
+  normalizeThinkCloudOptions,
+  type ThinkCloudOptions,
+  type ThinkCloudResponse,
+  type ThinkCloudSession,
+} from "./thinkCloud";
 
 type ConfigLike = Pick<SystemConfig, "year" | "semester"> | null | undefined;
 type JsonRecord = Record<string, unknown>;
@@ -198,6 +204,47 @@ export interface W8DashboardSummary {
   importantNotices: W8Notice[];
 }
 
+export interface W8ThinkCloudState {
+  activeSessionId: string;
+  activeSessionIds: string[];
+  revision: number;
+  exists: boolean;
+}
+
+export interface W8ThinkCloudSession extends Omit<
+  ThinkCloudSession,
+  "options"
+> {
+  id: string;
+  sessionId: string;
+  revision: number;
+  stateRevision: number;
+  stateExists: boolean;
+  options: ThinkCloudOptions;
+}
+
+export interface W8ThinkCloudResponse extends ThinkCloudResponse {
+  id: string;
+  revision: number;
+  isOwn: boolean;
+}
+
+export interface W8ThinkCloudRosterItem {
+  uid: string;
+  name: string;
+  number: string;
+}
+
+export interface W8ThinkCloudManagedClass {
+  classId: string;
+  grade: string;
+  classNumber: string;
+  displayName: string;
+  stateRevision: number;
+  stateExists: boolean;
+  activeSessionId: string;
+}
+
 export interface W8DomainState {
   domain: W8Domain;
   audience: W8Audience;
@@ -221,6 +268,11 @@ export interface W8DomainState {
   deliveries: W8NoticeDelivery[];
   acknowledgements: W8NoticeAcknowledgement[];
   notificationConfig: JsonRecord;
+  thinkCloudState: W8ThinkCloudState;
+  thinkCloudSessions: W8ThinkCloudSession[];
+  thinkCloudResponses: W8ThinkCloudResponse[];
+  thinkCloudRoster: W8ThinkCloudRosterItem[];
+  thinkCloudManagedClasses: W8ThinkCloudManagedClass[];
   writeCount: 0;
   dashboard: W8DashboardSummary;
 }
@@ -441,6 +493,74 @@ const normalizeAcknowledgement = (value: unknown): W8NoticeAcknowledgement => {
   };
 };
 
+const normalizeThinkCloudSession = (value: unknown): W8ThinkCloudSession => {
+  const item = record(value);
+  const status = text(item.status);
+  const id = text(item.id) || text(item.sessionId);
+  return {
+    id,
+    sessionId: text(item.sessionId) || id,
+    title: text(item.title),
+    description: text(item.description),
+    targetGrade: text(item.targetGrade),
+    targetClass: text(item.targetClass),
+    targetGradeLabel: text(item.targetGradeLabel),
+    targetClassLabel: text(item.targetClassLabel),
+    status: ["active", "paused", "closed"].includes(status)
+      ? (status as W8ThinkCloudSession["status"])
+      : "draft",
+    options: normalizeThinkCloudOptions(item.options),
+    createdBy: text(item.createdBy),
+    createdByName: text(item.createdByName) || "교사",
+    createdAt: item.createdAt,
+    activatedAt: item.activatedAt,
+    closedAt: item.closedAt,
+    revision: number(item.revision),
+    stateRevision: number(item.stateRevision),
+    stateExists: boolean(item.stateExists),
+  };
+};
+
+const normalizeThinkCloudResponse = (value: unknown): W8ThinkCloudResponse => {
+  const item = record(value);
+  return {
+    id: text(item.id),
+    uid: text(item.uid),
+    displayName: text(item.displayName),
+    textRaw: text(item.textRaw),
+    textNormalized: text(item.textNormalized),
+    createdAt: item.createdAt,
+    revision: number(item.revision),
+    isOwn: boolean(item.isOwn),
+  };
+};
+
+const normalizeThinkCloudRosterItem = (
+  value: unknown,
+): W8ThinkCloudRosterItem => {
+  const item = record(value);
+  return {
+    uid: text(item.uid),
+    name: text(item.name) || "학생",
+    number: text(item.number),
+  };
+};
+
+const normalizeThinkCloudManagedClass = (
+  value: unknown,
+): W8ThinkCloudManagedClass => {
+  const item = record(value);
+  return {
+    classId: text(item.classId),
+    grade: text(item.grade),
+    classNumber: text(item.classNumber),
+    displayName: text(item.displayName),
+    stateRevision: number(item.stateRevision),
+    stateExists: boolean(item.stateExists),
+    activeSessionId: text(item.activeSessionId),
+  };
+};
+
 const mapError = (error: unknown) => {
   const raw = record(error);
   const code = text(raw.code).toLowerCase();
@@ -551,6 +671,10 @@ export const getW8DomainState = async (input: {
       "notices",
       "deliveries",
       "acknowledgements",
+      "thinkCloudSessions",
+      "thinkCloudResponses",
+      "thinkCloudRoster",
+      "thinkCloudManagedClasses",
     ] as const;
     const responseContractValid =
       raw.domain === input.domain &&
@@ -560,7 +684,10 @@ export const getW8DomainState = async (input: {
       requiredArrayKeys.every((key) => Array.isArray(raw[key])) &&
       (raw.notificationConfig === null ||
         (typeof raw.notificationConfig === "object" &&
-          !Array.isArray(raw.notificationConfig)));
+          !Array.isArray(raw.notificationConfig))) &&
+      typeof raw.thinkCloudState === "object" &&
+      raw.thinkCloudState !== null &&
+      !Array.isArray(raw.thinkCloudState);
     if (!responseContractValid) {
       throw new W8DomainError(
         "UNKNOWN",
@@ -632,6 +759,24 @@ export const getW8DomainState = async (input: {
       deliveries: rows(raw.deliveries).map(normalizeDelivery),
       acknowledgements,
       notificationConfig: record(raw.notificationConfig),
+      thinkCloudState: {
+        activeSessionId: text(record(raw.thinkCloudState).activeSessionId),
+        activeSessionIds: strings(record(raw.thinkCloudState).activeSessionIds),
+        revision: number(record(raw.thinkCloudState).revision),
+        exists: boolean(record(raw.thinkCloudState).exists),
+      },
+      thinkCloudSessions: rows(raw.thinkCloudSessions).map(
+        normalizeThinkCloudSession,
+      ),
+      thinkCloudResponses: rows(raw.thinkCloudResponses).map(
+        normalizeThinkCloudResponse,
+      ),
+      thinkCloudRoster: rows(raw.thinkCloudRoster).map(
+        normalizeThinkCloudRosterItem,
+      ),
+      thinkCloudManagedClasses: rows(raw.thinkCloudManagedClasses).map(
+        normalizeThinkCloudManagedClass,
+      ),
       writeCount: 0,
       dashboard: {
         todaySchedule: rows(dashboardRaw.todaySchedule).map(
@@ -724,9 +869,10 @@ export const getLearningProgressForContent = (
 const execute = async <CommandType extends keyof W2CommandPayloads>(
   commandType: CommandType,
   payload: W2CommandPayloads[CommandType],
+  options: { commandId?: string } = {},
 ) => {
   try {
-    return await executeWestoryCommand(commandType, payload);
+    return await executeWestoryCommand(commandType, payload, options);
   } catch (error) {
     throw mapError(error);
   }
@@ -805,3 +951,19 @@ export const updateNotificationSettings = async (
     throw mapError(error);
   }
 };
+export const createThinkCloudSession = (
+  payload: W2CommandPayloads["createThinkCloudSession"],
+  options: { commandId?: string } = {},
+) => execute("createThinkCloudSession", payload, options);
+export const transitionThinkCloudSession = (
+  payload: W2CommandPayloads["transitionThinkCloudSession"],
+  options: { commandId?: string } = {},
+) => execute("transitionThinkCloudSession", payload, options);
+export const deleteThinkCloudSession = (
+  payload: W2CommandPayloads["deleteThinkCloudSession"],
+  options: { commandId?: string } = {},
+) => execute("deleteThinkCloudSession", payload, options);
+export const submitThinkCloudResponse = (
+  payload: W2CommandPayloads["submitThinkCloudResponse"],
+  options: { commandId?: string } = {},
+) => execute("submitThinkCloudResponse", payload, options);

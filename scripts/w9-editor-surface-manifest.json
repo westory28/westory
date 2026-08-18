@@ -4,63 +4,494 @@
   "expectedDispositionCounts": {
     "DRAFT_REQUIRED": 4,
     "DOMAIN_DRAFT_EXISTS": 10,
-    "COMMAND_ONLY": 20,
-    "READ_ONLY": 1,
-    "NOT_APPLICABLE": 8,
+    "COMMAND_ONLY": 25,
+    "READ_ONLY": 2,
+    "NOT_APPLICABLE": 2,
     "RELEASE_DECISION": 8,
     "UNKNOWN": 0
   },
   "surfaces": [
-    {"id":"D01","disposition":"DRAFT_REQUIRED","file":"src/pages/teacher/W8TeacherHub.tsx","anchors":["TeacherCommunication","createNotice","useTeacherDraft"],"rationale":"공지 생성 편집은 장문 작성 중 복구가 필요합니다.","completion":"IMPLEMENTED_W9","adapter":"useTeacherDraft"},
-    {"id":"D02","disposition":"DRAFT_REQUIRED","file":"src/pages/teacher/W8TeacherHub.tsx","anchors":["TeacherCommunication","updateNotice","useTeacherDraft"],"rationale":"공지 수정 편집은 장문 작성 중 복구가 필요합니다.","completion":"IMPLEMENTED_W9","adapter":"useTeacherDraft"},
-    {"id":"D03","disposition":"NOT_APPLICABLE","file":"src/pages/teacher/components/TeacherNoticeBoard.tsx","anchors":["TeacherNoticeBoard"],"rationale":"이전 공지 순서 화면은 현재 route에 mount되지 않습니다.","completion":"NOT_MOUNTED","adapter":"none"},
-    {"id":"D04","disposition":"NOT_APPLICABLE","file":"src/pages/teacher/Dashboard.tsx","anchors":["/teacher/schedule"],"rationale":"Dashboard 편집은 제거되고 Schedule 이동만 제공합니다.","completion":"QUERY_ONLY","adapter":"none"},
-    {"id":"STU01","disposition":"COMMAND_ONLY","file":"src/pages/teacher/components/StudentEditModal.tsx","anchors":["handleSave"],"rationale":"민감한 학적 변경은 임시 Draft보다 명시적 학적 command가 우선입니다.","completion":"COMMAND_BOUNDARY","adapter":"command-gateway"},
-    {"id":"STU02","disposition":"COMMAND_ONLY","file":"src/pages/teacher/components/MoveClassModal.tsx","anchors":["handleMove"],"rationale":"학급 이동은 W4 원자 command로 처리합니다.","completion":"COMMAND_BOUNDARY","adapter":"command-gateway"},
-    {"id":"Q01","disposition":"DOMAIN_DRAFT_EXISTS","file":"src/pages/teacher/components/QuizEditor.tsx","anchors":["QuizEditor"],"rationale":"평가 정의가 자체 DRAFT lifecycle을 가집니다.","completion":"DOMAIN_OWNED","adapter":"assessment-draft"},
-    {"id":"Q02","disposition":"DOMAIN_DRAFT_EXISTS","file":"src/pages/teacher/components/QuizSettingsModal.tsx","anchors":["QuizSettingsModal"],"rationale":"평가 설정이 자체 DRAFT lifecycle을 가집니다.","completion":"DOMAIN_OWNED","adapter":"assessment-draft"},
-    {"id":"Q03","disposition":"DOMAIN_DRAFT_EXISTS","file":"src/pages/teacher/components/QuizBankTab.tsx","anchors":["QuizBankTab"],"rationale":"문항 편집이 평가 Domain Draft에 포함됩니다.","completion":"DOMAIN_OWNED","adapter":"assessment-draft"},
-    {"id":"HC01","disposition":"DOMAIN_DRAFT_EXISTS","file":"src/pages/teacher/ManageHistoryClassroom.tsx","anchors":["handleSave","handleSaveAssignmentEdit"],"rationale":"역사교실 과제는 평가 정의 Draft를 사용합니다.","completion":"DOMAIN_OWNED","adapter":"assessment-draft"},
-    {"id":"HC02","disposition":"DOMAIN_DRAFT_EXISTS","file":"src/pages/teacher/ManageHistoryClassroom.tsx","anchors":["handleSaveMapBlanks"],"rationale":"지도 빈칸 편집은 평가 Domain Draft를 사용합니다.","completion":"DOMAIN_OWNED","adapter":"assessment-draft"},
-    {"id":"HC03","disposition":"COMMAND_ONLY","file":"src/pages/teacher/W8TeacherHub.tsx","anchors":["grantLearningExemptions","revokeLearningExemptions"],"rationale":"학습 면제 부여와 취소는 즉시 감사되는 명시적 command입니다.","completion":"COMMAND_BOUNDARY","adapter":"command-gateway"},
-    {"id":"HC04","disposition":"COMMAND_ONLY","file":"src/pages/teacher/ManageHistoryClassroom.tsx","anchors":["handleReview"],"rationale":"면제 요청 검토는 명시적 review command입니다.","completion":"COMMAND_BOUNDARY","adapter":"command-gateway"},
-    {"id":"EX01","disposition":"DOMAIN_DRAFT_EXISTS","file":"src/pages/teacher/components/ExamGradingPlan.tsx","anchors":["handleSave"],"rationale":"채점 계획은 W6B plan/version Draft 계약이 소유합니다.","completion":"DOMAIN_OWNED","adapter":"grade-draft"},
-    {"id":"EX02","disposition":"COMMAND_ONLY","file":"src/pages/teacher/components/ExamOmrConfig.tsx","anchors":["handleSave"],"rationale":"OMR 설정은 짧은 명시적 저장 command가 적합합니다.","completion":"COMMAND_BOUNDARY","adapter":"command-gateway"},
-    {"id":"EX03","disposition":"RELEASE_DECISION","file":"src/pages/teacher/components/PerformanceScoreManager.tsx","anchors":["handleUpload","saveParsedScores"],"rationale":"점수 파일 업로드는 공식 gateway와 asset 계약 결정이 남았습니다.","completion":"RELEASE_PENDING","adapter":"none"},
-    {"id":"EX04","disposition":"DOMAIN_DRAFT_EXISTS","file":"src/pages/teacher/components/GradeEvidenceManager.tsx","anchors":["itemDrafts","reviewGradeDraft"],"rationale":"성적 항목은 W6B Grade Draft가 소유합니다.","completion":"DOMAIN_OWNED","adapter":"grade-draft"},
-    {"id":"EX05","disposition":"COMMAND_ONLY","file":"src/pages/teacher/components/PerformanceScoreManager.tsx","anchors":["saveScoreWarningSettings"],"rationale":"점수 경고 설정은 짧은 운영 설정 command입니다.","completion":"COMMAND_BOUNDARY","adapter":"command-gateway"},
-    {"id":"EX06","disposition":"RELEASE_DECISION","file":"src/pages/teacher/components/PerformanceScoreManager.tsx","anchors":["handleUpload","saveParsedScores"],"rationale":"점수 일괄 반영은 공식 gateway와 부분 실패 정책 결정이 남았습니다.","completion":"RELEASE_PENDING","adapter":"none"},
-    {"id":"EX07","disposition":"DOMAIN_DRAFT_EXISTS","file":"src/pages/teacher/components/GradeEvidenceManager.tsx","anchors":["itemDrafts","reviewGradeDraft"],"rationale":"성적 검토는 W6B Grade Draft가 소유합니다.","completion":"DOMAIN_OWNED","adapter":"grade-draft"},
-    {"id":"EX08","disposition":"COMMAND_ONLY","file":"src/pages/teacher/components/PerformanceScoreManager.tsx","anchors":["handleReviewObjection"],"rationale":"이의 검토는 명시적 review command입니다.","completion":"COMMAND_BOUNDARY","adapter":"command-gateway"},
-    {"id":"SET01","disposition":"COMMAND_ONLY","file":"src/pages/teacher/components/SettingsGeneral.tsx","anchors":["handleSave"],"rationale":"일반 설정은 짧은 운영 설정 command입니다.","completion":"COMMAND_BOUNDARY","adapter":"command-gateway"},
-    {"id":"SET02","disposition":"COMMAND_ONLY","file":"src/pages/teacher/components/SettingsSchool.tsx","anchors":["handleSave"],"rationale":"학교 설정은 짧은 운영 설정 command입니다.","completion":"COMMAND_BOUNDARY","adapter":"command-gateway"},
-    {"id":"SET03","disposition":"COMMAND_ONLY","file":"src/pages/teacher/components/SemesterCorePanel.tsx","anchors":["SemesterCorePanel"],"rationale":"학기 lifecycle은 W3 명시적 command가 소유합니다.","completion":"COMMAND_BOUNDARY","adapter":"command-gateway"},
-    {"id":"SET04","disposition":"COMMAND_ONLY","file":"src/pages/teacher/components/SettingsInterface.tsx","anchors":["saveInterfaceConfig"],"rationale":"화면 설정은 짧은 운영 설정 command입니다.","completion":"COMMAND_BOUNDARY","adapter":"command-gateway"},
-    {"id":"SET05","disposition":"COMMAND_ONLY","file":"src/pages/teacher/components/SettingsInterface.tsx","anchors":["saveMenuConfig"],"rationale":"메뉴 설정은 짧은 운영 설정 command입니다.","completion":"COMMAND_BOUNDARY","adapter":"command-gateway"},
-    {"id":"SET06","disposition":"COMMAND_ONLY","file":"src/pages/teacher/components/SettingsAccess.tsx","anchors":["saveUserAccess"],"rationale":"접근 권한은 명시적 고위험 command입니다.","completion":"COMMAND_BOUNDARY","adapter":"command-gateway"},
-    {"id":"SET07","disposition":"COMMAND_ONLY","file":"src/pages/teacher/components/SettingsNotifications.tsx","anchors":["saveConfig"],"rationale":"알림 설정은 짧은 운영 설정 command입니다.","completion":"COMMAND_BOUNDARY","adapter":"command-gateway"},
-    {"id":"SET08","disposition":"COMMAND_ONLY","file":"src/pages/teacher/components/SettingsPrivacy.tsx","anchors":["saveTerms","savePrivacy"],"rationale":"약관과 개인정보 설정은 감사되는 명시적 command입니다.","completion":"COMMAND_BOUNDARY","adapter":"command-gateway"},
-    {"id":"SET09","disposition":"COMMAND_ONLY","file":"src/pages/teacher/components/SettingsPrivacy.tsx","anchors":["addConsentItem","saveConsentItem"],"rationale":"동의 항목 변경은 명시적 command입니다.","completion":"COMMAND_BOUNDARY","adapter":"command-gateway"},
-    {"id":"WIS01","disposition":"COMMAND_ONLY","file":"src/pages/teacher/WisEconomyManager.tsx","anchors":["changeBalance","adjustBalance"],"rationale":"잔액 조정은 W7 원장 command입니다.","completion":"COMMAND_BOUNDARY","adapter":"command-gateway"},
-    {"id":"WIS02","disposition":"NOT_APPLICABLE","file":"src/pages/teacher/ManagePoints.tsx","anchors":["ManagePoints"],"rationale":"이전 포인트 화면은 현재 route에 mount되지 않습니다.","completion":"NOT_MOUNTED","adapter":"none"},
-    {"id":"WIS03","disposition":"NOT_APPLICABLE","file":"src/pages/teacher/ManagePoints.tsx","anchors":["ManagePoints"],"rationale":"이전 포인트 화면은 현재 route에 mount되지 않습니다.","completion":"NOT_MOUNTED","adapter":"none"},
-    {"id":"WIS04","disposition":"NOT_APPLICABLE","file":"src/pages/teacher/ManagePoints.tsx","anchors":["ManagePoints"],"rationale":"이전 포인트 화면은 현재 route에 mount되지 않습니다.","completion":"NOT_MOUNTED","adapter":"none"},
-    {"id":"WIS05","disposition":"NOT_APPLICABLE","file":"src/pages/teacher/ManagePoints.tsx","anchors":["ManagePoints"],"rationale":"이전 포인트 화면은 현재 route에 mount되지 않습니다.","completion":"NOT_MOUNTED","adapter":"none"},
-    {"id":"WIS06","disposition":"NOT_APPLICABLE","file":"src/pages/teacher/ManagePoints.tsx","anchors":["ManagePoints"],"rationale":"이전 포인트 화면은 현재 route에 mount되지 않습니다.","completion":"NOT_MOUNTED","adapter":"none"},
-    {"id":"WIS07","disposition":"DOMAIN_DRAFT_EXISTS","file":"src/pages/teacher/WisEconomyManager.tsx","anchors":["saveProduct"],"rationale":"상품 metadata는 W7 product DRAFT lifecycle이 소유합니다.","completion":"DOMAIN_OWNED","adapter":"wis-product-draft"},
-    {"id":"WIS08","disposition":"DOMAIN_DRAFT_EXISTS","file":"src/pages/teacher/WisEconomyManager.tsx","anchors":["saveProduct"],"rationale":"상품 재고 편집은 동일 W7 product DRAFT lifecycle이 소유합니다.","completion":"DOMAIN_OWNED","adapter":"wis-product-draft"},
-    {"id":"WIS09","disposition":"COMMAND_ONLY","file":"src/pages/teacher/WisEconomyManager.tsx","anchors":["reviewOrder"],"rationale":"주문 검토는 원장과 재고를 묶는 명시적 command입니다.","completion":"COMMAND_BOUNDARY","adapter":"command-gateway"},
-    {"id":"WIS10","disposition":"COMMAND_ONLY","file":"src/pages/teacher/WisEconomyManager.tsx","anchors":["reverseEntry"],"rationale":"원장 반전은 감사되는 명시적 command입니다.","completion":"COMMAND_BOUNDARY","adapter":"command-gateway"},
-    {"id":"SCH01","disposition":"DRAFT_REQUIRED","file":"src/pages/teacher/W8TeacherHub.tsx","anchors":["TeacherSchedule","createScheduleEvent","useTeacherDraft"],"rationale":"일정 편집은 작성 중 복구와 기준 revision 충돌 보존이 필요합니다.","completion":"IMPLEMENTED_W9","adapter":"useTeacherDraft"},
-    {"id":"LES01","disposition":"DRAFT_REQUIRED","file":"src/pages/teacher/W8TeacherHub.tsx","anchors":["TeacherLearning","createLearningContent","useTeacherDraft"],"rationale":"학습 자료 편집은 장문 작성 중 복구가 필요합니다.","completion":"IMPLEMENTED_W9","adapter":"useTeacherDraft"},
-    {"id":"LES02","disposition":"NOT_APPLICABLE","file":"src/App.tsx","anchors":["/teacher/lesson","/teacher/learning"],"rationale":"이전 수업 route는 canonical Learning으로 redirect됩니다.","completion":"ROUTE_REDIRECT","adapter":"none"},
-    {"id":"DIC01","disposition":"RELEASE_DECISION","file":"src/pages/teacher/ManageHistoryDictionary.tsx","anchors":["handleSaveTerm","handleSaveStudentWord"],"rationale":"사전 편집은 공식 gateway와 receipt가 없어 공통 Draft resolve가 불가능합니다.","completion":"RELEASE_PENDING","adapter":"none"},
-    {"id":"DIC02","disposition":"RELEASE_DECISION","file":"src/pages/teacher/ManageHistoryDictionary.tsx","anchors":["handleExcelUpload","handleRegisterUploadRows"],"rationale":"사전 XLSX 일괄 저장은 공식 gateway와 부분 실패 정책 결정이 남았습니다.","completion":"RELEASE_PENDING","adapter":"none"},
-    {"id":"MAP01","disposition":"RELEASE_DECISION","file":"src/pages/teacher/ManageMaps.tsx","anchors":["handleFileInputChange","handleSave"],"rationale":"지도 파일 저장은 asset staging과 공식 receipt 계약 결정이 남았습니다.","completion":"RELEASE_PENDING","adapter":"none"},
-    {"id":"MAP02","disposition":"RELEASE_DECISION","file":"src/pages/teacher/ManageMaps.tsx","anchors":["handleSaveTagManager"],"rationale":"태그 편집은 공식 gateway와 receipt가 없어 공통 Draft resolve가 불가능합니다.","completion":"RELEASE_PENDING","adapter":"none"},
-    {"id":"MAP03","disposition":"COMMAND_ONLY","file":"src/pages/teacher/ManageMaps.tsx","anchors":["handleSaveTabRename"],"rationale":"탭 이름 변경은 짧은 명시적 command가 적합합니다.","completion":"COMMAND_BOUNDARY","adapter":"command-gateway"},
-    {"id":"SRC01","disposition":"RELEASE_DECISION","file":"src/pages/teacher/ManageSourceArchive.tsx","anchors":["handleFileChange","handleSave"],"rationale":"사료 파일 저장은 asset staging과 공식 receipt 계약 결정이 남았습니다.","completion":"RELEASE_PENDING","adapter":"none"},
-    {"id":"THINK01","disposition":"READ_ONLY","file":"src/App.tsx","anchors":["source=LEGACY","/teacher/learning"],"rationale":"생각모아 이전 화면은 LEGACY read-only route입니다.","completion":"READ_ONLY","adapter":"legacy-read-adapter"},
-    {"id":"PATCH01","disposition":"RELEASE_DECISION","file":"src/components/common/TeacherPatchMemoController.tsx","anchors":["handleSubmit","createTeacherPatchNote"],"rationale":"패치 메모는 공식 gateway와 receipt 계약이 없습니다.","completion":"RELEASE_PENDING","adapter":"none"}
+    {
+      "id": "D01",
+      "disposition": "DRAFT_REQUIRED",
+      "file": "src/pages/teacher/W8TeacherHub.tsx",
+      "anchors": ["TeacherCommunication", "createNotice", "useTeacherDraft"],
+      "rationale": "공지 생성 편집은 장문 작성 중 복구가 필요합니다.",
+      "completion": "IMPLEMENTED_W9",
+      "adapter": "useTeacherDraft"
+    },
+    {
+      "id": "D02",
+      "disposition": "DRAFT_REQUIRED",
+      "file": "src/pages/teacher/W8TeacherHub.tsx",
+      "anchors": ["TeacherCommunication", "updateNotice", "useTeacherDraft"],
+      "rationale": "공지 수정 편집은 장문 작성 중 복구가 필요합니다.",
+      "completion": "IMPLEMENTED_W9",
+      "adapter": "useTeacherDraft"
+    },
+    {
+      "id": "D03",
+      "disposition": "NOT_APPLICABLE",
+      "file": "src/pages/teacher/components/TeacherNoticeBoard.tsx",
+      "anchors": ["TeacherNoticeBoard"],
+      "rationale": "이전 공지 순서 화면은 현재 route에 mount되지 않습니다.",
+      "completion": "NOT_MOUNTED",
+      "adapter": "none"
+    },
+    {
+      "id": "D04",
+      "disposition": "NOT_APPLICABLE",
+      "file": "src/pages/teacher/Dashboard.tsx",
+      "anchors": ["/teacher/schedule"],
+      "rationale": "Dashboard 편집은 제거되고 Schedule 이동만 제공합니다.",
+      "completion": "QUERY_ONLY",
+      "adapter": "none"
+    },
+    {
+      "id": "STU01",
+      "disposition": "COMMAND_ONLY",
+      "file": "src/pages/teacher/components/StudentEditModal.tsx",
+      "anchors": ["handleSave"],
+      "rationale": "민감한 학적 변경은 임시 Draft보다 명시적 학적 command가 우선입니다.",
+      "completion": "COMMAND_BOUNDARY",
+      "adapter": "command-gateway"
+    },
+    {
+      "id": "STU02",
+      "disposition": "COMMAND_ONLY",
+      "file": "src/pages/teacher/components/MoveClassModal.tsx",
+      "anchors": ["handleMove"],
+      "rationale": "학급 이동은 W4 원자 command로 처리합니다.",
+      "completion": "COMMAND_BOUNDARY",
+      "adapter": "command-gateway"
+    },
+    {
+      "id": "Q01",
+      "disposition": "DOMAIN_DRAFT_EXISTS",
+      "file": "src/pages/teacher/components/QuizEditor.tsx",
+      "anchors": ["QuizEditor"],
+      "rationale": "평가 정의가 자체 DRAFT lifecycle을 가집니다.",
+      "completion": "DOMAIN_OWNED",
+      "adapter": "assessment-draft"
+    },
+    {
+      "id": "Q02",
+      "disposition": "DOMAIN_DRAFT_EXISTS",
+      "file": "src/pages/teacher/components/QuizSettingsModal.tsx",
+      "anchors": ["QuizSettingsModal"],
+      "rationale": "평가 설정이 자체 DRAFT lifecycle을 가집니다.",
+      "completion": "DOMAIN_OWNED",
+      "adapter": "assessment-draft"
+    },
+    {
+      "id": "Q03",
+      "disposition": "DOMAIN_DRAFT_EXISTS",
+      "file": "src/pages/teacher/components/QuizBankTab.tsx",
+      "anchors": ["QuizBankTab"],
+      "rationale": "문항 편집이 평가 Domain Draft에 포함됩니다.",
+      "completion": "DOMAIN_OWNED",
+      "adapter": "assessment-draft"
+    },
+    {
+      "id": "HC01",
+      "disposition": "DOMAIN_DRAFT_EXISTS",
+      "file": "src/pages/teacher/ManageHistoryClassroom.tsx",
+      "anchors": ["handleSave", "handleSaveAssignmentEdit"],
+      "rationale": "역사교실 과제는 평가 정의 Draft를 사용합니다.",
+      "completion": "DOMAIN_OWNED",
+      "adapter": "assessment-draft"
+    },
+    {
+      "id": "HC02",
+      "disposition": "DOMAIN_DRAFT_EXISTS",
+      "file": "src/pages/teacher/ManageHistoryClassroom.tsx",
+      "anchors": ["handleSaveMapBlanks"],
+      "rationale": "지도 빈칸 편집은 평가 Domain Draft를 사용합니다.",
+      "completion": "DOMAIN_OWNED",
+      "adapter": "assessment-draft"
+    },
+    {
+      "id": "HC03",
+      "disposition": "COMMAND_ONLY",
+      "file": "src/pages/teacher/W8TeacherHub.tsx",
+      "anchors": ["grantLearningExemptions", "revokeLearningExemptions"],
+      "rationale": "학습 면제 부여와 취소는 즉시 감사되는 명시적 command입니다.",
+      "completion": "COMMAND_BOUNDARY",
+      "adapter": "command-gateway"
+    },
+    {
+      "id": "HC04",
+      "disposition": "COMMAND_ONLY",
+      "file": "src/pages/teacher/ManageHistoryClassroom.tsx",
+      "anchors": ["handleReview"],
+      "rationale": "면제 요청 검토는 명시적 review command입니다.",
+      "completion": "COMMAND_BOUNDARY",
+      "adapter": "command-gateway"
+    },
+    {
+      "id": "EX01",
+      "disposition": "COMMAND_ONLY",
+      "file": "src/pages/teacher/components/ExamGradingPlan.tsx",
+      "anchors": ["handleSave", "saveLegacyGradeConfig"],
+      "rationale": "채점 계획 저장·삭제는 기존 화면에서 W6B revision·CAS·receipt command로 처리합니다.",
+      "completion": "COMMAND_BOUNDARY",
+      "adapter": "legacy-grade-evidence-adapter"
+    },
+    {
+      "id": "EX02",
+      "disposition": "COMMAND_ONLY",
+      "file": "src/pages/teacher/components/ExamOmrConfig.tsx",
+      "anchors": ["handleSave", "saveLegacyGradeConfig"],
+      "rationale": "OMR 설정은 기존 화면에서 W6B revision·CAS·receipt command로 저장합니다.",
+      "completion": "COMMAND_BOUNDARY",
+      "adapter": "legacy-grade-evidence-adapter"
+    },
+    {
+      "id": "EX03",
+      "disposition": "COMMAND_ONLY",
+      "file": "src/pages/teacher/components/PerformanceScoreManager.tsx",
+      "anchors": ["handleUpload", "saveParsedScores", "saveLegacyGradeRoster"],
+      "rationale": "수행평가 파일은 브라우저에서 미리보기로만 해석하고, 확인된 100명 이하 점수만 W6B 원자 command로 저장합니다.",
+      "completion": "COMMAND_BOUNDARY",
+      "adapter": "legacy-grade-evidence-adapter"
+    },
+    {
+      "id": "EX04",
+      "disposition": "DOMAIN_DRAFT_EXISTS",
+      "file": "src/pages/teacher/components/GradeEvidenceManager.tsx",
+      "anchors": ["itemDrafts", "reviewGradeDraft"],
+      "rationale": "성적 항목은 W6B Grade Draft가 소유합니다.",
+      "completion": "DOMAIN_OWNED",
+      "adapter": "grade-draft"
+    },
+    {
+      "id": "EX05",
+      "disposition": "COMMAND_ONLY",
+      "file": "src/pages/teacher/components/PerformanceScoreManager.tsx",
+      "anchors": ["saveScoreWarningSettings", "saveLegacyGradeWarningSettings"],
+      "rationale": "점수 확인 경고 문구는 기존 화면에서 W6B WARNING config revision·CAS·receipt command로 저장합니다.",
+      "completion": "COMMAND_BOUNDARY",
+      "adapter": "legacy-grade-evidence-adapter"
+    },
+    {
+      "id": "EX06",
+      "disposition": "COMMAND_ONLY",
+      "file": "src/pages/teacher/components/PerformanceScoreManager.tsx",
+      "anchors": ["handleUpload", "saveParsedScores", "saveLegacyGradeRoster"],
+      "rationale": "서답형·논술형 파일은 브라우저에서 미리보기로만 해석하고, 확인된 100명 이하 점수만 W6B 원자 command로 저장합니다.",
+      "completion": "COMMAND_BOUNDARY",
+      "adapter": "legacy-grade-evidence-adapter"
+    },
+    {
+      "id": "EX07",
+      "disposition": "DOMAIN_DRAFT_EXISTS",
+      "file": "src/pages/teacher/components/GradeEvidenceManager.tsx",
+      "anchors": ["itemDrafts", "reviewGradeDraft"],
+      "rationale": "성적 검토는 W6B Grade Draft가 소유합니다.",
+      "completion": "DOMAIN_OWNED",
+      "adapter": "grade-draft"
+    },
+    {
+      "id": "EX08",
+      "disposition": "COMMAND_ONLY",
+      "file": "src/pages/teacher/components/PerformanceScoreManager.tsx",
+      "anchors": ["handleReviewObjection", "reviewLegacyGradeRequest"],
+      "rationale": "이의 수용·반려는 최신 요청 revision과 실제 변경 점수를 재검증하는 W6B review command로 처리합니다.",
+      "completion": "COMMAND_BOUNDARY",
+      "adapter": "legacy-grade-evidence-adapter"
+    },
+    {
+      "id": "SET01",
+      "disposition": "COMMAND_ONLY",
+      "file": "src/pages/teacher/components/SettingsGeneral.tsx",
+      "anchors": ["handleSave"],
+      "rationale": "일반 설정은 짧은 운영 설정 command입니다.",
+      "completion": "COMMAND_BOUNDARY",
+      "adapter": "command-gateway"
+    },
+    {
+      "id": "SET02",
+      "disposition": "COMMAND_ONLY",
+      "file": "src/pages/teacher/components/SettingsSchool.tsx",
+      "anchors": ["handleSave"],
+      "rationale": "학교 설정은 짧은 운영 설정 command입니다.",
+      "completion": "COMMAND_BOUNDARY",
+      "adapter": "command-gateway"
+    },
+    {
+      "id": "SET03",
+      "disposition": "COMMAND_ONLY",
+      "file": "src/pages/teacher/components/SemesterCorePanel.tsx",
+      "anchors": ["SemesterCorePanel"],
+      "rationale": "학기 lifecycle은 W3 명시적 command가 소유합니다.",
+      "completion": "COMMAND_BOUNDARY",
+      "adapter": "command-gateway"
+    },
+    {
+      "id": "SET04",
+      "disposition": "COMMAND_ONLY",
+      "file": "src/pages/teacher/components/SettingsInterface.tsx",
+      "anchors": ["saveInterfaceConfig"],
+      "rationale": "화면 설정은 짧은 운영 설정 command입니다.",
+      "completion": "COMMAND_BOUNDARY",
+      "adapter": "command-gateway"
+    },
+    {
+      "id": "SET05",
+      "disposition": "COMMAND_ONLY",
+      "file": "src/pages/teacher/components/SettingsInterface.tsx",
+      "anchors": ["saveMenuConfig"],
+      "rationale": "메뉴 설정은 짧은 운영 설정 command입니다.",
+      "completion": "COMMAND_BOUNDARY",
+      "adapter": "command-gateway"
+    },
+    {
+      "id": "SET06",
+      "disposition": "COMMAND_ONLY",
+      "file": "src/pages/teacher/components/SettingsAccess.tsx",
+      "anchors": ["saveUserAccess"],
+      "rationale": "접근 권한은 명시적 고위험 command입니다.",
+      "completion": "COMMAND_BOUNDARY",
+      "adapter": "command-gateway"
+    },
+    {
+      "id": "SET07",
+      "disposition": "COMMAND_ONLY",
+      "file": "src/pages/teacher/components/SettingsNotifications.tsx",
+      "anchors": ["saveConfig"],
+      "rationale": "알림 설정은 짧은 운영 설정 command입니다.",
+      "completion": "COMMAND_BOUNDARY",
+      "adapter": "command-gateway"
+    },
+    {
+      "id": "SET08",
+      "disposition": "COMMAND_ONLY",
+      "file": "src/pages/teacher/components/SettingsPrivacy.tsx",
+      "anchors": ["saveTerms", "savePrivacy"],
+      "rationale": "약관과 개인정보 설정은 감사되는 명시적 command입니다.",
+      "completion": "COMMAND_BOUNDARY",
+      "adapter": "command-gateway"
+    },
+    {
+      "id": "SET09",
+      "disposition": "COMMAND_ONLY",
+      "file": "src/pages/teacher/components/SettingsPrivacy.tsx",
+      "anchors": ["addConsentItem", "saveConsentItem"],
+      "rationale": "동의 항목 변경은 명시적 command입니다.",
+      "completion": "COMMAND_BOUNDARY",
+      "adapter": "command-gateway"
+    },
+    {
+      "id": "WIS01",
+      "disposition": "COMMAND_ONLY",
+      "file": "src/pages/teacher/ManagePoints.tsx",
+      "anchors": ["handleSaveGrant", "adjustPoints"],
+      "rationale": "기존 위스 지급 화면은 W7 원장 command로 잔액을 조정합니다.",
+      "completion": "COMMAND_BOUNDARY",
+      "adapter": "legacy-wis-presentation-adapter"
+    },
+    {
+      "id": "WIS02",
+      "disposition": "COMMAND_ONLY",
+      "file": "src/pages/teacher/ManagePoints.tsx",
+      "anchors": ["handleSaveGrant", "reclaim"],
+      "rationale": "기존 위스 환수 화면은 W7 원장 deduct command로 처리합니다.",
+      "completion": "COMMAND_BOUNDARY",
+      "adapter": "legacy-wis-presentation-adapter"
+    },
+    {
+      "id": "WIS03",
+      "disposition": "RELEASE_DECISION",
+      "file": "src/pages/teacher/ManagePoints.tsx",
+      "anchors": ["handleSavePolicy", "upsertPointPolicy"],
+      "rationale": "기존 운영 정책은 W7 원장 정책과 의미가 일치하지 않아 명시적으로 저장을 차단합니다.",
+      "completion": "RELEASE_PENDING",
+      "adapter": "legacy-wis-presentation-adapter"
+    },
+    {
+      "id": "WIS04",
+      "disposition": "RELEASE_DECISION",
+      "file": "src/pages/teacher/ManagePoints.tsx",
+      "anchors": ["handleSaveRankTheme", "handleSaveRankSettings"],
+      "rationale": "기존 등급 꾸미기 설정은 W7 원장에 안전한 변환 계약이 없어 저장을 차단합니다.",
+      "completion": "RELEASE_PENDING",
+      "adapter": "legacy-wis-presentation-adapter"
+    },
+    {
+      "id": "WIS05",
+      "disposition": "DOMAIN_DRAFT_EXISTS",
+      "file": "src/pages/teacher/ManagePoints.tsx",
+      "anchors": ["handleSaveProduct", "upsertPointProduct"],
+      "rationale": "기존 상품 편집 폼은 W7 상품·재고 revision 계약에 연결됩니다.",
+      "completion": "DOMAIN_OWNED",
+      "adapter": "legacy-wis-presentation-adapter"
+    },
+    {
+      "id": "WIS06",
+      "disposition": "COMMAND_ONLY",
+      "file": "src/pages/teacher/ManagePoints.tsx",
+      "anchors": ["handleSaveOrder", "reviewPointOrder"],
+      "rationale": "기존 구매 요청 처리는 W7 원장과 재고를 묶는 명시적 command입니다.",
+      "completion": "COMMAND_BOUNDARY",
+      "adapter": "legacy-wis-presentation-adapter"
+    },
+    {
+      "id": "WIS07",
+      "disposition": "DOMAIN_DRAFT_EXISTS",
+      "file": "src/pages/teacher/ManagePoints.tsx",
+      "anchors": ["handleSaveProduct", "handleSaveProductWithUpload"],
+      "rationale": "상품 metadata는 기존 폼을 유지하면서 W7 product revision 계약이 소유합니다.",
+      "completion": "DOMAIN_OWNED",
+      "adapter": "legacy-wis-presentation-adapter"
+    },
+    {
+      "id": "WIS08",
+      "disposition": "DOMAIN_DRAFT_EXISTS",
+      "file": "src/pages/teacher/ManagePoints.tsx",
+      "anchors": ["handleSaveProduct", "productForm"],
+      "rationale": "상품 재고 편집은 동일 W7 inventory revision 계약이 소유합니다.",
+      "completion": "DOMAIN_OWNED",
+      "adapter": "legacy-wis-presentation-adapter"
+    },
+    {
+      "id": "WIS09",
+      "disposition": "COMMAND_ONLY",
+      "file": "src/pages/teacher/ManagePoints.tsx",
+      "anchors": ["handleSaveOrder", "reviewPointOrder"],
+      "rationale": "주문 검토는 원장과 재고를 묶는 명시적 command입니다.",
+      "completion": "COMMAND_BOUNDARY",
+      "adapter": "legacy-wis-presentation-adapter"
+    },
+    {
+      "id": "WIS10",
+      "disposition": "COMMAND_ONLY",
+      "file": "src/pages/teacher/ManagePoints.tsx",
+      "anchors": ["handleSubmitAdjustmentCancel", "updatePointAdjustment"],
+      "rationale": "원장 반전은 기존 화면에서 W7의 감사되는 명시적 command로 전달합니다.",
+      "completion": "COMMAND_BOUNDARY",
+      "adapter": "legacy-wis-presentation-adapter"
+    },
+    {
+      "id": "SCH01",
+      "disposition": "DRAFT_REQUIRED",
+      "file": "src/pages/teacher/W8TeacherHub.tsx",
+      "anchors": ["TeacherSchedule", "createScheduleEvent", "useTeacherDraft"],
+      "rationale": "일정 편집은 작성 중 복구와 기준 revision 충돌 보존이 필요합니다.",
+      "completion": "IMPLEMENTED_W9",
+      "adapter": "useTeacherDraft"
+    },
+    {
+      "id": "LES01",
+      "disposition": "DRAFT_REQUIRED",
+      "file": "src/pages/teacher/W8TeacherHub.tsx",
+      "anchors": [
+        "TeacherLearning",
+        "createLearningContent",
+        "useTeacherDraft"
+      ],
+      "rationale": "학습 자료 편집은 장문 작성 중 복구가 필요합니다.",
+      "completion": "IMPLEMENTED_W9",
+      "adapter": "useTeacherDraft"
+    },
+    {
+      "id": "LES02",
+      "disposition": "READ_ONLY",
+      "file": "src/pages/teacher/ManageLesson.tsx",
+      "anchors": [
+        "LEGACY_LESSON_READ_ONLY_MESSAGE",
+        "blockLegacyLessonMutationAsync",
+        "LEGACY_LESSON_MANAGEMENT_ROUTE"
+      ],
+      "rationale": "기존 수업자료 route는 실제 화면을 유지해 조회·제시를 제공하고, 저장 동작은 차단한 뒤 학습 운영 화면으로 안전하게 handoff합니다.",
+      "completion": "MOUNTED_SAFE_HANDOFF",
+      "adapter": "legacy-lesson-management-handoff"
+    },
+    {
+      "id": "DIC01",
+      "disposition": "RELEASE_DECISION",
+      "file": "src/pages/teacher/ManageHistoryDictionary.tsx",
+      "anchors": ["handleSaveTerm", "handleSaveStudentWord"],
+      "rationale": "사전 편집은 공식 gateway와 receipt가 없어 공통 Draft resolve가 불가능합니다.",
+      "completion": "RELEASE_PENDING",
+      "adapter": "none"
+    },
+    {
+      "id": "DIC02",
+      "disposition": "RELEASE_DECISION",
+      "file": "src/pages/teacher/ManageHistoryDictionary.tsx",
+      "anchors": ["handleExcelUpload", "handleRegisterUploadRows"],
+      "rationale": "사전 XLSX 일괄 저장은 공식 gateway와 부분 실패 정책 결정이 남았습니다.",
+      "completion": "RELEASE_PENDING",
+      "adapter": "none"
+    },
+    {
+      "id": "MAP01",
+      "disposition": "RELEASE_DECISION",
+      "file": "src/pages/teacher/ManageMaps.tsx",
+      "anchors": [
+        "handleFileInputChange",
+        "handleSave",
+        "shouldHandoffLegacyLessonManagementMutation"
+      ],
+      "rationale": "지도 파일은 로컬 미리보기까지만 허용하며, 저장은 공식 asset command가 없어 차단한 뒤 학습 운영 화면으로 handoff합니다.",
+      "completion": "SAFE_HANDOFF",
+      "adapter": "legacy-lesson-management-handoff"
+    },
+    {
+      "id": "MAP02",
+      "disposition": "RELEASE_DECISION",
+      "file": "src/pages/teacher/ManageMaps.tsx",
+      "anchors": [
+        "handleSaveTagManager",
+        "shouldHandoffLegacyLessonManagementMutation"
+      ],
+      "rationale": "지도 태그 편집은 공식 taxonomy command가 없어 저장을 차단한 뒤 학습 운영 화면으로 handoff합니다.",
+      "completion": "SAFE_HANDOFF",
+      "adapter": "legacy-lesson-management-handoff"
+    },
+    {
+      "id": "MAP03",
+      "disposition": "READ_ONLY",
+      "file": "src/pages/teacher/ManageMaps.tsx",
+      "anchors": [
+        "handleSaveTabRename",
+        "shouldHandoffLegacyLessonManagementMutation",
+        "setHandoffAction"
+      ],
+      "rationale": "지도 탭 이름 변경은 현재 화면에서 쓰기를 실행하지 않고 학습 운영 화면으로 안전하게 handoff합니다.",
+      "completion": "MOUNTED_SAFE_HANDOFF",
+      "adapter": "legacy-lesson-management-handoff"
+    },
+    {
+      "id": "SRC01",
+      "disposition": "RELEASE_DECISION",
+      "file": "src/pages/teacher/ManageSourceArchive.tsx",
+      "anchors": ["handleFileChange", "handleSave", "setHandoffAction"],
+      "rationale": "사료 파일은 로컬 선택까지만 허용하며, 저장은 공식 asset command가 없어 차단한 뒤 학습 운영 화면으로 handoff합니다.",
+      "completion": "SAFE_HANDOFF",
+      "adapter": "legacy-lesson-management-handoff"
+    },
+    {
+      "id": "THINK01",
+      "disposition": "COMMAND_ONLY",
+      "file": "src/pages/teacher/ManageThinkCloud.tsx",
+      "anchors": [
+        "createLegacyThinkCloudSession",
+        "transitionLegacyThinkCloudSession",
+        "deleteLegacyThinkCloudSession"
+      ],
+      "rationale": "생각모아 기존 화면은 W8 학기 범위·학급 권한·CAS·receipt command로 생성, 상태 전환, 삭제를 처리합니다.",
+      "completion": "COMMAND_BOUNDARY",
+      "adapter": "legacy-think-cloud-command-adapter"
+    },
+    {
+      "id": "PATCH01",
+      "disposition": "RELEASE_DECISION",
+      "file": "src/components/common/TeacherPatchMemoController.tsx",
+      "anchors": ["handleSubmit", "createTeacherPatchNote"],
+      "rationale": "패치 메모는 공식 gateway와 receipt 계약이 없습니다.",
+      "completion": "RELEASE_PENDING",
+      "adapter": "none"
+    }
   ]
 }

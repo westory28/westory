@@ -605,9 +605,9 @@ const HistoryClassroomIndex: React.FC = () => {
             <div className="text-sm font-bold text-orange-500">
               학습 &gt; 역사교실
             </div>
-            <h2 className="mt-2 text-3xl font-black text-slate-950">
+            <h1 className="mt-2 text-3xl font-black text-slate-950">
               역사교실
-            </h2>
+            </h1>
             <p className="mt-2 text-sm text-slate-600">
               지도의 빈칸을 채우고 기준 점수 이상이면 통과합니다.
             </p>

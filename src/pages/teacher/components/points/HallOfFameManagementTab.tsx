@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import WisHallOfFamePositionEditor, {
   type HallOfFameEditorDeviceMode,
 } from "../../../../components/common/WisHallOfFamePositionEditor";
@@ -7,20 +6,16 @@ import WisHallOfFameStudentPreview, {
   type HallOfFamePreviewView,
 } from "../../../../components/common/WisHallOfFameStudentPreview";
 import { useAppToast } from "../../../../components/common/AppToastProvider";
-import { getFirebaseStorage } from "../../../../lib/firebase";
+import { createStableLegacyMutationActionKey } from "../../../../lib/legacyWisMutationIntent";
 import { formatPointDateShortTime } from "../../../../lib/pointFormatters";
-import { invalidateSiteSettingDocCache } from "../../../../lib/siteSettings";
 import {
   DEFAULT_WIS_HALL_OF_FAME_PODIUM_IMAGE_URL,
   WIS_HALL_OF_FAME_GRADE_KEY,
   WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS,
-  ensureWisHallOfFameSnapshot,
   getDefaultHallOfFameLeaderboardPanelPosition,
   getDefaultHallOfFamePositions,
-  getWisHallOfFameSnapshot,
   isWisHallOfFameSnapshotStale,
   resolveHallOfFameInterfaceConfig,
-  saveWisHallOfFameConfig,
 } from "../../../../lib/wisHallOfFame";
 import type {
   HallOfFameInterfaceConfig,
@@ -33,7 +28,18 @@ interface HallOfFameManagementTabProps {
   config: SystemConfig | null;
   interfaceConfig?: InterfaceConfig | null;
   canManage: boolean;
-  onInterfaceConfigRefresh?: () => Promise<void>;
+  onLoadHallOfFameState: () => Promise<HallOfFameProjectionState>;
+  onSaveHallOfFameConfig: (
+    hallOfFame: ReturnType<typeof resolveHallOfFameInterfaceConfig>,
+    expectedRevision: number,
+    actionKey: string,
+  ) => Promise<HallOfFameProjectionState>;
+}
+
+interface HallOfFameProjectionState {
+  snapshot: WisHallOfFameSnapshot | null;
+  hallOfFame: HallOfFameInterfaceConfig | null;
+  revision: number;
 }
 
 type FeatureDraft = Pick<
@@ -457,12 +463,22 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
   config,
   interfaceConfig,
   canManage,
-  onInterfaceConfigRefresh,
+  onLoadHallOfFameState,
+  onSaveHallOfFameConfig,
 }) => {
   const { showToast } = useAppToast();
+  const [projectedHallOfFame, setProjectedHallOfFame] =
+    useState<HallOfFameInterfaceConfig | null>(
+      interfaceConfig?.hallOfFame || null,
+    );
+  const [configRevision, setConfigRevision] = useState(0);
+  const [saveIntent, setSaveIntent] = useState<{
+    signature: string;
+    actionKey: string;
+  } | null>(null);
   const initialDraft = useMemo(
-    () => createDraft(interfaceConfig?.hallOfFame),
-    [interfaceConfig?.hallOfFame],
+    () => createDraft(projectedHallOfFame),
+    [projectedHallOfFame],
   );
   const [snapshot, setSnapshot] = useState<WisHallOfFameSnapshot | null>(null);
   const [snapshotError, setSnapshotError] = useState("");
@@ -513,7 +529,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
   };
 
   useEffect(() => {
-    const nextDraft = createDraft(interfaceConfig?.hallOfFame);
+    const nextDraft = createDraft(projectedHallOfFame);
     const nextFeatureDraft = pickFeatureDraft(nextDraft);
     const nextViewDraft = pickViewDraft(nextDraft);
     const featureWasClean =
@@ -535,7 +551,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
     if (!layoutEditorOpen) {
       setLayoutDraft(pickLayoutDraft(nextViewDraft));
     }
-  }, [interfaceConfig?.hallOfFame, layoutEditorOpen]);
+  }, [projectedHallOfFame, layoutEditorOpen]);
 
   useEffect(
     () => () => {
@@ -559,9 +575,11 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
       setSnapshotError("");
 
       try {
-        const nextSnapshot = await getWisHallOfFameSnapshot(config);
+        const state = await onLoadHallOfFameState();
         if (!cancelled) {
-          applySnapshotState(nextSnapshot);
+          setProjectedHallOfFame(state.hallOfFame);
+          setConfigRevision(state.revision);
+          applySnapshotState(state.snapshot);
         }
       } catch (error) {
         console.warn(
@@ -586,7 +604,7 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [config]);
+  }, [config, onLoadHallOfFameState]);
 
   const featureDirty =
     serializeFeatureDraft(featureDraft) !==
@@ -695,26 +713,15 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
     return nextViewDraft;
   };
 
-  const refreshSavedInterfaceConfig = async () => {
-    if (!onInterfaceConfigRefresh) return;
-
-    invalidateSiteSettingDocCache("interface_config");
-    await onInterfaceConfigRefresh().catch((error) => {
-      console.warn(
-        "Failed to refresh interface config after hall of fame student view save:",
-        error,
-      );
-    });
-  };
-
   const refreshSnapshot = async () => {
     if (!config) return;
 
     setRefreshing(true);
     try {
-      await ensureWisHallOfFameSnapshot(config, { force: true });
-      const nextSnapshot = await getWisHallOfFameSnapshot(config);
-      applySnapshotState(nextSnapshot);
+      const state = await onLoadHallOfFameState();
+      setProjectedHallOfFame(state.hallOfFame);
+      setConfigRevision(state.revision);
+      applySnapshotState(state.snapshot);
       showToast({
         tone: "success",
         title: "최신 위스 현황을 화랑의 전당에 반영했습니다.",
@@ -781,78 +788,35 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
 
     try {
       if (imageFile) {
-        const layoutOnlyDraft: ViewDraft = {
-          ...nextViewDraft,
-          podiumImageUrl: savedViewDraft.podiumImageUrl,
-          podiumStoragePath: savedViewDraft.podiumStoragePath,
-        };
-        const hasNonImageChanges =
-          featureDirty ||
-          serializeViewDraft(layoutOnlyDraft) !==
-            serializeViewDraft(savedViewDraft);
-
-        try {
-          const resizedBlob = await buildResizedImageBlob(
-            imageFile,
-            1600,
-            0.84,
-          );
-          const storage = await getFirebaseStorage();
-          const imageRef = ref(
-            storage,
-            `${HALL_OF_FAME_PODIUM_STORAGE_DIR}/podium-${Date.now()}.jpg`,
-          );
-
-          await uploadBytes(imageRef, resizedBlob, {
-            contentType: "image/jpeg",
-            cacheControl: "public,max-age=86400",
-          });
-
-          nextViewDraft = {
-            ...nextViewDraft,
-            podiumImageUrl: await getDownloadURL(imageRef),
-            podiumStoragePath: imageRef.fullPath,
-          };
-        } catch (imageError: any) {
-          const uploadFailure = getHallOfFameImageUploadFailureText(imageError);
-
-          if (hasNonImageChanges) {
-            const result = await saveWisHallOfFameConfig(
-              config,
-              buildCombinedConfig(nextFeatureDraft, layoutOnlyDraft),
-            );
-            const nextDraft = createDraft(result.hallOfFame);
-            const savedNextFeatureDraft = pickFeatureDraft(nextDraft);
-
-            setSavedFeatureDraft(savedNextFeatureDraft);
-            setFeatureDraft(savedNextFeatureDraft);
-            applySavedStudentViewDraft(nextDraft, {
-              preserveImageSelection: true,
-            });
-            await refreshSavedInterfaceConfig();
-            applySnapshotState(await getWisHallOfFameSnapshot(config));
-
-            showToast({
-              tone: "warning",
-              title: uploadFailure.title,
-              message:
-                "이미지를 제외한 변경사항은 저장했습니다. 이미지 권한을 확인한 뒤 다시 업로드해 주세요.",
-            });
-            return;
-          }
-
-          showToast({
-            tone: "error",
-            title: uploadFailure.title,
-            message: uploadFailure.message,
-          });
-          return;
-        }
+        showToast({
+          tone: "error",
+          title: "시상대 이미지 업로드에 실패했습니다.",
+          message:
+            "현재 안전한 이미지 업로드 경로가 준비되지 않았습니다. 선택한 이미지를 제거한 뒤 설정을 저장해 주세요.",
+        });
+        return;
       }
 
-      const result = await saveWisHallOfFameConfig(
-        config,
-        buildCombinedConfig(nextFeatureDraft, nextViewDraft),
+      const nextConfig = buildCombinedConfig(nextFeatureDraft, nextViewDraft);
+      const signature = JSON.stringify(nextConfig);
+      const actionKey =
+        saveIntent?.signature === signature
+          ? saveIntent.actionKey
+          : createStableLegacyMutationActionKey(
+              "teacher-wis-hall-of-fame-config",
+              {
+                semesterId: `${String(config?.year || "")}-${String(
+                  config?.semester || "",
+                )}`,
+                expectedRevision: configRevision,
+                hallOfFame: nextConfig,
+              },
+            );
+      setSaveIntent({ signature, actionKey });
+      const result = await onSaveHallOfFameConfig(
+        nextConfig,
+        configRevision,
+        actionKey,
       );
       const nextDraft = createDraft(result.hallOfFame);
       const savedNextFeatureDraft = pickFeatureDraft(nextDraft);
@@ -860,8 +824,10 @@ const HallOfFameManagementTab: React.FC<HallOfFameManagementTabProps> = ({
       setSavedFeatureDraft(savedNextFeatureDraft);
       setFeatureDraft(savedNextFeatureDraft);
       applySavedStudentViewDraft(nextDraft);
-      await refreshSavedInterfaceConfig();
-      applySnapshotState(await getWisHallOfFameSnapshot(config));
+      setProjectedHallOfFame(result.hallOfFame);
+      setConfigRevision(result.revision);
+      applySnapshotState(result.snapshot);
+      setSaveIntent(null);
 
       showToast({
         tone: "success",

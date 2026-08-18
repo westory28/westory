@@ -1,6 +1,12 @@
 import { getHttpsCallable } from "./firebase";
 import { executeWestoryCommand } from "./commandGateway";
 import { getYearSemester } from "./semesterScope";
+import {
+  forgetLegacyWisMutationIntent,
+  getOrCreateLegacyWisMutationIntent,
+  shouldForgetLegacyWisIntentAfterError,
+} from "./legacyWisMutationIntent";
+import { createLegacyGradeMutationActionKey } from "./legacyGradeMutationIntent";
 import type { SystemConfig } from "../types";
 
 export type GradeEvidenceScoreKind = "performance" | "written_exam_essay";
@@ -94,8 +100,42 @@ export interface GradeEvidenceState {
   readOnly: boolean;
   manifestRevision: number | null;
   pendingSources: GradeDraftCandidate[];
+  activeStudents: GradeEvidenceActiveStudent[];
   records: GradeEvidenceRecord[];
   nextCursor: string;
+}
+
+export type ReleasedExamAnswersStatus = "EMPTY" | "NOT_RELEASED" | "RELEASED";
+
+export interface ReleasedExamObjectiveItem {
+  score: number;
+  answer: number;
+}
+
+export interface ReleasedExamSubjectiveItem {
+  subItems: Array<{
+    score: number;
+    answer: string;
+  }>;
+}
+
+export interface ReleasedExamAnswersState {
+  semesterId: string;
+  status: ReleasedExamAnswersStatus;
+  releaseStatus: "HIDDEN" | "RELEASED";
+  releasePolicyVersion: string;
+  configRevision: number | null;
+  objective: ReleasedExamObjectiveItem[];
+  subjective: ReleasedExamSubjectiveItem[];
+  reason: string;
+}
+
+export interface GradeEvidenceActiveStudent {
+  studentUid: string;
+  studentName: string;
+  enrollmentId: string;
+  classId: string;
+  enrollmentLabel: string;
 }
 
 export interface GradeDraftCandidate {
@@ -634,8 +674,107 @@ export const getGradeEvidenceState = async (
           };
         },
       ),
+      activeStudents: asArray(scope.activeStudents || raw.activeStudents).map(
+        (value) => {
+          const student = asRecord(value);
+          const enrollment = asRecord(student.enrollmentSnapshot);
+          return {
+            studentUid: readString(student, "studentUid"),
+            studentName: readString(enrollment, "displayName"),
+            enrollmentId: readString(student, "enrollmentId"),
+            classId: readString(student, "classId"),
+            enrollmentLabel: [
+              withUnit(readString(enrollment, "grade"), "학년"),
+              withUnit(readString(enrollment, "classNumber"), "반"),
+              withUnit(readString(enrollment, "studentNumber"), "번"),
+            ]
+              .filter(Boolean)
+              .join(" "),
+          };
+        },
+      ),
       records,
       nextCursor: readString(raw, "nextCursor"),
+    };
+  } catch (error) {
+    throw error instanceof GradeEvidenceError ? error : mapCallableError(error);
+  }
+};
+
+export const getReleasedExamAnswers = async (input: {
+  config: ConfigLike;
+}): Promise<ReleasedExamAnswersState> => {
+  const { year, semester } = getYearSemester(input.config);
+  const semesterId = `${year}-${String(semester)}`;
+  try {
+    const callable = await getHttpsCallable<
+      {
+        mode: "STUDENT_EXAM_ANSWERS";
+        audience: "student";
+        semesterId: string;
+        source: "CURRENT";
+        scoreKind: "written_exam_essay";
+      },
+      unknown
+    >("getGradeEvidenceState");
+    const result = await callable({
+      mode: "STUDENT_EXAM_ANSWERS",
+      audience: "student",
+      semesterId,
+      source: "CURRENT",
+      scoreKind: "written_exam_essay",
+    });
+    const raw = asRecord(result.data);
+    const status = String(raw.status || "");
+    if (!["EMPTY", "NOT_RELEASED", "RELEASED"].includes(status)) {
+      throw new GradeEvidenceError(
+        "VALIDATION",
+        "시험 답안 공개 상태를 확인하지 못했습니다.",
+        "GRADE_ANSWER_RELEASE_STATE_INVALID",
+      );
+    }
+    const releaseStatus =
+      raw.releaseStatus === "RELEASED" ? "RELEASED" : "HIDDEN";
+    const examAnswers = asRecord(raw.examAnswers);
+    const objective = asArray(examAnswers.objective).map((value) => {
+      const item = asRecord(value);
+      return {
+        score: Math.max(0, readNumber(item, "score") || 0),
+        answer: Math.max(0, Math.trunc(readNumber(item, "answer") || 0)),
+      };
+    });
+    const subjective = asArray(examAnswers.subjective).map((value) => {
+      const item = asRecord(value);
+      return {
+        subItems: asArray(item.subItems).map((subValue) => {
+          const subItem = asRecord(subValue);
+          return {
+            score: Math.max(0, readNumber(subItem, "score") || 0),
+            answer: readString(subItem, "answer"),
+          };
+        }),
+      };
+    });
+    if (
+      status === "RELEASED" &&
+      (releaseStatus !== "RELEASED" ||
+        objective.some((item) => item.answer < 1 || item.answer > 5))
+    ) {
+      throw new GradeEvidenceError(
+        "VALIDATION",
+        "공개된 시험 답안 형식이 올바르지 않습니다.",
+        "GRADE_ANSWER_RELEASE_STATE_INVALID",
+      );
+    }
+    return {
+      semesterId: readString(raw, "semesterId") || semesterId,
+      status: status as ReleasedExamAnswersStatus,
+      releaseStatus,
+      releasePolicyVersion: readString(raw, "releasePolicyVersion"),
+      configRevision: readNumber(raw, "configRevision"),
+      objective: status === "RELEASED" ? objective : [],
+      subjective: status === "RELEASED" ? subjective : [],
+      reason: readString(raw, "reason"),
     };
   } catch (error) {
     throw error instanceof GradeEvidenceError ? error : mapCallableError(error);
@@ -919,3 +1058,151 @@ export const signOfficialGrade = (
         input.statementVersion || GRADE_EVIDENCE_STATEMENT_VERSION,
     }),
   );
+
+export type LegacyGradeCommandType =
+  | "upsertLegacyGradeRoster"
+  | "deleteLegacyGradeRoster"
+  | "saveLegacyGradeConfig"
+  | "acknowledgeLegacyGradeWarning"
+  | "submitLegacyGradeRequest"
+  | "reviewLegacyGradeRequest"
+  | "signLegacyGradeRecords"
+  | "rejectLegacyGradeSignatures";
+
+export interface LegacyGradeCommandResult {
+  rosterId: string;
+  requestId: string;
+  requestIds: string[];
+  configId: string;
+  revision: number;
+  recordCount: number;
+  requestCount: number;
+  signedCount: number;
+  rejectedCount: number;
+  status: string;
+  data: Record<string, unknown>;
+  records: Array<{
+    uid: string;
+    scoreId: string;
+    recordId: string;
+    versionId: string;
+    revision: number;
+    gradeRevision: number;
+    projectionRevision: number;
+  }>;
+  relatedRosterRevisions: Array<{ rosterId: string; revision: number }>;
+}
+
+type LegacyGradeCommandResponse = Promise<{ result: unknown }>;
+type LegacyGradeCommandExecutor = (
+  commandType: LegacyGradeCommandType,
+  payload: Record<string, unknown>,
+  options?: { commandId?: string },
+) => LegacyGradeCommandResponse;
+
+const executeLegacyGradeCommand =
+  executeWestoryCommand as unknown as LegacyGradeCommandExecutor;
+
+const normalizeLegacyGradeCommandResult = async (
+  pending: LegacyGradeCommandResponse,
+): Promise<LegacyGradeCommandResult> => {
+  try {
+    const response = await pending;
+    const result = asRecord(response.result);
+    const records = asArray(result.records).flatMap((value) => {
+      const record = asRecord(value);
+      const uid = readString(record, "uid");
+      const scoreId = readString(record, "scoreId");
+      const recordId = readString(record, "recordId");
+      const versionId = readString(record, "versionId");
+      if (!uid || !scoreId || !recordId || !versionId) return [];
+      return [
+        {
+          uid,
+          scoreId,
+          recordId,
+          versionId,
+          revision: Math.max(
+            0,
+            Math.trunc(readNumber(record, "revision") || 0),
+          ),
+          gradeRevision: Math.max(
+            0,
+            Math.trunc(readNumber(record, "gradeRevision") || 0),
+          ),
+          projectionRevision: Math.max(
+            0,
+            Math.trunc(readNumber(record, "projectionRevision") || 0),
+          ),
+        },
+      ];
+    });
+    const relatedRosterRevisions = asArray(
+      result.relatedRosterRevisions,
+    ).flatMap((value) => {
+      const roster = asRecord(value);
+      const rosterId = readString(roster, "rosterId");
+      if (!rosterId) return [];
+      return [
+        {
+          rosterId,
+          revision: Math.max(
+            0,
+            Math.trunc(readNumber(roster, "revision") || 0),
+          ),
+        },
+      ];
+    });
+    return {
+      rosterId: readString(result, "rosterId"),
+      requestId: readString(result, "requestId"),
+      requestIds: asArray(result.requestIds).map(String).filter(Boolean),
+      configId: readString(result, "configId"),
+      revision: Math.max(0, Math.trunc(readNumber(result, "revision") || 0)),
+      recordCount: Math.max(
+        0,
+        Math.trunc(readNumber(result, "recordCount") || 0),
+      ),
+      requestCount: Math.max(
+        0,
+        Math.trunc(readNumber(result, "requestCount") || 0),
+      ),
+      signedCount: Math.max(
+        0,
+        Math.trunc(readNumber(result, "signedCount") || 0),
+      ),
+      rejectedCount: Math.max(
+        0,
+        Math.trunc(readNumber(result, "rejectedCount") || 0),
+      ),
+      status: readString(result, "status"),
+      data: asRecord(result.data),
+      records,
+      relatedRosterRevisions,
+    };
+  } catch (error) {
+    throw error instanceof GradeEvidenceError ? error : mapCallableError(error);
+  }
+};
+
+export const runLegacyGradeCommand = async (
+  commandType: LegacyGradeCommandType,
+  payload: Record<string, unknown>,
+) => {
+  const intentKey = createLegacyGradeMutationActionKey(commandType, payload);
+  const intent = getOrCreateLegacyWisMutationIntent(intentKey, () => payload);
+  try {
+    const result = await normalizeLegacyGradeCommandResult(
+      executeLegacyGradeCommand(commandType, intent.payload, {
+        commandId: intent.commandId,
+      }),
+    );
+    forgetLegacyWisMutationIntent(intentKey);
+    return result;
+  } catch (error) {
+    if (shouldForgetLegacyWisIntentAfterError(error)) {
+      forgetLegacyWisMutationIntent(intentKey);
+    }
+    throw error;
+  }
+};

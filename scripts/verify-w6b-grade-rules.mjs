@@ -171,6 +171,40 @@ try {
   await assertSucceeds(
     getDoc(doc(studentDb, `users/${studentUid}/performance_scores/legacy-score`)),
   );
+  await assertFails(getDoc(doc(studentDb, "exam_config/legacy-config")));
+  await assertFails(
+    getDoc(
+      doc(
+        studentDb,
+        "years/2026/semesters/2/exam_config/legacy-config",
+      ),
+    ),
+  );
+  await assertFails(getDocs(collection(studentDb, "exam_config")));
+  await assertFails(
+    getDocs(
+      collection(studentDb, "years/2026/semesters/2/exam_config"),
+    ),
+  );
+  deniedOperations += 4;
+  await assertSucceeds(getDoc(doc(teacherDb, "exam_config/legacy-config")));
+  await assertSucceeds(getDoc(doc(adminDb, "exam_config/legacy-config")));
+  await assertSucceeds(
+    getDoc(
+      doc(
+        teacherDb,
+        "years/2026/semesters/2/exam_config/legacy-config",
+      ),
+    ),
+  );
+  await assertSucceeds(
+    getDoc(
+      doc(
+        adminDb,
+        "years/2026/semesters/2/exam_config/legacy-config",
+      ),
+    ),
+  );
   await assertSucceeds(getDoc(doc(teacherDb, "performance_score_rosters/legacy-roster")));
   await assertSucceeds(
     getDoc(
@@ -193,6 +227,8 @@ try {
         "LEGACY_PLAN_CONFIG_ROSTER_WRITES_DENIED_ROOT_AND_SCOPED",
         "LEGACY_REQUEST_AND_OBJECTION_WRITES_DENIED",
         "LEGACY_READ_ONLY_PROJECTION_PRESERVED",
+        "EXAM_ANSWER_CONFIG_STUDENT_GET_LIST_DENIED",
+        "EXAM_ANSWER_CONFIG_TEACHER_ADMIN_READ_ALLOWED",
         "ADMIN_TEACHER_STUDENT_ANONYMOUS_DIRECT_SDK_BYPASS_DENIED",
       ],
       deniedOperations,

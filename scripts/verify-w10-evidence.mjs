@@ -100,6 +100,8 @@ if (has("dry-run")) {
     JSON.stringify({
       suite: "w10-evidence-dry-run",
       passed: true,
+      evidenceStatus: "PLAN_ONLY",
+      acceptanceGate: false,
       fixtureOwner: schema.fixtureOwner,
       projectId: matrix.projectId,
       viewports: matrix.viewports.length,
@@ -110,7 +112,7 @@ if (has("dry-run")) {
       journeys: matrix.journeys.length,
       stateCases: matrix.stateCases.length,
       plannedWrites: 0,
-      productionAccess: 0,
+      productionAccessMeasurement: "NOT_MEASURED",
     }),
   );
   process.exit(0);

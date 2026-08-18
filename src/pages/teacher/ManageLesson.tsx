@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useCallback } from "react";
+import { Link } from "react-router-dom";
 import { LoadingOverlay } from "../../components/common/LoadingState";
 import { useAuth } from "../../contexts/AuthContext";
 import { db, getFirebaseStorage } from "../../lib/firebase";
@@ -13,16 +14,13 @@ import {
   orderBy,
   query,
   serverTimestamp,
-  setDoc,
   where,
 } from "firebase/firestore";
 import {
-  deleteObject,
   getDownloadURL,
   listAll,
   ref,
   type StorageReference,
-  uploadBytes,
 } from "firebase/storage";
 import {
   getSemesterCollectionPath,
@@ -65,13 +63,14 @@ import {
   normalizeLessonPdfProcessingMeta,
   type LessonPdfProcessingMeta,
 } from "../../lib/lessonPdfExtraction";
-import {
-  tryDeleteLessonFootnoteAsset,
-  uploadLessonFootnoteAsset,
-} from "../../lib/lessonFootnoteAssets";
+import { LEGACY_LESSON_READ_ONLY_MESSAGE } from "../../lib/legacyLessonSafetyAdapter";
 import { canWriteLessonManagement } from "../../lib/permissions";
-import { createManagedNotifications } from "../../lib/notifications";
 import { subscribeSourceArchiveAssets } from "../../lib/sourceArchive";
+import {
+  LEGACY_LESSON_MANAGEMENT_ROUTE,
+  buildLegacyLessonManagementHandoffMessage,
+  shouldHandoffLegacyLessonManagementMutation,
+} from "../../lib/legacyLessonManagementHandoff";
 import {
   buildTeacherPresentationClassId,
   buildTeacherPresentationClassLabel,
@@ -843,7 +842,17 @@ const ManageLesson: React.FC = () => {
   const lastSavedMetaSnapshotRef = useRef(EMPTY_META_EDITOR_SNAPSHOT);
   const lastSavedPdfSnapshotRef = useRef(EMPTY_PDF_EDITOR_SNAPSHOT);
   const deletedFootnoteAssetPathsRef = useRef<string[]>([]);
+  const [handoffAction, setHandoffAction] = useState("");
   const canEdit = canWriteLessonManagement(userData, currentUser?.email || "");
+  const blockLegacyLessonMutationAsync = useCallback(
+    async <T = never,>(..._ignored: unknown[]): Promise<T> => {
+      setHandoffAction((current) => current || "수업 자료 변경 저장");
+      throw new Error(
+        buildLegacyLessonManagementHandoffMessage("수업 자료 변경 저장"),
+      );
+    },
+    [],
+  );
   const [savedLessonState, setSavedLessonState] =
     useState<NormalizedLessonData>(() => createEmptyNormalizedLessonData());
 
@@ -1514,6 +1523,15 @@ const ManageLesson: React.FC = () => {
       });
       return;
     }
+    if (shouldHandoffLegacyLessonManagementMutation()) {
+      const actionLabel = "PDF 구조 추출 재요청";
+      setHandoffAction(actionLabel);
+      setPdfSaveFeedback({
+        tone: "error",
+        message: buildLegacyLessonManagementHandoffMessage(actionLabel),
+      });
+      return;
+    }
     if (selectedPdfFile || preparedPdf || hasUnsavedPdfChanges) {
       alert(
         "저장하지 않은 PDF 편집 내용이 있습니다. 먼저 저장한 뒤 다시 요청해 주세요.",
@@ -1561,7 +1579,7 @@ const ManageLesson: React.FC = () => {
         previous: lessonPdfProcessing,
       });
 
-      await setDoc(
+      await blockLegacyLessonMutationAsync(
         lessonDocRef,
         {
           pdfProcessing: queuedProcessing,
@@ -1571,7 +1589,7 @@ const ManageLesson: React.FC = () => {
       );
       const storage = await getFirebaseStorage();
       await runPdfExtractionStepWithTimeout(
-        uploadBytes(
+        blockLegacyLessonMutationAsync(
           ref(storage, pendingUploadPath),
           new Blob([], { type: "application/pdf" }),
           {
@@ -1639,7 +1657,7 @@ const ManageLesson: React.FC = () => {
         );
 
         if (lessonDocRef) {
-          await setDoc(
+          await blockLegacyLessonMutationAsync(
             lessonDocRef,
             {
               pdfProcessing: failedProcessing,
@@ -2331,13 +2349,23 @@ const ManageLesson: React.FC = () => {
   };
 
   const saveTree = async (newTree: TreeNode[], silent = true) => {
-    if (!canEdit) return;
+    if (!canEdit) {
+      if (!silent) alert(LEGACY_LESSON_READ_ONLY_MESSAGE);
+      return;
+    }
+    if (shouldHandoffLegacyLessonManagementMutation()) {
+      setHandoffAction("수업 자료 목차 저장");
+      return;
+    }
     setScreenBusyMessage("트리 구조를 저장하는 중입니다...");
     try {
-      await setDoc(doc(db, getSemesterDocPath(config, "curriculum", "tree")), {
-        tree: newTree,
-        updatedAt: serverTimestamp(),
-      });
+      await blockLegacyLessonMutationAsync(
+        doc(db, getSemesterDocPath(config, "curriculum", "tree")),
+        {
+          tree: newTree,
+          updatedAt: serverTimestamp(),
+        },
+      );
       setTreeData(newTree);
       if (!silent) alert("트리 구조를 저장했습니다.");
     } catch (error) {
@@ -2395,9 +2423,21 @@ const ManageLesson: React.FC = () => {
   };
 
   const handleModalConfirm = () => {
-    if (!canEdit) return;
+    if (!canEdit) {
+      alert(LEGACY_LESSON_READ_ONLY_MESSAGE);
+      return;
+    }
     const value = modalInput.trim();
     if (!value) return alert("이름을 입력해 주세요.");
+    if (shouldHandoffLegacyLessonManagementMutation()) {
+      setHandoffAction(
+        modalMode === "rename"
+          ? "수업 자료 목차 이름 변경"
+          : "수업 자료 목차 항목 추가",
+      );
+      setModalOpen(false);
+      return;
+    }
     const nextTree = JSON.parse(JSON.stringify(treeData)) as TreeNode[];
     if (modalMode === "root") {
       const id = `u-${Date.now()}`;
@@ -2422,8 +2462,15 @@ const ManageLesson: React.FC = () => {
   };
 
   const handleDeleteNode = (node: TreeNode) => {
-    if (!canEdit) return;
+    if (!canEdit) {
+      alert(LEGACY_LESSON_READ_ONLY_MESSAGE);
+      return;
+    }
     if (!window.confirm(`'${node.title}' 및 하위 항목을 삭제할까요?`)) return;
+    if (shouldHandoffLegacyLessonManagementMutation()) {
+      setHandoffAction("수업 자료 목차 항목 삭제");
+      return;
+    }
     const removeRecursive = (nodes: TreeNode[]): TreeNode[] =>
       nodes
         .filter((item) => item.id !== node.id)
@@ -2769,7 +2816,9 @@ const ManageLesson: React.FC = () => {
   ): Promise<void> => {
     const listing = await listAll(folderRef);
     await Promise.all(
-      listing.items.map((item) => deleteObject(item).catch(() => undefined)),
+      listing.items.map(() =>
+        blockLegacyLessonMutationAsync().catch(() => undefined),
+      ),
     );
     await Promise.all(
       listing.prefixes.map((childRef) =>
@@ -2812,7 +2861,7 @@ const ManageLesson: React.FC = () => {
       const pageExtension = getPdfPageImageExtension(page.blob);
       const pagePath = `${basePath}/page-${page.page}.${pageExtension}`;
       const pageRef = ref(storage, pagePath);
-      await uploadBytes(pageRef, page.blob, {
+      await blockLegacyLessonMutationAsync(pageRef, page.blob, {
         contentType: page.blob.type || "image/png",
         cacheControl: LESSON_PDF_UPLOAD_CACHE_CONTROL,
       });
@@ -2841,7 +2890,7 @@ const ManageLesson: React.FC = () => {
         Array.from(new Set(cleanupPaths)).map(async (path) => {
           if (uploadedPagePaths.has(path)) return;
           try {
-            await deleteObject(ref(storage, path));
+            await blockLegacyLessonMutationAsync(ref(storage, path));
           } catch {
             // Best-effort cleanup only. Missing old page files are expected.
           }
@@ -3360,12 +3409,10 @@ const ManageLesson: React.FC = () => {
       let nextFootnote = { ...footnote };
 
       if (draft?.file) {
-        const uploadedAsset = await uploadLessonFootnoteAsset({
-          config,
-          unitId,
-          footnoteId: footnote.id,
-          file: draft.file,
-        });
+        const uploadedAsset = await blockLegacyLessonMutationAsync<{
+          imageUrl: string;
+          imageStoragePath: string;
+        }>({ config, unitId, footnoteId: footnote.id, file: draft.file });
         nextFootnote = {
           ...nextFootnote,
           imageUrl: uploadedAsset.imageUrl,
@@ -3401,6 +3448,20 @@ const ManageLesson: React.FC = () => {
     source?: "header" | "pdf-floating";
   }) => {
     if (!canEdit || !selectedNodeId) return;
+    if (shouldHandoffLegacyLessonManagementMutation()) {
+      const actionLabel =
+        options?.source === "pdf-floating"
+          ? "PDF 편집 내용 저장"
+          : "수업 자료 저장";
+      setHandoffAction(actionLabel);
+      if (options?.source === "pdf-floating") {
+        setPdfSaveFeedback({
+          tone: "error",
+          message: buildLegacyLessonManagementHandoffMessage(actionLabel),
+        });
+      }
+      return;
+    }
     emitSessionActivity();
     const source = options?.source || "header";
     const shouldSavePdf =
@@ -3465,7 +3526,7 @@ const ManageLesson: React.FC = () => {
       );
 
       if (shouldSaveMeta) {
-        await setDoc(
+        await blockLegacyLessonMutationAsync(
           lessonDocRef,
           {
             unitId: selectedNodeId,
@@ -3487,7 +3548,7 @@ const ManageLesson: React.FC = () => {
             selectedNodeId,
             normalizedGeneralDraft.title,
           );
-          await setDoc(
+          await blockLegacyLessonMutationAsync(
             doc(db, getSemesterDocPath(config, "curriculum", "tree")),
             { tree: nextTree, updatedAt: serverTimestamp() },
           );
@@ -3557,11 +3618,13 @@ const ManageLesson: React.FC = () => {
         footnotes: draftForPersist.footnotes,
         updatedAt: serverTimestamp(),
       };
-      await setDoc(lessonDocRef, payload, { merge: true });
+      await blockLegacyLessonMutationAsync(lessonDocRef, payload, {
+        merge: true,
+      });
       if (uploadedWorksheet.pendingIncomingUpload) {
         try {
           const storage = await getFirebaseStorage();
-          await uploadBytes(
+          await blockLegacyLessonMutationAsync(
             ref(storage, uploadedWorksheet.pendingIncomingUpload.storagePath),
             uploadedWorksheet.pendingIncomingUpload.file,
             {
@@ -3594,7 +3657,7 @@ const ManageLesson: React.FC = () => {
           };
           resolvedPdfUrl = "";
           resolvedPdfStoragePath = "";
-          await setDoc(
+          await blockLegacyLessonMutationAsync(
             lessonDocRef,
             {
               pdfUrl: "",
@@ -3655,7 +3718,7 @@ const ManageLesson: React.FC = () => {
       deletedFootnoteAssetPathsRef.current = [];
       if (cleanupTargets.length) {
         void Promise.all(
-          cleanupTargets.map((path) => tryDeleteLessonFootnoteAsset(path)),
+          cleanupTargets.map((path) => blockLegacyLessonMutationAsync(path)),
         );
       }
       if (savedLessonState.pdfStoragePath && !savedDraft.pdfStoragePath) {
@@ -3704,7 +3767,7 @@ const ManageLesson: React.FC = () => {
       if (shouldNotifyStudents) {
         const notificationLessonTitle =
           persistedMetaTitle || selectedNodeTitle || "수업자료";
-        void createManagedNotifications(config, {
+        void blockLegacyLessonMutationAsync(config, {
           recipientMode: "all_students",
           type: "lesson_worksheet_published",
           title: "새 학습지가 업데이트되었습니다",
@@ -3788,6 +3851,10 @@ const ManageLesson: React.FC = () => {
     status: TeacherPresentationRuntimeStatus,
   ) => {
     setTeacherPreviewRuntimeStatus(status);
+  };
+
+  const handleOpenTeacherPreview = () => {
+    setHandoffAction("교사용 판서 수업 시작");
   };
 
   const handleTeacherPreviewClassChange = (nextId: string) => {
@@ -3912,7 +3979,27 @@ const ManageLesson: React.FC = () => {
         </div>
         {!canEdit && (
           <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-700">
-            이 화면은 조회 전용입니다. 편집과 저장은 관리자만 가능합니다.
+            <p>{LEGACY_LESSON_READ_ONLY_MESSAGE}</p>
+            <Link
+              to={LEGACY_LESSON_MANAGEMENT_ROUTE}
+              className="mt-2 inline-flex text-blue-700 underline"
+            >
+              학습 운영으로 이동
+            </Link>
+          </div>
+        )}
+        {handoffAction && (
+          <div
+            className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-bold text-blue-800"
+            role="status"
+          >
+            <p>{buildLegacyLessonManagementHandoffMessage(handoffAction)}</p>
+            <Link
+              to={LEGACY_LESSON_MANAGEMENT_ROUTE}
+              className="mt-2 inline-flex text-blue-700 underline"
+            >
+              학습 운영으로 이동
+            </Link>
           </div>
         )}
         <div className="flex flex-1 flex-col gap-6 pb-4 lg:flex-row">
@@ -3952,7 +4039,7 @@ const ManageLesson: React.FC = () => {
                   onLessonTitleChange={setLessonTitle}
                   onToggleVisible={setLessonVisibleToStudents}
                   onSave={() => void saveLesson({ source: "header" })}
-                  onOpenTeacherPreview={() => setTeacherPreviewOpen(true)}
+                  onOpenTeacherPreview={handleOpenTeacherPreview}
                 />
                 <div className="border-b border-gray-200 bg-white px-4 py-2">
                   <div className="inline-flex flex-wrap items-center gap-1 rounded-lg bg-slate-100 p-1">
@@ -4122,7 +4209,7 @@ const ManageLesson: React.FC = () => {
                         lesson={lessonDraft}
                         unitId={selectedNodeId}
                         fallbackTitle={selectedNodeTitle}
-                        onOpenTeacherPreview={() => setTeacherPreviewOpen(true)}
+                        onOpenTeacherPreview={handleOpenTeacherPreview}
                       />
                       {teacherPreviewRuntimeStatus && !teacherPreviewOpen && (
                         <div className="mt-4 rounded-3xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
@@ -4238,7 +4325,7 @@ const ManageLesson: React.FC = () => {
       />
       {/* ManageLesson is the current official teacher-present entry point.
           Future entry points should pass the same class context contract. */}
-      {teacherPreviewOpen && (
+      {teacherPreviewOpen && canEdit && (
         <div className="fixed inset-0 z-[70] bg-slate-950/80 backdrop-blur-sm">
           <div className="h-full overflow-y-auto p-3 md:p-4">
             <TeacherPresentationLauncher

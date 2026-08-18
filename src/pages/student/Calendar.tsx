@@ -4,18 +4,17 @@ import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
 import listPlugin from "@fullcalendar/list";
 import { useAuth } from "../../contexts/AuthContext";
-import { db } from "../../lib/firebase";
-import { doc, getDoc } from "firebase/firestore";
 import {
   getKoreanPublicHolidays,
   mergeEventsWithKoreanPublicHolidays,
 } from "../../lib/koreanPublicHolidays";
+import { loadLegacyStudentScheduleProjection } from "../../lib/legacyStudentScheduleAdapter";
+import { W8DomainError } from "../../lib/w8Domains";
 import {
   compareSchedulePeriod,
   getSchedulePeriodRangeLabel,
   getSchedulePeriodOrder,
 } from "../../lib/schedulePeriods";
-import { loadVisibleCalendarEvents } from "../../lib/visibleSchedule";
 
 interface CalendarEvent {
   id: string;
@@ -61,13 +60,12 @@ const getInclusiveSpanDays = (start?: string, end?: string) => {
 };
 
 const Calendar = () => {
-  const { user } = useAuth();
+  const { currentUser, config, configReady } = useAuth();
   const [events, setEvents] = useState<any[]>([]);
-  const [userClass, setUserClass] = useState<string | null>(null);
-  const [currentConfig, setCurrentConfig] = useState<{
-    year: string;
-    semester: string;
-  } | null>(null);
+  const [loadState, setLoadState] = useState<
+    "loading" | "ready" | "permission" | "error"
+  >("loading");
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   // Modal State
@@ -125,53 +123,18 @@ const Calendar = () => {
   }, [events]);
 
   useEffect(() => {
-    const fetchConfig = async () => {
-      try {
-        const configDoc = await getDoc(doc(db, "site_settings", "config"));
-        if (configDoc.exists()) {
-          setCurrentConfig(
-            configDoc.data() as { year: string; semester: string },
-          );
-        }
-      } catch (error) {
-        console.error("Error fetching config:", error);
-      }
-    };
-    fetchConfig();
-  }, []);
-
-  useEffect(() => {
-    if (!user) return;
-    const loadUserClass = async () => {
-      try {
-        const userDoc = await getDoc(doc(db, "users", user.uid));
-        if (userDoc.exists()) {
-          const d = userDoc.data();
-          if (d.grade && d.class) {
-            setUserClass(`${d.grade}-${d.class}`);
-          }
-        }
-      } catch (error) {
-        console.error("Error loading user class:", error);
-      }
-    };
-    loadUserClass();
-  }, [user]);
-
-  useEffect(() => {
-    if (!currentConfig || !userClass) return;
+    if (!configReady || !config || !currentUser) return;
 
     const fetchEvents = async () => {
-      // Path: years/{year}/semesters/{semester}/calendar
+      setLoadState("loading");
       try {
-        const visibleEvents = (await loadVisibleCalendarEvents(
-          db,
-          `years/${currentConfig.year}/semesters/${currentConfig.semester}/calendar`,
-          userClass,
-        )) as CalendarEvent[];
-        const holidays = await getKoreanPublicHolidays(currentConfig.year);
+        const projection = await loadLegacyStudentScheduleProjection({
+          config,
+          studentUid: currentUser.uid,
+        });
+        const holidays = await getKoreanPublicHolidays(projection.year);
         const loadedEvents = mergeEventsWithKoreanPublicHolidays(
-          visibleEvents,
+          projection.events,
           holidays,
         ).map((event) => {
           const isHoliday = event.eventType === "holiday";
@@ -211,13 +174,20 @@ const Calendar = () => {
           };
         });
         setEvents(loadedEvents);
+        setLoadState("ready");
       } catch (e) {
         console.error("Error fetching events:", e);
+        setEvents([]);
+        setLoadState(
+          e instanceof W8DomainError && e.kind === "PERMISSION"
+            ? "permission"
+            : "error",
+        );
       }
     };
 
     fetchEvents();
-  }, [currentConfig, userClass]);
+  }, [config, configReady, currentUser, loadAttempt]);
 
   const handleEventClick = (info: any) => {
     const props = info.event.extendedProps as CalendarEvent & {
@@ -245,6 +215,29 @@ const Calendar = () => {
             우리 반의 주요 일정과 평가 계획을 확인하세요.
           </p>
         </div>
+
+        {loadState === "loading" && (
+          <p className="mb-4 text-sm font-bold text-gray-500" role="status">
+            일정을 불러오는 중입니다.
+          </p>
+        )}
+        {loadState === "permission" && (
+          <p className="mb-4 text-sm font-bold text-red-600" role="alert">
+            이 학기의 일정을 확인할 권한이 없습니다.
+          </p>
+        )}
+        {loadState === "error" && (
+          <div className="mb-4 text-sm font-bold text-red-600" role="alert">
+            <p>일정을 불러오지 못했습니다.</p>
+            <button
+              type="button"
+              className="mt-2 text-blue-700 underline"
+              onClick={() => setLoadAttempt((value) => value + 1)}
+            >
+              다시 시도
+            </button>
+          </div>
+        )}
 
         <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-4 md:p-6 flex flex-col relative min-h-[600px]">
           <div className="flex items-center gap-4 mb-4 text-xs font-bold text-gray-500 justify-end">

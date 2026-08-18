@@ -62,6 +62,7 @@ export type W2CommandType =
   | "upsertWisInventory"
   | "placeWisOrder"
   | "reviewWisOrder"
+  | "saveWisHallOfFameConfig"
   | "createLearningContent"
   | "updateLearningContent"
   | "transitionLearningContent"
@@ -85,6 +86,10 @@ export type W2CommandType =
   | "acknowledgeNotice"
   | "acknowledgeAllNotices"
   | "updateNotificationSettings"
+  | "createThinkCloudSession"
+  | "transitionThinkCloudSession"
+  | "deleteThinkCloudSession"
+  | "submitThinkCloudResponse"
   | "saveTeacherDraft"
   | "discardTeacherDraft"
   | "resolveTeacherDraft"
@@ -594,6 +599,58 @@ export interface W2CommandPayloads {
     action: "APPROVE" | "REJECT" | "FULFILL";
     reason: string;
   };
+  saveWisHallOfFameConfig: {
+    semesterId: string;
+    expectedSemesterRevision: number;
+    expectedEconomyRevision: number;
+    expectedHallOfFameRevision: number;
+    hallOfFame: {
+      podiumImageUrl: string;
+      podiumStoragePath: string;
+      positionPreset: string;
+      positions: {
+        desktop: Record<
+          "first" | "second" | "third",
+          {
+            leftPercent: number;
+            topPercent: number;
+            widthPercent: number;
+          }
+        >;
+        mobile: Record<
+          "first" | "second" | "third",
+          {
+            leftPercent: number;
+            topPercent: number;
+            widthPercent: number;
+          }
+        >;
+      };
+      leaderboardPanel: {
+        desktop: {
+          leftPercent: number;
+          topPercent: number;
+          widthPercent: number;
+        };
+        mobile: {
+          leftPercent: number;
+          topPercent: number;
+          widthPercent: number;
+        };
+      };
+      publicRange: {
+        gradeRankLimit: number;
+        classRankLimit: number;
+        includeTies: boolean;
+      };
+      recognitionPopup: {
+        enabled: boolean;
+        gradeEnabled: boolean;
+        classEnabled: boolean;
+      };
+    };
+    reason: string;
+  };
   createLearningContent: W8CommandBase & LearningContentInput;
   updateLearningContent: W8CommandBase &
     LearningContentInput & {
@@ -710,6 +767,41 @@ export interface W2CommandPayloads {
     studentNotificationsEnabled: boolean;
     teacherNotificationsEnabled: boolean;
     eventPolicies: Record<string, unknown>;
+  };
+  createThinkCloudSession: W8CommandBase & {
+    expectedStateRevision: number | null;
+    title: string;
+    description: string;
+    targetGrade: string;
+    targetClass: string;
+    targetGradeLabel: string;
+    targetClassLabel: string;
+    options: {
+      allowDuplicateWord: boolean;
+      allowDuplicateByStudent: boolean;
+      inputMode: "word" | "sentence";
+      anonymous: boolean;
+      maxLength: number;
+      profanityFilter: boolean;
+    };
+  };
+  transitionThinkCloudSession: W8CommandBase & {
+    sessionId: string;
+    expectedSessionRevision: number;
+    expectedStateRevision: number | null;
+    targetStatus: "active" | "paused" | "closed";
+  };
+  deleteThinkCloudSession: W8CommandBase & {
+    sessionId: string;
+    expectedSessionRevision: number;
+    expectedStateRevision: number | null;
+    reason: string;
+  };
+  submitThinkCloudResponse: W8CommandBase & {
+    sessionId: string;
+    expectedSessionRevision: number;
+    textRaw: string;
+    textNormalized: string;
   };
   saveTeacherDraft: TeacherOperationsCommandBase & {
     payloadSchemaVersion: number;
@@ -1004,6 +1096,7 @@ export interface W2CommandResults {
   upsertWisInventory: WisCommandResult;
   placeWisOrder: WisCommandResult;
   reviewWisOrder: WisCommandResult;
+  saveWisHallOfFameConfig: WisCommandResult;
   createLearningContent: W8CommandResult;
   updateLearningContent: W8CommandResult;
   transitionLearningContent: W8CommandResult;
@@ -1027,6 +1120,10 @@ export interface W2CommandResults {
   acknowledgeNotice: W8CommandResult;
   acknowledgeAllNotices: W8CommandResult;
   updateNotificationSettings: W8CommandResult;
+  createThinkCloudSession: W8CommandResult;
+  transitionThinkCloudSession: W8CommandResult;
+  deleteThinkCloudSession: W8CommandResult;
+  submitThinkCloudResponse: W8CommandResult;
   saveTeacherDraft: TeacherOperationsCommandResult;
   discardTeacherDraft: TeacherOperationsCommandResult;
   resolveTeacherDraft: TeacherOperationsCommandResult;
@@ -1128,6 +1225,9 @@ export interface W8CommandResult {
   recordRevision?: number;
   noticeRevision?: number;
   configRevision?: number;
+  stateRevision?: number;
+  responseId?: string;
+  responseRevision?: number;
   resetCount?: number;
   createdCount?: number;
   revokedCount?: number;
@@ -1135,6 +1235,7 @@ export interface W8CommandResult {
   acknowledgedCount?: number;
   deliveryCount?: number;
   acknowledged?: boolean;
+  deleted?: boolean;
   status?: string;
   progressIds?: string[];
   records?: Array<{ recordId: string; recordRevision: number }>;

@@ -102,13 +102,7 @@ export const canWriteLessonManagement = (
 export const canManageW8Domains = (
   userData?: Partial<UserData> | null,
   email?: string | null,
-) =>
-  isAdminUser(userData, email) ||
-  (userData?.role === "teacher" &&
-    userData?.teacherPortalEnabled === true &&
-    normalizeStaffPermissions(userData?.staffPermissions).includes(
-      "lesson_read",
-    ));
+) => isAdminUser(userData, email) || userData?.role === "teacher";
 
 export const canReadQuizManagement = (
   userData?: Partial<UserData> | null,

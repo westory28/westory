@@ -1,30 +1,34 @@
-const crypto = require('crypto');
-const { initializeApp } = require('firebase-admin/app');
-const { getAuth } = require('firebase-admin/auth');
-const { getFirestore, FieldValue, Timestamp } = require('firebase-admin/firestore');
-const { HttpsError } = require('firebase-functions/v2/https');
-const { onSchedule } = require('firebase-functions/v2/scheduler');
+const crypto = require("crypto");
+const { initializeApp } = require("firebase-admin/app");
+const { getAuth } = require("firebase-admin/auth");
+const {
+  getFirestore,
+  FieldValue,
+  Timestamp,
+} = require("firebase-admin/firestore");
+const { HttpsError } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 
 initializeApp();
-const studentMaintenance = require('./studentMaintenance');
+const studentMaintenance = require("./studentMaintenance");
 const { onCallWithStudentMaintenance: onCall } = studentMaintenance;
-const sessionAuthority = require('./sessionAuthority');
-const commandGateway = require('./commandGateway');
-const semesterCore = require('./semesterCore');
-const archiveEnrollment = require('./archiveEnrollment');
-const assessmentLifecycle = require('./assessmentLifecycle');
-const gradeEvidence = require('./gradeEvidence');
-const wisEconomy = require('./wisEconomy');
-const w8Domains = require('./w8Domains');
-const teacherOperations = require('./teacherOperations');
-const semesterCutover = require('./semesterCutover');
+const sessionAuthority = require("./sessionAuthority");
+const commandGateway = require("./commandGateway");
+const semesterCore = require("./semesterCore");
+const archiveEnrollment = require("./archiveEnrollment");
+const assessmentLifecycle = require("./assessmentLifecycle");
+const gradeEvidence = require("./gradeEvidence");
+const wisEconomy = require("./wisEconomy");
+const w8Domains = require("./w8Domains");
+const teacherOperations = require("./teacherOperations");
+const semesterCutover = require("./semesterCutover");
 const {
   createLegacyPointV1CommandAdapter,
   createRetiredAdjustTeacherPointsHandler,
-} = require('./legacyPointV1CommandAdapter');
+} = require("./legacyPointV1CommandAdapter");
 Object.assign(exports, sessionAuthority.callableExports);
-Object.assign(exports, require('./sourceArchiveBeta'));
-Object.assign(exports, require('./lessonPdfBeta'));
+Object.assign(exports, require("./sourceArchiveBeta"));
+Object.assign(exports, require("./lessonPdfBeta"));
 exports.updateStudentMaintenanceConfig =
   studentMaintenance.createUpdateStudentMaintenanceConfigCallable({
     assertActiveApplicationSession:
@@ -32,60 +36,280 @@ exports.updateStudentMaintenanceConfig =
   });
 
 const db = getFirestore();
-const REGION = 'asia-northeast3';
-const ADMIN_EMAIL = 'westoria28@gmail.com';
+const REGION = "asia-northeast3";
+const ADMIN_EMAIL = "westoria28@gmail.com";
 const SCHOOL_EMAIL_PATTERN = /@yongshin-ms\.ms\.kr$/i;
-const LESSON_CORE_POINT_RESET_TEST_LABEL = '방테스트';
+const LESSON_CORE_POINT_RESET_TEST_LABEL = "방테스트";
 const DEFAULT_POINT_RANK_TIERS = [
-  { code: 'tier_1', minPoints: 0 },
-  { code: 'tier_2', minPoints: 50 },
-  { code: 'tier_3', minPoints: 150 },
-  { code: 'tier_4', minPoints: 300 },
-  { code: 'tier_5', minPoints: 500 },
+  { code: "tier_1", minPoints: 0 },
+  { code: "tier_2", minPoints: 50 },
+  { code: "tier_3", minPoints: 150 },
+  { code: "tier_4", minPoints: 300 },
+  { code: "tier_5", minPoints: 500 },
 ];
-const DEFAULT_THEME_ID = 'korean_golpum';
-const DEFAULT_PROFILE_EMOJI_ID = 'smile';
+const DEFAULT_THEME_ID = "korean_golpum";
+const DEFAULT_PROFILE_EMOJI_ID = "smile";
 const PROFILE_EMOJI_REGISTRY = [
-  { id: 'smile', emoji: '😀', value: '😀', label: '웃는 얼굴', category: '기본', sortOrder: 10, enabled: true, unlockTierCode: 'tier_1', legacyValues: [] },
-  { id: 'soft_smile', emoji: '🙂', value: '🙂', label: '미소', category: '기본', sortOrder: 20, enabled: true, unlockTierCode: 'tier_1', legacyValues: [] },
-  { id: 'note', emoji: '📝', value: '📝', label: '메모', category: '학습', sortOrder: 30, enabled: true, unlockTierCode: 'tier_1', legacyValues: [] },
-  { id: 'book', emoji: '📚', value: '📚', label: '책', category: '학습', sortOrder: 40, enabled: true, unlockTierCode: 'tier_1', legacyValues: [] },
-  { id: 'cool', emoji: '😎', value: '😎', label: '선글라스', category: '표정', sortOrder: 50, enabled: true, unlockTierCode: 'tier_2', legacyValues: [] },
-  { id: 'brain', emoji: '🧠', value: '🧠', label: '두뇌', category: '학습', sortOrder: 60, enabled: true, unlockTierCode: 'tier_2', legacyValues: [] },
-  { id: 'clover', emoji: '🍀', value: '🍀', label: '행운', category: '자연', sortOrder: 70, enabled: true, unlockTierCode: 'tier_2', legacyValues: [] },
-  { id: 'target', emoji: '🎯', value: '🎯', label: '목표', category: '학습', sortOrder: 80, enabled: true, unlockTierCode: 'tier_2', legacyValues: [] },
-  { id: 'nerd', emoji: '🤓', value: '🤓', label: '공부 모드', category: '표정', sortOrder: 90, enabled: true, unlockTierCode: 'tier_3', legacyValues: [] },
-  { id: 'trophy', emoji: '🏆', value: '🏆', label: '트로피', category: '성취', sortOrder: 100, enabled: true, unlockTierCode: 'tier_3', legacyValues: [] },
-  { id: 'rocket', emoji: '🚀', value: '🚀', label: '로켓', category: '성취', sortOrder: 110, enabled: true, unlockTierCode: 'tier_3', legacyValues: [] },
-  { id: 'school', emoji: '🏫', value: '🏫', label: '학교', category: '학습', sortOrder: 120, enabled: true, unlockTierCode: 'tier_3', legacyValues: [] },
-  { id: 'sparkles', emoji: '🌟', value: '🌟', label: '반짝별', category: '반짝임', sortOrder: 130, enabled: true, unlockTierCode: 'tier_4', legacyValues: [] },
-  { id: 'science', emoji: '🧪', value: '🧪', label: '실험', category: '학습', sortOrder: 140, enabled: true, unlockTierCode: 'tier_4', legacyValues: [] },
-  { id: 'tiger', emoji: '🐯', value: '🐯', label: '호랑이', category: '동물', sortOrder: 150, enabled: true, unlockTierCode: 'tier_4', legacyValues: [] },
-  { id: 'panda', emoji: '🐼', value: '🐼', label: '판다', category: '동물', sortOrder: 160, enabled: true, unlockTierCode: 'tier_4', legacyValues: [] },
-  { id: 'pencil', emoji: '✏️', value: '✏️', label: '연필', category: '학습', sortOrder: 170, enabled: true, unlockTierCode: 'tier_5', legacyValues: [] },
-  { id: 'bear', emoji: '🐻', value: '🐻', label: '곰', category: '동물', sortOrder: 180, enabled: true, unlockTierCode: 'tier_5', legacyValues: [] },
-  { id: 'fox', emoji: '🦊', value: '🦊', label: '여우', category: '동물', sortOrder: 190, enabled: true, unlockTierCode: 'tier_5', legacyValues: [] },
-  { id: 'dolphin', emoji: '🐬', value: '🐬', label: '돌고래', category: '동물', sortOrder: 200, enabled: true, unlockTierCode: 'tier_5', legacyValues: [] },
-  { id: 'owl', emoji: '🦉', value: '🦉', label: '부엉이', category: '동물', sortOrder: 210, enabled: true, unlockTierCode: 'tier_5', legacyValues: [] },
-  { id: 'whale', emoji: '🐳', value: '🐳', label: '고래', category: '동물', sortOrder: 220, enabled: true, unlockTierCode: 'tier_5', legacyValues: [] },
+  {
+    id: "smile",
+    emoji: "😀",
+    value: "😀",
+    label: "웃는 얼굴",
+    category: "기본",
+    sortOrder: 10,
+    enabled: true,
+    unlockTierCode: "tier_1",
+    legacyValues: [],
+  },
+  {
+    id: "soft_smile",
+    emoji: "🙂",
+    value: "🙂",
+    label: "미소",
+    category: "기본",
+    sortOrder: 20,
+    enabled: true,
+    unlockTierCode: "tier_1",
+    legacyValues: [],
+  },
+  {
+    id: "note",
+    emoji: "📝",
+    value: "📝",
+    label: "메모",
+    category: "학습",
+    sortOrder: 30,
+    enabled: true,
+    unlockTierCode: "tier_1",
+    legacyValues: [],
+  },
+  {
+    id: "book",
+    emoji: "📚",
+    value: "📚",
+    label: "책",
+    category: "학습",
+    sortOrder: 40,
+    enabled: true,
+    unlockTierCode: "tier_1",
+    legacyValues: [],
+  },
+  {
+    id: "cool",
+    emoji: "😎",
+    value: "😎",
+    label: "선글라스",
+    category: "표정",
+    sortOrder: 50,
+    enabled: true,
+    unlockTierCode: "tier_2",
+    legacyValues: [],
+  },
+  {
+    id: "brain",
+    emoji: "🧠",
+    value: "🧠",
+    label: "두뇌",
+    category: "학습",
+    sortOrder: 60,
+    enabled: true,
+    unlockTierCode: "tier_2",
+    legacyValues: [],
+  },
+  {
+    id: "clover",
+    emoji: "🍀",
+    value: "🍀",
+    label: "행운",
+    category: "자연",
+    sortOrder: 70,
+    enabled: true,
+    unlockTierCode: "tier_2",
+    legacyValues: [],
+  },
+  {
+    id: "target",
+    emoji: "🎯",
+    value: "🎯",
+    label: "목표",
+    category: "학습",
+    sortOrder: 80,
+    enabled: true,
+    unlockTierCode: "tier_2",
+    legacyValues: [],
+  },
+  {
+    id: "nerd",
+    emoji: "🤓",
+    value: "🤓",
+    label: "공부 모드",
+    category: "표정",
+    sortOrder: 90,
+    enabled: true,
+    unlockTierCode: "tier_3",
+    legacyValues: [],
+  },
+  {
+    id: "trophy",
+    emoji: "🏆",
+    value: "🏆",
+    label: "트로피",
+    category: "성취",
+    sortOrder: 100,
+    enabled: true,
+    unlockTierCode: "tier_3",
+    legacyValues: [],
+  },
+  {
+    id: "rocket",
+    emoji: "🚀",
+    value: "🚀",
+    label: "로켓",
+    category: "성취",
+    sortOrder: 110,
+    enabled: true,
+    unlockTierCode: "tier_3",
+    legacyValues: [],
+  },
+  {
+    id: "school",
+    emoji: "🏫",
+    value: "🏫",
+    label: "학교",
+    category: "학습",
+    sortOrder: 120,
+    enabled: true,
+    unlockTierCode: "tier_3",
+    legacyValues: [],
+  },
+  {
+    id: "sparkles",
+    emoji: "🌟",
+    value: "🌟",
+    label: "반짝별",
+    category: "반짝임",
+    sortOrder: 130,
+    enabled: true,
+    unlockTierCode: "tier_4",
+    legacyValues: [],
+  },
+  {
+    id: "science",
+    emoji: "🧪",
+    value: "🧪",
+    label: "실험",
+    category: "학습",
+    sortOrder: 140,
+    enabled: true,
+    unlockTierCode: "tier_4",
+    legacyValues: [],
+  },
+  {
+    id: "tiger",
+    emoji: "🐯",
+    value: "🐯",
+    label: "호랑이",
+    category: "동물",
+    sortOrder: 150,
+    enabled: true,
+    unlockTierCode: "tier_4",
+    legacyValues: [],
+  },
+  {
+    id: "panda",
+    emoji: "🐼",
+    value: "🐼",
+    label: "판다",
+    category: "동물",
+    sortOrder: 160,
+    enabled: true,
+    unlockTierCode: "tier_4",
+    legacyValues: [],
+  },
+  {
+    id: "pencil",
+    emoji: "✏️",
+    value: "✏️",
+    label: "연필",
+    category: "학습",
+    sortOrder: 170,
+    enabled: true,
+    unlockTierCode: "tier_5",
+    legacyValues: [],
+  },
+  {
+    id: "bear",
+    emoji: "🐻",
+    value: "🐻",
+    label: "곰",
+    category: "동물",
+    sortOrder: 180,
+    enabled: true,
+    unlockTierCode: "tier_5",
+    legacyValues: [],
+  },
+  {
+    id: "fox",
+    emoji: "🦊",
+    value: "🦊",
+    label: "여우",
+    category: "동물",
+    sortOrder: 190,
+    enabled: true,
+    unlockTierCode: "tier_5",
+    legacyValues: [],
+  },
+  {
+    id: "dolphin",
+    emoji: "🐬",
+    value: "🐬",
+    label: "돌고래",
+    category: "동물",
+    sortOrder: 200,
+    enabled: true,
+    unlockTierCode: "tier_5",
+    legacyValues: [],
+  },
+  {
+    id: "owl",
+    emoji: "🦉",
+    value: "🦉",
+    label: "부엉이",
+    category: "동물",
+    sortOrder: 210,
+    enabled: true,
+    unlockTierCode: "tier_5",
+    legacyValues: [],
+  },
+  {
+    id: "whale",
+    emoji: "🐳",
+    value: "🐳",
+    label: "고래",
+    category: "동물",
+    sortOrder: 220,
+    enabled: true,
+    unlockTierCode: "tier_5",
+    legacyValues: [],
+  },
 ];
 
-const cloneDefaultEmojiRegistry = () => PROFILE_EMOJI_REGISTRY.map((entry) => ({
-  ...entry,
-  legacyValues: [...(entry.legacyValues || [])],
-}));
+const cloneDefaultEmojiRegistry = () =>
+  PROFILE_EMOJI_REGISTRY.map((entry) => ({
+    ...entry,
+    legacyValues: [...(entry.legacyValues || [])],
+  }));
 
-const normalizeThemeId = (value) => (
-  value === 'world_nobility' ? 'world_nobility' : DEFAULT_THEME_ID
-);
+const normalizeThemeId = (value) =>
+  value === "world_nobility" ? "world_nobility" : DEFAULT_THEME_ID;
 
 const parseTierIndex = (tierCode) => {
-  const parsed = Number(String(tierCode || '').replace('tier_', ''));
+  const parsed = Number(String(tierCode || "").replace("tier_", ""));
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
 };
 
 const normalizeTierCode = (value, index) => {
-  const raw = String(value || '').trim();
+  const raw = String(value || "").trim();
   return /^tier_\d+$/.test(raw) ? raw : `tier_${index + 1}`;
 };
 
@@ -93,7 +317,9 @@ const normalizeRankTier = (tier, index) => ({
   code: normalizeTierCode(tier?.code, index),
   minPoints: Math.max(0, Number(tier?.minPoints ?? tier?.threshold ?? 0)),
   allowedEmojiIds: Array.isArray(tier?.allowedEmojiIds)
-    ? tier.allowedEmojiIds.map((value) => String(value || '').trim()).filter(Boolean)
+    ? tier.allowedEmojiIds
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
     : undefined,
 });
 
@@ -114,12 +340,18 @@ const buildEmojiMaps = (registry) => {
 };
 
 const getProfileEmojiEntryById = (emojiId, registry = PROFILE_EMOJI_REGISTRY) =>
-  buildEmojiMaps(registry).byId.get(String(emojiId || '').trim()) || null;
+  buildEmojiMaps(registry).byId.get(String(emojiId || "").trim()) || null;
 
-const getEnabledEmojiRegistry = (registry) => registry.filter((entry) => entry.enabled !== false);
+const getEnabledEmojiRegistry = (registry) =>
+  registry.filter((entry) => entry.enabled !== false);
 
 const ensureUniqueEmojiId = (candidateId, usedIds, fallbackIndex) => {
-  const baseId = String(candidateId || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || `emoji_${fallbackIndex + 1}`;
+  const baseId =
+    String(candidateId || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "") || `emoji_${fallbackIndex + 1}`;
   let nextId = baseId;
   let suffix = 2;
   while (usedIds.has(nextId)) {
@@ -136,26 +368,50 @@ const resolveEmojiRegistry = (rawRegistry) => {
   }
 
   const usedIds = new Set();
-  const entries = rawRegistry.map((entry, index) => {
-    const fallbackEntry = PROFILE_EMOJI_REGISTRY[index] || {};
-    const emoji = String(entry?.emoji || entry?.value || fallbackEntry.emoji || '').trim();
-    if (!emoji) return null;
-    const rawValue = String(entry?.value || '').trim();
-    return {
-      id: ensureUniqueEmojiId(entry?.id || fallbackEntry.id || entry?.label || emoji, usedIds, index),
-      emoji,
-      value: emoji,
-      label: String(entry?.label || fallbackEntry.label || `이모지 ${index + 1}`).trim(),
-      category: String(entry?.category || fallbackEntry.category || '기타').trim() || '기타',
-      sortOrder: Number.isFinite(Number(entry?.sortOrder)) ? Number(entry.sortOrder) : Number(fallbackEntry.sortOrder || (index + 1) * 10),
-      enabled: entry?.enabled !== false,
-      unlockTierCode: /^tier_\d+$/.test(String(entry?.unlockTierCode || '')) ? String(entry.unlockTierCode).trim() : fallbackEntry.unlockTierCode,
-      legacyValues: Array.from(new Set([
-        ...(Array.isArray(entry?.legacyValues) ? entry.legacyValues.map((value) => String(value || '').trim()).filter(Boolean) : []),
-        rawValue && rawValue !== emoji ? rawValue : '',
-      ].filter(Boolean))),
-    };
-  }).filter(Boolean);
+  const entries = rawRegistry
+    .map((entry, index) => {
+      const fallbackEntry = PROFILE_EMOJI_REGISTRY[index] || {};
+      const emoji = String(
+        entry?.emoji || entry?.value || fallbackEntry.emoji || "",
+      ).trim();
+      if (!emoji) return null;
+      const rawValue = String(entry?.value || "").trim();
+      return {
+        id: ensureUniqueEmojiId(
+          entry?.id || fallbackEntry.id || entry?.label || emoji,
+          usedIds,
+          index,
+        ),
+        emoji,
+        value: emoji,
+        label: String(
+          entry?.label || fallbackEntry.label || `이모지 ${index + 1}`,
+        ).trim(),
+        category:
+          String(entry?.category || fallbackEntry.category || "기타").trim() ||
+          "기타",
+        sortOrder: Number.isFinite(Number(entry?.sortOrder))
+          ? Number(entry.sortOrder)
+          : Number(fallbackEntry.sortOrder || (index + 1) * 10),
+        enabled: entry?.enabled !== false,
+        unlockTierCode: /^tier_\d+$/.test(String(entry?.unlockTierCode || ""))
+          ? String(entry.unlockTierCode).trim()
+          : fallbackEntry.unlockTierCode,
+        legacyValues: Array.from(
+          new Set(
+            [
+              ...(Array.isArray(entry?.legacyValues)
+                ? entry.legacyValues
+                    .map((value) => String(value || "").trim())
+                    .filter(Boolean)
+                : []),
+              rawValue && rawValue !== emoji ? rawValue : "",
+            ].filter(Boolean),
+          ),
+        ),
+      };
+    })
+    .filter(Boolean);
 
   if (!entries.length) {
     return cloneDefaultEmojiRegistry();
@@ -164,20 +420,23 @@ const resolveEmojiRegistry = (rawRegistry) => {
   return [...entries].sort((a, b) => {
     const sortGap = Number(a.sortOrder || 0) - Number(b.sortOrder || 0);
     if (sortGap !== 0) return sortGap;
-    return String(a.label || '').localeCompare(String(b.label || ''), 'ko');
+    return String(a.label || "").localeCompare(String(b.label || ""), "ko");
   });
 };
 
-const sanitizeEmojiIds = (raw, registry) => Array.from(new Set(
-  Array.isArray(raw)
-    ? raw
-      .map((value) => String(value || '').trim())
-      .filter((emojiId) => {
-        const entry = getProfileEmojiEntryById(emojiId, registry);
-        return Boolean(entry && entry.enabled !== false);
-      })
-    : [],
-));
+const sanitizeEmojiIds = (raw, registry) =>
+  Array.from(
+    new Set(
+      Array.isArray(raw)
+        ? raw
+            .map((value) => String(value || "").trim())
+            .filter((emojiId) => {
+              const entry = getProfileEmojiEntryById(emojiId, registry);
+              return Boolean(entry && entry.enabled !== false);
+            })
+        : [],
+    ),
+  );
 
 const getClampedTierCode = (requestedTierCode, tiers) => {
   if (!tiers.length) return requestedTierCode;
@@ -190,28 +449,38 @@ const getClampedTierCode = (requestedTierCode, tiers) => {
 
 const buildDefaultRankEmojiPolicy = (tiers, registry) => {
   const enabledRegistry = getEnabledEmojiRegistry(registry);
-  const tierUnlocks = tiers.reduce((accumulator, tier) => ({
-    ...accumulator,
-    [tier.code]: {
-      allowedEmojiIds: [],
-    },
-  }), {});
+  const tierUnlocks = tiers.reduce(
+    (accumulator, tier) => ({
+      ...accumulator,
+      [tier.code]: {
+        allowedEmojiIds: [],
+      },
+    }),
+    {},
+  );
 
   enabledRegistry.forEach((entry) => {
-    const tierCode = getClampedTierCode(entry.unlockTierCode || tiers[0]?.code || 'tier_1', tiers);
+    const tierCode = getClampedTierCode(
+      entry.unlockTierCode || tiers[0]?.code || "tier_1",
+      tiers,
+    );
     const currentTier = tierUnlocks[tierCode] || { allowedEmojiIds: [] };
     currentTier.allowedEmojiIds = [...currentTier.allowedEmojiIds, entry.id];
     tierUnlocks[tierCode] = currentTier;
   });
 
-  const requestedDefaultEmojiId = getProfileEmojiEntryById(DEFAULT_PROFILE_EMOJI_ID, enabledRegistry)?.id
-    || enabledRegistry[0]?.id
-    || DEFAULT_PROFILE_EMOJI_ID;
+  const requestedDefaultEmojiId =
+    getProfileEmojiEntryById(DEFAULT_PROFILE_EMOJI_ID, enabledRegistry)?.id ||
+    enabledRegistry[0]?.id ||
+    DEFAULT_PROFILE_EMOJI_ID;
   const firstTierCode = tiers[0]?.code;
   if (firstTierCode) {
     const firstTier = tierUnlocks[firstTierCode] || { allowedEmojiIds: [] };
     if (!firstTier.allowedEmojiIds.includes(requestedDefaultEmojiId)) {
-      firstTier.allowedEmojiIds = [requestedDefaultEmojiId, ...firstTier.allowedEmojiIds];
+      firstTier.allowedEmojiIds = [
+        requestedDefaultEmojiId,
+        ...firstTier.allowedEmojiIds,
+      ];
     }
     tierUnlocks[firstTierCode] = {
       allowedEmojiIds: Array.from(new Set(firstTier.allowedEmojiIds)),
@@ -221,7 +490,7 @@ const buildDefaultRankEmojiPolicy = (tiers, registry) => {
   return {
     enabled: true,
     defaultEmojiId: requestedDefaultEmojiId,
-    legacyMode: 'keep_selected',
+    legacyMode: "keep_selected",
     tiers: tierUnlocks,
   };
 };
@@ -230,19 +499,33 @@ const resolveRankPolicy = (rawRankPolicy) => {
   const emojiRegistry = resolveEmojiRegistry(rawRankPolicy?.emojiRegistry);
   const tiers = Array.isArray(rawRankPolicy?.tiers)
     ? rawRankPolicy.tiers
-      .map((tier, index) => normalizeRankTier(tier, index))
-      .sort((a, b) => a.minPoints - b.minPoints)
+        .map((tier, index) => normalizeRankTier(tier, index))
+        .sort((a, b) => a.minPoints - b.minPoints)
     : DEFAULT_POINT_RANK_TIERS.map((tier) => ({ ...tier }));
-  const normalizedTiers = tiers.length > 0 ? tiers : DEFAULT_POINT_RANK_TIERS.map((tier) => ({ ...tier }));
-  const defaultEmojiPolicy = buildDefaultRankEmojiPolicy(normalizedTiers, emojiRegistry);
+  const normalizedTiers =
+    tiers.length > 0
+      ? tiers
+      : DEFAULT_POINT_RANK_TIERS.map((tier) => ({ ...tier }));
+  const defaultEmojiPolicy = buildDefaultRankEmojiPolicy(
+    normalizedTiers,
+    emojiRegistry,
+  );
   const usedEmojiIds = new Set();
   const nextTiers = normalizedTiers.map((tier) => {
-    const hasExplicitAllowedEmojiIds = Array.isArray(tier.allowedEmojiIds)
-      || Array.isArray(rawRankPolicy?.emojiPolicy?.tiers?.[tier.code]?.allowedEmojiIds);
+    const hasExplicitAllowedEmojiIds =
+      Array.isArray(tier.allowedEmojiIds) ||
+      Array.isArray(
+        rawRankPolicy?.emojiPolicy?.tiers?.[tier.code]?.allowedEmojiIds,
+      );
     const requestedAllowedEmojiIds = hasExplicitAllowedEmojiIds
-      ? (tier.allowedEmojiIds || rawRankPolicy?.emojiPolicy?.tiers?.[tier.code]?.allowedEmojiIds || [])
-      : (defaultEmojiPolicy.tiers[tier.code]?.allowedEmojiIds || []);
-    const allowedEmojiIds = sanitizeEmojiIds(requestedAllowedEmojiIds, emojiRegistry).filter((emojiId) => {
+      ? tier.allowedEmojiIds ||
+        rawRankPolicy?.emojiPolicy?.tiers?.[tier.code]?.allowedEmojiIds ||
+        []
+      : defaultEmojiPolicy.tiers[tier.code]?.allowedEmojiIds || [];
+    const allowedEmojiIds = sanitizeEmojiIds(
+      requestedAllowedEmojiIds,
+      emojiRegistry,
+    ).filter((emojiId) => {
       if (usedEmojiIds.has(emojiId)) return false;
       usedEmojiIds.add(emojiId);
       return true;
@@ -254,18 +537,25 @@ const resolveRankPolicy = (rawRankPolicy) => {
   });
 
   const enabledRegistry = getEnabledEmojiRegistry(emojiRegistry);
-  const defaultEmojiId = getProfileEmojiEntryById(rawRankPolicy?.emojiPolicy?.defaultEmojiId, enabledRegistry)?.id
-    || getProfileEmojiEntryById(defaultEmojiPolicy.defaultEmojiId, enabledRegistry)?.id
-    || enabledRegistry[0]?.id
-    || DEFAULT_PROFILE_EMOJI_ID;
+  const defaultEmojiId =
+    getProfileEmojiEntryById(
+      rawRankPolicy?.emojiPolicy?.defaultEmojiId,
+      enabledRegistry,
+    )?.id ||
+    getProfileEmojiEntryById(defaultEmojiPolicy.defaultEmojiId, enabledRegistry)
+      ?.id ||
+    enabledRegistry[0]?.id ||
+    DEFAULT_PROFILE_EMOJI_ID;
   const firstTierCode = nextTiers[0]?.code;
   if (firstTierCode) {
     nextTiers.forEach((tier) => {
-      tier.allowedEmojiIds = (tier.allowedEmojiIds || []).filter((emojiId) => (
-        tier.code === firstTierCode || emojiId !== defaultEmojiId
-      ));
+      tier.allowedEmojiIds = (tier.allowedEmojiIds || []).filter(
+        (emojiId) => tier.code === firstTierCode || emojiId !== defaultEmojiId,
+      );
     });
-    nextTiers[0].allowedEmojiIds = Array.from(new Set([defaultEmojiId, ...(nextTiers[0].allowedEmojiIds || [])]));
+    nextTiers[0].allowedEmojiIds = Array.from(
+      new Set([defaultEmojiId, ...(nextTiers[0].allowedEmojiIds || [])]),
+    );
   }
 
   const emojiPolicyTiers = nextTiers.reduce((accumulator, tier) => {
@@ -277,22 +567,34 @@ const resolveRankPolicy = (rawRankPolicy) => {
 
   return {
     enabled: rawRankPolicy?.enabled !== false,
-    activeThemeId: normalizeThemeId(rawRankPolicy?.activeThemeId ?? rawRankPolicy?.themeId),
-    themeId: normalizeThemeId(rawRankPolicy?.activeThemeId ?? rawRankPolicy?.themeId),
-    basedOn: rawRankPolicy?.basedOn === 'earnedTotal' || rawRankPolicy?.basedOn === 'earnedTotal_plus_positive_manual_adjust'
-      ? rawRankPolicy.basedOn
-      : 'earnedTotal_plus_positive_manual_adjust',
+    activeThemeId: normalizeThemeId(
+      rawRankPolicy?.activeThemeId ?? rawRankPolicy?.themeId,
+    ),
+    themeId: normalizeThemeId(
+      rawRankPolicy?.activeThemeId ?? rawRankPolicy?.themeId,
+    ),
+    basedOn:
+      rawRankPolicy?.basedOn === "earnedTotal" ||
+      rawRankPolicy?.basedOn === "earnedTotal_plus_positive_manual_adjust"
+        ? rawRankPolicy.basedOn
+        : "earnedTotal_plus_positive_manual_adjust",
     tiers: nextTiers,
     emojiRegistry,
     emojiPolicy: {
       enabled: rawRankPolicy?.emojiPolicy?.enabled !== false,
       defaultEmojiId,
-      legacyMode: rawRankPolicy?.emojiPolicy?.legacyMode === 'strict' ? 'strict' : 'keep_selected',
+      legacyMode:
+        rawRankPolicy?.emojiPolicy?.legacyMode === "strict"
+          ? "strict"
+          : "keep_selected",
       tiers: emojiPolicyTiers,
     },
     celebrationPolicy: {
       enabled: rawRankPolicy?.celebrationPolicy?.enabled !== false,
-      effectLevel: rawRankPolicy?.celebrationPolicy?.effectLevel === 'subtle' ? 'subtle' : 'standard',
+      effectLevel:
+        rawRankPolicy?.celebrationPolicy?.effectLevel === "subtle"
+          ? "subtle"
+          : "standard",
     },
   };
 };
@@ -300,7 +602,7 @@ const resolveRankPolicy = (rawRankPolicy) => {
 const buildRankSnapshot = (rankEarnedTotal, rankPolicy) => {
   const resolvedRankPolicy = resolveRankPolicy(rankPolicy);
   const metricValue = Math.max(0, Number(rankEarnedTotal || 0));
-  let activeTier = resolvedRankPolicy.tiers[0] || { code: 'tier_1' };
+  let activeTier = resolvedRankPolicy.tiers[0] || { code: "tier_1" };
 
   resolvedRankPolicy.tiers.forEach((tier) => {
     if (metricValue >= Number(tier.minPoints || 0)) {
@@ -324,50 +626,72 @@ const buildWalletRankState = (rankEarnedTotal, rankPolicy) => {
   };
 };
 
-const sumPositiveManualAdjustDocs = (docs) => docs.reduce((total, docSnapshot) => {
-  const transaction = docSnapshot?.data ? docSnapshot.data() : docSnapshot;
-  if (transaction?.type !== 'manual_adjust') return total;
-  const delta = Number(transaction?.delta || 0);
-  return delta > 0 ? total + delta : total;
-}, 0);
+const sumPositiveManualAdjustDocs = (docs) =>
+  docs.reduce((total, docSnapshot) => {
+    const transaction = docSnapshot?.data ? docSnapshot.data() : docSnapshot;
+    if (transaction?.type !== "manual_adjust") return total;
+    const delta = Number(transaction?.delta || 0);
+    return delta > 0 ? total + delta : total;
+  }, 0);
 
-const getCurrentRankEarnedTotal = async (transaction, year, semester, uid, wallet) => {
+const getCurrentRankEarnedTotal = async (
+  transaction,
+  year,
+  semester,
+  uid,
+  wallet,
+) => {
   if (Number.isFinite(Number(wallet?.rankEarnedTotal))) {
     return Math.max(0, Number(wallet.rankEarnedTotal || 0));
   }
 
-  const manualAdjustQuery = db.collection(getPointCollectionPath(year, semester, 'point_transactions'))
-    .where('uid', '==', uid)
-    .where('type', '==', 'manual_adjust');
+  const manualAdjustQuery = db
+    .collection(getPointCollectionPath(year, semester, "point_transactions"))
+    .where("uid", "==", uid)
+    .where("type", "==", "manual_adjust");
   const manualAdjustSnap = await transaction.get(manualAdjustQuery);
-  return Math.max(0, Number(wallet?.earnedTotal || 0) + sumPositiveManualAdjustDocs(manualAdjustSnap.docs));
+  return Math.max(
+    0,
+    Number(wallet?.earnedTotal || 0) +
+      sumPositiveManualAdjustDocs(manualAdjustSnap.docs),
+  );
 };
 
 const getAllowedEmojiIdsForTier = (rankPolicy, currentTierCode) => {
   const resolvedRankPolicy = resolveRankPolicy(rankPolicy);
-  const enabledRegistry = getEnabledEmojiRegistry(resolvedRankPolicy.emojiRegistry);
+  const enabledRegistry = getEnabledEmojiRegistry(
+    resolvedRankPolicy.emojiRegistry,
+  );
   if (!resolvedRankPolicy.emojiPolicy.enabled) {
     return enabledRegistry.map((entry) => entry.id);
   }
 
-  const targetTierCode = currentTierCode || resolvedRankPolicy.tiers[0]?.code || 'tier_1';
-  const targetTierIndex = resolvedRankPolicy.tiers.findIndex((tier) => tier.code === targetTierCode);
+  const targetTierCode =
+    currentTierCode || resolvedRankPolicy.tiers[0]?.code || "tier_1";
+  const targetTierIndex = resolvedRankPolicy.tiers.findIndex(
+    (tier) => tier.code === targetTierCode,
+  );
   const safeTargetTierIndex = targetTierIndex >= 0 ? targetTierIndex : 0;
-  const allowedEmojiIds = resolvedRankPolicy.tiers.reduce((accumulator, tier, index) => {
-    if (index > safeTargetTierIndex) {
-      return accumulator;
-    }
-    return [
-      ...accumulator,
-      ...(tier.allowedEmojiIds || []),
-    ];
-  }, []);
-  const uniqueAllowedEmojiIds = Array.from(new Set(
-    allowedEmojiIds.filter((emojiId) => {
-      const entry = getProfileEmojiEntryById(emojiId, resolvedRankPolicy.emojiRegistry);
-      return Boolean(entry && entry.enabled !== false);
-    }),
-  ));
+  const allowedEmojiIds = resolvedRankPolicy.tiers.reduce(
+    (accumulator, tier, index) => {
+      if (index > safeTargetTierIndex) {
+        return accumulator;
+      }
+      return [...accumulator, ...(tier.allowedEmojiIds || [])];
+    },
+    [],
+  );
+  const uniqueAllowedEmojiIds = Array.from(
+    new Set(
+      allowedEmojiIds.filter((emojiId) => {
+        const entry = getProfileEmojiEntryById(
+          emojiId,
+          resolvedRankPolicy.emojiRegistry,
+        );
+        return Boolean(entry && entry.enabled !== false);
+      }),
+    ),
+  );
 
   return uniqueAllowedEmojiIds.length > 0
     ? uniqueAllowedEmojiIds
@@ -401,9 +725,19 @@ const resolveQuizBonusInput = (policy) => {
   const legacyBonus = policy?.quizBonus || policy?.quizPerfectBonus || {};
   const nestedBonus = nestedRewardPolicy?.quizBonus || legacyBonus || {};
   return {
-    enabled: policy?.quizBonusEnabled ?? policy?.quizPerfectBonusEnabled ?? nestedBonus?.enabled,
-    threshold: policy?.quizBonusThreshold ?? policy?.quizPerfectBonusThreshold ?? nestedBonus?.thresholdScore ?? nestedBonus?.threshold,
-    amount: policy?.quizBonusAmount ?? policy?.quizPerfectBonusAmount ?? nestedBonus?.amount,
+    enabled:
+      policy?.quizBonusEnabled ??
+      policy?.quizPerfectBonusEnabled ??
+      nestedBonus?.enabled,
+    threshold:
+      policy?.quizBonusThreshold ??
+      policy?.quizPerfectBonusThreshold ??
+      nestedBonus?.thresholdScore ??
+      nestedBonus?.threshold,
+    amount:
+      policy?.quizBonusAmount ??
+      policy?.quizPerfectBonusAmount ??
+      nestedBonus?.amount,
   };
 };
 
@@ -461,10 +795,10 @@ const getDefaultPointPolicy = () => ({
     attendanceMilestoneBonus: {
       enabled: false,
       amounts: {
-        '50': 0,
-        '100': 0,
-        '200': 0,
-        '300': 0,
+        50: 0,
+        100: 0,
+        200: 0,
+        300: 0,
       },
     },
   },
@@ -474,11 +808,11 @@ const getDefaultPointPolicy = () => ({
   },
   rankPolicy: resolveRankPolicy({
     enabled: true,
-    activeThemeId: 'korean_golpum',
-    basedOn: 'earnedTotal_plus_positive_manual_adjust',
+    activeThemeId: "korean_golpum",
+    basedOn: "earnedTotal_plus_positive_manual_adjust",
     tiers: DEFAULT_POINT_RANK_TIERS,
   }),
-  updatedBy: '',
+  updatedBy: "",
 });
 
 const DEFAULT_POINT_POLICY = getDefaultPointPolicy();
@@ -489,106 +823,146 @@ const normalizePointPolicy = (policy) => {
   const autoRewardEnabled = resolveAutoRewardEnabled(policy) !== false;
   const controlPolicy = policy?.controlPolicy || {};
   const rewardPolicy = policy?.rewardPolicy || {};
-  const manualAdjustEnabled = (controlPolicy?.manualAdjustEnabled ?? policy?.manualAdjustEnabled) === true;
-  const allowNegativeBalance = (controlPolicy?.allowNegativeBalance ?? policy?.allowNegativeBalance) === true;
+  const manualAdjustEnabled =
+    (controlPolicy?.manualAdjustEnabled ?? policy?.manualAdjustEnabled) ===
+    true;
+  const allowNegativeBalance =
+    (controlPolicy?.allowNegativeBalance ?? policy?.allowNegativeBalance) ===
+    true;
   const lessonCorePointsRule = rewardPolicy?.lessonCorePoints || {};
   const thinkCloudRule = rewardPolicy?.thinkCloud || {};
   const mapTagRule = rewardPolicy?.mapTag || {};
   const historyDictionaryRule = rewardPolicy?.historyDictionary || {};
   const historyClassroomRule = rewardPolicy?.historyClassroom || {};
   const historyClassroomBonusRule = rewardPolicy?.historyClassroomBonus || {};
-  const attendanceMilestoneBonusRule = rewardPolicy?.attendanceMilestoneBonus || {};
-  const lessonCorePointsEnabled = (policy?.lessonCorePointsEnabled
-    ?? lessonCorePointsRule?.enabled
-    ?? defaults.lessonCorePointsEnabled) === true;
+  const attendanceMilestoneBonusRule =
+    rewardPolicy?.attendanceMilestoneBonus || {};
+  const lessonCorePointsEnabled =
+    (policy?.lessonCorePointsEnabled ??
+      lessonCorePointsRule?.enabled ??
+      defaults.lessonCorePointsEnabled) === true;
   const lessonCorePointsAmount = toNonNegativeNumber(
     policy?.lessonCorePointsAmount ?? lessonCorePointsRule?.amount,
     defaults.lessonCorePointsAmount,
   );
-  const thinkCloudEnabled = (policy?.thinkCloudEnabled ?? thinkCloudRule?.enabled ?? defaults.thinkCloudEnabled) === true;
+  const thinkCloudEnabled =
+    (policy?.thinkCloudEnabled ??
+      thinkCloudRule?.enabled ??
+      defaults.thinkCloudEnabled) === true;
   const thinkCloudAmount = toNonNegativeNumber(
     policy?.thinkCloudAmount ?? thinkCloudRule?.amount,
     defaults.thinkCloudAmount,
   );
   const thinkCloudMaxClaims = Math.max(
     1,
-    Math.round(toFiniteNumber(
-      policy?.thinkCloudMaxClaims ?? thinkCloudRule?.maxClaims,
-      defaults.thinkCloudMaxClaims,
-    )),
+    Math.round(
+      toFiniteNumber(
+        policy?.thinkCloudMaxClaims ?? thinkCloudRule?.maxClaims,
+        defaults.thinkCloudMaxClaims,
+      ),
+    ),
   );
-  const mapTagEnabled = (policy?.mapTagEnabled ?? mapTagRule?.enabled ?? defaults.mapTagEnabled) === true;
+  const mapTagEnabled =
+    (policy?.mapTagEnabled ?? mapTagRule?.enabled ?? defaults.mapTagEnabled) ===
+    true;
   const mapTagAmount = toNonNegativeNumber(
     policy?.mapTagAmount ?? mapTagRule?.amount,
     defaults.mapTagAmount,
   );
   const mapTagMaxClaims = Math.max(
     1,
-    Math.round(toFiniteNumber(
-      policy?.mapTagMaxClaims ?? mapTagRule?.maxClaims,
-      defaults.mapTagMaxClaims,
-    )),
+    Math.round(
+      toFiniteNumber(
+        policy?.mapTagMaxClaims ?? mapTagRule?.maxClaims,
+        defaults.mapTagMaxClaims,
+      ),
+    ),
   );
-  const historyDictionaryEnabled = (policy?.historyDictionaryEnabled ?? historyDictionaryRule?.enabled ?? defaults.historyDictionaryEnabled) === true;
+  const historyDictionaryEnabled =
+    (policy?.historyDictionaryEnabled ??
+      historyDictionaryRule?.enabled ??
+      defaults.historyDictionaryEnabled) === true;
   const historyDictionaryAmount = toNonNegativeNumber(
     policy?.historyDictionaryAmount ?? historyDictionaryRule?.amount,
     defaults.historyDictionaryAmount,
   );
   const historyDictionaryMaxDailyClaims = Math.max(
     1,
-    Math.round(toFiniteNumber(
-      policy?.historyDictionaryMaxDailyClaims ?? historyDictionaryRule?.maxDailyClaims,
-      defaults.historyDictionaryMaxDailyClaims,
-    )),
+    Math.round(
+      toFiniteNumber(
+        policy?.historyDictionaryMaxDailyClaims ??
+          historyDictionaryRule?.maxDailyClaims,
+        defaults.historyDictionaryMaxDailyClaims,
+      ),
+    ),
   );
   const historyDictionaryMinDefinitionLength = Math.max(
     1,
-    Math.round(toFiniteNumber(
-      policy?.historyDictionaryMinDefinitionLength ?? historyDictionaryRule?.minDefinitionLength,
-      defaults.historyDictionaryMinDefinitionLength,
-    )),
+    Math.round(
+      toFiniteNumber(
+        policy?.historyDictionaryMinDefinitionLength ??
+          historyDictionaryRule?.minDefinitionLength,
+        defaults.historyDictionaryMinDefinitionLength,
+      ),
+    ),
   );
-  const historyClassroomEnabled = (policy?.historyClassroomEnabled ?? historyClassroomRule?.enabled ?? defaults.historyClassroomEnabled) === true;
+  const historyClassroomEnabled =
+    (policy?.historyClassroomEnabled ??
+      historyClassroomRule?.enabled ??
+      defaults.historyClassroomEnabled) === true;
   const historyClassroomAmount = toNonNegativeNumber(
     policy?.historyClassroomAmount ?? historyClassroomRule?.amount,
     defaults.historyClassroomAmount,
   );
-  const historyClassroomBonusEnabled = (policy?.historyClassroomBonusEnabled
-    ?? historyClassroomBonusRule?.enabled
-    ?? defaults.historyClassroomBonusEnabled) === true;
+  const historyClassroomBonusEnabled =
+    (policy?.historyClassroomBonusEnabled ??
+      historyClassroomBonusRule?.enabled ??
+      defaults.historyClassroomBonusEnabled) === true;
   const historyClassroomBonusThreshold = toPositiveThreshold(
-    policy?.historyClassroomBonusThreshold ?? historyClassroomBonusRule?.thresholdScore,
+    policy?.historyClassroomBonusThreshold ??
+      historyClassroomBonusRule?.thresholdScore,
     defaults.historyClassroomBonusThreshold,
   );
   const historyClassroomBonusAmount = toNonNegativeNumber(
     policy?.historyClassroomBonusAmount ?? historyClassroomBonusRule?.amount,
     defaults.historyClassroomBonusAmount,
   );
-  const attendanceMilestoneBonusEnabled = (policy?.attendanceMilestoneBonusEnabled
-    ?? attendanceMilestoneBonusRule?.enabled
-    ?? defaults.attendanceMilestoneBonusEnabled) === true;
+  const attendanceMilestoneBonusEnabled =
+    (policy?.attendanceMilestoneBonusEnabled ??
+      attendanceMilestoneBonusRule?.enabled ??
+      defaults.attendanceMilestoneBonusEnabled) === true;
   const attendanceMilestone50 = toNonNegativeNumber(
-    policy?.attendanceMilestone50 ?? attendanceMilestoneBonusRule?.amounts?.['50'],
+    policy?.attendanceMilestone50 ??
+      attendanceMilestoneBonusRule?.amounts?.["50"],
     defaults.attendanceMilestone50,
   );
   const attendanceMilestone100 = toNonNegativeNumber(
-    policy?.attendanceMilestone100 ?? attendanceMilestoneBonusRule?.amounts?.['100'],
+    policy?.attendanceMilestone100 ??
+      attendanceMilestoneBonusRule?.amounts?.["100"],
     defaults.attendanceMilestone100,
   );
   const attendanceMilestone200 = toNonNegativeNumber(
-    policy?.attendanceMilestone200 ?? attendanceMilestoneBonusRule?.amounts?.['200'],
+    policy?.attendanceMilestone200 ??
+      attendanceMilestoneBonusRule?.amounts?.["200"],
     defaults.attendanceMilestone200,
   );
   const attendanceMilestone300 = toNonNegativeNumber(
-    policy?.attendanceMilestone300 ?? attendanceMilestoneBonusRule?.amounts?.['300'],
+    policy?.attendanceMilestone300 ??
+      attendanceMilestoneBonusRule?.amounts?.["300"],
     defaults.attendanceMilestone300,
   );
 
   return {
     ...defaults,
     ...(policy || {}),
-    attendanceDaily: toNonNegativeNumber(policy?.attendanceDaily, defaults.attendanceDaily),
-    attendanceMonthlyBonus: toNonNegativeNumber(policy?.attendanceMonthlyBonus, defaults.attendanceMonthlyBonus),
+    attendanceDaily: toNonNegativeNumber(
+      policy?.attendanceDaily,
+      defaults.attendanceDaily,
+    ),
+    attendanceMonthlyBonus: toNonNegativeNumber(
+      policy?.attendanceMonthlyBonus,
+      defaults.attendanceMonthlyBonus,
+    ),
     lessonView: toNonNegativeNumber(policy?.lessonView, defaults.lessonView),
     lessonCorePointsEnabled,
     lessonCorePointsAmount,
@@ -615,15 +989,24 @@ const normalizePointPolicy = (policy) => {
     attendanceMilestone300,
     autoRewardEnabled,
     quizBonusEnabled: quizBonus.enabled === true,
-    quizBonusThreshold: toPositiveThreshold(quizBonus.threshold, defaults.quizBonusThreshold),
-    quizBonusAmount: toNonNegativeNumber(quizBonus.amount, defaults.quizBonusAmount),
+    quizBonusThreshold: toPositiveThreshold(
+      quizBonus.threshold,
+      defaults.quizBonusThreshold,
+    ),
+    quizBonusAmount: toNonNegativeNumber(
+      quizBonus.amount,
+      defaults.quizBonusAmount,
+    ),
     manualAdjustEnabled,
     allowNegativeBalance,
     rewardPolicy: {
       autoEnabled: autoRewardEnabled,
       attendance: {
         enabled: autoRewardEnabled,
-        amount: toNonNegativeNumber(policy?.attendanceDaily, defaults.attendanceDaily),
+        amount: toNonNegativeNumber(
+          policy?.attendanceDaily,
+          defaults.attendanceDaily,
+        ),
       },
       quiz: {
         enabled: autoRewardEnabled,
@@ -640,19 +1023,29 @@ const normalizePointPolicy = (policy) => {
       thinkCloud: {
         enabled: autoRewardEnabled && thinkCloudEnabled,
         amount: thinkCloudAmount,
-        cooldownHours: Math.max(1, Math.round(toFiniteNumber(
-          thinkCloudRule?.cooldownHours,
-          defaults.rewardPolicy.thinkCloud.cooldownHours,
-        ))),
+        cooldownHours: Math.max(
+          1,
+          Math.round(
+            toFiniteNumber(
+              thinkCloudRule?.cooldownHours,
+              defaults.rewardPolicy.thinkCloud.cooldownHours,
+            ),
+          ),
+        ),
         maxClaims: thinkCloudMaxClaims,
       },
       mapTag: {
         enabled: autoRewardEnabled && mapTagEnabled,
         amount: mapTagAmount,
-        cooldownHours: Math.max(1, Math.round(toFiniteNumber(
-          mapTagRule?.cooldownHours,
-          defaults.rewardPolicy.mapTag.cooldownHours,
-        ))),
+        cooldownHours: Math.max(
+          1,
+          Math.round(
+            toFiniteNumber(
+              mapTagRule?.cooldownHours,
+              defaults.rewardPolicy.mapTag.cooldownHours,
+            ),
+          ),
+        ),
         maxClaims: mapTagMaxClaims,
       },
       historyDictionary: {
@@ -664,18 +1057,29 @@ const normalizePointPolicy = (policy) => {
       historyClassroom: {
         enabled: autoRewardEnabled && historyClassroomEnabled,
         amount: historyClassroomAmount,
-        cooldownHours: Math.max(1, Math.round(toFiniteNumber(
-          historyClassroomRule?.cooldownHours,
-          defaults.rewardPolicy.historyClassroom.cooldownHours,
-        ))),
+        cooldownHours: Math.max(
+          1,
+          Math.round(
+            toFiniteNumber(
+              historyClassroomRule?.cooldownHours,
+              defaults.rewardPolicy.historyClassroom.cooldownHours,
+            ),
+          ),
+        ),
       },
       attendanceMonthlyBonus: {
         enabled: autoRewardEnabled,
-        amount: toNonNegativeNumber(policy?.attendanceMonthlyBonus, defaults.attendanceMonthlyBonus),
+        amount: toNonNegativeNumber(
+          policy?.attendanceMonthlyBonus,
+          defaults.attendanceMonthlyBonus,
+        ),
       },
       quizBonus: {
         enabled: quizBonus.enabled === true,
-        thresholdScore: toPositiveThreshold(quizBonus.threshold, defaults.quizBonusThreshold),
+        thresholdScore: toPositiveThreshold(
+          quizBonus.threshold,
+          defaults.quizBonusThreshold,
+        ),
         amount: toNonNegativeNumber(quizBonus.amount, defaults.quizBonusAmount),
       },
       historyClassroomBonus: {
@@ -686,10 +1090,10 @@ const normalizePointPolicy = (policy) => {
       attendanceMilestoneBonus: {
         enabled: attendanceMilestoneBonusEnabled,
         amounts: {
-          '50': attendanceMilestone50,
-          '100': attendanceMilestone100,
-          '200': attendanceMilestone200,
-          '300': attendanceMilestone300,
+          50: attendanceMilestone50,
+          100: attendanceMilestone100,
+          200: attendanceMilestone200,
+          300: attendanceMilestone300,
         },
       },
     },
@@ -698,7 +1102,7 @@ const normalizePointPolicy = (policy) => {
       allowNegativeBalance,
     },
     rankPolicy: resolveRankPolicy(policy?.rankPolicy),
-    updatedBy: String(policy?.updatedBy || '').trim(),
+    updatedBy: String(policy?.updatedBy || "").trim(),
   };
 };
 
@@ -719,14 +1123,18 @@ const buildPointPolicyPayload = (policy, actorUid) => {
     mapTagMaxClaims: normalizedPolicy.mapTagMaxClaims,
     historyDictionaryEnabled: normalizedPolicy.historyDictionaryEnabled,
     historyDictionaryAmount: normalizedPolicy.historyDictionaryAmount,
-    historyDictionaryMaxDailyClaims: normalizedPolicy.historyDictionaryMaxDailyClaims,
-    historyDictionaryMinDefinitionLength: normalizedPolicy.historyDictionaryMinDefinitionLength,
+    historyDictionaryMaxDailyClaims:
+      normalizedPolicy.historyDictionaryMaxDailyClaims,
+    historyDictionaryMinDefinitionLength:
+      normalizedPolicy.historyDictionaryMinDefinitionLength,
     historyClassroomEnabled: normalizedPolicy.historyClassroomEnabled,
     historyClassroomAmount: normalizedPolicy.historyClassroomAmount,
     historyClassroomBonusEnabled: normalizedPolicy.historyClassroomBonusEnabled,
-    historyClassroomBonusThreshold: normalizedPolicy.historyClassroomBonusThreshold,
+    historyClassroomBonusThreshold:
+      normalizedPolicy.historyClassroomBonusThreshold,
     historyClassroomBonusAmount: normalizedPolicy.historyClassroomBonusAmount,
-    attendanceMilestoneBonusEnabled: normalizedPolicy.attendanceMilestoneBonusEnabled,
+    attendanceMilestoneBonusEnabled:
+      normalizedPolicy.attendanceMilestoneBonusEnabled,
     attendanceMilestone50: normalizedPolicy.attendanceMilestone50,
     attendanceMilestone100: normalizedPolicy.attendanceMilestone100,
     attendanceMilestone200: normalizedPolicy.attendanceMilestone200,
@@ -741,87 +1149,100 @@ const buildPointPolicyPayload = (policy, actorUid) => {
     controlPolicy: normalizedPolicy.controlPolicy,
     rankPolicy: resolveRankPolicy(normalizedPolicy.rankPolicy),
     updatedAt: FieldValue.serverTimestamp(),
-    updatedBy: String(actorUid || '').trim(),
+    updatedBy: String(actorUid || "").trim(),
   };
 };
 
-const getSemesterRoot = (year, semester) => `years/${year}/semesters/${semester}`;
-const getPointCollectionPath = (year, semester, collectionName) => `${getSemesterRoot(year, semester)}/${collectionName}`;
-const getPointWalletPath = (year, semester, uid) => `${getPointCollectionPath(year, semester, 'point_wallets')}/${uid}`;
-const getPointPolicyPath = (year, semester) => `${getPointCollectionPath(year, semester, 'point_policies')}/current`;
-const getNotificationInboxPath = (year, semester, uid) => `${getSemesterRoot(year, semester)}/notification_inboxes/${uid}`;
-const getNotificationItemsPath = (year, semester, uid) => `${getNotificationInboxPath(year, semester, uid)}/items`;
-const getBroadcastNotificationsPath = (year, semester) => `${getSemesterRoot(year, semester)}/broadcast_notifications`;
-const NOTIFICATION_CONFIG_PATH = 'site_settings/notification_config';
-const PERFORMANCE_SCORE_ROSTERS_COLLECTION = 'performance_score_rosters';
-const PERFORMANCE_SCORE_USER_COLLECTION = 'performance_scores';
-const PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION = 'confirmations';
-const PERFORMANCE_SCORE_OBJECTIONS_COLLECTION = 'performance_score_objections';
-const PERFORMANCE_SCORE_ANSWER_SHEET_REQUESTS_COLLECTION = 'performance_score_answer_sheet_requests';
-const PERFORMANCE_SCORE_KIND = 'performance';
-const WRITTEN_EXAM_SCORE_KIND = 'written_exam_essay';
+const getSemesterRoot = (year, semester) =>
+  `years/${year}/semesters/${semester}`;
+const getPointCollectionPath = (year, semester, collectionName) =>
+  `${getSemesterRoot(year, semester)}/${collectionName}`;
+const getPointWalletPath = (year, semester, uid) =>
+  `${getPointCollectionPath(year, semester, "point_wallets")}/${uid}`;
+const getPointPolicyPath = (year, semester) =>
+  `${getPointCollectionPath(year, semester, "point_policies")}/current`;
+const getNotificationInboxPath = (year, semester, uid) =>
+  `${getSemesterRoot(year, semester)}/notification_inboxes/${uid}`;
+const getNotificationItemsPath = (year, semester, uid) =>
+  `${getNotificationInboxPath(year, semester, uid)}/items`;
+const getBroadcastNotificationsPath = (year, semester) =>
+  `${getSemesterRoot(year, semester)}/broadcast_notifications`;
+const NOTIFICATION_CONFIG_PATH = "site_settings/notification_config";
+const PERFORMANCE_SCORE_ROSTERS_COLLECTION = "performance_score_rosters";
+const PERFORMANCE_SCORE_USER_COLLECTION = "performance_scores";
+const PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION = "confirmations";
+const PERFORMANCE_SCORE_OBJECTIONS_COLLECTION = "performance_score_objections";
+const PERFORMANCE_SCORE_ANSWER_SHEET_REQUESTS_COLLECTION =
+  "performance_score_answer_sheet_requests";
+const PERFORMANCE_SCORE_KIND = "performance";
+const WRITTEN_EXAM_SCORE_KIND = "written_exam_essay";
 const NOTIFICATION_EVENT_AUDIENCE = {
-  history_classroom_assigned: 'students',
-  history_classroom_passed: 'teachers',
-  history_classroom_submitted: 'teachers',
-  history_classroom_exemption_granted: 'students',
-  history_classroom_exemption_requested: 'teachers',
-  history_classroom_exemption_reviewed: 'students',
-  performance_score_objection_requested: 'teachers',
-  performance_score_objection_reviewed: 'students',
-  performance_score_signature_rejected: 'students',
-  performance_score_answer_sheet_requested: 'teachers',
-  history_dictionary_requested: 'teachers',
-  history_dictionary_resolved: 'students',
-  history_dictionary_rejected: 'students',
-  point_order_requested: 'teachers',
-  point_order_reviewed: 'students',
-  lesson_worksheet_published: 'students',
-  privacy_policy_updated: 'students',
-  question_created: 'teachers',
-  question_replied: 'students',
-  quiz_submitted: 'teachers',
-  lesson_unit_completed: 'teachers',
-  think_cloud_submitted: 'teachers',
-  system_notice: 'students',
+  history_classroom_assigned: "students",
+  history_classroom_passed: "teachers",
+  history_classroom_submitted: "teachers",
+  history_classroom_exemption_granted: "students",
+  history_classroom_exemption_requested: "teachers",
+  history_classroom_exemption_reviewed: "students",
+  performance_score_objection_requested: "teachers",
+  performance_score_objection_reviewed: "students",
+  performance_score_signature_rejected: "students",
+  performance_score_answer_sheet_requested: "teachers",
+  history_dictionary_requested: "teachers",
+  history_dictionary_resolved: "students",
+  history_dictionary_rejected: "students",
+  point_order_requested: "teachers",
+  point_order_reviewed: "students",
+  lesson_worksheet_published: "students",
+  privacy_policy_updated: "students",
+  question_created: "teachers",
+  question_replied: "students",
+  quiz_submitted: "teachers",
+  lesson_unit_completed: "teachers",
+  think_cloud_submitted: "teachers",
+  system_notice: "students",
 };
-const HISTORY_DICTIONARY_TERMS_COLLECTION = 'history_dictionary_terms';
-const HISTORY_DICTIONARY_REQUESTS_COLLECTION = 'history_dictionary_requests';
+const HISTORY_DICTIONARY_TERMS_COLLECTION = "history_dictionary_terms";
+const HISTORY_DICTIONARY_REQUESTS_COLLECTION = "history_dictionary_requests";
 const NOTIFICATION_RETENTION_DAYS = 30;
-const WIS_HALL_OF_FAME_DOC_ID = 'hall_of_fame';
+const WIS_HALL_OF_FAME_DOC_ID = "hall_of_fame";
 const WIS_HALL_OF_FAME_SNAPSHOT_VERSION = 6;
 const WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS = 4;
-const WIS_HALL_OF_FAME_STALE_MS = WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS * 60 * 60 * 1000;
-const WIS_HALL_OF_FAME_GRADE_KEY = '3';
-const LESSON_CORE_POINTS_ALL_SOURCE_ID = 'lesson-core-points-all';
-const DEFAULT_HALL_OF_FAME_PROFILE_ICON = '😀';
+const WIS_HALL_OF_FAME_STALE_MS =
+  WIS_HALL_OF_FAME_REFRESH_INTERVAL_HOURS * 60 * 60 * 1000;
+const WIS_HALL_OF_FAME_GRADE_KEY = "3";
+const LESSON_CORE_POINTS_ALL_SOURCE_ID = "lesson-core-points-all";
+const DEFAULT_HALL_OF_FAME_PROFILE_ICON = "😀";
 const DEFAULT_HALL_OF_FAME_GRADE_RANK_LIMIT = 10;
 const DEFAULT_HALL_OF_FAME_CLASS_RANK_LIMIT = 10;
 const DEFAULT_HALL_OF_FAME_STORED_RANK_LIMIT = 20;
 const DEFAULT_HALL_OF_FAME_INCLUDE_TIES = true;
-const getWisHallOfFamePath = (year, semester) => `${getPointCollectionPath(year, semester, 'point_public')}/${WIS_HALL_OF_FAME_DOC_ID}`;
+const getWisHallOfFamePath = (year, semester) =>
+  `${getPointCollectionPath(year, semester, "point_public")}/${WIS_HALL_OF_FAME_DOC_ID}`;
 
-const sanitizeKeyPart = (value) => String(value || '')
-  .trim()
-  .replace(/[^a-zA-Z0-9_-]+/g, '_')
-  .replace(/^_+|_+$/g, '')
-  .slice(0, 120) || 'empty';
+const sanitizeKeyPart = (value) =>
+  String(value || "")
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 120) || "empty";
 
-const sanitizeNotificationText = (value, maxLength, fallback = '') => {
-  const text = String(value || '').replace(/\s+/g, ' ').trim();
+const sanitizeNotificationText = (value, maxLength, fallback = "") => {
+  const text = String(value || "")
+    .replace(/\s+/g, " ")
+    .trim();
   return (text || fallback).slice(0, maxLength);
 };
 
 const buildNotificationId = (dedupeKey) => {
   const normalized = sanitizeNotificationText(dedupeKey, 240);
   if (!normalized) return crypto.randomUUID();
-  return `n_${crypto.createHash('sha1').update(normalized).digest('hex')}`;
+  return `n_${crypto.createHash("sha1").update(normalized).digest("hex")}`;
 };
 
-const resolveNotificationAudience = (type, fallbackAudience = '') => {
-  const requested = String(fallbackAudience || '').trim();
-  if (requested === 'students' || requested === 'teachers') return requested;
-  return NOTIFICATION_EVENT_AUDIENCE[type] || 'students';
+const resolveNotificationAudience = (type, fallbackAudience = "") => {
+  const requested = String(fallbackAudience || "").trim();
+  if (requested === "students" || requested === "teachers") return requested;
+  return NOTIFICATION_EVENT_AUDIENCE[type] || "students";
 };
 
 const loadNotificationConfigSafely = async () => {
@@ -829,49 +1250,53 @@ const loadNotificationConfigSafely = async () => {
     const snap = await db.doc(NOTIFICATION_CONFIG_PATH).get();
     return snap.exists ? snap.data() || {} : {};
   } catch (error) {
-    console.warn('Failed to load notification config. Notifications will use defaults.', error);
+    console.warn(
+      "Failed to load notification config. Notifications will use defaults.",
+      error,
+    );
     return {};
   }
 };
 
 const normalizeNotificationTemplateValues = (value) => {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return Object.entries(value).reduce((acc, [key, raw]) => {
-    const normalizedKey = String(key || '').trim();
+    const normalizedKey = String(key || "").trim();
     if (!normalizedKey) return acc;
-    acc[normalizedKey] = String(raw ?? '').trim();
+    acc[normalizedKey] = String(raw ?? "").trim();
     return acc;
   }, {});
 };
 
 const getNotificationTemplateKeys = (template) => {
   const keys = new Set();
-  for (const match of String(template || '').matchAll(/\{([a-zA-Z0-9_]+)\}/g)) {
+  for (const match of String(template || "").matchAll(/\{([a-zA-Z0-9_]+)\}/g)) {
     keys.add(match[1]);
   }
   return Array.from(keys);
 };
 
 const renderNotificationTemplate = (template, values) => {
-  const text = String(template || '').trim();
-  if (!text) return '';
+  const text = String(template || "").trim();
+  if (!text) return "";
   const keys = getNotificationTemplateKeys(text);
   if (keys.some((key) => !Object.prototype.hasOwnProperty.call(values, key))) {
-    return '';
+    return "";
   }
-  return text.replace(/\{([a-zA-Z0-9_]+)\}/g, (_, key) => values[key] || '');
+  return text.replace(/\{([a-zA-Z0-9_]+)\}/g, (_, key) => values[key] || "");
 };
 
 const resolveNotificationTemplateText = (template, fallback, values) => {
   const rendered = renderNotificationTemplate(template, values);
-  return rendered || String(fallback || '').trim();
+  return rendered || String(fallback || "").trim();
 };
 
 const resolveNotificationTargetUrl = (template, fallback, values) => {
-  const fallbackUrl = String(fallback || '').trim();
-  const policyUrl = String(template || '').trim();
+  const fallbackUrl = String(fallback || "").trim();
+  const policyUrl = String(template || "").trim();
   if (!policyUrl) return fallbackUrl;
-  if (!fallbackUrl) return renderNotificationTemplate(policyUrl, values) || policyUrl;
+  if (!fallbackUrl)
+    return renderNotificationTemplate(policyUrl, values) || policyUrl;
   return getNotificationTemplateKeys(policyUrl).length > 0
     ? renderNotificationTemplate(policyUrl, values) || fallbackUrl
     : fallbackUrl;
@@ -879,62 +1304,103 @@ const resolveNotificationTargetUrl = (template, fallback, values) => {
 
 const getNotificationPolicy = (config, type) => {
   const policies = config?.eventPolicies;
-  if (!policies || typeof policies !== 'object') return null;
+  if (!policies || typeof policies !== "object") return null;
   const policy = policies[type];
-  return policy && typeof policy === 'object' ? policy : null;
+  return policy && typeof policy === "object" ? policy : null;
 };
 
-const prepareNotificationInput = async (year, semester, input, fallbackAudience = '') => {
-  const type = sanitizeNotificationText(input.type, 80, 'system_notice');
-  const audience = resolveNotificationAudience(type, fallbackAudience || input.audience);
+const prepareNotificationInput = async (
+  year,
+  semester,
+  input,
+  fallbackAudience = "",
+) => {
+  const type = sanitizeNotificationText(input.type, 80, "system_notice");
+  const audience = resolveNotificationAudience(
+    type,
+    fallbackAudience || input.audience,
+  );
   const config = await loadNotificationConfigSafely();
   const policy = getNotificationPolicy(config, type);
 
   if (
-    config.enabled === false
-    || (audience === 'students' && config.studentNotificationsEnabled === false)
-    || (audience === 'teachers' && config.teacherNotificationsEnabled === false)
-    || policy?.enabled === false
+    config.enabled === false ||
+    (audience === "students" && config.studentNotificationsEnabled === false) ||
+    (audience === "teachers" && config.teacherNotificationsEnabled === false) ||
+    policy?.enabled === false
   ) {
-    return { skipped: true, type, audience, reason: 'disabled_by_notification_config' };
+    return {
+      skipped: true,
+      type,
+      audience,
+      reason: "disabled_by_notification_config",
+    };
   }
 
-  const templateValues = normalizeNotificationTemplateValues(input.templateValues);
-  const resolvedTitle = resolveNotificationTemplateText(policy?.titleTemplate, input.title, templateValues);
-  const resolvedBody = resolveNotificationTemplateText(policy?.bodyTemplate, input.body, templateValues);
-  const body = type === 'history_dictionary_requested'
-    ? resolvedBody.replace(/학생이\s+"([^"]+)"\s+뜻풀이를 요청했습니다\./g, '학생이 $1 뜻풀이를 요청했습니다.')
-    : resolvedBody;
+  const templateValues = normalizeNotificationTemplateValues(
+    input.templateValues,
+  );
+  const resolvedTitle = resolveNotificationTemplateText(
+    policy?.titleTemplate,
+    input.title,
+    templateValues,
+  );
+  const resolvedBody = resolveNotificationTemplateText(
+    policy?.bodyTemplate,
+    input.body,
+    templateValues,
+  );
+  const body =
+    type === "history_dictionary_requested"
+      ? resolvedBody.replace(
+          /학생이\s+"([^"]+)"\s+뜻풀이를 요청했습니다\./g,
+          "학생이 $1 뜻풀이를 요청했습니다.",
+        )
+      : resolvedBody;
   return {
     skipped: false,
     type,
     audience,
     title: resolvedTitle,
     body,
-    targetUrl: resolveNotificationTargetUrl(policy?.targetUrl, input.targetUrl, templateValues),
+    targetUrl: resolveNotificationTargetUrl(
+      policy?.targetUrl,
+      input.targetUrl,
+      templateValues,
+    ),
     entityType: input.entityType,
     entityId: input.entityId,
     actorUid: input.actorUid,
-    priority: policy?.priority === 'high' || input.priority === 'high' ? 'high' : 'normal',
+    priority:
+      policy?.priority === "high" || input.priority === "high"
+        ? "high"
+        : "normal",
     dedupeKey: input.dedupeKey,
   };
 };
 
-const normalizeHistoryDictionaryWord = (value) => String(value || '')
-  .trim()
-  .replace(/\s+/g, ' ')
-  .toLowerCase();
+const normalizeHistoryDictionaryWord = (value) =>
+  String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
 
 const sanitizeHistoryDictionaryWord = (value) =>
-  String(value || '').replace(/\s+/g, ' ').trim().slice(0, 40);
+  String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 40);
 
 const sanitizeHistoryDictionaryText = (value, maxLength) =>
-  String(value || '').replace(/\s+/g, ' ').trim().slice(0, maxLength);
+  String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
 
 const sanitizeHistoryDictionaryTags = (value) => {
   const rawItems = Array.isArray(value)
     ? value
-    : String(value || '').split(',');
+    : String(value || "").split(",");
   const seen = new Set();
   return rawItems
     .map((item) => sanitizeHistoryDictionaryText(item, 24))
@@ -949,7 +1415,10 @@ const sanitizeHistoryDictionaryTags = (value) => {
 };
 
 const buildHistoryDictionaryHash = (value) =>
-  crypto.createHash('sha1').update(String(value || '')).digest('hex');
+  crypto
+    .createHash("sha1")
+    .update(String(value || ""))
+    .digest("hex");
 
 const buildHistoryDictionaryTermId = (normalizedWord) =>
   `term_${buildHistoryDictionaryHash(normalizedWord)}`;
@@ -968,16 +1437,17 @@ const getStudentHistoryDictionaryWordPath = (uid, termId) =>
 
 const MAX_HISTORY_DICTIONARY_BULK_TERMS = 200;
 
-const getNotificationExpiryTimestamp = () => Timestamp.fromMillis(
-  Date.now() + NOTIFICATION_RETENTION_DAYS * 24 * 60 * 60 * 1000,
-);
+const getNotificationExpiryTimestamp = () =>
+  Timestamp.fromMillis(
+    Date.now() + NOTIFICATION_RETENTION_DAYS * 24 * 60 * 60 * 1000,
+  );
 
-const normalizeHallOfFameText = (value) => String(value || '').trim();
+const normalizeHallOfFameText = (value) => String(value || "").trim();
 
 const normalizeHallOfFameSchoolValue = (value) => {
   const normalized = normalizeHallOfFameText(value);
-  if (!normalized) return '';
-  const digits = normalized.match(/\d+/)?.[0] || '';
+  if (!normalized) return "";
+  const digits = normalized.match(/\d+/)?.[0] || "";
   if (!digits) return normalized;
   const parsed = Number(digits);
   return Number.isFinite(parsed) && parsed > 0 ? String(parsed) : normalized;
@@ -988,17 +1458,17 @@ const resolveHallOfFameProfileField = (profile, keys) => {
     const value = normalizeHallOfFameText(profile?.[key]);
     if (value) return value;
   }
-  return '';
+  return "";
 };
 
 const buildWisHallOfFameClassKey = (grade, className) => {
   const normalizedGrade = normalizeHallOfFameSchoolValue(grade);
   const normalizedClass = normalizeHallOfFameSchoolValue(className);
-  if (!normalizedGrade || !normalizedClass) return '';
+  if (!normalizedGrade || !normalizedClass) return "";
   return `${normalizedGrade}-${normalizedClass}`;
 };
 
-const DEFAULT_HALL_OF_FAME_POSITION_PRESET = 'classic_podium_v1';
+const DEFAULT_HALL_OF_FAME_POSITION_PRESET = "classic_podium_v1";
 const DEFAULT_HALL_OF_FAME_POSITIONS = {
   desktop: {
     first: { leftPercent: 50, topPercent: 26, widthPercent: 21 },
@@ -1021,16 +1491,36 @@ const DEFAULT_HALL_OF_FAME_RECOGNITION_POPUP = {
   classEnabled: true,
 };
 
-const normalizeHallOfFameBoundedNumber = (value, minimum, maximum, fallback) => {
+const normalizeHallOfFameBoundedNumber = (
+  value,
+  minimum,
+  maximum,
+  fallback,
+) => {
   const numericValue = Number(value);
   if (!Number.isFinite(numericValue)) return fallback;
   return Math.min(maximum, Math.max(minimum, numericValue));
 };
 
 const normalizeHallOfFamePodiumSlotPosition = (value, fallback) => ({
-  leftPercent: normalizeHallOfFameBoundedNumber(value?.leftPercent, 0, 100, fallback.leftPercent),
-  topPercent: normalizeHallOfFameBoundedNumber(value?.topPercent, 0, 100, fallback.topPercent),
-  widthPercent: normalizeHallOfFameBoundedNumber(value?.widthPercent, 8, 72, fallback.widthPercent),
+  leftPercent: normalizeHallOfFameBoundedNumber(
+    value?.leftPercent,
+    0,
+    100,
+    fallback.leftPercent,
+  ),
+  topPercent: normalizeHallOfFameBoundedNumber(
+    value?.topPercent,
+    0,
+    100,
+    fallback.topPercent,
+  ),
+  widthPercent: normalizeHallOfFameBoundedNumber(
+    value?.widthPercent,
+    8,
+    72,
+    fallback.widthPercent,
+  ),
 });
 
 const normalizeHallOfFamePodiumPositions = (value, fallback) => ({
@@ -1040,8 +1530,18 @@ const normalizeHallOfFamePodiumPositions = (value, fallback) => ({
 });
 
 const normalizeHallOfFameLeaderboardPanelPosition = (value, fallback) => ({
-  leftPercent: normalizeHallOfFameBoundedNumber(value?.leftPercent, 0, 100, fallback.leftPercent),
-  topPercent: normalizeHallOfFameBoundedNumber(value?.topPercent, 0, 100, fallback.topPercent),
+  leftPercent: normalizeHallOfFameBoundedNumber(
+    value?.leftPercent,
+    0,
+    100,
+    fallback.leftPercent,
+  ),
+  topPercent: normalizeHallOfFameBoundedNumber(
+    value?.topPercent,
+    0,
+    100,
+    fallback.topPercent,
+  ),
   widthPercent: normalizeHallOfFameBoundedNumber(
     value?.widthPercent,
     fallback.widthPercent >= 90 ? 78 : 24,
@@ -1058,8 +1558,10 @@ const normalizeHallOfFameRankLimit = (value, fallback) => {
 
 const resolveHallOfFameLeaderboardPolicy = async () => {
   try {
-    const interfaceSnapshot = await db.doc('site_settings/interface_config').get();
-    const data = interfaceSnapshot.exists ? (interfaceSnapshot.data() || {}) : {};
+    const interfaceSnapshot = await db
+      .doc("site_settings/interface_config")
+      .get();
+    const data = interfaceSnapshot.exists ? interfaceSnapshot.data() || {} : {};
     const publicRange = data?.hallOfFame?.publicRange || {};
     return {
       gradeRankLimit: normalizeHallOfFameRankLimit(
@@ -1074,7 +1576,10 @@ const resolveHallOfFameLeaderboardPolicy = async () => {
       storedRankLimit: DEFAULT_HALL_OF_FAME_STORED_RANK_LIMIT,
     };
   } catch (error) {
-    console.warn('Failed to read hall of fame public range config, using defaults:', error);
+    console.warn(
+      "Failed to read hall of fame public range config, using defaults:",
+      error,
+    );
     return {
       gradeRankLimit: DEFAULT_HALL_OF_FAME_GRADE_RANK_LIMIT,
       classRankLimit: DEFAULT_HALL_OF_FAME_CLASS_RANK_LIMIT,
@@ -1087,7 +1592,9 @@ const resolveHallOfFameLeaderboardPolicy = async () => {
 const resolveHallOfFameInterfaceConfig = (value = {}) => ({
   podiumImageUrl: normalizeHallOfFameText(value?.podiumImageUrl),
   podiumStoragePath: normalizeHallOfFameText(value?.podiumStoragePath),
-  positionPreset: normalizeHallOfFameText(value?.positionPreset) || DEFAULT_HALL_OF_FAME_POSITION_PRESET,
+  positionPreset:
+    normalizeHallOfFameText(value?.positionPreset) ||
+    DEFAULT_HALL_OF_FAME_POSITION_PRESET,
   positions: {
     desktop: normalizeHallOfFamePodiumPositions(
       value?.positions?.desktop,
@@ -1137,22 +1644,32 @@ const resolveWisHallOfFameCumulativeEarned = (wallet) => {
 const buildWisHallOfFameEntry = (wallet, profile = {}) => {
   const uid = normalizeHallOfFameText(wallet?.uid);
   const grade = normalizeHallOfFameSchoolValue(
-    resolveHallOfFameProfileField(profile, ['studentGrade', 'grade']) || wallet?.grade,
+    resolveHallOfFameProfileField(profile, ["studentGrade", "grade"]) ||
+      wallet?.grade,
   );
   const className = normalizeHallOfFameSchoolValue(
-    resolveHallOfFameProfileField(profile, ['studentClass', 'class']) || wallet?.class,
+    resolveHallOfFameProfileField(profile, ["studentClass", "class"]) ||
+      wallet?.class,
   );
   const displayName = normalizeHallOfFameText(
-    resolveHallOfFameProfileField(
-      profile,
-      ['displayName', 'customName', 'studentName', 'name', 'nickname'],
-    ) || wallet?.studentName,
+    resolveHallOfFameProfileField(profile, [
+      "displayName",
+      "customName",
+      "studentName",
+      "name",
+      "nickname",
+    ]) || wallet?.studentName,
   );
   const studentName = normalizeHallOfFameText(
-    resolveHallOfFameProfileField(
-      profile,
-      ['studentName', 'name', 'displayName', 'nickname', 'customName'],
-    ) || wallet?.studentName || displayName,
+    resolveHallOfFameProfileField(profile, [
+      "studentName",
+      "name",
+      "displayName",
+      "nickname",
+      "customName",
+    ]) ||
+      wallet?.studentName ||
+      displayName,
   );
   const classKey = buildWisHallOfFameClassKey(grade, className);
   const emojiEntry = getProfileEmojiEntryById(
@@ -1173,7 +1690,10 @@ const buildWisHallOfFameEntry = (wallet, profile = {}) => {
     displayName,
     currentBalance: Math.max(0, Number(wallet?.balance || 0)),
     cumulativeEarned: resolveWisHallOfFameCumulativeEarned(wallet),
-    profileIcon: normalizeHallOfFameText(profile?.profileIcon) || emojiEntry?.emoji || DEFAULT_HALL_OF_FAME_PROFILE_ICON,
+    profileIcon:
+      normalizeHallOfFameText(profile?.profileIcon) ||
+      emojiEntry?.emoji ||
+      DEFAULT_HALL_OF_FAME_PROFILE_ICON,
     profileEmojiId: normalizeHallOfFameText(profile?.profileEmojiId),
   };
 };
@@ -1186,10 +1706,14 @@ const sanitizeWisHallOfFameEntryForStorage = (entry) => {
     class: normalizeHallOfFameSchoolValue(entry?.class),
     classKey: normalizeHallOfFameText(entry?.classKey),
     studentName: normalizeHallOfFameText(entry?.studentName),
-    displayName: normalizeHallOfFameText(entry?.displayName || entry?.studentName),
+    displayName: normalizeHallOfFameText(
+      entry?.displayName || entry?.studentName,
+    ),
     currentBalance: Math.max(0, Number(entry?.currentBalance || 0)),
     cumulativeEarned: Math.max(0, Number(entry?.cumulativeEarned || 0)),
-    profileIcon: normalizeHallOfFameText(entry?.profileIcon) || DEFAULT_HALL_OF_FAME_PROFILE_ICON,
+    profileIcon:
+      normalizeHallOfFameText(entry?.profileIcon) ||
+      DEFAULT_HALL_OF_FAME_PROFILE_ICON,
   };
   const profileEmojiId = normalizeHallOfFameText(entry?.profileEmojiId);
   const podiumSlot = Number(entry?.podiumSlot || 0);
@@ -1205,27 +1729,31 @@ const sanitizeWisHallOfFameEntryForStorage = (entry) => {
 };
 
 const compareWisHallOfFameEntries = (left, right) => {
-  const cumulativeGap = Number(right.cumulativeEarned || 0) - Number(left.cumulativeEarned || 0);
+  const cumulativeGap =
+    Number(right.cumulativeEarned || 0) - Number(left.cumulativeEarned || 0);
   if (cumulativeGap !== 0) return cumulativeGap;
 
-  const balanceGap = Number(right.currentBalance || 0) - Number(left.currentBalance || 0);
+  const balanceGap =
+    Number(right.currentBalance || 0) - Number(left.currentBalance || 0);
   if (balanceGap !== 0) return balanceGap;
 
-  const nameCompare = String(left.displayName || left.studentName || '').localeCompare(
-    String(right.displayName || right.studentName || ''),
-    'ko',
-  );
+  const nameCompare = String(
+    left.displayName || left.studentName || "",
+  ).localeCompare(String(right.displayName || right.studentName || ""), "ko");
   if (nameCompare !== 0) return nameCompare;
 
-  return String(left.uid || '').localeCompare(String(right.uid || ''), 'en');
+  return String(left.uid || "").localeCompare(String(right.uid || ""), "en");
 };
 
-const buildPodiumWisHallOfFameEntries = (entries) => buildRankedWisHallOfFameEntries(entries)
-  .filter((entry) => Number(entry.rank || 0) > 0 && Number(entry.rank || 0) <= 3)
-  .map((entry) => ({
-    ...sanitizeWisHallOfFameEntryForStorage(entry),
-    podiumSlot: Number(entry.rank || 0),
-  }));
+const buildPodiumWisHallOfFameEntries = (entries) =>
+  buildRankedWisHallOfFameEntries(entries)
+    .filter(
+      (entry) => Number(entry.rank || 0) > 0 && Number(entry.rank || 0) <= 3,
+    )
+    .map((entry) => ({
+      ...sanitizeWisHallOfFameEntryForStorage(entry),
+      podiumSlot: Number(entry.rank || 0),
+    }));
 
 const buildRankedWisHallOfFameEntries = (entries) => {
   const sortedEntries = [...entries].sort(compareWisHallOfFameEntries);
@@ -1246,8 +1774,15 @@ const buildRankedWisHallOfFameEntries = (entries) => {
   });
 };
 
-const buildLeaderboardWisHallOfFameEntries = (rankedEntries, rankLimit, includeTies) => {
-  const safeLimit = normalizeHallOfFameRankLimit(rankLimit, DEFAULT_HALL_OF_FAME_STORED_RANK_LIMIT);
+const buildLeaderboardWisHallOfFameEntries = (
+  rankedEntries,
+  rankLimit,
+  includeTies,
+) => {
+  const safeLimit = normalizeHallOfFameRankLimit(
+    rankLimit,
+    DEFAULT_HALL_OF_FAME_STORED_RANK_LIMIT,
+  );
   if (safeLimit <= 0) {
     return [];
   }
@@ -1264,8 +1799,8 @@ const buildLeaderboardWisHallOfFameEntries = (rankedEntries, rankLimit, includeT
   const cutoffMetric = Number(cutoffEntry.cumulativeEarned || 0);
   let endIndex = visibleEntries.length;
   while (
-    endIndex < rankedEntries.length
-    && Number(rankedEntries[endIndex]?.cumulativeEarned || 0) === cutoffMetric
+    endIndex < rankedEntries.length &&
+    Number(rankedEntries[endIndex]?.cumulativeEarned || 0) === cutoffMetric
   ) {
     endIndex += 1;
   }
@@ -1273,8 +1808,16 @@ const buildLeaderboardWisHallOfFameEntries = (rankedEntries, rankLimit, includeT
   return rankedEntries.slice(0, endIndex);
 };
 
-const buildHallOfFameLeaderboardMeta = (rankedEntries, visibleEntries, rankLimit, includeTies) => {
-  const safeLimit = normalizeHallOfFameRankLimit(rankLimit, DEFAULT_HALL_OF_FAME_STORED_RANK_LIMIT);
+const buildHallOfFameLeaderboardMeta = (
+  rankedEntries,
+  visibleEntries,
+  rankLimit,
+  includeTies,
+) => {
+  const safeLimit = normalizeHallOfFameRankLimit(
+    rankLimit,
+    DEFAULT_HALL_OF_FAME_STORED_RANK_LIMIT,
+  );
   if (!visibleEntries.length) {
     return {
       storedRankLimit: safeLimit,
@@ -1293,7 +1836,9 @@ const buildHallOfFameLeaderboardMeta = (rankedEntries, visibleEntries, rankLimit
   return {
     storedRankLimit: safeLimit,
     visibleCount: visibleEntries.length,
-    totalCandidates: Array.isArray(rankedEntries) ? rankedEntries.length : visibleEntries.length,
+    totalCandidates: Array.isArray(rankedEntries)
+      ? rankedEntries.length
+      : visibleEntries.length,
     cutoffOrdinal,
     cutoffRank: Number(cutoffEntry?.rank || 0),
     cutoffCumulativeEarned: Number(cutoffEntry?.cumulativeEarned || 0),
@@ -1303,40 +1848,48 @@ const buildHallOfFameLeaderboardMeta = (rankedEntries, visibleEntries, rankLimit
 
 const buildWisHallOfFameSnapshotKey = (year, semester, snapshot) => {
   const digest = crypto
-    .createHash('sha256')
-    .update(JSON.stringify({
-      gradeTop3ByGrade: snapshot.gradeTop3ByGrade,
-      classTop3ByClassKey: snapshot.classTop3ByClassKey,
-      gradeLeaderboardByGrade: snapshot.gradeLeaderboardByGrade,
-      classLeaderboardByClassKey: snapshot.classLeaderboardByClassKey,
-      gradeLeaderboardMetaByGrade: snapshot.gradeLeaderboardMetaByGrade,
-      classLeaderboardMetaByClassKey: snapshot.classLeaderboardMetaByClassKey,
-      leaderboardPolicy: snapshot.leaderboardPolicy,
-    }))
-    .digest('hex')
+    .createHash("sha256")
+    .update(
+      JSON.stringify({
+        gradeTop3ByGrade: snapshot.gradeTop3ByGrade,
+        classTop3ByClassKey: snapshot.classTop3ByClassKey,
+        gradeLeaderboardByGrade: snapshot.gradeLeaderboardByGrade,
+        classLeaderboardByClassKey: snapshot.classLeaderboardByClassKey,
+        gradeLeaderboardMetaByGrade: snapshot.gradeLeaderboardMetaByGrade,
+        classLeaderboardMetaByClassKey: snapshot.classLeaderboardMetaByClassKey,
+        leaderboardPolicy: snapshot.leaderboardPolicy,
+      }),
+    )
+    .digest("hex")
     .slice(0, 16);
   return `${year}-${semester}-${digest}`;
 };
 
-const getSortedHallOfFameBucketKeys = (buckets) => Object.keys(buckets)
-  .sort((left, right) => String(left || '').localeCompare(String(right || ''), 'ko', { numeric: true }))
+const getSortedHallOfFameBucketKeys = (buckets) =>
+  Object.keys(buckets).sort((left, right) =>
+    String(left || "").localeCompare(String(right || ""), "ko", {
+      numeric: true,
+    }),
+  );
 
 const createHallOfFameRefreshError = (stage, message, cause) => {
-  const error = new Error(String(message || 'Failed to refresh wis hall of fame snapshot.'));
-  error.stage = String(stage || 'unknown').trim() || 'unknown';
+  const error = new Error(
+    String(message || "Failed to refresh wis hall of fame snapshot."),
+  );
+  error.stage = String(stage || "unknown").trim() || "unknown";
   if (cause) {
     error.cause = cause;
   }
   return error;
 };
 
-const normalizeHallOfFameRefreshError = (error, fallbackStage = 'unknown') => {
+const normalizeHallOfFameRefreshError = (error, fallbackStage = "unknown") => {
   if (error?.stage) {
     return error;
   }
   return createHallOfFameRefreshError(
     fallbackStage,
-    error?.message || 'Failed to refresh wis hall of fame snapshot.',
+    error?.message || "Failed to refresh wis hall of fame snapshot.",
     error,
   );
 };
@@ -1347,7 +1900,9 @@ const runHallOfFameRefreshStage = async (stage, runner, message) => {
   } catch (error) {
     throw createHallOfFameRefreshError(
       stage,
-      message || error?.message || 'Failed to refresh wis hall of fame snapshot.',
+      message ||
+        error?.message ||
+        "Failed to refresh wis hall of fame snapshot.",
       error,
     );
   }
@@ -1355,24 +1910,36 @@ const runHallOfFameRefreshStage = async (stage, runner, message) => {
 
 const buildWisHallOfFamePayload = async (year, semester) => {
   const leaderboardPolicy = await runHallOfFameRefreshStage(
-    'policy_load',
+    "policy_load",
     () => resolveHallOfFameLeaderboardPolicy(),
-    'Failed to read hall of fame leaderboard policy.',
+    "Failed to read hall of fame leaderboard policy.",
   );
   const walletSnapshot = await runHallOfFameRefreshStage(
-    'wallet_read',
-    () => db.collection(getPointCollectionPath(year, semester, 'point_wallets')).get(),
-    'Failed to read point_wallets for the selected semester.',
+    "wallet_read",
+    () =>
+      db
+        .collection(getPointCollectionPath(year, semester, "point_wallets"))
+        .get(),
+    "Failed to read point_wallets for the selected semester.",
   );
   const wallets = walletSnapshot.docs
-    .map((docSnapshot) => ({ uid: docSnapshot.id, ...(docSnapshot.data() || {}) }))
+    .map((docSnapshot) => ({
+      uid: docSnapshot.id,
+      ...(docSnapshot.data() || {}),
+    }))
     .filter((wallet) => normalizeHallOfFameText(wallet.uid));
   const profileSnapshots = await runHallOfFameRefreshStage(
-    'profile_read',
-    () => Promise.all(
-      wallets.map((wallet) => db.doc(`users/${wallet.uid}`).get().catch(() => null)),
-    ),
-    'Failed to read student profiles for hall of fame ranking.',
+    "profile_read",
+    () =>
+      Promise.all(
+        wallets.map((wallet) =>
+          db
+            .doc(`users/${wallet.uid}`)
+            .get()
+            .catch(() => null),
+        ),
+      ),
+    "Failed to read student profiles for hall of fame ranking.",
   );
 
   const gradeBuckets = {};
@@ -1380,15 +1947,21 @@ const buildWisHallOfFamePayload = async (year, semester) => {
 
   wallets.forEach((wallet, index) => {
     const profileSnapshot = profileSnapshots[index];
-    const profile = profileSnapshot?.exists ? (profileSnapshot.data() || {}) : {};
-    if (normalizeHallOfFameText(profile?.role) && normalizeHallOfFameText(profile?.role) !== 'student') {
+    const profile = profileSnapshot?.exists ? profileSnapshot.data() || {} : {};
+    if (
+      normalizeHallOfFameText(profile?.role) &&
+      normalizeHallOfFameText(profile?.role) !== "student"
+    ) {
       return;
     }
     const entry = buildWisHallOfFameEntry(wallet, profile);
     if (!entry) return;
 
     gradeBuckets[entry.grade] = [...(gradeBuckets[entry.grade] || []), entry];
-    classBuckets[entry.classKey] = [...(classBuckets[entry.classKey] || []), entry];
+    classBuckets[entry.classKey] = [
+      ...(classBuckets[entry.classKey] || []),
+      entry,
+    ];
   });
 
   const gradeTop3ByGrade = {};
@@ -1399,7 +1972,9 @@ const buildWisHallOfFamePayload = async (year, semester) => {
   const classLeaderboardMetaByClassKey = {};
 
   getSortedHallOfFameBucketKeys(gradeBuckets).forEach((key) => {
-    const rankedEntries = buildRankedWisHallOfFameEntries(gradeBuckets[key] || []);
+    const rankedEntries = buildRankedWisHallOfFameEntries(
+      gradeBuckets[key] || [],
+    );
     const visibleEntries = buildLeaderboardWisHallOfFameEntries(
       rankedEntries,
       leaderboardPolicy.storedRankLimit,
@@ -1416,7 +1991,9 @@ const buildWisHallOfFamePayload = async (year, semester) => {
   });
 
   getSortedHallOfFameBucketKeys(classBuckets).forEach((key) => {
-    const rankedEntries = buildRankedWisHallOfFameEntries(classBuckets[key] || []);
+    const rankedEntries = buildRankedWisHallOfFameEntries(
+      classBuckets[key] || [],
+    );
     const visibleEntries = buildLeaderboardWisHallOfFameEntries(
       rankedEntries,
       leaderboardPolicy.storedRankLimit,
@@ -1437,7 +2014,7 @@ const buildWisHallOfFamePayload = async (year, semester) => {
     year,
     semester,
     snapshotVersion: WIS_HALL_OF_FAME_SNAPSHOT_VERSION,
-    rankingMetric: 'cumulativeEarned',
+    rankingMetric: "cumulativeEarned",
     primaryGradeKey: WIS_HALL_OF_FAME_GRADE_KEY,
     gradeTop3ByGrade,
     classTop3ByClassKey,
@@ -1461,15 +2038,15 @@ const buildWisHallOfFamePayload = async (year, semester) => {
 const refreshWisHallOfFame = async (year, semester, options = {}) => {
   const payload = await buildWisHallOfFamePayload(year, semester);
   await runHallOfFameRefreshStage(
-    'snapshot_write',
+    "snapshot_write",
     () => db.doc(getWisHallOfFamePath(year, semester)).set(payload),
-    'Failed to write the public hall of fame snapshot.',
+    "Failed to write the public hall of fame snapshot.",
   );
   return {
     ensured: true,
     snapshotKey: payload.snapshotKey,
     snapshotVersion: WIS_HALL_OF_FAME_SNAPSHOT_VERSION,
-    source: String(options.source || '').trim() || undefined,
+    source: String(options.source || "").trim() || undefined,
   };
 };
 
@@ -1482,21 +2059,21 @@ const refreshWisHallOfFameOrThrowHttps = async (
     return await refreshWisHallOfFame(year, semester, options);
   } catch (error) {
     const failure = normalizeHallOfFameRefreshError(error);
-    console.error('Failed to refresh wis hall of fame snapshot:', {
+    console.error("Failed to refresh wis hall of fame snapshot:", {
       year,
       semester,
-      source: String(options.source || '').trim() || 'unknown',
-      stage: failure.stage || 'unknown',
+      source: String(options.source || "").trim() || "unknown",
+      stage: failure.stage || "unknown",
       message: failure.message,
       cause: failure.cause || null,
     });
     throw new HttpsError(
-      'internal',
-      'Failed to refresh wis hall of fame snapshot.',
+      "internal",
+      "Failed to refresh wis hall of fame snapshot.",
       {
-        stage: failure.stage || 'unknown',
-        detail: String(failure.message || '').trim(),
-        source: String(options.source || '').trim() || 'unknown',
+        stage: failure.stage || "unknown",
+        detail: String(failure.message || "").trim(),
+        source: String(options.source || "").trim() || "unknown",
         year,
         semester,
       },
@@ -1506,26 +2083,32 @@ const refreshWisHallOfFameOrThrowHttps = async (
 
 const markWisHallOfFameDirty = async (year, semester) => {
   const sourceUpdatedAtMs = Date.now();
-  await db.doc(getWisHallOfFamePath(year, semester)).set({
-    sourceUpdatedAt: FieldValue.serverTimestamp(),
-    sourceUpdatedAtMs,
-  }, { merge: true });
+  await db.doc(getWisHallOfFamePath(year, semester)).set(
+    {
+      sourceUpdatedAt: FieldValue.serverTimestamp(),
+      sourceUpdatedAtMs,
+    },
+    { merge: true },
+  );
   return sourceUpdatedAtMs;
 };
 
-const hasWisHallOfFameSnapshotRankingData = (data) => Object.keys(data?.gradeTop3ByGrade || {}).length > 0
-  || Object.keys(data?.classTop3ByClassKey || {}).length > 0
-  || Object.keys(data?.gradeLeaderboardByGrade || {}).length > 0
-  || Object.keys(data?.classLeaderboardByClassKey || {}).length > 0;
+const hasWisHallOfFameSnapshotRankingData = (data) =>
+  Object.keys(data?.gradeTop3ByGrade || {}).length > 0 ||
+  Object.keys(data?.classTop3ByClassKey || {}).length > 0 ||
+  Object.keys(data?.gradeLeaderboardByGrade || {}).length > 0 ||
+  Object.keys(data?.classLeaderboardByClassKey || {}).length > 0;
 
-const hasWisHallOfFameSnapshotLeaderboardData = (data) => Object.keys(data?.gradeLeaderboardByGrade || {}).length > 0
-  || Object.keys(data?.classLeaderboardByClassKey || {}).length > 0;
+const hasWisHallOfFameSnapshotLeaderboardData = (data) =>
+  Object.keys(data?.gradeLeaderboardByGrade || {}).length > 0 ||
+  Object.keys(data?.classLeaderboardByClassKey || {}).length > 0;
 
-const hasWisHallOfFameSnapshotLeaderboardMeta = (data) => Object.keys(data?.gradeLeaderboardMetaByGrade || {}).length > 0
-  || Object.keys(data?.classLeaderboardMetaByClassKey || {}).length > 0;
+const hasWisHallOfFameSnapshotLeaderboardMeta = (data) =>
+  Object.keys(data?.gradeLeaderboardMetaByGrade || {}).length > 0 ||
+  Object.keys(data?.classLeaderboardMetaByClassKey || {}).length > 0;
 
-const hasCompleteHallOfFameLeaderboardEntries = (leaderboardMap, metaMap) => Object.entries(metaMap || {})
-  .every(([key, meta]) => {
+const hasCompleteHallOfFameLeaderboardEntries = (leaderboardMap, metaMap) =>
+  Object.entries(metaMap || {}).every(([key, meta]) => {
     const expectedVisibleCount = Math.max(0, Number(meta?.visibleCount || 0));
     const totalCandidates = Math.max(0, Number(meta?.totalCandidates || 0));
     const actualVisibleCount = Array.isArray(leaderboardMap?.[key])
@@ -1540,7 +2123,11 @@ const hasCompleteHallOfFameLeaderboardEntries = (leaderboardMap, metaMap) => Obj
     return true;
   });
 
-const hasCompleteHallOfFameLeaderboardScopes = (podiumMap, leaderboardMap, metaMap) => {
+const hasCompleteHallOfFameLeaderboardScopes = (
+  podiumMap,
+  leaderboardMap,
+  metaMap,
+) => {
   const scopeKeys = new Set([
     ...Object.keys(podiumMap || {}),
     ...Object.keys(leaderboardMap || {}),
@@ -1563,7 +2150,10 @@ const hasCompleteHallOfFameLeaderboardScopes = (podiumMap, leaderboardMap, metaM
     if (!scopeMeta) {
       return true;
     }
-    return leaderboardEntries.length >= Math.max(0, Number(scopeMeta.visibleCount || 0));
+    return (
+      leaderboardEntries.length >=
+      Math.max(0, Number(scopeMeta.visibleCount || 0))
+    );
   });
 };
 
@@ -1573,43 +2163,43 @@ const isWisHallOfFameSnapshotStale = (data) => {
     return true;
   }
   if (
-    hasWisHallOfFameSnapshotRankingData(data)
-    && (
-      !hasWisHallOfFameSnapshotLeaderboardData(data)
-      || !hasWisHallOfFameSnapshotLeaderboardMeta(data)
-      || !hasCompleteHallOfFameLeaderboardEntries(
+    hasWisHallOfFameSnapshotRankingData(data) &&
+    (!hasWisHallOfFameSnapshotLeaderboardData(data) ||
+      !hasWisHallOfFameSnapshotLeaderboardMeta(data) ||
+      !hasCompleteHallOfFameLeaderboardEntries(
         data?.gradeLeaderboardByGrade,
         data?.gradeLeaderboardMetaByGrade,
-      )
-      || !hasCompleteHallOfFameLeaderboardEntries(
+      ) ||
+      !hasCompleteHallOfFameLeaderboardEntries(
         data?.classLeaderboardByClassKey,
         data?.classLeaderboardMetaByClassKey,
-      )
-      || !hasCompleteHallOfFameLeaderboardScopes(
+      ) ||
+      !hasCompleteHallOfFameLeaderboardScopes(
         data?.gradeTop3ByGrade,
         data?.gradeLeaderboardByGrade,
         data?.gradeLeaderboardMetaByGrade,
-      )
-      || !hasCompleteHallOfFameLeaderboardScopes(
+      ) ||
+      !hasCompleteHallOfFameLeaderboardScopes(
         data?.classTop3ByClassKey,
         data?.classLeaderboardByClassKey,
         data?.classLeaderboardMetaByClassKey,
-      )
-    )
+      ))
   ) {
     return true;
   }
-  const updatedAtMs = Number(data.updatedAtMs || 0) > 0
-    ? Number(data.updatedAtMs || 0)
-    : typeof data.updatedAt?.toMillis === 'function'
-      ? data.updatedAt.toMillis()
-      : Number(data.updatedAt?.seconds || 0) * 1000;
+  const updatedAtMs =
+    Number(data.updatedAtMs || 0) > 0
+      ? Number(data.updatedAtMs || 0)
+      : typeof data.updatedAt?.toMillis === "function"
+        ? data.updatedAt.toMillis()
+        : Number(data.updatedAt?.seconds || 0) * 1000;
   if (!updatedAtMs) return true;
-  const sourceUpdatedAtMs = Number(data.sourceUpdatedAtMs || 0) > 0
-    ? Number(data.sourceUpdatedAtMs || 0)
-    : typeof data.sourceUpdatedAt?.toMillis === 'function'
-      ? data.sourceUpdatedAt.toMillis()
-      : Number(data.sourceUpdatedAt?.seconds || 0) * 1000;
+  const sourceUpdatedAtMs =
+    Number(data.sourceUpdatedAtMs || 0) > 0
+      ? Number(data.sourceUpdatedAtMs || 0)
+      : typeof data.sourceUpdatedAt?.toMillis === "function"
+        ? data.sourceUpdatedAt.toMillis()
+        : Number(data.sourceUpdatedAt?.seconds || 0) * 1000;
   if (sourceUpdatedAtMs > updatedAtMs) return true;
   return Date.now() - updatedAtMs > WIS_HALL_OF_FAME_STALE_MS;
 };
@@ -1618,7 +2208,7 @@ const markWisHallOfFameDirtySafely = async (year, semester) => {
   try {
     await markWisHallOfFameDirty(year, semester);
   } catch (error) {
-    console.error('Failed to mark wis hall of fame snapshot dirty:', error);
+    console.error("Failed to mark wis hall of fame snapshot dirty:", error);
   }
 };
 
@@ -1626,15 +2216,25 @@ const buildActivityTransactionId = (uid, type, sourceId) =>
   `activity_${sanitizeKeyPart(uid)}_${type}_${sanitizeKeyPart(sourceId)}`;
 
 const buildPurchaseRequestId = (uid, requestKey) => {
-  const digest = crypto.createHash('sha256').update(`${uid}:${requestKey}`).digest('hex').slice(0, 24);
+  const digest = crypto
+    .createHash("sha256")
+    .update(`${uid}:${requestKey}`)
+    .digest("hex")
+    .slice(0, 24);
   return `order_${sanitizeKeyPart(uid)}_${digest}`;
 };
 
-const buildHistoryClassroomExemptionRequestId = (year, semester, uid, assignmentId, exemptionId) => {
+const buildHistoryClassroomExemptionRequestId = (
+  year,
+  semester,
+  uid,
+  assignmentId,
+  exemptionId,
+) => {
   const digest = crypto
-    .createHash('sha256')
+    .createHash("sha256")
     .update(`${year}:${semester}:${uid}:${assignmentId}:${exemptionId}`)
-    .digest('hex')
+    .digest("hex")
     .slice(0, 24);
   return `hce_req_${sanitizeKeyPart(uid)}_${digest}`;
 };
@@ -1643,24 +2243,32 @@ const buildHistoryClassroomExemptionResultId = (requestId) =>
   `hce_result_${sanitizeKeyPart(requestId)}`;
 
 const buildOrderReviewTransactionId = (orderId, nextStatus) => {
-  if (nextStatus === 'rejected' || nextStatus === 'cancelled') {
+  if (nextStatus === "rejected" || nextStatus === "cancelled") {
     return `purchase_cancel_${sanitizeKeyPart(orderId)}_${nextStatus}`;
   }
   return `purchase_confirm_${sanitizeKeyPart(orderId)}_${nextStatus}`;
 };
 
-const getKstDateKey = () => new Intl.DateTimeFormat('en-CA', {
-  timeZone: 'Asia/Seoul',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-}).format(new Date());
+const getKstDateKey = () =>
+  new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Seoul",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
 
 const getAttendanceSourceId = () => `attendance-${getKstDateKey()}`;
 const getAttendanceMonthKey = () => getKstDateKey().slice(0, 7);
 const getDaysInMonthFromMonthKey = (monthKey) => {
-  const [year, month] = String(monthKey || '').split('-').map((value) => Number(value));
-  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1 || month > 12) {
+  const [year, month] = String(monthKey || "")
+    .split("-")
+    .map((value) => Number(value));
+  if (
+    !Number.isFinite(year) ||
+    !Number.isFinite(month) ||
+    month < 1 ||
+    month > 12
+  ) {
     return 0;
   }
   return new Date(year, month, 0).getDate();
@@ -1672,11 +2280,14 @@ const isLastDayOfMonth = () => {
   return day === getDaysInMonthFromMonthKey(monthKey);
 };
 
-const getAuthEmail = (request) => String(request.auth?.token?.email || '').trim().toLowerCase();
+const getAuthEmail = (request) =>
+  String(request.auth?.token?.email || "")
+    .trim()
+    .toLowerCase();
 
 const assertAuth = (request) => {
   if (!request.auth?.uid) {
-    throw new HttpsError('unauthenticated', 'Authentication is required.');
+    throw new HttpsError("unauthenticated", "Authentication is required.");
   }
   return request.auth.uid;
 };
@@ -1685,7 +2296,10 @@ const assertAllowedWestoryUser = async (request, options = {}) => {
   const uid = assertAuth(request);
   const email = getAuthEmail(request);
   if (!email || (!SCHOOL_EMAIL_PATTERN.test(email) && email !== ADMIN_EMAIL)) {
-    throw new HttpsError('permission-denied', 'This account cannot use Westory point functions.');
+    throw new HttpsError(
+      "permission-denied",
+      "This account cannot use Westory point functions.",
+    );
   }
   await sessionAuthority.assertActiveApplicationSession(request, options);
   return { uid, email };
@@ -1693,17 +2307,17 @@ const assertAllowedWestoryUser = async (request, options = {}) => {
 
 const getHeaderText = (headers, name) => {
   const value = headers?.[name];
-  if (Array.isArray(value)) return String(value[0] || '').trim();
-  return String(value || '').trim();
+  if (Array.isArray(value)) return String(value[0] || "").trim();
+  return String(value || "").trim();
 };
 
 const normalizePrintIpCandidate = (value) => {
-  let candidate = String(value || '').trim();
-  if (!candidate) return '';
-  candidate = candidate.split(',')[0].trim();
-  candidate = candidate.replace(/^"|"$/g, '').replace(/^::ffff:/i, '');
-  if (candidate.startsWith('[')) {
-    const closingIndex = candidate.indexOf(']');
+  let candidate = String(value || "").trim();
+  if (!candidate) return "";
+  candidate = candidate.split(",")[0].trim();
+  candidate = candidate.replace(/^"|"$/g, "").replace(/^::ffff:/i, "");
+  if (candidate.startsWith("[")) {
+    const closingIndex = candidate.indexOf("]");
     if (closingIndex > 0) {
       candidate = candidate.slice(1, closingIndex);
     }
@@ -1718,34 +2332,37 @@ const extractPrintClientIp = (request) => {
   const candidates = [
     request.rawRequest?.ip,
     request.rawRequest?.socket?.remoteAddress,
-    getHeaderText(headers, 'fastly-client-ip'),
-    getHeaderText(headers, 'x-appengine-user-ip'),
-    getHeaderText(headers, 'x-real-ip'),
-    getHeaderText(headers, 'x-forwarded-for'),
+    getHeaderText(headers, "fastly-client-ip"),
+    getHeaderText(headers, "x-appengine-user-ip"),
+    getHeaderText(headers, "x-real-ip"),
+    getHeaderText(headers, "x-forwarded-for"),
   ];
   for (const candidate of candidates) {
     const normalized = normalizePrintIpCandidate(candidate);
     if (normalized) return normalized;
   }
-  return '';
+  return "";
 };
 
 const maskPrintClientIp = (ip) => {
   const normalized = normalizePrintIpCandidate(ip);
-  const ipv4Parts = normalized.split('.');
+  const ipv4Parts = normalized.split(".");
   if (
-    ipv4Parts.length === 4
-    && ipv4Parts.every((part) => /^\d{1,3}$/.test(part) && Number(part) >= 0 && Number(part) <= 255)
+    ipv4Parts.length === 4 &&
+    ipv4Parts.every(
+      (part) =>
+        /^\d{1,3}$/.test(part) && Number(part) >= 0 && Number(part) <= 255,
+    )
   ) {
     return `${ipv4Parts[0]}.${ipv4Parts[1]}.***.***`;
   }
 
-  const ipv6Parts = normalized.split(':').filter(Boolean);
-  if (ipv6Parts.length >= 2 && /^[0-9a-f]+$/i.test(ipv6Parts.join(''))) {
+  const ipv6Parts = normalized.split(":").filter(Boolean);
+  if (ipv6Parts.length >= 2 && /^[0-9a-f]+$/i.test(ipv6Parts.join(""))) {
     return `${ipv6Parts[0]}:****:****:${ipv6Parts[ipv6Parts.length - 1]}`;
   }
 
-  return '***.***.***.***';
+  return "***.***.***.***";
 };
 
 exports.getPrintClientInfo = onCall({ region: REGION }, async (request) => {
@@ -1756,27 +2373,27 @@ exports.getPrintClientInfo = onCall({ region: REGION }, async (request) => {
 });
 
 const assertYearSemester = (data) => {
-  const year = String(data?.year || '').trim();
-  const semester = String(data?.semester || '').trim();
+  const year = String(data?.year || "").trim();
+  const semester = String(data?.semester || "").trim();
   if (!year || !semester) {
-    throw new HttpsError('invalid-argument', 'Year and semester are required.');
+    throw new HttpsError("invalid-argument", "Year and semester are required.");
   }
   return { year, semester };
 };
 
 const getCurrentConfiguredYearSemester = async () => {
-  const configSnap = await db.doc('site_settings/config').get();
+  const configSnap = await db.doc("site_settings/config").get();
   if (!configSnap.exists) return null;
   const data = configSnap.data() || {};
-  const year = String(data.year || '').trim();
-  const semester = String(data.semester || '').trim();
+  const year = String(data.year || "").trim();
+  const semester = String(data.semester || "").trim();
   if (!year || !semester) return null;
   return { year, semester };
 };
 
 const getOptionalYearSemester = (data) => {
-  const year = String(data?.year || '').trim();
-  const semester = String(data?.semester || '').trim();
+  const year = String(data?.year || "").trim();
+  const semester = String(data?.semester || "").trim();
   if (!year || !semester) return null;
   return { year, semester };
 };
@@ -1784,23 +2401,25 @@ const getOptionalYearSemester = (data) => {
 const resolveHallOfFameTargetYearSemester = async (data, options = {}) => {
   const providedYearSemester = getOptionalYearSemester(data);
   const preferConfiguredCurrent = options.preferConfiguredCurrent === true;
-  const configuredYearSemester = (preferConfiguredCurrent || !providedYearSemester)
-    ? await getCurrentConfiguredYearSemester()
-    : null;
+  const configuredYearSemester =
+    preferConfiguredCurrent || !providedYearSemester
+      ? await getCurrentConfiguredYearSemester()
+      : null;
 
   if (preferConfiguredCurrent && configuredYearSemester) {
     if (
-      providedYearSemester
-      && (
-        providedYearSemester.year !== configuredYearSemester.year
-        || providedYearSemester.semester !== configuredYearSemester.semester
-      )
+      providedYearSemester &&
+      (providedYearSemester.year !== configuredYearSemester.year ||
+        providedYearSemester.semester !== configuredYearSemester.semester)
     ) {
-      console.warn('Hall of fame refresh request semester differed from current configured semester. Using configured semester instead.', {
-        requested: providedYearSemester,
-        configured: configuredYearSemester,
-        source: String(options.source || '').trim() || 'unknown',
-      });
+      console.warn(
+        "Hall of fame refresh request semester differed from current configured semester. Using configured semester instead.",
+        {
+          requested: providedYearSemester,
+          configured: configuredYearSemester,
+          source: String(options.source || "").trim() || "unknown",
+        },
+      );
     }
     return configuredYearSemester;
   }
@@ -1818,9 +2437,9 @@ const resolveHallOfFameTargetYearSemester = async (data, options = {}) => {
   }
 
   throw new HttpsError(
-    'failed-precondition',
-    'Current year/semester is not configured.',
-    { stage: 'current_semester' },
+    "failed-precondition",
+    "Current year/semester is not configured.",
+    { stage: "current_semester" },
   );
 };
 
@@ -1828,7 +2447,7 @@ const getUserProfile = async (uid) => {
   const userRef = db.doc(`users/${uid}`);
   const userSnap = await userRef.get();
   if (!userSnap.exists) {
-    throw new HttpsError('failed-precondition', 'User profile is missing.');
+    throw new HttpsError("failed-precondition", "User profile is missing.");
   }
   return {
     ref: userRef,
@@ -1837,9 +2456,9 @@ const getUserProfile = async (uid) => {
 };
 
 const hasStaffPermission = (profile, permission) =>
-  profile.teacherPortalEnabled === true
-  && Array.isArray(profile.staffPermissions)
-  && profile.staffPermissions.includes(permission);
+  profile.teacherPortalEnabled === true &&
+  Array.isArray(profile.staffPermissions) &&
+  profile.staffPermissions.includes(permission);
 
 const assertPointManager = async (request, options = {}) => {
   const { uid, email } = await assertAllowedWestoryUser(request, options);
@@ -1848,8 +2467,11 @@ const assertPointManager = async (request, options = {}) => {
   }
 
   const { profile } = await getUserProfile(uid);
-  if (!hasStaffPermission(profile, 'point_manage')) {
-    throw new HttpsError('permission-denied', 'point_manage permission is required.');
+  if (!hasStaffPermission(profile, "point_manage")) {
+    throw new HttpsError(
+      "permission-denied",
+      "point_manage permission is required.",
+    );
   }
   return { uid, email, profile };
 };
@@ -1861,18 +2483,21 @@ const assertHallOfFameManager = async (request, options = {}) => {
   }
 
   const { profile } = await getUserProfile(uid);
-  if (profile?.role !== 'teacher' && !hasStaffPermission(profile, 'point_manage')) {
+  if (
+    profile?.role !== "teacher" &&
+    !hasStaffPermission(profile, "point_manage")
+  ) {
     throw new HttpsError(
-      'permission-denied',
-      'teacher, admin, or point_manage permission is required.',
+      "permission-denied",
+      "teacher, admin, or point_manage permission is required.",
     );
   }
   return { uid, email, profile };
 };
 
 const normalizeSchoolToken = (value) => {
-  const raw = String(value || '').trim();
-  if (!raw) return '';
+  const raw = String(value || "").trim();
+  if (!raw) return "";
   const digits = raw.match(/\d+/)?.[0];
   return digits || raw;
 };
@@ -1880,7 +2505,7 @@ const normalizeSchoolToken = (value) => {
 const buildQuizClassId = (grade, className) => {
   const normalizedGrade = normalizeSchoolToken(grade);
   const normalizedClass = normalizeSchoolToken(className);
-  if (!normalizedGrade || !normalizedClass) return '';
+  if (!normalizedGrade || !normalizedClass) return "";
   return `${normalizedGrade}-${normalizedClass}`;
 };
 
@@ -1891,10 +2516,10 @@ const assertQuizManager = async (request, options = {}) => {
   }
 
   const { profile } = await getUserProfile(uid);
-  if (String(profile?.role || '').trim() !== 'teacher') {
+  if (String(profile?.role || "").trim() !== "teacher") {
     throw new HttpsError(
-      'permission-denied',
-      'teacher or admin permission is required.',
+      "permission-denied",
+      "teacher or admin permission is required.",
     );
   }
   return { uid, email, profile };
@@ -1907,10 +2532,10 @@ const assertPerformanceScoreManager = async (request, options = {}) => {
   }
 
   const { profile } = await getUserProfile(uid);
-  if (String(profile?.role || '').trim() !== 'teacher') {
+  if (String(profile?.role || "").trim() !== "teacher") {
     throw new HttpsError(
-      'permission-denied',
-      'teacher permission is required.',
+      "permission-denied",
+      "teacher permission is required.",
     );
   }
   return { uid, email, profile };
@@ -1923,10 +2548,10 @@ const assertStudentDataManager = async (request, options = {}) => {
   }
 
   const { profile } = await getUserProfile(uid);
-  if (String(profile?.role || '').trim() !== 'teacher') {
+  if (String(profile?.role || "").trim() !== "teacher") {
     throw new HttpsError(
-      'permission-denied',
-      'teacher or admin permission is required.',
+      "permission-denied",
+      "teacher or admin permission is required.",
     );
   }
   return { uid, email, profile };
@@ -1940,24 +2565,27 @@ const assertNotificationManager = async (request) => {
 
   const { profile } = await getUserProfile(uid);
   if (
-    String(profile?.role || '').trim() !== 'teacher'
-    && !hasStaffPermission(profile, 'lesson_read')
-    && !hasStaffPermission(profile, 'quiz_read')
-    && !hasStaffPermission(profile, 'point_manage')
+    String(profile?.role || "").trim() !== "teacher" &&
+    !hasStaffPermission(profile, "lesson_read") &&
+    !hasStaffPermission(profile, "quiz_read") &&
+    !hasStaffPermission(profile, "point_manage")
   ) {
     throw new HttpsError(
-      'permission-denied',
-      'teacher or staff permission is required.',
+      "permission-denied",
+      "teacher or staff permission is required.",
     );
   }
   return { uid, email, profile };
 };
 
-const uniqueNonEmptyStrings = (values, maxCount = 200) => Array.from(new Set(
-  (Array.isArray(values) ? values : [])
-    .map((value) => String(value || '').trim())
-    .filter(Boolean),
-)).slice(0, maxCount);
+const uniqueNonEmptyStrings = (values, maxCount = 200) =>
+  Array.from(
+    new Set(
+      (Array.isArray(values) ? values : [])
+        .map((value) => String(value || "").trim())
+        .filter(Boolean),
+    ),
+  ).slice(0, maxCount);
 
 const runInChunks = async (items, chunkSize, handler) => {
   for (let index = 0; index < items.length; index += chunkSize) {
@@ -1966,20 +2594,28 @@ const runInChunks = async (items, chunkSize, handler) => {
   }
 };
 
-const createUserNotificationWithPreparedInput = async (year, semester, recipientUid, input) => {
-  const uid = String(recipientUid || '').trim();
+const createUserNotificationWithPreparedInput = async (
+  year,
+  semester,
+  recipientUid,
+  input,
+) => {
+  const uid = String(recipientUid || "").trim();
   if (!uid) return { created: false, recipientUid: uid };
 
   const type = input.type;
   const entityType = sanitizeNotificationText(input.entityType, 80);
   const entityId = sanitizeNotificationText(input.entityId, 160);
   const dedupeKey = sanitizeNotificationText(
-    input.dedupeKey || `${type}:${entityType}:${entityId}:${uid}:${input.title}`,
+    input.dedupeKey ||
+      `${type}:${entityType}:${entityId}:${uid}:${input.title}`,
     240,
   );
   const notificationId = buildNotificationId(dedupeKey);
   const inboxRef = db.doc(getNotificationInboxPath(year, semester, uid));
-  const itemRef = db.doc(`${getNotificationItemsPath(year, semester, uid)}/${notificationId}`);
+  const itemRef = db.doc(
+    `${getNotificationItemsPath(year, semester, uid)}/${notificationId}`,
+  );
 
   return db.runTransaction(async (transaction) => {
     const existing = await transaction.get(itemRef);
@@ -1989,25 +2625,29 @@ const createUserNotificationWithPreparedInput = async (year, semester, recipient
 
     const payload = {
       type,
-      title: sanitizeNotificationText(input.title, 80, '알림'),
+      title: sanitizeNotificationText(input.title, 80, "알림"),
       body: sanitizeNotificationText(input.body, 500),
       targetUrl: sanitizeNotificationText(input.targetUrl, 240),
       entityType,
       entityId,
       actorUid: sanitizeNotificationText(input.actorUid, 160),
       recipientUid: uid,
-      priority: input.priority === 'high' ? 'high' : 'normal',
+      priority: input.priority === "high" ? "high" : "normal",
       dedupeKey,
       readAt: null,
       createdAt: FieldValue.serverTimestamp(),
       expiresAt: getNotificationExpiryTimestamp(),
     };
 
-    transaction.set(inboxRef, {
-      uid,
-      unreadCount: FieldValue.increment(1),
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
+    transaction.set(
+      inboxRef,
+      {
+        uid,
+        unreadCount: FieldValue.increment(1),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
     transaction.set(itemRef, payload);
     return { created: true, recipientUid: uid, notificationId };
   });
@@ -2019,15 +2659,25 @@ const createUserNotification = async (year, semester, recipientUid, input) => {
     return {
       created: false,
       skipped: true,
-      recipientUid: String(recipientUid || '').trim(),
+      recipientUid: String(recipientUid || "").trim(),
       reason: preparedInput.reason,
     };
   }
-  return createUserNotificationWithPreparedInput(year, semester, recipientUid, preparedInput);
+  return createUserNotificationWithPreparedInput(
+    year,
+    semester,
+    recipientUid,
+    preparedInput,
+  );
 };
 
 const createBroadcastNotification = async (year, semester, input) => {
-  const preparedInput = await prepareNotificationInput(year, semester, input, 'students');
+  const preparedInput = await prepareNotificationInput(
+    year,
+    semester,
+    input,
+    "students",
+  );
   if (preparedInput.skipped) {
     return { created: false, skipped: true, reason: preparedInput.reason };
   }
@@ -2036,11 +2686,14 @@ const createBroadcastNotification = async (year, semester, input) => {
   const entityType = sanitizeNotificationText(input.entityType, 80);
   const entityId = sanitizeNotificationText(input.entityId, 160);
   const dedupeKey = sanitizeNotificationText(
-    preparedInput.dedupeKey || `${type}:${entityType}:${entityId}:${preparedInput.title}`,
+    preparedInput.dedupeKey ||
+      `${type}:${entityType}:${entityId}:${preparedInput.title}`,
     240,
   );
   const notificationId = buildNotificationId(`broadcast:${dedupeKey}`);
-  const itemRef = db.doc(`${getBroadcastNotificationsPath(year, semester)}/${notificationId}`);
+  const itemRef = db.doc(
+    `${getBroadcastNotificationsPath(year, semester)}/${notificationId}`,
+  );
 
   return db.runTransaction(async (transaction) => {
     const existing = await transaction.get(itemRef);
@@ -2050,15 +2703,15 @@ const createBroadcastNotification = async (year, semester, input) => {
 
     transaction.set(itemRef, {
       type,
-      title: sanitizeNotificationText(preparedInput.title, 80, '알림'),
+      title: sanitizeNotificationText(preparedInput.title, 80, "알림"),
       body: sanitizeNotificationText(preparedInput.body, 500),
       targetUrl: sanitizeNotificationText(preparedInput.targetUrl, 240),
       entityType,
       entityId,
       actorUid: sanitizeNotificationText(preparedInput.actorUid, 160),
-      recipientUid: '',
-      audience: 'all_students',
-      priority: preparedInput.priority === 'high' ? 'high' : 'normal',
+      recipientUid: "",
+      audience: "all_students",
+      priority: preparedInput.priority === "high" ? "high" : "normal",
       dedupeKey,
       createdAt: FieldValue.serverTimestamp(),
       expiresAt: getNotificationExpiryTimestamp(),
@@ -2067,7 +2720,12 @@ const createBroadcastNotification = async (year, semester, input) => {
   });
 };
 
-const createUserNotifications = async (year, semester, recipientUids, input) => {
+const createUserNotifications = async (
+  year,
+  semester,
+  recipientUids,
+  input,
+) => {
   const targets = uniqueNonEmptyStrings(recipientUids, 500);
   const preparedInput = await prepareNotificationInput(year, semester, input);
   if (preparedInput.skipped) {
@@ -2080,20 +2738,33 @@ const createUserNotifications = async (year, semester, recipientUids, input) => 
   }
   const results = [];
   await runInChunks(targets, 20, async (recipientUid) => {
-    results.push(await createUserNotificationWithPreparedInput(year, semester, recipientUid, preparedInput));
+    results.push(
+      await createUserNotificationWithPreparedInput(
+        year,
+        semester,
+        recipientUid,
+        preparedInput,
+      ),
+    );
   });
   return results;
 };
 
 const getAdminRecipientUids = async () => {
-  const snap = await db.collection('users').where('email', '==', ADMIN_EMAIL).get();
+  const snap = await db
+    .collection("users")
+    .where("email", "==", ADMIN_EMAIL)
+    .get();
   return snap.docs.map((docSnap) => docSnap.id);
 };
 
 const resolvePointManagerRecipientUids = async () => {
   const [adminUids, managerSnap] = await Promise.all([
     getAdminRecipientUids(),
-    db.collection('users').where('staffPermissions', 'array-contains', 'point_manage').get(),
+    db
+      .collection("users")
+      .where("staffPermissions", "array-contains", "point_manage")
+      .get(),
   ]);
   return uniqueNonEmptyStrings([
     ...adminUids,
@@ -2104,8 +2775,11 @@ const resolvePointManagerRecipientUids = async () => {
 const resolveTeacherNotificationRecipientUids = async () => {
   const [adminUids, teacherSnap, quizStaffSnap] = await Promise.all([
     getAdminRecipientUids(),
-    db.collection('users').where('role', '==', 'teacher').get(),
-    db.collection('users').where('staffPermissions', 'array-contains', 'quiz_read').get(),
+    db.collection("users").where("role", "==", "teacher").get(),
+    db
+      .collection("users")
+      .where("staffPermissions", "array-contains", "quiz_read")
+      .get(),
   ]);
   return uniqueNonEmptyStrings([
     ...adminUids,
@@ -2114,22 +2788,35 @@ const resolveTeacherNotificationRecipientUids = async () => {
   ]);
 };
 
-const resolvePerformanceScoreNotificationRecipientUids = async (preferredTeacherUids = []) => {
+const resolvePerformanceScoreNotificationRecipientUids = async (
+  preferredTeacherUids = [],
+) => {
   const adminUids = await getAdminRecipientUids();
   const preferredUids = uniqueNonEmptyStrings(preferredTeacherUids, 50);
   if (preferredUids.length > 0) {
     const preferredSnaps = await Promise.all(
-      preferredUids.map((uid) => db.doc(`users/${uid}`).get().catch(() => null)),
+      preferredUids.map((uid) =>
+        db
+          .doc(`users/${uid}`)
+          .get()
+          .catch(() => null),
+      ),
     );
     const verifiedTeacherUids = preferredSnaps
-      .filter((snap) => snap?.exists && String(snap.data()?.role || '').trim() === 'teacher')
+      .filter(
+        (snap) =>
+          snap?.exists && String(snap.data()?.role || "").trim() === "teacher",
+      )
       .map((snap) => snap.id);
     if (verifiedTeacherUids.length > 0) {
       return uniqueNonEmptyStrings([...adminUids, ...verifiedTeacherUids]);
     }
   }
 
-  const teacherSnap = await db.collection('users').where('role', '==', 'teacher').get();
+  const teacherSnap = await db
+    .collection("users")
+    .where("role", "==", "teacher")
+    .get();
   return uniqueNonEmptyStrings([
     ...adminUids,
     ...teacherSnap.docs.map((docSnap) => docSnap.id),
@@ -2137,56 +2824,92 @@ const resolvePerformanceScoreNotificationRecipientUids = async (preferredTeacher
 };
 
 const hasCompletePerformanceScoreSignatureData = (data) =>
-  typeof data?.signatureImage === 'string'
-  && data.signatureImage.trim().length > 0
-  && typeof data?.signatureName === 'string'
-  && data.signatureName.trim().length > 0;
+  typeof data?.signatureImage === "string" &&
+  data.signatureImage.trim().length > 0 &&
+  typeof data?.signatureName === "string" &&
+  data.signatureName.trim().length > 0;
 
 const normalizePerformanceScoreKind = (value) =>
-  String(value || '').trim() === WRITTEN_EXAM_SCORE_KIND
+  String(value || "").trim() === WRITTEN_EXAM_SCORE_KIND
     ? WRITTEN_EXAM_SCORE_KIND
     : PERFORMANCE_SCORE_KIND;
 
 const getPerformanceScoreKindLabel = (scoreKind) =>
   normalizePerformanceScoreKind(scoreKind) === WRITTEN_EXAM_SCORE_KIND
-    ? '정기시험'
-    : '수행평가';
+    ? "정기시험"
+    : "수행평가";
 
-const loadStudentPerformanceScoreForNotification = async (uid, year, semester, scoreId, options = {}) => {
-  const scoreRef = db.doc(`users/${uid}/${PERFORMANCE_SCORE_USER_COLLECTION}/${scoreId}`);
+const loadStudentPerformanceScoreForNotification = async (
+  uid,
+  year,
+  semester,
+  scoreId,
+  options = {},
+) => {
+  const scoreRef = db.doc(
+    `users/${uid}/${PERFORMANCE_SCORE_USER_COLLECTION}/${scoreId}`,
+  );
   const scoreSnap = await scoreRef.get();
   if (!scoreSnap.exists) {
-    throw new HttpsError('not-found', 'Performance score does not exist.');
+    throw new HttpsError("not-found", "Performance score does not exist.");
   }
 
   const scoreData = scoreSnap.data() || {};
-  if (String(scoreData.uid || '').trim() !== uid) {
-    throw new HttpsError('permission-denied', 'Performance score belongs to another user.');
+  if (String(scoreData.uid || "").trim() !== uid) {
+    throw new HttpsError(
+      "permission-denied",
+      "Performance score belongs to another user.",
+    );
   }
-  if (String(scoreData.rosterId || '').trim() !== scoreId) {
-    throw new HttpsError('invalid-argument', 'Performance score id does not match roster id.');
+  if (String(scoreData.rosterId || "").trim() !== scoreId) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Performance score id does not match roster id.",
+    );
   }
   if (
-    String(scoreData.academicYear || '').trim() !== year
-    || String(scoreData.semester || '').trim() !== semester
+    String(scoreData.academicYear || "").trim() !== year ||
+    String(scoreData.semester || "").trim() !== semester
   ) {
-    throw new HttpsError('invalid-argument', 'Performance score is outside the requested semester.');
+    throw new HttpsError(
+      "invalid-argument",
+      "Performance score is outside the requested semester.",
+    );
   }
   if (
-    options.scoreKind
-    && normalizePerformanceScoreKind(scoreData.scoreKind) !== normalizePerformanceScoreKind(options.scoreKind)
+    options.scoreKind &&
+    normalizePerformanceScoreKind(scoreData.scoreKind) !==
+      normalizePerformanceScoreKind(options.scoreKind)
   ) {
-    throw new HttpsError('invalid-argument', 'Performance score kind does not match this request.');
+    throw new HttpsError(
+      "invalid-argument",
+      "Performance score kind does not match this request.",
+    );
   }
-  if (!options.allowConfirmed && hasCompletePerformanceScoreSignatureData(scoreData)) {
-    throw new HttpsError('failed-precondition', 'Performance score is already confirmed.');
+  if (
+    !options.allowConfirmed &&
+    hasCompletePerformanceScoreSignatureData(scoreData)
+  ) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Performance score is already confirmed.",
+    );
   }
 
   const confirmationSnap = await db
-    .doc(`users/${uid}/${PERFORMANCE_SCORE_USER_COLLECTION}/${scoreId}/${PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION}/${uid}`)
+    .doc(
+      `users/${uid}/${PERFORMANCE_SCORE_USER_COLLECTION}/${scoreId}/${PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION}/${uid}`,
+    )
     .get();
-  if (!options.allowConfirmed && confirmationSnap.exists && hasCompletePerformanceScoreSignatureData(confirmationSnap.data() || {})) {
-    throw new HttpsError('failed-precondition', 'Performance score confirmation already exists.');
+  if (
+    !options.allowConfirmed &&
+    confirmationSnap.exists &&
+    hasCompletePerformanceScoreSignatureData(confirmationSnap.data() || {})
+  ) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Performance score confirmation already exists.",
+    );
   }
 
   return { id: scoreSnap.id, data: scoreData };
@@ -2197,9 +2920,9 @@ const getPerformanceScoreObjectionPath = (year, semester, objectionId) =>
 
 const buildPerformanceScoreObjectionId = (year, semester, uid, scoreId) => {
   const hash = crypto
-    .createHash('sha1')
+    .createHash("sha1")
     .update(`${year}:${semester}:${uid}:${scoreId}`)
-    .digest('hex')
+    .digest("hex")
     .slice(0, 32);
   return `pso_${hash}`;
 };
@@ -2207,11 +2930,16 @@ const buildPerformanceScoreObjectionId = (year, semester, uid, scoreId) => {
 const getPerformanceScoreAnswerSheetRequestPath = (year, semester, requestId) =>
   `${getSemesterRoot(year, semester)}/${PERFORMANCE_SCORE_ANSWER_SHEET_REQUESTS_COLLECTION}/${requestId}`;
 
-const buildPerformanceScoreAnswerSheetRequestId = (year, semester, uid, scoreId) => {
+const buildPerformanceScoreAnswerSheetRequestId = (
+  year,
+  semester,
+  uid,
+  scoreId,
+) => {
   const hash = crypto
-    .createHash('sha1')
+    .createHash("sha1")
     .update(`${year}:${semester}:${uid}:${scoreId}:answer_sheet`)
-    .digest('hex')
+    .digest("hex")
     .slice(0, 32);
   return `psa_${hash}`;
 };
@@ -2224,7 +2952,7 @@ const toNullablePerformanceScoreNumber = (value) => {
 const formatPerformanceScoreLabel = (score, maxScore) => {
   const safeScore = toNullablePerformanceScoreNumber(score);
   const safeMaxScore = toNullablePerformanceScoreNumber(maxScore);
-  if (safeScore === null && safeMaxScore === null) return '';
+  if (safeScore === null && safeMaxScore === null) return "";
   if (safeMaxScore === null || safeMaxScore <= 0) return `${safeScore ?? 0}점`;
   return `${safeScore ?? 0} / ${safeMaxScore}점`;
 };
@@ -2250,12 +2978,19 @@ const savePerformanceScoreObjections = async (year, semester, input) => {
 
   const refs = records.map((record) => {
     const scoreId = sanitizeNotificationText(record?.id, 160);
-    const objectionId = buildPerformanceScoreObjectionId(year, semester, actorUid, scoreId);
+    const objectionId = buildPerformanceScoreObjectionId(
+      year,
+      semester,
+      actorUid,
+      scoreId,
+    );
     return {
       objectionId,
       scoreId,
       record,
-      ref: db.doc(getPerformanceScoreObjectionPath(year, semester, objectionId)),
+      ref: db.doc(
+        getPerformanceScoreObjectionPath(year, semester, objectionId),
+      ),
     };
   });
   const existingSnaps = await Promise.all(refs.map((item) => item.ref.get()));
@@ -2266,15 +3001,21 @@ const savePerformanceScoreObjections = async (year, semester, input) => {
   refs.forEach((item, index) => {
     const data = item.record?.data || {};
     const existing = existingSnaps[index];
-    const existingStatus = sanitizeNotificationText(existing.data()?.status, 40);
-    if (existing.exists && existingStatus && existingStatus !== 'pending') {
+    const existingStatus = sanitizeNotificationText(
+      existing.data()?.status,
+      40,
+    );
+    if (existing.exists && existingStatus && existingStatus !== "pending") {
       skippedProcessedCount += 1;
       return;
     }
     const studentName = sanitizeNotificationText(
-      profile.studentName || profile.name || profile.displayName || data.studentName,
+      profile.studentName ||
+        profile.name ||
+        profile.displayName ||
+        data.studentName,
       40,
-      '학생',
+      "학생",
     );
     const grade = sanitizeNotificationText(
       profile.studentGrade || profile.grade || data.grade,
@@ -2314,13 +3055,13 @@ const savePerformanceScoreObjections = async (year, semester, input) => {
       targetDetails,
       items: buildPerformanceScoreObjectionItems(data.items),
       reason: objectionReason,
-      status: 'pending',
+      status: "pending",
       reviewedAt: null,
-      reviewedBy: '',
-      reviewedByName: '',
-      reviewMemo: '',
+      reviewedBy: "",
+      reviewedByName: "",
+      reviewMemo: "",
       changedTotalScore: null,
-      changedScoreLabel: '',
+      changedScoreLabel: "",
       uploadedBy: sanitizeNotificationText(data.uploadedBy, 160),
       uploadedByEmail: sanitizeNotificationText(data.uploadedByEmail, 160),
       updatedAt: FieldValue.serverTimestamp(),
@@ -2343,7 +3084,11 @@ const savePerformanceScoreObjections = async (year, semester, input) => {
   };
 };
 
-const createPerformanceScoreObjectionRequestedNotifications = async (year, semester, input) => {
+const createPerformanceScoreObjectionRequestedNotifications = async (
+  year,
+  semester,
+  input,
+) => {
   const actorUid = sanitizeNotificationText(input.actorUid, 160);
   const scoreIds = uniqueNonEmptyStrings(input.scoreIds, 20);
   const sortedScoreIds = [...scoreIds].sort();
@@ -2359,41 +3104,58 @@ const createPerformanceScoreObjectionRequestedNotifications = async (year, semes
   const studentName = sanitizeNotificationText(
     profile.name || firstRecord.studentName,
     40,
-    '학생',
+    "학생",
   );
-  const grade = sanitizeNotificationText(profile.grade || firstRecord.grade, 12);
-  const className = sanitizeNotificationText(profile.class || firstRecord.class, 12);
-  const number = sanitizeNotificationText(profile.number || firstRecord.number, 12);
+  const grade = sanitizeNotificationText(
+    profile.grade || firstRecord.grade,
+    12,
+  );
+  const className = sanitizeNotificationText(
+    profile.class || firstRecord.class,
+    12,
+  );
+  const number = sanitizeNotificationText(
+    profile.number || firstRecord.number,
+    12,
+  );
   const scoreTitles = uniqueNonEmptyStrings(
-    records.map((record) => sanitizeNotificationText(record?.data?.title, 80, scoreKindLabel)),
+    records.map((record) =>
+      sanitizeNotificationText(record?.data?.title, 80, scoreKindLabel),
+    ),
     20,
   );
-  const titleLabel = scoreTitles.length > 1
-    ? `${scoreTitles[0]} 외 ${scoreTitles.length - 1}건`
-    : scoreTitles[0] || scoreKindLabel;
-  const studentScopeLabel = [grade && `${grade}학년`, className && `${className}반`, number && `${number}번`]
+  const titleLabel =
+    scoreTitles.length > 1
+      ? `${scoreTitles[0]} 외 ${scoreTitles.length - 1}건`
+      : scoreTitles[0] || scoreKindLabel;
+  const studentScopeLabel = [
+    grade && `${grade}학년`,
+    className && `${className}반`,
+    number && `${number}번`,
+  ]
     .filter(Boolean)
-    .join(' ');
+    .join(" ");
   const objectionHash = crypto
-    .createHash('sha1')
-    .update(`${year}:${semester}:${actorUid}:${sortedScoreIds.join('|')}`)
-    .digest('hex');
+    .createHash("sha1")
+    .update(`${year}:${semester}:${actorUid}:${sortedScoreIds.join("|")}`)
+    .digest("hex");
   const recipients = await resolvePerformanceScoreNotificationRecipientUids(
     records.map((record) => record?.data?.uploadedBy),
   );
 
   return createUserNotifications(year, semester, recipients, {
-    type: 'performance_score_objection_requested',
+    type: "performance_score_objection_requested",
     title: `${scoreKindLabel} 점수 이의 제기`,
-    body: `${studentName} 학생이 ${titleLabel} 점수에 이의를 제기했습니다.${targetDetails ? ` 대상: ${targetDetails}.` : ''} 사유: ${objectionReason}`,
-    targetUrl: scoreKind === WRITTEN_EXAM_SCORE_KIND
-      ? '/teacher/exam?tab=written-essay&panel=objections'
-      : '/teacher/exam?tab=performance',
-    entityType: 'performance_score_objection',
+    body: `${studentName} 학생이 ${titleLabel} 점수에 이의를 제기했습니다.${targetDetails ? ` 대상: ${targetDetails}.` : ""} 사유: ${objectionReason}`,
+    targetUrl:
+      scoreKind === WRITTEN_EXAM_SCORE_KIND
+        ? "/teacher/exam?tab=written-essay&panel=objections"
+        : "/teacher/exam?tab=performance",
+    entityType: "performance_score_objection",
     entityId: objectionHash,
     actorUid,
-    priority: 'high',
-    dedupeKey: `performance_score_objection_requested:${year}:${semester}:${actorUid}:${sortedScoreIds.join('|')}`,
+    priority: "high",
+    dedupeKey: `performance_score_objection_requested:${year}:${semester}:${actorUid}:${sortedScoreIds.join("|")}`,
     templateValues: {
       studentName,
       studentScope: studentScopeLabel,
@@ -2406,34 +3168,45 @@ const createPerformanceScoreObjectionRequestedNotifications = async (year, semes
   });
 };
 
-const createPerformanceScoreObjectionReviewedNotification = async (year, semester, input) => {
+const createPerformanceScoreObjectionReviewedNotification = async (
+  year,
+  semester,
+  input,
+) => {
   const objectionId = sanitizeNotificationText(input.objectionId, 160);
   const recipientUid = sanitizeNotificationText(input.recipientUid, 160);
   if (!objectionId || !recipientUid) return { created: false, recipientUid };
 
-  const accepted = input.status === 'accepted';
+  const accepted = input.status === "accepted";
   const scoreKind = normalizePerformanceScoreKind(input.scoreKind);
   const scoreKindLabel = getPerformanceScoreKindLabel(scoreKind);
-  const scoreTitle = sanitizeNotificationText(input.scoreTitle, 120, scoreKindLabel);
+  const scoreTitle = sanitizeNotificationText(
+    input.scoreTitle,
+    120,
+    scoreKindLabel,
+  );
   const reviewMemo = sanitizeNotificationText(input.reviewMemo, 240);
-  const changedScoreLabel = sanitizeNotificationText(input.changedScoreLabel, 80);
-  const statusLabel = accepted ? '수용' : '반려';
-  const scoreMessage = accepted && changedScoreLabel
-    ? ` 변경 후 점수: ${changedScoreLabel}`
-    : '';
-  const memoMessage = reviewMemo ? ` 처리 메모: ${reviewMemo}` : '';
+  const changedScoreLabel = sanitizeNotificationText(
+    input.changedScoreLabel,
+    80,
+  );
+  const statusLabel = accepted ? "수용" : "반려";
+  const scoreMessage =
+    accepted && changedScoreLabel ? ` 변경 후 점수: ${changedScoreLabel}` : "";
+  const memoMessage = reviewMemo ? ` 처리 메모: ${reviewMemo}` : "";
 
   return createUserNotification(year, semester, recipientUid, {
-    type: 'performance_score_objection_reviewed',
+    type: "performance_score_objection_reviewed",
     title: `${scoreKindLabel} 이의 제기 처리`,
     body: `${scoreTitle} 이의 제기가 ${statusLabel}되었습니다.${scoreMessage}${memoMessage}`,
-    targetUrl: scoreKind === WRITTEN_EXAM_SCORE_KIND
-      ? '/student/score/written-exam'
-      : '/student/score/performance',
-    entityType: 'performance_score_objection',
+    targetUrl:
+      scoreKind === WRITTEN_EXAM_SCORE_KIND
+        ? "/student/score/written-exam"
+        : "/student/score/performance",
+    entityType: "performance_score_objection",
     entityId: objectionId,
     actorUid: input.actorUid,
-    priority: accepted ? 'normal' : 'high',
+    priority: accepted ? "normal" : "high",
     dedupeKey: `performance_score_objection_reviewed:${year}:${semester}:${objectionId}:${input.status}:${changedScoreLabel}:${reviewMemo}`,
     templateValues: {
       scoreTitle,
@@ -2444,28 +3217,32 @@ const createPerformanceScoreObjectionReviewedNotification = async (year, semeste
   });
 };
 
-const createHistoryClassroomPassedNotifications = async (year, semester, input) => {
+const createHistoryClassroomPassedNotifications = async (
+  year,
+  semester,
+  input,
+) => {
   const resultId = sanitizeNotificationText(input.resultId, 160);
   if (!resultId) return [];
 
-  const studentName = sanitizeNotificationText(input.studentName, 40, '학생');
+  const studentName = sanitizeNotificationText(input.studentName, 40, "학생");
   const assignmentTitle = sanitizeNotificationText(
     input.assignmentTitle,
     80,
-    '역사교실',
+    "역사교실",
   );
   const percent = Math.max(0, Math.min(100, Number(input.percent || 0)));
   const recipients = await resolveTeacherNotificationRecipientUids();
 
   return createUserNotifications(year, semester, recipients, {
-    type: 'history_classroom_passed',
-    title: '역사교실 통과 알림',
+    type: "history_classroom_passed",
+    title: "역사교실 통과 알림",
     body: `${studentName} 학생이 ${assignmentTitle}을(를) ${percent}%로 통과했습니다.`,
-    targetUrl: '/teacher/quiz/history-classroom',
-    entityType: 'history_classroom_result',
+    targetUrl: "/teacher/quiz/history-classroom",
+    entityType: "history_classroom_result",
     entityId: resultId,
     actorUid: input.actorUid,
-    priority: 'normal',
+    priority: "normal",
     dedupeKey: `history_classroom_passed:${year}:${semester}:${resultId}`,
     templateValues: {
       studentName,
@@ -2475,12 +3252,18 @@ const createHistoryClassroomPassedNotifications = async (year, semester, input) 
   });
 };
 
-const loadHistoryClassroomResultForNotification = async (year, semester, resultId) => {
+const loadHistoryClassroomResultForNotification = async (
+  year,
+  semester,
+  resultId,
+) => {
   const safeResultId = sanitizeNotificationText(resultId, 160);
   if (!safeResultId) return null;
 
   const semesterSnap = await db
-    .doc(`${getSemesterRoot(year, semester)}/history_classroom_results/${safeResultId}`)
+    .doc(
+      `${getSemesterRoot(year, semester)}/history_classroom_results/${safeResultId}`,
+    )
     .get();
   if (semesterSnap.exists) {
     return {
@@ -2490,12 +3273,14 @@ const loadHistoryClassroomResultForNotification = async (year, semester, resultI
     };
   }
 
-  const legacySnap = await db.doc(`history_classroom_results/${safeResultId}`).get();
+  const legacySnap = await db
+    .doc(`history_classroom_results/${safeResultId}`)
+    .get();
   if (legacySnap.exists) {
     return {
       id: legacySnap.id,
       data: legacySnap.data() || {},
-      collectionPath: 'history_classroom_results',
+      collectionPath: "history_classroom_results",
     };
   }
 
@@ -2505,8 +3290,11 @@ const loadHistoryClassroomResultForNotification = async (year, semester, resultI
 const resolveHistoryDictionaryManagerRecipientUids = async () => {
   const [adminUids, teacherSnap, lessonStaffSnap] = await Promise.all([
     getAdminRecipientUids(),
-    db.collection('users').where('role', '==', 'teacher').get(),
-    db.collection('users').where('staffPermissions', 'array-contains', 'lesson_read').get(),
+    db.collection("users").where("role", "==", "teacher").get(),
+    db
+      .collection("users")
+      .where("staffPermissions", "array-contains", "lesson_read")
+      .get(),
   ]);
   return uniqueNonEmptyStrings([
     ...adminUids,
@@ -2522,10 +3310,13 @@ const assertHistoryDictionaryManager = async (request) => {
   }
 
   const { profile } = await getUserProfile(uid);
-  if (String(profile?.role || '').trim() !== 'teacher' && !hasStaffPermission(profile, 'lesson_read')) {
+  if (
+    String(profile?.role || "").trim() !== "teacher" &&
+    !hasStaffPermission(profile, "lesson_read")
+  ) {
     throw new HttpsError(
-      'permission-denied',
-      'teacher or lesson_read permission is required.',
+      "permission-denied",
+      "teacher or lesson_read permission is required.",
     );
   }
   return { uid, email, profile };
@@ -2538,10 +3329,10 @@ const assertHistoryDictionaryWriteManager = async (request) => {
   }
 
   const { profile } = await getUserProfile(uid);
-  if (String(profile?.role || '').trim() !== 'teacher') {
+  if (String(profile?.role || "").trim() !== "teacher") {
     throw new HttpsError(
-      'permission-denied',
-      'teacher permission is required.',
+      "permission-denied",
+      "teacher permission is required.",
     );
   }
   return { uid, email, profile };
@@ -2553,21 +3344,28 @@ const ensureStudentProfile = async (uid) => {
 };
 
 const isQuizStudentProfile = (profile = {}) => {
-  const role = String(profile.role || '').trim();
-  return role === 'student';
+  const role = String(profile.role || "").trim();
+  return role === "student";
 };
 
 const getQuizAttemptClassCandidates = (attempt = {}) => {
   const candidates = new Set();
-  const gradeValue = normalizeSchoolToken(attempt.studentGrade || attempt.grade);
-  const classValue = normalizeSchoolToken(attempt.studentClass || attempt.class);
+  const gradeValue = normalizeSchoolToken(
+    attempt.studentGrade || attempt.grade,
+  );
+  const classValue = normalizeSchoolToken(
+    attempt.studentClass || attempt.class,
+  );
   const explicitClassId = buildQuizClassId(gradeValue, classValue);
   if (explicitClassId) {
     candidates.add(explicitClassId);
   }
 
-  const gradeClassDigits = String(attempt.gradeClass || '').match(/\d+/g) || [];
-  const gradeClassId = buildQuizClassId(gradeClassDigits[0], gradeClassDigits[1]);
+  const gradeClassDigits = String(attempt.gradeClass || "").match(/\d+/g) || [];
+  const gradeClassId = buildQuizClassId(
+    gradeClassDigits[0],
+    gradeClassDigits[1],
+  );
   if (gradeClassId) {
     candidates.add(gradeClassId);
   }
@@ -2580,10 +3378,18 @@ const quizAttemptMatchesClass = (attempt = {}, normalizedClassId) => {
   const candidates = getQuizAttemptClassCandidates(attempt);
   if (candidates.has(normalizedClassId)) return true;
 
-  const [targetGrade, targetClass] = normalizedClassId.split('-');
-  const classValue = normalizeSchoolToken(attempt.studentClass || attempt.class);
-  const gradeClassLabel = String(attempt.gradeClass || '').trim();
-  if (!targetGrade || !targetClass || !classValue || classValue !== targetClass || !gradeClassLabel) {
+  const [targetGrade, targetClass] = normalizedClassId.split("-");
+  const classValue = normalizeSchoolToken(
+    attempt.studentClass || attempt.class,
+  );
+  const gradeClassLabel = String(attempt.gradeClass || "").trim();
+  if (
+    !targetGrade ||
+    !targetClass ||
+    !classValue ||
+    classValue !== targetClass ||
+    !gradeClassLabel
+  ) {
     return false;
   }
 
@@ -2595,24 +3401,29 @@ const quizAttemptMatchesClass = (attempt = {}, normalizedClassId) => {
     return false;
   }
 
-  return gradeClassLabel.includes(targetGrade) && gradeClassLabel.includes(targetClass);
+  return (
+    gradeClassLabel.includes(targetGrade) &&
+    gradeClassLabel.includes(targetClass)
+  );
 };
 
 const shouldCountTowardsEarnedTotal = (pointTransaction = {}) => {
-  const type = String(pointTransaction.type || '').trim();
+  const type = String(pointTransaction.type || "").trim();
   const delta = Number(pointTransaction.delta || 0);
   if (pointTransaction.reclaimed === true) {
     return false;
   }
   if (delta <= 0) return false;
-  if (type === 'manual_adjust') return true;
-  if (type === 'manual_reclaim') return false;
-  if (type.startsWith('purchase_')) return false;
+  if (type === "manual_adjust") return true;
+  if (type === "manual_reclaim") return false;
+  if (type.startsWith("purchase_")) return false;
   return true;
 };
 
 const calculatePointWalletTotals = (transactionDocs) => {
-  const safeTransactionDocs = Array.isArray(transactionDocs) ? transactionDocs : [];
+  const safeTransactionDocs = Array.isArray(transactionDocs)
+    ? transactionDocs
+    : [];
   const sortedDocs = sortPointTransactionDocsDesc(safeTransactionDocs);
   const balance = safeTransactionDocs.reduce(
     (total, docSnap) => total + Number(docSnap.data()?.delta || 0),
@@ -2626,16 +3437,16 @@ const calculatePointWalletTotals = (transactionDocs) => {
   }, 0);
   const spentTotal = safeTransactionDocs.reduce((total, docSnap) => {
     const pointTransaction = docSnap.data() || {};
-    const type = String(pointTransaction.type || '').trim();
-    if (type !== 'purchase_hold' && type !== 'purchase_cancel') {
+    const type = String(pointTransaction.type || "").trim();
+    if (type !== "purchase_hold" && type !== "purchase_cancel") {
       return total;
     }
     return total - Number(pointTransaction.delta || 0);
   }, 0);
   const adjustedTotal = safeTransactionDocs.reduce((total, docSnap) => {
     const pointTransaction = docSnap.data() || {};
-    const type = String(pointTransaction.type || '').trim();
-    if (type !== 'manual_adjust' && type !== 'manual_reclaim') {
+    const type = String(pointTransaction.type || "").trim();
+    if (type !== "manual_adjust" && type !== "manual_reclaim") {
       return total;
     }
     return total + Number(pointTransaction.delta || 0);
@@ -2650,7 +3461,12 @@ const calculatePointWalletTotals = (transactionDocs) => {
   };
 };
 
-const buildQuizResetWalletSnapshot = ({ uid, profile, transactionDocs, rankPolicy }) => {
+const buildQuizResetWalletSnapshot = ({
+  uid,
+  profile,
+  transactionDocs,
+  rankPolicy,
+}) => {
   const totals = calculatePointWalletTotals(transactionDocs);
 
   return {
@@ -2668,11 +3484,15 @@ const walletRankFieldsNeedRebuild = (wallet, rankEarnedTotal, rankPolicy) => {
   const safeRankEarnedTotal = Math.max(0, Number(rankEarnedTotal || 0));
   const nextRankSnapshot = buildRankSnapshot(safeRankEarnedTotal, rankPolicy);
   const currentRankSnapshot = wallet?.rankSnapshot || {};
-  return Number(wallet?.earnedTotal) !== safeRankEarnedTotal
-    || Number(wallet?.rankEarnedTotal) !== safeRankEarnedTotal
-    || String(currentRankSnapshot.tierCode || '') !== String(nextRankSnapshot.tierCode || '')
-    || Number(currentRankSnapshot.metricValue) !== safeRankEarnedTotal
-    || String(currentRankSnapshot.basedOn || '') !== String(nextRankSnapshot.basedOn || '');
+  return (
+    Number(wallet?.earnedTotal) !== safeRankEarnedTotal ||
+    Number(wallet?.rankEarnedTotal) !== safeRankEarnedTotal ||
+    String(currentRankSnapshot.tierCode || "") !==
+      String(nextRankSnapshot.tierCode || "") ||
+    Number(currentRankSnapshot.metricValue) !== safeRankEarnedTotal ||
+    String(currentRankSnapshot.basedOn || "") !==
+      String(nextRankSnapshot.basedOn || "")
+  );
 };
 
 const commitPointWalletBackfillWrites = async (writes) => {
@@ -2685,10 +3505,18 @@ const commitPointWalletBackfillWrites = async (writes) => {
   }
 };
 
-const buildPointWalletRankBackfillPlan = async ({ year, semester, rankPolicy }) => {
+const buildPointWalletRankBackfillPlan = async ({
+  year,
+  semester,
+  rankPolicy,
+}) => {
   const [walletSnapshot, transactionSnapshot] = await Promise.all([
-    db.collection(getPointCollectionPath(year, semester, 'point_wallets')).get(),
-    db.collection(getPointCollectionPath(year, semester, 'point_transactions')).get(),
+    db
+      .collection(getPointCollectionPath(year, semester, "point_wallets"))
+      .get(),
+    db
+      .collection(getPointCollectionPath(year, semester, "point_transactions"))
+      .get(),
   ]);
   const walletsByUid = new Map();
   const transactionDocsByUid = new Map();
@@ -2696,7 +3524,7 @@ const buildPointWalletRankBackfillPlan = async ({ year, semester, rankPolicy }) 
 
   walletSnapshot.docs.forEach((docSnap) => {
     const wallet = docSnap.data() || {};
-    const uid = String(wallet.uid || docSnap.id || '').trim();
+    const uid = String(wallet.uid || docSnap.id || "").trim();
     if (!uid) return;
     walletsByUid.set(uid, { ref: docSnap.ref, wallet });
     uidSet.add(uid);
@@ -2704,7 +3532,7 @@ const buildPointWalletRankBackfillPlan = async ({ year, semester, rankPolicy }) 
 
   transactionSnapshot.docs.forEach((docSnap) => {
     const transaction = docSnap.data() || {};
-    const uid = String(transaction.uid || '').trim();
+    const uid = String(transaction.uid || "").trim();
     if (!uid) return;
     if (!transactionDocsByUid.has(uid)) {
       transactionDocsByUid.set(uid, []);
@@ -2720,14 +3548,25 @@ const buildPointWalletRankBackfillPlan = async ({ year, semester, rankPolicy }) 
     const transactionDocs = transactionDocsByUid.get(uid) || [];
     const totals = calculatePointWalletTotals(transactionDocs);
     const existingWallet = walletsByUid.get(uid);
-    const rankEarnedTotal = Math.max(0, Number(
-      transactionDocs.length > 0
-        ? totals.earnedTotal
-        : existingWallet?.wallet?.rankEarnedTotal ?? existingWallet?.wallet?.earnedTotal ?? 0,
-    ));
+    const rankEarnedTotal = Math.max(
+      0,
+      Number(
+        transactionDocs.length > 0
+          ? totals.earnedTotal
+          : (existingWallet?.wallet?.rankEarnedTotal ??
+              existingWallet?.wallet?.earnedTotal ??
+              0),
+      ),
+    );
 
     if (existingWallet) {
-      if (!walletRankFieldsNeedRebuild(existingWallet.wallet, rankEarnedTotal, rankPolicy)) {
+      if (
+        !walletRankFieldsNeedRebuild(
+          existingWallet.wallet,
+          rankEarnedTotal,
+          rankPolicy,
+        )
+      ) {
         continue;
       }
       writes.push({
@@ -2750,10 +3589,13 @@ const buildPointWalletRankBackfillPlan = async ({ year, semester, rankPolicy }) 
       ({ profile } = await ensureStudentProfile(uid));
     } catch (error) {
       skippedMissingProfileCount += 1;
-      console.warn('Skipping point wallet rank backfill for uid without profile.', {
-        uid,
-        errorMessage: String(error?.message || 'profile-missing'),
-      });
+      console.warn(
+        "Skipping point wallet rank backfill for uid without profile.",
+        {
+          uid,
+          errorMessage: String(error?.message || "profile-missing"),
+        },
+      );
       continue;
     }
 
@@ -2788,14 +3630,17 @@ const rebuildQuizResetWallet = async ({ year, semester, uid, rankPolicy }) => {
   try {
     ({ profile } = await ensureStudentProfile(uid));
   } catch (error) {
-    console.warn('Rebuilding quiz reset wallet without an active user profile.', {
-      uid,
-      errorMessage: String(error?.message || 'profile-missing'),
-    });
+    console.warn(
+      "Rebuilding quiz reset wallet without an active user profile.",
+      {
+        uid,
+        errorMessage: String(error?.message || "profile-missing"),
+      },
+    );
   }
   const pointTransactionsSnapshot = await db
-    .collection(getPointCollectionPath(year, semester, 'point_transactions'))
-    .where('uid', '==', uid)
+    .collection(getPointCollectionPath(year, semester, "point_transactions"))
+    .where("uid", "==", uid)
     .get();
 
   const nextWallet = buildQuizResetWalletSnapshot({
@@ -2805,17 +3650,15 @@ const rebuildQuizResetWallet = async ({ year, semester, uid, rankPolicy }) => {
     rankPolicy,
   });
 
-  await db.doc(getPointWalletPath(year, semester, uid)).set(nextWallet, { merge: true });
+  await db
+    .doc(getPointWalletPath(year, semester, uid))
+    .set(nextWallet, { merge: true });
   return nextWallet;
 };
 
 const commitDeleteRefsInChunks = async (refs) => {
   const uniqueRefs = Array.from(
-    new Map(
-      refs
-        .filter(Boolean)
-        .map((ref) => [ref.path, ref]),
-    ).values(),
+    new Map(refs.filter(Boolean).map((ref) => [ref.path, ref])).values(),
   );
   for (let index = 0; index < uniqueRefs.length; index += 400) {
     const batch = db.batch();
@@ -2853,34 +3696,34 @@ const commitSetEntriesInChunks = async (entries) => {
 };
 
 const getStudentProfileClearPatch = () => ({
-  studentName: '',
-  studentGrade: '',
-  studentClass: '',
-  studentNumber: '',
-  grade: '',
-  class: '',
-  number: '',
-  gradeClass: '',
+  studentName: "",
+  studentGrade: "",
+  studentClass: "",
+  studentNumber: "",
+  grade: "",
+  class: "",
+  number: "",
+  gradeClass: "",
   updatedAt: FieldValue.serverTimestamp(),
 });
 
 const deleteAuthUserIfExists = async (uid) => {
   try {
     await getAuth().deleteUser(uid);
-    return { authUserDeleted: true, authUserDeleteError: '' };
+    return { authUserDeleted: true, authUserDeleteError: "" };
   } catch (error) {
-    const code = String(error?.code || '').trim();
-    if (code === 'auth/user-not-found') {
-      return { authUserDeleted: false, authUserDeleteError: '' };
+    const code = String(error?.code || "").trim();
+    if (code === "auth/user-not-found") {
+      return { authUserDeleted: false, authUserDeleteError: "" };
     }
-    console.warn('Failed to delete Firebase Auth user for student cleanup.', {
+    console.warn("Failed to delete Firebase Auth user for student cleanup.", {
       uid,
       code,
       message: String(error?.message || error),
     });
     return {
       authUserDeleted: false,
-      authUserDeleteError: code || 'auth-delete-failed',
+      authUserDeleteError: code || "auth-delete-failed",
     };
   }
 };
@@ -2892,36 +3735,50 @@ const addQueryDocRefs = (refsByPath, snapshot) => {
 };
 
 const collectQueryRefsByUid = async (collectionPath, uid) => {
-  const snapshot = await db.collection(collectionPath).where('uid', '==', uid).get();
+  const snapshot = await db
+    .collection(collectionPath)
+    .where("uid", "==", uid)
+    .get();
   return snapshot.docs.map((docSnap) => docSnap.ref);
 };
 
 const isMissingFirestoreIndexError = (error) => {
-  const code = String(error?.code || '').trim();
-  const message = String(error?.details || error?.message || error || '').toLowerCase();
-  return (code === '9' || code === 'failed-precondition')
-    && message.includes('query requires')
-    && message.includes('index');
+  const code = String(error?.code || "").trim();
+  const message = String(
+    error?.details || error?.message || error || "",
+  ).toLowerCase();
+  return (
+    (code === "9" || code === "failed-precondition") &&
+    message.includes("query requires") &&
+    message.includes("index")
+  );
 };
 
 const collectStudentPerformanceScoreDocRefs = async (uid) => {
   const refsByPath = new Map();
-  const ownedScoresQuery = db.collection(`users/${uid}/${PERFORMANCE_SCORE_USER_COLLECTION}`).get();
+  const ownedScoresQuery = db
+    .collection(`users/${uid}/${PERFORMANCE_SCORE_USER_COLLECTION}`)
+    .get();
   const uidScoresQuery = db
     .collectionGroup(PERFORMANCE_SCORE_USER_COLLECTION)
-    .where('uid', '==', uid)
+    .where("uid", "==", uid)
     .get()
     .catch((error) => {
       if (!isMissingFirestoreIndexError(error)) {
         throw error;
       }
-      console.warn('Skipping performance score collection group cleanup until Firestore index is ready.', {
-        uid,
-        collectionGroup: PERFORMANCE_SCORE_USER_COLLECTION,
-        field: 'uid',
-        code: String(error?.code || ''),
-        message: String(error?.details || error?.message || error || '').slice(0, 500),
-      });
+      console.warn(
+        "Skipping performance score collection group cleanup until Firestore index is ready.",
+        {
+          uid,
+          collectionGroup: PERFORMANCE_SCORE_USER_COLLECTION,
+          field: "uid",
+          code: String(error?.code || ""),
+          message: String(
+            error?.details || error?.message || error || "",
+          ).slice(0, 500),
+        },
+      );
       return null;
     });
 
@@ -2933,8 +3790,9 @@ const collectStudentPerformanceScoreDocRefs = async (uid) => {
   addQueryDocRefs(refsByPath, ownedScores);
   addQueryDocRefs(refsByPath, uidScores);
 
-  return Array.from(refsByPath.values())
-    .filter((ref) => ref.parent.id === PERFORMANCE_SCORE_USER_COLLECTION);
+  return Array.from(refsByPath.values()).filter(
+    (ref) => ref.parent.id === PERFORMANCE_SCORE_USER_COLLECTION,
+  );
 };
 
 const collectStudentPerformanceScoreRefs = async (uid) => {
@@ -2942,7 +3800,9 @@ const collectStudentPerformanceScoreRefs = async (uid) => {
   const scoreRefs = await collectStudentPerformanceScoreDocRefs(uid);
   scoreRefs.forEach((ref) => refsByPath.set(ref.path, ref));
   await runInChunks(scoreRefs, 25, async (scoreRef) => {
-    const confirmations = await scoreRef.collection(PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION).get();
+    const confirmations = await scoreRef
+      .collection(PERFORMANCE_SCORE_CONFIRMATIONS_COLLECTION)
+      .get();
     addQueryDocRefs(refsByPath, confirmations);
   });
 
@@ -2950,17 +3810,28 @@ const collectStudentPerformanceScoreRefs = async (uid) => {
 };
 
 const buildPerformanceRosterRowsMeta = (rosterData, rows) => {
-  const classes = Array.from(new Set(
-    rows.map((row) => String(row?.class || '').trim()).filter(Boolean),
-  )).sort((a, b) => Number(a) - Number(b) || String(a).localeCompare(String(b), 'ko'));
+  const classes = Array.from(
+    new Set(rows.map((row) => String(row?.class || "").trim()).filter(Boolean)),
+  ).sort(
+    (a, b) => Number(a) - Number(b) || String(a).localeCompare(String(b), "ko"),
+  );
   const rowHasScore = (row) => {
     if (!row) return false;
-    if (String(row.uid || '').trim()) return true;
-    if (row.isManual === true || row.isTransferred === true || String(row.academicStatus || '').trim()) {
+    if (String(row.uid || "").trim()) return true;
+    if (
+      row.isManual === true ||
+      row.isTransferred === true ||
+      String(row.academicStatus || "").trim()
+    ) {
       return true;
     }
     const items = Array.isArray(row.items) ? row.items : [];
-    if (items.some((item) => item?.scoreEntered !== false && Number.isFinite(Number(item?.score)))) {
+    if (
+      items.some(
+        (item) =>
+          item?.scoreEntered !== false && Number.isFinite(Number(item?.score)),
+      )
+    ) {
       return true;
     }
     const totalScore = Number(row.totalScore);
@@ -2969,16 +3840,25 @@ const buildPerformanceRosterRowsMeta = (rosterData, rows) => {
   const matchedCount = rows.filter(rowHasScore).length;
   return {
     classes,
-    targetClass: classes.length === 1 ? classes[0] : String(rosterData?.targetClass || '').trim(),
+    targetClass:
+      classes.length === 1
+        ? classes[0]
+        : String(rosterData?.targetClass || "").trim(),
     rowCount: rows.length,
     matchedCount,
     unmatchedCount: Math.max(0, rows.length - matchedCount),
   };
 };
 
-const removeStudentFromPerformanceScoreRosters = async (year, semester, uid) => {
+const removeStudentFromPerformanceScoreRosters = async (
+  year,
+  semester,
+  uid,
+) => {
   const rosterSnapshot = await db
-    .collection(`${getSemesterRoot(year, semester)}/${PERFORMANCE_SCORE_ROSTERS_COLLECTION}`)
+    .collection(
+      `${getSemesterRoot(year, semester)}/${PERFORMANCE_SCORE_ROSTERS_COLLECTION}`,
+    )
     .get();
   let updatedRosterCount = 0;
   let removedRosterRowCount = 0;
@@ -2994,7 +3874,9 @@ const removeStudentFromPerformanceScoreRosters = async (year, semester, uid) => 
   for (const rosterDoc of rosterSnapshot.docs) {
     const data = rosterDoc.data() || {};
     const rows = Array.isArray(data.rows) ? data.rows : [];
-    const nextRows = rows.filter((row) => String(row?.uid || '').trim() !== uid);
+    const nextRows = rows.filter(
+      (row) => String(row?.uid || "").trim() !== uid,
+    );
     if (nextRows.length === rows.length) continue;
     const meta = buildPerformanceRosterRowsMeta(data, nextRows);
     batch.update(rosterDoc.ref, {
@@ -3023,20 +3905,20 @@ const collectCurrentSemesterStudentRefs = async (year, semester, uid) => {
   const refsByPath = new Map();
   const uidCollections = [
     PERFORMANCE_SCORE_OBJECTIONS_COLLECTION,
-    'point_transactions',
-    'point_orders',
-    'quiz_results',
-    'quiz_submissions',
-    'history_classroom_results',
-    'history_classroom_exemptions',
-    'history_classroom_exemption_requests',
+    "point_transactions",
+    "point_orders",
+    "quiz_results",
+    "quiz_submissions",
+    "history_classroom_results",
+    "history_classroom_exemptions",
+    "history_classroom_exemption_requests",
   ];
   const legacyUidCollections = [
-    'quiz_results',
-    'quiz_submissions',
-    'history_classroom_results',
-    'history_classroom_exemptions',
-    'history_classroom_exemption_requests',
+    "quiz_results",
+    "quiz_submissions",
+    "history_classroom_results",
+    "history_classroom_exemptions",
+    "history_classroom_exemption_requests",
     HISTORY_DICTIONARY_REQUESTS_COLLECTION,
   ];
 
@@ -3053,15 +3935,23 @@ const collectCurrentSemesterStudentRefs = async (year, semester, uid) => {
   const pointWalletRef = db.doc(getPointWalletPath(year, semester, uid));
   refsByPath.set(pointWalletRef.path, pointWalletRef);
 
-  const notificationInboxRef = db.doc(getNotificationInboxPath(year, semester, uid));
+  const notificationInboxRef = db.doc(
+    getNotificationInboxPath(year, semester, uid),
+  );
   refsByPath.set(notificationInboxRef.path, notificationInboxRef);
-  const notificationItems = await db.collection(getNotificationItemsPath(year, semester, uid)).get();
+  const notificationItems = await db
+    .collection(getNotificationItemsPath(year, semester, uid))
+    .get();
   addQueryDocRefs(refsByPath, notificationItems);
 
   return Array.from(refsByPath.values());
 };
 
-const savePerformanceScoreAnswerSheetRequests = async (year, semester, input) => {
+const savePerformanceScoreAnswerSheetRequests = async (
+  year,
+  semester,
+  input,
+) => {
   const actorUid = sanitizeNotificationText(input.actorUid, 160);
   const requestReason = sanitizeNotificationText(input.reason, 300);
   const targetDetails = sanitizeNotificationText(input.targetDetails, 240);
@@ -3073,12 +3963,19 @@ const savePerformanceScoreAnswerSheetRequests = async (year, semester, input) =>
 
   const refs = records.map((record) => {
     const scoreId = sanitizeNotificationText(record?.id, 160);
-    const requestId = buildPerformanceScoreAnswerSheetRequestId(year, semester, actorUid, scoreId);
+    const requestId = buildPerformanceScoreAnswerSheetRequestId(
+      year,
+      semester,
+      actorUid,
+      scoreId,
+    );
     return {
       requestId,
       scoreId,
       record,
-      ref: db.doc(getPerformanceScoreAnswerSheetRequestPath(year, semester, requestId)),
+      ref: db.doc(
+        getPerformanceScoreAnswerSheetRequestPath(year, semester, requestId),
+      ),
     };
   });
   const existingSnaps = await Promise.all(refs.map((item) => item.ref.get()));
@@ -3089,17 +3986,23 @@ const savePerformanceScoreAnswerSheetRequests = async (year, semester, input) =>
   refs.forEach((item, index) => {
     const data = item.record?.data || {};
     const existing = existingSnaps[index];
-    const existingStatus = sanitizeNotificationText(existing.data()?.status, 40);
-    if (existing.exists && existingStatus === 'pending') {
+    const existingStatus = sanitizeNotificationText(
+      existing.data()?.status,
+      40,
+    );
+    if (existing.exists && existingStatus === "pending") {
       skippedPendingCount += 1;
       return;
     }
     const scoreKind = normalizePerformanceScoreKind(data.scoreKind);
     const scoreKindLabel = getPerformanceScoreKindLabel(scoreKind);
     const studentName = sanitizeNotificationText(
-      profile.studentName || profile.name || profile.displayName || data.studentName,
+      profile.studentName ||
+        profile.name ||
+        profile.displayName ||
+        data.studentName,
       40,
-      '학생',
+      "학생",
     );
     const grade = sanitizeNotificationText(
       profile.studentGrade || profile.grade || data.grade,
@@ -3133,10 +4036,10 @@ const savePerformanceScoreAnswerSheetRequests = async (year, semester, input) =>
       scoreLabel: formatPerformanceScoreLabel(totalScore, totalMaxScore),
       targetDetails,
       reason: requestReason,
-      status: 'pending',
+      status: "pending",
       reviewedAt: null,
-      reviewedBy: '',
-      reviewMemo: '',
+      reviewedBy: "",
+      reviewMemo: "",
       requestBatchId: sanitizeNotificationText(input.requestBatchId, 80),
       uploadedBy: sanitizeNotificationText(data.uploadedBy, 160),
       uploadedByEmail: sanitizeNotificationText(data.uploadedByEmail, 160),
@@ -3160,7 +4063,11 @@ const savePerformanceScoreAnswerSheetRequests = async (year, semester, input) =>
   };
 };
 
-const createPerformanceScoreAnswerSheetRequestedNotifications = async (year, semester, input) => {
+const createPerformanceScoreAnswerSheetRequestedNotifications = async (
+  year,
+  semester,
+  input,
+) => {
   const actorUid = sanitizeNotificationText(input.actorUid, 160);
   const scoreIds = uniqueNonEmptyStrings(input.scoreIds, 20);
   const sortedScoreIds = [...scoreIds].sort();
@@ -3176,42 +4083,65 @@ const createPerformanceScoreAnswerSheetRequestedNotifications = async (year, sem
   const studentName = sanitizeNotificationText(
     profile.name || firstRecord.studentName,
     40,
-    '학생',
+    "학생",
   );
-  const grade = sanitizeNotificationText(profile.grade || firstRecord.grade, 12);
-  const className = sanitizeNotificationText(profile.class || firstRecord.class, 12);
-  const number = sanitizeNotificationText(profile.number || firstRecord.number, 12);
+  const grade = sanitizeNotificationText(
+    profile.grade || firstRecord.grade,
+    12,
+  );
+  const className = sanitizeNotificationText(
+    profile.class || firstRecord.class,
+    12,
+  );
+  const number = sanitizeNotificationText(
+    profile.number || firstRecord.number,
+    12,
+  );
   const scoreTitles = uniqueNonEmptyStrings(
-    records.map((record) => sanitizeNotificationText(record?.data?.title, 80, scoreKindLabel)),
+    records.map((record) =>
+      sanitizeNotificationText(record?.data?.title, 80, scoreKindLabel),
+    ),
     20,
   );
-  const titleLabel = scoreTitles.length > 1
-    ? `${scoreTitles[0]} 외 ${scoreTitles.length - 1}건`
-    : scoreTitles[0] || scoreKindLabel;
-  const studentScopeLabel = [grade && `${grade}학년`, className && `${className}반`, number && `${number}번`]
+  const titleLabel =
+    scoreTitles.length > 1
+      ? `${scoreTitles[0]} 외 ${scoreTitles.length - 1}건`
+      : scoreTitles[0] || scoreKindLabel;
+  const studentScopeLabel = [
+    grade && `${grade}학년`,
+    className && `${className}반`,
+    number && `${number}번`,
+  ]
     .filter(Boolean)
-    .join(' ');
+    .join(" ");
   const requestHash = crypto
-    .createHash('sha1')
-    .update(`${year}:${semester}:${actorUid}:${sortedScoreIds.join('|')}:answer_sheet`)
-    .digest('hex');
-  const requestBatchId = sanitizeNotificationText(input.requestBatchId, 80, requestHash);
+    .createHash("sha1")
+    .update(
+      `${year}:${semester}:${actorUid}:${sortedScoreIds.join("|")}:answer_sheet`,
+    )
+    .digest("hex");
+  const requestBatchId = sanitizeNotificationText(
+    input.requestBatchId,
+    80,
+    requestHash,
+  );
   const recipients = await resolvePerformanceScoreNotificationRecipientUids(
     records.map((record) => record?.data?.uploadedBy),
   );
 
   return createUserNotifications(year, semester, recipients, {
-    type: 'performance_score_answer_sheet_requested',
-    title: '답안지 확인 요청',
-    body: `${studentName} 학생이 ${titleLabel} 답안지 확인을 요청했습니다.${targetDetails ? ` 대상: ${targetDetails}.` : ''} 사유: ${requestReason}`,
-    targetUrl: scoreKind === WRITTEN_EXAM_SCORE_KIND
-      ? '/teacher/exam?tab=written-essay&panel=answer-sheet-requests'
-      : '/teacher/exam?tab=performance&panel=answer-sheet-requests',
-    entityType: 'performance_score_answer_sheet_request',
+    type: "performance_score_answer_sheet_requested",
+    title: "답안지 확인 요청",
+    body: `${studentName} 학생이 ${titleLabel} 답안지 확인을 요청했습니다.${targetDetails ? ` 대상: ${targetDetails}.` : ""} 사유: ${requestReason}`,
+    targetUrl:
+      scoreKind === WRITTEN_EXAM_SCORE_KIND
+        ? "/teacher/exam?tab=written-essay&panel=answer-sheet-requests"
+        : "/teacher/exam?tab=performance&panel=answer-sheet-requests",
+    entityType: "performance_score_answer_sheet_request",
     entityId: requestHash,
     actorUid,
-    priority: 'high',
-    dedupeKey: `performance_score_answer_sheet_requested:${year}:${semester}:${actorUid}:${sortedScoreIds.join('|')}:${requestBatchId}`,
+    priority: "high",
+    dedupeKey: `performance_score_answer_sheet_requested:${year}:${semester}:${actorUid}:${sortedScoreIds.join("|")}:${requestBatchId}`,
     templateValues: {
       studentName,
       studentScope: studentScopeLabel,
@@ -3225,12 +4155,12 @@ const createPerformanceScoreAnswerSheetRequestedNotifications = async (year, sem
 };
 
 const normalizeLessonCorePointResetIdentity = (value) =>
-  String(value ?? '')
+  String(value ?? "")
     .toLowerCase()
-    .replace(/[\s._-]+/g, '')
+    .replace(/[\s._-]+/g, "")
     .trim();
 
-const isLessonCorePointResetTestStudent = (profile = {}, uid = '') => {
+const isLessonCorePointResetTestStudent = (profile = {}, uid = "") => {
   const candidates = [
     uid,
     profile.email,
@@ -3241,18 +4171,22 @@ const isLessonCorePointResetTestStudent = (profile = {}, uid = '') => {
     profile.customName,
   ];
   return candidates.some((candidate) => {
-    const raw = String(candidate ?? '').trim();
+    const raw = String(candidate ?? "").trim();
     const normalized = normalizeLessonCorePointResetIdentity(raw);
-    return raw.includes(LESSON_CORE_POINT_RESET_TEST_LABEL)
-      || normalized.includes('bangtest');
+    return (
+      raw.includes(LESSON_CORE_POINT_RESET_TEST_LABEL) ||
+      normalized.includes("bangtest")
+    );
   });
 };
 
 const collectLessonCorePointResetUpdates = async (year, semester, uid) => {
-  const progressRootRef = db.doc(`${getSemesterRoot(year, semester)}/lesson_progress/${uid}`);
+  const progressRootRef = db.doc(
+    `${getSemesterRoot(year, semester)}/lesson_progress/${uid}`,
+  );
   const [progressRootSnap, progressUnitsSnap] = await Promise.all([
     progressRootRef.get(),
-    progressRootRef.collection('units').get(),
+    progressRootRef.collection("units").get(),
   ]);
   const updates = [];
   let resetRoot = false;
@@ -3262,10 +4196,13 @@ const collectLessonCorePointResetUpdates = async (year, semester, uid) => {
   if (progressRootSnap.exists) {
     const rootData = progressRootSnap.data() || {};
     const hasRootCorePointState =
-      Object.prototype.hasOwnProperty.call(rootData, 'corePointRewardClaimed')
-      || Object.prototype.hasOwnProperty.call(rootData, 'corePointCompletedAt')
-      || Object.prototype.hasOwnProperty.call(rootData, 'corePointFoundCount')
-      || Object.prototype.hasOwnProperty.call(rootData, 'corePointTotalCount');
+      Object.prototype.hasOwnProperty.call(
+        rootData,
+        "corePointRewardClaimed",
+      ) ||
+      Object.prototype.hasOwnProperty.call(rootData, "corePointCompletedAt") ||
+      Object.prototype.hasOwnProperty.call(rootData, "corePointFoundCount") ||
+      Object.prototype.hasOwnProperty.call(rootData, "corePointTotalCount");
     if (hasRootCorePointState) {
       updates.push({
         ref: progressRootRef,
@@ -3283,8 +4220,14 @@ const collectLessonCorePointResetUpdates = async (year, semester, uid) => {
 
   progressUnitsSnap.docs.forEach((unitDoc) => {
     const data = unitDoc.data() || {};
-    const hasCorePointFinds = Object.prototype.hasOwnProperty.call(data, 'corePointFinds');
-    const hasCorePointCompletedAt = Object.prototype.hasOwnProperty.call(data, 'corePointCompletedAt');
+    const hasCorePointFinds = Object.prototype.hasOwnProperty.call(
+      data,
+      "corePointFinds",
+    );
+    const hasCorePointCompletedAt = Object.prototype.hasOwnProperty.call(
+      data,
+      "corePointCompletedAt",
+    );
     if (!hasCorePointFinds && !hasCorePointCompletedAt) return;
     if (Array.isArray(data.corePointFinds)) {
       removedCorePointFindCount += data.corePointFinds.length;
@@ -3311,20 +4254,24 @@ const collectLessonCorePointResetUpdates = async (year, semester, uid) => {
 const collectKnownUserStudentDataRefs = async (uid) => {
   const refsByPath = new Map();
   const userCollections = [
-    'academic_records',
-    'performance_score_consents',
-    'attendance',
-    'history_dictionary_words',
+    "academic_records",
+    "performance_score_consents",
+    "attendance",
+    "history_dictionary_words",
   ];
   const snapshots = await Promise.all(
-    userCollections.map((collectionName) => db.collection(`users/${uid}/${collectionName}`).get()),
+    userCollections.map((collectionName) =>
+      db.collection(`users/${uid}/${collectionName}`).get(),
+    ),
   );
   snapshots.forEach((snapshot) => addQueryDocRefs(refsByPath, snapshot));
   return Array.from(refsByPath.values());
 };
 
-const sanitizeStudentProfileText = (value, maxLength, fallback = '') => {
-  const normalized = String(value ?? '').replace(/\s+/g, ' ').trim();
+const sanitizeStudentProfileText = (value, maxLength, fallback = "") => {
+  const normalized = String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim();
   return (normalized || fallback).slice(0, maxLength);
 };
 
@@ -3333,16 +4280,22 @@ const buildStudentGradeClassLabel = ({ grade, classValue, number }) => {
   if (grade) parts.push(`${grade}학년`);
   if (classValue) parts.push(`${classValue}반`);
   if (number) parts.push(`${number}번`);
-  return parts.join(' ');
+  return parts.join(" ");
 };
 
 const buildStudentProfileUpdatePatches = (input = {}) => {
-  const grade = sanitizeStudentProfileText(input.grade ?? input.studentGrade, 12);
+  const grade = sanitizeStudentProfileText(
+    input.grade ?? input.studentGrade,
+    12,
+  );
   const classValue = sanitizeStudentProfileText(
     input.class ?? input.classValue ?? input.studentClass,
     12,
   );
-  const number = sanitizeStudentProfileText(input.number ?? input.studentNumber, 12);
+  const number = sanitizeStudentProfileText(
+    input.number ?? input.studentNumber,
+    12,
+  );
   const name = sanitizeStudentProfileText(input.name ?? input.studentName, 80);
   const email = sanitizeStudentProfileText(input.email, 160).toLowerCase();
   const gradeClass = buildStudentGradeClassLabel({ grade, classValue, number });
@@ -3419,7 +4372,9 @@ const updateStudentInPerformanceScoreRosters = async (
   profilePatch,
 ) => {
   const rosterSnapshot = await db
-    .collection(`${getSemesterRoot(year, semester)}/${PERFORMANCE_SCORE_ROSTERS_COLLECTION}`)
+    .collection(
+      `${getSemesterRoot(year, semester)}/${PERFORMANCE_SCORE_ROSTERS_COLLECTION}`,
+    )
     .get();
   let updatedRosterCount = 0;
   let updatedRosterRowCount = 0;
@@ -3437,7 +4392,7 @@ const updateStudentInPerformanceScoreRosters = async (
     const rows = Array.isArray(data.rows) ? data.rows : [];
     let changed = false;
     const nextRows = rows.map((row) => {
-      if (String(row?.uid || '').trim() !== uid) return row;
+      if (String(row?.uid || "").trim() !== uid) return row;
       changed = true;
       updatedRosterRowCount += 1;
       return {
@@ -3475,23 +4430,23 @@ const collectStudentProfileSnapshotRefs = async (year, semester, uid) => {
   const refsByPath = new Map();
   const scopedCollections = [
     PERFORMANCE_SCORE_OBJECTIONS_COLLECTION,
-    'point_transactions',
-    'point_orders',
-    'quiz_results',
-    'quiz_submissions',
-    'history_classroom_results',
-    'history_classroom_exemptions',
-    'history_classroom_exemption_requests',
+    "point_transactions",
+    "point_orders",
+    "quiz_results",
+    "quiz_submissions",
+    "history_classroom_results",
+    "history_classroom_exemptions",
+    "history_classroom_exemption_requests",
   ];
   const legacyCollections = [
-    'quiz_results',
-    'quiz_submissions',
-    'history_classroom_results',
-    'history_classroom_exemptions',
-    'history_classroom_exemption_requests',
+    "quiz_results",
+    "quiz_submissions",
+    "history_classroom_results",
+    "history_classroom_exemptions",
+    "history_classroom_exemption_requests",
     HISTORY_DICTIONARY_REQUESTS_COLLECTION,
   ];
-  const userCollections = ['academic_records', 'history_dictionary_words'];
+  const userCollections = ["academic_records", "history_dictionary_words"];
 
   const [
     scopedRefs,
@@ -3528,249 +4483,274 @@ const collectStudentProfileSnapshotRefs = async (year, semester, uid) => {
   return Array.from(refsByPath.values());
 };
 
-exports.deleteStudentData = onCall({ region: REGION, timeoutSeconds: 300, memory: '512MiB' }, async (request) => {
-  const manager = await assertStudentDataManager(request, { recentAuth: true, highRisk: true });
-  const { year, semester } = assertYearSemester(request.data || {});
-  const targetUid = String(
-    request.data?.uid
-    || request.data?.studentUid
-    || request.data?.targetUid
-    || '',
-  ).trim();
-  if (!targetUid) {
-    throw new HttpsError('invalid-argument', 'Student uid is required.');
-  }
-
-  const userRef = db.doc(`users/${targetUid}`);
-  const userSnap = await userRef.get();
-  const targetProfile = userSnap.exists ? userSnap.data() || {} : {};
-  const targetEmail = String(targetProfile.email || '').trim().toLowerCase();
-  const preserveUserDocument = String(targetProfile.role || '').trim() === 'teacher'
-    || targetEmail === ADMIN_EMAIL;
-
-  const [
-    performanceScoreRefs,
-    semesterRefs,
-    knownUserRefs,
-    rosterCleanup,
-  ] = await Promise.all([
-    collectStudentPerformanceScoreRefs(targetUid),
-    collectCurrentSemesterStudentRefs(year, semester, targetUid),
-    collectKnownUserStudentDataRefs(targetUid),
-    removeStudentFromPerformanceScoreRosters(year, semester, targetUid),
-  ]);
-
-  const deletedRelatedDocCount = await commitDeleteRefsInChunks([
-    ...performanceScoreRefs,
-    ...semesterRefs,
-    ...knownUserRefs,
-  ]);
-
-  let userDocumentDeleted = false;
-  let userProfileCleared = false;
-  let authUserDeleted = false;
-  let authUserDeleteError = '';
-  if (preserveUserDocument) {
-    await userRef.set(getStudentProfileClearPatch(), { merge: true });
-    userProfileCleared = true;
-  } else if (userSnap.exists) {
-    await userRef.delete();
-    userDocumentDeleted = true;
-    const authCleanup = await deleteAuthUserIfExists(targetUid);
-    authUserDeleted = authCleanup.authUserDeleted;
-    authUserDeleteError = authCleanup.authUserDeleteError;
-  }
-
-  console.info('Student data deleted.', {
-    actorUid: manager.uid,
-    targetUid,
-    year,
-    semester,
-    preserveUserDocument,
-    deletedRelatedDocCount,
-    authUserDeleted,
-    authUserDeleteError,
-    ...rosterCleanup,
-  });
-
-  return {
-    uid: targetUid,
-    year,
-    semester,
-    userDocumentDeleted,
-    userProfileCleared,
-    authUserDeleted,
-    authUserDeleteError,
-    deletedRelatedDocCount,
-    ...rosterCleanup,
-  };
-});
-
-exports.resetLessonCorePointProgress = onCall({ region: REGION, timeoutSeconds: 180, memory: '512MiB' }, async (request) => {
-  const manager = await assertStudentDataManager(request, { recentAuth: true, highRisk: true });
-  const { year, semester } = assertYearSemester(request.data || {});
-  const targetUid = String(
-    request.data?.uid
-    || request.data?.studentUid
-    || request.data?.targetUid
-    || '',
-  ).trim();
-  if (!targetUid) {
-    throw new HttpsError('invalid-argument', 'Student uid is required.');
-  }
-
-  const userRef = db.doc(`users/${targetUid}`);
-  const userSnap = await userRef.get();
-  if (!userSnap.exists) {
-    throw new HttpsError('not-found', 'Student user document does not exist.');
-  }
-
-  const targetProfile = userSnap.data() || {};
-  if (!isLessonCorePointResetTestStudent(targetProfile, targetUid)) {
-    throw new HttpsError(
-      'failed-precondition',
-      'Lesson core point reset is only allowed for the Bang test account.',
-    );
-  }
-
-  const {
-    updates,
-    resetRoot,
-    resetUnitCount,
-    removedCorePointFindCount,
-  } = await collectLessonCorePointResetUpdates(year, semester, targetUid);
-
-  for (let index = 0; index < updates.length; index += 400) {
-    const batch = db.batch();
-    updates.slice(index, index + 400).forEach((entry) => {
-      batch.update(entry.ref, entry.data);
+exports.deleteStudentData = onCall(
+  { region: REGION, timeoutSeconds: 300, memory: "512MiB" },
+  async (request) => {
+    const manager = await assertStudentDataManager(request, {
+      recentAuth: true,
+      highRisk: true,
     });
-    await batch.commit();
-  }
+    const { year, semester } = assertYearSemester(request.data || {});
+    const targetUid = String(
+      request.data?.uid ||
+        request.data?.studentUid ||
+        request.data?.targetUid ||
+        "",
+    ).trim();
+    if (!targetUid) {
+      throw new HttpsError("invalid-argument", "Student uid is required.");
+    }
 
-  console.info('Lesson core point progress reset.', {
-    actorUid: manager.uid,
-    targetUid,
-    year,
-    semester,
-    resetRoot,
-    resetUnitCount,
-    removedCorePointFindCount,
-  });
+    const userRef = db.doc(`users/${targetUid}`);
+    const userSnap = await userRef.get();
+    const targetProfile = userSnap.exists ? userSnap.data() || {} : {};
+    const targetEmail = String(targetProfile.email || "")
+      .trim()
+      .toLowerCase();
+    const preserveUserDocument =
+      String(targetProfile.role || "").trim() === "teacher" ||
+      targetEmail === ADMIN_EMAIL;
 
-  return {
-    uid: targetUid,
-    year,
-    semester,
-    resetRoot,
-    resetUnitCount,
-    removedCorePointFindCount,
-  };
-});
+    const [performanceScoreRefs, semesterRefs, knownUserRefs, rosterCleanup] =
+      await Promise.all([
+        collectStudentPerformanceScoreRefs(targetUid),
+        collectCurrentSemesterStudentRefs(year, semester, targetUid),
+        collectKnownUserStudentDataRefs(targetUid),
+        removeStudentFromPerformanceScoreRosters(year, semester, targetUid),
+      ]);
 
-exports.updateStudentData = onCall({ region: REGION, timeoutSeconds: 180, memory: '512MiB' }, async (request) => {
-  const manager = await assertStudentDataManager(request, { recentAuth: true, highRisk: true });
-  const { year, semester } = assertYearSemester(request.data || {});
-  const targetUid = String(
-    request.data?.uid
-    || request.data?.studentUid
-    || request.data?.targetUid
-    || '',
-  ).trim();
-  if (!targetUid) {
-    throw new HttpsError('invalid-argument', 'Student uid is required.');
-  }
+    const deletedRelatedDocCount = await commitDeleteRefsInChunks([
+      ...performanceScoreRefs,
+      ...semesterRefs,
+      ...knownUserRefs,
+    ]);
 
-  const userRef = db.doc(`users/${targetUid}`);
-  const userSnap = await userRef.get();
-  if (!userSnap.exists) {
-    throw new HttpsError('not-found', 'Student user document does not exist.');
-  }
+    let userDocumentDeleted = false;
+    let userProfileCleared = false;
+    let authUserDeleted = false;
+    let authUserDeleteError = "";
+    if (preserveUserDocument) {
+      await userRef.set(getStudentProfileClearPatch(), { merge: true });
+      userProfileCleared = true;
+    } else if (userSnap.exists) {
+      await userRef.delete();
+      userDocumentDeleted = true;
+      const authCleanup = await deleteAuthUserIfExists(targetUid);
+      authUserDeleted = authCleanup.authUserDeleted;
+      authUserDeleteError = authCleanup.authUserDeleteError;
+    }
 
-  const targetProfile = userSnap.data() || {};
-  const targetEmail = String(targetProfile.email || '').trim().toLowerCase();
-  const preserveTeacherRole = String(targetProfile.role || '').trim() === 'teacher'
-    || targetEmail === ADMIN_EMAIL;
-  const profilePatch = buildStudentProfileUpdatePatches({
-    ...request.data,
-    uid: targetUid,
-    email: request.data?.email ?? targetProfile.email,
-  });
-
-  const [snapshotRefs, rosterSync] = await Promise.all([
-    collectStudentProfileSnapshotRefs(year, semester, targetUid),
-    updateStudentInPerformanceScoreRosters(
+    console.info("Student data deleted.", {
+      actorUid: manager.uid,
+      targetUid,
       year,
       semester,
+      preserveUserDocument,
+      deletedRelatedDocCount,
+      authUserDeleted,
+      authUserDeleteError,
+      ...rosterCleanup,
+    });
+
+    return {
+      uid: targetUid,
+      year,
+      semester,
+      userDocumentDeleted,
+      userProfileCleared,
+      authUserDeleted,
+      authUserDeleteError,
+      deletedRelatedDocCount,
+      ...rosterCleanup,
+    };
+  },
+);
+
+exports.resetLessonCorePointProgress = onCall(
+  { region: REGION, timeoutSeconds: 180, memory: "512MiB" },
+  async (request) => {
+    const manager = await assertStudentDataManager(request, {
+      recentAuth: true,
+      highRisk: true,
+    });
+    const { year, semester } = assertYearSemester(request.data || {});
+    const targetUid = String(
+      request.data?.uid ||
+        request.data?.studentUid ||
+        request.data?.targetUid ||
+        "",
+    ).trim();
+    if (!targetUid) {
+      throw new HttpsError("invalid-argument", "Student uid is required.");
+    }
+
+    const userRef = db.doc(`users/${targetUid}`);
+    const userSnap = await userRef.get();
+    if (!userSnap.exists) {
+      throw new HttpsError(
+        "not-found",
+        "Student user document does not exist.",
+      );
+    }
+
+    const targetProfile = userSnap.data() || {};
+    if (!isLessonCorePointResetTestStudent(targetProfile, targetUid)) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Lesson core point reset is only allowed for the Bang test account.",
+      );
+    }
+
+    const { updates, resetRoot, resetUnitCount, removedCorePointFindCount } =
+      await collectLessonCorePointResetUpdates(year, semester, targetUid);
+
+    for (let index = 0; index < updates.length; index += 400) {
+      const batch = db.batch();
+      updates.slice(index, index + 400).forEach((entry) => {
+        batch.update(entry.ref, entry.data);
+      });
+      await batch.commit();
+    }
+
+    console.info("Lesson core point progress reset.", {
+      actorUid: manager.uid,
       targetUid,
-      profilePatch,
-    ),
-  ]);
+      year,
+      semester,
+      resetRoot,
+      resetUnitCount,
+      removedCorePointFindCount,
+    });
 
-  const updateEntries = [
-    {
-      ref: userRef,
-      data: {
-        ...profilePatch.userPatch,
-        ...(preserveTeacherRole ? { role: targetProfile.role || 'teacher' } : {}),
+    return {
+      uid: targetUid,
+      year,
+      semester,
+      resetRoot,
+      resetUnitCount,
+      removedCorePointFindCount,
+    };
+  },
+);
+
+exports.updateStudentData = onCall(
+  { region: REGION, timeoutSeconds: 180, memory: "512MiB" },
+  async (request) => {
+    const manager = await assertStudentDataManager(request, {
+      recentAuth: true,
+      highRisk: true,
+    });
+    const { year, semester } = assertYearSemester(request.data || {});
+    const targetUid = String(
+      request.data?.uid ||
+        request.data?.studentUid ||
+        request.data?.targetUid ||
+        "",
+    ).trim();
+    if (!targetUid) {
+      throw new HttpsError("invalid-argument", "Student uid is required.");
+    }
+
+    const userRef = db.doc(`users/${targetUid}`);
+    const userSnap = await userRef.get();
+    if (!userSnap.exists) {
+      throw new HttpsError(
+        "not-found",
+        "Student user document does not exist.",
+      );
+    }
+
+    const targetProfile = userSnap.data() || {};
+    const targetEmail = String(targetProfile.email || "")
+      .trim()
+      .toLowerCase();
+    const preserveTeacherRole =
+      String(targetProfile.role || "").trim() === "teacher" ||
+      targetEmail === ADMIN_EMAIL;
+    const profilePatch = buildStudentProfileUpdatePatches({
+      ...request.data,
+      uid: targetUid,
+      email: request.data?.email ?? targetProfile.email,
+    });
+
+    const [snapshotRefs, rosterSync] = await Promise.all([
+      collectStudentProfileSnapshotRefs(year, semester, targetUid),
+      updateStudentInPerformanceScoreRosters(
+        year,
+        semester,
+        targetUid,
+        profilePatch,
+      ),
+    ]);
+
+    const updateEntries = [
+      {
+        ref: userRef,
+        data: {
+          ...profilePatch.userPatch,
+          ...(preserveTeacherRole
+            ? { role: targetProfile.role || "teacher" }
+            : {}),
+        },
       },
-    },
-    ...snapshotRefs.map((ref) => ({
-      ref,
-      data: ref.parent.id === PERFORMANCE_SCORE_USER_COLLECTION
-        ? profilePatch.scorePatch
-        : profilePatch.genericPatch,
-    })),
-  ];
-  const updatedRelatedDocCount = await commitSetEntriesInChunks(updateEntries);
+      ...snapshotRefs.map((ref) => ({
+        ref,
+        data:
+          ref.parent.id === PERFORMANCE_SCORE_USER_COLLECTION
+            ? profilePatch.scorePatch
+            : profilePatch.genericPatch,
+      })),
+    ];
+    const updatedRelatedDocCount =
+      await commitSetEntriesInChunks(updateEntries);
 
-  console.info('Student data updated.', {
-    actorUid: manager.uid,
-    targetUid,
-    year,
-    semester,
-    updatedRelatedDocCount,
-    ...rosterSync,
-  });
+    console.info("Student data updated.", {
+      actorUid: manager.uid,
+      targetUid,
+      year,
+      semester,
+      updatedRelatedDocCount,
+      ...rosterSync,
+    });
 
-  return {
-    uid: targetUid,
-    year,
-    semester,
-    updatedRelatedDocCount,
-    ...rosterSync,
-  };
-});
+    return {
+      uid: targetUid,
+      year,
+      semester,
+      updatedRelatedDocCount,
+      ...rosterSync,
+    };
+  },
+);
 
 const normalizeMockExamRound = (value) => {
-  const raw = String(value || '').trim().toLowerCase();
+  const raw = String(value || "")
+    .trim()
+    .toLowerCase();
   const numeric = raw.match(/\d+/)?.[0];
   const normalized = numeric ? `round_${Number(numeric)}` : raw;
-  return /^round_([1-9]\d*)$/.test(normalized)
-    ? normalized
-    : 'round_1';
+  return /^round_([1-9]\d*)$/.test(normalized) ? normalized : "round_1";
 };
 
 const getMockExamRoundFromCategory = (category) => {
-  const raw = String(category || '').trim();
-  const prefix = 'exam_prep__';
-  if (!raw.startsWith(prefix)) return '';
+  const raw = String(category || "").trim();
+  const prefix = "exam_prep__";
+  if (!raw.startsWith(prefix)) return "";
   const round = raw.slice(prefix.length);
-  return /^round_([1-9]\d*)$/.test(round) ? round : '';
+  return /^round_([1-9]\d*)$/.test(round) ? round : "";
 };
 
 const isMockExamCategory = (category) => {
-  const raw = String(category || '').trim();
-  return raw === 'exam_prep' || Boolean(getMockExamRoundFromCategory(raw));
+  const raw = String(category || "").trim();
+  return raw === "exam_prep" || Boolean(getMockExamRoundFromCategory(raw));
 };
 
-const normalizeMockExamCategory = (category) => (
-  isMockExamCategory(category) ? 'exam_prep' : String(category || '').trim()
-);
+const normalizeMockExamCategory = (category) =>
+  isMockExamCategory(category) ? "exam_prep" : String(category || "").trim();
 
-const getResultMockExamRound = (data) => (
-  getMockExamRoundFromCategory(data?.category) || normalizeMockExamRound(data?.examRound)
-);
+const getResultMockExamRound = (data) =>
+  getMockExamRoundFromCategory(data?.category) ||
+  normalizeMockExamRound(data?.examRound);
 
 const quizAttemptMatchesExamRound = (data, category, examRound) => {
   if (!isMockExamCategory(category)) return true;
@@ -3787,16 +4767,16 @@ const collectMatchingQuizAttemptDocsByClass = async ({
   normalizedClassId,
 }) => {
   const snapshots = await Promise.all(
-    ['class', 'studentClass'].map((classField) =>
+    ["class", "studentClass"].map((classField) =>
       collectionRef
-        .where(classField, '==', className)
+        .where(classField, "==", className)
         .get()
         .catch((error) => {
-          console.warn('Failed to query quiz attempts by class field.', {
+          console.warn("Failed to query quiz attempts by class field.", {
             collectionPath: collectionRef.path,
             classField,
             className,
-            errorMessage: String(error?.message || 'query-failed'),
+            errorMessage: String(error?.message || "query-failed"),
           });
           return null;
         }),
@@ -3812,10 +4792,10 @@ const collectMatchingQuizAttemptDocsByClass = async ({
   return Array.from(docsByPath.values()).filter((docSnap) => {
     const data = docSnap.data() || {};
     return (
-      String(data.unitId || '').trim() === unitId
-      && normalizeMockExamCategory(data.category) === category
-      && quizAttemptMatchesExamRound(data, category, examRound)
-      && quizAttemptMatchesClass(data, normalizedClassId)
+      String(data.unitId || "").trim() === unitId &&
+      normalizeMockExamCategory(data.category) === category &&
+      quizAttemptMatchesExamRound(data, category, examRound) &&
+      quizAttemptMatchesClass(data, normalizedClassId)
     );
   });
 };
@@ -3852,7 +4832,7 @@ const collectMatchingQuizAttemptDocsByUidChunks = async ({
   const uidList = Array.from(
     new Set(
       Array.from(studentUids || [])
-        .map((uid) => String(uid || '').trim())
+        .map((uid) => String(uid || "").trim())
         .filter(Boolean),
     ),
   );
@@ -3865,13 +4845,13 @@ const collectMatchingQuizAttemptDocsByUidChunks = async ({
 
   const snapshots = await runWithConcurrency(uidChunks, 4, (uidChunk) =>
     collectionRef
-      .where('uid', 'in', uidChunk)
+      .where("uid", "in", uidChunk)
       .get()
       .catch((error) => {
-        console.warn('Failed to query quiz attempts by uid chunk.', {
+        console.warn("Failed to query quiz attempts by uid chunk.", {
           collectionPath: collectionRef.path,
           uidCount: uidChunk.length,
-          errorMessage: String(error?.message || 'query-failed'),
+          errorMessage: String(error?.message || "query-failed"),
         });
         return null;
       }),
@@ -3882,12 +4862,12 @@ const collectMatchingQuizAttemptDocsByUidChunks = async ({
   snapshots.forEach((snapshot) => {
     snapshot?.forEach((docSnap) => {
       const data = docSnap.data() || {};
-      const uid = String(data.uid || '').trim();
+      const uid = String(data.uid || "").trim();
       if (
-        !uidSet.has(uid)
-        || String(data.unitId || '').trim() !== unitId
-        || normalizeMockExamCategory(data.category) !== category
-        || !quizAttemptMatchesExamRound(data, category, examRound)
+        !uidSet.has(uid) ||
+        String(data.unitId || "").trim() !== unitId ||
+        normalizeMockExamCategory(data.category) !== category ||
+        !quizAttemptMatchesExamRound(data, category, examRound)
       ) {
         return;
       }
@@ -3900,16 +4880,14 @@ const collectMatchingQuizAttemptDocsByUidChunks = async ({
 
 const filterExistingRefs = async (refs) => {
   const uniqueRefs = Array.from(
-    new Map(
-      refs
-        .filter(Boolean)
-        .map((ref) => [ref.path, ref]),
-    ).values(),
+    new Map(refs.filter(Boolean).map((ref) => [ref.path, ref])).values(),
   );
   const existingRefs = [];
   for (let index = 0; index < uniqueRefs.length; index += 100) {
     const snapshotBatch = await Promise.all(
-      uniqueRefs.slice(index, index + 100).map((ref) => ref.get().catch(() => null)),
+      uniqueRefs
+        .slice(index, index + 100)
+        .map((ref) => ref.get().catch(() => null)),
     );
     snapshotBatch.forEach((snapshot, snapshotIndex) => {
       if (!snapshot?.exists) return;
@@ -3927,34 +4905,39 @@ const resetAssessmentAttemptsByClassHandler = onCall(
       highRisk: true,
     });
     if (uid && email) {
-      throw new HttpsError('failed-precondition', 'This legacy reset endpoint was retired by W6A.', {
-        reason: 'ASSESSMENT_LEGACY_RESET_RETIRED',
-        replacement: 'resetAssessmentAttemptsByClassV2',
-      });
+      throw new HttpsError(
+        "failed-precondition",
+        "This legacy reset endpoint was retired by W6A.",
+        {
+          reason: "ASSESSMENT_LEGACY_RESET_RETIRED",
+          replacement: "resetAssessmentAttemptsByClassV2",
+        },
+      );
     }
     const { year, semester } = assertYearSemester(request.data || {});
-    const unitId = String(request.data?.unitId || '').trim();
-    const category = String(request.data?.category || '').trim();
-    const classId = String(request.data?.classId || '').trim();
-    const examRound = isMockExamCategory(category) && request.data?.examRound
-      ? normalizeMockExamRound(request.data.examRound)
-      : '';
+    const unitId = String(request.data?.unitId || "").trim();
+    const category = String(request.data?.category || "").trim();
+    const classId = String(request.data?.classId || "").trim();
+    const examRound =
+      isMockExamCategory(category) && request.data?.examRound
+        ? normalizeMockExamRound(request.data.examRound)
+        : "";
 
     if (!unitId || !category || !classId) {
       throw new HttpsError(
-        'invalid-argument',
-        'unitId, category, and classId are required.',
+        "invalid-argument",
+        "unitId, category, and classId are required.",
       );
     }
 
     const [grade, className] = classId
-      .split('-')
+      .split("-")
       .map((value) => normalizeSchoolToken(value));
     const normalizedClassId = buildQuizClassId(grade, className);
     if (!normalizedClassId) {
       throw new HttpsError(
-        'invalid-argument',
-        'classId must follow the {grade}-{class} format.',
+        "invalid-argument",
+        "classId must follow the {grade}-{class} format.",
       );
     }
 
@@ -3968,23 +4951,23 @@ const resetAssessmentAttemptsByClassHandler = onCall(
       ...(examRound ? { examRound } : {}),
       requestedClassId: classId,
       resolvedClassId: normalizedClassId,
-      status: 'started',
+      status: "started",
       startedAt: FieldValue.serverTimestamp(),
     });
 
     try {
       const userQueryCombos = [
-        ['studentGrade', 'studentClass'],
-        ['studentGrade', 'class'],
-        ['grade', 'studentClass'],
-        ['grade', 'class'],
+        ["studentGrade", "studentClass"],
+        ["studentGrade", "class"],
+        ["grade", "studentClass"],
+        ["grade", "class"],
       ];
       const userSnapshots = await Promise.all(
         userQueryCombos.map(([gradeField, classField]) =>
           db
-            .collection('users')
-            .where(gradeField, '==', grade)
-            .where(classField, '==', className)
+            .collection("users")
+            .where(gradeField, "==", grade)
+            .where(classField, "==", className)
             .get()
             .catch(() => null),
         ),
@@ -4005,8 +4988,12 @@ const resetAssessmentAttemptsByClassHandler = onCall(
         });
       });
 
-      const quizResultsCollection = db.collection(`${semesterRoot}/quiz_results`);
-      const quizSubmissionsCollection = db.collection(`${semesterRoot}/quiz_submissions`);
+      const quizResultsCollection = db.collection(
+        `${semesterRoot}/quiz_results`,
+      );
+      const quizSubmissionsCollection = db.collection(
+        `${semesterRoot}/quiz_submissions`,
+      );
       const resultRefs = [];
       const submissionRefs = [];
       const pointTransactionRefs = [];
@@ -4052,7 +5039,7 @@ const resetAssessmentAttemptsByClassHandler = onCall(
 
       [...uidResultDocs, ...classResultDocs].forEach((docSnap) => {
         const data = docSnap.data() || {};
-        const studentUid = String(data.uid || '').trim();
+        const studentUid = String(data.uid || "").trim();
         if (!studentUid) return;
         resultRefs.push(docSnap.ref);
         affectedStudentUids.add(studentUid);
@@ -4060,27 +5047,26 @@ const resetAssessmentAttemptsByClassHandler = onCall(
         const sourceId = `quiz-result-${docSnap.id}`;
         pointTransactionRefs.push(
           db.doc(
-            `${getPointCollectionPath(year, semester, 'point_transactions')}/${buildActivityTransactionId(studentUid, 'quiz', sourceId)}`,
+            `${getPointCollectionPath(year, semester, "point_transactions")}/${buildActivityTransactionId(studentUid, "quiz", sourceId)}`,
           ),
         );
         pointTransactionRefs.push(
           db.doc(
-            `${getPointCollectionPath(year, semester, 'point_transactions')}/${buildActivityTransactionId(studentUid, 'quiz_bonus', sourceId)}`,
+            `${getPointCollectionPath(year, semester, "point_transactions")}/${buildActivityTransactionId(studentUid, "quiz_bonus", sourceId)}`,
           ),
         );
       });
 
       [...uidSubmissionDocs, ...classSubmissionDocs].forEach((docSnap) => {
         const data = docSnap.data() || {};
-        const studentUid = String(data.uid || '').trim();
+        const studentUid = String(data.uid || "").trim();
         if (!studentUid) return;
         submissionRefs.push(docSnap.ref);
         affectedStudentUids.add(studentUid);
       });
 
-      const existingPointTransactionRefsPromise = filterExistingRefs(
-        pointTransactionRefs,
-      );
+      const existingPointTransactionRefsPromise =
+        filterExistingRefs(pointTransactionRefs);
       const [
         deletedQuizResultCount,
         deletedSubmissionCount,
@@ -4110,9 +5096,11 @@ const resetAssessmentAttemptsByClassHandler = onCall(
         } catch (error) {
           walletRebuildErrors.push({
             uid: studentUid,
-            errorMessage: String(error?.message || 'wallet-rebuild-failed').slice(0, 160),
+            errorMessage: String(
+              error?.message || "wallet-rebuild-failed",
+            ).slice(0, 160),
           });
-          console.error('Failed to rebuild wallet after quiz reset.', {
+          console.error("Failed to rebuild wallet after quiz reset.", {
             uid: studentUid,
             year,
             semester,
@@ -4120,7 +5108,8 @@ const resetAssessmentAttemptsByClassHandler = onCall(
           });
         }
       });
-      const recalculatedWalletCount = affectedStudentList.length - walletRebuildErrors.length;
+      const recalculatedWalletCount =
+        affectedStudentList.length - walletRebuildErrors.length;
 
       if (deletedPointTransactionCount > 0) {
         await markWisHallOfFameDirtySafely(year, semester);
@@ -4128,7 +5117,7 @@ const resetAssessmentAttemptsByClassHandler = onCall(
 
       await auditRef.set(
         {
-          status: 'completed',
+          status: "completed",
           targetStudentCount: studentUids.size,
           affectedStudentCount: affectedStudentList.length,
           deletedQuizResultCount,
@@ -4142,7 +5131,7 @@ const resetAssessmentAttemptsByClassHandler = onCall(
         { merge: true },
       );
 
-      console.info('Assessment attempts reset for class.', {
+      console.info("Assessment attempts reset for class.", {
         actorUid: uid,
         year,
         semester,
@@ -4171,14 +5160,19 @@ const resetAssessmentAttemptsByClassHandler = onCall(
         walletRebuildErrorCount: walletRebuildErrors.length,
       };
     } catch (error) {
-      await auditRef.set(
-        {
-          status: 'failed',
-          errorMessage: String(error?.message || 'reset-failed').slice(0, 240),
-          completedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true },
-      ).catch(() => undefined);
+      await auditRef
+        .set(
+          {
+            status: "failed",
+            errorMessage: String(error?.message || "reset-failed").slice(
+              0,
+              240,
+            ),
+            completedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        )
+        .catch(() => undefined);
       throw error;
     }
   },
@@ -4190,16 +5184,16 @@ exports.resetQuizAttemptsForClass = resetAssessmentAttemptsByClassHandler;
 const buildWalletBase = (uid, profile) => ({
   uid,
   studentName: String(
-    profile.studentName
-    || profile.name
-    || profile.displayName
-    || profile.customName
-    || profile.nickname
-    || '',
+    profile.studentName ||
+      profile.name ||
+      profile.displayName ||
+      profile.customName ||
+      profile.nickname ||
+      "",
   ).trim(),
-  grade: String(profile.studentGrade || profile.grade || '').trim(),
-  class: String(profile.studentClass || profile.class || '').trim(),
-  number: String(profile.studentNumber || profile.number || '').trim(),
+  grade: String(profile.studentGrade || profile.grade || "").trim(),
+  class: String(profile.studentClass || profile.class || "").trim(),
+  number: String(profile.studentNumber || profile.number || "").trim(),
 });
 
 const ensureWallet = async (transaction, year, semester, uid, profile) => {
@@ -4257,42 +5251,49 @@ const createTransactionPayload = ({
   delta,
   balanceAfter,
   sourceId,
-  sourceLabel: String(sourceLabel || '').trim(),
-  policyId: String(policyId || ''),
+  sourceLabel: String(sourceLabel || "").trim(),
+  policyId: String(policyId || ""),
   createdBy,
-  targetMonth: String(targetMonth || '').trim(),
-  targetDate: String(targetDate || '').trim(),
+  targetMonth: String(targetMonth || "").trim(),
+  targetDate: String(targetDate || "").trim(),
   createdAt: FieldValue.serverTimestamp(),
 });
 
 const getLessonCorePointTimestampMs = (value) => {
   if (!value) return 0;
-  if (typeof value.toMillis === 'function') return value.toMillis();
+  if (typeof value.toMillis === "function") return value.toMillis();
   if (Number(value.seconds || 0) || Number(value.nanoseconds || 0)) {
-    return (Number(value.seconds || 0) * 1000) + Math.floor(Number(value.nanoseconds || 0) / 1000000);
+    return (
+      Number(value.seconds || 0) * 1000 +
+      Math.floor(Number(value.nanoseconds || 0) / 1000000)
+    );
   }
-  const parsed = Date.parse(String(value || ''));
+  const parsed = Date.parse(String(value || ""));
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-const getLessonUpdatedAtMs = (lesson = {}) => Math.max(
-  getLessonCorePointTimestampMs(lesson.updatedAt),
-  getLessonCorePointTimestampMs(lesson.createdAt),
-);
+const getLessonUpdatedAtMs = (lesson = {}) =>
+  Math.max(
+    getLessonCorePointTimestampMs(lesson.updatedAt),
+    getLessonCorePointTimestampMs(lesson.createdAt),
+  );
 
 const getLatestLessonsByUnitIdForCorePoints = (lessons = []) => {
   const latestByUnitId = new Map();
   [...lessons]
-    .sort((left, right) => getLessonUpdatedAtMs(right) - getLessonUpdatedAtMs(left))
+    .sort(
+      (left, right) => getLessonUpdatedAtMs(right) - getLessonUpdatedAtMs(left),
+    )
     .forEach((lesson) => {
-      const unitId = String(lesson?.unitId || '').trim();
+      const unitId = String(lesson?.unitId || "").trim();
       if (!unitId || latestByUnitId.has(unitId)) return;
       latestByUnitId.set(unitId, lesson);
     });
   return Array.from(latestByUnitId.values());
 };
 
-const isStudentVisibleLessonForCorePoints = (lesson = {}) => lesson.isVisibleToStudents !== false;
+const isStudentVisibleLessonForCorePoints = (lesson = {}) =>
+  lesson.isVisibleToStudents !== false;
 
 const normalizeLessonCorePointIds = (lesson = {}) => {
   const rawHighlights = Array.isArray(lesson.worksheetExamHighlights)
@@ -4302,39 +5303,64 @@ const normalizeLessonCorePointIds = (lesson = {}) => {
     .map((item, index) => {
       const widthRatio = Math.max(0, Number(item?.widthRatio || 0));
       const heightRatio = Math.max(0, Number(item?.heightRatio || 0));
-      if (widthRatio <= 0 || heightRatio <= 0) return '';
-      return String(item?.id || '').trim() || `exam-highlight-${index + 1}`;
+      if (widthRatio <= 0 || heightRatio <= 0) return "";
+      return String(item?.id || "").trim() || `exam-highlight-${index + 1}`;
     })
     .filter(Boolean);
 };
 
-const readEffectiveVisibleLessonCorePointCatalog = async (transaction, year, semester) => {
+const readEffectiveVisibleLessonCorePointCatalog = async (
+  transaction,
+  year,
+  semester,
+) => {
   const scopedSnapshot = await transaction.get(
     db.collection(`${getSemesterRoot(year, semester)}/lessons`),
   );
   const scopedLessons = getLatestLessonsByUnitIdForCorePoints(
-    scopedSnapshot.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() || {}) })),
+    scopedSnapshot.docs.map((docSnap) => ({
+      id: docSnap.id,
+      ...(docSnap.data() || {}),
+    })),
   );
-  const scopedUnitIds = new Set(scopedLessons.map((lesson) => String(lesson.unitId || '').trim()).filter(Boolean));
-  const legacySnapshot = await transaction.get(db.collection('lessons'));
+  const scopedUnitIds = new Set(
+    scopedLessons
+      .map((lesson) => String(lesson.unitId || "").trim())
+      .filter(Boolean),
+  );
+  const legacySnapshot = await transaction.get(db.collection("lessons"));
   const legacyLessons = getLatestLessonsByUnitIdForCorePoints(
-    legacySnapshot.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() || {}) })),
-  ).filter((lesson) => !scopedUnitIds.has(String(lesson.unitId || '').trim()));
+    legacySnapshot.docs.map((docSnap) => ({
+      id: docSnap.id,
+      ...(docSnap.data() || {}),
+    })),
+  ).filter((lesson) => !scopedUnitIds.has(String(lesson.unitId || "").trim()));
 
   return [...scopedLessons, ...legacyLessons]
     .filter(isStudentVisibleLessonForCorePoints)
     .map((lesson) => ({
-      unitId: String(lesson.unitId || '').trim(),
-      title: String(lesson.title || '').trim(),
+      unitId: String(lesson.unitId || "").trim(),
+      title: String(lesson.title || "").trim(),
       corePointIds: normalizeLessonCorePointIds(lesson),
     }))
     .filter((lesson) => lesson.unitId && lesson.corePointIds.length > 0);
 };
 
-const getLessonCorePointCompletion = async (transaction, year, semester, uid) => {
-  const catalog = await readEffectiveVisibleLessonCorePointCatalog(transaction, year, semester);
+const getLessonCorePointCompletion = async (
+  transaction,
+  year,
+  semester,
+  uid,
+) => {
+  const catalog = await readEffectiveVisibleLessonCorePointCatalog(
+    transaction,
+    year,
+    semester,
+  );
   const progressSnapshot = await transaction.get(
-    db.collection(`${getSemesterRoot(year, semester)}/lesson_progress/${uid}/units`),
+    db.collection(
+      `${getSemesterRoot(year, semester)}/lesson_progress/${uid}/units`,
+    ),
   );
   const progressByUnitId = new Map(
     progressSnapshot.docs.map((docSnap) => [docSnap.id, docSnap.data() || {}]),
@@ -4348,13 +5374,16 @@ const getLessonCorePointCompletion = async (transaction, year, semester, uid) =>
     const progress = progressByUnitId.get(lesson.unitId) || {};
     const foundIds = Array.isArray(progress.corePointFinds)
       ? progress.corePointFinds
-        .map((value) => String(value || '').trim())
-        .filter((value) => value && corePointIdSet.has(value))
+          .map((value) => String(value || "").trim())
+          .filter((value) => value && corePointIdSet.has(value))
       : [];
     const uniqueFoundCount = new Set(foundIds).size;
     totalCount += lesson.corePointIds.length;
     foundCount += uniqueFoundCount;
-    const missingCount = Math.max(0, lesson.corePointIds.length - uniqueFoundCount);
+    const missingCount = Math.max(
+      0,
+      lesson.corePointIds.length - uniqueFoundCount,
+    );
     if (missingCount > 0) {
       missingUnits.push({
         unitId: lesson.unitId,
@@ -4371,46 +5400,891 @@ const getLessonCorePointCompletion = async (transaction, year, semester, uid) =>
     complete: totalCount > 0 && foundCount >= totalCount,
     unitCount: catalog.length,
     missingUnits,
+    catalogHash: commandGateway.sha256(
+      commandGateway.canonicalize(
+        catalog.map((lesson) => ({
+          unitId: lesson.unitId,
+          corePointIds: lesson.corePointIds,
+        })),
+      ),
+    ),
   };
 };
 
+const LESSON_CORE_POINT_COMMAND_TYPES = Object.freeze({
+  RECORD_FIND: "recordLessonCorePointFind",
+  CLAIM_REWARD: "claimLessonCorePointReward",
+});
+const LESSON_CORE_POINT_REWARD_AMOUNT = 500;
+const LESSON_CORE_POINT_REWARD_SOURCE_ID = "lesson-core-points-all";
+const LESSON_CORE_POINT_RECENT_LEDGER_LIMIT = 100;
+const LESSON_CORE_POINT_COMMAND_ID_PATTERN =
+  /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[47][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|[0-9A-HJKMNP-TV-Z]{26})$/i;
+
+const normalizeLessonCorePointCommandText = (value, label, maxLength) => {
+  if (
+    typeof value !== "string" ||
+    value !== value.trim() ||
+    !value ||
+    value.length > maxLength ||
+    value.includes("/")
+  ) {
+    throw new HttpsError("invalid-argument", `${label} is invalid.`, {
+      reason: "LESSON_CORE_POINT_PAYLOAD_INVALID",
+      field: label,
+    });
+  }
+  return value;
+};
+
+const normalizeLessonCorePointCommand = (data) => {
+  const commandId = String(data?.commandId || "").trim();
+  const commandType = String(data?.commandType || "").trim();
+  if (!LESSON_CORE_POINT_COMMAND_ID_PATTERN.test(commandId)) {
+    throw new HttpsError("invalid-argument", "commandId is invalid.", {
+      reason: "LESSON_CORE_POINT_COMMAND_ID_INVALID",
+    });
+  }
+  if (!Object.values(LESSON_CORE_POINT_COMMAND_TYPES).includes(commandType)) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Unsupported lesson core point command.",
+      {
+        reason: "LESSON_CORE_POINT_COMMAND_UNSUPPORTED",
+      },
+    );
+  }
+  const rawPayload = data?.payload;
+  if (
+    !rawPayload ||
+    typeof rawPayload !== "object" ||
+    Array.isArray(rawPayload)
+  ) {
+    throw new HttpsError("invalid-argument", "payload is invalid.", {
+      reason: "LESSON_CORE_POINT_PAYLOAD_INVALID",
+    });
+  }
+  const allowedKeys =
+    commandType === LESSON_CORE_POINT_COMMAND_TYPES.RECORD_FIND
+      ? ["year", "semester", "unitId", "corePointId"]
+      : ["year", "semester"];
+  const unsupportedKeys = Object.keys(rawPayload).filter(
+    (key) => !allowedKeys.includes(key),
+  );
+  if (unsupportedKeys.length > 0) {
+    throw new HttpsError(
+      "invalid-argument",
+      "payload contains unsupported fields.",
+      {
+        reason: "LESSON_CORE_POINT_PAYLOAD_INVALID",
+        fields: unsupportedKeys,
+      },
+    );
+  }
+  const year = String(rawPayload.year || "").trim();
+  const semester = String(rawPayload.semester || "").trim();
+  if (!/^\d{4}$/.test(year) || !/^[12]$/.test(semester)) {
+    throw new HttpsError("invalid-argument", "Year and semester are invalid.", {
+      reason: "LESSON_CORE_POINT_SEMESTER_INVALID",
+    });
+  }
+  const payload = {
+    year,
+    semester,
+    ...(commandType === LESSON_CORE_POINT_COMMAND_TYPES.RECORD_FIND
+      ? {
+          unitId: normalizeLessonCorePointCommandText(
+            rawPayload.unitId,
+            "unitId",
+            180,
+          ),
+          corePointId: normalizeLessonCorePointCommandText(
+            rawPayload.corePointId,
+            "corePointId",
+            180,
+          ),
+        }
+      : {}),
+  };
+  return {
+    commandId: commandId.toLowerCase(),
+    commandType,
+    payload,
+    payloadHash: commandGateway.sha256(commandGateway.canonicalize(payload)),
+  };
+};
+
+const serializeLessonCorePointCommandSession = (identity) => {
+  const revision = String(identity?.session?.sessionRevision || "");
+  return {
+    ref: identity?.sessionRef?.path || null,
+    authTime: Number(identity?.authTime || 0),
+    authorityMode: String(identity?.authorityMode || ""),
+    authorityGeneration: String(identity?.session?.authorityGeneration || ""),
+    protocolVersion: Number(identity?.session?.protocolVersion || 0),
+    revisionHash: revision ? commandGateway.sha256(revision) : null,
+  };
+};
+
+const assertLessonCorePointStudent = async (request) => {
+  const uid = assertAuth(request);
+  const email = getAuthEmail(request);
+  if (!email || email === ADMIN_EMAIL || !SCHOOL_EMAIL_PATTERN.test(email)) {
+    throw new HttpsError(
+      "permission-denied",
+      "A student account is required.",
+      {
+        reason: "LESSON_CORE_POINT_STUDENT_REQUIRED",
+      },
+    );
+  }
+  const identity = await sessionAuthority.assertActiveApplicationSession(
+    request,
+    {
+      recentAuth: false,
+      highRisk: false,
+    },
+  );
+  const profileSnapshot = await db.doc(`users/${uid}`).get();
+  const profile = profileSnapshot.exists ? profileSnapshot.data() || {} : {};
+  if (String(profile.role || "student").trim() !== "student") {
+    throw new HttpsError(
+      "permission-denied",
+      "A student account is required.",
+      {
+        reason: "LESSON_CORE_POINT_STUDENT_REQUIRED",
+      },
+    );
+  }
+  return { uid, email, identity };
+};
+
+const assertLessonCorePointActiveScope = ({
+  manifestSnapshot,
+  pointerSnapshot,
+  semesterId,
+}) => {
+  const manifest = manifestSnapshot.exists ? manifestSnapshot.data() || {} : {};
+  const pointer = pointerSnapshot.exists ? pointerSnapshot.data() || {} : {};
+  const pointerSemesterId = String(
+    pointer.semesterId || pointer.activeSemesterId || "",
+  ).trim();
+  if (
+    !manifestSnapshot.exists ||
+    manifest.semesterId !== semesterId ||
+    manifest.status !== "ACTIVE" ||
+    !pointerSnapshot.exists ||
+    Number(pointer.revision || 0) !== Number(manifest.revision || 0)
+  ) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Lesson progress requires the active semester.",
+      {
+        reason: "LESSON_CORE_POINT_SEMESTER_NOT_ACTIVE",
+      },
+    );
+  }
+  if (pointerSemesterId !== semesterId) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Lesson progress requires the active semester.",
+      {
+        reason: "LESSON_CORE_POINT_SEMESTER_NOT_ACTIVE",
+      },
+    );
+  }
+  return manifest;
+};
+
+const resolveLessonCorePointActiveEnrollmentId = ({
+  slotSnapshot,
+  semesterId,
+  uid,
+}) => {
+  const slot = slotSnapshot.exists ? slotSnapshot.data() || {} : {};
+  const enrollmentId = String(slot.activeEnrollmentId || "").trim();
+  if (
+    !slotSnapshot.exists ||
+    slot.semesterId !== semesterId ||
+    slot.studentUid !== uid ||
+    slot.status !== "ACTIVE" ||
+    !enrollmentId ||
+    enrollmentId.includes("/")
+  ) {
+    throw new HttpsError(
+      "permission-denied",
+      "An active enrollment is required.",
+      {
+        reason: "LESSON_CORE_POINT_ACTIVE_ENROLLMENT_REQUIRED",
+      },
+    );
+  }
+  return enrollmentId;
+};
+
+const assertLessonCorePointActiveEnrollment = ({
+  enrollmentSnapshot,
+  enrollmentId,
+  semesterId,
+  uid,
+}) => {
+  const enrollment = enrollmentSnapshot.exists
+    ? enrollmentSnapshot.data() || {}
+    : {};
+  if (
+    !enrollmentSnapshot.exists ||
+    enrollment.enrollmentId !== enrollmentId ||
+    enrollment.semesterId !== semesterId ||
+    enrollment.studentUid !== uid ||
+    enrollment.enrollmentStatus !== "ACTIVE"
+  ) {
+    throw new HttpsError(
+      "permission-denied",
+      "An active enrollment is required.",
+      {
+        reason: "LESSON_CORE_POINT_ACTIVE_ENROLLMENT_REQUIRED",
+      },
+    );
+  }
+  return enrollment;
+};
+
+const writeLessonCorePointCommandReceipt = ({
+  transaction,
+  receiptRef,
+  auditRef,
+  receiptId,
+  command,
+  actor,
+  session,
+  business,
+  timestamp,
+}) => {
+  const target = business.target;
+  const result = business.result;
+  transaction.create(receiptRef, {
+    schemaVersion: 1,
+    commandId: command.commandId,
+    commandType: command.commandType,
+    status: "SUCCEEDED",
+    actorUid: actor.uid,
+    actorEmail: actor.email,
+    actorRole: "student",
+    actorCapability: `lesson:${command.commandType}`,
+    target,
+    payloadHash: command.payloadHash,
+    payloadHashAlgorithm: "sha256",
+    sourceHash: business.sourceHash,
+    session,
+    audit: {
+      eventId: receiptId,
+      ref: auditRef.path,
+      eventType: "COMMAND_SUCCEEDED",
+    },
+    createdAt: timestamp,
+    completedAt: timestamp,
+    result,
+    error: null,
+    retryable: false,
+    checkpoint: "COMMITTED",
+  });
+  transaction.create(auditRef, {
+    schemaVersion: 1,
+    eventId: receiptId,
+    eventType: "COMMAND_SUCCEEDED",
+    receiptRef: receiptRef.path,
+    commandId: command.commandId,
+    commandType: command.commandType,
+    actorUid: actor.uid,
+    actorEmail: actor.email,
+    actorRole: "student",
+    actorCapability: `lesson:${command.commandType}`,
+    target,
+    payloadHash: command.payloadHash,
+    sourceHash: business.sourceHash,
+    result,
+    createdAt: timestamp,
+  });
+};
+
+const executeLessonCorePointBusinessCommand = async ({
+  transaction,
+  command,
+  actor,
+  receiptId,
+  timestamp,
+}) => {
+  const { year, semester } = command.payload;
+  const semesterId = `${year}-${semester}`;
+  const manifestRef = db.doc(
+    `${semesterCore.SEMESTER_MANIFEST_COLLECTION}/${semesterId}`,
+  );
+  const pointerRef = db.doc(semesterCore.ACTIVE_SEMESTER_POINTER_PATH);
+  const enrollmentSlotRef = db.doc(
+    `${archiveEnrollment.ENROLLMENT_SLOT_COLLECTION}/${archiveEnrollment.buildEnrollmentSlotId(
+      semesterId,
+      actor.uid,
+    )}`,
+  );
+  const [manifestSnapshot, pointerSnapshot, enrollmentSlotSnapshot] =
+    await Promise.all([
+      transaction.get(manifestRef),
+      transaction.get(pointerRef),
+      transaction.get(enrollmentSlotRef),
+    ]);
+  assertLessonCorePointActiveScope({
+    manifestSnapshot,
+    pointerSnapshot,
+    semesterId,
+  });
+  const activeEnrollmentId = resolveLessonCorePointActiveEnrollmentId({
+    slotSnapshot: enrollmentSlotSnapshot,
+    semesterId,
+    uid: actor.uid,
+  });
+  const activeEnrollmentSnapshot = await transaction.get(
+    db.doc(
+      `${archiveEnrollment.SEMESTER_ENROLLMENT_COLLECTION}/${activeEnrollmentId}`,
+    ),
+  );
+  const activeEnrollment = assertLessonCorePointActiveEnrollment({
+    enrollmentSnapshot: activeEnrollmentSnapshot,
+    enrollmentId: activeEnrollmentId,
+    semesterId,
+    uid: actor.uid,
+  });
+
+  if (command.commandType === LESSON_CORE_POINT_COMMAND_TYPES.RECORD_FIND) {
+    const catalog = await readEffectiveVisibleLessonCorePointCatalog(
+      transaction,
+      year,
+      semester,
+    );
+    const lesson = catalog.find(
+      (item) => item.unitId === command.payload.unitId,
+    );
+    if (!lesson || !lesson.corePointIds.includes(command.payload.corePointId)) {
+      throw new HttpsError(
+        "failed-precondition",
+        "The core point is not part of the current lesson.",
+        {
+          reason: "LESSON_CORE_POINT_NOT_CANONICAL",
+        },
+      );
+    }
+    const progressRef = db.doc(
+      `${getSemesterRoot(year, semester)}/lesson_progress/${actor.uid}/units/${lesson.unitId}`,
+    );
+    const progressSnapshot = await transaction.get(progressRef);
+    const progress = progressSnapshot.exists
+      ? progressSnapshot.data() || {}
+      : {};
+    if (
+      progressSnapshot.exists &&
+      progress.userId &&
+      progress.userId !== actor.uid
+    ) {
+      throw new HttpsError(
+        "permission-denied",
+        "Lesson progress ownership is invalid.",
+        {
+          reason: "LESSON_CORE_POINT_OWNER_MISMATCH",
+        },
+      );
+    }
+    const allowedIds = new Set(lesson.corePointIds);
+    const currentIds = Array.isArray(progress.corePointFinds)
+      ? [
+          ...new Set(
+            progress.corePointFinds
+              .map((value) => String(value || "").trim())
+              .filter((value) => value && allowedIds.has(value)),
+          ),
+        ]
+      : [];
+    const alreadyFound = currentIds.includes(command.payload.corePointId);
+    const nextIds = alreadyFound
+      ? currentIds
+      : lesson.corePointIds.filter((id) =>
+          new Set([...currentIds, command.payload.corePointId]).has(id),
+        );
+    const currentRevision = Number(progress.revision || 0);
+    if (!alreadyFound) {
+      transaction.set(
+        progressRef,
+        {
+          userId: actor.uid,
+          studentUid: actor.uid,
+          enrollmentId: activeEnrollment.enrollmentId,
+          unitId: lesson.unitId,
+          corePointFinds: nextIds,
+          revision: currentRevision + 1,
+          updatedAt: timestamp,
+          ...(nextIds.length >= lesson.corePointIds.length
+            ? { corePointCompletedAt: timestamp }
+            : {}),
+        },
+        { merge: true },
+      );
+    }
+    return {
+      target: {
+        kind: "lesson-core-point-progress",
+        id: `${actor.uid}:${lesson.unitId}`,
+        refs: [progressRef.path],
+      },
+      sourceHash: commandGateway.sha256(
+        commandGateway.canonicalize({
+          unitId: lesson.unitId,
+          corePointIds: lesson.corePointIds,
+        }),
+      ),
+      result: {
+        unitId: lesson.unitId,
+        corePointId: command.payload.corePointId,
+        duplicate: alreadyFound,
+        foundCount: nextIds.length,
+        totalCount: lesson.corePointIds.length,
+        progressRevision: alreadyFound ? currentRevision : currentRevision + 1,
+        settled: true,
+      },
+    };
+  }
+
+  const accountId = wisEconomy.accountIdFor(semesterId, actor.uid);
+  const economyRef = db.doc(
+    `${wisEconomy.WIS_ECONOMY_COLLECTION}/${semesterId}`,
+  );
+  const accountRef = db.doc(
+    `${wisEconomy.WIS_ACCOUNT_COLLECTION}/${accountId}`,
+  );
+  const balanceRef = db.doc(
+    `${wisEconomy.WIS_BALANCE_COLLECTION}/${accountId}`,
+  );
+  const rankingRef = db.doc(
+    `${wisEconomy.WIS_RANKING_COLLECTION}/${accountId}`,
+  );
+  const ledgerEntryId = `wisled_${commandGateway.sha256(
+    [semesterId, accountId, "GRANT", LESSON_CORE_POINT_REWARD_SOURCE_ID].join(
+      "\n",
+    ),
+  )}`;
+  const ledgerRef = db.doc(
+    `${wisEconomy.WIS_LEDGER_COLLECTION}/${ledgerEntryId}`,
+  );
+  const progressRootRef = db.doc(
+    `${getSemesterRoot(year, semester)}/lesson_progress/${actor.uid}`,
+  );
+  const legacyTransactionRef = db.doc(
+    `${getPointCollectionPath(year, semester, "point_transactions")}/${buildActivityTransactionId(
+      actor.uid,
+      "lesson_core_points",
+      LESSON_CORE_POINT_REWARD_SOURCE_ID,
+    )}`,
+  );
+  const [
+    economySnapshot,
+    accountSnapshot,
+    ledgerSnapshot,
+    progressRootSnapshot,
+    legacyTransactionSnapshot,
+  ] = await transaction.getAll(
+    economyRef,
+    accountRef,
+    ledgerRef,
+    progressRootRef,
+    legacyTransactionRef,
+  );
+  const economy = economySnapshot.exists ? economySnapshot.data() || {} : {};
+  const account = accountSnapshot.exists ? accountSnapshot.data() || {} : {};
+  if (
+    !economySnapshot.exists ||
+    economy.status !== "ACTIVE_OPEN" ||
+    economy.readOnly === true
+  ) {
+    throw new HttpsError(
+      "failed-precondition",
+      "The Wis economy is not open.",
+      {
+        reason: "LESSON_CORE_POINT_WIS_NOT_OPEN",
+      },
+    );
+  }
+  if (
+    !accountSnapshot.exists ||
+    account.accountId !== accountId ||
+    account.semesterId !== semesterId ||
+    account.studentUid !== actor.uid ||
+    account.status !== "ACTIVE" ||
+    account.readOnly === true
+  ) {
+    throw new HttpsError(
+      "failed-precondition",
+      "An active Wis account is required.",
+      {
+        reason: "LESSON_CORE_POINT_WIS_ACCOUNT_INVALID",
+      },
+    );
+  }
+  const completion = await getLessonCorePointCompletion(
+    transaction,
+    year,
+    semester,
+    actor.uid,
+  );
+  if (!completion.complete) {
+    throw new HttpsError(
+      "failed-precondition",
+      "All lesson core points must be found first.",
+      {
+        reason:
+          completion.totalCount > 0
+            ? "LESSON_CORE_POINTS_REMAINING"
+            : "LESSON_CORE_POINTS_EMPTY",
+        totalCount: completion.totalCount,
+        foundCount: completion.foundCount,
+        remainingCount: completion.remainingCount,
+      },
+    );
+  }
+  const legacySettled =
+    legacyTransactionSnapshot.exists ||
+    progressRootSnapshot.data()?.corePointRewardClaimed === true;
+  const duplicate = ledgerSnapshot.exists || legacySettled;
+  const currentBalance = Number(account.balance || 0);
+  const currentEarnedTotal = Number(account.earnedTotal || 0);
+  const currentRankEarnedTotal = Number(account.rankEarnedTotal || 0);
+  const currentSpentTotal = Number(account.spentTotal || 0);
+  const currentAdjustedTotal = Number(account.adjustedTotal || 0);
+  let nextBalance = currentBalance;
+  let nextEarnedTotal = currentEarnedTotal;
+  let nextRankEarnedTotal = currentRankEarnedTotal;
+  let nextAdjustedTotal = currentAdjustedTotal;
+  let accountRevision = Number(account.revision || 0);
+  if (!duplicate) {
+    nextBalance = currentBalance + LESSON_CORE_POINT_REWARD_AMOUNT;
+    nextEarnedTotal = currentEarnedTotal + LESSON_CORE_POINT_REWARD_AMOUNT;
+    nextRankEarnedTotal =
+      currentRankEarnedTotal + LESSON_CORE_POINT_REWARD_AMOUNT;
+    nextAdjustedTotal = currentAdjustedTotal + LESSON_CORE_POINT_REWARD_AMOUNT;
+    accountRevision += 1;
+    const ledgerEntry = {
+      schemaVersion: wisEconomy.WIS_SCHEMA_VERSION,
+      policyVersion: wisEconomy.WIS_POLICY_VERSION,
+      ledgerEntryId,
+      semesterId,
+      accountId,
+      studentUid: actor.uid,
+      type: "GRANT",
+      delta: LESSON_CORE_POINT_REWARD_AMOUNT,
+      balanceBefore: currentBalance,
+      balanceAfter: nextBalance,
+      sourceId: LESSON_CORE_POINT_REWARD_SOURCE_ID,
+      reason: "전체 수업자료 핵심포인트 완주",
+      actorUid: "system:lesson-core-point-reward",
+      actorRole: "system",
+      initiatedByUid: actor.uid,
+      commandId: command.commandId,
+      receiptId,
+      createdAt: Timestamp.now(),
+    };
+    transaction.set(
+      accountRef,
+      {
+        revision: accountRevision,
+        balance: nextBalance,
+        earnedTotal: nextEarnedTotal,
+        rankEarnedTotal: nextRankEarnedTotal,
+        spentTotal: currentSpentTotal,
+        adjustedTotal: nextAdjustedTotal,
+        recentLedgerEntries: [
+          ledgerEntry,
+          ...(Array.isArray(account.recentLedgerEntries)
+            ? account.recentLedgerEntries
+            : []),
+        ].slice(0, LESSON_CORE_POINT_RECENT_LEDGER_LIMIT),
+        updatedAt: timestamp,
+        updatedBy: "system:lesson-core-point-reward",
+      },
+      { merge: true },
+    );
+    transaction.set(
+      balanceRef,
+      {
+        schemaVersion: wisEconomy.WIS_SCHEMA_VERSION,
+        policyVersion: wisEconomy.WIS_POLICY_VERSION,
+        accountId,
+        semesterId,
+        studentUid: actor.uid,
+        balance: nextBalance,
+        earnedTotal: nextEarnedTotal,
+        rankEarnedTotal: nextRankEarnedTotal,
+        spentTotal: currentSpentTotal,
+        adjustedTotal: nextAdjustedTotal,
+        ledgerRevision: accountRevision,
+        updatedAt: timestamp,
+      },
+      { merge: true },
+    );
+    transaction.set(
+      rankingRef,
+      {
+        schemaVersion: wisEconomy.WIS_SCHEMA_VERSION,
+        policyVersion: wisEconomy.WIS_POLICY_VERSION,
+        accountId,
+        semesterId,
+        studentUid: actor.uid,
+        displayName: account.displayName || "학생",
+        balance: nextBalance,
+        rankEarnedTotal: nextRankEarnedTotal,
+        ledgerRevision: accountRevision,
+        updatedAt: timestamp,
+      },
+      { merge: true },
+    );
+    transaction.create(ledgerRef, ledgerEntry);
+    transaction.set(
+      economyRef,
+      {
+        ledgerEntryCount: Number(economy.ledgerEntryCount || 0) + 1,
+        updatedAt: timestamp,
+        updatedBy: "system:lesson-core-point-reward",
+      },
+      { merge: true },
+    );
+  }
+  transaction.set(
+    progressRootRef,
+    {
+      userId: actor.uid,
+      corePointRewardClaimed: true,
+      corePointCompletedAt:
+        progressRootSnapshot.data()?.corePointCompletedAt || timestamp,
+      corePointFoundCount: completion.foundCount,
+      corePointTotalCount: completion.totalCount,
+      updatedAt: timestamp,
+    },
+    { merge: true },
+  );
+  return {
+    target: {
+      kind: "lesson-core-point-reward",
+      id: ledgerEntryId,
+      refs: [
+        accountRef.path,
+        balanceRef.path,
+        rankingRef.path,
+        ledgerRef.path,
+        progressRootRef.path,
+      ],
+    },
+    sourceHash: commandGateway.sha256(
+      commandGateway.canonicalize({
+        catalogHash: completion.catalogHash,
+        foundCount: completion.foundCount,
+        totalCount: completion.totalCount,
+        sourceId: LESSON_CORE_POINT_REWARD_SOURCE_ID,
+      }),
+    ),
+    result: {
+      awarded: !duplicate,
+      duplicate,
+      settled: true,
+      amount: duplicate ? 0 : LESSON_CORE_POINT_REWARD_AMOUNT,
+      totalAwarded: duplicate ? 0 : LESSON_CORE_POINT_REWARD_AMOUNT,
+      balance: nextBalance,
+      accountRevision,
+      ledgerEntryId,
+      sourceId: LESSON_CORE_POINT_REWARD_SOURCE_ID,
+      blockedMessage: duplicate
+        ? "핵심포인트 완주 보상은 이미 반영되었습니다."
+        : "",
+      corePointTotalCount: completion.totalCount,
+      corePointFoundCount: completion.foundCount,
+      corePointRemainingCount: completion.remainingCount,
+    },
+  };
+};
+
+exports.executeLessonCorePointCommand = onCall(
+  { region: REGION },
+  async (request) => {
+    const actor = await assertLessonCorePointStudent(request);
+    const command = normalizeLessonCorePointCommand(request.data);
+    const configured = await getCurrentConfiguredYearSemester();
+    if (
+      !configured ||
+      configured.year !== command.payload.year ||
+      configured.semester !== command.payload.semester
+    ) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Lesson progress requires the active semester.",
+        {
+          reason: "LESSON_CORE_POINT_SEMESTER_NOT_ACTIVE",
+        },
+      );
+    }
+    const injectResponseLoss =
+      request.data?._testDropResponseAfterCommit === true;
+    const injectAbortBeforeCommit =
+      request.data?._testAbortBeforeCommit === true;
+    const projectId = commandGateway.resolveProjectId();
+    if (
+      (injectResponseLoss || injectAbortBeforeCommit) &&
+      !String(projectId).startsWith("demo-westory-session-")
+    ) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Command fault injection is not available.",
+        {
+          reason: "TEST_FAULT_INJECTION_FORBIDDEN",
+        },
+      );
+    }
+    const receiptId = commandGateway.buildReceiptId(
+      actor.uid,
+      command.commandType,
+      command.commandId,
+    );
+    const receiptRef = db.doc(
+      `${commandGateway.RECEIPT_COLLECTION}/${receiptId}`,
+    );
+    const auditRef = db.doc(`${commandGateway.AUDIT_COLLECTION}/${receiptId}`);
+    const response = await db.runTransaction(async (transaction) => {
+      const existing = await transaction.get(receiptRef);
+      if (existing.exists) {
+        const receipt = existing.data() || {};
+        if (receipt.payloadHash !== command.payloadHash) {
+          throw new HttpsError(
+            "already-exists",
+            "commandId was used with another payload.",
+            {
+              reason: "LESSON_CORE_POINT_COMMAND_ID_CONFLICT",
+            },
+          );
+        }
+        return {
+          commandId: command.commandId,
+          commandType: command.commandType,
+          status: receipt.status || "SUCCEEDED",
+          replayed: true,
+          result: receipt.result || null,
+        };
+      }
+      const timestamp = FieldValue.serverTimestamp();
+      const business = await executeLessonCorePointBusinessCommand({
+        transaction,
+        command,
+        actor,
+        receiptId,
+        timestamp,
+      });
+      writeLessonCorePointCommandReceipt({
+        transaction,
+        receiptRef,
+        auditRef,
+        receiptId,
+        command,
+        actor,
+        session: serializeLessonCorePointCommandSession(actor.identity),
+        business,
+        timestamp,
+      });
+      if (injectAbortBeforeCommit) {
+        throw new HttpsError(
+          "aborted",
+          "The test transaction was intentionally aborted.",
+          {
+            reason: "TEST_COMMIT_ABORT",
+          },
+        );
+      }
+      return {
+        commandId: command.commandId,
+        commandType: command.commandType,
+        status: "SUCCEEDED",
+        replayed: false,
+        result: business.result,
+      };
+    });
+    if (response.result?.awarded) {
+      await markWisHallOfFameDirtySafely(
+        command.payload.year,
+        command.payload.semester,
+      );
+    }
+    if (injectResponseLoss && response.replayed === false) {
+      throw new HttpsError(
+        "unavailable",
+        "The test response was intentionally dropped.",
+        {
+          reason: "TEST_RESPONSE_LOSS",
+        },
+      );
+    }
+    return response;
+  },
+);
+
 const extractActivityDocumentId = (sourceId, prefix) => {
-  const normalizedSourceId = String(sourceId || '').trim();
+  const normalizedSourceId = String(sourceId || "").trim();
   const normalizedPrefix = `${prefix}-`;
   return normalizedSourceId.startsWith(normalizedPrefix)
     ? normalizedSourceId.slice(normalizedPrefix.length).trim()
-    : '';
+    : "";
 };
 
-const loadQuizActivityScore = async (transaction, year, semester, uid, sourceId) => {
-  const quizResultId = extractActivityDocumentId(sourceId, 'quiz-result');
+const loadQuizActivityScore = async (
+  transaction,
+  year,
+  semester,
+  uid,
+  sourceId,
+) => {
+  const quizResultId = extractActivityDocumentId(sourceId, "quiz-result");
   if (quizResultId) {
-    const quizResultRef = db.doc(`${getSemesterRoot(year, semester)}/quiz_results/${quizResultId}`);
+    const quizResultRef = db.doc(
+      `${getSemesterRoot(year, semester)}/quiz_results/${quizResultId}`,
+    );
     const quizResultSnap = await transaction.get(quizResultRef);
     if (!quizResultSnap.exists) {
       return null;
     }
     const data = quizResultSnap.data() || {};
-    if (String(data.uid || '').trim() !== uid) {
-      throw new HttpsError('permission-denied', 'Quiz result does not belong to the caller.');
+    if (String(data.uid || "").trim() !== uid) {
+      throw new HttpsError(
+        "permission-denied",
+        "Quiz result does not belong to the caller.",
+      );
     }
     return toNonNegativeNumber(data.score, 0);
   }
 
-  const historyResultId = extractActivityDocumentId(sourceId, 'history-classroom');
+  const historyResultId = extractActivityDocumentId(
+    sourceId,
+    "history-classroom",
+  );
   if (historyResultId) {
-    const historyResultRef = db.doc(`${getSemesterRoot(year, semester)}/history_classroom_results/${historyResultId}`);
+    const historyResultRef = db.doc(
+      `${getSemesterRoot(year, semester)}/history_classroom_results/${historyResultId}`,
+    );
     let historyResultSnap = await transaction.get(historyResultRef);
     if (!historyResultSnap.exists) {
-      const legacyHistoryResultRef = db.doc(`history_classroom_results/${historyResultId}`);
+      const legacyHistoryResultRef = db.doc(
+        `history_classroom_results/${historyResultId}`,
+      );
       historyResultSnap = await transaction.get(legacyHistoryResultRef);
     }
     if (!historyResultSnap.exists) {
       return null;
     }
     const data = historyResultSnap.data() || {};
-    if (String(data.uid || '').trim() !== uid) {
-      throw new HttpsError('permission-denied', 'History classroom result does not belong to the caller.');
+    if (String(data.uid || "").trim() !== uid) {
+      throw new HttpsError(
+        "permission-denied",
+        "History classroom result does not belong to the caller.",
+      );
     }
     return toNonNegativeNumber(data.percent, 0);
   }
@@ -4419,36 +6293,49 @@ const loadQuizActivityScore = async (transaction, year, semester, uid, sourceId)
 };
 
 const getTransactionCreatedAtMs = (docOrData) => {
-  const createdAt = typeof docOrData?.data === 'function'
-    ? docOrData.data()?.createdAt
-    : docOrData?.createdAt;
-  return (Number(createdAt?.seconds || 0) * 1000) + Math.floor(Number(createdAt?.nanoseconds || 0) / 1000000);
+  const createdAt =
+    typeof docOrData?.data === "function"
+      ? docOrData.data()?.createdAt
+      : docOrData?.createdAt;
+  return (
+    Number(createdAt?.seconds || 0) * 1000 +
+    Math.floor(Number(createdAt?.nanoseconds || 0) / 1000000)
+  );
 };
 
-const listActivityTransactionsByType = async (transaction, year, semester, uid, type) => {
-  const activityQuery = db.collection(getPointCollectionPath(year, semester, 'point_transactions'))
-    .where('uid', '==', uid)
-    .where('type', '==', type);
+const listActivityTransactionsByType = async (
+  transaction,
+  year,
+  semester,
+  uid,
+  type,
+) => {
+  const activityQuery = db
+    .collection(getPointCollectionPath(year, semester, "point_transactions"))
+    .where("uid", "==", uid)
+    .where("type", "==", type);
   const activitySnapshot = await transaction.get(activityQuery);
   return sortPointTransactionDocsDesc(activitySnapshot.docs);
 };
 
 const safeDecodeURIComponent = (value) => {
   try {
-    return decodeURIComponent(String(value || '').trim());
+    return decodeURIComponent(String(value || "").trim());
   } catch {
-    return String(value || '').trim();
+    return String(value || "").trim();
   }
 };
 
 const parseThinkCloudRewardSource = (sourceId) => {
-  const parts = String(sourceId || '').trim().split(':');
-  if (parts.length !== 3 || parts[0] !== 'think-cloud') {
+  const parts = String(sourceId || "")
+    .trim()
+    .split(":");
+  if (parts.length !== 3 || parts[0] !== "think-cloud") {
     return null;
   }
 
-  const sessionId = String(parts[1] || '').trim();
-  const responseId = String(parts[2] || '').trim();
+  const sessionId = String(parts[1] || "").trim();
+  const responseId = String(parts[2] || "").trim();
   if (!sessionId || !responseId) {
     return null;
   }
@@ -4459,10 +6346,19 @@ const parseThinkCloudRewardSource = (sourceId) => {
   };
 };
 
-const assertThinkCloudRewardSource = async (transaction, year, semester, uid, sourceId) => {
+const assertThinkCloudRewardSource = async (
+  transaction,
+  year,
+  semester,
+  uid,
+  sourceId,
+) => {
   const parsedSource = parseThinkCloudRewardSource(sourceId);
   if (!parsedSource) {
-    throw new HttpsError('invalid-argument', 'Invalid think cloud reward source.');
+    throw new HttpsError(
+      "invalid-argument",
+      "Invalid think cloud reward source.",
+    );
   }
 
   const responseRef = db.doc(
@@ -4470,26 +6366,31 @@ const assertThinkCloudRewardSource = async (transaction, year, semester, uid, so
   );
   const responseSnap = await transaction.get(responseRef);
   if (!responseSnap.exists) {
-    throw new HttpsError('not-found', 'Think cloud response does not exist.');
+    throw new HttpsError("not-found", "Think cloud response does not exist.");
   }
 
   const responseData = responseSnap.data() || {};
-  if (String(responseData.uid || '').trim() !== uid) {
-    throw new HttpsError('permission-denied', 'Think cloud response does not belong to the caller.');
+  if (String(responseData.uid || "").trim() !== uid) {
+    throw new HttpsError(
+      "permission-denied",
+      "Think cloud response does not belong to the caller.",
+    );
   }
 
   return parsedSource;
 };
 
 const parseMapTagRewardSource = (sourceId) => {
-  const parts = String(sourceId || '').trim().split(':');
-  if (parts.length !== 4 || parts[0] !== 'map-tag') {
+  const parts = String(sourceId || "")
+    .trim()
+    .split(":");
+  if (parts.length !== 4 || parts[0] !== "map-tag") {
     return null;
   }
 
   const mapId = safeDecodeURIComponent(parts[1]);
   const tag = safeDecodeURIComponent(parts[2]);
-  const nonce = String(parts[3] || '').trim();
+  const nonce = String(parts[3] || "").trim();
   if (!mapId || !tag || !nonce) {
     return null;
   }
@@ -4519,31 +6420,39 @@ const collectMapResourceTags = (resource) => {
   }
 
   return new Set(
-    rawTags
-      .map((tag) => String(tag || '').trim())
-      .filter(Boolean),
+    rawTags.map((tag) => String(tag || "").trim()).filter(Boolean),
   );
 };
 
-const assertMapTagRewardSource = async (transaction, year, semester, sourceId) => {
+const assertMapTagRewardSource = async (
+  transaction,
+  year,
+  semester,
+  sourceId,
+) => {
   const parsedSource = parseMapTagRewardSource(sourceId);
   if (!parsedSource) {
-    throw new HttpsError('invalid-argument', 'Invalid map tag reward source.');
+    throw new HttpsError("invalid-argument", "Invalid map tag reward source.");
   }
 
-  const scopedResourceRef = db.doc(`${getSemesterRoot(year, semester)}/map_resources/${parsedSource.mapId}`);
+  const scopedResourceRef = db.doc(
+    `${getSemesterRoot(year, semester)}/map_resources/${parsedSource.mapId}`,
+  );
   let resourceSnap = await transaction.get(scopedResourceRef);
   if (!resourceSnap.exists) {
     const legacyResourceRef = db.doc(`map_resources/${parsedSource.mapId}`);
     resourceSnap = await transaction.get(legacyResourceRef);
   }
   if (!resourceSnap.exists) {
-    throw new HttpsError('not-found', 'Map resource does not exist.');
+    throw new HttpsError("not-found", "Map resource does not exist.");
   }
 
   const availableTags = collectMapResourceTags(resourceSnap.data() || {});
   if (!availableTags.has(parsedSource.tag)) {
-    throw new HttpsError('invalid-argument', 'Map tag does not exist in the selected resource.');
+    throw new HttpsError(
+      "invalid-argument",
+      "Map tag does not exist in the selected resource.",
+    );
   }
 
   return parsedSource;
@@ -4570,20 +6479,29 @@ const resolveActivityReward = ({
     };
   }
 
-  const baseAmount = activityType === 'attendance'
-    ? normalizedPolicy.attendanceDaily
-    : activityType === 'quiz'
-      ? normalizedPolicy.quizSolve
-      : activityType === 'lesson'
-        ? normalizedPolicy.lessonView
-        : activityType === 'lesson_core_points'
-          ? (normalizedPolicy.rewardPolicy.lessonCorePoints.enabled ? normalizedPolicy.rewardPolicy.lessonCorePoints.amount : 0)
-          : activityType === 'think_cloud'
-            ? (normalizedPolicy.rewardPolicy.thinkCloud.enabled ? normalizedPolicy.rewardPolicy.thinkCloud.amount : 0)
-            : activityType === 'map_tag'
-              ? (normalizedPolicy.rewardPolicy.mapTag.enabled ? normalizedPolicy.rewardPolicy.mapTag.amount : 0)
-              : (normalizedPolicy.rewardPolicy.historyClassroom.enabled ? normalizedPolicy.rewardPolicy.historyClassroom.amount : 0);
-  const normalizedSourceLabel = String(sourceLabel || '').trim();
+  const baseAmount =
+    activityType === "attendance"
+      ? normalizedPolicy.attendanceDaily
+      : activityType === "quiz"
+        ? normalizedPolicy.quizSolve
+        : activityType === "lesson"
+          ? normalizedPolicy.lessonView
+          : activityType === "lesson_core_points"
+            ? normalizedPolicy.rewardPolicy.lessonCorePoints.enabled
+              ? normalizedPolicy.rewardPolicy.lessonCorePoints.amount
+              : 0
+            : activityType === "think_cloud"
+              ? normalizedPolicy.rewardPolicy.thinkCloud.enabled
+                ? normalizedPolicy.rewardPolicy.thinkCloud.amount
+                : 0
+              : activityType === "map_tag"
+                ? normalizedPolicy.rewardPolicy.mapTag.enabled
+                  ? normalizedPolicy.rewardPolicy.mapTag.amount
+                  : 0
+                : normalizedPolicy.rewardPolicy.historyClassroom.enabled
+                  ? normalizedPolicy.rewardPolicy.historyClassroom.amount
+                  : 0;
+  const normalizedSourceLabel = String(sourceLabel || "").trim();
   const items = [];
 
   if (baseAmount > 0) {
@@ -4591,29 +6509,33 @@ const resolveActivityReward = ({
       type: activityType,
       amount: baseAmount,
       sourceId,
-      sourceLabel: normalizedSourceLabel || (
-        activityType === 'attendance'
+      sourceLabel:
+        normalizedSourceLabel ||
+        (activityType === "attendance"
           ? `${todayKey} 출석 체크`
-          : activityType === 'quiz'
-          ? '문제 풀이'
-          : activityType === 'lesson'
-            ? '수업 자료 확인'
-            : activityType === 'lesson_core_points'
-              ? '핵심포인트 완주'
-              : activityType === 'think_cloud'
-                ? '생각모아 참여'
-                : activityType === 'map_tag'
-                  ? '지도 태그 탐색'
-                  : '역사교실 제출 완료'
-      ),
-      targetMonth: activityType === 'attendance' ? monthKey : '',
-      targetDate: activityType === 'attendance' ? todayKey : '',
+          : activityType === "quiz"
+            ? "문제 풀이"
+            : activityType === "lesson"
+              ? "수업 자료 확인"
+              : activityType === "lesson_core_points"
+                ? "핵심포인트 완주"
+                : activityType === "think_cloud"
+                  ? "생각모아 참여"
+                  : activityType === "map_tag"
+                    ? "지도 태그 탐색"
+                    : "역사교실 제출 완료"),
+      targetMonth: activityType === "attendance" ? monthKey : "",
+      targetDate: activityType === "attendance" ? todayKey : "",
     });
   }
 
-  if (activityType === 'attendance' && includeAttendanceMonthlyBonus && normalizedPolicy.attendanceMonthlyBonus > 0) {
+  if (
+    activityType === "attendance" &&
+    includeAttendanceMonthlyBonus &&
+    normalizedPolicy.attendanceMonthlyBonus > 0
+  ) {
     items.push({
-      type: 'attendance_monthly_bonus',
+      type: "attendance_monthly_bonus",
       amount: normalizedPolicy.attendanceMonthlyBonus,
       sourceId: monthKey,
       sourceLabel: `${monthKey} 월간 개근 보너스`,
@@ -4623,17 +6545,19 @@ const resolveActivityReward = ({
   }
 
   if (
-    activityType === 'attendance'
-    && attendanceMilestoneReached
-    && normalizedPolicy.rewardPolicy.attendanceMilestoneBonus.enabled
+    activityType === "attendance" &&
+    attendanceMilestoneReached &&
+    normalizedPolicy.rewardPolicy.attendanceMilestoneBonus.enabled
   ) {
     const milestoneKey = String(attendanceMilestoneReached);
     const milestoneAmount = Number(
-      normalizedPolicy.rewardPolicy.attendanceMilestoneBonus.amounts?.[milestoneKey] || 0,
+      normalizedPolicy.rewardPolicy.attendanceMilestoneBonus.amounts?.[
+        milestoneKey
+      ] || 0,
     );
     if (milestoneAmount > 0) {
       items.push({
-        type: 'attendance_milestone_bonus',
+        type: "attendance_milestone_bonus",
         amount: milestoneAmount,
         sourceId: `attendance-milestone-${attendanceMilestoneReached}`,
         sourceLabel: `출석 ${attendanceMilestoneReached}회 달성 보너스`,
@@ -4644,42 +6568,49 @@ const resolveActivityReward = ({
   }
 
   if (
-    activityType === 'quiz'
-    && normalizedPolicy.quizBonusEnabled
-    && normalizedPolicy.quizBonusAmount > 0
-    && Number(score || 0) >= normalizedPolicy.quizBonusThreshold
+    activityType === "quiz" &&
+    normalizedPolicy.quizBonusEnabled &&
+    normalizedPolicy.quizBonusAmount > 0 &&
+    Number(score || 0) >= normalizedPolicy.quizBonusThreshold
   ) {
     items.push({
-      type: 'quiz_bonus',
+      type: "quiz_bonus",
       amount: normalizedPolicy.quizBonusAmount,
       sourceId,
-      sourceLabel: normalizedPolicy.quizBonusThreshold >= 100
-        ? '문제 풀이 만점 보너스'
-        : `문제 풀이 ${normalizedPolicy.quizBonusThreshold}점 이상 보너스`,
-      targetMonth: '',
-      targetDate: '',
+      sourceLabel:
+        normalizedPolicy.quizBonusThreshold >= 100
+          ? "문제 풀이 만점 보너스"
+          : `문제 풀이 ${normalizedPolicy.quizBonusThreshold}점 이상 보너스`,
+      targetMonth: "",
+      targetDate: "",
     });
   }
 
   if (
-    activityType === 'history_classroom'
-    && normalizedPolicy.rewardPolicy.historyClassroomBonus.enabled
-    && normalizedPolicy.rewardPolicy.historyClassroomBonus.amount > 0
-    && Number(score || 0) >= normalizedPolicy.rewardPolicy.historyClassroomBonus.thresholdScore
+    activityType === "history_classroom" &&
+    normalizedPolicy.rewardPolicy.historyClassroomBonus.enabled &&
+    normalizedPolicy.rewardPolicy.historyClassroomBonus.amount > 0 &&
+    Number(score || 0) >=
+      normalizedPolicy.rewardPolicy.historyClassroomBonus.thresholdScore
   ) {
     items.push({
-      type: 'history_classroom_bonus',
+      type: "history_classroom_bonus",
       amount: normalizedPolicy.rewardPolicy.historyClassroomBonus.amount,
       sourceId,
-      sourceLabel: normalizedPolicy.rewardPolicy.historyClassroomBonus.thresholdScore >= 100
-        ? '역사교실 성과 보너스'
-        : `역사교실 정답률 ${normalizedPolicy.rewardPolicy.historyClassroomBonus.thresholdScore}% 이상 보너스`,
-      targetMonth: '',
-      targetDate: '',
+      sourceLabel:
+        normalizedPolicy.rewardPolicy.historyClassroomBonus.thresholdScore >=
+        100
+          ? "역사교실 성과 보너스"
+          : `역사교실 정답률 ${normalizedPolicy.rewardPolicy.historyClassroomBonus.thresholdScore}% 이상 보너스`,
+      targetMonth: "",
+      targetDate: "",
     });
   }
 
-  const totalAmount = items.reduce((total, item) => total + Number(item.amount || 0), 0);
+  const totalAmount = items.reduce(
+    (total, item) => total + Number(item.amount || 0),
+    0,
+  );
   return {
     baseAmount,
     bonusAmount: Math.max(0, totalAmount - Math.max(0, baseAmount)),
@@ -4688,20 +6619,26 @@ const resolveActivityReward = ({
   };
 };
 
-const sortPointTransactionDocsDesc = (docs) => [...docs].sort((a, b) => {
-  const aCreatedAt = a.data()?.createdAt || null;
-  const bCreatedAt = b.data()?.createdAt || null;
-  const secondGap = Number(bCreatedAt?.seconds || 0) - Number(aCreatedAt?.seconds || 0);
-  if (secondGap !== 0) return secondGap;
-  return Number(bCreatedAt?.nanoseconds || 0) - Number(aCreatedAt?.nanoseconds || 0);
-});
+const sortPointTransactionDocsDesc = (docs) =>
+  [...docs].sort((a, b) => {
+    const aCreatedAt = a.data()?.createdAt || null;
+    const bCreatedAt = b.data()?.createdAt || null;
+    const secondGap =
+      Number(bCreatedAt?.seconds || 0) - Number(aCreatedAt?.seconds || 0);
+    if (secondGap !== 0) return secondGap;
+    return (
+      Number(bCreatedAt?.nanoseconds || 0) -
+      Number(aCreatedAt?.nanoseconds || 0)
+    );
+  });
 
-const normalizeQuizCorrectionAnswer = (value) => String(value ?? '')
-  .replace(/\s+/g, '')
-  .trim();
+const normalizeQuizCorrectionAnswer = (value) =>
+  String(value ?? "")
+    .replace(/\s+/g, "")
+    .trim();
 
 const quizDetailMatchesQuestion = (detail, questionDocId, questionId) => {
-  const detailQuestionId = String(detail?.id ?? detail?.qid ?? '').trim();
+  const detailQuestionId = String(detail?.id ?? detail?.qid ?? "").trim();
   if (!detailQuestionId) return false;
   return detailQuestionId === questionDocId || detailQuestionId === questionId;
 };
@@ -4716,104 +6653,144 @@ const commitQuizCorrectionWrites = async (writes) => {
   }
 };
 
-const awardQuizCorrectionBonus = async ({ year, semester, uid, resultId, score }) => {
+const awardQuizCorrectionBonus = async ({
+  year,
+  semester,
+  uid,
+  resultId,
+  score,
+}) => {
   const sourceId = `quiz-result-${resultId}`;
   let profile = {};
   try {
     ({ profile } = await ensureStudentProfile(uid));
   } catch (error) {
-    console.warn('Awarding quiz correction bonus without an active user profile.', {
-      uid,
-      resultId,
-      errorMessage: String(error?.message || 'profile-missing'),
-    });
+    console.warn(
+      "Awarding quiz correction bonus without an active user profile.",
+      {
+        uid,
+        resultId,
+        errorMessage: String(error?.message || "profile-missing"),
+      },
+    );
   }
 
   return db.runTransaction(async (transaction) => {
     const policy = await loadPolicy(transaction, year, semester);
     if (
-      !policy.quizBonusEnabled
-      || Number(policy.quizBonusAmount || 0) <= 0
-      || Number(score || 0) < Number(policy.quizBonusThreshold || 100)
+      !policy.quizBonusEnabled ||
+      Number(policy.quizBonusAmount || 0) <= 0 ||
+      Number(score || 0) < Number(policy.quizBonusThreshold || 100)
     ) {
       return { awarded: false, amount: 0, duplicate: false };
     }
 
-    const transactionId = buildActivityTransactionId(uid, 'quiz_bonus', sourceId);
-    const txRef = db.doc(`${getPointCollectionPath(year, semester, 'point_transactions')}/${transactionId}`);
+    const transactionId = buildActivityTransactionId(
+      uid,
+      "quiz_bonus",
+      sourceId,
+    );
+    const txRef = db.doc(
+      `${getPointCollectionPath(year, semester, "point_transactions")}/${transactionId}`,
+    );
     const existingTx = await transaction.get(txRef);
     if (existingTx.exists) {
       return { awarded: false, amount: 0, duplicate: true, transactionId };
     }
 
-    const { ref: walletRef, wallet } = await ensureWallet(transaction, year, semester, uid, profile);
-    const currentRankEarnedTotal = await getCurrentRankEarnedTotal(transaction, year, semester, uid, wallet);
+    const { ref: walletRef, wallet } = await ensureWallet(
+      transaction,
+      year,
+      semester,
+      uid,
+      profile,
+    );
+    const currentRankEarnedTotal = await getCurrentRankEarnedTotal(
+      transaction,
+      year,
+      semester,
+      uid,
+      wallet,
+    );
     const amount = Number(policy.quizBonusAmount || 0);
     const nextBalance = Number(wallet.balance || 0) + amount;
     const nextEarnedTotal = Number(wallet.earnedTotal || 0) + amount;
     const nextRankEarnedTotal = currentRankEarnedTotal + amount;
 
-    transaction.set(walletRef, {
-      ...buildWalletBase(uid, profile),
-      balance: nextBalance,
-      earnedTotal: nextEarnedTotal,
-      ...buildWalletRankState(nextRankEarnedTotal, policy.rankPolicy),
-      spentTotal: Number(wallet.spentTotal || 0),
-      adjustedTotal: Number(wallet.adjustedTotal || 0),
-      lastTransactionAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
+    transaction.set(
+      walletRef,
+      {
+        ...buildWalletBase(uid, profile),
+        balance: nextBalance,
+        earnedTotal: nextEarnedTotal,
+        ...buildWalletRankState(nextRankEarnedTotal, policy.rankPolicy),
+        spentTotal: Number(wallet.spentTotal || 0),
+        adjustedTotal: Number(wallet.adjustedTotal || 0),
+        lastTransactionAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
 
-    transaction.set(txRef, createTransactionPayload({
-      uid,
-      type: 'quiz_bonus',
-      delta: amount,
-      balanceAfter: nextBalance,
-      sourceId,
-      sourceLabel: 'Quiz correction bonus',
-      policyId: 'current',
-      createdBy: 'system:quiz-correction',
-    }));
+    transaction.set(
+      txRef,
+      createTransactionPayload({
+        uid,
+        type: "quiz_bonus",
+        delta: amount,
+        balanceAfter: nextBalance,
+        sourceId,
+        sourceLabel: "Quiz correction bonus",
+        policyId: "current",
+        createdBy: "system:quiz-correction",
+      }),
+    );
 
     return { awarded: true, amount, duplicate: false, transactionId };
   });
 };
 
 exports.recalculateQuizResultsAfterQuestionCorrection = onCall(
-  { region: REGION, timeoutSeconds: 180, memory: '512MiB' },
+  { region: REGION, timeoutSeconds: 180, memory: "512MiB" },
   async (request) => {
     const { uid } = await assertQuizManager(request, {
       recentAuth: true,
       highRisk: true,
     });
     if (uid) {
-      throw new HttpsError('failed-precondition', 'Submitted assessment results are immutable in W6A.', {
-        reason: 'ASSESSMENT_RESULT_RECALCULATION_RETIRED',
-        replacement: 'publish a new assessment definition revision',
-      });
+      throw new HttpsError(
+        "failed-precondition",
+        "Submitted assessment results are immutable in W6A.",
+        {
+          reason: "ASSESSMENT_RESULT_RECALCULATION_RETIRED",
+          replacement: "publish a new assessment definition revision",
+        },
+      );
     }
     const { year, semester } = assertYearSemester(request.data || {});
-    const questionDocId = String(request.data?.questionDocId || '').trim();
-    const questionId = String(request.data?.questionId || '').trim();
+    const questionDocId = String(request.data?.questionDocId || "").trim();
+    const questionId = String(request.data?.questionId || "").trim();
 
     if (!questionDocId && !questionId) {
       throw new HttpsError(
-        'invalid-argument',
-        'questionDocId or questionId is required.',
+        "invalid-argument",
+        "questionDocId or questionId is required.",
       );
     }
 
     const questionRef = questionDocId
-      ? db.doc(`${getSemesterRoot(year, semester)}/quiz_questions/${questionDocId}`)
+      ? db.doc(
+          `${getSemesterRoot(year, semester)}/quiz_questions/${questionDocId}`,
+        )
       : null;
     const questionSnap = questionRef ? await questionRef.get() : null;
     if (questionRef && !questionSnap.exists) {
-      throw new HttpsError('not-found', 'Question does not exist.');
+      throw new HttpsError("not-found", "Question does not exist.");
     }
 
     const question = questionSnap?.data?.() || {};
     const nextAnswer = normalizeQuizCorrectionAnswer(question.answer);
     if (!nextAnswer) {
-      throw new HttpsError('failed-precondition', 'Question answer is empty.');
+      throw new HttpsError("failed-precondition", "Question answer is empty.");
     }
 
     const quizResultsSnap = await db
@@ -4852,10 +6829,14 @@ exports.recalculateQuizResultsAfterQuestionCorrection = onCall(
       if (!changed) return;
 
       const totalCount = nextDetails.length;
-      const correctCount = nextDetails.filter((detail) => detail?.correct === true).length;
+      const correctCount = nextDetails.filter(
+        (detail) => detail?.correct === true,
+      ).length;
       const previousScore = Math.max(0, Number(data.score || 0));
-      const nextScore = totalCount ? Math.round((correctCount / totalCount) * 100) : 0;
-      const resultUid = String(data.uid || '').trim();
+      const nextScore = totalCount
+        ? Math.round((correctCount / totalCount) * 100)
+        : 0;
+      const resultUid = String(data.uid || "").trim();
 
       writes.push({
         ref: docSnap.ref,
@@ -4869,7 +6850,7 @@ exports.recalculateQuizResultsAfterQuestionCorrection = onCall(
             questionId,
             previousScore,
             nextScore,
-            reason: 'answer_key_correction',
+            reason: "answer_key_correction",
           },
         },
       });
@@ -4918,10 +6899,14 @@ exports.recalculateQuizResultsAfterQuestionCorrection = onCall(
 
 exports.ensureWisHallOfFame = onCall({ region: REGION }, async (request) => {
   await assertAllowedWestoryUser(request);
-  throw new HttpsError('failed-precondition', '이전 위스 명예의 전당 갱신 경로는 종료되었습니다.', {
-    reason: 'CLIENT_UPDATE_REQUIRED',
-    replacement: 'rebuildWisProjection',
-  });
+  throw new HttpsError(
+    "failed-precondition",
+    "이전 위스 명예의 전당 갱신 경로는 종료되었습니다.",
+    {
+      reason: "CLIENT_UPDATE_REQUIRED",
+      replacement: "rebuildWisProjection",
+    },
+  );
 
   /* istanbul ignore next -- 이전 번들 진단을 위해 한 Wave 동안 보존한 비활성 구현 */
   const forceRefresh = request.data?.force === true;
@@ -4929,17 +6914,17 @@ exports.ensureWisHallOfFame = onCall({ region: REGION }, async (request) => {
     request.data,
     {
       preferConfiguredCurrent: forceRefresh,
-      source: forceRefresh ? 'manual' : 'ensure',
+      source: forceRefresh ? "manual" : "ensure",
     },
   );
   const snapshotRef = db.doc(getWisHallOfFamePath(year, semester));
   const snapshot = await snapshotRef.get();
-  const data = snapshot.exists ? (snapshot.data() || {}) : null;
+  const data = snapshot.exists ? snapshot.data() || {} : null;
 
   if (forceRefresh) {
     await assertHallOfFameManager(request);
     return refreshWisHallOfFameOrThrowHttps(year, semester, {
-      source: 'manual',
+      source: "manual",
     });
   }
 
@@ -4947,7 +6932,7 @@ exports.ensureWisHallOfFame = onCall({ region: REGION }, async (request) => {
     ensured: false,
     available: snapshot.exists,
     stale: isWisHallOfFameSnapshotStale(data),
-    snapshotKey: String(data?.snapshotKey || '').trim(),
+    snapshotKey: String(data?.snapshotKey || "").trim(),
     snapshotVersion: Number(
       data?.snapshotVersion || WIS_HALL_OF_FAME_SNAPSHOT_VERSION,
     ),
@@ -4958,22 +6943,31 @@ exports.markNotificationsRead = onCall({ region: REGION }, async (request) => {
   const { uid } = await assertAllowedWestoryUser(request);
   const { year, semester } = assertYearSemester(request.data);
   const inboxRef = db.doc(getNotificationInboxPath(year, semester, uid));
-  const unreadSnap = await db.collection(getNotificationItemsPath(year, semester, uid))
-    .where('readAt', '==', null)
+  const unreadSnap = await db
+    .collection(getNotificationItemsPath(year, semester, uid))
+    .where("readAt", "==", null)
     .limit(100)
     .get();
 
   const batch = db.batch();
   unreadSnap.docs.forEach((docSnap) => {
-    batch.set(docSnap.ref, { readAt: FieldValue.serverTimestamp() }, { merge: true });
+    batch.set(
+      docSnap.ref,
+      { readAt: FieldValue.serverTimestamp() },
+      { merge: true },
+    );
   });
-  batch.set(inboxRef, {
-    uid,
-    unreadCount: 0,
-    lastReadAt: FieldValue.serverTimestamp(),
-    lastBroadcastReadAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
+  batch.set(
+    inboxRef,
+    {
+      uid,
+      unreadCount: 0,
+      lastReadAt: FieldValue.serverTimestamp(),
+      lastBroadcastReadAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
   await batch.commit();
 
   return { updatedCount: unreadSnap.size };
@@ -4986,7 +6980,8 @@ exports.clearNotifications = onCall({ region: REGION }, async (request) => {
   let deletedCount = 0;
 
   while (true) {
-    const snap = await db.collection(getNotificationItemsPath(year, semester, uid))
+    const snap = await db
+      .collection(getNotificationItemsPath(year, semester, uid))
       .limit(450)
       .get();
     if (snap.empty) break;
@@ -4996,21 +6991,28 @@ exports.clearNotifications = onCall({ region: REGION }, async (request) => {
       batch.delete(docSnap.ref);
       deletedCount += 1;
     });
-    batch.set(inboxRef, {
-      uid,
-      unreadCount: 0,
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
+    batch.set(
+      inboxRef,
+      {
+        uid,
+        unreadCount: 0,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
     await batch.commit();
   }
 
-  await inboxRef.set({
-    uid,
-    unreadCount: 0,
-    lastBroadcastReadAt: FieldValue.serverTimestamp(),
-    broadcastClearedAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
+  await inboxRef.set(
+    {
+      uid,
+      unreadCount: 0,
+      lastBroadcastReadAt: FieldValue.serverTimestamp(),
+      broadcastClearedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
 
   return { deletedCount };
 });
@@ -5025,15 +7027,15 @@ const deleteNotificationQueryBatch = async (querySnapshot) => {
 
 const cleanupSemesterNotifications = async (year, semester, cutoff) => {
   const inboxRefs = await db
-    .collection(getPointCollectionPath(year, semester, 'notification_inboxes'))
+    .collection(getPointCollectionPath(year, semester, "notification_inboxes"))
     .listDocuments();
   let deletedCount = 0;
 
   for (const inboxRef of inboxRefs) {
     while (true) {
       const oldItems = await inboxRef
-        .collection('items')
-        .where('createdAt', '<', cutoff)
+        .collection("items")
+        .where("createdAt", "<", cutoff)
         .limit(400)
         .get();
       const deleted = await deleteNotificationQueryBatch(oldItems);
@@ -5045,7 +7047,7 @@ const cleanupSemesterNotifications = async (year, semester, cutoff) => {
   while (true) {
     const oldBroadcasts = await db
       .collection(getBroadcastNotificationsPath(year, semester))
-      .where('createdAt', '<', cutoff)
+      .where("createdAt", "<", cutoff)
       .limit(400)
       .get();
     const deleted = await deleteNotificationQueryBatch(oldBroadcasts);
@@ -5059,159 +7061,196 @@ const cleanupSemesterNotifications = async (year, semester, cutoff) => {
 exports.cleanupOldNotifications = onSchedule(
   {
     region: REGION,
-    schedule: '25 3 * * *',
-    timeZone: 'Asia/Seoul',
+    schedule: "25 3 * * *",
+    timeZone: "Asia/Seoul",
   },
   async () => {
-    const configSnap = await db.doc('site_settings/config').get();
+    const configSnap = await db.doc("site_settings/config").get();
     const config = configSnap.data() || {};
-    const year = String(config.year || '').trim();
-    const semester = String(config.semester || '').trim();
+    const year = String(config.year || "").trim();
+    const semester = String(config.semester || "").trim();
     if (!year || !semester) {
-      console.warn('Skipped notification cleanup because site_settings/config is missing year/semester.');
+      console.warn(
+        "Skipped notification cleanup because site_settings/config is missing year/semester.",
+      );
       return;
     }
 
     const cutoff = Timestamp.fromMillis(
       Date.now() - NOTIFICATION_RETENTION_DAYS * 24 * 60 * 60 * 1000,
     );
-    const deletedCount = await cleanupSemesterNotifications(year, semester, cutoff);
+    const deletedCount = await cleanupSemesterNotifications(
+      year,
+      semester,
+      cutoff,
+    );
     console.info(`Cleaned up ${deletedCount} old notification documents.`);
   },
 );
 
-exports.createManagedNotifications = onCall({ region: REGION }, async (request) => {
-  const { year, semester } = assertYearSemester(request.data);
-  const recipientMode = String(request.data?.recipientMode || 'explicit').trim();
-  const type = sanitizeNotificationText(request.data?.type, 80, 'system_notice');
-  const allowedTypes = new Set([
-    'history_classroom_assigned',
-    'lesson_worksheet_published',
-    'privacy_policy_updated',
-    'performance_score_signature_rejected',
-    'question_replied',
-    'system_notice',
-  ]);
-  if (!allowedTypes.has(type)) {
-    throw new HttpsError('invalid-argument', 'Unsupported notification type.');
-  }
-  const isPerformanceScoreSignatureRejected = type === 'performance_score_signature_rejected';
-  const manager = isPerformanceScoreSignatureRejected
-    ? await assertPerformanceScoreManager(request)
-    : await assertNotificationManager(request);
-  if (isPerformanceScoreSignatureRejected) {
-    const recipientUids = uniqueNonEmptyStrings(request.data?.recipientUids, 2);
-    if (recipientMode !== 'explicit' || recipientUids.length !== 1) {
+exports.createManagedNotifications = onCall(
+  { region: REGION },
+  async (request) => {
+    const { year, semester } = assertYearSemester(request.data);
+    const recipientMode = String(
+      request.data?.recipientMode || "explicit",
+    ).trim();
+    const type = sanitizeNotificationText(
+      request.data?.type,
+      80,
+      "system_notice",
+    );
+    const allowedTypes = new Set([
+      "history_classroom_assigned",
+      "lesson_worksheet_published",
+      "privacy_policy_updated",
+      "performance_score_signature_rejected",
+      "question_replied",
+      "system_notice",
+    ]);
+    if (!allowedTypes.has(type)) {
       throw new HttpsError(
-        'invalid-argument',
-        'Performance score signature rejection notifications require exactly one explicit student recipient.',
+        "invalid-argument",
+        "Unsupported notification type.",
       );
     }
-  }
+    const isPerformanceScoreSignatureRejected =
+      type === "performance_score_signature_rejected";
+    const manager = isPerformanceScoreSignatureRejected
+      ? await assertPerformanceScoreManager(request)
+      : await assertNotificationManager(request);
+    if (isPerformanceScoreSignatureRejected) {
+      const recipientUids = uniqueNonEmptyStrings(
+        request.data?.recipientUids,
+        2,
+      );
+      if (recipientMode !== "explicit" || recipientUids.length !== 1) {
+        throw new HttpsError(
+          "invalid-argument",
+          "Performance score signature rejection notifications require exactly one explicit student recipient.",
+        );
+      }
+    }
 
-  if (recipientMode === 'all_students') {
-    const result = await createBroadcastNotification(year, semester, {
-      type,
-      title: request.data?.title,
-      body: request.data?.body,
-      targetUrl: request.data?.targetUrl,
-      entityType: request.data?.entityType,
-      entityId: request.data?.entityId,
-      priority: request.data?.priority,
-      dedupeKey: request.data?.dedupeKey,
-      actorUid: manager.uid,
-      templateValues: request.data?.templateValues,
-    });
+    if (recipientMode === "all_students") {
+      const result = await createBroadcastNotification(year, semester, {
+        type,
+        title: request.data?.title,
+        body: request.data?.body,
+        targetUrl: request.data?.targetUrl,
+        entityType: request.data?.entityType,
+        entityId: request.data?.entityId,
+        priority: request.data?.priority,
+        dedupeKey: request.data?.dedupeKey,
+        actorUid: manager.uid,
+        templateValues: request.data?.templateValues,
+      });
+      return {
+        createdCount: result.created ? 1 : 0,
+        recipientCount: 1,
+        broadcast: true,
+      };
+    }
+
+    const recipientUids = uniqueNonEmptyStrings(
+      request.data?.recipientUids,
+      300,
+    );
+    if (!recipientUids.length) {
+      return { createdCount: 0, recipientCount: 0 };
+    }
+
+    const results = await createUserNotifications(
+      year,
+      semester,
+      recipientUids,
+      {
+        type,
+        title: request.data?.title,
+        body: request.data?.body,
+        targetUrl: request.data?.targetUrl,
+        entityType: request.data?.entityType,
+        entityId: request.data?.entityId,
+        priority: request.data?.priority,
+        dedupeKey: request.data?.dedupeKey,
+        actorUid: manager.uid,
+        templateValues: request.data?.templateValues,
+      },
+    );
+
     return {
-      createdCount: result.created ? 1 : 0,
-      recipientCount: 1,
-      broadcast: true,
+      createdCount: results.filter((result) => result.created).length,
+      recipientCount: recipientUids.length,
     };
-  }
+  },
+);
 
-  const recipientUids = uniqueNonEmptyStrings(request.data?.recipientUids, 300);
-  if (!recipientUids.length) {
-    return { createdCount: 0, recipientCount: 0 };
-  }
-
-  const results = await createUserNotifications(year, semester, recipientUids, {
-    type,
-    title: request.data?.title,
-    body: request.data?.body,
-    targetUrl: request.data?.targetUrl,
-    entityType: request.data?.entityType,
-    entityId: request.data?.entityId,
-    priority: request.data?.priority,
-    dedupeKey: request.data?.dedupeKey,
-    actorUid: manager.uid,
-    templateValues: request.data?.templateValues,
-  });
-
-  return {
-    createdCount: results.filter((result) => result.created).length,
-    recipientCount: recipientUids.length,
-  };
-});
-
-const normalizeHistoryClassroomAnswerText = (value) => String(value ?? '')
-  .normalize('NFKC')
-  .replace(/\s+/g, '')
-  .replace(/[\u200B-\u200D\uFEFF]/g, '')
-  .replace(/[^\p{L}\p{N}]/gu, '')
-  .toLocaleLowerCase('ko-KR');
+const normalizeHistoryClassroomAnswerText = (value) =>
+  String(value ?? "")
+    .normalize("NFKC")
+    .replace(/\s+/g, "")
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")
+    .replace(/[^\p{L}\p{N}]/gu, "")
+    .toLocaleLowerCase("ko-KR");
 
 const normalizeHistoryClassroomAnswersForWrite = (answers) => {
-  if (!answers || typeof answers !== 'object' || Array.isArray(answers)) {
+  if (!answers || typeof answers !== "object" || Array.isArray(answers)) {
     return {};
   }
   return Object.fromEntries(
     Object.entries(answers)
-      .map(([key, value]) => [String(key || '').trim(), String(value ?? '')])
+      .map(([key, value]) => [String(key || "").trim(), String(value ?? "")])
       .filter(([key]) => key)
       .slice(0, 200),
   );
 };
 
-const normalizeHistoryClassroomBlanksForScoring = (blanks) => (
+const normalizeHistoryClassroomBlanksForScoring = (blanks) =>
   Array.isArray(blanks)
-    ? blanks.map((blank, index) => ({
-      id: String(blank?.id || `blank-${index + 1}`).trim(),
-      page: Math.max(1, Number(blank?.page) || 1),
-      answer: String(blank?.answer ?? '').trim(),
-    })).filter((blank) => blank.id)
-    : []
-);
+    ? blanks
+        .map((blank, index) => ({
+          id: String(blank?.id || `blank-${index + 1}`).trim(),
+          page: Math.max(1, Number(blank?.page) || 1),
+          answer: String(blank?.answer ?? "").trim(),
+        }))
+        .filter((blank) => blank.id)
+    : [];
 
-const collectHistoryClassroomAssignedUidsForFunction = (assignment) => Array.from(new Set([
-  ...(Array.isArray(assignment?.targetStudentUids)
-    ? assignment.targetStudentUids.map((uid) => String(uid || '').trim()).filter(Boolean)
-    : []),
-  ...(String(assignment?.targetStudentUid || '').trim()
-    ? [String(assignment.targetStudentUid || '').trim()]
-    : []),
-  ...(
-    assignment?.targetStudentAccessMap && typeof assignment.targetStudentAccessMap === 'object'
-      ? Object.entries(assignment.targetStudentAccessMap)
-        .filter(([, allowed]) => allowed === true)
-        .map(([uid]) => String(uid || '').trim())
-        .filter(Boolean)
-      : []
-  ),
-]));
+const collectHistoryClassroomAssignedUidsForFunction = (assignment) =>
+  Array.from(
+    new Set([
+      ...(Array.isArray(assignment?.targetStudentUids)
+        ? assignment.targetStudentUids
+            .map((uid) => String(uid || "").trim())
+            .filter(Boolean)
+        : []),
+      ...(String(assignment?.targetStudentUid || "").trim()
+        ? [String(assignment.targetStudentUid || "").trim()]
+        : []),
+      ...(assignment?.targetStudentAccessMap &&
+      typeof assignment.targetStudentAccessMap === "object"
+        ? Object.entries(assignment.targetStudentAccessMap)
+            .filter(([, allowed]) => allowed === true)
+            .map(([uid]) => String(uid || "").trim())
+            .filter(Boolean)
+        : []),
+    ]),
+  );
 
 const buildHistoryClassroomServerScore = (assignment, answers) => {
   const blanks = normalizeHistoryClassroomBlanksForScoring(assignment?.blanks);
   const checks = blanks.map((blank, index) => {
-    const studentAnswer = String(answers[blank.id] ?? '');
-    const correctAnswer = String(blank.answer ?? '');
+    const studentAnswer = String(answers[blank.id] ?? "");
+    const correctAnswer = String(blank.answer ?? "");
     return {
       blankId: blank.id,
       blankNumber: index + 1,
       page: blank.page,
       studentAnswer,
       correctAnswer,
-      correct: normalizeHistoryClassroomAnswerText(studentAnswer)
-        === normalizeHistoryClassroomAnswerText(correctAnswer),
+      correct:
+        normalizeHistoryClassroomAnswerText(studentAnswer) ===
+        normalizeHistoryClassroomAnswerText(correctAnswer),
     };
   });
   const score = checks.filter((check) => check.correct).length;
@@ -5224,14 +7263,23 @@ const buildHistoryClassroomServerScore = (assignment, answers) => {
   };
 };
 
-const loadHistoryClassroomAssignmentForSubmit = async (year, semester, assignmentId) => {
-  const semesterRef = db.doc(`${getSemesterRoot(year, semester)}/history_classrooms/${assignmentId}`);
+const loadHistoryClassroomAssignmentForSubmit = async (
+  year,
+  semester,
+  assignmentId,
+) => {
+  const semesterRef = db.doc(
+    `${getSemesterRoot(year, semester)}/history_classrooms/${assignmentId}`,
+  );
   let snap = await semesterRef.get();
   if (!snap.exists) {
     snap = await db.doc(`history_classrooms/${assignmentId}`).get();
   }
   if (!snap.exists) {
-    throw new HttpsError('not-found', 'History classroom assignment does not exist.');
+    throw new HttpsError(
+      "not-found",
+      "History classroom assignment does not exist.",
+    );
   }
   return {
     id: snap.id,
@@ -5245,69 +7293,93 @@ const getHistoryClassroomExemptionCollectionPath = (year, semester) =>
 const getHistoryClassroomExemptionRequestCollectionPath = (year, semester) =>
   `${getSemesterRoot(year, semester)}/history_classroom_exemption_requests`;
 
-const sanitizeHistoryClassroomText = (value, maxLength, fallback = '') =>
+const sanitizeHistoryClassroomText = (value, maxLength, fallback = "") =>
   sanitizeNotificationText(value, maxLength, fallback);
 
 const getHistoryClassroomProfileSnapshot = (uid, profile = {}) => ({
   uid,
-  studentName: sanitizeHistoryClassroomText(profile.name, 40, '학생'),
-  studentGrade: sanitizeHistoryClassroomText(profile.studentGrade || profile.grade, 8),
-  studentClass: sanitizeHistoryClassroomText(profile.studentClass || profile.class, 8),
-  studentNumber: sanitizeHistoryClassroomText(profile.studentNumber || profile.number, 8),
+  studentName: sanitizeHistoryClassroomText(profile.name, 40, "학생"),
+  studentGrade: sanitizeHistoryClassroomText(
+    profile.studentGrade || profile.grade,
+    8,
+  ),
+  studentClass: sanitizeHistoryClassroomText(
+    profile.studentClass || profile.class,
+    8,
+  ),
+  studentNumber: sanitizeHistoryClassroomText(
+    profile.studentNumber || profile.number,
+    8,
+  ),
 });
 
 const assertHistoryClassroomStudent = async (request) => {
   const { uid, email } = await assertAllowedWestoryUser(request);
   const { profile } = await getUserProfile(uid);
-  if (String(profile?.role || '').trim() !== 'student') {
-    throw new HttpsError('permission-denied', 'student permission is required.');
+  if (String(profile?.role || "").trim() !== "student") {
+    throw new HttpsError(
+      "permission-denied",
+      "student permission is required.",
+    );
   }
   return { uid, email, profile };
 };
 
 const assertHistoryClassroomAssignmentForStudent = (assignmentData, uid) => {
   if (assignmentData.deletedAt) {
-    throw new HttpsError('failed-precondition', 'History classroom assignment was deleted.');
+    throw new HttpsError(
+      "failed-precondition",
+      "History classroom assignment was deleted.",
+    );
   }
   if (assignmentData.isPublished !== true) {
-    throw new HttpsError('failed-precondition', 'History classroom assignment is not published.');
+    throw new HttpsError(
+      "failed-precondition",
+      "History classroom assignment is not published.",
+    );
   }
-  if (!collectHistoryClassroomAssignedUidsForFunction(assignmentData).includes(uid)) {
-    throw new HttpsError('permission-denied', 'History classroom assignment is not assigned to the caller.');
+  if (
+    !collectHistoryClassroomAssignedUidsForFunction(assignmentData).includes(
+      uid,
+    )
+  ) {
+    throw new HttpsError(
+      "permission-denied",
+      "History classroom assignment is not assigned to the caller.",
+    );
   }
 };
 
 const resolveClassScopeFromHistoryClassroomInput = (data = {}) => {
-  const scope = data.classScope && typeof data.classScope === 'object' ? data.classScope : {};
-  const requestedClassId = String(data.classId || scope.classId || '').trim();
+  const scope =
+    data.classScope && typeof data.classScope === "object"
+      ? data.classScope
+      : {};
+  const requestedClassId = String(data.classId || scope.classId || "").trim();
   let grade = String(
-    data.targetGrade
-    || data.grade
-    || scope.targetGrade
-    || scope.grade
-    || '',
+    data.targetGrade || data.grade || scope.targetGrade || scope.grade || "",
   ).trim();
   let className = String(
-    data.targetClass
-    || data.className
-    || data.class
-    || scope.targetClass
-    || scope.className
-    || scope.class
-    || '',
+    data.targetClass ||
+      data.className ||
+      data.class ||
+      scope.targetClass ||
+      scope.className ||
+      scope.class ||
+      "",
   ).trim();
 
   if (requestedClassId && (!grade || !className)) {
     const [classIdGrade, classIdClass] = requestedClassId
-      .split('-')
+      .split("-")
       .map((value) => normalizeSchoolToken(value));
-    grade = grade || classIdGrade || '';
-    className = className || classIdClass || '';
+    grade = grade || classIdGrade || "";
+    className = className || classIdClass || "";
   }
 
   const normalizedClassId = buildQuizClassId(grade, className);
   if (!normalizedClassId) return null;
-  const [normalizedGrade, normalizedClassName] = normalizedClassId.split('-');
+  const [normalizedGrade, normalizedClassName] = normalizedClassId.split("-");
   return {
     grade: normalizedGrade,
     className: normalizedClassName,
@@ -5317,8 +7389,8 @@ const resolveClassScopeFromHistoryClassroomInput = (data = {}) => {
 
 const resolveHistoryClassroomExemptionRecipientProfiles = async (data = {}) => {
   const isGrantableStudentProfile = (profile = {}) => {
-    const role = String(profile?.role || '').trim();
-    return role !== 'teacher' && role !== 'staff';
+    const role = String(profile?.role || "").trim();
+    return role !== "teacher" && role !== "staff";
   };
   const explicitUids = uniqueNonEmptyStrings(
     data.recipientUids || data.studentUids || data.targetUids,
@@ -5340,21 +7412,24 @@ const resolveHistoryClassroomExemptionRecipientProfiles = async (data = {}) => {
 
   const classScope = resolveClassScopeFromHistoryClassroomInput(data);
   if (!classScope) {
-    throw new HttpsError('invalid-argument', 'recipientUids or class scope is required.');
+    throw new HttpsError(
+      "invalid-argument",
+      "recipientUids or class scope is required.",
+    );
   }
 
   const userQueryCombos = [
-    ['studentGrade', 'studentClass'],
-    ['studentGrade', 'class'],
-    ['grade', 'studentClass'],
-    ['grade', 'class'],
+    ["studentGrade", "studentClass"],
+    ["studentGrade", "class"],
+    ["grade", "studentClass"],
+    ["grade", "class"],
   ];
   const snapshots = await Promise.all(
     userQueryCombos.map(([gradeField, classField]) =>
       db
-        .collection('users')
-        .where(gradeField, '==', classScope.grade)
-        .where(classField, '==', classScope.className)
+        .collection("users")
+        .where(gradeField, "==", classScope.grade)
+        .where(classField, "==", classScope.className)
         .get()
         .catch(() => null),
     ),
@@ -5376,23 +7451,35 @@ const resolveHistoryClassroomExemptionRecipientProfiles = async (data = {}) => {
   return Array.from(profilesByUid.values()).slice(0, 300);
 };
 
-const createHistoryClassroomExemptionRequestedNotifications = async (year, semester, input) => {
+const createHistoryClassroomExemptionRequestedNotifications = async (
+  year,
+  semester,
+  input,
+) => {
   const requestId = sanitizeHistoryClassroomText(input.requestId, 160);
   if (!requestId) return [];
 
   const recipients = await resolveTeacherNotificationRecipientUids();
-  const studentName = sanitizeHistoryClassroomText(input.studentName, 40, '학생');
-  const assignmentTitle = sanitizeHistoryClassroomText(input.assignmentTitle, 80, '역사교실');
+  const studentName = sanitizeHistoryClassroomText(
+    input.studentName,
+    40,
+    "학생",
+  );
+  const assignmentTitle = sanitizeHistoryClassroomText(
+    input.assignmentTitle,
+    80,
+    "역사교실",
+  );
 
   return createUserNotifications(year, semester, recipients, {
-    type: 'history_classroom_exemption_requested',
-    title: '역사교실 면제권 사용 요청',
+    type: "history_classroom_exemption_requested",
+    title: "역사교실 면제권 사용 요청",
     body: `${studentName} 학생이 ${assignmentTitle} 면제권 사용을 요청했습니다.`,
     targetUrl: `/teacher/quiz/history-classroom?panel=exemption-requests&requestId=${encodeURIComponent(requestId)}`,
-    entityType: 'history_classroom_exemption_request',
+    entityType: "history_classroom_exemption_request",
     entityId: requestId,
     actorUid: input.actorUid,
-    priority: 'high',
+    priority: "high",
     dedupeKey: `history_classroom_exemption_requested:${year}:${semester}:${requestId}`,
     templateValues: {
       studentName,
@@ -5401,25 +7488,33 @@ const createHistoryClassroomExemptionRequestedNotifications = async (year, semes
   });
 };
 
-const createHistoryClassroomExemptionReviewedNotification = async (year, semester, input) => {
+const createHistoryClassroomExemptionReviewedNotification = async (
+  year,
+  semester,
+  input,
+) => {
   const requestId = sanitizeHistoryClassroomText(input.requestId, 160);
   const recipientUid = sanitizeHistoryClassroomText(input.recipientUid, 160);
   if (!requestId || !recipientUid) return { created: false, recipientUid };
 
   const approved = input.approved === true;
-  const assignmentTitle = sanitizeHistoryClassroomText(input.assignmentTitle, 80, '역사교실');
-  const statusLabel = approved ? '승인' : '반려';
+  const assignmentTitle = sanitizeHistoryClassroomText(
+    input.assignmentTitle,
+    80,
+    "역사교실",
+  );
+  const statusLabel = approved ? "승인" : "반려";
 
   return createUserNotification(year, semester, recipientUid, {
-    type: 'history_classroom_exemption_reviewed',
-    title: '역사교실 면제권 처리',
+    type: "history_classroom_exemption_reviewed",
+    title: "역사교실 면제권 처리",
     body: `${assignmentTitle} 면제권 사용 요청이 ${statusLabel} 처리되었습니다.`,
-    targetUrl: '/student/history-classroom',
-    entityType: 'history_classroom_exemption_request',
+    targetUrl: "/student/history-classroom",
+    entityType: "history_classroom_exemption_request",
     entityId: requestId,
     actorUid: input.actorUid,
-    priority: approved ? 'normal' : 'high',
-    dedupeKey: `history_classroom_exemption_reviewed:${year}:${semester}:${requestId}:${approved ? 'approved' : 'rejected'}`,
+    priority: approved ? "normal" : "high",
+    dedupeKey: `history_classroom_exemption_reviewed:${year}:${semester}:${requestId}:${approved ? "approved" : "rejected"}`,
     templateValues: {
       assignmentTitle,
       statusLabel,
@@ -5427,7 +7522,11 @@ const createHistoryClassroomExemptionReviewedNotification = async (year, semeste
   });
 };
 
-const createHistoryClassroomExemptionGrantedNotifications = async (year, semester, grants) => {
+const createHistoryClassroomExemptionGrantedNotifications = async (
+  year,
+  semester,
+  grants,
+) => {
   const grantItems = Array.isArray(grants) ? grants : [];
   const results = [];
 
@@ -5440,17 +7539,17 @@ const createHistoryClassroomExemptionGrantedNotifications = async (year, semeste
     const scopeLabel = sanitizeHistoryClassroomText(grant?.grantScopeLabel, 40);
     const body = reason
       ? `역사교실 면제권이 부여되었습니다. 사유: ${reason}`
-      : '역사교실 면제권이 부여되었습니다.';
+      : "역사교실 면제권이 부여되었습니다.";
 
     const [result] = await createUserNotifications(year, semester, [uid], {
-      type: 'history_classroom_exemption_granted',
-      title: '역사교실 면제권이 부여되었습니다',
+      type: "history_classroom_exemption_granted",
+      title: "역사교실 면제권이 부여되었습니다",
       body,
-      targetUrl: '/student/history-classroom',
-      entityType: 'history_classroom_exemption',
+      targetUrl: "/student/history-classroom",
+      entityType: "history_classroom_exemption",
       entityId: exemptionId,
       actorUid: grant?.actorUid,
-      priority: 'normal',
+      priority: "normal",
       dedupeKey: `history_classroom_exemption_granted:${year}:${semester}:${exemptionId}`,
       templateValues: {
         reason,
@@ -5463,947 +7562,1383 @@ const createHistoryClassroomExemptionGrantedNotifications = async (year, semeste
   return results;
 };
 
-exports.grantHistoryClassroomExemptions = onCall({ region: REGION }, async (request) => {
-  const manager = await assertQuizManager(request, { recentAuth: true, highRisk: true });
-  const { year, semester } = assertYearSemester(request.data);
-  const reason = sanitizeHistoryClassroomText(request.data?.reason, 240);
-  if (!reason) {
-    throw new HttpsError('invalid-argument', 'reason is required.');
-  }
-
-  const recipients = await resolveHistoryClassroomExemptionRecipientProfiles(request.data || {});
-  if (!recipients.length) {
-    throw new HttpsError('not-found', 'No student recipients were found.');
-  }
-
-  const grantScope = String(request.data?.mode || '').trim() === 'class' ? 'class' : 'student';
-  const classScope = grantScope === 'class'
-    ? resolveClassScopeFromHistoryClassroomInput(request.data || {})
-    : null;
-  const grantScopeLabel = classScope ? `${classScope.grade}-${classScope.className}` : '';
-  const collectionPath = getHistoryClassroomExemptionCollectionPath(year, semester);
-  const batch = db.batch();
-  const exemptionIds = [];
-  const notificationGrants = [];
-  recipients.forEach(({ uid, profile }) => {
-    const exemptionRef = db.collection(collectionPath).doc();
-    const snapshot = getHistoryClassroomProfileSnapshot(uid, profile);
-    exemptionIds.push(exemptionRef.id);
-    notificationGrants.push({
-      uid,
-      exemptionId: exemptionRef.id,
-      reason,
-      grantScopeLabel,
-      actorUid: manager.uid,
+exports.grantHistoryClassroomExemptions = onCall(
+  { region: REGION },
+  async (request) => {
+    const manager = await assertQuizManager(request, {
+      recentAuth: true,
+      highRisk: true,
     });
-    batch.set(exemptionRef, {
-      ...snapshot,
-      reason,
-      grantScope,
-      grantScopeLabel,
-      status: 'available',
-      grantedByUid: manager.uid,
-      grantedAt: FieldValue.serverTimestamp(),
-      assignmentId: '',
-      exemptionRequestId: '',
-      pendingRequestId: '',
-      requestedAssignmentId: '',
-      usedAt: null,
-      usedByUid: '',
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-  });
-  await batch.commit();
-  const notificationResults = await createHistoryClassroomExemptionGrantedNotifications(
-    year,
-    semester,
-    notificationGrants,
-  );
-
-  return {
-    createdCount: exemptionIds.length,
-    recipientCount: recipients.length,
-    notificationCreatedCount: notificationResults.filter((result) => result.created).length,
-    exemptionIds,
-    collectionPath,
-  };
-});
-
-exports.revokeHistoryClassroomExemptions = onCall({ region: REGION }, async (request) => {
-  const manager = await assertQuizManager(request, { recentAuth: true, highRisk: true });
-  const { year, semester } = assertYearSemester(request.data);
-  const exemptionIds = uniqueNonEmptyStrings(request.data?.exemptionIds, 50);
-  if (!exemptionIds.length) {
-    throw new HttpsError('invalid-argument', 'exemptionIds are required.');
-  }
-
-  const collectionPath = getHistoryClassroomExemptionCollectionPath(year, semester);
-  const refs = exemptionIds.map((id) => db.doc(`${collectionPath}/${id}`));
-  const snaps = await db.getAll(...refs);
-  snaps.forEach((snap) => {
-    if (!snap.exists) {
-      throw new HttpsError('not-found', 'History classroom exemption does not exist.');
-    }
-    const data = snap.data() || {};
-    const status = String(data.status || '').trim() || 'available';
-    if (status !== 'available' && status !== 'active') {
-      throw new HttpsError(
-        'failed-precondition',
-        'Only available history classroom exemptions can be revoked.',
-      );
-    }
-  });
-
-  const batch = db.batch();
-  refs.forEach((ref) => {
-    batch.update(ref, {
-      status: 'revoked',
-      revokedAt: FieldValue.serverTimestamp(),
-      revokedByUid: manager.uid,
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-  });
-  await batch.commit();
-
-  return {
-    revokedCount: refs.length,
-    exemptionIds,
-  };
-});
-
-exports.createHistoryClassroomExemptionRequest = onCall({ region: REGION }, async (request) => {
-  const { uid, profile } = await assertHistoryClassroomStudent(request);
-  const { year, semester } = assertYearSemester(request.data);
-  const assignmentId = sanitizeHistoryClassroomText(request.data?.assignmentId, 160);
-  const exemptionId = sanitizeHistoryClassroomText(request.data?.exemptionId, 160);
-  const memo = sanitizeHistoryClassroomText(request.data?.memo, 240);
-
-  if (!assignmentId || !exemptionId) {
-    throw new HttpsError('invalid-argument', 'assignmentId and exemptionId are required.');
-  }
-
-  const assignment = await loadHistoryClassroomAssignmentForSubmit(year, semester, assignmentId);
-  const assignmentData = assignment.data;
-  assertHistoryClassroomAssignmentForStudent(assignmentData, uid);
-
-  const exemptionRef = db.doc(`${getHistoryClassroomExemptionCollectionPath(year, semester)}/${exemptionId}`);
-  const requestId = buildHistoryClassroomExemptionRequestId(year, semester, uid, assignment.id, exemptionId);
-  const requestRef = db.doc(`${getHistoryClassroomExemptionRequestCollectionPath(year, semester)}/${requestId}`);
-  const studentSnapshot = getHistoryClassroomProfileSnapshot(uid, profile);
-  const assignmentTitle = sanitizeHistoryClassroomText(assignmentData.title, 80, '역사교실');
-
-  const result = await db.runTransaction(async (transaction) => {
-    const [exemptionSnap, requestSnap] = await Promise.all([
-      transaction.get(exemptionRef),
-      transaction.get(requestRef),
-    ]);
-    if (!exemptionSnap.exists) {
-      throw new HttpsError('not-found', 'History classroom exemption does not exist.');
-    }
-    const exemption = exemptionSnap.data() || {};
-    if (String(exemption.uid || '').trim() !== uid) {
-      throw new HttpsError('permission-denied', 'History classroom exemption belongs to another user.');
-    }
-    const exemptionStatus = String(exemption.status || '').trim() || 'available';
-    if (requestSnap.exists) {
-      const existing = requestSnap.data() || {};
-      const existingStatus = String(existing.status || '').trim() || 'requested';
-      if (existingStatus === 'requested') {
-        return {
-          requestId,
-          exemptionId,
-          assignmentId: assignment.id,
-          created: false,
-          duplicate: true,
-          status: existingStatus,
-          studentName: studentSnapshot.studentName,
-          assignmentTitle,
-        };
-      }
-      if (existingStatus === 'approved') {
-        throw new HttpsError('failed-precondition', 'History classroom exemption request was already approved.');
-      }
-    }
-    if (exemptionStatus !== 'available') {
-      throw new HttpsError('failed-precondition', 'History classroom exemption is not available.');
+    const { year, semester } = assertYearSemester(request.data);
+    const reason = sanitizeHistoryClassroomText(request.data?.reason, 240);
+    if (!reason) {
+      throw new HttpsError("invalid-argument", "reason is required.");
     }
 
-    transaction.set(requestRef, {
-      uid,
-      ...studentSnapshot,
-      assignmentId: assignment.id,
-      assignmentTitle,
-      exemptionId,
-      exemptionReason: sanitizeHistoryClassroomText(exemption.reason, 240),
-      memo,
-      status: 'requested',
+    const recipients = await resolveHistoryClassroomExemptionRecipientProfiles(
+      request.data || {},
+    );
+    if (!recipients.length) {
+      throw new HttpsError("not-found", "No student recipients were found.");
+    }
+
+    const grantScope =
+      String(request.data?.mode || "").trim() === "class" ? "class" : "student";
+    const classScope =
+      grantScope === "class"
+        ? resolveClassScopeFromHistoryClassroomInput(request.data || {})
+        : null;
+    const grantScopeLabel = classScope
+      ? `${classScope.grade}-${classScope.className}`
+      : "";
+    const collectionPath = getHistoryClassroomExemptionCollectionPath(
       year,
       semester,
-      resultId: '',
-      reviewedByUid: '',
-      reviewReason: '',
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-      reviewedAt: null,
+    );
+    const batch = db.batch();
+    const exemptionIds = [];
+    const notificationGrants = [];
+    recipients.forEach(({ uid, profile }) => {
+      const exemptionRef = db.collection(collectionPath).doc();
+      const snapshot = getHistoryClassroomProfileSnapshot(uid, profile);
+      exemptionIds.push(exemptionRef.id);
+      notificationGrants.push({
+        uid,
+        exemptionId: exemptionRef.id,
+        reason,
+        grantScopeLabel,
+        actorUid: manager.uid,
+      });
+      batch.set(exemptionRef, {
+        ...snapshot,
+        reason,
+        grantScope,
+        grantScopeLabel,
+        status: "available",
+        grantedByUid: manager.uid,
+        grantedAt: FieldValue.serverTimestamp(),
+        assignmentId: "",
+        exemptionRequestId: "",
+        pendingRequestId: "",
+        requestedAssignmentId: "",
+        usedAt: null,
+        usedByUid: "",
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
     });
-    transaction.set(exemptionRef, {
-      status: 'requested',
-      pendingRequestId: requestId,
-      requestedAssignmentId: assignment.id,
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
+    await batch.commit();
+    const notificationResults =
+      await createHistoryClassroomExemptionGrantedNotifications(
+        year,
+        semester,
+        notificationGrants,
+      );
 
     return {
-      requestId,
-      exemptionId,
-      assignmentId: assignment.id,
-      created: true,
-      duplicate: false,
-      status: 'requested',
-      studentName: studentSnapshot.studentName,
-      assignmentTitle,
+      createdCount: exemptionIds.length,
+      recipientCount: recipients.length,
+      notificationCreatedCount: notificationResults.filter(
+        (result) => result.created,
+      ).length,
+      exemptionIds,
+      collectionPath,
     };
-  });
+  },
+);
 
-  if (result.created) {
-    await createHistoryClassroomExemptionRequestedNotifications(year, semester, {
-      requestId: result.requestId,
-      studentName: result.studentName,
-      assignmentTitle: result.assignmentTitle,
-      actorUid: uid,
+exports.revokeHistoryClassroomExemptions = onCall(
+  { region: REGION },
+  async (request) => {
+    const manager = await assertQuizManager(request, {
+      recentAuth: true,
+      highRisk: true,
     });
-  }
-
-  return result;
-});
-
-exports.reviewHistoryClassroomExemptionRequest = onCall({ region: REGION }, async (request) => {
-  const manager = await assertQuizManager(request, { recentAuth: true, highRisk: true });
-  const { year, semester } = assertYearSemester(request.data);
-  const requestId = sanitizeHistoryClassroomText(request.data?.requestId, 160);
-  const approved = request.data?.approved === true
-    || String(request.data?.decision || request.data?.status || '').trim() === 'approved';
-  const rejected = request.data?.approved === false
-    || String(request.data?.decision || request.data?.status || '').trim() === 'rejected';
-  const reviewReason = sanitizeHistoryClassroomText(request.data?.reviewReason || request.data?.reason, 240);
-
-  if (!requestId) {
-    throw new HttpsError('invalid-argument', 'requestId is required.');
-  }
-  if (!approved && !rejected) {
-    throw new HttpsError('invalid-argument', 'approved true or false is required.');
-  }
-
-  const requestRef = db.doc(`${getHistoryClassroomExemptionRequestCollectionPath(year, semester)}/${requestId}`);
-  const result = await db.runTransaction(async (transaction) => {
-    const requestSnap = await transaction.get(requestRef);
-    if (!requestSnap.exists) {
-      throw new HttpsError('not-found', 'History classroom exemption request does not exist.');
+    const { year, semester } = assertYearSemester(request.data);
+    const exemptionIds = uniqueNonEmptyStrings(request.data?.exemptionIds, 50);
+    if (!exemptionIds.length) {
+      throw new HttpsError("invalid-argument", "exemptionIds are required.");
     }
 
-    const exemptionRequest = { id: requestSnap.id, ...(requestSnap.data() || {}) };
-    const currentStatus = String(exemptionRequest.status || '').trim();
-    const nextStatus = approved ? 'approved' : 'rejected';
-    if (currentStatus === nextStatus) {
+    const collectionPath = getHistoryClassroomExemptionCollectionPath(
+      year,
+      semester,
+    );
+    const refs = exemptionIds.map((id) => db.doc(`${collectionPath}/${id}`));
+    const snaps = await db.getAll(...refs);
+    snaps.forEach((snap) => {
+      if (!snap.exists) {
+        throw new HttpsError(
+          "not-found",
+          "History classroom exemption does not exist.",
+        );
+      }
+      const data = snap.data() || {};
+      const status = String(data.status || "").trim() || "available";
+      if (status !== "available" && status !== "active") {
+        throw new HttpsError(
+          "failed-precondition",
+          "Only available history classroom exemptions can be revoked.",
+        );
+      }
+    });
+
+    const batch = db.batch();
+    refs.forEach((ref) => {
+      batch.update(ref, {
+        status: "revoked",
+        revokedAt: FieldValue.serverTimestamp(),
+        revokedByUid: manager.uid,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    });
+    await batch.commit();
+
+    return {
+      revokedCount: refs.length,
+      exemptionIds,
+    };
+  },
+);
+
+exports.createHistoryClassroomExemptionRequest = onCall(
+  { region: REGION },
+  async (request) => {
+    const { uid, profile } = await assertHistoryClassroomStudent(request);
+    const { year, semester } = assertYearSemester(request.data);
+    const assignmentId = sanitizeHistoryClassroomText(
+      request.data?.assignmentId,
+      160,
+    );
+    const exemptionId = sanitizeHistoryClassroomText(
+      request.data?.exemptionId,
+      160,
+    );
+    const memo = sanitizeHistoryClassroomText(request.data?.memo, 240);
+
+    if (!assignmentId || !exemptionId) {
+      throw new HttpsError(
+        "invalid-argument",
+        "assignmentId and exemptionId are required.",
+      );
+    }
+
+    const assignment = await loadHistoryClassroomAssignmentForSubmit(
+      year,
+      semester,
+      assignmentId,
+    );
+    const assignmentData = assignment.data;
+    assertHistoryClassroomAssignmentForStudent(assignmentData, uid);
+
+    const exemptionRef = db.doc(
+      `${getHistoryClassroomExemptionCollectionPath(year, semester)}/${exemptionId}`,
+    );
+    const requestId = buildHistoryClassroomExemptionRequestId(
+      year,
+      semester,
+      uid,
+      assignment.id,
+      exemptionId,
+    );
+    const requestRef = db.doc(
+      `${getHistoryClassroomExemptionRequestCollectionPath(year, semester)}/${requestId}`,
+    );
+    const studentSnapshot = getHistoryClassroomProfileSnapshot(uid, profile);
+    const assignmentTitle = sanitizeHistoryClassroomText(
+      assignmentData.title,
+      80,
+      "역사교실",
+    );
+
+    const result = await db.runTransaction(async (transaction) => {
+      const [exemptionSnap, requestSnap] = await Promise.all([
+        transaction.get(exemptionRef),
+        transaction.get(requestRef),
+      ]);
+      if (!exemptionSnap.exists) {
+        throw new HttpsError(
+          "not-found",
+          "History classroom exemption does not exist.",
+        );
+      }
+      const exemption = exemptionSnap.data() || {};
+      if (String(exemption.uid || "").trim() !== uid) {
+        throw new HttpsError(
+          "permission-denied",
+          "History classroom exemption belongs to another user.",
+        );
+      }
+      const exemptionStatus =
+        String(exemption.status || "").trim() || "available";
+      if (requestSnap.exists) {
+        const existing = requestSnap.data() || {};
+        const existingStatus =
+          String(existing.status || "").trim() || "requested";
+        if (existingStatus === "requested") {
+          return {
+            requestId,
+            exemptionId,
+            assignmentId: assignment.id,
+            created: false,
+            duplicate: true,
+            status: existingStatus,
+            studentName: studentSnapshot.studentName,
+            assignmentTitle,
+          };
+        }
+        if (existingStatus === "approved") {
+          throw new HttpsError(
+            "failed-precondition",
+            "History classroom exemption request was already approved.",
+          );
+        }
+      }
+      if (exemptionStatus !== "available") {
+        throw new HttpsError(
+          "failed-precondition",
+          "History classroom exemption is not available.",
+        );
+      }
+
+      transaction.set(requestRef, {
+        uid,
+        ...studentSnapshot,
+        assignmentId: assignment.id,
+        assignmentTitle,
+        exemptionId,
+        exemptionReason: sanitizeHistoryClassroomText(exemption.reason, 240),
+        memo,
+        status: "requested",
+        year,
+        semester,
+        resultId: "",
+        reviewedByUid: "",
+        reviewReason: "",
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        reviewedAt: null,
+      });
+      transaction.set(
+        exemptionRef,
+        {
+          status: "requested",
+          pendingRequestId: requestId,
+          requestedAssignmentId: assignment.id,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+
       return {
         requestId,
-        status: currentStatus,
-        approved,
-        duplicate: true,
-        uid: String(exemptionRequest.uid || '').trim(),
-        assignmentTitle: sanitizeHistoryClassroomText(exemptionRequest.assignmentTitle, 80, '역사교실'),
-        resultId: String(exemptionRequest.resultId || '').trim(),
-      };
-    }
-    if (currentStatus !== 'requested') {
-      throw new HttpsError('failed-precondition', 'History classroom exemption request is not reviewable.');
-    }
-
-    const targetUid = String(exemptionRequest.uid || '').trim();
-    const assignmentId = String(exemptionRequest.assignmentId || '').trim();
-    const exemptionId = String(exemptionRequest.exemptionId || '').trim();
-    if (!targetUid || !assignmentId || !exemptionId) {
-      throw new HttpsError('failed-precondition', 'History classroom exemption request is incomplete.');
-    }
-
-    const exemptionRef = db.doc(`${getHistoryClassroomExemptionCollectionPath(year, semester)}/${exemptionId}`);
-    const assignmentRef = db.doc(`${getSemesterRoot(year, semester)}/history_classrooms/${assignmentId}`);
-    const [exemptionSnap, semesterAssignmentSnap] = await Promise.all([
-      transaction.get(exemptionRef),
-      transaction.get(assignmentRef),
-    ]);
-    let assignmentSnap = semesterAssignmentSnap;
-    if (!assignmentSnap.exists) {
-      assignmentSnap = await transaction.get(db.doc(`history_classrooms/${assignmentId}`));
-    }
-    if (!exemptionSnap.exists) {
-      throw new HttpsError('not-found', 'History classroom exemption does not exist.');
-    }
-    const exemption = exemptionSnap.data() || {};
-    if (String(exemption.uid || '').trim() !== targetUid) {
-      throw new HttpsError('failed-precondition', 'History classroom exemption owner does not match request.');
-    }
-    if (!assignmentSnap.exists) {
-      throw new HttpsError('not-found', 'History classroom assignment does not exist.');
-    }
-
-    const assignmentData = assignmentSnap.data() || {};
-    const assignmentTitle = sanitizeHistoryClassroomText(
-      assignmentData.title || exemptionRequest.assignmentTitle,
-      80,
-      '역사교실',
-    );
-    const resultId = approved
-      ? buildHistoryClassroomExemptionResultId(requestId)
-      : String(exemptionRequest.resultId || '').trim();
-
-    transaction.set(requestRef, {
-      status: nextStatus,
-      reviewedAt: FieldValue.serverTimestamp(),
-      reviewedByUid: manager.uid,
-      reviewReason,
-      resultId: approved ? resultId : '',
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
-
-    if (approved) {
-      const exemptionStatus = String(exemption.status || '').trim() || 'available';
-      if (exemptionStatus === 'used') {
-        throw new HttpsError('failed-precondition', 'History classroom exemption was already used.');
-      }
-      const resultRef = db.doc(`${getSemesterRoot(year, semester)}/history_classroom_results/${resultId}`);
-      transaction.set(exemptionRef, {
-        status: 'used',
-        assignmentId,
-        exemptionRequestId: requestId,
-        usedAt: FieldValue.serverTimestamp(),
-        usedByUid: targetUid,
-        pendingRequestId: '',
-        requestedAssignmentId: '',
-        updatedAt: FieldValue.serverTimestamp(),
-      }, { merge: true });
-      transaction.set(resultRef, {
-        assignmentId,
-        assignmentTitle,
-        uid: targetUid,
-        studentName: sanitizeHistoryClassroomText(exemptionRequest.studentName, 40, '학생'),
-        studentGrade: sanitizeHistoryClassroomText(exemptionRequest.studentGrade, 8),
-        studentClass: sanitizeHistoryClassroomText(exemptionRequest.studentClass, 8),
-        studentNumber: sanitizeHistoryClassroomText(exemptionRequest.studentNumber, 8),
-        answers: {},
-        score: 0,
-        total: 0,
-        percent: 100,
-        passThresholdPercent: Math.min(100, Math.max(0, Number(assignmentData.passThresholdPercent) || 80)),
-        passed: true,
-        status: 'passed',
-        answerChecks: [],
-        cancellationReason: '',
-        completionSource: 'exemption',
         exemptionId,
-        exemptionRequestId: requestId,
-        approvedByUid: manager.uid,
-        approvedAt: FieldValue.serverTimestamp(),
-        createdAt: FieldValue.serverTimestamp(),
-      }, { merge: false });
-    } else {
-      transaction.set(exemptionRef, {
-        status: 'available',
-        pendingRequestId: '',
-        requestedAssignmentId: '',
-        updatedAt: FieldValue.serverTimestamp(),
-      }, { merge: true });
-    }
-
-    return {
-      requestId,
-      status: nextStatus,
-      approved,
-      duplicate: false,
-      uid: targetUid,
-      assignmentTitle,
-      resultId,
-    };
-  });
-
-  if (!result.duplicate) {
-    await createHistoryClassroomExemptionReviewedNotification(year, semester, {
-      requestId: result.requestId,
-      recipientUid: result.uid,
-      assignmentTitle: result.assignmentTitle,
-      approved: result.approved,
-      actorUid: manager.uid,
+        assignmentId: assignment.id,
+        created: true,
+        duplicate: false,
+        status: "requested",
+        studentName: studentSnapshot.studentName,
+        assignmentTitle,
+      };
     });
-  }
 
-  return result;
-});
-
-exports.submitHistoryClassroomResult = onCall({ region: REGION }, async (request) => {
-  const { uid } = await assertAllowedWestoryUser(request);
-  if (uid) {
-    throw new HttpsError('failed-precondition', 'This legacy submission endpoint was retired by W6A.', {
-      reason: 'ASSESSMENT_LEGACY_SUBMISSION_RETIRED',
-      replacement: 'submitAssessmentAttempt',
-    });
-  }
-  const { year, semester } = assertYearSemester(request.data);
-  const assignmentId = String(request.data?.assignmentId || '').trim();
-  const requestedResultId = String(request.data?.resultId || '').trim();
-  const requestedStatus = String(request.data?.status || '').trim();
-  const cancellationReason = String(request.data?.cancellationReason || '').trim().slice(0, 120);
-
-  if (!assignmentId) {
-    throw new HttpsError('invalid-argument', 'Assignment id is required.');
-  }
-  if (requestedStatus && !['passed', 'failed', 'cancelled'].includes(requestedStatus)) {
-    throw new HttpsError('invalid-argument', 'Invalid result status.');
-  }
-
-  const assignment = await loadHistoryClassroomAssignmentForSubmit(year, semester, assignmentId);
-  const assignmentData = assignment.data;
-  if (assignmentData.deletedAt) {
-    throw new HttpsError('failed-precondition', 'History classroom assignment was deleted.');
-  }
-  if (assignmentData.isPublished !== true) {
-    throw new HttpsError('failed-precondition', 'History classroom assignment is not published.');
-  }
-  if (!collectHistoryClassroomAssignedUidsForFunction(assignmentData).includes(uid)) {
-    throw new HttpsError('permission-denied', 'History classroom assignment is not assigned to the caller.');
-  }
-
-  const answers = normalizeHistoryClassroomAnswersForWrite(request.data?.answers);
-  const scoreSummary = buildHistoryClassroomServerScore(assignmentData, answers);
-  const { profile } = await getUserProfile(uid);
-  const passThresholdPercent = Math.min(100, Math.max(0, Number(assignmentData.passThresholdPercent) || 80));
-  const passed = requestedStatus === 'cancelled'
-    ? false
-    : scoreSummary.percent >= passThresholdPercent;
-  const status = requestedStatus === 'cancelled'
-    ? 'cancelled'
-    : passed
-      ? 'passed'
-      : 'failed';
-
-  const resultCollectionPath = `${getSemesterRoot(year, semester)}/history_classroom_results`;
-  const resultRef = requestedResultId
-    ? db.doc(`${resultCollectionPath}/${requestedResultId}`)
-    : db.collection(resultCollectionPath).doc();
-  const resultSnap = await resultRef.get();
-  if (resultSnap.exists && String(resultSnap.data()?.uid || '').trim() !== uid) {
-    throw new HttpsError('permission-denied', 'History classroom result id belongs to another user.');
-  }
-
-  const resultPayload = {
-    assignmentId: assignment.id,
-    assignmentTitle: String(assignmentData.title || '').trim(),
-    uid,
-    studentName: String(profile.name || '').trim(),
-    studentGrade: String(profile.grade || '').trim(),
-    studentClass: String(profile.class || '').trim(),
-    studentNumber: String(profile.number || '').trim(),
-    answers,
-    score: scoreSummary.score,
-    total: scoreSummary.total,
-    percent: scoreSummary.percent,
-    passThresholdPercent,
-    passed,
-    status,
-    answerChecks: scoreSummary.checks,
-    cancellationReason,
-    createdAt: FieldValue.serverTimestamp(),
-  };
-
-  await resultRef.set(resultPayload, { merge: false });
-
-  let notificationCreatedCount = 0;
-  let notificationRecipientCount = 0;
-  if (passed) {
-    try {
-      const notificationResults = await createHistoryClassroomPassedNotifications(year, semester, {
-        resultId: resultRef.id,
-        assignmentTitle: resultPayload.assignmentTitle,
-        studentName: resultPayload.studentName,
-        percent: scoreSummary.percent,
-        actorUid: uid,
-      });
-      notificationCreatedCount = notificationResults.filter((result) => result.created).length;
-      notificationRecipientCount = notificationResults.length;
-    } catch (notificationError) {
-      console.error('Failed to create history classroom passed notifications:', notificationError);
-    }
-  }
-
-  return {
-    resultId: resultRef.id,
-    resultCollectionPath,
-    score: scoreSummary.score,
-    total: scoreSummary.total,
-    percent: scoreSummary.percent,
-    passed,
-    status,
-    answerChecks: scoreSummary.checks,
-    notificationCreatedCount,
-    notificationRecipientCount,
-  };
-});
-
-exports.notifyHistoryClassroomSubmitted = onCall({ region: REGION }, async (request) => {
-  const { uid } = await assertAllowedWestoryUser(request);
-  const { year, semester } = assertYearSemester(request.data);
-  const assignmentId = sanitizeNotificationText(request.data?.assignmentId, 160);
-  const resultId = sanitizeNotificationText(request.data?.resultId, 160);
-  const assignmentTitle = sanitizeNotificationText(
-    request.data?.assignmentTitle,
-    80,
-    '역사교실',
-  );
-  const percent = Math.max(0, Math.min(100, Number(request.data?.percent || 0)));
-  if (!assignmentId || !resultId) {
-    throw new HttpsError('invalid-argument', 'assignmentId and resultId are required.');
-  }
-
-  const { profile: profileForNotification } = await getUserProfile(uid);
-  const savedResult = await loadHistoryClassroomResultForNotification(year, semester, resultId);
-  if (!savedResult) {
-    throw new HttpsError('not-found', 'History classroom result does not exist.');
-  }
-
-  const savedResultData = savedResult.data;
-  const resultUid = String(savedResultData.uid || '').trim();
-  if (resultUid !== uid) {
-    throw new HttpsError('permission-denied', 'History classroom result belongs to another user.');
-  }
-  if (String(savedResultData.assignmentId || '').trim() !== assignmentId) {
-    throw new HttpsError('invalid-argument', 'History classroom result does not match assignment id.');
-  }
-  if (savedResultData.passed !== true && String(savedResultData.status || '').trim() !== 'passed') {
-    return {
-      createdCount: 0,
-      recipientCount: 0,
-      skipped: true,
-      reason: 'result_not_passed',
-    };
-  }
-
-  const notificationResults = await createHistoryClassroomPassedNotifications(year, semester, {
-    resultId,
-    assignmentTitle: savedResultData.assignmentTitle || assignmentTitle,
-    studentName: savedResultData.studentName || profileForNotification.name,
-    percent: Number(savedResultData.percent || percent),
-    actorUid: uid,
-  });
-
-  return {
-    createdCount: notificationResults.filter((result) => result.created).length,
-    recipientCount: notificationResults.length,
-  };
-
-});
-
-exports.notifyPerformanceScoreObjectionRequested = onCall({ region: REGION }, async (request) => {
-  const { uid } = await assertAllowedWestoryUser(request);
-  if (uid) {
-    throw new HttpsError('failed-precondition', 'Legacy performance score requests are retired in W6B.', {
-      reason: 'CLIENT_UPDATE_REQUIRED',
-      replacement: 'requestGradeReview via executeCommand',
-    });
-  }
-  const { year, semester } = assertYearSemester(request.data);
-  const scoreIds = uniqueNonEmptyStrings(request.data?.scoreIds, 20).map((scoreId) =>
-    sanitizeNotificationText(scoreId, 160),
-  ).filter(Boolean);
-  const reason = sanitizeNotificationText(request.data?.reason, 300);
-  const targetDetails = sanitizeNotificationText(request.data?.targetDetails, 240);
-  const requestedScoreKind = normalizePerformanceScoreKind(request.data?.scoreKind);
-  if (scoreIds.length === 0) {
-    throw new HttpsError('invalid-argument', 'scoreIds are required.');
-  }
-  if (!reason) {
-    throw new HttpsError('invalid-argument', 'reason is required.');
-  }
-
-  const { profile } = await getUserProfile(uid);
-  if (String(profile?.role || '').trim() !== 'student') {
-    throw new HttpsError('permission-denied', 'Only students can request performance score objections.');
-  }
-
-  const records = await Promise.all(
-    scoreIds.map((scoreId) =>
-      loadStudentPerformanceScoreForNotification(uid, year, semester, scoreId, {
-        scoreKind: requestedScoreKind,
-      }),
-    ),
-  );
-  const objectionSaveResult = await savePerformanceScoreObjections(year, semester, {
-    actorUid: uid,
-    profile,
-    records,
-    reason,
-    targetDetails,
-  });
-  const savedScoreIds = new Set(objectionSaveResult.scoreIds);
-  const savedRecords = records.filter((record) => savedScoreIds.has(record.id));
-  if (savedRecords.length === 0) {
-    return {
-      objectionIds: [],
-      objectionSavedCount: 0,
-      objectionSkippedProcessedCount: objectionSaveResult.skippedProcessedCount,
-      createdCount: 0,
-      skippedCount: 0,
-      recipientCount: 0,
-    };
-  }
-  const notificationResults = await createPerformanceScoreObjectionRequestedNotifications(year, semester, {
-    actorUid: uid,
-    profile,
-    scoreIds: objectionSaveResult.scoreIds,
-    records: savedRecords,
-    reason,
-    targetDetails,
-  });
-
-  return {
-    objectionIds: objectionSaveResult.objectionIds,
-    objectionSavedCount: objectionSaveResult.objectionIds.length,
-    objectionSkippedProcessedCount: objectionSaveResult.skippedProcessedCount,
-    createdCount: notificationResults.filter((result) => result.created).length,
-    skippedCount: notificationResults.filter((result) => result.skipped).length,
-    recipientCount: notificationResults.length,
-  };
-});
-
-exports.notifyPerformanceScoreAnswerSheetRequested = onCall({ region: REGION }, async (request) => {
-  const { uid } = await assertAllowedWestoryUser(request);
-  if (uid) {
-    throw new HttpsError('failed-precondition', 'Legacy answer sheet requests are retired in W6B.', {
-      reason: 'CLIENT_UPDATE_REQUIRED',
-      replacement: 'requestGradeReview via executeCommand',
-    });
-  }
-  const { year, semester } = assertYearSemester(request.data);
-  const scoreIds = uniqueNonEmptyStrings(request.data?.scoreIds, 20).map((scoreId) =>
-    sanitizeNotificationText(scoreId, 160),
-  ).filter(Boolean);
-  const reason = sanitizeNotificationText(request.data?.reason, 300);
-  const targetDetails = sanitizeNotificationText(request.data?.targetDetails, 240);
-  const requestedScoreKind = normalizePerformanceScoreKind(request.data?.scoreKind);
-  if (scoreIds.length === 0) {
-    throw new HttpsError('invalid-argument', 'scoreIds are required.');
-  }
-  if (!reason || reason.length < 10) {
-    throw new HttpsError('invalid-argument', 'A detailed reason is required.');
-  }
-
-  const { profile } = await getUserProfile(uid);
-  if (String(profile?.role || '').trim() !== 'student') {
-    throw new HttpsError('permission-denied', 'Only students can request answer sheet checks.');
-  }
-
-  const records = await Promise.all(
-    scoreIds.map((scoreId) =>
-      loadStudentPerformanceScoreForNotification(uid, year, semester, scoreId, {
-        scoreKind: requestedScoreKind,
-        allowConfirmed: true,
-      }),
-    ),
-  );
-  const requestBatchId = typeof crypto.randomUUID === 'function'
-    ? crypto.randomUUID()
-    : crypto.createHash('sha1').update(`${Date.now()}:${uid}:${scoreIds.join('|')}`).digest('hex').slice(0, 32);
-  const requestSaveResult = await savePerformanceScoreAnswerSheetRequests(year, semester, {
-    actorUid: uid,
-    profile,
-    records,
-    reason,
-    targetDetails,
-    requestBatchId,
-  });
-  const savedScoreIds = new Set(requestSaveResult.scoreIds);
-  const savedRecords = records.filter((record) => savedScoreIds.has(record.id));
-  if (savedRecords.length === 0) {
-    return {
-      requestIds: [],
-      requestSavedCount: 0,
-      requestSkippedPendingCount: requestSaveResult.skippedPendingCount,
-      createdCount: 0,
-      skippedCount: 0,
-      recipientCount: 0,
-    };
-  }
-  const notificationResults = await createPerformanceScoreAnswerSheetRequestedNotifications(year, semester, {
-    actorUid: uid,
-    profile,
-    scoreIds: requestSaveResult.scoreIds,
-    records: savedRecords,
-    reason,
-    targetDetails,
-    requestBatchId,
-  });
-
-  return {
-    requestIds: requestSaveResult.requestIds,
-    requestSavedCount: requestSaveResult.requestIds.length,
-    requestSkippedPendingCount: requestSaveResult.skippedPendingCount,
-    createdCount: notificationResults.filter((result) => result.created).length,
-    skippedCount: notificationResults.filter((result) => result.skipped).length,
-    recipientCount: notificationResults.length,
-  };
-});
-
-exports.reviewPerformanceScoreObjection = onCall({ region: REGION }, async (request) => {
-  const manager = await assertPerformanceScoreManager(request, { recentAuth: true, highRisk: true });
-  if (manager.uid) {
-    throw new HttpsError('failed-precondition', 'Legacy performance score review is retired in W6B.', {
-      reason: 'CLIENT_UPDATE_REQUIRED',
-      replacement: 'correctOfficialGrade via executeCommand',
-    });
-  }
-  const { year, semester } = assertYearSemester(request.data);
-  const objectionId = sanitizeNotificationText(request.data?.objectionId, 160);
-  const action = String(request.data?.status || '').trim();
-  const reviewMemo = sanitizeNotificationText(request.data?.reviewMemo, 240);
-  if (!objectionId) {
-    throw new HttpsError('invalid-argument', 'objectionId is required.');
-  }
-  if (action !== 'accepted' && action !== 'rejected') {
-    throw new HttpsError('invalid-argument', 'status must be accepted or rejected.');
-  }
-
-  const objectionRef = db.doc(getPerformanceScoreObjectionPath(year, semester, objectionId));
-  const reviewerName = sanitizeNotificationText(
-    manager.profile?.teacherName || manager.profile?.displayName || manager.profile?.name || manager.email,
-    80,
-    '교사',
-  );
-
-  const reviewResult = await db.runTransaction(async (transaction) => {
-    const objectionSnap = await transaction.get(objectionRef);
-    if (!objectionSnap.exists) {
-      throw new HttpsError('not-found', 'Performance score objection does not exist.');
-    }
-
-    const objection = objectionSnap.data() || {};
-    const currentStatus = String(objection.status || 'pending').trim();
-    const recipientUid = sanitizeNotificationText(objection.uid, 160);
-    if (!recipientUid) {
-      throw new HttpsError('failed-precondition', 'Objection student uid is missing.');
-    }
-    const scoreId = sanitizeNotificationText(objection.scoreId || objection.rosterId, 160);
-    if (!scoreId) {
-      throw new HttpsError('failed-precondition', 'Objection score id is missing.');
-    }
-
-    if (currentStatus !== 'pending') {
-      if (currentStatus === action) {
-        return {
-          duplicate: true,
-          status: currentStatus,
-          recipientUid,
-          scoreTitle: objection.scoreTitle,
-          scoreKind: normalizePerformanceScoreKind(objection.scoreKind),
-          changedScoreLabel: sanitizeNotificationText(objection.changedScoreLabel, 80),
-          reviewMemo: sanitizeNotificationText(objection.reviewMemo, 240),
-        };
-      }
-      throw new HttpsError('failed-precondition', 'Performance score objection has already been reviewed.');
-    }
-
-    let changedTotalScore = null;
-    let changedScoreLabel = '';
-    if (action === 'accepted') {
-      changedTotalScore = toNullablePerformanceScoreNumber(request.data?.changedTotalScore);
-      if (changedTotalScore === null) {
-        throw new HttpsError('invalid-argument', 'changedTotalScore is required when accepting an objection.');
-      }
-      const scoreRef = db.doc(`users/${recipientUid}/${PERFORMANCE_SCORE_USER_COLLECTION}/${scoreId}`);
-      const scoreSnap = await transaction.get(scoreRef);
-      if (!scoreSnap.exists) {
-        throw new HttpsError('failed-precondition', 'Accepted score must be saved before reviewing an objection.');
-      }
-      const scoreData = scoreSnap.data() || {};
-      if (
-        String(scoreData.uid || '').trim() !== recipientUid
-        || String(scoreData.rosterId || scoreId).trim() !== scoreId
-        || String(scoreData.academicYear || '').trim() !== year
-        || String(scoreData.semester || '').trim() !== semester
-      ) {
-        throw new HttpsError('failed-precondition', 'Saved performance score does not match this objection.');
-      }
-      const savedTotalScore = toNullablePerformanceScoreNumber(scoreData.totalScore);
-      if (savedTotalScore === null || savedTotalScore !== changedTotalScore) {
-        throw new HttpsError('failed-precondition', 'Accepted score must match the saved performance score.');
-      }
-      const maxScore = toNullablePerformanceScoreNumber(scoreData.totalMaxScore ?? objection.totalMaxScore);
-      if (changedTotalScore < 0 || (maxScore !== null && maxScore > 0 && changedTotalScore > maxScore)) {
-        throw new HttpsError('invalid-argument', 'changedTotalScore is outside the valid score range.');
-      }
-      changedScoreLabel = formatPerformanceScoreLabel(savedTotalScore, maxScore);
-    }
-
-    transaction.set(objectionRef, {
-      status: action,
-      reviewedAt: FieldValue.serverTimestamp(),
-      reviewedBy: manager.uid,
-      reviewedByName: reviewerName,
-      reviewMemo,
-      changedTotalScore,
-      changedScoreLabel,
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
-
-    return {
-      duplicate: false,
-      status: action,
-      recipientUid,
-      scoreTitle: objection.scoreTitle,
-      scoreKind: normalizePerformanceScoreKind(objection.scoreKind),
-      changedScoreLabel,
-      reviewMemo,
-    };
-  });
-
-  let notificationCreated = false;
-  try {
-    const notificationResult = await createPerformanceScoreObjectionReviewedNotification(year, semester, {
-      objectionId,
-      recipientUid: reviewResult.recipientUid,
-      scoreTitle: reviewResult.scoreTitle,
-      scoreKind: reviewResult.scoreKind,
-      status: reviewResult.status,
-      changedScoreLabel: reviewResult.changedScoreLabel,
-      reviewMemo: reviewResult.reviewMemo,
-      actorUid: manager.uid,
-    });
-    notificationCreated = notificationResult.created === true || Boolean(notificationResult.notificationId);
-  } catch (error) {
-    console.error('Failed to create performance score objection reviewed notification:', error);
-  }
-
-  return {
-    status: reviewResult.status,
-    notificationCreated,
-    recipientUid: reviewResult.recipientUid,
-    duplicate: reviewResult.duplicate === true,
-  };
-});
-
-exports.saveWisHallOfFameConfig = onCall({ region: REGION }, async (request) => {
-  const { uid } = await assertHallOfFameManager(request, { recentAuth: true, highRisk: true });
-  throw new HttpsError('failed-precondition', '이전 위스 명예의 전당 설정 경로는 종료되었습니다.', {
-    reason: 'CLIENT_UPDATE_REQUIRED',
-    replacement: 'rebuildWisProjection',
-  });
-
-  /* istanbul ignore next -- 이전 번들 진단을 위해 한 Wave 동안 보존한 비활성 구현 */
-  const { year, semester } = await resolveHallOfFameTargetYearSemester(
-    request.data,
-    {
-      preferConfiguredCurrent: true,
-      source: 'config_save',
-    },
-  );
-  const shouldRefreshSnapshot = false;
-  const hallOfFamePatch = request.data?.hallOfFame && typeof request.data.hallOfFame === 'object'
-    ? request.data.hallOfFame
-    : {};
-  const interfaceRef = db.doc('site_settings/interface_config');
-  let normalizedHallOfFame = null;
-
-  try {
-    const interfaceSnap = await interfaceRef.get();
-    const existing = interfaceSnap.exists ? (interfaceSnap.data() || {}) : {};
-    const existingHallOfFame = existing?.hallOfFame && typeof existing.hallOfFame === 'object'
-      ? existing.hallOfFame
-      : {};
-    const mergedHallOfFame = {
-      ...existingHallOfFame,
-      ...hallOfFamePatch,
-      positions: {
-        ...(existingHallOfFame.positions || {}),
-        ...(hallOfFamePatch.positions || {}),
-        desktop: {
-          ...(existingHallOfFame.positions?.desktop || {}),
-          ...(hallOfFamePatch.positions?.desktop || {}),
-        },
-        mobile: {
-          ...(existingHallOfFame.positions?.mobile || {}),
-          ...(hallOfFamePatch.positions?.mobile || {}),
-        },
-      },
-      leaderboardPanel: {
-        ...(existingHallOfFame.leaderboardPanel || {}),
-        ...(hallOfFamePatch.leaderboardPanel || {}),
-        desktop: {
-          ...(existingHallOfFame.leaderboardPanel?.desktop || {}),
-          ...(hallOfFamePatch.leaderboardPanel?.desktop || {}),
-        },
-        mobile: {
-          ...(existingHallOfFame.leaderboardPanel?.mobile || {}),
-          ...(hallOfFamePatch.leaderboardPanel?.mobile || {}),
-        },
-      },
-      publicRange: {
-        ...(existingHallOfFame.publicRange || {}),
-        ...(hallOfFamePatch.publicRange || {}),
-      },
-      recognitionPopup: {
-        ...(existingHallOfFame.recognitionPopup || {}),
-        ...(hallOfFamePatch.recognitionPopup || {}),
-      },
-    };
-    normalizedHallOfFame = resolveHallOfFameInterfaceConfig(mergedHallOfFame);
-
-    await interfaceRef.set({
-      hallOfFame: normalizedHallOfFame,
-      updatedAt: FieldValue.serverTimestamp(),
-      updatedBy: uid,
-    }, { merge: true });
-  } catch (error) {
-    console.error('Failed to save hall of fame interface config:', error);
-    throw new HttpsError(
-      'internal',
-      '학생 화면 설정 저장 중 서버 오류가 발생했습니다.',
-      { stage: 'config_save' },
-    );
-  }
-
-  if (shouldRefreshSnapshot) {
-    try {
-      await refreshWisHallOfFameOrThrowHttps(year, semester, {
-        source: 'config_save',
-      });
-    } catch (error) {
-      console.error('Failed to refresh wis hall of fame snapshot after config save:', error);
-      throw new HttpsError(
-        'internal',
-        '학생 화면 설정 저장 후 공개 랭킹 새로고침에 실패했습니다.',
+    if (result.created) {
+      await createHistoryClassroomExemptionRequestedNotifications(
+        year,
+        semester,
         {
-          stage: 'snapshot_refresh',
-          refreshStage: String(error?.details?.stage || '').trim(),
-          refreshDetail: String(error?.details?.detail || '').trim(),
+          requestId: result.requestId,
+          studentName: result.studentName,
+          assignmentTitle: result.assignmentTitle,
+          actorUid: uid,
         },
       );
     }
-  }
 
-  return {
-    saved: true,
-    hallOfFame: normalizedHallOfFame,
-  };
-});
+    return result;
+  },
+);
+
+exports.reviewHistoryClassroomExemptionRequest = onCall(
+  { region: REGION },
+  async (request) => {
+    const manager = await assertQuizManager(request, {
+      recentAuth: true,
+      highRisk: true,
+    });
+    const { year, semester } = assertYearSemester(request.data);
+    const requestId = sanitizeHistoryClassroomText(
+      request.data?.requestId,
+      160,
+    );
+    const approved =
+      request.data?.approved === true ||
+      String(request.data?.decision || request.data?.status || "").trim() ===
+        "approved";
+    const rejected =
+      request.data?.approved === false ||
+      String(request.data?.decision || request.data?.status || "").trim() ===
+        "rejected";
+    const reviewReason = sanitizeHistoryClassroomText(
+      request.data?.reviewReason || request.data?.reason,
+      240,
+    );
+
+    if (!requestId) {
+      throw new HttpsError("invalid-argument", "requestId is required.");
+    }
+    if (!approved && !rejected) {
+      throw new HttpsError(
+        "invalid-argument",
+        "approved true or false is required.",
+      );
+    }
+
+    const requestRef = db.doc(
+      `${getHistoryClassroomExemptionRequestCollectionPath(year, semester)}/${requestId}`,
+    );
+    const result = await db.runTransaction(async (transaction) => {
+      const requestSnap = await transaction.get(requestRef);
+      if (!requestSnap.exists) {
+        throw new HttpsError(
+          "not-found",
+          "History classroom exemption request does not exist.",
+        );
+      }
+
+      const exemptionRequest = {
+        id: requestSnap.id,
+        ...(requestSnap.data() || {}),
+      };
+      const currentStatus = String(exemptionRequest.status || "").trim();
+      const nextStatus = approved ? "approved" : "rejected";
+      if (currentStatus === nextStatus) {
+        return {
+          requestId,
+          status: currentStatus,
+          approved,
+          duplicate: true,
+          uid: String(exemptionRequest.uid || "").trim(),
+          assignmentTitle: sanitizeHistoryClassroomText(
+            exemptionRequest.assignmentTitle,
+            80,
+            "역사교실",
+          ),
+          resultId: String(exemptionRequest.resultId || "").trim(),
+        };
+      }
+      if (currentStatus !== "requested") {
+        throw new HttpsError(
+          "failed-precondition",
+          "History classroom exemption request is not reviewable.",
+        );
+      }
+
+      const targetUid = String(exemptionRequest.uid || "").trim();
+      const assignmentId = String(exemptionRequest.assignmentId || "").trim();
+      const exemptionId = String(exemptionRequest.exemptionId || "").trim();
+      if (!targetUid || !assignmentId || !exemptionId) {
+        throw new HttpsError(
+          "failed-precondition",
+          "History classroom exemption request is incomplete.",
+        );
+      }
+
+      const exemptionRef = db.doc(
+        `${getHistoryClassroomExemptionCollectionPath(year, semester)}/${exemptionId}`,
+      );
+      const assignmentRef = db.doc(
+        `${getSemesterRoot(year, semester)}/history_classrooms/${assignmentId}`,
+      );
+      const [exemptionSnap, semesterAssignmentSnap] = await Promise.all([
+        transaction.get(exemptionRef),
+        transaction.get(assignmentRef),
+      ]);
+      let assignmentSnap = semesterAssignmentSnap;
+      if (!assignmentSnap.exists) {
+        assignmentSnap = await transaction.get(
+          db.doc(`history_classrooms/${assignmentId}`),
+        );
+      }
+      if (!exemptionSnap.exists) {
+        throw new HttpsError(
+          "not-found",
+          "History classroom exemption does not exist.",
+        );
+      }
+      const exemption = exemptionSnap.data() || {};
+      if (String(exemption.uid || "").trim() !== targetUid) {
+        throw new HttpsError(
+          "failed-precondition",
+          "History classroom exemption owner does not match request.",
+        );
+      }
+      if (!assignmentSnap.exists) {
+        throw new HttpsError(
+          "not-found",
+          "History classroom assignment does not exist.",
+        );
+      }
+
+      const assignmentData = assignmentSnap.data() || {};
+      const assignmentTitle = sanitizeHistoryClassroomText(
+        assignmentData.title || exemptionRequest.assignmentTitle,
+        80,
+        "역사교실",
+      );
+      const resultId = approved
+        ? buildHistoryClassroomExemptionResultId(requestId)
+        : String(exemptionRequest.resultId || "").trim();
+
+      transaction.set(
+        requestRef,
+        {
+          status: nextStatus,
+          reviewedAt: FieldValue.serverTimestamp(),
+          reviewedByUid: manager.uid,
+          reviewReason,
+          resultId: approved ? resultId : "",
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      if (approved) {
+        const exemptionStatus =
+          String(exemption.status || "").trim() || "available";
+        if (exemptionStatus === "used") {
+          throw new HttpsError(
+            "failed-precondition",
+            "History classroom exemption was already used.",
+          );
+        }
+        const resultRef = db.doc(
+          `${getSemesterRoot(year, semester)}/history_classroom_results/${resultId}`,
+        );
+        transaction.set(
+          exemptionRef,
+          {
+            status: "used",
+            assignmentId,
+            exemptionRequestId: requestId,
+            usedAt: FieldValue.serverTimestamp(),
+            usedByUid: targetUid,
+            pendingRequestId: "",
+            requestedAssignmentId: "",
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+        transaction.set(
+          resultRef,
+          {
+            assignmentId,
+            assignmentTitle,
+            uid: targetUid,
+            studentName: sanitizeHistoryClassroomText(
+              exemptionRequest.studentName,
+              40,
+              "학생",
+            ),
+            studentGrade: sanitizeHistoryClassroomText(
+              exemptionRequest.studentGrade,
+              8,
+            ),
+            studentClass: sanitizeHistoryClassroomText(
+              exemptionRequest.studentClass,
+              8,
+            ),
+            studentNumber: sanitizeHistoryClassroomText(
+              exemptionRequest.studentNumber,
+              8,
+            ),
+            answers: {},
+            score: 0,
+            total: 0,
+            percent: 100,
+            passThresholdPercent: Math.min(
+              100,
+              Math.max(0, Number(assignmentData.passThresholdPercent) || 80),
+            ),
+            passed: true,
+            status: "passed",
+            answerChecks: [],
+            cancellationReason: "",
+            completionSource: "exemption",
+            exemptionId,
+            exemptionRequestId: requestId,
+            approvedByUid: manager.uid,
+            approvedAt: FieldValue.serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
+          },
+          { merge: false },
+        );
+      } else {
+        transaction.set(
+          exemptionRef,
+          {
+            status: "available",
+            pendingRequestId: "",
+            requestedAssignmentId: "",
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+      }
+
+      return {
+        requestId,
+        status: nextStatus,
+        approved,
+        duplicate: false,
+        uid: targetUid,
+        assignmentTitle,
+        resultId,
+      };
+    });
+
+    if (!result.duplicate) {
+      await createHistoryClassroomExemptionReviewedNotification(
+        year,
+        semester,
+        {
+          requestId: result.requestId,
+          recipientUid: result.uid,
+          assignmentTitle: result.assignmentTitle,
+          approved: result.approved,
+          actorUid: manager.uid,
+        },
+      );
+    }
+
+    return result;
+  },
+);
+
+exports.submitHistoryClassroomResult = onCall(
+  { region: REGION },
+  async (request) => {
+    const { uid } = await assertAllowedWestoryUser(request);
+    if (uid) {
+      throw new HttpsError(
+        "failed-precondition",
+        "This legacy submission endpoint was retired by W6A.",
+        {
+          reason: "ASSESSMENT_LEGACY_SUBMISSION_RETIRED",
+          replacement: "submitAssessmentAttempt",
+        },
+      );
+    }
+    const { year, semester } = assertYearSemester(request.data);
+    const assignmentId = String(request.data?.assignmentId || "").trim();
+    const requestedResultId = String(request.data?.resultId || "").trim();
+    const requestedStatus = String(request.data?.status || "").trim();
+    const cancellationReason = String(request.data?.cancellationReason || "")
+      .trim()
+      .slice(0, 120);
+
+    if (!assignmentId) {
+      throw new HttpsError("invalid-argument", "Assignment id is required.");
+    }
+    if (
+      requestedStatus &&
+      !["passed", "failed", "cancelled"].includes(requestedStatus)
+    ) {
+      throw new HttpsError("invalid-argument", "Invalid result status.");
+    }
+
+    const assignment = await loadHistoryClassroomAssignmentForSubmit(
+      year,
+      semester,
+      assignmentId,
+    );
+    const assignmentData = assignment.data;
+    if (assignmentData.deletedAt) {
+      throw new HttpsError(
+        "failed-precondition",
+        "History classroom assignment was deleted.",
+      );
+    }
+    if (assignmentData.isPublished !== true) {
+      throw new HttpsError(
+        "failed-precondition",
+        "History classroom assignment is not published.",
+      );
+    }
+    if (
+      !collectHistoryClassroomAssignedUidsForFunction(assignmentData).includes(
+        uid,
+      )
+    ) {
+      throw new HttpsError(
+        "permission-denied",
+        "History classroom assignment is not assigned to the caller.",
+      );
+    }
+
+    const answers = normalizeHistoryClassroomAnswersForWrite(
+      request.data?.answers,
+    );
+    const scoreSummary = buildHistoryClassroomServerScore(
+      assignmentData,
+      answers,
+    );
+    const { profile } = await getUserProfile(uid);
+    const passThresholdPercent = Math.min(
+      100,
+      Math.max(0, Number(assignmentData.passThresholdPercent) || 80),
+    );
+    const passed =
+      requestedStatus === "cancelled"
+        ? false
+        : scoreSummary.percent >= passThresholdPercent;
+    const status =
+      requestedStatus === "cancelled"
+        ? "cancelled"
+        : passed
+          ? "passed"
+          : "failed";
+
+    const resultCollectionPath = `${getSemesterRoot(year, semester)}/history_classroom_results`;
+    const resultRef = requestedResultId
+      ? db.doc(`${resultCollectionPath}/${requestedResultId}`)
+      : db.collection(resultCollectionPath).doc();
+    const resultSnap = await resultRef.get();
+    if (
+      resultSnap.exists &&
+      String(resultSnap.data()?.uid || "").trim() !== uid
+    ) {
+      throw new HttpsError(
+        "permission-denied",
+        "History classroom result id belongs to another user.",
+      );
+    }
+
+    const resultPayload = {
+      assignmentId: assignment.id,
+      assignmentTitle: String(assignmentData.title || "").trim(),
+      uid,
+      studentName: String(profile.name || "").trim(),
+      studentGrade: String(profile.grade || "").trim(),
+      studentClass: String(profile.class || "").trim(),
+      studentNumber: String(profile.number || "").trim(),
+      answers,
+      score: scoreSummary.score,
+      total: scoreSummary.total,
+      percent: scoreSummary.percent,
+      passThresholdPercent,
+      passed,
+      status,
+      answerChecks: scoreSummary.checks,
+      cancellationReason,
+      createdAt: FieldValue.serverTimestamp(),
+    };
+
+    await resultRef.set(resultPayload, { merge: false });
+
+    let notificationCreatedCount = 0;
+    let notificationRecipientCount = 0;
+    if (passed) {
+      try {
+        const notificationResults =
+          await createHistoryClassroomPassedNotifications(year, semester, {
+            resultId: resultRef.id,
+            assignmentTitle: resultPayload.assignmentTitle,
+            studentName: resultPayload.studentName,
+            percent: scoreSummary.percent,
+            actorUid: uid,
+          });
+        notificationCreatedCount = notificationResults.filter(
+          (result) => result.created,
+        ).length;
+        notificationRecipientCount = notificationResults.length;
+      } catch (notificationError) {
+        console.error(
+          "Failed to create history classroom passed notifications:",
+          notificationError,
+        );
+      }
+    }
+
+    return {
+      resultId: resultRef.id,
+      resultCollectionPath,
+      score: scoreSummary.score,
+      total: scoreSummary.total,
+      percent: scoreSummary.percent,
+      passed,
+      status,
+      answerChecks: scoreSummary.checks,
+      notificationCreatedCount,
+      notificationRecipientCount,
+    };
+  },
+);
+
+exports.notifyHistoryClassroomSubmitted = onCall(
+  { region: REGION },
+  async (request) => {
+    const { uid } = await assertAllowedWestoryUser(request);
+    const { year, semester } = assertYearSemester(request.data);
+    const assignmentId = sanitizeNotificationText(
+      request.data?.assignmentId,
+      160,
+    );
+    const resultId = sanitizeNotificationText(request.data?.resultId, 160);
+    const assignmentTitle = sanitizeNotificationText(
+      request.data?.assignmentTitle,
+      80,
+      "역사교실",
+    );
+    const percent = Math.max(
+      0,
+      Math.min(100, Number(request.data?.percent || 0)),
+    );
+    if (!assignmentId || !resultId) {
+      throw new HttpsError(
+        "invalid-argument",
+        "assignmentId and resultId are required.",
+      );
+    }
+
+    const { profile: profileForNotification } = await getUserProfile(uid);
+    const savedResult = await loadHistoryClassroomResultForNotification(
+      year,
+      semester,
+      resultId,
+    );
+    if (!savedResult) {
+      throw new HttpsError(
+        "not-found",
+        "History classroom result does not exist.",
+      );
+    }
+
+    const savedResultData = savedResult.data;
+    const resultUid = String(savedResultData.uid || "").trim();
+    if (resultUid !== uid) {
+      throw new HttpsError(
+        "permission-denied",
+        "History classroom result belongs to another user.",
+      );
+    }
+    if (String(savedResultData.assignmentId || "").trim() !== assignmentId) {
+      throw new HttpsError(
+        "invalid-argument",
+        "History classroom result does not match assignment id.",
+      );
+    }
+    if (
+      savedResultData.passed !== true &&
+      String(savedResultData.status || "").trim() !== "passed"
+    ) {
+      return {
+        createdCount: 0,
+        recipientCount: 0,
+        skipped: true,
+        reason: "result_not_passed",
+      };
+    }
+
+    const notificationResults = await createHistoryClassroomPassedNotifications(
+      year,
+      semester,
+      {
+        resultId,
+        assignmentTitle: savedResultData.assignmentTitle || assignmentTitle,
+        studentName: savedResultData.studentName || profileForNotification.name,
+        percent: Number(savedResultData.percent || percent),
+        actorUid: uid,
+      },
+    );
+
+    return {
+      createdCount: notificationResults.filter((result) => result.created)
+        .length,
+      recipientCount: notificationResults.length,
+    };
+  },
+);
+
+exports.notifyPerformanceScoreObjectionRequested = onCall(
+  { region: REGION },
+  async (request) => {
+    const { uid } = await assertAllowedWestoryUser(request);
+    if (uid) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Legacy performance score requests are retired in W6B.",
+        {
+          reason: "CLIENT_UPDATE_REQUIRED",
+          replacement: "requestGradeReview via executeCommand",
+        },
+      );
+    }
+    const { year, semester } = assertYearSemester(request.data);
+    const scoreIds = uniqueNonEmptyStrings(request.data?.scoreIds, 20)
+      .map((scoreId) => sanitizeNotificationText(scoreId, 160))
+      .filter(Boolean);
+    const reason = sanitizeNotificationText(request.data?.reason, 300);
+    const targetDetails = sanitizeNotificationText(
+      request.data?.targetDetails,
+      240,
+    );
+    const requestedScoreKind = normalizePerformanceScoreKind(
+      request.data?.scoreKind,
+    );
+    if (scoreIds.length === 0) {
+      throw new HttpsError("invalid-argument", "scoreIds are required.");
+    }
+    if (!reason) {
+      throw new HttpsError("invalid-argument", "reason is required.");
+    }
+
+    const { profile } = await getUserProfile(uid);
+    if (String(profile?.role || "").trim() !== "student") {
+      throw new HttpsError(
+        "permission-denied",
+        "Only students can request performance score objections.",
+      );
+    }
+
+    const records = await Promise.all(
+      scoreIds.map((scoreId) =>
+        loadStudentPerformanceScoreForNotification(
+          uid,
+          year,
+          semester,
+          scoreId,
+          {
+            scoreKind: requestedScoreKind,
+          },
+        ),
+      ),
+    );
+    const objectionSaveResult = await savePerformanceScoreObjections(
+      year,
+      semester,
+      {
+        actorUid: uid,
+        profile,
+        records,
+        reason,
+        targetDetails,
+      },
+    );
+    const savedScoreIds = new Set(objectionSaveResult.scoreIds);
+    const savedRecords = records.filter((record) =>
+      savedScoreIds.has(record.id),
+    );
+    if (savedRecords.length === 0) {
+      return {
+        objectionIds: [],
+        objectionSavedCount: 0,
+        objectionSkippedProcessedCount:
+          objectionSaveResult.skippedProcessedCount,
+        createdCount: 0,
+        skippedCount: 0,
+        recipientCount: 0,
+      };
+    }
+    const notificationResults =
+      await createPerformanceScoreObjectionRequestedNotifications(
+        year,
+        semester,
+        {
+          actorUid: uid,
+          profile,
+          scoreIds: objectionSaveResult.scoreIds,
+          records: savedRecords,
+          reason,
+          targetDetails,
+        },
+      );
+
+    return {
+      objectionIds: objectionSaveResult.objectionIds,
+      objectionSavedCount: objectionSaveResult.objectionIds.length,
+      objectionSkippedProcessedCount: objectionSaveResult.skippedProcessedCount,
+      createdCount: notificationResults.filter((result) => result.created)
+        .length,
+      skippedCount: notificationResults.filter((result) => result.skipped)
+        .length,
+      recipientCount: notificationResults.length,
+    };
+  },
+);
+
+exports.notifyPerformanceScoreAnswerSheetRequested = onCall(
+  { region: REGION },
+  async (request) => {
+    const { uid } = await assertAllowedWestoryUser(request);
+    if (uid) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Legacy answer sheet requests are retired in W6B.",
+        {
+          reason: "CLIENT_UPDATE_REQUIRED",
+          replacement: "requestGradeReview via executeCommand",
+        },
+      );
+    }
+    const { year, semester } = assertYearSemester(request.data);
+    const scoreIds = uniqueNonEmptyStrings(request.data?.scoreIds, 20)
+      .map((scoreId) => sanitizeNotificationText(scoreId, 160))
+      .filter(Boolean);
+    const reason = sanitizeNotificationText(request.data?.reason, 300);
+    const targetDetails = sanitizeNotificationText(
+      request.data?.targetDetails,
+      240,
+    );
+    const requestedScoreKind = normalizePerformanceScoreKind(
+      request.data?.scoreKind,
+    );
+    if (scoreIds.length === 0) {
+      throw new HttpsError("invalid-argument", "scoreIds are required.");
+    }
+    if (!reason || reason.length < 10) {
+      throw new HttpsError(
+        "invalid-argument",
+        "A detailed reason is required.",
+      );
+    }
+
+    const { profile } = await getUserProfile(uid);
+    if (String(profile?.role || "").trim() !== "student") {
+      throw new HttpsError(
+        "permission-denied",
+        "Only students can request answer sheet checks.",
+      );
+    }
+
+    const records = await Promise.all(
+      scoreIds.map((scoreId) =>
+        loadStudentPerformanceScoreForNotification(
+          uid,
+          year,
+          semester,
+          scoreId,
+          {
+            scoreKind: requestedScoreKind,
+            allowConfirmed: true,
+          },
+        ),
+      ),
+    );
+    const requestBatchId =
+      typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : crypto
+            .createHash("sha1")
+            .update(`${Date.now()}:${uid}:${scoreIds.join("|")}`)
+            .digest("hex")
+            .slice(0, 32);
+    const requestSaveResult = await savePerformanceScoreAnswerSheetRequests(
+      year,
+      semester,
+      {
+        actorUid: uid,
+        profile,
+        records,
+        reason,
+        targetDetails,
+        requestBatchId,
+      },
+    );
+    const savedScoreIds = new Set(requestSaveResult.scoreIds);
+    const savedRecords = records.filter((record) =>
+      savedScoreIds.has(record.id),
+    );
+    if (savedRecords.length === 0) {
+      return {
+        requestIds: [],
+        requestSavedCount: 0,
+        requestSkippedPendingCount: requestSaveResult.skippedPendingCount,
+        createdCount: 0,
+        skippedCount: 0,
+        recipientCount: 0,
+      };
+    }
+    const notificationResults =
+      await createPerformanceScoreAnswerSheetRequestedNotifications(
+        year,
+        semester,
+        {
+          actorUid: uid,
+          profile,
+          scoreIds: requestSaveResult.scoreIds,
+          records: savedRecords,
+          reason,
+          targetDetails,
+          requestBatchId,
+        },
+      );
+
+    return {
+      requestIds: requestSaveResult.requestIds,
+      requestSavedCount: requestSaveResult.requestIds.length,
+      requestSkippedPendingCount: requestSaveResult.skippedPendingCount,
+      createdCount: notificationResults.filter((result) => result.created)
+        .length,
+      skippedCount: notificationResults.filter((result) => result.skipped)
+        .length,
+      recipientCount: notificationResults.length,
+    };
+  },
+);
+
+exports.reviewPerformanceScoreObjection = onCall(
+  { region: REGION },
+  async (request) => {
+    const manager = await assertPerformanceScoreManager(request, {
+      recentAuth: true,
+      highRisk: true,
+    });
+    if (manager.uid) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Legacy performance score review is retired in W6B.",
+        {
+          reason: "CLIENT_UPDATE_REQUIRED",
+          replacement: "correctOfficialGrade via executeCommand",
+        },
+      );
+    }
+    const { year, semester } = assertYearSemester(request.data);
+    const objectionId = sanitizeNotificationText(
+      request.data?.objectionId,
+      160,
+    );
+    const action = String(request.data?.status || "").trim();
+    const reviewMemo = sanitizeNotificationText(request.data?.reviewMemo, 240);
+    if (!objectionId) {
+      throw new HttpsError("invalid-argument", "objectionId is required.");
+    }
+    if (action !== "accepted" && action !== "rejected") {
+      throw new HttpsError(
+        "invalid-argument",
+        "status must be accepted or rejected.",
+      );
+    }
+
+    const objectionRef = db.doc(
+      getPerformanceScoreObjectionPath(year, semester, objectionId),
+    );
+    const reviewerName = sanitizeNotificationText(
+      manager.profile?.teacherName ||
+        manager.profile?.displayName ||
+        manager.profile?.name ||
+        manager.email,
+      80,
+      "교사",
+    );
+
+    const reviewResult = await db.runTransaction(async (transaction) => {
+      const objectionSnap = await transaction.get(objectionRef);
+      if (!objectionSnap.exists) {
+        throw new HttpsError(
+          "not-found",
+          "Performance score objection does not exist.",
+        );
+      }
+
+      const objection = objectionSnap.data() || {};
+      const currentStatus = String(objection.status || "pending").trim();
+      const recipientUid = sanitizeNotificationText(objection.uid, 160);
+      if (!recipientUid) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Objection student uid is missing.",
+        );
+      }
+      const scoreId = sanitizeNotificationText(
+        objection.scoreId || objection.rosterId,
+        160,
+      );
+      if (!scoreId) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Objection score id is missing.",
+        );
+      }
+
+      if (currentStatus !== "pending") {
+        if (currentStatus === action) {
+          return {
+            duplicate: true,
+            status: currentStatus,
+            recipientUid,
+            scoreTitle: objection.scoreTitle,
+            scoreKind: normalizePerformanceScoreKind(objection.scoreKind),
+            changedScoreLabel: sanitizeNotificationText(
+              objection.changedScoreLabel,
+              80,
+            ),
+            reviewMemo: sanitizeNotificationText(objection.reviewMemo, 240),
+          };
+        }
+        throw new HttpsError(
+          "failed-precondition",
+          "Performance score objection has already been reviewed.",
+        );
+      }
+
+      let changedTotalScore = null;
+      let changedScoreLabel = "";
+      if (action === "accepted") {
+        changedTotalScore = toNullablePerformanceScoreNumber(
+          request.data?.changedTotalScore,
+        );
+        if (changedTotalScore === null) {
+          throw new HttpsError(
+            "invalid-argument",
+            "changedTotalScore is required when accepting an objection.",
+          );
+        }
+        const scoreRef = db.doc(
+          `users/${recipientUid}/${PERFORMANCE_SCORE_USER_COLLECTION}/${scoreId}`,
+        );
+        const scoreSnap = await transaction.get(scoreRef);
+        if (!scoreSnap.exists) {
+          throw new HttpsError(
+            "failed-precondition",
+            "Accepted score must be saved before reviewing an objection.",
+          );
+        }
+        const scoreData = scoreSnap.data() || {};
+        if (
+          String(scoreData.uid || "").trim() !== recipientUid ||
+          String(scoreData.rosterId || scoreId).trim() !== scoreId ||
+          String(scoreData.academicYear || "").trim() !== year ||
+          String(scoreData.semester || "").trim() !== semester
+        ) {
+          throw new HttpsError(
+            "failed-precondition",
+            "Saved performance score does not match this objection.",
+          );
+        }
+        const savedTotalScore = toNullablePerformanceScoreNumber(
+          scoreData.totalScore,
+        );
+        if (savedTotalScore === null || savedTotalScore !== changedTotalScore) {
+          throw new HttpsError(
+            "failed-precondition",
+            "Accepted score must match the saved performance score.",
+          );
+        }
+        const maxScore = toNullablePerformanceScoreNumber(
+          scoreData.totalMaxScore ?? objection.totalMaxScore,
+        );
+        if (
+          changedTotalScore < 0 ||
+          (maxScore !== null && maxScore > 0 && changedTotalScore > maxScore)
+        ) {
+          throw new HttpsError(
+            "invalid-argument",
+            "changedTotalScore is outside the valid score range.",
+          );
+        }
+        changedScoreLabel = formatPerformanceScoreLabel(
+          savedTotalScore,
+          maxScore,
+        );
+      }
+
+      transaction.set(
+        objectionRef,
+        {
+          status: action,
+          reviewedAt: FieldValue.serverTimestamp(),
+          reviewedBy: manager.uid,
+          reviewedByName: reviewerName,
+          reviewMemo,
+          changedTotalScore,
+          changedScoreLabel,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      return {
+        duplicate: false,
+        status: action,
+        recipientUid,
+        scoreTitle: objection.scoreTitle,
+        scoreKind: normalizePerformanceScoreKind(objection.scoreKind),
+        changedScoreLabel,
+        reviewMemo,
+      };
+    });
+
+    let notificationCreated = false;
+    try {
+      const notificationResult =
+        await createPerformanceScoreObjectionReviewedNotification(
+          year,
+          semester,
+          {
+            objectionId,
+            recipientUid: reviewResult.recipientUid,
+            scoreTitle: reviewResult.scoreTitle,
+            scoreKind: reviewResult.scoreKind,
+            status: reviewResult.status,
+            changedScoreLabel: reviewResult.changedScoreLabel,
+            reviewMemo: reviewResult.reviewMemo,
+            actorUid: manager.uid,
+          },
+        );
+      notificationCreated =
+        notificationResult.created === true ||
+        Boolean(notificationResult.notificationId);
+    } catch (error) {
+      console.error(
+        "Failed to create performance score objection reviewed notification:",
+        error,
+      );
+    }
+
+    return {
+      status: reviewResult.status,
+      notificationCreated,
+      recipientUid: reviewResult.recipientUid,
+      duplicate: reviewResult.duplicate === true,
+    };
+  },
+);
+
+exports.saveWisHallOfFameConfig = onCall(
+  { region: REGION },
+  async (request) => {
+    const { uid } = await assertHallOfFameManager(request, {
+      recentAuth: true,
+      highRisk: true,
+    });
+    throw new HttpsError(
+      "failed-precondition",
+      "이전 위스 명예의 전당 설정 경로는 종료되었습니다.",
+      {
+        reason: "CLIENT_UPDATE_REQUIRED",
+        replacement: "rebuildWisProjection",
+      },
+    );
+
+    /* istanbul ignore next -- 이전 번들 진단을 위해 한 Wave 동안 보존한 비활성 구현 */
+    const { year, semester } = await resolveHallOfFameTargetYearSemester(
+      request.data,
+      {
+        preferConfiguredCurrent: true,
+        source: "config_save",
+      },
+    );
+    const shouldRefreshSnapshot = false;
+    const hallOfFamePatch =
+      request.data?.hallOfFame && typeof request.data.hallOfFame === "object"
+        ? request.data.hallOfFame
+        : {};
+    const interfaceRef = db.doc("site_settings/interface_config");
+    let normalizedHallOfFame = null;
+
+    try {
+      const interfaceSnap = await interfaceRef.get();
+      const existing = interfaceSnap.exists ? interfaceSnap.data() || {} : {};
+      const existingHallOfFame =
+        existing?.hallOfFame && typeof existing.hallOfFame === "object"
+          ? existing.hallOfFame
+          : {};
+      const mergedHallOfFame = {
+        ...existingHallOfFame,
+        ...hallOfFamePatch,
+        positions: {
+          ...(existingHallOfFame.positions || {}),
+          ...(hallOfFamePatch.positions || {}),
+          desktop: {
+            ...(existingHallOfFame.positions?.desktop || {}),
+            ...(hallOfFamePatch.positions?.desktop || {}),
+          },
+          mobile: {
+            ...(existingHallOfFame.positions?.mobile || {}),
+            ...(hallOfFamePatch.positions?.mobile || {}),
+          },
+        },
+        leaderboardPanel: {
+          ...(existingHallOfFame.leaderboardPanel || {}),
+          ...(hallOfFamePatch.leaderboardPanel || {}),
+          desktop: {
+            ...(existingHallOfFame.leaderboardPanel?.desktop || {}),
+            ...(hallOfFamePatch.leaderboardPanel?.desktop || {}),
+          },
+          mobile: {
+            ...(existingHallOfFame.leaderboardPanel?.mobile || {}),
+            ...(hallOfFamePatch.leaderboardPanel?.mobile || {}),
+          },
+        },
+        publicRange: {
+          ...(existingHallOfFame.publicRange || {}),
+          ...(hallOfFamePatch.publicRange || {}),
+        },
+        recognitionPopup: {
+          ...(existingHallOfFame.recognitionPopup || {}),
+          ...(hallOfFamePatch.recognitionPopup || {}),
+        },
+      };
+      normalizedHallOfFame = resolveHallOfFameInterfaceConfig(mergedHallOfFame);
+
+      await interfaceRef.set(
+        {
+          hallOfFame: normalizedHallOfFame,
+          updatedAt: FieldValue.serverTimestamp(),
+          updatedBy: uid,
+        },
+        { merge: true },
+      );
+    } catch (error) {
+      console.error("Failed to save hall of fame interface config:", error);
+      throw new HttpsError(
+        "internal",
+        "학생 화면 설정 저장 중 서버 오류가 발생했습니다.",
+        { stage: "config_save" },
+      );
+    }
+
+    if (shouldRefreshSnapshot) {
+      try {
+        await refreshWisHallOfFameOrThrowHttps(year, semester, {
+          source: "config_save",
+        });
+      } catch (error) {
+        console.error(
+          "Failed to refresh wis hall of fame snapshot after config save:",
+          error,
+        );
+        throw new HttpsError(
+          "internal",
+          "학생 화면 설정 저장 후 공개 랭킹 새로고침에 실패했습니다.",
+          {
+            stage: "snapshot_refresh",
+            refreshStage: String(error?.details?.stage || "").trim(),
+            refreshDetail: String(error?.details?.detail || "").trim(),
+          },
+        );
+      }
+    }
+
+    return {
+      saved: true,
+      hallOfFame: normalizedHallOfFame,
+    };
+  },
+);
 
 exports.refreshWisHallOfFameOnSchedule = onSchedule(
   {
     region: REGION,
-    schedule: '0 */4 * * *',
-    timeZone: 'Asia/Seoul',
+    schedule: "0 */4 * * *",
+    timeZone: "Asia/Seoul",
   },
   async () => {
-    console.log('Skipped retired legacy hall of fame refresh.', {
-      reason: 'CLIENT_UPDATE_REQUIRED',
-      replacement: 'rebuildWisProjection',
+    console.log("Skipped retired legacy hall of fame refresh.", {
+      reason: "CLIENT_UPDATE_REQUIRED",
+      replacement: "rebuildWisProjection",
     });
     return;
 
@@ -6413,42 +8948,49 @@ exports.refreshWisHallOfFameOnSchedule = onSchedule(
       {
         preferConfiguredCurrent: true,
         allowMissing: true,
-        source: 'schedule',
+        source: "schedule",
       },
     );
     if (!currentYearSemester) {
-      console.warn('Skipped scheduled hall of fame refresh because site_settings/config is missing year/semester.');
+      console.warn(
+        "Skipped scheduled hall of fame refresh because site_settings/config is missing year/semester.",
+      );
       return;
     }
 
     const { year, semester } = currentYearSemester;
     try {
       const snapshot = await db.doc(getWisHallOfFamePath(year, semester)).get();
-      const data = snapshot.exists ? (snapshot.data() || {}) : null;
+      const data = snapshot.exists ? snapshot.data() || {} : null;
       if (!isWisHallOfFameSnapshotStale(data)) {
-        console.log('Skipped scheduled hall of fame refresh because snapshot is fresh:', {
-          year,
-          semester,
-          snapshotKey: String(data?.snapshotKey || '').trim(),
-          snapshotVersion: Number(data?.snapshotVersion || WIS_HALL_OF_FAME_SNAPSHOT_VERSION),
-        });
+        console.log(
+          "Skipped scheduled hall of fame refresh because snapshot is fresh:",
+          {
+            year,
+            semester,
+            snapshotKey: String(data?.snapshotKey || "").trim(),
+            snapshotVersion: Number(
+              data?.snapshotVersion || WIS_HALL_OF_FAME_SNAPSHOT_VERSION,
+            ),
+          },
+        );
         return;
       }
 
       const result = await refreshWisHallOfFame(year, semester, {
-        source: 'schedule',
+        source: "schedule",
       });
-      console.log('Scheduled hall of fame refresh completed:', {
+      console.log("Scheduled hall of fame refresh completed:", {
         year,
         semester,
         ...result,
       });
     } catch (error) {
       const failure = normalizeHallOfFameRefreshError(error);
-      console.error('Scheduled hall of fame refresh failed:', {
+      console.error("Scheduled hall of fame refresh failed:", {
         year,
         semester,
-        stage: failure.stage || 'unknown',
+        stage: failure.stage || "unknown",
         message: failure.message,
         cause: failure.cause || null,
       });
@@ -6457,768 +8999,1146 @@ exports.refreshWisHallOfFameOnSchedule = onSchedule(
   },
 );
 
-exports.rebuildPointWalletRankTotals = onCall({ region: REGION, timeoutSeconds: 540, memory: '1GiB' }, async (request) => {
-  throw new HttpsError('failed-precondition', '이전 위스 projection 재계산 경로는 종료되었습니다.', {
-    reason: 'CLIENT_UPDATE_REQUIRED',
-    replacement: 'rebuildWisProjection',
-  });
-  const manager = await assertPointManager(request, { recentAuth: true, highRisk: true });
-  const { year, semester } = assertYearSemester(request.data);
-  const dryRun = request.data?.dryRun === true;
-  const policySnap = await db.doc(getPointPolicyPath(year, semester)).get();
-  const policy = policySnap.exists
-    ? normalizePointPolicy(policySnap.data() || {})
-    : getDefaultPointPolicy();
-  const plan = await buildPointWalletRankBackfillPlan({
-    year,
-    semester,
-    rankPolicy: policy.rankPolicy,
-  });
-  const changedWalletCount = plan.writes.length;
-
-  if (!dryRun && changedWalletCount > 0) {
-    await commitPointWalletBackfillWrites(plan.writes);
-    await markWisHallOfFameDirtySafely(year, semester);
-  }
-
-  return {
-    year,
-    semester,
-    dryRun,
-    scannedWalletCount: plan.scannedWalletCount,
-    scannedTransactionCount: plan.scannedTransactionCount,
-    processedUidCount: plan.processedUidCount,
-    updatedWalletCount: plan.updatedWalletCount,
-    createdWalletCount: plan.createdWalletCount,
-    changedWalletCount,
-    skippedMissingProfileCount: plan.skippedMissingProfileCount,
-    hallOfFameDirty: !dryRun && changedWalletCount > 0,
-    actorUid: manager.uid,
-  };
-});
-
-exports.applyPointActivityReward = onCall({ region: REGION }, async (request) => {
-  throw new HttpsError('failed-precondition', '이전 위스 자동 지급 경로는 종료되었습니다.', {
-    reason: 'CLIENT_UPDATE_REQUIRED',
-    replacement: 'grantWis',
-  });
-  const { uid } = await assertAllowedWestoryUser(request);
-  const { year, semester } = assertYearSemester(request.data);
-  const activityType = String(request.data?.activityType || '').trim();
-  const allowedTypes = ['attendance', 'quiz', 'lesson', 'lesson_core_points', 'think_cloud', 'map_tag', 'history_classroom'];
-  if (!allowedTypes.includes(activityType)) {
-    throw new HttpsError('invalid-argument', 'Unsupported point activity type.');
-  }
-
-  const sourceId = activityType === 'attendance'
-    ? getAttendanceSourceId()
-    : String(request.data?.sourceId || '').trim();
-  if (!sourceId) {
-    throw new HttpsError('invalid-argument', 'Activity sourceId is required.');
-  }
-
-  const requestedLabel = String(request.data?.sourceLabel || '').trim();
-  const { profile } = await ensureStudentProfile(uid);
-
-  const result = await db.runTransaction(async (transaction) => {
-    const { ref: walletRef, wallet } = await ensureWallet(transaction, year, semester, uid, profile);
-    const policy = await loadPolicy(transaction, year, semester);
-    const currentRankEarnedTotal = await getCurrentRankEarnedTotal(transaction, year, semester, uid, wallet);
-    const todayKey = getKstDateKey();
-    const monthKey = todayKey.slice(0, 7);
-    const currentBalance = Number(wallet.balance || 0);
-    const currentEarnedTotal = Number(wallet.earnedTotal || 0);
-    const activityScore = (activityType === 'quiz' || activityType === 'history_classroom')
-      ? await loadQuizActivityScore(transaction, year, semester, uid, sourceId)
-      : null;
-    const fallbackTransactionId = buildActivityTransactionId(uid, activityType, sourceId);
-
-    if (activityType === 'think_cloud') {
-      await assertThinkCloudRewardSource(transaction, year, semester, uid, sourceId);
-    }
-    if (activityType === 'map_tag') {
-      await assertMapTagRewardSource(transaction, year, semester, sourceId);
-    }
-
-    let lessonCorePointCompletion = null;
-    if (activityType === 'lesson_core_points') {
-      if (sourceId !== LESSON_CORE_POINTS_ALL_SOURCE_ID) {
-        return {
-          awarded: false,
-          duplicate: false,
-          amount: 0,
-          bonusAwarded: false,
-          bonusAmount: 0,
-          bonusType: '',
-          monthlyBonusAwarded: false,
-          monthlyBonusAmount: 0,
-          totalAwarded: 0,
-          targetMonth: '',
-          balance: currentBalance,
-          transactionId: fallbackTransactionId,
-          sourceId,
-          policyId: 'current',
-          blockedReason: 'legacy_unit_scope_disabled',
-          blockedMessage: '핵심포인트 보상은 전체 수업자료를 모두 찾았을 때만 지급됩니다.',
-          claimCount: 0,
-          maxClaims: 1,
-        };
-      }
-
-      lessonCorePointCompletion = await getLessonCorePointCompletion(transaction, year, semester, uid);
-      if (!lessonCorePointCompletion.complete) {
-        return {
-          awarded: false,
-          duplicate: false,
-          amount: 0,
-          bonusAwarded: false,
-          bonusAmount: 0,
-          bonusType: '',
-          monthlyBonusAwarded: false,
-          monthlyBonusAmount: 0,
-          totalAwarded: 0,
-          targetMonth: '',
-          balance: currentBalance,
-          transactionId: fallbackTransactionId,
-          sourceId,
-          policyId: 'current',
-          blockedReason: lessonCorePointCompletion.totalCount > 0
-            ? 'core_points_remaining'
-            : 'no_core_points',
-          blockedMessage: lessonCorePointCompletion.totalCount > 0
-            ? `전체 수업자료에서 남은 핵심포인트 ${lessonCorePointCompletion.remainingCount}개`
-            : '아직 찾을 수 있는 핵심포인트가 없습니다.',
-          claimCount: lessonCorePointCompletion.foundCount,
-          maxClaims: lessonCorePointCompletion.totalCount,
-          corePointTotalCount: lessonCorePointCompletion.totalCount,
-          corePointFoundCount: lessonCorePointCompletion.foundCount,
-          corePointRemainingCount: lessonCorePointCompletion.remainingCount,
-        };
-      }
-    }
-
-    let claimCount = 0;
-    if (activityType === 'think_cloud' || activityType === 'map_tag' || activityType === 'history_classroom') {
-      const activityHistory = await listActivityTransactionsByType(transaction, year, semester, uid, activityType);
-      const latestActivityDoc = activityHistory[0] || null;
-      claimCount = activityHistory.length;
-      const rewardRule = activityType === 'think_cloud'
-        ? policy.rewardPolicy.thinkCloud
-        : activityType === 'map_tag'
-          ? policy.rewardPolicy.mapTag
-          : policy.rewardPolicy.historyClassroom;
-      const maxClaims = Number(rewardRule?.maxClaims || 0);
-      if (maxClaims > 0 && claimCount >= maxClaims) {
-        return {
-          awarded: false,
-          duplicate: true,
-          amount: 0,
-          bonusAwarded: false,
-          bonusAmount: 0,
-          bonusType: '',
-          monthlyBonusAwarded: false,
-          monthlyBonusAmount: 0,
-          totalAwarded: 0,
-          targetMonth: '',
-          balance: currentBalance,
-          transactionId: fallbackTransactionId,
-          sourceId,
-          policyId: 'current',
-          blockedReason: 'max_claims_reached',
-          blockedMessage: `누적 최대 ${maxClaims}회까지 적립됩니다.`,
-          claimCount,
-          maxClaims,
-        };
-      }
-
-      const latestCreatedAtMs = getTransactionCreatedAtMs(latestActivityDoc);
-      const cooldownHours = Math.max(1, Number(rewardRule?.cooldownHours || 24));
-      const cooldownMs = cooldownHours * 60 * 60 * 1000;
-      const nextEligibleAtMs = latestCreatedAtMs ? latestCreatedAtMs + cooldownMs : 0;
-      if (nextEligibleAtMs && nextEligibleAtMs > Date.now()) {
-        return {
-          awarded: false,
-          duplicate: true,
-          amount: 0,
-          bonusAwarded: false,
-          bonusAmount: 0,
-          bonusType: '',
-          monthlyBonusAwarded: false,
-          monthlyBonusAmount: 0,
-          totalAwarded: 0,
-          targetMonth: '',
-          balance: currentBalance,
-          transactionId: fallbackTransactionId,
-          sourceId,
-          policyId: 'current',
-          blockedReason: 'cooldown_active',
-          blockedMessage: `${cooldownHours}시간마다 1회만 적립됩니다.`,
-          nextEligibleAt: new Date(nextEligibleAtMs).toISOString(),
-          claimCount,
-          maxClaims,
-        };
-      }
-    }
-
-    let includeAttendanceMonthlyBonus = false;
-    let attendanceMilestoneReached = null;
-    if (
-      activityType === 'attendance'
-      && Number(policy.attendanceMonthlyBonus || 0) > 0
-      && isLastDayOfMonth()
-    ) {
-      const attendanceQuery = db.collection(getPointCollectionPath(year, semester, 'point_transactions'))
-        .where('uid', '==', uid)
-        .where('type', '==', 'attendance')
-        .where('targetMonth', '==', monthKey);
-      const attendanceSnapshot = await transaction.get(attendanceQuery);
-      const attendanceDateSet = new Set(
-        attendanceSnapshot.docs
-          .map((doc) => String(doc.data().targetDate || '').trim())
-          .filter(Boolean),
-      );
-      attendanceDateSet.add(todayKey);
-      includeAttendanceMonthlyBonus = attendanceDateSet.size >= getDaysInMonthFromMonthKey(monthKey);
-    }
-
-    if (activityType === 'attendance' && policy.rewardPolicy.attendanceMilestoneBonus.enabled) {
-      const attendanceScope = `${year}_${semester}`;
-      const attendanceDocQuery = db.collection(`users/${uid}/attendance`)
-        .where('scope', '==', attendanceScope);
-      const attendanceDocSnapshot = await transaction.get(attendanceDocQuery);
-      const attendanceDateSet = new Set(
-        attendanceDocSnapshot.docs
-          .map((doc) => String(doc.data()?.date || '').trim())
-          .filter(Boolean),
-      );
-      attendanceDateSet.add(todayKey);
-      const attendanceCount = attendanceDateSet.size;
-      const milestoneCandidates = [50, 100, 200, 300];
-      attendanceMilestoneReached = milestoneCandidates.find((milestone) => (
-        attendanceCount === milestone
-        && Number(policy.rewardPolicy.attendanceMilestoneBonus.amounts?.[String(milestone)] || 0) > 0
-      )) || null;
-      claimCount = attendanceCount;
-    }
-
-    const rewardPlan = resolveActivityReward({
-      policy,
-      activityType,
-      sourceId,
-      sourceLabel: requestedLabel,
-      todayKey,
-      monthKey,
-      score: activityScore,
-      includeAttendanceMonthlyBonus,
-      attendanceMilestoneReached,
+exports.rebuildPointWalletRankTotals = onCall(
+  { region: REGION, timeoutSeconds: 540, memory: "1GiB" },
+  async (request) => {
+    throw new HttpsError(
+      "failed-precondition",
+      "이전 위스 projection 재계산 경로는 종료되었습니다.",
+      {
+        reason: "CLIENT_UPDATE_REQUIRED",
+        replacement: "rebuildWisProjection",
+      },
+    );
+    const manager = await assertPointManager(request, {
+      recentAuth: true,
+      highRisk: true,
     });
+    const { year, semester } = assertYearSemester(request.data);
+    const dryRun = request.data?.dryRun === true;
+    const policySnap = await db.doc(getPointPolicyPath(year, semester)).get();
+    const policy = policySnap.exists
+      ? normalizePointPolicy(policySnap.data() || {})
+      : getDefaultPointPolicy();
+    const plan = await buildPointWalletRankBackfillPlan({
+      year,
+      semester,
+      rankPolicy: policy.rankPolicy,
+    });
+    const changedWalletCount = plan.writes.length;
 
-    const rewardDocs = [];
-    for (const item of rewardPlan.items.filter((candidate) => Number(candidate.amount || 0) > 0)) {
-      const transactionId = buildActivityTransactionId(uid, item.type, item.sourceId);
-      const ref = db.doc(`${getPointCollectionPath(year, semester, 'point_transactions')}/${transactionId}`);
-      const snap = await transaction.get(ref);
-      rewardDocs.push({
-        item,
-        ref,
-        snap,
-        transactionId,
-      });
+    if (!dryRun && changedWalletCount > 0) {
+      await commitPointWalletBackfillWrites(plan.writes);
+      await markWisHallOfFameDirtySafely(year, semester);
     }
 
-    const newRewardDocs = rewardDocs.filter(({ snap }) => !snap.exists);
-    const baseRewardDoc = newRewardDocs.find(({ item }) => item.type === activityType) || null;
-    const newBonusDocs = newRewardDocs.filter(({ item }) => item.type !== activityType);
-    const awardedBaseAmount = baseRewardDoc ? Number(baseRewardDoc.item.amount || 0) : 0;
-    const bonusAmount = newBonusDocs.reduce((total, { item }) => total + Number(item.amount || 0), 0);
-    const totalAwarded = newRewardDocs.reduce((total, { item }) => total + Number(item.amount || 0), 0);
-    const monthlyBonusAmount = newBonusDocs
-      .filter(({ item }) => item.type === 'attendance_monthly_bonus')
-      .reduce((total, { item }) => total + Number(item.amount || 0), 0);
-    const bonusType = newBonusDocs[0]?.item.type || '';
-    const resolvedFallbackTransactionId = rewardDocs[0]?.transactionId || fallbackTransactionId;
+    return {
+      year,
+      semester,
+      dryRun,
+      scannedWalletCount: plan.scannedWalletCount,
+      scannedTransactionCount: plan.scannedTransactionCount,
+      processedUidCount: plan.processedUidCount,
+      updatedWalletCount: plan.updatedWalletCount,
+      createdWalletCount: plan.createdWalletCount,
+      changedWalletCount,
+      skippedMissingProfileCount: plan.skippedMissingProfileCount,
+      hallOfFameDirty: !dryRun && changedWalletCount > 0,
+      actorUid: manager.uid,
+    };
+  },
+);
 
-    if (totalAwarded <= 0) {
-      if (activityType === 'lesson_core_points' && rewardDocs.length > 0 && lessonCorePointCompletion?.complete) {
-        transaction.set(db.doc(`${getSemesterRoot(year, semester)}/lesson_progress/${uid}`), {
-          userId: uid,
-          corePointRewardClaimed: true,
-          corePointCompletedAt: FieldValue.serverTimestamp(),
-          corePointFoundCount: lessonCorePointCompletion.foundCount,
-          corePointTotalCount: lessonCorePointCompletion.totalCount,
-          updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
-      }
-      return {
-        awarded: false,
-        duplicate: rewardDocs.length > 0,
-        amount: 0,
-        bonusAwarded: false,
-        bonusAmount: 0,
-        bonusType: '',
-        monthlyBonusAwarded: false,
-        monthlyBonusAmount: 0,
-        totalAwarded: 0,
-        targetMonth: activityType === 'attendance' ? monthKey : '',
-        balance: currentBalance,
-        transactionId: resolvedFallbackTransactionId,
+exports.applyPointActivityReward = onCall(
+  { region: REGION },
+  async (request) => {
+    throw new HttpsError(
+      "failed-precondition",
+      "이전 위스 자동 지급 경로는 종료되었습니다.",
+      {
+        reason: "CLIENT_UPDATE_REQUIRED",
+        replacement: "grantWis",
+      },
+    );
+    const { uid } = await assertAllowedWestoryUser(request);
+    const { year, semester } = assertYearSemester(request.data);
+    const activityType = String(request.data?.activityType || "").trim();
+    const allowedTypes = [
+      "attendance",
+      "quiz",
+      "lesson",
+      "lesson_core_points",
+      "think_cloud",
+      "map_tag",
+      "history_classroom",
+    ];
+    if (!allowedTypes.includes(activityType)) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Unsupported point activity type.",
+      );
+    }
+
+    const sourceId =
+      activityType === "attendance"
+        ? getAttendanceSourceId()
+        : String(request.data?.sourceId || "").trim();
+    if (!sourceId) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Activity sourceId is required.",
+      );
+    }
+
+    const requestedLabel = String(request.data?.sourceLabel || "").trim();
+    const { profile } = await ensureStudentProfile(uid);
+
+    const result = await db.runTransaction(async (transaction) => {
+      const { ref: walletRef, wallet } = await ensureWallet(
+        transaction,
+        year,
+        semester,
+        uid,
+        profile,
+      );
+      const policy = await loadPolicy(transaction, year, semester);
+      const currentRankEarnedTotal = await getCurrentRankEarnedTotal(
+        transaction,
+        year,
+        semester,
+        uid,
+        wallet,
+      );
+      const todayKey = getKstDateKey();
+      const monthKey = todayKey.slice(0, 7);
+      const currentBalance = Number(wallet.balance || 0);
+      const currentEarnedTotal = Number(wallet.earnedTotal || 0);
+      const activityScore =
+        activityType === "quiz" || activityType === "history_classroom"
+          ? await loadQuizActivityScore(
+              transaction,
+              year,
+              semester,
+              uid,
+              sourceId,
+            )
+          : null;
+      const fallbackTransactionId = buildActivityTransactionId(
+        uid,
+        activityType,
         sourceId,
-        policyId: 'current',
-        blockedReason: rewardDocs.length > 0 ? 'duplicate_source' : '',
-        blockedMessage: rewardDocs.length > 0 ? '이미 지급된 기록입니다.' : '',
-        claimCount,
-        maxClaims: activityType === 'think_cloud'
-          ? Number(policy.rewardPolicy.thinkCloud.maxClaims || 0)
-          : activityType === 'map_tag'
-            ? Number(policy.rewardPolicy.mapTag.maxClaims || 0)
-            : activityType === 'lesson_core_points'
-              ? lessonCorePointCompletion?.totalCount || 1
-              : 0,
+      );
+
+      if (activityType === "think_cloud") {
+        await assertThinkCloudRewardSource(
+          transaction,
+          year,
+          semester,
+          uid,
+          sourceId,
+        );
+      }
+      if (activityType === "map_tag") {
+        await assertMapTagRewardSource(transaction, year, semester, sourceId);
+      }
+
+      let lessonCorePointCompletion = null;
+      if (activityType === "lesson_core_points") {
+        if (sourceId !== LESSON_CORE_POINTS_ALL_SOURCE_ID) {
+          return {
+            awarded: false,
+            duplicate: false,
+            amount: 0,
+            bonusAwarded: false,
+            bonusAmount: 0,
+            bonusType: "",
+            monthlyBonusAwarded: false,
+            monthlyBonusAmount: 0,
+            totalAwarded: 0,
+            targetMonth: "",
+            balance: currentBalance,
+            transactionId: fallbackTransactionId,
+            sourceId,
+            policyId: "current",
+            blockedReason: "legacy_unit_scope_disabled",
+            blockedMessage:
+              "핵심포인트 보상은 전체 수업자료를 모두 찾았을 때만 지급됩니다.",
+            claimCount: 0,
+            maxClaims: 1,
+          };
+        }
+
+        lessonCorePointCompletion = await getLessonCorePointCompletion(
+          transaction,
+          year,
+          semester,
+          uid,
+        );
+        if (!lessonCorePointCompletion.complete) {
+          return {
+            awarded: false,
+            duplicate: false,
+            amount: 0,
+            bonusAwarded: false,
+            bonusAmount: 0,
+            bonusType: "",
+            monthlyBonusAwarded: false,
+            monthlyBonusAmount: 0,
+            totalAwarded: 0,
+            targetMonth: "",
+            balance: currentBalance,
+            transactionId: fallbackTransactionId,
+            sourceId,
+            policyId: "current",
+            blockedReason:
+              lessonCorePointCompletion.totalCount > 0
+                ? "core_points_remaining"
+                : "no_core_points",
+            blockedMessage:
+              lessonCorePointCompletion.totalCount > 0
+                ? `전체 수업자료에서 남은 핵심포인트 ${lessonCorePointCompletion.remainingCount}개`
+                : "아직 찾을 수 있는 핵심포인트가 없습니다.",
+            claimCount: lessonCorePointCompletion.foundCount,
+            maxClaims: lessonCorePointCompletion.totalCount,
+            corePointTotalCount: lessonCorePointCompletion.totalCount,
+            corePointFoundCount: lessonCorePointCompletion.foundCount,
+            corePointRemainingCount: lessonCorePointCompletion.remainingCount,
+          };
+        }
+      }
+
+      let claimCount = 0;
+      if (
+        activityType === "think_cloud" ||
+        activityType === "map_tag" ||
+        activityType === "history_classroom"
+      ) {
+        const activityHistory = await listActivityTransactionsByType(
+          transaction,
+          year,
+          semester,
+          uid,
+          activityType,
+        );
+        const latestActivityDoc = activityHistory[0] || null;
+        claimCount = activityHistory.length;
+        const rewardRule =
+          activityType === "think_cloud"
+            ? policy.rewardPolicy.thinkCloud
+            : activityType === "map_tag"
+              ? policy.rewardPolicy.mapTag
+              : policy.rewardPolicy.historyClassroom;
+        const maxClaims = Number(rewardRule?.maxClaims || 0);
+        if (maxClaims > 0 && claimCount >= maxClaims) {
+          return {
+            awarded: false,
+            duplicate: true,
+            amount: 0,
+            bonusAwarded: false,
+            bonusAmount: 0,
+            bonusType: "",
+            monthlyBonusAwarded: false,
+            monthlyBonusAmount: 0,
+            totalAwarded: 0,
+            targetMonth: "",
+            balance: currentBalance,
+            transactionId: fallbackTransactionId,
+            sourceId,
+            policyId: "current",
+            blockedReason: "max_claims_reached",
+            blockedMessage: `누적 최대 ${maxClaims}회까지 적립됩니다.`,
+            claimCount,
+            maxClaims,
+          };
+        }
+
+        const latestCreatedAtMs = getTransactionCreatedAtMs(latestActivityDoc);
+        const cooldownHours = Math.max(
+          1,
+          Number(rewardRule?.cooldownHours || 24),
+        );
+        const cooldownMs = cooldownHours * 60 * 60 * 1000;
+        const nextEligibleAtMs = latestCreatedAtMs
+          ? latestCreatedAtMs + cooldownMs
+          : 0;
+        if (nextEligibleAtMs && nextEligibleAtMs > Date.now()) {
+          return {
+            awarded: false,
+            duplicate: true,
+            amount: 0,
+            bonusAwarded: false,
+            bonusAmount: 0,
+            bonusType: "",
+            monthlyBonusAwarded: false,
+            monthlyBonusAmount: 0,
+            totalAwarded: 0,
+            targetMonth: "",
+            balance: currentBalance,
+            transactionId: fallbackTransactionId,
+            sourceId,
+            policyId: "current",
+            blockedReason: "cooldown_active",
+            blockedMessage: `${cooldownHours}시간마다 1회만 적립됩니다.`,
+            nextEligibleAt: new Date(nextEligibleAtMs).toISOString(),
+            claimCount,
+            maxClaims,
+          };
+        }
+      }
+
+      let includeAttendanceMonthlyBonus = false;
+      let attendanceMilestoneReached = null;
+      if (
+        activityType === "attendance" &&
+        Number(policy.attendanceMonthlyBonus || 0) > 0 &&
+        isLastDayOfMonth()
+      ) {
+        const attendanceQuery = db
+          .collection(
+            getPointCollectionPath(year, semester, "point_transactions"),
+          )
+          .where("uid", "==", uid)
+          .where("type", "==", "attendance")
+          .where("targetMonth", "==", monthKey);
+        const attendanceSnapshot = await transaction.get(attendanceQuery);
+        const attendanceDateSet = new Set(
+          attendanceSnapshot.docs
+            .map((doc) => String(doc.data().targetDate || "").trim())
+            .filter(Boolean),
+        );
+        attendanceDateSet.add(todayKey);
+        includeAttendanceMonthlyBonus =
+          attendanceDateSet.size >= getDaysInMonthFromMonthKey(monthKey);
+      }
+
+      if (
+        activityType === "attendance" &&
+        policy.rewardPolicy.attendanceMilestoneBonus.enabled
+      ) {
+        const attendanceScope = `${year}_${semester}`;
+        const attendanceDocQuery = db
+          .collection(`users/${uid}/attendance`)
+          .where("scope", "==", attendanceScope);
+        const attendanceDocSnapshot = await transaction.get(attendanceDocQuery);
+        const attendanceDateSet = new Set(
+          attendanceDocSnapshot.docs
+            .map((doc) => String(doc.data()?.date || "").trim())
+            .filter(Boolean),
+        );
+        attendanceDateSet.add(todayKey);
+        const attendanceCount = attendanceDateSet.size;
+        const milestoneCandidates = [50, 100, 200, 300];
+        attendanceMilestoneReached =
+          milestoneCandidates.find(
+            (milestone) =>
+              attendanceCount === milestone &&
+              Number(
+                policy.rewardPolicy.attendanceMilestoneBonus.amounts?.[
+                  String(milestone)
+                ] || 0,
+              ) > 0,
+          ) || null;
+        claimCount = attendanceCount;
+      }
+
+      const rewardPlan = resolveActivityReward({
+        policy,
+        activityType,
+        sourceId,
+        sourceLabel: requestedLabel,
+        todayKey,
+        monthKey,
+        score: activityScore,
+        includeAttendanceMonthlyBonus,
+        attendanceMilestoneReached,
+      });
+
+      const rewardDocs = [];
+      for (const item of rewardPlan.items.filter(
+        (candidate) => Number(candidate.amount || 0) > 0,
+      )) {
+        const transactionId = buildActivityTransactionId(
+          uid,
+          item.type,
+          item.sourceId,
+        );
+        const ref = db.doc(
+          `${getPointCollectionPath(year, semester, "point_transactions")}/${transactionId}`,
+        );
+        const snap = await transaction.get(ref);
+        rewardDocs.push({
+          item,
+          ref,
+          snap,
+          transactionId,
+        });
+      }
+
+      const newRewardDocs = rewardDocs.filter(({ snap }) => !snap.exists);
+      const baseRewardDoc =
+        newRewardDocs.find(({ item }) => item.type === activityType) || null;
+      const newBonusDocs = newRewardDocs.filter(
+        ({ item }) => item.type !== activityType,
+      );
+      const awardedBaseAmount = baseRewardDoc
+        ? Number(baseRewardDoc.item.amount || 0)
+        : 0;
+      const bonusAmount = newBonusDocs.reduce(
+        (total, { item }) => total + Number(item.amount || 0),
+        0,
+      );
+      const totalAwarded = newRewardDocs.reduce(
+        (total, { item }) => total + Number(item.amount || 0),
+        0,
+      );
+      const monthlyBonusAmount = newBonusDocs
+        .filter(({ item }) => item.type === "attendance_monthly_bonus")
+        .reduce((total, { item }) => total + Number(item.amount || 0), 0);
+      const bonusType = newBonusDocs[0]?.item.type || "";
+      const resolvedFallbackTransactionId =
+        rewardDocs[0]?.transactionId || fallbackTransactionId;
+
+      if (totalAwarded <= 0) {
+        if (
+          activityType === "lesson_core_points" &&
+          rewardDocs.length > 0 &&
+          lessonCorePointCompletion?.complete
+        ) {
+          transaction.set(
+            db.doc(`${getSemesterRoot(year, semester)}/lesson_progress/${uid}`),
+            {
+              userId: uid,
+              corePointRewardClaimed: true,
+              corePointCompletedAt: FieldValue.serverTimestamp(),
+              corePointFoundCount: lessonCorePointCompletion.foundCount,
+              corePointTotalCount: lessonCorePointCompletion.totalCount,
+              updatedAt: FieldValue.serverTimestamp(),
+            },
+            { merge: true },
+          );
+        }
+        return {
+          awarded: false,
+          duplicate: rewardDocs.length > 0,
+          amount: 0,
+          bonusAwarded: false,
+          bonusAmount: 0,
+          bonusType: "",
+          monthlyBonusAwarded: false,
+          monthlyBonusAmount: 0,
+          totalAwarded: 0,
+          targetMonth: activityType === "attendance" ? monthKey : "",
+          balance: currentBalance,
+          transactionId: resolvedFallbackTransactionId,
+          sourceId,
+          policyId: "current",
+          blockedReason: rewardDocs.length > 0 ? "duplicate_source" : "",
+          blockedMessage:
+            rewardDocs.length > 0 ? "이미 지급된 기록입니다." : "",
+          claimCount,
+          maxClaims:
+            activityType === "think_cloud"
+              ? Number(policy.rewardPolicy.thinkCloud.maxClaims || 0)
+              : activityType === "map_tag"
+                ? Number(policy.rewardPolicy.mapTag.maxClaims || 0)
+                : activityType === "lesson_core_points"
+                  ? lessonCorePointCompletion?.totalCount || 1
+                  : 0,
+          corePointTotalCount: lessonCorePointCompletion?.totalCount || 0,
+          corePointFoundCount: lessonCorePointCompletion?.foundCount || 0,
+          corePointRemainingCount:
+            lessonCorePointCompletion?.remainingCount || 0,
+        };
+      }
+
+      const nextBalance = currentBalance + totalAwarded;
+      const nextRankEarnedTotal = currentRankEarnedTotal + totalAwarded;
+      const nextEarnedTotal = currentEarnedTotal + totalAwarded;
+
+      transaction.set(
+        walletRef,
+        {
+          ...buildWalletBase(uid, profile),
+          balance: nextBalance,
+          earnedTotal: nextEarnedTotal,
+          ...buildWalletRankState(nextRankEarnedTotal, policy.rankPolicy),
+          spentTotal: Number(wallet.spentTotal || 0),
+          adjustedTotal: Number(wallet.adjustedTotal || 0),
+          lastTransactionAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      let runningBalance = currentBalance;
+      newRewardDocs.forEach(({ item, ref }) => {
+        runningBalance += Number(item.amount || 0);
+        transaction.set(
+          ref,
+          createTransactionPayload({
+            uid,
+            type: item.type,
+            delta: Number(item.amount || 0),
+            balanceAfter: runningBalance,
+            sourceId: item.sourceId,
+            sourceLabel: item.sourceLabel,
+            policyId: "current",
+            createdBy: "system:auto",
+            targetMonth: item.targetMonth,
+            targetDate: item.targetDate,
+          }),
+        );
+      });
+
+      if (
+        activityType === "lesson_core_points" &&
+        lessonCorePointCompletion?.complete
+      ) {
+        transaction.set(
+          db.doc(`${getSemesterRoot(year, semester)}/lesson_progress/${uid}`),
+          {
+            userId: uid,
+            corePointRewardClaimed: true,
+            corePointCompletedAt: FieldValue.serverTimestamp(),
+            corePointFoundCount: lessonCorePointCompletion.foundCount,
+            corePointTotalCount: lessonCorePointCompletion.totalCount,
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+      }
+
+      return {
+        awarded: true,
+        duplicate: false,
+        amount: awardedBaseAmount,
+        bonusAwarded: bonusAmount > 0,
+        bonusAmount,
+        bonusType,
+        monthlyBonusAwarded: monthlyBonusAmount > 0,
+        monthlyBonusAmount,
+        totalAwarded,
+        targetMonth: activityType === "attendance" ? monthKey : "",
+        balance: nextBalance,
+        transactionId:
+          baseRewardDoc?.transactionId ||
+          newRewardDocs[0]?.transactionId ||
+          resolvedFallbackTransactionId,
+        sourceId,
+        policyId: "current",
+        blockedReason: "",
+        blockedMessage: "",
+        claimCount:
+          activityType === "attendance"
+            ? claimCount
+            : claimCount + (baseRewardDoc ? 1 : 0),
+        maxClaims:
+          activityType === "think_cloud"
+            ? Number(policy.rewardPolicy.thinkCloud.maxClaims || 0)
+            : activityType === "map_tag"
+              ? Number(policy.rewardPolicy.mapTag.maxClaims || 0)
+              : activityType === "lesson_core_points"
+                ? lessonCorePointCompletion?.totalCount || 1
+                : 0,
         corePointTotalCount: lessonCorePointCompletion?.totalCount || 0,
         corePointFoundCount: lessonCorePointCompletion?.foundCount || 0,
         corePointRemainingCount: lessonCorePointCompletion?.remainingCount || 0,
       };
-    }
-
-    const nextBalance = currentBalance + totalAwarded;
-    const nextRankEarnedTotal = currentRankEarnedTotal + totalAwarded;
-    const nextEarnedTotal = currentEarnedTotal + totalAwarded;
-
-    transaction.set(walletRef, {
-      ...buildWalletBase(uid, profile),
-      balance: nextBalance,
-      earnedTotal: nextEarnedTotal,
-      ...buildWalletRankState(nextRankEarnedTotal, policy.rankPolicy),
-      spentTotal: Number(wallet.spentTotal || 0),
-      adjustedTotal: Number(wallet.adjustedTotal || 0),
-      lastTransactionAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
-
-    let runningBalance = currentBalance;
-    newRewardDocs.forEach(({ item, ref }) => {
-      runningBalance += Number(item.amount || 0);
-      transaction.set(ref, createTransactionPayload({
-        uid,
-        type: item.type,
-        delta: Number(item.amount || 0),
-        balanceAfter: runningBalance,
-        sourceId: item.sourceId,
-        sourceLabel: item.sourceLabel,
-        policyId: 'current',
-        createdBy: 'system:auto',
-        targetMonth: item.targetMonth,
-        targetDate: item.targetDate,
-      }));
     });
 
-    if (activityType === 'lesson_core_points' && lessonCorePointCompletion?.complete) {
-      transaction.set(db.doc(`${getSemesterRoot(year, semester)}/lesson_progress/${uid}`), {
-        userId: uid,
-        corePointRewardClaimed: true,
-        corePointCompletedAt: FieldValue.serverTimestamp(),
-        corePointFoundCount: lessonCorePointCompletion.foundCount,
-        corePointTotalCount: lessonCorePointCompletion.totalCount,
-        updatedAt: FieldValue.serverTimestamp(),
-      }, { merge: true });
+    if (result.awarded) {
+      await markWisHallOfFameDirtySafely(year, semester);
     }
+    return result;
+  },
+);
 
-    return {
-      awarded: true,
-      duplicate: false,
-      amount: awardedBaseAmount,
-      bonusAwarded: bonusAmount > 0,
-      bonusAmount,
-      bonusType,
-      monthlyBonusAwarded: monthlyBonusAmount > 0,
-      monthlyBonusAmount,
-      totalAwarded,
-      targetMonth: activityType === 'attendance' ? monthKey : '',
-      balance: nextBalance,
-      transactionId: baseRewardDoc?.transactionId || newRewardDocs[0]?.transactionId || resolvedFallbackTransactionId,
-      sourceId,
-      policyId: 'current',
-      blockedReason: '',
-      blockedMessage: '',
-      claimCount: activityType === 'attendance'
-        ? claimCount
-        : claimCount + (baseRewardDoc ? 1 : 0),
-      maxClaims: activityType === 'think_cloud'
-        ? Number(policy.rewardPolicy.thinkCloud.maxClaims || 0)
-        : activityType === 'map_tag'
-          ? Number(policy.rewardPolicy.mapTag.maxClaims || 0)
-          : activityType === 'lesson_core_points'
-            ? lessonCorePointCompletion?.totalCount || 1
-            : 0,
-      corePointTotalCount: lessonCorePointCompletion?.totalCount || 0,
-      corePointFoundCount: lessonCorePointCompletion?.foundCount || 0,
-      corePointRemainingCount: lessonCorePointCompletion?.remainingCount || 0,
-    };
-  });
-
-  if (result.awarded) {
-    await markWisHallOfFameDirtySafely(year, semester);
-  }
-  return result;
-});
-
-exports.createPointPurchaseRequest = onCall({ region: REGION }, async (request) => {
-  throw new HttpsError('failed-precondition', '이전 위스 구매 경로는 종료되었습니다.', {
-    reason: 'CLIENT_UPDATE_REQUIRED',
-    replacement: 'placeWisOrder',
-  });
-  const { uid } = await assertAllowedWestoryUser(request);
-  const { year, semester } = assertYearSemester(request.data);
-  const productId = String(request.data?.productId || '').trim();
-  const requestKey = String(request.data?.requestKey || '').trim();
-  const memo = String(request.data?.memo || '').trim();
-  if (!productId || !requestKey) {
-    throw new HttpsError('invalid-argument', 'productId and requestKey are required.');
-  }
-
-  const { profile } = await ensureStudentProfile(uid);
-
-  const result = await db.runTransaction(async (transaction) => {
-    const { ref: walletRef, wallet } = await ensureWallet(transaction, year, semester, uid, profile);
-    const policy = await loadPolicy(transaction, year, semester);
-    const currentRankEarnedTotal = await getCurrentRankEarnedTotal(transaction, year, semester, uid, wallet);
-    const productRef = db.doc(`${getPointCollectionPath(year, semester, 'point_products')}/${productId}`);
-    const productSnap = await transaction.get(productRef);
-    if (!productSnap.exists) {
-      throw new HttpsError('not-found', 'Point product does not exist.');
-    }
-
-    const product = { id: productSnap.id, ...(productSnap.data() || {}) };
-    const productPrice = toNonNegativeNumber(product.price, 0);
-    const productStock = Math.max(0, Math.floor(toFiniteNumber(product.stock, 0)));
-    if (product.isActive === false) {
-      throw new HttpsError('failed-precondition', 'Point product is inactive.');
-    }
-    if (productPrice <= 0) {
-      throw new HttpsError('failed-precondition', 'Point product price must be greater than zero.');
-    }
-    if (productStock <= 0) {
-      throw new HttpsError('failed-precondition', 'Point product is out of stock.');
-    }
-    if (Number(wallet.balance || 0) < productPrice) {
-      throw new HttpsError('failed-precondition', 'Insufficient point balance.');
-    }
-
-    const orderId = buildPurchaseRequestId(uid, requestKey);
-    const orderRef = db.doc(`${getPointCollectionPath(year, semester, 'point_orders')}/${orderId}`);
-    const existingOrder = await transaction.get(orderRef);
-    if (existingOrder.exists) {
-      return {
-        created: false,
-        duplicate: true,
-        orderId,
-        transactionId: `purchase_hold_${orderId}`,
-        balance: Number(wallet.balance || 0),
-      };
-    }
-
-    const nextBalance = Number(wallet.balance || 0) - productPrice;
-    transaction.set(walletRef, {
-      ...buildWalletBase(uid, profile),
-      balance: nextBalance,
-      earnedTotal: Number(wallet.earnedTotal || 0),
-      ...buildWalletRankState(currentRankEarnedTotal, policy.rankPolicy),
-      spentTotal: Number(wallet.spentTotal || 0) + productPrice,
-      adjustedTotal: Number(wallet.adjustedTotal || 0),
-      lastTransactionAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
-
-    transaction.set(orderRef, {
-      uid,
-      studentName: String(wallet.studentName || profile.name || '').trim(),
-      productId,
-      productName: String(product.name || '').trim(),
-      priceSnapshot: productPrice,
-      status: 'requested',
-      stockDeducted: false,
-      requestedAt: FieldValue.serverTimestamp(),
-      reviewedAt: null,
-      reviewedBy: '',
-      memo,
-    });
-
-    const transactionId = `purchase_hold_${orderId}`;
-    const txRef = db.doc(`${getPointCollectionPath(year, semester, 'point_transactions')}/${transactionId}`);
-    transaction.set(txRef, createTransactionPayload({
-      uid,
-      type: 'purchase_hold',
-      delta: -productPrice,
-      balanceAfter: nextBalance,
-      sourceId: orderId,
-      sourceLabel: String(product.name || '').trim(),
-      policyId: 'purchase',
-      createdBy: uid,
-    }));
-
-    return {
-      created: true,
-      duplicate: false,
-      orderId,
-      transactionId,
-      balance: nextBalance,
-      productName: String(product.name || '').trim(),
-      studentName: String(wallet.studentName || profile.name || '').trim(),
-    };
-  });
-
-  if (result.created) {
-    await markWisHallOfFameDirtySafely(year, semester);
-    const recipients = await resolvePointManagerRecipientUids();
-    await createUserNotifications(year, semester, recipients, {
-      type: 'point_order_requested',
-      title: '상점 구매 요청',
-      body: `${result.studentName || '학생'} 학생이 ${result.productName || '상품'} 구매를 요청했습니다.`,
-      targetUrl: '/teacher/points?tab=requests',
-      entityType: 'point_order',
-      entityId: result.orderId,
-      actorUid: uid,
-      priority: 'normal',
-      dedupeKey: `point_order_requested:${year}:${semester}:${result.orderId}`,
-      templateValues: {
-        studentName: result.studentName || '학생',
-        productName: result.productName || '상품',
+exports.createPointPurchaseRequest = onCall(
+  { region: REGION },
+  async (request) => {
+    throw new HttpsError(
+      "failed-precondition",
+      "이전 위스 구매 경로는 종료되었습니다.",
+      {
+        reason: "CLIENT_UPDATE_REQUIRED",
+        replacement: "placeWisOrder",
       },
+    );
+    const { uid } = await assertAllowedWestoryUser(request);
+    const { year, semester } = assertYearSemester(request.data);
+    const productId = String(request.data?.productId || "").trim();
+    const requestKey = String(request.data?.requestKey || "").trim();
+    const memo = String(request.data?.memo || "").trim();
+    if (!productId || !requestKey) {
+      throw new HttpsError(
+        "invalid-argument",
+        "productId and requestKey are required.",
+      );
+    }
+
+    const { profile } = await ensureStudentProfile(uid);
+
+    const result = await db.runTransaction(async (transaction) => {
+      const { ref: walletRef, wallet } = await ensureWallet(
+        transaction,
+        year,
+        semester,
+        uid,
+        profile,
+      );
+      const policy = await loadPolicy(transaction, year, semester);
+      const currentRankEarnedTotal = await getCurrentRankEarnedTotal(
+        transaction,
+        year,
+        semester,
+        uid,
+        wallet,
+      );
+      const productRef = db.doc(
+        `${getPointCollectionPath(year, semester, "point_products")}/${productId}`,
+      );
+      const productSnap = await transaction.get(productRef);
+      if (!productSnap.exists) {
+        throw new HttpsError("not-found", "Point product does not exist.");
+      }
+
+      const product = { id: productSnap.id, ...(productSnap.data() || {}) };
+      const productPrice = toNonNegativeNumber(product.price, 0);
+      const productStock = Math.max(
+        0,
+        Math.floor(toFiniteNumber(product.stock, 0)),
+      );
+      if (product.isActive === false) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Point product is inactive.",
+        );
+      }
+      if (productPrice <= 0) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Point product price must be greater than zero.",
+        );
+      }
+      if (productStock <= 0) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Point product is out of stock.",
+        );
+      }
+      if (Number(wallet.balance || 0) < productPrice) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Insufficient point balance.",
+        );
+      }
+
+      const orderId = buildPurchaseRequestId(uid, requestKey);
+      const orderRef = db.doc(
+        `${getPointCollectionPath(year, semester, "point_orders")}/${orderId}`,
+      );
+      const existingOrder = await transaction.get(orderRef);
+      if (existingOrder.exists) {
+        return {
+          created: false,
+          duplicate: true,
+          orderId,
+          transactionId: `purchase_hold_${orderId}`,
+          balance: Number(wallet.balance || 0),
+        };
+      }
+
+      const nextBalance = Number(wallet.balance || 0) - productPrice;
+      transaction.set(
+        walletRef,
+        {
+          ...buildWalletBase(uid, profile),
+          balance: nextBalance,
+          earnedTotal: Number(wallet.earnedTotal || 0),
+          ...buildWalletRankState(currentRankEarnedTotal, policy.rankPolicy),
+          spentTotal: Number(wallet.spentTotal || 0) + productPrice,
+          adjustedTotal: Number(wallet.adjustedTotal || 0),
+          lastTransactionAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      transaction.set(orderRef, {
+        uid,
+        studentName: String(wallet.studentName || profile.name || "").trim(),
+        productId,
+        productName: String(product.name || "").trim(),
+        priceSnapshot: productPrice,
+        status: "requested",
+        stockDeducted: false,
+        requestedAt: FieldValue.serverTimestamp(),
+        reviewedAt: null,
+        reviewedBy: "",
+        memo,
+      });
+
+      const transactionId = `purchase_hold_${orderId}`;
+      const txRef = db.doc(
+        `${getPointCollectionPath(year, semester, "point_transactions")}/${transactionId}`,
+      );
+      transaction.set(
+        txRef,
+        createTransactionPayload({
+          uid,
+          type: "purchase_hold",
+          delta: -productPrice,
+          balanceAfter: nextBalance,
+          sourceId: orderId,
+          sourceLabel: String(product.name || "").trim(),
+          policyId: "purchase",
+          createdBy: uid,
+        }),
+      );
+
+      return {
+        created: true,
+        duplicate: false,
+        orderId,
+        transactionId,
+        balance: nextBalance,
+        productName: String(product.name || "").trim(),
+        studentName: String(wallet.studentName || profile.name || "").trim(),
+      };
     });
-  }
-  return result;
-});
+
+    if (result.created) {
+      await markWisHallOfFameDirtySafely(year, semester);
+      const recipients = await resolvePointManagerRecipientUids();
+      await createUserNotifications(year, semester, recipients, {
+        type: "point_order_requested",
+        title: "상점 구매 요청",
+        body: `${result.studentName || "학생"} 학생이 ${result.productName || "상품"} 구매를 요청했습니다.`,
+        targetUrl: "/teacher/points?tab=requests",
+        entityType: "point_order",
+        entityId: result.orderId,
+        actorUid: uid,
+        priority: "normal",
+        dedupeKey: `point_order_requested:${year}:${semester}:${result.orderId}`,
+        templateValues: {
+          studentName: result.studentName || "학생",
+          productName: result.productName || "상품",
+        },
+      });
+    }
+    return result;
+  },
+);
 
 exports.adjustTeacherPoints = onCall(
   { region: REGION },
   createRetiredAdjustTeacherPointsHandler({ assertPointManager }),
 );
 
-exports.updateTeacherPointAdjustment = onCall({ region: REGION }, async (request) => {
-  throw new HttpsError('failed-precondition', '이전 위스 조정 경로는 종료되었습니다.', {
-    reason: 'CLIENT_UPDATE_REQUIRED',
-    replacement: 'adjustWis',
-  });
-  await assertPointManager(request, { recentAuth: true, highRisk: true });
-  const { year, semester } = assertYearSemester(request.data);
-  const transactionId = String(request.data?.transactionId || '').trim();
-  const action = String(request.data?.action || 'update').trim();
-  const requestedDelta = Number(request.data?.nextDelta || 0);
-
-  if (!transactionId) {
-    throw new HttpsError('invalid-argument', 'transactionId is required.');
-  }
-  if (!['update', 'cancel'].includes(action)) {
-    throw new HttpsError('invalid-argument', 'Unsupported action.');
-  }
-  if (action === 'update' && (!Number.isFinite(requestedDelta) || requestedDelta === 0)) {
-    throw new HttpsError('invalid-argument', 'nextDelta must be a non-zero finite number.');
-  }
-
-  const result = await db.runTransaction(async (transaction) => {
-    const txRef = db.doc(`${getPointCollectionPath(year, semester, 'point_transactions')}/${transactionId}`);
-    const txSnap = await transaction.get(txRef);
-    if (!txSnap.exists) {
-      throw new HttpsError('not-found', 'Point transaction does not exist.');
-    }
-
-    const pointTransaction = { id: txSnap.id, ...(txSnap.data() || {}) };
-    if (!['manual_adjust', 'manual_reclaim'].includes(pointTransaction.type)) {
-      throw new HttpsError('failed-precondition', 'Only manual point adjustments can be edited.');
-    }
-
-    const targetUid = String(pointTransaction.uid || '').trim();
-    if (!targetUid) {
-      throw new HttpsError('failed-precondition', 'Transaction target uid is missing.');
-    }
-
-    const userTransactionQuery = db.collection(getPointCollectionPath(year, semester, 'point_transactions'))
-      .where('uid', '==', targetUid);
-    const userTransactionSnap = await transaction.get(userTransactionQuery);
-    const sortedDocs = sortPointTransactionDocsDesc(userTransactionSnap.docs);
-    if (!sortedDocs.length || sortedDocs[0].id !== transactionId) {
-      throw new HttpsError('failed-precondition', 'Only the latest point transaction can be edited or cancelled.');
-    }
-
-    const { profile } = await ensureStudentProfile(targetUid);
-    const { ref: walletRef, wallet } = await ensureWallet(transaction, year, semester, targetUid, profile);
-    const policy = await loadPolicy(transaction, year, semester);
-    const currentRankEarnedTotal = await getCurrentRankEarnedTotal(transaction, year, semester, targetUid, wallet);
-    const previousDelta = Number(pointTransaction.delta || 0);
-    const nextDelta = action === 'cancel' ? 0 : requestedDelta;
-    if (action === 'update') {
-      if (pointTransaction.type === 'manual_adjust' && nextDelta < 0) {
-        throw new HttpsError('failed-precondition', 'Manual grants can only keep a positive delta.');
-      }
-      if (pointTransaction.type === 'manual_reclaim' && nextDelta > 0) {
-        throw new HttpsError('failed-precondition', 'Manual reclaims can only keep a negative delta.');
-      }
-    }
-    const deltaDiff = nextDelta - previousDelta;
-    const nextBalance = Number(wallet.balance || 0) + deltaDiff;
-    const nextRankEarnedTotal = Math.max(
-      0,
-      currentRankEarnedTotal + Math.max(0, nextDelta) - Math.max(0, previousDelta),
+exports.updateTeacherPointAdjustment = onCall(
+  { region: REGION },
+  async (request) => {
+    throw new HttpsError(
+      "failed-precondition",
+      "이전 위스 조정 경로는 종료되었습니다.",
+      {
+        reason: "CLIENT_UPDATE_REQUIRED",
+        replacement: "adjustWis",
+      },
     );
+    await assertPointManager(request, { recentAuth: true, highRisk: true });
+    const { year, semester } = assertYearSemester(request.data);
+    const transactionId = String(request.data?.transactionId || "").trim();
+    const action = String(request.data?.action || "update").trim();
+    const requestedDelta = Number(request.data?.nextDelta || 0);
 
-    if (!policy.allowNegativeBalance && nextBalance < 0) {
-      throw new HttpsError('failed-precondition', 'Insufficient point balance.');
+    if (!transactionId) {
+      throw new HttpsError("invalid-argument", "transactionId is required.");
+    }
+    if (!["update", "cancel"].includes(action)) {
+      throw new HttpsError("invalid-argument", "Unsupported action.");
+    }
+    if (
+      action === "update" &&
+      (!Number.isFinite(requestedDelta) || requestedDelta === 0)
+    ) {
+      throw new HttpsError(
+        "invalid-argument",
+        "nextDelta must be a non-zero finite number.",
+      );
     }
 
-    const nextLastTransactionAt = action === 'cancel'
-      ? (sortedDocs[1]?.data()?.createdAt || null)
-      : (pointTransaction.createdAt || wallet.lastTransactionAt || null);
+    const result = await db.runTransaction(async (transaction) => {
+      const txRef = db.doc(
+        `${getPointCollectionPath(year, semester, "point_transactions")}/${transactionId}`,
+      );
+      const txSnap = await transaction.get(txRef);
+      if (!txSnap.exists) {
+        throw new HttpsError("not-found", "Point transaction does not exist.");
+      }
 
-    transaction.set(walletRef, {
-      ...buildWalletBase(targetUid, profile),
-      balance: nextBalance,
-      // Edits and cancellations follow the same cumulative-earned rule so
-      // positive manual grants can be corrected without double counting.
-      earnedTotal: nextRankEarnedTotal,
-      ...buildWalletRankState(nextRankEarnedTotal, policy.rankPolicy),
-      spentTotal: Number(wallet.spentTotal || 0),
-      adjustedTotal: Number(wallet.adjustedTotal || 0) + deltaDiff,
-      lastTransactionAt: nextLastTransactionAt,
-    }, { merge: true });
+      const pointTransaction = { id: txSnap.id, ...(txSnap.data() || {}) };
+      if (
+        !["manual_adjust", "manual_reclaim"].includes(pointTransaction.type)
+      ) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Only manual point adjustments can be edited.",
+        );
+      }
 
-    if (action === 'cancel') {
-      transaction.delete(txRef);
-    } else {
-      transaction.set(txRef, {
+      const targetUid = String(pointTransaction.uid || "").trim();
+      if (!targetUid) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Transaction target uid is missing.",
+        );
+      }
+
+      const userTransactionQuery = db
+        .collection(
+          getPointCollectionPath(year, semester, "point_transactions"),
+        )
+        .where("uid", "==", targetUid);
+      const userTransactionSnap = await transaction.get(userTransactionQuery);
+      const sortedDocs = sortPointTransactionDocsDesc(userTransactionSnap.docs);
+      if (!sortedDocs.length || sortedDocs[0].id !== transactionId) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Only the latest point transaction can be edited or cancelled.",
+        );
+      }
+
+      const { profile } = await ensureStudentProfile(targetUid);
+      const { ref: walletRef, wallet } = await ensureWallet(
+        transaction,
+        year,
+        semester,
+        targetUid,
+        profile,
+      );
+      const policy = await loadPolicy(transaction, year, semester);
+      const currentRankEarnedTotal = await getCurrentRankEarnedTotal(
+        transaction,
+        year,
+        semester,
+        targetUid,
+        wallet,
+      );
+      const previousDelta = Number(pointTransaction.delta || 0);
+      const nextDelta = action === "cancel" ? 0 : requestedDelta;
+      if (action === "update") {
+        if (pointTransaction.type === "manual_adjust" && nextDelta < 0) {
+          throw new HttpsError(
+            "failed-precondition",
+            "Manual grants can only keep a positive delta.",
+          );
+        }
+        if (pointTransaction.type === "manual_reclaim" && nextDelta > 0) {
+          throw new HttpsError(
+            "failed-precondition",
+            "Manual reclaims can only keep a negative delta.",
+          );
+        }
+      }
+      const deltaDiff = nextDelta - previousDelta;
+      const nextBalance = Number(wallet.balance || 0) + deltaDiff;
+      const nextRankEarnedTotal = Math.max(
+        0,
+        currentRankEarnedTotal +
+          Math.max(0, nextDelta) -
+          Math.max(0, previousDelta),
+      );
+
+      if (!policy.allowNegativeBalance && nextBalance < 0) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Insufficient point balance.",
+        );
+      }
+
+      const nextLastTransactionAt =
+        action === "cancel"
+          ? sortedDocs[1]?.data()?.createdAt || null
+          : pointTransaction.createdAt || wallet.lastTransactionAt || null;
+
+      transaction.set(
+        walletRef,
+        {
+          ...buildWalletBase(targetUid, profile),
+          balance: nextBalance,
+          // Edits and cancellations follow the same cumulative-earned rule so
+          // positive manual grants can be corrected without double counting.
+          earnedTotal: nextRankEarnedTotal,
+          ...buildWalletRankState(nextRankEarnedTotal, policy.rankPolicy),
+          spentTotal: Number(wallet.spentTotal || 0),
+          adjustedTotal: Number(wallet.adjustedTotal || 0) + deltaDiff,
+          lastTransactionAt: nextLastTransactionAt,
+        },
+        { merge: true },
+      );
+
+      if (action === "cancel") {
+        transaction.delete(txRef);
+      } else {
+        transaction.set(
+          txRef,
+          {
+            delta: nextDelta,
+            balanceAfter: nextBalance,
+          },
+          { merge: true },
+        );
+      }
+
+      return {
+        walletId: walletRef.id,
+        transactionId,
+        balance: nextBalance,
         delta: nextDelta,
-        balanceAfter: nextBalance,
-      }, { merge: true });
-    }
-
-    return {
-      walletId: walletRef.id,
-      transactionId,
-      balance: nextBalance,
-      delta: nextDelta,
-      cancelled: action === 'cancel',
-    };
-  });
-
-  await markWisHallOfFameDirtySafely(year, semester);
-  return result;
-});
-
-exports.reviewTeacherPointOrder = onCall({ region: REGION }, async (request) => {
-  throw new HttpsError('failed-precondition', '이전 위스 주문 검토 경로는 종료되었습니다.', {
-    reason: 'CLIENT_UPDATE_REQUIRED',
-    replacement: 'reviewWisOrder',
-  });
-  const manager = await assertPointManager(request, { recentAuth: true, highRisk: true });
-  const { year, semester } = assertYearSemester(request.data);
-  const orderId = String(request.data?.orderId || '').trim();
-  const nextStatus = String(request.data?.nextStatus || '').trim();
-  const memo = String(request.data?.memo || '').trim();
-
-  if (!orderId) {
-    throw new HttpsError('invalid-argument', 'orderId is required.');
-  }
-  if (!['requested', 'approved', 'rejected', 'fulfilled', 'cancelled'].includes(nextStatus)) {
-    throw new HttpsError('invalid-argument', 'Unsupported nextStatus.');
-  }
-
-  const result = await db.runTransaction(async (transaction) => {
-    const orderRef = db.doc(`${getPointCollectionPath(year, semester, 'point_orders')}/${orderId}`);
-    const orderSnap = await transaction.get(orderRef);
-    if (!orderSnap.exists) {
-      throw new HttpsError('not-found', 'Point order does not exist.');
-    }
-
-    const order = { id: orderSnap.id, ...(orderSnap.data() || {}) };
-    if (order.status === nextStatus) {
-      return {
-        orderId,
-        transactionId: buildOrderReviewTransactionId(orderId, nextStatus),
-        status: nextStatus,
-        duplicate: true,
+        cancelled: action === "cancel",
       };
-    }
+    });
 
-    const canTransition = (
-      (order.status === 'requested' && ['approved', 'rejected', 'cancelled'].includes(nextStatus))
-      || (order.status === 'approved' && ['requested', 'fulfilled', 'cancelled'].includes(nextStatus))
+    await markWisHallOfFameDirtySafely(year, semester);
+    return result;
+  },
+);
+
+exports.reviewTeacherPointOrder = onCall(
+  { region: REGION },
+  async (request) => {
+    throw new HttpsError(
+      "failed-precondition",
+      "이전 위스 주문 검토 경로는 종료되었습니다.",
+      {
+        reason: "CLIENT_UPDATE_REQUIRED",
+        replacement: "reviewWisOrder",
+      },
     );
+    const manager = await assertPointManager(request, {
+      recentAuth: true,
+      highRisk: true,
+    });
+    const { year, semester } = assertYearSemester(request.data);
+    const orderId = String(request.data?.orderId || "").trim();
+    const nextStatus = String(request.data?.nextStatus || "").trim();
+    const memo = String(request.data?.memo || "").trim();
 
-    if (!canTransition) {
-      throw new HttpsError('failed-precondition', 'Point order is not in a reviewable state.');
+    if (!orderId) {
+      throw new HttpsError("invalid-argument", "orderId is required.");
+    }
+    if (
+      !["requested", "approved", "rejected", "fulfilled", "cancelled"].includes(
+        nextStatus,
+      )
+    ) {
+      throw new HttpsError("invalid-argument", "Unsupported nextStatus.");
     }
 
-    const { profile } = await ensureStudentProfile(order.uid);
-    const { ref: walletRef, wallet } = await ensureWallet(transaction, year, semester, order.uid, profile);
-    const policy = await loadPolicy(transaction, year, semester);
-    const currentRankEarnedTotal = await getCurrentRankEarnedTotal(transaction, year, semester, order.uid, wallet);
-    const productRef = db.doc(`${getPointCollectionPath(year, semester, 'point_products')}/${order.productId}`);
-    const productSnap = await transaction.get(productRef);
-    const currentProductStock = productSnap.exists
-      ? Math.max(0, Math.floor(toFiniteNumber(productSnap.data().stock, 0)))
-      : 0;
-    const stockDeducted = order.stockDeducted !== false;
-
-    transaction.set(orderRef, {
-      status: nextStatus,
-      stockDeducted: nextStatus === 'approved' || nextStatus === 'fulfilled',
-      reviewedAt: FieldValue.serverTimestamp(),
-      reviewedBy: manager.uid,
-      memo: memo || String(order.memo || '').trim(),
-    }, { merge: true });
-
-    const transactionId = buildOrderReviewTransactionId(order.id, nextStatus);
-    const txRef = db.doc(`${getPointCollectionPath(year, semester, 'point_transactions')}/${transactionId}`);
-
-    if (nextStatus === 'requested') {
-      if (stockDeducted && productSnap.exists) {
-        transaction.set(productRef, {
-          stock: currentProductStock + 1,
-          updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
+    const result = await db.runTransaction(async (transaction) => {
+      const orderRef = db.doc(
+        `${getPointCollectionPath(year, semester, "point_orders")}/${orderId}`,
+      );
+      const orderSnap = await transaction.get(orderRef);
+      if (!orderSnap.exists) {
+        throw new HttpsError("not-found", "Point order does not exist.");
       }
 
-      transaction.set(walletRef, {
-        ...buildWalletBase(order.uid, profile),
-        ...buildWalletRankState(currentRankEarnedTotal, policy.rankPolicy),
-      }, { merge: true });
-
-      return {
-        orderId: order.id,
-        transactionId: '',
-        status: nextStatus,
-        duplicate: false,
-        uid: order.uid,
-        productName: String(order.productName || '').trim(),
-      };
-    }
-
-    if (nextStatus === 'rejected' || nextStatus === 'cancelled') {
-      const restoredBalance = Number(wallet.balance || 0) + Number(order.priceSnapshot || 0);
-      transaction.set(walletRef, {
-        ...buildWalletBase(order.uid, profile),
-        balance: restoredBalance,
-        earnedTotal: Number(wallet.earnedTotal || 0),
-        ...buildWalletRankState(currentRankEarnedTotal, policy.rankPolicy),
-        spentTotal: Math.max(0, Number(wallet.spentTotal || 0) - Number(order.priceSnapshot || 0)),
-        adjustedTotal: Number(wallet.adjustedTotal || 0),
-        lastTransactionAt: FieldValue.serverTimestamp(),
-      }, { merge: true });
-
-      if (stockDeducted && productSnap.exists) {
-        transaction.set(productRef, {
-          stock: currentProductStock + 1,
-          updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
+      const order = { id: orderSnap.id, ...(orderSnap.data() || {}) };
+      if (order.status === nextStatus) {
+        return {
+          orderId,
+          transactionId: buildOrderReviewTransactionId(orderId, nextStatus),
+          status: nextStatus,
+          duplicate: true,
+        };
       }
 
-      transaction.set(txRef, createTransactionPayload({
-        uid: order.uid,
-        type: 'purchase_cancel',
-        delta: Number(order.priceSnapshot || 0),
-        balanceAfter: restoredBalance,
-        sourceId: order.id,
-        sourceLabel: String(order.productName || '').trim(),
-        policyId: 'purchase',
-        createdBy: manager.uid,
-      }));
+      const canTransition =
+        (order.status === "requested" &&
+          ["approved", "rejected", "cancelled"].includes(nextStatus)) ||
+        (order.status === "approved" &&
+          ["requested", "fulfilled", "cancelled"].includes(nextStatus));
+
+      if (!canTransition) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Point order is not in a reviewable state.",
+        );
+      }
+
+      const { profile } = await ensureStudentProfile(order.uid);
+      const { ref: walletRef, wallet } = await ensureWallet(
+        transaction,
+        year,
+        semester,
+        order.uid,
+        profile,
+      );
+      const policy = await loadPolicy(transaction, year, semester);
+      const currentRankEarnedTotal = await getCurrentRankEarnedTotal(
+        transaction,
+        year,
+        semester,
+        order.uid,
+        wallet,
+      );
+      const productRef = db.doc(
+        `${getPointCollectionPath(year, semester, "point_products")}/${order.productId}`,
+      );
+      const productSnap = await transaction.get(productRef);
+      const currentProductStock = productSnap.exists
+        ? Math.max(0, Math.floor(toFiniteNumber(productSnap.data().stock, 0)))
+        : 0;
+      const stockDeducted = order.stockDeducted !== false;
+
+      transaction.set(
+        orderRef,
+        {
+          status: nextStatus,
+          stockDeducted:
+            nextStatus === "approved" || nextStatus === "fulfilled",
+          reviewedAt: FieldValue.serverTimestamp(),
+          reviewedBy: manager.uid,
+          memo: memo || String(order.memo || "").trim(),
+        },
+        { merge: true },
+      );
+
+      const transactionId = buildOrderReviewTransactionId(order.id, nextStatus);
+      const txRef = db.doc(
+        `${getPointCollectionPath(year, semester, "point_transactions")}/${transactionId}`,
+      );
+
+      if (nextStatus === "requested") {
+        if (stockDeducted && productSnap.exists) {
+          transaction.set(
+            productRef,
+            {
+              stock: currentProductStock + 1,
+              updatedAt: FieldValue.serverTimestamp(),
+            },
+            { merge: true },
+          );
+        }
+
+        transaction.set(
+          walletRef,
+          {
+            ...buildWalletBase(order.uid, profile),
+            ...buildWalletRankState(currentRankEarnedTotal, policy.rankPolicy),
+          },
+          { merge: true },
+        );
+
+        return {
+          orderId: order.id,
+          transactionId: "",
+          status: nextStatus,
+          duplicate: false,
+          uid: order.uid,
+          productName: String(order.productName || "").trim(),
+        };
+      }
+
+      if (nextStatus === "rejected" || nextStatus === "cancelled") {
+        const restoredBalance =
+          Number(wallet.balance || 0) + Number(order.priceSnapshot || 0);
+        transaction.set(
+          walletRef,
+          {
+            ...buildWalletBase(order.uid, profile),
+            balance: restoredBalance,
+            earnedTotal: Number(wallet.earnedTotal || 0),
+            ...buildWalletRankState(currentRankEarnedTotal, policy.rankPolicy),
+            spentTotal: Math.max(
+              0,
+              Number(wallet.spentTotal || 0) - Number(order.priceSnapshot || 0),
+            ),
+            adjustedTotal: Number(wallet.adjustedTotal || 0),
+            lastTransactionAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+
+        if (stockDeducted && productSnap.exists) {
+          transaction.set(
+            productRef,
+            {
+              stock: currentProductStock + 1,
+              updatedAt: FieldValue.serverTimestamp(),
+            },
+            { merge: true },
+          );
+        }
+
+        transaction.set(
+          txRef,
+          createTransactionPayload({
+            uid: order.uid,
+            type: "purchase_cancel",
+            delta: Number(order.priceSnapshot || 0),
+            balanceAfter: restoredBalance,
+            sourceId: order.id,
+            sourceLabel: String(order.productName || "").trim(),
+            policyId: "purchase",
+            createdBy: manager.uid,
+          }),
+        );
+
+        return {
+          orderId: order.id,
+          transactionId,
+          status: nextStatus,
+          duplicate: false,
+          uid: order.uid,
+          productName: String(order.productName || "").trim(),
+        };
+      }
+
+      if (nextStatus === "approved") {
+        if (!stockDeducted) {
+          if (!productSnap.exists) {
+            throw new HttpsError("not-found", "Point product does not exist.");
+          }
+          if (currentProductStock <= 0) {
+            throw new HttpsError(
+              "failed-precondition",
+              "Point product is out of stock.",
+            );
+          }
+          transaction.set(
+            productRef,
+            {
+              stock: currentProductStock - 1,
+              updatedAt: FieldValue.serverTimestamp(),
+            },
+            { merge: true },
+          );
+        }
+      }
+
+      transaction.set(
+        walletRef,
+        {
+          ...buildWalletBase(order.uid, profile),
+          ...buildWalletRankState(currentRankEarnedTotal, policy.rankPolicy),
+        },
+        { merge: true },
+      );
+
+      transaction.set(
+        txRef,
+        createTransactionPayload({
+          uid: order.uid,
+          type: "purchase_confirm",
+          delta: 0,
+          balanceAfter: Number(wallet.balance || 0),
+          sourceId: order.id,
+          sourceLabel: String(order.productName || "").trim(),
+          policyId: "purchase",
+          createdBy: manager.uid,
+        }),
+      );
 
       return {
         orderId: order.id,
@@ -7226,87 +10146,57 @@ exports.reviewTeacherPointOrder = onCall({ region: REGION }, async (request) => 
         status: nextStatus,
         duplicate: false,
         uid: order.uid,
-        productName: String(order.productName || '').trim(),
+        productName: String(order.productName || "").trim(),
       };
-    }
-
-    if (nextStatus === 'approved') {
-      if (!stockDeducted) {
-        if (!productSnap.exists) {
-          throw new HttpsError('not-found', 'Point product does not exist.');
-        }
-        if (currentProductStock <= 0) {
-          throw new HttpsError('failed-precondition', 'Point product is out of stock.');
-        }
-        transaction.set(productRef, {
-          stock: currentProductStock - 1,
-          updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
-      }
-    }
-
-    transaction.set(walletRef, {
-      ...buildWalletBase(order.uid, profile),
-      ...buildWalletRankState(currentRankEarnedTotal, policy.rankPolicy),
-    }, { merge: true });
-
-    transaction.set(txRef, createTransactionPayload({
-      uid: order.uid,
-      type: 'purchase_confirm',
-      delta: 0,
-      balanceAfter: Number(wallet.balance || 0),
-      sourceId: order.id,
-      sourceLabel: String(order.productName || '').trim(),
-      policyId: 'purchase',
-      createdBy: manager.uid,
-    }));
-
-    return {
-      orderId: order.id,
-      transactionId,
-      status: nextStatus,
-      duplicate: false,
-      uid: order.uid,
-      productName: String(order.productName || '').trim(),
-    };
-  });
-
-  if (!result.duplicate) {
-    await markWisHallOfFameDirtySafely(year, semester);
-    const statusLabel = {
-      requested: '검토 대기',
-      approved: '승인',
-      rejected: '거절',
-      fulfilled: '확정',
-      cancelled: '취소',
-    }[result.status] || result.status;
-    await createUserNotification(year, semester, result.uid, {
-      type: 'point_order_reviewed',
-      title: '상점 구매 처리',
-      body: `${result.productName || '상품'} 구매 요청이 ${statusLabel} 처리되었습니다.`,
-      targetUrl: '/student/points?tab=orders',
-      entityType: 'point_order',
-      entityId: result.orderId,
-      actorUid: manager.uid,
-      priority: result.status === 'rejected' || result.status === 'cancelled' ? 'high' : 'normal',
-      dedupeKey: `point_order_reviewed:${year}:${semester}:${result.orderId}:${result.status}`,
-      templateValues: {
-        productName: result.productName || '상품',
-        statusLabel,
-      },
     });
-  }
-  return result;
-});
+
+    if (!result.duplicate) {
+      await markWisHallOfFameDirtySafely(year, semester);
+      const statusLabel =
+        {
+          requested: "검토 대기",
+          approved: "승인",
+          rejected: "거절",
+          fulfilled: "확정",
+          cancelled: "취소",
+        }[result.status] || result.status;
+      await createUserNotification(year, semester, result.uid, {
+        type: "point_order_reviewed",
+        title: "상점 구매 처리",
+        body: `${result.productName || "상품"} 구매 요청이 ${statusLabel} 처리되었습니다.`,
+        targetUrl: "/student/points?tab=orders",
+        entityType: "point_order",
+        entityId: result.orderId,
+        actorUid: manager.uid,
+        priority:
+          result.status === "rejected" || result.status === "cancelled"
+            ? "high"
+            : "normal",
+        dedupeKey: `point_order_reviewed:${year}:${semester}:${result.orderId}:${result.status}`,
+        templateValues: {
+          productName: result.productName || "상품",
+          statusLabel,
+        },
+      });
+    }
+    return result;
+  },
+);
 
 const getHistoryDictionaryRewardSourceId = (termId) =>
   `history-dictionary:${sanitizeKeyPart(termId)}`;
 
 const getHistoryDictionaryRewardTransactionId = (uid, termId) =>
-  buildActivityTransactionId(uid, 'history_dictionary', getHistoryDictionaryRewardSourceId(termId));
+  buildActivityTransactionId(
+    uid,
+    "history_dictionary",
+    getHistoryDictionaryRewardSourceId(termId),
+  );
 
 const getHistoryDictionaryDefinitionQualityLength = (definition) =>
-  String(definition || '').replace(/\s+/g, '').trim().length;
+  String(definition || "")
+    .replace(/\s+/g, "")
+    .trim().length;
 
 const awardHistoryDictionaryRewardIfEligible = async ({
   transaction,
@@ -7321,74 +10211,107 @@ const awardHistoryDictionaryRewardIfEligible = async ({
   const policy = await loadPolicy(transaction, year, semester);
   const rule = policy.rewardPolicy?.historyDictionary || {};
   const amount = Number(rule.amount || 0);
-  const minDefinitionLength = Math.max(1, Number(rule.minDefinitionLength || 20));
+  const minDefinitionLength = Math.max(
+    1,
+    Number(rule.minDefinitionLength || 20),
+  );
   const qualityLength = getHistoryDictionaryDefinitionQualityLength(definition);
-  if (!policy.autoRewardEnabled || rule.enabled !== true || amount <= 0 || qualityLength < minDefinitionLength) {
+  if (
+    !policy.autoRewardEnabled ||
+    rule.enabled !== true ||
+    amount <= 0 ||
+    qualityLength < minDefinitionLength
+  ) {
     return {
       awarded: false,
       amount: 0,
-      blockedReason: qualityLength < minDefinitionLength ? 'definition_too_short' : 'policy_disabled',
+      blockedReason:
+        qualityLength < minDefinitionLength
+          ? "definition_too_short"
+          : "policy_disabled",
     };
   }
 
   const todayKey = getKstDateKey();
   const sourceId = getHistoryDictionaryRewardSourceId(termId);
   const transactionId = getHistoryDictionaryRewardTransactionId(uid, termId);
-  const txRef = db.doc(`${getPointCollectionPath(year, semester, 'point_transactions')}/${transactionId}`);
+  const txRef = db.doc(
+    `${getPointCollectionPath(year, semester, "point_transactions")}/${transactionId}`,
+  );
   const txSnap = await transaction.get(txRef);
   if (txSnap.exists) {
     return {
       awarded: false,
       amount: 0,
       transactionId,
-      blockedReason: 'duplicate_source',
+      blockedReason: "duplicate_source",
     };
   }
 
   const dailySnapshot = await transaction.get(
-    db.collection(getPointCollectionPath(year, semester, 'point_transactions'))
-      .where('uid', '==', uid)
-      .where('type', '==', 'history_dictionary')
-      .where('targetDate', '==', todayKey),
+    db
+      .collection(getPointCollectionPath(year, semester, "point_transactions"))
+      .where("uid", "==", uid)
+      .where("type", "==", "history_dictionary")
+      .where("targetDate", "==", todayKey),
   );
   const maxDailyClaims = Math.max(1, Number(rule.maxDailyClaims || 4));
   if (dailySnapshot.size >= maxDailyClaims) {
     return {
       awarded: false,
       amount: 0,
-      blockedReason: 'daily_max_reached',
+      blockedReason: "daily_max_reached",
       claimCount: dailySnapshot.size,
       maxDailyClaims,
     };
   }
 
-  const { ref: walletRef, wallet } = await ensureWallet(transaction, year, semester, uid, profile);
-  const currentRankEarnedTotal = await getCurrentRankEarnedTotal(transaction, year, semester, uid, wallet);
+  const { ref: walletRef, wallet } = await ensureWallet(
+    transaction,
+    year,
+    semester,
+    uid,
+    profile,
+  );
+  const currentRankEarnedTotal = await getCurrentRankEarnedTotal(
+    transaction,
+    year,
+    semester,
+    uid,
+    wallet,
+  );
   const nextBalance = Number(wallet.balance || 0) + amount;
   const nextRankEarnedTotal = currentRankEarnedTotal + amount;
   const nextEarnedTotal = Number(wallet.earnedTotal || 0) + amount;
 
-  transaction.set(walletRef, {
-    ...buildWalletBase(uid, profile),
-    balance: nextBalance,
-    earnedTotal: nextEarnedTotal,
-    ...buildWalletRankState(nextRankEarnedTotal, policy.rankPolicy),
-    spentTotal: Number(wallet.spentTotal || 0),
-    adjustedTotal: Number(wallet.adjustedTotal || 0),
-    lastTransactionAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
+  transaction.set(
+    walletRef,
+    {
+      ...buildWalletBase(uid, profile),
+      balance: nextBalance,
+      earnedTotal: nextEarnedTotal,
+      ...buildWalletRankState(nextRankEarnedTotal, policy.rankPolicy),
+      spentTotal: Number(wallet.spentTotal || 0),
+      adjustedTotal: Number(wallet.adjustedTotal || 0),
+      lastTransactionAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
 
-  transaction.set(txRef, createTransactionPayload({
-    uid,
-    type: 'history_dictionary',
-    delta: amount,
-    balanceAfter: nextBalance,
-    sourceId,
-    sourceLabel: `역사 사전 단어 등록: ${sanitizeHistoryDictionaryWord(word)}`,
-    policyId: 'current',
-    createdBy: 'system:auto',
-    targetDate: todayKey,
-  }));
+  transaction.set(
+    txRef,
+    createTransactionPayload({
+      uid,
+      type: "history_dictionary",
+      delta: amount,
+      balanceAfter: nextBalance,
+      sourceId,
+      sourceLabel: `역사 사전 단어 등록: ${sanitizeHistoryDictionaryWord(word)}`,
+      policyId: "current",
+      createdBy: "system:auto",
+      targetDate: todayKey,
+    }),
+  );
 
   return {
     awarded: true,
@@ -7411,70 +10334,106 @@ const reclaimHistoryDictionaryRewardIfNeeded = async ({
   actorUid,
   reason,
 }) => {
-  const rewardTransactionId = getHistoryDictionaryRewardTransactionId(uid, termId);
-  const rewardTxRef = db.doc(`${getPointCollectionPath(year, semester, 'point_transactions')}/${rewardTransactionId}`);
+  const rewardTransactionId = getHistoryDictionaryRewardTransactionId(
+    uid,
+    termId,
+  );
+  const rewardTxRef = db.doc(
+    `${getPointCollectionPath(year, semester, "point_transactions")}/${rewardTransactionId}`,
+  );
   const rewardTxSnap = await transaction.get(rewardTxRef);
   if (!rewardTxSnap.exists) {
-    return { reclaimed: false, amount: 0, blockedReason: 'reward_not_found' };
+    return { reclaimed: false, amount: 0, blockedReason: "reward_not_found" };
   }
 
   const rewardTx = rewardTxSnap.data() || {};
   if (rewardTx.reclaimed === true) {
-    return { reclaimed: false, amount: 0, blockedReason: 'already_reclaimed' };
+    return { reclaimed: false, amount: 0, blockedReason: "already_reclaimed" };
   }
 
   const amount = Math.max(0, Number(rewardTx.delta || 0));
   if (amount <= 0) {
-    return { reclaimed: false, amount: 0, blockedReason: 'empty_reward' };
+    return { reclaimed: false, amount: 0, blockedReason: "empty_reward" };
   }
 
-  const reclaimTxRef = db.doc(`${getPointCollectionPath(year, semester, 'point_transactions')}/${rewardTransactionId}_reclaim`);
+  const reclaimTxRef = db.doc(
+    `${getPointCollectionPath(year, semester, "point_transactions")}/${rewardTransactionId}_reclaim`,
+  );
   const reclaimTxSnap = await transaction.get(reclaimTxRef);
   if (reclaimTxSnap.exists) {
-    transaction.set(rewardTxRef, {
-      reclaimed: true,
-      reclaimedAt: rewardTx.reclaimedAt || FieldValue.serverTimestamp(),
-      reclaimedBy: rewardTx.reclaimedBy || actorUid,
-      reclaimReason: rewardTx.reclaimReason || reason,
-    }, { merge: true });
-    return { reclaimed: false, amount: 0, blockedReason: 'reclaim_exists' };
+    transaction.set(
+      rewardTxRef,
+      {
+        reclaimed: true,
+        reclaimedAt: rewardTx.reclaimedAt || FieldValue.serverTimestamp(),
+        reclaimedBy: rewardTx.reclaimedBy || actorUid,
+        reclaimReason: rewardTx.reclaimReason || reason,
+      },
+      { merge: true },
+    );
+    return { reclaimed: false, amount: 0, blockedReason: "reclaim_exists" };
   }
 
   const policy = await loadPolicy(transaction, year, semester);
-  const { ref: walletRef, wallet } = await ensureWallet(transaction, year, semester, uid, profile);
-  const currentRankEarnedTotal = await getCurrentRankEarnedTotal(transaction, year, semester, uid, wallet);
+  const { ref: walletRef, wallet } = await ensureWallet(
+    transaction,
+    year,
+    semester,
+    uid,
+    profile,
+  );
+  const currentRankEarnedTotal = await getCurrentRankEarnedTotal(
+    transaction,
+    year,
+    semester,
+    uid,
+    wallet,
+  );
   const nextBalance = Number(wallet.balance || 0) - amount;
   const nextRankEarnedTotal = Math.max(0, currentRankEarnedTotal - amount);
   const nextEarnedTotal = Math.max(0, Number(wallet.earnedTotal || 0) - amount);
 
-  transaction.set(walletRef, {
-    ...buildWalletBase(uid, profile),
-    balance: nextBalance,
-    earnedTotal: nextEarnedTotal,
-    ...buildWalletRankState(nextRankEarnedTotal, policy.rankPolicy),
-    spentTotal: Number(wallet.spentTotal || 0),
-    adjustedTotal: Number(wallet.adjustedTotal || 0),
-    lastTransactionAt: FieldValue.serverTimestamp(),
-  }, { merge: true });
+  transaction.set(
+    walletRef,
+    {
+      ...buildWalletBase(uid, profile),
+      balance: nextBalance,
+      earnedTotal: nextEarnedTotal,
+      ...buildWalletRankState(nextRankEarnedTotal, policy.rankPolicy),
+      spentTotal: Number(wallet.spentTotal || 0),
+      adjustedTotal: Number(wallet.adjustedTotal || 0),
+      lastTransactionAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
 
-  transaction.set(rewardTxRef, {
-    reclaimed: true,
-    reclaimedAt: FieldValue.serverTimestamp(),
-    reclaimedBy: actorUid,
-    reclaimReason: reason,
-  }, { merge: true });
+  transaction.set(
+    rewardTxRef,
+    {
+      reclaimed: true,
+      reclaimedAt: FieldValue.serverTimestamp(),
+      reclaimedBy: actorUid,
+      reclaimReason: reason,
+    },
+    { merge: true },
+  );
 
-  transaction.set(reclaimTxRef, createTransactionPayload({
-    uid,
-    type: 'history_dictionary_reclaim',
-    delta: -amount,
-    balanceAfter: nextBalance,
-    sourceId: String(rewardTx.sourceId || getHistoryDictionaryRewardSourceId(termId)),
-    sourceLabel: `역사 사전 보상 회수: ${sanitizeHistoryDictionaryWord(word)}`,
-    policyId: String(rewardTx.policyId || 'current'),
-    createdBy: actorUid,
-    targetDate: String(rewardTx.targetDate || ''),
-  }));
+  transaction.set(
+    reclaimTxRef,
+    createTransactionPayload({
+      uid,
+      type: "history_dictionary_reclaim",
+      delta: -amount,
+      balanceAfter: nextBalance,
+      sourceId: String(
+        rewardTx.sourceId || getHistoryDictionaryRewardSourceId(termId),
+      ),
+      sourceLabel: `역사 사전 보상 회수: ${sanitizeHistoryDictionaryWord(word)}`,
+      policyId: String(rewardTx.policyId || "current"),
+      createdBy: actorUid,
+      targetDate: String(rewardTx.targetDate || ""),
+    }),
+  );
 
   return {
     reclaimed: true,
@@ -7484,629 +10443,801 @@ const reclaimHistoryDictionaryRewardIfNeeded = async ({
   };
 };
 
-exports.requestHistoryDictionaryTerm = onCall({ region: REGION }, async (request) => {
-  const { uid } = await assertAllowedWestoryUser(request);
-  const { year, semester } = assertYearSemester(request.data);
-  const word = sanitizeHistoryDictionaryWord(request.data?.word);
-  const normalizedWord = normalizeHistoryDictionaryWord(word);
-  const memo = sanitizeHistoryDictionaryText(request.data?.memo, 240);
-  const warningAccepted = request.data?.warningAccepted === true;
+exports.requestHistoryDictionaryTerm = onCall(
+  { region: REGION },
+  async (request) => {
+    const { uid } = await assertAllowedWestoryUser(request);
+    const { year, semester } = assertYearSemester(request.data);
+    const word = sanitizeHistoryDictionaryWord(request.data?.word);
+    const normalizedWord = normalizeHistoryDictionaryWord(word);
+    const memo = sanitizeHistoryDictionaryText(request.data?.memo, 240);
+    const warningAccepted = request.data?.warningAccepted === true;
 
-  if (!word || !normalizedWord) {
-    throw new HttpsError('invalid-argument', 'A word is required.');
-  }
-  if (word.length > 40) {
-    throw new HttpsError('invalid-argument', 'Word is too long.');
-  }
-  if (!warningAccepted) {
-    throw new HttpsError('failed-precondition', 'Dictionary request warning must be accepted.');
-  }
+    if (!word || !normalizedWord) {
+      throw new HttpsError("invalid-argument", "A word is required.");
+    }
+    if (word.length > 40) {
+      throw new HttpsError("invalid-argument", "Word is too long.");
+    }
+    if (!warningAccepted) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Dictionary request warning must be accepted.",
+      );
+    }
 
-  const { profile } = await ensureStudentProfile(uid);
-  const termId = buildHistoryDictionaryTermId(normalizedWord);
-  const requestId = buildHistoryDictionaryRequestId(year, semester, uid, normalizedWord);
-  const termRef = db.doc(getHistoryDictionaryTermPath(termId));
-  const requestRef = db.doc(getHistoryDictionaryRequestPath(requestId));
-  const wordRef = db.doc(getStudentHistoryDictionaryWordPath(uid, termId));
+    const { profile } = await ensureStudentProfile(uid);
+    const termId = buildHistoryDictionaryTermId(normalizedWord);
+    const requestId = buildHistoryDictionaryRequestId(
+      year,
+      semester,
+      uid,
+      normalizedWord,
+    );
+    const termRef = db.doc(getHistoryDictionaryTermPath(termId));
+    const requestRef = db.doc(getHistoryDictionaryRequestPath(requestId));
+    const wordRef = db.doc(getStudentHistoryDictionaryWordPath(uid, termId));
 
-  const result = await db.runTransaction(async (transaction) => {
-    const [termSnap, requestSnap] = await Promise.all([
-      transaction.get(termRef),
-      transaction.get(requestRef),
-    ]);
-    const termData = termSnap.exists ? termSnap.data() || {} : null;
-    const hasPublishedTerm = termData?.status === 'published' && String(termData.definition || '').trim();
-    const nextStatus = hasPublishedTerm ? 'needs_approval' : 'requested';
+    const result = await db.runTransaction(async (transaction) => {
+      const [termSnap, requestSnap] = await Promise.all([
+        transaction.get(termRef),
+        transaction.get(requestRef),
+      ]);
+      const termData = termSnap.exists ? termSnap.data() || {} : null;
+      const hasPublishedTerm =
+        termData?.status === "published" &&
+        String(termData.definition || "").trim();
+      const nextStatus = hasPublishedTerm ? "needs_approval" : "requested";
 
-    if (requestSnap.exists) {
-      const existing = requestSnap.data() || {};
-      const existingStatus = String(existing.status || '').trim();
-      if (existingStatus === 'resolved') {
+      if (requestSnap.exists) {
+        const existing = requestSnap.data() || {};
+        const existingStatus = String(existing.status || "").trim();
+        if (existingStatus === "resolved") {
+          return {
+            requestId,
+            termId,
+            created: false,
+            alreadyResolved: true,
+            status: existingStatus,
+            matchedTermId: String(
+              existing.resolvedTermId || existing.matchedTermId || "",
+            ),
+          };
+        }
+        transaction.set(
+          requestRef,
+          {
+            word,
+            normalizedWord,
+            memo,
+            status:
+              existingStatus === "needs_approval" ||
+              existingStatus === "requested"
+                ? existingStatus
+                : nextStatus,
+            matchedTermId: hasPublishedTerm
+              ? termId
+              : String(existing.matchedTermId || ""),
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+        transaction.set(
+          wordRef,
+          {
+            termId,
+            word,
+            normalizedWord,
+            definition: "",
+            studentLevel: "",
+            status: "requested",
+            requestId,
+            uid,
+            studentName:
+              sanitizeHistoryDictionaryText(profile.name, 40) || "학생",
+            grade: sanitizeHistoryDictionaryText(profile.grade, 8),
+            class: sanitizeHistoryDictionaryText(profile.class, 8),
+            number: sanitizeHistoryDictionaryText(profile.number, 8),
+            memo,
+            year,
+            semester,
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
         return {
           requestId,
           termId,
           created: false,
-          alreadyResolved: true,
-          status: existingStatus,
-          matchedTermId: String(existing.resolvedTermId || existing.matchedTermId || ''),
+          alreadyResolved: false,
+          status: existingStatus || nextStatus,
+          matchedTermId: hasPublishedTerm
+            ? termId
+            : String(existing.matchedTermId || ""),
         };
       }
+
       transaction.set(requestRef, {
         word,
         normalizedWord,
-        memo,
-        status: existingStatus === 'needs_approval' || existingStatus === 'requested'
-          ? existingStatus
-          : nextStatus,
-        matchedTermId: hasPublishedTerm ? termId : String(existing.matchedTermId || ''),
-        updatedAt: FieldValue.serverTimestamp(),
-      }, { merge: true });
-      transaction.set(wordRef, {
-        termId,
-        word,
-        normalizedWord,
-        definition: '',
-        studentLevel: '',
-        status: 'requested',
-        requestId,
         uid,
-        studentName: sanitizeHistoryDictionaryText(profile.name, 40) || '학생',
+        studentName: sanitizeHistoryDictionaryText(profile.name, 40) || "학생",
         grade: sanitizeHistoryDictionaryText(profile.grade, 8),
         class: sanitizeHistoryDictionaryText(profile.class, 8),
         number: sanitizeHistoryDictionaryText(profile.number, 8),
         memo,
-        year,
-        semester,
-        updatedAt: FieldValue.serverTimestamp(),
-      }, { merge: true });
-      return {
-        requestId,
-        termId,
-        created: false,
-        alreadyResolved: false,
-        status: existingStatus || nextStatus,
-        matchedTermId: hasPublishedTerm ? termId : String(existing.matchedTermId || ''),
-      };
-    }
-
-    transaction.set(requestRef, {
-      word,
-      normalizedWord,
-      uid,
-      studentName: sanitizeHistoryDictionaryText(profile.name, 40) || '학생',
-      grade: sanitizeHistoryDictionaryText(profile.grade, 8),
-      class: sanitizeHistoryDictionaryText(profile.class, 8),
-      number: sanitizeHistoryDictionaryText(profile.number, 8),
-      memo,
-      status: nextStatus,
-      matchedTermId: hasPublishedTerm ? termId : '',
-      resolvedTermId: '',
-      resolvedBy: '',
-      year,
-      semester,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-      resolvedAt: null,
-    });
-    transaction.set(wordRef, {
-      termId,
-      word,
-      normalizedWord,
-      definition: '',
-      studentLevel: '',
-      status: 'requested',
-      requestId,
-      uid,
-      studentName: sanitizeHistoryDictionaryText(profile.name, 40) || '학생',
-      grade: sanitizeHistoryDictionaryText(profile.grade, 8),
-      class: sanitizeHistoryDictionaryText(profile.class, 8),
-      number: sanitizeHistoryDictionaryText(profile.number, 8),
-      memo,
-      year,
-      semester,
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
-    return {
-      requestId,
-      termId,
-      created: true,
-      alreadyResolved: false,
-      status: nextStatus,
-      matchedTermId: hasPublishedTerm ? termId : '',
-    };
-  });
-
-  if (result.created) {
-    const recipients = await resolveHistoryDictionaryManagerRecipientUids();
-    await createUserNotifications(year, semester, recipients, {
-      type: 'history_dictionary_requested',
-      title: '역사 사전 요청',
-      body: `${profile.name || '학생'} 학생이 ${word} 뜻풀이를 요청했습니다.`,
-      targetUrl: `/teacher/lesson/history-dictionary?panel=requests&requestId=${encodeURIComponent(requestId)}`,
-      entityType: 'history_dictionary_request',
-      entityId: requestId,
-      actorUid: uid,
-      priority: result.status === 'needs_approval' ? 'normal' : 'high',
-      dedupeKey: `history_dictionary_requested:${year}:${semester}:${requestId}`,
-      templateValues: {
-        studentName: profile.name || '학생',
-        word,
-      },
-    });
-  }
-
-  return result;
-});
-
-exports.saveStudentHistoryDictionaryWord = onCall({ region: REGION }, async (request) => {
-  const { uid } = await assertAllowedWestoryUser(request);
-  const termId = sanitizeHistoryDictionaryText(request.data?.termId, 80);
-  if (!termId) {
-    throw new HttpsError('invalid-argument', 'termId is required.');
-  }
-
-  const termRef = db.doc(getHistoryDictionaryTermPath(termId));
-  const wordRef = db.doc(getStudentHistoryDictionaryWordPath(uid, termId));
-  return db.runTransaction(async (transaction) => {
-    const termSnap = await transaction.get(termRef);
-    if (!termSnap.exists) {
-      throw new HttpsError('not-found', 'Dictionary term does not exist.');
-    }
-    const term = termSnap.data() || {};
-    if (term.status !== 'published' || !String(term.definition || '').trim()) {
-      throw new HttpsError('failed-precondition', 'Dictionary term is not published.');
-    }
-
-    transaction.set(wordRef, {
-      termId,
-      word: sanitizeHistoryDictionaryWord(term.word),
-      normalizedWord: normalizeHistoryDictionaryWord(term.normalizedWord || term.word),
-      definition: sanitizeHistoryDictionaryText(term.definition, 1200),
-      studentLevel: sanitizeHistoryDictionaryText(term.studentLevel, 80),
-      tags: sanitizeHistoryDictionaryTags(term.tags),
-      status: 'saved',
-      requestId: '',
-      updatedAt: FieldValue.serverTimestamp(),
-      createdAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
-    return { termId, saved: true };
-  });
-});
-
-exports.saveStudentHistoryDictionaryEntry = onCall({ region: REGION }, async (request) => {
-  const { uid } = await assertAllowedWestoryUser(request);
-  const word = sanitizeHistoryDictionaryWord(request.data?.word);
-  const normalizedWord = normalizeHistoryDictionaryWord(word);
-  const definition = sanitizeHistoryDictionaryText(request.data?.definition, 1200);
-  const scoped = getOptionalYearSemester(request.data) || await getCurrentConfiguredYearSemester();
-
-  if (!word || !normalizedWord) {
-    throw new HttpsError('invalid-argument', 'A word is required.');
-  }
-  if (!definition || definition.length < 2) {
-    throw new HttpsError('invalid-argument', 'Definition is required.');
-  }
-
-  const termId = buildHistoryDictionaryTermId(normalizedWord);
-  const wordRef = db.doc(getStudentHistoryDictionaryWordPath(uid, termId));
-  const { profile } = await ensureStudentProfile(uid);
-  const result = await db.runTransaction(async (transaction) => {
-    const wordSnap = await transaction.get(wordRef);
-    let reward = { awarded: false, amount: 0 };
-    if (scoped) {
-      reward = await awardHistoryDictionaryRewardIfEligible({
-        transaction,
-        year: scoped.year,
-        semester: scoped.semester,
-        uid,
-        profile,
-        termId,
-        word,
-        definition,
-      });
-    }
-
-    const existingWord = wordSnap.data() || {};
-    transaction.set(wordRef, {
-      termId,
-      word,
-      normalizedWord,
-      definition,
-      studentLevel: '내가 정리한 뜻풀이',
-      status: 'saved',
-      requestId: '',
-      uid,
-      studentName: sanitizeHistoryDictionaryText(profile.name, 40) || '학생',
-      grade: sanitizeHistoryDictionaryText(profile.grade, 8),
-      class: sanitizeHistoryDictionaryText(profile.class, 8),
-      number: sanitizeHistoryDictionaryText(profile.number, 8),
-      year: scoped?.year || '',
-      semester: scoped?.semester || '',
-      definitionSource: 'student',
-      rewardTermId: reward.awarded ? termId : (existingWord.rewardTermId || termId),
-      rewardTransactionId: reward.transactionId || existingWord.rewardTransactionId || '',
-      rewardAmount: reward.awarded ? reward.amount : Number(existingWord.rewardAmount || 0),
-      rewardAwardedAt: reward.awarded ? FieldValue.serverTimestamp() : (existingWord.rewardAwardedAt || null),
-      updatedAt: FieldValue.serverTimestamp(),
-      createdAt: wordSnap.exists ? (existingWord.createdAt || FieldValue.serverTimestamp()) : FieldValue.serverTimestamp(),
-    }, { merge: true });
-
-    return reward;
-  });
-
-  if (result.awarded && scoped) {
-    await markWisHallOfFameDirtySafely(scoped.year, scoped.semester);
-  }
-
-  return {
-    termId,
-    saved: true,
-    reward: result,
-  };
-});
-
-exports.deleteStudentHistoryDictionaryWord = onCall({ region: REGION }, async (request) => {
-  const { uid } = await assertAllowedWestoryUser(request);
-  const termId = sanitizeHistoryDictionaryText(request.data?.termId, 80);
-  const scoped = getOptionalYearSemester(request.data) || await getCurrentConfiguredYearSemester();
-  if (!termId) {
-    throw new HttpsError('invalid-argument', 'termId is required.');
-  }
-
-  const wordRef = db.doc(getStudentHistoryDictionaryWordPath(uid, termId));
-  const { profile } = await ensureStudentProfile(uid);
-  const result = await db.runTransaction(async (transaction) => {
-    const wordSnap = await transaction.get(wordRef);
-    if (!wordSnap.exists) {
-      return {
-        termId,
-        deleted: false,
-        reward: { reclaimed: false, amount: 0, blockedReason: 'word_not_found' },
-      };
-    }
-
-    const wordData = wordSnap.data() || {};
-    let reward = { reclaimed: false, amount: 0 };
-    if (scoped) {
-      reward = await reclaimHistoryDictionaryRewardIfNeeded({
-        transaction,
-        year: scoped.year,
-        semester: scoped.semester,
-        uid,
-        profile,
-        termId: String(wordData.rewardTermId || termId),
-        word: wordData.word || termId,
-        actorUid: uid,
-        reason: 'student_deleted_history_dictionary_word',
-      });
-    }
-
-    transaction.delete(wordRef);
-    return {
-      termId,
-      deleted: true,
-      reward,
-    };
-  });
-
-  if (result.reward?.reclaimed && scoped) {
-    await markWisHallOfFameDirtySafely(scoped.year, scoped.semester);
-  }
-
-  return result;
-});
-
-exports.deleteStudentHistoryDictionaryWordByTeacher = onCall({ region: REGION }, async (request) => {
-  const manager = await assertHistoryDictionaryWriteManager(request);
-  const { year, semester } = assertYearSemester(request.data);
-  const targetUid = String(request.data?.uid || '').trim();
-  const requestId = sanitizeHistoryDictionaryText(request.data?.requestId, 100);
-  const word = sanitizeHistoryDictionaryWord(request.data?.word);
-  const normalizedWord = normalizeHistoryDictionaryWord(request.data?.normalizedWord || word);
-  const termId = sanitizeHistoryDictionaryText(request.data?.termId, 80)
-    || (normalizedWord ? buildHistoryDictionaryTermId(normalizedWord) : '');
-  const reason = sanitizeHistoryDictionaryText(
-    request.data?.reason || 'teacher_deleted_inappropriate_history_dictionary_word',
-    160,
-  );
-  if (!targetUid || !termId) {
-    throw new HttpsError('invalid-argument', 'uid and termId are required.');
-  }
-
-  const wordRef = db.doc(getStudentHistoryDictionaryWordPath(targetUid, termId));
-  const requestRef = requestId ? db.doc(getHistoryDictionaryRequestPath(requestId)) : null;
-  const { profile } = await ensureStudentProfile(targetUid);
-  const result = await db.runTransaction(async (transaction) => {
-    const [wordSnap, requestSnap] = await Promise.all([
-      transaction.get(wordRef),
-      requestRef ? transaction.get(requestRef) : Promise.resolve(null),
-    ]);
-    const wordData = wordSnap.exists ? wordSnap.data() || {} : {};
-    let reward = { reclaimed: false, amount: 0 };
-    reward = await reclaimHistoryDictionaryRewardIfNeeded({
-      transaction,
-      year,
-      semester,
-      uid: targetUid,
-      profile,
-      termId: String(wordData.rewardTermId || termId),
-      word: wordData.word || word || termId,
-      actorUid: manager.uid,
-      reason,
-    });
-
-    if (wordSnap.exists) {
-      transaction.delete(wordRef);
-    }
-    if (requestRef && requestSnap?.exists) {
-      transaction.set(requestRef, {
-        status: 'rejected',
-        rejectedBy: manager.uid,
-        rejectedAt: FieldValue.serverTimestamp(),
-        rejectionReason: reason,
-        updatedAt: FieldValue.serverTimestamp(),
-      }, { merge: true });
-    } else if (requestRef) {
-      transaction.set(requestRef, {
-        word: word || wordData.word || termId,
-        normalizedWord,
-        uid: targetUid,
-        studentName: sanitizeHistoryDictionaryText(profile.name, 40) || '학생',
-        grade: sanitizeHistoryDictionaryText(profile.grade, 8),
-        class: sanitizeHistoryDictionaryText(profile.class, 8),
-        number: sanitizeHistoryDictionaryText(profile.number, 8),
-        memo: '알림 기록에서 복구해 반려한 요청입니다.',
-        status: 'rejected',
-        matchedTermId: termId,
-        resolvedTermId: '',
-        resolvedBy: '',
-        rejectedBy: manager.uid,
-        rejectedAt: FieldValue.serverTimestamp(),
-        rejectionReason: reason,
+        status: nextStatus,
+        matchedTermId: hasPublishedTerm ? termId : "",
+        resolvedTermId: "",
+        resolvedBy: "",
         year,
         semester,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
         resolvedAt: null,
-      }, { merge: true });
+      });
+      transaction.set(
+        wordRef,
+        {
+          termId,
+          word,
+          normalizedWord,
+          definition: "",
+          studentLevel: "",
+          status: "requested",
+          requestId,
+          uid,
+          studentName:
+            sanitizeHistoryDictionaryText(profile.name, 40) || "학생",
+          grade: sanitizeHistoryDictionaryText(profile.grade, 8),
+          class: sanitizeHistoryDictionaryText(profile.class, 8),
+          number: sanitizeHistoryDictionaryText(profile.number, 8),
+          memo,
+          year,
+          semester,
+          createdAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+      return {
+        requestId,
+        termId,
+        created: true,
+        alreadyResolved: false,
+        status: nextStatus,
+        matchedTermId: hasPublishedTerm ? termId : "",
+      };
+    });
+
+    if (result.created) {
+      const recipients = await resolveHistoryDictionaryManagerRecipientUids();
+      await createUserNotifications(year, semester, recipients, {
+        type: "history_dictionary_requested",
+        title: "역사 사전 요청",
+        body: `${profile.name || "학생"} 학생이 ${word} 뜻풀이를 요청했습니다.`,
+        targetUrl: `/teacher/lesson/history-dictionary?panel=requests&requestId=${encodeURIComponent(requestId)}`,
+        entityType: "history_dictionary_request",
+        entityId: requestId,
+        actorUid: uid,
+        priority: result.status === "needs_approval" ? "normal" : "high",
+        dedupeKey: `history_dictionary_requested:${year}:${semester}:${requestId}`,
+        templateValues: {
+          studentName: profile.name || "학생",
+          word,
+        },
+      });
+    }
+
+    return result;
+  },
+);
+
+exports.saveStudentHistoryDictionaryWord = onCall(
+  { region: REGION },
+  async (request) => {
+    const { uid } = await assertAllowedWestoryUser(request);
+    const termId = sanitizeHistoryDictionaryText(request.data?.termId, 80);
+    if (!termId) {
+      throw new HttpsError("invalid-argument", "termId is required.");
+    }
+
+    const termRef = db.doc(getHistoryDictionaryTermPath(termId));
+    const wordRef = db.doc(getStudentHistoryDictionaryWordPath(uid, termId));
+    return db.runTransaction(async (transaction) => {
+      const termSnap = await transaction.get(termRef);
+      if (!termSnap.exists) {
+        throw new HttpsError("not-found", "Dictionary term does not exist.");
+      }
+      const term = termSnap.data() || {};
+      if (
+        term.status !== "published" ||
+        !String(term.definition || "").trim()
+      ) {
+        throw new HttpsError(
+          "failed-precondition",
+          "Dictionary term is not published.",
+        );
+      }
+
+      transaction.set(
+        wordRef,
+        {
+          termId,
+          word: sanitizeHistoryDictionaryWord(term.word),
+          normalizedWord: normalizeHistoryDictionaryWord(
+            term.normalizedWord || term.word,
+          ),
+          definition: sanitizeHistoryDictionaryText(term.definition, 1200),
+          studentLevel: sanitizeHistoryDictionaryText(term.studentLevel, 80),
+          tags: sanitizeHistoryDictionaryTags(term.tags),
+          status: "saved",
+          requestId: "",
+          updatedAt: FieldValue.serverTimestamp(),
+          createdAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+      return { termId, saved: true };
+    });
+  },
+);
+
+exports.saveStudentHistoryDictionaryEntry = onCall(
+  { region: REGION },
+  async (request) => {
+    const { uid } = await assertAllowedWestoryUser(request);
+    const word = sanitizeHistoryDictionaryWord(request.data?.word);
+    const normalizedWord = normalizeHistoryDictionaryWord(word);
+    const definition = sanitizeHistoryDictionaryText(
+      request.data?.definition,
+      1200,
+    );
+    const scoped =
+      getOptionalYearSemester(request.data) ||
+      (await getCurrentConfiguredYearSemester());
+
+    if (!word || !normalizedWord) {
+      throw new HttpsError("invalid-argument", "A word is required.");
+    }
+    if (!definition || definition.length < 2) {
+      throw new HttpsError("invalid-argument", "Definition is required.");
+    }
+
+    const termId = buildHistoryDictionaryTermId(normalizedWord);
+    const wordRef = db.doc(getStudentHistoryDictionaryWordPath(uid, termId));
+    const { profile } = await ensureStudentProfile(uid);
+    const result = await db.runTransaction(async (transaction) => {
+      const wordSnap = await transaction.get(wordRef);
+      let reward = { awarded: false, amount: 0 };
+      if (scoped) {
+        reward = await awardHistoryDictionaryRewardIfEligible({
+          transaction,
+          year: scoped.year,
+          semester: scoped.semester,
+          uid,
+          profile,
+          termId,
+          word,
+          definition,
+        });
+      }
+
+      const existingWord = wordSnap.data() || {};
+      transaction.set(
+        wordRef,
+        {
+          termId,
+          word,
+          normalizedWord,
+          definition,
+          studentLevel: "내가 정리한 뜻풀이",
+          status: "saved",
+          requestId: "",
+          uid,
+          studentName:
+            sanitizeHistoryDictionaryText(profile.name, 40) || "학생",
+          grade: sanitizeHistoryDictionaryText(profile.grade, 8),
+          class: sanitizeHistoryDictionaryText(profile.class, 8),
+          number: sanitizeHistoryDictionaryText(profile.number, 8),
+          year: scoped?.year || "",
+          semester: scoped?.semester || "",
+          definitionSource: "student",
+          rewardTermId: reward.awarded
+            ? termId
+            : existingWord.rewardTermId || termId,
+          rewardTransactionId:
+            reward.transactionId || existingWord.rewardTransactionId || "",
+          rewardAmount: reward.awarded
+            ? reward.amount
+            : Number(existingWord.rewardAmount || 0),
+          rewardAwardedAt: reward.awarded
+            ? FieldValue.serverTimestamp()
+            : existingWord.rewardAwardedAt || null,
+          updatedAt: FieldValue.serverTimestamp(),
+          createdAt: wordSnap.exists
+            ? existingWord.createdAt || FieldValue.serverTimestamp()
+            : FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      return reward;
+    });
+
+    if (result.awarded && scoped) {
+      await markWisHallOfFameDirtySafely(scoped.year, scoped.semester);
     }
 
     return {
       termId,
-      requestId,
-      deleted: wordSnap.exists,
-      reward,
+      saved: true,
+      reward: result,
     };
-  });
+  },
+);
 
-  if (result.reward?.reclaimed) {
-    await markWisHallOfFameDirtySafely(year, semester);
-  }
+exports.deleteStudentHistoryDictionaryWord = onCall(
+  { region: REGION },
+  async (request) => {
+    const { uid } = await assertAllowedWestoryUser(request);
+    const termId = sanitizeHistoryDictionaryText(request.data?.termId, 80);
+    const scoped =
+      getOptionalYearSemester(request.data) ||
+      (await getCurrentConfiguredYearSemester());
+    if (!termId) {
+      throw new HttpsError("invalid-argument", "termId is required.");
+    }
 
-  await createUserNotification(year, semester, targetUid, {
-    type: 'history_dictionary_rejected',
-    title: '역사 사전 단어 삭제',
-    body: `"${word || '요청한 단어'}" 항목이 선생님 확인 후 삭제되었습니다.`,
-    targetUrl: '/student/lesson/history-dictionary',
-    entityType: 'history_dictionary_request',
-    entityId: requestId || termId,
-    actorUid: manager.uid,
-    priority: 'normal',
-    dedupeKey: `history_dictionary_rejected:${year}:${semester}:${targetUid}:${termId}:${Date.now()}`,
-    templateValues: {
-      word: word || '요청한 단어',
-    },
-  });
-
-  return result;
-});
-
-exports.listStudentHistoryDictionaryWordsForTeacher = onCall({ region: REGION }, async (request) => {
-  await assertHistoryDictionaryManager(request);
-  const scoped = getOptionalYearSemester(request.data);
-  const timestampMs = (value) => {
-    if (!value) return 0;
-    if (typeof value.toMillis === 'function') return value.toMillis();
-    if (typeof value.toDate === 'function') return value.toDate().getTime();
-    return Number(value.seconds || 0) * 1000;
-  };
-  const usersSnapshot = await db.collection('users').get();
-  const wordGroups = await Promise.all(
-    usersSnapshot.docs.map(async (userDoc) => {
-      const profile = userDoc.data() || {};
-      const wordsSnapshot = await userDoc.ref
-        .collection('history_dictionary_words')
-        .limit(100)
-        .get();
-      return wordsSnapshot.docs.map((docSnap) => ({
-        docSnap,
-        profile,
-        uid: userDoc.id,
-      }));
-    })
-  );
-
-  const words = wordGroups
-    .flat()
-    .map(({ docSnap, profile, uid }) => {
-      const data = docSnap.data() || {};
-      if (String(data.status || '') !== 'saved') {
-        return null;
+    const wordRef = db.doc(getStudentHistoryDictionaryWordPath(uid, termId));
+    const { profile } = await ensureStudentProfile(uid);
+    const result = await db.runTransaction(async (transaction) => {
+      const wordSnap = await transaction.get(wordRef);
+      if (!wordSnap.exists) {
+        return {
+          termId,
+          deleted: false,
+          reward: {
+            reclaimed: false,
+            amount: 0,
+            blockedReason: "word_not_found",
+          },
+        };
       }
-      const definitionSource = sanitizeHistoryDictionaryText(data.definitionSource, 40);
-      if (!['student', 'teacher_reviewed'].includes(definitionSource)) {
-        return null;
+
+      const wordData = wordSnap.data() || {};
+      let reward = { reclaimed: false, amount: 0 };
+      if (scoped) {
+        reward = await reclaimHistoryDictionaryRewardIfNeeded({
+          transaction,
+          year: scoped.year,
+          semester: scoped.semester,
+          uid,
+          profile,
+          termId: String(wordData.rewardTermId || termId),
+          word: wordData.word || termId,
+          actorUid: uid,
+          reason: "student_deleted_history_dictionary_word",
+        });
       }
-      const dataYear = sanitizeHistoryDictionaryText(data.year, 8);
-      const dataSemester = sanitizeHistoryDictionaryText(data.semester, 8);
-      if (
-        scoped
-        && dataYear
-        && dataSemester
-        && (dataYear !== scoped.year || dataSemester !== scoped.semester)
-      ) {
-        return null;
-      }
-      const targetUid = String(data.uid || uid || '').trim();
-      if (!targetUid) return null;
+
+      transaction.delete(wordRef);
       return {
-        id: `${targetUid}:${docSnap.id}`,
+        termId,
+        deleted: true,
+        reward,
+      };
+    });
+
+    if (result.reward?.reclaimed && scoped) {
+      await markWisHallOfFameDirtySafely(scoped.year, scoped.semester);
+    }
+
+    return result;
+  },
+);
+
+exports.deleteStudentHistoryDictionaryWordByTeacher = onCall(
+  { region: REGION },
+  async (request) => {
+    const manager = await assertHistoryDictionaryWriteManager(request);
+    const { year, semester } = assertYearSemester(request.data);
+    const targetUid = String(request.data?.uid || "").trim();
+    const requestId = sanitizeHistoryDictionaryText(
+      request.data?.requestId,
+      100,
+    );
+    const word = sanitizeHistoryDictionaryWord(request.data?.word);
+    const normalizedWord = normalizeHistoryDictionaryWord(
+      request.data?.normalizedWord || word,
+    );
+    const termId =
+      sanitizeHistoryDictionaryText(request.data?.termId, 80) ||
+      (normalizedWord ? buildHistoryDictionaryTermId(normalizedWord) : "");
+    const reason = sanitizeHistoryDictionaryText(
+      request.data?.reason ||
+        "teacher_deleted_inappropriate_history_dictionary_word",
+      160,
+    );
+    if (!targetUid || !termId) {
+      throw new HttpsError("invalid-argument", "uid and termId are required.");
+    }
+
+    const wordRef = db.doc(
+      getStudentHistoryDictionaryWordPath(targetUid, termId),
+    );
+    const requestRef = requestId
+      ? db.doc(getHistoryDictionaryRequestPath(requestId))
+      : null;
+    const { profile } = await ensureStudentProfile(targetUid);
+    const result = await db.runTransaction(async (transaction) => {
+      const [wordSnap, requestSnap] = await Promise.all([
+        transaction.get(wordRef),
+        requestRef ? transaction.get(requestRef) : Promise.resolve(null),
+      ]);
+      const wordData = wordSnap.exists ? wordSnap.data() || {} : {};
+      let reward = { reclaimed: false, amount: 0 };
+      reward = await reclaimHistoryDictionaryRewardIfNeeded({
+        transaction,
+        year,
+        semester,
         uid: targetUid,
-        termId: sanitizeHistoryDictionaryText(data.termId || docSnap.id, 80),
-        word: sanitizeHistoryDictionaryWord(data.word),
-        normalizedWord: normalizeHistoryDictionaryWord(data.normalizedWord || data.word),
-        definition: sanitizeHistoryDictionaryText(data.definition, 1200),
-        studentLevel: sanitizeHistoryDictionaryText(data.studentLevel, 80),
-        tags: sanitizeHistoryDictionaryTags(data.tags),
-        status: 'saved',
-        requestId: sanitizeHistoryDictionaryText(data.requestId, 100),
+        profile,
+        termId: String(wordData.rewardTermId || termId),
+        word: wordData.word || word || termId,
+        actorUid: manager.uid,
+        reason,
+      });
+
+      if (wordSnap.exists) {
+        transaction.delete(wordRef);
+      }
+      if (requestRef && requestSnap?.exists) {
+        transaction.set(
+          requestRef,
+          {
+            status: "rejected",
+            rejectedBy: manager.uid,
+            rejectedAt: FieldValue.serverTimestamp(),
+            rejectionReason: reason,
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+      } else if (requestRef) {
+        transaction.set(
+          requestRef,
+          {
+            word: word || wordData.word || termId,
+            normalizedWord,
+            uid: targetUid,
+            studentName:
+              sanitizeHistoryDictionaryText(profile.name, 40) || "학생",
+            grade: sanitizeHistoryDictionaryText(profile.grade, 8),
+            class: sanitizeHistoryDictionaryText(profile.class, 8),
+            number: sanitizeHistoryDictionaryText(profile.number, 8),
+            memo: "알림 기록에서 복구해 반려한 요청입니다.",
+            status: "rejected",
+            matchedTermId: termId,
+            resolvedTermId: "",
+            resolvedBy: "",
+            rejectedBy: manager.uid,
+            rejectedAt: FieldValue.serverTimestamp(),
+            rejectionReason: reason,
+            year,
+            semester,
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+            resolvedAt: null,
+          },
+          { merge: true },
+        );
+      }
+
+      return {
+        termId,
+        requestId,
+        deleted: wordSnap.exists,
+        reward,
+      };
+    });
+
+    if (result.reward?.reclaimed) {
+      await markWisHallOfFameDirtySafely(year, semester);
+    }
+
+    await createUserNotification(year, semester, targetUid, {
+      type: "history_dictionary_rejected",
+      title: "역사 사전 단어 삭제",
+      body: `"${word || "요청한 단어"}" 항목이 선생님 확인 후 삭제되었습니다.`,
+      targetUrl: "/student/lesson/history-dictionary",
+      entityType: "history_dictionary_request",
+      entityId: requestId || termId,
+      actorUid: manager.uid,
+      priority: "normal",
+      dedupeKey: `history_dictionary_rejected:${year}:${semester}:${targetUid}:${termId}:${Date.now()}`,
+      templateValues: {
+        word: word || "요청한 단어",
+      },
+    });
+
+    return result;
+  },
+);
+
+exports.listStudentHistoryDictionaryWordsForTeacher = onCall(
+  { region: REGION },
+  async (request) => {
+    await assertHistoryDictionaryManager(request);
+    const scoped = getOptionalYearSemester(request.data);
+    const timestampMs = (value) => {
+      if (!value) return 0;
+      if (typeof value.toMillis === "function") return value.toMillis();
+      if (typeof value.toDate === "function") return value.toDate().getTime();
+      return Number(value.seconds || 0) * 1000;
+    };
+    const usersSnapshot = await db.collection("users").get();
+    const wordGroups = await Promise.all(
+      usersSnapshot.docs.map(async (userDoc) => {
+        const profile = userDoc.data() || {};
+        const wordsSnapshot = await userDoc.ref
+          .collection("history_dictionary_words")
+          .limit(100)
+          .get();
+        return wordsSnapshot.docs.map((docSnap) => ({
+          docSnap,
+          profile,
+          uid: userDoc.id,
+        }));
+      }),
+    );
+
+    const words = wordGroups
+      .flat()
+      .map(({ docSnap, profile, uid }) => {
+        const data = docSnap.data() || {};
+        if (String(data.status || "") !== "saved") {
+          return null;
+        }
+        const definitionSource = sanitizeHistoryDictionaryText(
+          data.definitionSource,
+          40,
+        );
+        if (!["student", "teacher_reviewed"].includes(definitionSource)) {
+          return null;
+        }
+        const dataYear = sanitizeHistoryDictionaryText(data.year, 8);
+        const dataSemester = sanitizeHistoryDictionaryText(data.semester, 8);
+        if (
+          scoped &&
+          dataYear &&
+          dataSemester &&
+          (dataYear !== scoped.year || dataSemester !== scoped.semester)
+        ) {
+          return null;
+        }
+        const targetUid = String(data.uid || uid || "").trim();
+        if (!targetUid) return null;
+        return {
+          id: `${targetUid}:${docSnap.id}`,
+          uid: targetUid,
+          termId: sanitizeHistoryDictionaryText(data.termId || docSnap.id, 80),
+          word: sanitizeHistoryDictionaryWord(data.word),
+          normalizedWord: normalizeHistoryDictionaryWord(
+            data.normalizedWord || data.word,
+          ),
+          definition: sanitizeHistoryDictionaryText(data.definition, 1200),
+          studentLevel: sanitizeHistoryDictionaryText(data.studentLevel, 80),
+          tags: sanitizeHistoryDictionaryTags(data.tags),
+          status: "saved",
+          requestId: sanitizeHistoryDictionaryText(data.requestId, 100),
+          studentName:
+            sanitizeHistoryDictionaryText(
+              data.studentName ||
+                data.name ||
+                profile.studentName ||
+                profile.name ||
+                profile.displayName ||
+                profile.nickname,
+              40,
+            ) || "학생",
+          grade: sanitizeHistoryDictionaryText(data.grade || profile.grade, 8),
+          class: sanitizeHistoryDictionaryText(
+            data.class || profile.class || profile.classNumber,
+            8,
+          ),
+          number: sanitizeHistoryDictionaryText(
+            data.number || profile.number || profile.studentNumber,
+            8,
+          ),
+          definitionSource,
+          memo: sanitizeHistoryDictionaryText(data.memo, 240),
+          year: dataYear,
+          semester: dataSemester,
+          reviewedBy: sanitizeHistoryDictionaryText(data.reviewedBy, 80),
+          rewardTermId: sanitizeHistoryDictionaryText(data.rewardTermId, 80),
+          rewardTransactionId: sanitizeHistoryDictionaryText(
+            data.rewardTransactionId,
+            120,
+          ),
+          rewardAmount: Number(data.rewardAmount || 0),
+          createdAtMs: timestampMs(data.createdAt),
+          updatedAtMs: timestampMs(data.updatedAt),
+        };
+      })
+      .filter(Boolean)
+      .sort(
+        (a, b) =>
+          Number(b.updatedAtMs || b.createdAtMs || 0) -
+          Number(a.updatedAtMs || a.createdAtMs || 0),
+      )
+      .slice(0, 500);
+
+    return { words };
+  },
+);
+
+exports.updateStudentHistoryDictionaryWordByTeacher = onCall(
+  { region: REGION },
+  async (request) => {
+    const manager = await assertHistoryDictionaryWriteManager(request);
+    const { year, semester } = assertYearSemester(request.data);
+    const targetUid = String(request.data?.uid || "").trim();
+    const previousTermId = sanitizeHistoryDictionaryText(
+      request.data?.termId,
+      80,
+    );
+    const word = sanitizeHistoryDictionaryWord(request.data?.word);
+    const normalizedWord = normalizeHistoryDictionaryWord(word);
+    const definition = sanitizeHistoryDictionaryText(
+      request.data?.definition,
+      1200,
+    );
+
+    if (!targetUid || !previousTermId) {
+      throw new HttpsError("invalid-argument", "uid and termId are required.");
+    }
+    if (!word || !normalizedWord) {
+      throw new HttpsError("invalid-argument", "A word is required.");
+    }
+    if (!definition || definition.length < 2) {
+      throw new HttpsError("invalid-argument", "Definition is required.");
+    }
+
+    const nextTermId = buildHistoryDictionaryTermId(normalizedWord);
+    const previousRef = db.doc(
+      getStudentHistoryDictionaryWordPath(targetUid, previousTermId),
+    );
+    const nextRef = db.doc(
+      getStudentHistoryDictionaryWordPath(targetUid, nextTermId),
+    );
+    const { profile } = await ensureStudentProfile(targetUid);
+
+    await db.runTransaction(async (transaction) => {
+      const [previousSnap, nextSnap] = await Promise.all([
+        transaction.get(previousRef),
+        nextTermId === previousTermId
+          ? Promise.resolve(null)
+          : transaction.get(nextRef),
+      ]);
+
+      if (!previousSnap.exists) {
+        throw new HttpsError(
+          "not-found",
+          "Student dictionary word does not exist.",
+        );
+      }
+      if (nextSnap?.exists) {
+        throw new HttpsError(
+          "already-exists",
+          "The student already has this word.",
+        );
+      }
+
+      const existing = previousSnap.data() || {};
+      const payload = {
+        ...existing,
+        termId: nextTermId,
+        word,
+        normalizedWord,
+        definition,
+        studentLevel: sanitizeHistoryDictionaryText(
+          existing.studentLevel || "내가 정리한 뜻풀이",
+          80,
+        ),
+        tags: sanitizeHistoryDictionaryTags(existing.tags),
+        status: "saved",
+        uid: targetUid,
         studentName:
           sanitizeHistoryDictionaryText(
-            data.studentName
-            || data.name
-            || profile.studentName
-            || profile.name
-            || profile.displayName
-            || profile.nickname,
+            existing.studentName || profile.name,
             40,
-          ) || '학생',
-        grade: sanitizeHistoryDictionaryText(data.grade || profile.grade, 8),
+          ) || "학생",
+        grade: sanitizeHistoryDictionaryText(
+          existing.grade || profile.grade,
+          8,
+        ),
         class: sanitizeHistoryDictionaryText(
-          data.class || profile.class || profile.classNumber,
-          8
+          existing.class || profile.class,
+          8,
         ),
         number: sanitizeHistoryDictionaryText(
-          data.number || profile.number || profile.studentNumber,
-          8
+          existing.number || profile.number,
+          8,
         ),
-        definitionSource,
-        memo: sanitizeHistoryDictionaryText(data.memo, 240),
-        year: dataYear,
-        semester: dataSemester,
-        reviewedBy: sanitizeHistoryDictionaryText(data.reviewedBy, 80),
-        rewardTermId: sanitizeHistoryDictionaryText(data.rewardTermId, 80),
-        rewardTransactionId: sanitizeHistoryDictionaryText(data.rewardTransactionId, 120),
-        rewardAmount: Number(data.rewardAmount || 0),
-        createdAtMs: timestampMs(data.createdAt),
-        updatedAtMs: timestampMs(data.updatedAt),
+        year: sanitizeHistoryDictionaryText(existing.year || year, 8),
+        semester: sanitizeHistoryDictionaryText(
+          existing.semester || semester,
+          8,
+        ),
+        definitionSource: "teacher_reviewed",
+        reviewedBy: manager.uid,
+        reviewedAt: FieldValue.serverTimestamp(),
+        rewardTermId: sanitizeHistoryDictionaryText(
+          existing.rewardTermId || previousTermId,
+          80,
+        ),
+        updatedAt: FieldValue.serverTimestamp(),
+        createdAt: existing.createdAt || FieldValue.serverTimestamp(),
       };
-    })
-    .filter(Boolean)
-    .sort(
-      (a, b) =>
-        Number(b.updatedAtMs || b.createdAtMs || 0) -
-        Number(a.updatedAtMs || a.createdAtMs || 0)
-    )
-    .slice(0, 500);
 
-  return { words };
-});
+      transaction.set(nextRef, payload, { merge: true });
+      if (nextTermId !== previousTermId) {
+        transaction.delete(previousRef);
+      }
+    });
 
-exports.updateStudentHistoryDictionaryWordByTeacher = onCall({ region: REGION }, async (request) => {
-  const manager = await assertHistoryDictionaryWriteManager(request);
-  const { year, semester } = assertYearSemester(request.data);
-  const targetUid = String(request.data?.uid || '').trim();
-  const previousTermId = sanitizeHistoryDictionaryText(request.data?.termId, 80);
-  const word = sanitizeHistoryDictionaryWord(request.data?.word);
-  const normalizedWord = normalizeHistoryDictionaryWord(word);
-  const definition = sanitizeHistoryDictionaryText(request.data?.definition, 1200);
-
-  if (!targetUid || !previousTermId) {
-    throw new HttpsError('invalid-argument', 'uid and termId are required.');
-  }
-  if (!word || !normalizedWord) {
-    throw new HttpsError('invalid-argument', 'A word is required.');
-  }
-  if (!definition || definition.length < 2) {
-    throw new HttpsError('invalid-argument', 'Definition is required.');
-  }
-
-  const nextTermId = buildHistoryDictionaryTermId(normalizedWord);
-  const previousRef = db.doc(getStudentHistoryDictionaryWordPath(targetUid, previousTermId));
-  const nextRef = db.doc(getStudentHistoryDictionaryWordPath(targetUid, nextTermId));
-  const { profile } = await ensureStudentProfile(targetUid);
-
-  await db.runTransaction(async (transaction) => {
-    const [previousSnap, nextSnap] = await Promise.all([
-      transaction.get(previousRef),
-      nextTermId === previousTermId ? Promise.resolve(null) : transaction.get(nextRef),
-    ]);
-
-    if (!previousSnap.exists) {
-      throw new HttpsError('not-found', 'Student dictionary word does not exist.');
-    }
-    if (nextSnap?.exists) {
-      throw new HttpsError('already-exists', 'The student already has this word.');
-    }
-
-    const existing = previousSnap.data() || {};
-    const payload = {
-      ...existing,
+    return {
       termId: nextTermId,
-      word,
-      normalizedWord,
-      definition,
-      studentLevel: sanitizeHistoryDictionaryText(existing.studentLevel || '내가 정리한 뜻풀이', 80),
-      tags: sanitizeHistoryDictionaryTags(existing.tags),
-      status: 'saved',
-      uid: targetUid,
-      studentName: sanitizeHistoryDictionaryText(existing.studentName || profile.name, 40) || '학생',
-      grade: sanitizeHistoryDictionaryText(existing.grade || profile.grade, 8),
-      class: sanitizeHistoryDictionaryText(existing.class || profile.class, 8),
-      number: sanitizeHistoryDictionaryText(existing.number || profile.number, 8),
-      year: sanitizeHistoryDictionaryText(existing.year || year, 8),
-      semester: sanitizeHistoryDictionaryText(existing.semester || semester, 8),
-      definitionSource: 'teacher_reviewed',
-      reviewedBy: manager.uid,
-      reviewedAt: FieldValue.serverTimestamp(),
-      rewardTermId: sanitizeHistoryDictionaryText(existing.rewardTermId || previousTermId, 80),
-      updatedAt: FieldValue.serverTimestamp(),
-      createdAt: existing.createdAt || FieldValue.serverTimestamp(),
+      previousTermId,
+      updated: true,
     };
-
-    transaction.set(nextRef, payload, { merge: true });
-    if (nextTermId !== previousTermId) {
-      transaction.delete(previousRef);
-    }
-  });
-
-  return {
-    termId: nextTermId,
-    previousTermId,
-    updated: true,
-  };
-});
+  },
+);
 
 const resolveHistoryDictionaryRequestsWithTerm = async ({
   managerUid,
   termId,
-  requestId = '',
-  fallbackRequestId = '',
-  fallbackUid = '',
-  year = '',
-  semester = '',
+  requestId = "",
+  fallbackRequestId = "",
+  fallbackUid = "",
+  year = "",
+  semester = "",
 }) => {
   const termRef = db.doc(getHistoryDictionaryTermPath(termId));
   const result = await db.runTransaction(async (transaction) => {
     const termSnap = await transaction.get(termRef);
     if (!termSnap.exists) {
-      throw new HttpsError('not-found', 'Dictionary term does not exist.');
+      throw new HttpsError("not-found", "Dictionary term does not exist.");
     }
     const term = termSnap.data() || {};
-    if (term.status !== 'published' || !String(term.definition || '').trim()) {
-      throw new HttpsError('failed-precondition', 'Dictionary term is not published.');
+    if (term.status !== "published" || !String(term.definition || "").trim()) {
+      throw new HttpsError(
+        "failed-precondition",
+        "Dictionary term is not published.",
+      );
     }
 
-    const normalizedWord = normalizeHistoryDictionaryWord(term.normalizedWord || term.word);
+    const normalizedWord = normalizeHistoryDictionaryWord(
+      term.normalizedWord || term.word,
+    );
     let docs = [];
     if (requestId) {
-      const requestSnap = await transaction.get(db.doc(getHistoryDictionaryRequestPath(requestId)));
-      docs = [{ ref: requestSnap.ref, exists: requestSnap.exists, data: () => requestSnap.data() }];
+      const requestSnap = await transaction.get(
+        db.doc(getHistoryDictionaryRequestPath(requestId)),
+      );
+      docs = [
+        {
+          ref: requestSnap.ref,
+          exists: requestSnap.exists,
+          data: () => requestSnap.data(),
+        },
+      ];
     } else {
       const requestSnap = await transaction.get(
-        db.collection(HISTORY_DICTIONARY_REQUESTS_COLLECTION)
-          .where('normalizedWord', '==', normalizedWord)
+        db
+          .collection(HISTORY_DICTIONARY_REQUESTS_COLLECTION)
+          .where("normalizedWord", "==", normalizedWord)
           .limit(100),
       );
       docs = requestSnap.docs;
@@ -8116,31 +11247,44 @@ const resolveHistoryDictionaryRequestsWithTerm = async ({
     docs.forEach((docSnap) => {
       if (!docSnap.exists) return;
       const data = docSnap.data() || {};
-      if (year && String(data.year || '') !== year) return;
-      if (semester && String(data.semester || '') !== semester) return;
-      if (!['requested', 'needs_approval'].includes(String(data.status || '').trim())) return;
-      const targetUid = String(data.uid || '').trim();
+      if (year && String(data.year || "") !== year) return;
+      if (semester && String(data.semester || "") !== semester) return;
+      if (
+        !["requested", "needs_approval"].includes(
+          String(data.status || "").trim(),
+        )
+      )
+        return;
+      const targetUid = String(data.uid || "").trim();
       if (!targetUid) return;
-      transaction.set(docSnap.ref, {
-        status: 'resolved',
-        matchedTermId: termId,
-        resolvedTermId: termId,
-        resolvedBy: managerUid,
-        resolvedAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      }, { merge: true });
-      transaction.set(db.doc(getStudentHistoryDictionaryWordPath(targetUid, termId)), {
-        termId,
-        word: sanitizeHistoryDictionaryWord(term.word),
-        normalizedWord,
-        definition: sanitizeHistoryDictionaryText(term.definition, 1200),
-        studentLevel: sanitizeHistoryDictionaryText(term.studentLevel, 80),
-        tags: sanitizeHistoryDictionaryTags(term.tags),
-        status: 'saved',
-        requestId: docSnap.ref.id,
-        updatedAt: FieldValue.serverTimestamp(),
-        createdAt: FieldValue.serverTimestamp(),
-      }, { merge: true });
+      transaction.set(
+        docSnap.ref,
+        {
+          status: "resolved",
+          matchedTermId: termId,
+          resolvedTermId: termId,
+          resolvedBy: managerUid,
+          resolvedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+      transaction.set(
+        db.doc(getStudentHistoryDictionaryWordPath(targetUid, termId)),
+        {
+          termId,
+          word: sanitizeHistoryDictionaryWord(term.word),
+          normalizedWord,
+          definition: sanitizeHistoryDictionaryText(term.definition, 1200),
+          studentLevel: sanitizeHistoryDictionaryText(term.studentLevel, 80),
+          tags: sanitizeHistoryDictionaryTags(term.tags),
+          status: "saved",
+          requestId: docSnap.ref.id,
+          updatedAt: FieldValue.serverTimestamp(),
+          createdAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
       resolved.push({
         uid: targetUid,
         requestId: docSnap.ref.id,
@@ -8150,38 +11294,46 @@ const resolveHistoryDictionaryRequestsWithTerm = async ({
 
     if (fallbackUid && !resolved.some((item) => item.uid === fallbackUid)) {
       if (fallbackRequestId) {
-        transaction.set(db.doc(getHistoryDictionaryRequestPath(fallbackRequestId)), {
+        transaction.set(
+          db.doc(getHistoryDictionaryRequestPath(fallbackRequestId)),
+          {
+            word: sanitizeHistoryDictionaryWord(term.word),
+            normalizedWord,
+            uid: fallbackUid,
+            studentName: "",
+            grade: "",
+            class: "",
+            number: "",
+            memo: "알림 기록에서 복구해 처리한 요청입니다.",
+            status: "resolved",
+            matchedTermId: termId,
+            resolvedTermId: termId,
+            resolvedBy: managerUid,
+            year,
+            semester,
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+            resolvedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+      }
+      transaction.set(
+        db.doc(getStudentHistoryDictionaryWordPath(fallbackUid, termId)),
+        {
+          termId,
           word: sanitizeHistoryDictionaryWord(term.word),
           normalizedWord,
-          uid: fallbackUid,
-          studentName: '',
-          grade: '',
-          class: '',
-          number: '',
-          memo: '알림 기록에서 복구해 처리한 요청입니다.',
-          status: 'resolved',
-          matchedTermId: termId,
-          resolvedTermId: termId,
-          resolvedBy: managerUid,
-          year,
-          semester,
-          createdAt: FieldValue.serverTimestamp(),
+          definition: sanitizeHistoryDictionaryText(term.definition, 1200),
+          studentLevel: sanitizeHistoryDictionaryText(term.studentLevel, 80),
+          tags: sanitizeHistoryDictionaryTags(term.tags),
+          status: "saved",
+          requestId: fallbackRequestId,
           updatedAt: FieldValue.serverTimestamp(),
-          resolvedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
-      }
-      transaction.set(db.doc(getStudentHistoryDictionaryWordPath(fallbackUid, termId)), {
-        termId,
-        word: sanitizeHistoryDictionaryWord(term.word),
-        normalizedWord,
-        definition: sanitizeHistoryDictionaryText(term.definition, 1200),
-        studentLevel: sanitizeHistoryDictionaryText(term.studentLevel, 80),
-        tags: sanitizeHistoryDictionaryTags(term.tags),
-        status: 'saved',
-        requestId: fallbackRequestId,
-        updatedAt: FieldValue.serverTimestamp(),
-        createdAt: FieldValue.serverTimestamp(),
-      }, { merge: true });
+          createdAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
       resolved.push({
         uid: fallbackUid,
         requestId: fallbackRequestId,
@@ -8199,242 +11351,348 @@ const resolveHistoryDictionaryRequestsWithTerm = async ({
   return result;
 };
 
-exports.saveHistoryDictionaryTermsBulk = onCall({
-  region: REGION,
-  timeoutSeconds: 60,
-  memory: '512MiB',
-}, async (request) => {
-  const manager = await assertHistoryDictionaryWriteManager(request);
-  assertYearSemester(request.data);
-  const rawTerms = Array.isArray(request.data?.terms) ? request.data.terms : [];
-  if (!rawTerms.length) {
-    throw new HttpsError('invalid-argument', 'Terms are required.');
-  }
-  if (rawTerms.length > MAX_HISTORY_DICTIONARY_BULK_TERMS) {
-    throw new HttpsError(
-      'invalid-argument',
-      `Terms must be ${MAX_HISTORY_DICTIONARY_BULK_TERMS} or fewer.`,
-    );
-  }
+exports.saveHistoryDictionaryTermsBulk = onCall(
+  {
+    region: REGION,
+    timeoutSeconds: 60,
+    memory: "512MiB",
+  },
+  async (request) => {
+    const manager = await assertHistoryDictionaryWriteManager(request);
+    assertYearSemester(request.data);
+    const rawTerms = Array.isArray(request.data?.terms)
+      ? request.data.terms
+      : [];
+    if (!rawTerms.length) {
+      throw new HttpsError("invalid-argument", "Terms are required.");
+    }
+    if (rawTerms.length > MAX_HISTORY_DICTIONARY_BULK_TERMS) {
+      throw new HttpsError(
+        "invalid-argument",
+        `Terms must be ${MAX_HISTORY_DICTIONARY_BULK_TERMS} or fewer.`,
+      );
+    }
 
-  const seenWords = new Set();
-  const terms = rawTerms.map((item, index) => {
-    const word = sanitizeHistoryDictionaryWord(item?.word);
+    const seenWords = new Set();
+    const terms = rawTerms.map((item, index) => {
+      const word = sanitizeHistoryDictionaryWord(item?.word);
+      const normalizedWord = normalizeHistoryDictionaryWord(word);
+      const definition = sanitizeHistoryDictionaryText(item?.definition, 1200);
+      const studentLevel = sanitizeHistoryDictionaryText(
+        item?.studentLevel || "중학생 수준",
+        80,
+      );
+      const relatedUnitId = sanitizeHistoryDictionaryText(
+        item?.relatedUnitId,
+        120,
+      );
+      const tags = sanitizeHistoryDictionaryTags(item?.tags);
+
+      if (!word || !normalizedWord) {
+        throw new HttpsError(
+          "invalid-argument",
+          `A word is required at row ${index + 1}.`,
+        );
+      }
+      if (!definition || definition.length < 5) {
+        throw new HttpsError(
+          "invalid-argument",
+          `Definition is too short at row ${index + 1}.`,
+        );
+      }
+      if (seenWords.has(normalizedWord)) {
+        throw new HttpsError("invalid-argument", `Duplicate word: ${word}`);
+      }
+      seenWords.add(normalizedWord);
+
+      return {
+        termId: buildHistoryDictionaryTermId(normalizedWord),
+        word,
+        normalizedWord,
+        definition,
+        studentLevel,
+        relatedUnitId,
+        tags,
+      };
+    });
+
+    const termRefs = terms.map((term) =>
+      db.doc(getHistoryDictionaryTermPath(term.termId)),
+    );
+    const existingSnaps = await db.getAll(...termRefs);
+    const batch = db.batch();
+
+    terms.forEach((term, index) => {
+      const existing = existingSnaps[index]?.exists
+        ? existingSnaps[index].data() || {}
+        : {};
+      batch.set(
+        termRefs[index],
+        {
+          word: term.word,
+          normalizedWord: term.normalizedWord,
+          definition: term.definition,
+          studentLevel: term.studentLevel,
+          relatedUnitId: term.relatedUnitId,
+          tags: term.tags,
+          status: "published",
+          createdBy: existing.createdBy || manager.uid,
+          updatedBy: manager.uid,
+          createdAt: existing.createdAt || FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+          publishedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    });
+
+    await batch.commit();
+
+    return {
+      savedCount: terms.length,
+      termIds: terms.map((term) => term.termId),
+    };
+  },
+);
+
+exports.saveHistoryDictionaryTerm = onCall(
+  { region: REGION },
+  async (request) => {
+    const manager = await assertHistoryDictionaryWriteManager(request);
+    const word = sanitizeHistoryDictionaryWord(request.data?.word);
     const normalizedWord = normalizeHistoryDictionaryWord(word);
-    const definition = sanitizeHistoryDictionaryText(item?.definition, 1200);
-    const studentLevel = sanitizeHistoryDictionaryText(item?.studentLevel || '중학생 수준', 80);
-    const relatedUnitId = sanitizeHistoryDictionaryText(item?.relatedUnitId, 120);
-    const tags = sanitizeHistoryDictionaryTags(item?.tags);
+    const definition = sanitizeHistoryDictionaryText(
+      request.data?.definition,
+      1200,
+    );
+    const studentLevel = sanitizeHistoryDictionaryText(
+      request.data?.studentLevel || "중학생 수준",
+      80,
+    );
+    const relatedUnitId = sanitizeHistoryDictionaryText(
+      request.data?.relatedUnitId,
+      120,
+    );
+    const tags = sanitizeHistoryDictionaryTags(request.data?.tags);
+    const fallbackRequestId = sanitizeHistoryDictionaryText(
+      request.data?.fallbackRequestId,
+      120,
+    );
+    const fallbackUid = sanitizeHistoryDictionaryText(
+      request.data?.fallbackUid,
+      80,
+    );
 
     if (!word || !normalizedWord) {
-      throw new HttpsError('invalid-argument', `A word is required at row ${index + 1}.`);
+      throw new HttpsError("invalid-argument", "A word is required.");
     }
     if (!definition || definition.length < 5) {
-      throw new HttpsError('invalid-argument', `Definition is too short at row ${index + 1}.`);
+      throw new HttpsError("invalid-argument", "Definition is too short.");
     }
-    if (seenWords.has(normalizedWord)) {
-      throw new HttpsError('invalid-argument', `Duplicate word: ${word}`);
-    }
-    seenWords.add(normalizedWord);
 
-    return {
-      termId: buildHistoryDictionaryTermId(normalizedWord),
-      word,
-      normalizedWord,
-      definition,
-      studentLevel,
-      relatedUnitId,
-      tags,
-    };
-  });
-
-  const termRefs = terms.map((term) =>
-    db.doc(getHistoryDictionaryTermPath(term.termId)));
-  const existingSnaps = await db.getAll(...termRefs);
-  const batch = db.batch();
-
-  terms.forEach((term, index) => {
-    const existing = existingSnaps[index]?.exists
-      ? (existingSnaps[index].data() || {})
-      : {};
-    batch.set(termRefs[index], {
-      word: term.word,
-      normalizedWord: term.normalizedWord,
-      definition: term.definition,
-      studentLevel: term.studentLevel,
-      relatedUnitId: term.relatedUnitId,
-      tags: term.tags,
-      status: 'published',
-      createdBy: existing.createdBy || manager.uid,
-      updatedBy: manager.uid,
-      createdAt: existing.createdAt || FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-      publishedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
-  });
-
-  await batch.commit();
-
-  return {
-    savedCount: terms.length,
-    termIds: terms.map((term) => term.termId),
-  };
-});
-
-exports.saveHistoryDictionaryTerm = onCall({ region: REGION }, async (request) => {
-  const manager = await assertHistoryDictionaryWriteManager(request);
-  const word = sanitizeHistoryDictionaryWord(request.data?.word);
-  const normalizedWord = normalizeHistoryDictionaryWord(word);
-  const definition = sanitizeHistoryDictionaryText(request.data?.definition, 1200);
-  const studentLevel = sanitizeHistoryDictionaryText(request.data?.studentLevel || '중학생 수준', 80);
-  const relatedUnitId = sanitizeHistoryDictionaryText(request.data?.relatedUnitId, 120);
-  const tags = sanitizeHistoryDictionaryTags(request.data?.tags);
-  const fallbackRequestId = sanitizeHistoryDictionaryText(request.data?.fallbackRequestId, 120);
-  const fallbackUid = sanitizeHistoryDictionaryText(request.data?.fallbackUid, 80);
-
-  if (!word || !normalizedWord) {
-    throw new HttpsError('invalid-argument', 'A word is required.');
-  }
-  if (!definition || definition.length < 5) {
-    throw new HttpsError('invalid-argument', 'Definition is too short.');
-  }
-
-  const termId = buildHistoryDictionaryTermId(normalizedWord);
-  const termRef = db.doc(getHistoryDictionaryTermPath(termId));
-  await db.runTransaction(async (transaction) => {
-    const termSnap = await transaction.get(termRef);
-    transaction.set(termRef, {
-      word,
-      normalizedWord,
-      definition,
-      studentLevel,
-      relatedUnitId,
-      tags,
-      status: 'published',
-      createdBy: termSnap.exists ? (termSnap.data()?.createdBy || manager.uid) : manager.uid,
-      updatedBy: manager.uid,
-      createdAt: termSnap.exists ? (termSnap.data()?.createdAt || FieldValue.serverTimestamp()) : FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-      publishedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
-  });
-
-  const scoped = getOptionalYearSemester(request.data) || await getCurrentConfiguredYearSemester();
-  const resolvedResult = await resolveHistoryDictionaryRequestsWithTerm({
-    managerUid: manager.uid,
-    termId,
-    fallbackRequestId,
-    fallbackUid,
-    year: scoped?.year || '',
-    semester: scoped?.semester || '',
-  });
-  if (scoped) {
-    await createUserNotifications(scoped.year, scoped.semester, resolvedResult.resolved.map((item) => item.uid), {
-      type: 'history_dictionary_resolved',
-      title: '역사 사전 등록 완료',
-      body: `요청한 "${word}" 뜻풀이가 등록되었습니다.`,
-      targetUrl: '/student/lesson/history-dictionary',
-      entityType: 'history_dictionary_term',
-      entityId: termId,
-      actorUid: manager.uid,
-      priority: 'normal',
-      dedupeKey: `history_dictionary_resolved:${termId}:${Date.now()}`,
-      templateValues: {
-        word,
-      },
+    const termId = buildHistoryDictionaryTermId(normalizedWord);
+    const termRef = db.doc(getHistoryDictionaryTermPath(termId));
+    await db.runTransaction(async (transaction) => {
+      const termSnap = await transaction.get(termRef);
+      transaction.set(
+        termRef,
+        {
+          word,
+          normalizedWord,
+          definition,
+          studentLevel,
+          relatedUnitId,
+          tags,
+          status: "published",
+          createdBy: termSnap.exists
+            ? termSnap.data()?.createdBy || manager.uid
+            : manager.uid,
+          updatedBy: manager.uid,
+          createdAt: termSnap.exists
+            ? termSnap.data()?.createdAt || FieldValue.serverTimestamp()
+            : FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+          publishedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
     });
-  }
 
-  return {
-    termId,
-    resolvedCount: resolvedResult.resolved.length,
-  };
-});
-
-exports.approveHistoryDictionaryTermForRequests = onCall({ region: REGION }, async (request) => {
-  const manager = await assertHistoryDictionaryWriteManager(request);
-  const { year, semester } = assertYearSemester(request.data);
-  const termId = sanitizeHistoryDictionaryText(request.data?.termId, 80);
-  const requestId = sanitizeHistoryDictionaryText(request.data?.requestId, 100);
-  if (!termId) {
-    throw new HttpsError('invalid-argument', 'termId is required.');
-  }
-
-  const result = await resolveHistoryDictionaryRequestsWithTerm({
-    managerUid: manager.uid,
-    termId,
-    requestId,
-    year,
-    semester,
-  });
-
-  await createUserNotifications(year, semester, result.resolved.map((item) => item.uid), {
-    type: 'history_dictionary_resolved',
-    title: '역사 사전 등록 완료',
-    body: `"${result.resolved[0]?.word || '요청한 단어'}" 뜻풀이가 선생님 승인 후 단어장에 들어왔습니다.`,
-    targetUrl: '/student/lesson/history-dictionary',
-    entityType: 'history_dictionary_term',
-    entityId: termId,
-    actorUid: manager.uid,
-    priority: 'normal',
-    dedupeKey: `history_dictionary_approved:${year}:${semester}:${termId}:${requestId || 'all'}`,
-    templateValues: {
-      word: result.resolved[0]?.word || '요청한 단어',
-    },
-  });
-
-  return {
-    termId,
-    resolvedCount: result.resolved.length,
-  };
-});
-
-exports.updateStudentProfileIcon = onCall({ region: REGION }, async (request) => {
-  const { uid } = await assertAllowedWestoryUser(request);
-  const { year, semester } = assertYearSemester(request.data);
-  const emojiId = String(request.data?.emojiId || '').trim();
-
-  if (!emojiId) {
-    throw new HttpsError('invalid-argument', 'A valid emojiId is required.');
-  }
-
-  const result = await db.runTransaction(async (transaction) => {
-    const { ref: userRef, profile } = await getUserProfile(uid);
-    const { wallet } = await ensureWallet(transaction, year, semester, uid, profile);
-    const policy = await loadPolicy(transaction, year, semester);
-    const emojiEntry = getProfileEmojiEntryById(emojiId, policy.rankPolicy.emojiRegistry);
-
-    if (!emojiEntry || emojiEntry.enabled === false) {
-      throw new HttpsError('invalid-argument', 'A valid emojiId is required.');
+    const scoped =
+      getOptionalYearSemester(request.data) ||
+      (await getCurrentConfiguredYearSemester());
+    const resolvedResult = await resolveHistoryDictionaryRequestsWithTerm({
+      managerUid: manager.uid,
+      termId,
+      fallbackRequestId,
+      fallbackUid,
+      year: scoped?.year || "",
+      semester: scoped?.semester || "",
+    });
+    if (scoped) {
+      await createUserNotifications(
+        scoped.year,
+        scoped.semester,
+        resolvedResult.resolved.map((item) => item.uid),
+        {
+          type: "history_dictionary_resolved",
+          title: "역사 사전 등록 완료",
+          body: `요청한 "${word}" 뜻풀이가 등록되었습니다.`,
+          targetUrl: "/student/lesson/history-dictionary",
+          entityType: "history_dictionary_term",
+          entityId: termId,
+          actorUid: manager.uid,
+          priority: "normal",
+          dedupeKey: `history_dictionary_resolved:${termId}:${Date.now()}`,
+          templateValues: {
+            word,
+          },
+        },
+      );
     }
-
-    const currentRankEarnedTotal = await getCurrentRankEarnedTotal(transaction, year, semester, uid, wallet);
-    const currentTierCode = getCurrentTierCodeForRankTotal(currentRankEarnedTotal, policy.rankPolicy);
-    const allowedEmojiIds = getAllowedEmojiIdsForTier(policy.rankPolicy, currentTierCode);
-
-    if (!allowedEmojiIds.includes(emojiId)) {
-      throw new HttpsError('failed-precondition', 'This profile emoji is locked for the current rank.');
-    }
-
-    transaction.set(userRef, {
-      profileEmojiId: emojiEntry.id,
-      profileIcon: emojiEntry.emoji,
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
 
     return {
-      emojiId,
-      profileIcon: emojiEntry.emoji,
-      tierCode: currentTierCode,
+      termId,
+      resolvedCount: resolvedResult.resolved.length,
     };
-  });
+  },
+);
 
-  await markWisHallOfFameDirtySafely(year, semester);
-  return result;
-});
+exports.approveHistoryDictionaryTermForRequests = onCall(
+  { region: REGION },
+  async (request) => {
+    const manager = await assertHistoryDictionaryWriteManager(request);
+    const { year, semester } = assertYearSemester(request.data);
+    const termId = sanitizeHistoryDictionaryText(request.data?.termId, 80);
+    const requestId = sanitizeHistoryDictionaryText(
+      request.data?.requestId,
+      100,
+    );
+    if (!termId) {
+      throw new HttpsError("invalid-argument", "termId is required.");
+    }
 
-const authorizeCommandGatewayActor = async ({ request, identity, commandType }) => {
-  const assessmentCommandTypes = Object.values(assessmentLifecycle.ASSESSMENT_COMMAND_TYPES);
+    const result = await resolveHistoryDictionaryRequestsWithTerm({
+      managerUid: manager.uid,
+      termId,
+      requestId,
+      year,
+      semester,
+    });
+
+    await createUserNotifications(
+      year,
+      semester,
+      result.resolved.map((item) => item.uid),
+      {
+        type: "history_dictionary_resolved",
+        title: "역사 사전 등록 완료",
+        body: `"${result.resolved[0]?.word || "요청한 단어"}" 뜻풀이가 선생님 승인 후 단어장에 들어왔습니다.`,
+        targetUrl: "/student/lesson/history-dictionary",
+        entityType: "history_dictionary_term",
+        entityId: termId,
+        actorUid: manager.uid,
+        priority: "normal",
+        dedupeKey: `history_dictionary_approved:${year}:${semester}:${termId}:${requestId || "all"}`,
+        templateValues: {
+          word: result.resolved[0]?.word || "요청한 단어",
+        },
+      },
+    );
+
+    return {
+      termId,
+      resolvedCount: result.resolved.length,
+    };
+  },
+);
+
+exports.updateStudentProfileIcon = onCall(
+  { region: REGION },
+  async (request) => {
+    const { uid } = await assertAllowedWestoryUser(request);
+    const { year, semester } = assertYearSemester(request.data);
+    const emojiId = String(request.data?.emojiId || "").trim();
+
+    if (!emojiId) {
+      throw new HttpsError("invalid-argument", "A valid emojiId is required.");
+    }
+
+    const result = await db.runTransaction(async (transaction) => {
+      const { ref: userRef, profile } = await getUserProfile(uid);
+      const { wallet } = await ensureWallet(
+        transaction,
+        year,
+        semester,
+        uid,
+        profile,
+      );
+      const policy = await loadPolicy(transaction, year, semester);
+      const emojiEntry = getProfileEmojiEntryById(
+        emojiId,
+        policy.rankPolicy.emojiRegistry,
+      );
+
+      if (!emojiEntry || emojiEntry.enabled === false) {
+        throw new HttpsError(
+          "invalid-argument",
+          "A valid emojiId is required.",
+        );
+      }
+
+      const currentRankEarnedTotal = await getCurrentRankEarnedTotal(
+        transaction,
+        year,
+        semester,
+        uid,
+        wallet,
+      );
+      const currentTierCode = getCurrentTierCodeForRankTotal(
+        currentRankEarnedTotal,
+        policy.rankPolicy,
+      );
+      const allowedEmojiIds = getAllowedEmojiIdsForTier(
+        policy.rankPolicy,
+        currentTierCode,
+      );
+
+      if (!allowedEmojiIds.includes(emojiId)) {
+        throw new HttpsError(
+          "failed-precondition",
+          "This profile emoji is locked for the current rank.",
+        );
+      }
+
+      transaction.set(
+        userRef,
+        {
+          profileEmojiId: emojiEntry.id,
+          profileIcon: emojiEntry.emoji,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      return {
+        emojiId,
+        profileIcon: emojiEntry.emoji,
+        tierCode: currentTierCode,
+      };
+    });
+
+    await markWisHallOfFameDirtySafely(year, semester);
+    return result;
+  },
+);
+
+const authorizeCommandGatewayActor = async ({
+  request,
+  identity,
+  commandType,
+}) => {
+  const assessmentCommandTypes = Object.values(
+    assessmentLifecycle.ASSESSMENT_COMMAND_TYPES,
+  );
   const gradeCommandTypes = Object.values(gradeEvidence.GRADE_COMMAND_TYPES);
   const wisCommandTypes = Object.values(wisEconomy.WIS_COMMAND_TYPES);
   const w8CommandTypes = Object.values(w8Domains.W8_COMMAND_TYPES);
@@ -8445,198 +11703,264 @@ const authorizeCommandGatewayActor = async ({ request, identity, commandType }) 
     semesterCutover.CUTOVER_COMMAND_TYPES,
   );
   if (
-    commandType !== commandGateway.COMMAND_TYPES.ADJUST_TEACHER_POINTS
-    && !assessmentCommandTypes.includes(commandType)
-    && !gradeCommandTypes.includes(commandType)
-    && !wisCommandTypes.includes(commandType)
-    && !w8CommandTypes.includes(commandType)
-    && !teacherOperationsCommandTypes.includes(commandType)
-    && !semesterCutoverCommandTypes.includes(commandType)
+    commandType !== commandGateway.COMMAND_TYPES.ADJUST_TEACHER_POINTS &&
+    !assessmentCommandTypes.includes(commandType) &&
+    !gradeCommandTypes.includes(commandType) &&
+    !wisCommandTypes.includes(commandType) &&
+    !w8CommandTypes.includes(commandType) &&
+    !teacherOperationsCommandTypes.includes(commandType) &&
+    !semesterCutoverCommandTypes.includes(commandType)
   ) {
     return null;
   }
-  const actorUid = String(identity?.uid || '').trim();
-  const authenticatedUid = String(request.auth?.uid || '').trim();
-  const actorEmail = String(identity?.email || '').trim().toLowerCase();
-  const tokenEmail = String(request.auth?.token?.email || '').trim().toLowerCase();
-  if (!actorUid || actorUid !== authenticatedUid || !actorEmail || actorEmail !== tokenEmail) {
-    throw new HttpsError('permission-denied', 'Authenticated actor mismatch.', {
-      reason: 'COMMAND_ACTOR_MISMATCH',
+  const actorUid = String(identity?.uid || "").trim();
+  const authenticatedUid = String(request.auth?.uid || "").trim();
+  const actorEmail = String(identity?.email || "")
+    .trim()
+    .toLowerCase();
+  const tokenEmail = String(request.auth?.token?.email || "")
+    .trim()
+    .toLowerCase();
+  if (
+    !actorUid ||
+    actorUid !== authenticatedUid ||
+    !actorEmail ||
+    actorEmail !== tokenEmail
+  ) {
+    throw new HttpsError("permission-denied", "Authenticated actor mismatch.", {
+      reason: "COMMAND_ACTOR_MISMATCH",
     });
   }
   if (actorEmail === ADMIN_EMAIL) {
     if (
-      gradeCommandTypes.includes(commandType)
-      && gradeEvidence.STUDENT_COMMAND_TYPES.has(commandType)
+      gradeCommandTypes.includes(commandType) &&
+      gradeEvidence.STUDENT_COMMAND_TYPES.has(commandType)
     ) {
-      throw new HttpsError('permission-denied', 'A student account is required.', {
-        reason: 'GRADE_STUDENT_REQUIRED',
-      });
+      throw new HttpsError(
+        "permission-denied",
+        "A student account is required.",
+        {
+          reason: "GRADE_STUDENT_REQUIRED",
+        },
+      );
     }
-    if (wisCommandTypes.includes(commandType) && wisEconomy.STUDENT_COMMAND_TYPES.has(commandType)) {
-      throw new HttpsError('permission-denied', 'A student account is required.', {
-        reason: 'WIS_STUDENT_REQUIRED',
-      });
+    if (
+      wisCommandTypes.includes(commandType) &&
+      wisEconomy.STUDENT_COMMAND_TYPES.has(commandType)
+    ) {
+      throw new HttpsError(
+        "permission-denied",
+        "A student account is required.",
+        {
+          reason: "WIS_STUDENT_REQUIRED",
+        },
+      );
     }
-    if (w8CommandTypes.includes(commandType) && w8Domains.STUDENT_COMMAND_TYPES.has(commandType)) {
-      throw new HttpsError('permission-denied', 'A student account is required.', {
-        reason: 'W8_STUDENT_REQUIRED',
-      });
+    if (
+      w8CommandTypes.includes(commandType) &&
+      w8Domains.STUDENT_COMMAND_TYPES.has(commandType)
+    ) {
+      throw new HttpsError(
+        "permission-denied",
+        "A student account is required.",
+        {
+          reason: "W8_STUDENT_REQUIRED",
+        },
+      );
     }
     return {
       actorUid,
       actorEmail,
-      actorRole: 'admin',
+      actorRole: "admin",
       actorCapability: `command:${commandType}`,
     };
   }
   const profileSnapshot = await db.doc(`users/${actorUid}`).get();
   const profile = profileSnapshot.exists ? profileSnapshot.data() || {} : {};
   if (semesterCutoverCommandTypes.includes(commandType)) {
-    throw new HttpsError('permission-denied', 'Highest administrator authority is required.', {
-      reason: 'W11_ADMIN_REQUIRED',
-    });
+    throw new HttpsError(
+      "permission-denied",
+      "Highest administrator authority is required.",
+      {
+        reason: "W11_ADMIN_REQUIRED",
+      },
+    );
   }
   if (teacherOperationsCommandTypes.includes(commandType)) {
-    const role = String(profile.role || 'student').trim() || 'student';
+    const role = String(profile.role || "student").trim() || "student";
     if (teacherOperations.ADMIN_COMMAND_TYPES.has(commandType)) {
-      throw new HttpsError('permission-denied', 'Administrator authority is required.', {
-        reason: 'W9_ADMIN_REQUIRED',
-      });
+      throw new HttpsError(
+        "permission-denied",
+        "Administrator authority is required.",
+        {
+          reason: "W9_ADMIN_REQUIRED",
+        },
+      );
     }
     const permissions = Array.isArray(profile.staffPermissions)
       ? profile.staffPermissions
       : [];
     if (
-      role !== 'teacher'
-      || profile.teacherPortalEnabled !== true
-      || !permissions.some((permission) => ['lesson_read', 'quiz_read', 'point_manage'].includes(permission))
+      role !== "teacher" ||
+      profile.teacherPortalEnabled !== true ||
+      !permissions.some((permission) =>
+        ["lesson_read", "quiz_read", "point_manage"].includes(permission),
+      )
     ) {
-      throw new HttpsError('permission-denied', 'Teacher Operations authority is required.', {
-        reason: 'W9_MANAGE_REQUIRED',
-      });
+      throw new HttpsError(
+        "permission-denied",
+        "Teacher Operations authority is required.",
+        {
+          reason: "W9_MANAGE_REQUIRED",
+        },
+      );
     }
     return {
       actorUid,
       actorEmail,
-      actorRole: 'teacher',
-      actorCapability: 'teacher_role+teacherPortalEnabled+domain_manage',
+      actorRole: "teacher",
+      actorCapability: "teacher_role+teacherPortalEnabled+domain_manage",
     };
   }
   if (w8CommandTypes.includes(commandType)) {
-    const role = String(profile.role || 'student').trim() || 'student';
+    const role = String(profile.role || "student").trim() || "student";
     if (w8Domains.STUDENT_COMMAND_TYPES.has(commandType)) {
-      if (role !== 'student') {
-        throw new HttpsError('permission-denied', 'A student account is required.', {
-          reason: 'W8_STUDENT_REQUIRED',
-        });
+      if (role !== "student") {
+        throw new HttpsError(
+          "permission-denied",
+          "A student account is required.",
+          {
+            reason: "W8_STUDENT_REQUIRED",
+          },
+        );
       }
       return {
         actorUid,
         actorEmail,
-        actorRole: 'student',
+        actorRole: "student",
         actorCapability: `w8:${commandType}`,
       };
     }
     if (w8Domains.ADMIN_COMMAND_TYPES.has(commandType)) {
-      throw new HttpsError('permission-denied', 'Administrator authority is required.', {
-        reason: 'W8_ADMIN_REQUIRED',
-      });
+      throw new HttpsError(
+        "permission-denied",
+        "Administrator authority is required.",
+        {
+          reason: "W8_ADMIN_REQUIRED",
+        },
+      );
     }
-    const permissions = Array.isArray(profile.staffPermissions)
-      ? profile.staffPermissions
-      : [];
-    if (
-      role !== 'teacher'
-      || profile.teacherPortalEnabled !== true
-      || !permissions.includes('lesson_read')
-    ) {
-      throw new HttpsError('permission-denied', 'Teacher W8 management authority is required.', {
-        reason: 'W8_MANAGE_REQUIRED',
-      });
+    if (role !== "teacher") {
+      throw new HttpsError(
+        "permission-denied",
+        "Teacher W8 management authority is required.",
+        {
+          reason: "W8_MANAGE_REQUIRED",
+        },
+      );
     }
     return {
       actorUid,
       actorEmail,
-      actorRole: 'teacher',
-      actorCapability: 'teacher_role+teacherPortalEnabled+lesson_read',
+      actorRole: "teacher",
+      actorCapability: "teacher_role",
     };
   }
   if (wisCommandTypes.includes(commandType)) {
-    const role = String(profile.role || 'student').trim() || 'student';
+    const role = String(profile.role || "student").trim() || "student";
     if (wisEconomy.STUDENT_COMMAND_TYPES.has(commandType)) {
-      if (role !== 'student') {
-        throw new HttpsError('permission-denied', 'A student account is required.', {
-          reason: 'WIS_STUDENT_REQUIRED',
-        });
+      if (role !== "student") {
+        throw new HttpsError(
+          "permission-denied",
+          "A student account is required.",
+          {
+            reason: "WIS_STUDENT_REQUIRED",
+          },
+        );
       }
       return {
         actorUid,
         actorEmail,
-        actorRole: 'student',
+        actorRole: "student",
         actorCapability: `wis:${commandType}`,
-      };
-    }
-    const permissions = Array.isArray(profile.staffPermissions) ? profile.staffPermissions : [];
-    if (profile.teacherPortalEnabled !== true || !permissions.includes('point_manage')) {
-      throw new HttpsError('permission-denied', 'Wis management permission is required.', {
-        reason: 'WIS_MANAGE_REQUIRED',
-      });
-    }
-    return {
-      actorUid,
-      actorEmail,
-      actorRole: role === 'admin' ? 'admin' : 'teacher',
-      actorCapability: 'point_manage',
-    };
-  }
-  if (gradeCommandTypes.includes(commandType)) {
-    const isStudentCommand = gradeEvidence.STUDENT_COMMAND_TYPES.has(commandType);
-    const role = String(profile.role || 'student').trim() || 'student';
-    if (isStudentCommand) {
-      if (role !== 'student') {
-        throw new HttpsError('permission-denied', 'A student account is required.', {
-          reason: 'GRADE_STUDENT_REQUIRED',
-        });
-      }
-      return {
-        actorUid,
-        actorEmail,
-        actorRole: 'student',
-        actorCapability: `grade:${commandType}`,
       };
     }
     const permissions = Array.isArray(profile.staffPermissions)
       ? profile.staffPermissions
       : [];
-    if (
-      profile.teacherPortalEnabled !== true
-      || !permissions.includes('quiz_read')
-    ) {
-      throw new HttpsError('permission-denied', 'Grade management permission is required.', {
-        reason: 'GRADE_MANAGE_REQUIRED',
-      });
+    const pointPortalEligible =
+      role === "teacher" || profile.teacherPortalEnabled === true;
+    if (!pointPortalEligible || !permissions.includes("point_manage")) {
+      throw new HttpsError(
+        "permission-denied",
+        "Wis management permission is required.",
+        {
+          reason: "WIS_MANAGE_REQUIRED",
+        },
+      );
     }
     return {
       actorUid,
       actorEmail,
-      actorRole: role === 'admin' ? 'admin' : 'teacher',
-      actorCapability: permissions.includes('quiz_read') ? 'quiz_read' : 'grade_manage',
+      actorRole: role === "admin" ? "admin" : "teacher",
+      actorCapability: "point_manage",
     };
   }
-  if (assessmentCommandTypes.includes(commandType)) {
-    const isStudentCommand = assessmentLifecycle.STUDENT_COMMAND_TYPES.has(commandType);
-    const role = String(profile.role || 'student').trim() || 'student';
+  if (gradeCommandTypes.includes(commandType)) {
+    const isStudentCommand =
+      gradeEvidence.STUDENT_COMMAND_TYPES.has(commandType);
+    const role = String(profile.role || "student").trim() || "student";
     if (isStudentCommand) {
-      if (role !== 'student') {
-        throw new HttpsError('permission-denied', 'A student account is required.', {
-          reason: 'ASSESSMENT_STUDENT_REQUIRED',
-        });
+      if (role !== "student") {
+        throw new HttpsError(
+          "permission-denied",
+          "A student account is required.",
+          {
+            reason: "GRADE_STUDENT_REQUIRED",
+          },
+        );
       }
       return {
         actorUid,
         actorEmail,
-        actorRole: 'student',
+        actorRole: "student",
+        actorCapability: `grade:${commandType}`,
+      };
+    }
+    if (role !== "teacher") {
+      throw new HttpsError(
+        "permission-denied",
+        "Grade management permission is required.",
+        {
+          reason: "GRADE_MANAGE_REQUIRED",
+        },
+      );
+    }
+    return {
+      actorUid,
+      actorEmail,
+      actorRole: "teacher",
+      actorCapability: "teacher_role",
+    };
+  }
+  if (assessmentCommandTypes.includes(commandType)) {
+    const isStudentCommand =
+      assessmentLifecycle.STUDENT_COMMAND_TYPES.has(commandType);
+    const role = String(profile.role || "student").trim() || "student";
+    if (isStudentCommand) {
+      if (role !== "student") {
+        throw new HttpsError(
+          "permission-denied",
+          "A student account is required.",
+          {
+            reason: "ASSESSMENT_STUDENT_REQUIRED",
+          },
+        );
+      }
+      return {
+        actorUid,
+        actorEmail,
+        actorRole: "student",
         actorCapability: `assessment:${commandType}`,
       };
     }
@@ -8644,31 +11968,42 @@ const authorizeCommandGatewayActor = async ({ request, identity, commandType }) 
       ? profile.staffPermissions
       : [];
     if (
-      profile.teacherPortalEnabled !== true
-      || (!permissions.includes('quiz_read') && !permissions.includes('lesson_read'))
+      profile.teacherPortalEnabled !== true ||
+      (!permissions.includes("quiz_read") &&
+        !permissions.includes("lesson_read"))
     ) {
-      throw new HttpsError('permission-denied', 'Assessment management permission is required.', {
-        reason: 'ASSESSMENT_MANAGE_REQUIRED',
-      });
+      throw new HttpsError(
+        "permission-denied",
+        "Assessment management permission is required.",
+        {
+          reason: "ASSESSMENT_MANAGE_REQUIRED",
+        },
+      );
     }
     return {
       actorUid,
       actorEmail,
-      actorRole: role === 'admin' ? 'admin' : 'teacher',
-      actorCapability: permissions.includes('quiz_read') ? 'quiz_read' : 'lesson_read',
+      actorRole: role === "admin" ? "admin" : "teacher",
+      actorCapability: permissions.includes("quiz_read")
+        ? "quiz_read"
+        : "lesson_read",
     };
   }
-  if (!hasStaffPermission(profile, 'point_manage')) {
-    throw new HttpsError('permission-denied', 'point_manage permission is required.', {
-      reason: 'COMMAND_CAPABILITY_REQUIRED',
-      capability: 'point_manage',
-    });
+  if (!hasStaffPermission(profile, "point_manage")) {
+    throw new HttpsError(
+      "permission-denied",
+      "point_manage permission is required.",
+      {
+        reason: "COMMAND_CAPABILITY_REQUIRED",
+        capability: "point_manage",
+      },
+    );
   }
   return {
     actorUid,
     actorEmail,
-    actorRole: String(profile.role || 'teacher').trim() || 'teacher',
-    actorCapability: 'point_manage',
+    actorRole: String(profile.role || "teacher").trim() || "teacher",
+    actorCapability: "point_manage",
   };
 };
 
@@ -8677,7 +12012,7 @@ const legacyPointV1CommandAdapter = createLegacyPointV1CommandAdapter({
   getPointWalletPath,
   getPointPolicyPath,
   getPointTransactionsPath: (year, semester) =>
-    getPointCollectionPath(year, semester, 'point_transactions'),
+    getPointCollectionPath(year, semester, "point_transactions"),
   getWisHallOfFamePath,
   ensureWallet,
   loadPolicy,
@@ -8688,20 +12023,29 @@ const legacyPointV1CommandAdapter = createLegacyPointV1CommandAdapter({
 });
 const retiredLegacyPointV1CommandAdapter = {
   apply: async () => {
-    throw new HttpsError('failed-precondition', '이전 위스 조정 경로는 종료되었습니다.', {
-      reason: 'CLIENT_UPDATE_REQUIRED',
-      replacement: 'adjustWis',
-    });
+    throw new HttpsError(
+      "failed-precondition",
+      "이전 위스 조정 경로는 종료되었습니다.",
+      {
+        reason: "CLIENT_UPDATE_REQUIRED",
+        replacement: "adjustWis",
+      },
+    );
   },
 };
 
-const archiveEnrollmentReadinessAdapter = archiveEnrollment.createArchiveEnrollmentReadinessAdapter();
-const assessmentReadinessAdapter = assessmentLifecycle.createAssessmentReadinessAdapter();
-const gradeEvidenceReadinessAdapter = gradeEvidence.createGradeReadinessAdapter();
+const archiveEnrollmentReadinessAdapter =
+  archiveEnrollment.createArchiveEnrollmentReadinessAdapter();
+const assessmentReadinessAdapter =
+  assessmentLifecycle.createAssessmentReadinessAdapter();
+const gradeEvidenceReadinessAdapter =
+  gradeEvidence.createGradeReadinessAdapter();
 const wisEconomyReadinessAdapter = wisEconomy.createWisReadinessAdapter();
 const w8ReadinessAdapter = w8Domains.createW8ReadinessAdapter();
-const teacherOperationsReadinessAdapter = teacherOperations.createTeacherOperationsReadinessAdapter();
-const semesterCutoverReadinessAdapter = semesterCutover.createSemesterCutoverReadinessAdapter();
+const teacherOperationsReadinessAdapter =
+  teacherOperations.createTeacherOperationsReadinessAdapter();
+const semesterCutoverReadinessAdapter =
+  semesterCutover.createSemesterCutoverReadinessAdapter();
 const readinessAdapters = [
   archiveEnrollmentReadinessAdapter,
   assessmentReadinessAdapter,
@@ -8711,118 +12055,176 @@ const readinessAdapters = [
   teacherOperationsReadinessAdapter,
   semesterCutoverReadinessAdapter,
 ];
-const semesterCoreCommandAdapter = semesterCore.createSemesterCoreCommandAdapter({
-  getDefaultPointPolicy,
-  projectId: commandGateway.resolveProjectId(),
-  readinessAdapters,
-});
-const archiveEnrollmentCommandAdapter = archiveEnrollment.createArchiveEnrollmentCommandAdapter();
-const assessmentCommandAdapter = assessmentLifecycle.createAssessmentCommandAdapter();
+const semesterCoreCommandAdapter =
+  semesterCore.createSemesterCoreCommandAdapter({
+    getDefaultPointPolicy,
+    projectId: commandGateway.resolveProjectId(),
+    readinessAdapters,
+  });
+const archiveEnrollmentCommandAdapter =
+  archiveEnrollment.createArchiveEnrollmentCommandAdapter();
+const assessmentCommandAdapter =
+  assessmentLifecycle.createAssessmentCommandAdapter();
 const gradeEvidenceCommandAdapter = gradeEvidence.createGradeCommandAdapter();
 const wisEconomyCommandAdapter = wisEconomy.createWisCommandAdapter();
 const w8CommandAdapter = w8Domains.createW8CommandAdapter();
-const teacherOperationsCommandAdapter = teacherOperations.createTeacherOperationsCommandAdapter();
-const semesterCutoverCommandAdapter = semesterCutover.createSemesterCutoverCommandAdapter({
-  projectId: commandGateway.resolveProjectId(),
-});
+const teacherOperationsCommandAdapter =
+  teacherOperations.createTeacherOperationsCommandAdapter();
+const semesterCutoverCommandAdapter =
+  semesterCutover.createSemesterCutoverCommandAdapter({
+    projectId: commandGateway.resolveProjectId(),
+  });
 const commandGatewayStore = commandGateway.createFirestoreStore(db);
 
 const commandGatewayCore = commandGateway.createCommandGatewayCore({
   store: commandGatewayStore,
   authorizeCommand: authorizeCommandGatewayActor,
   commandAdapters: {
-    [commandGateway.COMMAND_TYPES.ADJUST_TEACHER_POINTS]: retiredLegacyPointV1CommandAdapter,
-    [commandGateway.COMMAND_TYPES.CREATE_SEMESTER_MANIFEST]: semesterCoreCommandAdapter,
-    [commandGateway.COMMAND_TYPES.UPDATE_OPERATIONAL_SETTINGS]: semesterCoreCommandAdapter,
-    [commandGateway.COMMAND_TYPES.UPDATE_SEMESTER_MANIFEST]: semesterCoreCommandAdapter,
-    [commandGateway.COMMAND_TYPES.VALIDATE_SEMESTER_READINESS]: semesterCoreCommandAdapter,
-    [commandGateway.COMMAND_TYPES.TRANSITION_SEMESTER_STATUS]: semesterCoreCommandAdapter,
-    [commandGateway.COMMAND_TYPES.ACTIVATE_SEMESTER]: semesterCoreCommandAdapter,
+    [commandGateway.COMMAND_TYPES.ADJUST_TEACHER_POINTS]:
+      retiredLegacyPointV1CommandAdapter,
+    [commandGateway.COMMAND_TYPES.CREATE_SEMESTER_MANIFEST]:
+      semesterCoreCommandAdapter,
+    [commandGateway.COMMAND_TYPES.UPDATE_OPERATIONAL_SETTINGS]:
+      semesterCoreCommandAdapter,
+    [commandGateway.COMMAND_TYPES.UPDATE_SEMESTER_MANIFEST]:
+      semesterCoreCommandAdapter,
+    [commandGateway.COMMAND_TYPES.VALIDATE_SEMESTER_READINESS]:
+      semesterCoreCommandAdapter,
+    [commandGateway.COMMAND_TYPES.TRANSITION_SEMESTER_STATUS]:
+      semesterCoreCommandAdapter,
+    [commandGateway.COMMAND_TYPES.ACTIVATE_SEMESTER]:
+      semesterCoreCommandAdapter,
     ...Object.fromEntries(
-      Object.values(archiveEnrollment.ARCHIVE_ENROLLMENT_COMMAND_TYPES)
-        .map((commandType) => [commandType, archiveEnrollmentCommandAdapter]),
+      Object.values(archiveEnrollment.ARCHIVE_ENROLLMENT_COMMAND_TYPES).map(
+        (commandType) => [commandType, archiveEnrollmentCommandAdapter],
+      ),
     ),
     ...Object.fromEntries(
-      Object.values(assessmentLifecycle.ASSESSMENT_COMMAND_TYPES)
-        .map((commandType) => [commandType, assessmentCommandAdapter]),
+      Object.values(assessmentLifecycle.ASSESSMENT_COMMAND_TYPES).map(
+        (commandType) => [commandType, assessmentCommandAdapter],
+      ),
     ),
     ...Object.fromEntries(
-      Object.values(gradeEvidence.GRADE_COMMAND_TYPES)
-        .map((commandType) => [commandType, gradeEvidenceCommandAdapter]),
+      Object.values(gradeEvidence.GRADE_COMMAND_TYPES).map((commandType) => [
+        commandType,
+        gradeEvidenceCommandAdapter,
+      ]),
     ),
     ...Object.fromEntries(
-      Object.values(wisEconomy.WIS_COMMAND_TYPES)
-        .map((commandType) => [commandType, wisEconomyCommandAdapter]),
+      Object.values(wisEconomy.WIS_COMMAND_TYPES).map((commandType) => [
+        commandType,
+        wisEconomyCommandAdapter,
+      ]),
     ),
     ...Object.fromEntries(
-      Object.values(w8Domains.W8_COMMAND_TYPES)
-        .map((commandType) => [commandType, w8CommandAdapter]),
+      Object.values(w8Domains.W8_COMMAND_TYPES).map((commandType) => [
+        commandType,
+        w8CommandAdapter,
+      ]),
     ),
     ...Object.fromEntries(
-      Object.values(teacherOperations.TEACHER_OPERATIONS_COMMAND_TYPES)
-        .map((commandType) => [commandType, teacherOperationsCommandAdapter]),
+      Object.values(teacherOperations.TEACHER_OPERATIONS_COMMAND_TYPES).map(
+        (commandType) => [commandType, teacherOperationsCommandAdapter],
+      ),
     ),
     ...Object.fromEntries(
-      Object.values(semesterCutover.CUTOVER_COMMAND_TYPES)
-        .map((commandType) => [commandType, semesterCutoverCommandAdapter]),
+      Object.values(semesterCutover.CUTOVER_COMMAND_TYPES).map(
+        (commandType) => [commandType, semesterCutoverCommandAdapter],
+      ),
     ),
   },
   semesterCoreResolver: ({ store, semesterId }) =>
-    semesterCore.resolveSemesterCoreState({ store, semesterId, readinessAdapters }),
+    semesterCore.resolveSemesterCoreState({
+      store,
+      semesterId,
+      readinessAdapters,
+    }),
 });
-Object.assign(exports, commandGateway.createCallableExports({ core: commandGatewayCore }));
-const archiveEnrollmentQueryCore = archiveEnrollment.createArchiveEnrollmentQueryCore({
-  store: commandGatewayStore,
-  projectId: commandGateway.resolveProjectId(),
-});
-Object.assign(exports, archiveEnrollment.createArchiveEnrollmentCallableExports({
-  core: archiveEnrollmentQueryCore,
-}));
+Object.assign(
+  exports,
+  commandGateway.createCallableExports({ core: commandGatewayCore }),
+);
+const archiveEnrollmentQueryCore =
+  archiveEnrollment.createArchiveEnrollmentQueryCore({
+    store: commandGatewayStore,
+    projectId: commandGateway.resolveProjectId(),
+  });
+Object.assign(
+  exports,
+  archiveEnrollment.createArchiveEnrollmentCallableExports({
+    core: archiveEnrollmentQueryCore,
+  }),
+);
 const assessmentQueryCore = assessmentLifecycle.createAssessmentQueryCore({
   store: commandGatewayStore,
   serverTimestamp: () => FieldValue.serverTimestamp(),
   projectId: commandGateway.resolveProjectId(),
 });
-Object.assign(exports, assessmentLifecycle.createAssessmentCallableExports({
-  core: assessmentQueryCore,
-}));
+Object.assign(
+  exports,
+  assessmentLifecycle.createAssessmentCallableExports({
+    core: assessmentQueryCore,
+  }),
+);
 const gradeEvidenceQueryCore = gradeEvidence.createGradeQueryCore({
   store: commandGatewayStore,
 });
-Object.assign(exports, gradeEvidence.createGradeCallableExports({
-  core: gradeEvidenceQueryCore,
-}));
+Object.assign(
+  exports,
+  gradeEvidence.createGradeCallableExports({
+    core: gradeEvidenceQueryCore,
+  }),
+);
 const wisEconomyQueryCore = wisEconomy.createWisQueryCore({
   store: commandGatewayStore,
 });
-Object.assign(exports, wisEconomy.createWisCallableExports({
-  core: wisEconomyQueryCore,
-}));
+Object.assign(
+  exports,
+  wisEconomy.createWisCallableExports({
+    core: wisEconomyQueryCore,
+  }),
+);
 const w8QueryCore = w8Domains.createW8QueryCore({
   store: commandGatewayStore,
 });
-Object.assign(exports, w8Domains.createW8CallableExports({
-  core: w8QueryCore,
-}));
-const teacherOperationsQueryCore = teacherOperations.createTeacherOperationsQueryCore({
-  store: commandGatewayStore,
-});
-Object.assign(exports, teacherOperations.createTeacherOperationsCallableExports({
-  core: teacherOperationsQueryCore,
-}));
-const semesterCutoverQueryCore = semesterCutover.createSemesterCutoverQueryCore({
-  store: commandGatewayStore,
-  projectId: commandGateway.resolveProjectId(),
-});
-Object.assign(exports, semesterCutover.createSemesterCutoverCallableExports({
-  core: semesterCutoverQueryCore,
-}));
+Object.assign(
+  exports,
+  w8Domains.createW8CallableExports({
+    core: w8QueryCore,
+  }),
+);
+const teacherOperationsQueryCore =
+  teacherOperations.createTeacherOperationsQueryCore({
+    store: commandGatewayStore,
+  });
+Object.assign(
+  exports,
+  teacherOperations.createTeacherOperationsCallableExports({
+    core: teacherOperationsQueryCore,
+  }),
+);
+const semesterCutoverQueryCore = semesterCutover.createSemesterCutoverQueryCore(
+  {
+    store: commandGatewayStore,
+    projectId: commandGateway.resolveProjectId(),
+  },
+);
+Object.assign(
+  exports,
+  semesterCutover.createSemesterCutoverCallableExports({
+    core: semesterCutoverQueryCore,
+  }),
+);
 
 const retiredW8LegacyCallable = onCall({ region: REGION }, async () => {
-  throw new HttpsError('failed-precondition', '이전 학습·알림 저장 경로는 종료되었습니다.', {
-    reason: 'CLIENT_UPDATE_REQUIRED',
-    replacement: 'executeCommand/getW8DomainState',
-  });
+  throw new HttpsError(
+    "failed-precondition",
+    "이전 학습·알림 저장 경로는 종료되었습니다.",
+    {
+      reason: "CLIENT_UPDATE_REQUIRED",
+      replacement: "executeCommand/getW8DomainState",
+    },
+  );
 });
 exports.resetLessonCorePointProgress = retiredW8LegacyCallable;
 exports.grantHistoryClassroomExemptions = retiredW8LegacyCallable;

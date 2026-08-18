@@ -65,7 +65,6 @@ import {
   type GradingPlanLike,
 } from "../../lib/studentScores";
 import type { PointPolicy, PointWallet } from "../../types";
-import StudentCurrentEnrollmentCard from "./components/StudentCurrentEnrollmentCard";
 
 const LazyChart = lazyWithRetry(
   () => import("../../components/common/LazyChart"),
@@ -3075,9 +3074,6 @@ const MyPage: React.FC = () => {
                 <h2 className="text-3xl font-black tracking-tight text-slate-900">
                   나의 기본 정보
                 </h2>
-                {user?.uid && (
-                  <StudentCurrentEnrollmentCard studentUid={user.uid} />
-                )}
                 <div className="grid gap-5 xl:grid-cols-[minmax(360px,1.65fr)_repeat(3,minmax(170px,0.7fr))]">
                   <div className="rounded-2xl border border-blue-200 bg-white p-6 shadow-[0_14px_32px_rgba(37,99,235,0.10)] md:p-7">
                     <div className="flex flex-col gap-6 sm:flex-row sm:items-center">

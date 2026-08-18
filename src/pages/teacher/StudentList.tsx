@@ -1,12 +1,22 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { collection, doc, getDoc, getDocs } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
+import { useAppDialog } from "../../components/common/AppDialogProvider";
 import { db } from "../../lib/firebase";
 import MoveClassModal from "./components/MoveClassModal";
 import StudentDetailModal from "./components/StudentDetailModal";
 import { useAuth } from "../../contexts/AuthContext";
-import { canEditStudentList } from "../../lib/permissions";
+import { canEditStudentList, canManageW8Domains } from "../../lib/permissions";
+import {
+  getArchiveEnrollmentState,
+  type ArchiveEnrollmentState,
+} from "../../lib/archiveEnrollment";
+import { readSiteSettingDoc } from "../../lib/siteSettings";
 import { deleteStudentData, updateStudentData } from "../../lib/studentData";
-import ResponsiveDataContainer from "../../components/common/ResponsiveDataContainer";
+import {
+  W8DomainError,
+  getW8DomainState,
+  resetLearningProgress,
+} from "../../lib/w8Domains";
 
 interface Student {
   id: string;
@@ -134,6 +144,7 @@ const getStudentDeleteErrorMessage = (error: unknown) => {
 };
 
 const getCorePointResetErrorMessage = (error: unknown) => {
+  if (error instanceof W8DomainError) return error.message;
   const code = String((error as { code?: string })?.code || "");
   if (code.includes("permission-denied")) {
     return "핵심포인트 초기화 권한이 없습니다. 관리자 권한으로 다시 확인해 주세요.";
@@ -150,8 +161,95 @@ const getCorePointResetErrorMessage = (error: unknown) => {
   return "핵심포인트 초기화에 실패했습니다. 잠시 후 다시 시도해 주세요.";
 };
 
+const loadScopedStudentProfiles = async (studentUids: string[]) => {
+  const profiles = new Map<string, Record<string, any>>();
+  const uniqueUids = Array.from(
+    new Set(studentUids.map((uid) => uid.trim()).filter(Boolean)),
+  );
+  for (let index = 0; index < uniqueUids.length; index += 25) {
+    const chunk = uniqueUids.slice(index, index + 25);
+    const snapshots = await Promise.all(
+      chunk.map((uid) => getDoc(doc(db, "users", uid))),
+    );
+    snapshots.forEach((snapshot, snapshotIndex) => {
+      if (snapshot.exists()) {
+        profiles.set(chunk[snapshotIndex], snapshot.data());
+      }
+    });
+  }
+  return profiles;
+};
+
+const toStudentList = async (
+  state: ArchiveEnrollmentState,
+): Promise<Student[]> => {
+  const activeEnrollments = state.enrollments.filter(
+    (enrollment) => enrollment.enrollmentStatus === "ACTIVE",
+  );
+  const profileByUid = await loadScopedStudentProfiles(
+    activeEnrollments.map((enrollment) => enrollment.studentUid),
+  );
+  const classById = new Map(
+    state.classes.map((schoolClass) => [schoolClass.classId, schoolClass]),
+  );
+
+  return activeEnrollments.map((enrollment) => {
+    const profile = profileByUid.get(enrollment.studentUid) || {};
+    const semesterClass = enrollment.classId
+      ? classById.get(enrollment.classId)
+      : undefined;
+    const email = String(profile.email || "").trim();
+    const snapshot = enrollment.snapshot || {};
+    return {
+      id: enrollment.studentUid,
+      userId: enrollment.studentUid,
+      grade:
+        parseGradeValue(profile) ||
+        String(
+          snapshot.grade || enrollment.grade || semesterClass?.grade || "",
+        ),
+      class:
+        parseClassValue(profile) ||
+        String(
+          snapshot.classNumber ||
+            enrollment.classNumber ||
+            semesterClass?.classNumber ||
+            "",
+        ),
+      number:
+        parseNumberValue(profile) ||
+        parseNumberValue({
+          studentNumber:
+            snapshot.studentNumber || enrollment.studentNumber || "",
+        }),
+      name: String(
+        profile.studentName ||
+          profile.name ||
+          profile.displayName ||
+          profile.nickname ||
+          profile.customName ||
+          snapshot.displayName ||
+          enrollment.displayName ||
+          "",
+      ).trim(),
+      email,
+      isTeacherAccount:
+        profile.role === "teacher" || email.toLowerCase() === ADMIN_EMAIL,
+    };
+  });
+};
+
+const scopedConfigFromSemesterId = (
+  semesterId: string,
+  fallback: Parameters<typeof deleteStudentData>[0],
+) => {
+  const match = semesterId.match(/^(\d{4})-([12])$/u);
+  return match ? { year: match[1], semester: match[2] } : fallback;
+};
+
 const StudentList: React.FC = () => {
   const { userData, currentUser, config } = useAuth();
+  const { confirm } = useAppDialog();
   const [students, setStudents] = useState<Student[]>([]);
   const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
@@ -183,12 +281,14 @@ const StudentList: React.FC = () => {
   );
   const [resettingCorePointStudentIds, setResettingCorePointStudentIds] =
     useState<Set<string>>(new Set());
-  const readOnly = !canEditStudentList(userData, currentUser?.email || "");
-
-  useEffect(() => {
-    void fetchStudents();
-    void loadSchoolConfig();
-  }, []);
+  const [semesterId, setSemesterId] = useState("");
+  const [scopeReadOnly, setScopeReadOnly] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const readOnly =
+    scopeReadOnly || !canEditStudentList(userData, currentUser?.email || "");
+  const canResetCorePoints =
+    !readOnly && canManageW8Domains(userData, currentUser?.email || "");
+  const mutationConfig = scopedConfigFromSemesterId(semesterId, config);
 
   const gradeOrderMap = useMemo(() => {
     return gradeOptions.reduce<Record<string, number>>((acc, item, index) => {
@@ -211,48 +311,21 @@ const StudentList: React.FC = () => {
 
   const fetchStudents = async (options: { silent?: boolean } = {}) => {
     if (!options.silent) setLoading(true);
+    setLoadError("");
     try {
-      const snap = await getDocs(collection(db, "users"));
-      const list: Student[] = [];
-
-      snap.forEach((item) => {
-        const data = item.data();
-        const email = String(data.email || "").trim();
-        const isTeacherAccount =
-          data.role === "teacher" || email === ADMIN_EMAIL;
-        const hasStudentProfile =
-          !!String(data.studentName || "").trim() ||
-          !!String(data.studentGrade || "").trim() ||
-          !!String(data.studentClass || "").trim() ||
-          !!String(data.studentNumber || "").trim() ||
-          !!String(data.grade || "").trim() ||
-          !!String(data.class || "").trim() ||
-          !!String(data.number || "").trim();
-        const includeAsStudent =
-          data.role !== "teacher" ||
-          (email === ADMIN_EMAIL && hasStudentProfile);
-        if (!includeAsStudent) return;
-
-        const resolvedName = String(
-          data.studentName ||
-            data.name ||
-            data.displayName ||
-            data.nickname ||
-            data.customName ||
-            "",
-        ).trim();
-
-        list.push({
-          id: item.id,
-          userId: item.id,
-          grade: parseGradeValue(data),
-          class: parseClassValue(data),
-          number: parseNumberValue(data),
-          name: resolvedName,
-          email,
-          isTeacherAccount,
-        });
+      const state = await getArchiveEnrollmentState({
+        source: "CURRENT",
+        callSite: "StudentList.fetchStudents",
       });
+      const list = await toStudentList(state);
+      setSemesterId(state.semesterId);
+      const configuredSemesterId =
+        config?.year && config?.semester
+          ? `${config.year}-${config.semester}`
+          : state.semesterId;
+      setScopeReadOnly(
+        state.readOnly || configuredSemesterId !== state.semesterId,
+      );
 
       list.sort((a, b) => {
         const aCanonicalGrade = toCanonicalOptionValue(a.grade, gradeOptions);
@@ -291,6 +364,12 @@ const StudentList: React.FC = () => {
       setFilteredStudents(list);
     } catch (error) {
       console.error("Error fetching students:", error);
+      setStudents([]);
+      setFilteredStudents([]);
+      setScopeReadOnly(true);
+      setLoadError(
+        "현재 학기 학생 명단을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      );
     } finally {
       if (!options.silent) setLoading(false);
     }
@@ -298,12 +377,11 @@ const StudentList: React.FC = () => {
 
   const loadSchoolConfig = async () => {
     try {
-      const snap = await getDoc(doc(db, "site_settings", "school_config"));
-      if (!snap.exists()) return;
-      const data = snap.data() as {
+      const data = await readSiteSettingDoc<{
         grades?: Array<{ value?: string; label?: string }>;
         classes?: Array<{ value?: string; label?: string }>;
-      };
+      }>("school_config");
+      if (!data) return;
       const loadedGrades = (data.grades || [])
         .map((item) => ({
           value: String(item?.value ?? "").trim(),
@@ -323,6 +401,15 @@ const StudentList: React.FC = () => {
       console.error("Failed to load school config:", error);
     }
   };
+
+  useEffect(() => {
+    if (!currentUser?.uid) return;
+    void fetchStudents();
+  }, [currentUser?.uid, config?.year, config?.semester]);
+
+  useEffect(() => {
+    void loadSchoolConfig();
+  }, []);
 
   const getGradeLabel = (gradeValue: string) => {
     const normalized = String(gradeValue || "").trim();
@@ -430,15 +517,21 @@ const StudentList: React.FC = () => {
 
   const handleDelete = async (id: string) => {
     if (readOnly) return;
-    if (!window.confirm("정말 삭제하시겠습니까? (복구 불가)")) return;
     const target = students.find((student) => student.id === id);
     if (!target) return;
+    const confirmed = await confirm({
+      title: "학생 정보를 삭제하시겠습니까?",
+      message: "삭제한 학생 정보는 복구할 수 없습니다.",
+      confirmLabel: "삭제",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     const previousStudents = students;
     const previousFilteredStudents = filteredStudents;
     setDeletingStudentIds((current) => new Set(current).add(id));
     removeStudentsLocally(new Set([id]));
     try {
-      const result = await deleteStudentData(config, target.userId);
+      const result = await deleteStudentData(mutationConfig, target.userId);
       if (result.authUserDeleteError) {
         console.warn("Student auth account cleanup failed", result);
       }
@@ -460,10 +553,13 @@ const StudentList: React.FC = () => {
 
   const handleBulkDelete = async () => {
     if (readOnly) return;
-    if (
-      !window.confirm(`선택한 ${selectedIds.size}명을 정말 삭제하시겠습니까?`)
-    )
-      return;
+    const confirmed = await confirm({
+      title: `선택한 ${selectedIds.size}명을 삭제하시겠습니까?`,
+      message: "삭제한 학생 정보는 복구할 수 없습니다.",
+      confirmLabel: "모두 삭제",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     const targets = Array.from(selectedIds)
       .map((id) => students.find((student) => student.id === id))
       .filter((student): student is Student => Boolean(student));
@@ -475,7 +571,7 @@ const StudentList: React.FC = () => {
     removeStudentsLocally(targetIds);
     try {
       for (const target of targets) {
-        const result = await deleteStudentData(config, target.userId);
+        const result = await deleteStudentData(mutationConfig, target.userId);
         if (result.authUserDeleteError) {
           console.warn("Student auth account cleanup failed", result);
         }
@@ -494,10 +590,13 @@ const StudentList: React.FC = () => {
 
   const handleBulkPromote = async () => {
     if (readOnly) return;
-    if (
-      !window.confirm(`선택한 ${selectedIds.size}명의 학년을 1 올리시겠습니까?`)
-    )
-      return;
+    const confirmed = await confirm({
+      title: `선택한 ${selectedIds.size}명을 진급 처리하시겠습니까?`,
+      message: "선택한 학생의 학년을 1학년씩 올립니다.",
+      confirmLabel: "진급",
+      tone: "warning",
+    });
+    if (!confirmed) return;
     const targets = Array.from(selectedIds)
       .map((id) => students.find((student) => student.id === id))
       .filter((student): student is Student => Boolean(student))
@@ -544,7 +643,7 @@ const StudentList: React.FC = () => {
         ),
       );
       for (const { student, nextGrade } of targets) {
-        await updateStudentData(config, {
+        await updateStudentData(mutationConfig, {
           uid: student.userId,
           grade: nextGrade,
           class: student.class,
@@ -565,10 +664,77 @@ const StudentList: React.FC = () => {
   };
 
   const handleResetCorePoints = async (student: Student) => {
-    if (readOnly || !isBangTestStudent(student)) return;
-    alert(
-      "이전 핵심포인트 초기화 기능은 종료되었습니다. 학습 운영 화면에서 학생의 학습 진행 기록을 확인해 주세요.",
+    if (!canResetCorePoints || !isBangTestStudent(student)) return;
+    const confirmed = await confirm({
+      title: "핵심포인트 기록을 초기화하시겠습니까?",
+      message: `${student.name || getStudentIdentityLabel(student)} 학생의 현재 학기 학습 진행 기록을 초기화합니다. 저장한 답안은 유지됩니다.`,
+      confirmLabel: "초기화",
+      tone: "warning",
+    });
+    if (!confirmed) return;
+
+    setResettingCorePointStudentIds((current) =>
+      new Set(current).add(student.id),
     );
+    try {
+      const state = await getW8DomainState({
+        config: mutationConfig,
+        domain: "LEARNING",
+        audience: "teacher",
+        studentUid: student.userId,
+        source: "CURRENT",
+      });
+      if (state.readOnly || state.semesterId !== semesterId) {
+        throw new W8DomainError(
+          "CONFLICT",
+          "현재 학기 범위가 바뀌었습니다. 명단을 새로고침해 주세요.",
+        );
+      }
+      const progress = state.learningProgress.filter(
+        (item) =>
+          item.studentUid === student.userId && item.status !== "NOT_STARTED",
+      );
+      if (progress.length === 0) {
+        alert("초기화할 현재 학기 학습 진행 기록이 없습니다.");
+        return;
+      }
+
+      const progressByEnrollment = new Map<string, typeof progress>();
+      progress.forEach((item) => {
+        const entries = progressByEnrollment.get(item.enrollmentId) || [];
+        entries.push(item);
+        progressByEnrollment.set(item.enrollmentId, entries);
+      });
+      let resetCount = 0;
+      for (const [enrollmentId, entries] of progressByEnrollment) {
+        for (let index = 0; index < entries.length; index += 100) {
+          const chunk = entries.slice(index, index + 100);
+          const response = await resetLearningProgress({
+            semesterId: state.semesterId,
+            expectedSemesterRevision: state.manifestRevision,
+            studentUid: student.userId,
+            enrollmentId,
+            entries: chunk.map((item) => ({
+              contentId: item.contentId,
+              expectedProgressRevision: item.revision,
+            })),
+            reason:
+              "교사가 학생 명단에서 방테스트 계정 학습 진행 초기화를 확인함",
+          });
+          resetCount += Number(response.result.resetCount || chunk.length);
+        }
+      }
+      alert(`현재 학기 학습 진행 기록 ${resetCount}건을 초기화했습니다.`);
+    } catch (error) {
+      console.error("Failed to reset learning progress:", error);
+      alert(getCorePointResetErrorMessage(error));
+    } finally {
+      setResettingCorePointStudentIds((current) => {
+        const next = new Set(current);
+        next.delete(student.id);
+        return next;
+      });
+    }
   };
 
   const handleRefreshList = async () => {
@@ -601,10 +767,9 @@ const StudentList: React.FC = () => {
             )}
             <div className="flex w-full items-center gap-2 overflow-x-auto md:w-auto">
               <select
-                aria-label="학년 필터"
                 value={gradeFilter}
                 onChange={(e) => setGradeFilter(e.target.value)}
-                className="min-h-11 rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700 focus:border-blue-500 focus:outline-none"
+                className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700 focus:border-blue-500 focus:outline-none"
               >
                 <option value="all">전체 학년</option>
                 {gradeOptions.map((grade) => (
@@ -614,10 +779,9 @@ const StudentList: React.FC = () => {
                 ))}
               </select>
               <select
-                aria-label="반 필터"
                 value={classFilter}
                 onChange={(e) => setClassFilter(e.target.value)}
-                className="min-h-11 rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700 focus:border-blue-500 focus:outline-none"
+                className="rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700 focus:border-blue-500 focus:outline-none"
               >
                 <option value="all">전체 반</option>
                 {classOptions.map((cls) => (
@@ -628,8 +792,7 @@ const StudentList: React.FC = () => {
               </select>
               <button
                 onClick={() => void handleRefreshList()}
-                aria-label="명단 새로고침 및 필터 초기화"
-                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-600 transition hover:border-blue-500 hover:text-blue-600"
+                className="rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-600 transition hover:border-blue-500 hover:text-blue-600"
                 title="명단 새로고침 및 필터 초기화"
               >
                 <i
@@ -641,32 +804,27 @@ const StudentList: React.FC = () => {
             <div className="flex w-full gap-2 md:w-auto">
               <input
                 type="text"
-                aria-label="학생 이름 또는 이메일 검색"
                 placeholder="이름 또는 이메일 검색"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="min-h-11 flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none md:w-64"
+                className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-blue-500 focus:outline-none md:w-64"
               />
               <button
                 onClick={applyFilters}
-                className="min-h-11 whitespace-nowrap rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
+                className="whitespace-nowrap rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
               >
                 <i className="fas fa-search mr-1"></i>검색
               </button>
             </div>
           </div>
 
-          <ResponsiveDataContainer
-            className="flex-1"
-            label="학생 명단과 관리 작업"
-          >
+          <div className="flex-1 overflow-x-auto">
             <table className="w-full min-w-[680px] text-left text-sm md:min-w-0">
               <thead className="bg-gray-100 text-xs font-bold uppercase text-gray-600">
                 <tr>
                   <th className="w-10 p-4 text-center">
                     <input
                       type="checkbox"
-                      aria-label="현재 학생 목록 전체 선택"
                       onChange={(e) => handleSelectAll(e.target.checked)}
                       checked={
                         pagedStudents.length > 0 &&
@@ -692,6 +850,12 @@ const StudentList: React.FC = () => {
                       데이터를 불러오는 중...
                     </td>
                   </tr>
+                ) : loadError ? (
+                  <tr>
+                    <td colSpan={7} className="p-10 text-center text-red-500">
+                      {loadError}
+                    </td>
+                  </tr>
                 ) : filteredStudents.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="p-10 text-center text-gray-400">
@@ -707,7 +871,6 @@ const StudentList: React.FC = () => {
                       <td className="p-4 text-center">
                         <input
                           type="checkbox"
-                          aria-label={`${student.name || "이름 없음"} 학생 선택`}
                           checked={selectedIds.has(student.id)}
                           onChange={() => handleSelect(student.id)}
                           className="h-4 w-4 rounded text-blue-600 focus:ring-blue-500"
@@ -730,7 +893,7 @@ const StudentList: React.FC = () => {
                             setDetailModalOpen(true);
                           }}
                           title="학생 학습 현황 보기"
-                          className="min-h-11 w-full text-left font-bold text-gray-800 hover:text-blue-600 hover:underline group-hover:text-blue-600"
+                          className="w-full text-left font-bold text-gray-800 hover:text-blue-600 hover:underline group-hover:text-blue-600"
                         >
                           <span className="flex items-center">
                             <span>{student.name || "(이름 없음)"}</span>
@@ -756,8 +919,7 @@ const StudentList: React.FC = () => {
                                   setDetailInitialTab("profile");
                                   setDetailModalOpen(true);
                                 }}
-                                aria-label={`${student.name || "이름 없음"} 학생 정보 수정`}
-                                className="flex min-h-11 min-w-11 items-center justify-center gap-1 rounded bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-blue-600 transition hover:bg-blue-100"
+                                className="flex items-center gap-1 rounded bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-blue-600 transition hover:bg-blue-100"
                                 title="수정"
                               >
                                 <i className="fas fa-edit"></i>
@@ -766,8 +928,7 @@ const StudentList: React.FC = () => {
                               <button
                                 onClick={() => void handleDelete(student.id)}
                                 disabled={deletingStudentIds.has(student.id)}
-                                aria-label={`${student.name || "이름 없음"} 학생 정보 삭제`}
-                                className="flex min-h-11 min-w-11 items-center justify-center gap-1 rounded bg-red-50 px-2.5 py-1.5 text-xs font-bold text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                className="flex items-center gap-1 rounded bg-red-50 px-2.5 py-1.5 text-xs font-bold text-red-600 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
                                 title={
                                   student.isTeacherAccount
                                     ? "학생 정보만 삭제"
@@ -777,31 +938,32 @@ const StudentList: React.FC = () => {
                                 <i className="fas fa-trash"></i>
                                 <span className="hidden lg:inline">삭제</span>
                               </button>
-                              {isBangTestStudent(student) && (
-                                <button
-                                  onClick={() =>
-                                    void handleResetCorePoints(student)
-                                  }
-                                  disabled={resettingCorePointStudentIds.has(
-                                    student.id,
-                                  )}
-                                  className="flex items-center gap-1 rounded bg-amber-50 px-2.5 py-1.5 text-xs font-bold text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
-                                  title="방테스트 핵심포인트 클릭 기록 초기화"
-                                >
-                                  <i
-                                    className={`fas ${
-                                      resettingCorePointStudentIds.has(
-                                        student.id,
-                                      )
-                                        ? "fa-spinner fa-spin"
-                                        : "fa-undo"
-                                    }`}
-                                  ></i>
-                                  <span className="hidden lg:inline">
-                                    핵심초기화
-                                  </span>
-                                </button>
-                              )}
+                              {canResetCorePoints &&
+                                isBangTestStudent(student) && (
+                                  <button
+                                    onClick={() =>
+                                      void handleResetCorePoints(student)
+                                    }
+                                    disabled={resettingCorePointStudentIds.has(
+                                      student.id,
+                                    )}
+                                    className="flex items-center gap-1 rounded bg-amber-50 px-2.5 py-1.5 text-xs font-bold text-amber-700 transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+                                    title="방테스트 핵심포인트 클릭 기록 초기화"
+                                  >
+                                    <i
+                                      className={`fas ${
+                                        resettingCorePointStudentIds.has(
+                                          student.id,
+                                        )
+                                          ? "fa-spinner fa-spin"
+                                          : "fa-undo"
+                                      }`}
+                                    ></i>
+                                    <span className="hidden lg:inline">
+                                      핵심초기화
+                                    </span>
+                                  </button>
+                                )}
                             </>
                           )}
                         </div>
@@ -811,7 +973,7 @@ const StudentList: React.FC = () => {
                 )}
               </tbody>
             </table>
-          </ResponsiveDataContainer>
+          </div>
 
           {!loading && studentPageGroups.length > 1 && (
             <div className="flex flex-wrap items-center justify-center gap-2 border-t border-gray-100 bg-white px-5 py-3">
@@ -829,7 +991,7 @@ const StudentList: React.FC = () => {
                       onClick={() => setCurrentPage(page)}
                       title={`${page}페이지: ${group.label}`}
                       aria-label={`${page}페이지, ${group.label}`}
-                      className={`h-11 min-w-11 rounded-md px-2 text-xs font-bold transition ${currentPage === page ? "bg-blue-600 text-white shadow-sm" : "bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-blue-600"}`}
+                      className={`min-w-8 h-8 rounded-md px-2 text-xs font-bold transition ${currentPage === page ? "bg-blue-600 text-white shadow-sm" : "bg-gray-100 text-gray-600 hover:bg-blue-50 hover:text-blue-600"}`}
                     >
                       {page}
                     </button>

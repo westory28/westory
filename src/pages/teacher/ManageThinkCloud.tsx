@@ -1,42 +1,46 @@
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  getDoc,
-  getDocs,
-  onSnapshot,
-  query,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
-  where,
-  writeBatch,
-} from "firebase/firestore";
 import { useAuth } from "../../contexts/AuthContext";
-import { db } from "../../lib/firebase";
 import WordCloudView from "../../components/common/WordCloudView";
 import {
-  buildThinkCloudResponsesCollectionPath,
-  buildThinkCloudSessionCollectionPath,
-  buildThinkCloudStateDocPath,
   DEFAULT_THINK_CLOUD_OPTIONS,
   formatClassLabel,
   formatGradeLabel,
   normalizeThinkCloudOptions,
   type ThinkCloudOptions,
   type ThinkCloudResponse,
-  type ThinkCloudSession,
 } from "../../lib/thinkCloud";
 import { canWriteLessonManagement } from "../../lib/permissions";
+import {
+  createLegacyThinkCloudSession,
+  createLegacyThinkCloudActionKey,
+  deleteLegacyThinkCloudSession,
+  getLegacyThinkCloudState,
+  transitionLegacyThinkCloudSession,
+} from "../../lib/legacyThinkCloudAdapter";
+import {
+  W8DomainError,
+  type W8ThinkCloudManagedClass,
+  type W8ThinkCloudSession,
+} from "../../lib/w8Domains";
 
-type SessionWithId = ThinkCloudSession & { id: string };
+type SessionWithId = W8ThinkCloudSession;
 type SchoolOption = { value: string; label: string };
 type StudentRosterItem = {
   uid: string;
   name: string;
   number: string;
+};
+type ReadLoadState = "loading" | "ready" | "permission" | "error";
+
+const getReadFailureState = (error: unknown): ReadLoadState => {
+  if (error instanceof W8DomainError) {
+    return error.kind === "PERMISSION" ? "permission" : "error";
+  }
+  const errorCode =
+    error && typeof error === "object" && "code" in error
+      ? String((error as { code?: unknown }).code || "")
+      : "";
+  return errorCode.includes("permission-denied") ? "permission" : "error";
 };
 
 const defaultGradeOptions: SchoolOption[] = [
@@ -55,18 +59,33 @@ const defaultClassOptions: SchoolOption[] = Array.from(
 
 const ManageThinkCloud: React.FC = () => {
   const { config, currentUser, userData } = useAuth();
-  const [activeSessionId, setActiveSessionId] = useState("");
+  const [activeSessionIds, setActiveSessionIds] = useState<string[]>([]);
   const [sessions, setSessions] = useState<SessionWithId[]>([]);
+  const [sessionLoadState, setSessionLoadState] = useState<
+    "loading" | "ready" | "permission" | "error"
+  >("loading");
+  const [sessionLoadAttempt, setSessionLoadAttempt] = useState(0);
   const [selectedSessionId, setSelectedSessionId] = useState("");
   const [responses, setResponses] = useState<
     Array<ThinkCloudResponse & { id: string }>
   >([]);
+  const [responseLoadState, setResponseLoadState] =
+    useState<ReadLoadState>("ready");
+  const [responseLoadKey, setResponseLoadKey] = useState("");
+  const [responseLoadAttempt, setResponseLoadAttempt] = useState(0);
   const [loadingAction, setLoadingAction] = useState(false);
+  const [managedClasses, setManagedClasses] = useState<
+    W8ThinkCloudManagedClass[]
+  >([]);
   const [message, setMessage] = useState("");
   const [isCreateMode, setIsCreateMode] = useState(false);
   const [cloudModalOpen, setCloudModalOpen] = useState(false);
   const [mobileSessionListOpen, setMobileSessionListOpen] = useState(false);
   const [classStudents, setClassStudents] = useState<StudentRosterItem[]>([]);
+  const [rosterLoadState, setRosterLoadState] =
+    useState<ReadLoadState>("ready");
+  const [rosterLoadKey, setRosterLoadKey] = useState("");
+  const [rosterLoadAttempt, setRosterLoadAttempt] = useState(0);
   const [gradeOptions, setGradeOptions] =
     useState<SchoolOption[]>(defaultGradeOptions);
   const [classOptions, setClassOptions] =
@@ -82,6 +101,19 @@ const ManageThinkCloud: React.FC = () => {
     DEFAULT_THINK_CLOUD_OPTIONS,
   );
   const canEdit = canWriteLessonManagement(userData, currentUser?.email || "");
+  const selectedReadKey = `${String(config?.year || "")}-${String(
+    config?.semester || "",
+  )}:${selectedSessionId}`;
+  const selectedResponseLoadState: ReadLoadState = selectedSessionId
+    ? responseLoadKey === selectedReadKey
+      ? responseLoadState
+      : "loading"
+    : "ready";
+  const selectedRosterLoadState: ReadLoadState = selectedSessionId
+    ? rosterLoadKey === selectedReadKey
+      ? rosterLoadState
+      : "loading"
+    : "ready";
 
   const selectedSession = useMemo(
     () => sessions.find((session) => session.id === selectedSessionId) || null,
@@ -99,132 +131,157 @@ const ManageThinkCloud: React.FC = () => {
       }),
     [sessions, filterGrade, filterClass],
   );
+  const targetClassOptions = useMemo(() => {
+    const optionsForGrade = managedClasses
+      .filter((item) => item.grade === targetGrade)
+      .map((item) => ({
+        value: item.classNumber,
+        label: formatClassLabel(item.classNumber),
+      }));
+    return optionsForGrade.length > 0 ? optionsForGrade : classOptions;
+  }, [classOptions, managedClasses, targetGrade]);
 
   useEffect(() => {
-    const stateRef = doc(db, buildThinkCloudStateDocPath(config));
-    const unsubscribe = onSnapshot(stateRef, (snap) => {
-      if (!snap.exists()) {
-        setActiveSessionId("");
-        return;
-      }
-      setActiveSessionId(String(snap.data().activeSessionId || "").trim());
-    });
-    return () => unsubscribe();
-  }, [config]);
-
-  useEffect(() => {
-    const sessionsRef = collection(
-      db,
-      buildThinkCloudSessionCollectionPath(config),
-    );
-    const unsubscribe = onSnapshot(sessionsRef, (snap) => {
-      const loaded = snap.docs.map((item) => {
-        const raw = item.data() as ThinkCloudSession;
-        return {
-          ...raw,
-          id: item.id,
-          options: normalizeThinkCloudOptions(raw.options),
-        };
-      });
-      loaded.sort((a, b) => {
-        const ta = Number(
-          (a.createdAt as { seconds?: number } | undefined)?.seconds || 0,
+    let cancelled = false;
+    const loadSessions = async () => {
+      setSessionLoadState("loading");
+      try {
+        const state = await getLegacyThinkCloudState(config, "teacher");
+        if (cancelled) return;
+        const loaded: SessionWithId[] = state.thinkCloudSessions.map(
+          (session) => ({
+            ...session,
+            options: normalizeThinkCloudOptions(session.options),
+          }),
         );
-        const tb = Number(
-          (b.createdAt as { seconds?: number } | undefined)?.seconds || 0,
+        loaded.sort((a, b) => {
+          const ta = Number(
+            (a.createdAt as { seconds?: number } | undefined)?.seconds || 0,
+          );
+          const tb = Number(
+            (b.createdAt as { seconds?: number } | undefined)?.seconds || 0,
+          );
+          return tb - ta;
+        });
+        setActiveSessionIds(state.thinkCloudState.activeSessionIds);
+        setManagedClasses(state.thinkCloudManagedClasses);
+        if (state.thinkCloudManagedClasses.length > 0) {
+          const nextGrades = Array.from(
+            new Map(
+              state.thinkCloudManagedClasses.map((item) => [
+                item.grade,
+                {
+                  value: item.grade,
+                  label: formatGradeLabel(item.grade),
+                },
+              ]),
+            ).values(),
+          );
+          const nextClasses = Array.from(
+            new Map(
+              state.thinkCloudManagedClasses.map((item) => [
+                item.classNumber,
+                {
+                  value: item.classNumber,
+                  label: formatClassLabel(item.classNumber),
+                },
+              ]),
+            ).values(),
+          );
+          setGradeOptions(nextGrades);
+          setClassOptions(nextClasses);
+        }
+        setSessions(loaded);
+        setSelectedSessionId((current) =>
+          current && loaded.some((item) => item.id === current)
+            ? current
+            : loaded[0]?.id || "",
         );
-        return tb - ta;
-      });
-      setSessions(loaded);
-      if (!selectedSessionId && loaded.length > 0) {
-        setSelectedSessionId(loaded[0].id);
+        setSessionLoadState("ready");
+      } catch (error) {
+        if (!cancelled) {
+          console.warn("Failed to load think cloud sessions:", error);
+          setActiveSessionIds([]);
+          setManagedClasses([]);
+          setSessions([]);
+          setSelectedSessionId("");
+          setSessionLoadState(getReadFailureState(error));
+        }
       }
-      if (
-        selectedSessionId &&
-        !loaded.some((item) => item.id === selectedSessionId)
-      ) {
-        setSelectedSessionId(loaded.length > 0 ? loaded[0].id : "");
-      }
-    });
-    return () => unsubscribe();
-  }, [config, selectedSessionId]);
+    };
+    void loadSessions();
+    return () => {
+      cancelled = true;
+    };
+  }, [config, sessionLoadAttempt]);
 
   useEffect(() => {
     if (!selectedSessionId) {
       setResponses([]);
+      setResponseLoadState("ready");
+      setResponseLoadKey("");
       return;
     }
-    const responsesRef = collection(
-      db,
-      buildThinkCloudResponsesCollectionPath(config, selectedSessionId),
-    );
-    const unsubscribe = onSnapshot(responsesRef, (snap) => {
-      const loaded = snap.docs.map((item) => ({
-        id: item.id,
-        ...(item.data() as ThinkCloudResponse),
-      }));
-      loaded.sort((a, b) => {
-        const ta = Number(
-          (a.createdAt as { seconds?: number } | undefined)?.seconds || 0,
+    let cancelled = false;
+    const loadSelectedSession = async () => {
+      setResponseLoadKey(selectedReadKey);
+      setRosterLoadKey(selectedReadKey);
+      setResponseLoadState("loading");
+      setRosterLoadState("loading");
+      try {
+        const state = await getLegacyThinkCloudState(
+          config,
+          "teacher",
+          selectedSessionId,
         );
-        const tb = Number(
-          (b.createdAt as { seconds?: number } | undefined)?.seconds || 0,
-        );
-        return tb - ta;
-      });
-      setResponses(loaded);
-    });
-    return () => unsubscribe();
-  }, [config, selectedSessionId]);
-
-  useEffect(() => {
-    if (
-      !selectedSession ||
-      !selectedSession.targetGrade ||
-      !selectedSession.targetClass
-    ) {
-      setClassStudents([]);
-      return;
-    }
-
-    const q = query(
-      collection(db, "users"),
-      where("grade", "==", selectedSession.targetGrade),
-      where("class", "==", selectedSession.targetClass),
-    );
-    const unsubscribe = onSnapshot(q, (snap) => {
-      const loaded: StudentRosterItem[] = [];
-      snap.forEach((item) => {
-        const data = item.data() as {
-          role?: string;
-          name?: string;
-          number?: string;
-          uid?: string;
-        };
-        if (data.role === "teacher") return;
-        const uid = String(data.uid || item.id).trim();
-        if (!uid) return;
-        loaded.push({
-          uid,
-          name: String(data.name || "").trim() || "이름없음",
-          number: String(data.number || "").trim(),
+        if (cancelled) return;
+        const loaded = [...state.thinkCloudResponses];
+        loaded.sort((a, b) => {
+          const ta = Number(
+            (a.createdAt as { seconds?: number } | undefined)?.seconds || 0,
+          );
+          const tb = Number(
+            (b.createdAt as { seconds?: number } | undefined)?.seconds || 0,
+          );
+          return tb - ta;
         });
-      });
-      loaded.sort((a, b) => {
-        const an = Number.parseInt(a.number, 10);
-        const bn = Number.parseInt(b.number, 10);
-        const aValid = Number.isFinite(an) && an > 0;
-        const bValid = Number.isFinite(bn) && bn > 0;
-        if (aValid && bValid) return an - bn;
-        if (aValid) return -1;
-        if (bValid) return 1;
-        return a.name.localeCompare(b.name);
-      });
-      setClassStudents(loaded);
-    });
-
-    return () => unsubscribe();
-  }, [selectedSession]);
+        const loadedRoster = [...state.thinkCloudRoster];
+        loadedRoster.sort((a, b) => {
+          const an = Number.parseInt(a.number, 10);
+          const bn = Number.parseInt(b.number, 10);
+          const aValid = Number.isFinite(an) && an > 0;
+          const bValid = Number.isFinite(bn) && bn > 0;
+          if (aValid && bValid) return an - bn;
+          if (aValid) return -1;
+          if (bValid) return 1;
+          return a.name.localeCompare(b.name);
+        });
+        setResponses(loaded);
+        setClassStudents(loadedRoster);
+        setResponseLoadState("ready");
+        setRosterLoadState("ready");
+      } catch (error) {
+        if (!cancelled) {
+          console.warn("Failed to load think cloud session details:", error);
+          setResponses([]);
+          setClassStudents([]);
+          const failureState = getReadFailureState(error);
+          setResponseLoadState(failureState);
+          setRosterLoadState(failureState);
+        }
+      }
+    };
+    void loadSelectedSession();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    config,
+    responseLoadAttempt,
+    rosterLoadAttempt,
+    selectedReadKey,
+    selectedSessionId,
+  ]);
 
   const cloudEntries = useMemo(() => {
     const buckets = new Map<
@@ -270,55 +327,16 @@ const ManageThinkCloud: React.FC = () => {
   };
 
   useEffect(() => {
-    const loadSchoolConfig = async () => {
-      try {
-        const schoolSnap = await getDoc(
-          doc(db, "site_settings", "school_config"),
-        );
-        if (!schoolSnap.exists()) return;
-        const data = schoolSnap.data() as {
-          grades?: Array<{ value?: string; label?: string }>;
-          classes?: Array<{ value?: string; label?: string }>;
-        };
-
-        if (Array.isArray(data.grades) && data.grades.length > 0) {
-          const nextGrades = data.grades
-            .map((item) => ({
-              value: String(item.value || "").trim(),
-              label: String(item.label || "").trim(),
-            }))
-            .filter((item) => item.value && item.label);
-          if (nextGrades.length > 0) setGradeOptions(nextGrades);
-        }
-
-        if (Array.isArray(data.classes) && data.classes.length > 0) {
-          const nextClasses = data.classes
-            .map((item) => ({
-              value: String(item.value || "").trim(),
-              label: String(item.label || "").trim(),
-            }))
-            .filter((item) => item.value && item.label);
-          if (nextClasses.length > 0) setClassOptions(nextClasses);
-        }
-      } catch (error) {
-        console.warn("Failed to load school options for think cloud:", error);
-      }
-    };
-
-    void loadSchoolConfig();
-  }, []);
-
-  useEffect(() => {
     if (!gradeOptions.some((item) => item.value === targetGrade)) {
       setTargetGrade(gradeOptions[0]?.value || "1");
     }
   }, [gradeOptions, targetGrade]);
 
   useEffect(() => {
-    if (!classOptions.some((item) => item.value === targetClass)) {
-      setTargetClass(classOptions[0]?.value || "1");
+    if (!targetClassOptions.some((item) => item.value === targetClass)) {
+      setTargetClass(targetClassOptions[0]?.value || "1");
     }
-  }, [classOptions, targetClass]);
+  }, [targetClass, targetClassOptions]);
 
   useEffect(() => {
     if (
@@ -337,6 +355,10 @@ const ManageThinkCloud: React.FC = () => {
       setFilterClass("all");
     }
   }, [filterClass, classOptions]);
+
+  useEffect(() => {
+    if (!canEdit && isCreateMode) setIsCreateMode(false);
+  }, [canEdit, isCreateMode]);
 
   useEffect(() => {
     if (isCreateMode) return;
@@ -360,11 +382,17 @@ const ManageThinkCloud: React.FC = () => {
   };
 
   const openCreateMode = () => {
+    if (!canEdit) return;
     setIsCreateMode(true);
     setSelectedSessionId("");
     setMessage("");
     resetCreateForm();
     setMobileSessionListOpen(false);
+  };
+
+  const handleActionFailure = (error: unknown, fallback: string) => {
+    console.error(fallback, error);
+    setMessage(error instanceof W8DomainError ? error.message : fallback);
   };
 
   const handleStartSession = async () => {
@@ -379,205 +407,196 @@ const ManageThinkCloud: React.FC = () => {
       return;
     }
     if (!currentUser) return;
-
+    const targetManagedClass = managedClasses.find(
+      (item) => item.grade === targetGrade && item.classNumber === targetClass,
+    );
+    if (!targetManagedClass) {
+      setMessage("현재 학기에 배정된 학년과 반을 선택해 주세요.");
+      return;
+    }
     setLoadingAction(true);
     setMessage("");
     try {
-      const stateRef = doc(db, buildThinkCloudStateDocPath(config));
-      const stateSnap = await getDoc(stateRef);
-      const previousSessionId = stateSnap.exists()
-        ? String(stateSnap.data().activeSessionId || "").trim()
-        : "";
-
-      if (previousSessionId) {
-        const previousRef = doc(
-          db,
-          buildThinkCloudSessionCollectionPath(config),
-          previousSessionId,
-        );
-        await updateDoc(previousRef, {
-          status: "closed",
-          closedAt: serverTimestamp(),
-        });
-      }
-
-      const payload: ThinkCloudSession = {
+      const result = await createLegacyThinkCloudSession({
+        actionKey: createLegacyThinkCloudActionKey({
+          actorUid: currentUser.uid,
+          description: description.trim(),
+          operation: "create",
+          options,
+          semester: String(config?.semester || ""),
+          targetClass,
+          targetGrade,
+          title: safeTitle,
+          year: String(config?.year || ""),
+        }),
+        config,
+        expectedStateRevision: targetManagedClass.stateExists
+          ? targetManagedClass.stateRevision
+          : null,
         title: safeTitle,
         description: description.trim(),
         targetGrade,
         targetClass,
-        targetGradeLabel:
-          gradeOptions.find((item) => item.value === targetGrade)?.label || "",
-        targetClassLabel:
-          classOptions.find((item) => item.value === targetClass)?.label || "",
-        status: "active",
+        targetGradeLabel: formatGradeLabel(targetGrade),
+        targetClassLabel: formatClassLabel(targetClass),
         options,
-        createdBy: currentUser.uid,
-        createdByName: (userData?.name || "교사").trim() || "교사",
-        createdAt: serverTimestamp(),
-        activatedAt: serverTimestamp(),
-      };
-
-      const added = await addDoc(
-        collection(db, buildThinkCloudSessionCollectionPath(config)),
-        payload,
-      );
-      await setDoc(stateRef, {
-        activeSessionId: added.id,
-        updatedAt: serverTimestamp(),
       });
-      setMessage("새 생각모아 세션을 시작했습니다.");
+      setActiveSessionIds((current) => [
+        ...(result.result.sessionId ? [result.result.sessionId] : []),
+        ...current.filter(
+          (id) =>
+            id !== result.result.sessionId &&
+            !sessions.some(
+              (session) =>
+                session.id === id &&
+                session.targetGrade === targetGrade &&
+                session.targetClass === targetClass,
+            ),
+        ),
+      ]);
+      setSelectedSessionId(result.result.sessionId || "");
       setIsCreateMode(false);
-      setSelectedSessionId(added.id);
+      setMessage("새 생각모아 주제를 시작했습니다.");
+      setSessionLoadAttempt((value) => value + 1);
     } catch (error) {
-      console.error("Failed to start think cloud session:", error);
-      setMessage("세션 시작에 실패했습니다.");
+      handleActionFailure(error, "세션 시작에 실패했습니다.");
+      setSessionLoadAttempt((value) => value + 1);
     } finally {
       setLoadingAction(false);
     }
   };
 
-  const handleCloseSession = async () => {
+  const handleTransitionSession = async (
+    targetStatus: "active" | "paused" | "closed",
+    successMessage: string,
+    failureMessage: string,
+  ) => {
     if (!canEdit) return;
-    if (!selectedSessionId) return;
+    if (!selectedSessionId || !selectedSession) return;
     setLoadingAction(true);
     setMessage("");
     try {
-      const sessionRef = doc(
-        db,
-        buildThinkCloudSessionCollectionPath(config),
-        selectedSessionId,
-      );
-      await updateDoc(sessionRef, {
-        status: "closed",
-        closedAt: serverTimestamp(),
+      await transitionLegacyThinkCloudSession({
+        actionKey: `${selectedSessionId}:${targetStatus}`,
+        config,
+        sessionId: selectedSessionId,
+        expectedSessionRevision: selectedSession.revision || 0,
+        expectedStateRevision: selectedSession.stateExists
+          ? selectedSession.stateRevision
+          : null,
+        targetStatus,
       });
-
-      if (selectedSessionId === activeSessionId) {
-        await setDoc(doc(db, buildThinkCloudStateDocPath(config)), {
-          activeSessionId: "",
-          updatedAt: serverTimestamp(),
-        });
-      }
-      setMessage("선택한 세션을 종료했습니다.");
+      setActiveSessionIds((current) =>
+        targetStatus === "active"
+          ? [
+              selectedSessionId,
+              ...current.filter((id) => id !== selectedSessionId),
+            ]
+          : current.filter((id) => id !== selectedSessionId),
+      );
+      setMessage(successMessage);
+      setSessionLoadAttempt((value) => value + 1);
     } catch (error) {
-      console.error("Failed to close think cloud session:", error);
-      setMessage("세션 종료에 실패했습니다.");
+      handleActionFailure(error, failureMessage);
+      setSessionLoadAttempt((value) => value + 1);
     } finally {
       setLoadingAction(false);
     }
   };
 
-  const handlePauseSession = async () => {
-    if (!canEdit) return;
-    if (!selectedSessionId) return;
-    setLoadingAction(true);
-    setMessage("");
-    try {
-      const sessionRef = doc(
-        db,
-        buildThinkCloudSessionCollectionPath(config),
-        selectedSessionId,
-      );
-      await updateDoc(sessionRef, { status: "paused" });
-      if (selectedSessionId === activeSessionId) {
-        await setDoc(doc(db, buildThinkCloudStateDocPath(config)), {
-          activeSessionId: "",
-          updatedAt: serverTimestamp(),
-        });
-      }
-      setMessage("선택한 세션을 일시 정지했습니다.");
-    } catch (error) {
-      console.error("Failed to pause think cloud session:", error);
-      setMessage("일시 정지에 실패했습니다.");
-    } finally {
-      setLoadingAction(false);
-    }
-  };
+  const handleCloseSession = () =>
+    handleTransitionSession(
+      "closed",
+      "선택한 세션을 종료했습니다.",
+      "세션 종료에 실패했습니다.",
+    );
 
-  const handleResumeSession = async () => {
-    if (!canEdit) return;
-    if (!selectedSessionId) return;
-    setLoadingAction(true);
-    setMessage("");
-    try {
-      if (activeSessionId && activeSessionId !== selectedSessionId) {
-        const previousRef = doc(
-          db,
-          buildThinkCloudSessionCollectionPath(config),
-          activeSessionId,
-        );
-        await updateDoc(previousRef, { status: "paused" });
-      }
+  const handlePauseSession = () =>
+    handleTransitionSession(
+      "paused",
+      "선택한 세션을 일시 정지했습니다.",
+      "일시 정지에 실패했습니다.",
+    );
 
-      const sessionRef = doc(
-        db,
-        buildThinkCloudSessionCollectionPath(config),
-        selectedSessionId,
-      );
-      await updateDoc(sessionRef, {
-        status: "active",
-        activatedAt: serverTimestamp(),
-      });
-      await setDoc(doc(db, buildThinkCloudStateDocPath(config)), {
-        activeSessionId: selectedSessionId,
-        updatedAt: serverTimestamp(),
-      });
-      setMessage("선택한 세션을 재개했습니다.");
-    } catch (error) {
-      console.error("Failed to resume think cloud session:", error);
-      setMessage("재개에 실패했습니다.");
-    } finally {
-      setLoadingAction(false);
-    }
-  };
+  const handleResumeSession = () =>
+    handleTransitionSession(
+      "active",
+      "선택한 세션을 재개했습니다.",
+      "재개에 실패했습니다.",
+    );
 
   const handleDeleteSession = async () => {
     if (!canEdit) return;
-    if (!selectedSessionId) return;
+    if (!selectedSessionId || !selectedSession) return;
     const confirmed = window.confirm(
       "선택한 주제를 삭제할까요? 해당 주제의 응답도 함께 삭제됩니다.",
     );
     if (!confirmed) return;
-
     setLoadingAction(true);
     setMessage("");
     try {
-      const responsesRef = collection(
-        db,
-        buildThinkCloudResponsesCollectionPath(config, selectedSessionId),
+      await deleteLegacyThinkCloudSession({
+        actionKey: selectedSessionId,
+        config,
+        sessionId: selectedSessionId,
+        expectedSessionRevision: selectedSession.revision || 0,
+        expectedStateRevision: selectedSession.stateExists
+          ? selectedSession.stateRevision
+          : null,
+      });
+      setActiveSessionIds((current) =>
+        current.filter((id) => id !== selectedSessionId),
       );
-      const responsesSnap = await getDocs(responsesRef);
-      if (!responsesSnap.empty) {
-        const batch = writeBatch(db);
-        responsesSnap.docs.forEach((item) => {
-          batch.delete(item.ref);
-        });
-        await batch.commit();
-      }
-
-      const sessionRef = doc(
-        db,
-        buildThinkCloudSessionCollectionPath(config),
-        selectedSessionId,
-      );
-      await deleteDoc(sessionRef);
-
-      if (selectedSessionId === activeSessionId) {
-        await setDoc(doc(db, buildThinkCloudStateDocPath(config)), {
-          activeSessionId: "",
-          updatedAt: serverTimestamp(),
-        });
-      }
-
       setSelectedSessionId("");
       setMessage("선택한 주제를 삭제했습니다.");
+      setSessionLoadAttempt((value) => value + 1);
     } catch (error) {
-      console.error("Failed to delete think cloud session:", error);
-      setMessage("삭제에 실패했습니다.");
+      handleActionFailure(error, "주제 삭제에 실패했습니다.");
+      setSessionLoadAttempt((value) => value + 1);
     } finally {
       setLoadingAction(false);
     }
+  };
+
+  const renderReadStatus = (
+    kind: "response" | "roster",
+    state: ReadLoadState,
+  ) => {
+    if (state === "ready") return null;
+    const label = kind === "response" ? "응답" : "학생 명단";
+    if (state === "loading") {
+      return (
+        <span className="text-sm font-bold text-gray-500" role="status">
+          {label}을 불러오는 중입니다.
+        </span>
+      );
+    }
+    const retry = () => {
+      if (kind === "response") {
+        setResponseLoadAttempt((value) => value + 1);
+      } else {
+        setRosterLoadAttempt((value) => value + 1);
+      }
+    };
+    return (
+      <span
+        className={`inline-flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold ${
+          state === "permission"
+            ? "border-amber-200 bg-amber-50 text-amber-800"
+            : "border-red-200 bg-red-50 text-red-700"
+        }`}
+        role="alert"
+      >
+        <span>
+          {state === "permission"
+            ? `${label}을 볼 권한이 없습니다.`
+            : `${label}을 불러오지 못했습니다.`}
+        </span>
+        <button type="button" className="underline" onClick={retry}>
+          다시 시도
+        </button>
+      </span>
+    );
   };
 
   const renderCreatePanel = () => (
@@ -640,7 +659,7 @@ const ManageThinkCloud: React.FC = () => {
               onChange={(e) => setTargetClass(e.target.value)}
               className="border border-gray-300 rounded-lg px-3 py-1.5 font-bold bg-white"
             >
-              {classOptions.map((cls) => (
+              {targetClassOptions.map((cls) => (
                 <option key={cls.value} value={cls.value}>
                   {cls.label}
                 </option>
@@ -768,7 +787,7 @@ const ManageThinkCloud: React.FC = () => {
     }
 
     const isActive =
-      selectedSession.id === activeSessionId &&
+      activeSessionIds.includes(selectedSession.id) &&
       selectedSession.status === "active";
     const isPaused = selectedSession.status === "paused";
 
@@ -830,81 +849,94 @@ const ManageThinkCloud: React.FC = () => {
             {"\uC2E4\uC2DC\uAC04 \uC9D1\uACC4"}
           </h3>
           <div className="flex flex-1 flex-col gap-2 lg:items-end">
-            <span className="text-sm font-bold text-gray-500">
-              {"\uC751\uB2F5 "}
-              {responses.length}
-              {"\uAC1C"}
-            </span>
-            {pendingStudents.length > 0 ? (
-              <div className="flex flex-wrap gap-2 lg:justify-end">
-                {pendingStudents.map((student) => (
-                  <span
-                    key={student.uid}
-                    className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700"
-                    title={student.name}
-                  >
-                    {student.name}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
-                {"\uC804\uC6D0 \uC81C\uCD9C \uC644\uB8CC"}
+            {renderReadStatus("response", selectedResponseLoadState)}
+            {renderReadStatus("roster", selectedRosterLoadState)}
+            {selectedResponseLoadState === "ready" && (
+              <span className="text-sm font-bold text-gray-500">
+                {"\uC751\uB2F5 "}
+                {responses.length}
+                {"\uAC1C"}
               </span>
             )}
+            {selectedResponseLoadState === "ready" &&
+              selectedRosterLoadState === "ready" &&
+              (classStudents.length === 0 ? (
+                <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-bold text-gray-600">
+                  제출 대상 학생이 없습니다.
+                </span>
+              ) : pendingStudents.length > 0 ? (
+                <div className="flex flex-wrap gap-2 lg:justify-end">
+                  {pendingStudents.map((student) => (
+                    <span
+                      key={student.uid}
+                      className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700"
+                      title={student.name}
+                    >
+                      {student.name}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+                  {"\uC804\uC6D0 \uC81C\uCD9C \uC644\uB8CC"}
+                </span>
+              ))}
           </div>
         </div>
 
-        {cloudEntries.length === 0 ? (
-          <p className="text-sm text-gray-500 font-bold">
-            아직 제출된 응답이 없습니다.
-          </p>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setCloudModalOpen(true)}
-            className="w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-2xl"
-            title="클릭해서 크게 보기"
-          >
-            <WordCloudView
-              entries={cloudEntries}
-              showSubmitters={!selectedSession.options.anonymous}
-            />
-          </button>
-        )}
+        {selectedResponseLoadState === "ready" &&
+          (cloudEntries.length === 0 ? (
+            <p className="text-sm text-gray-500 font-bold">
+              아직 제출된 응답이 없습니다.
+            </p>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setCloudModalOpen(true)}
+              className="w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-2xl"
+              title="클릭해서 크게 보기"
+            >
+              <WordCloudView
+                entries={cloudEntries}
+                showSubmitters={!selectedSession.options.anonymous}
+              />
+            </button>
+          ))}
 
-        <div className="mt-6 flex flex-wrap justify-end gap-2">
-          <button
-            onClick={() => void handlePauseSession()}
-            disabled={!isActive || loadingAction}
-            className="bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 px-5 rounded-lg disabled:opacity-50"
-          >
-            {loadingAction ? "처리 중..." : "일시 정지"}
-          </button>
-          <button
-            onClick={() => void handleResumeSession()}
-            disabled={
-              isActive || selectedSession.status === "closed" || loadingAction
-            }
-            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-5 rounded-lg disabled:opacity-50"
-          >
-            {loadingAction ? "처리 중..." : "재개"}
-          </button>
-          <button
-            onClick={() => void handleCloseSession()}
-            disabled={!isActive || loadingAction}
-            className="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2.5 px-5 rounded-lg disabled:opacity-50"
-          >
-            {loadingAction ? "처리 중..." : "이 세션 종료"}
-          </button>
-          <button
-            onClick={() => void handleDeleteSession()}
-            disabled={loadingAction}
-            className="bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-5 rounded-lg disabled:opacity-50"
-          >
-            {loadingAction ? "처리 중..." : "주제 삭제"}
-          </button>
-        </div>
+        {canEdit && (
+          <div className="mt-6 flex flex-wrap justify-end gap-2">
+            <button
+              onClick={() => void handlePauseSession()}
+              disabled={!isActive || loadingAction}
+              className="bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 px-5 rounded-lg disabled:opacity-50"
+            >
+              {loadingAction ? "처리 중..." : "일시 정지"}
+            </button>
+            <button
+              onClick={() => void handleResumeSession()}
+              disabled={
+                isActive || selectedSession.status === "closed" || loadingAction
+              }
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-5 rounded-lg disabled:opacity-50"
+            >
+              {loadingAction ? "처리 중..." : "재개"}
+            </button>
+            <button
+              onClick={() => void handleCloseSession()}
+              disabled={!isActive || loadingAction}
+              className="bg-gray-700 hover:bg-gray-800 text-white font-bold py-2.5 px-5 rounded-lg disabled:opacity-50"
+            >
+              {loadingAction ? "처리 중..." : "이 세션 종료"}
+            </button>
+            <button
+              onClick={() => void handleDeleteSession()}
+              disabled={loadingAction}
+              className="bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-5 rounded-lg disabled:opacity-50"
+            >
+              {loadingAction ? "처리 중..." : "주제 삭제"}
+            </button>
+          </div>
+        )}
       </section>
     );
   };
@@ -991,16 +1023,49 @@ const ManageThinkCloud: React.FC = () => {
             </div>
 
             <nav className="flex-1 overflow-y-auto lg:max-h-[60vh]">
-              {filteredSessions.length === 0 && (
+              {sessionLoadState === "loading" && (
                 <p className="p-4 text-sm font-bold text-gray-500">
-                  저장된 주제가 없습니다.
+                  저장된 주제를 불러오는 중입니다.
                 </p>
               )}
+              {sessionLoadState === "permission" && (
+                <div
+                  className="p-4 text-sm font-bold text-gray-600"
+                  role="status"
+                >
+                  <p>담당 학급의 생각모아 자료만 확인할 수 있습니다.</p>
+                  <p className="mt-1 text-xs font-medium text-gray-500">
+                    담당 학년·반 정보가 없거나 접근 권한이 부족합니다.
+                  </p>
+                </div>
+              )}
+              {sessionLoadState === "error" && (
+                <div
+                  className="p-4 text-sm font-bold text-gray-600"
+                  role="alert"
+                >
+                  <p>저장된 주제를 불러오지 못했습니다.</p>
+                  <button
+                    type="button"
+                    className="mt-2 text-blue-700 underline"
+                    onClick={() => setSessionLoadAttempt((value) => value + 1)}
+                  >
+                    다시 시도
+                  </button>
+                </div>
+              )}
+              {sessionLoadState === "ready" &&
+                filteredSessions.length === 0 && (
+                  <p className="p-4 text-sm font-bold text-gray-500">
+                    저장된 주제가 없습니다.
+                  </p>
+                )}
               {filteredSessions.map((session) => {
                 const isSelected =
                   !isCreateMode && selectedSessionId === session.id;
                 const isActive =
-                  session.id === activeSessionId && session.status === "active";
+                  activeSessionIds.includes(session.id) &&
+                  session.status === "active";
                 return (
                   <button
                     type="button"
@@ -1035,17 +1100,30 @@ const ManageThinkCloud: React.FC = () => {
         </aside>
 
         <div className="flex-1">
-          <div className="think-cloud-desktop-create-action mb-4 justify-end">
-            <button
-              onClick={openCreateMode}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-5 rounded-lg shadow-sm"
+          {canEdit && (
+            <div className="think-cloud-desktop-create-action mb-4 justify-end">
+              <button
+                onClick={openCreateMode}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 px-5 rounded-lg shadow-sm"
+              >
+                + 새 주제
+              </button>
+            </div>
+          )}
+          {!canEdit && (
+            <div
+              className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800"
+              role="status"
             >
-              + 새 주제
-            </button>
-          </div>
-          {isCreateMode ? renderCreatePanel() : renderDetailPanel()}
+              읽기 전용 권한으로 접속 중입니다. 저장된 생각모아 자료만 확인할 수
+              있습니다.
+            </div>
+          )}
+          {isCreateMode && canEdit ? renderCreatePanel() : renderDetailPanel()}
           {message && (
-            <p className="mt-3 text-sm font-bold text-blue-700">{message}</p>
+            <div className="mt-3 text-sm font-bold text-blue-700" role="status">
+              <p>{message}</p>
+            </div>
           )}
         </div>
       </div>
@@ -1078,24 +1156,33 @@ const ManageThinkCloud: React.FC = () => {
                   생각모아 워드클라우드 대형 보기
                 </h3>
                 <div className="mt-2 text-sm font-bold text-gray-600 md:text-base">
-                  TV 출력용 모드입니다. 응답 {responses.length}개
+                  {selectedResponseLoadState === "ready"
+                    ? `TV 출력용 모드입니다. 응답 ${responses.length}개`
+                    : renderReadStatus("response", selectedResponseLoadState)}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {pendingStudents.length > 0 ? (
-                    pendingStudents.map((student) => (
-                      <span
-                        key={student.uid}
-                        className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700 md:text-sm"
-                        title={student.name}
-                      >
-                        {student.name}
+                  {renderReadStatus("roster", selectedRosterLoadState)}
+                  {selectedResponseLoadState === "ready" &&
+                    selectedRosterLoadState === "ready" &&
+                    (classStudents.length === 0 ? (
+                      <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-bold text-gray-600 md:text-sm">
+                        제출 대상 학생이 없습니다.
                       </span>
-                    ))
-                  ) : (
-                    <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 md:text-sm">
-                      전원 제출 완료
-                    </span>
-                  )}
+                    ) : pendingStudents.length > 0 ? (
+                      pendingStudents.map((student) => (
+                        <span
+                          key={student.uid}
+                          className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-xs font-bold text-rose-700 md:text-sm"
+                          title={student.name}
+                        >
+                          {student.name}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 md:text-sm">
+                        전원 제출 완료
+                      </span>
+                    ))}
                 </div>
               </div>
               <button
@@ -1108,16 +1195,18 @@ const ManageThinkCloud: React.FC = () => {
               </button>
             </div>
             <div className="custom-scroll flex-1 overflow-y-auto overscroll-contain px-4 pb-4 pt-4 md:px-8 md:pb-8 md:pt-6">
-              <div className="flex min-h-full w-full items-center justify-center">
-                <WordCloudView
-                  entries={cloudEntries}
-                  showSubmitters={
-                    !!selectedSession && !selectedSession.options.anonymous
-                  }
-                  variant="default"
-                  className="w-full"
-                />
-              </div>
+              {selectedResponseLoadState === "ready" && (
+                <div className="flex min-h-full w-full items-center justify-center">
+                  <WordCloudView
+                    entries={cloudEntries}
+                    showSubmitters={
+                      !!selectedSession && !selectedSession.options.anonymous
+                    }
+                    variant="default"
+                    className="w-full"
+                  />
+                </div>
+              )}
             </div>
           </div>
         </div>

@@ -2,10 +2,13 @@ import React, { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import SemesterSourceSummary from "../../components/common/SemesterSourceSummary";
 import StatePanel from "../../components/common/StatePanel";
+import { useAuth } from "../../contexts/AuthContext";
 import { getServerSemesterCoreState } from "../../lib/semesterCore";
 import "../../assets/semesterCutover.css";
+import StudentCurrentEnrollmentCard from "./components/StudentCurrentEnrollmentCard";
 
 const StudentArchiveOverview: React.FC = () => {
+  const { currentUser } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const requestedSource = searchParams.get("source")?.toUpperCase();
@@ -70,6 +73,10 @@ const StudentArchiveOverview: React.FC = () => {
         <p>{preparing ? "다음 학기" : "지난 학기"}</p>
         <h2>{preparing ? "준비 중인 학기" : "학기별 기록"}</h2>
       </div>
+
+      {!preparing && currentUser?.uid && (
+        <StudentCurrentEnrollmentCard studentUid={currentUser.uid} />
+      )}
 
       {state === "LOADING" && (
         <StatePanel

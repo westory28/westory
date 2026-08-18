@@ -13,9 +13,17 @@ const ownedPaths = [
   "src/pages/teacher/Dashboard.tsx",
   "src/components/common/NotificationBell.tsx",
   "src/pages/teacher/components/SettingsNotifications.tsx",
+  "src/pages/teacher/ManageSchedule.tsx",
+  "src/pages/student/Calendar.tsx",
+  "src/pages/student/components/CalendarSection.tsx",
+  "src/lib/legacyStudentScheduleAdapter.ts",
 ];
 for (const path of [...ownedPaths, "src/pages/w8Domains.css"]) {
-  assert.equal(existsSync(resolve(path)), true, `Missing mounted W8 module: ${path}`);
+  assert.equal(
+    existsSync(resolve(path)),
+    true,
+    `Missing mounted W8 module: ${path}`,
+  );
 }
 
 const directMutation =
@@ -23,7 +31,11 @@ const directMutation =
 const directImport = /from\s+["']firebase\/(?:firestore|storage)["']/u;
 for (const path of ownedPaths) {
   const source = read(path);
-  assert.doesNotMatch(source, directMutation, `${path} retains direct persistence.`);
+  assert.doesNotMatch(
+    source,
+    directMutation,
+    `${path} retains direct persistence.`,
+  );
   assert.doesNotMatch(source, directImport, `${path} imports persistence SDK.`);
 }
 
@@ -68,7 +80,10 @@ for (const checkId of [
   "attendance_domain_readiness",
   "communication_domain_readiness",
 ]) {
-  assert.ok(implementation.includes(checkId), `Missing W8 readiness check ${checkId}.`);
+  assert.ok(
+    implementation.includes(checkId),
+    `Missing W8 readiness check ${checkId}.`,
+  );
 }
 assert.match(
   implementation,
@@ -125,9 +140,13 @@ const implicitWrites = analysis.observations.filter(
     owned.has(entry.file) &&
     entry.boundary !== "QUERY_CALLABLE" &&
     entry.triggers.some((trigger) =>
-      ["MOUNT_EFFECT", "LISTENER", "TIMER", "UNMOUNT_CLEANUP", "RENDER"].includes(
-        trigger,
-      ),
+      [
+        "MOUNT_EFFECT",
+        "LISTENER",
+        "TIMER",
+        "UNMOUNT_CLEANUP",
+        "RENDER",
+      ].includes(trigger),
     ),
 );
 assert.deepEqual(implicitWrites, []);
@@ -159,25 +178,37 @@ for (const name of [
 const app = read("src/App.tsx");
 assert.match(app, /import\("\.\/pages\/student\/W8StudentHub"\)/u);
 assert.match(app, /import\("\.\/pages\/teacher\/W8TeacherHub"\)/u);
-assert.doesNotMatch(
+assert.match(
   app,
   /import\("\.\/pages\/teacher\/ManageSchedule"\)/u,
-  "Legacy schedule writer route is still mounted.",
+  "The Production schedule presentation adapter must remain mounted.",
 );
-for (const unmounted of ["CalendarSection", "TeacherCalendarSection"]) {
-  assert.doesNotMatch(
-    app,
-    new RegExp(`import\\([^)]*${unmounted}`, "u"),
-    `Legacy calendar projection remains mounted: ${unmounted}.`,
+const scheduleAdapter = read("src/pages/teacher/ManageSchedule.tsx");
+for (const command of [
+  "createScheduleEvent",
+  "updateScheduleEvent",
+  "deleteScheduleEvent",
+]) {
+  assert.match(
+    scheduleAdapter,
+    new RegExp(`\\b${command}\\s*\\(`, "u"),
+    `Schedule adapter does not use ${command}.`,
   );
 }
+assert.match(scheduleAdapter, /getW8DomainState/u);
+assert.match(scheduleAdapter, /domain:\s*"SCHEDULE"/u);
+const studentScheduleAdapter = read("src/lib/legacyStudentScheduleAdapter.ts");
+assert.match(studentScheduleAdapter, /getW8DomainState/u);
+assert.match(studentScheduleAdapter, /domain:\s*"SCHEDULE"/u);
+assert.match(studentScheduleAdapter, /audience:\s*"student"/u);
+assert.match(studentScheduleAdapter, /source:\s*"CURRENT"/u);
 
 console.log(
   JSON.stringify({
     suite: "w8-query-purity",
     passed: true,
     mountedModules: ownedPaths.length,
-    unmountedLegacyCalendarModules: 2,
+    productionPresentationAdapters: 3,
     directReads: 0,
     directWrites: 0,
     implicitWrites: 0,

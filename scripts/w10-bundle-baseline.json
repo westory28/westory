@@ -1,59 +1,189 @@
 {
-  "schemaVersion": 1,
-  "baselineWave": "W9",
-  "baselineSha": "9f9cf691dc72669384a23bf6a23c5081cf8f09bd",
+  "schemaVersion": 3,
+  "baselineWave": "W10P",
+  "referenceBuilds": {
+    "productionPresentation": {
+      "sha": "676869fa289d3e7ecef234cbb5cca65c60ec4597",
+      "purpose": "actual Production presentation source",
+      "nodeVersion": "24.13.1",
+      "npmVersion": "11.8.0",
+      "viteVersion": "6.4.2"
+    },
+    "w11Functional": {
+      "sha": "ef74b571a6964ddbc61eb7877a98d21b3c7c8c85",
+      "purpose": "W11 functional and security source",
+      "nodeVersion": "24.13.1",
+      "npmVersion": "11.8.0",
+      "viteVersion": "6.4.2"
+    }
+  },
   "budgets": {
     "mainJs": {
       "pattern": "^main-[^.]+\\.js$",
-      "baselineBytes": 167455,
+      "referenceBuild": "w11Functional",
+      "baselineBytes": 170115,
+      "baselineGzipBytes": 51087,
       "maxBytes": 205000,
       "maxGzipBytes": 62000
     },
     "mainCss": {
       "pattern": "^main-[^.]+\\.css$",
-      "baselineBytes": 317021,
-      "maxBytes": 330000,
-      "maxGzipBytes": 65000
+      "referenceBuild": "w11Functional",
+      "baselineBytes": 334454,
+      "baselineGzipBytes": 59741,
+      "maxBytes": 375000,
+      "maxGzipBytes": 68000,
+      "rationale": "Production selectors are restored while W11 CSS and locally bundled assets remain available."
     },
-    "teacherOperations": {
-      "pattern": "^teacherOperations-[^.]+\\.js$",
-      "baselineBytes": 8387,
+    "studentNote": {
+      "pattern": "^Note-[^.]+\\.js$",
+      "referenceBuild": "productionPresentation",
+      "baselineBytes": 6923,
+      "baselineGzipBytes": 2711,
+      "maxBytes": 8500,
+      "maxGzipBytes": 3400
+    },
+    "studentThinkCloud": {
+      "pattern": "^ThinkCloud-[^.]+\\.js$",
+      "referenceBuild": "productionPresentation",
+      "baselineBytes": 9432,
+      "baselineGzipBytes": 3675,
       "maxBytes": 12000,
-      "maxGzipBytes": 5000
+      "maxGzipBytes": 4800,
+      "rationale": "The Production screen keeps its presentation and adds scoped callable loading, permission, retry, and idempotent submit states."
     },
-    "teacherHub": {
+    "studentPoints": {
+      "pattern": "^Points-[^.]+\\.js$",
+      "referenceBuild": "productionPresentation",
+      "baselineBytes": 19060,
+      "baselineGzipBytes": 5904,
+      "maxBytes": 24000,
+      "maxGzipBytes": 7600
+    },
+    "teacherManagePoints": {
+      "pattern": "^ManagePoints-[^.]+\\.js$",
+      "referenceBuild": "productionPresentation",
+      "baselineBytes": 183523,
+      "baselineGzipBytes": 43586,
+      "maxBytes": 210000,
+      "maxGzipBytes": 50000,
+      "rationale": "The Production Wis tabs are restored and backed by W7 bounded queries, CAS commands, receipts, and retry intents."
+    },
+    "teacherManageLesson": {
+      "pattern": "^ManageLesson-[^.]+\\.js$",
+      "referenceBuild": "productionPresentation",
+      "baselineBytes": 116936,
+      "baselineGzipBytes": 30330,
+      "maxBytes": 130000,
+      "maxGzipBytes": 35000
+    },
+    "teacherManageSchedule": {
+      "pattern": "^ManageSchedule-[^.]+\\.js$",
+      "referenceBuild": "productionPresentation",
+      "baselineBytes": 12768,
+      "baselineGzipBytes": 4249,
+      "maxBytes": 21000,
+      "maxGzipBytes": 7500,
+      "rationale": "The Production calendar markup is retained and the W8 CURRENT projection and command adapter are added."
+    },
+    "teacherManageThinkCloud": {
+      "pattern": "^ManageThinkCloud-[^.]+\\.js$",
+      "referenceBuild": "productionPresentation",
+      "baselineBytes": 22477,
+      "baselineGzipBytes": 6054,
+      "maxBytes": 27500,
+      "maxGzipBytes": 7800,
+      "rationale": "The Production screen adds independently recoverable response and roster states plus W8 command intents."
+    },
+    "teacherManageExam": {
+      "pattern": "^ManageExam-[^.]+\\.js$",
+      "referenceBuild": "productionPresentation",
+      "baselineBytes": 254427,
+      "baselineGzipBytes": 65165,
+      "maxBytes": 290000,
+      "maxGzipBytes": 75000,
+      "rationale": "The four Production grade tabs remain mounted and use the W6B evidence command layer."
+    },
+    "w8StudentHub": {
+      "pattern": "^W8StudentHub-[^.]+\\.js$",
+      "referenceBuild": "w11Functional",
+      "baselineBytes": 11773,
+      "baselineGzipBytes": 4010,
+      "maxBytes": 14500,
+      "maxGzipBytes": 5200
+    },
+    "w8TeacherHub": {
       "pattern": "^W8TeacherHub-[^.]+\\.js$",
+      "referenceBuild": "w11Functional",
       "baselineBytes": 43208,
-      "maxBytes": 56000,
-      "maxGzipBytes": 15000
+      "baselineGzipBytes": 11655,
+      "maxBytes": 60000,
+      "maxGzipBytes": 17000,
+      "rationale": "The W11 hub remains lazy and adds W10P compatibility projections used by restored Production screens."
     },
     "pdfVendor": {
       "pattern": "^vendor-pdf-[^.]+\\.js$",
+      "referenceBuild": "productionPresentation",
       "baselineBytes": 462791,
+      "baselineGzipBytes": 136818,
       "maxBytes": 480000,
       "maxGzipBytes": 145000
     },
     "excelVendor": {
       "pattern": "^vendor-excel-[^.]+\\.js$",
-      "baselineBytes": 107438,
-      "maxBytes": 120000,
-      "maxGzipBytes": 34000
+      "referenceBuild": "productionPresentation",
+      "baselineBytes": 1048176,
+      "baselineGzipBytes": 301541,
+      "maxBytes": 1100000,
+      "maxGzipBytes": 320000,
+      "rationale": "The exact Production grade workbook implementation already loads ExcelJS; the smaller W11-only chunk is not a valid presentation-parity baseline."
     }
   },
   "fontNetworkBudget": {
     "patterns": [
+      "^fa-v4compatibility-[^.]+\\.woff2$",
       "^fa-regular-400-[^.]+\\.woff2$",
-      "^fa-solid-900-[^.]+\\.woff2$"
+      "^fa-solid-900-[^.]+\\.woff2$",
+      "^fa-brands-400-[^.]+\\.woff2$"
     ],
-    "expectedFiles": 2,
-    "maxBytes": 190000
+    "expectedFiles": 4,
+    "baselineBytes": 287656,
+    "maxBytes": 290000
+  },
+  "assetContract": {
+    "fontAwesome": {
+      "package": "@fortawesome/fontawesome-free",
+      "version": "6.4.0",
+      "entryImport": "@fortawesome/fontawesome-free/css/all.min.css"
+    },
+    "notoSansKr": {
+      "sourceCss": "src/assets/tailwind.css",
+      "importUrl": "https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800;900&display=swap",
+      "expectedBuiltImportCount": 1
+    },
+    "forbiddenRuntimeCdnPatterns": [
+      "cdn\\.tailwindcss\\.com",
+      "use\\.fontawesome\\.com",
+      "kit\\.fontawesome\\.com",
+      "cdnjs\\.cloudflare\\.com/ajax/libs/font-awesome(?:/|$)",
+      "cdn\\.jsdelivr\\.net/npm/@fortawesome(?:/|$)",
+      "unpkg\\.com/@fortawesome(?:/|$)"
+    ]
   },
   "requiredLazyImports": [
+    "./pages/student/lesson/Note",
+    "./pages/student/lesson/ThinkCloud",
+    "./pages/student/Points",
+    "./pages/teacher/ManageLesson",
+    "./pages/teacher/ManageSchedule",
+    "./pages/teacher/ManagePoints",
+    "./pages/teacher/ManageThinkCloud",
+    "./pages/student/W8StudentHub",
+    "./pages/teacher/W8TeacherHub",
     "./pages/teacher/ManageExam",
     "./pages/teacher/ManageHistoryDictionary",
     "./pages/teacher/ManageMaps",
-    "./pages/teacher/ManageSourceArchive",
-    "./pages/teacher/W8TeacherHub"
+    "./pages/teacher/ManageSourceArchive"
   ],
   "forbiddenInitialChunkTerms": [
     "pdf.worker.min",

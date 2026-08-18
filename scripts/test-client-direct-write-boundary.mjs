@@ -8,6 +8,7 @@ import {
   validateCommandManifest,
   validateGatewayPurity,
   validatePolicy,
+  validateUserEventCommandCallablePurity,
 } from "./verify-client-direct-write-boundary.mjs";
 
 const tempRoots = [];
@@ -149,6 +150,35 @@ try {
   });
   assert.throws(() => validateGatewayPurity(gatewayEffect), /explicit user event/);
 
+  const lessonRewardUserEvent = fixture({
+    "lib/firebase.ts": `export const getHttpsCallable = async (name: string) => async () => name;`,
+    "lib/lessonCorePointReward.ts": `
+      import { getHttpsCallable } from "./firebase";
+      export const executeLessonCorePointCommand = async () => (await getHttpsCallable("executeLessonCorePointCommand"))();
+    `,
+    "App.tsx": `
+      import { executeLessonCorePointCommand } from "./lib/lessonCorePointReward";
+      export const App = () => <button onClick={() => void executeLessonCorePointCommand()}>reward</button>;
+    `,
+  });
+  validateUserEventCommandCallablePurity(lessonRewardUserEvent);
+  const lessonRewardMount = fixture({
+    "lib/firebase.ts": `export const getHttpsCallable = async (name: string) => async () => name;`,
+    "lib/lessonCorePointReward.ts": `
+      import { getHttpsCallable } from "./firebase";
+      export const executeLessonCorePointCommand = async () => (await getHttpsCallable("executeLessonCorePointCommand"))();
+    `,
+    "App.tsx": `
+      import { useEffect } from "react";
+      import { executeLessonCorePointCommand } from "./lib/lessonCorePointReward";
+      export const App = () => { useEffect(() => { void executeLessonCorePointCommand(); }, []); return null; };
+    `,
+  });
+  assert.throws(
+    () => validateUserEventCommandCallablePurity(lessonRewardMount),
+    /must never dispatch from render, mount, listener, timer, cleanup, or an implicit\/unreached path/,
+  );
+
   const cleanPolicy = buildProposedPolicy(base);
   validatePolicy(cleanPolicy, base);
   const duplicate = structuredClone(cleanPolicy);
@@ -193,6 +223,7 @@ try {
         "query callable exclusion",
         "HTTP mutation and dynamic method sensitivity",
         "gateway effect rejection",
+        "lesson reward explicit user-event purity",
         "allowlist duplicate stale expiry",
         "28-command manifest exact count",
       ],

@@ -38,6 +38,11 @@ try {
   assert.match(appSource, /LegacyRouteRedirect to="\/teacher\/quiz"/);
   assert.match(loginSource, /runtimeEnvironment === "staging"/);
   assert.match(loginSource, /signInWithEmailAndPassword/);
+  assert.match(
+    loginSource,
+    /nextRole === "student" \? \[\] : staffPermissions/,
+    "Teacher login must preserve existing delegated permissions.",
+  );
   assert.match(headerSource, /runtimeEnvironment === "staging"/);
   assert.match(headerSource, /세션 만료 테스트/);
 
@@ -139,11 +144,14 @@ try {
     "/teacher/quiz/history-classroom",
     "/teacher/exam",
     "/teacher/lesson",
+    "/teacher/learning",
+    "/teacher/schedule",
+    "/teacher/attendance",
+    "/teacher/communication",
   ]) {
     assert.equal(teacherDecision(pathname).status, "AUTHORIZED", pathname);
   }
   assert.equal(teacherDecision("/teacher/settings").status, "UNAUTHORIZED");
-  assert.equal(teacherDecision("/teacher/schedule").status, "UNAUTHORIZED");
   assert.equal(teacherDecision("/teacher/points").status, "UNAUTHORIZED");
   assert.equal(
     teacherDecision("/teacher/points", {

@@ -1,88 +1,420 @@
-import React, { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import ProvenanceBadge from "../../components/common/ProvenanceBadge";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import type FullCalendar from "@fullcalendar/react";
+import { useNavigate } from "react-router-dom";
+import { InlineLoading } from "../../components/common/LoadingState";
+import ScheduleEventDetailModal from "../../components/common/ScheduleEventDetailModal";
 import StatePanel from "../../components/common/StatePanel";
-import TeacherOperationsQueue from "../../components/common/TeacherOperationsQueue";
-import W8ReadOnlyState from "../../components/common/W8ReadOnlyState";
-import W8StatusBadge from "../../components/common/W8StatusBadge";
 import WisRankingPanel from "../../components/common/WisRankingPanel";
 import { useAuth } from "../../contexts/AuthContext";
-import { getServerSemesterCoreState } from "../../lib/semesterCore";
+import { runAfterNextPaint } from "../../lib/browserTasks";
+import { db } from "../../lib/firebase";
+import {
+  getKoreanPublicHolidays,
+  mergeEventsWithKoreanPublicHolidays,
+} from "../../lib/koreanPublicHolidays";
+import { lazyWithRetry } from "../../lib/lazyWithRetry";
+import { canManageW8Domains, canReadPoints } from "../../lib/permissions";
+import { useScheduleCategories } from "../../lib/scheduleCategories";
+import { getYearSemester } from "../../lib/semesterScope";
+import {
+  subscribeVisibleNotices,
+  type VisibleNotice,
+} from "../../lib/visibleSchedule";
 import {
   W8DomainError,
-  formatW8DateTime,
   getW8DomainState,
+  toW8LocalDateTimeInput,
   toW8StatePanelState,
-  type W8DomainState,
+  type W8ScheduleEvent,
 } from "../../lib/w8Domains";
-import {
-  getTeacherOperationsState,
-  type TeacherOperationsState,
-} from "../../lib/teacherOperations";
-import "../w8Domains.css";
+import type { CalendarEvent, SystemConfig } from "../../types";
 
-interface TeacherDomainWorkload {
-  readinessCurrent: boolean | null;
-}
+const TeacherCalendarSection = lazyWithRetry(
+  () => import("./components/TeacherCalendarSection"),
+  "teacher-calendar-section",
+);
 
-const emptyWorkload: TeacherDomainWorkload = {
-  readinessCurrent: null,
+const getVisibleCalendarEvents = (
+  events: CalendarEvent[],
+  filterClass: string,
+) =>
+  events.filter((event) => {
+    const isCommon =
+      event.targetType === "common" || event.targetType === "all";
+    const isHoliday = event.eventType === "holiday";
+    const targetClass = String(event.targetClass || "").trim();
+    if (filterClass === "all") return true;
+    if (filterClass === "common") return isCommon || isHoliday;
+    return (
+      isCommon ||
+      isHoliday ||
+      (event.targetType === "class" && targetClass === filterClass)
+    );
+  });
+
+const legacyEventTypeFromW8 = (event: W8ScheduleEvent) => {
+  const sourceMatch = event.sourceReference.match(
+    /^legacy-calendar:(exam|performance|event|diagnosis|formative):/u,
+  );
+  if (sourceMatch) return sourceMatch[1];
+  if (event.eventType === "HOLIDAY") return "holiday";
+  if (event.eventType === "ASSESSMENT") return "performance";
+  if (event.eventType === "LEARNING_DEADLINE") return "formative";
+  return "event";
+};
+
+const toLegacyDate = (value: string) =>
+  toW8LocalDateTimeInput(value).split("T")[0] || value.split("T")[0] || "";
+
+const w8ClassIdForLegacyClass = async (
+  semesterId: string,
+  legacyClass: string,
+) => {
+  const [grade, classNumber] = legacyClass.split("-");
+  if (!grade || !classNumber || !globalThis.crypto?.subtle) return legacyClass;
+  const digest = await globalThis.crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(
+      `${semesterId}\n${grade.normalize("NFKC").toLowerCase()}::${classNumber
+        .normalize("NFKC")
+        .toLowerCase()}`,
+    ),
+  );
+  const hash = Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+  return `class_${hash.slice(0, 32)}`;
+};
+
+const buildLegacyClassByW8Id = async (semesterId: string) => {
+  const legacyClasses = Array.from({ length: 3 }, (_, gradeIndex) =>
+    Array.from(
+      { length: 12 },
+      (_, classIndex) => `${gradeIndex + 1}-${classIndex + 1}`,
+    ),
+  ).flat();
+  const pairs = await Promise.all(
+    legacyClasses.map(
+      async (legacyClass) =>
+        [
+          await w8ClassIdForLegacyClass(semesterId, legacyClass),
+          legacyClass,
+        ] as const,
+    ),
+  );
+  return new Map(pairs);
+};
+
+const projectScheduleEvent = (
+  event: W8ScheduleEvent,
+  legacyClassByW8Id: Map<string, string>,
+): CalendarEvent => ({
+  id: event.eventId,
+  title: event.title,
+  description: event.description,
+  start: toLegacyDate(event.startAt),
+  end: toLegacyDate(event.endAt),
+  period: event.period,
+  eventType: legacyEventTypeFromW8(event),
+  targetType: event.classIds.length ? "class" : "common",
+  targetClass: event.classIds.length
+    ? legacyClassByW8Id.get(event.classIds[0]) || event.classIds[0]
+    : undefined,
+});
+
+const getCategoryLabel = (category?: string) => {
+  if (category === "event") return "학교 행사";
+  if (category === "exam") return "정기 시험";
+  if (category === "performance") return "수행평가";
+  if (category === "prep") return "준비";
+  if (category === "dday") return "D-Day";
+  return "공지";
+};
+
+const ReadOnlyTeacherNoticeBoard: React.FC<{
+  config: SystemConfig | null;
+  canManage: boolean;
+  onOpenCommunication: () => void;
+}> = ({ config, canManage, onOpenCommunication }) => {
+  const [notices, setNotices] = useState<VisibleNotice[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
+
+  useEffect(() => {
+    const { year, semester } = getYearSemester(config);
+    const path = `years/${year}/semesters/${semester}/notices`;
+    setLoading(true);
+    return subscribeVisibleNotices(
+      db,
+      path,
+      undefined,
+      (loadedNotices) => {
+        setNotices(loadedNotices.filter((notice) => Boolean(notice.imageUrl)));
+        setLoading(false);
+      },
+      (noticeError) => {
+        console.error("Notice fetch error:", noticeError);
+        setLoading(false);
+      },
+    );
+  }, [config]);
+
+  useEffect(() => {
+    setActiveIndex(0);
+    setIsPaused(false);
+  }, [notices.length]);
+
+  const activeNotice = notices[activeIndex] || notices[0] || null;
+  const showCarousel = notices.length > 1;
+  const activeImageRatio = useMemo(() => {
+    if (!activeNotice?.imageWidth || !activeNotice?.imageHeight)
+      return "16 / 9";
+    return `${activeNotice.imageWidth} / ${activeNotice.imageHeight}`;
+  }, [activeNotice]);
+  const move = useCallback(
+    (direction: -1 | 1) => {
+      setActiveIndex((current) => {
+        if (notices.length <= 1) return 0;
+        return (current + direction + notices.length) % notices.length;
+      });
+    },
+    [notices.length],
+  );
+
+  useEffect(() => {
+    if (!showCarousel || isPaused) return undefined;
+    const timerId = window.setInterval(() => move(1), 5000);
+    return () => window.clearInterval(timerId);
+  }, [isPaused, move, showCarousel]);
+
+  return (
+    <div className="flex h-full min-h-[260px] flex-col overflow-hidden rounded-xl border border-gray-200 bg-white p-4 shadow-sm md:min-h-0">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <h3 className="flex items-center text-lg font-extrabold text-gray-900">
+          <i className="fas fa-bullhorn mr-2 text-blue-600"></i>
+          알림장
+        </h3>
+      </div>
+
+      <div className="min-h-0 flex-1">
+        {loading && (
+          <InlineLoading
+            className="flex h-full min-h-[180px] items-center"
+            message="알림장을 불러오는 중입니다."
+            showWarning
+          />
+        )}
+
+        {!loading &&
+          !activeNotice &&
+          (canManage ? (
+            <button
+              type="button"
+              onClick={onOpenCommunication}
+              className="flex h-full min-h-[180px] w-full flex-col items-center justify-center rounded-xl border border-dashed border-blue-200 bg-blue-50/40 text-sm font-bold text-blue-700"
+            >
+              <i className="far fa-image mb-2 text-3xl"></i>
+              알림장 이미지를 등록해 주세요.
+            </button>
+          ) : (
+            <div className="flex h-full min-h-[180px] w-full flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 text-sm font-bold text-gray-400">
+              등록된 알림 이미지가 없습니다.
+            </div>
+          ))}
+
+        {!loading && activeNotice && (
+          <div className="flex h-full flex-col">
+            <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl">
+              <button
+                type="button"
+                onClick={canManage ? onOpenCommunication : undefined}
+                disabled={!canManage}
+                className="group block h-full w-full text-left"
+                title={canManage ? "알림장 이미지 수정" : "알림장 이미지"}
+              >
+                <div
+                  className="flex h-full min-h-[180px] w-full transition-transform duration-500 ease-out will-change-transform motion-reduce:transition-none"
+                  style={{
+                    aspectRatio: activeImageRatio,
+                    transform: `translateX(-${activeIndex * 100}%)`,
+                  }}
+                >
+                  {notices.map((notice) => (
+                    <img
+                      key={notice.id}
+                      src={notice.imageUrl}
+                      alt="알림장"
+                      loading="lazy"
+                      decoding="async"
+                      className="h-full min-h-[180px] w-full shrink-0 object-contain transition-transform duration-500 group-hover:scale-[1.01]"
+                    />
+                  ))}
+                </div>
+              </button>
+              <span className="absolute right-4 top-4 rounded-full bg-blue-600 px-3 py-1 text-xs font-extrabold text-white shadow-sm">
+                {getCategoryLabel(activeNotice.category)}
+              </span>
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              {showCarousel && (
+                <div className="inline-flex shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => move(-1)}
+                    className="inline-flex h-9 w-9 items-center justify-center text-blue-700 transition hover:bg-blue-50"
+                    aria-label="이전 알림"
+                  >
+                    <i className="fas fa-chevron-left text-xs"></i>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsPaused((current) => !current)}
+                    className="inline-flex h-9 w-9 items-center justify-center border-x border-gray-200 text-blue-700 transition hover:bg-blue-50"
+                    aria-label={
+                      isPaused
+                        ? "알림 자동 넘김 재생"
+                        : "알림 자동 넘김 일시정지"
+                    }
+                    title={isPaused ? "재생" : "일시정지"}
+                  >
+                    <i
+                      className={`fas ${isPaused ? "fa-play" : "fa-pause"} text-xs`}
+                    ></i>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => move(1)}
+                    className="inline-flex h-9 w-9 items-center justify-center text-blue-700 transition hover:bg-blue-50"
+                    aria-label="다음 알림"
+                  >
+                    <i className="fas fa-chevron-right text-xs"></i>
+                  </button>
+                </div>
+              )}
+
+              {showCarousel && (
+                <div className="ml-5 flex items-center gap-1.5">
+                  {notices.map((notice, index) => (
+                    <button
+                      key={`${notice.id}-dot`}
+                      type="button"
+                      onClick={() => setActiveIndex(index)}
+                      className={`h-2.5 rounded-full transition ${
+                        activeIndex === index
+                          ? "w-6 bg-blue-600"
+                          : "w-2.5 bg-gray-200"
+                      }`}
+                      aria-label={`${index + 1}번째 알림 보기`}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {canManage && (
+                <>
+                  <button
+                    type="button"
+                    onClick={onOpenCommunication}
+                    className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-extrabold text-gray-600 transition hover:bg-gray-50 hover:text-blue-700"
+                  >
+                    <i className="fas fa-hand-pointer text-gray-400"></i>
+                    이미지 수정
+                  </button>
+                  {activeNotice.developerLogPostId && (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-blue-100 bg-blue-50 px-2.5 py-1 text-xs font-extrabold text-blue-700">
+                      <i className="fas fa-link text-[10px]"></i>
+                      게시물 연동
+                    </span>
+                  )}
+                  <div className="ml-auto flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={onOpenCommunication}
+                      disabled={notices.length <= 1}
+                      className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-extrabold text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-45"
+                    >
+                      <i className="fas fa-list-ol mr-1"></i>
+                      순서
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onOpenCommunication}
+                      className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-extrabold text-blue-700 transition hover:bg-blue-100"
+                    >
+                      <i className="fas fa-plus mr-1"></i>
+                      쓰기
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 };
 
 const TeacherDashboard: React.FC = () => {
-  const { config, configReady } = useAuth();
-  const [state, setState] = useState<W8DomainState | null>(null);
+  const { config, configReady, currentUser, userData } = useAuth();
+  const navigate = useNavigate();
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [detailEvent, setDetailEvent] = useState<CalendarEvent | null>(null);
+  const [filterClass, setFilterClass] = useState("all");
+  const [secondaryPanelsReady, setSecondaryPanelsReady] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<W8DomainError | null>(null);
-  const [operations, setOperations] = useState<TeacherOperationsState | null>(
-    null,
-  );
-  const [operationsError, setOperationsError] = useState("");
-  const [workload, setWorkload] =
-    useState<TeacherDomainWorkload>(emptyWorkload);
+  const [readOnly, setReadOnly] = useState(false);
+
+  const calendarRef = useRef<FullCalendar>(null);
+  const { categories } = useScheduleCategories();
+  const canManageDomains =
+    canManageW8Domains(userData, currentUser?.email) && !readOnly;
+  const canOpenPoints = canReadPoints(userData, currentUser?.email);
+
+  useEffect(() => {
+    const cancel = runAfterNextPaint(() => setSecondaryPanelsReady(true));
+    return cancel;
+  }, []);
 
   const load = useCallback(async () => {
     if (!configReady) return;
     setLoading(true);
     setError(null);
     try {
-      const dashboardState = await getW8DomainState({
+      const nextState = await getW8DomainState({
         config,
         domain: "DASHBOARD",
         audience: "teacher",
         source: "CURRENT",
       });
-      setState(dashboardState);
-      const [operationsResult, readinessResult] = await Promise.allSettled([
-        getTeacherOperationsState({
-          config,
-          semesterId: dashboardState.semesterId,
-          source: "CURRENT",
-          includeTerminal: true,
-          limit: 8,
-        }),
-        getServerSemesterCoreState(dashboardState.semesterId),
-      ]);
-
-      if (operationsResult.status === "fulfilled") {
-        setOperations(operationsResult.value);
-        setOperationsError("");
-      } else {
-        setOperations(null);
-        setOperationsError(
-          operationsResult.reason instanceof Error
-            ? operationsResult.reason.message
-            : "이어 할 업무를 불러오지 못했습니다.",
+      const legacyClassByW8Id = await buildLegacyClassByW8Id(
+        nextState.semesterId,
+      );
+      const projectedEvents = nextState.scheduleEvents
+        .filter((event) => event.status === "ACTIVE")
+        .map((event) => projectScheduleEvent(event, legacyClassByW8Id));
+      const year = nextState.semesterId.split("-")[0] || config?.year || "";
+      try {
+        const holidays = await getKoreanPublicHolidays(year);
+        setEvents(
+          mergeEventsWithKoreanPublicHolidays(projectedEvents, holidays),
         );
+      } catch (holidayError) {
+        console.error("Failed to load Korean public holidays:", holidayError);
+        setEvents(projectedEvents);
       }
-      setWorkload({
-        readinessCurrent:
-          readinessResult.status === "fulfilled"
-            ? (readinessResult.value.readiness?.current ?? null)
-            : null,
-      });
+      setReadOnly(nextState.readOnly);
     } catch (caught) {
-      setWorkload(emptyWorkload);
       setError(
         caught instanceof W8DomainError
           ? caught
@@ -100,8 +432,47 @@ const TeacherDashboard: React.FC = () => {
     void load();
   }, [load]);
 
+  const availableClassTargets = useMemo(() => {
+    const targets = new Set<string>();
+    events.forEach((event) => {
+      if (event.targetType !== "class") return;
+      const targetClass = String(event.targetClass || "").trim();
+      if (targetClass) targets.add(targetClass);
+    });
+    return Array.from(targets).sort((left, right) =>
+      left.localeCompare(right, "ko", { numeric: true }),
+    );
+  }, [events]);
+  const effectiveFilterClass = useMemo(() => {
+    if (filterClass === "all" || filterClass === "common") return filterClass;
+    return availableClassTargets.includes(filterClass) ? filterClass : "all";
+  }, [availableClassTargets, filterClass]);
+
+  useEffect(() => {
+    if (filterClass !== effectiveFilterClass) {
+      setFilterClass(effectiveFilterClass);
+    }
+  }, [effectiveFilterClass, filterClass]);
+
+  const visibleEvents = useMemo(
+    () => getVisibleCalendarEvents(events, effectiveFilterClass),
+    [effectiveFilterClass, events],
+  );
+  const handleDateClick = (dateStr: string) => setSelectedDate(dateStr);
+  const openSchedule = () => {
+    if (canManageDomains) navigate("/teacher/schedule");
+  };
+  const handleEventClick = (event: CalendarEvent) => {
+    setSelectedDate(event.start);
+    setDetailEvent(event);
+  };
+  const handleEditEvent = () => {
+    setDetailEvent(null);
+    openSchedule();
+  };
+
   if (loading) return <StatePanel state="LOADING" />;
-  if (error && !state) {
+  if (error) {
     return (
       <StatePanel
         state={toW8StatePanelState(error)}
@@ -111,218 +482,114 @@ const TeacherDashboard: React.FC = () => {
       />
     );
   }
-  if (!state) return null;
 
-  const summary = state.dashboard;
-  const domainWork = [
-    {
-      id: "attendance",
-      label: "출석 미처리",
-      value: `${summary.attendancePendingCount.toLocaleString("ko-KR")}건`,
-      description: "교사가 아직 입력하거나 마감하지 않은 출석입니다.",
-      route: "/teacher/attendance",
-    },
-    {
-      id: "grade",
-      label: "성적 검토 요청",
-      value: "운영 화면에서 확인",
-      description: "업무 홈에서 성적 자료 전체를 읽지 않습니다.",
-      route: "/teacher/exam?tab=performance",
-    },
-    {
-      id: "wis",
-      label: "위스 주문 요청",
-      value: "운영 화면에서 확인",
-      description: "업무 홈에서 주문 자료 전체를 읽지 않습니다.",
-      route: "/teacher/points",
-    },
-    {
-      id: "learning",
-      label: "공개 예정 학습",
-      value: `${summary.upcomingLearning.length.toLocaleString("ko-KR")}건`,
-      description: "공개 시각이나 상태를 확인할 학습 자료입니다.",
-      route: "/teacher/learning",
-    },
-    {
-      id: "notice",
-      label: "예약 상태 공지",
-      value: "운영 화면에서 확인",
-      description:
-        "공지 전체를 읽지 않고 운영 화면에서 공개 상태를 확인합니다.",
-      route: "/teacher/communication",
-    },
-    {
-      id: "readiness",
-      label: "학기 준비도",
-      value:
-        workload.readinessCurrent === null
-          ? "미확인"
-          : workload.readinessCurrent
-            ? "최신"
-            : "확인 필요",
-      description:
-        workload.readinessCurrent === false
-          ? "준비도 차단 사유를 관리자 학기 관리에서 확인해 주세요."
-          : "현재 학기의 운영 준비도 상태입니다.",
-      route: "/teacher/settings?tab=semester",
-    },
-  ];
   return (
-    <section className="w8-domain-page" aria-labelledby="teacher-home-title">
-      <header className="w8-domain-page__header">
-        <div>
-          <h2 id="teacher-home-title">업무 홈</h2>
-          <p>오늘 처리할 일정과 출석, 학습 자료, 공지를 확인해 주세요.</p>
-          <span className="w8-semester-label">{state.semesterId} 학기</span>
-        </div>
-        <ProvenanceBadge value={state.provenance} readOnly={state.readOnly} />
-      </header>
-      <W8ReadOnlyState state={state} />
-      {error && (
-        <StatePanel
-          state={toW8StatePanelState(error)}
-          compact
-          description={error.message}
-          action={{ label: "새로고침", onClick: () => void load() }}
-        />
-      )}
-
-      <div className="w8-today-grid">
-        {operations ? (
-          <TeacherOperationsQueue
-            drafts={operations.drafts}
-            bulkJobs={operations.bulkJobs}
-            warningCount={operations.warnings.length}
-            domainWork={domainWork}
-          />
-        ) : operationsError ? (
-          <section className="w8-panel w8-panel--wide">
-            <StatePanel
-              state="ERROR"
-              compact
-              title="이어 할 업무를 불러오지 못했습니다."
-              description={operationsError}
-              action={{ label: "다시 불러오기", onClick: () => void load() }}
-            />
-          </section>
-        ) : null}
-        <section className="w8-panel">
-          <div className="w8-panel__heading">
-            <h2>오늘 일정</h2>
-            <Link className="w8-text-link" to="/teacher/schedule">
-              일정 관리
-            </Link>
-          </div>
-          {summary.todaySchedule.length === 0 ? (
-            <StatePanel
-              state="EMPTY"
-              compact
-              title="오늘 등록된 일정이 없습니다."
-            />
-          ) : (
-            <ol className="w8-timeline">
-              {summary.todaySchedule.slice(0, 4).map((event) => (
-                <li key={event.eventId}>
-                  <time dateTime={event.startAt}>
-                    {formatW8DateTime(event.startAt)}
-                  </time>
-                  <div>
-                    <strong>{event.title}</strong>
-                    <p>{event.description}</p>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          )}
-        </section>
-
-        <section className="w8-panel">
-          <div className="w8-panel__heading">
-            <h2>출석 미처리</h2>
-            <Link className="w8-text-link" to="/teacher/attendance">
-              출석 운영
-            </Link>
-          </div>
-          <div className="w8-dashboard-status">
-            <strong>
-              {summary.attendancePendingCount.toLocaleString("ko-KR")}건
-            </strong>
-            <span>
-              업무 홈에서는 조회만 하며 출석 입력은 출석 운영에서 합니다.
+    <div
+      className="dashboard-container teacher-dashboard-container w-full max-w-7xl mx-auto px-4 py-6 flex-1"
+      data-patch-target="teacher-dashboard"
+      data-patch-label="교사 대시보드"
+    >
+      <div className="mb-6 flex flex-col md:flex-row justify-between items-center gap-3 shrink-0">
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl md:text-3xl font-extrabold text-gray-900 tracking-tight">
+            대시보드
+          </h1>
+          {config && (
+            <span className="bg-blue-600 text-white font-bold px-3 py-1 rounded-full text-xs md:text-sm shadow-md shrink-0">
+              {config.year}학년도 {config.semester}학기
             </span>
-          </div>
-        </section>
-
-        <section className="w8-panel">
-          <div className="w8-panel__heading">
-            <h2>공개 예정 학습</h2>
-            <Link className="w8-text-link" to="/teacher/learning">
-              학습 운영
-            </Link>
-          </div>
-          {summary.upcomingLearning.length === 0 ? (
-            <StatePanel
-              state="EMPTY"
-              compact
-              title="공개를 앞둔 학습 자료가 없습니다."
-            />
-          ) : (
-            <ul className="w8-list">
-              {summary.upcomingLearning.slice(0, 3).map((content) => (
-                <li key={content.contentId} className="w8-list__row">
-                  <span className="w8-list__copy">
-                    <strong>{content.title}</strong>
-                    <span>{content.summary}</span>
-                  </span>
-                  <W8StatusBadge value={content.status} />
-                </li>
-              ))}
-            </ul>
           )}
-        </section>
-
-        <section className="w8-panel">
-          <div className="w8-panel__heading">
-            <h2>중요 공지</h2>
-            <Link className="w8-text-link" to="/teacher/communication">
-              공지 운영
-            </Link>
-          </div>
-          {summary.importantNotices.length === 0 ? (
-            <StatePanel
-              state="EMPTY"
-              compact
-              title="확인할 중요 공지가 없습니다."
-            />
-          ) : (
-            <ul className="w8-list">
-              {summary.importantNotices.slice(0, 3).map((notice) => (
-                <li key={notice.noticeId} className="w8-list__row">
-                  <span className="w8-list__copy">
-                    <strong>{notice.title}</strong>
-                    <span>{formatW8DateTime(notice.publishAt)}</span>
-                  </span>
-                  <W8StatusBadge value={notice.priority} />
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <section className="w8-panel w8-panel--wide">
-          <div className="w8-panel__heading">
-            <h2>이번 학기 위스 순위</h2>
-            <Link className="w8-text-link" to="/teacher/points">
-              위스 운영
-            </Link>
-          </div>
-          <WisRankingPanel
-            config={config}
-            hallOfFamePath="/teacher/points?tab=hall-of-fame"
-          />
-        </section>
+        </div>
       </div>
-    </section>
+
+      <div
+        className="teacher-dashboard-grid flex flex-col md:grid md:grid-cols-5 md:grid-rows-2 gap-4 h-auto md:h-[calc(100vh-140px)] min-h-[500px]"
+        data-patch-target="teacher-dashboard-grid"
+        data-patch-label="대시보드 주요 영역"
+      >
+        <div
+          className="teacher-dashboard-notice order-1 md:order-2 md:col-span-2 md:row-span-1"
+          data-patch-target="teacher-dashboard-notice"
+          data-patch-label="대시보드 알림장"
+        >
+          {secondaryPanelsReady ? (
+            <ReadOnlyTeacherNoticeBoard
+              config={config}
+              canManage={canManageDomains}
+              onOpenCommunication={() => navigate("/teacher/communication")}
+            />
+          ) : (
+            <div className="rounded-xl border border-yellow-200 bg-[#fffbeb] p-4 text-sm font-semibold text-amber-800/70">
+              알림장을 준비 중입니다.
+            </div>
+          )}
+        </div>
+
+        <div
+          className="teacher-dashboard-calendar order-2 md:order-1 md:col-span-3 md:row-span-2"
+          data-patch-target="teacher-dashboard-calendar"
+          data-patch-label="대시보드 학사 일정"
+        >
+          {!canManageDomains && (
+            <style>{`
+              .teacher-dashboard-calendar .student-calendar-shell__action-button,
+              .teacher-dashboard-calendar .student-calendar-shell__search-button { display: none !important; }
+            `}</style>
+          )}
+          <React.Suspense
+            fallback={
+              <div className="flex min-h-[420px] items-center justify-center rounded-2xl border border-gray-200 bg-white text-sm font-semibold text-gray-500 shadow-sm">
+                학사 일정을 준비하는 중입니다.
+              </div>
+            }
+          >
+            <TeacherCalendarSection
+              events={visibleEvents}
+              onDateClick={handleDateClick}
+              onDateDoubleClick={
+                canManageDomains ? openSchedule : handleDateClick
+              }
+              onEventClick={handleEventClick}
+              onAddEvent={openSchedule}
+              onSearchClick={openSchedule}
+              calendarRef={calendarRef}
+              filterClass={effectiveFilterClass}
+              availableClassTargets={availableClassTargets}
+              onFilterChange={setFilterClass}
+              selectedDate={selectedDate}
+            />
+          </React.Suspense>
+        </div>
+
+        <div
+          className="teacher-dashboard-ranking order-3 md:order-3 md:col-span-2 md:row-span-1"
+          data-patch-target="teacher-dashboard-ranking"
+          data-patch-label="대시보드 위스 순위"
+        >
+          <div className="min-h-[260px] h-full">
+            {secondaryPanelsReady ? (
+              <WisRankingPanel
+                config={config}
+                hallOfFamePath={
+                  canOpenPoints ? "/teacher/points?tab=hall-of-fame" : undefined
+                }
+              />
+            ) : (
+              <div className="flex h-full min-h-[260px] items-center justify-center rounded-xl border border-blue-100 bg-white p-4 text-sm font-semibold text-blue-700/70 shadow-sm">
+                위스 순위를 준비 중입니다.
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <ScheduleEventDetailModal
+        event={detailEvent}
+        categories={categories}
+        onClose={() => setDetailEvent(null)}
+        onEdit={canManageDomains ? handleEditEvent : undefined}
+      />
+    </div>
   );
 };
 

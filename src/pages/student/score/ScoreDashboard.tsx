@@ -17,7 +17,12 @@ import {
   getYearSemester,
 } from "../../../lib/semesterScope";
 import { lazyWithRetry } from "../../../lib/lazyWithRetry";
-import { failLegacyPerformanceScoreMutation } from "../../../lib/performanceScores";
+import {
+  loadLegacyScoreDraft,
+  loadLegacyScoreWarningAcknowledgement,
+  saveLegacyScoreDraft,
+  saveLegacyScoreWarningAcknowledgement,
+} from "../../../lib/legacyScoreCalculatorAdapter";
 import {
   getAchievementColor,
   getSubjectPriorityIndex,
@@ -38,24 +43,8 @@ interface GradingPlan {
   createdAt?: any;
 }
 
-const getFirestoreErrorCode = (error: unknown) =>
-  typeof error === "object" &&
-  error !== null &&
-  "code" in error &&
-  typeof (error as { code?: unknown }).code === "string"
-    ? (error as { code: string }).code
-    : "";
-
-const getWarningAgreementErrorMessage = (error: unknown) => {
-  const code = getFirestoreErrorCode(error);
-  if (code === "permission-denied") {
-    return "학생 정보 저장 권한을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.";
-  }
-  if (code === "unavailable") {
-    return "네트워크 상태를 확인한 뒤 다시 시도해 주세요.";
-  }
-  return "동의 저장 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.";
-};
+const getLocalDraftErrorMessage = () =>
+  "이 브라우저에 임시 저장하지 못했습니다. 브라우저 저장 공간과 개인정보 보호 설정을 확인해 주세요.";
 
 const ScoreDashboard: React.FC = () => {
   const { userData, currentUser, config } = useAuth();
@@ -73,6 +62,8 @@ const ScoreDashboard: React.FC = () => {
   const [warningSaving, setWarningSaving] = useState(false);
   const [warningAcknowledgedLocal, setWarningAcknowledgedLocal] =
     useState(false);
+  const [warningAcknowledgementReady, setWarningAcknowledgementReady] =
+    useState(false);
   const hasHydratedUserDoc = userData?.uid === currentUser?.uid;
 
   // Filters
@@ -83,38 +74,35 @@ const ScoreDashboard: React.FC = () => {
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const didInitDefaultsRef = useRef(false);
 
-  const getDraftKey = (targetSemester: string) => {
-    const uid = currentUser?.uid || userData?.uid || "anonymous";
-    return `scoreDraft:${uid}:${activeYear}:${targetSemester}`;
-  };
-
   const persistDraftScores = (
     targetSemester: string,
     scoresToDraft: { [key: string]: string },
   ) => {
+    const uid = currentUser?.uid || userData?.uid;
+    if (!uid) return null;
     try {
-      localStorage.setItem(
-        getDraftKey(targetSemester),
-        JSON.stringify({
-          scores: scoresToDraft,
-          savedAt: Date.now(),
-        }),
+      return saveLegacyScoreDraft(
+        window.localStorage,
+        { uid, year: activeYear, semester: targetSemester },
+        scoresToDraft,
       );
     } catch (error) {
       console.error("Failed to persist temporary scores:", error);
+      return null;
     }
   };
 
   const loadDraftScores = (
     targetSemester: string,
   ): { [key: string]: string } => {
+    const uid = currentUser?.uid || userData?.uid;
+    if (!uid) return {};
     try {
-      const raw = localStorage.getItem(getDraftKey(targetSemester));
-      if (!raw) return {};
-      const parsed = JSON.parse(raw) as { scores?: { [key: string]: string } };
-      return parsed?.scores && typeof parsed.scores === "object"
-        ? parsed.scores
-        : {};
+      return loadLegacyScoreDraft(window.localStorage, {
+        uid,
+        year: activeYear,
+        semester: targetSemester,
+      }).scores;
     } catch (error) {
       console.error("Failed to load temporary scores:", error);
       return {};
@@ -130,7 +118,25 @@ const ScoreDashboard: React.FC = () => {
   }, [userData, activeSemester]);
 
   useEffect(() => {
-    setWarningAcknowledgedLocal(false);
+    setWarningAcknowledgementReady(false);
+    if (!currentUser?.uid) {
+      setWarningAcknowledgedLocal(false);
+      setWarningAcknowledgementReady(true);
+      return;
+    }
+    try {
+      setWarningAcknowledgedLocal(
+        loadLegacyScoreWarningAcknowledgement(
+          window.localStorage,
+          currentUser.uid,
+        ),
+      );
+    } catch (error) {
+      console.error("Failed to load score warning acknowledgement:", error);
+      setWarningAcknowledgedLocal(false);
+    } finally {
+      setWarningAcknowledgementReady(true);
+    }
   }, [currentUser?.uid]);
 
   useEffect(() => {
@@ -142,7 +148,11 @@ const ScoreDashboard: React.FC = () => {
   }, [currentUser?.uid, activeYear, semester]);
 
   useEffect(() => {
-    if (!currentUser?.uid || !hasHydratedUserDoc) {
+    if (
+      !currentUser?.uid ||
+      !hasHydratedUserDoc ||
+      !warningAcknowledgementReady
+    ) {
       setShowWarning(false);
       setAgree(false);
       return;
@@ -155,6 +165,7 @@ const ScoreDashboard: React.FC = () => {
   }, [
     currentUser?.uid,
     hasHydratedUserDoc,
+    warningAcknowledgementReady,
     userData?.scoreWarningAcknowledged,
     warningAcknowledgedLocal,
   ]);
@@ -254,7 +265,9 @@ const ScoreDashboard: React.FC = () => {
     const newScores = { ...userScores, [key]: finalVal };
     setUserScores(newScores);
     setSaveError(null);
-    persistDraftScores(semester, newScores);
+    if (persistDraftScores(semester, newScores) === null) {
+      setSaveError(getLocalDraftErrorMessage());
+    }
 
     // Debounce Save
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -273,17 +286,25 @@ const ScoreDashboard: React.FC = () => {
   ) => {
     if (!currentUser?.uid) return;
     try {
-      void scoresToSave;
-      void targetSemester;
-      failLegacyPerformanceScoreMutation();
+      const savedAt = persistDraftScores(targetSemester, scoresToSave);
+      if (savedAt === null) throw new Error("Local score draft save failed.");
+      setLastSavedAt(savedAt);
+      setSaveError(null);
+      if (options?.announce) {
+        showToast({
+          tone: "success",
+          title: "성적 계산기가 임시 저장되었습니다.",
+          message: `${activeYear}학년도 ${targetSemester}학기 입력값을 이 브라우저에 저장했습니다.`,
+        });
+      }
     } catch (e) {
       console.error("Save failed", e);
-      setSaveError("저장에 실패했습니다. 잠시 후 다시 시도해 주세요.");
+      setSaveError(getLocalDraftErrorMessage());
       if (options?.announce) {
         showToast({
           tone: "error",
-          title: "저장에 실패했습니다.",
-          message: "잠시 후 다시 시도해 주세요.",
+          title: "임시 저장에 실패했습니다.",
+          message: getLocalDraftErrorMessage(),
         });
       }
     }
@@ -296,21 +317,31 @@ const ScoreDashboard: React.FC = () => {
   };
 
   const handleConfirmWarning = async () => {
-    if (!agree || !userData) return;
+    if (!agree || !userData || !currentUser?.uid) return;
     setWarningSaving(true);
     try {
-      failLegacyPerformanceScoreMutation();
+      saveLegacyScoreWarningAcknowledgement(
+        window.localStorage,
+        currentUser.uid,
+      );
+      setWarningAcknowledgedLocal(true);
+      setAgree(true);
+      setSaveError(null);
+      setShowWarning(false);
+      showToast({
+        tone: "success",
+        title: "확인이 저장되었습니다.",
+        message: "이 브라우저에서 성적 계산기를 계속 사용할 수 있습니다.",
+      });
     } catch (e) {
       console.error("Warning agreement save failed", {
         uid: userData.uid,
-        userDocPath: `users/${userData.uid}`,
-        code: getFirestoreErrorCode(e),
         error: e,
       });
       showToast({
         tone: "error",
-        title: "동의 저장에 실패했습니다.",
-        message: getWarningAgreementErrorMessage(e),
+        title: "확인 상태를 저장하지 못했습니다.",
+        message: getLocalDraftErrorMessage(),
       });
     } finally {
       setWarningSaving(false);

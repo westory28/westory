@@ -81,6 +81,35 @@ const provenanceFromQuery = (
   return "CURRENT";
 };
 
+const mergeGradeQueuePage = (
+  current: GradeEvidenceState,
+  next: GradeEvidenceState,
+): GradeEvidenceState => {
+  const mergeBy = <T,>(
+    existing: T[],
+    incoming: T[],
+    keyFor: (value: T) => string,
+  ) => {
+    const merged = new Map(existing.map((value) => [keyFor(value), value]));
+    incoming.forEach((value) => merged.set(keyFor(value), value));
+    return [...merged.values()];
+  };
+  return {
+    ...next,
+    records: mergeBy(current.records, next.records, (record) => record.headId),
+    pendingSources: mergeBy(
+      current.pendingSources,
+      next.pendingSources,
+      (candidate) => candidate.attemptId,
+    ),
+    activeStudents: mergeBy(
+      current.activeStudents,
+      next.activeStudents,
+      (student) => student.studentUid,
+    ),
+  };
+};
+
 interface GradeEvidenceManagerProps {
   scoreKind: GradeEvidenceScoreKind;
 }
@@ -103,6 +132,8 @@ const GradeEvidenceManager: React.FC<GradeEvidenceManagerProps> = ({
   const [selectedHeadId, setSelectedHeadId] = useState("");
   const [searchText, setSearchText] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadingNextPage, setLoadingNextPage] = useState(false);
+  const [nextPageError, setNextPageError] = useState("");
   const [error, setError] = useState<GradeEvidenceError | null>(null);
   const [detail, setDetail] = useState<GradeEvidenceRecord | null>(null);
   const [detailRefreshKey, setDetailRefreshKey] = useState(0);
@@ -119,44 +150,61 @@ const GradeEvidenceManager: React.FC<GradeEvidenceManagerProps> = ({
   const [lifecycleReason, setLifecycleReason] = useState("");
   const [correctionReason, setCorrectionReason] = useState("");
 
-  const loadState = useCallback(async () => {
-    if (!configReady) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const nextState = await getGradeEvidenceState({
-        config,
-        semesterId: requestedSemesterId || undefined,
-        scoreKind,
-        audience: "teacher",
-        provenance: requestedProvenance,
-      });
-      setState(nextState);
-      setSelectedHeadId((current) =>
-        nextState.records.some((record) => record.headId === current)
-          ? current
-          : nextState.records[0]?.headId || "",
-      );
-    } catch (caught) {
-      setState(null);
-      setError(
-        caught instanceof GradeEvidenceError
-          ? caught
-          : new GradeEvidenceError(
-              "UNKNOWN",
-              "성적 근거 자료를 불러오지 못했습니다.",
-            ),
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [
-    config,
-    configReady,
-    requestedProvenance,
-    requestedSemesterId,
-    scoreKind,
-  ]);
+  const loadState = useCallback(
+    async (cursor = "") => {
+      if (!configReady) return;
+      const appending = Boolean(cursor);
+      if (appending) {
+        setLoadingNextPage(true);
+        setNextPageError("");
+      } else {
+        setLoading(true);
+        setError(null);
+        setNextPageError("");
+      }
+      try {
+        const nextState = await getGradeEvidenceState({
+          config,
+          semesterId: requestedSemesterId || undefined,
+          scoreKind,
+          audience: "teacher",
+          provenance: requestedProvenance,
+          ...(cursor ? { cursor } : {}),
+        });
+        setState((current) => {
+          const mergedState =
+            appending && current
+              ? mergeGradeQueuePage(current, nextState)
+              : nextState;
+          return mergedState;
+        });
+        setSelectedHeadId((current) => {
+          if (appending && current) return current;
+          return nextState.records.some((record) => record.headId === current)
+            ? current
+            : nextState.records[0]?.headId || "";
+        });
+      } catch (caught) {
+        const resolvedError =
+          caught instanceof GradeEvidenceError
+            ? caught
+            : new GradeEvidenceError(
+                "UNKNOWN",
+                "성적 근거 자료를 불러오지 못했습니다.",
+              );
+        if (appending) {
+          setNextPageError(resolvedError.message);
+        } else {
+          setState(null);
+          setError(resolvedError);
+        }
+      } finally {
+        if (appending) setLoadingNextPage(false);
+        else setLoading(false);
+      }
+    },
+    [config, configReady, requestedProvenance, requestedSemesterId, scoreKind],
+  );
 
   useEffect(() => {
     void loadState();
@@ -518,14 +566,17 @@ const GradeEvidenceManager: React.FC<GradeEvidenceManagerProps> = ({
   if (
     state?.provenance === "ARCHIVE" &&
     state.records.length === 0 &&
-    state.pendingSources.length === 0
+    state.pendingSources.length === 0 &&
+    !state.nextCursor
   ) {
     return <StatePanel state="ARCHIVED" readOnly />;
   }
 
   if (
     !state ||
-    (state.records.length === 0 && state.pendingSources.length === 0)
+    (state.records.length === 0 &&
+      state.pendingSources.length === 0 &&
+      !state.nextCursor)
   ) {
     return (
       <StatePanel
@@ -646,7 +697,36 @@ const GradeEvidenceManager: React.FC<GradeEvidenceManagerProps> = ({
         >
           최신 상태 불러오기
         </button>
+        {state.nextCursor && (
+          <button
+            type="button"
+            className="ws-grade-evidence__button"
+            disabled={loadingNextPage}
+            onClick={() => void loadState(state.nextCursor)}
+          >
+            {loadingNextPage ? "다음 목록 불러오는 중…" : "목록 더 보기"}
+          </button>
+        )}
       </div>
+
+      {nextPageError && (
+        <div aria-label="다음 목록 불러오기 오류">
+          <p
+            className="ws-grade-evidence__notice ws-grade-evidence__notice--error"
+            role="alert"
+          >
+            {nextPageError}
+          </p>
+          <button
+            type="button"
+            className="ws-grade-evidence__button"
+            disabled={loadingNextPage || !state.nextCursor}
+            onClick={() => void loadState(state.nextCursor)}
+          >
+            다시 시도
+          </button>
+        </div>
+      )}
 
       {state.records.length === 0 ? (
         <StatePanel

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -25,10 +25,14 @@ import {
   httpsCallable,
 } from "firebase/functions";
 
-const projectId = process.env.WESTORY_TEST_PROJECT_ID || "demo-westory-session-w8";
+const projectId =
+  process.env.WESTORY_TEST_PROJECT_ID || "demo-westory-session-w8";
 assert.equal(projectId, "demo-westory-session-w8");
 assert.notEqual(projectId, "history-quiz-yongsin");
-for (const variable of ["FIREBASE_AUTH_EMULATOR_HOST", "FIRESTORE_EMULATOR_HOST"]) {
+for (const variable of [
+  "FIREBASE_AUTH_EMULATOR_HOST",
+  "FIRESTORE_EMULATOR_HOST",
+]) {
   assert.ok(process.env[variable], `${variable} is required.`);
 }
 
@@ -43,6 +47,11 @@ const config = {
   projectId,
 };
 const password = () => `${randomBytes(24).toString("base64url")}Aa1!`;
+const enrollmentSlotIdFor = (scopedSemesterId, studentUid) =>
+  `slot_${createHash("sha256")
+    .update(`${scopedSemesterId}\n${studentUid}`, "utf8")
+    .digest("hex")
+    .slice(0, 40)}`;
 const common = { semesterId, expectedSemesterRevision: 1 };
 const W8_COMMAND_TYPES = new Set([
   "createLearningContent",
@@ -68,6 +77,10 @@ const W8_COMMAND_TYPES = new Set([
   "acknowledgeNotice",
   "acknowledgeAllNotices",
   "updateNotificationSettings",
+  "createThinkCloudSession",
+  "transitionThinkCloudSession",
+  "deleteThinkCloudSession",
+  "submitThinkCloudResponse",
 ]);
 const canonicalCollections = [
   "semester_learning_contents",
@@ -98,7 +111,10 @@ const makeClient = (name) => {
 
 const openSession = async (client) => {
   const result = (
-    await httpsCallable(client.functions, "openApplicationSession")({
+    await httpsCallable(
+      client.functions,
+      "openApplicationSession",
+    )({
       authorityGeneration: "w1r2-2026-08-09",
       protocolVersion: 2,
     })
@@ -110,7 +126,10 @@ const openSession = async (client) => {
   };
 };
 const execute = (client, commandType, payload, options = {}) =>
-  httpsCallable(client.functions, "executeCommand")({
+  httpsCallable(
+    client.functions,
+    "executeCommand",
+  )({
     commandId: options.commandId || randomUUID(),
     commandType,
     payload,
@@ -118,7 +137,10 @@ const execute = (client, commandType, payload, options = {}) =>
     ...(options.dropResponse ? { _testDropResponseAfterCommit: true } : {}),
   });
 const queryW8 = (client, payload) =>
-  httpsCallable(client.functions, "getW8DomainState")({
+  httpsCallable(
+    client.functions,
+    "getW8DomainState",
+  )({
     ...payload,
     _session: client.proof,
   });
@@ -158,7 +180,10 @@ const readDocument = (testEnv, path) =>
 const businessCounts = async (testEnv) =>
   Object.fromEntries(
     await Promise.all(
-      canonicalCollections.map(async (name) => [name, (await readCollection(testEnv, name)).length]),
+      canonicalCollections.map(async (name) => [
+        name,
+        (await readCollection(testEnv, name)).length,
+      ]),
     ),
   );
 const recoverResponseLoss = async (client, commandType, payload) => {
@@ -168,14 +193,18 @@ const recoverResponseLoss = async (client, commandType, payload) => {
     "TEST_RESPONSE_LOSS",
   );
   const status = (
-    await httpsCallable(client.functions, "getCommandStatus")({
+    await httpsCallable(
+      client.functions,
+      "getCommandStatus",
+    )({
       commandId,
       commandType,
       _session: client.proof,
     })
   ).data;
   assert.equal(status.status, "SUCCEEDED");
-  const replay = (await execute(client, commandType, payload, { commandId })).data;
+  const replay = (await execute(client, commandType, payload, { commandId }))
+    .data;
   assert.equal(replay.replayed, true);
   assert.deepEqual(replay.result, status.result);
   return status.result;
@@ -188,17 +217,37 @@ const main = async () => {
   });
   const admin = makeClient("w8-admin");
   const teacher = makeClient("w8-teacher");
+  const teacher2 = makeClient("w8-teacher-2");
+  const lessonReader = makeClient("w8-lesson-reader");
   const student = makeClient("w8-student");
   const peer = makeClient("w8-peer");
   try {
     await testEnv.clearFirestore();
     admin.user = (
-      await createUserWithEmailAndPassword(admin.auth, "westoria28@gmail.com", password())
+      await createUserWithEmailAndPassword(
+        admin.auth,
+        "westoria28@gmail.com",
+        password(),
+      )
     ).user;
     teacher.user = (
       await createUserWithEmailAndPassword(
         teacher.auth,
         "w8-teacher@yongshin-ms.ms.kr",
+        password(),
+      )
+    ).user;
+    teacher2.user = (
+      await createUserWithEmailAndPassword(
+        teacher2.auth,
+        "w8-teacher-2@yongshin-ms.ms.kr",
+        password(),
+      )
+    ).user;
+    lessonReader.user = (
+      await createUserWithEmailAndPassword(
+        lessonReader.auth,
+        "w8-lesson-reader@yongshin-ms.ms.kr",
         password(),
       )
     ).user;
@@ -217,6 +266,7 @@ const main = async () => {
       )
     ).user;
     const classId = "w8-class";
+    const secondClassId = "w8-class-2";
     const enrollmentId = "w8-enrollment";
     const peerEnrollmentId = "w8-peer-enrollment";
     await withAdminDb(testEnv, async (db) => {
@@ -227,8 +277,24 @@ const main = async () => {
           teacherPortalEnabled: true,
           staffPermissions: ["lesson_read"],
         }),
-        setDoc(doc(db, "users", student.user.uid), { role: "student" }),
-        setDoc(doc(db, "users", peer.user.uid), { role: "student" }),
+        setDoc(doc(db, "users", teacher2.user.uid), {
+          role: "teacher",
+          teacherPortalEnabled: false,
+          staffPermissions: [],
+        }),
+        setDoc(doc(db, "users", lessonReader.user.uid), {
+          role: "student",
+          teacherPortalEnabled: true,
+          staffPermissions: ["lesson_read"],
+        }),
+        setDoc(doc(db, "users", student.user.uid), {
+          role: "student",
+          name: "합성 학생",
+        }),
+        setDoc(doc(db, "users", peer.user.uid), {
+          role: "student",
+          name: "합성 학생 2",
+        }),
         setDoc(doc(db, "site_settings", "semester_active"), {
           semesterId,
           activeSemesterId: semesterId,
@@ -266,6 +332,19 @@ const main = async () => {
           classId,
           semesterId,
           status: "ACTIVE",
+          grade: "3",
+          classNumber: "1",
+          displayName: "3학년 1반",
+          homeroomTeacherUid: teacher.user.uid,
+        }),
+        setDoc(doc(db, "semester_classes", secondClassId), {
+          classId: secondClassId,
+          semesterId,
+          status: "ACTIVE",
+          grade: "3",
+          classNumber: "2",
+          displayName: "3학년 2반",
+          homeroomTeacherUid: teacher2.user.uid,
         }),
         setDoc(doc(db, "semester_enrollments", enrollmentId), {
           enrollmentId,
@@ -285,9 +364,44 @@ const main = async () => {
           studentNumber: "2",
           snapshot: { displayName: "합성 학생 2", studentNumber: "2" },
         }),
+        setDoc(
+          doc(
+            db,
+            "semester_enrollment_slots",
+            enrollmentSlotIdFor(semesterId, student.user.uid),
+          ),
+          {
+            semesterId,
+            studentUid: student.user.uid,
+            activeEnrollmentId: enrollmentId,
+            revision: 1,
+            status: "ACTIVE",
+          },
+        ),
+        setDoc(
+          doc(
+            db,
+            "semester_enrollment_slots",
+            enrollmentSlotIdFor(semesterId, peer.user.uid),
+          ),
+          {
+            semesterId,
+            studentUid: peer.user.uid,
+            activeEnrollmentId: peerEnrollmentId,
+            revision: 1,
+            status: "ACTIVE",
+          },
+        ),
       ]);
     });
-    await Promise.all([openSession(admin), openSession(teacher), openSession(student), openSession(peer)]);
+    await Promise.all([
+      openSession(admin),
+      openSession(teacher),
+      openSession(teacher2),
+      openSession(lessonReader),
+      openSession(student),
+      openSession(peer),
+    ]);
 
     const beforeForbidden = await businessCounts(testEnv);
     await expectReason(
@@ -316,14 +430,18 @@ const main = async () => {
     );
     assert.deepEqual(await businessCounts(testEnv), beforeForbidden);
 
-    const configResult = await recoverResponseLoss(admin, "updateNotificationSettings", {
-      ...common,
-      expectedConfigRevision: null,
-      enabled: true,
-      studentNotificationsEnabled: true,
-      teacherNotificationsEnabled: true,
-      eventPolicies: { acknowledgementMode: "EXPLICIT" },
-    });
+    const configResult = await recoverResponseLoss(
+      admin,
+      "updateNotificationSettings",
+      {
+        ...common,
+        expectedConfigRevision: null,
+        enabled: true,
+        studentNotificationsEnabled: true,
+        teacherNotificationsEnabled: true,
+        eventPolicies: { acknowledgementMode: "EXPLICIT" },
+      },
+    );
     assert.equal(configResult.configRevision, 1);
 
     const learningInput = {
@@ -338,7 +456,9 @@ const main = async () => {
       availableFrom: "2026-08-01T00:00:00.000Z",
       availableUntil: "2026-12-31T23:59:59.000Z",
     };
-    const createdContent = (await execute(teacher, "createLearningContent", learningInput)).data.result;
+    const createdContent = (
+      await execute(teacher, "createLearningContent", learningInput)
+    ).data.result;
     const contentId = createdContent.contentId;
     const updatedContent = (
       await execute(teacher, "updateLearningContent", {
@@ -379,6 +499,271 @@ const main = async () => {
     assert.equal(learningState.writeCount, 0);
     assert.equal(learningState.contents.length, 1);
     assert.deepEqual(await businessCounts(testEnv), beforeLearningQuery);
+
+    const thinkCloudOptions = {
+      allowDuplicateWord: true,
+      allowDuplicateByStudent: true,
+      inputMode: "word",
+      anonymous: false,
+      maxLength: 20,
+      profanityFilter: true,
+    };
+    const firstCloud = (
+      await execute(teacher, "createThinkCloudSession", {
+        ...common,
+        expectedStateRevision: null,
+        title: "3학년 1반 생각모아",
+        description: "응답 투영과 상한을 검증합니다.",
+        targetGrade: "3",
+        targetClass: "1",
+        targetGradeLabel: "3학년",
+        targetClassLabel: "1반",
+        options: thinkCloudOptions,
+      })
+    ).data.result;
+    const secondCloud = (
+      await execute(admin, "createThinkCloudSession", {
+        ...common,
+        expectedStateRevision: null,
+        title: "3학년 2반 생각모아",
+        description: "담임 범위를 검증합니다.",
+        targetGrade: "3",
+        targetClass: "2",
+        targetGradeLabel: "3학년",
+        targetClassLabel: "2반",
+        options: thinkCloudOptions,
+      })
+    ).data.result;
+    const pausedSecondCloud = (
+      await execute(admin, "transitionThinkCloudSession", {
+        ...common,
+        sessionId: secondCloud.sessionId,
+        expectedSessionRevision: 1,
+        expectedStateRevision: 1,
+        targetStatus: "paused",
+      })
+    ).data.result;
+    assert.equal(pausedSecondCloud.status, "paused");
+
+    const teacherCloudState = (
+      await queryW8(teacher, {
+        domain: "LEARNING",
+        audience: "teacher",
+        semesterId,
+        source: "CURRENT",
+      })
+    ).data;
+    assert.equal(teacherCloudState.readOnly, false);
+    assert.deepEqual(
+      teacherCloudState.thinkCloudManagedClasses.map((item) => item.classId),
+      [classId],
+    );
+    assert.deepEqual(
+      teacherCloudState.thinkCloudSessions.map((item) => item.id),
+      [firstCloud.sessionId],
+    );
+    await expectReason(
+      queryW8(teacher, {
+        domain: "LEARNING",
+        audience: "teacher",
+        semesterId,
+        source: "CURRENT",
+        sessionId: secondCloud.sessionId,
+      }),
+      "W8_THINK_CLOUD_TARGET_FORBIDDEN",
+    );
+    const delegatedCloudState = (
+      await queryW8(lessonReader, {
+        domain: "LEARNING",
+        audience: "teacher",
+        semesterId,
+        source: "CURRENT",
+      })
+    ).data;
+    assert.equal(delegatedCloudState.readOnly, true);
+    assert.deepEqual(
+      new Set(
+        delegatedCloudState.thinkCloudManagedClasses.map(
+          (item) => item.classId,
+        ),
+      ),
+      new Set([classId, secondClassId]),
+    );
+
+    const firstCloudResponse = await recoverResponseLoss(
+      student,
+      "submitThinkCloudResponse",
+      {
+        ...common,
+        sessionId: firstCloud.sessionId,
+        expectedSessionRevision: 1,
+        textRaw: "독립",
+        textNormalized: "독립",
+      },
+    );
+    const peerCloudResponse = (
+      await execute(peer, "submitThinkCloudResponse", {
+        ...common,
+        sessionId: firstCloud.sessionId,
+        expectedSessionRevision: 1,
+        textRaw: "연대",
+        textNormalized: "연대",
+      })
+    ).data.result;
+    const studentCloudDetail = (
+      await queryW8(student, {
+        domain: "LEARNING",
+        audience: "student",
+        semesterId,
+        source: "CURRENT",
+        sessionId: firstCloud.sessionId,
+      })
+    ).data;
+    assert.equal(studentCloudDetail.thinkCloudResponses.length, 2);
+    assert.equal(
+      studentCloudDetail.thinkCloudResponses.every(
+        (response) => !("uid" in response),
+      ),
+      true,
+    );
+    assert.equal(
+      studentCloudDetail.thinkCloudResponses.find(
+        (response) => response.id === firstCloudResponse.responseId,
+      )?.isOwn,
+      true,
+    );
+    assert.equal(
+      studentCloudDetail.thinkCloudResponses.find(
+        (response) => response.id === peerCloudResponse.responseId,
+      )?.isOwn,
+      false,
+    );
+    assert.deepEqual(
+      new Set(
+        studentCloudDetail.thinkCloudResponses.map(
+          (response) => response.displayName,
+        ),
+      ),
+      new Set(["합성 학생", "합성 학생 2"]),
+    );
+    const teacherCloudDetail = (
+      await queryW8(teacher, {
+        domain: "LEARNING",
+        audience: "teacher",
+        semesterId,
+        source: "CURRENT",
+        sessionId: firstCloud.sessionId,
+      })
+    ).data;
+    assert.deepEqual(
+      new Set(
+        teacherCloudDetail.thinkCloudResponses.map((response) => response.uid),
+      ),
+      new Set([student.user.uid, peer.user.uid]),
+    );
+
+    const responseCollectionPath = `years/2026/semesters/2/think_cloud_sessions/${firstCloud.sessionId}/responses`;
+    const studentSlotPath = `semester_enrollment_slots/${enrollmentSlotIdFor(
+      semesterId,
+      student.user.uid,
+    )}`;
+    await withAdminDb(testEnv, (db) =>
+      setDoc(doc(db, studentSlotPath), {
+        semesterId,
+        studentUid: student.user.uid,
+        activeEnrollmentId: peerEnrollmentId,
+        revision: 2,
+        status: "ACTIVE",
+      }),
+    );
+    const responsesBeforeMismatchedSlot = (
+      await readCollection(testEnv, responseCollectionPath)
+    ).length;
+    await expectReason(
+      execute(student, "submitThinkCloudResponse", {
+        ...common,
+        sessionId: firstCloud.sessionId,
+        expectedSessionRevision: 1,
+        textRaw: "차단",
+        textNormalized: "차단",
+      }),
+      "W8_THINK_CLOUD_TARGET_FORBIDDEN",
+    );
+    assert.equal(
+      (await readCollection(testEnv, responseCollectionPath)).length,
+      responsesBeforeMismatchedSlot,
+    );
+    await withAdminDb(testEnv, (db) =>
+      setDoc(doc(db, studentSlotPath), {
+        semesterId,
+        studentUid: student.user.uid,
+        activeEnrollmentId: enrollmentId,
+        revision: 3,
+        status: "ACTIVE",
+      }),
+    );
+
+    await withAdminDb(testEnv, async (db) => {
+      await Promise.all(
+        Array.from({ length: 198 }, (_, offset) => {
+          const index = offset + 2;
+          return setDoc(
+            doc(
+              db,
+              responseCollectionPath,
+              `synthetic-${String(index).padStart(3, "0")}`,
+            ),
+            {
+              uid: `synthetic-student-${index}`,
+              displayName: `합성 학생 ${index}`,
+              textRaw: `응답${index}`,
+              textNormalized: `응답${index}`,
+              revision: 1,
+              createdAt: new Date(1_700_000_000_000 + index * 1000),
+            },
+          );
+        }),
+      );
+    });
+    assert.equal(
+      (await readCollection(testEnv, responseCollectionPath)).length,
+      200,
+    );
+    await expectReason(
+      execute(student, "submitThinkCloudResponse", {
+        ...common,
+        sessionId: firstCloud.sessionId,
+        expectedSessionRevision: 1,
+        textRaw: "이백일",
+        textNormalized: "이백일",
+      }),
+      "W8_THINK_CLOUD_RESPONSE_LIMIT",
+    );
+    assert.equal(
+      (await readCollection(testEnv, responseCollectionPath)).length,
+      200,
+    );
+    const deletedFullCloud = (
+      await execute(teacher, "deleteThinkCloudSession", {
+        ...common,
+        sessionId: firstCloud.sessionId,
+        expectedSessionRevision: 1,
+        expectedStateRevision: 1,
+        reason: "응답 상한 도달 세션 정리",
+      })
+    ).data.result;
+    assert.equal(deletedFullCloud.deleted, true);
+    assert.equal(
+      await readDocument(
+        testEnv,
+        `years/2026/semesters/2/think_cloud_sessions/${firstCloud.sessionId}`,
+      ),
+      null,
+    );
+    assert.equal(
+      (await readCollection(testEnv, responseCollectionPath)).length,
+      0,
+    );
 
     const started = (
       await execute(student, "recordLearningProgress", {
@@ -468,7 +853,10 @@ const main = async () => {
     ).data.result;
     assert.equal(reviewed.status, "APPROVED");
     await expectReason(
-      httpsCallable(peer.functions, "createHistoryClassroomExemptionRequest")({
+      httpsCallable(
+        peer.functions,
+        "createHistoryClassroomExemptionRequest",
+      )({
         _session: peer.proof,
       }),
       "CLIENT_UPDATE_REQUIRED",
@@ -488,7 +876,11 @@ const main = async () => {
       sourceDomain: "USER",
       sourceReference: "w8-integration-class-1",
     };
-    const event = await recoverResponseLoss(teacher, "createScheduleEvent", scheduleInput);
+    const event = await recoverResponseLoss(
+      teacher,
+      "createScheduleEvent",
+      scheduleInput,
+    );
     const eventId = event.eventId;
     const updatedEvent = (
       await execute(teacher, "updateScheduleEvent", {
@@ -556,7 +948,10 @@ const main = async () => {
       })
     ).data.result;
     assert.equal(correction.recordRevision, 2);
-    assert.equal((await readCollection(testEnv, "semester_attendance_revisions")).length, 1);
+    assert.equal(
+      (await readCollection(testEnv, "semester_attendance_revisions")).length,
+      1,
+    );
     const closedSession = (
       await execute(teacher, "closeAttendanceSession", {
         ...common,
@@ -581,8 +976,8 @@ const main = async () => {
     );
     assert.equal(revisionsAfterClose.length, 2);
     assert.equal(
-      revisionsAfterClose.find(({ id }) => id === closedCorrection.revisionId)?.data
-        ?.sessionStatusAtCorrection,
+      revisionsAfterClose.find(({ id }) => id === closedCorrection.revisionId)
+        ?.data?.sessionStatusAtCorrection,
       "CLOSED",
     );
 
@@ -597,7 +992,8 @@ const main = async () => {
       expireAt: "2026-12-31T23:59:59.000Z",
       priority: "HIGH",
     };
-    const notice = (await execute(teacher, "createNotice", noticeInput)).data.result;
+    const notice = (await execute(teacher, "createNotice", noticeInput)).data
+      .result;
     const noticeId = notice.noticeId;
     const updatedNotice = (
       await execute(teacher, "updateNotice", {
@@ -674,9 +1070,9 @@ const main = async () => {
     assert.equal(ackA.data.result.acknowledged, true);
     assert.equal(ackB.data.result.acknowledged, true);
     assert.equal(
-      (await readCollection(testEnv, "semester_notice_acknowledgements")).filter(
-        ({ data }) => data.studentUid === student.user.uid,
-      ).length,
+      (
+        await readCollection(testEnv, "semester_notice_acknowledgements")
+      ).filter(({ data }) => data.studentUid === student.user.uid).length,
       1,
     );
     const allAcknowledged = (
@@ -764,12 +1160,16 @@ const main = async () => {
     assert.deepEqual(await businessCounts(testEnv), beforeArchiveWrite);
 
     const receipts = (await readCollection(testEnv, "command_receipts")).filter(
-      ({ data }) => W8_COMMAND_TYPES.has(data.commandType) && data.status === "SUCCEEDED",
+      ({ data }) =>
+        W8_COMMAND_TYPES.has(data.commandType) && data.status === "SUCCEEDED",
     );
-    const audits = (await readCollection(testEnv, "command_audit_events")).filter(
-      ({ data }) => W8_COMMAND_TYPES.has(data.commandType),
+    const audits = (
+      await readCollection(testEnv, "command_audit_events")
+    ).filter(({ data }) => W8_COMMAND_TYPES.has(data.commandType));
+    assert.deepEqual(
+      new Set(receipts.map(({ data }) => data.commandType)),
+      W8_COMMAND_TYPES,
     );
-    assert.deepEqual(new Set(receipts.map(({ data }) => data.commandType)), W8_COMMAND_TYPES);
     assert.equal(receipts.length, audits.length);
     console.log(
       JSON.stringify({
@@ -781,6 +1181,12 @@ const main = async () => {
         studentExemptionRequestExactlyOnce: true,
         previousBundleExemptionWriter: "fail-closed",
         bulkAttendancePartialSuccess: 0,
+        thinkCloudResponseLimit: 200,
+        thinkCloudResponseOverflowWrites: 0,
+        thinkCloudMismatchedSlotWrites: 0,
+        thinkCloudStudentUidExposure: 0,
+        thinkCloudTeacherLessonReadScope: "HOMEROOM_ONLY",
+        thinkCloudDelegatedReadMode: "ALL_READ_ONLY",
         archiveWrites: 0,
         legacySilentFallback: 0,
         queryWrites: 0,
