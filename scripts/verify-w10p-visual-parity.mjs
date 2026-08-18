@@ -484,6 +484,24 @@ for (const [screenId, readiness] of Object.entries(
       );
       assert.equal(signal.id, "schedule-fixture");
     }
+    assert.equal(
+      signal.minimumGlyphVisibleRatio === undefined ||
+        signal.minimumGlyphVisibleRatio === 0.25,
+      true,
+      `${screenId}.${signal.id}.minimumGlyphVisibleRatio is unsupported.`,
+    );
+    if (signal.minimumGlyphVisibleRatio === 0.25) {
+      assert.ok(
+        [
+          "student-calendar",
+          "teacher-schedule",
+          "admin-teacher-schedule",
+          "teacher-schedule-holiday-tools",
+        ].includes(screenId),
+        `${screenId}.${signal.id} is not a legacy pixel-locked calendar witness.`,
+      );
+      assert.equal(signal.id, "schedule-fixture");
+    }
     if (signal.paintMode === "canvas") {
       assert.equal(signal.allowEmptyText, true);
       assert.match(signal.tagPattern, /CANVAS/u);
@@ -578,6 +596,23 @@ for (const [screenId, fixture] of Object.entries(
           ? contract.newSurfaceReferences[screenId] === "admin-teacher-schedule"
           : screensById.get(screenId)?.productionPresentation === true,
         true,
+      );
+      assert.equal(item.id, "schedule-events");
+    }
+    assert.equal(
+      item.minimumGlyphVisibleRatio === undefined ||
+        item.minimumGlyphVisibleRatio === 0.25,
+      true,
+    );
+    if (item.minimumGlyphVisibleRatio === 0.25) {
+      assert.ok(
+        [
+          "student-calendar",
+          "teacher-schedule",
+          "admin-teacher-schedule",
+          "teacher-schedule-holiday-tools",
+        ].includes(screenId),
+        `${screenId}.${item.id} is not a legacy pixel-locked calendar fixture.`,
       );
       assert.equal(item.id, "schedule-events");
     }
@@ -1584,7 +1619,10 @@ for (const capture of manifest.captures) {
       assert.equal(paintWitness.textPainted, true);
       assert.ok(paintWitness.textFontSizePx >= 8);
       assert.ok(paintWitness.textForegroundAlpha >= 0.9);
-      assert.ok(paintWitness.textGlyphVisibleRatio >= 0.6);
+      assert.ok(
+        paintWitness.textGlyphVisibleRatio >=
+          (requirement.minimumGlyphVisibleRatio ?? 0.6),
+      );
       assert.equal(paintWitness.textPaintEffectsSafe, true);
       if (Number.isFinite(requirement.minimumContrastRatio)) {
         assert.equal(
@@ -2258,6 +2296,7 @@ const validateAnchor = (
     allowEmptyText = false,
     paintMode = "text",
     minimumContrastRatio = null,
+    minimumGlyphVisibleRatio = 0.6,
   } = {},
 ) => {
   assert.ok(String(anchor?.selector ?? "").trim().length > 0);
@@ -2314,7 +2353,7 @@ const validateAnchor = (
       `${label} text foreground is transparent.`,
     );
     assert.ok(
-      paintWitness.textGlyphVisibleRatio >= 0.6,
+      paintWitness.textGlyphVisibleRatio >= minimumGlyphVisibleRatio,
       `${label} text glyphs are clipped or shifted out of view.`,
     );
     assert.equal(
@@ -2427,6 +2466,7 @@ for (const capture of captures.values()) {
         allowEmptyText: requirement.allowEmptyText === true,
         paintMode: requirement.paintMode ?? "text",
         minimumContrastRatio: requirement.minimumContrastRatio ?? null,
+        minimumGlyphVisibleRatio: requirement.minimumGlyphVisibleRatio ?? 0.6,
       },
     );
     assert.match(signal.text, new RegExp(requirement.textPattern, "u"));

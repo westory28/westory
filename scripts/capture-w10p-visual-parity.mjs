@@ -1004,7 +1004,11 @@ const describePage = async (
         }
         return totalArea > 0 ? Math.min(1, visibleArea / totalArea) : 0;
       };
-      const textPaintFor = (element, minimumContrastRatio = null) => {
+      const textPaintFor = (
+        element,
+        minimumContrastRatio = null,
+        minimumGlyphVisibleRatio = 0.6,
+      ) => {
         if (!(element instanceof Element)) {
           return {
             painted: false,
@@ -1057,7 +1061,7 @@ const describePage = async (
             fontSizePx >= 8 &&
             foregroundAlpha >= 0.9 &&
             measuredContrast >= requiredContrastRatio &&
-            glyphVisibleRatio >= 0.6 &&
+            glyphVisibleRatio >= minimumGlyphVisibleRatio &&
             effectsSafe,
           fontSizePx,
           foregroundAlpha,
@@ -1105,12 +1109,19 @@ const describePage = async (
           return { painted: false, sampledOpaquePixels: 0, sampledColors: 0 };
         }
       };
-      const describe = (element, { minimumContrastRatio = null } = {}) => {
+      const describe = (
+        element,
+        { minimumContrastRatio = null, minimumGlyphVisibleRatio = 0.6 } = {},
+      ) => {
         if (!(element instanceof Element)) return { present: false };
         const box = element.getBoundingClientRect();
         const computedStyle = getComputedStyle(element);
         const visibility = visibilityFor(element);
-        const textPaint = textPaintFor(element, minimumContrastRatio);
+        const textPaint = textPaintFor(
+          element,
+          minimumContrastRatio,
+          minimumGlyphVisibleRatio,
+        );
         const canvasPaint = canvasPaintFor(element);
         return {
           present: true,
@@ -1214,7 +1225,11 @@ const describePage = async (
       const paintWitnessFor = (
         container,
         pattern,
-        { allowRendered = false, minimumContrastRatio = null } = {},
+        {
+          allowRendered = false,
+          minimumContrastRatio = null,
+          minimumGlyphVisibleRatio = 0.6,
+        } = {},
       ) => {
         if (!(container instanceof Element)) return null;
         const candidates = [container, ...container.querySelectorAll("*")]
@@ -1225,7 +1240,11 @@ const describePage = async (
             return (
               rendered &&
               pattern.test(directPaintText(element)) &&
-              textPaintFor(element, minimumContrastRatio).painted
+              textPaintFor(
+                element,
+                minimumContrastRatio,
+                minimumGlyphVisibleRatio,
+              ).painted
             );
           })
           .sort((left, right) => {
@@ -1267,6 +1286,8 @@ const describePage = async (
                   Boolean(
                     paintWitnessFor(element, pattern, {
                       minimumContrastRatio: requirement.minimumContrastRatio,
+                      minimumGlyphVisibleRatio:
+                        requirement.minimumGlyphVisibleRatio,
                     }),
                   );
             return (
@@ -1299,6 +1320,7 @@ const describePage = async (
         if (!element) continue;
         const described = describe(element, {
           minimumContrastRatio: requirement.minimumContrastRatio,
+          minimumGlyphVisibleRatio: requirement.minimumGlyphVisibleRatio,
         });
         const paintPattern = requirement.textPattern
           ? new RegExp(requirement.textPattern, "u")
@@ -1306,10 +1328,12 @@ const describePage = async (
         const paintWitness = paintPattern
           ? paintWitnessFor(element, paintPattern, {
               minimumContrastRatio: requirement.minimumContrastRatio,
+              minimumGlyphVisibleRatio: requirement.minimumGlyphVisibleRatio,
             })
           : element;
         const describedPaintWitness = describe(paintWitness, {
           minimumContrastRatio: requirement.minimumContrastRatio,
+          minimumGlyphVisibleRatio: requirement.minimumGlyphVisibleRatio,
         });
         anchors[id] = {
           selector: described.selector,
@@ -1360,6 +1384,7 @@ const describePage = async (
         if (!element) continue;
         const described = describe(element, {
           minimumContrastRatio: requirement.minimumContrastRatio,
+          minimumGlyphVisibleRatio: requirement.minimumGlyphVisibleRatio,
         });
         const paintPattern = new RegExp(requirement.textPattern, "u");
         const paintWitness =
@@ -1367,9 +1392,11 @@ const describePage = async (
             ? null
             : paintWitnessFor(element, paintPattern, {
                 minimumContrastRatio: requirement.minimumContrastRatio,
+                minimumGlyphVisibleRatio: requirement.minimumGlyphVisibleRatio,
               });
         const describedPaintWitness = describe(paintWitness, {
           minimumContrastRatio: requirement.minimumContrastRatio,
+          minimumGlyphVisibleRatio: requirement.minimumGlyphVisibleRatio,
         });
         readySignals[requirement.id] = {
           selector: described.selector,
@@ -1498,6 +1525,7 @@ const describePage = async (
               paintWitnessFor(element, pattern, {
                 allowRendered: requirement.countMode === "rendered",
                 minimumContrastRatio: requirement.minimumContrastRatio,
+                minimumGlyphVisibleRatio: requirement.minimumGlyphVisibleRatio,
               }),
             )
           );
@@ -1508,12 +1536,15 @@ const describePage = async (
           fixtureItemTexts.push(text);
           const described = describe(element, {
             minimumContrastRatio: requirement.minimumContrastRatio,
+            minimumGlyphVisibleRatio: requirement.minimumGlyphVisibleRatio,
           });
           const paintWitness = paintWitnessFor(element, pattern, {
             minimumContrastRatio: requirement.minimumContrastRatio,
+            minimumGlyphVisibleRatio: requirement.minimumGlyphVisibleRatio,
           });
           const describedPaintWitness = describe(paintWitness, {
             minimumContrastRatio: requirement.minimumContrastRatio,
+            minimumGlyphVisibleRatio: requirement.minimumGlyphVisibleRatio,
           });
           items.push({
             selector: described.selector,
