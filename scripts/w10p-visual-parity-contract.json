@@ -14,7 +14,7 @@
   "stableAlias": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
   "fixtureId": "w10p-visual-fixture-v1",
   "fixtureRevision": 1,
-  "fixturePlanHash": "ba116361a6c7fb765d0f8a3c8467bc5fb538aa18f3553e17ddd92e82b2f5b4a4",
+  "fixturePlanHash": "fe18dbf369602af95b3ed35496a1bf7dcf64364ecd20b4b29cab1a818a5d850e",
   "fixedTime": "2026-08-17T06:00:00.000Z",
   "evidenceRootPrefix": "docs/evidence/w10p-presentation-freeze",
   "finalReportPath": "docs/phase-6-w10p-presentation-freeze-functional-modernization.md",
@@ -107,7 +107,7 @@
     "developer-log-postid": "teacher"
   },
   "captureIdentities": {
-    "adminEmailSha256": "e0704874f65563b0d7f1b75520d0f28c01bde74606e9a9aedcdb6c80e49493fe",
+    "adminEmailSha256": "1817de428ec7cba5fb07902cd019ee6244786eed8b56031075d1f844d6cb4919",
     "roles": {
       "student": {
         "uid": "w10p-visual-student",
@@ -185,6 +185,53 @@
     "developer-log-postid": "W10P 시각 검증 일지"
   },
   "screenFixtureActions": {
+    "teacher-settings-school": [
+      {
+        "id": "select-school-settings-tab",
+        "type": "click",
+        "selector": "main aside nav.flex.flex-col > button:nth-of-type(2)",
+        "exactMatchCount": 1
+      }
+    ],
+    "teacher-settings-interface": [
+      {
+        "id": "select-interface-settings-tab",
+        "type": "click",
+        "selector": "main aside nav.flex.flex-col > button:nth-of-type(3)",
+        "exactMatchCount": 1
+      }
+    ],
+    "teacher-settings-access": [
+      {
+        "id": "select-access-settings-tab",
+        "type": "click",
+        "selector": "main aside nav.flex.flex-col > button:nth-of-type(4)",
+        "exactMatchCount": 1
+      },
+      {
+        "id": "filter-synthetic-teacher",
+        "type": "fill",
+        "selector": "input[placeholder='이름 또는 이메일 검색']",
+        "value": "W10P 교사",
+        "exactMatchCount": 1
+      }
+    ],
+    "teacher-settings-notifications": [
+      {
+        "id": "select-notifications-settings-tab",
+        "type": "click",
+        "selector": "main aside nav.flex.flex-col > button:nth-of-type(5)",
+        "exactMatchCount": 1
+      }
+    ],
+    "teacher-settings-privacy": [
+      {
+        "id": "select-privacy-settings-tab",
+        "type": "click",
+        "selector": "main aside nav.flex.flex-col > button:nth-of-type(6)",
+        "exactMatchCount": 1
+      }
+    ],
     "teacher-exam-performance": [
       {
         "id": "select-performance-roster",
@@ -250,15 +297,6 @@
         "exactMatchCount": 1
       }
     ],
-    "teacher-settings-access": [
-      {
-        "id": "filter-synthetic-teacher",
-        "type": "fill",
-        "selector": "input[placeholder='이름 또는 이메일 검색']",
-        "value": "W10P 교사",
-        "exactMatchCount": 1
-      }
-    ],
     "teacher-students": [
       {
         "id": "reveal-student-fixture",
@@ -272,7 +310,7 @@
   },
   "fixturePrivacy": {
     "allowedVisibleEmails": [
-      "westoria28@gmail.com",
+      "w10p-visual-admin@yongshin-ms.ms.kr",
       "w10p-visual-student@yongshin-ms.ms.kr",
       "w10p-visual-teacher@yongshin-ms.ms.kr"
     ],

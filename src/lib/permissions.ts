@@ -3,6 +3,17 @@ import type { UserData } from "../types";
 export const ADMIN_EMAIL = "westoria28@gmail.com";
 export const ALLOWED_SCHOOL_EMAIL_DOMAIN = "yongshin-ms.ms.kr";
 
+const STAGING_PROJECT_ID = "westory-staging-177587430482";
+const VISUAL_FIXTURE_ADMIN_EMAIL = "w10p-visual-admin@yongshin-ms.ms.kr";
+const VISUAL_FIXTURE_ADMIN_UID = "w10p-visual-admin";
+const VISUAL_FIXTURE_ID = "w10p-visual-fixture-v1";
+const VISUAL_FIXTURE_OWNER = "w10p-visual-parity";
+
+type VisualFixtureAdminProfile = Partial<UserData> & {
+  fixtureId?: unknown;
+  fixtureOwner?: unknown;
+};
+
 export const STAFF_PERMISSION_KEYS = [
   "lesson_read",
   "quiz_read",
@@ -46,7 +57,17 @@ export const isAdminUser = (
   email?: string | null,
 ) => {
   const normalizedEmail = normalizeEmail(email || userData?.email);
-  return normalizedEmail === ADMIN_EMAIL;
+  if (normalizedEmail === ADMIN_EMAIL) return true;
+
+  const fixtureProfile = userData as VisualFixtureAdminProfile | null;
+  return (
+    import.meta.env.VITE_APP_ENV === "staging" &&
+    import.meta.env.VITE_FIREBASE_PROJECT_ID === STAGING_PROJECT_ID &&
+    normalizeEmail(email) === VISUAL_FIXTURE_ADMIN_EMAIL &&
+    fixtureProfile?.uid === VISUAL_FIXTURE_ADMIN_UID &&
+    fixtureProfile.fixtureOwner === VISUAL_FIXTURE_OWNER &&
+    fixtureProfile.fixtureId === VISUAL_FIXTURE_ID
+  );
 };
 
 export const isTeacherUser = (

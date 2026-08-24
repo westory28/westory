@@ -1279,9 +1279,7 @@ const assertThinkCloudStudentTarget = async (
     `users/${actor.actorUid}`,
     thinkCloudEnrollmentSlotPath(scope, actor.actorUid),
   ]);
-  const activeEnrollmentId = String(
-    slot.data?.activeEnrollmentId || "",
-  ).trim();
+  const activeEnrollmentId = String(slot.data?.activeEnrollmentId || "").trim();
   if (
     !profile.exists ||
     !slot.exists ||
@@ -3566,12 +3564,12 @@ const createW8QueryCore = ({
     const profileRole = String(profile.data?.role || "").trim();
     const isTeacher = profileRole === "teacher";
     const delegatedLessonRead =
+      query.domain === "LEARNING" &&
       !isTeacher &&
       profile.data?.teacherPortalEnabled === true &&
       Array.isArray(profile.data?.staffPermissions) &&
       profile.data.staffPermissions.includes("lesson_read");
-    const canReadTeacherState =
-      isAdmin || isTeacher || delegatedLessonRead;
+    const canReadTeacherState = isAdmin || isTeacher || delegatedLessonRead;
     if (query.audience === "teacher" && !canReadTeacherState)
       fail(
         "permission-denied",
@@ -3662,14 +3660,39 @@ const createW8QueryCore = ({
           status: "EMPTY",
           reason: "PREPARING_STUDENT_DATA_HIDDEN",
         };
+      let semesterClassRowsPromise = null;
+      const getSemesterClassRows = () => {
+        if (!semesterClassRowsPromise)
+          semesterClassRowsPromise = transaction.query(
+            archiveEnrollment.SEMESTER_CLASS_COLLECTION,
+            {
+              field: "semesterId",
+              operator: "==",
+              value: query.semesterId,
+            },
+          );
+        return semesterClassRowsPromise;
+      };
+      const suppressArchiveStudentState =
+        query.audience === "teacher" &&
+        ["LEARNING", "ATTENDANCE", "DASHBOARD"].includes(query.domain) &&
+        lifecycleProvenance === "ARCHIVE" &&
+        !isAdmin &&
+        !delegatedLessonRead &&
+        !(await getSemesterClassRows()).some(
+          (row) =>
+            row.data?.status === "ACTIVE" &&
+            row.data?.homeroomTeacherUid === uid,
+        );
       const selectedUid = query.audience === "student" ? uid : query.studentUid;
       let enrollment = null;
       let enrollmentRows = [];
       if (
-        query.audience === "student" ||
-        query.domain === "LEARNING" ||
-        query.domain === "ATTENDANCE" ||
-        query.domain === "DASHBOARD"
+        !suppressArchiveStudentState &&
+        (query.audience === "student" ||
+          query.domain === "LEARNING" ||
+          query.domain === "ATTENDANCE" ||
+          query.domain === "DASHBOARD")
       ) {
         enrollmentRows = await transaction.query(
           archiveEnrollment.SEMESTER_ENROLLMENT_COLLECTION,
@@ -3732,7 +3755,7 @@ const createW8QueryCore = ({
                 value: query.semesterId,
               })
             ).map((row) => row.data);
-        if (selectedUid) {
+        if (!suppressArchiveStudentState && selectedUid) {
           progress = (
             await transaction.query(LEARNING_PROGRESS_COLLECTION, {
               field: "studentUid",
@@ -3760,7 +3783,10 @@ const createW8QueryCore = ({
           )
             .map((row) => row.data)
             .filter((row) => row.semesterId === query.semesterId);
-        } else if (query.audience === "teacher") {
+        } else if (
+          !suppressArchiveStudentState &&
+          query.audience === "teacher"
+        ) {
           progress = (
             await transaction.query(LEARNING_PROGRESS_COLLECTION, {
               field: "semesterId",
@@ -3802,12 +3828,9 @@ const createW8QueryCore = ({
           );
       };
       const loadThinkCloud = async () => {
+        if (suppressArchiveStudentState) return;
         const [classRows, sessionRows] = await Promise.all([
-          transaction.query(archiveEnrollment.SEMESTER_CLASS_COLLECTION, {
-            field: "semesterId",
-            operator: "==",
-            value: query.semesterId,
-          }),
+          getSemesterClassRows(),
           transaction.query(thinkCloudSessionsPath(query.semesterId)),
         ]);
         const activeClasses = classRows.filter(
@@ -4045,6 +4068,7 @@ const createW8QueryCore = ({
           );
       };
       const loadAttendance = async () => {
+        if (suppressArchiveStudentState) return;
         sessions = query.sessionId
           ? [
               await transaction.get(
@@ -4194,17 +4218,18 @@ const createW8QueryCore = ({
           )
             .map((row) => row.data)
             .filter((row) => row.semesterId === query.semesterId);
-          acknowledgements = selectedUid
-            ? (
-                await transaction.query(NOTICE_ACK_COLLECTION, {
-                  field: "studentUid",
-                  operator: "==",
-                  value: selectedUid,
-                })
-              )
-                .map((row) => row.data)
-                .filter((row) => row.semesterId === query.semesterId)
-            : [];
+          acknowledgements =
+            !suppressArchiveStudentState && selectedUid
+              ? (
+                  await transaction.query(NOTICE_ACK_COLLECTION, {
+                    field: "studentUid",
+                    operator: "==",
+                    value: selectedUid,
+                  })
+                )
+                  .map((row) => row.data)
+                  .filter((row) => row.semesterId === query.semesterId)
+              : [];
         }
         if (query.classId)
           notices = notices.filter(

@@ -17,6 +17,410 @@ const PNG_SIGNATURE = Buffer.from([
 ]);
 
 const args = process.argv.slice(2);
+const VERIFIER_CHILD_SECRET_ENVIRONMENT_VARIABLE_NAMES = [
+  "W10P_VISUAL_APPCHECK_DEBUG_TOKEN",
+  "W10P_VISUAL_CREDENTIALS_JSON",
+  "W10P_VISUAL_FIREBASE_CONFIG_JSON",
+  "VERCEL_AUTOMATION_BYPASS_SECRET",
+];
+const BROWSER_CHILD_ENVIRONMENT_ALLOWLIST = [
+  "ALLUSERSPROFILE",
+  "APPDATA",
+  "COMMONPROGRAMFILES",
+  "COMMONPROGRAMFILES(X86)",
+  "COMMONPROGRAMW6432",
+  "COMSPEC",
+  "DRIVERDATA",
+  "HOMEDRIVE",
+  "HOMEPATH",
+  "LANG",
+  "LOCALAPPDATA",
+  "LOGONSERVER",
+  "NUMBER_OF_PROCESSORS",
+  "OS",
+  "PATH",
+  "PATHEXT",
+  "PROCESSOR_ARCHITECTURE",
+  "PROCESSOR_IDENTIFIER",
+  "PROCESSOR_LEVEL",
+  "PROCESSOR_REVISION",
+  "PROGRAMDATA",
+  "PROGRAMFILES",
+  "PROGRAMFILES(X86)",
+  "PROGRAMW6432",
+  "PUBLIC",
+  "SESSIONNAME",
+  "SYSTEMDRIVE",
+  "SYSTEMROOT",
+  "TEMP",
+  "TMP",
+  "TZ",
+  "USERDOMAIN",
+  "USERDOMAIN_ROAMINGPROFILE",
+  "USERNAME",
+  "USERPROFILE",
+  "WINDIR",
+].sort();
+const verifierVercelBypassSecret = String(
+  process.env.VERCEL_AUTOMATION_BYPASS_SECRET || "",
+).trim();
+const verifierChildSecretValues =
+  VERIFIER_CHILD_SECRET_ENVIRONMENT_VARIABLE_NAMES.map((name) =>
+    String(process.env[name] || ""),
+  ).filter(Boolean);
+for (const name of VERIFIER_CHILD_SECRET_ENVIRONMENT_VARIABLE_NAMES) {
+  delete process.env[name];
+}
+const verifierChildEnvironment = { ...process.env };
+const verifierChildSecretEnvironmentVariableCount =
+  VERIFIER_CHILD_SECRET_ENVIRONMENT_VARIABLE_NAMES.filter((name) =>
+    Object.hasOwn(verifierChildEnvironment, name),
+  ).length;
+const verifierChildSecretValueObservationCount = Object.values(
+  verifierChildEnvironment,
+).filter((environmentValue) =>
+  verifierChildSecretValues.some((secretValue) =>
+    String(environmentValue).includes(secretValue),
+  ),
+).length;
+assert.equal(verifierChildSecretEnvironmentVariableCount, 0);
+assert.equal(verifierChildSecretValueObservationCount, 0);
+verifierChildSecretValues.fill("");
+const STAGING_PROJECT_NUMBER = "894916304910";
+const STAGING_APP_ID = "1:894916304910:web:bd8c8a9e3ed8bd1620dc5f";
+const APP_CHECK_DEBUG_SENTINEL = "w10p-visual-app-check-debug-sentinel-v1";
+const JWT_PATTERN =
+  /[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/u;
+const APP_CHECK_DEBUG_TOKEN_CANDIDATE_PATTERN =
+  /\b[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/giu;
+const secretSha256 = (value) =>
+  createHash("sha256").update(String(value), "utf8").digest("hex");
+const FIXTURE_AUDIT_FRESHNESS_KEYS = [
+  "issuedAt",
+  "expiresAt",
+  "maxAgeSeconds",
+  "fixedFixtureTime",
+].sort();
+const assertFixtureAuditFreshnessBinding = ({
+  freshness,
+  captureBindingFreshness,
+  expectedFixedTime,
+}) => {
+  assert.ok(freshness && typeof freshness === "object");
+  assert.equal(Array.isArray(freshness), false);
+  assert.deepEqual(
+    Object.keys(freshness).sort(),
+    FIXTURE_AUDIT_FRESHNESS_KEYS,
+    "The fixture audit freshness schema drifted.",
+  );
+  assert.deepEqual(
+    captureBindingFreshness,
+    freshness,
+    "The fixture audit freshness is not exactly bound to captureBinding.",
+  );
+  const issuedAt = Date.parse(freshness.issuedAt);
+  const expiresAt = Date.parse(freshness.expiresAt);
+  assert.equal(Number.isNaN(issuedAt), false);
+  assert.equal(Number.isNaN(expiresAt), false);
+  assert.equal(new Date(issuedAt).toISOString(), freshness.issuedAt);
+  assert.equal(new Date(expiresAt).toISOString(), freshness.expiresAt);
+  assert.equal(freshness.maxAgeSeconds, 3600);
+  assert.equal(freshness.fixedFixtureTime, expectedFixedTime);
+  assert.equal(
+    expiresAt - issuedAt,
+    3600 * 1000,
+    "The fixture audit freshness window must be exactly one hour.",
+  );
+  return { issuedAt, expiresAt };
+};
+const PRE_TRANSMISSION_NETWORK_BOUNDARY_ATTESTATION = {
+  schemaVersion: 1,
+  interceptionStage: "cdp-fetch-request-stage",
+  inspectionFunction: "inspectNetworkRequest",
+  blockedMarkers: ["production", "unbound-firebase"],
+  blockMechanism: "Fetch.failRequest",
+  blockErrorReason: "BlockedByClient",
+  ordering: "before-header-body-read-or-secret-mutation",
+};
+const preTransmissionBoundaryDecision = ({
+  productionMarker,
+  unboundFirebaseRequest,
+}) => {
+  assert.equal(typeof productionMarker, "boolean");
+  assert.equal(typeof unboundFirebaseRequest, "boolean");
+  if (productionMarker) return { block: true, marker: "production" };
+  if (unboundFirebaseRequest) {
+    return { block: true, marker: "unbound-firebase" };
+  }
+  return { block: false, marker: null };
+};
+const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
+  const requestStageStart = sourceText.indexOf(
+    'if (stage === "baseline") baselineBridgeCdpPausedRequestCount += 1;',
+  );
+  assert.ok(requestStageStart >= 0);
+  const headerReadIndex = sourceText.indexOf(
+    "const headerEntries = Object.entries(event.request.headers || {})",
+    requestStageStart,
+  );
+  const postDataReadIndex = sourceText.indexOf(
+    'const postData = String(event.request.postData || "");',
+    requestStageStart,
+  );
+  const inspectionIndex = sourceText.indexOf(
+    "const preTransmissionInspection = inspectNetworkRequest({",
+    requestStageStart,
+  );
+  const decisionIndex = sourceText.indexOf(
+    "const preTransmissionDecision = preTransmissionBoundaryDecision(",
+    inspectionIndex,
+  );
+  const blockIndex = sourceText.indexOf(
+    "if (preTransmissionDecision.block) {",
+    decisionIndex,
+  );
+  const failRequestIndex = sourceText.indexOf(
+    'await appCheckCdpSession.send("Fetch.failRequest", {',
+    blockIndex,
+  );
+  assert.ok(
+    requestStageStart < inspectionIndex &&
+      inspectionIndex < decisionIndex &&
+      decisionIndex < blockIndex &&
+      blockIndex < failRequestIndex &&
+      failRequestIndex < headerReadIndex &&
+      headerReadIndex < postDataReadIndex,
+    "Production/unbound Firebase inspection must fail before sensitive header or body reads.",
+  );
+  const sourceBeforeInspection = sourceText.slice(
+    requestStageStart,
+    inspectionIndex,
+  );
+  const sourceBeforeSensitiveRead = sourceText.slice(
+    inspectionIndex,
+    headerReadIndex,
+  );
+  assert.doesNotMatch(
+    sourceBeforeInspection,
+    /event\.request\.(?:headers|postData)|Fetch\.continueRequest|ensureFresh\(|\b(?:appCheckDebugToken|bypassSecret)\b/u,
+  );
+  assert.doesNotMatch(
+    sourceBeforeSensitiveRead,
+    /event\.request\.(?:headers|postData)|Fetch\.continueRequest|ensureFresh\(|\b(?:appCheckDebugToken|bypassSecret)\b/u,
+  );
+  return true;
+};
+const assertNoAppCheckSecretMaterial = (
+  textValue,
+  { debugToken = "", debugSentinel = "", exchangedToken = "" } = {},
+) => {
+  const text = String(textValue);
+  if (debugToken) assert.equal(text.includes(debugToken), false);
+  if (debugSentinel) assert.equal(text.includes(debugSentinel), false);
+  if (exchangedToken) assert.equal(text.includes(exchangedToken), false);
+  assert.doesNotMatch(text, JWT_PATTERN);
+};
+const assertExactObjectKeys = (value, expectedKeys) => {
+  assert.ok(value && typeof value === "object" && !Array.isArray(value));
+  assert.deepEqual(Object.keys(value).sort(), [...expectedKeys].sort());
+};
+const assertNoHashedAppCheckDebugToken = (textValue, debugTokenSha256) => {
+  assert.match(debugTokenSha256, /^[a-f0-9]{64}$/u);
+  for (const candidate of String(textValue).matchAll(
+    APP_CHECK_DEBUG_TOKEN_CANDIDATE_PATTERN,
+  )) {
+    assert.notEqual(
+      secretSha256(candidate[0]),
+      debugTokenSha256,
+      "Raw App Check debug token material reached evidence.",
+    );
+  }
+};
+const verifyAppCheckSecretNegativeFixtures = () => {
+  const debugToken = "12345678-1234-4123-8123-123456789abc";
+  const exchangedToken = `${"a".repeat(24)}.${"b".repeat(24)}.${"c".repeat(
+    24,
+  )}`;
+  assert.throws(() =>
+    assertNoAppCheckSecretMaterial(`raw=${debugToken}`, { debugToken }),
+  );
+  assert.throws(() =>
+    assertNoAppCheckSecretMaterial(`raw=${exchangedToken}`, {
+      exchangedToken,
+    }),
+  );
+  assert.throws(() =>
+    assertNoHashedAppCheckDebugToken(
+      `raw=${debugToken}`,
+      secretSha256(debugToken),
+    ),
+  );
+  assert.throws(() =>
+    assertNoAppCheckSecretMaterial(`raw=${APP_CHECK_DEBUG_SENTINEL}`, {
+      debugSentinel: APP_CHECK_DEBUG_SENTINEL,
+    }),
+  );
+  const schemaFixture = { status: "VERIFIED", rawTokenOutputCount: 0 };
+  assert.doesNotThrow(() =>
+    assertExactObjectKeys(schemaFixture, ["status", "rawTokenOutputCount"]),
+  );
+  assert.throws(() =>
+    assertExactObjectKeys({ ...schemaFixture, hiddenRawToken: debugToken }, [
+      "status",
+      "rawTokenOutputCount",
+    ]),
+  );
+  assert.throws(() =>
+    assertExactObjectKeys({ status: "NOT_EXECUTED" }, [
+      "status",
+      "rawTokenOutputCount",
+    ]),
+  );
+  assert.doesNotThrow(() =>
+    assertNoAppCheckSecretMaterial(
+      JSON.stringify({ debugTokenSha256: secretSha256(debugToken) }),
+      { debugToken },
+    ),
+  );
+  return {
+    rejectedRawSecretCaseCount: 4,
+    rejectedSchemaMutationCaseCount: 2,
+    acceptedSanitizedCaseCount: 2,
+  };
+};
+const verifyPreTransmissionBoundaryNegativeFixtures = () => {
+  const cases = [
+    {
+      method: "GET",
+      inspection: { productionMarker: true, unboundFirebaseRequest: false },
+      marker: "production",
+    },
+    {
+      method: "POST",
+      inspection: { productionMarker: true, unboundFirebaseRequest: false },
+      marker: "production",
+    },
+    {
+      method: "POST",
+      inspection: { productionMarker: false, unboundFirebaseRequest: true },
+      marker: "unbound-firebase",
+    },
+  ];
+  for (const fixture of cases) {
+    assert.deepEqual(preTransmissionBoundaryDecision(fixture.inspection), {
+      block: true,
+      marker: fixture.marker,
+    });
+    assert.ok(["GET", "POST"].includes(fixture.method));
+  }
+  assert.deepEqual(
+    preTransmissionBoundaryDecision({
+      productionMarker: false,
+      unboundFirebaseRequest: false,
+    }),
+    { block: false, marker: null },
+  );
+  assert.equal(
+    assertCapturePreTransmissionBoundarySourceOrdering(
+      readFileSync(resolve(contract.captureRunner.scriptPath), "utf8"),
+    ),
+    true,
+  );
+  return {
+    preTransmissionProductionGetRejectedCaseCount: 1,
+    preTransmissionProductionPostRejectedCaseCount: 1,
+    preTransmissionUnboundFirebaseRejectedCaseCount: 1,
+    preTransmissionAcceptedStagingCaseCount: 1,
+    preTransmissionSourceOrderingVerified: true,
+  };
+};
+const verifyFixtureAuditFreshnessNegativeFixtures = () => {
+  const freshness = {
+    issuedAt: "2026-08-24T00:00:00.000Z",
+    expiresAt: "2026-08-24T01:00:00.000Z",
+    maxAgeSeconds: 3600,
+    fixedFixtureTime: contract.fixedTime,
+  };
+  assert.doesNotThrow(() =>
+    assertFixtureAuditFreshnessBinding({
+      freshness,
+      captureBindingFreshness: structuredClone(freshness),
+      expectedFixedTime: contract.fixedTime,
+    }),
+  );
+  const mutations = [
+    {
+      freshness: { ...freshness, unexpected: true },
+      captureBindingFreshness: { ...freshness, unexpected: true },
+    },
+    {
+      freshness,
+      captureBindingFreshness: {
+        ...freshness,
+        issuedAt: "2026-08-24T00:00:00.001Z",
+      },
+    },
+    {
+      freshness,
+      captureBindingFreshness: { ...freshness, unexpected: true },
+    },
+    {
+      freshness: {
+        ...freshness,
+        expiresAt: "2026-08-24T01:00:00.001Z",
+      },
+      captureBindingFreshness: {
+        ...freshness,
+        expiresAt: "2026-08-24T01:00:00.001Z",
+      },
+    },
+    {
+      freshness: { ...freshness, maxAgeSeconds: 3599 },
+      captureBindingFreshness: { ...freshness, maxAgeSeconds: 3599 },
+    },
+    {
+      freshness: { ...freshness, fixedFixtureTime: "2026-08-17T06:00:00.001Z" },
+      captureBindingFreshness: {
+        ...freshness,
+        fixedFixtureTime: "2026-08-17T06:00:00.001Z",
+      },
+    },
+  ];
+  for (const mutation of mutations) {
+    assert.throws(() =>
+      assertFixtureAuditFreshnessBinding({
+        ...mutation,
+        expectedFixedTime: contract.fixedTime,
+      }),
+    );
+  }
+  return {
+    acceptedFreshnessBindingCaseCount: 1,
+    rejectedFreshnessMutationCaseCount: mutations.length,
+  };
+};
+const appCheckSecretNegativeSelfTest = verifyAppCheckSecretNegativeFixtures();
+const preTransmissionBoundaryNegativeSelfTest =
+  verifyPreTransmissionBoundaryNegativeFixtures();
+const fixtureAuditFreshnessNegativeSelfTest =
+  verifyFixtureAuditFreshnessNegativeFixtures();
+if (args.includes("--self-test-app-check")) {
+  console.log(
+    JSON.stringify({
+      suite: "w10p-app-check-verifier-secret-self-test",
+      passed: true,
+      ...appCheckSecretNegativeSelfTest,
+      ...preTransmissionBoundaryNegativeSelfTest,
+      ...fixtureAuditFreshnessNegativeSelfTest,
+      verifierChildSecretEnvScrubbed: true,
+      verifierChildSecretEnvironmentVariableCount,
+      verifierChildSecretValueObservationCount,
+      productionAccess: 0,
+      networkAccess: 0,
+    }),
+  );
+  process.exit(0);
+}
 const verifyLive = args.includes("--verify-live");
 assert.equal(
   verifyLive,
@@ -37,12 +441,27 @@ const evidenceRoot = dirname(manifestPath);
 assert.equal(existsSync(manifestPath), true, "Visual manifest is missing.");
 assert.equal(statSync(evidenceRoot).isDirectory(), true);
 const manifest = readJson(manifestPath);
+const manifestText = readFileSync(manifestPath, "utf8");
+assertNoAppCheckSecretMaterial(manifestText);
+assert.equal(manifestText.includes(APP_CHECK_DEBUG_SENTINEL), false);
+if (verifierVercelBypassSecret) {
+  assert.equal(
+    manifestText.includes(verifierVercelBypassSecret),
+    false,
+    "The Vercel bypass secret reached the visual manifest.",
+  );
+}
+assertNoHashedAppCheckDebugToken(
+  manifestText,
+  manifest.appCheckBinding?.debugTokenSha256 ?? "",
+);
 
 const run = (command, commandArgs) =>
   execFileSync(command, commandArgs, {
     cwd: process.cwd(),
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
+    env: verifierChildEnvironment,
   }).trim();
 const runJson = (command, commandArgs) => JSON.parse(run(command, commandArgs));
 const git = (...gitArgs) => run("git", gitArgs);
@@ -79,6 +498,538 @@ const canonicalJson = (value) => {
   }
   return JSON.stringify(value);
 };
+const exactVercelOrigin = (value) => {
+  const parsed = new URL(value);
+  assert.equal(parsed.protocol, "https:");
+  assert.equal(parsed.username, "");
+  assert.equal(parsed.password, "");
+  assert.ok(!parsed.port || parsed.port === "443");
+  assert.ok(parsed.hostname.toLowerCase().endsWith(".vercel.app"));
+  return parsed.origin;
+};
+const vercelBypassAllowedOrigins = [
+  ...new Set(
+    [
+      manifest.baselineDeployment?.url,
+      manifest.candidateDeployment?.url,
+      contract.stableAlias,
+    ].map(exactVercelOrigin),
+  ),
+].sort();
+const VERCEL_BYPASS_TRANSPORT_CONTRACT = {
+  requiredProtocol: "https:",
+  allowedPorts: ["", "443"],
+  userinfoAllowed: false,
+  originMatch: "exact",
+};
+const FIXTURE_APP_CHECK_EXCHANGE_ENDPOINT = `https://content-firebaseappcheck.googleapis.com/v1/projects/${contract.firebaseProjectId}/apps/${STAGING_APP_ID}:exchangeDebugToken`;
+const FIXTURE_APP_CHECK_VERIFIED_AUDIENCE_SET = [
+  `projects/${contract.firebaseProjectId}`,
+  `projects/${STAGING_PROJECT_NUMBER}`,
+].sort();
+const FIXTURE_APP_CHECK_EXCHANGE_TRANSPORT_CONTRACT = {
+  method: "POST",
+  contentType: "application/json",
+  queryKeys: ["key"],
+  requiredRequestHeaders: { "Content-Type": "application/json" },
+  optionalRequestHeaders: ["X-Firebase-Client"],
+  originHeaderPolicy: "exact-stable-alias-origin",
+  refererHeaderPolicy: "exact-stable-alias-origin-slash",
+  redirectMode: "error",
+  requestBodyKeys: ["debug_token"],
+  expectedStatus: 200,
+  requiredResponseBodyKeys: ["token", "ttl"],
+  ttlPattern: "^([\\d.]+)s$",
+};
+const BASELINE_APP_CHECK_BRIDGE_SCOPE = {
+  schemaVersion: 1,
+  baselinePresentationSha: "676869fa289d3e7ecef234cbb5cca65c60ec4597",
+  reason: "baseline-presentation-source-has-no-app-check-initialization",
+  firebaseProjectId: contract.firebaseProjectId,
+  allowedServices: ["firestore", "functions", "storage"],
+  allowedHosts: [
+    "firestore.googleapis.com",
+    "firebasestorage.googleapis.com",
+    `asia-northeast3-${contract.firebaseProjectId}.cloudfunctions.net`,
+  ],
+  requiredProtocol: "https:",
+  allowedPorts: ["", "443"],
+  userinfoAllowed: false,
+  excludedMethods: ["OPTIONS"],
+  firestoreDatabaseBoundaryHash: sha256(
+    `projects/${contract.firebaseProjectId}/databases/(default)`,
+  ),
+  storageBucketHash: manifest?.environment?.firebaseConfig?.storageBucket
+    ? sha256(manifest.environment.firebaseConfig.storageBucket)
+    : "",
+  storagePathBoundaryHash: manifest?.environment?.firebaseConfig?.storageBucket
+    ? sha256(`/v0/b/${manifest.environment.firebaseConfig.storageBucket}/o`)
+    : "",
+  functionsPathRuleHash: sha256("single-callable-path-segment-v1"),
+  interceptionMechanism: "cdp-fetch-request-stage",
+  headerCorrelationMechanism: "playwright-request-allHeaders",
+  urlMethodFifoCorrelationAllowed: false,
+  redirectHeaderOverridePropagation: false,
+  redirectPolicyHash: sha256(
+    "abort-before-send-every-redirect-from-bridge-injected-request-v1",
+  ),
+  serviceWorkerPolicy: "block",
+  candidateBridgeAllowed: false,
+};
+const baselineAppCheckBridgeScopeHash = sha256(
+  Buffer.from(canonicalJson(BASELINE_APP_CHECK_BRIDGE_SCOPE)),
+);
+const preTransmissionNetworkBoundaryAttestationHash = sha256(
+  Buffer.from(canonicalJson(PRE_TRANSMISSION_NETWORK_BOUNDARY_ATTESTATION)),
+);
+const BROWSER_APP_CHECK_CDP_SECURITY_SCOPE = {
+  schemaVersion: 1,
+  interceptionMechanism: "cdp-fetch-request-stage",
+  preTransmissionNetworkBoundaryAttestationHash,
+  secretInitScope: "primary-page-only",
+  browserGlobalValueKind: "non-secret-fixed-sentinel",
+  debugSentinelHash: sha256(APP_CHECK_DEBUG_SENTINEL),
+  exchangeEndpointHash: sha256(FIXTURE_APP_CHECK_EXCHANGE_ENDPOINT),
+  exchangeApiKeyHash: manifest?.environment?.firebaseConfig?.apiKeySha256 ?? "",
+  exchangeMethod: "POST",
+  exchangeQueryKeys: ["key"],
+  exchangeContentType: "application/json",
+  exchangeRequestBodyKeys: ["debug_token"],
+  replacementEncoding: "base64-utf8-json",
+  appCheckHeaderAllowedScopeHashes: [
+    baselineAppCheckBridgeScopeHash,
+    sha256(
+      canonicalJson({
+        hosts: ["identitytoolkit.googleapis.com", "securetoken.googleapis.com"],
+        apiKeyHash: manifest?.environment?.firebaseConfig?.apiKeySha256 ?? "",
+        identityToolkitPathRule: "/v[12]/accounts:<operation>",
+        secureTokenPath: "/v1/token",
+        requiredProtocol: "https:",
+        allowedPorts: ["", "443"],
+        userinfoAllowed: false,
+      }),
+    ),
+  ].sort(),
+  rawDebugTokenRendererInjectionAllowed: false,
+  sensitiveResponseInterception: true,
+  sensitiveRedirectPolicyHash: sha256(
+    "abort-before-send-any-redirect-for-debug-body-or-app-check-header-v1",
+  ),
+  protocolDebugLoggingAllowed: false,
+  browserChildSecretEnvironmentScrubRequired: true,
+  browserChildEnvironmentAllowlistHash: sha256(
+    canonicalJson(BROWSER_CHILD_ENVIRONMENT_ALLOWLIST),
+  ),
+  browserGlobalExtraHttpHeadersAllowed: false,
+  vercelBypassInjectionMechanism: "cdp-fetch-exact-origin-only",
+  vercelBypassAllowedOriginSetHash: sha256(
+    canonicalJson(vercelBypassAllowedOrigins),
+  ),
+  vercelBypassTransportContractHash: sha256(
+    canonicalJson(VERCEL_BYPASS_TRANSPORT_CONTRACT),
+  ),
+  vercelBypassRedirectPolicyHash: sha256(
+    "abort-before-send-any-redirect-for-cdp-injected-vercel-bypass-v1",
+  ),
+  monitoredTargetKind: "primary-page-target-only",
+  monitorTerminationMechanism: "context-close-with-fetch-enabled",
+  targetDiscoveryMechanism: "cdp-target-created-cumulative",
+  retainedTargetSnapshotCrossCheck: true,
+  unexpectedPagePolicy: "zero",
+  dedicatedWorkerPolicy: "zero",
+  sharedWorkerPolicy: "zero",
+  serviceWorkerTargetPolicy: "zero",
+  crossOriginFramePolicy: "zero",
+  oopifTargetPolicy: "zero",
+  playwrightRouteInterceptionAllowed: false,
+  traceWriteAllowed: false,
+  harWriteAllowed: false,
+  storageStateWriteAllowed: false,
+};
+const browserAppCheckCdpSecurityScopeHash = sha256(
+  Buffer.from(canonicalJson(BROWSER_APP_CHECK_CDP_SECURITY_SCOPE)),
+);
+const backupAccessProbeCanary = (kind) => {
+  const revisionHash = sha256(
+    `${contract.fixtureId}\n${contract.fixtureRevision}\nbackup-access-${kind}-canary-v1`,
+  );
+  const documentId = sha256(`${revisionHash}\ndocument`);
+  const data = {
+    schemaVersion: 1,
+    fixtureOwner: "w10p-visual-parity",
+    fixtureId: contract.fixtureId,
+    fixtureRevision: contract.fixtureRevision,
+    canaryPurpose: `backup-access-${kind}-deny-probe`,
+    canaryRevision: revisionHash,
+    payloadSentinelHash: sha256(
+      `${contract.fixtureId}\n${contract.fixtureRevision}\n${kind}\npayload`,
+    ),
+  };
+  return {
+    revisionHash,
+    path: `w10p_visual_fixture_backups/${contract.fixtureId}/documents/${documentId}`,
+    documentHash: sha256(Buffer.from(canonicalJson(data))),
+  };
+};
+const POST_BACKUP_PROBE_EXACT = {
+  status: "VERIFIED_DENIED",
+  probeKind: "synthetic-fixture-id-token-backup-read-update-delete-create",
+  sessionBound: true,
+  appCheckBound: true,
+  appCheckExchangeHttpStatus: 200,
+  appCheckExchangeRequestCount: 1,
+  appCheckAdminVerificationCount: 1,
+  appCheckProjectBindingVerified: true,
+  appCheckAppBindingVerified: true,
+  appCheckTokenValidAtVerification: true,
+  appCheckTokenLifetimeWithinMaximum: true,
+  appCheckHeaderRequestCount: 4,
+  readDenied: true,
+  writeDenied: true,
+  updateDenied: true,
+  deleteDenied: true,
+  createDenied: true,
+  readHttpStatus: 403,
+  readFirestoreStatus: "PERMISSION_DENIED",
+  updateHttpStatus: 403,
+  updateFirestoreStatus: "PERMISSION_DENIED",
+  deleteHttpStatus: 403,
+  deleteFirestoreStatus: "PERMISSION_DENIED",
+  createHttpStatus: 403,
+  createFirestoreStatus: "PERMISSION_DENIED",
+  existingCanaryOriginalHashPreserved: true,
+  requestCount: 6,
+  identityRequestCount: 1,
+  accessRequestCount: 4,
+  readRequestCount: 1,
+  writeRequestCount: 3,
+  updateRequestCount: 1,
+  deleteRequestCount: 1,
+  createRequestCount: 1,
+  adminCanarySetupWriteCount: 1,
+  conditionalCanaryCleanupWriteCount: 1,
+  canaryOwnershipMismatchCount: 0,
+  canaryResidualCount: 0,
+  temporarySessionWriteCount: 2,
+  temporarySessionCleanupWriteCount: 1,
+  temporarySessionResidualCount: 0,
+  rawTokenOutputCount: 0,
+  rawAppCheckDebugTokenOutputCount: 0,
+  rawAppCheckJwtOutputCount: 0,
+  rawResponseBodyOutputCount: 0,
+  rawDocumentPathOutputCount: 0,
+  rawCanaryDocumentOutputCount: 0,
+  rawPiiOutputCount: 0,
+};
+const POST_BACKUP_PROBE_HASH_FIELDS = [
+  "appCheckDebugTokenHash",
+  "verifiedAppIdHash",
+  "verifiedProjectIdHash",
+  "verifiedProjectNumberHash",
+  "verifiedAudienceSetHash",
+  "verifiedIssuerHash",
+  "exchangeEndpointHash",
+  "exchangeTransportContractHash",
+  "projectIdHash",
+  "identityUidHash",
+  "backupNamespaceHash",
+  "backupManifestHash",
+  "localRulesSourceHash",
+  "probeSessionPathHash",
+  "readDocumentPathHash",
+  "existingWriteCanaryPathHash",
+  "absentWriteCanaryPathHash",
+  "existingWriteCanaryRevisionHash",
+  "absentWriteCanaryRevisionHash",
+  "existingWriteCanaryDocumentHash",
+  "absentWriteCanaryDocumentHash",
+];
+const PRE_BACKUP_PROBE_EXACT = {
+  status: "VERIFIED_DENIED",
+  probeKind:
+    "ephemeral-synthetic-id-token-pre-backup-read-update-delete-create",
+  sessionBound: true,
+  appCheckBound: true,
+  appCheckExchangeHttpStatus: 200,
+  appCheckExchangeRequestCount: 1,
+  appCheckAdminVerificationCount: 1,
+  appCheckProjectBindingVerified: true,
+  appCheckAppBindingVerified: true,
+  appCheckTokenValidAtVerification: true,
+  appCheckTokenLifetimeWithinMaximum: true,
+  appCheckHeaderRequestCount: 6,
+  positiveControlPassed: true,
+  positiveControlHttpStatus: 200,
+  positiveControlSentinelMatched: true,
+  positiveControlOriginalHashPreserved: true,
+  readDenied: true,
+  existingReadDenied: true,
+  absentReadDenied: true,
+  writeDenied: true,
+  updateDenied: true,
+  deleteDenied: true,
+  createDenied: true,
+  existingReadHttpStatus: 403,
+  existingReadFirestoreStatus: "PERMISSION_DENIED",
+  absentReadHttpStatus: 403,
+  absentReadFirestoreStatus: "PERMISSION_DENIED",
+  updateHttpStatus: 403,
+  updateFirestoreStatus: "PERMISSION_DENIED",
+  deleteHttpStatus: 403,
+  deleteFirestoreStatus: "PERMISSION_DENIED",
+  createHttpStatus: 403,
+  createFirestoreStatus: "PERMISSION_DENIED",
+  existingCanaryOriginalHashPreserved: true,
+  requestCount: 8,
+  identityRequestCount: 1,
+  accessRequestCount: 6,
+  readRequestCount: 2,
+  writeRequestCount: 3,
+  positiveControlReadRequestCount: 1,
+  existingReadRequestCount: 1,
+  absentReadRequestCount: 1,
+  updateRequestCount: 1,
+  deleteRequestCount: 1,
+  createRequestCount: 1,
+  ephemeralAuthWriteCount: 3,
+  ephemeralAuthSetupWriteCount: 2,
+  ephemeralAuthCleanupWriteCount: 1,
+  ephemeralAuthResidualCount: 0,
+  ephemeralProfileWriteCount: 2,
+  ephemeralProfileSetupWriteCount: 1,
+  ephemeralProfileCleanupWriteCount: 1,
+  ephemeralProfileResidualCount: 0,
+  positiveControlWriteCount: 2,
+  positiveControlSetupWriteCount: 1,
+  positiveControlCleanupWriteCount: 1,
+  positiveControlResidualCount: 0,
+  temporarySessionWriteCount: 2,
+  temporarySessionCleanupWriteCount: 1,
+  temporarySessionResidualCount: 0,
+  adminCanarySetupWriteCount: 1,
+  conditionalCanaryCleanupWriteCount: 1,
+  canaryResidualCount: 0,
+  ownershipMismatchCount: 0,
+  rawBackupWriteCount: 0,
+  rawTokenOutputCount: 0,
+  rawAppCheckDebugTokenOutputCount: 0,
+  rawAppCheckJwtOutputCount: 0,
+  rawResponseBodyOutputCount: 0,
+  rawDocumentPathOutputCount: 0,
+  rawCanaryDocumentOutputCount: 0,
+  rawPiiOutputCount: 0,
+};
+const PRE_BACKUP_PROBE_HASH_FIELDS = [
+  "appCheckDebugTokenHash",
+  "verifiedAppIdHash",
+  "verifiedProjectIdHash",
+  "verifiedProjectNumberHash",
+  "verifiedAudienceSetHash",
+  "verifiedIssuerHash",
+  "exchangeEndpointHash",
+  "exchangeTransportContractHash",
+  "projectIdHash",
+  "identityUidHash",
+  "identityEmailHash",
+  "backupNamespaceHash",
+  "localRulesSourceHash",
+  "probeRevisionHash",
+  "probeProfilePathHash",
+  "probeSessionPathHash",
+  "positiveControlPathHash",
+  "positiveControlSentinelHash",
+  "positiveControlDocumentHash",
+  "existingWriteCanaryPathHash",
+  "absentWriteCanaryPathHash",
+  "existingWriteCanaryRevisionHash",
+  "absentWriteCanaryRevisionHash",
+  "existingWriteCanaryDocumentHash",
+  "absentWriteCanaryDocumentHash",
+];
+const assertExactBackupProbeAttestation = ({
+  probe,
+  exact,
+  hashFields,
+  expected,
+  label,
+}) => {
+  assert.ok(
+    probe && typeof probe === "object" && !Array.isArray(probe),
+    `${label} is missing.`,
+  );
+  assert.deepEqual(
+    Object.keys(probe).sort(),
+    [...Object.keys(exact), ...hashFields, "attestationHash"].sort(),
+    `${label} schema drifted.`,
+  );
+  for (const [field, value] of Object.entries(exact)) {
+    assert.equal(probe[field], value, `${label} ${field} is invalid.`);
+  }
+  for (const field of [...hashFields, "attestationHash"]) {
+    assert.match(
+      probe[field],
+      /^[a-f0-9]{64}$/u,
+      `${label} ${field} must be SHA-256.`,
+    );
+  }
+  for (const [field, value] of Object.entries(expected)) {
+    assert.equal(probe[field], value, `${label} ${field} is invalid.`);
+  }
+  const { attestationHash, ...projection } = probe;
+  assert.equal(
+    sha256(Buffer.from(canonicalJson(projection))),
+    attestationHash,
+    `${label} attestation hash is invalid.`,
+  );
+  return attestationHash;
+};
+const assertBackupAccessProbeAttestation = (probe, expected) =>
+  assertExactBackupProbeAttestation({
+    probe,
+    exact: POST_BACKUP_PROBE_EXACT,
+    hashFields: POST_BACKUP_PROBE_HASH_FIELDS,
+    expected,
+    label: "The post-backup namespace access probe",
+  });
+const assertPreBackupAccessProbeAttestation = (probe, expected) =>
+  assertExactBackupProbeAttestation({
+    probe,
+    exact: PRE_BACKUP_PROBE_EXACT,
+    hashFields: PRE_BACKUP_PROBE_HASH_FIELDS,
+    expected,
+    label: "The pre-backup namespace access probe",
+  });
+const verifyBackupAccessProbeNegativeFixtures = () => {
+  const hash = "a".repeat(64);
+  const attest = (projection) => ({
+    ...projection,
+    attestationHash: sha256(Buffer.from(canonicalJson(projection))),
+  });
+  const postProjection = {
+    ...POST_BACKUP_PROBE_EXACT,
+    ...Object.fromEntries(
+      POST_BACKUP_PROBE_HASH_FIELDS.map((field) => [field, hash]),
+    ),
+  };
+  const valid = attest(postProjection);
+  const postExpected = Object.fromEntries(
+    POST_BACKUP_PROBE_HASH_FIELDS.map((field) => [field, hash]),
+  );
+  assert.doesNotThrow(() =>
+    assertBackupAccessProbeAttestation(valid, postExpected),
+  );
+  const postInvalid = [
+    null,
+    attest({ ...postProjection, status: "NOT_EXECUTED" }),
+    attest({ ...postProjection, appCheckBound: false }),
+    attest({ ...postProjection, appCheckHeaderRequestCount: 3 }),
+    attest({ ...postProjection, appCheckExchangeRequestCount: 0 }),
+    attest({ ...postProjection, appCheckAdminVerificationCount: 0 }),
+    attest({ ...postProjection, rawAppCheckDebugTokenOutputCount: 1 }),
+    attest({ ...postProjection, rawAppCheckJwtOutputCount: 1 }),
+    Object.fromEntries(
+      Object.entries(valid).filter(([field]) => field !== "writeDenied"),
+    ),
+    attest({ ...postProjection, readDenied: false }),
+    attest({ ...postProjection, writeDenied: false }),
+    attest({ ...postProjection, updateDenied: false }),
+    attest({ ...postProjection, deleteDenied: false }),
+    attest({ ...postProjection, createDenied: false }),
+    attest({ ...postProjection, createHttpStatus: 200 }),
+    attest({ ...postProjection, writeRequestCount: 2 }),
+    attest({ ...postProjection, canaryResidualCount: 1 }),
+    attest({ ...postProjection, temporarySessionResidualCount: 1 }),
+    { ...valid, requestCount: 4 },
+    attest({
+      ...postProjection,
+      existingWriteCanaryPathHash: "b".repeat(64),
+    }),
+    attest({ ...postProjection, exchangeEndpointHash: "b".repeat(64) }),
+    attest({
+      ...postProjection,
+      exchangeTransportContractHash: "b".repeat(64),
+    }),
+  ];
+  for (const invalid of postInvalid) {
+    assert.throws(() =>
+      assertBackupAccessProbeAttestation(invalid, postExpected),
+    );
+  }
+  const preProjection = {
+    ...PRE_BACKUP_PROBE_EXACT,
+    ...Object.fromEntries(
+      PRE_BACKUP_PROBE_HASH_FIELDS.map((field) => [field, hash]),
+    ),
+  };
+  const validPre = attest(preProjection);
+  const preExpected = Object.fromEntries(
+    PRE_BACKUP_PROBE_HASH_FIELDS.map((field) => [field, hash]),
+  );
+  assert.doesNotThrow(() =>
+    assertPreBackupAccessProbeAttestation(validPre, preExpected),
+  );
+  const preInvalid = [
+    null,
+    attest({ ...preProjection, status: "NOT_EXECUTED" }),
+    attest({ ...preProjection, appCheckBound: false }),
+    attest({ ...preProjection, appCheckHeaderRequestCount: 5 }),
+    attest({ ...preProjection, appCheckExchangeRequestCount: 0 }),
+    attest({ ...preProjection, appCheckAdminVerificationCount: 0 }),
+    attest({ ...preProjection, rawAppCheckDebugTokenOutputCount: 1 }),
+    attest({ ...preProjection, rawAppCheckJwtOutputCount: 1 }),
+    attest({ ...preProjection, positiveControlPassed: false }),
+    attest({ ...preProjection, positiveControlHttpStatus: 403 }),
+    attest({ ...preProjection, positiveControlSentinelMatched: false }),
+    Object.fromEntries(
+      Object.entries(validPre).filter(
+        ([field]) => field !== "rawBackupWriteCount",
+      ),
+    ),
+    attest({ ...preProjection, readDenied: false }),
+    attest({ ...preProjection, absentReadDenied: false }),
+    attest({ ...preProjection, writeDenied: false }),
+    attest({ ...preProjection, updateDenied: false }),
+    attest({ ...preProjection, deleteDenied: false }),
+    attest({ ...preProjection, createDenied: false }),
+    attest({ ...preProjection, rawBackupWriteCount: 1 }),
+    attest({ ...preProjection, ephemeralAuthResidualCount: 1 }),
+    attest({ ...preProjection, ephemeralProfileResidualCount: 1 }),
+    attest({ ...preProjection, temporarySessionResidualCount: 1 }),
+    attest({ ...preProjection, positiveControlResidualCount: 1 }),
+    attest({ ...preProjection, canaryResidualCount: 1 }),
+    attest({ ...preProjection, writeRequestCount: 2 }),
+    { ...validPre, requestCount: 5 },
+    attest({ ...preProjection, probeRevisionHash: "b".repeat(64) }),
+    attest({ ...preProjection, verifiedAudienceSetHash: "b".repeat(64) }),
+    attest({
+      ...preProjection,
+      exchangeTransportContractHash: "b".repeat(64),
+    }),
+  ];
+  for (const invalid of preInvalid) {
+    assert.throws(() =>
+      assertPreBackupAccessProbeAttestation(invalid, preExpected),
+    );
+  }
+  return {
+    postBackupNegativeCaseCount: postInvalid.length,
+    preBackupNegativeCaseCount: preInvalid.length,
+  };
+};
+const backupAccessProbeNegativeSelfTest =
+  verifyBackupAccessProbeNegativeFixtures();
+if (args.includes("--self-test-backup-probe")) {
+  console.log(
+    JSON.stringify({
+      suite: "w10p-backup-access-probe-verifier-self-test",
+      passed: true,
+      ...backupAccessProbeNegativeSelfTest,
+      productionAccess: 0,
+      networkAccess: 0,
+    }),
+  );
+  process.exit(0);
+}
 const cssNumber = (value) => {
   const parsed = Number.parseFloat(String(value || "0"));
   return Number.isFinite(parsed) ? parsed : 0;
@@ -388,7 +1339,7 @@ assert.deepEqual(
   contract.captureIdentities,
   {
     adminEmailSha256:
-      "e0704874f65563b0d7f1b75520d0f28c01bde74606e9a9aedcdb6c80e49493fe",
+      "1817de428ec7cba5fb07902cd019ee6244786eed8b56031075d1f844d6cb4919",
     roles: {
       student: {
         uid: "w10p-visual-student",
@@ -533,7 +1484,7 @@ assert.deepEqual(
   contract.fixturePrivacy,
   {
     allowedVisibleEmails: [
-      "westoria28@gmail.com",
+      "w10p-visual-admin@yongshin-ms.ms.kr",
       "w10p-visual-student@yongshin-ms.ms.kr",
       "w10p-visual-teacher@yongshin-ms.ms.kr",
     ],
@@ -907,6 +1858,17 @@ const listBrowserAuditFiles = (root, current = root) =>
     }
     return [relative(root, absolute).replaceAll("\\", "/")];
   });
+const listEvidenceFiles = (root, current = root) =>
+  readdirSync(current, { withFileTypes: true }).flatMap((entry) => {
+    const absolute = resolve(current, entry.name);
+    if (entry.isDirectory()) return listEvidenceFiles(root, absolute);
+    assert.equal(
+      entry.isFile(),
+      true,
+      "The evidence root contains a non-file filesystem entry.",
+    );
+    return [relative(root, absolute).replaceAll("\\", "/")];
+  });
 const readBrowserAudit = (path) => {
   const textValue = readFileSync(path, "utf8");
   assert.ok(textValue.endsWith("\n"), `${path} must end with a newline.`);
@@ -916,10 +1878,11 @@ const readBrowserAudit = (path) => {
     `${path} contains a sensitive transport field.`,
   );
   assert.doesNotMatch(textValue, /[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/u);
-  assert.doesNotMatch(
+  assertNoAppCheckSecretMaterial(textValue);
+  assert.equal(textValue.includes(APP_CHECK_DEBUG_SENTINEL), false);
+  assertNoHashedAppCheckDebugToken(
     textValue,
-    /[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/u,
-    `${path} contains a token-shaped value.`,
+    manifest.appCheckBinding.debugTokenSha256,
   );
   return {
     textValue,
@@ -983,11 +1946,76 @@ assert.deepEqual(
   },
   "Visual evidence was not produced by the committed W10P capture runner.",
 );
+const captureRunnerSourceText = readFileSync(
+  resolve(contract.captureRunner.scriptPath),
+  "utf8",
+);
+assert.equal(
+  assertCapturePreTransmissionBoundarySourceOrdering(captureRunnerSourceText),
+  true,
+);
+const playwrightRouteRegistrationCount = (
+  captureRunnerSourceText.match(/\.(?:route|unroute)\s*\(/gu) || []
+).length;
+const browserGlobalExtraHttpHeaderRegistrationCount = (
+  captureRunnerSourceText.match(/\bextraHTTPHeaders\s*:/gu) || []
+).length;
+const targetDiscoveryRegistrationCount = (
+  captureRunnerSourceText.match(/"Target\.setDiscoverTargets"/gu) || []
+).length;
+const pageAppCheckSecretInitRegistrationCount = (
+  captureRunnerSourceText.match(
+    /\bpage\.addInitScript\(\s*appCheckDebugInitScript\s*,\s*appCheckDebugInitArgument\s*,?\s*\)/gu,
+  ) || []
+).length;
+const pageAppCheckSentinelInitArgumentSourceCount = (
+  captureRunnerSourceText.match(
+    /\bconst\s+appCheckDebugInitArgument\s*=\s*\{\s*allowedOrigin:\s*origin,\s*debugToken:\s*APP_CHECK_DEBUG_SENTINEL,\s*\};/gu,
+  ) || []
+).length;
+const contextAppCheckSecretInitRegistrationCount = (
+  captureRunnerSourceText.match(
+    /\bcontext\.addInitScript\(appCheckDebugInitScript\s*,/gu,
+  ) || []
+).length;
+assert.equal(
+  playwrightRouteRegistrationCount,
+  0,
+  "The capture runner combines Playwright route interception with CDP Fetch.",
+);
+assert.equal(
+  browserGlobalExtraHttpHeaderRegistrationCount,
+  0,
+  "The capture runner configures browser-global HTTP headers.",
+);
+assert.equal(targetDiscoveryRegistrationCount, 1);
+assert.equal(pageAppCheckSecretInitRegistrationCount, 1);
+assert.equal(pageAppCheckSentinelInitArgumentSourceCount, 1);
+assert.equal(contextAppCheckSecretInitRegistrationCount, 0);
+const browserLaunchSourceIndex = captureRunnerSourceText.indexOf(
+  "const browser = await chromium.launch(",
+);
+assert.ok(browserLaunchSourceIndex > 0);
+for (const environmentVariableName of [
+  "W10P_VISUAL_APPCHECK_DEBUG_TOKEN",
+  "W10P_VISUAL_CREDENTIALS_JSON",
+  "W10P_VISUAL_FIREBASE_CONFIG_JSON",
+  "VERCEL_AUTOMATION_BYPASS_SECRET",
+]) {
+  const deletionSourceIndex = captureRunnerSourceText.indexOf(
+    `delete process.env.${environmentVariableName};`,
+  );
+  assert.ok(
+    deletionSourceIndex >= 0 && deletionSourceIndex < browserLaunchSourceIndex,
+    `${environmentVariableName} is not scrubbed before the Edge child process launches.`,
+  );
+}
 const trustedInputPaths = [
   contract.captureRunner.scriptPath,
   "scripts/w10p-visual-parity-contract.json",
   "scripts/w10p-route-menu-inventory.json",
   "scripts/seed-w10p-visual-fixture.mjs",
+  "firestore.rules",
   "package.json",
   "package-lock.json",
 ];
@@ -1063,6 +2091,14 @@ for (const field of [
   "stagingFirebaseResponseCount",
   "stagingDataRequestCount",
   "stagingDataResponseCount",
+  "appCheckExchangeRequestCount",
+  "successfulAppCheckExchangeResponseCount",
+  "appCheckProtectedDataRequestCount",
+  "appCheckHeaderPresentRequestCount",
+  "appCheckHeaderMissingRequestCount",
+  "appCheckHeaderJwtShapeValidRequestCount",
+  "appCheckHeaderJwtShapeInvalidRequestCount",
+  "rawAppCheckHeaderValueOutputCount",
   "productionAccess",
   "productionWrites",
   "unboundFirebaseRequestCount",
@@ -1139,6 +2175,19 @@ assert.deepEqual(networkSummary.observedFirebaseApiKeySha256s, [
   manifest.environment.firebaseConfig.apiKeySha256,
 ]);
 assert.equal(networkSummary.failedFirebaseResponseCount, 0);
+assert.ok(networkSummary.appCheckExchangeRequestCount > 0);
+assert.equal(
+  networkSummary.successfulAppCheckExchangeResponseCount,
+  networkSummary.appCheckExchangeRequestCount,
+);
+assert.ok(networkSummary.appCheckProtectedDataRequestCount > 0);
+assert.equal(networkSummary.appCheckHeaderMissingRequestCount, 0);
+assert.equal(networkSummary.appCheckHeaderJwtShapeInvalidRequestCount, 0);
+assert.equal(
+  networkSummary.appCheckHeaderJwtShapeValidRequestCount,
+  networkSummary.appCheckProtectedDataRequestCount,
+);
+assert.equal(networkSummary.rawAppCheckHeaderValueOutputCount, 0);
 assert.equal(manifest.status, "CAPTURED");
 const startedAt = isoTime(manifest.startedAt, "manifest.startedAt");
 const completedAt = isoTime(manifest.completedAt, "manifest.completedAt");
@@ -1149,7 +2198,7 @@ assert.deepEqual(
   {
     fileName: "fixture-audit.json",
     sha256: manifest.fixtureAudit?.sha256,
-    artifactSchemaVersion: "w10p-visual-fixture-audit-v1",
+    artifactSchemaVersion: "w10p-visual-fixture-audit-v2",
     fixtureRevision: contract.fixtureRevision,
     planHash: contract.fixturePlanHash,
     captureBindingHash: manifest.fixtureAudit?.captureBindingHash,
@@ -1165,6 +2214,10 @@ assert.equal(existsSync(fixtureAuditPath), true, "Fixture audit is missing.");
 const fixtureAuditBytes = readFileSync(fixtureAuditPath);
 assert.equal(sha256(fixtureAuditBytes), manifest.fixtureAudit.sha256);
 const fixtureAuditText = fixtureAuditBytes.toString("utf8");
+assertNoAppCheckSecretMaterial(fixtureAuditText);
+if (verifierVercelBypassSecret) {
+  assert.equal(fixtureAuditText.includes(verifierVercelBypassSecret), false);
+}
 assert.doesNotMatch(fixtureAuditText, /@/u);
 assert.doesNotMatch(
   fixtureAuditText,
@@ -1192,6 +2245,44 @@ assert.equal(
   fixtureAudit.captureBinding?.projectId,
   contract.firebaseProjectId,
 );
+assert.deepEqual(
+  Object.keys(fixtureAudit.captureBinding || {}).sort(),
+  [
+    "fixtureNamespace",
+    "fixtureRevision",
+    "projectId",
+    "planHash",
+    "authAllowedUidSetHash",
+    "authManifestHash",
+    "authFixtureIdentityScopeManifestHash",
+    "fixtureDocumentCount",
+    "documentProjectionHash",
+    "plannedMutationTopologyAllowlistHash",
+    "plannedMutationTopologyObservedHash",
+    "plannedMutationTopologyBaselineHash",
+    "strictCollectionCount",
+    "strictExpectedRowCount",
+    "strictActualRowCount",
+    "strictAllowlistManifestHash",
+    "strictManifestHash",
+    "presentationAttestationHash",
+    "privacyAttestationHash",
+    "appCheckDebugTokenHash",
+    "verifiedAppIdHash",
+    "verifiedProjectIdHash",
+    "verifiedProjectNumberHash",
+    "verifiedAudienceSetHash",
+    "verifiedIssuerHash",
+    "exchangeEndpointHash",
+    "exchangeTransportContractHash",
+    "preBackupNamespaceAccessAttestationHash",
+    "backupNamespaceAccessAttestationHash",
+    "postBackupProbeLifecycleHash",
+    "freshness",
+    "extraRowCount",
+  ].sort(),
+  "The staging fixture capture binding schema drifted.",
+);
 assert.equal(
   sha256(Buffer.from(canonicalJson(fixtureAudit.captureBinding))),
   fixtureAudit.captureBindingHash,
@@ -1199,6 +2290,254 @@ assert.equal(
 assert.equal(
   fixtureAudit.captureBindingHash,
   manifest.fixtureAudit.captureBindingHash,
+);
+const plannedMutationTopology = fixtureAudit.isolation?.plannedMutationTopology;
+assert.deepEqual(
+  Object.keys(plannedMutationTopology || {}).sort(),
+  [
+    "documentCount",
+    "allowlistHash",
+    "observedHash",
+    "baselineHash",
+    "rows",
+  ].sort(),
+  "The planned mutation topology schema drifted.",
+);
+assert.equal(
+  Number(plannedMutationTopology.documentCount),
+  plannedMutationTopology.rows?.length,
+);
+assert.ok(Number(plannedMutationTopology.documentCount) > 0);
+for (const field of ["allowlistHash", "observedHash", "baselineHash"]) {
+  assert.match(plannedMutationTopology[field], /^[a-f0-9]{64}$/u);
+}
+const plannedMutationPathHashes = [];
+const topologyRowUsesOnlyAllowedChildren = (row) => {
+  const allowedChildIds = new Set(row.allowedChildIds || []);
+  return (row.actualChildIds || []).every((childId) =>
+    allowedChildIds.has(childId),
+  );
+};
+for (const row of plannedMutationTopology.rows || []) {
+  assert.deepEqual(
+    Object.keys(row || {}).sort(),
+    ["pathHash", "allowedChildIds", "actualChildIds"].sort(),
+  );
+  assert.match(row.pathHash, /^[a-f0-9]{64}$/u);
+  assert.deepEqual(row.allowedChildIds, [...row.allowedChildIds].sort());
+  assert.deepEqual(row.actualChildIds, [...row.actualChildIds].sort());
+  assert.equal(new Set(row.allowedChildIds).size, row.allowedChildIds.length);
+  assert.equal(new Set(row.actualChildIds).size, row.actualChildIds.length);
+  assert.equal(topologyRowUsesOnlyAllowedChildren(row), true);
+  plannedMutationPathHashes.push(row.pathHash);
+}
+assert.deepEqual(
+  plannedMutationPathHashes,
+  [...plannedMutationPathHashes].sort(),
+);
+assert.equal(
+  new Set(plannedMutationPathHashes).size,
+  plannedMutationPathHashes.length,
+);
+const unknownChildTopologyNegative = structuredClone(
+  plannedMutationTopology.rows[0],
+);
+unknownChildTopologyNegative.actualChildIds.push("unknown-fixture-child");
+assert.equal(
+  topologyRowUsesOnlyAllowedChildren(unknownChildTopologyNegative),
+  false,
+);
+assert.equal(
+  sha256(Buffer.from(canonicalJson(plannedMutationTopology.rows))),
+  plannedMutationTopology.observedHash,
+);
+assert.equal(
+  sha256(
+    Buffer.from(
+      canonicalJson(
+        plannedMutationTopology.rows.map(({ pathHash, allowedChildIds }) => ({
+          pathHash,
+          allowedChildIds,
+        })),
+      ),
+    ),
+  ),
+  plannedMutationTopology.allowlistHash,
+);
+assert.equal(
+  fixtureAudit.captureBinding.plannedMutationTopologyAllowlistHash,
+  plannedMutationTopology.allowlistHash,
+);
+assert.equal(
+  fixtureAudit.captureBinding.plannedMutationTopologyObservedHash,
+  plannedMutationTopology.observedHash,
+);
+assert.equal(
+  fixtureAudit.captureBinding.plannedMutationTopologyBaselineHash,
+  plannedMutationTopology.baselineHash,
+);
+const postExistingCanary = backupAccessProbeCanary("existing-update-delete");
+const postAbsentCanary = backupAccessProbeCanary("absent-create");
+const preExistingCanary = backupAccessProbeCanary(
+  "pre-backup-existing-update-delete",
+);
+const preAbsentCanary = backupAccessProbeCanary("pre-backup-absent-create");
+const preBackupProbeRevisionHash = sha256(
+  `${contract.fixtureId}\n${contract.fixtureRevision}\npre-backup-access-probe-v1`,
+);
+const preBackupPositiveControlSentinelHash = sha256(
+  `${preBackupProbeRevisionHash}\npositive-control-sentinel`,
+);
+const preBackupPositiveControlData = {
+  schemaVersion: 1,
+  fixtureOwner: "w10p-visual-parity",
+  fixtureId: contract.fixtureId,
+  fixtureRevision: contract.fixtureRevision,
+  fixturePurpose: "pre-backup-positive-control",
+  probeRevision: preBackupProbeRevisionHash,
+  sentinelHash: preBackupPositiveControlSentinelHash,
+};
+const preBackupNamespaceAccessAttestationHash =
+  assertPreBackupAccessProbeAttestation(
+    fixtureAudit.isolation?.preBackupAccessProbe,
+    {
+      verifiedAppIdHash: sha256(STAGING_APP_ID),
+      verifiedProjectIdHash: sha256(contract.firebaseProjectId),
+      verifiedProjectNumberHash: sha256(STAGING_PROJECT_NUMBER),
+      verifiedAudienceSetHash: sha256(
+        canonicalJson(FIXTURE_APP_CHECK_VERIFIED_AUDIENCE_SET),
+      ),
+      verifiedIssuerHash: sha256(
+        `https://firebaseappcheck.googleapis.com/${STAGING_PROJECT_NUMBER}`,
+      ),
+      exchangeEndpointHash: sha256(FIXTURE_APP_CHECK_EXCHANGE_ENDPOINT),
+      exchangeTransportContractHash: sha256(
+        canonicalJson(FIXTURE_APP_CHECK_EXCHANGE_TRANSPORT_CONTRACT),
+      ),
+      projectIdHash: sha256(contract.firebaseProjectId),
+      identityUidHash: sha256("w10p-visual-backup-preflight"),
+      identityEmailHash: sha256(
+        "w10p-visual-backup-preflight@yongshin-ms.ms.kr",
+      ),
+      backupNamespaceHash: sha256(
+        `w10p_visual_fixture_backups/${contract.fixtureId}`,
+      ),
+      localRulesSourceHash: sha256(readFileSync(resolve("firestore.rules"))),
+      probeRevisionHash: preBackupProbeRevisionHash,
+      probeProfilePathHash: sha256("users/w10p-visual-backup-preflight"),
+      positiveControlPathHash: sha256(
+        "users/w10p-visual-backup-preflight/academic_records/access-control",
+      ),
+      positiveControlSentinelHash: preBackupPositiveControlSentinelHash,
+      positiveControlDocumentHash: sha256(
+        Buffer.from(canonicalJson(preBackupPositiveControlData)),
+      ),
+      existingWriteCanaryPathHash: sha256(preExistingCanary.path),
+      absentWriteCanaryPathHash: sha256(preAbsentCanary.path),
+      existingWriteCanaryRevisionHash: preExistingCanary.revisionHash,
+      absentWriteCanaryRevisionHash: preAbsentCanary.revisionHash,
+      existingWriteCanaryDocumentHash: preExistingCanary.documentHash,
+      absentWriteCanaryDocumentHash: preAbsentCanary.documentHash,
+    },
+  );
+assert.equal(
+  fixtureAudit.captureBinding?.preBackupNamespaceAccessAttestationHash,
+  preBackupNamespaceAccessAttestationHash,
+  "The capture binding is not bound to the pre-backup deny attestation.",
+);
+const backupNamespaceAccessAttestationHash = assertBackupAccessProbeAttestation(
+  fixtureAudit.isolation?.liveBackupAccessProbe,
+  {
+    verifiedAppIdHash: sha256(STAGING_APP_ID),
+    verifiedProjectIdHash: sha256(contract.firebaseProjectId),
+    verifiedProjectNumberHash: sha256(STAGING_PROJECT_NUMBER),
+    verifiedAudienceSetHash: sha256(
+      canonicalJson(FIXTURE_APP_CHECK_VERIFIED_AUDIENCE_SET),
+    ),
+    verifiedIssuerHash: sha256(
+      `https://firebaseappcheck.googleapis.com/${STAGING_PROJECT_NUMBER}`,
+    ),
+    exchangeEndpointHash: sha256(FIXTURE_APP_CHECK_EXCHANGE_ENDPOINT),
+    exchangeTransportContractHash: sha256(
+      canonicalJson(FIXTURE_APP_CHECK_EXCHANGE_TRANSPORT_CONTRACT),
+    ),
+    projectIdHash: sha256(contract.firebaseProjectId),
+    identityUidHash: sha256(contract.captureIdentities.roles.student.uid),
+    backupNamespaceHash: sha256(
+      `w10p_visual_fixture_backups/${contract.fixtureId}`,
+    ),
+    backupManifestHash: fixtureAudit.isolation?.backupManifestHash,
+    localRulesSourceHash: sha256(readFileSync(resolve("firestore.rules"))),
+    existingWriteCanaryPathHash: sha256(postExistingCanary.path),
+    absentWriteCanaryPathHash: sha256(postAbsentCanary.path),
+    existingWriteCanaryRevisionHash: postExistingCanary.revisionHash,
+    absentWriteCanaryRevisionHash: postAbsentCanary.revisionHash,
+    existingWriteCanaryDocumentHash: postExistingCanary.documentHash,
+    absentWriteCanaryDocumentHash: postAbsentCanary.documentHash,
+  },
+);
+assert.equal(
+  fixtureAudit.captureBinding?.backupNamespaceAccessAttestationHash,
+  backupNamespaceAccessAttestationHash,
+  "The capture binding is not bound to the live backup deny attestation.",
+);
+assert.equal(
+  fixtureAudit.isolation.preBackupAccessProbe.appCheckDebugTokenHash,
+  fixtureAudit.isolation.liveBackupAccessProbe.appCheckDebugTokenHash,
+  "Pre/post probes used different App Check debug registrations.",
+);
+assert.equal(
+  fixtureAudit.captureBinding?.appCheckDebugTokenHash,
+  fixtureAudit.isolation.preBackupAccessProbe.appCheckDebugTokenHash,
+);
+assert.equal(
+  fixtureAudit.captureBinding?.verifiedAppIdHash,
+  sha256(STAGING_APP_ID),
+);
+for (const [field, expectedHash] of Object.entries({
+  verifiedProjectIdHash: sha256(contract.firebaseProjectId),
+  verifiedProjectNumberHash: sha256(STAGING_PROJECT_NUMBER),
+  verifiedAudienceSetHash: sha256(
+    canonicalJson(FIXTURE_APP_CHECK_VERIFIED_AUDIENCE_SET),
+  ),
+  verifiedIssuerHash: sha256(
+    `https://firebaseappcheck.googleapis.com/${STAGING_PROJECT_NUMBER}`,
+  ),
+  exchangeEndpointHash: sha256(FIXTURE_APP_CHECK_EXCHANGE_ENDPOINT),
+  exchangeTransportContractHash: sha256(
+    canonicalJson(FIXTURE_APP_CHECK_EXCHANGE_TRANSPORT_CONTRACT),
+  ),
+})) {
+  assert.equal(fixtureAudit.captureBinding?.[field], expectedHash);
+}
+const postBackupProbeLifecycle =
+  fixtureAudit.isolation?.postBackupProbeLifecycle;
+assert.deepEqual(Object.keys(postBackupProbeLifecycle || {}).sort(), [
+  "absentCanaryPathHash",
+  "artifactResidualCount",
+  "attestationHash",
+  "existingCanaryPathHash",
+  "revisionHash",
+  "state",
+]);
+assert.deepEqual(postBackupProbeLifecycle, {
+  state: "VERIFIED_CLEAN",
+  revisionHash: sha256(
+    `${contract.fixtureId}\n${contract.fixtureRevision}\npost-backup-access-probe-v1`,
+  ),
+  existingCanaryPathHash: sha256(postExistingCanary.path),
+  absentCanaryPathHash: sha256(postAbsentCanary.path),
+  attestationHash: backupNamespaceAccessAttestationHash,
+  artifactResidualCount: 0,
+});
+assert.equal(
+  sha256(Buffer.from(canonicalJson(postBackupProbeLifecycle))),
+  fixtureAudit.isolation?.postBackupProbeLifecycleHash,
+);
+assert.equal(
+  fixtureAudit.captureBinding?.postBackupProbeLifecycleHash,
+  fixtureAudit.isolation?.postBackupProbeLifecycleHash,
+  "The capture binding is not bound to the post-backup probe lifecycle.",
 );
 for (const field of [
   "productionAccess",
@@ -1213,9 +2552,80 @@ assert.deepEqual(
   fixtureAudit.authRoles.map((row) => row.role),
   ["student", "teacher", "admin"],
 );
-assert.equal(fixtureAudit.authTenant?.actualUidCount, 3);
-assert.equal(fixtureAudit.authTenant?.extraUidCount, 0);
-assert.equal(fixtureAudit.authTenant?.missingUidCount, 0);
+assert.equal(
+  fixtureAudit.authFixtureIdentityScope?.scopeKind,
+  "fixture-auth-identities",
+);
+assert.equal(
+  fixtureAudit.authFixtureIdentityScope?.scopeBoundary,
+  "fixed-uid-and-email-pairs-only",
+);
+assert.equal(
+  fixtureAudit.authFixtureIdentityScope?.tenantWideEnumerationPerformed,
+  false,
+);
+assert.equal(
+  fixtureAudit.authFixtureIdentityScope?.nonFixtureTenantUsersInScope,
+  false,
+);
+assert.equal(fixtureAudit.authFixtureIdentityScope?.scopedIdentityCount, 3);
+assert.equal(
+  fixtureAudit.authFixtureIdentityScope?.expectedPresentIdentityCount,
+  3,
+);
+assert.equal(
+  fixtureAudit.authFixtureIdentityScope?.actualPresentIdentityCount,
+  3,
+);
+assert.equal(fixtureAudit.authFixtureIdentityScope?.uidLookupCount, 3);
+assert.equal(fixtureAudit.authFixtureIdentityScope?.emailLookupCount, 3);
+assert.equal(
+  fixtureAudit.authFixtureIdentityScope?.uidExpectationMatchCount,
+  3,
+);
+assert.equal(
+  fixtureAudit.authFixtureIdentityScope?.emailExpectationMatchCount,
+  3,
+);
+assert.equal(fixtureAudit.authFixtureIdentityScope?.customClaimMatchCount, 3);
+assert.equal(
+  fixtureAudit.authFixtureIdentityScope?.missingScopedIdentityCount,
+  0,
+);
+assert.equal(
+  fixtureAudit.authFixtureIdentityScope?.mismatchedScopedIdentityCount,
+  0,
+);
+assert.equal(
+  fixtureAudit.captureBinding?.authFixtureIdentityScopeManifestHash,
+  fixtureAudit.authFixtureIdentityScope?.manifestHash,
+);
+const {
+  manifestHash: authFixtureIdentityScopeManifestHash,
+  ...authFixtureIdentityScopeAttestation
+} = fixtureAudit.authFixtureIdentityScope;
+assert.equal(
+  sha256(Buffer.from(canonicalJson(authFixtureIdentityScopeAttestation))),
+  authFixtureIdentityScopeManifestHash,
+  "The scoped fixture Auth identity attestation hash is invalid.",
+);
+assert.deepEqual(
+  fixtureAudit.authFixtureIdentityScope.identities.map(
+    ({ role, uidHash, emailHash }) => ({ role, uidHash, emailHash }),
+  ),
+  fixtureAudit.authRoles,
+);
+assert.equal(
+  fixtureAudit.authFixtureIdentityScope.identities.every(
+    (row) =>
+      row.expectedPresent === true &&
+      row.actualPresent === true &&
+      row.uidExpectationMatched === true &&
+      row.emailExpectationMatched === true &&
+      row.customClaimsMatched === true,
+  ),
+  true,
+);
 assert.equal(fixtureAudit.strict?.collectionCount, 63);
 assert.equal(fixtureAudit.strict?.expectedRowCount, 51);
 assert.equal(fixtureAudit.strict?.actualRowCount, 51);
@@ -1240,16 +2650,12 @@ assert.equal(
   fixtureAudit.captureBinding?.privacyAttestationHash,
   fixtureAudit.privacyAttestationHash,
 );
-const fixtureIssuedAt = isoTime(
-  fixtureAudit.freshness?.issuedAt,
-  "fixtureAudit.freshness.issuedAt",
-);
-const fixtureExpiresAt = isoTime(
-  fixtureAudit.freshness?.expiresAt,
-  "fixtureAudit.freshness.expiresAt",
-);
-assert.equal(fixtureAudit.freshness?.maxAgeSeconds, 3600);
-assert.equal(fixtureAudit.freshness?.fixedFixtureTime, contract.fixedTime);
+const { issuedAt: fixtureIssuedAt, expiresAt: fixtureExpiresAt } =
+  assertFixtureAuditFreshnessBinding({
+    freshness: fixtureAudit.freshness,
+    captureBindingFreshness: fixtureAudit.captureBinding?.freshness,
+    expectedFixedTime: contract.fixedTime,
+  });
 assert.equal(manifest.fixtureAudit.issuedAt, fixtureAudit.freshness.issuedAt);
 assert.equal(manifest.fixtureAudit.expiresAt, fixtureAudit.freshness.expiresAt);
 assert.ok(startedAt >= fixtureIssuedAt);
@@ -1286,10 +2692,16 @@ assert.ok(
     contract.firebaseProjectId,
   ),
 );
-assert.ok(
-  String(manifest.environment?.firebaseConfig?.storageBucket ?? "").includes(
-    contract.firebaseProjectId,
+assert.match(
+  String(manifest.environment?.firebaseConfig?.storageBucket ?? ""),
+  new RegExp(
+    `^${contract.firebaseProjectId.replace(
+      /[.*+?^${}()|[\]\\]/gu,
+      "\\$&",
+    )}\\.(?:appspot\\.com|firebasestorage\\.app)$`,
+    "u",
   ),
+  "The capture manifest storage bucket is outside the exact staging boundary.",
 );
 assert.match(
   manifest.environment?.firebaseConfig?.apiKeySha256 ?? "",
@@ -1324,6 +2736,7 @@ for (const role of ["student", "teacher", "admin"]) {
   const attestation = manifest.identityAttestations[role];
   assert.deepEqual(Object.keys(attestation).sort(), [
     "adminEmail",
+    "appCheckBound",
     "emailSha256",
     "profileRole",
     "role",
@@ -1333,6 +2746,7 @@ for (const role of ["student", "teacher", "admin"]) {
     "uidSha256",
   ]);
   assert.equal(attestation.role, role);
+  assert.equal(attestation.appCheckBound, true);
   assert.equal(attestation.uidSha256, sha256(expected.uid));
   assert.match(attestation.emailSha256, /^[a-f0-9]{64}$/u);
   assert.equal(attestation.profileRole, expected.profileRole);
@@ -1418,6 +2832,8 @@ assert.notEqual(
 );
 
 let liveDeploymentVerified = false;
+let liveDeploymentRedirectResponseCount = 0;
+let verifierVercelBypassHeaderRequestCount = 0;
 if (verifyLive) {
   const npxCommand = process.platform === "win32" ? "npx.cmd" : "npx";
   const inspectDeployment = (url) =>
@@ -1466,12 +2882,11 @@ if (verifyLive) {
       assert.equal(api.meta?.gitCommitRef, contract.branch);
     }
   }
-  const bypassSecret = String(
-    process.env.VERCEL_AUTOMATION_BYPASS_SECRET || "",
-  ).trim();
   const htmlHeaders = {
     "cache-control": "no-cache",
-    ...(bypassSecret ? { "x-vercel-protection-bypass": bypassSecret } : {}),
+    ...(verifierVercelBypassSecret
+      ? { "x-vercel-protection-bypass": verifierVercelBypassSecret }
+      : {}),
   };
   for (const [stage, url, expectedHtmlSha] of [
     [
@@ -1485,10 +2900,21 @@ if (verifyLive) {
       manifest.candidateDeployment.htmlSha256,
     ],
   ]) {
-    const response = await fetch(url, {
-      redirect: "follow",
+    const htmlUrl = new URL(url);
+    assert.ok(vercelBypassAllowedOrigins.includes(exactVercelOrigin(htmlUrl)));
+    assert.equal(htmlUrl.pathname, "/");
+    assert.equal(htmlUrl.search, "");
+    assert.equal(htmlUrl.hash, "");
+    const response = await fetch(htmlUrl, {
+      redirect: "error",
       headers: htmlHeaders,
     });
+    if (verifierVercelBypassSecret) {
+      verifierVercelBypassHeaderRequestCount += 1;
+    }
+    if (response.status >= 300 && response.status < 400) {
+      liveDeploymentRedirectResponseCount += 1;
+    }
     assert.equal(response.status, 200, `${stage} staging HTML is not 200.`);
     assert.equal(
       new URL(response.url).origin,
@@ -1507,10 +2933,18 @@ if (verifyLive) {
         : manifest.candidateDeployment;
     let combinedBundleSource = "";
     for (const asset of deployment.firebaseBundle.assets) {
-      const assetResponse = await fetch(new URL(asset.path, url), {
-        redirect: "follow",
+      const assetUrl = new URL(asset.path, htmlUrl);
+      assert.equal(exactVercelOrigin(assetUrl), htmlUrl.origin);
+      const assetResponse = await fetch(assetUrl, {
+        redirect: "error",
         headers: htmlHeaders,
       });
+      if (verifierVercelBypassSecret) {
+        verifierVercelBypassHeaderRequestCount += 1;
+      }
+      if (assetResponse.status >= 300 && assetResponse.status < 400) {
+        liveDeploymentRedirectResponseCount += 1;
+      }
       assert.equal(
         assetResponse.status,
         200,
@@ -1530,6 +2964,7 @@ if (verifyLive) {
       `${stage} bundle is not built for staging Firebase.`,
     );
   }
+  assert.equal(liveDeploymentRedirectResponseCount, 0);
   liveDeploymentVerified = true;
 }
 
@@ -1697,6 +3132,14 @@ for (const capture of manifest.captures) {
     "stagingFirebaseResponseCount",
     "stagingDataRequestCount",
     "stagingDataResponseCount",
+    "appCheckExchangeRequestCount",
+    "successfulAppCheckExchangeResponseCount",
+    "appCheckProtectedDataRequestCount",
+    "appCheckHeaderPresentRequestCount",
+    "appCheckHeaderMissingRequestCount",
+    "appCheckHeaderJwtShapeValidRequestCount",
+    "appCheckHeaderJwtShapeInvalidRequestCount",
+    "rawAppCheckHeaderValueOutputCount",
     "productionAccess",
     "productionWrites",
     "unboundFirebaseRequestCount",
@@ -1709,6 +3152,8 @@ for (const capture of manifest.captures) {
   assert.equal(capture.network.productionWrites, 0);
   assert.equal(capture.network.unboundFirebaseRequestCount, 0);
   assert.equal(capture.network.failedFirebaseResponseCount, 0);
+  assert.equal(capture.network.rawAppCheckHeaderValueOutputCount, 0);
+  assert.equal(capture.network.appCheckHeaderJwtShapeInvalidRequestCount, 0);
   if (contract.fixtureMarkers[capture.screenId]) {
     assert.ok(
       capture.network.stagingDataRequestCount > 0,
@@ -1912,6 +3357,99 @@ const observedAuditIds = new Set();
 let auditedStagingFirebaseRequests = 0;
 let auditedProductionAccess = 0;
 let auditedProductionWrites = 0;
+let auditedBaselineBridgeEligibleRequests = 0;
+let auditedBaselineBridgeInjectedRequests = 0;
+let auditedBaselineBridgeNativeHeaderRequests = 0;
+let auditedBaselineBridgeScopeMismatches = 0;
+let auditedBaselineBridgeStrippedHeaders = 0;
+let auditedBaselineBridgeRedirectRequests = 0;
+let auditedBaselineBridgeRedirectHeaderAbsentRequests = 0;
+let auditedBaselineBridgeRedirectAbortRequests = 0;
+let auditedBaselineBridgeCdpPausedRequests = 0;
+let auditedBaselineBridgeCdpResponsePausedRequests = 0;
+let auditedBaselineBridgeCdpReconciledRequests = 0;
+let auditedBaselineBridgeHandlerErrors = 0;
+let auditedBaselineBridgeInjectedRedirectResponseAborts = 0;
+let auditedAppCheckCdpMonitorPausedRequests = 0;
+let auditedPreTransmissionBoundaryInspections = 0;
+let auditedPreTransmissionBoundaryBlockAttempts = 0;
+let auditedPreTransmissionBoundaryProductionBlocks = 0;
+let auditedPreTransmissionBoundaryUnboundFirebaseBlocks = 0;
+let auditedPreTransmissionBoundaryFailRequests = 0;
+let auditedDebugTokenNetworkObservations = 0;
+let auditedDebugSentinelNetworkObservations = 0;
+let auditedAuthorizedDebugExchangeBodyReplacements = 0;
+let auditedUnauthorizedDebugTokenEgresses = 0;
+let auditedUnauthorizedDebugSentinelEgresses = 0;
+let auditedAppCheckHeaderNetworkObservations = 0;
+let auditedAuthorizedAppCheckHeaderRequests = 0;
+let auditedUnauthorizedAppCheckHeaderEgresses = 0;
+let auditedSensitiveAppCheckRedirectRequests = 0;
+let auditedSensitiveAppCheckRedirectAborts = 0;
+let auditedSensitiveAppCheckCdpResponsePausedRequests = 0;
+let auditedSensitiveAppCheckRedirectResponseAborts = 0;
+let auditedSensitiveAppCheckResponseErrorAborts = 0;
+let auditedSensitiveAppCheckRequestTrackingResiduals = 0;
+let auditedBrowserNetworkHeaderAttestationErrors = 0;
+let auditedPendingBridgeDecisionResiduals = 0;
+let auditedPendingBridgeObservationResiduals = 0;
+let auditedUnexpectedExtraPages = 0;
+let auditedUnexpectedDedicatedWorkers = 0;
+let auditedUnexpectedServiceWorkers = 0;
+let auditedUnexpectedCrossOriginFrames = 0;
+let auditedUnexpectedOopifTargets = 0;
+let auditedUnexpectedDedicatedWorkerTargets = 0;
+let auditedUnexpectedSharedWorkerTargets = 0;
+let auditedUnexpectedServiceWorkerTargets = 0;
+let auditedRetainedOopifTargets = 0;
+let auditedRetainedDedicatedWorkerTargets = 0;
+let auditedRetainedSharedWorkerTargets = 0;
+let auditedRetainedServiceWorkerTargets = 0;
+let auditedTargetDiscoveryActivations = 0;
+let auditedTargetSnapshots = 0;
+let auditedPageRawDebugTokenInjections = 0;
+let auditedBrowserGlobalRawDebugTokenWrites = 0;
+let auditedBrowserGlobalDebugSentinelWrites = 0;
+let auditedLocalStorageSecretWrites = 0;
+let auditedBrowserGlobalExtraHttpHeaderRegistrations = 0;
+let auditedBrowserChildEnvironmentUnexpectedKeys = 0;
+let auditedVercelBypassCdpInjectedRequests = 0;
+let auditedVercelBypassPreexistingHeaderObservations = 0;
+let auditedUnauthorizedVercelBypassEgresses = 0;
+let auditedVercelBypassCdpResponsePausedRequests = 0;
+let auditedVercelBypassHttpSuccessResponses = 0;
+let auditedVercelBypassHttpErrorResponses = 0;
+let auditedVercelBypassRedirectRequests = 0;
+let auditedVercelBypassRedirectAborts = 0;
+let auditedVercelBypassRedirectResponseAborts = 0;
+let auditedVercelBypassResponseErrorAborts = 0;
+let auditedVercelBypassObservedEligibleRequests = 0;
+let auditedVercelBypassHeaderObservedRequests = 0;
+let auditedVercelBypassHeaderMissingRequests = 0;
+let auditedVercelBypassHeaderMismatches = 0;
+let auditedRawVercelBypassOutputs = 0;
+const auditedVercelBypassConfiguredValues = new Set();
+let auditedBaselineBridgeDecisionUnmatchedProtectedRequests = 0;
+let auditedBaselineBridgeScopeIneligibleProtectedRequests = 0;
+let auditedCandidateBridgeInjectedRequests = 0;
+let auditedBaselineProtectedDataRequests = 0;
+let auditedCandidateProtectedDataRequests = 0;
+let auditedBaselineScreenCaptureProtectedRequests = 0;
+let auditedBaselineScreenCaptureBridgeRequests = 0;
+let auditedCandidateScreenCaptureProtectedRequests = 0;
+let auditedCandidateScreenCaptureNativeRequests = 0;
+let auditedProtectedHeaderJwtShapeInvalidRequests = 0;
+let auditedProtectedHeaderPresentRequests = 0;
+let auditedProtectedHeaderMissingRequests = 0;
+let auditedProtectedHeaderJwtShapeValidRequests = 0;
+let auditedBaselineEffectiveHeaderMissingRequests = 0;
+let auditedCandidateNativeHeaderPresentRequests = 0;
+let auditedCandidateNativeHeaderMissingRequests = 0;
+let auditedBrowserAppCheckExchangeRequests = 0;
+let auditedBrowserAppCheckExchangeHttp200Responses = 0;
+let auditedFirebaseDataRedirectResponses = 0;
+let auditedFirebaseDataErrorResponses = 0;
+let auditedSuccessfulFirebaseDataResponses = 0;
 for (const audit of manifest.browserAudits) {
   assert.equal(observedAuditIds.has(audit.id), false, `Duplicate ${audit.id}.`);
   observedAuditIds.add(audit.id);
@@ -1955,6 +3493,26 @@ for (const audit of manifest.browserAudits) {
   assert.ok(statSync(auditPath).size > 100, `${audit.fileName} is empty.`);
   const { textValue: auditText, events } = readBrowserAudit(auditPath);
   assert.equal(sha256(Buffer.from(auditText)), audit.sha256);
+  if (verifierVercelBypassSecret) {
+    assert.equal(
+      auditText.includes(verifierVercelBypassSecret),
+      false,
+      "The Vercel bypass secret reached a browser audit.",
+    );
+  }
+  const allowedAuditEventTypes = new Set([
+    "browser-session",
+    "app-check-bridge",
+    "network-request",
+    "network-response",
+    "capture",
+    "browser-session-complete",
+  ]);
+  assert.equal(
+    events.every((event) => allowedAuditEventTypes.has(event.type)),
+    true,
+    `${audit.id} contains an unknown browser-audit event type.`,
+  );
   const sessionEvents = events.filter(
     (event) => event.type === "browser-session",
   );
@@ -1986,6 +3544,545 @@ for (const audit of manifest.browserAudits) {
         ? null
         : manifest.identityAttestations[authenticatedAuditRole],
   });
+  const bridgeEvents = events.filter(
+    (event) => event.type === "app-check-bridge",
+  );
+  assert.equal(bridgeEvents.length, 1);
+  const bridgeEvent = bridgeEvents[0];
+  assertExactObjectKeys(bridgeEvent, [
+    "type",
+    "id",
+    "stage",
+    "scopeHash",
+    "browserCdpSecurityScopeHash",
+    "serviceWorkerPolicy",
+    "interceptionMechanism",
+    "preTransmissionBoundaryAttestationHash",
+    "preTransmissionBoundaryInspectionCount",
+    "preTransmissionBoundaryBlockAttemptCount",
+    "preTransmissionBoundaryProductionBlockCount",
+    "preTransmissionBoundaryUnboundFirebaseBlockCount",
+    "preTransmissionBoundaryFailRequestCount",
+    "headerCorrelationMechanism",
+    "secretInitScope",
+    "browserGlobalValueKind",
+    "debugSentinelHash",
+    "pageRawDebugTokenInjectionCount",
+    "pageAppCheckSecretInitRegistrationCount",
+    "browserGlobalRawDebugTokenWriteCount",
+    "browserGlobalDebugSentinelWriteCount",
+    "localStorageSecretWriteCount",
+    "contextAppCheckSecretInitCount",
+    "protocolDebugLoggingDisabled",
+    "browserLaunchExplicitEnvironment",
+    "childProcessSecretEnvScrubbed",
+    "browserChildEnvironmentAllowlisted",
+    "browserChildEnvironmentAllowlistHash",
+    "browserChildEnvironmentUnexpectedKeyCount",
+    "scrubbedSecretEnvironmentVariableCount",
+    "browserChildSecretEnvironmentVariableCount",
+    "browserChildSecretValueObservationCount",
+    "browserGlobalExtraHttpHeaderRegistrationCount",
+    "vercelBypassConfigured",
+    "vercelBypassAllowedOriginSetHash",
+    "vercelBypassTransportContractHash",
+    "vercelBypassCdpInjectedRequestCount",
+    "vercelBypassPreexistingHeaderObservationCount",
+    "unauthorizedVercelBypassEgressCount",
+    "vercelBypassCdpResponsePausedRequestCount",
+    "vercelBypassHttpSuccessResponseCount",
+    "vercelBypassHttpErrorResponseCount",
+    "vercelBypassRedirectRequestCount",
+    "vercelBypassRedirectAbortRequestCount",
+    "vercelBypassRedirectResponseAbortRequestCount",
+    "vercelBypassResponseErrorAbortRequestCount",
+    "vercelBypassObservedEligibleRequestCount",
+    "vercelBypassHeaderObservedRequestCount",
+    "vercelBypassHeaderMissingRequestCount",
+    "vercelBypassHeaderMismatchRequestCount",
+    "rawVercelBypassOutputCount",
+    "urlMethodFifoCorrelationUsed",
+    "playwrightRouteRegistrationCount",
+    "eligibleRequestCount",
+    "injectedRequestCount",
+    "nativeHeaderRequestCount",
+    "scopeMismatchRequestCount",
+    "strippedHeaderRequestCount",
+    "redirectRequestCount",
+    "redirectHeaderAbsentRequestCount",
+    "redirectAbortRequestCount",
+    "cdpPausedRequestCount",
+    "cdpResponsePausedRequestCount",
+    "cdpReconciledRequestCount",
+    "handlerErrorCount",
+    "injectedRedirectResponseAbortRequestCount",
+    "cdpMonitorPausedRequestCount",
+    "debugTokenNetworkObservationCount",
+    "debugSentinelNetworkObservationCount",
+    "authorizedDebugExchangeBodyReplacementCount",
+    "unauthorizedDebugTokenEgressCount",
+    "unauthorizedDebugSentinelEgressCount",
+    "appCheckHeaderNetworkObservationCount",
+    "authorizedAppCheckHeaderRequestCount",
+    "unauthorizedAppCheckHeaderEgressCount",
+    "sensitiveRedirectRequestCount",
+    "sensitiveRedirectAbortRequestCount",
+    "sensitiveCdpResponsePausedRequestCount",
+    "sensitiveRedirectResponseAbortRequestCount",
+    "sensitiveResponseErrorAbortRequestCount",
+    "sensitiveRequestTrackingResidualCount",
+    "networkHeaderAttestationErrorCount",
+    "pendingBridgeDecisionResidualCount",
+    "pendingBridgeObservationResidualCount",
+    "unexpectedExtraPageCount",
+    "unexpectedDedicatedWorkerCount",
+    "unexpectedServiceWorkerCount",
+    "unexpectedCrossOriginFrameCount",
+    "unexpectedOopifTargetCount",
+    "unexpectedDedicatedWorkerTargetCount",
+    "unexpectedSharedWorkerTargetCount",
+    "unexpectedServiceWorkerTargetCount",
+    "retainedOopifTargetCount",
+    "retainedDedicatedWorkerTargetCount",
+    "retainedSharedWorkerTargetCount",
+    "retainedServiceWorkerTargetCount",
+    "targetDiscoveryActivationCount",
+    "targetSnapshotCount",
+    "unmatchedProtectedRequestCount",
+    "scopeIneligibleProtectedRequestCount",
+    "candidateBridgeInjectedRequestCount",
+    "screenCaptureProtectedRequestCount",
+    "screenCaptureBridgeHeaderRequestCount",
+    "screenCaptureNativeHeaderRequestCount",
+    "invalidHeaderJwtShapeRequestCount",
+    "rawHeaderValueOutputCount",
+    "rawTokenOutputCount",
+  ]);
+  assert.equal(bridgeEvent.id, audit.id);
+  assert.equal(bridgeEvent.stage, audit.stage);
+  assert.equal(bridgeEvent.scopeHash, baselineAppCheckBridgeScopeHash);
+  assert.equal(
+    bridgeEvent.browserCdpSecurityScopeHash,
+    browserAppCheckCdpSecurityScopeHash,
+  );
+  assert.equal(bridgeEvent.serviceWorkerPolicy, "block");
+  assert.equal(bridgeEvent.interceptionMechanism, "cdp-fetch-request-stage");
+  assert.equal(
+    bridgeEvent.preTransmissionBoundaryAttestationHash,
+    preTransmissionNetworkBoundaryAttestationHash,
+  );
+  assert.equal(
+    bridgeEvent.headerCorrelationMechanism,
+    "playwright-request-allHeaders",
+  );
+  assert.equal(bridgeEvent.secretInitScope, "primary-page-only");
+  assert.equal(bridgeEvent.browserGlobalValueKind, "non-secret-fixed-sentinel");
+  assert.equal(bridgeEvent.debugSentinelHash, sha256(APP_CHECK_DEBUG_SENTINEL));
+  assert.equal(bridgeEvent.protocolDebugLoggingDisabled, true);
+  assert.equal(bridgeEvent.browserLaunchExplicitEnvironment, true);
+  assert.equal(bridgeEvent.childProcessSecretEnvScrubbed, true);
+  assert.equal(bridgeEvent.browserChildEnvironmentAllowlisted, true);
+  assert.equal(
+    bridgeEvent.browserChildEnvironmentAllowlistHash,
+    sha256(canonicalJson(BROWSER_CHILD_ENVIRONMENT_ALLOWLIST)),
+  );
+  assert.equal(bridgeEvent.browserChildEnvironmentUnexpectedKeyCount, 0);
+  assert.equal(typeof bridgeEvent.vercelBypassConfigured, "boolean");
+  assert.equal(
+    bridgeEvent.vercelBypassAllowedOriginSetHash,
+    sha256(canonicalJson(vercelBypassAllowedOrigins)),
+  );
+  assert.equal(
+    bridgeEvent.vercelBypassTransportContractHash,
+    sha256(canonicalJson(VERCEL_BYPASS_TRANSPORT_CONTRACT)),
+  );
+  assert.equal(bridgeEvent.urlMethodFifoCorrelationUsed, false);
+  for (const field of [
+    "pageRawDebugTokenInjectionCount",
+    "pageAppCheckSecretInitRegistrationCount",
+    "browserGlobalRawDebugTokenWriteCount",
+    "browserGlobalDebugSentinelWriteCount",
+    "localStorageSecretWriteCount",
+    "contextAppCheckSecretInitCount",
+    "scrubbedSecretEnvironmentVariableCount",
+    "browserChildSecretEnvironmentVariableCount",
+    "browserChildSecretValueObservationCount",
+    "browserChildEnvironmentUnexpectedKeyCount",
+    "browserGlobalExtraHttpHeaderRegistrationCount",
+    "vercelBypassCdpInjectedRequestCount",
+    "vercelBypassPreexistingHeaderObservationCount",
+    "unauthorizedVercelBypassEgressCount",
+    "vercelBypassCdpResponsePausedRequestCount",
+    "vercelBypassHttpSuccessResponseCount",
+    "vercelBypassHttpErrorResponseCount",
+    "vercelBypassRedirectRequestCount",
+    "vercelBypassRedirectAbortRequestCount",
+    "vercelBypassRedirectResponseAbortRequestCount",
+    "vercelBypassResponseErrorAbortRequestCount",
+    "vercelBypassObservedEligibleRequestCount",
+    "vercelBypassHeaderObservedRequestCount",
+    "vercelBypassHeaderMissingRequestCount",
+    "vercelBypassHeaderMismatchRequestCount",
+    "rawVercelBypassOutputCount",
+    "playwrightRouteRegistrationCount",
+    "eligibleRequestCount",
+    "injectedRequestCount",
+    "nativeHeaderRequestCount",
+    "scopeMismatchRequestCount",
+    "strippedHeaderRequestCount",
+    "redirectRequestCount",
+    "redirectHeaderAbsentRequestCount",
+    "redirectAbortRequestCount",
+    "cdpPausedRequestCount",
+    "cdpResponsePausedRequestCount",
+    "cdpReconciledRequestCount",
+    "handlerErrorCount",
+    "injectedRedirectResponseAbortRequestCount",
+    "cdpMonitorPausedRequestCount",
+    "preTransmissionBoundaryInspectionCount",
+    "preTransmissionBoundaryBlockAttemptCount",
+    "preTransmissionBoundaryProductionBlockCount",
+    "preTransmissionBoundaryUnboundFirebaseBlockCount",
+    "preTransmissionBoundaryFailRequestCount",
+    "debugTokenNetworkObservationCount",
+    "debugSentinelNetworkObservationCount",
+    "authorizedDebugExchangeBodyReplacementCount",
+    "unauthorizedDebugTokenEgressCount",
+    "unauthorizedDebugSentinelEgressCount",
+    "appCheckHeaderNetworkObservationCount",
+    "authorizedAppCheckHeaderRequestCount",
+    "unauthorizedAppCheckHeaderEgressCount",
+    "sensitiveRedirectRequestCount",
+    "sensitiveRedirectAbortRequestCount",
+    "sensitiveCdpResponsePausedRequestCount",
+    "sensitiveRedirectResponseAbortRequestCount",
+    "sensitiveResponseErrorAbortRequestCount",
+    "sensitiveRequestTrackingResidualCount",
+    "networkHeaderAttestationErrorCount",
+    "pendingBridgeDecisionResidualCount",
+    "pendingBridgeObservationResidualCount",
+    "unexpectedExtraPageCount",
+    "unexpectedDedicatedWorkerCount",
+    "unexpectedServiceWorkerCount",
+    "unexpectedCrossOriginFrameCount",
+    "unexpectedOopifTargetCount",
+    "unexpectedDedicatedWorkerTargetCount",
+    "unexpectedSharedWorkerTargetCount",
+    "unexpectedServiceWorkerTargetCount",
+    "retainedOopifTargetCount",
+    "retainedDedicatedWorkerTargetCount",
+    "retainedSharedWorkerTargetCount",
+    "retainedServiceWorkerTargetCount",
+    "targetDiscoveryActivationCount",
+    "targetSnapshotCount",
+    "unmatchedProtectedRequestCount",
+    "scopeIneligibleProtectedRequestCount",
+    "candidateBridgeInjectedRequestCount",
+    "screenCaptureProtectedRequestCount",
+    "screenCaptureBridgeHeaderRequestCount",
+    "screenCaptureNativeHeaderRequestCount",
+    "invalidHeaderJwtShapeRequestCount",
+    "rawHeaderValueOutputCount",
+    "rawTokenOutputCount",
+  ]) {
+    assert.ok(Number.isInteger(bridgeEvent[field]) && bridgeEvent[field] >= 0);
+  }
+  assert.equal(bridgeEvent.rawHeaderValueOutputCount, 0);
+  assert.equal(bridgeEvent.rawTokenOutputCount, 0);
+  assert.equal(bridgeEvent.rawVercelBypassOutputCount, 0);
+  assert.equal(bridgeEvent.invalidHeaderJwtShapeRequestCount, 0);
+  assert.equal(bridgeEvent.handlerErrorCount, 0);
+  assert.equal(bridgeEvent.redirectAbortRequestCount, 0);
+  assert.equal(bridgeEvent.injectedRedirectResponseAbortRequestCount, 0);
+  assert.ok(bridgeEvent.cdpMonitorPausedRequestCount > 0);
+  assert.ok(bridgeEvent.preTransmissionBoundaryInspectionCount > 0);
+  assert.equal(
+    bridgeEvent.preTransmissionBoundaryInspectionCount,
+    bridgeEvent.cdpMonitorPausedRequestCount,
+  );
+  assert.equal(
+    bridgeEvent.preTransmissionBoundaryBlockAttemptCount,
+    bridgeEvent.preTransmissionBoundaryProductionBlockCount +
+      bridgeEvent.preTransmissionBoundaryUnboundFirebaseBlockCount,
+  );
+  assert.equal(
+    bridgeEvent.preTransmissionBoundaryFailRequestCount,
+    bridgeEvent.preTransmissionBoundaryBlockAttemptCount,
+  );
+  assert.equal(bridgeEvent.preTransmissionBoundaryBlockAttemptCount, 0);
+  assert.equal(bridgeEvent.preTransmissionBoundaryProductionBlockCount, 0);
+  assert.equal(bridgeEvent.preTransmissionBoundaryUnboundFirebaseBlockCount, 0);
+  assert.equal(bridgeEvent.preTransmissionBoundaryFailRequestCount, 0);
+  assert.equal(bridgeEvent.debugTokenNetworkObservationCount, 0);
+  assert.equal(bridgeEvent.unauthorizedDebugTokenEgressCount, 0);
+  assert.equal(bridgeEvent.unauthorizedDebugSentinelEgressCount, 0);
+  assert.equal(bridgeEvent.unauthorizedAppCheckHeaderEgressCount, 0);
+  assert.equal(bridgeEvent.sensitiveRedirectRequestCount, 0);
+  assert.equal(bridgeEvent.sensitiveRedirectAbortRequestCount, 0);
+  assert.equal(bridgeEvent.sensitiveRedirectResponseAbortRequestCount, 0);
+  assert.equal(bridgeEvent.sensitiveResponseErrorAbortRequestCount, 0);
+  assert.equal(bridgeEvent.sensitiveRequestTrackingResidualCount, 0);
+  assert.equal(bridgeEvent.networkHeaderAttestationErrorCount, 0);
+  assert.equal(bridgeEvent.pendingBridgeDecisionResidualCount, 0);
+  assert.equal(bridgeEvent.pendingBridgeObservationResidualCount, 0);
+  assert.equal(bridgeEvent.unexpectedExtraPageCount, 0);
+  assert.equal(bridgeEvent.unexpectedDedicatedWorkerCount, 0);
+  assert.equal(bridgeEvent.unexpectedServiceWorkerCount, 0);
+  assert.equal(bridgeEvent.unexpectedCrossOriginFrameCount, 0);
+  assert.equal(bridgeEvent.unexpectedOopifTargetCount, 0);
+  assert.equal(bridgeEvent.unexpectedDedicatedWorkerTargetCount, 0);
+  assert.equal(bridgeEvent.unexpectedSharedWorkerTargetCount, 0);
+  assert.equal(bridgeEvent.unexpectedServiceWorkerTargetCount, 0);
+  assert.equal(bridgeEvent.retainedOopifTargetCount, 0);
+  assert.equal(bridgeEvent.retainedDedicatedWorkerTargetCount, 0);
+  assert.equal(bridgeEvent.retainedSharedWorkerTargetCount, 0);
+  assert.equal(bridgeEvent.retainedServiceWorkerTargetCount, 0);
+  assert.equal(bridgeEvent.targetDiscoveryActivationCount, 1);
+  assert.equal(bridgeEvent.targetSnapshotCount, 1);
+  assert.equal(bridgeEvent.pageRawDebugTokenInjectionCount, 0);
+  assert.equal(bridgeEvent.pageAppCheckSecretInitRegistrationCount, 1);
+  assert.equal(bridgeEvent.browserGlobalRawDebugTokenWriteCount, 0);
+  assert.ok(bridgeEvent.browserGlobalDebugSentinelWriteCount > 0);
+  assert.equal(bridgeEvent.localStorageSecretWriteCount, 0);
+  assert.equal(bridgeEvent.contextAppCheckSecretInitCount, 0);
+  assert.equal(bridgeEvent.scrubbedSecretEnvironmentVariableCount, 4);
+  assert.equal(bridgeEvent.browserChildSecretEnvironmentVariableCount, 0);
+  assert.equal(bridgeEvent.browserChildSecretValueObservationCount, 0);
+  assert.equal(bridgeEvent.playwrightRouteRegistrationCount, 0);
+  assert.equal(bridgeEvent.browserGlobalExtraHttpHeaderRegistrationCount, 0);
+  assert.equal(bridgeEvent.vercelBypassPreexistingHeaderObservationCount, 0);
+  assert.equal(bridgeEvent.unauthorizedVercelBypassEgressCount, 0);
+  assert.equal(bridgeEvent.vercelBypassRedirectRequestCount, 0);
+  assert.equal(bridgeEvent.vercelBypassRedirectAbortRequestCount, 0);
+  assert.equal(bridgeEvent.vercelBypassRedirectResponseAbortRequestCount, 0);
+  assert.equal(bridgeEvent.vercelBypassResponseErrorAbortRequestCount, 0);
+  assert.equal(bridgeEvent.vercelBypassHttpErrorResponseCount, 0);
+  assert.equal(bridgeEvent.vercelBypassHeaderMissingRequestCount, 0);
+  assert.equal(bridgeEvent.vercelBypassHeaderMismatchRequestCount, 0);
+  if (bridgeEvent.vercelBypassConfigured) {
+    assert.ok(bridgeEvent.vercelBypassCdpInjectedRequestCount > 0);
+    assert.equal(
+      bridgeEvent.vercelBypassCdpInjectedRequestCount,
+      bridgeEvent.vercelBypassObservedEligibleRequestCount,
+    );
+    assert.equal(
+      bridgeEvent.vercelBypassCdpInjectedRequestCount,
+      bridgeEvent.vercelBypassHeaderObservedRequestCount,
+    );
+    assert.equal(
+      bridgeEvent.vercelBypassCdpInjectedRequestCount,
+      bridgeEvent.vercelBypassCdpResponsePausedRequestCount,
+    );
+    assert.equal(
+      bridgeEvent.vercelBypassCdpInjectedRequestCount,
+      bridgeEvent.vercelBypassHttpSuccessResponseCount,
+    );
+  } else {
+    assert.equal(bridgeEvent.vercelBypassCdpInjectedRequestCount, 0);
+    assert.equal(bridgeEvent.vercelBypassObservedEligibleRequestCount, 0);
+    assert.equal(bridgeEvent.vercelBypassHeaderObservedRequestCount, 0);
+    assert.equal(bridgeEvent.vercelBypassCdpResponsePausedRequestCount, 0);
+    assert.equal(bridgeEvent.vercelBypassHttpSuccessResponseCount, 0);
+  }
+  assert.equal(
+    bridgeEvent.debugSentinelNetworkObservationCount,
+    bridgeEvent.authorizedDebugExchangeBodyReplacementCount,
+  );
+  assert.equal(
+    bridgeEvent.appCheckHeaderNetworkObservationCount,
+    bridgeEvent.authorizedAppCheckHeaderRequestCount,
+  );
+  assert.equal(
+    bridgeEvent.sensitiveCdpResponsePausedRequestCount,
+    bridgeEvent.authorizedDebugExchangeBodyReplacementCount +
+      bridgeEvent.authorizedAppCheckHeaderRequestCount +
+      bridgeEvent.vercelBypassCdpInjectedRequestCount,
+  );
+  assert.equal(
+    bridgeEvent.cdpResponsePausedRequestCount,
+    bridgeEvent.injectedRequestCount,
+  );
+  assert.equal(bridgeEvent.unmatchedProtectedRequestCount, 0);
+  assert.equal(bridgeEvent.scopeIneligibleProtectedRequestCount, 0);
+  if (audit.stage === "candidate") {
+    assert.equal(bridgeEvent.eligibleRequestCount, 0);
+    assert.equal(bridgeEvent.injectedRequestCount, 0);
+    assert.equal(bridgeEvent.nativeHeaderRequestCount, 0);
+    assert.equal(bridgeEvent.scopeMismatchRequestCount, 0);
+    assert.equal(bridgeEvent.strippedHeaderRequestCount, 0);
+    assert.equal(bridgeEvent.redirectRequestCount, 0);
+    assert.equal(bridgeEvent.redirectHeaderAbsentRequestCount, 0);
+    assert.equal(bridgeEvent.redirectAbortRequestCount, 0);
+    assert.equal(bridgeEvent.cdpPausedRequestCount, 0);
+    assert.equal(bridgeEvent.cdpResponsePausedRequestCount, 0);
+    assert.equal(bridgeEvent.cdpReconciledRequestCount, 0);
+    assert.equal(bridgeEvent.handlerErrorCount, 0);
+    assert.equal(bridgeEvent.screenCaptureBridgeHeaderRequestCount, 0);
+    assert.equal(
+      bridgeEvent.screenCaptureNativeHeaderRequestCount,
+      bridgeEvent.screenCaptureProtectedRequestCount,
+    );
+  } else {
+    assert.ok(bridgeEvent.cdpPausedRequestCount > 0);
+    assert.ok(bridgeEvent.cdpReconciledRequestCount > 0);
+    assert.equal(
+      bridgeEvent.injectedRequestCount + bridgeEvent.nativeHeaderRequestCount,
+      bridgeEvent.eligibleRequestCount,
+    );
+    assert.equal(
+      bridgeEvent.screenCaptureBridgeHeaderRequestCount,
+      bridgeEvent.screenCaptureProtectedRequestCount,
+    );
+    assert.equal(bridgeEvent.screenCaptureNativeHeaderRequestCount, 0);
+  }
+  assert.equal(bridgeEvent.candidateBridgeInjectedRequestCount, 0);
+  auditedBaselineBridgeEligibleRequests += bridgeEvent.eligibleRequestCount;
+  auditedBaselineBridgeInjectedRequests += bridgeEvent.injectedRequestCount;
+  auditedBaselineBridgeNativeHeaderRequests +=
+    bridgeEvent.nativeHeaderRequestCount;
+  auditedBaselineBridgeScopeMismatches += bridgeEvent.scopeMismatchRequestCount;
+  auditedBaselineBridgeStrippedHeaders +=
+    bridgeEvent.strippedHeaderRequestCount;
+  auditedBaselineBridgeRedirectRequests += bridgeEvent.redirectRequestCount;
+  auditedBaselineBridgeRedirectHeaderAbsentRequests +=
+    bridgeEvent.redirectHeaderAbsentRequestCount;
+  auditedBaselineBridgeRedirectAbortRequests +=
+    bridgeEvent.redirectAbortRequestCount;
+  auditedBaselineBridgeCdpPausedRequests += bridgeEvent.cdpPausedRequestCount;
+  auditedBaselineBridgeCdpResponsePausedRequests +=
+    bridgeEvent.cdpResponsePausedRequestCount;
+  auditedBaselineBridgeCdpReconciledRequests +=
+    bridgeEvent.cdpReconciledRequestCount;
+  auditedBaselineBridgeHandlerErrors += bridgeEvent.handlerErrorCount;
+  auditedBaselineBridgeInjectedRedirectResponseAborts +=
+    bridgeEvent.injectedRedirectResponseAbortRequestCount;
+  auditedAppCheckCdpMonitorPausedRequests +=
+    bridgeEvent.cdpMonitorPausedRequestCount;
+  auditedPreTransmissionBoundaryInspections +=
+    bridgeEvent.preTransmissionBoundaryInspectionCount;
+  auditedPreTransmissionBoundaryBlockAttempts +=
+    bridgeEvent.preTransmissionBoundaryBlockAttemptCount;
+  auditedPreTransmissionBoundaryProductionBlocks +=
+    bridgeEvent.preTransmissionBoundaryProductionBlockCount;
+  auditedPreTransmissionBoundaryUnboundFirebaseBlocks +=
+    bridgeEvent.preTransmissionBoundaryUnboundFirebaseBlockCount;
+  auditedPreTransmissionBoundaryFailRequests +=
+    bridgeEvent.preTransmissionBoundaryFailRequestCount;
+  auditedDebugTokenNetworkObservations +=
+    bridgeEvent.debugTokenNetworkObservationCount;
+  auditedDebugSentinelNetworkObservations +=
+    bridgeEvent.debugSentinelNetworkObservationCount;
+  auditedAuthorizedDebugExchangeBodyReplacements +=
+    bridgeEvent.authorizedDebugExchangeBodyReplacementCount;
+  auditedUnauthorizedDebugTokenEgresses +=
+    bridgeEvent.unauthorizedDebugTokenEgressCount;
+  auditedUnauthorizedDebugSentinelEgresses +=
+    bridgeEvent.unauthorizedDebugSentinelEgressCount;
+  auditedAppCheckHeaderNetworkObservations +=
+    bridgeEvent.appCheckHeaderNetworkObservationCount;
+  auditedAuthorizedAppCheckHeaderRequests +=
+    bridgeEvent.authorizedAppCheckHeaderRequestCount;
+  auditedUnauthorizedAppCheckHeaderEgresses +=
+    bridgeEvent.unauthorizedAppCheckHeaderEgressCount;
+  auditedSensitiveAppCheckRedirectRequests +=
+    bridgeEvent.sensitiveRedirectRequestCount;
+  auditedSensitiveAppCheckRedirectAborts +=
+    bridgeEvent.sensitiveRedirectAbortRequestCount;
+  auditedSensitiveAppCheckCdpResponsePausedRequests +=
+    bridgeEvent.sensitiveCdpResponsePausedRequestCount;
+  auditedSensitiveAppCheckRedirectResponseAborts +=
+    bridgeEvent.sensitiveRedirectResponseAbortRequestCount;
+  auditedSensitiveAppCheckResponseErrorAborts +=
+    bridgeEvent.sensitiveResponseErrorAbortRequestCount;
+  auditedSensitiveAppCheckRequestTrackingResiduals +=
+    bridgeEvent.sensitiveRequestTrackingResidualCount;
+  auditedBrowserNetworkHeaderAttestationErrors +=
+    bridgeEvent.networkHeaderAttestationErrorCount;
+  auditedPendingBridgeDecisionResiduals +=
+    bridgeEvent.pendingBridgeDecisionResidualCount;
+  auditedPendingBridgeObservationResiduals +=
+    bridgeEvent.pendingBridgeObservationResidualCount;
+  auditedUnexpectedExtraPages += bridgeEvent.unexpectedExtraPageCount;
+  auditedUnexpectedDedicatedWorkers +=
+    bridgeEvent.unexpectedDedicatedWorkerCount;
+  auditedUnexpectedServiceWorkers += bridgeEvent.unexpectedServiceWorkerCount;
+  auditedUnexpectedCrossOriginFrames +=
+    bridgeEvent.unexpectedCrossOriginFrameCount;
+  auditedUnexpectedOopifTargets += bridgeEvent.unexpectedOopifTargetCount;
+  auditedUnexpectedDedicatedWorkerTargets +=
+    bridgeEvent.unexpectedDedicatedWorkerTargetCount;
+  auditedUnexpectedSharedWorkerTargets +=
+    bridgeEvent.unexpectedSharedWorkerTargetCount;
+  auditedUnexpectedServiceWorkerTargets +=
+    bridgeEvent.unexpectedServiceWorkerTargetCount;
+  auditedRetainedOopifTargets += bridgeEvent.retainedOopifTargetCount;
+  auditedRetainedDedicatedWorkerTargets +=
+    bridgeEvent.retainedDedicatedWorkerTargetCount;
+  auditedRetainedSharedWorkerTargets +=
+    bridgeEvent.retainedSharedWorkerTargetCount;
+  auditedRetainedServiceWorkerTargets +=
+    bridgeEvent.retainedServiceWorkerTargetCount;
+  auditedTargetDiscoveryActivations +=
+    bridgeEvent.targetDiscoveryActivationCount;
+  auditedTargetSnapshots += bridgeEvent.targetSnapshotCount;
+  auditedPageRawDebugTokenInjections +=
+    bridgeEvent.pageRawDebugTokenInjectionCount;
+  auditedBrowserGlobalRawDebugTokenWrites +=
+    bridgeEvent.browserGlobalRawDebugTokenWriteCount;
+  auditedBrowserGlobalDebugSentinelWrites +=
+    bridgeEvent.browserGlobalDebugSentinelWriteCount;
+  auditedLocalStorageSecretWrites += bridgeEvent.localStorageSecretWriteCount;
+  auditedBrowserGlobalExtraHttpHeaderRegistrations +=
+    bridgeEvent.browserGlobalExtraHttpHeaderRegistrationCount;
+  auditedBrowserChildEnvironmentUnexpectedKeys +=
+    bridgeEvent.browserChildEnvironmentUnexpectedKeyCount;
+  auditedVercelBypassCdpInjectedRequests +=
+    bridgeEvent.vercelBypassCdpInjectedRequestCount;
+  auditedVercelBypassPreexistingHeaderObservations +=
+    bridgeEvent.vercelBypassPreexistingHeaderObservationCount;
+  auditedUnauthorizedVercelBypassEgresses +=
+    bridgeEvent.unauthorizedVercelBypassEgressCount;
+  auditedVercelBypassCdpResponsePausedRequests +=
+    bridgeEvent.vercelBypassCdpResponsePausedRequestCount;
+  auditedVercelBypassHttpSuccessResponses +=
+    bridgeEvent.vercelBypassHttpSuccessResponseCount;
+  auditedVercelBypassHttpErrorResponses +=
+    bridgeEvent.vercelBypassHttpErrorResponseCount;
+  auditedVercelBypassRedirectRequests +=
+    bridgeEvent.vercelBypassRedirectRequestCount;
+  auditedVercelBypassRedirectAborts +=
+    bridgeEvent.vercelBypassRedirectAbortRequestCount;
+  auditedVercelBypassRedirectResponseAborts +=
+    bridgeEvent.vercelBypassRedirectResponseAbortRequestCount;
+  auditedVercelBypassResponseErrorAborts +=
+    bridgeEvent.vercelBypassResponseErrorAbortRequestCount;
+  auditedVercelBypassObservedEligibleRequests +=
+    bridgeEvent.vercelBypassObservedEligibleRequestCount;
+  auditedVercelBypassHeaderObservedRequests +=
+    bridgeEvent.vercelBypassHeaderObservedRequestCount;
+  auditedVercelBypassHeaderMissingRequests +=
+    bridgeEvent.vercelBypassHeaderMissingRequestCount;
+  auditedVercelBypassHeaderMismatches +=
+    bridgeEvent.vercelBypassHeaderMismatchRequestCount;
+  auditedRawVercelBypassOutputs += bridgeEvent.rawVercelBypassOutputCount;
+  auditedVercelBypassConfiguredValues.add(bridgeEvent.vercelBypassConfigured);
+  auditedBaselineBridgeDecisionUnmatchedProtectedRequests +=
+    bridgeEvent.unmatchedProtectedRequestCount;
+  auditedBaselineBridgeScopeIneligibleProtectedRequests +=
+    bridgeEvent.scopeIneligibleProtectedRequestCount;
+  auditedCandidateBridgeInjectedRequests +=
+    bridgeEvent.candidateBridgeInjectedRequestCount;
+  if (audit.stage === "baseline") {
+    auditedBaselineScreenCaptureProtectedRequests +=
+      bridgeEvent.screenCaptureProtectedRequestCount;
+    auditedBaselineScreenCaptureBridgeRequests +=
+      bridgeEvent.screenCaptureBridgeHeaderRequestCount;
+  } else {
+    auditedCandidateScreenCaptureProtectedRequests +=
+      bridgeEvent.screenCaptureProtectedRequestCount;
+    auditedCandidateScreenCaptureNativeRequests +=
+      bridgeEvent.screenCaptureNativeHeaderRequestCount;
+  }
   const captureEvents = events.filter((event) => event.type === "capture");
   assert.deepEqual(
     captureEvents.map((event) => event.id).sort(),
@@ -2033,6 +4130,11 @@ for (const audit of manifest.browserAudits) {
   const responseEvents = events.filter(
     (event) => event.type === "network-response",
   );
+  assert.equal(
+    events.length,
+    3 + requestEvents.length + responseEvents.length + captureEvents.length,
+    `${audit.id} has an unexpected browser-audit event count.`,
+  );
   const fixtureDataServices = new Set(["firestore", "functions", "storage"]);
   const knownFirebaseServices = new Set([
     "auth",
@@ -2058,6 +4160,89 @@ for (const audit of manifest.browserAudits) {
         "u",
       ),
     );
+    assert.equal(typeof event.appCheckHeaderPresent, "boolean");
+    assert.equal(typeof event.appCheckHeaderJwtShapeValid, "boolean");
+    for (const field of [
+      "appCheckBridgeDecisionObserved",
+      "appCheckBridgeScopeEligible",
+      "appCheckBridgeHeaderStripped",
+      "appCheckBridgeRedirectedRequest",
+    ]) {
+      assert.equal(typeof event[field], "boolean");
+    }
+    assert.ok(
+      [null, "native-sdk", "baseline-cdp-fetch-bridge"].includes(
+        event.appCheckHeaderSource,
+      ),
+    );
+    assert.equal(
+      event.appCheckHeaderPresent,
+      event.appCheckHeaderSource !== null,
+    );
+    assert.equal(
+      event.appCheckHeaderJwtShapeValid,
+      event.appCheckHeaderPresent,
+    );
+  }
+  for (const [sequence, request] of requestEvents.entries()) {
+    assert.deepEqual(
+      Object.keys(request).sort(),
+      [
+        "type",
+        "sequence",
+        "phase",
+        "captureId",
+        "correlationId",
+        "method",
+        "hostname",
+        "firebaseService",
+        "firebase",
+        "staging",
+        "production",
+        "unboundFirebase",
+        "productionWrite",
+        "apiKeySha256",
+        "appCheckHeaderPresent",
+        "appCheckHeaderSource",
+        "appCheckHeaderJwtShapeValid",
+        "appCheckBridgeDecisionObserved",
+        "appCheckBridgeScopeEligible",
+        "appCheckBridgeHeaderStripped",
+        "appCheckBridgeRedirectedRequest",
+        "observedProjectIds",
+      ].sort(),
+    );
+    assert.equal(request.sequence, sequence);
+  }
+  for (const [sequence, response] of responseEvents.entries()) {
+    assert.deepEqual(
+      Object.keys(response).sort(),
+      [
+        "type",
+        "sequence",
+        "phase",
+        "captureId",
+        "correlationId",
+        "method",
+        "hostname",
+        "firebaseService",
+        "status",
+        "firebase",
+        "staging",
+        "production",
+        "unboundFirebase",
+        "apiKeySha256",
+        "appCheckHeaderPresent",
+        "appCheckHeaderSource",
+        "appCheckHeaderJwtShapeValid",
+        "appCheckBridgeDecisionObserved",
+        "appCheckBridgeScopeEligible",
+        "appCheckBridgeHeaderStripped",
+        "appCheckBridgeRedirectedRequest",
+        "observedProjectIds",
+      ].sort(),
+    );
+    assert.equal(response.sequence, sequence);
   }
   const requestsByCorrelationId = new Map();
   for (const request of requestEvents) {
@@ -2085,6 +4270,13 @@ for (const audit of manifest.browserAudits) {
       "production",
       "unboundFirebase",
       "apiKeySha256",
+      "appCheckHeaderPresent",
+      "appCheckHeaderSource",
+      "appCheckHeaderJwtShapeValid",
+      "appCheckBridgeDecisionObserved",
+      "appCheckBridgeScopeEligible",
+      "appCheckBridgeHeaderStripped",
+      "appCheckBridgeRedirectedRequest",
     ]) {
       assert.deepEqual(
         response[field],
@@ -2097,19 +4289,41 @@ for (const audit of manifest.browserAudits) {
   for (const event of captureEvents) {
     const capture = captures.get(event.id);
     if (!capture.fixtureMarker) continue;
+    const successfulCaptureDataRequestIds = new Set(
+      responseEvents
+        .filter(
+          (response) =>
+            response.captureId === event.id &&
+            response.staging &&
+            fixtureDataServices.has(response.firebaseService) &&
+            response.status >= 200 &&
+            response.status < 300,
+        )
+        .map((response) => response.correlationId),
+    );
+    const successfulCaptureDataRequests = requestEvents.filter(
+      (request) =>
+        request.captureId === event.id &&
+        request.method !== "OPTIONS" &&
+        request.staging &&
+        fixtureDataServices.has(request.firebaseService) &&
+        successfulCaptureDataRequestIds.has(request.correlationId),
+    );
     assert.ok(
-      requestEvents.some(
-        (request) =>
-          request.captureId === event.id &&
-          request.staging &&
-          fixtureDataServices.has(request.firebaseService) &&
-          responseEvents.some(
-            (response) =>
-              response.correlationId === request.correlationId &&
-              response.status < 400,
-          ),
-      ),
+      successfulCaptureDataRequests.length > 0,
       `${event.id} has no capture-bound staging data request.`,
+    );
+    const requiredHeaderSource =
+      capture.stage === "baseline" ? "baseline-cdp-fetch-bridge" : "native-sdk";
+    assert.equal(
+      successfulCaptureDataRequests.every(
+        (request) =>
+          request.appCheckHeaderPresent &&
+          request.appCheckHeaderJwtShapeValid &&
+          request.appCheckHeaderSource === requiredHeaderSource,
+      ),
+      true,
+      `${event.id} is not bound to the required ${requiredHeaderSource} App Check JWT.`,
     );
   }
   assert.equal(requestEvents.length > 0, true, `${audit.id} has no requests.`);
@@ -2161,8 +4375,110 @@ for (const audit of manifest.browserAudits) {
   const stagingDataRequests = stagingRequests.filter((request) =>
     fixtureDataServices.has(request.firebaseService),
   );
+  const appCheckProtectedDataRequests = stagingDataRequests.filter(
+    (request) => request.method !== "OPTIONS",
+  );
+  const screenCaptureProtectedDataRequests =
+    appCheckProtectedDataRequests.filter(
+      (request) => request.phase === "screen-capture",
+    );
+  assert.equal(
+    bridgeEvent.screenCaptureProtectedRequestCount,
+    screenCaptureProtectedDataRequests.length,
+  );
+  assert.equal(
+    bridgeEvent.screenCaptureBridgeHeaderRequestCount,
+    screenCaptureProtectedDataRequests.filter(
+      (request) => request.appCheckHeaderSource === "baseline-cdp-fetch-bridge",
+    ).length,
+  );
+  assert.equal(
+    bridgeEvent.screenCaptureNativeHeaderRequestCount,
+    screenCaptureProtectedDataRequests.filter(
+      (request) => request.appCheckHeaderSource === "native-sdk",
+    ).length,
+  );
+  assert.equal(
+    bridgeEvent.invalidHeaderJwtShapeRequestCount,
+    screenCaptureProtectedDataRequests.filter(
+      (request) => !request.appCheckHeaderJwtShapeValid,
+    ).length,
+  );
+  if (audit.stage === "baseline") {
+    assert.equal(
+      appCheckProtectedDataRequests.every(
+        (request) => request.appCheckBridgeDecisionObserved,
+      ),
+      true,
+    );
+    assert.equal(
+      appCheckProtectedDataRequests.every(
+        (request) => request.appCheckBridgeScopeEligible,
+      ),
+      true,
+    );
+    assert.equal(
+      bridgeEvent.eligibleRequestCount,
+      appCheckProtectedDataRequests.length,
+    );
+    assert.equal(
+      bridgeEvent.injectedRequestCount,
+      appCheckProtectedDataRequests.filter(
+        (request) =>
+          request.appCheckHeaderSource === "baseline-cdp-fetch-bridge",
+      ).length,
+    );
+    assert.equal(
+      bridgeEvent.nativeHeaderRequestCount,
+      appCheckProtectedDataRequests.filter(
+        (request) => request.appCheckHeaderSource === "native-sdk",
+      ).length,
+    );
+  } else {
+    assert.equal(
+      requestEvents.every(
+        (request) =>
+          !request.appCheckBridgeDecisionObserved &&
+          !request.appCheckBridgeScopeEligible &&
+          !request.appCheckBridgeHeaderStripped &&
+          !request.appCheckBridgeRedirectedRequest,
+      ),
+      true,
+    );
+  }
+  auditedProtectedHeaderJwtShapeInvalidRequests +=
+    appCheckProtectedDataRequests.filter(
+      (request) =>
+        !request.appCheckHeaderPresent || !request.appCheckHeaderJwtShapeValid,
+    ).length;
+  auditedProtectedHeaderPresentRequests += appCheckProtectedDataRequests.filter(
+    (request) => request.appCheckHeaderPresent,
+  ).length;
+  auditedProtectedHeaderMissingRequests += appCheckProtectedDataRequests.filter(
+    (request) => !request.appCheckHeaderPresent,
+  ).length;
+  auditedProtectedHeaderJwtShapeValidRequests +=
+    appCheckProtectedDataRequests.filter(
+      (request) => request.appCheckHeaderJwtShapeValid,
+    ).length;
+  if (audit.stage === "baseline") {
+    auditedBaselineEffectiveHeaderMissingRequests +=
+      appCheckProtectedDataRequests.filter(
+        (request) => !request.appCheckHeaderPresent,
+      ).length;
+  }
+  const appCheckExchangeRequests = stagingRequests.filter(
+    (request) =>
+      request.firebaseService === "app-check" && request.method === "POST",
+  );
   const stagingDataResponses = stagingResponses.filter((response) =>
     fixtureDataServices.has(response.firebaseService),
+  );
+  const successfulAppCheckExchangeResponses = stagingResponses.filter(
+    (response) =>
+      response.firebaseService === "app-check" &&
+      response.method === "POST" &&
+      response.status === 200,
   );
   const groupNetwork = {
     requestCount: requestEvents.length,
@@ -2172,6 +4488,26 @@ for (const audit of manifest.browserAudits) {
     stagingFirebaseResponseCount: stagingResponses.length,
     stagingDataRequestCount: stagingDataRequests.length,
     stagingDataResponseCount: stagingDataResponses.length,
+    appCheckExchangeRequestCount: appCheckExchangeRequests.length,
+    successfulAppCheckExchangeResponseCount:
+      successfulAppCheckExchangeResponses.length,
+    appCheckProtectedDataRequestCount: appCheckProtectedDataRequests.length,
+    appCheckHeaderPresentRequestCount: appCheckProtectedDataRequests.filter(
+      (request) => request.appCheckHeaderPresent,
+    ).length,
+    appCheckHeaderMissingRequestCount: appCheckProtectedDataRequests.filter(
+      (request) => !request.appCheckHeaderPresent,
+    ).length,
+    appCheckHeaderJwtShapeValidRequestCount:
+      appCheckProtectedDataRequests.filter(
+        (request) => request.appCheckHeaderJwtShapeValid,
+      ).length,
+    appCheckHeaderJwtShapeInvalidRequestCount:
+      appCheckProtectedDataRequests.filter(
+        (request) =>
+          request.appCheckHeaderPresent && !request.appCheckHeaderJwtShapeValid,
+      ).length,
+    rawAppCheckHeaderValueOutputCount: 0,
     stagingFirebaseRequestsByPhase: countBy(
       stagingRequests,
       (request) => request.phase,
@@ -2219,11 +4555,788 @@ for (const audit of manifest.browserAudits) {
     captureCount: captureEvents.length,
     network: groupNetwork,
   });
+  if (audit.stage === "baseline") {
+    auditedBaselineProtectedDataRequests +=
+      appCheckProtectedDataRequests.length;
+  } else {
+    auditedCandidateProtectedDataRequests +=
+      appCheckProtectedDataRequests.length;
+    auditedCandidateNativeHeaderPresentRequests +=
+      appCheckProtectedDataRequests.filter(
+        (request) =>
+          request.appCheckHeaderPresent &&
+          request.appCheckHeaderSource === "native-sdk",
+      ).length;
+    auditedCandidateNativeHeaderMissingRequests +=
+      appCheckProtectedDataRequests.filter(
+        (request) => !request.appCheckHeaderPresent,
+      ).length;
+    assert.equal(
+      appCheckProtectedDataRequests.some(
+        (request) =>
+          request.appCheckHeaderSource === "baseline-cdp-fetch-bridge",
+      ),
+      false,
+    );
+  }
+  auditedBrowserAppCheckExchangeRequests += appCheckExchangeRequests.length;
+  auditedBrowserAppCheckExchangeHttp200Responses +=
+    successfulAppCheckExchangeResponses.length;
+  auditedFirebaseDataRedirectResponses += responseEvents.filter(
+    (response) =>
+      response.staging &&
+      fixtureDataServices.has(response.firebaseService) &&
+      response.status >= 300 &&
+      response.status < 400,
+  ).length;
+  auditedFirebaseDataErrorResponses += responseEvents.filter(
+    (response) =>
+      response.staging &&
+      fixtureDataServices.has(response.firebaseService) &&
+      response.status >= 400,
+  ).length;
+  auditedSuccessfulFirebaseDataResponses += responseEvents.filter(
+    (response) =>
+      response.staging &&
+      fixtureDataServices.has(response.firebaseService) &&
+      response.status >= 200 &&
+      response.status < 300,
+  ).length;
   auditedStagingFirebaseRequests += stagingRequests.length;
   auditedProductionAccess += productionRequests.length;
   auditedProductionWrites += productionRequests.filter(
     (request) => request.productionWrite,
   ).length;
+}
+const appCheckBinding = manifest.appCheckBinding;
+assert.ok(appCheckBinding && typeof appCheckBinding === "object");
+assert.equal(
+  sha256(Buffer.from(canonicalJson(appCheckBinding))),
+  manifest.appCheckBindingHash,
+  "The App Check capture binding hash is invalid.",
+);
+assert.match(manifest.appCheckBindingHash, /^[a-f0-9]{64}$/u);
+assertExactObjectKeys(appCheckBinding, [
+  "adminVerificationCount",
+  "allExchangesAdminVerified",
+  "allExchangesHttp200",
+  "appCheckBound",
+  "appCheckCdpHandlerErrorCount",
+  "appCheckCdpMonitorPausedRequestCount",
+  "appCheckHeaderNetworkObservationCount",
+  "argvSecretCount",
+  "authorizedAppCheckHeaderRequestCount",
+  "authorizedDebugExchangeBodyReplacementCount",
+  "baselineBridgeCdpResponsePausedRequestCount",
+  "baselineBridgeEligibleRequestCount",
+  "baselineBridgeInjectedRequestCount",
+  "baselineBridgeNativeHeaderRequestCount",
+  "baselineBridgeScope",
+  "baselineBridgeScopeHash",
+  "baselineBridgeScopeMismatchRequestCount",
+  "baselineBridgeStrippedHeaderRequestCount",
+  "baselineBridgeRedirectRequestCount",
+  "baselineBridgeRedirectHeaderAbsentRequestCount",
+  "baselineBridgeRedirectAbortRequestCount",
+  "baselineBridgeCdpPausedRequestCount",
+  "baselineBridgeCdpReconciledRequestCount",
+  "baselineBridgeInjectedRedirectResponseAbortCount",
+  "baselineBridgeDecisionUnmatchedProtectedRequestCount",
+  "baselineBridgeScopeIneligibleProtectedRequestCount",
+  "baselineEffectiveHeaderMissingRequestCount",
+  "baselineProtectedDataRequestCount",
+  "baselineScreenCaptureBridgeRequestCount",
+  "baselineScreenCaptureProtectedRequestCount",
+  "browserAppCheckExchangeHttp200Count",
+  "browserAppCheckExchangeRequestCount",
+  "browserCdpSecurityScope",
+  "browserCdpSecurityScopeHash",
+  "preTransmissionBoundaryAttestationHash",
+  "preTransmissionBoundaryInspectionCount",
+  "preTransmissionBoundaryBlockAttemptCount",
+  "preTransmissionBoundaryProductionBlockCount",
+  "preTransmissionBoundaryUnboundFirebaseBlockCount",
+  "preTransmissionBoundaryFailRequestCount",
+  "browserChildEnvironmentAllowlisted",
+  "browserChildEnvironmentAllowlistHash",
+  "browserChildEnvironmentUnexpectedKeyCount",
+  "browserChildSecretEnvironmentVariableCount",
+  "browserChildSecretValueObservationCount",
+  "browserGlobalExtraHttpHeaderRegistrationCount",
+  "browserGlobalDebugSentinelWriteCount",
+  "browserGlobalRawDebugTokenWriteCount",
+  "browserGlobalValueKind",
+  "browserLaunchExplicitEnvironment",
+  "browserNetworkHeaderAttestationErrorCount",
+  "candidateBridgeInjectedRequestCount",
+  "candidateNativeHeaderMissingRequestCount",
+  "candidateNativeHeaderPresentRequestCount",
+  "candidateProtectedDataRequestCount",
+  "candidateScreenCaptureNativeRequestCount",
+  "candidateScreenCaptureProtectedRequestCount",
+  "consoleMessageCount",
+  "consoleSecretObservationCount",
+  "contextCloseCount",
+  "contextAppCheckSecretInitCount",
+  "corsConsoleErrorCount",
+  "childProcessSecretEnvScrubbed",
+  "debugSentinelHash",
+  "debugSentinelNetworkObservationCount",
+  "debugTokenSha256",
+  "debugTokenNetworkObservationCount",
+  "domSecretObservationCount",
+  "exchangeHttp200Count",
+  "exchangeEndpointHash",
+  "exchangeOriginHash",
+  "exchangeRequestCount",
+  "exchangeTransportContractHash",
+  "firebaseDataErrorResponseCount",
+  "firebaseDataRedirectResponseCount",
+  "fixturePostBackupAttestationHash",
+  "fixturePreBackupAttestationHash",
+  "harWriteCount",
+  "headerCorrelationMechanism",
+  "initScriptInjectionCount",
+  "localStorageSecretWriteCount",
+  "minimumRemainingLifetimeSeconds",
+  "nodeDeploymentFetchRequestCount",
+  "nodeDeploymentFetchHttp200Count",
+  "nodeDeploymentRedirectResponseCount",
+  "nodeVercelBypassHeaderRequestCount",
+  "pageRawDebugTokenInjectionCount",
+  "pageAppCheckSecretInitRegistrationCount",
+  "pendingBridgeDecisionResidualCount",
+  "pendingBridgeObservationResidualCount",
+  "playwrightRouteRegistrationCount",
+  "protocolDebugLoggingDisabled",
+  "protectedHeaderJwtShapeInvalidRequestCount",
+  "rawDebugTokenOutputCount",
+  "rawExchangedTokenOutputCount",
+  "rawHeaderValueOutputCount",
+  "rawResponseBodyOutputCount",
+  "rawTokenOutputCount",
+  "rawVercelBypassOutputCount",
+  "refreshCount",
+  "requestFailureCount",
+  "scrubbedSecretEnvironmentVariableCount",
+  "secretInitScope",
+  "sensitiveAppCheckCdpResponsePausedRequestCount",
+  "sensitiveAppCheckRedirectAbortRequestCount",
+  "sensitiveAppCheckRedirectRequestCount",
+  "sensitiveAppCheckRedirectResponseAbortRequestCount",
+  "sensitiveAppCheckRequestTrackingResidualCount",
+  "sensitiveAppCheckResponseErrorAbortRequestCount",
+  "serviceWorkerPolicy",
+  "status",
+  "storageStateWriteCount",
+  "tokenLifetimeMatchedTtl",
+  "tokenJwtShapeValid",
+  "tokenValidAtExchange",
+  "traceWriteCount",
+  "unauthorizedAppCheckHeaderEgressCount",
+  "unauthorizedDebugSentinelEgressCount",
+  "unauthorizedDebugTokenEgressCount",
+  "unauthorizedVercelBypassEgressCount",
+  "unexpectedDedicatedWorkerCount",
+  "unexpectedExtraPageCount",
+  "unexpectedServiceWorkerCount",
+  "unexpectedCrossOriginFrameCount",
+  "unexpectedOopifTargetCount",
+  "unexpectedDedicatedWorkerTargetCount",
+  "unexpectedSharedWorkerTargetCount",
+  "unexpectedServiceWorkerTargetCount",
+  "retainedOopifTargetCount",
+  "retainedDedicatedWorkerTargetCount",
+  "retainedSharedWorkerTargetCount",
+  "retainedServiceWorkerTargetCount",
+  "targetDiscoveryActivationCount",
+  "targetSnapshotCount",
+  "urlMethodFifoCorrelationUsed",
+  "verifiedAppIdHash",
+  "verifiedAudienceSetHash",
+  "verifiedIssuerHash",
+  "verifiedProjectIdHash",
+  "verifiedProjectNumberHash",
+  "vercelBypassConfigured",
+  "vercelBypassAllowedOriginSetHash",
+  "vercelBypassTransportContractHash",
+  "vercelBypassCdpInjectedRequestCount",
+  "vercelBypassPreexistingHeaderObservationCount",
+  "vercelBypassCdpResponsePausedRequestCount",
+  "vercelBypassHttpSuccessResponseCount",
+  "vercelBypassHttpErrorResponseCount",
+  "vercelBypassRedirectRequestCount",
+  "vercelBypassRedirectAbortRequestCount",
+  "vercelBypassRedirectResponseAbortRequestCount",
+  "vercelBypassResponseErrorAbortRequestCount",
+  "vercelBypassObservedEligibleRequestCount",
+  "vercelBypassHeaderObservedRequestCount",
+  "vercelBypassHeaderMissingRequestCount",
+  "vercelBypassHeaderMismatchRequestCount",
+  "successfulFirebaseDataResponseCount",
+]);
+assert.equal(appCheckBinding.status, "VERIFIED_EXCHANGED");
+assert.equal(appCheckBinding.appCheckBound, true);
+assert.equal(
+  appCheckBinding.debugTokenSha256,
+  fixtureAudit.isolation.preBackupAccessProbe.appCheckDebugTokenHash,
+);
+assert.equal(appCheckBinding.verifiedAppIdHash, sha256(STAGING_APP_ID));
+assert.equal(
+  appCheckBinding.verifiedProjectIdHash,
+  sha256(contract.firebaseProjectId),
+);
+assert.equal(
+  appCheckBinding.verifiedProjectNumberHash,
+  sha256(STAGING_PROJECT_NUMBER),
+);
+assert.equal(
+  appCheckBinding.verifiedAudienceSetHash,
+  sha256(
+    canonicalJson(
+      [
+        `projects/${contract.firebaseProjectId}`,
+        `projects/${STAGING_PROJECT_NUMBER}`,
+      ].sort(),
+    ),
+  ),
+);
+assert.equal(
+  appCheckBinding.verifiedIssuerHash,
+  sha256(`https://firebaseappcheck.googleapis.com/${STAGING_PROJECT_NUMBER}`),
+);
+assert.equal(
+  appCheckBinding.exchangeOriginHash,
+  sha256(new URL(contract.stableAlias).origin),
+);
+assert.equal(
+  appCheckBinding.exchangeEndpointHash,
+  sha256(
+    `https://content-firebaseappcheck.googleapis.com/v1/projects/${contract.firebaseProjectId}/apps/${STAGING_APP_ID}:exchangeDebugToken`,
+  ),
+);
+assert.equal(
+  appCheckBinding.exchangeTransportContractHash,
+  sha256(canonicalJson(FIXTURE_APP_CHECK_EXCHANGE_TRANSPORT_CONTRACT)),
+);
+assert.ok(appCheckBinding.exchangeRequestCount >= 1);
+assert.equal(
+  appCheckBinding.exchangeHttp200Count,
+  appCheckBinding.exchangeRequestCount,
+);
+assert.equal(
+  appCheckBinding.adminVerificationCount,
+  appCheckBinding.exchangeRequestCount,
+);
+assert.equal(
+  appCheckBinding.refreshCount,
+  appCheckBinding.exchangeRequestCount - 1,
+);
+assert.equal(appCheckBinding.minimumRemainingLifetimeSeconds, 300);
+assert.equal(appCheckBinding.allExchangesHttp200, true);
+assert.equal(appCheckBinding.allExchangesAdminVerified, true);
+assert.equal(appCheckBinding.tokenValidAtExchange, true);
+assert.equal(appCheckBinding.tokenJwtShapeValid, true);
+assert.equal(appCheckBinding.tokenLifetimeMatchedTtl, true);
+assert.equal(
+  appCheckBinding.fixturePreBackupAttestationHash,
+  preBackupNamespaceAccessAttestationHash,
+);
+assert.equal(
+  appCheckBinding.fixturePostBackupAttestationHash,
+  backupNamespaceAccessAttestationHash,
+);
+assert.deepEqual(
+  appCheckBinding.baselineBridgeScope,
+  BASELINE_APP_CHECK_BRIDGE_SCOPE,
+);
+assert.equal(
+  appCheckBinding.baselineBridgeScopeHash,
+  baselineAppCheckBridgeScopeHash,
+);
+assert.deepEqual(
+  appCheckBinding.browserCdpSecurityScope,
+  BROWSER_APP_CHECK_CDP_SECURITY_SCOPE,
+);
+assert.equal(
+  appCheckBinding.browserCdpSecurityScopeHash,
+  browserAppCheckCdpSecurityScopeHash,
+);
+assert.equal(
+  appCheckBinding.preTransmissionBoundaryAttestationHash,
+  preTransmissionNetworkBoundaryAttestationHash,
+);
+assert.equal(
+  appCheckBinding.debugSentinelHash,
+  sha256(APP_CHECK_DEBUG_SENTINEL),
+);
+assert.equal(
+  appCheckBinding.browserGlobalValueKind,
+  "non-secret-fixed-sentinel",
+);
+assert.equal(appCheckBinding.secretInitScope, "primary-page-only");
+assert.equal(appCheckBinding.pageAppCheckSecretInitRegistrationCount, 1);
+assert.equal(
+  appCheckBinding.headerCorrelationMechanism,
+  "playwright-request-allHeaders",
+);
+assert.equal(appCheckBinding.urlMethodFifoCorrelationUsed, false);
+assert.equal(appCheckBinding.protocolDebugLoggingDisabled, true);
+assert.equal(appCheckBinding.browserLaunchExplicitEnvironment, true);
+assert.equal(appCheckBinding.childProcessSecretEnvScrubbed, true);
+assert.equal(appCheckBinding.browserChildEnvironmentAllowlisted, true);
+assert.equal(
+  appCheckBinding.browserChildEnvironmentAllowlistHash,
+  sha256(canonicalJson(BROWSER_CHILD_ENVIRONMENT_ALLOWLIST)),
+);
+assert.equal(appCheckBinding.scrubbedSecretEnvironmentVariableCount, 4);
+assert.equal(appCheckBinding.playwrightRouteRegistrationCount, 0);
+assert.equal(appCheckBinding.browserGlobalExtraHttpHeaderRegistrationCount, 0);
+assert.equal(typeof appCheckBinding.vercelBypassConfigured, "boolean");
+assert.equal(auditedVercelBypassConfiguredValues.size, 1);
+assert.equal(
+  [...auditedVercelBypassConfiguredValues][0],
+  appCheckBinding.vercelBypassConfigured,
+);
+assert.equal(
+  appCheckBinding.vercelBypassAllowedOriginSetHash,
+  sha256(canonicalJson(vercelBypassAllowedOrigins)),
+);
+assert.equal(
+  appCheckBinding.vercelBypassTransportContractHash,
+  sha256(canonicalJson(VERCEL_BYPASS_TRANSPORT_CONTRACT)),
+);
+assert.equal(appCheckBinding.serviceWorkerPolicy, "block");
+assert.ok(appCheckBinding.nodeDeploymentFetchRequestCount > 0);
+assert.equal(
+  appCheckBinding.nodeDeploymentFetchRequestCount,
+  appCheckBinding.nodeDeploymentFetchHttp200Count,
+);
+assert.equal(appCheckBinding.nodeDeploymentRedirectResponseCount, 0);
+assert.equal(
+  appCheckBinding.nodeVercelBypassHeaderRequestCount,
+  appCheckBinding.vercelBypassConfigured
+    ? appCheckBinding.nodeDeploymentFetchRequestCount
+    : 0,
+);
+assert.equal(
+  appCheckBinding.baselineProtectedDataRequestCount,
+  auditedBaselineProtectedDataRequests,
+);
+assert.equal(
+  appCheckBinding.baselineBridgeEligibleRequestCount,
+  auditedBaselineBridgeEligibleRequests,
+);
+assert.equal(
+  appCheckBinding.baselineBridgeInjectedRequestCount,
+  auditedBaselineBridgeInjectedRequests,
+);
+assert.ok(appCheckBinding.baselineBridgeInjectedRequestCount > 0);
+assert.equal(
+  appCheckBinding.baselineBridgeNativeHeaderRequestCount,
+  auditedBaselineBridgeNativeHeaderRequests,
+);
+for (const [field, auditedValue] of Object.entries({
+  baselineBridgeRedirectRequestCount: auditedBaselineBridgeRedirectRequests,
+  baselineBridgeRedirectHeaderAbsentRequestCount:
+    auditedBaselineBridgeRedirectHeaderAbsentRequests,
+  baselineBridgeRedirectAbortRequestCount:
+    auditedBaselineBridgeRedirectAbortRequests,
+  baselineBridgeCdpPausedRequestCount: auditedBaselineBridgeCdpPausedRequests,
+  baselineBridgeCdpResponsePausedRequestCount:
+    auditedBaselineBridgeCdpResponsePausedRequests,
+  baselineBridgeCdpReconciledRequestCount:
+    auditedBaselineBridgeCdpReconciledRequests,
+  appCheckCdpHandlerErrorCount: auditedBaselineBridgeHandlerErrors,
+  baselineBridgeInjectedRedirectResponseAbortCount:
+    auditedBaselineBridgeInjectedRedirectResponseAborts,
+  baselineBridgeDecisionUnmatchedProtectedRequestCount:
+    auditedBaselineBridgeDecisionUnmatchedProtectedRequests,
+  baselineBridgeScopeIneligibleProtectedRequestCount:
+    auditedBaselineBridgeScopeIneligibleProtectedRequests,
+  appCheckCdpMonitorPausedRequestCount: auditedAppCheckCdpMonitorPausedRequests,
+  preTransmissionBoundaryInspectionCount:
+    auditedPreTransmissionBoundaryInspections,
+  preTransmissionBoundaryBlockAttemptCount:
+    auditedPreTransmissionBoundaryBlockAttempts,
+  preTransmissionBoundaryProductionBlockCount:
+    auditedPreTransmissionBoundaryProductionBlocks,
+  preTransmissionBoundaryUnboundFirebaseBlockCount:
+    auditedPreTransmissionBoundaryUnboundFirebaseBlocks,
+  preTransmissionBoundaryFailRequestCount:
+    auditedPreTransmissionBoundaryFailRequests,
+  debugTokenNetworkObservationCount: auditedDebugTokenNetworkObservations,
+  debugSentinelNetworkObservationCount: auditedDebugSentinelNetworkObservations,
+  authorizedDebugExchangeBodyReplacementCount:
+    auditedAuthorizedDebugExchangeBodyReplacements,
+  unauthorizedDebugTokenEgressCount: auditedUnauthorizedDebugTokenEgresses,
+  unauthorizedDebugSentinelEgressCount:
+    auditedUnauthorizedDebugSentinelEgresses,
+  appCheckHeaderNetworkObservationCount:
+    auditedAppCheckHeaderNetworkObservations,
+  authorizedAppCheckHeaderRequestCount: auditedAuthorizedAppCheckHeaderRequests,
+  unauthorizedAppCheckHeaderEgressCount:
+    auditedUnauthorizedAppCheckHeaderEgresses,
+  sensitiveAppCheckRedirectRequestCount:
+    auditedSensitiveAppCheckRedirectRequests,
+  sensitiveAppCheckRedirectAbortRequestCount:
+    auditedSensitiveAppCheckRedirectAborts,
+  sensitiveAppCheckCdpResponsePausedRequestCount:
+    auditedSensitiveAppCheckCdpResponsePausedRequests,
+  sensitiveAppCheckRedirectResponseAbortRequestCount:
+    auditedSensitiveAppCheckRedirectResponseAborts,
+  sensitiveAppCheckResponseErrorAbortRequestCount:
+    auditedSensitiveAppCheckResponseErrorAborts,
+  sensitiveAppCheckRequestTrackingResidualCount:
+    auditedSensitiveAppCheckRequestTrackingResiduals,
+  browserNetworkHeaderAttestationErrorCount:
+    auditedBrowserNetworkHeaderAttestationErrors,
+  pendingBridgeDecisionResidualCount: auditedPendingBridgeDecisionResiduals,
+  pendingBridgeObservationResidualCount:
+    auditedPendingBridgeObservationResiduals,
+  unexpectedExtraPageCount: auditedUnexpectedExtraPages,
+  unexpectedDedicatedWorkerCount: auditedUnexpectedDedicatedWorkers,
+  unexpectedServiceWorkerCount: auditedUnexpectedServiceWorkers,
+  unexpectedCrossOriginFrameCount: auditedUnexpectedCrossOriginFrames,
+  unexpectedOopifTargetCount: auditedUnexpectedOopifTargets,
+  unexpectedDedicatedWorkerTargetCount: auditedUnexpectedDedicatedWorkerTargets,
+  unexpectedSharedWorkerTargetCount: auditedUnexpectedSharedWorkerTargets,
+  unexpectedServiceWorkerTargetCount: auditedUnexpectedServiceWorkerTargets,
+  retainedOopifTargetCount: auditedRetainedOopifTargets,
+  retainedDedicatedWorkerTargetCount: auditedRetainedDedicatedWorkerTargets,
+  retainedSharedWorkerTargetCount: auditedRetainedSharedWorkerTargets,
+  retainedServiceWorkerTargetCount: auditedRetainedServiceWorkerTargets,
+  targetDiscoveryActivationCount: auditedTargetDiscoveryActivations,
+  targetSnapshotCount: auditedTargetSnapshots,
+  pageRawDebugTokenInjectionCount: auditedPageRawDebugTokenInjections,
+  browserGlobalRawDebugTokenWriteCount: auditedBrowserGlobalRawDebugTokenWrites,
+  browserGlobalDebugSentinelWriteCount: auditedBrowserGlobalDebugSentinelWrites,
+  localStorageSecretWriteCount: auditedLocalStorageSecretWrites,
+  browserGlobalExtraHttpHeaderRegistrationCount:
+    auditedBrowserGlobalExtraHttpHeaderRegistrations,
+  browserChildEnvironmentUnexpectedKeyCount:
+    auditedBrowserChildEnvironmentUnexpectedKeys,
+  vercelBypassCdpInjectedRequestCount: auditedVercelBypassCdpInjectedRequests,
+  vercelBypassPreexistingHeaderObservationCount:
+    auditedVercelBypassPreexistingHeaderObservations,
+  unauthorizedVercelBypassEgressCount: auditedUnauthorizedVercelBypassEgresses,
+  vercelBypassCdpResponsePausedRequestCount:
+    auditedVercelBypassCdpResponsePausedRequests,
+  vercelBypassHttpSuccessResponseCount: auditedVercelBypassHttpSuccessResponses,
+  vercelBypassHttpErrorResponseCount: auditedVercelBypassHttpErrorResponses,
+  vercelBypassRedirectRequestCount: auditedVercelBypassRedirectRequests,
+  vercelBypassRedirectAbortRequestCount: auditedVercelBypassRedirectAborts,
+  vercelBypassRedirectResponseAbortRequestCount:
+    auditedVercelBypassRedirectResponseAborts,
+  vercelBypassResponseErrorAbortRequestCount:
+    auditedVercelBypassResponseErrorAborts,
+  vercelBypassObservedEligibleRequestCount:
+    auditedVercelBypassObservedEligibleRequests,
+  vercelBypassHeaderObservedRequestCount:
+    auditedVercelBypassHeaderObservedRequests,
+  vercelBypassHeaderMissingRequestCount:
+    auditedVercelBypassHeaderMissingRequests,
+  vercelBypassHeaderMismatchRequestCount: auditedVercelBypassHeaderMismatches,
+  rawVercelBypassOutputCount: auditedRawVercelBypassOutputs,
+})) {
+  assert.equal(
+    appCheckBinding[field],
+    auditedValue,
+    `appCheckBinding.${field} does not reconcile to browser audit.`,
+  );
+}
+assert.equal(
+  appCheckBinding.baselineBridgeScopeMismatchRequestCount,
+  auditedBaselineBridgeScopeMismatches,
+);
+assert.equal(
+  appCheckBinding.baselineBridgeStrippedHeaderRequestCount,
+  auditedBaselineBridgeStrippedHeaders,
+);
+assert.equal(
+  appCheckBinding.baselineBridgeEligibleRequestCount,
+  appCheckBinding.baselineProtectedDataRequestCount,
+);
+assert.equal(
+  appCheckBinding.baselineBridgeInjectedRequestCount +
+    appCheckBinding.baselineBridgeNativeHeaderRequestCount,
+  appCheckBinding.baselineBridgeEligibleRequestCount,
+);
+assert.equal(appCheckBinding.baselineBridgeScopeMismatchRequestCount, 0);
+assert.equal(
+  appCheckBinding.baselineEffectiveHeaderMissingRequestCount,
+  auditedBaselineEffectiveHeaderMissingRequests,
+);
+assert.equal(appCheckBinding.baselineEffectiveHeaderMissingRequestCount, 0);
+assert.ok(appCheckBinding.baselineBridgeCdpPausedRequestCount > 0);
+assert.ok(appCheckBinding.baselineBridgeCdpReconciledRequestCount > 0);
+assert.ok(appCheckBinding.appCheckCdpMonitorPausedRequestCount > 0);
+assert.ok(appCheckBinding.preTransmissionBoundaryInspectionCount > 0);
+assert.equal(
+  appCheckBinding.preTransmissionBoundaryInspectionCount,
+  appCheckBinding.appCheckCdpMonitorPausedRequestCount,
+);
+assert.equal(
+  appCheckBinding.preTransmissionBoundaryBlockAttemptCount,
+  appCheckBinding.preTransmissionBoundaryProductionBlockCount +
+    appCheckBinding.preTransmissionBoundaryUnboundFirebaseBlockCount,
+);
+assert.equal(
+  appCheckBinding.preTransmissionBoundaryFailRequestCount,
+  appCheckBinding.preTransmissionBoundaryBlockAttemptCount,
+);
+assert.equal(
+  appCheckBinding.baselineBridgeCdpResponsePausedRequestCount,
+  appCheckBinding.baselineBridgeInjectedRequestCount,
+);
+assert.equal(
+  appCheckBinding.debugSentinelNetworkObservationCount,
+  appCheckBinding.authorizedDebugExchangeBodyReplacementCount,
+);
+assert.equal(
+  appCheckBinding.authorizedDebugExchangeBodyReplacementCount,
+  appCheckBinding.browserAppCheckExchangeRequestCount,
+);
+assert.equal(
+  appCheckBinding.appCheckHeaderNetworkObservationCount,
+  appCheckBinding.authorizedAppCheckHeaderRequestCount,
+);
+assert.equal(
+  appCheckBinding.sensitiveAppCheckCdpResponsePausedRequestCount,
+  appCheckBinding.authorizedDebugExchangeBodyReplacementCount +
+    appCheckBinding.authorizedAppCheckHeaderRequestCount +
+    appCheckBinding.vercelBypassCdpInjectedRequestCount,
+);
+if (appCheckBinding.vercelBypassConfigured) {
+  assert.ok(appCheckBinding.vercelBypassCdpInjectedRequestCount > 0);
+  assert.equal(
+    appCheckBinding.vercelBypassCdpInjectedRequestCount,
+    appCheckBinding.vercelBypassObservedEligibleRequestCount,
+  );
+  assert.equal(
+    appCheckBinding.vercelBypassCdpInjectedRequestCount,
+    appCheckBinding.vercelBypassHeaderObservedRequestCount,
+  );
+  assert.equal(
+    appCheckBinding.vercelBypassCdpInjectedRequestCount,
+    appCheckBinding.vercelBypassCdpResponsePausedRequestCount,
+  );
+  assert.equal(
+    appCheckBinding.vercelBypassCdpInjectedRequestCount,
+    appCheckBinding.vercelBypassHttpSuccessResponseCount,
+  );
+} else {
+  assert.equal(appCheckBinding.vercelBypassCdpInjectedRequestCount, 0);
+  assert.equal(appCheckBinding.vercelBypassObservedEligibleRequestCount, 0);
+  assert.equal(appCheckBinding.vercelBypassHeaderObservedRequestCount, 0);
+  assert.equal(appCheckBinding.vercelBypassCdpResponsePausedRequestCount, 0);
+  assert.equal(appCheckBinding.vercelBypassHttpSuccessResponseCount, 0);
+}
+assert.equal(
+  appCheckBinding.baselineScreenCaptureProtectedRequestCount,
+  auditedBaselineScreenCaptureProtectedRequests,
+);
+assert.equal(
+  appCheckBinding.baselineScreenCaptureBridgeRequestCount,
+  auditedBaselineScreenCaptureBridgeRequests,
+);
+assert.ok(appCheckBinding.baselineScreenCaptureProtectedRequestCount > 0);
+assert.equal(
+  appCheckBinding.baselineScreenCaptureBridgeRequestCount,
+  appCheckBinding.baselineScreenCaptureProtectedRequestCount,
+);
+assert.equal(
+  appCheckBinding.candidateProtectedDataRequestCount,
+  auditedCandidateProtectedDataRequests,
+);
+assert.equal(
+  appCheckBinding.candidateNativeHeaderPresentRequestCount,
+  auditedCandidateNativeHeaderPresentRequests,
+);
+assert.equal(
+  appCheckBinding.candidateNativeHeaderMissingRequestCount,
+  auditedCandidateNativeHeaderMissingRequests,
+);
+assert.equal(appCheckBinding.candidateNativeHeaderMissingRequestCount, 0);
+assert.equal(
+  appCheckBinding.candidateNativeHeaderPresentRequestCount,
+  appCheckBinding.candidateProtectedDataRequestCount,
+);
+assert.equal(
+  appCheckBinding.candidateScreenCaptureProtectedRequestCount,
+  auditedCandidateScreenCaptureProtectedRequests,
+);
+assert.equal(
+  appCheckBinding.candidateScreenCaptureNativeRequestCount,
+  auditedCandidateScreenCaptureNativeRequests,
+);
+assert.ok(appCheckBinding.candidateScreenCaptureProtectedRequestCount > 0);
+assert.equal(
+  appCheckBinding.candidateScreenCaptureNativeRequestCount,
+  appCheckBinding.candidateScreenCaptureProtectedRequestCount,
+);
+assert.equal(
+  appCheckBinding.candidateBridgeInjectedRequestCount,
+  auditedCandidateBridgeInjectedRequests,
+);
+assert.equal(appCheckBinding.candidateBridgeInjectedRequestCount, 0);
+assert.equal(
+  appCheckBinding.protectedHeaderJwtShapeInvalidRequestCount,
+  auditedProtectedHeaderJwtShapeInvalidRequests,
+);
+assert.equal(appCheckBinding.protectedHeaderJwtShapeInvalidRequestCount, 0);
+assert.equal(
+  appCheckBinding.browserAppCheckExchangeRequestCount,
+  auditedBrowserAppCheckExchangeRequests,
+);
+assert.equal(
+  appCheckBinding.browserAppCheckExchangeHttp200Count,
+  auditedBrowserAppCheckExchangeHttp200Responses,
+);
+const auditedProtectedDataRequestCount =
+  auditedBaselineProtectedDataRequests + auditedCandidateProtectedDataRequests;
+assert.equal(
+  networkSummary.appCheckProtectedDataRequestCount,
+  auditedProtectedDataRequestCount,
+);
+assert.equal(
+  networkSummary.appCheckHeaderPresentRequestCount,
+  auditedProtectedHeaderPresentRequests,
+);
+assert.equal(
+  networkSummary.appCheckHeaderMissingRequestCount,
+  auditedProtectedHeaderMissingRequests,
+);
+assert.equal(networkSummary.appCheckHeaderMissingRequestCount, 0);
+assert.equal(
+  networkSummary.appCheckHeaderJwtShapeValidRequestCount,
+  auditedProtectedHeaderJwtShapeValidRequests,
+);
+assert.equal(
+  networkSummary.appCheckHeaderJwtShapeInvalidRequestCount,
+  auditedProtectedHeaderJwtShapeInvalidRequests,
+);
+assert.equal(networkSummary.appCheckHeaderJwtShapeInvalidRequestCount, 0);
+assert.equal(
+  networkSummary.appCheckHeaderPresentRequestCount,
+  networkSummary.appCheckProtectedDataRequestCount,
+);
+assert.equal(
+  networkSummary.appCheckHeaderJwtShapeValidRequestCount,
+  networkSummary.appCheckProtectedDataRequestCount,
+);
+assert.equal(
+  networkSummary.appCheckExchangeRequestCount,
+  appCheckBinding.browserAppCheckExchangeRequestCount,
+);
+assert.equal(
+  networkSummary.successfulAppCheckExchangeResponseCount,
+  appCheckBinding.browserAppCheckExchangeHttp200Count,
+);
+assert.equal(appCheckBinding.firebaseDataRedirectResponseCount, 0);
+assert.equal(auditedFirebaseDataRedirectResponses, 0);
+assert.equal(appCheckBinding.firebaseDataErrorResponseCount, 0);
+assert.equal(auditedFirebaseDataErrorResponses, 0);
+assert.equal(
+  appCheckBinding.successfulFirebaseDataResponseCount,
+  auditedSuccessfulFirebaseDataResponses,
+);
+assert.ok(appCheckBinding.successfulFirebaseDataResponseCount > 0);
+assert.equal(appCheckBinding.serviceWorkerPolicy, "block");
+assert.equal(
+  appCheckBinding.initScriptInjectionCount,
+  manifest.browserAudits.length,
+);
+assert.equal(
+  appCheckBinding.targetDiscoveryActivationCount,
+  manifest.browserAudits.length,
+);
+assert.equal(
+  appCheckBinding.targetSnapshotCount,
+  manifest.browserAudits.length,
+);
+assert.ok(
+  appCheckBinding.browserGlobalDebugSentinelWriteCount >=
+    manifest.browserAudits.length,
+);
+assert.equal(appCheckBinding.contextCloseCount, manifest.browserAudits.length);
+assert.ok(Number.isInteger(appCheckBinding.consoleMessageCount));
+for (const field of [
+  "consoleSecretObservationCount",
+  "corsConsoleErrorCount",
+  "domSecretObservationCount",
+  "requestFailureCount",
+  "rawDebugTokenOutputCount",
+  "rawExchangedTokenOutputCount",
+  "rawResponseBodyOutputCount",
+  "argvSecretCount",
+  "localStorageSecretWriteCount",
+  "traceWriteCount",
+  "harWriteCount",
+  "storageStateWriteCount",
+  "rawHeaderValueOutputCount",
+  "rawTokenOutputCount",
+  "rawVercelBypassOutputCount",
+  "pageRawDebugTokenInjectionCount",
+  "browserGlobalRawDebugTokenWriteCount",
+  "contextAppCheckSecretInitCount",
+  "browserChildSecretEnvironmentVariableCount",
+  "browserChildSecretValueObservationCount",
+  "browserChildEnvironmentUnexpectedKeyCount",
+  "playwrightRouteRegistrationCount",
+  "browserGlobalExtraHttpHeaderRegistrationCount",
+  "pendingBridgeDecisionResidualCount",
+  "pendingBridgeObservationResidualCount",
+  "baselineBridgeScopeMismatchRequestCount",
+  "baselineBridgeStrippedHeaderRequestCount",
+  "baselineBridgeRedirectRequestCount",
+  "baselineBridgeRedirectHeaderAbsentRequestCount",
+  "baselineBridgeRedirectAbortRequestCount",
+  "appCheckCdpHandlerErrorCount",
+  "baselineBridgeInjectedRedirectResponseAbortCount",
+  "preTransmissionBoundaryBlockAttemptCount",
+  "preTransmissionBoundaryProductionBlockCount",
+  "preTransmissionBoundaryUnboundFirebaseBlockCount",
+  "preTransmissionBoundaryFailRequestCount",
+  "baselineBridgeDecisionUnmatchedProtectedRequestCount",
+  "baselineBridgeScopeIneligibleProtectedRequestCount",
+  "debugTokenNetworkObservationCount",
+  "unauthorizedDebugTokenEgressCount",
+  "unauthorizedDebugSentinelEgressCount",
+  "unauthorizedAppCheckHeaderEgressCount",
+  "vercelBypassPreexistingHeaderObservationCount",
+  "unauthorizedVercelBypassEgressCount",
+  "vercelBypassRedirectRequestCount",
+  "vercelBypassRedirectAbortRequestCount",
+  "vercelBypassRedirectResponseAbortRequestCount",
+  "vercelBypassResponseErrorAbortRequestCount",
+  "vercelBypassHttpErrorResponseCount",
+  "vercelBypassHeaderMissingRequestCount",
+  "vercelBypassHeaderMismatchRequestCount",
+  "sensitiveAppCheckRedirectRequestCount",
+  "sensitiveAppCheckRedirectAbortRequestCount",
+  "sensitiveAppCheckRedirectResponseAbortRequestCount",
+  "sensitiveAppCheckResponseErrorAbortRequestCount",
+  "sensitiveAppCheckRequestTrackingResidualCount",
+  "browserNetworkHeaderAttestationErrorCount",
+  "unexpectedExtraPageCount",
+  "unexpectedDedicatedWorkerCount",
+  "unexpectedServiceWorkerCount",
+  "unexpectedCrossOriginFrameCount",
+  "unexpectedOopifTargetCount",
+  "unexpectedDedicatedWorkerTargetCount",
+  "unexpectedSharedWorkerTargetCount",
+  "unexpectedServiceWorkerTargetCount",
+  "retainedOopifTargetCount",
+  "retainedDedicatedWorkerTargetCount",
+  "retainedSharedWorkerTargetCount",
+  "retainedServiceWorkerTargetCount",
+]) {
+  assert.equal(
+    appCheckBinding[field],
+    0,
+    `appCheckBinding.${field} must be 0.`,
+  );
 }
 assert.ok(auditedStagingFirebaseRequests > 0);
 assert.equal(
@@ -2246,6 +5359,24 @@ assert.deepEqual(
   listBrowserAuditFiles(evidenceRoot).sort(),
   [...representedAuditFiles].sort(),
   "Every sanitized browser audit must be represented exactly once.",
+);
+const representedEvidenceFiles = [
+  relative(evidenceRoot, manifestPath).replaceAll("\\", "/"),
+  manifest.fixtureAudit.fileName,
+  ...[...captures.values()].map((capture) => capture.fileName),
+  ...manifest.browserAudits.map((audit) => audit.fileName),
+].sort();
+assert.deepEqual(
+  listEvidenceFiles(evidenceRoot).sort(),
+  representedEvidenceFiles,
+  "The evidence root contains an unrepresented artifact.",
+);
+assert.equal(
+  representedEvidenceFiles.some((fileName) =>
+    /(?:\.har|\.zip|\.trace|storage[-_.]?state|\.txt)$/iu.test(fileName),
+  ),
+  false,
+  "The evidence root contains a trace, HAR, storage-state, or text sidecar.",
 );
 
 const validateElement = (element, label) => {
@@ -3128,6 +6259,11 @@ console.log(
       sourceCommitSha: manifest.sourceCommitSha,
       sourceTreeSha: manifest.sourceTreeSha,
       liveDeploymentVerified,
+      liveDeploymentRedirectResponseCount,
+      verifierVercelBypassHeaderRequestCount,
+      verifierChildSecretEnvScrubbed: true,
+      verifierChildSecretEnvironmentVariableCount,
+      verifierChildSecretValueObservationCount,
       productionAccess: manifest.productionAccess,
       productionWrites: manifest.productionWrites,
     },

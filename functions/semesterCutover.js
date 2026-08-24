@@ -14,6 +14,13 @@ const { onCallWithStudentMaintenance: onCall } = require("./studentMaintenance")
 const REGION = "asia-northeast3";
 const ADMIN_EMAIL = "westoria28@gmail.com";
 const STAGING_PROJECT_ID = "westory-staging-177587430482";
+const VISUAL_FIXTURE_ADMIN_EMAIL = "w10p-visual-admin@yongshin-ms.ms.kr";
+const VISUAL_FIXTURE_ADMIN_UID = "w10p-visual-admin";
+const VISUAL_FIXTURE_ID = "w10p-visual-fixture-v1";
+const VISUAL_FIXTURE_OWNER = "w10p-visual-parity";
+const VISUAL_FIXTURE_PLAN_HASH = "fe18dbf369602af95b3ed35496a1bf7dcf64364ecd20b4b29cab1a818a5d850e";
+const VISUAL_FIXTURE_RUN_PATH = `w10p_visual_fixture_runs/${VISUAL_FIXTURE_ID}`;
+const VISUAL_FIXTURE_TARGET_SEMESTER_ID = "2026-2";
 const REHEARSAL_SOURCE_SEMESTER_ID = "2098-1";
 const REHEARSAL_TARGET_SEMESTER_ID = "2098-2";
 const CUTOVER_SCHEMA_VERSION = 1;
@@ -945,14 +952,78 @@ const normalizeQuery = (raw) => {
   allowed(raw, ["targetSemesterId", "planId", "attemptId", "_session"], "getSemesterCutoverState payload");
   return { targetSemesterId: semesterId(raw.targetSemesterId), planId: raw.planId ? text(raw.planId, "planId", 80) : null, attemptId: raw.attemptId ? text(raw.attemptId, "attemptId", 80) : null };
 };
+const isVisualFixtureAdminReadIdentity = ({ request, identity, projectId }) => {
+  const token = request.auth?.token || {};
+  return String(projectId || "").trim() === STAGING_PROJECT_ID
+    && String(request.data?.targetSemesterId || "").trim() === VISUAL_FIXTURE_TARGET_SEMESTER_ID
+    && String(request.auth?.uid || "").trim() === VISUAL_FIXTURE_ADMIN_UID
+    && String(identity?.uid || "").trim() === VISUAL_FIXTURE_ADMIN_UID
+    && String(identity?.email || "").trim().toLowerCase() === VISUAL_FIXTURE_ADMIN_EMAIL
+    && String(token.email || "").trim().toLowerCase() === VISUAL_FIXTURE_ADMIN_EMAIL
+    && token.fixtureOwner === VISUAL_FIXTURE_OWNER
+    && token.fixtureId === VISUAL_FIXTURE_ID
+    && token.fixtureRole === "admin";
+};
+const assertVisualFixtureAdminReadMarker = async (transaction) => {
+  const marker = await transaction.get(VISUAL_FIXTURE_RUN_PATH);
+  const data = marker.data || {};
+  if (!marker.exists
+    || data.status !== "READY"
+    || data.projectId !== STAGING_PROJECT_ID
+    || data.fixtureOwner !== VISUAL_FIXTURE_OWNER
+    || data.fixtureId !== VISUAL_FIXTURE_ID
+    || data.fixtureRevision !== 1
+    || data.planHash !== VISUAL_FIXTURE_PLAN_HASH) {
+    fail("permission-denied", "Highest administrator authority is required.", "W11_ADMIN_REQUIRED");
+  }
+};
+const visualFixtureEmptyState = () => ({
+  schemaVersion: CUTOVER_SCHEMA_VERSION,
+  policyVersion: CUTOVER_POLICY_VERSION,
+  targetSemesterId: VISUAL_FIXTURE_TARGET_SEMESTER_ID,
+  manifestRevision: 0,
+  manifestStatus: null,
+  provenance: "EXPLICIT",
+  readOnly: true,
+  status: "EMPTY",
+  pointer: null,
+  plan: null,
+  attempt: null,
+  items: [],
+  evidence: null,
+  suggestedPlan: null,
+  suggestedPlanUnavailableReason: "VISUAL_FIXTURE_READ_ONLY_EMPTY",
+  suggestedPlanScanEvidence: null,
+  contract: {
+    manifestVersion: CUTOVER_POLICY_VERSION,
+    operationTypes: Object.keys(OPERATION_DEFINITIONS),
+    copyDenylist: COPY_DENYLIST,
+    maxOperations: MAX_OPERATIONS,
+    applyBatchLimit: APPLY_BATCH_LIMIT,
+    snapshotRowLimits: SNAPSHOT_ROW_LIMITS,
+    snapshotByteLimit: SNAPSHOT_TOTAL_BYTE_LIMIT,
+    snapshotTransactionByteLimit: SNAPSHOT_TRANSACTION_BYTE_LIMIT,
+    executionModel: "ALLOWLISTED_DOMAIN_COMMAND_RECEIPT_RECONCILIATION",
+    suggestedPlanPolicy: "APPROVED_AUTHENTICATED_RUNNER_ONLY",
+  },
+  activationControlsAvailable: false,
+  productionControlsAvailable: false,
+  writeCount: 0,
+});
 const createSemesterCutoverQueryCore = ({ store, projectId = "", assertSession = sessionAuthority.assertActiveApplicationSession } = {}) => ({
   getSemesterCutoverState: async (request) => {
     assertProject(projectId);
     const identity = await assertSession(request, { recentAuth: false, highRisk: false });
     const email = String(identity?.email || request.auth?.token?.email || "").trim().toLowerCase();
-    if (email !== ADMIN_EMAIL) fail("permission-denied", "Highest administrator authority is required.", "W11_ADMIN_REQUIRED");
+    const fixtureAdminRead = isVisualFixtureAdminReadIdentity({ request, identity, projectId });
+    if (email !== ADMIN_EMAIL && !fixtureAdminRead) fail("permission-denied", "Highest administrator authority is required.", "W11_ADMIN_REQUIRED");
     const query = normalizeQuery(request.data || {});
+    if (fixtureAdminRead && (query.planId || query.attemptId)) fail("permission-denied", "Highest administrator authority is required.", "W11_ADMIN_REQUIRED");
     return store.runTransaction(async (transaction) => {
+      if (fixtureAdminRead) {
+        await assertVisualFixtureAdminReadMarker(transaction);
+        return visualFixtureEmptyState();
+      }
       const pointer = await transaction.get(targetPath(query.targetSemesterId));
       const planId = query.planId || pointer.data?.latestPlanId || null;
       const attemptId = query.attemptId || pointer.data?.latestAttemptId || null;

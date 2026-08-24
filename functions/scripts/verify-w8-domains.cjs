@@ -410,9 +410,7 @@ const run = async () => {
     "student-1",
   )}`;
   assert.equal(
-    tx.queryLog.some(
-      ({ collection }) => collection === "semester_enrollments",
-    ),
+    tx.queryLog.some(({ collection }) => collection === "semester_enrollments"),
     false,
   );
   assert.equal(tx.readPaths.includes(studentSlotPath), true);
@@ -791,6 +789,26 @@ const run = async () => {
       email: request.auth.token.email,
     }),
   });
+  let delegatedNonLearningDenialCases = 0;
+  const assertDelegatedNonLearningDenied = async (source, domain) => {
+    await assert.rejects(
+      () =>
+        queryCore.getW8DomainState({
+          auth: {
+            uid: "lesson-reader",
+            token: { email: "lesson-reader@yongshin-ms.ms.kr" },
+          },
+          data: {
+            domain,
+            audience: "teacher",
+            semesterId: "2026-2",
+            source,
+          },
+        }),
+      (error) => error.details?.reason === "W8_MANAGE_REQUIRED",
+    );
+    delegatedNonLearningDenialCases += 1;
+  };
   const learningState = await queryCore.getW8DomainState({
     auth: { uid: "student-1", token: { email: "student@yongshin-ms.ms.kr" } },
     data: {
@@ -820,20 +838,19 @@ const run = async () => {
       sessionId: classOneCloud.result.sessionId,
     },
   });
-  const ownStudentCloudResponse =
-    studentCloudDetail.thinkCloudResponses.find((response) => response.isOwn);
-  const peerStudentCloudResponse =
-    studentCloudDetail.thinkCloudResponses.find(
-      (response) => !response.isOwn,
-    );
+  const ownStudentCloudResponse = studentCloudDetail.thinkCloudResponses.find(
+    (response) => response.isOwn,
+  );
+  const peerStudentCloudResponse = studentCloudDetail.thinkCloudResponses.find(
+    (response) => !response.isOwn,
+  );
   assert.equal(ownStudentCloudResponse.id, cloudResponse.result.responseId);
   assert.equal(ownStudentCloudResponse.textRaw, "독립");
   assert.equal(ownStudentCloudResponse.displayName, "학생");
   assert.equal(peerStudentCloudResponse.displayName, "다른 학생");
   assert.equal(
     studentCloudDetail.thinkCloudResponses.every(
-      (response) =>
-        !Object.prototype.hasOwnProperty.call(response, "uid"),
+      (response) => !Object.prototype.hasOwnProperty.call(response, "uid"),
     ),
     true,
   );
@@ -899,6 +916,8 @@ const run = async () => {
     },
   });
   assert.equal(delegatedCloudDetail.thinkCloudRoster[0].uid, "student-1");
+  for (const domain of ["ATTENDANCE", "DASHBOARD"])
+    await assertDelegatedNonLearningDenied("CURRENT", domain);
   await assert.rejects(
     () =>
       queryCore.getW8DomainState({
@@ -1073,6 +1092,149 @@ const run = async () => {
     status: "ARCHIVED",
     provenance: "ARCHIVE",
   });
+  tx.seed("users/archive-observer", { role: "teacher" });
+  for (const source of ["ARCHIVE", "EXPLICIT"])
+    for (const domain of ["ATTENDANCE", "DASHBOARD"])
+      await assertDelegatedNonLearningDenied(source, domain);
+  const archiveObserverCases = ["CLOSED", "ARCHIVED"].flatMap(
+    (lifecycleStatus) =>
+      ["ARCHIVE", "EXPLICIT"].flatMap((source) =>
+        ["LEARNING", "DASHBOARD", "ATTENDANCE"].map((domain) => ({
+          lifecycleStatus,
+          domain,
+          source,
+          provenance: source === "ARCHIVE" ? "ARCHIVE" : "EXPLICIT",
+        })),
+      ),
+  );
+  const archiveSensitiveQueryCollections = [
+    "semester_enrollments",
+    w8.LEARNING_PROGRESS_COLLECTION,
+    w8.LEARNING_EXEMPTION_COLLECTION,
+    w8.LEARNING_EXEMPTION_REQUEST_COLLECTION,
+    w8.ATTENDANCE_SESSION_COLLECTION,
+    w8.ATTENDANCE_RECORD_COLLECTION,
+    w8.NOTICE_ACK_COLLECTION,
+    "years/2026/semesters/2/think_cloud_sessions",
+  ];
+  const archiveSensitiveReadPrefixes = [
+    "semester_enrollments/",
+    `${w8.LEARNING_PROGRESS_COLLECTION}/`,
+    `${w8.LEARNING_EXEMPTION_COLLECTION}/`,
+    `${w8.LEARNING_EXEMPTION_REQUEST_COLLECTION}/`,
+    `${w8.ATTENDANCE_SESSION_COLLECTION}/`,
+    `${w8.ATTENDANCE_RECORD_COLLECTION}/`,
+    `${w8.NOTICE_ACK_COLLECTION}/`,
+    "years/2026/semesters/2/think_cloud_",
+  ];
+  for (const archiveObserverCase of archiveObserverCases) {
+    tx.seed("semester_manifests/2026-2", {
+      ...manifest,
+      status: archiveObserverCase.lifecycleStatus,
+      provenance: "ARCHIVE",
+    });
+    tx.resetTransaction();
+    const archiveObserverState = await queryCore.getW8DomainState({
+      auth: {
+        uid: "archive-observer",
+        token: { email: "archive-observer@yongshin-ms.ms.kr" },
+      },
+      data: {
+        domain: archiveObserverCase.domain,
+        audience: "teacher",
+        semesterId: "2026-2",
+        source: archiveObserverCase.source,
+        studentUid: "student-1",
+        sessionId,
+      },
+    });
+    assert.equal(archiveObserverState.enrollment, null);
+    assert.equal(archiveObserverState.enrollmentId, null);
+    assert.equal(
+      archiveObserverState.contents.length > 0,
+      archiveObserverCase.domain !== "ATTENDANCE",
+    );
+    assert.equal(
+      archiveObserverState.contents.every(
+        (content) =>
+          content.readOnly &&
+          content.provenance === archiveObserverCase.provenance,
+      ),
+      true,
+    );
+    assert.deepEqual(archiveObserverState.progress, []);
+    assert.deepEqual(archiveObserverState.exemptions, []);
+    assert.deepEqual(archiveObserverState.exemptionRequests, []);
+    assert.deepEqual(archiveObserverState.sessions, []);
+    assert.deepEqual(archiveObserverState.records, []);
+    assert.deepEqual(archiveObserverState.acknowledgements, []);
+    assert.deepEqual(archiveObserverState.thinkCloudSessions, []);
+    assert.deepEqual(archiveObserverState.thinkCloudResponses, []);
+    assert.deepEqual(archiveObserverState.thinkCloudRoster, []);
+    assert.deepEqual(archiveObserverState.thinkCloudManagedClasses, []);
+    assert.equal(archiveObserverState.dashboard.attendancePendingCount, 0);
+    assert.deepEqual(
+      tx.queryLog.filter(({ collection }) =>
+        archiveSensitiveQueryCollections.includes(collection),
+      ),
+      [],
+    );
+    assert.deepEqual(
+      tx.readPaths.filter((readPath) =>
+        archiveSensitiveReadPrefixes.some((prefix) =>
+          readPath.startsWith(prefix),
+        ),
+      ),
+      [],
+    );
+    assert.equal(
+      tx.queryLog.filter(({ collection }) => collection === "semester_classes")
+        .length,
+      1,
+    );
+  }
+  tx.seed("semester_manifests/2026-2", {
+    ...manifest,
+    status: "ARCHIVED",
+    provenance: "ARCHIVE",
+  });
+  const archiveHomeroomAttendance = await queryCore.getW8DomainState({
+    auth: { uid: "teacher-1", token: { email: "teacher@yongshin-ms.ms.kr" } },
+    data: {
+      domain: "ATTENDANCE",
+      audience: "teacher",
+      semesterId: "2026-2",
+      source: "ARCHIVE",
+      sessionId,
+    },
+  });
+  assert.equal(archiveHomeroomAttendance.records.length > 0, true);
+  const archiveDelegatedLearning = await queryCore.getW8DomainState({
+    auth: {
+      uid: "lesson-reader",
+      token: { email: "lesson-reader@yongshin-ms.ms.kr" },
+    },
+    data: {
+      domain: "LEARNING",
+      audience: "teacher",
+      semesterId: "2026-2",
+      source: "ARCHIVE",
+    },
+  });
+  assert.equal(archiveDelegatedLearning.progress.length > 0, true);
+  const archiveAdminLearning = await queryCore.getW8DomainState({
+    auth: {
+      uid: "archive-admin",
+      token: { email: "westoria28@gmail.com" },
+    },
+    data: {
+      domain: "LEARNING",
+      audience: "teacher",
+      semesterId: "2026-2",
+      source: "ARCHIVE",
+    },
+  });
+  assert.equal(archiveAdminLearning.progress.length > 0, true);
   await assert.rejects(
     () => apply("createNotice", { ...common, ...noticeEditable }),
     (error) => error.details?.reason === "SEMESTER_ARCHIVED_WRITE_FORBIDDEN",
@@ -1081,7 +1243,7 @@ const run = async () => {
   console.log(
     JSON.stringify({
       passed: true,
-      cases: 70,
+      cases: 91,
       commandTypes: Object.values(w8.W8_COMMAND_TYPES).length,
       readinessChecks: checks.length,
       readAfterWrite: 0,
@@ -1089,6 +1251,16 @@ const run = async () => {
       thinkCloudResponseLimit: w8.THINK_CLOUD_RESPONSE_LIMIT,
       thinkCloudStudentUidExposure: 0,
       thinkCloudDelegatedReadOnly: true,
+      delegatedNonLearningDirectCallDenials: delegatedNonLearningDenialCases,
+      archiveUnassignedTeacherSensitiveReads: 0,
+      archiveUnassignedTeacherNegativeCases: archiveObserverCases.length,
+      archiveLifecycleStatusesCovered: new Set(
+        archiveObserverCases.map(({ lifecycleStatus }) => lifecycleStatus),
+      ).size,
+      archiveExplicitSourceBypassCases: archiveObserverCases.filter(
+        ({ source }) => source === "EXPLICIT",
+      ).length,
+      archivePrivilegedPolicyPreservationCases: 3,
       productionAccess: 0,
     }),
   );

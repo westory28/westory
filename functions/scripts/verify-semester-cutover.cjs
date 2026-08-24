@@ -238,6 +238,278 @@ function activeLearningPlaceholder() { return { title: "합성 자료", summary:
   const productionCore = commandGateway.createCommandGatewayCore({ projectId: "history-quiz-yongsin", store: { runTransaction: async () => { throw new Error("business read forbidden"); } }, assertSession: async () => { productionSessionReads += 1; return {}; } });
   await assert.rejects(() => productionCore.execute({ data: { commandType: "createSemesterCutoverPlan" } }), (error) => error.details?.reason === "W11_PROJECT_FORBIDDEN");
   assert.equal(productionSessionReads, 0);
+  const fixtureMarker = {
+    fixtureId: "w10p-visual-fixture-v1",
+    fixtureOwner: "w10p-visual-parity",
+    fixtureRevision: 1,
+    planHash:
+      "fe18dbf369602af95b3ed35496a1bf7dcf64364ecd20b4b29cab1a818a5d850e",
+    projectId: "westory-staging-177587430482",
+    status: "READY",
+  };
+  const fixtureDocuments = new Map([
+    ["w10p_visual_fixture_runs/w10p-visual-fixture-v1", fixtureMarker],
+    [
+      "semester_manifests/2026-2",
+      { semesterId: "2026-2", revision: 7, status: "PREPARING" },
+    ],
+    [
+      "semester_cutover_targets/2026-2",
+      {
+        latestPlanId: "private-plan",
+        latestAttemptId: "private-attempt",
+        latestEvidenceId: "private-evidence",
+      },
+    ],
+    [
+      "semester_cutover_plans/private-plan",
+      {
+        targetSemesterId: "2026-2",
+        operations: [{ operationKey: "private-item" }],
+      },
+    ],
+    ["semester_cutover_attempts/private-attempt", { planId: "private-plan" }],
+    [
+      "semester_cutover_evidence/private-evidence",
+      { private: "must-not-be-returned" },
+    ],
+  ]);
+  let fixtureReadTransactions = 0;
+  const fixtureReadPaths = [];
+  let fixtureSessionIdentity = {
+    uid: "w10p-visual-admin",
+    email: "w10p-visual-admin@yongshin-ms.ms.kr",
+  };
+  const fixtureQueryCore = cutover.createSemesterCutoverQueryCore({
+    projectId: "westory-staging-177587430482",
+    store: {
+      runTransaction: async (operation) => {
+        fixtureReadTransactions += 1;
+        const transaction = new MemoryTransaction(fixtureDocuments);
+        const get = transaction.get.bind(transaction);
+        transaction.get = async (path) => {
+          fixtureReadPaths.push(path);
+          return get(path);
+        };
+        return operation(transaction);
+      },
+    },
+    assertSession: async () => fixtureSessionIdentity,
+  });
+  const fixtureAdminRequest = {
+    auth: {
+      uid: "w10p-visual-admin",
+      token: {
+        email: "w10p-visual-admin@yongshin-ms.ms.kr",
+        fixtureOwner: "w10p-visual-parity",
+        fixtureId: "w10p-visual-fixture-v1",
+        fixtureRole: "admin",
+      },
+    },
+    data: { targetSemesterId: "2026-2" },
+  };
+  const fixtureReadState =
+    await fixtureQueryCore.getSemesterCutoverState(fixtureAdminRequest);
+  assert.equal(fixtureReadState.targetSemesterId, "2026-2");
+  assert.equal(fixtureReadState.manifestStatus, null);
+  assert.equal(fixtureReadState.readOnly, true);
+  assert.equal(fixtureReadState.status, "EMPTY");
+  assert.equal(fixtureReadState.pointer, null);
+  assert.equal(fixtureReadState.plan, null);
+  assert.equal(fixtureReadState.attempt, null);
+  assert.equal(fixtureReadState.evidence, null);
+  assert.equal(
+    fixtureReadState.suggestedPlanUnavailableReason,
+    "VISUAL_FIXTURE_READ_ONLY_EMPTY",
+  );
+  assert.equal(fixtureReadState.writeCount, 0);
+  assert.equal(fixtureReadTransactions, 1);
+  assert.deepEqual(fixtureReadPaths, [
+    "w10p_visual_fixture_runs/w10p-visual-fixture-v1",
+  ]);
+  for (const scopedIdentifier of [
+    { planId: "private-plan" },
+    { attemptId: "private-attempt" },
+  ]) {
+    await assert.rejects(
+      () =>
+        fixtureQueryCore.getSemesterCutoverState({
+          ...fixtureAdminRequest,
+          data: { ...fixtureAdminRequest.data, ...scopedIdentifier },
+        }),
+      (error) => error.details?.reason === "W11_ADMIN_REQUIRED",
+    );
+  }
+  assert.equal(fixtureReadTransactions, 1);
+  for (const [claim, value] of [
+    ["fixtureOwner", "foreign-owner"],
+    ["fixtureId", "foreign-fixture"],
+    ["fixtureRole", "teacher"],
+  ]) {
+    await assert.rejects(
+      () =>
+        fixtureQueryCore.getSemesterCutoverState({
+          ...fixtureAdminRequest,
+          auth: {
+            ...fixtureAdminRequest.auth,
+            token: { ...fixtureAdminRequest.auth.token, [claim]: value },
+          },
+        }),
+      (error) => error.details?.reason === "W11_ADMIN_REQUIRED",
+    );
+  }
+  for (const request of [
+    {
+      ...fixtureAdminRequest,
+      auth: { ...fixtureAdminRequest.auth, uid: "foreign-admin" },
+    },
+    {
+      ...fixtureAdminRequest,
+      auth: {
+        ...fixtureAdminRequest.auth,
+        token: {
+          ...fixtureAdminRequest.auth.token,
+          email: "foreign@yongshin-ms.ms.kr",
+        },
+      },
+    },
+  ]) {
+    await assert.rejects(
+      () => fixtureQueryCore.getSemesterCutoverState(request),
+      (error) => error.details?.reason === "W11_ADMIN_REQUIRED",
+    );
+  }
+  for (const identity of [
+    { ...fixtureSessionIdentity, uid: "foreign-admin" },
+    { ...fixtureSessionIdentity, email: "foreign@yongshin-ms.ms.kr" },
+  ]) {
+    fixtureSessionIdentity = identity;
+    await assert.rejects(
+      () => fixtureQueryCore.getSemesterCutoverState(fixtureAdminRequest),
+      (error) => error.details?.reason === "W11_ADMIN_REQUIRED",
+    );
+  }
+  fixtureSessionIdentity = {
+    uid: "w10p-visual-admin",
+    email: "w10p-visual-admin@yongshin-ms.ms.kr",
+  };
+  await assert.rejects(
+    () =>
+      fixtureQueryCore.getSemesterCutoverState({
+        ...fixtureAdminRequest,
+        data: { targetSemesterId: "2098-2" },
+      }),
+    (error) => error.details?.reason === "W11_ADMIN_REQUIRED",
+  );
+  for (const [field, value] of [
+    ["status", "CLEANING"],
+    ["projectId", "history-quiz-yongsin"],
+    ["fixtureOwner", "foreign-owner"],
+    ["fixtureId", "foreign-fixture"],
+    ["fixtureRevision", "1"],
+    ["planHash", "0".repeat(64)],
+  ]) {
+    fixtureDocuments.set("w10p_visual_fixture_runs/w10p-visual-fixture-v1", {
+      ...fixtureMarker,
+      [field]: value,
+    });
+    await assert.rejects(
+      () => fixtureQueryCore.getSemesterCutoverState(fixtureAdminRequest),
+      (error) => error.details?.reason === "W11_ADMIN_REQUIRED",
+    );
+  }
+  fixtureDocuments.set(
+    "w10p_visual_fixture_runs/w10p-visual-fixture-v1",
+    fixtureMarker,
+  );
+  const realAdminQueryCore = cutover.createSemesterCutoverQueryCore({
+    projectId: "westory-staging-177587430482",
+    store: {
+      runTransaction: async (operation) =>
+        operation(
+          new MemoryTransaction(
+            new Map([
+              [
+                "semester_manifests/2026-2",
+                { semesterId: "2026-2", revision: 7, status: "PREPARING" },
+              ],
+            ]),
+          ),
+        ),
+    },
+    assertSession: async () => ({
+      uid: "admin-1",
+      email: "westoria28@gmail.com",
+    }),
+  });
+  const realAdminReadState = await realAdminQueryCore.getSemesterCutoverState({
+    auth: { uid: "admin-1", token: { email: "westoria28@gmail.com" } },
+    data: { targetSemesterId: "2026-2" },
+  });
+  assert.equal(realAdminReadState.readOnly, false);
+  const demoFixtureQueryCore = cutover.createSemesterCutoverQueryCore({
+    projectId: "demo-westory-session-w11",
+    store: {
+      runTransaction: async () => {
+        throw new Error("fixture demo read must fail before business reads");
+      },
+    },
+    assertSession: async () => ({
+      uid: "w10p-visual-admin",
+      email: "w10p-visual-admin@yongshin-ms.ms.kr",
+    }),
+  });
+  await assert.rejects(
+    () => demoFixtureQueryCore.getSemesterCutoverState(fixtureAdminRequest),
+    (error) => error.details?.reason === "W11_ADMIN_REQUIRED",
+  );
+  let productionFixtureSessionReads = 0;
+  const productionFixtureQueryCore = cutover.createSemesterCutoverQueryCore({
+    projectId: "history-quiz-yongsin",
+    store: {
+      runTransaction: async () => {
+        throw new Error("production fixture read forbidden");
+      },
+    },
+    assertSession: async () => {
+      productionFixtureSessionReads += 1;
+      return {};
+    },
+  });
+  await assert.rejects(
+    () =>
+      productionFixtureQueryCore.getSemesterCutoverState(fixtureAdminRequest),
+    (error) => error.details?.reason === "W11_PROJECT_FORBIDDEN",
+  );
+  assert.equal(productionFixtureSessionReads, 0);
+  for (const commandType of Object.values(cutover.CUTOVER_COMMAND_TYPES)) {
+    await assert.rejects(
+      () =>
+        cutover
+          .createSemesterCutoverCommandAdapter({
+            projectId: "westory-staging-177587430482",
+          })
+          .apply({
+            actor: {
+              actorUid: "w10p-visual-admin",
+              actorEmail: "w10p-visual-admin@yongshin-ms.ms.kr",
+              actorRole: "admin",
+            },
+            commandType,
+            payload: {},
+            transaction: {
+              get: async () => {
+                throw new Error("fixture mutation must fail before reads");
+              },
+              getAll: async () => {
+                throw new Error("fixture mutation must fail before reads");
+              },
+            },
+          }),
+      (error) => error.details?.reason === "W11_ADMIN_REQUIRED",
+    );
+  }
+
   assert.deepEqual(cutover.getSemesterCutoverCommandSessionOptions(), { recentAuth: true, highRisk: true });
   assert.doesNotThrow(() => cutover.assertProjectSemesterPair("demo-westory-session-w11", "2026-1", "2026-2"));
   assert.throws(
@@ -308,5 +580,5 @@ function activeLearningPlaceholder() { return { title: "합성 자료", summary:
   assert.equal(semesterCoreSource.includes('getAll: (paths) => typeof transaction.getAll === "function"'), true);
   const rules = readFileSync(resolve(__dirname, "../../firestore.rules"), "utf8");
   for (const collection of ["semester_cutover_plans", "semester_cutover_attempts", "semester_cutover_evidence", "semester_cutover_targets"]) assert.equal(rules.includes(`match /${collection}/`), true);
-  console.log(JSON.stringify({ passed: true, cases: 35, commands: 6, datasets: 12, maxOperations: 100, applyBatchLimit: 25, blockedDryRunRetry: true, latestPlanFence: true, stagingScopeFence: true, snapshotByteLimit: cutover.SNAPSHOT_TOTAL_BYTE_LIMIT, snapshotTransactionByteLimit: cutover.SNAPSHOT_TRANSACTION_BYTE_LIMIT, readinessChecks: 1, productionAccess: 0, productionWrites: 0 }));
+  console.log(JSON.stringify({ passed: true, cases: 35, fixtureAdminReadCases: 24, commands: 6, datasets: 12, maxOperations: 100, applyBatchLimit: 25, blockedDryRunRetry: true, latestPlanFence: true, stagingScopeFence: true, snapshotByteLimit: cutover.SNAPSHOT_TOTAL_BYTE_LIMIT, snapshotTransactionByteLimit: cutover.SNAPSHOT_TRANSACTION_BYTE_LIMIT, readinessChecks: 1, productionAccess: 0, productionWrites: 0 }));
 })().catch((error) => { console.error(error); process.exitCode = 1; });

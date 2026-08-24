@@ -8,6 +8,7 @@ import SettingsAccess from "./components/SettingsAccess";
 import SettingsNotifications from "./components/SettingsNotifications";
 import SettingsArchiveEnrollment from "./components/SettingsArchiveEnrollment";
 import { useAuth } from "../../contexts/AuthContext";
+import { ADMIN_EMAIL } from "../../lib/permissions";
 
 type SettingsTab =
   | "general"
@@ -40,7 +41,7 @@ const Settings: React.FC = () => {
   const canOpenCutoverCenter =
     String(currentUser?.email || "")
       .trim()
-      .toLowerCase() === "westoria28@gmail.com";
+      .toLowerCase() === ADMIN_EMAIL;
 
   const setActiveTab = (tab: SettingsTab) => {
     const next = new URLSearchParams(searchParams);
@@ -117,15 +118,17 @@ const Settings: React.FC = () => {
                 </div>
                 개인정보 동의 관리
               </button>
-              <button
-                onClick={() => setActiveTab("archive-enrollment")}
-                className={`p-4 text-left font-bold text-sm transition-colors flex items-center gap-3 ${activeTab === "archive-enrollment" ? "bg-blue-50 text-blue-600 border-l-4 border-blue-600" : "text-gray-600 hover:bg-gray-50 border-l-4 border-transparent"}`}
-              >
-                <div className="w-6 text-center">
-                  <i className="fas fa-box-archive"></i>
-                </div>
-                학급·학적·아카이브
-              </button>
+              {(canOpenCutoverCenter || activeTab === "archive-enrollment") && (
+                <button
+                  onClick={() => setActiveTab("archive-enrollment")}
+                  className={`p-4 text-left font-bold text-sm transition-colors flex items-center gap-3 ${activeTab === "archive-enrollment" ? "bg-blue-50 text-blue-600 border-l-4 border-blue-600" : "text-gray-600 hover:bg-gray-50 border-l-4 border-transparent"}`}
+                >
+                  <div className="w-6 text-center">
+                    <i className="fas fa-box-archive"></i>
+                  </div>
+                  학급·학적·아카이브
+                </button>
+              )}
               {canOpenCutoverCenter && (
                 <Link
                   to="/teacher/settings/cutover"

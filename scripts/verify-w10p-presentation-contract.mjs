@@ -144,6 +144,12 @@ const menus = read("src/constants/menus.ts");
 const studentArchive = read("src/pages/student/StudentArchiveOverview.tsx");
 const studentMyPage = read("src/pages/student/MyPage.tsx");
 const schedule = read("src/pages/teacher/ManageSchedule.tsx");
+const settings = read("src/pages/teacher/Settings.tsx");
+const permissions = read("src/lib/permissions.ts");
+const semesterCutoverServer = read("functions/semesterCutover.js");
+const visualParityContract = JSON.parse(
+  read("scripts/w10p-visual-parity-contract.json"),
+);
 const manageExam = read("src/pages/teacher/ManageExam.tsx");
 const performanceScoreManager = read(
   "src/pages/teacher/components/PerformanceScoreManager.tsx",
@@ -204,6 +210,40 @@ assert.match(
   schedule,
   /canSyncHolidays\s*&&\s*searchParams\.get\("adminTools"\) === "holidays"/u,
 );
+assert.match(
+  settings,
+  /import \{ ADMIN_EMAIL \} from "\.\.\/\.\.\/lib\/permissions";/u,
+);
+assert.match(
+  settings,
+  /const canOpenCutoverCenter =[\s\S]*?currentUser\?\.email[\s\S]*?=== ADMIN_EMAIL;/u,
+);
+assert.match(
+  settings,
+  /\{\(canOpenCutoverCenter \|\| activeTab === "archive-enrollment"\) && \(/u,
+);
+assert.doesNotMatch(settings, /westoria28@gmail\.com/u);
+for (const fixtureAdminFence of [
+  'import.meta.env.VITE_APP_ENV === "staging"',
+  "import.meta.env.VITE_FIREBASE_PROJECT_ID === STAGING_PROJECT_ID",
+  "normalizeEmail(email) === VISUAL_FIXTURE_ADMIN_EMAIL",
+  "fixtureProfile?.uid === VISUAL_FIXTURE_ADMIN_UID",
+  "fixtureProfile.fixtureOwner === VISUAL_FIXTURE_OWNER",
+  "fixtureProfile.fixtureId === VISUAL_FIXTURE_ID",
+]) {
+  assert.ok(
+    permissions.includes(fixtureAdminFence),
+    `Visual fixture admin fence missing: ${fixtureAdminFence}`,
+  );
+}
+assert.match(
+  semesterCutoverServer,
+  new RegExp(
+    `const VISUAL_FIXTURE_PLAN_HASH\\s*=\\s*"${visualParityContract.fixturePlanHash}";`,
+    "u",
+  ),
+  "The server fixture-admin read fence must bind the current visual fixture plan hash.",
+);
 assert.match(manageExam, /"evidence-performance"[\s\S]*?"evidence-written"/u);
 assert.match(performanceScore, /searchParams\.get\("view"\) === "evidence"/u);
 assert.match(writtenScore, /searchParams\.get\("view"\) === "evidence"/u);
@@ -244,10 +284,7 @@ assert.match(
   responseProjection,
   /if \(query\.audience !== "student"\) return \{ \.\.\.row\.data, id \};/u,
 );
-assert.match(
-  responseProjection,
-  /!anonymousStudent[\s\S]*?displayName/u,
-);
+assert.match(responseProjection, /!anonymousStudent[\s\S]*?displayName/u);
 assert.doesNotMatch(responseProjection, /\buid\s*:/u);
 assert.match(studentThinkCloud, /sessionLoadState === "permission"/u);
 assert.match(studentThinkCloud, /sessionLoadState === "error"/u);

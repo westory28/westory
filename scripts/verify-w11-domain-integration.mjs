@@ -212,6 +212,7 @@ const main = async () => {
   });
   const admin = makeClient("w11-admin");
   const teacher = makeClient("w11-teacher");
+  const lessonReader = makeClient("w11-lesson-reader");
   const student = makeClient("w11-student");
   try {
     await testEnv.clearFirestore();
@@ -226,6 +227,13 @@ const main = async () => {
       await createUserWithEmailAndPassword(
         teacher.auth,
         "w11-teacher@yongshin-ms.ms.kr",
+        password(),
+      )
+    ).user;
+    lessonReader.user = (
+      await createUserWithEmailAndPassword(
+        lessonReader.auth,
+        "w11-lesson-reader@yongshin-ms.ms.kr",
         password(),
       )
     ).user;
@@ -277,11 +285,68 @@ const main = async () => {
       startAt: "2025-08-01",
       endAt: "2025-12-31",
     };
+    const archiveSourceContentId = "w11-archive-source-sentinel";
+    const archiveSourceContentPath = `semester_learning_contents/${archiveSourceContentId}`;
+    const archiveSourceContent = {
+      schemaVersion: w8Domains.W8_SCHEMA_VERSION,
+      policyVersion: w8Domains.W8_POLICY_VERSION,
+      semesterId: sourceSemesterId,
+      provenance: "CURRENT",
+      readOnly: false,
+      contentId: archiveSourceContentId,
+      revision: 1,
+      status: "PUBLISHED",
+      title: "W11 아카이브 합성 학습 자료",
+      summary: "무담임 교사 아카이브 개인정보 경계를 검증합니다.",
+      body: "콘텐츠는 유지하고 학생별 상태는 노출하지 않습니다.",
+      resourceUrl: "",
+      contentType: "LESSON",
+      audienceRoles: ["student"],
+      targetClassIds: [],
+      availableFrom: "2026-03-01T00:00:00.000Z",
+      availableUntil: "2026-07-31T23:59:59.000Z",
+    };
+    const archiveAttendanceSessionId = "w11-archive-private-session";
+    const archiveAttendanceSession = {
+      schemaVersion: w8Domains.W8_SCHEMA_VERSION,
+      policyVersion: w8Domains.W8_POLICY_VERSION,
+      semesterId: sourceSemesterId,
+      provenance: "CURRENT",
+      readOnly: false,
+      sessionId: archiveAttendanceSessionId,
+      revision: 2,
+      status: "CLOSED",
+      classId: "w11-archive-private-class",
+      date: "2026-07-15",
+      period: "1",
+      openedAt: "2026-07-15T00:00:00.000Z",
+      closedAt: "2026-07-15T01:00:00.000Z",
+    };
+    const archiveAttendanceRecordId = "w11-archive-private-record";
+    const archiveAttendanceRecord = {
+      schemaVersion: w8Domains.W8_SCHEMA_VERSION,
+      policyVersion: w8Domains.W8_POLICY_VERSION,
+      semesterId: sourceSemesterId,
+      provenance: "CURRENT",
+      readOnly: false,
+      recordId: archiveAttendanceRecordId,
+      sessionId: archiveAttendanceSessionId,
+      studentUid: student.user.uid,
+      enrollmentId: "w11-archive-private-enrollment",
+      classId: archiveAttendanceSession.classId,
+      attendanceStatus: "PRESENT",
+      revision: 1,
+    };
     await withAdminDb(testEnv, async (db) => {
       await Promise.all([
         setDoc(doc(db, "users", admin.user.uid), { role: "admin" }),
         setDoc(doc(db, "users", teacher.user.uid), {
           role: "teacher",
+          teacherPortalEnabled: true,
+          staffPermissions: ["lesson_read"],
+        }),
+        setDoc(doc(db, "users", lessonReader.user.uid), {
+          role: "student",
           teacherPortalEnabled: true,
           staffPermissions: ["lesson_read"],
         }),
@@ -302,6 +367,64 @@ const main = async () => {
           doc(db, "semester_manifests", archiveSemesterId),
           archiveManifest,
         ),
+        setDoc(doc(db, archiveSourceContentPath), archiveSourceContent),
+        setDoc(
+          doc(db, "semester_learning_progress", "w11-archive-private-progress"),
+          {
+            semesterId: sourceSemesterId,
+            progressId: "w11-archive-private-progress",
+            contentId: archiveSourceContentId,
+            studentUid: student.user.uid,
+            revision: 1,
+            status: "COMPLETED",
+          },
+        ),
+        setDoc(
+          doc(
+            db,
+            "semester_learning_exemptions",
+            "w11-archive-private-exemption",
+          ),
+          {
+            semesterId: sourceSemesterId,
+            exemptionId: "w11-archive-private-exemption",
+            contentId: archiveSourceContentId,
+            studentUid: student.user.uid,
+            revision: 1,
+            status: "ACTIVE",
+          },
+        ),
+        setDoc(
+          doc(
+            db,
+            "semester_learning_exemption_requests",
+            "w11-archive-private-request",
+          ),
+          {
+            semesterId: sourceSemesterId,
+            requestId: "w11-archive-private-request",
+            contentId: archiveSourceContentId,
+            studentUid: student.user.uid,
+            revision: 1,
+            status: "PENDING",
+          },
+        ),
+        setDoc(
+          doc(
+            db,
+            w8Domains.ATTENDANCE_SESSION_COLLECTION,
+            archiveAttendanceSessionId,
+          ),
+          archiveAttendanceSession,
+        ),
+        setDoc(
+          doc(
+            db,
+            w8Domains.ATTENDANCE_RECORD_COLLECTION,
+            archiveAttendanceRecordId,
+          ),
+          archiveAttendanceRecord,
+        ),
         ...targetSeeds.map((seed) =>
           setDoc(doc(db, seed.path), {
             ...seed.data,
@@ -316,8 +439,49 @@ const main = async () => {
     await Promise.all([
       openSession(admin),
       openSession(teacher),
+      openSession(lessonReader),
       openSession(student),
     ]);
+    let delegatedNonLearningDirectCallDenials = 0;
+    let delegatedLearningPreservationCases = 0;
+    const assertLessonReaderNonLearningDenied = async (source, domain) => {
+      await expectReason(
+        queryFunction(lessonReader, "getW8DomainState", {
+          domain,
+          audience: "teacher",
+          semesterId: sourceSemesterId,
+          source,
+        }),
+        "W8_MANAGE_REQUIRED",
+      );
+      delegatedNonLearningDirectCallDenials += 1;
+    };
+    const assertLessonReaderLearningPreserved = async (source) => {
+      const state = (
+        await queryFunction(lessonReader, "getW8DomainState", {
+          domain: "LEARNING",
+          audience: "teacher",
+          semesterId: sourceSemesterId,
+          source,
+        })
+      ).data;
+      assert.equal(
+        state.contents.some(
+          (content) => content.contentId === archiveSourceContentId,
+        ),
+        true,
+      );
+      assert.equal(
+        state.progress.some(
+          (progress) => progress.progressId === "w11-archive-private-progress",
+        ),
+        true,
+      );
+      delegatedLearningPreservationCases += 1;
+    };
+    for (const domain of ["ATTENDANCE", "DASHBOARD"])
+      await assertLessonReaderNonLearningDenied("CURRENT", domain);
+    await assertLessonReaderLearningPreserved("CURRENT");
     const targetRoster = {
       semesterId: targetSemesterId,
       expectedSemesterRevision: targetManifest.revision,
@@ -474,7 +638,11 @@ const main = async () => {
       targetManifest,
       "SEMESTER_MANIFEST",
     );
-    const snapshotFromPaths = async (operationType, paths) => {
+    const snapshotFromPaths = async (
+      operationType,
+      paths,
+      scope = targetSemesterId,
+    ) => {
       const rows = [];
       for (const path of paths) {
         const data = await readDocument(testEnv, path);
@@ -482,7 +650,7 @@ const main = async () => {
       }
       const snapshot = cutover.snapshotFromRows(rows, {
         operationType,
-        scope: targetSemesterId,
+        scope,
       });
       return { count: snapshot.count, hash: snapshot.hash };
     };
@@ -513,6 +681,11 @@ const main = async () => {
       "SEMESTER_ENROLLMENTS",
       targetEnrollmentPaths,
     );
+    const sourceLearningSnapshot = await snapshotFromPaths(
+      "LEARNING_CONTENT",
+      [archiveSourceContentPath],
+      sourceSemesterId,
+    );
     const normalizedOperations = manifestSpec.selectiveClone.map(
       (item, index) => {
         const applicable = ["LEARNING_CONTENT", "SCHEDULE_EVENTS"].includes(
@@ -539,7 +712,9 @@ const main = async () => {
           sourceSnapshot:
             item.operationType === "SEMESTER_MANIFEST"
               ? sourceManifestSnapshot
-              : emptySnapshot,
+              : item.operationType === "LEARNING_CONTENT"
+                ? sourceLearningSnapshot
+                : emptySnapshot,
           targetBeforeSnapshot:
             item.operationType === "SEMESTER_MANIFEST"
               ? targetManifestSnapshot
@@ -621,12 +796,95 @@ const main = async () => {
       revalidateReadiness: randomUUID(),
     };
     const sourceSnapshotBeforeArchive = sourceManifestSnapshot;
+    const archiveReadCases = ["ARCHIVE", "EXPLICIT"].flatMap((source) =>
+      ["LEARNING", "DASHBOARD", "ATTENDANCE"].map((domain) => ({
+        domain,
+        source,
+        provenance: source === "ARCHIVE" ? "ARCHIVE" : "EXPLICIT",
+      })),
+    );
+    const archiveLifecycleStatusesVerified = new Set();
+    let archivePrivacyReadCount = 0;
+    const verifyArchiveTeacherPrivacy = async (expectedLifecycleStatus) => {
+      assert.equal(
+        (await readDocument(testEnv, `semester_manifests/${sourceSemesterId}`))
+          ?.status,
+        expectedLifecycleStatus,
+      );
+      assert.deepEqual(
+        await readDocument(
+          testEnv,
+          `${w8Domains.ATTENDANCE_SESSION_COLLECTION}/${archiveAttendanceSessionId}`,
+        ),
+        archiveAttendanceSession,
+      );
+      assert.deepEqual(
+        await readDocument(
+          testEnv,
+          `${w8Domains.ATTENDANCE_RECORD_COLLECTION}/${archiveAttendanceRecordId}`,
+        ),
+        archiveAttendanceRecord,
+      );
+      for (const archiveReadCase of archiveReadCases) {
+        const archivedState = (
+          await queryFunction(teacher, "getW8DomainState", {
+            domain: archiveReadCase.domain,
+            audience: "teacher",
+            semesterId: sourceSemesterId,
+            source: archiveReadCase.source,
+            studentUid: student.user.uid,
+            sessionId: archiveAttendanceSessionId,
+          })
+        ).data;
+        assert.equal(archivedState.readOnly, true);
+        assert.equal(
+          archivedState.contents.some(
+            (content) => content.contentId === archiveSourceContentId,
+          ),
+          archiveReadCase.domain !== "ATTENDANCE",
+        );
+        assert.equal(
+          archivedState.contents.every(
+            (content) =>
+              content.readOnly &&
+              content.provenance === archiveReadCase.provenance,
+          ),
+          true,
+        );
+        assert.equal(archivedState.enrollment, null);
+        assert.equal(archivedState.enrollmentId, null);
+        assert.deepEqual(archivedState.progress, []);
+        assert.deepEqual(archivedState.exemptions, []);
+        assert.deepEqual(archivedState.exemptionRequests, []);
+        assert.deepEqual(archivedState.sessions, []);
+        assert.deepEqual(archivedState.records, []);
+        assert.deepEqual(archivedState.deliveries, []);
+        assert.deepEqual(archivedState.acknowledgements, []);
+        assert.deepEqual(archivedState.thinkCloudState, {
+          activeSessionId: "",
+          activeSessionIds: [],
+          revision: 0,
+          exists: false,
+        });
+        assert.deepEqual(archivedState.thinkCloudSessions, []);
+        assert.deepEqual(archivedState.thinkCloudResponses, []);
+        assert.deepEqual(archivedState.thinkCloudRoster, []);
+        assert.deepEqual(archivedState.thinkCloudManagedClasses, []);
+        assert.equal(archivedState.dashboard.attendancePendingCount, 0);
+        archivePrivacyReadCount += 1;
+      }
+      for (const source of ["ARCHIVE", "EXPLICIT"])
+        for (const domain of ["ATTENDANCE", "DASHBOARD"])
+          await assertLessonReaderNonLearningDenied(source, domain);
+      await assertLessonReaderLearningPreserved("ARCHIVE");
+      archiveLifecycleStatusesVerified.add(expectedLifecycleStatus);
+    };
     const preparedSourceArchive = (
       await execute(admin, "prepareSemesterArchive", {
         semesterId: sourceSemesterId,
         expectedRevision: sourceManifest.revision,
         accessPolicy: "ADMIN_ONLY",
-        sourcePaths: ["semester_learning_contents/w11-archive-source-sentinel"],
+        sourcePaths: [archiveSourceContentPath],
         unresolvedLegacyItems: [],
         reason: "W11 합성 source archive 준비",
       })
@@ -643,6 +901,7 @@ const main = async () => {
       ).data.result;
       assert.equal(transition.status, targetStatus);
     }
+    await verifyArchiveTeacherPrivacy("CLOSED");
     const frozenSourceArchive = (
       await execute(admin, "freezeSemesterArchive", {
         semesterId: sourceSemesterId,
@@ -674,21 +933,12 @@ const main = async () => {
       ),
       sourceSnapshotBeforeArchive,
     );
-    assert.equal(
-      (
-        await httpsCallable(
-          teacher.functions,
-          "getW8DomainState",
-        )({
-          domain: "LEARNING",
-          audience: "teacher",
-          semesterId: sourceSemesterId,
-          source: "ARCHIVE",
-          _session: teacher.proof,
-        })
-      ).data.readOnly,
-      true,
-    );
+    await verifyArchiveTeacherPrivacy("ARCHIVED");
+    assert.equal(archivePrivacyReadCount, 12);
+    assert.deepEqual([...archiveLifecycleStatusesVerified].sort(), [
+      "ARCHIVED",
+      "CLOSED",
+    ]);
     assert.equal(
       (
         await getDoc(doc(admin.db, "semester_manifests", sourceSemesterId))
@@ -1207,11 +1457,11 @@ const main = async () => {
     assert.equal(finalState.productionControlsAvailable, false);
     assert.equal(finalState.plan.status, "ROLLBACK_PLANNED");
     assert.equal(finalState.items.length, 12);
-    assert.equal(
-      (await readCollection(testEnv, "semester_learning_contents")).filter(
-        (row) => row.data.semesterId !== targetSemesterId,
-      ).length,
-      0,
+    assert.deepEqual(
+      (await readCollection(testEnv, "semester_learning_contents"))
+        .filter((row) => row.data.semesterId !== targetSemesterId)
+        .map((row) => ({ id: row.id, data: row.data })),
+      [{ id: archiveSourceContentId, data: archiveSourceContent }],
     );
 
     assert.equal(
@@ -1251,6 +1501,14 @@ const main = async () => {
         resumeSucceededItemEffectCount: 0,
         previousSuccessDuplicateEffectCount: 0,
         archiveMutationCount: 0,
+        archiveUnassignedTeacherNegativeCases: archivePrivacyReadCount,
+        archiveLifecycleStatusesCovered: archiveLifecycleStatusesVerified.size,
+        archiveAttendanceSentinelPairs: 1,
+        archiveExplicitSourceBypassCases:
+          archiveReadCases.filter(({ source }) => source === "EXPLICIT")
+            .length * archiveLifecycleStatusesVerified.size,
+        delegatedNonLearningDirectCallDenials,
+        delegatedLearningPreservationCases,
         crossSemesterLeakageCount: 0,
         queryWriteCount: 0,
         readinessRegistryDerived: true,
