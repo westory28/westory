@@ -7,7 +7,115 @@ import { inflateSync } from "node:zlib";
 
 const readJson = (path) => JSON.parse(readFileSync(resolve(path), "utf8"));
 const contract = readJson("scripts/w10p-visual-parity-contract.json");
-assert.equal(contract.schemaVersion, 2);
+assert.equal(contract.schemaVersion, 9);
+const MAX_RESOLVED_REQUEST_POST_DATA_BYTES = 8 * 1024 * 1024;
+const NODE_OWNED_EXTERNAL_STATIC_RESPONSE_HEADER_MAXIMUM_BYTES = 64 * 1024;
+const NODE_OWNED_EXTERNAL_STATIC_RESPONSE_BODY_MAXIMUM_BYTES = 16 * 1024 * 1024;
+const NODE_OWNED_EXTERNAL_STATIC_TIMEOUT_MILLISECONDS = 30_000;
+const NODE_OWNED_EXTERNAL_STATIC_REQUEST_HEADERS = {
+  accept: "*/*",
+  "accept-encoding": "identity",
+  "cache-control": "no-cache, no-store, max-age=0",
+  pragma: "no-cache",
+};
+const NODE_OWNED_EXTERNAL_STATIC_RESPONSE_HEADER_ALLOWLIST = [
+  "access-control-allow-origin",
+  "cache-control",
+  "content-language",
+  "content-type",
+  "cross-origin-resource-policy",
+  "etag",
+  "last-modified",
+  "timing-allow-origin",
+];
+const NODE_OWNED_EXTERNAL_STATIC_REQUEST_CONTRACT = {
+  schemaVersion: 1,
+  method: "GET",
+  headers: NODE_OWNED_EXTERNAL_STATIC_REQUEST_HEADERS,
+  redirectPolicy: "manual-no-follow-exact-200",
+  contentEncodingPolicy: "absent-or-identity",
+  timeoutMilliseconds: NODE_OWNED_EXTERNAL_STATIC_TIMEOUT_MILLISECONDS,
+  responseHeaderMaximumBytes:
+    NODE_OWNED_EXTERNAL_STATIC_RESPONSE_HEADER_MAXIMUM_BYTES,
+  responseBodyMaximumBytes:
+    NODE_OWNED_EXTERNAL_STATIC_RESPONSE_BODY_MAXIMUM_BYTES,
+};
+const BROWSER_CONNECT_PROXY_ALLOWED_FIREBASE_HOSTNAMES = [
+  "content-firebaseappcheck.googleapis.com",
+  "firebaseappcheck.googleapis.com",
+  "firebasestorage.googleapis.com",
+  "firestore.googleapis.com",
+  "identitytoolkit.googleapis.com",
+  "securetoken.googleapis.com",
+  `asia-northeast3-${contract.firebaseProjectId}.cloudfunctions.net`,
+  `${contract.firebaseProjectId}.firebaseapp.com`,
+  `${contract.firebaseProjectId}.firebaseio.com`,
+  `${contract.firebaseProjectId}.web.app`,
+].sort();
+const BROWSER_PRODUCT_BACKGROUND_DENY_HOSTNAMES = [
+  "edge.microsoft.com",
+  "www.bing.com",
+].sort();
+const BROWSER_CONNECT_PROXY_AUTHORIZED_REQUEST_METHODS = [
+  "DELETE",
+  "GET",
+  "HEAD",
+  "OPTIONS",
+  "PATCH",
+  "POST",
+  "PUT",
+];
+const BROWSER_RESPONSE_HEADER_ALLOWLIST = [
+  "accept-ranges",
+  "access-control-allow-credentials",
+  "access-control-allow-headers",
+  "access-control-allow-methods",
+  "access-control-allow-origin",
+  "access-control-expose-headers",
+  "access-control-max-age",
+  "cache-control",
+  "content-disposition",
+  "content-encoding",
+  "content-language",
+  "content-length",
+  "content-range",
+  "content-type",
+  "cross-origin-embedder-policy",
+  "cross-origin-opener-policy",
+  "cross-origin-resource-policy",
+  "date",
+  "etag",
+  "expires",
+  "grpc-message",
+  "grpc-status",
+  "last-modified",
+  "server-timing",
+  "timing-allow-origin",
+  "vary",
+  "x-firebase-locale",
+  "x-goog-generation",
+  "x-goog-hash",
+  "x-goog-metageneration",
+  "x-goog-storage-class",
+  "x-goog-stored-content-encoding",
+  "x-goog-stored-content-length",
+  "x-guploader-uploadid",
+];
+const BROWSER_EGRESS_CAPABLE_RESPONSE_HEADER_NAMES = [
+  "alt-svc",
+  "clear-site-data",
+  "content-security-policy",
+  "content-security-policy-report-only",
+  "link",
+  "location",
+  "nel",
+  "refresh",
+  "report-to",
+  "reporting-endpoints",
+  "set-cookie",
+  "speculation-rules",
+  "x-dns-prefetch-control",
+];
 assert.equal(contract.fixtureRevision, 1);
 assert.match(contract.fixturePlanHash, /^[a-f0-9]{64}$/u);
 const inventory = readJson("scripts/w10p-route-menu-inventory.json");
@@ -89,12 +197,124 @@ verifierChildSecretValues.fill("");
 const STAGING_PROJECT_NUMBER = "894916304910";
 const STAGING_APP_ID = "1:894916304910:web:bd8c8a9e3ed8bd1620dc5f";
 const APP_CHECK_DEBUG_SENTINEL = "w10p-visual-app-check-debug-sentinel-v1";
+const PLAYWRIGHT_DEFAULT_DISABLED_FEATURES = [
+  "AvoidUnnecessaryBeforeUnloadCheckSync",
+  "BoundaryEventDispatchTracksNodeRemoval",
+  "DestroyProfileOnBrowserClose",
+  "DialMediaRouteProvider",
+  "GlobalMediaControls",
+  "HttpsUpgrades",
+  "LensOverlay",
+  "MediaRouter",
+  "PaintHolding",
+  "ThirdPartyStoragePartitioning",
+  "BlockOriginHeaderModificationOnRedirect",
+  "Translate",
+  "AutoDeElevate",
+  "OptimizationHints",
+  "msForceBrowserSignIn",
+  "msEdgeUpdateLaunchServicesPreferredVersion",
+];
+const CAPTURE_ADDITIONAL_DISABLED_FEATURES = [
+  "EarlyHintsPreloadForNavigation",
+  "PreconnectOnRedirect",
+  "PreconnectToSearch",
+  "Prerender2",
+  "SpeculationRulesPrefetchFuture",
+  "msSmartScreenBrowserDnsLookups",
+  "msSmartScreenCertCollection",
+  "msSmartScreenCollectFaviconUrls",
+  "msSmartScreenEnableTelemetry",
+  "msSmartScreenMultipleRedirectBlockPages",
+  "msSmartScreenProtection",
+  "msSmartScreenSendReferrerChain",
+  "msSmartScreenSubResourceThrottle",
+  "msSmartScreenSyncWcfCalls",
+  "msSmartScreenUseEdgeNetworking",
+  "msSmartScreenWebSocketThrottle",
+  "msSmartScreenWebSocketThrottleBlock",
+];
+const BROWSER_EFFECTIVE_DISABLED_FEATURES = [
+  ...new Set([
+    ...PLAYWRIGHT_DEFAULT_DISABLED_FEATURES,
+    ...CAPTURE_ADDITIONAL_DISABLED_FEATURES,
+  ]),
+].sort();
+const PLAYWRIGHT_DEFAULT_DISABLE_FEATURES_ARGUMENT = `--disable-features=${PLAYWRIGHT_DEFAULT_DISABLED_FEATURES.join(",")}`;
+const BROWSER_EFFECTIVE_DISABLE_FEATURES_ARGUMENT = `--disable-features=${BROWSER_EFFECTIVE_DISABLED_FEATURES.join(",")}`;
+const BROWSER_PRETRANSMISSION_LAUNCH_ARGS = [
+  "--disable-quic",
+  "--disable-preconnect",
+  "--dns-prefetch-disable",
+  "--enable-automation",
+  "--no-pings",
+  BROWSER_EFFECTIVE_DISABLE_FEATURES_ARGUMENT,
+];
+const BROWSER_PRETRANSMISSION_IGNORE_DEFAULT_ARGS = [
+  PLAYWRIGHT_DEFAULT_DISABLE_FEATURES_ARGUMENT,
+];
+const BROWSER_PRETRANSMISSION_REQUIRED_EFFECTIVE_ARGUMENTS = [
+  "--disable-background-networking",
+  "--disable-quic",
+  "--disable-preconnect",
+  "--dns-prefetch-disable",
+  "--enable-automation",
+  "--no-pings",
+  BROWSER_EFFECTIVE_DISABLE_FEATURES_ARGUMENT,
+].sort();
+const BROWSER_PROXY_BYPASS_LIST_ARGUMENT = "--proxy-bypass-list=<-loopback>";
 const JWT_PATTERN =
   /[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/u;
 const APP_CHECK_DEBUG_TOKEN_CANDIDATE_PATTERN =
   /\b[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/giu;
 const secretSha256 = (value) =>
   createHash("sha256").update(String(value), "utf8").digest("hex");
+const canonicalNetworkHostname = (hostname) => {
+  assert.equal(typeof hostname, "string");
+  const lowercaseHostname = hostname.toLowerCase();
+  if (lowercaseHostname.startsWith("[") && lowercaseHostname.endsWith("]")) {
+    return lowercaseHostname;
+  }
+  return lowercaseHostname.replace(/\.+$/u, "");
+};
+const safelyDecodeUrl = (value) => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return null;
+  }
+};
+const firebaseServiceForHostname = (hostname) => {
+  const canonicalHostname = canonicalNetworkHostname(hostname);
+  if (
+    canonicalHostname === "identitytoolkit.googleapis.com" ||
+    canonicalHostname === "securetoken.googleapis.com"
+  ) {
+    return "auth";
+  }
+  if (
+    canonicalHostname === "firebaseappcheck.googleapis.com" ||
+    canonicalHostname === "content-firebaseappcheck.googleapis.com"
+  ) {
+    return "app-check";
+  }
+  if (canonicalHostname === "firestore.googleapis.com") return "firestore";
+  if (canonicalHostname === "firebasestorage.googleapis.com") return "storage";
+  if (canonicalHostname.endsWith(".cloudfunctions.net")) return "functions";
+  if (
+    canonicalHostname.endsWith(".firebaseio.com") ||
+    canonicalHostname.endsWith(".firebasedatabase.app")
+  ) {
+    return "realtime-database";
+  }
+  if (
+    canonicalHostname.endsWith(".firebaseapp.com") ||
+    canonicalHostname.endsWith(".web.app")
+  ) {
+    return "hosting";
+  }
+  return null;
+};
 const FIXTURE_AUDIT_FRESHNESS_KEYS = [
   "issuedAt",
   "expiresAt",
@@ -134,29 +354,1005 @@ const assertFixtureAuditFreshnessBinding = ({
   return { issuedAt, expiresAt };
 };
 const PRE_TRANSMISSION_NETWORK_BOUNDARY_ATTESTATION = {
-  schemaVersion: 1,
+  schemaVersion: 8,
   interceptionStage: "cdp-fetch-request-stage",
   inspectionFunction: "inspectNetworkRequest",
-  blockedMarkers: ["production", "unbound-firebase"],
+  blockedMarkers: [
+    "production",
+    "cross-origin-document",
+    "unbound-firebase",
+    "non-firebase-hostname-not-allowlisted",
+    "malformed-url-encoding",
+  ],
+  nonFirebaseHostnameAllowlist:
+    contract.networkBoundary.nonFirebaseHostnameAllowlist,
+  hostnameCanonicalization: contract.networkBoundary.hostnameCanonicalization,
+  firebaseRequestBinding: contract.networkBoundary.firebaseRequestBinding,
+  executionTargetBoundary: contract.networkBoundary.executionTargetBoundary,
+  networkResponseBoundary: contract.networkBoundary.networkResponseBoundary,
+  browserConnectProxy: contract.networkBoundary.browserConnectProxy,
+  requestBodyResolver: "resolvePausedRequestPostData",
+  requestBodyMaximumBytes:
+    contract.networkBoundary.executionTargetBoundary.requestBodyMaximumBytes,
   blockMechanism: "Fetch.failRequest",
   blockErrorReason: "BlockedByClient",
-  ordering: "before-header-body-read-or-secret-mutation",
+  ordering:
+    "after-single-full-request-body-resolution-before-sensitive-scan-telemetry-deterministic-external-or-secret-mutation",
 };
 const preTransmissionBoundaryDecision = ({
   productionMarker,
   unboundFirebaseRequest,
+  isFirebaseRequest,
+  nonFirebaseHostnameAllowed,
+  malformedUrlEncoding = false,
+  crossOriginDocument = false,
 }) => {
   assert.equal(typeof productionMarker, "boolean");
   assert.equal(typeof unboundFirebaseRequest, "boolean");
+  assert.equal(typeof isFirebaseRequest, "boolean");
+  assert.equal(typeof nonFirebaseHostnameAllowed, "boolean");
+  assert.equal(typeof malformedUrlEncoding, "boolean");
+  assert.equal(typeof crossOriginDocument, "boolean");
+  if (malformedUrlEncoding) {
+    return { block: true, marker: "malformed-url-encoding" };
+  }
   if (productionMarker) return { block: true, marker: "production" };
+  if (crossOriginDocument) {
+    return { block: true, marker: "cross-origin-document" };
+  }
   if (unboundFirebaseRequest) {
     return { block: true, marker: "unbound-firebase" };
   }
+  if (!isFirebaseRequest && !nonFirebaseHostnameAllowed) {
+    return {
+      block: true,
+      marker: "non-firebase-hostname-not-allowlisted",
+    };
+  }
   return { block: false, marker: null };
 };
+const isCrossOriginDocumentRequest = ({
+  requestUrl,
+  resourceType,
+  stableBrowserOrigin,
+}) =>
+  resourceType === "Document" &&
+  new URL(requestUrl).origin !== stableBrowserOrigin;
+const isVercelNetworkHostname = (hostname) =>
+  canonicalNetworkHostname(hostname) === "vercel.app" ||
+  canonicalNetworkHostname(hostname).endsWith(".vercel.app");
+const normalizedNetworkResourceType = (resourceType) =>
+  String(resourceType || "").toLowerCase();
+const exactStaticExternalRuleId = ({
+  requestUrl,
+  method,
+  resourceType,
+  allowlist = contract.networkBoundary.externalStaticRequestAllowlist,
+}) => {
+  const parsed = new URL(requestUrl);
+  const normalizedMethod = String(method).toUpperCase();
+  const normalizedResourceType = normalizedNetworkResourceType(resourceType);
+  if (
+    parsed.protocol !== "https:" ||
+    parsed.username ||
+    parsed.password ||
+    (parsed.port && parsed.port !== "443") ||
+    !allowlist.methods.includes(normalizedMethod)
+  ) {
+    return null;
+  }
+  const rule = allowlist.rules.find((candidate) => {
+    if (
+      parsed.hostname.toLowerCase() !== candidate.hostname ||
+      !candidate.resourceTypes.some(
+        (value) => value.toLowerCase() === normalizedResourceType,
+      )
+    ) {
+      return false;
+    }
+    if (candidate.exactPathAndSearch !== undefined) {
+      return (
+        `${parsed.pathname}${parsed.search}` === candidate.exactPathAndSearch
+      );
+    }
+    if (candidate.queryPolicy === "none" && parsed.search) return false;
+    if (candidate.exactPathnames?.includes(parsed.pathname)) return true;
+    if (
+      candidate.pathnamePrefix &&
+      parsed.pathname.startsWith(candidate.pathnamePrefix) &&
+      candidate.allowedExtensions?.some((extension) =>
+        parsed.pathname.toLowerCase().endsWith(extension),
+      )
+    ) {
+      return true;
+    }
+    return false;
+  });
+  return rule?.id || null;
+};
+const deterministicRecaptchaRequestInScope = ({
+  requestUrl,
+  method,
+  resourceType,
+}) => {
+  const parsed = new URL(requestUrl);
+  const responseContract =
+    contract.browserTransport.deterministicRecaptchaResponse;
+  return (
+    parsed.protocol === responseContract.protocol &&
+    parsed.hostname.toLowerCase() === responseContract.hostname &&
+    responseContract.allowedPorts.includes(parsed.port) &&
+    (responseContract.userinfoAllowed ||
+      (!parsed.username && !parsed.password)) &&
+    String(method).toUpperCase() === responseContract.method &&
+    parsed.pathname === responseContract.pathname &&
+    parsed.search === "" &&
+    parsed.hash === "" &&
+    normalizedNetworkResourceType(resourceType) ===
+      responseContract.resourceType.toLowerCase()
+  );
+};
+const optionalTelemetrySuppressionDecision = ({ requestUrl, method }) => {
+  const parsed = new URL(requestUrl);
+  const suppression = contract.networkBoundary.optionalTelemetrySuppression;
+  const eligible =
+    parsed.protocol === "https:" &&
+    !parsed.username &&
+    !parsed.password &&
+    (!parsed.port || parsed.port === "443") &&
+    suppression.methods.includes(String(method).toUpperCase()) &&
+    suppression.hostnames.includes(parsed.hostname.toLowerCase());
+  return {
+    eligible,
+    hostname: parsed.hostname.toLowerCase(),
+    ruleId: eligible ? "optional-telemetry-host" : null,
+  };
+};
+const exactAuthCredentialBodyRequestScope = ({
+  requestUrl,
+  method,
+  stagingApiKey,
+}) => {
+  const parsed = new URL(requestUrl);
+  const queryKeys = [...parsed.searchParams.keys()];
+  return (
+    String(method).toUpperCase() === "POST" &&
+    parsed.protocol === "https:" &&
+    !parsed.username &&
+    !parsed.password &&
+    (!parsed.port || parsed.port === "443") &&
+    parsed.hostname === "identitytoolkit.googleapis.com" &&
+    parsed.pathname === "/v1/accounts:signInWithPassword" &&
+    parsed.hash === "" &&
+    queryKeys.length === 1 &&
+    queryKeys[0] === "key" &&
+    parsed.searchParams.getAll("key").length === 1 &&
+    parsed.searchParams.get("key") === stagingApiKey
+  );
+};
+const exactRefreshTokenBodyRequestScope = ({
+  requestUrl,
+  method,
+  stagingApiKey,
+}) => {
+  const parsed = new URL(requestUrl);
+  const queryKeys = [...parsed.searchParams.keys()];
+  return (
+    String(method).toUpperCase() === "POST" &&
+    parsed.protocol === "https:" &&
+    !parsed.username &&
+    !parsed.password &&
+    (!parsed.port || parsed.port === "443") &&
+    parsed.hostname === "securetoken.googleapis.com" &&
+    parsed.pathname === "/v1/token" &&
+    parsed.hash === "" &&
+    queryKeys.length === 1 &&
+    queryKeys[0] === "key" &&
+    parsed.searchParams.getAll("key").length === 1 &&
+    parsed.searchParams.get("key") === stagingApiKey
+  );
+};
+const deterministicResponseDecision = ({
+  requestUrl,
+  method,
+  resourceType,
+  headers = {},
+  postData = "",
+  stableBrowserOrigin,
+}) => {
+  const parsed = new URL(requestUrl);
+  const normalizedMethod = String(method).toUpperCase();
+  const normalizedResourceType = normalizedNetworkResourceType(resourceType);
+  const headerNames = Object.keys(headers).map((name) => name.toLowerCase());
+  const bodyAbsent = String(postData || "") === "";
+  const holidayContract = contract.browserTransport.deterministicLocalResponse;
+  const holidayNamespace =
+    parsed.origin === stableBrowserOrigin &&
+    (parsed.pathname === "/api" || parsed.pathname.startsWith("/api/"));
+  if (holidayNamespace) {
+    const yearValues = parsed.searchParams.getAll("year");
+    const yearValue = yearValues.length === 1 ? yearValues[0] : "";
+    const canonicalYear =
+      /^(?:19[0-9]{2}|20[0-9]{2}|2100)$/u.test(yearValue) &&
+      Number(yearValue) >= holidayContract.yearCanonicalDecimalMinimum &&
+      Number(yearValue) <= holidayContract.yearCanonicalDecimalMaximum &&
+      parsed.search === `?year=${yearValue}`;
+    const forbiddenHeaderPresent =
+      holidayContract.forbiddenRequestHeaderNames.some((name) =>
+        headerNames.includes(name),
+      );
+    const eligible =
+      parsed.pathname === holidayContract.pathname &&
+      parsed.hash === "" &&
+      normalizedMethod === holidayContract.method &&
+      holidayContract.resourceTypes.some(
+        (value) => value.toLowerCase() === normalizedResourceType,
+      ) &&
+      [...parsed.searchParams.keys()].length ===
+        holidayContract.queryOccurrenceCount &&
+      canonicalYear &&
+      bodyAbsent &&
+      !forbiddenHeaderPresent;
+    return {
+      scoped: true,
+      eligible,
+      id: holidayContract.id,
+      year: canonicalYear ? Number(yearValue) : null,
+      responseContract: holidayContract,
+    };
+  }
+  if (
+    deterministicRecaptchaRequestInScope({
+      requestUrl,
+      method,
+      resourceType,
+    })
+  ) {
+    const responseContract =
+      contract.browserTransport.deterministicRecaptchaResponse;
+    const forbiddenHeaderPresent =
+      responseContract.forbiddenRequestHeaderNames.some((name) =>
+        headerNames.includes(name),
+      );
+    return {
+      scoped: true,
+      eligible: bodyAbsent && !forbiddenHeaderPresent,
+      id: responseContract.id,
+      year: null,
+      responseContract,
+    };
+  }
+  return {
+    scoped: false,
+    eligible: false,
+    id: null,
+    year: null,
+    responseContract: null,
+  };
+};
+const isNonFirebaseHostnameAllowed = ({
+  requestUrl,
+  method,
+  resourceType,
+  isFirebaseRequest,
+  allowedOrigins,
+}) => {
+  assert.equal(typeof isFirebaseRequest, "boolean");
+  assert.equal(Array.isArray(allowedOrigins), true);
+  if (isFirebaseRequest) return false;
+  const parsed = new URL(requestUrl);
+  return (
+    allowedOrigins.includes(parsed.origin) ||
+    exactStaticExternalRuleId({ requestUrl, method, resourceType }) !== null ||
+    deterministicRecaptchaRequestInScope({
+      requestUrl,
+      method,
+      resourceType,
+    })
+  );
+};
+const nonFirebasePolicyRuleId = ({
+  requestUrl,
+  method,
+  resourceType,
+  isFirebaseRequest,
+  allowedOrigins,
+}) => {
+  if (isFirebaseRequest) return null;
+  const parsed = new URL(requestUrl);
+  if (allowedOrigins.includes(parsed.origin)) {
+    return "exact-browser-or-immutable-origin";
+  }
+  const externalRuleId = exactStaticExternalRuleId({
+    requestUrl,
+    method,
+    resourceType,
+  });
+  if (externalRuleId) return `external-static:${externalRuleId}`;
+  if (
+    deterministicRecaptchaRequestInScope({
+      requestUrl,
+      method,
+      resourceType,
+    })
+  ) {
+    return `deterministic:${contract.browserTransport.deterministicRecaptchaResponse.id}`;
+  }
+  return null;
+};
+const expectedPinnedStartupSourceBindingsForContract = () =>
+  contract.networkBoundary.externalStaticRequestAllowlist.rules.flatMap(
+    (rule) =>
+      Object.entries(rule.pinnedSources || {}).map(
+        ([browserPathname, source]) => ({ rule, browserPathname, source }),
+      ),
+  );
+const assertPinnedStartupSourceAttestationsForContract = (attestations) => {
+  const expectedBindings = expectedPinnedStartupSourceBindingsForContract();
+  assert.equal(attestations.length, expectedBindings.length);
+  const remainingBindings = [...expectedBindings];
+  for (const attestation of attestations) {
+    assertExactObjectKeys(attestation, [
+      "schemaVersion",
+      "ruleId",
+      "browserUrlSha256",
+      "sourceUrl",
+      "sourceUrlSha256",
+      "responseStatus",
+      "responseBodySha256",
+      "responseBodyBytes",
+      "informationalResponseCount",
+      "informationalEgressHeaderObservationCount",
+      "informationalBrowserExposureCount",
+      "finalHeaderSuppressionCount",
+      "requestContractHash",
+    ]);
+    const bindingIndex = remainingBindings.findIndex(
+      ({ rule, browserPathname, source }) =>
+        attestation.ruleId === rule.id &&
+        attestation.browserUrlSha256 ===
+          secretSha256(`https://${rule.hostname}${browserPathname}`) &&
+        attestation.sourceUrl === source.url,
+    );
+    assert.ok(bindingIndex >= 0);
+    const [{ source }] = remainingBindings.splice(bindingIndex, 1);
+    assert.equal(attestation.schemaVersion, 1);
+    assert.equal(attestation.sourceUrlSha256, secretSha256(source.url));
+    assert.equal(attestation.responseStatus, 200);
+    assert.equal(attestation.responseBodySha256, source.sha256);
+    assert.equal(attestation.responseBodyBytes, source.bytes);
+    assert.ok(Number.isInteger(attestation.informationalResponseCount));
+    assert.ok(attestation.informationalResponseCount >= 0);
+    assert.ok(
+      Number.isInteger(attestation.informationalEgressHeaderObservationCount),
+    );
+    assert.ok(attestation.informationalEgressHeaderObservationCount >= 0);
+    assert.equal(attestation.informationalBrowserExposureCount, 0);
+    assert.ok(Number.isInteger(attestation.finalHeaderSuppressionCount));
+    assert.ok(attestation.finalHeaderSuppressionCount >= 0);
+    assert.equal(
+      attestation.requestContractHash,
+      secretSha256(JSON.stringify(NODE_OWNED_EXTERNAL_STATIC_REQUEST_CONTRACT)),
+    );
+  }
+  assert.equal(remainingBindings.length, 0);
+  return true;
+};
+const externalStaticRequestDecision = ({
+  requestUrl,
+  method,
+  resourceType,
+  headers = {},
+  postData = "",
+}) => {
+  const ruleId = exactStaticExternalRuleId({
+    requestUrl,
+    method,
+    resourceType,
+  });
+  if (!ruleId) {
+    return { scoped: false, eligible: false, rule: null, action: null };
+  }
+  const allowlist = contract.networkBoundary.externalStaticRequestAllowlist;
+  const rule = allowlist.rules.find((candidate) => candidate.id === ruleId);
+  assert.ok(rule);
+  const headerNames = Object.keys(headers).map((name) => name.toLowerCase());
+  const forbiddenHeaderPresent = allowlist.forbiddenRequestHeaderNames.some(
+    (name) => headerNames.includes(name),
+  );
+  const bodyAbsent = String(postData || "") === "";
+  const action = rule.action;
+  return {
+    scoped: true,
+    eligible:
+      bodyAbsent &&
+      !forbiddenHeaderPresent &&
+      action !== "block-before-transmission-until-trusted-pin",
+    rule,
+    action,
+  };
+};
+const literalOccurrenceCount = (textValue, needle) =>
+  needle ? String(textValue).split(String(needle)).length - 1 : 0;
+const stagingApiKeyScopeDecision = ({
+  requestUrl,
+  headers = {},
+  postData = "",
+  stagingApiKey,
+  inspection,
+}) => {
+  assert.ok(stagingApiKey);
+  assert.ok(inspection && typeof inspection === "object");
+  const decodedRequestUrl = safelyDecodeUrl(requestUrl);
+  const headerOccurrenceCount = Object.values(headers).reduce(
+    (count, value) =>
+      count + literalOccurrenceCount(String(value), stagingApiKey),
+    0,
+  );
+  const observedOccurrenceCount =
+    literalOccurrenceCount(decodedRequestUrl || "", stagingApiKey) +
+    headerOccurrenceCount +
+    literalOccurrenceCount(postData, stagingApiKey);
+  const approvedOccurrenceCount =
+    inspection.isFirebaseRequest && inspection.apiKeyBindingValid
+      ? inspection.apiKeyValueCount
+      : 0;
+  return {
+    observedOccurrenceCount,
+    approvedOccurrenceCount,
+    valid: observedOccurrenceCount === approvedOccurrenceCount,
+  };
+};
+const sensitiveMaterialScopeDecision = ({
+  requestUrl,
+  headers = {},
+  postData = "",
+  credentialValues = [],
+  refreshTokenValues = [],
+  debugToken = "",
+  debugSentinel = "",
+  authCredentialBodyScope = false,
+  refreshTokenBodyScope = false,
+  debugSentinelBodyScope = false,
+}) => {
+  const decodedRequestUrl = safelyDecodeUrl(requestUrl) || "";
+  const headerValues = Object.values(headers).map(String);
+  const valueInUrlOrHeaders = (value) =>
+    Boolean(value) &&
+    (decodedRequestUrl.includes(value) ||
+      headerValues.some((headerValue) => headerValue.includes(value)));
+  const valueInBody = (value) =>
+    Boolean(value) && String(postData).includes(value);
+  const credentialInUrlOrHeaders = credentialValues.some(valueInUrlOrHeaders);
+  const credentialInBody = credentialValues.some(valueInBody);
+  const refreshTokenFieldPresent =
+    /(?:^|[&{,])\s*"?(?:refresh_token|refreshToken)"?\s*(?:=|:)/u.test(
+      String(postData),
+    );
+  const refreshTokenInUrlOrHeaders =
+    refreshTokenValues.some(valueInUrlOrHeaders);
+  const refreshTokenInBody = refreshTokenValues.some(valueInBody);
+  const debugTokenObserved =
+    valueInUrlOrHeaders(debugToken) || valueInBody(debugToken);
+  const debugSentinelInUrlOrHeaders = valueInUrlOrHeaders(debugSentinel);
+  const debugSentinelInBody = valueInBody(debugSentinel);
+  if (
+    credentialInUrlOrHeaders ||
+    (credentialInBody && !authCredentialBodyScope)
+  ) {
+    return { valid: false, marker: "test-credential-scope" };
+  }
+  if (
+    refreshTokenInUrlOrHeaders ||
+    ((refreshTokenFieldPresent || refreshTokenInBody) && !refreshTokenBodyScope)
+  ) {
+    return { valid: false, marker: "refresh-token-scope" };
+  }
+  if (debugTokenObserved) {
+    return { valid: false, marker: "debug-token-scope" };
+  }
+  if (
+    debugSentinelInUrlOrHeaders ||
+    (debugSentinelInBody && !debugSentinelBodyScope)
+  ) {
+    return { valid: false, marker: "debug-sentinel-scope" };
+  }
+  return { valid: true, marker: null };
+};
+const deterministicFulfillPayload = (responseContract, bodyBytes = null) => {
+  const bytes =
+    bodyBytes || Buffer.from(responseContract.responseBodyUtf8, "utf8");
+  assert.equal(
+    bytes.length,
+    responseContract.bytes ??
+      responseContract.responseBodyBytes ??
+      bytes.length,
+  );
+  assert.equal(
+    secretSha256(bytes),
+    responseContract.sha256 ?? responseContract.responseBodySha256,
+  );
+  const responseHeaders = Object.entries(
+    responseContract.responseHeaders || {
+      "cache-control": "no-store",
+      "content-type": "text/javascript; charset=utf-8",
+    },
+  ).map(([name, value]) => ({ name, value }));
+  return {
+    responseCode: responseContract.responseStatus ?? 200,
+    responseHeaders,
+    body: bytes.toString("base64"),
+    bodySha256: secretSha256(bytes),
+    bodyBytes: bytes.length,
+  };
+};
+const localFirebaseModulePayloadCache = new Map();
+const localFirebaseModulePayload = (requestUrl) => {
+  const pathname = new URL(requestUrl).pathname;
+  if (localFirebaseModulePayloadCache.has(pathname)) {
+    return localFirebaseModulePayloadCache.get(pathname);
+  }
+  const firebaseRule =
+    contract.networkBoundary.externalStaticRequestAllowlist.rules.find(
+      (rule) => rule.id === "firebase-esm-12.9.0",
+    );
+  const moduleContract = firebaseRule?.localModules?.[pathname];
+  assert.ok(moduleContract);
+  const bytes = readFileSync(resolve(moduleContract.path));
+  const payload = deterministicFulfillPayload(
+    {
+      ...moduleContract,
+      responseStatus: 200,
+      responseHeaders: firebaseRule.responseHeaders,
+    },
+    bytes,
+  );
+  localFirebaseModulePayloadCache.set(pathname, payload);
+  return payload;
+};
+const assertAuditedNetworkBoundaryEvent = ({ event, expectedApiKeySha256 }) => {
+  assert.equal(
+    event.canonicalHostname,
+    canonicalNetworkHostname(event.hostname),
+  );
+  assert.equal(
+    event.firebaseService,
+    firebaseServiceForHostname(event.canonicalHostname),
+  );
+  assert.equal(event.firebase, Boolean(event.firebaseService));
+  assert.equal(
+    event.canonicalHostname.endsWith(".firebasedatabase.app"),
+    false,
+    "A regional Realtime Database request reached evidence even though no exact regional databaseURL is configured.",
+  );
+  assert.equal(event.malformedUrlEncoding, false);
+  assert.equal(event.production, false);
+  assert.equal(event.unboundFirebase, false);
+  assert.equal(event.firebaseTransportValid, true);
+  assert.ok(Number.isInteger(event.apiKeyValueCount));
+  assert.ok(event.apiKeyValueCount >= 0);
+  if (!event.firebase) {
+    assert.equal(event.serviceResourceBound, false);
+    assert.equal(event.apiKeyValueCount, 0);
+    assert.equal(event.apiKeyBindingValid, false);
+    assert.equal(event.apiKeySha256, null);
+    return true;
+  }
+  assert.equal(event.staging, true);
+  assert.equal(event.serviceResourceBound, true);
+  const exactApiKeyRequired = ["auth", "app-check"].includes(
+    event.firebaseService,
+  );
+  if (exactApiKeyRequired) assert.equal(event.apiKeyValueCount, 1);
+  else assert.ok([0, 1].includes(event.apiKeyValueCount));
+  if (event.apiKeyValueCount === 1) {
+    assert.equal(event.apiKeyBindingValid, true);
+    assert.equal(event.apiKeySha256, expectedApiKeySha256);
+  } else {
+    assert.equal(event.apiKeyBindingValid, false);
+    assert.equal(event.apiKeySha256, null);
+  }
+  assert.equal(
+    event.observedProjectIds.every(
+      (projectId) => projectId === contract.firebaseProjectId.toLowerCase(),
+    ),
+    true,
+  );
+  return true;
+};
+const stableOriginRewriteDecision = ({
+  stage,
+  requestUrl,
+  method,
+  resourceType,
+  browserOrigin,
+  upstreamOrigins,
+  transportContract,
+}) => {
+  assert.ok(["baseline", "candidate"].includes(stage));
+  const parsed = new URL(requestUrl);
+  const stableOriginRequest =
+    parsed.protocol === transportContract.requiredProtocol &&
+    (transportContract.userinfoAllowed ||
+      (parsed.username === "" && parsed.password === "")) &&
+    transportContract.allowedPorts.includes(parsed.port) &&
+    parsed.origin === browserOrigin;
+  const normalizedMethod = String(method).toUpperCase();
+  const normalizedResourceType = String(resourceType);
+  const extensionMatch = parsed.pathname.toLowerCase().match(/\.[a-z0-9]+$/u);
+  const pathExtension = extensionMatch?.[0] || "";
+  const documentRequest =
+    normalizedResourceType === transportContract.documentResourceType;
+  const staticRequest =
+    transportContract.staticResourceTypes.includes(normalizedResourceType) ||
+    transportContract.staticPathPrefixes.some((prefix) =>
+      parsed.pathname.startsWith(prefix),
+    ) ||
+    transportContract.staticPathExtensions.includes(pathExtension);
+  const eligible =
+    stableOriginRequest &&
+    transportContract.allowedMethods.includes(normalizedMethod) &&
+    (documentRequest || staticRequest);
+  if (!eligible) {
+    return {
+      stableOriginRequest,
+      eligible: false,
+      kind: null,
+      browserOrigin: parsed.origin,
+      browserPath: `${parsed.pathname}${parsed.search}`,
+      upstreamOrigin: null,
+      upstreamUrl: null,
+    };
+  }
+  const upstreamOrigin = upstreamOrigins[stage];
+  assert.match(upstreamOrigin, /^https:\/\/[^/?#]+\.vercel\.app$/u);
+  const upstreamUrl = new URL(
+    `${parsed.pathname}${parsed.search}`,
+    upstreamOrigin,
+  );
+  assert.equal(upstreamUrl.origin, upstreamOrigin);
+  return {
+    stableOriginRequest: true,
+    eligible: true,
+    kind: documentRequest ? "document" : "static",
+    browserOrigin: parsed.origin,
+    browserPath: `${parsed.pathname}${parsed.search}`,
+    upstreamOrigin,
+    upstreamUrl: upstreamUrl.toString(),
+  };
+};
+const verifyStableOriginRewriteNegativeFixtures = () => {
+  const browserOrigin = "https://stable.example.vercel.app";
+  const upstreamOrigins = {
+    baseline: "https://baseline.example.vercel.app",
+    candidate: "https://candidate.example.vercel.app",
+  };
+  const document = stableOriginRewriteDecision({
+    stage: "baseline",
+    requestUrl: `${browserOrigin}/?fixture=1`,
+    method: "GET",
+    resourceType: "Document",
+    browserOrigin,
+    upstreamOrigins,
+    transportContract: contract.browserTransport,
+  });
+  assert.equal(document.eligible, true);
+  assert.equal(document.kind, "document");
+  assert.equal(document.upstreamUrl, `${upstreamOrigins.baseline}/?fixture=1`);
+  const script = stableOriginRewriteDecision({
+    stage: "candidate",
+    requestUrl: `${browserOrigin}/assets/index-123.js`,
+    method: "GET",
+    resourceType: "Script",
+    browserOrigin,
+    upstreamOrigins,
+    transportContract: contract.browserTransport,
+  });
+  assert.equal(script.eligible, true);
+  assert.equal(script.kind, "static");
+  assert.equal(script.upstreamOrigin, upstreamOrigins.candidate);
+  for (const fixture of [
+    {
+      requestUrl:
+        "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel",
+      method: "GET",
+      resourceType: "XHR",
+    },
+    {
+      requestUrl: `${browserOrigin}/api/write`,
+      method: "POST",
+      resourceType: "Fetch",
+    },
+    {
+      requestUrl: `${upstreamOrigins.baseline}/assets/index-123.js`,
+      method: "GET",
+      resourceType: "Script",
+    },
+    {
+      requestUrl: "https://user@stable.example.vercel.app/assets/index-123.js",
+      method: "GET",
+      resourceType: "Script",
+    },
+  ]) {
+    const decision = stableOriginRewriteDecision({
+      stage: "baseline",
+      ...fixture,
+      browserOrigin,
+      upstreamOrigins,
+      transportContract: contract.browserTransport,
+    });
+    assert.equal(decision.eligible, false);
+    assert.equal(decision.upstreamUrl, null);
+  }
+  return {
+    acceptedStableDocumentCaseCount: 1,
+    acceptedStableStaticCaseCount: 1,
+    rejectedExternalOrNonStaticCaseCount: 4,
+  };
+};
+const verifyNetworkPolicyNegativeFixtures = () => {
+  const stableBrowserOrigin = "https://stable.example.vercel.app";
+  const stagingApiKey = "w10p-synthetic-staging-api-key";
+  const credentialValues = [
+    "w10p-student@example.invalid",
+    "w10p-password-secret",
+  ];
+  const refreshToken = "w10p-refresh-token-secret";
+  const debugToken = "12345678-1234-4123-8123-123456789abc";
+  const holidayRequest = `${stableBrowserOrigin}/api/korean-holidays?year=2026`;
+  const holiday = deterministicResponseDecision({
+    requestUrl: holidayRequest,
+    method: "GET",
+    resourceType: "Fetch",
+    stableBrowserOrigin,
+  });
+  assert.equal(holiday.scoped, true);
+  assert.equal(holiday.eligible, true);
+  assert.equal(holiday.year, 2026);
+  const rejectedHolidayRequests = [
+    { requestUrl: `${stableBrowserOrigin}/api/korean-holidays`, method: "GET" },
+    {
+      requestUrl: `${stableBrowserOrigin}/api/korean-holidays?year=2026&year=2026`,
+      method: "GET",
+    },
+    {
+      requestUrl: `${stableBrowserOrigin}/api/korean-holidays?year=02026`,
+      method: "GET",
+    },
+    {
+      requestUrl: `${stableBrowserOrigin}/api/korean-holidays?year=2026`,
+      method: "POST",
+    },
+    {
+      requestUrl: `${stableBrowserOrigin}/api/unknown?year=2026`,
+      method: "GET",
+    },
+  ];
+  for (const fixture of rejectedHolidayRequests) {
+    const decision = deterministicResponseDecision({
+      ...fixture,
+      resourceType: "Fetch",
+      stableBrowserOrigin,
+    });
+    assert.equal(decision.scoped, true);
+    assert.equal(decision.eligible, false);
+  }
+  const recaptchaContract =
+    contract.browserTransport.deterministicRecaptchaResponse;
+  const recaptchaUrl = `${recaptchaContract.protocol}//${recaptchaContract.hostname}${recaptchaContract.pathname}`;
+  assert.equal(
+    deterministicResponseDecision({
+      requestUrl: recaptchaUrl,
+      method: "GET",
+      resourceType: "Script",
+      stableBrowserOrigin,
+    }).eligible,
+    true,
+  );
+  assert.equal(
+    isNonFirebaseHostnameAllowed({
+      requestUrl: `https://${recaptchaContract.hostname}/recaptcha/api.js`,
+      method: "GET",
+      resourceType: "Script",
+      isFirebaseRequest: false,
+      allowedOrigins: [stableBrowserOrigin],
+    }),
+    false,
+  );
+  const firebaseModuleUrl =
+    "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
+  assert.equal(
+    externalStaticRequestDecision({
+      requestUrl: firebaseModuleUrl,
+      method: "GET",
+      resourceType: "Script",
+    }).eligible,
+    true,
+  );
+  assert.equal(
+    exactStaticExternalRuleId({
+      requestUrl: firebaseModuleUrl,
+      method: "HEAD",
+      resourceType: "Script",
+    }),
+    null,
+  );
+  const externalScopeMismatchFixtures = [
+    { headers: { range: "bytes=0-10" } },
+    { headers: { authorization: "synthetic" } },
+    { headers: { "x-goog-api-key": stagingApiKey } },
+    { postData: "synthetic-body" },
+  ];
+  for (const fixture of externalScopeMismatchFixtures) {
+    const decision = externalStaticRequestDecision({
+      requestUrl: firebaseModuleUrl,
+      method: "GET",
+      resourceType: "Script",
+      ...fixture,
+    });
+    assert.equal(decision.scoped, true);
+    assert.equal(decision.eligible, false);
+  }
+  for (const requestUrl of [
+    `${firebaseModuleUrl}?unexpected=1`,
+    "https://www.gstatic.com/firebasejs/12.9.0/unknown.js",
+    "https://unknown-external.invalid/file.js",
+  ]) {
+    assert.equal(
+      exactStaticExternalRuleId({
+        requestUrl,
+        method: "GET",
+        resourceType: "Script",
+      }),
+      null,
+    );
+  }
+  const externalInspection = {
+    isFirebaseRequest: false,
+    apiKeyBindingValid: false,
+    apiKeyValueCount: 0,
+  };
+  assert.equal(
+    stagingApiKeyScopeDecision({
+      requestUrl: firebaseModuleUrl,
+      headers: { "x-goog-api-key": stagingApiKey },
+      stagingApiKey,
+      inspection: externalInspection,
+    }).valid,
+    false,
+  );
+  const sensitiveFixtures = [
+    {
+      postData: credentialValues[0],
+      credentialValues,
+      marker: "test-credential-scope",
+    },
+    {
+      headers: { "x-test": credentialValues[1] },
+      credentialValues,
+      marker: "test-credential-scope",
+    },
+    {
+      postData: `refresh_token=${refreshToken}`,
+      refreshTokenValues: [refreshToken],
+      marker: "refresh-token-scope",
+    },
+    { postData: debugToken, debugToken, marker: "debug-token-scope" },
+    {
+      headers: { "x-test": APP_CHECK_DEBUG_SENTINEL },
+      debugSentinel: APP_CHECK_DEBUG_SENTINEL,
+      marker: "debug-sentinel-scope",
+    },
+  ];
+  for (const { marker, ...fixture } of sensitiveFixtures) {
+    assert.deepEqual(
+      sensitiveMaterialScopeDecision({
+        requestUrl: firebaseModuleUrl,
+        ...fixture,
+      }),
+      { valid: false, marker },
+    );
+  }
+  assert.equal(
+    exactAuthCredentialBodyRequestScope({
+      requestUrl: `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${stagingApiKey}`,
+      method: "POST",
+      stagingApiKey,
+    }),
+    true,
+  );
+  assert.equal(
+    exactRefreshTokenBodyRequestScope({
+      requestUrl: `https://securetoken.googleapis.com/v1/token?key=${stagingApiKey}`,
+      method: "POST",
+      stagingApiKey,
+    }),
+    true,
+  );
+  for (const requestUrl of [
+    `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${stagingApiKey}`,
+    `https://securetoken.googleapis.com/v1/token?key=${stagingApiKey}&key=${stagingApiKey}`,
+    `https://securetoken.googleapis.com/v1/other?key=${stagingApiKey}`,
+  ]) {
+    assert.equal(
+      exactRefreshTokenBodyRequestScope({
+        requestUrl,
+        method: "POST",
+        stagingApiKey,
+      }),
+      false,
+    );
+  }
+  assert.equal(
+    optionalTelemetrySuppressionDecision({
+      requestUrl:
+        "https://firebaseinstallations.googleapis.com/v1/projects/x/installations",
+      method: "POST",
+    }).eligible,
+    true,
+  );
+  const firebaseRule =
+    contract.networkBoundary.externalStaticRequestAllowlist.rules.find(
+      ({ id }) => id === "firebase-esm-12.9.0",
+    );
+  assert.ok(firebaseRule);
+  for (const pathname of Object.keys(firebaseRule.localModules)) {
+    const payload = localFirebaseModulePayload(
+      `https://${firebaseRule.hostname}${pathname}`,
+    );
+    const responseHeaders = Object.fromEntries(
+      payload.responseHeaders.map(({ name, value }) => [name, value]),
+    );
+    assert.equal(responseHeaders["access-control-allow-origin"], "*");
+    assert.equal(
+      responseHeaders["cross-origin-resource-policy"],
+      "cross-origin",
+    );
+    assert.equal(responseHeaders["cache-control"], "no-store");
+  }
+  return {
+    acceptedDeterministicHolidayCaseCount: 1,
+    rejectedDeterministicHolidayScopeCaseCount: rejectedHolidayRequests.length,
+    acceptedDeterministicRecaptchaCaseCount: 1,
+    rejectedRecaptchaPathCaseCount: 1,
+    acceptedExternalStaticCaseCount: 1,
+    rejectedExternalStaticHeadCaseCount: 1,
+    rejectedExternalStaticSensitiveInputCaseCount:
+      externalScopeMismatchFixtures.length,
+    rejectedExternalStaticPathCaseCount: 3,
+    rejectedStagingApiKeyExfiltrationCaseCount: 1,
+    rejectedSensitiveMaterialExfiltrationCaseCount: sensitiveFixtures.length,
+    acceptedExactAuthCredentialBodyScopeCaseCount: 1,
+    acceptedExactRefreshTokenBodyScopeCaseCount: 1,
+    rejectedRefreshTokenBodyScopeCaseCount: 3,
+    optionalTelemetrySuppressionCaseCount: 1,
+    verifiedLocalFirebaseModuleCaseCount: Object.keys(firebaseRule.localModules)
+      .length,
+  };
+};
 const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
+  const compactSourceText = sourceText.replace(/\s+/gu, "");
+  assert.match(
+    sourceText,
+    /const nonFirebaseHostnameAllowed = isNonFirebaseHostnameAllowed\(\{\s*requestUrl,\s*method,\s*resourceType,\s*isFirebaseRequest,\s*allowedOrigins: allowedNonFirebaseOrigins,\s*\}\);/u,
+    "inspectNetworkBoundary must derive the real allowlist boolean from the exact runtime origin and request-rule set.",
+  );
+  assert.match(
+    sourceText,
+    /firebaseService,\s*isFirebaseRequest,\s*nonFirebaseHostnameAllowed,\s*nonFirebasePolicyRuleId: nonFirebaseRuleId,\s*stagingMarker,/u,
+    "inspectNetworkRequest must return the allowlist boolean consumed by the pre-transmission decision.",
+  );
+  const publicRequestHandlerStart = sourceText.lastIndexOf(
+    "const handlePausedRequest = async (event) => {",
+  );
+  assert.ok(publicRequestHandlerStart >= 0);
+  const resolvedPostDataIndex = sourceText.indexOf(
+    "const resolvedPostData = await resolvePausedRequestPostData({",
+    publicRequestHandlerStart,
+  );
   const requestStageStart = sourceText.indexOf(
     'if (stage === "baseline") baselineBridgeCdpPausedRequestCount += 1;',
+    resolvedPostDataIndex,
   );
   assert.ok(requestStageStart >= 0);
   const headerReadIndex = sourceText.indexOf(
@@ -164,49 +1360,237 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     requestStageStart,
   );
   const postDataReadIndex = sourceText.indexOf(
-    'const postData = String(event.request.postData || "");',
+    "const postData = resolvedPostData.postData;",
     requestStageStart,
   );
   const inspectionIndex = sourceText.indexOf(
     "const preTransmissionInspection = inspectNetworkRequest({",
     requestStageStart,
   );
+  const apiKeyExtractionIndex = sourceText.indexOf(
+    "const preTransmissionApiKeyHeaderValues = extractApiKeyHeaderValues(",
+    requestStageStart,
+  );
+  const unifiedSensitiveDecisionIndex = sourceText.indexOf(
+    "const rawSensitiveDecision = unifiedSensitivePreTransmissionDecision({",
+    inspectionIndex,
+  );
+  const unifiedSensitiveBlockIndex = sourceText.indexOf(
+    "if (!rawSensitiveDecision.valid) {",
+    unifiedSensitiveDecisionIndex,
+  );
+  const telemetryDecisionIndex = sourceText.indexOf(
+    "const telemetryDecision = optionalTelemetrySuppressionDecision({",
+    unifiedSensitiveBlockIndex,
+  );
   const decisionIndex = sourceText.indexOf(
     "const preTransmissionDecision = preTransmissionBoundaryDecision(",
-    inspectionIndex,
+    telemetryDecisionIndex,
   );
   const blockIndex = sourceText.indexOf(
     "if (preTransmissionDecision.block) {",
     decisionIndex,
   );
-  const failRequestIndex = sourceText.indexOf(
-    'await appCheckCdpSession.send("Fetch.failRequest", {',
+  const deterministicDecisionIndex = sourceText.indexOf(
+    "const deterministicDecision = deterministicResponseDecision({",
     blockIndex,
   );
+  const externalStaticDecisionIndex = sourceText.indexOf(
+    "const externalStaticDecision = externalStaticRequestDecision({",
+    deterministicDecisionIndex,
+  );
+  const stableOriginDecisionIndex = sourceText.indexOf(
+    "const rewriteDecision = stableOriginRewriteDecision({",
+    externalStaticDecisionIndex,
+  );
   assert.ok(
-    requestStageStart < inspectionIndex &&
+    publicRequestHandlerStart < resolvedPostDataIndex &&
+      resolvedPostDataIndex < requestStageStart &&
+      requestStageStart < headerReadIndex &&
+      headerReadIndex < postDataReadIndex &&
+      postDataReadIndex < apiKeyExtractionIndex &&
+      apiKeyExtractionIndex < inspectionIndex &&
+      inspectionIndex < unifiedSensitiveDecisionIndex &&
+      unifiedSensitiveDecisionIndex < unifiedSensitiveBlockIndex &&
+      unifiedSensitiveBlockIndex < telemetryDecisionIndex &&
       inspectionIndex < decisionIndex &&
       decisionIndex < blockIndex &&
-      blockIndex < failRequestIndex &&
-      failRequestIndex < headerReadIndex &&
-      headerReadIndex < postDataReadIndex,
-    "Production/unbound Firebase inspection must fail before sensitive header or body reads.",
+      blockIndex < deterministicDecisionIndex &&
+      deterministicDecisionIndex < externalStaticDecisionIndex &&
+      externalStaticDecisionIndex < stableOriginDecisionIndex,
+    "The unified raw-sensitive scan must run before telemetry, deterministic fulfillment, external handling, and stable-origin fulfillment.",
   );
-  const sourceBeforeInspection = sourceText.slice(
-    requestStageStart,
-    inspectionIndex,
+  for (const requiredSourceFragment of [
+    "const installBrowserWidePreTransmissionBoundary = async",
+    'method === "Runtime.runIfWaitingForDebugger"',
+    'originalSend.call(rootSession, "Target.closeTarget"',
+    'session.on("Fetch.requestPaused", state.fetchPausedListener)',
+    'await originalSend.call(state.session, "Fetch.disable", {})',
+    "state.session.removeListener(",
+    "await context.addInitScript(blockBrowserSecondaryExecutionAndWebTransport)",
+    'await context.routeWebSocket("**/*"',
+    "await browserWideBoundaryController.handoffPrimaryRequestBoundary(groupKey)",
+    "await browserWideBoundaryController.deactivate(groupKey)",
+    "new Worker(workerUrl)",
+    "new SharedWorker(sharedWorkerUrl)",
+    "navigator.serviceWorker.register(serviceWorkerUrl)",
+    'window.open(url, "_blank", "noopener")',
+    "new WebTransport(webTransportUrl)",
+    '"WebSocketStream"',
+    '"RTCPeerConnection"',
+    '"webkitRTCPeerConnection"',
+    'Object.defineProperty(globalThis.navigator, "sendBeacon"',
+    'lockMethod(globalThis.Navigator?.prototype, "sendBeacon", blockedOperation)',
+    "globalThis.ServiceWorkerContainer?.prototype",
+    'for (const name of ["append", "prepend", "replaceChildren"])',
+    'lockMethod(Element.prototype, "insertAdjacentHTML"',
+    '[Element.prototype, "innerHTML"]',
+    'lockMethod(DOMParser.prototype, "parseFromString"',
+    'lockMethod(Element.prototype, "setAttribute"',
+    'for (const name of ["setAttributeNode", "setAttributeNodeNS"])',
+    'for (const name of ["setNamedItem", "setNamedItemNS"])',
+    'lockAttrValueSetter(Attr.prototype, "value")',
+    'lockAttrValueSetter(Node.prototype, "nodeValue")',
+    'lockAttrValueSetter(Node.prototype, "textContent")',
+    'lockPropertySetter(HTMLIFrameElement.prototype, "srcdoc"',
+    'lockMethod(Range.prototype, "insertNode"',
+    'lockMethod(target, "moveBefore"',
+    'lockMethod(target, "setHTMLUnsafe"',
+    'lockMethod(globalThis.Document, "parseHTMLUnsafe"',
+    'String(command).toLowerCase() === "inserthtml"',
+    'marker: "parser-iframe-srcdoc"',
+    'String(node.type || "").toLowerCase() === "speculationrules"',
+    "const immutableDocumentParserMarkupDecision = (",
+    "immutableResourceAttestationParserMarkupRejectCount += 1",
+    'result = await session.send("Browser.getBrowserCommandLine")',
+    "ignoreDefaultArgs: BROWSER_PRETRANSMISSION_IGNORE_DEFAULT_ARGS",
+    "const rawSensitiveDecision = unifiedSensitivePreTransmissionDecision({",
+    "const responseStageCorrelationDecision = ({",
+    "const resolvePausedRequestPostData = async ({",
+    'send("Network.getRequestPostData"',
+    "const postDataOmissionFixtureEvent =",
+    "postDataOmissionFixtureInjectionCount += 1",
+    "postDataOmissionFixtureRealNetworkIdCount += 1",
+    "postData: undefined",
+    "fullPostDataRecoveredBodyExactMatchCount += Number(",
+    "fullPostDataRecoveredBodySha256 = secretSha256(",
+    '"missing-network-id"',
+    '"network-read-failed"',
+    '"maximum-bytes-exceeded"',
+    '"representation-mismatch"',
+    "const sanitizeBrowserResponseHeaders = (responseHeaders = []) => {",
+    'if (responseStageDecision.kind === "informational")',
+    "informationalResponseRequestsByFetchRequestId.add(event.requestId)",
+    "stableOriginRewriteLocalFulfillCount += 1",
+    "const exactAuthCredentialBodyScope = exactAuthCredentialBodyRequestScope({",
+    "const exactRefreshTokenBodyScope = exactRefreshTokenBodyRequestScope({",
+    "const apiKeyScope = stagingApiKeyScopeDecision({",
+    "const sensitiveMaterialScope = sensitiveMaterialScopeDecision({",
+    "const deterministicDecision = deterministicResponseDecision({",
+    "const externalStaticDecision = externalStaticRequestDecision({",
+    "const fetchPinnedExternalStaticSources = async",
+    "const nodeOwnedExactExternalStaticGet = (",
+    "const createBrowserConnectProxyGate = (",
+    'appCheckCdpSession.on("Network.responseReceivedEarlyHints"',
+    'source: "baseline-node-network"',
+    "const payload = localFirebaseModulePayload(requestUrl)",
+    'await appCheckCdpSession.send("Fetch.fulfillRequest", {',
+    "interceptResponse: true",
+    'await appCheckCdpSession.send("Fetch.continueResponse", {',
+    "responseHeaders: sanitizedInformational.responseHeaders",
+    "responseHeaders: sanitizedFinal.responseHeaders",
+    "responseHeaders: cachedExternal.responseHeaders",
+    'canonicalHostname.endsWith(".firebasedatabase.app")',
+    'upstreamParsed.hostname.endsWith(".firebasedatabase.app")',
+  ]) {
+    assert.equal(
+      compactSourceText.includes(requiredSourceFragment.replace(/\s+/gu, "")),
+      true,
+      `The all-target pre-transmission source contract is missing: ${requiredSourceFragment}`,
+    );
+  }
+  const informationalBranchStart = sourceText.lastIndexOf(
+    'if (responseStageDecision.kind === "informational")',
   );
-  const sourceBeforeSensitiveRead = sourceText.slice(
-    inspectionIndex,
-    headerReadIndex,
+  const invalidPreFinalBranchStart = sourceText.indexOf(
+    'if (responseStageDecision.kind === "invalid-pre-final")',
+    informationalBranchStart,
+  );
+  assert.ok(informationalBranchStart >= 0);
+  assert.ok(invalidPreFinalBranchStart > informationalBranchStart);
+  const informationalBranch = sourceText.slice(
+    informationalBranchStart,
+    invalidPreFinalBranchStart,
+  );
+  assert.match(informationalBranch, /Fetch\.continueResponse/u);
+  assert.match(informationalBranch, /sanitizeBrowserResponseHeaders/u);
+  assert.match(informationalBranch, /sanitizedInformational\.responseHeaders/u);
+  assert.doesNotMatch(
+    informationalBranch,
+    /\.delete\(|Fetch\.getResponseBody|stableOriginRewriteResponseCount|externalStaticResponseObservations\.push/u,
+    "An informational response must retain request correlation and cannot finalize body/cache/rewrite observations.",
+  );
+  const publicRequestHandlerEnd = sourceText.indexOf(
+    'appCheckCdpSession.on("Fetch.requestPaused"',
+    publicRequestHandlerStart,
+  );
+  assert.ok(publicRequestHandlerEnd > publicRequestHandlerStart);
+  const publicRequestHandlerSource = sourceText.slice(
+    publicRequestHandlerStart,
+    publicRequestHandlerEnd,
   );
   assert.doesNotMatch(
-    sourceBeforeInspection,
-    /event\.request\.(?:headers|postData)|Fetch\.continueRequest|ensureFresh\(|\b(?:appCheckDebugToken|bypassSecret)\b/u,
+    publicRequestHandlerSource,
+    /event\.request\.postData/u,
+    "The public boundary must use only the single resolved request body.",
   );
+  const publicResponseBranch = sourceText.slice(
+    publicRequestHandlerStart,
+    resolvedPostDataIndex,
+  );
+  assert.equal(
+    (publicResponseBranch.match(/Fetch\.continueResponse/gu) || []).length,
+    2,
+  );
+  assert.match(
+    publicResponseBranch,
+    /responseHeaders:\s*sanitizedInformational\.responseHeaders/u,
+  );
+  assert.match(
+    publicResponseBranch,
+    /responseHeaders:\s*sanitizedFinal\.responseHeaders/u,
+  );
+  assert.match(
+    sourceText,
+    /fetchedExternal\s*=\s*await\s+nodeOwnedExactExternalStaticGet\([\s\S]*source:\s*"baseline-node-network"[\s\S]*Fetch\.fulfillRequest[\s\S]*responseHeaders:\s*nodeOwnedCachedExternal\.responseHeaders,[\s\S]*body:\s*nodeOwnedCachedExternal\.body/u,
+  );
+  assert.doesNotMatch(sourceText, /\.connectToServer\s*\(/u);
+  assert.match(
+    sourceText,
+    /const canonicalHostname = canonicalNetworkHostname\(hostname\);[\s\S]*contract\.networkBoundary\.forbiddenWebHosts\.includes\(canonicalHostname\)/u,
+  );
+  assert.match(
+    sourceText,
+    /const malformedUrlEncoding = decodedValue === null;[\s\S]*!malformedUrlEncoding[\s\S]*firebaseTransportValid[\s\S]*serviceResourceBound/u,
+  );
+  const realtimeDatabaseBindingStart = sourceText.indexOf(
+    '} else if (firebaseService === "realtime-database") {',
+  );
+  const hostingBindingStart = sourceText.indexOf(
+    '} else if (firebaseService === "hosting") {',
+    realtimeDatabaseBindingStart,
+  );
+  assert.ok(realtimeDatabaseBindingStart >= 0);
+  assert.ok(hostingBindingStart > realtimeDatabaseBindingStart);
+  const realtimeDatabaseBindingSource = sourceText.slice(
+    realtimeDatabaseBindingStart,
+    hostingBindingStart,
+  );
+  assert.match(realtimeDatabaseBindingSource, /\\\.firebaseio\\\.com/u);
   assert.doesNotMatch(
-    sourceBeforeSensitiveRead,
-    /event\.request\.(?:headers|postData)|Fetch\.continueRequest|ensureFresh\(|\b(?:appCheckDebugToken|bypassSecret)\b/u,
+    realtimeDatabaseBindingSource,
+    /firebasedatabase\.app/u,
+    "Regional Realtime Database hosts must remain unbound without a configured databaseURL.",
   );
   return true;
 };
@@ -292,18 +1676,54 @@ const verifyPreTransmissionBoundaryNegativeFixtures = () => {
   const cases = [
     {
       method: "GET",
-      inspection: { productionMarker: true, unboundFirebaseRequest: false },
+      inspection: {
+        productionMarker: true,
+        unboundFirebaseRequest: false,
+        isFirebaseRequest: false,
+        nonFirebaseHostnameAllowed: false,
+      },
       marker: "production",
     },
     {
       method: "POST",
-      inspection: { productionMarker: true, unboundFirebaseRequest: false },
+      inspection: {
+        productionMarker: true,
+        unboundFirebaseRequest: false,
+        isFirebaseRequest: false,
+        nonFirebaseHostnameAllowed: false,
+      },
       marker: "production",
     },
     {
+      method: "GET",
+      inspection: {
+        productionMarker: false,
+        crossOriginDocument: true,
+        unboundFirebaseRequest: false,
+        isFirebaseRequest: false,
+        nonFirebaseHostnameAllowed: true,
+      },
+      marker: "cross-origin-document",
+    },
+    {
       method: "POST",
-      inspection: { productionMarker: false, unboundFirebaseRequest: true },
+      inspection: {
+        productionMarker: false,
+        unboundFirebaseRequest: true,
+        isFirebaseRequest: true,
+        nonFirebaseHostnameAllowed: false,
+      },
       marker: "unbound-firebase",
+    },
+    {
+      method: "GET",
+      inspection: {
+        productionMarker: false,
+        unboundFirebaseRequest: false,
+        isFirebaseRequest: false,
+        nonFirebaseHostnameAllowed: false,
+      },
+      marker: "non-firebase-hostname-not-allowlisted",
     },
   ];
   for (const fixture of cases) {
@@ -317,8 +1737,171 @@ const verifyPreTransmissionBoundaryNegativeFixtures = () => {
     preTransmissionBoundaryDecision({
       productionMarker: false,
       unboundFirebaseRequest: false,
+      isFirebaseRequest: false,
+      nonFirebaseHostnameAllowed: true,
     }),
     { block: false, marker: null },
+  );
+  assert.deepEqual(
+    preTransmissionBoundaryDecision({
+      productionMarker: false,
+      unboundFirebaseRequest: false,
+      isFirebaseRequest: true,
+      nonFirebaseHostnameAllowed: false,
+    }),
+    { block: false, marker: null },
+  );
+  assert.equal(
+    isNonFirebaseHostnameAllowed({
+      requestUrl: "https://stable.example.vercel.app/",
+      method: "GET",
+      resourceType: "Document",
+      isFirebaseRequest: false,
+      allowedOrigins: ["https://stable.example.vercel.app"],
+    }),
+    true,
+  );
+  assert.equal(
+    isNonFirebaseHostnameAllowed({
+      requestUrl: "https://unknown.example.vercel.app/",
+      method: "GET",
+      resourceType: "Document",
+      isFirebaseRequest: false,
+      allowedOrigins: ["https://stable.example.vercel.app"],
+    }),
+    false,
+  );
+  assert.equal(canonicalNetworkHostname("WESTORY.KR."), "westory.kr");
+  assert.equal(canonicalNetworkHostname("westory.kr..."), "westory.kr");
+  assert.equal(canonicalNetworkHostname("[2001:DB8::1]"), "[2001:db8::1]");
+  for (const method of ["GET", "POST"]) {
+    const hostname = new URL(`https://westory.kr./${method.toLowerCase()}`)
+      .hostname;
+    assert.equal(
+      contract.networkBoundary.forbiddenWebHosts.includes(
+        canonicalNetworkHostname(hostname),
+      ),
+      true,
+    );
+    assert.deepEqual(
+      preTransmissionBoundaryDecision({
+        productionMarker: true,
+        unboundFirebaseRequest: false,
+        isFirebaseRequest: false,
+        nonFirebaseHostnameAllowed: true,
+      }),
+      { block: true, marker: "production" },
+    );
+  }
+  for (const hostname of [
+    "identitytoolkit.googleapis.com.",
+    "securetoken.googleapis.com.",
+  ]) {
+    assert.equal(firebaseServiceForHostname(hostname), "auth");
+    assert.deepEqual(
+      preTransmissionBoundaryDecision({
+        productionMarker: false,
+        unboundFirebaseRequest: true,
+        isFirebaseRequest: true,
+        nonFirebaseHostnameAllowed: false,
+      }),
+      { block: true, marker: "unbound-firebase" },
+    );
+  }
+  assert.equal(
+    firebaseServiceForHostname(`${contract.firebaseProjectId}.firebaseio.com`),
+    "realtime-database",
+  );
+  const regionalRealtimeDatabaseNegativeFixtures = [
+    {
+      hostname:
+        "history-quiz-yongsin-default-rtdb.asia-southeast1.firebasedatabase.app",
+      marker: "production",
+    },
+    {
+      hostname:
+        "unknown-project-default-rtdb.europe-west1.firebasedatabase.app",
+      marker: "unbound-firebase",
+    },
+    {
+      hostname: `${contract.firebaseProjectId}-default-rtdb.asia-southeast1.firebasedatabase.app`,
+      marker: "unbound-firebase",
+    },
+    {
+      hostname: `${contract.firebaseProjectId}-alternate.europe-west1.firebasedatabase.app.`,
+      marker: "unbound-firebase",
+    },
+  ];
+  for (const { hostname, marker } of regionalRealtimeDatabaseNegativeFixtures) {
+    assert.equal(firebaseServiceForHostname(hostname), "realtime-database");
+    assert.deepEqual(
+      preTransmissionBoundaryDecision({
+        productionMarker: marker === "production",
+        unboundFirebaseRequest: marker === "unbound-firebase",
+        isFirebaseRequest: true,
+        nonFirebaseHostnameAllowed: false,
+      }),
+      { block: true, marker },
+    );
+  }
+  assert.deepEqual(
+    preTransmissionBoundaryDecision({
+      productionMarker: false,
+      unboundFirebaseRequest: false,
+      isFirebaseRequest: false,
+      nonFirebaseHostnameAllowed: true,
+      malformedUrlEncoding: true,
+    }),
+    { block: true, marker: "malformed-url-encoding" },
+  );
+  for (const fixture of [
+    {
+      requestUrl:
+        "https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800;900&display=swap",
+      resourceType: "Stylesheet",
+    },
+    {
+      requestUrl: "https://fonts.gstatic.com/s/notosanskr/v1/fixture.woff2",
+      resourceType: "Font",
+    },
+  ]) {
+    assert.equal(
+      isNonFirebaseHostnameAllowed({
+        ...fixture,
+        method: "GET",
+        isFirebaseRequest: false,
+        allowedOrigins: ["https://stable.example.vercel.app"],
+      }),
+      true,
+    );
+  }
+  assert.equal(
+    isNonFirebaseHostnameAllowed({
+      requestUrl: "https://stable.example.vercel.app./",
+      method: "GET",
+      resourceType: "Document",
+      isFirebaseRequest: false,
+      allowedOrigins: ["https://stable.example.vercel.app"],
+    }),
+    false,
+  );
+  const productionImmutableHostname =
+    "westory-70z9g2tvv-bbbs-projects-44f9da30.vercel.app";
+  assert.equal(
+    contract.networkBoundary.forbiddenWebHosts.includes(
+      productionImmutableHostname,
+    ),
+    true,
+  );
+  assert.equal(
+    isNonFirebaseHostnameAllowed({
+      requestUrl: `https://${productionImmutableHostname}/`,
+      method: "GET",
+      resourceType: "Document",
+      isFirebaseRequest: false,
+      allowedOrigins: ["https://stable.example.vercel.app"],
+    }),
+    false,
   );
   assert.equal(
     assertCapturePreTransmissionBoundarySourceOrdering(
@@ -329,8 +1912,21 @@ const verifyPreTransmissionBoundaryNegativeFixtures = () => {
   return {
     preTransmissionProductionGetRejectedCaseCount: 1,
     preTransmissionProductionPostRejectedCaseCount: 1,
+    preTransmissionCrossOriginDocumentRejectedCaseCount: 1,
     preTransmissionUnboundFirebaseRejectedCaseCount: 1,
+    preTransmissionUnallowlistedNonFirebaseRejectedCaseCount: 1,
     preTransmissionAcceptedStagingCaseCount: 1,
+    preTransmissionAcceptedBoundFirebaseCaseCount: 1,
+    preTransmissionHostnameClassifierVerified: true,
+    preTransmissionAllowedNonVercelExternalCaseCount: 2,
+    preTransmissionRejectedUnknownVercelHostnameCaseCount: 2,
+    preTransmissionRejectedProductionImmutableHostnameCaseCount: 1,
+    preTransmissionCanonicalHostnameCaseCount: 3,
+    preTransmissionDottedProductionHostnameRejectedCaseCount: 2,
+    preTransmissionDottedFirebaseHostnameRejectedCaseCount: 2,
+    preTransmissionLegacyRealtimeDatabaseClassifierCaseCount: 1,
+    preTransmissionRegionalRealtimeDatabaseRejectedCaseCount: 4,
+    preTransmissionMalformedEncodingRejectedCaseCount: 1,
     preTransmissionSourceOrderingVerified: true,
   };
 };
@@ -404,6 +2000,9 @@ const preTransmissionBoundaryNegativeSelfTest =
   verifyPreTransmissionBoundaryNegativeFixtures();
 const fixtureAuditFreshnessNegativeSelfTest =
   verifyFixtureAuditFreshnessNegativeFixtures();
+const stableOriginRewriteNegativeSelfTest =
+  verifyStableOriginRewriteNegativeFixtures();
+const networkPolicyNegativeSelfTest = verifyNetworkPolicyNegativeFixtures();
 if (args.includes("--self-test-app-check")) {
   console.log(
     JSON.stringify({
@@ -412,6 +2011,8 @@ if (args.includes("--self-test-app-check")) {
       ...appCheckSecretNegativeSelfTest,
       ...preTransmissionBoundaryNegativeSelfTest,
       ...fixtureAuditFreshnessNegativeSelfTest,
+      ...stableOriginRewriteNegativeSelfTest,
+      ...networkPolicyNegativeSelfTest,
       verifierChildSecretEnvScrubbed: true,
       verifierChildSecretEnvironmentVariableCount,
       verifierChildSecretValueObservationCount,
@@ -563,23 +2164,287 @@ const canonicalizeBackupValue = (value) => {
 };
 const canonicalBackupJson = (value) =>
   JSON.stringify(canonicalizeBackupValue(value));
+const STAGING_VERCEL_HOST_PATTERN =
+  /^westory-staging-[a-z0-9-]+-bbbs-projects-44f9da30\.vercel\.app$/u;
 const exactVercelOrigin = (value) => {
   const parsed = new URL(value);
   assert.equal(parsed.protocol, "https:");
   assert.equal(parsed.username, "");
   assert.equal(parsed.password, "");
   assert.ok(!parsed.port || parsed.port === "443");
-  assert.ok(parsed.hostname.toLowerCase().endsWith(".vercel.app"));
+  assert.match(parsed.hostname.toLowerCase(), STAGING_VERCEL_HOST_PATTERN);
   return parsed.origin;
 };
-const vercelBypassAllowedOrigins = [
+const exactDeploymentRoot = (value) => {
+  const parsed = new URL(value);
+  const origin = exactVercelOrigin(parsed);
+  assert.equal(parsed.pathname, "/");
+  assert.equal(parsed.search, "");
+  assert.equal(parsed.hash, "");
+  return origin;
+};
+const stableBrowserOrigin = exactDeploymentRoot(contract.stableAlias);
+const upstreamOrigins = {
+  baseline: exactDeploymentRoot(manifest.baselineDeployment?.url),
+  candidate: exactDeploymentRoot(manifest.candidateDeployment?.url),
+};
+const nonFirebaseNetworkAllowedHostnames = [
   ...new Set(
-    [
-      manifest.baselineDeployment?.url,
-      manifest.candidateDeployment?.url,
-      contract.stableAlias,
-    ].map(exactVercelOrigin),
+    [stableBrowserOrigin, ...Object.values(upstreamOrigins)].map((origin) =>
+      new URL(origin).hostname.toLowerCase(),
+    ),
   ),
+].sort();
+assert.equal(nonFirebaseNetworkAllowedHostnames.length, 3);
+const nonFirebaseNetworkAllowedHostnameSetHash = sha256(
+  Buffer.from(canonicalJson(nonFirebaseNetworkAllowedHostnames)),
+);
+assert.equal(contract.browserTransport?.browserOrigin, stableBrowserOrigin);
+assert.deepEqual(contract.browserTransport, {
+  schemaVersion: 4,
+  mechanism:
+    "cdp-fetch-request-stage-local-fulfill-from-node-attested-immutable-bytes",
+  browserOrigin: stableBrowserOrigin,
+  upstreamSource: "stage-immutable-deployment-url",
+  immutableFetchOwner: "node-only-exact-origin-no-redirect",
+  browserWirePolicy: "zero-browser-network-to-immutable-upstream",
+  responseHeaderPolicy:
+    "synthetic-no-store-content-type-and-x-dns-prefetch-control-link-omitted",
+  informationalResponsePolicy: "immutable-one-xx-never-exposed-to-browser",
+  parserMarkupPolicy:
+    "node-scan-fail-closed-before-browser-fulfill-on-speculative-link-speculationrules-anchor-ping-or-iframe-srcdoc",
+  domMutationPolicy:
+    "locked-common-attribute-validator-plus-srcdoc-set-html-unsafe-parse-html-unsafe-range-insert-node-move-before-and-insert-html-entrypoints",
+  requiredProtocol: "https:",
+  allowedPorts: ["", "443"],
+  userinfoAllowed: false,
+  allowedMethods: ["GET", "HEAD"],
+  documentResourceType: "Document",
+  staticResourceTypes: [
+    "Font",
+    "Image",
+    "Manifest",
+    "Media",
+    "Script",
+    "Stylesheet",
+    "TextTrack",
+  ],
+  staticPathPrefixes: ["/assets/"],
+  staticPathExtensions: [
+    ".css",
+    ".gif",
+    ".ico",
+    ".jpeg",
+    ".jpg",
+    ".js",
+    ".json",
+    ".map",
+    ".mjs",
+    ".otf",
+    ".png",
+    ".svg",
+    ".ttf",
+    ".webmanifest",
+    ".webp",
+    ".woff",
+    ".woff2",
+  ],
+  externalOriginRewriteAllowed: false,
+  firebaseGoogleRewriteAllowed: false,
+  redirectPolicy: "abort-before-follow",
+  responseBodyHashResourceTypes: ["Document", "Script"],
+  requiredPerGroupResourceTypes: ["Document", "Script"],
+  deterministicLocalResponse: {
+    schemaVersion: 1,
+    id: "korean-holidays-empty-v1",
+    browserOriginSource: "stable-alias",
+    method: "GET",
+    pathname: "/api/korean-holidays",
+    resourceTypes: ["Fetch", "XHR"],
+    queryKeys: ["year"],
+    queryOccurrenceCount: 1,
+    yearCanonicalDecimalMinimum: 1900,
+    yearCanonicalDecimalMaximum: 2100,
+    requestBodyPolicy: "absent",
+    forbiddenRequestHeaderNames: [
+      "authorization",
+      "content-type",
+      "cookie",
+      "x-firebase-appcheck",
+      "x-goog-api-key",
+      "x-vercel-protection-bypass",
+    ],
+    responseStatus: 200,
+    responseHeaders: {
+      "cache-control": "no-store",
+      "content-type": "application/json; charset=utf-8",
+    },
+    responseBodyUtf8: '{"holidays":[]}',
+    responseBodyBytes: 15,
+    responseBodySha256:
+      "b2353ccf5bff3a3f3f626773cf9824f9d0b7fc42f4f52488c49b36ebcdc64348",
+    scopeMismatchAction: "block-before-transmission",
+  },
+  deterministicRecaptchaResponse: {
+    schemaVersion: 1,
+    id: "recaptcha-enterprise-bootstrap-stub-v1",
+    protocol: "https:",
+    hostname: "www.google.com",
+    allowedPorts: ["", "443"],
+    userinfoAllowed: false,
+    method: "GET",
+    pathname: "/recaptcha/enterprise.js",
+    queryPolicy: "none",
+    resourceType: "Script",
+    requestBodyPolicy: "absent",
+    forbiddenRequestHeaderNames: [
+      "authorization",
+      "content-type",
+      "cookie",
+      "x-firebase-appcheck",
+      "x-goog-api-key",
+      "x-vercel-protection-bypass",
+    ],
+    responseStatus: 200,
+    responseHeaders: {
+      "cache-control": "no-store",
+      "content-type": "text/javascript; charset=utf-8",
+    },
+    responseBodyUtf8:
+      'globalThis.grecaptcha={enterprise:{ready:(callback)=>callback(),render:()=>0,execute:()=>Promise.resolve("w10p-recaptcha-stub-token")}};',
+    responseBodyBytes: 136,
+    responseBodySha256:
+      "9cf02df627dfd408fc5c4559b56b187450cbecc5684c72015708bcb18da5ed64",
+    scopeMismatchAction: "block-before-transmission",
+  },
+  playwrightRouteRegistrationAllowed: false,
+});
+assert.equal(new Set(Object.values(upstreamOrigins)).size, 2);
+assert.equal(
+  Object.values(upstreamOrigins).includes(stableBrowserOrigin),
+  false,
+);
+const stableOriginRewriteTransportContractHash = sha256(
+  Buffer.from(canonicalJson(contract.browserTransport)),
+);
+const immutableUpstreamBinding = {
+  baseline: {
+    deploymentId: manifest.baselineDeployment.id,
+    deploymentUrl: upstreamOrigins.baseline,
+    deploymentUrlSha256: sha256(upstreamOrigins.baseline),
+    sourceCommitSha: contract.productionPresentationSha,
+  },
+  candidate: {
+    deploymentId: manifest.candidateDeployment.id,
+    deploymentUrl: upstreamOrigins.candidate,
+    deploymentUrlSha256: sha256(upstreamOrigins.candidate),
+    sourceCommitSha: manifest.sourceCommitSha,
+  },
+};
+const immutableUpstreamBindingHash = sha256(
+  Buffer.from(canonicalJson(immutableUpstreamBinding)),
+);
+const STABLE_ORIGIN_REWRITE_SUMMARY_KEYS = [
+  "schemaVersion",
+  "transportContractHash",
+  "immutableUpstreamBindingHash",
+  "stage",
+  "browserOrigin",
+  "browserOriginSha256",
+  "upstreamDeploymentId",
+  "upstreamDeploymentUrl",
+  "upstreamDeploymentUrlSha256",
+  "upstreamSourceCommitSha",
+  "requestCount",
+  "responseCount",
+  "httpSuccessResponseCount",
+  "httpErrorResponseCount",
+  "documentRequestCount",
+  "scriptRequestCount",
+  "bodyHashCount",
+  "bodyHashMatchCount",
+  "bodyHashMismatchCount",
+  "redirectRequestCount",
+  "redirectResponseCount",
+  "responseErrorCount",
+  "documentBodySha256s",
+  "scriptBodySha256s",
+  "resourceProvenanceSha256",
+  "summarySha256",
+];
+const assertStableOriginRewriteSummary = (summary, expectedStage) => {
+  assertExactObjectKeys(summary, STABLE_ORIGIN_REWRITE_SUMMARY_KEYS);
+  assert.ok(["baseline", "candidate"].includes(expectedStage));
+  const { summarySha256, ...summaryBody } = summary;
+  assert.equal(summarySha256, sha256(Buffer.from(canonicalJson(summaryBody))));
+  const upstreamBinding = immutableUpstreamBinding[expectedStage];
+  assert.equal(summary.schemaVersion, 1);
+  assert.equal(
+    summary.transportContractHash,
+    stableOriginRewriteTransportContractHash,
+  );
+  assert.equal(
+    summary.immutableUpstreamBindingHash,
+    immutableUpstreamBindingHash,
+  );
+  assert.equal(summary.stage, expectedStage);
+  assert.equal(summary.browserOrigin, stableBrowserOrigin);
+  assert.equal(summary.browserOriginSha256, sha256(stableBrowserOrigin));
+  assert.equal(summary.upstreamDeploymentId, upstreamBinding.deploymentId);
+  assert.equal(summary.upstreamDeploymentUrl, upstreamBinding.deploymentUrl);
+  assert.equal(
+    summary.upstreamDeploymentUrlSha256,
+    upstreamBinding.deploymentUrlSha256,
+  );
+  assert.equal(
+    summary.upstreamSourceCommitSha,
+    upstreamBinding.sourceCommitSha,
+  );
+  for (const field of [
+    "requestCount",
+    "responseCount",
+    "httpSuccessResponseCount",
+    "httpErrorResponseCount",
+    "documentRequestCount",
+    "scriptRequestCount",
+    "bodyHashCount",
+    "bodyHashMatchCount",
+    "bodyHashMismatchCount",
+    "redirectRequestCount",
+    "redirectResponseCount",
+    "responseErrorCount",
+  ]) {
+    assert.ok(Number.isInteger(summary[field]) && summary[field] >= 0);
+  }
+  assert.ok(summary.requestCount > 0);
+  assert.equal(summary.responseCount, summary.requestCount);
+  assert.equal(summary.httpSuccessResponseCount, summary.requestCount);
+  assert.ok(summary.documentRequestCount > 0);
+  assert.ok(summary.scriptRequestCount > 0);
+  assert.ok(summary.bodyHashCount >= 2);
+  assert.equal(summary.bodyHashMatchCount, summary.bodyHashCount);
+  for (const field of [
+    "httpErrorResponseCount",
+    "bodyHashMismatchCount",
+    "redirectRequestCount",
+    "redirectResponseCount",
+    "responseErrorCount",
+  ]) {
+    assert.equal(summary[field], 0);
+  }
+  for (const hashes of [
+    summary.documentBodySha256s,
+    summary.scriptBodySha256s,
+  ]) {
+    assert.ok(Array.isArray(hashes) && hashes.length > 0);
+    assert.deepEqual(hashes, [...new Set(hashes)].sort());
+    for (const hash of hashes) assert.match(hash, /^[a-f0-9]{64}$/u);
+  }
+  assert.match(summary.resourceProvenanceSha256, /^[a-f0-9]{64}$/u);
+  return true;
+};
+const vercelBypassAllowedOrigins = [
+  ...new Set([stableBrowserOrigin, ...Object.values(upstreamOrigins)]),
 ].sort();
 const VERCEL_BYPASS_TRANSPORT_CONTRACT = {
   requiredProtocol: "https:",
@@ -648,9 +2513,18 @@ const preTransmissionNetworkBoundaryAttestationHash = sha256(
   Buffer.from(canonicalJson(PRE_TRANSMISSION_NETWORK_BOUNDARY_ATTESTATION)),
 );
 const BROWSER_APP_CHECK_CDP_SECURITY_SCOPE = {
-  schemaVersion: 1,
+  schemaVersion: 4,
   interceptionMechanism: "cdp-fetch-request-stage",
   preTransmissionNetworkBoundaryAttestationHash,
+  nonFirebaseNetworkAllowedHostnameSetHash,
+  executionTargetBoundaryHash: sha256(
+    canonicalJson(contract.networkBoundary.executionTargetBoundary),
+  ),
+  browserConnectProxyHash: sha256(
+    canonicalJson(contract.networkBoundary.browserConnectProxy),
+  ),
+  directBrowserEarlyHintsPolicy:
+    "observed-after-receipt-capture-invalid-fatal-not-pre-transmission-block",
   secretInitScope: "primary-page-only",
   browserGlobalValueKind: "non-secret-fixed-sentinel",
   debugSentinelHash: sha256(APP_CHECK_DEBUG_SENTINEL),
@@ -696,7 +2570,14 @@ const BROWSER_APP_CHECK_CDP_SECURITY_SCOPE = {
   vercelBypassRedirectPolicyHash: sha256(
     "abort-before-send-any-redirect-for-cdp-injected-vercel-bypass-v1",
   ),
-  monitoredTargetKind: "primary-page-target-only",
+  monitoredTargetKind: "all-relevant-targets-before-runtime-resume",
+  targetGuardMechanism:
+    "playwright-private-crsession-runtime-resume-gate-plus-primary-fetch-handoff",
+  secondaryTargetExecutionAllowed: false,
+  creatorCapabilityInitScriptRequired: true,
+  playwrightWebSocketRouteRequired: true,
+  webSocketConnectToServerAllowed: false,
+  webTransportConstructorAllowed: false,
   monitorTerminationMechanism: "context-close-with-fetch-enabled",
   targetDiscoveryMechanism: "cdp-target-created-cumulative",
   retainedTargetSnapshotCrossCheck: true,
@@ -1443,8 +3324,345 @@ assert.deepEqual(
   contract.networkBoundary,
   {
     forbiddenFirebaseProjectIds: ["history-quiz-yongsin"],
-    forbiddenWebHosts: ["westory.kr", "www.westory.kr"],
+    forbiddenWebHosts: [
+      "westory.kr",
+      "www.westory.kr",
+      "westory-70z9g2tvv-bbbs-projects-44f9da30.vercel.app",
+    ],
     requiredMeasuredFirebaseProjectIds: [contract.firebaseProjectId],
+    hostnameCanonicalization: {
+      schemaVersion: 1,
+      rawHostnameSource: "whatwg-url-hostname-lowercase",
+      dnsComparison: "strip-all-terminal-dots-except-bracketed-ipv6",
+      vercelAllowlistComparison: "raw-exact-terminal-dot-rejected",
+      malformedPercentEncodingAction: "block-before-transmission",
+    },
+    firebaseRequestBinding: {
+      schemaVersion: 2,
+      transport: "https-default-443-no-userinfo",
+      queryApiKeyName: "key",
+      headerApiKeyName: "x-goog-api-key",
+      auth: "exact-single-staging-api-key",
+      appCheck: "exact-single-staging-api-key-plus-project-identity-and-app-id",
+      firestore: "all-database-resource-project-slots-exact-staging",
+      storage: "exact-staging-bucket-resource-slot",
+      functions: "exact-asia-northeast3-staging-project-host",
+      realtimeDatabase: "exact-staging-project-firebaseio-host",
+      regionalRealtimeDatabase:
+        "all-firebasedatabase-app-hosts-classified-firebase-and-unbound-without-configured-database-url",
+      hosting: "exact-staging-project-host",
+    },
+    executionTargetBoundary: {
+      schemaVersion: 6,
+      mechanism: "playwright-1.62.1-private-crsession-runtime-resume-gate",
+      primaryRequestOwnerHandoff:
+        "private-fetch-before-page-init-to-public-cdp-fetch-before-navigation",
+      secondaryTargetPolicy: "close-before-runtime-resume",
+      coveredTargetTypes: [
+        "iframe",
+        "page",
+        "service_worker",
+        "shared_worker",
+        "worker",
+      ],
+      creatorCapabilityPolicy:
+        "locked-instance-and-prototype-init-script-block-worker-shared-worker-service-worker-send-beacon",
+      crossOriginDocumentPolicy:
+        "stable-browser-origin-only-in-private-and-public-fetch-owners",
+      webSocketPolicy: "playwright-websocket-route-without-connect-to-server",
+      webSocketStreamPolicy: "init-script-constructor-block-before-use",
+      webTransportPolicy: "init-script-constructor-block-before-use",
+      eventSourcePolicy: "public-cdp-fetch-pre-transmission-boundary",
+      peerConnectionPolicy:
+        "init-script-block-rtc-peer-connection-and-webkit-alias",
+      workletPolicy: "init-script-block-all-observable-add-module-entrypoints",
+      beaconPolicy:
+        "locked-navigator-instance-and-navigator-prototype-send-beacon-before-use",
+      speculativeTransportPolicy:
+        "exact-merged-effective-chromium-argv-plus-forced-connect-proxy-plus-parser-safe-node-local-fulfill-plus-locked-dom-attr-srcdoc-range-move-before-exec-command-and-trusted-markup-guards",
+      chromiumCommandLinePolicy:
+        "browser-get-browser-command-line-exact-single-disable-features-union-single-proxy-server-no-loopback-bypass-disable-quic",
+      informationalResponsePolicy:
+        "node-owned-external-one-xx-nonterminal-browser-unexposed-direct-browser-early-hints-observed-after-receipt-capture-invalid-fatal",
+      requestBodyResolutionPolicy:
+        "fetch-inline-exact-else-network-get-request-post-data-fail-closed-on-missing-id-read-failure-oversize-or-representation-mismatch",
+      requestBodyMaximumBytes: MAX_RESOLVED_REQUEST_POST_DATA_BYTES,
+      handlerErrorAction: "capture-fatal",
+      residualTargetAction: "capture-fatal",
+    },
+    networkResponseBoundary: {
+      schemaVersion: 2,
+      scope:
+        "split-direct-browser-final-direct-browser-early-hints-and-node-owned-external",
+      directBrowserFinalInterception:
+        "fetch-intercept-response-final-sanitized",
+      directBrowserInformationalObservation:
+        "network-response-received-early-hints-observed-after-receipt-capture-invalid-fatal",
+      directBrowserInformationalFixturePolicy:
+        "server-one-zero-three-sent-positive-cdp-event-may-be-zero-event-observation-invalidates-capture",
+      directBrowserInformationalTransmissionBoundary:
+        "allowed-host-link-target-fetch-rejected-if-exposed-else-feature-suppressed-or-proxy-denied-tunnel-and-raw-zero",
+      nodeOwnedExternalInformationalPolicy:
+        "node-http-information-nonterminal-browser-unexposed",
+      informationalCorrelation:
+        "node-owned-nonterminal-retain-until-final-direct-observation-invalidates-capture",
+      externalStaticFinalPolicy:
+        "node-owned-exact-200-body-hash-cache-safe-header-synthetic-local-fulfill",
+      headerPolicy: "explicit-allowlist-all-other-headers-omitted",
+      allowedHeaderNames: BROWSER_RESPONSE_HEADER_ALLOWLIST,
+      egressCapableHeaderNames: BROWSER_EGRESS_CAPABLE_RESPONSE_HEADER_NAMES,
+      egressCapableHeaderForwardAction:
+        "omit-before-browser-for-final-and-node-owned-never-expose-informational",
+      invalidHeaderAction: "fail-request-and-capture-fatal",
+    },
+    browserConnectProxy: {
+      schemaVersion: 2,
+      mechanism: "forced-loopback-http-connect-proxy-gate",
+      proxyServerArgument: "single-http-loopback-ephemeral-port",
+      proxyBypassListArgument: "<-loopback>",
+      allowedHostnames: BROWSER_CONNECT_PROXY_ALLOWED_FIREBASE_HOSTNAMES,
+      browserProductBackgroundDenyHostnames:
+        BROWSER_PRODUCT_BACKGROUND_DENY_HOSTNAMES,
+      allowedMethod: "CONNECT",
+      allowedPort: 443,
+      authorizedRequestMethods:
+        BROWSER_CONNECT_PROXY_AUTHORIZED_REQUEST_METHODS,
+      allowedTunnelAuthorization:
+        "cdp-fetch-request-stage-short-lived-single-use-exact-authority-lease",
+      requestAuthorizationBinding:
+        "request-id-stage-method-stable-browser-origin-exact-hostname-default-443",
+      authorityLeaseTtlMilliseconds: 5_000,
+      pooledExistingTunnelPolicy:
+        "every-request-remains-cdp-inspected-issued-lease-may-complete-unused-when-no-new-connect",
+      requestConnectionCardinality:
+        "not-one-to-one-http-connection-pooling-explicitly-reconciled",
+      uncorrelatedAllowedConnectAction:
+        "deny-before-upstream-socket-capture-fatal",
+      expiredOrReplayLeaseAction: "deny-before-upstream-socket-capture-fatal",
+      browserProductBackgroundDenyScope:
+        "connect-only-exact-authority-443-browser-launch-stage-proxy-only-browser-process-source-no-credentials-or-body",
+      browserProductBackgroundDenyAction:
+        "deny-before-upstream-socket-hashed-audit-nonfatal",
+      otherDenyAction: "deny-before-upstream-socket-capture-fatal",
+      ipLiteralAction: "deny-before-upstream-socket-capture-fatal",
+      alternatePortAction: "deny-before-upstream-socket-capture-fatal",
+      unallowlistedHostnameAction: "deny-before-upstream-socket-capture-fatal",
+      httpAbsoluteFormAction: "deny-before-upstream-socket-capture-fatal",
+      upgradeAction: "deny-before-upstream-socket-capture-fatal",
+      allowedTunnelScope:
+        "host-contact-only-fetch-request-stage-sensitive-and-project-scope-remain-authoritative",
+      sensitiveOrderingEvidence:
+        "wrong-api-key-or-credential-scope-exact-allowed-host-fetch-failed-before-connect",
+      allowedHostnameNegativeEvidence:
+        "early-hints-link-parser-preconnect-websocket-websocket-stream-and-worker-invalid-request-create-no-upstream-request-without-lease",
+      leaseLifecycleReconciliation:
+        "issued-equals-consumed-plus-completed-unused-plus-revoked-plus-expired-and-live-residual-zero",
+      cleanupPolicy:
+        "destroy-client-and-upstream-sockets-close-listener-revoke-unused-leases-residual-zero",
+    },
+    nonFirebaseHostnameAllowlist: {
+      schemaVersion: 3,
+      scope: "exact-vercel-or-declared-external-static-request",
+      match: "exact-raw-url-lowercase-hostname-no-terminal-dot",
+      allowedHostnameSources: [
+        "stable-alias",
+        "baseline-immutable-deployment",
+        "candidate-immutable-deployment",
+      ],
+      unallowlistedAction: "block-before-transmission",
+      nonVercelHostnameAction:
+        "block-unless-exact-external-static-rule-or-deterministic-response",
+      vercelWildcardAllowed: false,
+    },
+    externalStaticRequestAllowlist: {
+      schemaVersion: 3,
+      transport: "https-default-443-no-userinfo",
+      methods: ["GET"],
+      requestBodyPolicy: "absent",
+      nodeOwnedRequestHeaders: NODE_OWNED_EXTERNAL_STATIC_REQUEST_HEADERS,
+      nodeOwnedRequestHeaderPolicy:
+        "fixed-no-origin-referer-cookie-auth-bypass-app-check-or-api-key",
+      nodeOwnedCacheKey: "exact-canonical-url-plus-fixed-request-contract-hash",
+      nodeOwnedRedirectPolicy: "manual-no-follow-exact-200",
+      nodeOwnedInformationalPolicy:
+        "all-one-xx-observed-nonterminal-and-browser-unexposed-101-rejected",
+      nodeOwnedContentEncodingPolicy: "absent-or-identity",
+      nodeOwnedDuplicateResponseHeaderAction: "fail-closed",
+      nodeOwnedResponseHeaderMaximumBytes:
+        NODE_OWNED_EXTERNAL_STATIC_RESPONSE_HEADER_MAXIMUM_BYTES,
+      nodeOwnedResponseBodyMaximumBytes:
+        NODE_OWNED_EXTERNAL_STATIC_RESPONSE_BODY_MAXIMUM_BYTES,
+      nodeOwnedTimeoutMilliseconds:
+        NODE_OWNED_EXTERNAL_STATIC_TIMEOUT_MILLISECONDS,
+      nodeOwnedResponseHeaderAllowlist:
+        NODE_OWNED_EXTERNAL_STATIC_RESPONSE_HEADER_ALLOWLIST,
+      nodeOwnedContentLengthPolicy:
+        "discard-source-and-recalculate-from-captured-final-bytes",
+      forbiddenRequestHeaderNames: [
+        "authorization",
+        "content-type",
+        "cookie",
+        "range",
+        "x-firebase-appcheck",
+        "x-goog-api-key",
+        "x-vercel-protection-bypass",
+      ],
+      rules: [
+        {
+          id: "firebase-esm-12.9.0",
+          hostname: "www.gstatic.com",
+          resourceTypes: ["Script"],
+          exactPathnames: [
+            "/firebasejs/12.9.0/firebase-app-check.js",
+            "/firebasejs/12.9.0/firebase-app.js",
+            "/firebasejs/12.9.0/firebase-auth.js",
+            "/firebasejs/12.9.0/firebase-firestore.js",
+          ],
+          queryPolicy: "none",
+          action: "local-node-module-fulfill",
+          responseHeaders: {
+            "access-control-allow-origin": "*",
+            "cache-control": "no-store",
+            "content-type": "text/javascript; charset=utf-8",
+            "cross-origin-resource-policy": "cross-origin",
+          },
+          localModules: {
+            "/firebasejs/12.9.0/firebase-app-check.js": {
+              path: "node_modules/firebase/firebase-app-check.js",
+              bytes: 24975,
+              sha256:
+                "c44ef6c21d1eac0f5df0dda56fe1bc0cdf49458c76a837638efa2cb48aebc99e",
+            },
+            "/firebasejs/12.9.0/firebase-app.js": {
+              path: "node_modules/firebase/firebase-app.js",
+              bytes: 103065,
+              sha256:
+                "9d1506ac46c736e133afa49ceba8dff794c13898388cd91bbd1b8d2463f18315",
+            },
+            "/firebasejs/12.9.0/firebase-auth.js": {
+              path: "node_modules/firebase/firebase-auth.js",
+              bytes: 158797,
+              sha256:
+                "a44e3c26c183eab2ab6795af3c0f2ec6dad9adfe0057340e14df5324a4417356",
+            },
+            "/firebasejs/12.9.0/firebase-firestore.js": {
+              path: "node_modules/firebase/firebase-firestore.js",
+              bytes: 455145,
+              sha256:
+                "d300a686d0f9298189e7462737072cf69c564ccb15f7f01a061d19a741b6c909",
+            },
+          },
+        },
+        {
+          id: "noto-sans-kr-css",
+          hostname: "fonts.googleapis.com",
+          resourceTypes: ["Stylesheet"],
+          exactPathAndSearch:
+            "/css2?family=Noto+Sans+KR:wght@400;500;700;800;900&display=swap",
+          action: "baseline-fetch-hash-cache-then-local-fulfill",
+        },
+        {
+          id: "noto-sans-kr-font",
+          hostname: "fonts.gstatic.com",
+          resourceTypes: ["Font"],
+          pathnamePrefix: "/s/notosanskr/",
+          allowedExtensions: [".woff", ".woff2"],
+          queryPolicy: "none",
+          action: "baseline-fetch-hash-cache-then-local-fulfill",
+        },
+        {
+          id: "google-login-logo",
+          hostname: "fonts.gstatic.com",
+          resourceTypes: ["Image"],
+          exactPathnames: ["/s/i/productlogos/googleg/v6/24px.svg"],
+          queryPolicy: "none",
+          action: "baseline-fetch-hash-cache-then-local-fulfill",
+        },
+        {
+          id: "quill-1.3.6",
+          hostname: "cdn.quilljs.com",
+          resourceTypes: ["Script", "Stylesheet"],
+          exactPathnames: ["/1.3.6/quill.js", "/1.3.6/quill.snow.css"],
+          queryPolicy: "none",
+          action: "startup-pinned-source-fetch-then-local-fulfill",
+          pinnedSources: {
+            "/1.3.6/quill.js": {
+              url: "https://cdn.jsdelivr.net/npm/quill@1.3.6/dist/quill.js",
+              contentType: "text/javascript; charset=utf-8",
+              bytes: 437299,
+              sha256:
+                "a4da70cd71b5a0e224e95865829a8356a93907c7d47ebb6b23cb8014c6ff9c48",
+            },
+            "/1.3.6/quill.snow.css": {
+              url: "https://cdn.jsdelivr.net/npm/quill@1.3.6/dist/quill.snow.css",
+              contentType: "text/css; charset=utf-8",
+              bytes: 24743,
+              sha256:
+                "892e299431955e9ae388ae257f72024ee76af2d52a7a97a868f70fbe50f16144",
+            },
+          },
+        },
+        {
+          id: "pdfjs-3.11.174",
+          hostname: "cdnjs.cloudflare.com",
+          resourceTypes: ["Script"],
+          exactPathnames: [
+            "/ajax/libs/pdf.js/3.11.174/pdf.min.js",
+            "/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js",
+          ],
+          queryPolicy: "none",
+          action: "startup-pinned-source-fetch-then-local-fulfill",
+          pinnedSources: {
+            "/ajax/libs/pdf.js/3.11.174/pdf.min.js": {
+              url: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",
+              contentType: "text/javascript; charset=utf-8",
+              bytes: 320004,
+              sha256:
+                "5b5799e6f8c680663207ac5b42ee14eed2a406fa7af48f50c154f0c0b1566946",
+            },
+            "/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js": {
+              url: "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js",
+              contentType: "text/javascript; charset=utf-8",
+              bytes: 1087212,
+              sha256:
+                "feabdf309770ed24bba31a5467836cdc8cf639c705af27d52b585b041bb8527b",
+            },
+          },
+        },
+      ],
+      unmatchedAction: "block-before-transmission",
+      networkResponsePolicy:
+        "request-stage-node-owned-exact-get-no-redirect-no-error-hash-cache-safe-header-synthetic-final-fulfill-browser-wire-zero",
+    },
+    optionalTelemetrySuppression: {
+      schemaVersion: 1,
+      transport: "https-default-443-no-userinfo",
+      methods: ["GET", "POST", "OPTIONS"],
+      hostnames: [
+        "analytics.google.com",
+        "firebase.googleapis.com",
+        "firebaseinstallations.googleapis.com",
+        "google-analytics.com",
+        "region1.google-analytics.com",
+        "www.google-analytics.com",
+        "www.googletagmanager.com",
+      ],
+      action: "fail-request-before-transmission-nonfatal",
+    },
+    sensitiveValueScope: {
+      schemaVersion: 2,
+      stagingApiKey: "exact-firebase-query-key-or-x-goog-api-key-slot-only",
+      testEmailPassword:
+        "exact-identitytoolkit-sign-in-with-password-json-body-only",
+      refreshToken: "exact-securetoken-token-post-body-only",
+      debugToken: "node-only-never-browser-egress",
+      debugSentinel:
+        "exact-app-check-debug-exchange-json-body-replaced-before-transmission",
+      evidence: "count-and-sha256-only-no-raw-values",
+      scopeMismatchAction: "block-before-transmission",
+      requestBodyResolution:
+        "single-resolved-body-before-sensitive-telemetry-deterministic-or-external-decisions",
+    },
   },
   "The staging browser network boundary drifted.",
 );
@@ -2086,6 +4304,14 @@ const playwrightRouteRegistrationCount = (
 const browserGlobalExtraHttpHeaderRegistrationCount = (
   captureRunnerSourceText.match(/\bextraHTTPHeaders\s*:/gu) || []
 ).length;
+const stableOriginCdpUrlOverrideCount = (
+  captureRunnerSourceText.match(/url:\s*rewriteDecision\.upstreamUrl/gu) || []
+).length;
+const stableOriginLocalFulfillCounterSourceCount = (
+  captureRunnerSourceText.match(
+    /stableOriginRewriteLocalFulfillCount \+= 1/gu,
+  ) || []
+).length;
 const targetDiscoveryRegistrationCount = (
   captureRunnerSourceText.match(/"Target\.setDiscoverTargets"/gu) || []
 ).length;
@@ -2114,12 +4340,18 @@ assert.equal(
   0,
   "The capture runner configures browser-global HTTP headers.",
 );
+assert.equal(
+  stableOriginCdpUrlOverrideCount,
+  0,
+  "Immutable bytes must never be reached by a browser URL override.",
+);
+assert.equal(stableOriginLocalFulfillCounterSourceCount, 1);
 assert.equal(targetDiscoveryRegistrationCount, 1);
 assert.equal(pageAppCheckSecretInitRegistrationCount, 1);
 assert.equal(pageAppCheckSentinelInitArgumentSourceCount, 1);
 assert.equal(contextAppCheckSecretInitRegistrationCount, 0);
 const browserLaunchSourceIndex = captureRunnerSourceText.indexOf(
-  "const browser = await chromium.launch(",
+  "browser = await chromium.launch(",
 );
 assert.ok(browserLaunchSourceIndex > 0);
 for (const environmentVariableName of [
@@ -2213,6 +4445,14 @@ for (const field of [
   "requestCount",
   "responseCount",
   "firebaseRequestCount",
+  "nonFirebaseRequestCount",
+  "nonFirebaseAllowedRequestCount",
+  "nonFirebaseUnallowlistedRequestCount",
+  "nonFirebaseUnallowlistedResponseCount",
+  "productionVercelRequestCount",
+  "productionVercelResponseCount",
+  "unknownVercelRequestCount",
+  "unknownVercelResponseCount",
   "stagingFirebaseRequestCount",
   "stagingFirebaseResponseCount",
   "stagingDataRequestCount",
@@ -2240,6 +4480,20 @@ for (const field of [
 assert.equal(networkSummary.productionAccess, manifest.productionAccess);
 assert.equal(networkSummary.productionWrites, manifest.productionWrites);
 assert.equal(networkSummary.unboundFirebaseRequestCount, 0);
+assert.equal(
+  networkSummary.nonFirebaseRequestCount,
+  networkSummary.nonFirebaseAllowedRequestCount,
+);
+for (const field of [
+  "nonFirebaseUnallowlistedRequestCount",
+  "nonFirebaseUnallowlistedResponseCount",
+  "productionVercelRequestCount",
+  "productionVercelResponseCount",
+  "unknownVercelRequestCount",
+  "unknownVercelResponseCount",
+]) {
+  assert.equal(networkSummary[field], 0);
+}
 assert.ok(networkSummary.requestCount >= networkSummary.firebaseRequestCount);
 assert.ok(networkSummary.requestCount >= networkSummary.responseCount);
 assert.ok(
@@ -2297,6 +4551,9 @@ assert.deepEqual(
 assert.equal(Array.isArray(networkSummary.observedFirebaseHosts), true);
 assert.equal(networkSummary.observedFirebaseHosts.length > 0, true);
 assert.deepEqual(networkSummary.productionRequestHosts, []);
+assert.deepEqual(networkSummary.nonFirebaseUnallowlistedRequestHosts, []);
+assert.deepEqual(networkSummary.productionVercelRequestHosts, []);
+assert.deepEqual(networkSummary.unknownVercelRequestHosts, []);
 assert.deepEqual(networkSummary.observedFirebaseApiKeySha256s, [
   manifest.environment.firebaseConfig.apiKeySha256,
 ]);
@@ -2809,14 +5066,27 @@ assert.equal(
   manifest.environment?.fixtureCaptureBindingHash,
   manifest.fixtureAudit.captureBindingHash,
 );
+assertExactObjectKeys(manifest.environment?.firebaseConfig, [
+  "projectId",
+  "authDomain",
+  "storageBucket",
+  "messagingSenderId",
+  "apiKeySha256",
+  "appIdSha256",
+]);
 assert.equal(
   manifest.environment?.firebaseConfig?.projectId,
   contract.firebaseProjectId,
 );
-assert.ok(
-  String(manifest.environment?.firebaseConfig?.authDomain ?? "").includes(
-    contract.firebaseProjectId,
+assert.equal(
+  contract.firebaseConfigBinding.allowedAuthDomains.includes(
+    String(manifest.environment?.firebaseConfig?.authDomain ?? ""),
   ),
+  true,
+);
+assert.equal(
+  manifest.environment?.firebaseConfig?.messagingSenderId,
+  contract.firebaseConfigBinding.messagingSenderId,
 );
 assert.match(
   String(manifest.environment?.firebaseConfig?.storageBucket ?? ""),
@@ -3018,16 +5288,24 @@ if (verifyLive) {
       ? { "x-vercel-protection-bypass": verifierVercelBypassSecret }
       : {}),
   };
-  for (const [stage, url, expectedHtmlSha] of [
+  for (const [stage, url, expectedHtmlSha, inspectAssets] of [
     [
       "baseline",
       manifest.baselineDeployment.url,
       manifest.baselineDeployment.htmlSha256,
+      true,
     ],
     [
       "candidate",
+      manifest.candidateDeployment.url,
+      manifest.candidateDeployment.htmlSha256,
+      true,
+    ],
+    [
+      "candidate-alias",
       contract.stableAlias,
       manifest.candidateDeployment.htmlSha256,
+      false,
     ],
   ]) {
     const htmlUrl = new URL(url);
@@ -3061,6 +5339,7 @@ if (verifyLive) {
       stage === "baseline"
         ? manifest.baselineDeployment
         : manifest.candidateDeployment;
+    if (!inspectAssets) continue;
     let combinedBundleSource = "";
     for (const asset of deployment.firebaseBundle.assets) {
       const assetUrl = new URL(asset.path, htmlUrl);
@@ -3258,6 +5537,14 @@ for (const capture of manifest.captures) {
     "requestCount",
     "responseCount",
     "firebaseRequestCount",
+    "nonFirebaseRequestCount",
+    "nonFirebaseAllowedRequestCount",
+    "nonFirebaseUnallowlistedRequestCount",
+    "nonFirebaseUnallowlistedResponseCount",
+    "productionVercelRequestCount",
+    "productionVercelResponseCount",
+    "unknownVercelRequestCount",
+    "unknownVercelResponseCount",
     "stagingFirebaseRequestCount",
     "stagingFirebaseResponseCount",
     "stagingDataRequestCount",
@@ -3281,6 +5568,20 @@ for (const capture of manifest.captures) {
   assert.equal(capture.network.productionAccess, 0);
   assert.equal(capture.network.productionWrites, 0);
   assert.equal(capture.network.unboundFirebaseRequestCount, 0);
+  assert.equal(
+    capture.network.nonFirebaseRequestCount,
+    capture.network.nonFirebaseAllowedRequestCount,
+  );
+  for (const field of [
+    "nonFirebaseUnallowlistedRequestCount",
+    "nonFirebaseUnallowlistedResponseCount",
+    "productionVercelRequestCount",
+    "productionVercelResponseCount",
+    "unknownVercelRequestCount",
+    "unknownVercelResponseCount",
+  ]) {
+    assert.equal(capture.network[field], 0);
+  }
   assert.equal(capture.network.failedFirebaseResponseCount, 0);
   assert.equal(capture.network.rawAppCheckHeaderValueOutputCount, 0);
   assert.equal(capture.network.appCheckHeaderJwtShapeInvalidRequestCount, 0);
@@ -3295,6 +5596,9 @@ for (const capture of manifest.captures) {
     );
   }
   assert.deepEqual(capture.network.productionRequestHosts, []);
+  assert.deepEqual(capture.network.nonFirebaseUnallowlistedRequestHosts, []);
+  assert.deepEqual(capture.network.productionVercelRequestHosts, []);
+  assert.deepEqual(capture.network.unknownVercelRequestHosts, []);
   assert.equal(Array.isArray(capture.network.observedFirebaseProjectIds), true);
   assert.equal(Array.isArray(capture.network.observedFirebaseHosts), true);
   assert.equal(
@@ -3349,16 +5653,10 @@ for (const capture of manifest.captures) {
     capture.stage === "baseline"
       ? contract.productionPresentationSha
       : manifest.sourceCommitSha;
-  const observedOrigin =
-    capture.stage === "baseline"
-      ? manifest.baselineDeployment.url.replace(/\/$/u, "")
-      : manifest.candidateDeployment.url.replace(/\/$/u, "");
+  const observedOrigin = stableBrowserOrigin;
   assert.equal(capture.sourceCommitSha, sourceCommitSha);
-  assert.equal(capture.observedOrigin.replace(/\/$/u, ""), observedOrigin);
-  assert.equal(
-    new URL(capture.finalUrl).origin,
-    new URL(observedOrigin).origin,
-  );
+  assert.equal(capture.observedOrigin, observedOrigin);
+  assert.equal(new URL(capture.finalUrl).origin, observedOrigin);
   assert.equal(
     normalizedRouteFromUrl(capture.finalUrl),
     decodeURIComponent(capture.route),
@@ -3366,9 +5664,10 @@ for (const capture of manifest.captures) {
   );
   assert.equal(
     new URL(capture.performanceNavigationUrl).origin,
-    new URL(observedOrigin).origin,
+    observedOrigin,
     `${capture.id} navigation trace came from another origin.`,
   );
+  assertStableOriginRewriteSummary(capture.upstreamProvenance, capture.stage);
   const capturedAt = isoTime(capture.capturedAt, `${capture.id}.capturedAt`);
   assert.ok(capturedAt >= startedAt && capturedAt <= completedAt);
   assert.equal(capture.fileName, capture.fileName.replaceAll("\\", "/"));
@@ -3487,6 +5786,16 @@ const observedAuditIds = new Set();
 let auditedStagingFirebaseRequests = 0;
 let auditedProductionAccess = 0;
 let auditedProductionWrites = 0;
+let auditedNetworkRequests = 0;
+let auditedNetworkResponses = 0;
+let auditedNonFirebaseRequests = 0;
+let auditedNonFirebaseAllowedRequests = 0;
+let auditedNonFirebaseUnallowlistedRequests = 0;
+let auditedNonFirebaseUnallowlistedResponses = 0;
+let auditedProductionVercelRequests = 0;
+let auditedProductionVercelResponses = 0;
+let auditedUnknownVercelRequests = 0;
+let auditedUnknownVercelResponses = 0;
 let auditedBaselineBridgeEligibleRequests = 0;
 let auditedBaselineBridgeInjectedRequests = 0;
 let auditedBaselineBridgeNativeHeaderRequests = 0;
@@ -3504,8 +5813,65 @@ let auditedAppCheckCdpMonitorPausedRequests = 0;
 let auditedPreTransmissionBoundaryInspections = 0;
 let auditedPreTransmissionBoundaryBlockAttempts = 0;
 let auditedPreTransmissionBoundaryProductionBlocks = 0;
+let auditedPreTransmissionBoundaryCrossOriginDocumentBlocks = 0;
 let auditedPreTransmissionBoundaryUnboundFirebaseBlocks = 0;
+let auditedPreTransmissionBoundaryNonFirebaseHostnameBlocks = 0;
+let auditedPreTransmissionBoundaryMalformedUrlBlocks = 0;
 let auditedPreTransmissionBoundaryFailRequests = 0;
+let auditedOptionalTelemetrySuppressedRequests = 0;
+let auditedDeterministicHolidayResponseFulfills = 0;
+let auditedDeterministicRecaptchaResponseFulfills = 0;
+let auditedDeterministicFirebaseModuleFulfills = 0;
+let auditedDeterministicResponseScopeMismatchBlocks = 0;
+let auditedExternalStaticRequestNetworkFetches = 0;
+let auditedExternalStaticRequestCacheFulfills = 0;
+let auditedExternalStaticRequestScopeMismatchBlocks = 0;
+let auditedExternalStaticResponseNon200Aborts = 0;
+let auditedNodeOwnedExternalRequests = 0;
+let auditedNodeOwnedExternalInformationalResponses = 0;
+let auditedNodeOwnedExternalInformationalEgressHeaderObservations = 0;
+let auditedNodeOwnedExternalInformationalBrowserExposures = 0;
+let auditedNodeOwnedExternalFinalResponses = 0;
+let auditedNodeOwnedExternalFinalBodyHashAttestations = 0;
+let auditedNodeOwnedExternalFinalHeaderSuppressions = 0;
+let auditedStagingApiKeyScopeViolationBlocks = 0;
+let auditedTestCredentialScopeViolationBlocks = 0;
+let auditedRefreshTokenScopeViolationBlocks = 0;
+let auditedRawSensitivePreTransmissionInspections = 0;
+let auditedRawSensitivePreTransmissionBlocks = 0;
+let auditedRawProductionPreTransmissionBlocks = 0;
+let auditedRawVercelBypassPreTransmissionBlocks = 0;
+let auditedRawStagingApiKeyPreTransmissionBlocks = 0;
+let auditedRawTestCredentialPreTransmissionBlocks = 0;
+let auditedRawRefreshTokenPreTransmissionBlocks = 0;
+let auditedRawDebugTokenPreTransmissionBlocks = 0;
+let auditedRawDebugSentinelPreTransmissionBlocks = 0;
+let auditedAllowedEgressResponsePauses = 0;
+let auditedAllowedEgressInformationalResponsePauses = 0;
+let auditedAllowedEgressInformationalFinalResponses = 0;
+let auditedAllowedEgressInformationalTrackingResiduals = 0;
+let auditedAllowedEgressInvalidResponseStatusAborts = 0;
+let auditedAllowedEgressRedirectAborts = 0;
+let auditedAllowedEgressHttpErrorAborts = 0;
+let auditedAllowedEgressResponseErrorAborts = 0;
+let auditedAllowedEgressInformationalEgressHeaderObservations = 0;
+let auditedAllowedEgressFinalEgressHeaderObservations = 0;
+let auditedAllowedEgressResponseHeaderSuppressions = 0;
+let auditedAllowedEgressEgressHeaderForwards = 0;
+let auditedAllowedEgressTrackingResiduals = 0;
+let auditedExternalStaticTrackingResiduals = 0;
+let auditedDirectBrowserEarlyHintsObservations = 0;
+let auditedDirectBrowserEarlyHintsEgressHeaderObservations = 0;
+let auditedDirectBrowserEarlyHintsCaptureInvalidations = 0;
+let auditedFullPostDataResolutions = 0;
+let auditedFullPostDataNetworkFallbacks = 0;
+let auditedFullPostDataResolutionFailures = 0;
+let auditedFullPostDataOversizeBlocks = 0;
+let auditedFullPostDataRepresentationMismatchBlocks = 0;
+const auditedDeterministicResponseObservations = [];
+const auditedExternalStaticResponseObservations = [];
+const auditedOptionalTelemetryObservations = [];
+const auditedNetworkPolicySummaries = new Map();
 let auditedDebugTokenNetworkObservations = 0;
 let auditedDebugSentinelNetworkObservations = 0;
 let auditedAuthorizedDebugExchangeBodyReplacements = 0;
@@ -3580,6 +5946,19 @@ let auditedBrowserAppCheckExchangeHttp200Responses = 0;
 let auditedFirebaseDataRedirectResponses = 0;
 let auditedFirebaseDataErrorResponses = 0;
 let auditedSuccessfulFirebaseDataResponses = 0;
+let auditedStableOriginRewriteRequests = 0;
+let auditedStableOriginRewriteResponses = 0;
+let auditedStableOriginRewriteHttpSuccessResponses = 0;
+let auditedStableOriginRewriteHttpErrorResponses = 0;
+let auditedStableOriginRewriteDocumentRequests = 0;
+let auditedStableOriginRewriteScriptRequests = 0;
+let auditedStableOriginRewriteBodyHashes = 0;
+let auditedStableOriginRewriteBodyHashMismatches = 0;
+let auditedStableOriginRewriteRedirectRequests = 0;
+let auditedStableOriginRewriteRedirectResponses = 0;
+let auditedStableOriginRewriteResponseErrors = 0;
+const auditedStableOriginRewriteGroups = new Map();
+const auditedBrowserWideBoundaryGroupAttestations = [];
 for (const audit of manifest.browserAudits) {
   assert.equal(observedAuditIds.has(audit.id), false, `Duplicate ${audit.id}.`);
   observedAuditIds.add(audit.id);
@@ -3632,6 +6011,12 @@ for (const audit of manifest.browserAudits) {
   }
   const allowedAuditEventTypes = new Set([
     "browser-session",
+    "origin-rewrite-session",
+    "origin-rewrite",
+    "network-policy-session",
+    "deterministic-local-response",
+    "external-static-response",
+    "optional-telemetry-suppression",
     "app-check-bridge",
     "network-request",
     "network-response",
@@ -3674,6 +6059,622 @@ for (const audit of manifest.browserAudits) {
         ? null
         : manifest.identityAttestations[authenticatedAuditRole],
   });
+  const originRewriteSessionEvents = events.filter(
+    (event) => event.type === "origin-rewrite-session",
+  );
+  assert.equal(originRewriteSessionEvents.length, 1);
+  const {
+    type: originRewriteSessionType,
+    id: originRewriteSessionId,
+    ...originRewriteSummary
+  } = originRewriteSessionEvents[0];
+  assert.equal(originRewriteSessionType, "origin-rewrite-session");
+  assert.equal(originRewriteSessionId, audit.id);
+  assertStableOriginRewriteSummary(originRewriteSummary, audit.stage);
+  const originRewriteDeployment =
+    audit.stage === "baseline"
+      ? manifest.baselineDeployment
+      : manifest.candidateDeployment;
+  assert.deepEqual(originRewriteSummary.documentBodySha256s, [
+    originRewriteDeployment.htmlSha256,
+  ]);
+  assert.equal(
+    originRewriteDeployment.firebaseBundle.assets.every((asset) =>
+      originRewriteSummary.scriptBodySha256s.includes(asset.sha256),
+    ),
+    true,
+    `${audit.id} did not load every immutable entry script.`,
+  );
+  assert.equal(auditedStableOriginRewriteGroups.has(audit.id), false);
+  auditedStableOriginRewriteGroups.set(audit.id, originRewriteSummary);
+  const networkPolicyEvents = events.filter(
+    (event) => event.type === "network-policy-session",
+  );
+  assert.equal(networkPolicyEvents.length, 1);
+  const networkPolicyEvent = networkPolicyEvents[0];
+  assertExactObjectKeys(networkPolicyEvent, [
+    "type",
+    "id",
+    "stage",
+    "schemaVersion",
+    "externalStaticAllowlistHash",
+    "optionalTelemetrySuppressionContractHash",
+    "sensitiveValueScopeContractHash",
+    "deterministicResponseContractHash",
+    "optionalTelemetrySuppressedRequestCount",
+    "deterministicHolidayResponseFulfillCount",
+    "deterministicRecaptchaResponseFulfillCount",
+    "deterministicFirebaseModuleFulfillCount",
+    "deterministicResponseScopeMismatchBlockCount",
+    "externalStaticRequestNetworkFetchCount",
+    "externalStaticRequestCacheFulfillCount",
+    "externalStaticRequestScopeMismatchBlockCount",
+    "externalStaticResponseNon200AbortCount",
+    "nodeOwnedExternalRequestCount",
+    "nodeOwnedExternalInformationalResponseCount",
+    "nodeOwnedExternalInformationalEgressHeaderObservationCount",
+    "nodeOwnedExternalInformationalBrowserExposureCount",
+    "nodeOwnedExternalFinalResponseCount",
+    "nodeOwnedExternalFinalBodyHashAttestationCount",
+    "nodeOwnedExternalFinalHeaderSuppressionCount",
+    "stagingApiKeyScopeViolationBlockCount",
+    "testCredentialScopeViolationBlockCount",
+    "refreshTokenScopeViolationBlockCount",
+    "rawSensitivePreTransmissionInspectionCount",
+    "rawSensitivePreTransmissionBlockCount",
+    "rawProductionPreTransmissionBlockCount",
+    "rawVercelBypassPreTransmissionBlockCount",
+    "rawStagingApiKeyPreTransmissionBlockCount",
+    "rawTestCredentialPreTransmissionBlockCount",
+    "rawRefreshTokenPreTransmissionBlockCount",
+    "rawDebugTokenPreTransmissionBlockCount",
+    "rawDebugSentinelPreTransmissionBlockCount",
+    "allowedEgressResponsePauseCount",
+    "allowedEgressInformationalResponsePauseCount",
+    "allowedEgressInformationalFinalResponseCount",
+    "allowedEgressInformationalTrackingResidualCount",
+    "allowedEgressInvalidResponseStatusAbortCount",
+    "allowedEgressRedirectAbortCount",
+    "allowedEgressHttpErrorAbortCount",
+    "allowedEgressResponseErrorAbortCount",
+    "allowedEgressInformationalEgressHeaderObservationCount",
+    "allowedEgressFinalEgressHeaderObservationCount",
+    "allowedEgressResponseHeaderSuppressionCount",
+    "allowedEgressEgressHeaderForwardCount",
+    "directBrowserEarlyHintsObservationCount",
+    "directBrowserEarlyHintsEgressHeaderObservationCount",
+    "directBrowserEarlyHintsCaptureInvalidationCount",
+    "fullPostDataResolutionCount",
+    "fullPostDataNetworkFallbackCount",
+    "fullPostDataResolutionFailureCount",
+    "fullPostDataOversizeBlockCount",
+    "fullPostDataRepresentationMismatchBlockCount",
+    "deterministicResponseObservationCount",
+    "deterministicResponseObservationSetHash",
+    "externalStaticResponseObservationCount",
+    "externalStaticResponseObservationSetHash",
+    "optionalTelemetryObservationCount",
+    "optionalTelemetryObservationSetHash",
+    "pinnedStartupSourceAttestationCount",
+    "pinnedStartupSourceAttestationSetHash",
+    "allowedEgressTrackingResidualCount",
+    "externalStaticTrackingResidualCount",
+    "summarySha256",
+  ]);
+  assert.equal(networkPolicyEvent.id, audit.id);
+  assert.equal(networkPolicyEvent.stage, audit.stage);
+  assert.equal(networkPolicyEvent.schemaVersion, 4);
+  assert.equal(
+    networkPolicyEvent.externalStaticAllowlistHash,
+    sha256(
+      canonicalJson(contract.networkBoundary.externalStaticRequestAllowlist),
+    ),
+  );
+  assert.equal(
+    networkPolicyEvent.optionalTelemetrySuppressionContractHash,
+    sha256(
+      canonicalJson(contract.networkBoundary.optionalTelemetrySuppression),
+    ),
+  );
+  assert.equal(
+    networkPolicyEvent.sensitiveValueScopeContractHash,
+    sha256(canonicalJson(contract.networkBoundary.sensitiveValueScope)),
+  );
+  assert.equal(
+    networkPolicyEvent.deterministicResponseContractHash,
+    sha256(
+      canonicalJson({
+        holiday: contract.browserTransport.deterministicLocalResponse,
+        recaptcha: contract.browserTransport.deterministicRecaptchaResponse,
+      }),
+    ),
+  );
+  const deterministicEvents = events.filter(
+    (event) => event.type === "deterministic-local-response",
+  );
+  const deterministicObservations = deterministicEvents.map(
+    ({ type, auditEventId, ...observation }, index) => {
+      assert.equal(auditEventId, `${audit.id}:deterministic-${index}`);
+      assertExactObjectKeys(observation, [
+        "schemaVersion",
+        "stage",
+        "groupKey",
+        "id",
+        "requestUrlSha256",
+        "browserOrigin",
+        "year",
+        "responseStatus",
+        "responseBodySha256",
+        "responseBodyBytes",
+      ]);
+      assert.equal(observation.schemaVersion, 1);
+      assert.equal(observation.stage, audit.stage);
+      assert.equal(observation.groupKey, audit.id);
+      assert.equal(observation.browserOrigin, stableBrowserOrigin);
+      assert.equal(observation.responseStatus, 200);
+      assert.match(observation.requestUrlSha256, /^[a-f0-9]{64}$/u);
+      if (
+        observation.id ===
+        contract.browserTransport.deterministicLocalResponse.id
+      ) {
+        const responseContract =
+          contract.browserTransport.deterministicLocalResponse;
+        assert.ok(Number.isInteger(observation.year));
+        assert.ok(
+          observation.year >= responseContract.yearCanonicalDecimalMinimum &&
+            observation.year <= responseContract.yearCanonicalDecimalMaximum,
+        );
+        assert.equal(
+          observation.requestUrlSha256,
+          sha256(
+            `${stableBrowserOrigin}${responseContract.pathname}?year=${observation.year}`,
+          ),
+        );
+        assert.equal(
+          observation.responseBodySha256,
+          responseContract.responseBodySha256,
+        );
+        assert.equal(
+          observation.responseBodyBytes,
+          responseContract.responseBodyBytes,
+        );
+      } else if (
+        observation.id ===
+        contract.browserTransport.deterministicRecaptchaResponse.id
+      ) {
+        const responseContract =
+          contract.browserTransport.deterministicRecaptchaResponse;
+        assert.equal(observation.year, null);
+        assert.equal(
+          observation.requestUrlSha256,
+          sha256(
+            `${responseContract.protocol}//${responseContract.hostname}${responseContract.pathname}`,
+          ),
+        );
+        assert.equal(
+          observation.responseBodySha256,
+          responseContract.responseBodySha256,
+        );
+        assert.equal(
+          observation.responseBodyBytes,
+          responseContract.responseBodyBytes,
+        );
+      } else {
+        assert.equal(observation.id, "firebase-esm-12.9.0");
+        assert.equal(observation.year, null);
+        const firebaseRule =
+          contract.networkBoundary.externalStaticRequestAllowlist.rules.find(
+            (rule) => rule.id === observation.id,
+          );
+        const matchingModule = Object.entries(firebaseRule.localModules).find(
+          ([pathname, moduleContract]) =>
+            observation.requestUrlSha256 ===
+              sha256(`https://${firebaseRule.hostname}${pathname}`) &&
+            observation.responseBodySha256 === moduleContract.sha256 &&
+            observation.responseBodyBytes === moduleContract.bytes,
+        );
+        assert.ok(matchingModule);
+      }
+      return observation;
+    },
+  );
+  const externalStaticEvents = events.filter(
+    (event) => event.type === "external-static-response",
+  );
+  const externalStaticObservations = externalStaticEvents.map(
+    ({ type, auditEventId, ...observation }, index) => {
+      assert.equal(auditEventId, `${audit.id}:external-static-${index}`);
+      assertExactObjectKeys(observation, [
+        "schemaVersion",
+        "stage",
+        "groupKey",
+        "ruleId",
+        "requestUrl",
+        "requestUrlSha256",
+        "method",
+        "resourceType",
+        "requestBodyAbsent",
+        "sensitiveHeaderAbsent",
+        "source",
+        "sourceUrlSha256",
+        "responseStatus",
+        "responseBodySha256",
+        "responseBodyBytes",
+        "requestContractHash",
+        "cacheKeySha256",
+        "nodeOwnedNetworkRequest",
+        "informationalResponseCount",
+        "informationalEgressHeaderObservationCount",
+        "informationalBrowserExposureCount",
+        "finalHeaderSuppressionCount",
+      ]);
+      assert.equal(observation.schemaVersion, 1);
+      assert.equal(observation.stage, audit.stage);
+      assert.equal(observation.groupKey, audit.id);
+      assert.equal(
+        observation.requestUrlSha256,
+        sha256(observation.requestUrl),
+      );
+      assert.match(observation.requestUrlSha256, /^[a-f0-9]{64}$/u);
+      assert.equal(observation.requestBodyAbsent, true);
+      assert.equal(observation.sensitiveHeaderAbsent, true);
+      assert.match(observation.responseBodySha256, /^[a-f0-9]{64}$/u);
+      assert.ok(Number.isInteger(observation.responseBodyBytes));
+      assert.ok(observation.responseBodyBytes >= 0);
+      assert.equal(observation.responseStatus, 200);
+      assert.equal(
+        observation.requestContractHash,
+        secretSha256(
+          JSON.stringify(NODE_OWNED_EXTERNAL_STATIC_REQUEST_CONTRACT),
+        ),
+      );
+      assert.equal(
+        observation.cacheKeySha256,
+        sha256(
+          JSON.stringify({
+            method: "GET",
+            requestUrl: new URL(observation.requestUrl).toString(),
+            requestContractHash: observation.requestContractHash,
+          }),
+        ),
+      );
+      assert.ok(Number.isInteger(observation.informationalResponseCount));
+      assert.ok(observation.informationalResponseCount >= 0);
+      assert.ok(
+        Number.isInteger(observation.informationalEgressHeaderObservationCount),
+      );
+      assert.ok(observation.informationalEgressHeaderObservationCount >= 0);
+      assert.equal(observation.informationalBrowserExposureCount, 0);
+      assert.ok(Number.isInteger(observation.finalHeaderSuppressionCount));
+      assert.ok(observation.finalHeaderSuppressionCount >= 0);
+      const rule =
+        contract.networkBoundary.externalStaticRequestAllowlist.rules.find(
+          (candidate) => candidate.id === observation.ruleId,
+        );
+      assert.ok(rule);
+      assert.equal(
+        exactStaticExternalRuleId({
+          requestUrl: observation.requestUrl,
+          method: observation.method,
+          resourceType: observation.resourceType,
+        }),
+        rule.id,
+      );
+      if (observation.source === "startup-pinned-source-cache") {
+        assert.equal(
+          rule.action,
+          "startup-pinned-source-fetch-then-local-fulfill",
+        );
+        const requestUrl = new URL(observation.requestUrl);
+        const pinnedSource = Object.entries(rule.pinnedSources || {}).find(
+          ([browserPathname, source]) =>
+            requestUrl.origin === `https://${rule.hostname}` &&
+            requestUrl.pathname === browserPathname &&
+            requestUrl.search === "" &&
+            source.sha256 === observation.responseBodySha256 &&
+            source.bytes === observation.responseBodyBytes &&
+            sha256(source.url) === observation.sourceUrlSha256,
+        );
+        assert.ok(pinnedSource);
+      } else {
+        assert.equal(
+          rule.action,
+          "baseline-fetch-hash-cache-then-local-fulfill",
+        );
+        assert.ok(
+          ["baseline-node-network", "baseline-byte-cache"].includes(
+            observation.source,
+          ),
+        );
+        if (observation.source === "baseline-node-network") {
+          assert.equal(audit.stage, "baseline");
+          assert.equal(observation.nodeOwnedNetworkRequest, true);
+          assert.equal(
+            observation.sourceUrlSha256,
+            sha256(new URL(observation.requestUrl).toString()),
+          );
+        } else {
+          assert.equal(observation.nodeOwnedNetworkRequest, false);
+          assert.match(observation.sourceUrlSha256, /^[a-f0-9]{64}$/u);
+        }
+      }
+      return observation;
+    },
+  );
+  const telemetryEvents = events.filter(
+    (event) => event.type === "optional-telemetry-suppression",
+  );
+  const telemetryObservations = telemetryEvents.map(
+    ({ type, auditEventId, ...observation }, index) => {
+      assert.equal(auditEventId, `${audit.id}:telemetry-${index}`);
+      assertExactObjectKeys(observation, [
+        "schemaVersion",
+        "stage",
+        "groupKey",
+        "method",
+        "hostname",
+        "requestUrlSha256",
+        "rawSensitiveInspectionPassed",
+      ]);
+      assert.equal(observation.schemaVersion, 1);
+      assert.equal(observation.stage, audit.stage);
+      assert.equal(observation.groupKey, audit.id);
+      assert.equal(
+        contract.networkBoundary.optionalTelemetrySuppression.methods.includes(
+          observation.method,
+        ),
+        true,
+      );
+      assert.equal(
+        contract.networkBoundary.optionalTelemetrySuppression.hostnames.includes(
+          observation.hostname,
+        ),
+        true,
+      );
+      assert.match(observation.requestUrlSha256, /^[a-f0-9]{64}$/u);
+      assert.equal(observation.rawSensitiveInspectionPassed, true);
+      return observation;
+    },
+  );
+  assert.equal(
+    networkPolicyEvent.deterministicResponseObservationCount,
+    deterministicObservations.length,
+  );
+  assert.equal(
+    networkPolicyEvent.deterministicResponseObservationSetHash,
+    sha256(canonicalJson(deterministicObservations)),
+  );
+  assert.equal(
+    networkPolicyEvent.externalStaticResponseObservationCount,
+    externalStaticObservations.length,
+  );
+  assert.equal(
+    networkPolicyEvent.externalStaticResponseObservationSetHash,
+    sha256(canonicalJson(externalStaticObservations)),
+  );
+  assert.equal(
+    networkPolicyEvent.optionalTelemetryObservationCount,
+    telemetryObservations.length,
+  );
+  assert.equal(
+    networkPolicyEvent.optionalTelemetryObservationSetHash,
+    sha256(canonicalJson(telemetryObservations)),
+  );
+  assert.equal(
+    networkPolicyEvent.pinnedStartupSourceAttestationCount,
+    expectedPinnedStartupSourceBindingsForContract().length,
+  );
+  assert.equal(
+    networkPolicyEvent.pinnedStartupSourceAttestationSetHash,
+    manifest.networkPolicy.pinnedStartupSourceAttestationSetHash,
+  );
+  assert.equal(
+    networkPolicyEvent.optionalTelemetrySuppressedRequestCount,
+    telemetryObservations.length,
+  );
+  assert.equal(
+    networkPolicyEvent.deterministicHolidayResponseFulfillCount,
+    deterministicObservations.filter(
+      ({ id }) =>
+        id === contract.browserTransport.deterministicLocalResponse.id,
+    ).length,
+  );
+  assert.equal(
+    networkPolicyEvent.deterministicRecaptchaResponseFulfillCount,
+    deterministicObservations.filter(
+      ({ id }) =>
+        id === contract.browserTransport.deterministicRecaptchaResponse.id,
+    ).length,
+  );
+  assert.equal(
+    networkPolicyEvent.deterministicFirebaseModuleFulfillCount,
+    deterministicObservations.filter(({ id }) => id === "firebase-esm-12.9.0")
+      .length,
+  );
+  assert.equal(
+    networkPolicyEvent.externalStaticRequestNetworkFetchCount,
+    externalStaticObservations.filter(
+      ({ source }) => source === "baseline-node-network",
+    ).length,
+  );
+  assert.equal(
+    networkPolicyEvent.externalStaticRequestCacheFulfillCount,
+    externalStaticObservations.filter(
+      ({ source }) => source !== "baseline-node-network",
+    ).length,
+  );
+  for (const field of [
+    "deterministicResponseScopeMismatchBlockCount",
+    "externalStaticRequestScopeMismatchBlockCount",
+    "externalStaticResponseNon200AbortCount",
+    "stagingApiKeyScopeViolationBlockCount",
+    "testCredentialScopeViolationBlockCount",
+    "refreshTokenScopeViolationBlockCount",
+    "allowedEgressRedirectAbortCount",
+    "allowedEgressHttpErrorAbortCount",
+    "allowedEgressResponseErrorAbortCount",
+    "allowedEgressTrackingResidualCount",
+    "externalStaticTrackingResidualCount",
+    "rawSensitivePreTransmissionBlockCount",
+    "rawProductionPreTransmissionBlockCount",
+    "rawVercelBypassPreTransmissionBlockCount",
+    "rawStagingApiKeyPreTransmissionBlockCount",
+    "rawTestCredentialPreTransmissionBlockCount",
+    "rawRefreshTokenPreTransmissionBlockCount",
+    "rawDebugTokenPreTransmissionBlockCount",
+    "rawDebugSentinelPreTransmissionBlockCount",
+    "allowedEgressInformationalTrackingResidualCount",
+    "allowedEgressInvalidResponseStatusAbortCount",
+    "allowedEgressEgressHeaderForwardCount",
+    "nodeOwnedExternalInformationalBrowserExposureCount",
+    "directBrowserEarlyHintsObservationCount",
+    "directBrowserEarlyHintsEgressHeaderObservationCount",
+    "directBrowserEarlyHintsCaptureInvalidationCount",
+    "fullPostDataResolutionFailureCount",
+    "fullPostDataOversizeBlockCount",
+    "fullPostDataRepresentationMismatchBlockCount",
+  ]) {
+    assert.equal(networkPolicyEvent[field], 0);
+  }
+  assert.ok(
+    networkPolicyEvent.allowedEgressInformationalFinalResponseCount <=
+      networkPolicyEvent.allowedEgressInformationalResponsePauseCount,
+  );
+  assert.equal(
+    networkPolicyEvent.fullPostDataResolutionCount,
+    networkPolicyEvent.rawSensitivePreTransmissionInspectionCount,
+  );
+  assert.equal(
+    networkPolicyEvent.nodeOwnedExternalRequestCount,
+    networkPolicyEvent.externalStaticRequestNetworkFetchCount,
+  );
+  assert.equal(
+    networkPolicyEvent.nodeOwnedExternalFinalResponseCount,
+    networkPolicyEvent.nodeOwnedExternalRequestCount,
+  );
+  assert.equal(
+    networkPolicyEvent.nodeOwnedExternalFinalBodyHashAttestationCount,
+    networkPolicyEvent.nodeOwnedExternalRequestCount,
+  );
+  const {
+    type: _networkPolicyType,
+    id: _networkPolicyId,
+    stage: _networkPolicyStage,
+    summarySha256,
+    ...networkPolicySummaryWithoutIdentity
+  } = networkPolicyEvent;
+  assert.equal(
+    summarySha256,
+    sha256(canonicalJson(networkPolicySummaryWithoutIdentity)),
+  );
+  assert.equal(auditedNetworkPolicySummaries.has(audit.id), false);
+  auditedNetworkPolicySummaries.set(audit.id, {
+    ...networkPolicySummaryWithoutIdentity,
+    summarySha256,
+  });
+  auditedDeterministicResponseObservations.push(...deterministicObservations);
+  auditedExternalStaticResponseObservations.push(...externalStaticObservations);
+  auditedOptionalTelemetryObservations.push(...telemetryObservations);
+  auditedOptionalTelemetrySuppressedRequests +=
+    networkPolicyEvent.optionalTelemetrySuppressedRequestCount;
+  auditedDeterministicHolidayResponseFulfills +=
+    networkPolicyEvent.deterministicHolidayResponseFulfillCount;
+  auditedDeterministicRecaptchaResponseFulfills +=
+    networkPolicyEvent.deterministicRecaptchaResponseFulfillCount;
+  auditedDeterministicFirebaseModuleFulfills +=
+    networkPolicyEvent.deterministicFirebaseModuleFulfillCount;
+  auditedDeterministicResponseScopeMismatchBlocks +=
+    networkPolicyEvent.deterministicResponseScopeMismatchBlockCount;
+  auditedExternalStaticRequestNetworkFetches +=
+    networkPolicyEvent.externalStaticRequestNetworkFetchCount;
+  auditedExternalStaticRequestCacheFulfills +=
+    networkPolicyEvent.externalStaticRequestCacheFulfillCount;
+  auditedExternalStaticRequestScopeMismatchBlocks +=
+    networkPolicyEvent.externalStaticRequestScopeMismatchBlockCount;
+  auditedExternalStaticResponseNon200Aborts +=
+    networkPolicyEvent.externalStaticResponseNon200AbortCount;
+  auditedNodeOwnedExternalRequests +=
+    networkPolicyEvent.nodeOwnedExternalRequestCount;
+  auditedNodeOwnedExternalInformationalResponses +=
+    networkPolicyEvent.nodeOwnedExternalInformationalResponseCount;
+  auditedNodeOwnedExternalInformationalEgressHeaderObservations +=
+    networkPolicyEvent.nodeOwnedExternalInformationalEgressHeaderObservationCount;
+  auditedNodeOwnedExternalInformationalBrowserExposures +=
+    networkPolicyEvent.nodeOwnedExternalInformationalBrowserExposureCount;
+  auditedNodeOwnedExternalFinalResponses +=
+    networkPolicyEvent.nodeOwnedExternalFinalResponseCount;
+  auditedNodeOwnedExternalFinalBodyHashAttestations +=
+    networkPolicyEvent.nodeOwnedExternalFinalBodyHashAttestationCount;
+  auditedNodeOwnedExternalFinalHeaderSuppressions +=
+    networkPolicyEvent.nodeOwnedExternalFinalHeaderSuppressionCount;
+  auditedStagingApiKeyScopeViolationBlocks +=
+    networkPolicyEvent.stagingApiKeyScopeViolationBlockCount;
+  auditedTestCredentialScopeViolationBlocks +=
+    networkPolicyEvent.testCredentialScopeViolationBlockCount;
+  auditedRefreshTokenScopeViolationBlocks +=
+    networkPolicyEvent.refreshTokenScopeViolationBlockCount;
+  auditedRawSensitivePreTransmissionInspections +=
+    networkPolicyEvent.rawSensitivePreTransmissionInspectionCount;
+  auditedRawSensitivePreTransmissionBlocks +=
+    networkPolicyEvent.rawSensitivePreTransmissionBlockCount;
+  auditedRawProductionPreTransmissionBlocks +=
+    networkPolicyEvent.rawProductionPreTransmissionBlockCount;
+  auditedRawVercelBypassPreTransmissionBlocks +=
+    networkPolicyEvent.rawVercelBypassPreTransmissionBlockCount;
+  auditedRawStagingApiKeyPreTransmissionBlocks +=
+    networkPolicyEvent.rawStagingApiKeyPreTransmissionBlockCount;
+  auditedRawTestCredentialPreTransmissionBlocks +=
+    networkPolicyEvent.rawTestCredentialPreTransmissionBlockCount;
+  auditedRawRefreshTokenPreTransmissionBlocks +=
+    networkPolicyEvent.rawRefreshTokenPreTransmissionBlockCount;
+  auditedRawDebugTokenPreTransmissionBlocks +=
+    networkPolicyEvent.rawDebugTokenPreTransmissionBlockCount;
+  auditedRawDebugSentinelPreTransmissionBlocks +=
+    networkPolicyEvent.rawDebugSentinelPreTransmissionBlockCount;
+  auditedAllowedEgressResponsePauses +=
+    networkPolicyEvent.allowedEgressResponsePauseCount;
+  auditedAllowedEgressInformationalResponsePauses +=
+    networkPolicyEvent.allowedEgressInformationalResponsePauseCount;
+  auditedAllowedEgressInformationalFinalResponses +=
+    networkPolicyEvent.allowedEgressInformationalFinalResponseCount;
+  auditedAllowedEgressInformationalTrackingResiduals +=
+    networkPolicyEvent.allowedEgressInformationalTrackingResidualCount;
+  auditedAllowedEgressInvalidResponseStatusAborts +=
+    networkPolicyEvent.allowedEgressInvalidResponseStatusAbortCount;
+  auditedAllowedEgressRedirectAborts +=
+    networkPolicyEvent.allowedEgressRedirectAbortCount;
+  auditedAllowedEgressHttpErrorAborts +=
+    networkPolicyEvent.allowedEgressHttpErrorAbortCount;
+  auditedAllowedEgressResponseErrorAborts +=
+    networkPolicyEvent.allowedEgressResponseErrorAbortCount;
+  auditedAllowedEgressInformationalEgressHeaderObservations +=
+    networkPolicyEvent.allowedEgressInformationalEgressHeaderObservationCount;
+  auditedAllowedEgressFinalEgressHeaderObservations +=
+    networkPolicyEvent.allowedEgressFinalEgressHeaderObservationCount;
+  auditedAllowedEgressResponseHeaderSuppressions +=
+    networkPolicyEvent.allowedEgressResponseHeaderSuppressionCount;
+  auditedAllowedEgressEgressHeaderForwards +=
+    networkPolicyEvent.allowedEgressEgressHeaderForwardCount;
+  auditedAllowedEgressTrackingResiduals +=
+    networkPolicyEvent.allowedEgressTrackingResidualCount;
+  auditedExternalStaticTrackingResiduals +=
+    networkPolicyEvent.externalStaticTrackingResidualCount;
+  auditedDirectBrowserEarlyHintsObservations +=
+    networkPolicyEvent.directBrowserEarlyHintsObservationCount;
+  auditedDirectBrowserEarlyHintsEgressHeaderObservations +=
+    networkPolicyEvent.directBrowserEarlyHintsEgressHeaderObservationCount;
+  auditedDirectBrowserEarlyHintsCaptureInvalidations +=
+    networkPolicyEvent.directBrowserEarlyHintsCaptureInvalidationCount;
+  auditedFullPostDataResolutions +=
+    networkPolicyEvent.fullPostDataResolutionCount;
+  auditedFullPostDataNetworkFallbacks +=
+    networkPolicyEvent.fullPostDataNetworkFallbackCount;
+  auditedFullPostDataResolutionFailures +=
+    networkPolicyEvent.fullPostDataResolutionFailureCount;
+  auditedFullPostDataOversizeBlocks +=
+    networkPolicyEvent.fullPostDataOversizeBlockCount;
+  auditedFullPostDataRepresentationMismatchBlocks +=
+    networkPolicyEvent.fullPostDataRepresentationMismatchBlockCount;
   const bridgeEvents = events.filter(
     (event) => event.type === "app-check-bridge",
   );
@@ -3685,14 +6686,49 @@ for (const audit of manifest.browserAudits) {
     "stage",
     "scopeHash",
     "browserCdpSecurityScopeHash",
+    "browserWideBoundaryAttestation",
+    "browserWideBoundaryAttestationHash",
     "serviceWorkerPolicy",
     "interceptionMechanism",
     "preTransmissionBoundaryAttestationHash",
+    "nonFirebaseNetworkAllowedHostnameSetHash",
+    "nonFirebaseNetworkAllowedHostnameCount",
     "preTransmissionBoundaryInspectionCount",
     "preTransmissionBoundaryBlockAttemptCount",
     "preTransmissionBoundaryProductionBlockCount",
+    "preTransmissionBoundaryCrossOriginDocumentBlockCount",
     "preTransmissionBoundaryUnboundFirebaseBlockCount",
+    "preTransmissionBoundaryNonFirebaseHostnameBlockCount",
+    "preTransmissionBoundaryMalformedUrlBlockCount",
     "preTransmissionBoundaryFailRequestCount",
+    "optionalTelemetrySuppressedRequestCount",
+    "rawSensitivePreTransmissionInspectionCount",
+    "rawSensitivePreTransmissionBlockCount",
+    "rawProductionPreTransmissionBlockCount",
+    "rawVercelBypassPreTransmissionBlockCount",
+    "rawStagingApiKeyPreTransmissionBlockCount",
+    "rawTestCredentialPreTransmissionBlockCount",
+    "rawRefreshTokenPreTransmissionBlockCount",
+    "rawDebugTokenPreTransmissionBlockCount",
+    "rawDebugSentinelPreTransmissionBlockCount",
+    "allowedEgressResponsePauseCount",
+    "allowedEgressInformationalResponsePauseCount",
+    "allowedEgressInformationalFinalResponseCount",
+    "allowedEgressInformationalTrackingResidualCount",
+    "allowedEgressInvalidResponseStatusAbortCount",
+    "allowedEgressInformationalEgressHeaderObservationCount",
+    "allowedEgressFinalEgressHeaderObservationCount",
+    "allowedEgressResponseHeaderSuppressionCount",
+    "allowedEgressEgressHeaderForwardCount",
+    "directBrowserEarlyHintsObservationCount",
+    "directBrowserEarlyHintsEgressHeaderObservationCount",
+    "directBrowserEarlyHintsCaptureInvalidationCount",
+    "fullPostDataResolutionCount",
+    "fullPostDataNetworkFallbackCount",
+    "fullPostDataResolutionFailureCount",
+    "fullPostDataOversizeBlockCount",
+    "fullPostDataRepresentationMismatchBlockCount",
+    "networkPolicySummaryHash",
     "headerCorrelationMechanism",
     "secretInitScope",
     "browserGlobalValueKind",
@@ -3761,6 +6797,8 @@ for (const audit of manifest.browserAudits) {
     "sensitiveRedirectResponseAbortRequestCount",
     "sensitiveResponseErrorAbortRequestCount",
     "sensitiveRequestTrackingResidualCount",
+    "allowedEgressTrackingResidualCount",
+    "externalStaticTrackingResidualCount",
     "networkHeaderAttestationErrorCount",
     "pendingBridgeDecisionResidualCount",
     "pendingBridgeObservationResidualCount",
@@ -3795,11 +6833,159 @@ for (const audit of manifest.browserAudits) {
     bridgeEvent.browserCdpSecurityScopeHash,
     browserAppCheckCdpSecurityScopeHash,
   );
+  assertExactObjectKeys(bridgeEvent.browserWideBoundaryAttestation, [
+    "schemaVersion",
+    "mechanism",
+    "activationCount",
+    "waitingTargetCount",
+    "primaryTargetConfiguredCount",
+    "primaryRequestBoundaryHandoffCount",
+    "heldRuntimeResumeCount",
+    "secondaryTargetClosedBeforeResumeCount",
+    "privateRequestInspectionCount",
+    "privateRequestBlockCount",
+    "privateRequestContinueCount",
+    "privateRawSensitiveInspectionCount",
+    "privateRawSensitiveBlockCount",
+    "privateRawProductionBlockCount",
+    "privateRawVercelBypassBlockCount",
+    "privateRawStagingApiKeyBlockCount",
+    "privateRawTestCredentialBlockCount",
+    "privateRawRefreshTokenBlockCount",
+    "privateRawDebugTokenBlockCount",
+    "privateRawDebugSentinelBlockCount",
+    "privateOptionalTelemetrySuppressionCount",
+    "privateDeterministicResponseFulfillCount",
+    "privateDeterministicResponseScopeMismatchBlockCount",
+    "privateExternalStaticBlockCount",
+    "privateFullPostDataResolutionCount",
+    "privateFullPostDataNetworkFallbackCount",
+    "privateFullPostDataResolutionFailureCount",
+    "privateFullPostDataOversizeBlockCount",
+    "privateFullPostDataRepresentationMismatchBlockCount",
+    "handlerErrorCount",
+    "pendingSetupResidualCount",
+    "pendingHandlerResidualCount",
+    "heldRuntimeResumeResidualCount",
+    "fatalErrorCount",
+  ]);
+  assert.equal(bridgeEvent.browserWideBoundaryAttestation.schemaVersion, 3);
+  assert.equal(
+    bridgeEvent.browserWideBoundaryAttestation.mechanism,
+    contract.networkBoundary.executionTargetBoundary.mechanism,
+  );
+  assert.equal(
+    bridgeEvent.browserWideBoundaryAttestation
+      .privateFullPostDataResolutionCount,
+    bridgeEvent.browserWideBoundaryAttestation.privateRequestInspectionCount,
+  );
+  assert.equal(bridgeEvent.browserWideBoundaryAttestation.activationCount, 1);
+  assert.equal(
+    bridgeEvent.browserWideBoundaryAttestation.primaryTargetConfiguredCount,
+    1,
+  );
+  assert.equal(
+    bridgeEvent.browserWideBoundaryAttestation
+      .primaryRequestBoundaryHandoffCount,
+    1,
+  );
+  assert.ok(
+    bridgeEvent.browserWideBoundaryAttestation.heldRuntimeResumeCount >= 1,
+  );
+  assert.equal(
+    bridgeEvent.browserWideBoundaryAttestation
+      .privateRawSensitiveInspectionCount,
+    bridgeEvent.browserWideBoundaryAttestation.privateRequestInspectionCount,
+  );
+  for (const field of [
+    "secondaryTargetClosedBeforeResumeCount",
+    "privateOptionalTelemetrySuppressionCount",
+    "privateDeterministicResponseFulfillCount",
+    "privateDeterministicResponseScopeMismatchBlockCount",
+    "privateExternalStaticBlockCount",
+    "privateRawSensitiveBlockCount",
+    "privateRawProductionBlockCount",
+    "privateRawVercelBypassBlockCount",
+    "privateRawStagingApiKeyBlockCount",
+    "privateRawTestCredentialBlockCount",
+    "privateRawRefreshTokenBlockCount",
+    "privateRawDebugTokenBlockCount",
+    "privateRawDebugSentinelBlockCount",
+    "privateFullPostDataResolutionFailureCount",
+    "privateFullPostDataOversizeBlockCount",
+    "privateFullPostDataRepresentationMismatchBlockCount",
+    "handlerErrorCount",
+    "pendingSetupResidualCount",
+    "pendingHandlerResidualCount",
+    "heldRuntimeResumeResidualCount",
+    "fatalErrorCount",
+  ]) {
+    assert.equal(bridgeEvent.browserWideBoundaryAttestation[field], 0);
+  }
+  assert.equal(
+    bridgeEvent.browserWideBoundaryAttestationHash,
+    sha256(canonicalJson(bridgeEvent.browserWideBoundaryAttestation)),
+  );
+  auditedBrowserWideBoundaryGroupAttestations.push({
+    id: audit.id,
+    ...bridgeEvent.browserWideBoundaryAttestation,
+  });
   assert.equal(bridgeEvent.serviceWorkerPolicy, "block");
   assert.equal(bridgeEvent.interceptionMechanism, "cdp-fetch-request-stage");
   assert.equal(
     bridgeEvent.preTransmissionBoundaryAttestationHash,
     preTransmissionNetworkBoundaryAttestationHash,
+  );
+  assert.equal(
+    bridgeEvent.nonFirebaseNetworkAllowedHostnameSetHash,
+    nonFirebaseNetworkAllowedHostnameSetHash,
+  );
+  assert.equal(
+    bridgeEvent.nonFirebaseNetworkAllowedHostnameCount,
+    nonFirebaseNetworkAllowedHostnames.length,
+  );
+  assert.equal(
+    bridgeEvent.optionalTelemetrySuppressedRequestCount,
+    networkPolicyEvent.optionalTelemetrySuppressedRequestCount,
+  );
+  for (const field of [
+    "rawSensitivePreTransmissionInspectionCount",
+    "rawSensitivePreTransmissionBlockCount",
+    "rawProductionPreTransmissionBlockCount",
+    "rawVercelBypassPreTransmissionBlockCount",
+    "rawStagingApiKeyPreTransmissionBlockCount",
+    "rawTestCredentialPreTransmissionBlockCount",
+    "rawRefreshTokenPreTransmissionBlockCount",
+    "rawDebugTokenPreTransmissionBlockCount",
+    "rawDebugSentinelPreTransmissionBlockCount",
+    "allowedEgressResponsePauseCount",
+    "allowedEgressInformationalResponsePauseCount",
+    "allowedEgressInformationalFinalResponseCount",
+    "allowedEgressInformationalTrackingResidualCount",
+    "allowedEgressInvalidResponseStatusAbortCount",
+    "allowedEgressInformationalEgressHeaderObservationCount",
+    "allowedEgressFinalEgressHeaderObservationCount",
+    "allowedEgressResponseHeaderSuppressionCount",
+    "allowedEgressEgressHeaderForwardCount",
+    "fullPostDataResolutionCount",
+    "fullPostDataNetworkFallbackCount",
+    "fullPostDataResolutionFailureCount",
+    "fullPostDataOversizeBlockCount",
+    "fullPostDataRepresentationMismatchBlockCount",
+  ]) {
+    assert.equal(bridgeEvent[field], networkPolicyEvent[field]);
+  }
+  assert.equal(
+    bridgeEvent.rawSensitivePreTransmissionInspectionCount,
+    bridgeEvent.cdpMonitorPausedRequestCount,
+  );
+  assert.equal(
+    bridgeEvent.fullPostDataResolutionCount,
+    bridgeEvent.cdpMonitorPausedRequestCount,
+  );
+  assert.equal(
+    bridgeEvent.networkPolicySummaryHash,
+    networkPolicyEvent.summarySha256,
   );
   assert.equal(
     bridgeEvent.headerCorrelationMechanism,
@@ -3872,7 +7058,10 @@ for (const audit of manifest.browserAudits) {
     "preTransmissionBoundaryInspectionCount",
     "preTransmissionBoundaryBlockAttemptCount",
     "preTransmissionBoundaryProductionBlockCount",
+    "preTransmissionBoundaryCrossOriginDocumentBlockCount",
     "preTransmissionBoundaryUnboundFirebaseBlockCount",
+    "preTransmissionBoundaryNonFirebaseHostnameBlockCount",
+    "preTransmissionBoundaryMalformedUrlBlockCount",
     "preTransmissionBoundaryFailRequestCount",
     "debugTokenNetworkObservationCount",
     "debugSentinelNetworkObservationCount",
@@ -3927,13 +7116,16 @@ for (const audit of manifest.browserAudits) {
   assert.ok(bridgeEvent.cdpMonitorPausedRequestCount > 0);
   assert.ok(bridgeEvent.preTransmissionBoundaryInspectionCount > 0);
   assert.equal(
-    bridgeEvent.preTransmissionBoundaryInspectionCount,
     bridgeEvent.cdpMonitorPausedRequestCount,
+    bridgeEvent.preTransmissionBoundaryInspectionCount,
   );
   assert.equal(
     bridgeEvent.preTransmissionBoundaryBlockAttemptCount,
     bridgeEvent.preTransmissionBoundaryProductionBlockCount +
-      bridgeEvent.preTransmissionBoundaryUnboundFirebaseBlockCount,
+      bridgeEvent.preTransmissionBoundaryCrossOriginDocumentBlockCount +
+      bridgeEvent.preTransmissionBoundaryUnboundFirebaseBlockCount +
+      bridgeEvent.preTransmissionBoundaryNonFirebaseHostnameBlockCount +
+      bridgeEvent.preTransmissionBoundaryMalformedUrlBlockCount,
   );
   assert.equal(
     bridgeEvent.preTransmissionBoundaryFailRequestCount,
@@ -3941,7 +7133,16 @@ for (const audit of manifest.browserAudits) {
   );
   assert.equal(bridgeEvent.preTransmissionBoundaryBlockAttemptCount, 0);
   assert.equal(bridgeEvent.preTransmissionBoundaryProductionBlockCount, 0);
+  assert.equal(
+    bridgeEvent.preTransmissionBoundaryCrossOriginDocumentBlockCount,
+    0,
+  );
   assert.equal(bridgeEvent.preTransmissionBoundaryUnboundFirebaseBlockCount, 0);
+  assert.equal(
+    bridgeEvent.preTransmissionBoundaryNonFirebaseHostnameBlockCount,
+    0,
+  );
+  assert.equal(bridgeEvent.preTransmissionBoundaryMalformedUrlBlockCount, 0);
   assert.equal(bridgeEvent.preTransmissionBoundaryFailRequestCount, 0);
   assert.equal(bridgeEvent.debugTokenNetworkObservationCount, 0);
   assert.equal(bridgeEvent.unauthorizedDebugTokenEgressCount, 0);
@@ -3989,31 +7190,11 @@ for (const audit of manifest.browserAudits) {
   assert.equal(bridgeEvent.vercelBypassHttpErrorResponseCount, 0);
   assert.equal(bridgeEvent.vercelBypassHeaderMissingRequestCount, 0);
   assert.equal(bridgeEvent.vercelBypassHeaderMismatchRequestCount, 0);
-  if (bridgeEvent.vercelBypassConfigured) {
-    assert.ok(bridgeEvent.vercelBypassCdpInjectedRequestCount > 0);
-    assert.equal(
-      bridgeEvent.vercelBypassCdpInjectedRequestCount,
-      bridgeEvent.vercelBypassObservedEligibleRequestCount,
-    );
-    assert.equal(
-      bridgeEvent.vercelBypassCdpInjectedRequestCount,
-      bridgeEvent.vercelBypassHeaderObservedRequestCount,
-    );
-    assert.equal(
-      bridgeEvent.vercelBypassCdpInjectedRequestCount,
-      bridgeEvent.vercelBypassCdpResponsePausedRequestCount,
-    );
-    assert.equal(
-      bridgeEvent.vercelBypassCdpInjectedRequestCount,
-      bridgeEvent.vercelBypassHttpSuccessResponseCount,
-    );
-  } else {
-    assert.equal(bridgeEvent.vercelBypassCdpInjectedRequestCount, 0);
-    assert.equal(bridgeEvent.vercelBypassObservedEligibleRequestCount, 0);
-    assert.equal(bridgeEvent.vercelBypassHeaderObservedRequestCount, 0);
-    assert.equal(bridgeEvent.vercelBypassCdpResponsePausedRequestCount, 0);
-    assert.equal(bridgeEvent.vercelBypassHttpSuccessResponseCount, 0);
-  }
+  assert.equal(bridgeEvent.vercelBypassCdpInjectedRequestCount, 0);
+  assert.equal(bridgeEvent.vercelBypassObservedEligibleRequestCount, 0);
+  assert.equal(bridgeEvent.vercelBypassHeaderObservedRequestCount, 0);
+  assert.equal(bridgeEvent.vercelBypassCdpResponsePausedRequestCount, 0);
+  assert.equal(bridgeEvent.vercelBypassHttpSuccessResponseCount, 0);
   assert.equal(
     bridgeEvent.debugSentinelNetworkObservationCount,
     bridgeEvent.authorizedDebugExchangeBodyReplacementCount,
@@ -4025,8 +7206,7 @@ for (const audit of manifest.browserAudits) {
   assert.equal(
     bridgeEvent.sensitiveCdpResponsePausedRequestCount,
     bridgeEvent.authorizedDebugExchangeBodyReplacementCount +
-      bridgeEvent.authorizedAppCheckHeaderRequestCount +
-      bridgeEvent.vercelBypassCdpInjectedRequestCount,
+      bridgeEvent.authorizedAppCheckHeaderRequestCount,
   );
   assert.equal(
     bridgeEvent.cdpResponsePausedRequestCount,
@@ -4094,8 +7274,14 @@ for (const audit of manifest.browserAudits) {
     bridgeEvent.preTransmissionBoundaryBlockAttemptCount;
   auditedPreTransmissionBoundaryProductionBlocks +=
     bridgeEvent.preTransmissionBoundaryProductionBlockCount;
+  auditedPreTransmissionBoundaryCrossOriginDocumentBlocks +=
+    bridgeEvent.preTransmissionBoundaryCrossOriginDocumentBlockCount;
   auditedPreTransmissionBoundaryUnboundFirebaseBlocks +=
     bridgeEvent.preTransmissionBoundaryUnboundFirebaseBlockCount;
+  auditedPreTransmissionBoundaryNonFirebaseHostnameBlocks +=
+    bridgeEvent.preTransmissionBoundaryNonFirebaseHostnameBlockCount;
+  auditedPreTransmissionBoundaryMalformedUrlBlocks +=
+    bridgeEvent.preTransmissionBoundaryMalformedUrlBlockCount;
   auditedPreTransmissionBoundaryFailRequests +=
     bridgeEvent.preTransmissionBoundaryFailRequestCount;
   auditedDebugTokenNetworkObservations +=
@@ -4246,6 +7432,8 @@ for (const audit of manifest.browserAudits) {
       fixtureEvidenceSha256: sha256(
         Buffer.from(JSON.stringify(capture.fixtureEvidence)),
       ),
+      upstreamProvenance: capture.upstreamProvenance,
+      networkPolicy: capture.networkPolicy,
     };
     assert.deepEqual(event, expectedEvent);
     assert.equal(
@@ -4260,11 +7448,203 @@ for (const audit of manifest.browserAudits) {
   const responseEvents = events.filter(
     (event) => event.type === "network-response",
   );
+  const originRewriteEvents = events.filter(
+    (event) => event.type === "origin-rewrite",
+  );
   assert.equal(
     events.length,
-    3 + requestEvents.length + responseEvents.length + captureEvents.length,
+    5 +
+      requestEvents.length +
+      responseEvents.length +
+      originRewriteEvents.length +
+      deterministicEvents.length +
+      externalStaticEvents.length +
+      telemetryEvents.length +
+      captureEvents.length,
     `${audit.id} has an unexpected browser-audit event count.`,
   );
+  assert.equal(originRewriteEvents.length, originRewriteSummary.requestCount);
+  const originRewriteProvenanceRows = [];
+  for (const [sequence, event] of originRewriteEvents.entries()) {
+    assertExactObjectKeys(event, [
+      "type",
+      "sequence",
+      "stage",
+      "phase",
+      "captureId",
+      "method",
+      "resourceType",
+      "kind",
+      "browserOrigin",
+      "browserPath",
+      "browserUrlSha256",
+      "upstreamDeploymentId",
+      "upstreamOrigin",
+      "upstreamUrl",
+      "upstreamUrlSha256",
+      "redirectRequest",
+      "redirectResponse",
+      "responseStatus",
+      "responseError",
+      "payloadSha256",
+      "payloadBytes",
+      "immutableAttestationSha256",
+      "immutableAttestationBytes",
+      "byteMatch",
+    ]);
+    assert.equal(event.sequence, sequence);
+    assert.equal(event.stage, audit.stage);
+    assert.ok(
+      ["context-bootstrap", "authentication", "screen-capture"].includes(
+        event.phase,
+      ),
+    );
+    assert.equal(
+      event.captureId === null || audit.captureIds.includes(event.captureId),
+      true,
+    );
+    assert.ok(contract.browserTransport.allowedMethods.includes(event.method));
+    assert.equal(event.browserOrigin, stableBrowserOrigin);
+    const browserUrl = new URL(
+      event.browserPath,
+      stableBrowserOrigin,
+    ).toString();
+    assert.equal(new URL(browserUrl).origin, stableBrowserOrigin);
+    assert.equal(event.browserUrlSha256, sha256(browserUrl));
+    const decision = stableOriginRewriteDecision({
+      stage: audit.stage,
+      requestUrl: browserUrl,
+      method: event.method,
+      resourceType: event.resourceType,
+      browserOrigin: stableBrowserOrigin,
+      upstreamOrigins,
+      transportContract: contract.browserTransport,
+    });
+    assert.equal(decision.eligible, true);
+    assert.equal(event.kind, decision.kind);
+    assert.equal(
+      event.upstreamDeploymentId,
+      immutableUpstreamBinding[audit.stage].deploymentId,
+    );
+    assert.equal(event.upstreamOrigin, upstreamOrigins[audit.stage]);
+    assert.equal(event.upstreamUrl, decision.upstreamUrl);
+    assert.equal(event.upstreamUrlSha256, sha256(event.upstreamUrl));
+    assert.equal(event.redirectRequest, false);
+    assert.equal(event.redirectResponse, false);
+    assert.equal(event.responseError, false);
+    assert.ok(event.responseStatus >= 200 && event.responseStatus < 300);
+    const bodyHashRequired =
+      event.method === "GET" &&
+      contract.browserTransport.responseBodyHashResourceTypes.includes(
+        event.resourceType,
+      );
+    if (bodyHashRequired) {
+      assert.match(event.payloadSha256, /^[a-f0-9]{64}$/u);
+      assert.ok(Number.isInteger(event.payloadBytes) && event.payloadBytes > 0);
+      assert.equal(event.immutableAttestationSha256, event.payloadSha256);
+      assert.equal(event.immutableAttestationBytes, event.payloadBytes);
+      assert.equal(event.byteMatch, true);
+    } else {
+      assert.equal(event.payloadSha256, null);
+      assert.equal(event.payloadBytes, null);
+      assert.equal(event.immutableAttestationSha256, null);
+      assert.equal(event.immutableAttestationBytes, null);
+      assert.equal(event.byteMatch, null);
+    }
+    originRewriteProvenanceRows.push({
+      method: event.method,
+      resourceType: event.resourceType,
+      kind: event.kind,
+      browserPath: event.browserPath,
+      browserUrlSha256: event.browserUrlSha256,
+      upstreamUrl: event.upstreamUrl,
+      upstreamUrlSha256: event.upstreamUrlSha256,
+      responseStatus: event.responseStatus,
+      responseBodySha256: event.payloadSha256,
+      responseBodyBytes: event.payloadBytes,
+      immutableAttestationSha256: event.immutableAttestationSha256,
+      immutableAttestationBytes: event.immutableAttestationBytes,
+      byteMatch: event.byteMatch,
+    });
+  }
+  assert.equal(
+    originRewriteSummary.resourceProvenanceSha256,
+    sha256(Buffer.from(canonicalJson(originRewriteProvenanceRows))),
+  );
+  const rewrittenDocumentEvents = originRewriteEvents.filter(
+    (event) => event.resourceType === "Document",
+  );
+  const rewrittenScriptEvents = originRewriteEvents.filter(
+    (event) => event.resourceType === "Script",
+  );
+  const hashedRewriteEvents = originRewriteEvents.filter(
+    (event) => event.payloadSha256,
+  );
+  assert.equal(originRewriteSummary.responseCount, originRewriteEvents.length);
+  assert.equal(
+    originRewriteSummary.httpSuccessResponseCount,
+    originRewriteEvents.length,
+  );
+  assert.equal(
+    originRewriteSummary.documentRequestCount,
+    rewrittenDocumentEvents.length,
+  );
+  assert.equal(
+    originRewriteSummary.scriptRequestCount,
+    rewrittenScriptEvents.length,
+  );
+  assert.equal(originRewriteSummary.bodyHashCount, hashedRewriteEvents.length);
+  assert.deepEqual(
+    originRewriteSummary.documentBodySha256s,
+    [
+      ...new Set(
+        rewrittenDocumentEvents
+          .map((event) => event.payloadSha256)
+          .filter(Boolean),
+      ),
+    ].sort(),
+  );
+  assert.deepEqual(
+    originRewriteSummary.scriptBodySha256s,
+    [
+      ...new Set(
+        rewrittenScriptEvents
+          .map((event) => event.payloadSha256)
+          .filter(Boolean),
+      ),
+    ].sort(),
+  );
+  for (const captureId of audit.captureIds) {
+    assert.deepEqual(
+      captures.get(captureId).upstreamProvenance,
+      originRewriteSummary,
+    );
+    assert.deepEqual(
+      captures.get(captureId).networkPolicy,
+      auditedNetworkPolicySummaries.get(audit.id),
+    );
+  }
+  auditedStableOriginRewriteRequests += originRewriteEvents.length;
+  auditedStableOriginRewriteResponses += originRewriteEvents.length;
+  auditedStableOriginRewriteHttpSuccessResponses += originRewriteEvents.length;
+  auditedStableOriginRewriteHttpErrorResponses += originRewriteEvents.filter(
+    (event) => event.responseStatus >= 400,
+  ).length;
+  auditedStableOriginRewriteDocumentRequests += rewrittenDocumentEvents.length;
+  auditedStableOriginRewriteScriptRequests += rewrittenScriptEvents.length;
+  auditedStableOriginRewriteBodyHashes += hashedRewriteEvents.length;
+  auditedStableOriginRewriteBodyHashMismatches += hashedRewriteEvents.filter(
+    (event) => event.byteMatch !== true,
+  ).length;
+  auditedStableOriginRewriteRedirectRequests += originRewriteEvents.filter(
+    (event) => event.redirectRequest,
+  ).length;
+  auditedStableOriginRewriteRedirectResponses += originRewriteEvents.filter(
+    (event) => event.redirectResponse,
+  ).length;
+  auditedStableOriginRewriteResponseErrors += originRewriteEvents.filter(
+    (event) => event.responseError,
+  ).length;
   const fixtureDataServices = new Set(["firestore", "functions", "storage"]);
   const knownFirebaseServices = new Set([
     "auth",
@@ -4276,12 +7656,86 @@ for (const audit of manifest.browserAudits) {
     "hosting",
   ]);
   for (const event of [...requestEvents, ...responseEvents]) {
+    assertAuditedNetworkBoundaryEvent({
+      event,
+      expectedApiKeySha256: manifest.environment.firebaseConfig.apiKeySha256,
+    });
+    assert.equal(
+      event.firebaseService,
+      firebaseServiceForHostname(event.hostname),
+      `${audit.id} contains a hostname/service classification mismatch.`,
+    );
     assert.equal(
       event.firebase,
       event.firebaseService === null
         ? false
         : knownFirebaseServices.has(event.firebaseService),
       `${audit.id} contains an invalid Firebase service classification.`,
+    );
+    assert.equal(typeof event.nonFirebaseHostnameAllowed, "boolean");
+    assert.equal(typeof event.resourceType, "string");
+    if (event.firebase) {
+      assert.equal(event.nonFirebaseHostnameAllowed, false);
+      assert.equal(event.nonFirebasePolicyRuleId, null);
+    } else if (nonFirebaseNetworkAllowedHostnames.includes(event.hostname)) {
+      assert.equal(event.nonFirebaseHostnameAllowed, true);
+      assert.equal(
+        event.nonFirebasePolicyRuleId,
+        "exact-browser-or-immutable-origin",
+      );
+    } else if (event.nonFirebasePolicyRuleId?.startsWith("external-static:")) {
+      const ruleId = event.nonFirebasePolicyRuleId.slice(
+        "external-static:".length,
+      );
+      const rule =
+        contract.networkBoundary.externalStaticRequestAllowlist.rules.find(
+          (candidate) => candidate.id === ruleId,
+        );
+      assert.ok(rule);
+      assert.equal(event.hostname, rule.hostname);
+      assert.equal(
+        rule.resourceTypes.some(
+          (resourceType) =>
+            resourceType.toLowerCase() === event.resourceType.toLowerCase(),
+        ),
+        true,
+      );
+      assert.equal(event.nonFirebaseHostnameAllowed, true);
+    } else {
+      assert.equal(
+        event.nonFirebasePolicyRuleId,
+        `deterministic:${contract.browserTransport.deterministicRecaptchaResponse.id}`,
+      );
+      assert.equal(
+        event.hostname,
+        contract.browserTransport.deterministicRecaptchaResponse.hostname,
+      );
+      assert.equal(
+        event.resourceType.toLowerCase(),
+        contract.browserTransport.deterministicRecaptchaResponse.resourceType.toLowerCase(),
+      );
+      assert.equal(event.nonFirebaseHostnameAllowed, true);
+    }
+    if (!event.firebase) {
+      assert.equal(
+        event.nonFirebaseHostnameAllowed,
+        true,
+        `${audit.id} contains an unallowlisted non-Firebase hostname: ${event.hostname}.`,
+      );
+    }
+    if (isVercelNetworkHostname(event.hostname)) {
+      assert.equal(
+        nonFirebaseNetworkAllowedHostnames.includes(event.hostname),
+        true,
+        `${audit.id} contains an unknown or Production Vercel hostname: ${event.hostname}.`,
+      );
+    }
+    assert.equal(
+      contract.networkBoundary.forbiddenWebHosts.includes(
+        canonicalNetworkHostname(event.hostname),
+      ),
+      false,
+      `${audit.id} contains a forbidden web hostname: ${event.hostname}.`,
     );
     assert.match(
       event.correlationId ?? "",
@@ -4325,13 +7779,20 @@ for (const audit of manifest.browserAudits) {
         "correlationId",
         "method",
         "hostname",
+        "canonicalHostname",
         "firebaseService",
         "firebase",
+        "nonFirebaseHostnameAllowed",
         "staging",
         "production",
         "unboundFirebase",
+        "malformedUrlEncoding",
         "productionWrite",
         "apiKeySha256",
+        "apiKeyValueCount",
+        "apiKeyBindingValid",
+        "firebaseTransportValid",
+        "serviceResourceBound",
         "appCheckHeaderPresent",
         "appCheckHeaderSource",
         "appCheckHeaderJwtShapeValid",
@@ -4355,13 +7816,20 @@ for (const audit of manifest.browserAudits) {
         "correlationId",
         "method",
         "hostname",
+        "canonicalHostname",
         "firebaseService",
         "status",
         "firebase",
+        "nonFirebaseHostnameAllowed",
         "staging",
         "production",
         "unboundFirebase",
+        "malformedUrlEncoding",
         "apiKeySha256",
+        "apiKeyValueCount",
+        "apiKeyBindingValid",
+        "firebaseTransportValid",
+        "serviceResourceBound",
         "appCheckHeaderPresent",
         "appCheckHeaderSource",
         "appCheckHeaderJwtShapeValid",
@@ -4394,12 +7862,19 @@ for (const audit of manifest.browserAudits) {
       "captureId",
       "method",
       "hostname",
+      "canonicalHostname",
       "firebaseService",
       "firebase",
+      "nonFirebaseHostnameAllowed",
       "staging",
       "production",
       "unboundFirebase",
+      "malformedUrlEncoding",
       "apiKeySha256",
+      "apiKeyValueCount",
+      "apiKeyBindingValid",
+      "firebaseTransportValid",
+      "serviceResourceBound",
       "appCheckHeaderPresent",
       "appCheckHeaderSource",
       "appCheckHeaderJwtShapeValid",
@@ -4498,6 +7973,46 @@ for (const audit of manifest.browserAudits) {
       ].sort(([left], [right]) => left.localeCompare(right)),
     );
   const firebaseRequests = requestEvents.filter((request) => request.firebase);
+  const nonFirebaseRequests = requestEvents.filter(
+    (request) => !request.firebase,
+  );
+  const nonFirebaseResponses = responseEvents.filter(
+    (response) => !response.firebase,
+  );
+  const unallowlistedNonFirebaseRequests = nonFirebaseRequests.filter(
+    (request) => !request.nonFirebaseHostnameAllowed,
+  );
+  const unallowlistedNonFirebaseResponses = nonFirebaseResponses.filter(
+    (response) => !response.nonFirebaseHostnameAllowed,
+  );
+  const productionVercelRequests = unallowlistedNonFirebaseRequests.filter(
+    (request) =>
+      isVercelNetworkHostname(request.hostname) &&
+      contract.networkBoundary.forbiddenWebHosts.includes(
+        canonicalNetworkHostname(request.hostname),
+      ),
+  );
+  const productionVercelResponses = unallowlistedNonFirebaseResponses.filter(
+    (response) =>
+      isVercelNetworkHostname(response.hostname) &&
+      contract.networkBoundary.forbiddenWebHosts.includes(
+        canonicalNetworkHostname(response.hostname),
+      ),
+  );
+  const unknownVercelRequests = unallowlistedNonFirebaseRequests.filter(
+    (request) =>
+      isVercelNetworkHostname(request.hostname) &&
+      !contract.networkBoundary.forbiddenWebHosts.includes(
+        canonicalNetworkHostname(request.hostname),
+      ),
+  );
+  const unknownVercelResponses = unallowlistedNonFirebaseResponses.filter(
+    (response) =>
+      isVercelNetworkHostname(response.hostname) &&
+      !contract.networkBoundary.forbiddenWebHosts.includes(
+        canonicalNetworkHostname(response.hostname),
+      ),
+  );
   const stagingResponses = responseEvents.filter(
     (response) =>
       response.firebase && response.staging && response.status < 400,
@@ -4614,6 +8129,18 @@ for (const audit of manifest.browserAudits) {
     requestCount: requestEvents.length,
     responseCount: responseEvents.length,
     firebaseRequestCount: firebaseRequests.length,
+    nonFirebaseRequestCount: nonFirebaseRequests.length,
+    nonFirebaseAllowedRequestCount: nonFirebaseRequests.filter(
+      (request) => request.nonFirebaseHostnameAllowed,
+    ).length,
+    nonFirebaseUnallowlistedRequestCount:
+      unallowlistedNonFirebaseRequests.length,
+    nonFirebaseUnallowlistedResponseCount:
+      unallowlistedNonFirebaseResponses.length,
+    productionVercelRequestCount: productionVercelRequests.length,
+    productionVercelResponseCount: productionVercelResponses.length,
+    unknownVercelRequestCount: unknownVercelRequests.length,
+    unknownVercelResponseCount: unknownVercelResponses.length,
     stagingFirebaseRequestCount: stagingRequests.length,
     stagingFirebaseResponseCount: stagingResponses.length,
     stagingDataRequestCount: stagingDataRequests.length,
@@ -4674,6 +8201,17 @@ for (const audit of manifest.browserAudits) {
     ].sort(),
     productionRequestHosts: [
       ...new Set(productionRequests.map((request) => request.hostname)),
+    ].sort(),
+    nonFirebaseUnallowlistedRequestHosts: [
+      ...new Set(
+        unallowlistedNonFirebaseRequests.map((request) => request.hostname),
+      ),
+    ].sort(),
+    productionVercelRequestHosts: [
+      ...new Set(productionVercelRequests.map((request) => request.hostname)),
+    ].sort(),
+    unknownVercelRequestHosts: [
+      ...new Set(unknownVercelRequests.map((request) => request.hostname)),
     ].sort(),
     failedFirebaseResponseCount: responseEvents.filter(
       (response) => response.firebase && response.status >= 400,
@@ -4737,7 +8275,586 @@ for (const audit of manifest.browserAudits) {
   auditedProductionWrites += productionRequests.filter(
     (request) => request.productionWrite,
   ).length;
+  auditedNetworkRequests += requestEvents.length;
+  auditedNetworkResponses += responseEvents.length;
+  auditedNonFirebaseRequests += nonFirebaseRequests.length;
+  auditedNonFirebaseAllowedRequests += nonFirebaseRequests.filter(
+    (request) => request.nonFirebaseHostnameAllowed,
+  ).length;
+  auditedNonFirebaseUnallowlistedRequests +=
+    unallowlistedNonFirebaseRequests.length;
+  auditedNonFirebaseUnallowlistedResponses +=
+    unallowlistedNonFirebaseResponses.length;
+  auditedProductionVercelRequests += productionVercelRequests.length;
+  auditedProductionVercelResponses += productionVercelResponses.length;
+  auditedUnknownVercelRequests += unknownVercelRequests.length;
+  auditedUnknownVercelResponses += unknownVercelResponses.length;
 }
+const browserTransport = manifest.browserTransport;
+assertExactObjectKeys(browserTransport, [
+  "schemaVersion",
+  "contract",
+  "contractHash",
+  "browserOrigin",
+  "browserOriginSha256",
+  "immutableUpstreamBinding",
+  "immutableUpstreamBindingHash",
+  "requestCount",
+  "responseCount",
+  "httpSuccessResponseCount",
+  "httpErrorResponseCount",
+  "documentRequestCount",
+  "scriptRequestCount",
+  "bodyHashCount",
+  "bodyHashMismatchCount",
+  "redirectRequestCount",
+  "redirectResponseCount",
+  "responseErrorCount",
+  "trackingResidualCount",
+  "externalRewriteRequestCount",
+  "firebaseGoogleRewriteRequestCount",
+  "scopeMismatchRequestCount",
+  "directImmutableOriginBrowserRequestCount",
+  "immutableResourceAttestationRequestCount",
+  "immutableResourceAttestationCacheHitCount",
+  "immutableResourceAttestationHttp200Count",
+  "immutableResourceAttestationRedirectResponseCount",
+  "immutableResourceAttestationBypassHeaderRequestCount",
+  "immutableResourceAttestationLinkHeaderObservationCount",
+  "immutableResourceAttestationParserMarkupRejectCount",
+  "localFulfillCount",
+  "browserNetworkRequestCount",
+  "responseLinkHeaderForwardCount",
+  "playwrightRouteRegistrationCount",
+  "groups",
+]);
+assert.equal(
+  sha256(Buffer.from(canonicalJson(browserTransport))),
+  manifest.browserTransportHash,
+);
+assert.equal(browserTransport.schemaVersion, 2);
+assert.deepEqual(browserTransport.contract, contract.browserTransport);
+assert.equal(
+  browserTransport.contractHash,
+  stableOriginRewriteTransportContractHash,
+);
+assert.equal(browserTransport.browserOrigin, stableBrowserOrigin);
+assert.equal(browserTransport.browserOriginSha256, sha256(stableBrowserOrigin));
+assert.deepEqual(
+  browserTransport.immutableUpstreamBinding,
+  immutableUpstreamBinding,
+);
+assert.equal(
+  browserTransport.immutableUpstreamBindingHash,
+  immutableUpstreamBindingHash,
+);
+assert.equal(browserTransport.requestCount, auditedStableOriginRewriteRequests);
+assert.equal(
+  browserTransport.responseCount,
+  auditedStableOriginRewriteResponses,
+);
+assert.equal(
+  browserTransport.httpSuccessResponseCount,
+  auditedStableOriginRewriteHttpSuccessResponses,
+);
+assert.equal(
+  browserTransport.httpErrorResponseCount,
+  auditedStableOriginRewriteHttpErrorResponses,
+);
+assert.equal(
+  browserTransport.documentRequestCount,
+  auditedStableOriginRewriteDocumentRequests,
+);
+assert.equal(
+  browserTransport.scriptRequestCount,
+  auditedStableOriginRewriteScriptRequests,
+);
+assert.equal(
+  browserTransport.bodyHashCount,
+  auditedStableOriginRewriteBodyHashes,
+);
+assert.equal(
+  browserTransport.bodyHashMismatchCount,
+  auditedStableOriginRewriteBodyHashMismatches,
+);
+assert.equal(
+  browserTransport.redirectRequestCount,
+  auditedStableOriginRewriteRedirectRequests,
+);
+assert.equal(
+  browserTransport.redirectResponseCount,
+  auditedStableOriginRewriteRedirectResponses,
+);
+assert.equal(
+  browserTransport.responseErrorCount,
+  auditedStableOriginRewriteResponseErrors,
+);
+assert.equal(browserTransport.responseCount, browserTransport.requestCount);
+assert.equal(
+  browserTransport.httpSuccessResponseCount,
+  browserTransport.requestCount,
+);
+assert.ok(
+  browserTransport.documentRequestCount >= manifest.browserAudits.length,
+);
+assert.ok(browserTransport.scriptRequestCount >= manifest.browserAudits.length);
+assert.ok(browserTransport.bodyHashCount >= manifest.browserAudits.length * 2);
+for (const field of [
+  "httpErrorResponseCount",
+  "bodyHashMismatchCount",
+  "redirectRequestCount",
+  "redirectResponseCount",
+  "responseErrorCount",
+  "trackingResidualCount",
+  "externalRewriteRequestCount",
+  "firebaseGoogleRewriteRequestCount",
+  "scopeMismatchRequestCount",
+  "directImmutableOriginBrowserRequestCount",
+  "playwrightRouteRegistrationCount",
+]) {
+  assert.equal(
+    browserTransport[field],
+    0,
+    `browserTransport.${field} must be 0.`,
+  );
+}
+assert.ok(browserTransport.immutableResourceAttestationRequestCount >= 4);
+assert.equal(
+  browserTransport.immutableResourceAttestationHttp200Count,
+  browserTransport.immutableResourceAttestationRequestCount,
+);
+assert.equal(
+  browserTransport.immutableResourceAttestationRedirectResponseCount,
+  0,
+);
+assert.equal(
+  browserTransport.immutableResourceAttestationBypassHeaderRequestCount,
+  manifest.appCheckBinding.vercelBypassConfigured
+    ? browserTransport.immutableResourceAttestationRequestCount
+    : 0,
+);
+assert.equal(browserTransport.localFulfillCount, browserTransport.requestCount);
+assert.equal(browserTransport.browserNetworkRequestCount, 0);
+assert.equal(browserTransport.responseLinkHeaderForwardCount, 0);
+assert.equal(
+  browserTransport.immutableResourceAttestationParserMarkupRejectCount,
+  0,
+);
+assert.ok(
+  Number.isInteger(
+    browserTransport.immutableResourceAttestationLinkHeaderObservationCount,
+  ) &&
+    browserTransport.immutableResourceAttestationLinkHeaderObservationCount >=
+      0,
+);
+assert.ok(
+  Number.isInteger(
+    browserTransport.immutableResourceAttestationCacheHitCount,
+  ) && browserTransport.immutableResourceAttestationCacheHitCount >= 0,
+);
+const auditedOriginRewriteGroupRows = [
+  ...auditedStableOriginRewriteGroups.entries(),
+]
+  .map(([id, summary]) => ({ id, ...summary }))
+  .sort((left, right) => left.id.localeCompare(right.id));
+assert.deepEqual(browserTransport.groups, auditedOriginRewriteGroupRows);
+assert.equal(browserTransport.groups.length, manifest.browserAudits.length);
+const baselineExternalStaticBytesByRequestUrl = new Map();
+for (const observation of auditedExternalStaticResponseObservations) {
+  if (observation.source !== "baseline-node-network") continue;
+  assert.equal(
+    baselineExternalStaticBytesByRequestUrl.has(observation.requestUrl),
+    false,
+    `External static bytes were fetched from the network more than once: ${observation.requestUrl}`,
+  );
+  baselineExternalStaticBytesByRequestUrl.set(observation.requestUrl, {
+    ruleId: observation.ruleId,
+    responseStatus: observation.responseStatus,
+    responseBodySha256: observation.responseBodySha256,
+    responseBodyBytes: observation.responseBodyBytes,
+  });
+}
+for (const observation of auditedExternalStaticResponseObservations) {
+  if (observation.source !== "baseline-byte-cache") continue;
+  assert.deepEqual(
+    {
+      ruleId: observation.ruleId,
+      responseStatus: observation.responseStatus,
+      responseBodySha256: observation.responseBodySha256,
+      responseBodyBytes: observation.responseBodyBytes,
+    },
+    baselineExternalStaticBytesByRequestUrl.get(observation.requestUrl),
+    `A cached external static response does not match its baseline bytes: ${observation.requestUrl}`,
+  );
+}
+const networkPolicy = manifest.networkPolicy;
+assertExactObjectKeys(networkPolicy, [
+  "schemaVersion",
+  "externalStaticAllowlistHash",
+  "optionalTelemetrySuppressionContractHash",
+  "sensitiveValueScopeContractHash",
+  "deterministicResponseContractHash",
+  "optionalTelemetrySuppressedRequestCount",
+  "deterministicHolidayResponseFulfillCount",
+  "deterministicRecaptchaResponseFulfillCount",
+  "deterministicFirebaseModuleFulfillCount",
+  "deterministicResponseScopeMismatchBlockCount",
+  "externalStaticRequestNetworkFetchCount",
+  "externalStaticRequestCacheFulfillCount",
+  "externalStaticRequestScopeMismatchBlockCount",
+  "externalStaticResponseNon200AbortCount",
+  "nodeOwnedExternalRequestContract",
+  "nodeOwnedExternalRequestContractHash",
+  "nodeOwnedExternalResponseHeaderAllowlist",
+  "nodeOwnedExternalResponseHeaderAllowlistHash",
+  "nodeOwnedExternalRequestCount",
+  "nodeOwnedExternalInformationalResponseCount",
+  "nodeOwnedExternalInformationalEgressHeaderObservationCount",
+  "nodeOwnedExternalInformationalBrowserExposureCount",
+  "nodeOwnedExternalFinalResponseCount",
+  "nodeOwnedExternalFinalBodyHashAttestationCount",
+  "nodeOwnedExternalFinalHeaderSuppressionCount",
+  "stagingApiKeyScopeViolationBlockCount",
+  "testCredentialScopeViolationBlockCount",
+  "refreshTokenScopeViolationBlockCount",
+  "rawSensitivePreTransmissionInspectionCount",
+  "rawSensitivePreTransmissionBlockCount",
+  "rawProductionPreTransmissionBlockCount",
+  "rawVercelBypassPreTransmissionBlockCount",
+  "rawStagingApiKeyPreTransmissionBlockCount",
+  "rawTestCredentialPreTransmissionBlockCount",
+  "rawRefreshTokenPreTransmissionBlockCount",
+  "rawDebugTokenPreTransmissionBlockCount",
+  "rawDebugSentinelPreTransmissionBlockCount",
+  "allowedEgressResponsePauseCount",
+  "allowedEgressInformationalResponsePauseCount",
+  "allowedEgressInformationalFinalResponseCount",
+  "allowedEgressInformationalTrackingResidualCount",
+  "allowedEgressInvalidResponseStatusAbortCount",
+  "allowedEgressRedirectAbortCount",
+  "allowedEgressHttpErrorAbortCount",
+  "allowedEgressResponseErrorAbortCount",
+  "allowedEgressInformationalEgressHeaderObservationCount",
+  "allowedEgressFinalEgressHeaderObservationCount",
+  "allowedEgressResponseHeaderSuppressionCount",
+  "allowedEgressEgressHeaderForwardCount",
+  "allowedEgressTrackingResidualCount",
+  "externalStaticTrackingResidualCount",
+  "directBrowserEarlyHintsObservationCount",
+  "directBrowserEarlyHintsEgressHeaderObservationCount",
+  "directBrowserEarlyHintsCaptureInvalidationCount",
+  "directBrowserEarlyHintsObservationSetHash",
+  "fullPostDataResolutionCount",
+  "fullPostDataNetworkFallbackCount",
+  "fullPostDataResolutionFailureCount",
+  "fullPostDataOversizeBlockCount",
+  "fullPostDataRepresentationMismatchBlockCount",
+  "deterministicResponseObservationCount",
+  "deterministicResponseObservationSetHash",
+  "externalStaticResponseObservationCount",
+  "externalStaticResponseObservationSetHash",
+  "optionalTelemetryObservationCount",
+  "optionalTelemetryObservationSetHash",
+  "pinnedStartupSourceAttestations",
+  "pinnedStartupSourceAttestationCount",
+  "pinnedStartupSourceAttestationSetHash",
+]);
+assert.equal(networkPolicy.schemaVersion, 4);
+assert.equal(sha256(canonicalJson(networkPolicy)), manifest.networkPolicyHash);
+assert.equal(
+  networkPolicy.externalStaticAllowlistHash,
+  sha256(
+    canonicalJson(contract.networkBoundary.externalStaticRequestAllowlist),
+  ),
+);
+assert.equal(
+  networkPolicy.optionalTelemetrySuppressionContractHash,
+  sha256(canonicalJson(contract.networkBoundary.optionalTelemetrySuppression)),
+);
+assert.equal(
+  networkPolicy.sensitiveValueScopeContractHash,
+  sha256(canonicalJson(contract.networkBoundary.sensitiveValueScope)),
+);
+assert.equal(
+  networkPolicy.deterministicResponseContractHash,
+  sha256(
+    canonicalJson({
+      holiday: contract.browserTransport.deterministicLocalResponse,
+      recaptcha: contract.browserTransport.deterministicRecaptchaResponse,
+    }),
+  ),
+);
+assert.deepEqual(
+  networkPolicy.nodeOwnedExternalRequestContract,
+  NODE_OWNED_EXTERNAL_STATIC_REQUEST_CONTRACT,
+);
+assert.equal(
+  networkPolicy.nodeOwnedExternalRequestContractHash,
+  sha256(canonicalJson(NODE_OWNED_EXTERNAL_STATIC_REQUEST_CONTRACT)),
+);
+assert.deepEqual(
+  networkPolicy.nodeOwnedExternalResponseHeaderAllowlist,
+  NODE_OWNED_EXTERNAL_STATIC_RESPONSE_HEADER_ALLOWLIST,
+);
+assert.equal(
+  networkPolicy.nodeOwnedExternalResponseHeaderAllowlistHash,
+  sha256(canonicalJson(NODE_OWNED_EXTERNAL_STATIC_RESPONSE_HEADER_ALLOWLIST)),
+);
+assert.equal(
+  assertPinnedStartupSourceAttestationsForContract(
+    networkPolicy.pinnedStartupSourceAttestations,
+  ),
+  true,
+);
+assert.equal(networkPolicy.pinnedStartupSourceAttestationCount, 4);
+assert.equal(
+  networkPolicy.pinnedStartupSourceAttestationSetHash,
+  sha256(canonicalJson(networkPolicy.pinnedStartupSourceAttestations)),
+);
+const pinnedStartupInformationalResponseCount =
+  networkPolicy.pinnedStartupSourceAttestations.reduce(
+    (total, attestation) => total + attestation.informationalResponseCount,
+    0,
+  );
+const pinnedStartupInformationalEgressHeaderObservationCount =
+  networkPolicy.pinnedStartupSourceAttestations.reduce(
+    (total, attestation) =>
+      total + attestation.informationalEgressHeaderObservationCount,
+    0,
+  );
+const pinnedStartupFinalHeaderSuppressionCount =
+  networkPolicy.pinnedStartupSourceAttestations.reduce(
+    (total, attestation) => total + attestation.finalHeaderSuppressionCount,
+    0,
+  );
+assert.equal(
+  networkPolicy.nodeOwnedExternalRequestCount,
+  networkPolicy.pinnedStartupSourceAttestationCount +
+    auditedNodeOwnedExternalRequests,
+);
+assert.equal(
+  networkPolicy.nodeOwnedExternalInformationalResponseCount,
+  pinnedStartupInformationalResponseCount +
+    auditedNodeOwnedExternalInformationalResponses,
+);
+assert.equal(
+  networkPolicy.nodeOwnedExternalInformationalEgressHeaderObservationCount,
+  pinnedStartupInformationalEgressHeaderObservationCount +
+    auditedNodeOwnedExternalInformationalEgressHeaderObservations,
+);
+assert.equal(
+  networkPolicy.nodeOwnedExternalInformationalBrowserExposureCount,
+  auditedNodeOwnedExternalInformationalBrowserExposures,
+);
+assert.equal(
+  networkPolicy.nodeOwnedExternalInformationalBrowserExposureCount,
+  0,
+);
+assert.equal(
+  networkPolicy.nodeOwnedExternalFinalResponseCount,
+  networkPolicy.pinnedStartupSourceAttestationCount +
+    auditedNodeOwnedExternalFinalResponses,
+);
+assert.equal(
+  networkPolicy.nodeOwnedExternalFinalBodyHashAttestationCount,
+  networkPolicy.pinnedStartupSourceAttestationCount +
+    auditedNodeOwnedExternalFinalBodyHashAttestations,
+);
+assert.equal(
+  networkPolicy.nodeOwnedExternalFinalHeaderSuppressionCount,
+  pinnedStartupFinalHeaderSuppressionCount +
+    auditedNodeOwnedExternalFinalHeaderSuppressions,
+);
+assert.equal(
+  networkPolicy.nodeOwnedExternalFinalResponseCount,
+  networkPolicy.nodeOwnedExternalRequestCount,
+);
+assert.equal(
+  networkPolicy.nodeOwnedExternalFinalBodyHashAttestationCount,
+  networkPolicy.nodeOwnedExternalRequestCount,
+);
+assert.equal(
+  networkPolicy.directBrowserEarlyHintsObservationCount,
+  auditedDirectBrowserEarlyHintsObservations,
+);
+assert.equal(
+  networkPolicy.directBrowserEarlyHintsEgressHeaderObservationCount,
+  auditedDirectBrowserEarlyHintsEgressHeaderObservations,
+);
+assert.equal(
+  networkPolicy.directBrowserEarlyHintsCaptureInvalidationCount,
+  auditedDirectBrowserEarlyHintsCaptureInvalidations,
+);
+assert.equal(networkPolicy.directBrowserEarlyHintsObservationCount, 0);
+assert.equal(
+  networkPolicy.directBrowserEarlyHintsEgressHeaderObservationCount,
+  0,
+);
+assert.equal(networkPolicy.directBrowserEarlyHintsCaptureInvalidationCount, 0);
+assert.equal(
+  networkPolicy.directBrowserEarlyHintsObservationSetHash,
+  sha256(canonicalJson([])),
+);
+assert.equal(
+  networkPolicy.optionalTelemetrySuppressedRequestCount,
+  auditedOptionalTelemetrySuppressedRequests,
+);
+assert.equal(
+  networkPolicy.deterministicHolidayResponseFulfillCount,
+  auditedDeterministicHolidayResponseFulfills,
+);
+assert.equal(
+  networkPolicy.deterministicRecaptchaResponseFulfillCount,
+  auditedDeterministicRecaptchaResponseFulfills,
+);
+assert.equal(
+  networkPolicy.deterministicFirebaseModuleFulfillCount,
+  auditedDeterministicFirebaseModuleFulfills,
+);
+assert.equal(
+  networkPolicy.externalStaticRequestNetworkFetchCount,
+  auditedExternalStaticRequestNetworkFetches,
+);
+assert.equal(
+  networkPolicy.externalStaticRequestCacheFulfillCount,
+  auditedExternalStaticRequestCacheFulfills,
+);
+assert.equal(
+  networkPolicy.allowedEgressResponsePauseCount,
+  auditedAllowedEgressResponsePauses,
+);
+assert.equal(
+  networkPolicy.rawSensitivePreTransmissionInspectionCount,
+  auditedRawSensitivePreTransmissionInspections,
+);
+assert.equal(
+  networkPolicy.allowedEgressInformationalResponsePauseCount,
+  auditedAllowedEgressInformationalResponsePauses,
+);
+assert.equal(
+  networkPolicy.allowedEgressInformationalFinalResponseCount,
+  auditedAllowedEgressInformationalFinalResponses,
+);
+assert.equal(
+  networkPolicy.allowedEgressInformationalEgressHeaderObservationCount,
+  auditedAllowedEgressInformationalEgressHeaderObservations,
+);
+assert.equal(
+  networkPolicy.allowedEgressFinalEgressHeaderObservationCount,
+  auditedAllowedEgressFinalEgressHeaderObservations,
+);
+assert.equal(
+  networkPolicy.allowedEgressResponseHeaderSuppressionCount,
+  auditedAllowedEgressResponseHeaderSuppressions,
+);
+assert.equal(
+  networkPolicy.allowedEgressEgressHeaderForwardCount,
+  auditedAllowedEgressEgressHeaderForwards,
+);
+assert.equal(
+  networkPolicy.fullPostDataResolutionCount,
+  auditedFullPostDataResolutions,
+);
+assert.equal(
+  networkPolicy.fullPostDataNetworkFallbackCount,
+  auditedFullPostDataNetworkFallbacks,
+);
+assert.equal(
+  networkPolicy.fullPostDataResolutionFailureCount,
+  auditedFullPostDataResolutionFailures,
+);
+assert.equal(
+  networkPolicy.fullPostDataOversizeBlockCount,
+  auditedFullPostDataOversizeBlocks,
+);
+assert.equal(
+  networkPolicy.fullPostDataRepresentationMismatchBlockCount,
+  auditedFullPostDataRepresentationMismatchBlocks,
+);
+assert.ok(
+  networkPolicy.allowedEgressInformationalFinalResponseCount <=
+    networkPolicy.allowedEgressInformationalResponsePauseCount,
+);
+assert.equal(
+  networkPolicy.deterministicResponseObservationCount,
+  auditedDeterministicResponseObservations.length,
+);
+assert.equal(
+  networkPolicy.deterministicResponseObservationSetHash,
+  sha256(canonicalJson(auditedDeterministicResponseObservations)),
+);
+assert.equal(
+  networkPolicy.externalStaticResponseObservationCount,
+  auditedExternalStaticResponseObservations.length,
+);
+assert.equal(
+  networkPolicy.externalStaticResponseObservationSetHash,
+  sha256(canonicalJson(auditedExternalStaticResponseObservations)),
+);
+assert.equal(
+  networkPolicy.optionalTelemetryObservationCount,
+  auditedOptionalTelemetryObservations.length,
+);
+assert.equal(
+  networkPolicy.optionalTelemetryObservationSetHash,
+  sha256(canonicalJson(auditedOptionalTelemetryObservations)),
+);
+for (const [field, auditedValue] of Object.entries({
+  deterministicResponseScopeMismatchBlockCount:
+    auditedDeterministicResponseScopeMismatchBlocks,
+  externalStaticRequestScopeMismatchBlockCount:
+    auditedExternalStaticRequestScopeMismatchBlocks,
+  externalStaticResponseNon200AbortCount:
+    auditedExternalStaticResponseNon200Aborts,
+  stagingApiKeyScopeViolationBlockCount:
+    auditedStagingApiKeyScopeViolationBlocks,
+  testCredentialScopeViolationBlockCount:
+    auditedTestCredentialScopeViolationBlocks,
+  refreshTokenScopeViolationBlockCount: auditedRefreshTokenScopeViolationBlocks,
+  allowedEgressRedirectAbortCount: auditedAllowedEgressRedirectAborts,
+  allowedEgressHttpErrorAbortCount: auditedAllowedEgressHttpErrorAborts,
+  allowedEgressResponseErrorAbortCount: auditedAllowedEgressResponseErrorAborts,
+  allowedEgressTrackingResidualCount: auditedAllowedEgressTrackingResiduals,
+  externalStaticTrackingResidualCount: auditedExternalStaticTrackingResiduals,
+  rawSensitivePreTransmissionBlockCount:
+    auditedRawSensitivePreTransmissionBlocks,
+  rawProductionPreTransmissionBlockCount:
+    auditedRawProductionPreTransmissionBlocks,
+  rawVercelBypassPreTransmissionBlockCount:
+    auditedRawVercelBypassPreTransmissionBlocks,
+  rawStagingApiKeyPreTransmissionBlockCount:
+    auditedRawStagingApiKeyPreTransmissionBlocks,
+  rawTestCredentialPreTransmissionBlockCount:
+    auditedRawTestCredentialPreTransmissionBlocks,
+  rawRefreshTokenPreTransmissionBlockCount:
+    auditedRawRefreshTokenPreTransmissionBlocks,
+  rawDebugTokenPreTransmissionBlockCount:
+    auditedRawDebugTokenPreTransmissionBlocks,
+  rawDebugSentinelPreTransmissionBlockCount:
+    auditedRawDebugSentinelPreTransmissionBlocks,
+  allowedEgressInformationalTrackingResidualCount:
+    auditedAllowedEgressInformationalTrackingResiduals,
+  allowedEgressInvalidResponseStatusAbortCount:
+    auditedAllowedEgressInvalidResponseStatusAborts,
+  allowedEgressEgressHeaderForwardCount:
+    auditedAllowedEgressEgressHeaderForwards,
+  fullPostDataResolutionFailureCount: auditedFullPostDataResolutionFailures,
+  fullPostDataOversizeBlockCount: auditedFullPostDataOversizeBlocks,
+  fullPostDataRepresentationMismatchBlockCount:
+    auditedFullPostDataRepresentationMismatchBlocks,
+})) {
+  assert.equal(networkPolicy[field], auditedValue);
+  assert.equal(networkPolicy[field], 0);
+}
+assert.ok(networkPolicy.deterministicHolidayResponseFulfillCount > 0);
+assert.ok(networkPolicy.deterministicRecaptchaResponseFulfillCount > 0);
+assert.ok(networkPolicy.deterministicFirebaseModuleFulfillCount > 0);
+assert.ok(networkPolicy.externalStaticRequestNetworkFetchCount > 0);
+assert.ok(networkPolicy.externalStaticRequestCacheFulfillCount > 0);
+assert.equal(
+  networkPolicy.fullPostDataResolutionCount,
+  networkPolicy.rawSensitivePreTransmissionInspectionCount,
+);
 const appCheckBinding = manifest.appCheckBinding;
 assert.ok(appCheckBinding && typeof appCheckBinding === "object");
 assert.equal(
@@ -4781,12 +8898,68 @@ assertExactObjectKeys(appCheckBinding, [
   "browserAppCheckExchangeRequestCount",
   "browserCdpSecurityScope",
   "browserCdpSecurityScopeHash",
+  "browserWideBoundaryAttestation",
+  "browserConnectProxyHash",
+  "browserConnectProxyAllowedConnectCount",
+  "browserConnectProxyDeniedConnectCount",
+  "browserConnectProxyCleanupResidualCount",
   "preTransmissionBoundaryAttestationHash",
+  "nonFirebaseNetworkAllowedHostnameSetHash",
+  "nonFirebaseNetworkAllowedHostnameCount",
   "preTransmissionBoundaryInspectionCount",
   "preTransmissionBoundaryBlockAttemptCount",
   "preTransmissionBoundaryProductionBlockCount",
+  "preTransmissionBoundaryCrossOriginDocumentBlockCount",
   "preTransmissionBoundaryUnboundFirebaseBlockCount",
+  "preTransmissionBoundaryNonFirebaseHostnameBlockCount",
+  "preTransmissionBoundaryMalformedUrlBlockCount",
   "preTransmissionBoundaryFailRequestCount",
+  "networkPolicyBindingHash",
+  "optionalTelemetrySuppressedRequestCount",
+  "deterministicHolidayResponseFulfillCount",
+  "deterministicRecaptchaResponseFulfillCount",
+  "deterministicFirebaseModuleFulfillCount",
+  "deterministicResponseScopeMismatchBlockCount",
+  "externalStaticRequestNetworkFetchCount",
+  "externalStaticRequestCacheFulfillCount",
+  "externalStaticRequestScopeMismatchBlockCount",
+  "externalStaticResponseNon200AbortCount",
+  "nodeOwnedExternalInformationalResponseCount",
+  "nodeOwnedExternalInformationalBrowserExposureCount",
+  "stagingApiKeyScopeViolationBlockCount",
+  "testCredentialScopeViolationBlockCount",
+  "refreshTokenScopeViolationBlockCount",
+  "rawSensitivePreTransmissionInspectionCount",
+  "rawSensitivePreTransmissionBlockCount",
+  "rawProductionPreTransmissionBlockCount",
+  "rawVercelBypassPreTransmissionBlockCount",
+  "rawStagingApiKeyPreTransmissionBlockCount",
+  "rawTestCredentialPreTransmissionBlockCount",
+  "rawRefreshTokenPreTransmissionBlockCount",
+  "rawDebugTokenPreTransmissionBlockCount",
+  "rawDebugSentinelPreTransmissionBlockCount",
+  "allowedEgressResponsePauseCount",
+  "allowedEgressInformationalResponsePauseCount",
+  "allowedEgressInformationalFinalResponseCount",
+  "allowedEgressInformationalTrackingResidualCount",
+  "allowedEgressInvalidResponseStatusAbortCount",
+  "allowedEgressRedirectAbortCount",
+  "allowedEgressHttpErrorAbortCount",
+  "allowedEgressResponseErrorAbortCount",
+  "allowedEgressInformationalEgressHeaderObservationCount",
+  "allowedEgressFinalEgressHeaderObservationCount",
+  "allowedEgressResponseHeaderSuppressionCount",
+  "allowedEgressEgressHeaderForwardCount",
+  "allowedEgressTrackingResidualCount",
+  "externalStaticTrackingResidualCount",
+  "directBrowserEarlyHintsObservationCount",
+  "directBrowserEarlyHintsEgressHeaderObservationCount",
+  "directBrowserEarlyHintsCaptureInvalidationCount",
+  "fullPostDataResolutionCount",
+  "fullPostDataNetworkFallbackCount",
+  "fullPostDataResolutionFailureCount",
+  "fullPostDataOversizeBlockCount",
+  "fullPostDataRepresentationMismatchBlockCount",
   "browserChildEnvironmentAllowlisted",
   "browserChildEnvironmentAllowlistHash",
   "browserChildEnvironmentUnexpectedKeyCount",
@@ -4905,6 +9078,77 @@ assertExactObjectKeys(appCheckBinding, [
   "vercelBypassHeaderMismatchRequestCount",
   "successfulFirebaseDataResponseCount",
 ]);
+assert.equal(
+  appCheckBinding.networkPolicyBindingHash,
+  manifest.networkPolicyHash,
+);
+for (const field of [
+  "optionalTelemetrySuppressedRequestCount",
+  "deterministicHolidayResponseFulfillCount",
+  "deterministicRecaptchaResponseFulfillCount",
+  "deterministicFirebaseModuleFulfillCount",
+  "deterministicResponseScopeMismatchBlockCount",
+  "externalStaticRequestNetworkFetchCount",
+  "externalStaticRequestCacheFulfillCount",
+  "externalStaticRequestScopeMismatchBlockCount",
+  "externalStaticResponseNon200AbortCount",
+  "nodeOwnedExternalInformationalResponseCount",
+  "nodeOwnedExternalInformationalBrowserExposureCount",
+  "stagingApiKeyScopeViolationBlockCount",
+  "testCredentialScopeViolationBlockCount",
+  "refreshTokenScopeViolationBlockCount",
+  "rawSensitivePreTransmissionInspectionCount",
+  "rawSensitivePreTransmissionBlockCount",
+  "rawProductionPreTransmissionBlockCount",
+  "rawVercelBypassPreTransmissionBlockCount",
+  "rawStagingApiKeyPreTransmissionBlockCount",
+  "rawTestCredentialPreTransmissionBlockCount",
+  "rawRefreshTokenPreTransmissionBlockCount",
+  "rawDebugTokenPreTransmissionBlockCount",
+  "rawDebugSentinelPreTransmissionBlockCount",
+  "allowedEgressResponsePauseCount",
+  "allowedEgressInformationalResponsePauseCount",
+  "allowedEgressInformationalFinalResponseCount",
+  "allowedEgressInformationalTrackingResidualCount",
+  "allowedEgressInvalidResponseStatusAbortCount",
+  "allowedEgressRedirectAbortCount",
+  "allowedEgressHttpErrorAbortCount",
+  "allowedEgressResponseErrorAbortCount",
+  "allowedEgressInformationalEgressHeaderObservationCount",
+  "allowedEgressFinalEgressHeaderObservationCount",
+  "allowedEgressResponseHeaderSuppressionCount",
+  "allowedEgressEgressHeaderForwardCount",
+  "allowedEgressTrackingResidualCount",
+  "externalStaticTrackingResidualCount",
+  "directBrowserEarlyHintsObservationCount",
+  "directBrowserEarlyHintsEgressHeaderObservationCount",
+  "directBrowserEarlyHintsCaptureInvalidationCount",
+  "fullPostDataResolutionCount",
+  "fullPostDataNetworkFallbackCount",
+  "fullPostDataResolutionFailureCount",
+  "fullPostDataOversizeBlockCount",
+  "fullPostDataRepresentationMismatchBlockCount",
+]) {
+  assert.equal(appCheckBinding[field], networkPolicy[field]);
+}
+assert.equal(
+  appCheckBinding.rawSensitivePreTransmissionBlockCount,
+  appCheckBinding.rawProductionPreTransmissionBlockCount +
+    appCheckBinding.rawVercelBypassPreTransmissionBlockCount +
+    appCheckBinding.rawStagingApiKeyPreTransmissionBlockCount +
+    appCheckBinding.rawTestCredentialPreTransmissionBlockCount +
+    appCheckBinding.rawRefreshTokenPreTransmissionBlockCount +
+    appCheckBinding.rawDebugTokenPreTransmissionBlockCount +
+    appCheckBinding.rawDebugSentinelPreTransmissionBlockCount,
+);
+assert.ok(
+  appCheckBinding.allowedEgressInformationalFinalResponseCount <=
+    appCheckBinding.allowedEgressInformationalResponsePauseCount,
+);
+assert.equal(
+  appCheckBinding.fullPostDataResolutionCount,
+  appCheckBinding.appCheckCdpMonitorPausedRequestCount,
+);
 assert.equal(appCheckBinding.status, "VERIFIED_EXCHANGED");
 assert.equal(appCheckBinding.appCheckBound, true);
 assert.equal(
@@ -4992,9 +9236,663 @@ assert.equal(
   appCheckBinding.browserCdpSecurityScopeHash,
   browserAppCheckCdpSecurityScopeHash,
 );
+const browserWideBoundaryAttestation =
+  appCheckBinding.browserWideBoundaryAttestation;
+assertExactObjectKeys(browserWideBoundaryAttestation, [
+  "schemaVersion",
+  "executionTargetBoundaryHash",
+  "activationCount",
+  "waitingTargetCount",
+  "primaryTargetConfiguredCount",
+  "primaryRequestBoundaryHandoffCount",
+  "heldRuntimeResumeCount",
+  "secondaryTargetClosedBeforeResumeCount",
+  "requestInspectionCount",
+  "requestBlockCount",
+  "requestContinueCount",
+  "rawSensitiveInspectionCount",
+  "rawSensitiveBlockCount",
+  "rawProductionBlockCount",
+  "rawVercelBypassBlockCount",
+  "rawStagingApiKeyBlockCount",
+  "rawTestCredentialBlockCount",
+  "rawRefreshTokenBlockCount",
+  "rawDebugTokenBlockCount",
+  "rawDebugSentinelBlockCount",
+  "optionalTelemetrySuppressionCount",
+  "deterministicResponseFulfillCount",
+  "deterministicResponseScopeMismatchBlockCount",
+  "externalStaticPrivateOwnerBlockCount",
+  "fullPostDataResolutionCount",
+  "fullPostDataNetworkFallbackCount",
+  "fullPostDataResolutionFailureCount",
+  "fullPostDataOversizeBlockCount",
+  "fullPostDataRepresentationMismatchBlockCount",
+  "handlerErrorCount",
+  "pendingSetupCount",
+  "pendingHandlerCount",
+  "heldRuntimeResumeResidualCount",
+  "fatalErrorCount",
+  "groupAttestationCount",
+  "groupAttestationSetHash",
+  "secondaryExecutionGuardInitScriptRegistrationCount",
+  "playwrightWebSocketRouteRegistrationCount",
+  "playwrightWebSocketRouteInterceptCount",
+  "webSocketConnectToServerCount",
+  "webSocketHandshakeRequestCount",
+  "webTransportCreatedCount",
+  "launchArguments",
+  "launchArgumentsHash",
+  "ignoredDefaultArguments",
+  "ignoredDefaultArgumentsHash",
+  "effectiveDisabledFeatures",
+  "effectiveDisabledFeaturesHash",
+  "browserCommandLineAttestation",
+  "browserCommandLineAttestationHash",
+  "browserConnectProxyContractHash",
+  "browserConnectProxy",
+  "browserConnectProxyHash",
+  "browserObservedDirectFirebaseHostnames",
+  "browserObservedDirectFirebaseHostnameSetHash",
+  "browserConnectProxyAllowedConnectHostnames",
+  "browserConnectProxyAllowedConnectHostnameSetHash",
+  "stableImmutableDeterministicExternalProxyConnectCount",
+  "browserConnectProxyCleanupResidualCount",
+]);
+assert.equal(browserWideBoundaryAttestation.schemaVersion, 5);
+assert.equal(
+  browserWideBoundaryAttestation.executionTargetBoundaryHash,
+  sha256(canonicalJson(contract.networkBoundary.executionTargetBoundary)),
+);
+assert.equal(
+  browserWideBoundaryAttestation.groupAttestationCount,
+  manifest.browserAudits.length,
+);
+assert.equal(
+  browserWideBoundaryAttestation.groupAttestationSetHash,
+  sha256(
+    canonicalJson(
+      [...auditedBrowserWideBoundaryGroupAttestations].sort((left, right) =>
+        left.id.localeCompare(right.id),
+      ),
+    ),
+  ),
+);
+for (const field of [
+  "activationCount",
+  "waitingTargetCount",
+  "primaryTargetConfiguredCount",
+  "primaryRequestBoundaryHandoffCount",
+  "secondaryExecutionGuardInitScriptRegistrationCount",
+  "playwrightWebSocketRouteRegistrationCount",
+]) {
+  assert.equal(
+    browserWideBoundaryAttestation[field],
+    manifest.browserAudits.length,
+  );
+}
+assert.ok(
+  browserWideBoundaryAttestation.heldRuntimeResumeCount >=
+    manifest.browserAudits.length,
+);
+for (const field of [
+  "secondaryTargetClosedBeforeResumeCount",
+  "requestInspectionCount",
+  "requestBlockCount",
+  "requestContinueCount",
+  "rawSensitiveInspectionCount",
+  "rawSensitiveBlockCount",
+  "rawProductionBlockCount",
+  "rawVercelBypassBlockCount",
+  "rawStagingApiKeyBlockCount",
+  "rawTestCredentialBlockCount",
+  "rawRefreshTokenBlockCount",
+  "rawDebugTokenBlockCount",
+  "rawDebugSentinelBlockCount",
+  "optionalTelemetrySuppressionCount",
+  "deterministicResponseFulfillCount",
+  "deterministicResponseScopeMismatchBlockCount",
+  "externalStaticPrivateOwnerBlockCount",
+  "fullPostDataResolutionCount",
+  "fullPostDataNetworkFallbackCount",
+  "fullPostDataResolutionFailureCount",
+  "fullPostDataOversizeBlockCount",
+  "fullPostDataRepresentationMismatchBlockCount",
+  "handlerErrorCount",
+  "pendingSetupCount",
+  "pendingHandlerCount",
+  "heldRuntimeResumeResidualCount",
+  "fatalErrorCount",
+  "playwrightWebSocketRouteInterceptCount",
+  "webSocketConnectToServerCount",
+  "webSocketHandshakeRequestCount",
+  "webTransportCreatedCount",
+]) {
+  assert.equal(browserWideBoundaryAttestation[field], 0);
+}
+assert.equal(
+  browserWideBoundaryAttestation.fullPostDataResolutionCount,
+  browserWideBoundaryAttestation.requestInspectionCount,
+);
+const browserProxyServerArguments =
+  browserWideBoundaryAttestation.launchArguments.filter((argument) =>
+    argument.startsWith("--proxy-server="),
+  );
+assert.equal(browserProxyServerArguments.length, 1);
+const browserProxyServerArgument = browserProxyServerArguments[0];
+assert.match(
+  browserProxyServerArgument,
+  /^--proxy-server=http:\/\/127\.0\.0\.1:[1-9][0-9]{0,4}$/u,
+);
+const expectedBrowserLaunchArguments = [
+  ...BROWSER_PRETRANSMISSION_LAUNCH_ARGS,
+  BROWSER_PROXY_BYPASS_LIST_ARGUMENT,
+  browserProxyServerArgument,
+];
+assert.deepEqual(
+  browserWideBoundaryAttestation.launchArguments,
+  expectedBrowserLaunchArguments,
+);
+assert.equal(
+  browserWideBoundaryAttestation.launchArgumentsHash,
+  sha256(canonicalJson(expectedBrowserLaunchArguments)),
+);
+assert.deepEqual(
+  browserWideBoundaryAttestation.ignoredDefaultArguments,
+  BROWSER_PRETRANSMISSION_IGNORE_DEFAULT_ARGS,
+);
+assert.equal(
+  browserWideBoundaryAttestation.ignoredDefaultArgumentsHash,
+  sha256(canonicalJson(BROWSER_PRETRANSMISSION_IGNORE_DEFAULT_ARGS)),
+);
+assert.deepEqual(
+  browserWideBoundaryAttestation.effectiveDisabledFeatures,
+  BROWSER_EFFECTIVE_DISABLED_FEATURES,
+);
+assert.equal(
+  browserWideBoundaryAttestation.effectiveDisabledFeaturesHash,
+  sha256(canonicalJson(BROWSER_EFFECTIVE_DISABLED_FEATURES)),
+);
+const browserCommandLineAttestation =
+  browserWideBoundaryAttestation.browserCommandLineAttestation;
+assertExactObjectKeys(browserCommandLineAttestation, [
+  "schemaVersion",
+  "browserCommandLineQueryCount",
+  "browserCommandLineArgumentCount",
+  "disableFeaturesSwitchCount",
+  "effectiveDisabledFeatures",
+  "effectiveDisabledFeaturesHash",
+  "requiredEffectiveArguments",
+  "requiredEffectiveArgumentsHash",
+  "requiredEffectiveArgumentDuplicateCount",
+  "proxyServerSwitchCount",
+  "proxyBypassListSwitchCount",
+  "proxyServerArgumentSha256",
+  "proxyBypassListArgument",
+]);
+assert.equal(browserCommandLineAttestation.schemaVersion, 2);
+assert.equal(browserCommandLineAttestation.browserCommandLineQueryCount, 1);
+assert.ok(browserCommandLineAttestation.browserCommandLineArgumentCount > 0);
+assert.equal(browserCommandLineAttestation.disableFeaturesSwitchCount, 1);
+assert.deepEqual(
+  browserCommandLineAttestation.effectiveDisabledFeatures,
+  BROWSER_EFFECTIVE_DISABLED_FEATURES,
+);
+assert.equal(
+  browserCommandLineAttestation.effectiveDisabledFeaturesHash,
+  sha256(canonicalJson(BROWSER_EFFECTIVE_DISABLED_FEATURES)),
+);
+assert.deepEqual(
+  browserCommandLineAttestation.requiredEffectiveArguments,
+  [
+    ...BROWSER_PRETRANSMISSION_REQUIRED_EFFECTIVE_ARGUMENTS,
+    BROWSER_PROXY_BYPASS_LIST_ARGUMENT,
+    browserProxyServerArgument,
+  ].sort(),
+);
+assert.equal(
+  browserCommandLineAttestation.requiredEffectiveArgumentsHash,
+  sha256(
+    canonicalJson(
+      [
+        ...BROWSER_PRETRANSMISSION_REQUIRED_EFFECTIVE_ARGUMENTS,
+        BROWSER_PROXY_BYPASS_LIST_ARGUMENT,
+        browserProxyServerArgument,
+      ].sort(),
+    ),
+  ),
+);
+assert.equal(
+  browserCommandLineAttestation.requiredEffectiveArgumentDuplicateCount,
+  0,
+);
+assert.equal(browserCommandLineAttestation.proxyServerSwitchCount, 1);
+assert.equal(browserCommandLineAttestation.proxyBypassListSwitchCount, 1);
+assert.equal(
+  browserCommandLineAttestation.proxyServerArgumentSha256,
+  secretSha256(browserProxyServerArgument),
+);
+assert.equal(
+  browserCommandLineAttestation.proxyBypassListArgument,
+  BROWSER_PROXY_BYPASS_LIST_ARGUMENT,
+);
+assert.equal(
+  browserWideBoundaryAttestation.browserCommandLineAttestationHash,
+  sha256(canonicalJson(browserCommandLineAttestation)),
+);
+assert.equal(
+  browserWideBoundaryAttestation.browserConnectProxyContractHash,
+  sha256(canonicalJson(contract.networkBoundary.browserConnectProxy)),
+);
+const browserConnectProxyAttestation =
+  browserWideBoundaryAttestation.browserConnectProxy;
+assertExactObjectKeys(browserConnectProxyAttestation, [
+  "schemaVersion",
+  "allowedHostnames",
+  "allowedHostnameSetHash",
+  "allowedRequestOrigins",
+  "allowedRequestOriginSetHash",
+  "authorizedRequestMethods",
+  "browserProductBackgroundDenyHostnames",
+  "browserProductBackgroundDenyHostnameSetHash",
+  "listenerStartCount",
+  "listenerCloseCount",
+  "connectRequestCount",
+  "allowedConnectCount",
+  "deniedConnectCount",
+  "browserProductBackgroundDenyCount",
+  "browserProductBackgroundCredentialOrBodyObservationCount",
+  "fatalPolicyDenyCount",
+  "requestStageAuthorizationCount",
+  "requestStageAuthorizationCompleteCount",
+  "requestStageAuthorizationRevocationCount",
+  "activeTunnelPresentAtAuthorizationCount",
+  "authorityLeaseIssueCount",
+  "authorityLeaseConsumeCount",
+  "authorityLeaseUnusedCompletionCount",
+  "authorityLeaseRevocationCount",
+  "authorityLeaseExpiredBeforeConnectCount",
+  "uncorrelatedAllowedConnectDenyCount",
+  "upstreamSocketCreateCount",
+  "httpAbsoluteFormDenyCount",
+  "upgradeDenyCount",
+  "invalidAuthorityDenyCount",
+  "ipLiteralDenyCount",
+  "alternatePortDenyCount",
+  "unallowlistedHostnameDenyCount",
+  "connectHeaderDenyCount",
+  "clientSocketErrorCount",
+  "tunnelErrorCount",
+  "allowedConnectHosts",
+  "allowedConnectHostSetHash",
+  "deniedConnectAuthorities",
+  "deniedConnectAuthoritySetHash",
+  "browserProductBackgroundDenyObservations",
+  "browserProductBackgroundDenyObservationSetHash",
+  "authorityLeaseTtlMilliseconds",
+  "requestStageAuthorizationObservations",
+  "requestStageAuthorizationObservationSetHash",
+  "authorityLeaseConsumeObservations",
+  "authorityLeaseConsumeObservationSetHash",
+  "requestStageAuthorizationResidualCount",
+  "authorityLeaseResidualCount",
+  "authorityLeaseQueueResidualCount",
+  "activeAllowedTunnelResidualCount",
+  "activeClientSocketCount",
+  "activeUpstreamSocketCount",
+  "fatalErrorCount",
+]);
+assert.equal(browserConnectProxyAttestation.schemaVersion, 2);
+assert.deepEqual(
+  browserConnectProxyAttestation.allowedHostnames,
+  BROWSER_CONNECT_PROXY_ALLOWED_FIREBASE_HOSTNAMES,
+);
+assert.equal(
+  browserConnectProxyAttestation.allowedHostnameSetHash,
+  secretSha256(
+    JSON.stringify(BROWSER_CONNECT_PROXY_ALLOWED_FIREBASE_HOSTNAMES),
+  ),
+);
+assert.equal(browserConnectProxyAttestation.listenerStartCount, 1);
+assert.equal(browserConnectProxyAttestation.listenerCloseCount, 1);
+assert.ok(browserConnectProxyAttestation.allowedConnectCount > 0);
+assert.equal(
+  browserConnectProxyAttestation.connectRequestCount,
+  browserConnectProxyAttestation.allowedConnectCount +
+    browserConnectProxyAttestation.deniedConnectCount,
+);
+assert.equal(
+  browserConnectProxyAttestation.upstreamSocketCreateCount,
+  browserConnectProxyAttestation.allowedConnectCount,
+);
+assert.deepEqual(browserConnectProxyAttestation.allowedRequestOrigins, [
+  stableBrowserOrigin,
+]);
+assert.equal(
+  browserConnectProxyAttestation.allowedRequestOriginSetHash,
+  secretSha256(JSON.stringify([stableBrowserOrigin])),
+);
+assert.deepEqual(
+  browserConnectProxyAttestation.authorizedRequestMethods,
+  BROWSER_CONNECT_PROXY_AUTHORIZED_REQUEST_METHODS,
+);
+assert.deepEqual(
+  browserConnectProxyAttestation.browserProductBackgroundDenyHostnames,
+  BROWSER_PRODUCT_BACKGROUND_DENY_HOSTNAMES,
+);
+assert.equal(
+  browserConnectProxyAttestation.browserProductBackgroundDenyHostnameSetHash,
+  secretSha256(JSON.stringify(BROWSER_PRODUCT_BACKGROUND_DENY_HOSTNAMES)),
+);
+assert.equal(
+  browserConnectProxyAttestation.deniedConnectCount,
+  browserConnectProxyAttestation.browserProductBackgroundDenyCount,
+);
+assert.equal(
+  browserConnectProxyAttestation.unallowlistedHostnameDenyCount,
+  browserConnectProxyAttestation.browserProductBackgroundDenyCount,
+);
+assert.equal(browserConnectProxyAttestation.fatalPolicyDenyCount, 0);
+assert.equal(
+  browserConnectProxyAttestation.browserProductBackgroundCredentialOrBodyObservationCount,
+  0,
+);
+assert.equal(
+  browserConnectProxyAttestation.uncorrelatedAllowedConnectDenyCount,
+  0,
+);
+assert.equal(
+  browserConnectProxyAttestation.authorityLeaseTtlMilliseconds,
+  5000,
+);
+assert.equal(
+  browserConnectProxyAttestation.requestStageAuthorizationCount,
+  browserConnectProxyAttestation.requestStageAuthorizationCompleteCount,
+);
+assert.equal(
+  browserConnectProxyAttestation.requestStageAuthorizationRevocationCount,
+  0,
+);
+assert.equal(
+  browserConnectProxyAttestation.authorityLeaseIssueCount,
+  browserConnectProxyAttestation.requestStageAuthorizationCount,
+);
+assert.equal(
+  browserConnectProxyAttestation.authorityLeaseConsumeCount,
+  browserConnectProxyAttestation.allowedConnectCount,
+);
+assert.equal(browserConnectProxyAttestation.authorityLeaseRevocationCount, 0);
+assert.equal(
+  browserConnectProxyAttestation.authorityLeaseExpiredBeforeConnectCount,
+  0,
+);
+assert.equal(
+  browserConnectProxyAttestation.authorityLeaseIssueCount,
+  browserConnectProxyAttestation.authorityLeaseConsumeCount +
+    browserConnectProxyAttestation.authorityLeaseUnusedCompletionCount +
+    browserConnectProxyAttestation.authorityLeaseRevocationCount +
+    browserConnectProxyAttestation.authorityLeaseExpiredBeforeConnectCount,
+);
+for (const field of [
+  "httpAbsoluteFormDenyCount",
+  "upgradeDenyCount",
+  "invalidAuthorityDenyCount",
+  "ipLiteralDenyCount",
+  "alternatePortDenyCount",
+  "connectHeaderDenyCount",
+  "clientSocketErrorCount",
+  "tunnelErrorCount",
+  "requestStageAuthorizationResidualCount",
+  "authorityLeaseResidualCount",
+  "authorityLeaseQueueResidualCount",
+  "activeAllowedTunnelResidualCount",
+  "activeClientSocketCount",
+  "activeUpstreamSocketCount",
+  "fatalErrorCount",
+]) {
+  assert.equal(browserConnectProxyAttestation[field], 0);
+}
+for (const hostObservation of browserConnectProxyAttestation.allowedConnectHosts) {
+  assertExactObjectKeys(hostObservation, ["hostname", "count"]);
+  assert.equal(
+    BROWSER_CONNECT_PROXY_ALLOWED_FIREBASE_HOSTNAMES.includes(
+      hostObservation.hostname,
+    ),
+    true,
+  );
+  assert.ok(Number.isInteger(hostObservation.count));
+  assert.ok(hostObservation.count > 0);
+}
+assert.equal(
+  browserConnectProxyAttestation.allowedConnectHosts.reduce(
+    (total, observation) => total + observation.count,
+    0,
+  ),
+  browserConnectProxyAttestation.allowedConnectCount,
+);
+assert.equal(
+  browserConnectProxyAttestation.allowedConnectHostSetHash,
+  secretSha256(
+    JSON.stringify(browserConnectProxyAttestation.allowedConnectHosts),
+  ),
+);
+for (const observation of browserConnectProxyAttestation.browserProductBackgroundDenyObservations) {
+  assertExactObjectKeys(observation, [
+    "stage",
+    "source",
+    "hostname",
+    "port",
+    "count",
+  ]);
+  assert.equal(observation.stage, "browser-launch");
+  assert.equal(observation.source, "browser-process-proxy-only-connect");
+  assert.equal(observation.port, "443");
+  assert.equal(
+    BROWSER_PRODUCT_BACKGROUND_DENY_HOSTNAMES.includes(observation.hostname),
+    true,
+  );
+  assert.ok(Number.isInteger(observation.count));
+  assert.ok(observation.count > 0);
+}
+assert.equal(
+  browserConnectProxyAttestation.browserProductBackgroundDenyObservations.reduce(
+    (total, observation) => total + observation.count,
+    0,
+  ),
+  browserConnectProxyAttestation.browserProductBackgroundDenyCount,
+);
+assert.equal(
+  browserConnectProxyAttestation.browserProductBackgroundDenyObservationSetHash,
+  secretSha256(
+    JSON.stringify(
+      browserConnectProxyAttestation.browserProductBackgroundDenyObservations,
+    ),
+  ),
+);
+for (const observation of browserConnectProxyAttestation.requestStageAuthorizationObservations) {
+  assertExactObjectKeys(observation, [
+    "stage",
+    "hostname",
+    "method",
+    "origin",
+    "kind",
+    "count",
+  ]);
+  assert.equal(["baseline", "candidate"].includes(observation.stage), true);
+  assert.equal(
+    BROWSER_CONNECT_PROXY_ALLOWED_FIREBASE_HOSTNAMES.includes(
+      observation.hostname,
+    ),
+    true,
+  );
+  assert.equal(
+    BROWSER_CONNECT_PROXY_AUTHORIZED_REQUEST_METHODS.includes(
+      observation.method,
+    ),
+    true,
+  );
+  assert.equal(observation.origin, stableBrowserOrigin);
+  assert.equal(
+    [
+      "authority-lease-active-tunnel-present",
+      "authority-lease-no-active-tunnel",
+    ].includes(observation.kind),
+    true,
+  );
+  assert.ok(Number.isInteger(observation.count));
+  assert.ok(observation.count > 0);
+}
+assert.equal(
+  browserConnectProxyAttestation.requestStageAuthorizationObservations.reduce(
+    (total, observation) => total + observation.count,
+    0,
+  ),
+  browserConnectProxyAttestation.requestStageAuthorizationCount,
+);
+assert.equal(
+  browserConnectProxyAttestation.requestStageAuthorizationObservationSetHash,
+  secretSha256(
+    JSON.stringify(
+      browserConnectProxyAttestation.requestStageAuthorizationObservations,
+    ),
+  ),
+);
+for (const observation of browserConnectProxyAttestation.authorityLeaseConsumeObservations) {
+  assertExactObjectKeys(observation, [
+    "stage",
+    "hostname",
+    "method",
+    "origin",
+    "count",
+  ]);
+  assert.equal(["baseline", "candidate"].includes(observation.stage), true);
+  assert.equal(
+    BROWSER_CONNECT_PROXY_ALLOWED_FIREBASE_HOSTNAMES.includes(
+      observation.hostname,
+    ),
+    true,
+  );
+  assert.equal(
+    BROWSER_CONNECT_PROXY_AUTHORIZED_REQUEST_METHODS.includes(
+      observation.method,
+    ),
+    true,
+  );
+  assert.equal(observation.origin, stableBrowserOrigin);
+  assert.ok(Number.isInteger(observation.count));
+  assert.ok(observation.count > 0);
+}
+assert.equal(
+  browserConnectProxyAttestation.authorityLeaseConsumeObservations.reduce(
+    (total, observation) => total + observation.count,
+    0,
+  ),
+  browserConnectProxyAttestation.authorityLeaseConsumeCount,
+);
+assert.equal(
+  browserConnectProxyAttestation.authorityLeaseConsumeObservationSetHash,
+  secretSha256(
+    JSON.stringify(
+      browserConnectProxyAttestation.authorityLeaseConsumeObservations,
+    ),
+  ),
+);
+for (const observation of browserConnectProxyAttestation.deniedConnectAuthorities) {
+  assertExactObjectKeys(observation, ["authority", "count"]);
+  assert.equal(
+    BROWSER_PRODUCT_BACKGROUND_DENY_HOSTNAMES.map(
+      (hostname) => `${hostname}:443`,
+    ).includes(observation.authority),
+    true,
+  );
+  assert.ok(Number.isInteger(observation.count));
+  assert.ok(observation.count > 0);
+}
+assert.equal(
+  browserConnectProxyAttestation.deniedConnectAuthorities.reduce(
+    (total, observation) => total + observation.count,
+    0,
+  ),
+  browserConnectProxyAttestation.deniedConnectCount,
+);
+assert.equal(
+  browserConnectProxyAttestation.deniedConnectAuthoritySetHash,
+  secretSha256(
+    JSON.stringify(browserConnectProxyAttestation.deniedConnectAuthorities),
+  ),
+);
+assert.equal(
+  browserWideBoundaryAttestation.browserConnectProxyHash,
+  sha256(canonicalJson(browserConnectProxyAttestation)),
+);
+assert.deepEqual(
+  browserWideBoundaryAttestation.browserObservedDirectFirebaseHostnames,
+  browserWideBoundaryAttestation.browserConnectProxyAllowedConnectHostnames,
+);
+assert.deepEqual(
+  [
+    ...new Set(
+      browserConnectProxyAttestation.requestStageAuthorizationObservations.map(
+        ({ hostname }) => hostname,
+      ),
+    ),
+  ].sort(),
+  browserWideBoundaryAttestation.browserObservedDirectFirebaseHostnames,
+);
+assert.deepEqual(
+  browserWideBoundaryAttestation.browserConnectProxyAllowedConnectHostnames,
+  browserConnectProxyAttestation.allowedConnectHosts.map(
+    ({ hostname }) => hostname,
+  ),
+);
+assert.equal(
+  browserWideBoundaryAttestation.browserObservedDirectFirebaseHostnameSetHash,
+  sha256(
+    canonicalJson(
+      browserWideBoundaryAttestation.browserObservedDirectFirebaseHostnames,
+    ),
+  ),
+);
+assert.equal(
+  browserWideBoundaryAttestation.browserConnectProxyAllowedConnectHostnameSetHash,
+  sha256(
+    canonicalJson(
+      browserWideBoundaryAttestation.browserConnectProxyAllowedConnectHostnames,
+    ),
+  ),
+);
+assert.equal(
+  browserWideBoundaryAttestation.stableImmutableDeterministicExternalProxyConnectCount,
+  0,
+);
+assert.equal(
+  browserWideBoundaryAttestation.browserConnectProxyCleanupResidualCount,
+  0,
+);
+assert.equal(
+  appCheckBinding.browserConnectProxyHash,
+  browserWideBoundaryAttestation.browserConnectProxyHash,
+);
+assert.equal(
+  appCheckBinding.browserConnectProxyAllowedConnectCount,
+  browserConnectProxyAttestation.allowedConnectCount,
+);
+assert.equal(
+  appCheckBinding.browserConnectProxyDeniedConnectCount,
+  browserConnectProxyAttestation.deniedConnectCount,
+);
+assert.equal(appCheckBinding.browserConnectProxyCleanupResidualCount, 0);
 assert.equal(
   appCheckBinding.preTransmissionBoundaryAttestationHash,
   preTransmissionNetworkBoundaryAttestationHash,
+);
+assert.equal(
+  appCheckBinding.nonFirebaseNetworkAllowedHostnameSetHash,
+  nonFirebaseNetworkAllowedHostnameSetHash,
+);
+assert.equal(
+  appCheckBinding.nonFirebaseNetworkAllowedHostnameCount,
+  nonFirebaseNetworkAllowedHostnames.length,
 );
 assert.equal(
   appCheckBinding.debugSentinelHash,
@@ -5091,10 +9989,85 @@ for (const [field, auditedValue] of Object.entries({
     auditedPreTransmissionBoundaryBlockAttempts,
   preTransmissionBoundaryProductionBlockCount:
     auditedPreTransmissionBoundaryProductionBlocks,
+  preTransmissionBoundaryCrossOriginDocumentBlockCount:
+    auditedPreTransmissionBoundaryCrossOriginDocumentBlocks,
   preTransmissionBoundaryUnboundFirebaseBlockCount:
     auditedPreTransmissionBoundaryUnboundFirebaseBlocks,
+  preTransmissionBoundaryNonFirebaseHostnameBlockCount:
+    auditedPreTransmissionBoundaryNonFirebaseHostnameBlocks,
+  preTransmissionBoundaryMalformedUrlBlockCount:
+    auditedPreTransmissionBoundaryMalformedUrlBlocks,
   preTransmissionBoundaryFailRequestCount:
     auditedPreTransmissionBoundaryFailRequests,
+  optionalTelemetrySuppressedRequestCount:
+    auditedOptionalTelemetrySuppressedRequests,
+  deterministicHolidayResponseFulfillCount:
+    auditedDeterministicHolidayResponseFulfills,
+  deterministicRecaptchaResponseFulfillCount:
+    auditedDeterministicRecaptchaResponseFulfills,
+  deterministicFirebaseModuleFulfillCount:
+    auditedDeterministicFirebaseModuleFulfills,
+  deterministicResponseScopeMismatchBlockCount:
+    auditedDeterministicResponseScopeMismatchBlocks,
+  externalStaticRequestNetworkFetchCount:
+    auditedExternalStaticRequestNetworkFetches,
+  externalStaticRequestCacheFulfillCount:
+    auditedExternalStaticRequestCacheFulfills,
+  externalStaticRequestScopeMismatchBlockCount:
+    auditedExternalStaticRequestScopeMismatchBlocks,
+  externalStaticResponseNon200AbortCount:
+    auditedExternalStaticResponseNon200Aborts,
+  stagingApiKeyScopeViolationBlockCount:
+    auditedStagingApiKeyScopeViolationBlocks,
+  testCredentialScopeViolationBlockCount:
+    auditedTestCredentialScopeViolationBlocks,
+  refreshTokenScopeViolationBlockCount: auditedRefreshTokenScopeViolationBlocks,
+  rawSensitivePreTransmissionInspectionCount:
+    auditedRawSensitivePreTransmissionInspections,
+  rawSensitivePreTransmissionBlockCount:
+    auditedRawSensitivePreTransmissionBlocks,
+  rawProductionPreTransmissionBlockCount:
+    auditedRawProductionPreTransmissionBlocks,
+  rawVercelBypassPreTransmissionBlockCount:
+    auditedRawVercelBypassPreTransmissionBlocks,
+  rawStagingApiKeyPreTransmissionBlockCount:
+    auditedRawStagingApiKeyPreTransmissionBlocks,
+  rawTestCredentialPreTransmissionBlockCount:
+    auditedRawTestCredentialPreTransmissionBlocks,
+  rawRefreshTokenPreTransmissionBlockCount:
+    auditedRawRefreshTokenPreTransmissionBlocks,
+  rawDebugTokenPreTransmissionBlockCount:
+    auditedRawDebugTokenPreTransmissionBlocks,
+  rawDebugSentinelPreTransmissionBlockCount:
+    auditedRawDebugSentinelPreTransmissionBlocks,
+  allowedEgressResponsePauseCount: auditedAllowedEgressResponsePauses,
+  allowedEgressInformationalResponsePauseCount:
+    auditedAllowedEgressInformationalResponsePauses,
+  allowedEgressInformationalFinalResponseCount:
+    auditedAllowedEgressInformationalFinalResponses,
+  allowedEgressInformationalTrackingResidualCount:
+    auditedAllowedEgressInformationalTrackingResiduals,
+  allowedEgressInvalidResponseStatusAbortCount:
+    auditedAllowedEgressInvalidResponseStatusAborts,
+  allowedEgressRedirectAbortCount: auditedAllowedEgressRedirectAborts,
+  allowedEgressHttpErrorAbortCount: auditedAllowedEgressHttpErrorAborts,
+  allowedEgressResponseErrorAbortCount: auditedAllowedEgressResponseErrorAborts,
+  allowedEgressTrackingResidualCount: auditedAllowedEgressTrackingResiduals,
+  externalStaticTrackingResidualCount: auditedExternalStaticTrackingResiduals,
+  allowedEgressInformationalEgressHeaderObservationCount:
+    auditedAllowedEgressInformationalEgressHeaderObservations,
+  allowedEgressFinalEgressHeaderObservationCount:
+    auditedAllowedEgressFinalEgressHeaderObservations,
+  allowedEgressResponseHeaderSuppressionCount:
+    auditedAllowedEgressResponseHeaderSuppressions,
+  allowedEgressEgressHeaderForwardCount:
+    auditedAllowedEgressEgressHeaderForwards,
+  fullPostDataResolutionCount: auditedFullPostDataResolutions,
+  fullPostDataNetworkFallbackCount: auditedFullPostDataNetworkFallbacks,
+  fullPostDataResolutionFailureCount: auditedFullPostDataResolutionFailures,
+  fullPostDataOversizeBlockCount: auditedFullPostDataOversizeBlocks,
+  fullPostDataRepresentationMismatchBlockCount:
+    auditedFullPostDataRepresentationMismatchBlocks,
   debugTokenNetworkObservationCount: auditedDebugTokenNetworkObservations,
   debugSentinelNetworkObservationCount: auditedDebugSentinelNetworkObservations,
   authorizedDebugExchangeBodyReplacementCount:
@@ -5203,13 +10176,20 @@ assert.ok(appCheckBinding.baselineBridgeCdpReconciledRequestCount > 0);
 assert.ok(appCheckBinding.appCheckCdpMonitorPausedRequestCount > 0);
 assert.ok(appCheckBinding.preTransmissionBoundaryInspectionCount > 0);
 assert.equal(
+  appCheckBinding.appCheckCdpMonitorPausedRequestCount,
   appCheckBinding.preTransmissionBoundaryInspectionCount,
+);
+assert.equal(
+  appCheckBinding.rawSensitivePreTransmissionInspectionCount,
   appCheckBinding.appCheckCdpMonitorPausedRequestCount,
 );
 assert.equal(
   appCheckBinding.preTransmissionBoundaryBlockAttemptCount,
   appCheckBinding.preTransmissionBoundaryProductionBlockCount +
-    appCheckBinding.preTransmissionBoundaryUnboundFirebaseBlockCount,
+    appCheckBinding.preTransmissionBoundaryCrossOriginDocumentBlockCount +
+    appCheckBinding.preTransmissionBoundaryUnboundFirebaseBlockCount +
+    appCheckBinding.preTransmissionBoundaryNonFirebaseHostnameBlockCount +
+    appCheckBinding.preTransmissionBoundaryMalformedUrlBlockCount,
 );
 assert.equal(
   appCheckBinding.preTransmissionBoundaryFailRequestCount,
@@ -5234,34 +10214,13 @@ assert.equal(
 assert.equal(
   appCheckBinding.sensitiveAppCheckCdpResponsePausedRequestCount,
   appCheckBinding.authorizedDebugExchangeBodyReplacementCount +
-    appCheckBinding.authorizedAppCheckHeaderRequestCount +
-    appCheckBinding.vercelBypassCdpInjectedRequestCount,
+    appCheckBinding.authorizedAppCheckHeaderRequestCount,
 );
-if (appCheckBinding.vercelBypassConfigured) {
-  assert.ok(appCheckBinding.vercelBypassCdpInjectedRequestCount > 0);
-  assert.equal(
-    appCheckBinding.vercelBypassCdpInjectedRequestCount,
-    appCheckBinding.vercelBypassObservedEligibleRequestCount,
-  );
-  assert.equal(
-    appCheckBinding.vercelBypassCdpInjectedRequestCount,
-    appCheckBinding.vercelBypassHeaderObservedRequestCount,
-  );
-  assert.equal(
-    appCheckBinding.vercelBypassCdpInjectedRequestCount,
-    appCheckBinding.vercelBypassCdpResponsePausedRequestCount,
-  );
-  assert.equal(
-    appCheckBinding.vercelBypassCdpInjectedRequestCount,
-    appCheckBinding.vercelBypassHttpSuccessResponseCount,
-  );
-} else {
-  assert.equal(appCheckBinding.vercelBypassCdpInjectedRequestCount, 0);
-  assert.equal(appCheckBinding.vercelBypassObservedEligibleRequestCount, 0);
-  assert.equal(appCheckBinding.vercelBypassHeaderObservedRequestCount, 0);
-  assert.equal(appCheckBinding.vercelBypassCdpResponsePausedRequestCount, 0);
-  assert.equal(appCheckBinding.vercelBypassHttpSuccessResponseCount, 0);
-}
+assert.equal(appCheckBinding.vercelBypassCdpInjectedRequestCount, 0);
+assert.equal(appCheckBinding.vercelBypassObservedEligibleRequestCount, 0);
+assert.equal(appCheckBinding.vercelBypassHeaderObservedRequestCount, 0);
+assert.equal(appCheckBinding.vercelBypassCdpResponsePausedRequestCount, 0);
+assert.equal(appCheckBinding.vercelBypassHttpSuccessResponseCount, 0);
 assert.equal(
   appCheckBinding.baselineScreenCaptureProtectedRequestCount,
   auditedBaselineScreenCaptureProtectedRequests,
@@ -5426,8 +10385,15 @@ for (const field of [
   "baselineBridgeInjectedRedirectResponseAbortCount",
   "preTransmissionBoundaryBlockAttemptCount",
   "preTransmissionBoundaryProductionBlockCount",
+  "preTransmissionBoundaryCrossOriginDocumentBlockCount",
   "preTransmissionBoundaryUnboundFirebaseBlockCount",
+  "preTransmissionBoundaryNonFirebaseHostnameBlockCount",
+  "preTransmissionBoundaryMalformedUrlBlockCount",
   "preTransmissionBoundaryFailRequestCount",
+  "allowedEgressEgressHeaderForwardCount",
+  "fullPostDataResolutionFailureCount",
+  "fullPostDataOversizeBlockCount",
+  "fullPostDataRepresentationMismatchBlockCount",
   "baselineBridgeDecisionUnmatchedProtectedRequestCount",
   "baselineBridgeScopeIneligibleProtectedRequestCount",
   "debugTokenNetworkObservationCount",
@@ -5469,6 +10435,40 @@ for (const field of [
   );
 }
 assert.ok(auditedStagingFirebaseRequests > 0);
+assert.equal(auditedNetworkRequests, networkSummary.requestCount);
+assert.equal(auditedNetworkResponses, networkSummary.responseCount);
+assert.equal(
+  auditedNonFirebaseRequests,
+  networkSummary.nonFirebaseRequestCount,
+);
+assert.equal(
+  auditedNonFirebaseAllowedRequests,
+  networkSummary.nonFirebaseAllowedRequestCount,
+);
+assert.equal(
+  auditedNonFirebaseUnallowlistedRequests,
+  networkSummary.nonFirebaseUnallowlistedRequestCount,
+);
+assert.equal(
+  auditedNonFirebaseUnallowlistedResponses,
+  networkSummary.nonFirebaseUnallowlistedResponseCount,
+);
+assert.equal(
+  auditedProductionVercelRequests,
+  networkSummary.productionVercelRequestCount,
+);
+assert.equal(
+  auditedProductionVercelResponses,
+  networkSummary.productionVercelResponseCount,
+);
+assert.equal(
+  auditedUnknownVercelRequests,
+  networkSummary.unknownVercelRequestCount,
+);
+assert.equal(
+  auditedUnknownVercelResponses,
+  networkSummary.unknownVercelResponseCount,
+);
 assert.equal(
   auditedStagingFirebaseRequests,
   networkSummary.stagingFirebaseRequestCount,
@@ -6385,6 +11385,10 @@ console.log(
       readySignalAssertions,
       stagingFirebaseRequests: networkSummary.stagingFirebaseRequestCount,
       auditedStagingFirebaseRequests,
+      stableBrowserOrigin: browserTransport.browserOrigin,
+      immutableOriginRewriteRequests: browserTransport.requestCount,
+      immutableOriginRewriteBodyHashes: browserTransport.bodyHashCount,
+      immutableOriginRewriteMismatches: browserTransport.bodyHashMismatchCount,
       fullPageViewportKeys: contract.fullPageViewportKeys,
       sourceCommitSha: manifest.sourceCommitSha,
       sourceTreeSha: manifest.sourceTreeSha,
