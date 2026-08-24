@@ -12,6 +12,18 @@
     "requiredMeasuredFirebaseProjectIds": ["westory-staging-177587430482"]
   },
   "stableAlias": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
+  "deploymentVerification": {
+    "baseline": {
+      "inspectTarget": "preview",
+      "apiTarget": null,
+      "gitCommitRef": "HEAD"
+    },
+    "candidate": {
+      "inspectTarget": "production",
+      "apiTarget": "production",
+      "gitCommitRef": "codex/phase6-w10p-presentation-freeze"
+    }
+  },
   "fixtureId": "w10p-visual-fixture-v1",
   "fixtureRevision": 1,
   "fixturePlanHash": "fe18dbf369602af95b3ed35496a1bf7dcf64364ecd20b4b29cab1a818a5d850e",

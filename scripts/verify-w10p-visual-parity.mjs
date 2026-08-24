@@ -498,6 +498,71 @@ const canonicalJson = (value) => {
   }
   return JSON.stringify(value);
 };
+const canonicalBackupDouble = (value) => {
+  if (Number.isNaN(value)) return "NaN";
+  if (value === Infinity) return "Infinity";
+  if (value === -Infinity) return "-Infinity";
+  if (Object.is(value, -0)) return "-0";
+  return String(value);
+};
+const canonicalizeBackupValue = (value) => {
+  if (value === null) return ["null"];
+  if (value === undefined) return ["undefined"];
+  if (typeof value === "string") return ["string", value];
+  if (typeof value === "boolean") return ["boolean", value];
+  if (typeof value === "bigint") return ["integer", value.toString()];
+  if (typeof value === "number")
+    return ["double", canonicalBackupDouble(value)];
+  if (value instanceof Date) return ["date", value.toISOString()];
+  if (Array.isArray(value))
+    return ["array", value.map(canonicalizeBackupValue)];
+  if (
+    value?.constructor?.name === "Timestamp" &&
+    Number.isFinite(value.seconds) &&
+    Number.isFinite(value.nanoseconds)
+  ) {
+    return ["timestamp", String(value.seconds), String(value.nanoseconds)];
+  }
+  if (
+    value?.constructor?.name === "DocumentReference" &&
+    typeof value.path === "string"
+  ) {
+    return ["reference", String(value.formattedName || value.path)];
+  }
+  if (
+    value?.constructor?.name === "GeoPoint" &&
+    Number.isFinite(value.latitude) &&
+    Number.isFinite(value.longitude)
+  ) {
+    return [
+      "geoPoint",
+      canonicalBackupDouble(value.latitude),
+      canonicalBackupDouble(value.longitude),
+    ];
+  }
+  if (Buffer.isBuffer(value)) return ["bytes", value.toString("base64")];
+  if (value?.constructor?.name === "Bytes" && value.toBase64) {
+    return ["bytes", value.toBase64()];
+  }
+  if (
+    value?.constructor?.name === "VectorValue" &&
+    typeof value.toArray === "function"
+  ) {
+    return ["vector", value.toArray().map(canonicalBackupDouble)];
+  }
+  if (value && typeof value === "object") {
+    return [
+      "map",
+      Object.keys(value)
+        .sort()
+        .filter((key) => value[key] !== undefined)
+        .map((key) => [key, canonicalizeBackupValue(value[key])]),
+    ];
+  }
+  throw new TypeError("Unsupported Firestore backup value type.");
+};
+const canonicalBackupJson = (value) =>
+  JSON.stringify(canonicalizeBackupValue(value));
 const exactVercelOrigin = (value) => {
   const parsed = new URL(value);
   assert.equal(parsed.protocol, "https:");
@@ -668,8 +733,67 @@ const backupAccessProbeCanary = (kind) => {
   return {
     revisionHash,
     path: `w10p_visual_fixture_backups/${contract.fixtureId}/documents/${documentId}`,
-    documentHash: sha256(Buffer.from(canonicalJson(data))),
+    documentHash: sha256(Buffer.from(canonicalBackupJson(data))),
   };
+};
+const verifyBackupHashKnownVectors = () => {
+  const canaryVectors = [
+    [
+      "existing-update-delete",
+      "a64dd06032f8d72c981a05f4fb59c0e8cd516f6ada1266d4fffa5654f0de931a",
+      "af573ffe4c29aa45b0859cdce167f9504697aa729b35ba12288d45274e1dee2d",
+    ],
+    [
+      "absent-create",
+      "f5f4ba73a1b23a33e72d3a0287bd196a19316250937a3190b4b8ff015ccafb24",
+      "0987a826ae977395ba7e064ce1b1734fc8e81159ed17ab67db0959fb9bfd71bd",
+    ],
+    [
+      "pre-backup-existing-update-delete",
+      "0bd618252e9b5c8d1be515b4db0c7743e6d6f330228ce96b4d6d2f3cea58f3aa",
+      "ba5a118158a41378bb03ebd51af8319d9d52d71206063beb2d8c86712142887a",
+    ],
+    [
+      "pre-backup-absent-create",
+      "415e0746cbef40610b4fdd7e1e17572bf35d1cf6c45fd62c0187c021a199497b",
+      "fec5142c3082251f5e4cf603651debe41de1bf557b0c0aa762319c61b5412630",
+    ],
+  ];
+  for (const [kind, backupHash, genericHash] of canaryVectors) {
+    const actual = backupAccessProbeCanary(kind).documentHash;
+    assert.equal(actual, backupHash, `${kind} backup hash drifted.`);
+    assert.notEqual(
+      actual,
+      genericHash,
+      `${kind} must retain Firestore backup type tags.`,
+    );
+  }
+  const probeRevisionHash = sha256(
+    `${contract.fixtureId}\n${contract.fixtureRevision}\npre-backup-access-probe-v1`,
+  );
+  const positiveControlData = {
+    schemaVersion: 1,
+    fixtureOwner: "w10p-visual-parity",
+    fixtureId: contract.fixtureId,
+    fixtureRevision: contract.fixtureRevision,
+    fixturePurpose: "pre-backup-positive-control",
+    probeRevision: probeRevisionHash,
+    sentinelHash: sha256(`${probeRevisionHash}\npositive-control-sentinel`),
+  };
+  const positiveControlHash = sha256(
+    Buffer.from(canonicalBackupJson(positiveControlData)),
+  );
+  assert.equal(
+    positiveControlHash,
+    "a7aeff4656ddf93f04b09f12eeb72ede57b0e57472f2b85a49c0ec341bb3c171",
+    "The pre-backup positive-control backup hash drifted.",
+  );
+  assert.notEqual(
+    positiveControlHash,
+    sha256(Buffer.from(canonicalJson(positiveControlData))),
+    "The pre-backup positive control must retain Firestore backup type tags.",
+  );
+  return canaryVectors.length + 1;
 };
 const POST_BACKUP_PROBE_EXACT = {
   status: "VERIFIED_DENIED",
@@ -900,6 +1024,7 @@ const assertPreBackupAccessProbeAttestation = (probe, expected) =>
     label: "The pre-backup namespace access probe",
   });
 const verifyBackupAccessProbeNegativeFixtures = () => {
+  const backupHashKnownVectorCount = verifyBackupHashKnownVectors();
   const hash = "a".repeat(64);
   const attest = (projection) => ({
     ...projection,
@@ -1012,6 +1137,7 @@ const verifyBackupAccessProbeNegativeFixtures = () => {
     );
   }
   return {
+    backupHashKnownVectorCount,
     postBackupNegativeCaseCount: postInvalid.length,
     preBackupNegativeCaseCount: preInvalid.length,
   };
@@ -2430,7 +2556,7 @@ const preBackupNamespaceAccessAttestationHash =
       ),
       positiveControlSentinelHash: preBackupPositiveControlSentinelHash,
       positiveControlDocumentHash: sha256(
-        Buffer.from(canonicalJson(preBackupPositiveControlData)),
+        Buffer.from(canonicalBackupJson(preBackupPositiveControlData)),
       ),
       existingWriteCanaryPathHash: sha256(preExistingCanary.path),
       absentWriteCanaryPathHash: sha256(preAbsentCanary.path),
@@ -2857,6 +2983,12 @@ if (verifyLive) {
   ]) {
     const inspected = inspectDeployment(lookupUrl);
     const api = readDeploymentApi(deployment.id);
+    const expectedDeployment = contract.deploymentVerification?.[stage];
+    assert.deepEqual(
+      Object.keys(expectedDeployment ?? {}).sort(),
+      ["apiTarget", "gitCommitRef", "inspectTarget"],
+      `${stage} deployment verification contract is invalid.`,
+    );
     assert.equal(
       inspected.id,
       deployment.id,
@@ -2868,19 +3000,17 @@ if (verifyLive) {
       `${stage} immutable URL drifted.`,
     );
     assert.equal(inspected.readyState, "READY");
-    assert.equal(inspected.target, "production");
+    assert.equal(inspected.target, expectedDeployment.inspectTarget);
     assert.equal(api.id, deployment.id);
     assert.equal(api.projectId ?? api.project?.id, contract.vercelProjectId);
     assert.equal(api.readyState, "READY");
-    assert.equal(api.target, "production");
+    assert.equal(api.target, expectedDeployment.apiTarget);
     assert.equal(
       api.meta?.gitCommitSha,
       deployment.sourceCommitSha,
       `${stage} Vercel source commit drifted.`,
     );
-    if (stage === "candidate") {
-      assert.equal(api.meta?.gitCommitRef, contract.branch);
-    }
+    assert.equal(api.meta?.gitCommitRef, expectedDeployment.gitCommitRef);
   }
   const htmlHeaders = {
     "cache-control": "no-cache",

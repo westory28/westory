@@ -150,6 +150,8 @@ const semesterCutoverServer = read("functions/semesterCutover.js");
 const visualParityContract = JSON.parse(
   read("scripts/w10p-visual-parity-contract.json"),
 );
+const visualParityCapture = read("scripts/capture-w10p-visual-parity.mjs");
+const visualParityVerifier = read("scripts/verify-w10p-visual-parity.mjs");
 const manageExam = read("src/pages/teacher/ManageExam.tsx");
 const performanceScoreManager = read(
   "src/pages/teacher/components/PerformanceScoreManager.tsx",
@@ -244,6 +246,48 @@ assert.match(
   ),
   "The server fixture-admin read fence must bind the current visual fixture plan hash.",
 );
+assert.deepEqual(visualParityContract.deploymentVerification, {
+  baseline: {
+    inspectTarget: "preview",
+    apiTarget: null,
+    gitCommitRef: "HEAD",
+  },
+  candidate: {
+    inspectTarget: "production",
+    apiTarget: "production",
+    gitCommitRef: visualParityContract.branch,
+  },
+});
+for (const [path, source] of [
+  ["scripts/capture-w10p-visual-parity.mjs", visualParityCapture],
+  ["scripts/verify-w10p-visual-parity.mjs", visualParityVerifier],
+]) {
+  assert.match(
+    source,
+    /const canonicalizeBackupValue = \(value\) =>/u,
+    `${path} must reproduce the fixture backup-value canonicalization contract.`,
+  );
+  assert.match(
+    source,
+    /documentHash:\s*sha256\(Buffer\.from\(canonicalBackupJson\(data\)\)\)/u,
+    `${path} must derive access-probe canary hashes from backup canonicalization.`,
+  );
+  assert.match(
+    source,
+    /positiveControlDocumentHash:\s*sha256\(\s*Buffer\.from\(canonicalBackupJson\(preBackupPositiveControlData\)\)/u,
+    `${path} must derive the pre-backup positive-control hash from backup canonicalization.`,
+  );
+  assert.match(
+    source,
+    /const verifyBackupHashKnownVectors = \(\) =>/u,
+    `${path} must pin independent backup-hash regression vectors.`,
+  );
+  assert.match(
+    source,
+    /backupHashKnownVectorCount = verifyBackupHashKnownVectors\(\)/u,
+    `${path} must execute the backup-hash regression vectors.`,
+  );
+}
 assert.match(manageExam, /"evidence-performance"[\s\S]*?"evidence-written"/u);
 assert.match(performanceScore, /searchParams\.get\("view"\) === "evidence"/u);
 assert.match(writtenScore, /searchParams\.get\("view"\) === "evidence"/u);
