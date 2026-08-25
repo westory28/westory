@@ -7,7 +7,7 @@ import { inflateSync } from "node:zlib";
 
 const readJson = (path) => JSON.parse(readFileSync(resolve(path), "utf8"));
 const contract = readJson("scripts/w10p-visual-parity-contract.json");
-assert.equal(contract.schemaVersion, 10);
+assert.equal(contract.schemaVersion, 11);
 const MAX_RESOLVED_REQUEST_POST_DATA_BYTES = 8 * 1024 * 1024;
 const NODE_OWNED_EXTERNAL_STATIC_RESPONSE_HEADER_MAXIMUM_BYTES = 64 * 1024;
 const NODE_OWNED_EXTERNAL_STATIC_RESPONSE_BODY_MAXIMUM_BYTES = 16 * 1024 * 1024;
@@ -3943,6 +3943,23 @@ assert.deepEqual(
           },
         },
         {
+          id: "tailwind-play-3.4.17",
+          hostname: "cdn.tailwindcss.com",
+          resourceTypes: ["Script"],
+          exactPathnames: ["/"],
+          queryPolicy: "none",
+          action: "startup-pinned-source-fetch-then-local-fulfill",
+          pinnedSources: {
+            "/": {
+              url: "https://cdn.tailwindcss.com/3.4.17",
+              contentType: "text/javascript; charset=utf-8",
+              bytes: 407279,
+              sha256:
+                "176e894661aa9cdc9a5cba6c720044cbbf7b8bd80d1c9a142a7c24b1b6c50d15",
+            },
+          },
+        },
+        {
           id: "noto-sans-kr-css",
           hostname: "fonts.googleapis.com",
           resourceTypes: ["Stylesheet"],
@@ -3955,7 +3972,7 @@ assert.deepEqual(
           hostname: "fonts.gstatic.com",
           resourceTypes: ["Font"],
           pathnamePrefix: "/s/notosanskr/",
-          allowedExtensions: [".woff", ".woff2"],
+          allowedExtensions: [".ttf", ".woff", ".woff2"],
           queryPolicy: "none",
           action: "baseline-fetch-hash-cache-then-local-fulfill",
         },
@@ -3964,6 +3981,40 @@ assert.deepEqual(
           hostname: "fonts.gstatic.com",
           resourceTypes: ["Image"],
           exactPathnames: ["/s/i/productlogos/googleg/v6/24px.svg"],
+          queryPolicy: "none",
+          action: "baseline-fetch-hash-cache-then-local-fulfill",
+        },
+        {
+          id: "font-awesome-6.4.0-css",
+          hostname: "cdnjs.cloudflare.com",
+          resourceTypes: ["Stylesheet"],
+          exactPathnames: ["/ajax/libs/font-awesome/6.4.0/css/all.min.css"],
+          queryPolicy: "none",
+          action: "startup-pinned-source-fetch-then-local-fulfill",
+          pinnedSources: {
+            "/ajax/libs/font-awesome/6.4.0/css/all.min.css": {
+              url: "https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css",
+              contentType: "text/css; charset=utf-8",
+              bytes: 102025,
+              sha256:
+                "1edb1725a9ea8ca4dcf2f5508cee183218aa1685e47c1b23056717f754f58ebf",
+            },
+          },
+        },
+        {
+          id: "font-awesome-6.4.0-font",
+          hostname: "cdnjs.cloudflare.com",
+          resourceTypes: ["Font"],
+          exactPathnames: [
+            "/ajax/libs/font-awesome/6.4.0/webfonts/fa-brands-400.ttf",
+            "/ajax/libs/font-awesome/6.4.0/webfonts/fa-brands-400.woff2",
+            "/ajax/libs/font-awesome/6.4.0/webfonts/fa-regular-400.ttf",
+            "/ajax/libs/font-awesome/6.4.0/webfonts/fa-regular-400.woff2",
+            "/ajax/libs/font-awesome/6.4.0/webfonts/fa-solid-900.ttf",
+            "/ajax/libs/font-awesome/6.4.0/webfonts/fa-solid-900.woff2",
+            "/ajax/libs/font-awesome/6.4.0/webfonts/fa-v4compatibility.ttf",
+            "/ajax/libs/font-awesome/6.4.0/webfonts/fa-v4compatibility.woff2",
+          ],
           queryPolicy: "none",
           action: "baseline-fetch-hash-cache-then-local-fulfill",
         },
@@ -8996,7 +9047,10 @@ assert.equal(
   ),
   true,
 );
-assert.equal(networkPolicy.pinnedStartupSourceAttestationCount, 4);
+assert.equal(
+  networkPolicy.pinnedStartupSourceAttestationCount,
+  expectedPinnedStartupSourceBindingsForContract().length,
+);
 assert.equal(
   networkPolicy.pinnedStartupSourceAttestationSetHash,
   sha256(canonicalJson(networkPolicy.pinnedStartupSourceAttestations)),

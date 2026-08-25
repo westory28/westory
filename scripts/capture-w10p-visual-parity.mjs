@@ -820,7 +820,7 @@ const attestBrowserPreTransmissionCommandLine = async (
 
 const readJson = (path) => JSON.parse(readFileSync(resolve(path), "utf8"));
 const contract = readJson("scripts/w10p-visual-parity-contract.json");
-assert.equal(contract.schemaVersion, 10);
+assert.equal(contract.schemaVersion, 11);
 const BROWSER_CONNECT_PROXY_ALLOWED_FIREBASE_HOSTNAMES = [
   "content-firebaseappcheck.googleapis.com",
   "firebaseappcheck.googleapis.com",
@@ -1224,6 +1224,42 @@ const responseStageCorrelationDecision = ({
     return { kind: "invalid-pre-final", status, terminal: true };
   }
   return { kind: "final", status, terminal: true };
+};
+const retiredAllowedEgressLifecycleStates = new Set([
+  "request-continue-failed",
+  "terminal-command-in-flight",
+  "terminal-complete",
+  "redirect-retired",
+  "handler-failed",
+]);
+const missingResponseCorrelationFailureReason = ({
+  sameFetchState = null,
+  networkIdPresent,
+  networkAliasStates = [],
+}) => {
+  if (sameFetchState === "terminal-command-in-flight") {
+    return "response-correlation-same-fetch-terminal-in-flight";
+  }
+  if (sameFetchState === "terminal-complete") {
+    return "response-correlation-same-fetch-terminal-complete";
+  }
+  if (sameFetchState !== null) {
+    return retiredAllowedEgressLifecycleStates.has(sameFetchState)
+      ? "response-correlation-same-fetch-other-retired"
+      : "response-correlation-same-fetch-active";
+  }
+  if (!networkIdPresent) {
+    return "response-correlation-network-id-missing";
+  }
+  if (networkAliasStates.length === 0) {
+    return "response-correlation-network-id-unseen";
+  }
+  if (networkAliasStates.length !== 1) {
+    return "response-correlation-same-network-ambiguous";
+  }
+  return retiredAllowedEgressLifecycleStates.has(networkAliasStates[0])
+    ? "response-correlation-same-network-single-retired-alias"
+    : "response-correlation-same-network-single-active-alias";
 };
 const FETCH_INLINE_POST_DATA_LIMIT_BYTES = 64 * 1024;
 const MAX_RESOLVED_REQUEST_POST_DATA_BYTES = 8 * 1024 * 1024;
@@ -4043,6 +4079,70 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     }),
     null,
   );
+  const productionPresentationExternalFixtures = [
+    {
+      requestUrl: "https://cdn.tailwindcss.com/",
+      resourceType: "Script",
+      expectedRuleId: "tailwind-play-3.4.17",
+    },
+    {
+      requestUrl:
+        "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css",
+      resourceType: "Stylesheet",
+      expectedRuleId: "font-awesome-6.4.0-css",
+    },
+    {
+      requestUrl:
+        "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/webfonts/fa-solid-900.woff2",
+      resourceType: "Font",
+      expectedRuleId: "font-awesome-6.4.0-font",
+    },
+    {
+      requestUrl: "https://fonts.gstatic.com/s/notosanskr/v1/fixture.ttf",
+      resourceType: "Font",
+      expectedRuleId: "noto-sans-kr-font",
+    },
+  ];
+  for (const fixture of productionPresentationExternalFixtures) {
+    assert.equal(
+      exactStaticExternalRuleId({
+        requestUrl: fixture.requestUrl,
+        method: "GET",
+        resourceType: fixture.resourceType,
+      }),
+      fixture.expectedRuleId,
+    );
+  }
+  const rejectedProductionPresentationExternalFixtures = [
+    {
+      requestUrl: "https://cdn.tailwindcss.com/3.4.17",
+      resourceType: "Script",
+    },
+    {
+      requestUrl: "https://cdn.tailwindcss.com/?plugins=forms",
+      resourceType: "Script",
+    },
+    {
+      requestUrl:
+        "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css",
+      resourceType: "Stylesheet",
+    },
+    {
+      requestUrl:
+        "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/webfonts/unknown.woff2",
+      resourceType: "Font",
+    },
+  ];
+  for (const fixture of rejectedProductionPresentationExternalFixtures) {
+    assert.equal(
+      exactStaticExternalRuleId({
+        requestUrl: fixture.requestUrl,
+        method: "GET",
+        resourceType: fixture.resourceType,
+      }),
+      null,
+    );
+  }
   const externalScopeMismatchFixtures = [
     { headers: { range: "bytes=0-10" } },
     { headers: { authorization: "synthetic" } },
@@ -4381,6 +4481,75 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     responseStageCorrelationDecision({ responseErrorReason: "Failed" }),
     { kind: "response-error", status: null, terminal: true },
   );
+  const missingCorrelationFixtures = [
+    {
+      input: {
+        sameFetchState: "terminal-command-in-flight",
+        networkIdPresent: true,
+        networkAliasStates: ["response-awaiting"],
+      },
+      expected: "response-correlation-same-fetch-terminal-in-flight",
+    },
+    {
+      input: {
+        sameFetchState: "terminal-complete",
+        networkIdPresent: true,
+        networkAliasStates: [],
+      },
+      expected: "response-correlation-same-fetch-terminal-complete",
+    },
+    {
+      input: {
+        sameFetchState: "handler-failed",
+        networkIdPresent: false,
+        networkAliasStates: [],
+      },
+      expected: "response-correlation-same-fetch-other-retired",
+    },
+    {
+      input: {
+        sameFetchState: "response-awaiting",
+        networkIdPresent: true,
+        networkAliasStates: [],
+      },
+      expected: "response-correlation-same-fetch-active",
+    },
+    {
+      input: {
+        networkIdPresent: true,
+        networkAliasStates: ["response-awaiting"],
+      },
+      expected: "response-correlation-same-network-single-active-alias",
+    },
+    {
+      input: {
+        networkIdPresent: true,
+        networkAliasStates: ["redirect-retired"],
+      },
+      expected: "response-correlation-same-network-single-retired-alias",
+    },
+    {
+      input: {
+        networkIdPresent: true,
+        networkAliasStates: ["response-awaiting", "terminal-complete"],
+      },
+      expected: "response-correlation-same-network-ambiguous",
+    },
+    {
+      input: { networkIdPresent: true, networkAliasStates: [] },
+      expected: "response-correlation-network-id-unseen",
+    },
+    {
+      input: { networkIdPresent: false, networkAliasStates: [] },
+      expected: "response-correlation-network-id-missing",
+    },
+  ];
+  for (const fixture of missingCorrelationFixtures) {
+    assert.equal(
+      missingResponseCorrelationFailureReason(fixture.input),
+      fixture.expected,
+    );
+  }
   const parserDocumentOrigin = "https://westory-staging.example";
   const exactParserModulepreloadMarkup =
     '<link rel="modulepreload" crossorigin href="/assets/app-123_ABC.js">';
@@ -4461,10 +4630,14 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     acceptedDeterministicRecaptchaCaseCount: 1,
     rejectedRecaptchaPathCaseCount: 1,
     acceptedExternalStaticCaseCount: 1,
+    acceptedProductionPresentationExternalStaticCaseCount:
+      productionPresentationExternalFixtures.length,
     rejectedExternalStaticHeadCaseCount: 1,
     rejectedExternalStaticSensitiveInputCaseCount:
       externalScopeMismatchFixtures.length,
     rejectedExternalStaticPathCaseCount: 3,
+    rejectedProductionPresentationExternalStaticCaseCount:
+      rejectedProductionPresentationExternalFixtures.length,
     rejectedStagingApiKeyExfiltrationCaseCount: 1,
     acceptedFirestoreWebChannelEncodedApiKeyCaseCount: 2,
     rejectedFirestoreWebChannelEncodedApiKeyCaseCount:
@@ -8222,6 +8395,23 @@ assert.deepEqual(contract.networkBoundary, {
         },
       },
       {
+        id: "tailwind-play-3.4.17",
+        hostname: "cdn.tailwindcss.com",
+        resourceTypes: ["Script"],
+        exactPathnames: ["/"],
+        queryPolicy: "none",
+        action: "startup-pinned-source-fetch-then-local-fulfill",
+        pinnedSources: {
+          "/": {
+            url: "https://cdn.tailwindcss.com/3.4.17",
+            contentType: "text/javascript; charset=utf-8",
+            bytes: 407279,
+            sha256:
+              "176e894661aa9cdc9a5cba6c720044cbbf7b8bd80d1c9a142a7c24b1b6c50d15",
+          },
+        },
+      },
+      {
         id: "noto-sans-kr-css",
         hostname: "fonts.googleapis.com",
         resourceTypes: ["Stylesheet"],
@@ -8234,7 +8424,7 @@ assert.deepEqual(contract.networkBoundary, {
         hostname: "fonts.gstatic.com",
         resourceTypes: ["Font"],
         pathnamePrefix: "/s/notosanskr/",
-        allowedExtensions: [".woff", ".woff2"],
+        allowedExtensions: [".ttf", ".woff", ".woff2"],
         queryPolicy: "none",
         action: "baseline-fetch-hash-cache-then-local-fulfill",
       },
@@ -8243,6 +8433,40 @@ assert.deepEqual(contract.networkBoundary, {
         hostname: "fonts.gstatic.com",
         resourceTypes: ["Image"],
         exactPathnames: ["/s/i/productlogos/googleg/v6/24px.svg"],
+        queryPolicy: "none",
+        action: "baseline-fetch-hash-cache-then-local-fulfill",
+      },
+      {
+        id: "font-awesome-6.4.0-css",
+        hostname: "cdnjs.cloudflare.com",
+        resourceTypes: ["Stylesheet"],
+        exactPathnames: ["/ajax/libs/font-awesome/6.4.0/css/all.min.css"],
+        queryPolicy: "none",
+        action: "startup-pinned-source-fetch-then-local-fulfill",
+        pinnedSources: {
+          "/ajax/libs/font-awesome/6.4.0/css/all.min.css": {
+            url: "https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css",
+            contentType: "text/css; charset=utf-8",
+            bytes: 102025,
+            sha256:
+              "1edb1725a9ea8ca4dcf2f5508cee183218aa1685e47c1b23056717f754f58ebf",
+          },
+        },
+      },
+      {
+        id: "font-awesome-6.4.0-font",
+        hostname: "cdnjs.cloudflare.com",
+        resourceTypes: ["Font"],
+        exactPathnames: [
+          "/ajax/libs/font-awesome/6.4.0/webfonts/fa-brands-400.ttf",
+          "/ajax/libs/font-awesome/6.4.0/webfonts/fa-brands-400.woff2",
+          "/ajax/libs/font-awesome/6.4.0/webfonts/fa-regular-400.ttf",
+          "/ajax/libs/font-awesome/6.4.0/webfonts/fa-regular-400.woff2",
+          "/ajax/libs/font-awesome/6.4.0/webfonts/fa-solid-900.ttf",
+          "/ajax/libs/font-awesome/6.4.0/webfonts/fa-solid-900.woff2",
+          "/ajax/libs/font-awesome/6.4.0/webfonts/fa-v4compatibility.ttf",
+          "/ajax/libs/font-awesome/6.4.0/webfonts/fa-v4compatibility.woff2",
+        ],
         queryPolicy: "none",
         action: "baseline-fetch-hash-cache-then-local-fulfill",
       },
@@ -12748,7 +12972,15 @@ const SAFE_CDP_SANITIZER_FAILURE_REASONS = [
   "response-session-header-value-too-large",
 ];
 const SAFE_CDP_CORRELATION_FAILURE_REASONS = [
-  "response-request-stage-decision-missing",
+  "response-correlation-same-fetch-terminal-in-flight",
+  "response-correlation-same-fetch-terminal-complete",
+  "response-correlation-same-fetch-other-retired",
+  "response-correlation-same-fetch-active",
+  "response-correlation-same-network-single-active-alias",
+  "response-correlation-same-network-single-retired-alias",
+  "response-correlation-same-network-ambiguous",
+  "response-correlation-network-id-unseen",
+  "response-correlation-network-id-missing",
   "response-stage-status-invalid",
 ];
 const SAFE_CDP_HANDLER_FAILURE_REASONS = [
@@ -14088,7 +14320,108 @@ try {
     const stableOriginRewriteRequestsByFetchRequestId = new Map();
     const allowedEgressRequestsByFetchRequestId = new Map();
     const informationalResponseRequestsByFetchRequestId = new Set();
+    const allowedEgressLifecycleByFetchRequestId = new Map();
+    const allowedEgressFetchRequestIdsByNetworkId = new Map();
     const cdpHandlerDiagnosticContexts = new WeakMap();
+    const allowedEgressLifecycleStates = new Set([
+      "request-continue-in-flight",
+      "response-awaiting",
+      "request-continue-failed",
+      "terminal-command-in-flight",
+      "terminal-complete",
+      "redirect-retired",
+      "handler-failed",
+    ]);
+    const recordAllowedEgressRequestStageLifecycle = (
+      event,
+      diagnosticPhase,
+    ) => {
+      assert.equal(typeof event.requestId, "string");
+      assert.ok(SAFE_CDP_DIAGNOSTIC_PHASES.includes(diagnosticPhase));
+      assert.equal(
+        allowedEgressLifecycleByFetchRequestId.has(event.requestId),
+        false,
+      );
+      const networkId =
+        typeof event.networkId === "string" && event.networkId.length > 0
+          ? event.networkId
+          : null;
+      allowedEgressLifecycleByFetchRequestId.set(
+        event.requestId,
+        Object.freeze({
+          networkId,
+          state: "request-continue-in-flight",
+          diagnosticPhase,
+        }),
+      );
+      if (networkId !== null) {
+        const aliases =
+          allowedEgressFetchRequestIdsByNetworkId.get(networkId) || new Set();
+        aliases.add(event.requestId);
+        allowedEgressFetchRequestIdsByNetworkId.set(networkId, aliases);
+      }
+    };
+    const setAllowedEgressLifecycleState = (requestId, state) => {
+      assert.ok(allowedEgressLifecycleStates.has(state));
+      const lifecycle =
+        allowedEgressLifecycleByFetchRequestId.get(requestId) || null;
+      if (lifecycle === null) return;
+      allowedEgressLifecycleByFetchRequestId.set(
+        requestId,
+        Object.freeze({ ...lifecycle, state }),
+      );
+    };
+    const missingResponseCorrelationReasonForEvent = (event) => {
+      const sameFetchState =
+        allowedEgressLifecycleByFetchRequestId.get(event.requestId)?.state ||
+        null;
+      const networkIdPresent =
+        typeof event.networkId === "string" && event.networkId.length > 0;
+      const networkAliasStates = networkIdPresent
+        ? [
+            ...(allowedEgressFetchRequestIdsByNetworkId.get(event.networkId) ||
+              []),
+          ]
+            .filter((requestId) => requestId !== event.requestId)
+            .map(
+              (requestId) =>
+                allowedEgressLifecycleByFetchRequestId.get(requestId)?.state ||
+                null,
+            )
+            .filter((state) => state !== null)
+        : [];
+      return missingResponseCorrelationFailureReason({
+        sameFetchState,
+        networkIdPresent,
+        networkAliasStates,
+      });
+    };
+    const correlatedDiagnosticPhaseForEvent = (event) => {
+      const directPhase =
+        allowedEgressRequestsByFetchRequestId.get(event.requestId)
+          ?.diagnosticPhase || null;
+      if (directPhase !== null) return directPhase;
+      const sameFetchPhase =
+        allowedEgressLifecycleByFetchRequestId.get(event.requestId)
+          ?.diagnosticPhase || null;
+      if (sameFetchPhase !== null) return sameFetchPhase;
+      const networkIdPresent =
+        typeof event.networkId === "string" && event.networkId.length > 0;
+      if (!networkIdPresent) return networkPhase;
+      const networkAliasPhases = [
+        ...(allowedEgressFetchRequestIdsByNetworkId.get(event.networkId) || []),
+      ]
+        .filter((requestId) => requestId !== event.requestId)
+        .map(
+          (requestId) =>
+            allowedEgressLifecycleByFetchRequestId.get(requestId)
+              ?.diagnosticPhase || null,
+        )
+        .filter((phase) => phase !== null);
+      return networkAliasPhases.length === 1
+        ? networkAliasPhases[0]
+        : networkPhase;
+    };
     const continueInspectedDirectFirebaseRequest = async ({
       event,
       requestUrl,
@@ -14123,6 +14456,7 @@ try {
           diagnosticPhase: diagnosticContext.phase,
         }),
       );
+      recordAllowedEgressRequestStageLifecycle(event, diagnosticContext.phase);
       diagnosticContext.operation = "request-proxy-authorize";
       diagnosticContext.reason = "unexpected-handler-error";
       browserConnectProxy.authorizeRequestStage({
@@ -14139,7 +14473,12 @@ try {
           ...overrides,
           interceptResponse: true,
         });
+        setAllowedEgressLifecycleState(event.requestId, "response-awaiting");
       } catch (error) {
+        setAllowedEgressLifecycleState(
+          event.requestId,
+          "request-continue-failed",
+        );
         browserConnectProxy.revokeRequestStageAuthorization(event.requestId);
         allowedEgressRequestsByFetchRequestId.delete(event.requestId);
         sensitiveAppCheckRequestsByFetchRequestId.delete(event.requestId);
@@ -14161,7 +14500,8 @@ try {
           stableOriginRewriteRequestsByFetchRequestId.get(event.requestId);
         const allowedEgressObservation =
           allowedEgressRequestsByFetchRequestId.get(event.requestId);
-        diagnosticContext.reason = "response-request-stage-decision-missing";
+        diagnosticContext.reason =
+          missingResponseCorrelationReasonForEvent(event);
         assert.ok(
           sensitiveRequestKind ||
             rewriteObservation ||
@@ -14208,6 +14548,10 @@ try {
             stableOriginRewriteResponseErrorCount += 1;
             rewriteObservation.responseError = true;
           }
+          setAllowedEgressLifecycleState(
+            event.requestId,
+            "terminal-command-in-flight",
+          );
           allowedEgressRequestsByFetchRequestId.delete(event.requestId);
           sensitiveAppCheckRequestsByFetchRequestId.delete(event.requestId);
           stableOriginRewriteRequestsByFetchRequestId.delete(event.requestId);
@@ -14218,6 +14562,7 @@ try {
             errorReason: "BlockedByClient",
           });
           completeProxyAuthorization();
+          setAllowedEgressLifecycleState(event.requestId, "terminal-complete");
           return;
         }
         const responseStatus = responseStageDecision.status;
@@ -14246,11 +14591,16 @@ try {
             responseCode: responseStatus,
             responseHeaders: sanitizedInformational.responseHeaders,
           });
+          setAllowedEgressLifecycleState(event.requestId, "response-awaiting");
           return;
         }
         if (responseStageDecision.kind === "invalid-pre-final") {
           assert.equal(responseStageDecision.terminal, true);
           allowedEgressInvalidResponseStatusAbortCount += 1;
+          setAllowedEgressLifecycleState(
+            event.requestId,
+            "terminal-command-in-flight",
+          );
           allowedEgressRequestsByFetchRequestId.delete(event.requestId);
           sensitiveAppCheckRequestsByFetchRequestId.delete(event.requestId);
           stableOriginRewriteRequestsByFetchRequestId.delete(event.requestId);
@@ -14262,6 +14612,7 @@ try {
             errorReason: "BlockedByClient",
           });
           completeProxyAuthorization();
+          setAllowedEgressLifecycleState(event.requestId, "terminal-complete");
           return;
         }
         assert.equal(responseStageDecision.kind, "final");
@@ -14337,6 +14688,10 @@ try {
             stableOriginRewriteRedirectResponseCount += 1;
             rewriteObservation.redirectResponse = true;
           }
+          setAllowedEgressLifecycleState(
+            event.requestId,
+            "terminal-command-in-flight",
+          );
           allowedEgressRequestsByFetchRequestId.delete(event.requestId);
           sensitiveAppCheckRequestsByFetchRequestId.delete(event.requestId);
           stableOriginRewriteRequestsByFetchRequestId.delete(event.requestId);
@@ -14347,6 +14702,7 @@ try {
             errorReason: "BlockedByClient",
           });
           completeProxyAuthorization();
+          setAllowedEgressLifecycleState(event.requestId, "terminal-complete");
           return;
         }
         if (rewriteObservation) {
@@ -14401,6 +14757,10 @@ try {
           }
           stableOriginRewriteRequestsByFetchRequestId.delete(event.requestId);
         }
+        setAllowedEgressLifecycleState(
+          event.requestId,
+          "terminal-command-in-flight",
+        );
         sensitiveAppCheckRequestsByFetchRequestId.delete(event.requestId);
         allowedEgressRequestsByFetchRequestId.delete(event.requestId);
         diagnosticContext.operation = "response-continue-final";
@@ -14411,6 +14771,7 @@ try {
           responseHeaders: sanitizedFinal.responseHeaders,
         });
         completeProxyAuthorization();
+        setAllowedEgressLifecycleState(event.requestId, "terminal-complete");
         return;
       }
       diagnosticContext.operation = "request-post-data";
@@ -15002,6 +15363,10 @@ try {
               event.redirectedRequestId,
             );
           }
+          setAllowedEgressLifecycleState(
+            event.redirectedRequestId,
+            "redirect-retired",
+          );
           allowedEgressRequestsByFetchRequestId.delete(
             event.redirectedRequestId,
           );
@@ -15258,8 +15623,7 @@ try {
     };
     appCheckCdpSession.on("Fetch.requestPaused", (event) => {
       const correlatedDiagnosticPhase =
-        allowedEgressRequestsByFetchRequestId.get(event.requestId)
-          ?.diagnosticPhase || networkPhase;
+        correlatedDiagnosticPhaseForEvent(event);
       const diagnosticContext = {
         captureStage: stage,
         phase: correlatedDiagnosticPhase,
@@ -15285,6 +15649,7 @@ try {
             SAFE_CDP_HANDLER_FAILURE_REASONS,
           );
           appCheckCdpHandlerErrorCount += 1;
+          setAllowedEgressLifecycleState(event.requestId, "handler-failed");
           browserConnectProxy.revokeRequestStageAuthorization(event.requestId);
           allowedEgressRequestsByFetchRequestId.delete(event.requestId);
           sensitiveAppCheckRequestsByFetchRequestId.delete(event.requestId);
@@ -18128,7 +18493,13 @@ assert.equal(
   optionalTelemetrySuppressionObservations.length,
   optionalTelemetrySuppressedRequestCount,
 );
-assert.equal(externalStaticStartupSourceAttestations.length, 4);
+assert.equal(
+  externalStaticStartupSourceAttestations.length,
+  contract.networkBoundary.externalStaticRequestAllowlist.rules.reduce(
+    (total, rule) => total + Object.keys(rule.pinnedSources || {}).length,
+    0,
+  ),
+);
 assert.equal(
   externalStaticResponseObservations.length,
   externalStaticRequestNetworkFetchCount +
