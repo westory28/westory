@@ -11424,221 +11424,303 @@ const waitForScreenReady = async (page, screenId) => {
     signals: readiness.signals,
     blockingTextPattern: contract.readiness.blockingVisibleTextPattern,
   };
-  await page.waitForFunction(
-    ({ signals, blockingTextPattern }) => {
-      const contentRoot =
-        document.querySelector("#main-content") ||
-        document.querySelector("main") ||
-        document.querySelector("#root > div") ||
-        document.body;
-      const visible = (element) => {
-        const own = element.getBoundingClientRect();
-        if (own.width <= 0 || own.height <= 0) return false;
-        if (
-          typeof element.checkVisibility === "function" &&
-          !element.checkVisibility({
-            checkOpacity: true,
-            checkVisibilityCSS: true,
-          })
-        ) {
-          return false;
-        }
-        let left = Math.max(0, own.left);
-        let right = Math.min(window.innerWidth, own.right);
-        let top = Math.max(-window.scrollY, own.top);
-        let bottom = Math.min(
-          document.documentElement.scrollHeight - window.scrollY,
-          own.bottom,
-        );
-        let current = element;
-        let effectiveOpacity = 1;
-        while (current instanceof Element) {
-          const style = getComputedStyle(current);
-          const opacity = Number.parseFloat(style.opacity || "1");
-          effectiveOpacity *= Number.isFinite(opacity) ? opacity : 1;
-          if (
-            style.display === "none" ||
-            style.visibility === "hidden" ||
-            style.visibility === "collapse" ||
-            effectiveOpacity < 0.9 ||
-            (style.clipPath && style.clipPath !== "none")
-          ) {
-            return false;
-          }
-          if (current !== element) {
-            const clipBox = current.getBoundingClientRect();
-            if (
-              ["auto", "clip", "hidden", "scroll"].includes(style.overflowX)
-            ) {
-              left = Math.max(left, clipBox.left);
-              right = Math.min(right, clipBox.right);
-            }
-            if (
-              ["auto", "clip", "hidden", "scroll"].includes(style.overflowY)
-            ) {
-              top = Math.max(top, clipBox.top);
-              bottom = Math.min(bottom, clipBox.bottom);
-            }
-          }
-          current = current.parentElement;
-        }
-        const visibleArea =
-          Math.max(0, right - left) * Math.max(0, bottom - top);
-        return (
-          visibleArea / (own.width * own.height) >= 0.9 &&
-          effectiveOpacity >= 0.9
-        );
-      };
-      const colorAlpha = (value) => {
-        const normalized = String(value || "")
-          .trim()
-          .toLowerCase();
-        if (!normalized || normalized === "transparent") return 0;
-        const rgba = normalized.match(
-          /^rgba\([^,]+,[^,]+,[^,]+,\s*([0-9.]+)\)$/u,
-        );
-        if (rgba) return Number.parseFloat(rgba[1]);
-        const modern = normalized.match(/\/\s*([0-9.]+)(%)?\s*\)$/u);
-        if (!modern) return 1;
-        const parsed = Number.parseFloat(modern[1]);
-        return modern[2] ? parsed / 100 : parsed;
-      };
-      const paintedText = (element) => {
-        const style = getComputedStyle(element);
-        const fontSize = Number.parseFloat(style.fontSize || "0");
-        const foreground =
-          element instanceof SVGTextElement
-            ? style.fill
-            : style.webkitTextFillColor || style.color;
-        return (
-          Number.isFinite(fontSize) &&
-          fontSize >= 1 &&
-          Math.min(
-            colorAlpha(foreground),
-            element instanceof SVGTextElement
-              ? Number.parseFloat(style.fillOpacity || "1")
-              : colorAlpha(style.color),
-          ) >= 0.9
-        );
-      };
-      const normalizedText = (element) => {
-        if (element instanceof HTMLSelectElement) {
-          return `${String(element.value || "")} ${[...element.selectedOptions]
-            .map((option) => option.textContent || "")
-            .join(" ")}`
-            .replace(/\s+/gu, " ")
-            .trim();
-        }
-        if (
-          element instanceof HTMLInputElement ||
-          element instanceof HTMLTextAreaElement
-        ) {
-          return String(element.value || "")
-            .replace(/\s+/gu, " ")
-            .trim();
-        }
-        return String(element.innerText || element.textContent || "")
-          .replace(/\s+/gu, " ")
-          .trim();
-      };
-      const directPaintText = (element) => {
-        if (
-          element instanceof HTMLSelectElement ||
-          element instanceof HTMLInputElement ||
-          element instanceof HTMLTextAreaElement
-        ) {
-          return normalizedText(element);
-        }
-        return [...element.childNodes]
-          .filter((node) => node.nodeType === Node.TEXT_NODE)
-          .map((node) => node.textContent || "")
-          .join(" ")
-          .replace(/\s+/gu, " ")
-          .trim();
-      };
-      const canvasPainted = (element) => {
-        if (!(element instanceof HTMLCanvasElement)) return false;
-        try {
-          const context = element.getContext("2d", {
-            willReadFrequently: true,
-          });
-          if (!context || element.width <= 0 || element.height <= 0)
-            return false;
-          const pixels = context.getImageData(
-            0,
-            0,
-            element.width,
-            element.height,
-          ).data;
-          const stride = Math.max(
-            1,
-            Math.floor((element.width * element.height) / 8192),
-          );
-          let opaque = 0;
-          const colors = new Set();
-          for (let index = 0; index < pixels.length; index += 4 * stride) {
-            if (pixels[index + 3] < 64) continue;
-            opaque += 1;
-            colors.add(
-              `${pixels[index]}:${pixels[index + 1]}:${pixels[index + 2]}`,
-            );
-            if (colors.size > 32) break;
-          }
-          return opaque >= 8 && colors.size >= 2;
-        } catch {
-          return false;
-        }
-      };
-      const hasSignal = (signal) => {
-        const pattern = new RegExp(signal.textPattern, "u");
-        const tagPattern = new RegExp(signal.tagPattern, "u");
-        return [...contentRoot.querySelectorAll(signal.selector)].some(
-          (element) => {
-            const text = normalizedText(element);
-            const paintedWitness =
-              signal.paintMode === "canvas"
-                ? canvasPainted(element)
-                : [element, ...element.querySelectorAll("*")]
-                    .filter(visible)
-                    .some(
-                      (candidate) =>
-                        pattern.test(directPaintText(candidate)) &&
-                        paintedText(candidate),
-                    );
-            return (
-              visible(element) &&
-              paintedWitness &&
-              tagPattern.test(element.tagName) &&
-              (signal.allowEmptyText || text.length > 0) &&
-              pattern.test(text)
-            );
-          },
-        );
-      };
-      const blockingPattern = new RegExp(blockingTextPattern, "u");
-      const blockingVisible = [...contentRoot.querySelectorAll("*")]
-        .filter(
-          (element) =>
-            element.children.length === 0 &&
-            !["OPTION", "SCRIPT", "STYLE", "TEMPLATE"].includes(
-              element.tagName,
-            ),
-        )
-        .some(
-          (element) =>
-            visible(element) &&
-            paintedText(element) &&
-            blockingPattern.test(normalizedText(element)),
-        );
-      return (
-        document.readyState === "complete" &&
-        !blockingVisible &&
-        signals.every(hasSignal)
+  const evaluateReadiness = ({
+    signals,
+    blockingTextPattern,
+    returnDiagnostic = false,
+  }) => {
+    const contentRoot =
+      document.querySelector("#main-content") ||
+      document.querySelector("main") ||
+      document.querySelector("#root > div") ||
+      document.body;
+    const visible = (element) => {
+      const own = element.getBoundingClientRect();
+      if (own.width <= 0 || own.height <= 0) return false;
+      if (
+        typeof element.checkVisibility === "function" &&
+        !element.checkVisibility({
+          checkOpacity: true,
+          checkVisibilityCSS: true,
+        })
+      ) {
+        return false;
+      }
+      let left = Math.max(0, own.left);
+      let right = Math.min(window.innerWidth, own.right);
+      let top = Math.max(-window.scrollY, own.top);
+      let bottom = Math.min(
+        document.documentElement.scrollHeight - window.scrollY,
+        own.bottom,
       );
-    },
-    waitInput,
-    { timeout: contract.readiness.timeoutMs },
-  );
+      let current = element;
+      let effectiveOpacity = 1;
+      while (current instanceof Element) {
+        const style = getComputedStyle(current);
+        const opacity = Number.parseFloat(style.opacity || "1");
+        effectiveOpacity *= Number.isFinite(opacity) ? opacity : 1;
+        if (
+          style.display === "none" ||
+          style.visibility === "hidden" ||
+          style.visibility === "collapse" ||
+          effectiveOpacity < 0.9 ||
+          (style.clipPath && style.clipPath !== "none")
+        ) {
+          return false;
+        }
+        if (current !== element) {
+          const clipBox = current.getBoundingClientRect();
+          if (["auto", "clip", "hidden", "scroll"].includes(style.overflowX)) {
+            left = Math.max(left, clipBox.left);
+            right = Math.min(right, clipBox.right);
+          }
+          if (["auto", "clip", "hidden", "scroll"].includes(style.overflowY)) {
+            top = Math.max(top, clipBox.top);
+            bottom = Math.min(bottom, clipBox.bottom);
+          }
+        }
+        current = current.parentElement;
+      }
+      const visibleArea = Math.max(0, right - left) * Math.max(0, bottom - top);
+      return (
+        visibleArea / (own.width * own.height) >= 0.9 && effectiveOpacity >= 0.9
+      );
+    };
+    const colorAlpha = (value) => {
+      const normalized = String(value || "")
+        .trim()
+        .toLowerCase();
+      if (!normalized || normalized === "transparent") return 0;
+      const rgba = normalized.match(
+        /^rgba\([^,]+,[^,]+,[^,]+,\s*([0-9.]+)\)$/u,
+      );
+      if (rgba) return Number.parseFloat(rgba[1]);
+      const modern = normalized.match(/\/\s*([0-9.]+)(%)?\s*\)$/u);
+      if (!modern) return 1;
+      const parsed = Number.parseFloat(modern[1]);
+      return modern[2] ? parsed / 100 : parsed;
+    };
+    const paintedText = (element) => {
+      const style = getComputedStyle(element);
+      const fontSize = Number.parseFloat(style.fontSize || "0");
+      const foreground =
+        element instanceof SVGTextElement
+          ? style.fill
+          : style.webkitTextFillColor || style.color;
+      return (
+        Number.isFinite(fontSize) &&
+        fontSize >= 1 &&
+        Math.min(
+          colorAlpha(foreground),
+          element instanceof SVGTextElement
+            ? Number.parseFloat(style.fillOpacity || "1")
+            : colorAlpha(style.color),
+        ) >= 0.9
+      );
+    };
+    const normalizedText = (element) => {
+      if (element instanceof HTMLSelectElement) {
+        return `${String(element.value || "")} ${[...element.selectedOptions]
+          .map((option) => option.textContent || "")
+          .join(" ")}`
+          .replace(/\s+/gu, " ")
+          .trim();
+      }
+      if (
+        element instanceof HTMLInputElement ||
+        element instanceof HTMLTextAreaElement
+      ) {
+        return String(element.value || "")
+          .replace(/\s+/gu, " ")
+          .trim();
+      }
+      return String(element.innerText || element.textContent || "")
+        .replace(/\s+/gu, " ")
+        .trim();
+    };
+    const directPaintText = (element) => {
+      if (
+        element instanceof HTMLSelectElement ||
+        element instanceof HTMLInputElement ||
+        element instanceof HTMLTextAreaElement
+      ) {
+        return normalizedText(element);
+      }
+      return [...element.childNodes]
+        .filter((node) => node.nodeType === Node.TEXT_NODE)
+        .map((node) => node.textContent || "")
+        .join(" ")
+        .replace(/\s+/gu, " ")
+        .trim();
+    };
+    const canvasPainted = (element) => {
+      if (!(element instanceof HTMLCanvasElement)) return false;
+      try {
+        const context = element.getContext("2d", {
+          willReadFrequently: true,
+        });
+        if (!context || element.width <= 0 || element.height <= 0) return false;
+        const pixels = context.getImageData(
+          0,
+          0,
+          element.width,
+          element.height,
+        ).data;
+        const stride = Math.max(
+          1,
+          Math.floor((element.width * element.height) / 8192),
+        );
+        let opaque = 0;
+        const colors = new Set();
+        for (let index = 0; index < pixels.length; index += 4 * stride) {
+          if (pixels[index + 3] < 64) continue;
+          opaque += 1;
+          colors.add(
+            `${pixels[index]}:${pixels[index + 1]}:${pixels[index + 2]}`,
+          );
+          if (colors.size > 32) break;
+        }
+        return opaque >= 8 && colors.size >= 2;
+      } catch {
+        return false;
+      }
+    };
+    const candidateSignalState = (signal, pattern, tagPattern, element) => {
+      const text = normalizedText(element);
+      const paintedWitness =
+        signal.paintMode === "canvas"
+          ? canvasPainted(element)
+          : [element, ...element.querySelectorAll("*")]
+              .filter(visible)
+              .some(
+                (candidate) =>
+                  pattern.test(directPaintText(candidate)) &&
+                  paintedText(candidate),
+              );
+      const elementVisible = visible(element);
+      const tagMatch = tagPattern.test(element.tagName);
+      const textMatch = pattern.test(text);
+      const nonempty = signal.allowEmptyText || text.length > 0;
+      return {
+        visible: elementVisible,
+        paintedWitness,
+        tagMatch,
+        textMatch,
+        ready:
+          elementVisible && paintedWitness && tagMatch && nonempty && textMatch,
+      };
+    };
+    const signalCandidates = (signal) => ({
+      pattern: new RegExp(signal.textPattern, "u"),
+      tagPattern: new RegExp(signal.tagPattern, "u"),
+      elements: [...contentRoot.querySelectorAll(signal.selector)],
+    });
+    const hasSignal = (signal) => {
+      const { pattern, tagPattern, elements } = signalCandidates(signal);
+      return elements.some((element) => {
+        const text = normalizedText(element);
+        const paintedWitness =
+          signal.paintMode === "canvas"
+            ? canvasPainted(element)
+            : [element, ...element.querySelectorAll("*")]
+                .filter(visible)
+                .some(
+                  (candidate) =>
+                    pattern.test(directPaintText(candidate)) &&
+                    paintedText(candidate),
+                );
+        return (
+          visible(element) &&
+          paintedWitness &&
+          tagPattern.test(element.tagName) &&
+          (signal.allowEmptyText || text.length > 0) &&
+          pattern.test(text)
+        );
+      });
+    };
+    const signalState = (signal) => {
+      const { pattern, tagPattern, elements } = signalCandidates(signal);
+      const candidateStates = elements.map((element) =>
+        candidateSignalState(signal, pattern, tagPattern, element),
+      );
+      return {
+        id: signal.id,
+        selectorMatchCount: candidateStates.length,
+        visibleMatchCount: candidateStates.filter(({ visible }) => visible)
+          .length,
+        paintedWitnessMatchCount: candidateStates.filter(
+          ({ paintedWitness }) => paintedWitness,
+        ).length,
+        tagMatchCount: candidateStates.filter(({ tagMatch }) => tagMatch)
+          .length,
+        textMatchCount: candidateStates.filter(({ textMatch }) => textMatch)
+          .length,
+        readyMatchCount: candidateStates.filter(({ ready }) => ready).length,
+        met: candidateStates.some(({ ready }) => ready),
+      };
+    };
+    const blockingPattern = new RegExp(blockingTextPattern, "u");
+    const blockingCandidates = [...contentRoot.querySelectorAll("*")].filter(
+      (element) =>
+        element.children.length === 0 &&
+        !["OPTION", "SCRIPT", "STYLE", "TEMPLATE"].includes(element.tagName),
+    );
+    const isBlockingVisible = (element) =>
+      visible(element) &&
+      paintedText(element) &&
+      blockingPattern.test(normalizedText(element));
+    const blockingVisibleMatches = returnDiagnostic
+      ? blockingCandidates.filter(isBlockingVisible)
+      : [];
+    const blockingVisible = returnDiagnostic
+      ? blockingVisibleMatches.length > 0
+      : blockingCandidates.some(isBlockingVisible);
+    const documentReady = document.readyState === "complete";
+    const signalStates = returnDiagnostic ? signals.map(signalState) : [];
+    const signalsReady = returnDiagnostic
+      ? signalStates.every(({ met }) => met)
+      : documentReady && !blockingVisible
+        ? signals.every(hasSignal)
+        : false;
+    const ready = documentReady && !blockingVisible && signalsReady;
+    if (!returnDiagnostic) return ready;
+    return {
+      documentReadyState: document.readyState,
+      contentRootPresent: Boolean(contentRoot),
+      blockingVisible,
+      blockingVisibleMatchCount: blockingVisibleMatches.length,
+      signalStates,
+      evaluationFailed: false,
+    };
+  };
+  const readinessWait = page.waitForFunction(evaluateReadiness, waitInput, {
+    timeout: contract.readiness.timeoutMs,
+  });
+  await readinessWait.catch(async (error) => {
+    let readinessDiagnostic = {
+      documentReadyState: "unknown",
+      contentRootPresent: false,
+      blockingVisible: null,
+      blockingVisibleMatchCount: -1,
+      signalStates: [],
+      evaluationFailed: true,
+    };
+    try {
+      readinessDiagnostic = await page.evaluate(evaluateReadiness, {
+        ...waitInput,
+        returnDiagnostic: true,
+      });
+    } catch {
+      // The original readiness failure remains authoritative if the page closed.
+    }
+    if (error && typeof error === "object") {
+      Object.defineProperty(error, "w10pReadinessDiagnostic", {
+        value: Object.freeze(readinessDiagnostic),
+        enumerable: false,
+      });
+    }
+    throw error;
+  });
 
   let previousFingerprint = "";
   let stableSamples = 0;
@@ -15029,7 +15111,68 @@ try {
         target.screen.id,
         viewport,
       );
-      await waitForScreenReady(page, target.screen.id);
+      try {
+        await waitForScreenReady(page, target.screen.id);
+      } catch (error) {
+        const routeRequests = networkObservations.slice(
+          networkObservationStart,
+        );
+        const routeResponses = networkResponseObservations.slice(
+          networkResponseObservationStart,
+        );
+        const failureDiagnostic = {
+          stage,
+          screenId: target.screen.id,
+          viewport: viewportName,
+          originalErrorName:
+            error &&
+            typeof error === "object" &&
+            ["Error", "TimeoutError"].includes(String(error.name))
+              ? String(error.name)
+              : "UnknownError",
+          readiness:
+            error && typeof error === "object"
+              ? error.w10pReadinessDiagnostic || null
+              : null,
+          pageErrorCount: pageErrors.length,
+          pageErrorSha256s: pageErrors
+            .map((value) => sha256(String(value)))
+            .sort(),
+          routeObservedRequestCount: routeRequests.length,
+          routeObservedResponseCount: routeResponses.length,
+          routeObservedFirebaseRequestCount: routeRequests.filter(
+            (observation) => observation.isFirebaseRequest,
+          ).length,
+          routeObservedFirebaseResponseCount: routeResponses.filter(
+            (observation) => observation.isFirebaseRequest,
+          ).length,
+          routeObservedFirestoreRequestCount: routeRequests.filter(
+            (observation) => observation.firebaseService === "firestore",
+          ).length,
+          routeObservedFirestoreResponseCount: routeResponses.filter(
+            (observation) => observation.firebaseService === "firestore",
+          ).length,
+          routeObservedFirestoreHttpErrorResponseCount: routeResponses.filter(
+            (observation) =>
+              observation.firebaseService === "firestore" &&
+              Number(observation.status) >= 400,
+          ).length,
+          routeObservedUnboundFirebaseRequestCount: routeRequests.filter(
+            (observation) => observation.unboundFirebaseRequest,
+          ).length,
+          cumulativeBrowserRequestFailureCount: browserRequestFailureCount,
+          cumulativeAppCheckCdpHandlerErrorCount: appCheckCdpHandlerErrorCount,
+          cumulativeNetworkHeaderAttestationErrorCount:
+            networkHeaderAttestationErrorCount,
+          cumulativePreTransmissionBoundaryFailRequestCount:
+            preTransmissionBoundaryFailRequestCount,
+          cumulativeAllowedEgressResponseErrorAbortCount:
+            allowedEgressResponseErrorAbortCount,
+        };
+        throw new Error(
+          `W10P screen readiness failure: ${JSON.stringify(failureDiagnostic)}`,
+        );
+      }
       assert.deepEqual(pageErrors, [], `${target.screen.id} browser errors.`);
       const anchorRequirements =
         stage === "candidate" && !target.screen.productionPresentation

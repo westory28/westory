@@ -1500,10 +1500,16 @@
     "login": {
       "signals": [
         {
-          "id": "brand-title",
-          "selector": "h1",
-          "textPattern": "^Westory$",
-          "tagPattern": "^H1$"
+          "id": "brand-title-prefix",
+          "selector": "h1 > span:first-child",
+          "textPattern": "^We$",
+          "tagPattern": "^SPAN$"
+        },
+        {
+          "id": "brand-title-suffix",
+          "selector": "h1 > span:nth-child(2)",
+          "textPattern": "^story$",
+          "tagPattern": "^SPAN$"
         },
         {
           "id": "login-action",
