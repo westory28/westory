@@ -25,6 +25,10 @@ import {
   resolveRuntimeEnvironment,
   type FirebaseClientConfig,
 } from "./firebaseEnvironment";
+import {
+  parseActiveFirebaseBindingMarker,
+  readInjectedActiveFirebaseBindingMarker,
+} from "./firebaseActiveBinding";
 import { isHighRiskCommand } from "./highRiskCommands";
 import {
   requestStepUpReauthentication,
@@ -32,93 +36,147 @@ import {
   StepUpReauthError,
 } from "./stepUpReauth";
 
+declare const __W10P_ACTIVE_FIREBASE_CONFIG_MANAGED__: boolean;
+
 const isWestoryCustomHost = (host: string) =>
   /^(?:www\.)?westory\.kr$/i.test(host);
 
 const runtimeHost =
   typeof window === "undefined" ? "" : window.location.hostname;
-const runtimeEnvironment = resolveRuntimeEnvironment({
-  explicitEnvironment: import.meta.env.VITE_APP_ENV,
+const normalizedExplicitEnvironment =
+  import.meta.env.VITE_APP_ENV?.trim().toLowerCase();
+const isNormalizedManagedFirebaseEnvironment =
+  normalizedExplicitEnvironment === "production" ||
+  normalizedExplicitEnvironment === "staging";
+const isManagedFirebaseBuild = __W10P_ACTIVE_FIREBASE_CONFIG_MANAGED__;
+if (isManagedFirebaseBuild !== isNormalizedManagedFirebaseEnvironment) {
+  throw new Error(
+    "[Environment] The injected Firebase build role does not match normalized VITE_APP_ENV.",
+  );
+}
+const resolvedRuntimeEnvironment = resolveRuntimeEnvironment({
+  explicitEnvironment: normalizedExplicitEnvironment,
   hostname: runtimeHost,
   isDev: import.meta.env.DEV,
 });
+const isResolvedManagedFirebaseRuntime =
+  resolvedRuntimeEnvironment === "production" ||
+  resolvedRuntimeEnvironment === "staging";
+if (isManagedFirebaseBuild !== isResolvedManagedFirebaseRuntime) {
+  throw new Error(
+    "[Environment] Managed Firebase builds require an explicit matching VITE_APP_ENV.",
+  );
+}
 
-const useAllFirebaseEmulators =
-  import.meta.env.VITE_USE_FIREBASE_EMULATORS === "true";
-const emulatorTargets = {
-  auth:
-    useAllFirebaseEmulators || Boolean(import.meta.env.VITE_AUTH_EMULATOR_HOST),
-  firestore:
-    useAllFirebaseEmulators ||
-    Boolean(import.meta.env.VITE_FIRESTORE_EMULATOR_HOST),
-  functions:
-    useAllFirebaseEmulators ||
-    Boolean(import.meta.env.VITE_FUNCTIONS_EMULATOR_HOST),
-  storage:
-    useAllFirebaseEmulators ||
-    Boolean(import.meta.env.VITE_STORAGE_EMULATOR_HOST),
-};
+// The parser applies this one narrowly-scoped Production-only override while
+// returning the same frozen binding shape used by every Firebase initializer.
+const productionAuthDomainOverride =
+  resolvedRuntimeEnvironment === "production" &&
+  typeof window !== "undefined" &&
+  isWestoryCustomHost(runtimeHost) &&
+  window.location.protocol === "https:" &&
+  !window.location.port
+    ? runtimeHost.toLowerCase()
+    : undefined;
+const activeFirebaseBinding = isManagedFirebaseBuild
+  ? parseActiveFirebaseBindingMarker(
+      readInjectedActiveFirebaseBindingMarker(),
+      productionAuthDomainOverride
+        ? { productionAuthDomainOverride }
+        : undefined,
+    )
+  : null;
+if (
+  activeFirebaseBinding &&
+  activeFirebaseBinding.environment !== resolvedRuntimeEnvironment
+) {
+  throw new Error(
+    "[Environment] The active Firebase binding does not match VITE_APP_ENV.",
+  );
+}
+const runtimeEnvironment =
+  activeFirebaseBinding?.environment ?? resolvedRuntimeEnvironment;
 
-const envFirebaseConfig: FirebaseClientConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "",
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || undefined,
-};
-
-const baseFirebaseConfig = (() => {
-  if (runtimeEnvironment === "production") {
-    return envFirebaseConfig;
-  }
-  if (runtimeEnvironment === "local" || runtimeEnvironment === "test") {
-    return {
-      ...getLocalFirebaseConfig(),
-      ...Object.fromEntries(
-        Object.entries(envFirebaseConfig).filter(([, value]) => value),
-      ),
-    } as FirebaseClientConfig;
-  }
-  return envFirebaseConfig;
+const fallbackEmulatorTargets = (() => {
+  if (isManagedFirebaseBuild) return null;
+  const useAllFirebaseEmulators =
+    import.meta.env.VITE_USE_FIREBASE_EMULATORS === "true";
+  return Object.freeze({
+    auth:
+      useAllFirebaseEmulators ||
+      Boolean(import.meta.env.VITE_AUTH_EMULATOR_HOST),
+    firestore:
+      useAllFirebaseEmulators ||
+      Boolean(import.meta.env.VITE_FIRESTORE_EMULATOR_HOST),
+    functions:
+      useAllFirebaseEmulators ||
+      Boolean(import.meta.env.VITE_FUNCTIONS_EMULATOR_HOST),
+    storage:
+      useAllFirebaseEmulators ||
+      Boolean(import.meta.env.VITE_STORAGE_EMULATOR_HOST),
+  });
 })();
+const emulatorTargets =
+  activeFirebaseBinding?.emulators ?? fallbackEmulatorTargets;
+if (!emulatorTargets) {
+  throw new Error("[Environment] Firebase emulator binding is unavailable.");
+}
 
-const configuredAuthDomain = (() => {
-  const envDomain = baseFirebaseConfig.authDomain;
-  if (typeof window === "undefined") return envDomain;
-
-  if (isLocalQaHost(runtimeHost)) return envDomain;
-
-  // Only use the custom domain helper when we are on the real HTTPS site,
-  // not on a local hosts-file alias or a custom-port preview.
+const fallbackFirebaseConfig = (() => {
+  if (isManagedFirebaseBuild) return null;
+  const envFirebaseConfig: FirebaseClientConfig = {
+    apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "",
+    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "",
+    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "",
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "",
+    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
+    appId: import.meta.env.VITE_FIREBASE_APP_ID || "",
+    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || undefined,
+  };
+  const baseFirebaseConfig =
+    resolvedRuntimeEnvironment === "local" ||
+    resolvedRuntimeEnvironment === "test"
+      ? ({
+          ...getLocalFirebaseConfig(),
+          ...Object.fromEntries(
+            Object.entries(envFirebaseConfig).filter(([, value]) => value),
+          ),
+        } as FirebaseClientConfig)
+      : envFirebaseConfig;
+  let configuredAuthDomain = baseFirebaseConfig.authDomain;
   if (
+    typeof window !== "undefined" &&
+    !isLocalQaHost(runtimeHost) &&
     isWestoryCustomHost(runtimeHost) &&
     window.location.protocol === "https:" &&
     !window.location.port
   ) {
-    return runtimeHost.toLowerCase();
+    configuredAuthDomain = runtimeHost.toLowerCase();
   }
-
-  return envDomain;
+  return Object.freeze({
+    ...baseFirebaseConfig,
+    authDomain: configuredAuthDomain,
+  });
 })();
-
-const firebaseConfig = {
-  ...baseFirebaseConfig,
-  authDomain: configuredAuthDomain,
-};
+const resolvedFirebaseConfig =
+  activeFirebaseBinding?.config ?? fallbackFirebaseConfig;
+if (!resolvedFirebaseConfig) {
+  throw new Error("[Environment] Firebase client binding is unavailable.");
+}
+const firebaseConfig: FirebaseClientConfig = resolvedFirebaseConfig;
+const configuredAuthDomain = firebaseConfig.authDomain;
 
 assertFirebaseEnvironmentBoundary({
-  config: firebaseConfig,
+  config: activeFirebaseBinding?.config ?? firebaseConfig,
   environment: runtimeEnvironment,
   hostname: runtimeHost,
   emulators: emulatorTargets,
 });
 
-const app = initializeApp(firebaseConfig);
-const appCheckSiteKey = String(
-  import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY || "",
-).trim();
+const app = initializeApp(activeFirebaseBinding?.config ?? firebaseConfig);
+const appCheckSiteKey = isManagedFirebaseBuild
+  ? (activeFirebaseBinding?.appCheckSiteKey ?? "")
+  : String(import.meta.env.VITE_FIREBASE_APPCHECK_SITE_KEY || "").trim();
 const isProtectedCloudRuntime =
   typeof window !== "undefined" &&
   (runtimeEnvironment === "staging" || runtimeEnvironment === "production") &&
@@ -130,7 +188,9 @@ if (isProtectedCloudRuntime && !appCheckSiteKey) {
 }
 const appCheck: AppCheck | null = isProtectedCloudRuntime
   ? initializeAppCheck(app, {
-      provider: new ReCaptchaEnterpriseProvider(appCheckSiteKey),
+      provider: new ReCaptchaEnterpriseProvider(
+        activeFirebaseBinding?.appCheckSiteKey ?? appCheckSiteKey,
+      ),
       isTokenAutoRefreshEnabled: true,
     })
   : null;
@@ -262,7 +322,9 @@ const getFirebaseFunctions = () => {
       .then(({ connectFunctionsEmulator, getFunctions }) => {
         const functions = getFunctions(
           app,
-          import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION || "asia-northeast3",
+          activeFirebaseBinding?.functionsRegion ??
+            (import.meta.env.VITE_FIREBASE_FUNCTIONS_REGION ||
+              "asia-northeast3"),
         );
         if (emulatorTargets.functions && !functionsEmulatorConnected) {
           connectFunctionsEmulator(

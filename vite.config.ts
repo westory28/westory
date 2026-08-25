@@ -5,6 +5,7 @@ import {
   assertFirebaseBuildBoundary,
   type FirebaseClientConfig,
 } from "./src/lib/firebaseEnvironment";
+import { createActiveFirebaseBindingMarker } from "./src/lib/firebaseActiveBinding";
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, ".", "VITE_");
@@ -28,6 +29,44 @@ export default defineConfig(({ mode }) => {
     vercelProjectRole: env.VITE_VERCEL_PROJECT_ROLE,
   });
 
+  const normalizedEnvironment = env.VITE_APP_ENV?.trim().toLowerCase();
+  const normalizedProjectRole =
+    env.VITE_VERCEL_PROJECT_ROLE?.trim().toLowerCase();
+  const isManagedFirebaseBuild =
+    normalizedEnvironment === "production" ||
+    normalizedEnvironment === "staging";
+  const useAllFirebaseEmulators = env.VITE_USE_FIREBASE_EMULATORS === "true";
+  const activeFirebaseEmulators = {
+    auth:
+      useAllFirebaseEmulators || Boolean(env.VITE_AUTH_EMULATOR_HOST?.trim()),
+    firestore:
+      useAllFirebaseEmulators ||
+      Boolean(env.VITE_FIRESTORE_EMULATOR_HOST?.trim()),
+    functions:
+      useAllFirebaseEmulators ||
+      Boolean(env.VITE_FUNCTIONS_EMULATOR_HOST?.trim()),
+    storage:
+      useAllFirebaseEmulators ||
+      Boolean(env.VITE_STORAGE_EMULATOR_HOST?.trim()),
+  };
+  const activeFirebaseBindingMarker = isManagedFirebaseBuild
+    ? createActiveFirebaseBindingMarker({
+        config: {
+          apiKey: firebaseConfig.apiKey,
+          authDomain: firebaseConfig.authDomain,
+          projectId: firebaseConfig.projectId,
+          storageBucket: firebaseConfig.storageBucket,
+          messagingSenderId: firebaseConfig.messagingSenderId,
+          appId: firebaseConfig.appId,
+        },
+        appCheckSiteKey: env.VITE_FIREBASE_APPCHECK_SITE_KEY,
+        functionsRegion: env.VITE_FIREBASE_FUNCTIONS_REGION,
+        environment: normalizedEnvironment,
+        projectRole: normalizedProjectRole,
+        emulators: activeFirebaseEmulators,
+      })
+    : "";
+
   const publicBase =
     env.VITE_PUBLIC_BASE || (isGitHubPagesBuild ? "/westory/" : "/");
 
@@ -38,6 +77,14 @@ export default defineConfig(({ mode }) => {
       host: "0.0.0.0",
     },
     plugins: [react()],
+    define: {
+      __W10P_ACTIVE_FIREBASE_CONFIG__: JSON.stringify(
+        activeFirebaseBindingMarker,
+      ),
+      __W10P_ACTIVE_FIREBASE_CONFIG_MANAGED__: JSON.stringify(
+        isManagedFirebaseBuild,
+      ),
+    },
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "."),
