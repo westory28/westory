@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 9,
+  "schemaVersion": 10,
   "phase": "W10P",
   "functionalBaselineSha": "ef74b571a6964ddbc61eb7877a98d21b3c7c8c85",
   "productionPresentationSha": "676869fa289d3e7ecef234cbb5cca65c60ec4597",
@@ -36,7 +36,7 @@
       "malformedPercentEncodingAction": "block-before-transmission"
     },
     "firebaseRequestBinding": {
-      "schemaVersion": 2,
+      "schemaVersion": 3,
       "transport": "https-default-443-no-userinfo",
       "queryApiKeyName": "key",
       "headerApiKeyName": "x-goog-api-key",
@@ -47,7 +47,37 @@
       "functions": "exact-asia-northeast3-staging-project-host",
       "realtimeDatabase": "exact-staging-project-firebaseio-host",
       "regionalRealtimeDatabase": "all-firebasedatabase-app-hosts-classified-firebase-and-unbound-without-configured-database-url",
-      "hosting": "exact-staging-project-host"
+      "hosting": "exact-staging-project-host",
+      "firestoreWebChannel": {
+        "schemaVersion": 1,
+        "protocol": "https:",
+        "hostname": "firestore.googleapis.com",
+        "method": "POST",
+        "pathnames": [
+          "/google.firestore.v1.Firestore/Listen/channel",
+          "/google.firestore.v1.Firestore/Write/channel"
+        ],
+        "databaseQueryName": "database",
+        "databaseQueryValue": "projects/westory-staging-177587430482/databases/(default)",
+        "exactInitialQueryNames": [
+          "CVER",
+          "RID",
+          "VER",
+          "X-HTTP-Session-Id",
+          "database",
+          "t",
+          "zx"
+        ],
+        "versionQueryValue": "8",
+        "clientVersionQueryValue": "22",
+        "sessionHeaderQueryName": "X-HTTP-Session-Id",
+        "sessionHeaderQueryValue": "gsessionid",
+        "encodedHeaderBodyField": "headers",
+        "encodedApiKeyHeaderName": "x-goog-api-key",
+        "encodedApiKeyOccurrencePolicy": "exact-single-body-header-line-and-zero-url-or-wire-header-occurrences",
+        "contentTypePolicy": "application-x-www-form-urlencoded-with-optional-utf-8-charset",
+        "scopeMismatchAction": "block-before-transmission"
+      }
     },
     "executionTargetBoundary": {
       "schemaVersion": 6,
@@ -79,7 +109,7 @@
       "residualTargetAction": "capture-fatal"
     },
     "networkResponseBoundary": {
-      "schemaVersion": 2,
+      "schemaVersion": 3,
       "scope": "split-direct-browser-final-direct-browser-early-hints-and-node-owned-external",
       "directBrowserFinalInterception": "fetch-intercept-response-final-sanitized",
       "directBrowserInformationalObservation": "network-response-received-early-hints-observed-after-receipt-capture-invalid-fatal",
@@ -88,7 +118,7 @@
       "nodeOwnedExternalInformationalPolicy": "node-http-information-nonterminal-browser-unexposed",
       "informationalCorrelation": "node-owned-nonterminal-retain-until-final-direct-observation-invalidates-capture",
       "externalStaticFinalPolicy": "node-owned-exact-200-body-hash-cache-safe-header-synthetic-local-fulfill",
-      "headerPolicy": "explicit-allowlist-all-other-headers-omitted",
+      "headerPolicy": "explicit-base-allowlist-plus-exact-request-bound-conditional-rules-all-other-headers-omitted",
       "allowedHeaderNames": [
         "accept-ranges",
         "access-control-allow-credentials",
@@ -124,6 +154,18 @@
         "x-goog-stored-content-encoding",
         "x-goog-stored-content-length",
         "x-guploader-uploadid"
+      ],
+      "requestBoundConditionalHeaderRules": [
+        {
+          "id": "staging-firestore-webchannel-session",
+          "headerName": "x-http-session-id",
+          "responseStage": "successful-final-only",
+          "requestScope": "exact-firestore-webchannel-encoded-init",
+          "scopeMismatchAction": "omit",
+          "informationalResponseAction": "omit",
+          "duplicateHeaderAction": "capture-fatal",
+          "valuePolicy": "nonempty-visible-ascii-maximum-1024-bytes"
+        }
       ],
       "egressCapableHeaderNames": [
         "alt-svc",
@@ -382,8 +424,8 @@
       "action": "fail-request-before-transmission-nonfatal"
     },
     "sensitiveValueScope": {
-      "schemaVersion": 2,
-      "stagingApiKey": "exact-firebase-query-key-or-x-goog-api-key-slot-only",
+      "schemaVersion": 3,
+      "stagingApiKey": "exact-firebase-query-key-or-x-goog-api-key-slot-or-exact-firestore-webchannel-encoded-init-header-only",
       "testEmailPassword": "exact-identitytoolkit-sign-in-with-password-json-body-only",
       "refreshToken": "exact-securetoken-token-post-body-only",
       "debugToken": "node-only-never-browser-egress",

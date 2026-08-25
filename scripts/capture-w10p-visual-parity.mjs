@@ -820,7 +820,7 @@ const attestBrowserPreTransmissionCommandLine = async (
 
 const readJson = (path) => JSON.parse(readFileSync(resolve(path), "utf8"));
 const contract = readJson("scripts/w10p-visual-parity-contract.json");
-assert.equal(contract.schemaVersion, 9);
+assert.equal(contract.schemaVersion, 10);
 const BROWSER_CONNECT_PROXY_ALLOWED_FIREBASE_HOSTNAMES = [
   "content-firebaseappcheck.googleapis.com",
   "firebaseappcheck.googleapis.com",
@@ -1378,6 +1378,22 @@ const BROWSER_RESPONSE_HEADER_ALLOWLIST = new Set([
   "x-goog-stored-content-length",
   "x-guploader-uploadid",
 ]);
+const FIRESTORE_WEBCHANNEL_SESSION_RESPONSE_RULE_ID =
+  "staging-firestore-webchannel-session";
+const FIRESTORE_WEBCHANNEL_SESSION_RESPONSE_HEADER_NAME = "x-http-session-id";
+const FIRESTORE_WEBCHANNEL_PATHNAMES = new Set([
+  "/google.firestore.v1.Firestore/Listen/channel",
+  "/google.firestore.v1.Firestore/Write/channel",
+]);
+const FIRESTORE_WEBCHANNEL_INITIAL_QUERY_NAMES = [
+  "CVER",
+  "RID",
+  "VER",
+  "X-HTTP-Session-Id",
+  "database",
+  "t",
+  "zx",
+].sort();
 const BROWSER_EGRESS_CAPABLE_RESPONSE_HEADER_NAMES = new Set([
   "alt-svc",
   "clear-site-data",
@@ -1393,11 +1409,28 @@ const BROWSER_EGRESS_CAPABLE_RESPONSE_HEADER_NAMES = new Set([
   "speculation-rules",
   "x-dns-prefetch-control",
 ]);
-const sanitizeBrowserResponseHeaders = (responseHeaders = []) => {
+const sanitizeBrowserResponseHeaders = (
+  responseHeaders = [],
+  { conditionalResponseHeaderRuleId = null } = {},
+) => {
   assert.equal(Array.isArray(responseHeaders), true);
+  assert.ok(
+    conditionalResponseHeaderRuleId === null ||
+      conditionalResponseHeaderRuleId ===
+        FIRESTORE_WEBCHANNEL_SESSION_RESPONSE_RULE_ID,
+  );
+  const conditionalSessionHeaders = responseHeaders.filter(
+    (header) =>
+      String(header?.name || "").toLowerCase() ===
+      FIRESTORE_WEBCHANNEL_SESSION_RESPONSE_HEADER_NAME,
+  );
+  if (conditionalResponseHeaderRuleId !== null) {
+    assert.ok(conditionalSessionHeaders.length <= 1);
+  }
   const sanitizedHeaders = [];
   const observedEgressHeaderNames = [];
   let omittedHeaderCount = 0;
+  let conditionalHeaderForwardCount = 0;
   for (const header of responseHeaders) {
     const name = String(header?.name || "").toLowerCase();
     const value = String(header?.value ?? "");
@@ -1406,6 +1439,20 @@ const sanitizeBrowserResponseHeaders = (responseHeaders = []) => {
     if (BROWSER_EGRESS_CAPABLE_RESPONSE_HEADER_NAMES.has(name)) {
       observedEgressHeaderNames.push(name);
       omittedHeaderCount += 1;
+      continue;
+    }
+    if (name === FIRESTORE_WEBCHANNEL_SESSION_RESPONSE_HEADER_NAME) {
+      if (
+        conditionalResponseHeaderRuleId !==
+        FIRESTORE_WEBCHANNEL_SESSION_RESPONSE_RULE_ID
+      ) {
+        omittedHeaderCount += 1;
+        continue;
+      }
+      assert.match(value, /^[\x21-\x7e]+$/u);
+      assert.ok(Buffer.byteLength(value, "utf8") <= 1024);
+      sanitizedHeaders.push({ name, value });
+      conditionalHeaderForwardCount += 1;
       continue;
     }
     if (!BROWSER_RESPONSE_HEADER_ALLOWLIST.has(name)) {
@@ -1419,6 +1466,7 @@ const sanitizeBrowserResponseHeaders = (responseHeaders = []) => {
     observedEgressHeaderNames,
     egressHeaderObservationCount: observedEgressHeaderNames.length,
     omittedHeaderCount,
+    conditionalHeaderForwardCount,
   };
 };
 const NODE_OWNED_EXTERNAL_STATIC_RESPONSE_HEADER_MAXIMUM_BYTES = 64 * 1024;
@@ -2457,6 +2505,34 @@ assert.deepEqual(
   [...BROWSER_EGRESS_CAPABLE_RESPONSE_HEADER_NAMES],
   contract.networkBoundary.networkResponseBoundary.egressCapableHeaderNames,
 );
+assert.equal(
+  BROWSER_RESPONSE_HEADER_ALLOWLIST.has(
+    FIRESTORE_WEBCHANNEL_SESSION_RESPONSE_HEADER_NAME,
+  ),
+  false,
+);
+assert.equal(
+  BROWSER_EGRESS_CAPABLE_RESPONSE_HEADER_NAMES.has(
+    FIRESTORE_WEBCHANNEL_SESSION_RESPONSE_HEADER_NAME,
+  ),
+  false,
+);
+assert.deepEqual(
+  contract.networkBoundary.networkResponseBoundary
+    .requestBoundConditionalHeaderRules,
+  [
+    {
+      id: FIRESTORE_WEBCHANNEL_SESSION_RESPONSE_RULE_ID,
+      headerName: FIRESTORE_WEBCHANNEL_SESSION_RESPONSE_HEADER_NAME,
+      responseStage: "successful-final-only",
+      requestScope: "exact-firestore-webchannel-encoded-init",
+      scopeMismatchAction: "omit",
+      informationalResponseAction: "omit",
+      duplicateHeaderAction: "capture-fatal",
+      valuePolicy: "nonempty-visible-ascii-maximum-1024-bytes",
+    },
+  ],
+);
 const isCrossOriginDocumentRequest = ({
   requestUrl,
   resourceType,
@@ -2762,8 +2838,143 @@ const externalStaticRequestDecision = ({
 };
 const literalOccurrenceCount = (textValue, needle) =>
   needle ? String(textValue).split(String(needle)).length - 1 : 0;
+const exactStagingFirestoreWebChannelInitialRequestScope = ({
+  requestUrl,
+  method,
+  inspection,
+}) => {
+  if (
+    !inspection ||
+    inspection.firebaseService !== "firestore" ||
+    inspection.isFirebaseRequest !== true ||
+    inspection.stagingMarker !== true ||
+    inspection.productionMarker !== false ||
+    inspection.unboundFirebaseRequest !== false ||
+    inspection.malformedUrlEncoding !== false ||
+    inspection.firebaseTransportValid !== true ||
+    inspection.serviceResourceBound !== true ||
+    String(method).toUpperCase() !== "POST"
+  ) {
+    return false;
+  }
+  try {
+    const parsed = new URL(requestUrl);
+    const queryNames = [...parsed.searchParams.keys()].sort();
+    const databaseValues = parsed.searchParams.getAll("database");
+    const ridValues = parsed.searchParams.getAll("RID");
+    const attemptValues = parsed.searchParams.getAll("t");
+    const cacheBusterValues = parsed.searchParams.getAll("zx");
+    return (
+      parsed.protocol === "https:" &&
+      parsed.hostname.toLowerCase() === "firestore.googleapis.com" &&
+      parsed.username === "" &&
+      parsed.password === "" &&
+      (parsed.port === "" || parsed.port === "443") &&
+      parsed.hash === "" &&
+      FIRESTORE_WEBCHANNEL_PATHNAMES.has(parsed.pathname) &&
+      JSON.stringify(queryNames) ===
+        JSON.stringify(FIRESTORE_WEBCHANNEL_INITIAL_QUERY_NAMES) &&
+      databaseValues.length === 1 &&
+      databaseValues[0] ===
+        `projects/${contract.firebaseProjectId}/databases/(default)` &&
+      parsed.searchParams.getAll("VER").length === 1 &&
+      parsed.searchParams.get("VER") === "8" &&
+      parsed.searchParams.getAll("CVER").length === 1 &&
+      parsed.searchParams.get("CVER") === "22" &&
+      parsed.searchParams.getAll("X-HTTP-Session-Id").length === 1 &&
+      parsed.searchParams.get("X-HTTP-Session-Id") === "gsessionid" &&
+      ridValues.length === 1 &&
+      /^(?:0|[1-9][0-9]{0,4})$/u.test(ridValues[0]) &&
+      Number(ridValues[0]) <= 99_999 &&
+      attemptValues.length === 1 &&
+      /^[1-9][0-9]*$/u.test(attemptValues[0]) &&
+      cacheBusterValues.length === 1 &&
+      /^[0-9a-z]+$/u.test(cacheBusterValues[0])
+    );
+  } catch {
+    return false;
+  }
+};
+const exactStagingFirestoreWebChannelEncodedApiKeyBodyScope = ({
+  requestUrl,
+  method,
+  headers = {},
+  postData = "",
+  stagingApiKey,
+  inspection,
+}) => {
+  const rawPostData = String(postData);
+  const decodedPostData = safelyDecodeUrl(rawPostData.replace(/\+/gu, "%20"));
+  if (
+    !exactStagingFirestoreWebChannelInitialRequestScope({
+      requestUrl,
+      method,
+      inspection,
+    }) ||
+    inspection.apiKeyValueCount !== 0 ||
+    inspection.apiKeyBindingValid !== false ||
+    decodedPostData === null ||
+    literalOccurrenceCount(rawPostData, stagingApiKey) !== 1 ||
+    literalOccurrenceCount(decodedPostData, stagingApiKey) !== 1
+  ) {
+    return false;
+  }
+  const contentTypeValues = Object.entries(headers)
+    .filter(([name]) => String(name).toLowerCase() === "content-type")
+    .map(([, value]) => String(value));
+  if (
+    contentTypeValues.length !== 1 ||
+    !/^application\/x-www-form-urlencoded(?:\s*;\s*charset=utf-8)?$/iu.test(
+      contentTypeValues[0],
+    )
+  ) {
+    return false;
+  }
+  const rawHeaderFieldCount = rawPostData
+    .split("&")
+    .filter((segment) => segment.split("=", 1)[0] === "headers").length;
+  const bodyParams = new URLSearchParams(rawPostData);
+  const encodedHeaderFields = [...bodyParams.entries()].filter(
+    ([name]) => String(name).toLowerCase() === "headers",
+  );
+  if (
+    rawHeaderFieldCount !== 1 ||
+    encodedHeaderFields.length !== 1 ||
+    encodedHeaderFields[0][0] !== "headers"
+  ) {
+    return false;
+  }
+  const encodedHeaderBlock = encodedHeaderFields[0][1];
+  if (
+    !encodedHeaderBlock.endsWith("\r\n") ||
+    encodedHeaderBlock.includes("\0")
+  ) {
+    return false;
+  }
+  const headerLines = encodedHeaderBlock.split("\r\n");
+  if (headerLines.pop() !== "" || headerLines.some((line) => line === "")) {
+    return false;
+  }
+  const parsedHeaderLines = [];
+  for (const line of headerLines) {
+    const separatorIndex = line.indexOf(":");
+    if (separatorIndex <= 0) return false;
+    const name = line.slice(0, separatorIndex);
+    const value = line.slice(separatorIndex + 1);
+    if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/u.test(name)) return false;
+    parsedHeaderLines.push({ name: name.toLowerCase(), value });
+  }
+  const apiKeyHeaderLines = parsedHeaderLines.filter(
+    ({ name }) => name === "x-goog-api-key",
+  );
+  return (
+    apiKeyHeaderLines.length === 1 &&
+    apiKeyHeaderLines[0].value === stagingApiKey
+  );
+};
 const stagingApiKeyScopeDecision = ({
   requestUrl,
+  method = "GET",
   headers = {},
   postData = "",
   stagingApiKey,
@@ -2773,21 +2984,40 @@ const stagingApiKeyScopeDecision = ({
   assert.ok(inspection && typeof inspection === "object");
   const decodedRequestUrl = safelyDecodeUrl(requestUrl);
   const headerOccurrenceCount = Object.values(headers).reduce(
-    (count, value) =>
-      count + literalOccurrenceCount(String(value), stagingApiKey),
+    (count, value) => {
+      const rawValue = String(value);
+      const decodedValue = safelyDecodeUrl(rawValue) || rawValue;
+      return count + literalOccurrenceCount(decodedValue, stagingApiKey);
+    },
     0,
   );
+  const rawPostData = String(postData);
+  const decodedPostData =
+    safelyDecodeUrl(rawPostData.replace(/\+/gu, "%20")) || rawPostData;
   const observedOccurrenceCount =
     literalOccurrenceCount(decodedRequestUrl || "", stagingApiKey) +
     headerOccurrenceCount +
-    literalOccurrenceCount(postData, stagingApiKey);
-  const approvedOccurrenceCount =
+    literalOccurrenceCount(decodedPostData, stagingApiKey);
+  const approvedRequestOccurrenceCount =
     inspection.isFirebaseRequest && inspection.apiKeyBindingValid
       ? inspection.apiKeyValueCount
       : 0;
+  const approvedEncodedBodyOccurrenceCount = Number(
+    exactStagingFirestoreWebChannelEncodedApiKeyBodyScope({
+      requestUrl,
+      method,
+      headers,
+      postData,
+      stagingApiKey,
+      inspection,
+    }),
+  );
+  const approvedOccurrenceCount =
+    approvedRequestOccurrenceCount + approvedEncodedBodyOccurrenceCount;
   return {
     observedOccurrenceCount,
     approvedOccurrenceCount,
+    approvedEncodedBodyOccurrenceCount,
     valid: observedOccurrenceCount === approvedOccurrenceCount,
   };
 };
@@ -2861,6 +3091,7 @@ const sensitiveMaterialScopeDecision = ({
 };
 const unifiedSensitivePreTransmissionDecision = ({
   requestUrl,
+  method = "GET",
   headers = {},
   postData = "",
   inspection,
@@ -2890,6 +3121,7 @@ const unifiedSensitivePreTransmissionDecision = ({
       headerEntries.some(({ value }) => value.includes(bypassSecret)));
   const apiKeyScope = stagingApiKeyScopeDecision({
     requestUrl,
+    method,
     headers,
     postData,
     stagingApiKey,
@@ -3266,6 +3498,7 @@ const installBrowserWidePreTransmissionBoundary = async ({
       }
       const apiKeyScope = stagingApiKeyScopeDecision({
         requestUrl: resolvedEvent.request.url,
+        method: resolvedEvent.request.method,
         headers: resolvedEvent.request.headers,
         postData: resolvedPostData.postData,
         stagingApiKey: scope.stagingApiKey,
@@ -3840,12 +4073,137 @@ const verifyNetworkPolicyNegativeFixtures = () => {
   assert.equal(
     stagingApiKeyScopeDecision({
       requestUrl: firebaseModuleUrl,
+      method: "GET",
       headers: { "x-goog-api-key": stagingApiKey },
       stagingApiKey,
       inspection: externalInspection,
     }).valid,
     false,
   );
+  const firestoreDatabase = `projects/${contract.firebaseProjectId}/databases/(default)`;
+  const firestoreWebChannelUrl = new URL(
+    "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel",
+  );
+  firestoreWebChannelUrl.searchParams.set("database", firestoreDatabase);
+  firestoreWebChannelUrl.searchParams.set("VER", "8");
+  firestoreWebChannelUrl.searchParams.set("RID", "12345");
+  firestoreWebChannelUrl.searchParams.set("CVER", "22");
+  firestoreWebChannelUrl.searchParams.set("X-HTTP-Session-Id", "gsessionid");
+  firestoreWebChannelUrl.searchParams.set("zx", "abc123");
+  firestoreWebChannelUrl.searchParams.set("t", "1");
+  const firestoreHeaders = {
+    "content-type": "application/x-www-form-urlencoded;charset=UTF-8",
+  };
+  const firestoreEncodedHeaderBlock = [
+    "X-Goog-Api-Client:gl-js/fire/12.9.0",
+    `X-Goog-Api-Key:${stagingApiKey}`,
+    "Authorization:Bearer synthetic-token",
+    "",
+  ].join("\r\n");
+  const firestorePostData = [
+    `headers=${encodeURIComponent(firestoreEncodedHeaderBlock)}`,
+    "count=1",
+    "ofs=0",
+    `req0___data__=${encodeURIComponent('{"database":"staging"}')}`,
+  ].join("&");
+  const firestoreInspection = inspectNetworkBoundary({
+    requestUrl: firestoreWebChannelUrl.toString(),
+    method: "POST",
+    resourceType: "XHR",
+    stagingApiKey,
+    allowedNonFirebaseOrigins: [stableBrowserOrigin],
+  });
+  assert.equal(firestoreInspection.stagingMarker, true);
+  assert.equal(
+    exactStagingFirestoreWebChannelEncodedApiKeyBodyScope({
+      requestUrl: firestoreWebChannelUrl.toString(),
+      method: "POST",
+      headers: firestoreHeaders,
+      postData: firestorePostData,
+      stagingApiKey,
+      inspection: firestoreInspection,
+    }),
+    true,
+  );
+  assert.equal(
+    exactStagingFirestoreWebChannelEncodedApiKeyBodyScope({
+      requestUrl: firestoreWebChannelUrl.toString(),
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      postData: firestorePostData,
+      stagingApiKey,
+      inspection: firestoreInspection,
+    }),
+    true,
+  );
+  assert.deepEqual(
+    stagingApiKeyScopeDecision({
+      requestUrl: firestoreWebChannelUrl.toString(),
+      method: "POST",
+      headers: firestoreHeaders,
+      postData: firestorePostData,
+      stagingApiKey,
+      inspection: firestoreInspection,
+    }),
+    {
+      observedOccurrenceCount: 1,
+      approvedOccurrenceCount: 1,
+      approvedEncodedBodyOccurrenceCount: 1,
+      valid: true,
+    },
+  );
+  const duplicateDatabaseUrl = new URL(firestoreWebChannelUrl);
+  duplicateDatabaseUrl.searchParams.append("database", firestoreDatabase);
+  const wrongSessionNegotiationUrl = new URL(firestoreWebChannelUrl);
+  wrongSessionNegotiationUrl.searchParams.set(
+    "X-HTTP-Session-Id",
+    "wrong-session-parameter",
+  );
+  const queryApiKeyUrl = new URL(firestoreWebChannelUrl);
+  queryApiKeyUrl.searchParams.set("key", stagingApiKey);
+  const rejectedFirestoreWebChannelApiKeyScopes = [
+    { method: "GET" },
+    {
+      requestUrl: firestoreWebChannelUrl
+        .toString()
+        .replace("/Listen/channel?", "/Listen/channel/extra?"),
+    },
+    { requestUrl: duplicateDatabaseUrl.toString() },
+    { requestUrl: wrongSessionNegotiationUrl.toString() },
+    { requestUrl: queryApiKeyUrl.toString() },
+    { headers: { "content-type": "application/json" } },
+    {
+      postData: `${firestorePostData}&headers=${encodeURIComponent(firestoreEncodedHeaderBlock)}`,
+    },
+    { postData: `req0___data__=${stagingApiKey}` },
+    {
+      postData: `${firestorePostData}&extra=%77${stagingApiKey.slice(1)}`,
+    },
+    {
+      postData: firestorePostData.replace(
+        encodeURIComponent(firestoreEncodedHeaderBlock),
+        encodeURIComponent(
+          `${firestoreEncodedHeaderBlock}X-Goog-Api-Key:${stagingApiKey}\r\n`,
+        ),
+      ),
+    },
+    { postData: `headers=%E0%A4%A${stagingApiKey}` },
+    { inspection: { ...firestoreInspection, stagingMarker: false } },
+  ];
+  for (const fixture of rejectedFirestoreWebChannelApiKeyScopes) {
+    assert.equal(
+      exactStagingFirestoreWebChannelEncodedApiKeyBodyScope({
+        requestUrl: firestoreWebChannelUrl.toString(),
+        method: "POST",
+        headers: firestoreHeaders,
+        postData: firestorePostData,
+        stagingApiKey,
+        inspection: firestoreInspection,
+        ...fixture,
+      }),
+      false,
+    );
+  }
   const sensitiveFixtures = [
     {
       postData: credentialValues[0],
@@ -3964,6 +4322,7 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     assert.deepEqual(
       unifiedSensitivePreTransmissionDecision({
         requestUrl: telemetryUrl,
+        method: "POST",
         inspection: telemetryInspection,
         stagingApiKey,
         credentialValues,
@@ -4097,6 +4456,9 @@ const verifyNetworkPolicyNegativeFixtures = () => {
       externalScopeMismatchFixtures.length,
     rejectedExternalStaticPathCaseCount: 3,
     rejectedStagingApiKeyExfiltrationCaseCount: 1,
+    acceptedFirestoreWebChannelEncodedApiKeyCaseCount: 2,
+    rejectedFirestoreWebChannelEncodedApiKeyCaseCount:
+      rejectedFirestoreWebChannelApiKeyScopes.length,
     rejectedSensitiveMaterialExfiltrationCaseCount: sensitiveFixtures.length,
     acceptedExactAuthCredentialBodyScopeCaseCount: 1,
     acceptedExactRefreshTokenBodyScopeCaseCount: 1,
@@ -4213,6 +4575,7 @@ const verifyPostDataAndResponseSanitizationNegativeFixtures = async () => {
   const sanitized = sanitizeBrowserResponseHeaders([
     { name: "Access-Control-Allow-Origin", value: "*" },
     { name: "Content-Type", value: "application/json" },
+    { name: "X-HTTP-Session-Id", value: "omitted-without-request-scope" },
     ...egressHeaderNames.map((name) => ({
       name,
       value: name === "Location" ? "https://outside.invalid" : "blocked",
@@ -4227,7 +4590,44 @@ const verifyPostDataAndResponseSanitizationNegativeFixtures = async () => {
     sanitized.egressHeaderObservationCount,
     egressHeaderNames.length,
   );
-  assert.equal(sanitized.omittedHeaderCount, egressHeaderNames.length + 1);
+  assert.equal(sanitized.omittedHeaderCount, egressHeaderNames.length + 2);
+  assert.equal(sanitized.conditionalHeaderForwardCount, 0);
+  const conditionallySanitized = sanitizeBrowserResponseHeaders(
+    [{ name: "X-HTTP-Session-Id", value: "session_123-ABC" }],
+    {
+      conditionalResponseHeaderRuleId:
+        FIRESTORE_WEBCHANNEL_SESSION_RESPONSE_RULE_ID,
+    },
+  );
+  assert.deepEqual(conditionallySanitized.responseHeaders, [
+    { name: "x-http-session-id", value: "session_123-ABC" },
+  ]);
+  assert.equal(conditionallySanitized.conditionalHeaderForwardCount, 1);
+  assert.throws(() =>
+    sanitizeBrowserResponseHeaders([], {
+      conditionalResponseHeaderRuleId: "unknown-rule",
+    }),
+  );
+  assert.throws(() =>
+    sanitizeBrowserResponseHeaders(
+      [
+        { name: "X-HTTP-Session-Id", value: "first" },
+        { name: "x-http-session-id", value: "second" },
+      ],
+      {
+        conditionalResponseHeaderRuleId:
+          FIRESTORE_WEBCHANNEL_SESSION_RESPONSE_RULE_ID,
+      },
+    ),
+  );
+  for (const value of ["", "invalid\r\nvalue", "invalid\0value"]) {
+    assert.throws(() =>
+      sanitizeBrowserResponseHeaders([{ name: "X-HTTP-Session-Id", value }], {
+        conditionalResponseHeaderRuleId:
+          FIRESTORE_WEBCHANNEL_SESSION_RESPONSE_RULE_ID,
+      }),
+    );
+  }
   return {
     fullPostDataInlineCaseCount: 1,
     fullPostDataAbsentCaseCount: 1,
@@ -4237,6 +4637,9 @@ const verifyPostDataAndResponseSanitizationNegativeFixtures = async () => {
     responseHeaderEgressRejectedCaseCount:
       sanitized.egressHeaderObservationCount,
     responseHeaderUnknownRejectedCaseCount: 1,
+    responseHeaderConditionalRejectedCaseCount: 1,
+    responseHeaderConditionalAllowedCaseCount: 1,
+    responseHeaderConditionalInvalidCaseCount: 5,
   };
 };
 const verifyPreTransmissionBoundaryNegativeFixtures = () => {
@@ -5384,6 +5787,7 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
         inspectSensitiveRequest: ({ event, inspection }) =>
           unifiedSensitivePreTransmissionDecision({
             requestUrl: event.request.url,
+            method: event.request.method,
             headers: event.request.headers,
             postData: event.request.postData,
             inspection,
@@ -5593,6 +5997,7 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
         rawSensitivePreTransmissionInspectionCount += 1;
         const rawSensitiveDecision = unifiedSensitivePreTransmissionDecision({
           requestUrl: event.request.url,
+          method: event.request.method,
           headers: event.request.headers,
           postData: resolvedPostData.postData,
           inspection: preTransmissionInspection,
@@ -7533,7 +7938,7 @@ assert.deepEqual(contract.networkBoundary, {
     malformedPercentEncodingAction: "block-before-transmission",
   },
   firebaseRequestBinding: {
-    schemaVersion: 2,
+    schemaVersion: 3,
     transport: "https-default-443-no-userinfo",
     queryApiKeyName: "key",
     headerApiKeyName: "x-goog-api-key",
@@ -7546,6 +7951,38 @@ assert.deepEqual(contract.networkBoundary, {
     regionalRealtimeDatabase:
       "all-firebasedatabase-app-hosts-classified-firebase-and-unbound-without-configured-database-url",
     hosting: "exact-staging-project-host",
+    firestoreWebChannel: {
+      schemaVersion: 1,
+      protocol: "https:",
+      hostname: "firestore.googleapis.com",
+      method: "POST",
+      pathnames: [
+        "/google.firestore.v1.Firestore/Listen/channel",
+        "/google.firestore.v1.Firestore/Write/channel",
+      ],
+      databaseQueryName: "database",
+      databaseQueryValue: `projects/${contract.firebaseProjectId}/databases/(default)`,
+      exactInitialQueryNames: [
+        "CVER",
+        "RID",
+        "VER",
+        "X-HTTP-Session-Id",
+        "database",
+        "t",
+        "zx",
+      ],
+      versionQueryValue: "8",
+      clientVersionQueryValue: "22",
+      sessionHeaderQueryName: "X-HTTP-Session-Id",
+      sessionHeaderQueryValue: "gsessionid",
+      encodedHeaderBodyField: "headers",
+      encodedApiKeyHeaderName: "x-goog-api-key",
+      encodedApiKeyOccurrencePolicy:
+        "exact-single-body-header-line-and-zero-url-or-wire-header-occurrences",
+      contentTypePolicy:
+        "application-x-www-form-urlencoded-with-optional-utf-8-charset",
+      scopeMismatchAction: "block-before-transmission",
+    },
   },
   executionTargetBoundary: {
     schemaVersion: 6,
@@ -7586,7 +8023,7 @@ assert.deepEqual(contract.networkBoundary, {
     residualTargetAction: "capture-fatal",
   },
   networkResponseBoundary: {
-    schemaVersion: 2,
+    schemaVersion: 3,
     scope:
       "split-direct-browser-final-direct-browser-early-hints-and-node-owned-external",
     directBrowserFinalInterception: "fetch-intercept-response-final-sanitized",
@@ -7602,8 +8039,21 @@ assert.deepEqual(contract.networkBoundary, {
       "node-owned-nonterminal-retain-until-final-direct-observation-invalidates-capture",
     externalStaticFinalPolicy:
       "node-owned-exact-200-body-hash-cache-safe-header-synthetic-local-fulfill",
-    headerPolicy: "explicit-allowlist-all-other-headers-omitted",
+    headerPolicy:
+      "explicit-base-allowlist-plus-exact-request-bound-conditional-rules-all-other-headers-omitted",
     allowedHeaderNames: [...BROWSER_RESPONSE_HEADER_ALLOWLIST],
+    requestBoundConditionalHeaderRules: [
+      {
+        id: FIRESTORE_WEBCHANNEL_SESSION_RESPONSE_RULE_ID,
+        headerName: FIRESTORE_WEBCHANNEL_SESSION_RESPONSE_HEADER_NAME,
+        responseStage: "successful-final-only",
+        requestScope: "exact-firestore-webchannel-encoded-init",
+        scopeMismatchAction: "omit",
+        informationalResponseAction: "omit",
+        duplicateHeaderAction: "capture-fatal",
+        valuePolicy: "nonempty-visible-ascii-maximum-1024-bytes",
+      },
+    ],
     egressCapableHeaderNames: [...BROWSER_EGRESS_CAPABLE_RESPONSE_HEADER_NAMES],
     egressCapableHeaderForwardAction:
       "omit-before-browser-for-final-and-node-owned-never-expose-informational",
@@ -7844,8 +8294,9 @@ assert.deepEqual(contract.networkBoundary, {
     action: "fail-request-before-transmission-nonfatal",
   },
   sensitiveValueScope: {
-    schemaVersion: 2,
-    stagingApiKey: "exact-firebase-query-key-or-x-goog-api-key-slot-only",
+    schemaVersion: 3,
+    stagingApiKey:
+      "exact-firebase-query-key-or-x-goog-api-key-slot-or-exact-firestore-webchannel-encoded-init-header-only",
     testEmailPassword:
       "exact-identitytoolkit-sign-in-with-password-json-body-only",
     refreshToken: "exact-securetoken-token-post-body-only",
@@ -12684,6 +13135,7 @@ try {
         const requestUrl = event.request.url;
         return unifiedSensitivePreTransmissionDecision({
           requestUrl,
+          method: requestMethod,
           headers: event.request.headers,
           postData: event.request.postData,
           inspection,
@@ -13313,11 +13765,34 @@ try {
       event,
       requestUrl,
       requestMethod,
+      requestHeaders,
+      requestPostData,
       preTransmissionInspection,
       overrides = {},
     }) => {
       assert.equal(preTransmissionInspection.isFirebaseRequest, true);
       assert.equal(preTransmissionInspection.stagingMarker, true);
+      const allowedEgressObservation =
+        allowedEgressRequestsByFetchRequestId.get(event.requestId);
+      assert.ok(allowedEgressObservation);
+      const conditionalResponseHeaderRuleId =
+        exactStagingFirestoreWebChannelEncodedApiKeyBodyScope({
+          requestUrl,
+          method: requestMethod,
+          headers: requestHeaders,
+          postData: requestPostData,
+          stagingApiKey: firebaseConfig.apiKey,
+          inspection: preTransmissionInspection,
+        })
+          ? FIRESTORE_WEBCHANNEL_SESSION_RESPONSE_RULE_ID
+          : null;
+      allowedEgressRequestsByFetchRequestId.set(
+        event.requestId,
+        Object.freeze({
+          ...allowedEgressObservation,
+          conditionalResponseHeaderRuleId,
+        }),
+      );
       browserConnectProxy.authorizeRequestStage({
         requestId: event.requestId,
         requestUrl,
@@ -13439,8 +13914,16 @@ try {
         assert.equal(responseStageDecision.kind, "final");
         assert.equal(responseStageDecision.terminal, true);
         allowedEgressResponsePauseCount += 1;
+        const finalConditionalResponseHeaderRuleId =
+          responseStatus >= 200 && responseStatus < 300
+            ? allowedEgressObservation?.conditionalResponseHeaderRuleId || null
+            : null;
         const sanitizedFinal = sanitizeBrowserResponseHeaders(
           event.responseHeaders || [],
+          {
+            conditionalResponseHeaderRuleId:
+              finalConditionalResponseHeaderRuleId,
+          },
         );
         allowedEgressFinalEgressHeaderObservationCount +=
           sanitizedFinal.egressHeaderObservationCount;
@@ -13618,6 +14101,7 @@ try {
       rawSensitivePreTransmissionInspectionCount += 1;
       const rawSensitiveDecision = unifiedSensitivePreTransmissionDecision({
         requestUrl,
+        method: requestMethod,
         headers: event.request.headers,
         postData,
         inspection: preTransmissionInspection,
@@ -14222,6 +14706,8 @@ try {
           event,
           requestUrl,
           requestMethod,
+          requestHeaders: event.request.headers,
+          requestPostData: postData,
           preTransmissionInspection,
           overrides: {
             postData: Buffer.from(
@@ -14248,6 +14734,8 @@ try {
           event,
           requestUrl,
           requestMethod,
+          requestHeaders: event.request.headers,
+          requestPostData: postData,
           preTransmissionInspection,
         });
         return;
@@ -14271,6 +14759,8 @@ try {
           event,
           requestUrl,
           requestMethod,
+          requestHeaders: event.request.headers,
+          requestPostData: postData,
           preTransmissionInspection,
         });
         return;
@@ -14289,6 +14779,8 @@ try {
           event,
           requestUrl,
           requestMethod,
+          requestHeaders: event.request.headers,
+          requestPostData: postData,
           preTransmissionInspection,
         });
         return;
@@ -14309,6 +14801,8 @@ try {
         event,
         requestUrl,
         requestMethod,
+        requestHeaders: event.request.headers,
+        requestPostData: postData,
         preTransmissionInspection,
         overrides: {
           headers: [

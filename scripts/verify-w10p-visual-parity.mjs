@@ -7,7 +7,7 @@ import { inflateSync } from "node:zlib";
 
 const readJson = (path) => JSON.parse(readFileSync(resolve(path), "utf8"));
 const contract = readJson("scripts/w10p-visual-parity-contract.json");
-assert.equal(contract.schemaVersion, 9);
+assert.equal(contract.schemaVersion, 10);
 const MAX_RESOLVED_REQUEST_POST_DATA_BYTES = 8 * 1024 * 1024;
 const NODE_OWNED_EXTERNAL_STATIC_RESPONSE_HEADER_MAXIMUM_BYTES = 64 * 1024;
 const NODE_OWNED_EXTERNAL_STATIC_RESPONSE_BODY_MAXIMUM_BYTES = 16 * 1024 * 1024;
@@ -101,6 +101,22 @@ const BROWSER_RESPONSE_HEADER_ALLOWLIST = [
   "x-goog-stored-content-length",
   "x-guploader-uploadid",
 ];
+const FIRESTORE_WEBCHANNEL_SESSION_RESPONSE_RULE_ID =
+  "staging-firestore-webchannel-session";
+const FIRESTORE_WEBCHANNEL_SESSION_RESPONSE_HEADER_NAME = "x-http-session-id";
+const FIRESTORE_WEBCHANNEL_PATHNAMES = new Set([
+  "/google.firestore.v1.Firestore/Listen/channel",
+  "/google.firestore.v1.Firestore/Write/channel",
+]);
+const FIRESTORE_WEBCHANNEL_INITIAL_QUERY_NAMES = [
+  "CVER",
+  "RID",
+  "VER",
+  "X-HTTP-Session-Id",
+  "database",
+  "t",
+  "zx",
+].sort();
 const BROWSER_EGRESS_CAPABLE_RESPONSE_HEADER_NAMES = [
   "alt-svc",
   "clear-site-data",
@@ -116,6 +132,18 @@ const BROWSER_EGRESS_CAPABLE_RESPONSE_HEADER_NAMES = [
   "speculation-rules",
   "x-dns-prefetch-control",
 ];
+assert.equal(
+  BROWSER_RESPONSE_HEADER_ALLOWLIST.includes(
+    FIRESTORE_WEBCHANNEL_SESSION_RESPONSE_HEADER_NAME,
+  ),
+  false,
+);
+assert.equal(
+  BROWSER_EGRESS_CAPABLE_RESPONSE_HEADER_NAMES.includes(
+    FIRESTORE_WEBCHANNEL_SESSION_RESPONSE_HEADER_NAME,
+  ),
+  false,
+);
 assert.equal(contract.fixtureRevision, 1);
 assert.match(contract.fixturePlanHash, /^[a-f0-9]{64}$/u);
 const inventory = readJson("scripts/w10p-route-menu-inventory.json");
@@ -774,8 +802,143 @@ const externalStaticRequestDecision = ({
 };
 const literalOccurrenceCount = (textValue, needle) =>
   needle ? String(textValue).split(String(needle)).length - 1 : 0;
+const exactStagingFirestoreWebChannelInitialRequestScope = ({
+  requestUrl,
+  method,
+  inspection,
+}) => {
+  if (
+    !inspection ||
+    inspection.firebaseService !== "firestore" ||
+    inspection.isFirebaseRequest !== true ||
+    inspection.stagingMarker !== true ||
+    inspection.productionMarker !== false ||
+    inspection.unboundFirebaseRequest !== false ||
+    inspection.malformedUrlEncoding !== false ||
+    inspection.firebaseTransportValid !== true ||
+    inspection.serviceResourceBound !== true ||
+    String(method).toUpperCase() !== "POST"
+  ) {
+    return false;
+  }
+  try {
+    const parsed = new URL(requestUrl);
+    const queryNames = [...parsed.searchParams.keys()].sort();
+    const databaseValues = parsed.searchParams.getAll("database");
+    const ridValues = parsed.searchParams.getAll("RID");
+    const attemptValues = parsed.searchParams.getAll("t");
+    const cacheBusterValues = parsed.searchParams.getAll("zx");
+    return (
+      parsed.protocol === "https:" &&
+      parsed.hostname.toLowerCase() === "firestore.googleapis.com" &&
+      parsed.username === "" &&
+      parsed.password === "" &&
+      (parsed.port === "" || parsed.port === "443") &&
+      parsed.hash === "" &&
+      FIRESTORE_WEBCHANNEL_PATHNAMES.has(parsed.pathname) &&
+      JSON.stringify(queryNames) ===
+        JSON.stringify(FIRESTORE_WEBCHANNEL_INITIAL_QUERY_NAMES) &&
+      databaseValues.length === 1 &&
+      databaseValues[0] ===
+        `projects/${contract.firebaseProjectId}/databases/(default)` &&
+      parsed.searchParams.getAll("VER").length === 1 &&
+      parsed.searchParams.get("VER") === "8" &&
+      parsed.searchParams.getAll("CVER").length === 1 &&
+      parsed.searchParams.get("CVER") === "22" &&
+      parsed.searchParams.getAll("X-HTTP-Session-Id").length === 1 &&
+      parsed.searchParams.get("X-HTTP-Session-Id") === "gsessionid" &&
+      ridValues.length === 1 &&
+      /^(?:0|[1-9][0-9]{0,4})$/u.test(ridValues[0]) &&
+      Number(ridValues[0]) <= 99_999 &&
+      attemptValues.length === 1 &&
+      /^[1-9][0-9]*$/u.test(attemptValues[0]) &&
+      cacheBusterValues.length === 1 &&
+      /^[0-9a-z]+$/u.test(cacheBusterValues[0])
+    );
+  } catch {
+    return false;
+  }
+};
+const exactStagingFirestoreWebChannelEncodedApiKeyBodyScope = ({
+  requestUrl,
+  method,
+  headers = {},
+  postData = "",
+  stagingApiKey,
+  inspection,
+}) => {
+  const rawPostData = String(postData);
+  const decodedPostData = safelyDecodeUrl(rawPostData.replace(/\+/gu, "%20"));
+  if (
+    !exactStagingFirestoreWebChannelInitialRequestScope({
+      requestUrl,
+      method,
+      inspection,
+    }) ||
+    inspection.apiKeyValueCount !== 0 ||
+    inspection.apiKeyBindingValid !== false ||
+    decodedPostData === null ||
+    literalOccurrenceCount(rawPostData, stagingApiKey) !== 1 ||
+    literalOccurrenceCount(decodedPostData, stagingApiKey) !== 1
+  ) {
+    return false;
+  }
+  const contentTypeValues = Object.entries(headers)
+    .filter(([name]) => String(name).toLowerCase() === "content-type")
+    .map(([, value]) => String(value));
+  if (
+    contentTypeValues.length !== 1 ||
+    !/^application\/x-www-form-urlencoded(?:\s*;\s*charset=utf-8)?$/iu.test(
+      contentTypeValues[0],
+    )
+  ) {
+    return false;
+  }
+  const rawHeaderFieldCount = rawPostData
+    .split("&")
+    .filter((segment) => segment.split("=", 1)[0] === "headers").length;
+  const bodyParams = new URLSearchParams(rawPostData);
+  const encodedHeaderFields = [...bodyParams.entries()].filter(
+    ([name]) => String(name).toLowerCase() === "headers",
+  );
+  if (
+    rawHeaderFieldCount !== 1 ||
+    encodedHeaderFields.length !== 1 ||
+    encodedHeaderFields[0][0] !== "headers"
+  ) {
+    return false;
+  }
+  const encodedHeaderBlock = encodedHeaderFields[0][1];
+  if (
+    !encodedHeaderBlock.endsWith("\r\n") ||
+    encodedHeaderBlock.includes("\0")
+  ) {
+    return false;
+  }
+  const headerLines = encodedHeaderBlock.split("\r\n");
+  if (headerLines.pop() !== "" || headerLines.some((line) => line === "")) {
+    return false;
+  }
+  const parsedHeaderLines = [];
+  for (const line of headerLines) {
+    const separatorIndex = line.indexOf(":");
+    if (separatorIndex <= 0) return false;
+    const name = line.slice(0, separatorIndex);
+    const value = line.slice(separatorIndex + 1);
+    if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/u.test(name)) return false;
+    parsedHeaderLines.push({ name: name.toLowerCase(), value });
+  }
+  const apiKeyHeaderLines = parsedHeaderLines.filter(
+    ({ name }) => name === "x-goog-api-key",
+  );
+  return (
+    apiKeyHeaderLines.length === 1 &&
+    apiKeyHeaderLines[0].value === stagingApiKey
+  );
+};
 const stagingApiKeyScopeDecision = ({
   requestUrl,
+  method = "GET",
   headers = {},
   postData = "",
   stagingApiKey,
@@ -785,21 +948,40 @@ const stagingApiKeyScopeDecision = ({
   assert.ok(inspection && typeof inspection === "object");
   const decodedRequestUrl = safelyDecodeUrl(requestUrl);
   const headerOccurrenceCount = Object.values(headers).reduce(
-    (count, value) =>
-      count + literalOccurrenceCount(String(value), stagingApiKey),
+    (count, value) => {
+      const rawValue = String(value);
+      const decodedValue = safelyDecodeUrl(rawValue) || rawValue;
+      return count + literalOccurrenceCount(decodedValue, stagingApiKey);
+    },
     0,
   );
+  const rawPostData = String(postData);
+  const decodedPostData =
+    safelyDecodeUrl(rawPostData.replace(/\+/gu, "%20")) || rawPostData;
   const observedOccurrenceCount =
     literalOccurrenceCount(decodedRequestUrl || "", stagingApiKey) +
     headerOccurrenceCount +
-    literalOccurrenceCount(postData, stagingApiKey);
-  const approvedOccurrenceCount =
+    literalOccurrenceCount(decodedPostData, stagingApiKey);
+  const approvedRequestOccurrenceCount =
     inspection.isFirebaseRequest && inspection.apiKeyBindingValid
       ? inspection.apiKeyValueCount
       : 0;
+  const approvedEncodedBodyOccurrenceCount = Number(
+    exactStagingFirestoreWebChannelEncodedApiKeyBodyScope({
+      requestUrl,
+      method,
+      headers,
+      postData,
+      stagingApiKey,
+      inspection,
+    }),
+  );
+  const approvedOccurrenceCount =
+    approvedRequestOccurrenceCount + approvedEncodedBodyOccurrenceCount;
   return {
     observedOccurrenceCount,
     approvedOccurrenceCount,
+    approvedEncodedBodyOccurrenceCount,
     valid: observedOccurrenceCount === approvedOccurrenceCount,
   };
 };
@@ -1215,12 +1397,141 @@ const verifyNetworkPolicyNegativeFixtures = () => {
   assert.equal(
     stagingApiKeyScopeDecision({
       requestUrl: firebaseModuleUrl,
+      method: "GET",
       headers: { "x-goog-api-key": stagingApiKey },
       stagingApiKey,
       inspection: externalInspection,
     }).valid,
     false,
   );
+  const firestoreDatabase = `projects/${contract.firebaseProjectId}/databases/(default)`;
+  const firestoreWebChannelUrl = new URL(
+    "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel",
+  );
+  firestoreWebChannelUrl.searchParams.set("database", firestoreDatabase);
+  firestoreWebChannelUrl.searchParams.set("VER", "8");
+  firestoreWebChannelUrl.searchParams.set("RID", "12345");
+  firestoreWebChannelUrl.searchParams.set("CVER", "22");
+  firestoreWebChannelUrl.searchParams.set("X-HTTP-Session-Id", "gsessionid");
+  firestoreWebChannelUrl.searchParams.set("zx", "abc123");
+  firestoreWebChannelUrl.searchParams.set("t", "1");
+  const firestoreHeaders = {
+    "content-type": "application/x-www-form-urlencoded;charset=UTF-8",
+  };
+  const firestoreEncodedHeaderBlock = [
+    "X-Goog-Api-Client:gl-js/fire/12.9.0",
+    `X-Goog-Api-Key:${stagingApiKey}`,
+    "Authorization:Bearer synthetic-token",
+    "",
+  ].join("\r\n");
+  const firestorePostData = [
+    `headers=${encodeURIComponent(firestoreEncodedHeaderBlock)}`,
+    "count=1",
+    "ofs=0",
+    `req0___data__=${encodeURIComponent('{"database":"staging"}')}`,
+  ].join("&");
+  const firestoreInspection = {
+    firebaseService: "firestore",
+    isFirebaseRequest: true,
+    stagingMarker: true,
+    productionMarker: false,
+    unboundFirebaseRequest: false,
+    malformedUrlEncoding: false,
+    firebaseTransportValid: true,
+    serviceResourceBound: true,
+    apiKeyValueCount: 0,
+    apiKeyBindingValid: false,
+  };
+  assert.equal(
+    exactStagingFirestoreWebChannelEncodedApiKeyBodyScope({
+      requestUrl: firestoreWebChannelUrl.toString(),
+      method: "POST",
+      headers: firestoreHeaders,
+      postData: firestorePostData,
+      stagingApiKey,
+      inspection: firestoreInspection,
+    }),
+    true,
+  );
+  assert.equal(
+    exactStagingFirestoreWebChannelEncodedApiKeyBodyScope({
+      requestUrl: firestoreWebChannelUrl.toString(),
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      postData: firestorePostData,
+      stagingApiKey,
+      inspection: firestoreInspection,
+    }),
+    true,
+  );
+  assert.deepEqual(
+    stagingApiKeyScopeDecision({
+      requestUrl: firestoreWebChannelUrl.toString(),
+      method: "POST",
+      headers: firestoreHeaders,
+      postData: firestorePostData,
+      stagingApiKey,
+      inspection: firestoreInspection,
+    }),
+    {
+      observedOccurrenceCount: 1,
+      approvedOccurrenceCount: 1,
+      approvedEncodedBodyOccurrenceCount: 1,
+      valid: true,
+    },
+  );
+  const duplicateDatabaseUrl = new URL(firestoreWebChannelUrl);
+  duplicateDatabaseUrl.searchParams.append("database", firestoreDatabase);
+  const wrongSessionNegotiationUrl = new URL(firestoreWebChannelUrl);
+  wrongSessionNegotiationUrl.searchParams.set(
+    "X-HTTP-Session-Id",
+    "wrong-session-parameter",
+  );
+  const queryApiKeyUrl = new URL(firestoreWebChannelUrl);
+  queryApiKeyUrl.searchParams.set("key", stagingApiKey);
+  const rejectedFirestoreWebChannelApiKeyScopes = [
+    { method: "GET" },
+    {
+      requestUrl: firestoreWebChannelUrl
+        .toString()
+        .replace("/Listen/channel?", "/Listen/channel/extra?"),
+    },
+    { requestUrl: duplicateDatabaseUrl.toString() },
+    { requestUrl: wrongSessionNegotiationUrl.toString() },
+    { requestUrl: queryApiKeyUrl.toString() },
+    { headers: { "content-type": "application/json" } },
+    {
+      postData: `${firestorePostData}&headers=${encodeURIComponent(firestoreEncodedHeaderBlock)}`,
+    },
+    { postData: `req0___data__=${stagingApiKey}` },
+    {
+      postData: `${firestorePostData}&extra=%77${stagingApiKey.slice(1)}`,
+    },
+    {
+      postData: firestorePostData.replace(
+        encodeURIComponent(firestoreEncodedHeaderBlock),
+        encodeURIComponent(
+          `${firestoreEncodedHeaderBlock}X-Goog-Api-Key:${stagingApiKey}\r\n`,
+        ),
+      ),
+    },
+    { postData: `headers=%E0%A4%A${stagingApiKey}` },
+    { inspection: { ...firestoreInspection, stagingMarker: false } },
+  ];
+  for (const fixture of rejectedFirestoreWebChannelApiKeyScopes) {
+    assert.equal(
+      exactStagingFirestoreWebChannelEncodedApiKeyBodyScope({
+        requestUrl: firestoreWebChannelUrl.toString(),
+        method: "POST",
+        headers: firestoreHeaders,
+        postData: firestorePostData,
+        stagingApiKey,
+        inspection: firestoreInspection,
+        ...fixture,
+      }),
+      false,
+    );
+  }
   const sensitiveFixtures = [
     {
       postData: credentialValues[0],
@@ -1321,6 +1632,9 @@ const verifyNetworkPolicyNegativeFixtures = () => {
       externalScopeMismatchFixtures.length,
     rejectedExternalStaticPathCaseCount: 3,
     rejectedStagingApiKeyExfiltrationCaseCount: 1,
+    acceptedFirestoreWebChannelEncodedApiKeyCaseCount: 2,
+    rejectedFirestoreWebChannelEncodedApiKeyCaseCount:
+      rejectedFirestoreWebChannelApiKeyScopes.length,
     rejectedSensitiveMaterialExfiltrationCaseCount: sensitiveFixtures.length,
     acceptedExactAuthCredentialBodyScopeCaseCount: 1,
     acceptedExactRefreshTokenBodyScopeCaseCount: 1,
@@ -1346,6 +1660,20 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "const handlePausedRequest = async (event) => {",
   );
   assert.ok(publicRequestHandlerStart >= 0);
+  const directFirebaseContinuationStart = sourceText.lastIndexOf(
+    "const continueInspectedDirectFirebaseRequest = async ({",
+    publicRequestHandlerStart,
+  );
+  assert.ok(directFirebaseContinuationStart >= 0);
+  const directFirebaseContinuationSource = sourceText.slice(
+    directFirebaseContinuationStart,
+    publicRequestHandlerStart,
+  );
+  assert.match(
+    directFirebaseContinuationSource,
+    /exactStagingFirestoreWebChannelEncodedApiKeyBodyScope\(\{[\s\S]*headers:\s*requestHeaders,[\s\S]*postData:\s*requestPostData,[\s\S]*stagingApiKey:\s*firebaseConfig\.apiKey,[\s\S]*conditionalResponseHeaderRuleId/u,
+    "The conditional Firestore response-header rule must be bound to the fully resolved, exact encoded-init API-key body scope.",
+  );
   const resolvedPostDataIndex = sourceText.indexOf(
     "const resolvedPostData = await resolvePausedRequestPostData({",
     publicRequestHandlerStart,
@@ -1481,7 +1809,10 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     '"network-read-failed"',
     '"maximum-bytes-exceeded"',
     '"representation-mismatch"',
-    "const sanitizeBrowserResponseHeaders = (responseHeaders = []) => {",
+    "const sanitizeBrowserResponseHeaders = (",
+    "const exactStagingFirestoreWebChannelInitialRequestScope = (",
+    "const exactStagingFirestoreWebChannelEncodedApiKeyBodyScope = (",
+    "conditionalResponseHeaderRuleId,",
     'if (responseStageDecision.kind === "informational")',
     "informationalResponseRequestsByFetchRequestId.add(event.requestId)",
     "stableOriginRewriteLocalFulfillCount += 1",
@@ -1530,6 +1861,11 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   assert.match(informationalBranch, /sanitizedInformational\.responseHeaders/u);
   assert.doesNotMatch(
     informationalBranch,
+    /conditionalResponseHeaderRuleId/u,
+    "An informational response cannot receive a request-bound conditional response-header scope.",
+  );
+  assert.doesNotMatch(
+    informationalBranch,
     /\.delete\(|Fetch\.getResponseBody|stableOriginRewriteResponseCount|externalStaticResponseObservations\.push/u,
     "An informational response must retain request correlation and cannot finalize body/cache/rewrite observations.",
   );
@@ -1562,6 +1898,11 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   assert.match(
     publicResponseBranch,
     /responseHeaders:\s*sanitizedFinal\.responseHeaders/u,
+  );
+  assert.match(
+    publicResponseBranch,
+    /const finalConditionalResponseHeaderRuleId\s*=\s*responseStatus\s*>=\s*200\s*&&\s*responseStatus\s*<\s*300[\s\S]*allowedEgressObservation\?\.conditionalResponseHeaderRuleId[\s\S]*sanitizeBrowserResponseHeaders\([\s\S]*conditionalResponseHeaderRuleId:\s*finalConditionalResponseHeaderRuleId/u,
+    "Only a successful final response may receive the exact request-bound Firestore session-header rule.",
   );
   assert.match(
     sourceText,
@@ -3341,7 +3682,7 @@ assert.deepEqual(
       malformedPercentEncodingAction: "block-before-transmission",
     },
     firebaseRequestBinding: {
-      schemaVersion: 2,
+      schemaVersion: 3,
       transport: "https-default-443-no-userinfo",
       queryApiKeyName: "key",
       headerApiKeyName: "x-goog-api-key",
@@ -3354,6 +3695,38 @@ assert.deepEqual(
       regionalRealtimeDatabase:
         "all-firebasedatabase-app-hosts-classified-firebase-and-unbound-without-configured-database-url",
       hosting: "exact-staging-project-host",
+      firestoreWebChannel: {
+        schemaVersion: 1,
+        protocol: "https:",
+        hostname: "firestore.googleapis.com",
+        method: "POST",
+        pathnames: [
+          "/google.firestore.v1.Firestore/Listen/channel",
+          "/google.firestore.v1.Firestore/Write/channel",
+        ],
+        databaseQueryName: "database",
+        databaseQueryValue: `projects/${contract.firebaseProjectId}/databases/(default)`,
+        exactInitialQueryNames: [
+          "CVER",
+          "RID",
+          "VER",
+          "X-HTTP-Session-Id",
+          "database",
+          "t",
+          "zx",
+        ],
+        versionQueryValue: "8",
+        clientVersionQueryValue: "22",
+        sessionHeaderQueryName: "X-HTTP-Session-Id",
+        sessionHeaderQueryValue: "gsessionid",
+        encodedHeaderBodyField: "headers",
+        encodedApiKeyHeaderName: "x-goog-api-key",
+        encodedApiKeyOccurrencePolicy:
+          "exact-single-body-header-line-and-zero-url-or-wire-header-occurrences",
+        contentTypePolicy:
+          "application-x-www-form-urlencoded-with-optional-utf-8-charset",
+        scopeMismatchAction: "block-before-transmission",
+      },
     },
     executionTargetBoundary: {
       schemaVersion: 6,
@@ -3394,7 +3767,7 @@ assert.deepEqual(
       residualTargetAction: "capture-fatal",
     },
     networkResponseBoundary: {
-      schemaVersion: 2,
+      schemaVersion: 3,
       scope:
         "split-direct-browser-final-direct-browser-early-hints-and-node-owned-external",
       directBrowserFinalInterception:
@@ -3411,8 +3784,21 @@ assert.deepEqual(
         "node-owned-nonterminal-retain-until-final-direct-observation-invalidates-capture",
       externalStaticFinalPolicy:
         "node-owned-exact-200-body-hash-cache-safe-header-synthetic-local-fulfill",
-      headerPolicy: "explicit-allowlist-all-other-headers-omitted",
+      headerPolicy:
+        "explicit-base-allowlist-plus-exact-request-bound-conditional-rules-all-other-headers-omitted",
       allowedHeaderNames: BROWSER_RESPONSE_HEADER_ALLOWLIST,
+      requestBoundConditionalHeaderRules: [
+        {
+          id: FIRESTORE_WEBCHANNEL_SESSION_RESPONSE_RULE_ID,
+          headerName: FIRESTORE_WEBCHANNEL_SESSION_RESPONSE_HEADER_NAME,
+          responseStage: "successful-final-only",
+          requestScope: "exact-firestore-webchannel-encoded-init",
+          scopeMismatchAction: "omit",
+          informationalResponseAction: "omit",
+          duplicateHeaderAction: "capture-fatal",
+          valuePolicy: "nonempty-visible-ascii-maximum-1024-bytes",
+        },
+      ],
       egressCapableHeaderNames: BROWSER_EGRESS_CAPABLE_RESPONSE_HEADER_NAMES,
       egressCapableHeaderForwardAction:
         "omit-before-browser-for-final-and-node-owned-never-expose-informational",
@@ -3653,8 +4039,9 @@ assert.deepEqual(
       action: "fail-request-before-transmission-nonfatal",
     },
     sensitiveValueScope: {
-      schemaVersion: 2,
-      stagingApiKey: "exact-firebase-query-key-or-x-goog-api-key-slot-only",
+      schemaVersion: 3,
+      stagingApiKey:
+        "exact-firebase-query-key-or-x-goog-api-key-slot-or-exact-firestore-webchannel-encoded-init-header-only",
       testEmailPassword:
         "exact-identitytoolkit-sign-in-with-password-json-body-only",
       refreshToken: "exact-securetoken-token-post-body-only",
