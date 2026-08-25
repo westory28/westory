@@ -12716,6 +12716,28 @@ const SAFE_CDP_DIAGNOSTIC_SERVICES = [
   "non-firebase",
   "unknown",
 ];
+const SAFE_CDP_DIAGNOSTIC_REQUEST_CLASSES = [
+  "firebase",
+  "browser-product-background",
+  "recaptcha",
+  "firebase-static-module",
+  "font-static",
+  "quill-static",
+  "pdf-static",
+  "vercel",
+  "other-non-firebase",
+  "malformed",
+];
+const SAFE_CDP_DIAGNOSTIC_RESOURCE_CLASSES = [
+  "document",
+  "script",
+  "stylesheet",
+  "image",
+  "font",
+  "xhr",
+  "fetch",
+  "other",
+];
 const SAFE_CDP_SANITIZER_FAILURE_REASONS = [
   "response-header-collection-invalid",
   "response-rule-id-invalid",
@@ -12724,6 +12746,10 @@ const SAFE_CDP_SANITIZER_FAILURE_REASONS = [
   "response-header-value-invalid",
   "response-session-header-value-invalid",
   "response-session-header-value-too-large",
+];
+const SAFE_CDP_CORRELATION_FAILURE_REASONS = [
+  "response-request-stage-decision-missing",
+  "response-stage-status-invalid",
 ];
 const SAFE_CDP_HANDLER_FAILURE_REASONS = [
   "missing-network-id",
@@ -12735,6 +12761,7 @@ const SAFE_CDP_HANDLER_FAILURE_REASONS = [
   "target-closed",
   "unexpected-handler-error",
   ...SAFE_CDP_SANITIZER_FAILURE_REASONS,
+  ...SAFE_CDP_CORRELATION_FAILURE_REASONS,
 ];
 const SAFE_PRE_TRANSMISSION_BOUNDARY_FAILURE_REASONS = [
   "production",
@@ -12754,9 +12781,50 @@ const safeCdpDiagnosticServiceForEvent = (event) => {
     return "unknown";
   }
 };
+const safeCdpDiagnosticRequestClassForEvent = (event) => {
+  try {
+    const hostname = canonicalNetworkHostname(
+      new URL(String(event?.request?.url || "")).hostname,
+    );
+    if (firebaseServiceForHost(hostname)) return "firebase";
+    if (BROWSER_PRODUCT_BACKGROUND_DENY_HOSTNAMES.includes(hostname)) {
+      return "browser-product-background";
+    }
+    if (
+      hostname ===
+      contract.browserTransport.deterministicRecaptchaResponse.hostname
+    ) {
+      return "recaptcha";
+    }
+    if (hostname === "www.gstatic.com") return "firebase-static-module";
+    if (["fonts.googleapis.com", "fonts.gstatic.com"].includes(hostname)) {
+      return "font-static";
+    }
+    if (hostname === "cdn.quilljs.com") return "quill-static";
+    if (hostname === "cdnjs.cloudflare.com") return "pdf-static";
+    if (isVercelNetworkHostname(hostname)) return "vercel";
+    return "other-non-firebase";
+  } catch {
+    return "malformed";
+  }
+};
+const safeCdpDiagnosticResourceClassForEvent = (event) => {
+  const resourceClass = String(event?.resourceType || "").toLowerCase();
+  return SAFE_CDP_DIAGNOSTIC_RESOURCE_CLASSES.includes(resourceClass)
+    ? resourceClass
+    : "other";
+};
 const incrementSafeDiagnosticClass = (
   histogram,
-  { captureStage, phase, operation, reason, service },
+  {
+    captureStage,
+    phase,
+    operation,
+    reason,
+    service,
+    requestClass,
+    resourceClass,
+  },
   allowedReasons,
 ) => {
   assert.ok(SAFE_CDP_DIAGNOSTIC_CAPTURE_STAGES.includes(captureStage));
@@ -12764,7 +12832,17 @@ const incrementSafeDiagnosticClass = (
   assert.ok(SAFE_CDP_DIAGNOSTIC_OPERATIONS.includes(operation));
   assert.ok(allowedReasons.includes(reason));
   assert.ok(SAFE_CDP_DIAGNOSTIC_SERVICES.includes(service));
-  const key = JSON.stringify([captureStage, phase, operation, reason, service]);
+  assert.ok(SAFE_CDP_DIAGNOSTIC_REQUEST_CLASSES.includes(requestClass));
+  assert.ok(SAFE_CDP_DIAGNOSTIC_RESOURCE_CLASSES.includes(resourceClass));
+  const key = JSON.stringify([
+    captureStage,
+    phase,
+    operation,
+    reason,
+    service,
+    requestClass,
+    resourceClass,
+  ]);
   const previous = histogram.get(key);
   histogram.set(key, {
     captureStage,
@@ -12772,6 +12850,8 @@ const incrementSafeDiagnosticClass = (
     operation,
     reason,
     service,
+    requestClass,
+    resourceClass,
     count: (previous?.count || 0) + 1,
   });
 };
@@ -12799,7 +12879,10 @@ const safeCdpHandlerFailureReason = (error, diagnosticContext) => {
     typeof error === "object" &&
     String(error.code) === "ERR_ASSERTION"
   ) {
-    return SAFE_CDP_SANITIZER_FAILURE_REASONS.includes(diagnosticContext.reason)
+    return [
+      ...SAFE_CDP_SANITIZER_FAILURE_REASONS,
+      ...SAFE_CDP_CORRELATION_FAILURE_REASONS,
+    ].includes(diagnosticContext.reason)
       ? diagnosticContext.reason
       : "assertion-failed";
   }
@@ -14078,12 +14161,14 @@ try {
           stableOriginRewriteRequestsByFetchRequestId.get(event.requestId);
         const allowedEgressObservation =
           allowedEgressRequestsByFetchRequestId.get(event.requestId);
+        diagnosticContext.reason = "response-request-stage-decision-missing";
         assert.ok(
           sensitiveRequestKind ||
             rewriteObservation ||
             allowedEgressObservation,
           "A response-stage request pause had no request-stage decision.",
         );
+        diagnosticContext.reason = "response-stage-status-invalid";
         const responseStageDecision = responseStageCorrelationDecision({
           responseStatusCode: event.responseStatusCode,
           responseErrorReason: event.responseErrorReason,
@@ -14465,6 +14550,8 @@ try {
               operation: "request-fail",
               reason: "production",
               service: diagnosticContext.service,
+              requestClass: diagnosticContext.requestClass,
+              resourceClass: diagnosticContext.resourceClass,
             },
             SAFE_PRE_TRANSMISSION_BOUNDARY_FAILURE_REASONS,
           );
@@ -14537,6 +14624,8 @@ try {
             operation: "request-fail",
             reason: preTransmissionDecision.marker,
             service: diagnosticContext.service,
+            requestClass: diagnosticContext.requestClass,
+            resourceClass: diagnosticContext.resourceClass,
           },
           SAFE_PRE_TRANSMISSION_BOUNDARY_FAILURE_REASONS,
         );
@@ -15181,6 +15270,8 @@ try {
             : "request-post-data",
         reason: "unexpected-handler-error",
         service: safeCdpDiagnosticServiceForEvent(event),
+        requestClass: safeCdpDiagnosticRequestClassForEvent(event),
+        resourceClass: safeCdpDiagnosticResourceClassForEvent(event),
       };
       cdpHandlerDiagnosticContexts.set(event, diagnosticContext);
       const handlerPromise = handlePausedRequest(event)
