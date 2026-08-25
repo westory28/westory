@@ -1411,9 +1411,14 @@ const BROWSER_EGRESS_CAPABLE_RESPONSE_HEADER_NAMES = new Set([
 ]);
 const sanitizeBrowserResponseHeaders = (
   responseHeaders = [],
-  { conditionalResponseHeaderRuleId = null } = {},
+  { conditionalResponseHeaderRuleId = null, onDiagnosticCheck = null } = {},
 ) => {
+  assert.ok(
+    onDiagnosticCheck === null || typeof onDiagnosticCheck === "function",
+  );
+  onDiagnosticCheck?.("response-header-collection-invalid");
   assert.equal(Array.isArray(responseHeaders), true);
+  onDiagnosticCheck?.("response-rule-id-invalid");
   assert.ok(
     conditionalResponseHeaderRuleId === null ||
       conditionalResponseHeaderRuleId ===
@@ -1425,6 +1430,7 @@ const sanitizeBrowserResponseHeaders = (
       FIRESTORE_WEBCHANNEL_SESSION_RESPONSE_HEADER_NAME,
   );
   if (conditionalResponseHeaderRuleId !== null) {
+    onDiagnosticCheck?.("response-session-header-duplicate");
     assert.ok(conditionalSessionHeaders.length <= 1);
   }
   const sanitizedHeaders = [];
@@ -1434,7 +1440,9 @@ const sanitizeBrowserResponseHeaders = (
   for (const header of responseHeaders) {
     const name = String(header?.name || "").toLowerCase();
     const value = String(header?.value ?? "");
+    onDiagnosticCheck?.("response-header-name-invalid");
     assert.match(name, /^[!#$%&'*+.^_`|~0-9a-z-]+$/u);
+    onDiagnosticCheck?.("response-header-value-invalid");
     assert.doesNotMatch(value, /[\r\n\0]/u);
     if (BROWSER_EGRESS_CAPABLE_RESPONSE_HEADER_NAMES.has(name)) {
       observedEgressHeaderNames.push(name);
@@ -1449,7 +1457,9 @@ const sanitizeBrowserResponseHeaders = (
         omittedHeaderCount += 1;
         continue;
       }
+      onDiagnosticCheck?.("response-session-header-value-invalid");
       assert.match(value, /^[\x21-\x7e]+$/u);
+      onDiagnosticCheck?.("response-session-header-value-too-large");
       assert.ok(Buffer.byteLength(value, "utf8") <= 1024);
       sanitizedHeaders.push({ name, value });
       conditionalHeaderForwardCount += 1;
@@ -4603,11 +4613,19 @@ const verifyPostDataAndResponseSanitizationNegativeFixtures = async () => {
     { name: "x-http-session-id", value: "session_123-ABC" },
   ]);
   assert.equal(conditionallySanitized.conditionalHeaderForwardCount, 1);
+  const responseHeaderDiagnosticChecks = [];
   assert.throws(() =>
     sanitizeBrowserResponseHeaders([], {
       conditionalResponseHeaderRuleId: "unknown-rule",
+      onDiagnosticCheck: (reason) =>
+        responseHeaderDiagnosticChecks.push(reason),
     }),
   );
+  assert.equal(
+    responseHeaderDiagnosticChecks.at(-1),
+    "response-rule-id-invalid",
+  );
+  responseHeaderDiagnosticChecks.length = 0;
   assert.throws(() =>
     sanitizeBrowserResponseHeaders(
       [
@@ -4617,8 +4635,14 @@ const verifyPostDataAndResponseSanitizationNegativeFixtures = async () => {
       {
         conditionalResponseHeaderRuleId:
           FIRESTORE_WEBCHANNEL_SESSION_RESPONSE_RULE_ID,
+        onDiagnosticCheck: (reason) =>
+          responseHeaderDiagnosticChecks.push(reason),
       },
     ),
+  );
+  assert.equal(
+    responseHeaderDiagnosticChecks.at(-1),
+    "response-session-header-duplicate",
   );
   for (const value of ["", "invalid\r\nvalue", "invalid\0value"]) {
     assert.throws(() =>
@@ -12643,6 +12667,7 @@ let baselineBridgeCdpPausedRequestCount = 0;
 let baselineBridgeCdpResponsePausedRequestCount = 0;
 let baselineBridgeCdpReconciledRequestCount = 0;
 let appCheckCdpHandlerErrorCount = 0;
+const cdpHandlerFailureClassCounts = new Map();
 let baselineBridgeInjectedRedirectResponseAbortCount = 0;
 let appCheckCdpMonitorPausedRequestCount = 0;
 let preTransmissionBoundaryInspectionCount = 0;
@@ -12653,6 +12678,137 @@ let preTransmissionBoundaryUnboundFirebaseBlockCount = 0;
 let preTransmissionBoundaryNonFirebaseHostnameBlockCount = 0;
 let preTransmissionBoundaryMalformedUrlBlockCount = 0;
 let preTransmissionBoundaryFailRequestCount = 0;
+const preTransmissionBoundaryBlockClassCounts = new Map();
+const SAFE_CDP_DIAGNOSTIC_CAPTURE_STAGES = ["baseline", "candidate"];
+const SAFE_CDP_DIAGNOSTIC_PHASES = [
+  "context-bootstrap",
+  "authentication",
+  "screen-capture",
+  "browser-audit-finalization",
+];
+const SAFE_CDP_DIAGNOSTIC_OPERATIONS = [
+  "request-post-data",
+  "request-pre-transmission",
+  "request-policy",
+  "request-proxy-authorize",
+  "request-continue",
+  "request-fail",
+  "request-fulfill",
+  "request-node-fetch",
+  "request-bridge-token",
+  "response-correlation",
+  "response-sanitize-informational",
+  "response-continue-informational",
+  "response-fail",
+  "response-sanitize-final",
+  "response-body-attestation",
+  "response-continue-final",
+  "response-proxy-complete",
+];
+const SAFE_CDP_DIAGNOSTIC_SERVICES = [
+  "auth",
+  "app-check",
+  "firestore",
+  "storage",
+  "functions",
+  "realtime-database",
+  "hosting",
+  "non-firebase",
+  "unknown",
+];
+const SAFE_CDP_SANITIZER_FAILURE_REASONS = [
+  "response-header-collection-invalid",
+  "response-rule-id-invalid",
+  "response-session-header-duplicate",
+  "response-header-name-invalid",
+  "response-header-value-invalid",
+  "response-session-header-value-invalid",
+  "response-session-header-value-too-large",
+];
+const SAFE_CDP_HANDLER_FAILURE_REASONS = [
+  "missing-network-id",
+  "network-read-failed",
+  "representation-mismatch",
+  "maximum-bytes-exceeded",
+  "assertion-failed",
+  "cdp-protocol-error",
+  "target-closed",
+  "unexpected-handler-error",
+  ...SAFE_CDP_SANITIZER_FAILURE_REASONS,
+];
+const SAFE_PRE_TRANSMISSION_BOUNDARY_FAILURE_REASONS = [
+  "production",
+  "cross-origin-document",
+  "unbound-firebase",
+  "non-firebase-hostname-not-allowlisted",
+  "malformed-url-encoding",
+];
+const safeCdpDiagnosticServiceForEvent = (event) => {
+  try {
+    return (
+      firebaseServiceForHost(
+        new URL(String(event?.request?.url || "")).hostname,
+      ) || "non-firebase"
+    );
+  } catch {
+    return "unknown";
+  }
+};
+const incrementSafeDiagnosticClass = (
+  histogram,
+  { captureStage, phase, operation, reason, service },
+  allowedReasons,
+) => {
+  assert.ok(SAFE_CDP_DIAGNOSTIC_CAPTURE_STAGES.includes(captureStage));
+  assert.ok(SAFE_CDP_DIAGNOSTIC_PHASES.includes(phase));
+  assert.ok(SAFE_CDP_DIAGNOSTIC_OPERATIONS.includes(operation));
+  assert.ok(allowedReasons.includes(reason));
+  assert.ok(SAFE_CDP_DIAGNOSTIC_SERVICES.includes(service));
+  const key = JSON.stringify([captureStage, phase, operation, reason, service]);
+  const previous = histogram.get(key);
+  histogram.set(key, {
+    captureStage,
+    phase,
+    operation,
+    reason,
+    service,
+    count: (previous?.count || 0) + 1,
+  });
+};
+const snapshotSafeDiagnosticClasses = (histogram, baseline = new Map()) =>
+  [...histogram.entries()]
+    .map(([key, value]) => ({
+      ...value,
+      count: value.count - (baseline.get(key)?.count || 0),
+    }))
+    .filter(({ count }) => count > 0)
+    .sort((left, right) =>
+      JSON.stringify(left).localeCompare(JSON.stringify(right)),
+    );
+const safeDiagnosticClassTotal = (histogram) =>
+  [...histogram.values()].reduce((total, value) => total + value.count, 0);
+const safeCdpHandlerFailureReason = (error, diagnosticContext) => {
+  if (
+    error instanceof PausedRequestPostDataResolutionError &&
+    SAFE_CDP_HANDLER_FAILURE_REASONS.includes(String(error.code))
+  ) {
+    return String(error.code);
+  }
+  if (
+    error &&
+    typeof error === "object" &&
+    String(error.code) === "ERR_ASSERTION"
+  ) {
+    return SAFE_CDP_SANITIZER_FAILURE_REASONS.includes(diagnosticContext.reason)
+      ? diagnosticContext.reason
+      : "assertion-failed";
+  }
+  const safeErrorName =
+    error && typeof error === "object" ? String(error.name || "") : "";
+  if (safeErrorName === "ProtocolError") return "cdp-protocol-error";
+  if (safeErrorName === "TargetClosedError") return "target-closed";
+  return "unexpected-handler-error";
+};
 let rawSensitivePreTransmissionInspectionCount = 0;
 let rawSensitivePreTransmissionBlockCount = 0;
 let rawProductionPreTransmissionBlockCount = 0;
@@ -13296,6 +13452,12 @@ try {
     const groupTargetDiscoveryActivationStart = targetDiscoveryActivationCount;
     const groupTargetSnapshotStart = targetSnapshotCount;
     const groupBaselineBridgeHandlerErrorStart = appCheckCdpHandlerErrorCount;
+    const groupCdpHandlerFailureClassCountsStart = new Map(
+      cdpHandlerFailureClassCounts,
+    );
+    const groupPreTransmissionBoundaryBlockClassCountsStart = new Map(
+      preTransmissionBoundaryBlockClassCounts,
+    );
     const groupBaselineBridgeInjectedRedirectResponseAbortStart =
       baselineBridgeInjectedRedirectResponseAbortCount;
     const groupAppCheckCdpMonitorPausedStart =
@@ -13843,6 +14005,7 @@ try {
     const stableOriginRewriteRequestsByFetchRequestId = new Map();
     const allowedEgressRequestsByFetchRequestId = new Map();
     const informationalResponseRequestsByFetchRequestId = new Set();
+    const cdpHandlerDiagnosticContexts = new WeakMap();
     const continueInspectedDirectFirebaseRequest = async ({
       event,
       requestUrl,
@@ -13850,6 +14013,7 @@ try {
       requestHeaders,
       requestPostData,
       preTransmissionInspection,
+      diagnosticContext,
       overrides = {},
     }) => {
       assert.equal(preTransmissionInspection.isFirebaseRequest, true);
@@ -13873,8 +14037,11 @@ try {
         Object.freeze({
           ...allowedEgressObservation,
           conditionalResponseHeaderRuleId,
+          diagnosticPhase: diagnosticContext.phase,
         }),
       );
+      diagnosticContext.operation = "request-proxy-authorize";
+      diagnosticContext.reason = "unexpected-handler-error";
       browserConnectProxy.authorizeRequestStage({
         requestId: event.requestId,
         requestUrl,
@@ -13883,6 +14050,7 @@ try {
         stage,
       });
       try {
+        diagnosticContext.operation = "request-continue";
         await appCheckCdpSession.send("Fetch.continueRequest", {
           requestId: event.requestId,
           ...overrides,
@@ -13896,10 +14064,14 @@ try {
       }
     };
     const handlePausedRequest = async (event) => {
+      const diagnosticContext = cdpHandlerDiagnosticContexts.get(event);
+      assert.ok(diagnosticContext);
       if (
         event.responseStatusCode !== undefined ||
         event.responseErrorReason !== undefined
       ) {
+        diagnosticContext.operation = "response-correlation";
+        diagnosticContext.reason = "unexpected-handler-error";
         const sensitiveRequestKind =
           sensitiveAppCheckRequestsByFetchRequestId.get(event.requestId);
         const rewriteObservation =
@@ -13917,6 +14089,8 @@ try {
           responseErrorReason: event.responseErrorReason,
         });
         const completeProxyAuthorization = () => {
+          diagnosticContext.operation = "response-proxy-complete";
+          diagnosticContext.reason = "unexpected-handler-error";
           assert.equal(
             browserConnectProxy.hasRequestStageAuthorization(event.requestId),
             Boolean(allowedEgressObservation),
@@ -13953,6 +14127,7 @@ try {
           sensitiveAppCheckRequestsByFetchRequestId.delete(event.requestId);
           stableOriginRewriteRequestsByFetchRequestId.delete(event.requestId);
           informationalResponseRequestsByFetchRequestId.delete(event.requestId);
+          diagnosticContext.operation = "response-fail";
           await appCheckCdpSession.send("Fetch.failRequest", {
             requestId: event.requestId,
             errorReason: "BlockedByClient",
@@ -13965,13 +14140,22 @@ try {
           assert.equal(responseStageDecision.terminal, false);
           allowedEgressInformationalResponsePauseCount += 1;
           informationalResponseRequestsByFetchRequestId.add(event.requestId);
+          diagnosticContext.operation = "response-sanitize-informational";
+          diagnosticContext.reason = "unexpected-handler-error";
           const sanitizedInformational = sanitizeBrowserResponseHeaders(
             event.responseHeaders || [],
+            {
+              onDiagnosticCheck: (reason) => {
+                diagnosticContext.reason = reason;
+              },
+            },
           );
           allowedEgressInformationalEgressHeaderObservationCount +=
             sanitizedInformational.egressHeaderObservationCount;
           allowedEgressResponseHeaderSuppressionCount +=
             sanitizedInformational.omittedHeaderCount;
+          diagnosticContext.operation = "response-continue-informational";
+          diagnosticContext.reason = "unexpected-handler-error";
           await appCheckCdpSession.send("Fetch.continueResponse", {
             requestId: event.requestId,
             responseCode: responseStatus,
@@ -13986,6 +14170,8 @@ try {
           sensitiveAppCheckRequestsByFetchRequestId.delete(event.requestId);
           stableOriginRewriteRequestsByFetchRequestId.delete(event.requestId);
           informationalResponseRequestsByFetchRequestId.delete(event.requestId);
+          diagnosticContext.operation = "response-fail";
+          diagnosticContext.reason = "unexpected-handler-error";
           await appCheckCdpSession.send("Fetch.failRequest", {
             requestId: event.requestId,
             errorReason: "BlockedByClient",
@@ -14000,11 +14186,16 @@ try {
           responseStatus >= 200 && responseStatus < 300
             ? allowedEgressObservation?.conditionalResponseHeaderRuleId || null
             : null;
+        diagnosticContext.operation = "response-sanitize-final";
+        diagnosticContext.reason = "unexpected-handler-error";
         const sanitizedFinal = sanitizeBrowserResponseHeaders(
           event.responseHeaders || [],
           {
             conditionalResponseHeaderRuleId:
               finalConditionalResponseHeaderRuleId,
+            onDiagnosticCheck: (reason) => {
+              diagnosticContext.reason = reason;
+            },
           },
         );
         allowedEgressFinalEgressHeaderObservationCount +=
@@ -14064,6 +14255,8 @@ try {
           allowedEgressRequestsByFetchRequestId.delete(event.requestId);
           sensitiveAppCheckRequestsByFetchRequestId.delete(event.requestId);
           stableOriginRewriteRequestsByFetchRequestId.delete(event.requestId);
+          diagnosticContext.operation = "response-fail";
+          diagnosticContext.reason = "unexpected-handler-error";
           await appCheckCdpSession.send("Fetch.failRequest", {
             requestId: event.requestId,
             errorReason: "BlockedByClient",
@@ -14079,6 +14272,8 @@ try {
               rewriteObservation.resourceType,
             );
           if (responseBodyHashRequired) {
+            diagnosticContext.operation = "response-body-attestation";
+            diagnosticContext.reason = "unexpected-handler-error";
             const responseBody = await appCheckCdpSession.send(
               "Fetch.getResponseBody",
               { requestId: event.requestId },
@@ -14123,6 +14318,8 @@ try {
         }
         sensitiveAppCheckRequestsByFetchRequestId.delete(event.requestId);
         allowedEgressRequestsByFetchRequestId.delete(event.requestId);
+        diagnosticContext.operation = "response-continue-final";
+        diagnosticContext.reason = "unexpected-handler-error";
         await appCheckCdpSession.send("Fetch.continueResponse", {
           requestId: event.requestId,
           responseCode: responseStatus,
@@ -14131,6 +14328,8 @@ try {
         completeProxyAuthorization();
         return;
       }
+      diagnosticContext.operation = "request-post-data";
+      diagnosticContext.reason = "unexpected-handler-error";
       const resolvedPostData = await resolvePausedRequestPostData({
         event,
         send: (method, params) => appCheckCdpSession.send(method, params),
@@ -14160,6 +14359,13 @@ try {
         captureId: activeCaptureId,
         correlationId: `${groupKey}:cdp-pre-transmission-${appCheckCdpMonitorPausedRequestCount}`,
       });
+      diagnosticContext.operation = "request-pre-transmission";
+      diagnosticContext.reason = "unexpected-handler-error";
+      diagnosticContext.service =
+        preTransmissionInspection.firebaseService ||
+        (preTransmissionInspection.isFirebaseRequest
+          ? "unknown"
+          : "non-firebase");
       preTransmissionBoundaryInspectionCount += 1;
       const exactAuthCredentialBodyScope = exactAuthCredentialBodyRequestScope({
         requestUrl,
@@ -14248,6 +14454,21 @@ try {
           );
           unauthorizedVercelBypassEgressCount += 1;
         }
+        diagnosticContext.operation = "request-fail";
+        diagnosticContext.reason = "unexpected-handler-error";
+        if (rawSensitiveDecision.marker === "production") {
+          incrementSafeDiagnosticClass(
+            preTransmissionBoundaryBlockClassCounts,
+            {
+              captureStage: stage,
+              phase: diagnosticContext.phase,
+              operation: "request-fail",
+              reason: "production",
+              service: diagnosticContext.service,
+            },
+            SAFE_PRE_TRANSMISSION_BOUNDARY_FAILURE_REASONS,
+          );
+        }
         await appCheckCdpSession.send("Fetch.failRequest", {
           requestId: event.requestId,
           errorReason: "BlockedByClient",
@@ -14272,6 +14493,8 @@ try {
           requestUrlSha256: sha256(requestUrl),
           rawSensitiveInspectionPassed: true,
         });
+        diagnosticContext.operation = "request-fail";
+        diagnosticContext.reason = "unexpected-handler-error";
         await appCheckCdpSession.send("Fetch.failRequest", {
           requestId: event.requestId,
           errorReason: "BlockedByClient",
@@ -14304,6 +14527,19 @@ try {
         preTransmissionBoundaryMalformedUrlBlockCount += Number(
           preTransmissionDecision.marker === "malformed-url-encoding",
         );
+        diagnosticContext.operation = "request-fail";
+        diagnosticContext.reason = "unexpected-handler-error";
+        incrementSafeDiagnosticClass(
+          preTransmissionBoundaryBlockClassCounts,
+          {
+            captureStage: stage,
+            phase: diagnosticContext.phase,
+            operation: "request-fail",
+            reason: preTransmissionDecision.marker,
+            service: diagnosticContext.service,
+          },
+          SAFE_PRE_TRANSMISSION_BOUNDARY_FAILURE_REASONS,
+        );
         await appCheckCdpSession.send("Fetch.failRequest", {
           requestId: event.requestId,
           errorReason: "BlockedByClient",
@@ -14311,6 +14547,8 @@ try {
         preTransmissionBoundaryFailRequestCount += 1;
         return;
       }
+      diagnosticContext.operation = "request-policy";
+      diagnosticContext.reason = "unexpected-handler-error";
       const deterministicDecision = deterministicResponseDecision({
         requestUrl,
         method: requestMethod,
@@ -14322,6 +14560,8 @@ try {
       if (deterministicDecision.scoped) {
         if (!deterministicDecision.eligible) {
           deterministicResponseScopeMismatchBlockCount += 1;
+          diagnosticContext.operation = "request-fail";
+          diagnosticContext.reason = "unexpected-handler-error";
           await appCheckCdpSession.send("Fetch.failRequest", {
             requestId: event.requestId,
             errorReason: "BlockedByClient",
@@ -14351,6 +14591,8 @@ try {
           responseBodySha256: payload.bodySha256,
           responseBodyBytes: payload.bodyBytes,
         });
+        diagnosticContext.operation = "request-fulfill";
+        diagnosticContext.reason = "unexpected-handler-error";
         await appCheckCdpSession.send("Fetch.fulfillRequest", {
           requestId: event.requestId,
           responseCode: payload.responseCode,
@@ -14369,6 +14611,8 @@ try {
       if (externalStaticDecision.scoped) {
         if (!externalStaticDecision.eligible) {
           externalStaticRequestScopeMismatchBlockCount += 1;
+          diagnosticContext.operation = "request-fail";
+          diagnosticContext.reason = "unexpected-handler-error";
           await appCheckCdpSession.send("Fetch.failRequest", {
             requestId: event.requestId,
             errorReason: "BlockedByClient",
@@ -14390,6 +14634,8 @@ try {
             responseBodySha256: payload.bodySha256,
             responseBodyBytes: payload.bodyBytes,
           });
+          diagnosticContext.operation = "request-fulfill";
+          diagnosticContext.reason = "unexpected-handler-error";
           await appCheckCdpSession.send("Fetch.fulfillRequest", {
             requestId: event.requestId,
             responseCode: payload.responseCode,
@@ -14437,6 +14683,8 @@ try {
             finalHeaderSuppressionCount:
               cachedExternal.finalHeaderSuppressionCount,
           });
+          diagnosticContext.operation = "request-fulfill";
+          diagnosticContext.reason = "unexpected-handler-error";
           await appCheckCdpSession.send("Fetch.fulfillRequest", {
             requestId: event.requestId,
             responseCode: 200,
@@ -14450,6 +14698,8 @@ try {
         nodeOwnedExternalRequestCount += 1;
         let fetchedExternal;
         try {
+          diagnosticContext.operation = "request-node-fetch";
+          diagnosticContext.reason = "unexpected-handler-error";
           fetchedExternal = await nodeOwnedExactExternalStaticGet({
             requestUrl,
             expectedHostname: externalStaticDecision.rule.hostname,
@@ -14548,6 +14798,8 @@ try {
           finalHeaderSuppressionCount:
             nodeOwnedCachedExternal.finalHeaderSuppressionCount,
         });
+        diagnosticContext.operation = "request-fulfill";
+        diagnosticContext.reason = "unexpected-handler-error";
         await appCheckCdpSession.send("Fetch.fulfillRequest", {
           requestId: event.requestId,
           responseCode: fetchedExternal.responseStatus,
@@ -14572,6 +14824,8 @@ try {
       ) {
         directImmutableOriginBrowserRequestCount += 1;
         stableOriginRewriteScopeMismatchRequestCount += 1;
+        diagnosticContext.operation = "request-fail";
+        diagnosticContext.reason = "unexpected-handler-error";
         await appCheckCdpSession.send("Fetch.failRequest", {
           requestId: event.requestId,
           errorReason: "BlockedByClient",
@@ -14580,6 +14834,8 @@ try {
       }
       if (rewriteDecision.stableOriginRequest && !rewriteDecision.eligible) {
         stableOriginRewriteScopeMismatchRequestCount += 1;
+        diagnosticContext.operation = "request-fail";
+        diagnosticContext.reason = "unexpected-handler-error";
         await appCheckCdpSession.send("Fetch.failRequest", {
           requestId: event.requestId,
           errorReason: "BlockedByClient",
@@ -14661,6 +14917,8 @@ try {
             event.redirectedRequestId,
           );
         }
+        diagnosticContext.operation = "request-fail";
+        diagnosticContext.reason = "unexpected-handler-error";
         await appCheckCdpSession.send("Fetch.failRequest", {
           requestId: event.requestId,
           errorReason: "BlockedByClient",
@@ -14682,6 +14940,8 @@ try {
             }));
         if (!headerScopeAllowed) {
           unauthorizedAppCheckHeaderEgressCount += 1;
+          diagnosticContext.operation = "request-fail";
+          diagnosticContext.reason = "unexpected-handler-error";
           await appCheckCdpSession.send("Fetch.failRequest", {
             requestId: event.requestId,
             errorReason: "BlockedByClient",
@@ -14739,6 +14999,8 @@ try {
         stableOriginRewriteScriptRequestCount += Number(
           event.resourceType === "Script",
         );
+        diagnosticContext.operation = "request-node-fetch";
+        diagnosticContext.reason = "unexpected-handler-error";
         const immutableAttestation = await fetchImmutableResourceAttestation(
           stage,
           rewriteObservation.upstreamUrl,
@@ -14764,6 +15026,8 @@ try {
           rewriteObservation.byteMatch = true;
           stableOriginRewriteBodyHashCount += 1;
         }
+        diagnosticContext.operation = "request-fulfill";
+        diagnosticContext.reason = "unexpected-handler-error";
         await appCheckCdpSession.send("Fetch.fulfillRequest", {
           requestId: event.requestId,
           responseCode: immutableAttestation.status,
@@ -14791,6 +15055,7 @@ try {
           requestHeaders: event.request.headers,
           requestPostData: postData,
           preTransmissionInspection,
+          diagnosticContext,
           overrides: {
             postData: Buffer.from(
               JSON.stringify({ debug_token: appCheckDebugToken }),
@@ -14819,6 +15084,7 @@ try {
           requestHeaders: event.request.headers,
           requestPostData: postData,
           preTransmissionInspection,
+          diagnosticContext,
         });
         return;
       }
@@ -14844,6 +15110,7 @@ try {
           requestHeaders: event.request.headers,
           requestPostData: postData,
           preTransmissionInspection,
+          diagnosticContext,
         });
         return;
       }
@@ -14864,9 +15131,12 @@ try {
           requestHeaders: event.request.headers,
           requestPostData: postData,
           preTransmissionInspection,
+          diagnosticContext,
         });
         return;
       }
+      diagnosticContext.operation = "request-bridge-token";
+      diagnosticContext.reason = "unexpected-handler-error";
       const bridgeToken = await captureAppCheckTokenManager.ensureFresh();
       if (stage === "candidate") candidateBridgeInjectedRequestCount += 1;
       else baselineBridgeInjectedRequestCount += 1;
@@ -14886,6 +15156,7 @@ try {
         requestHeaders: event.request.headers,
         requestPostData: postData,
         preTransmissionInspection,
+        diagnosticContext,
         overrides: {
           headers: [
             ...headerEntries.filter(
@@ -14897,8 +15168,32 @@ try {
       });
     };
     appCheckCdpSession.on("Fetch.requestPaused", (event) => {
+      const correlatedDiagnosticPhase =
+        allowedEgressRequestsByFetchRequestId.get(event.requestId)
+          ?.diagnosticPhase || networkPhase;
+      const diagnosticContext = {
+        captureStage: stage,
+        phase: correlatedDiagnosticPhase,
+        operation:
+          event.responseStatusCode !== undefined ||
+          event.responseErrorReason !== undefined
+            ? "response-correlation"
+            : "request-post-data",
+        reason: "unexpected-handler-error",
+        service: safeCdpDiagnosticServiceForEvent(event),
+      };
+      cdpHandlerDiagnosticContexts.set(event, diagnosticContext);
       const handlerPromise = handlePausedRequest(event)
         .catch(async (error) => {
+          incrementSafeDiagnosticClass(
+            cdpHandlerFailureClassCounts,
+            {
+              ...diagnosticContext,
+              reason: safeCdpHandlerFailureReason(error, diagnosticContext),
+            },
+            SAFE_CDP_HANDLER_FAILURE_REASONS,
+          );
+          appCheckCdpHandlerErrorCount += 1;
           browserConnectProxy.revokeRequestStageAuthorization(event.requestId);
           allowedEgressRequestsByFetchRequestId.delete(event.requestId);
           sensitiveAppCheckRequestsByFetchRequestId.delete(event.requestId);
@@ -14913,7 +15208,6 @@ try {
               error.code === "representation-mismatch",
             );
           }
-          appCheckCdpHandlerErrorCount += 1;
           try {
             await appCheckCdpSession.send("Fetch.failRequest", {
               requestId: event.requestId,
@@ -14924,6 +15218,7 @@ try {
           }
         })
         .finally(() => {
+          cdpHandlerDiagnosticContexts.delete(event);
           appCheckCdpHandlerPromises.delete(handlerPromise);
         });
       appCheckCdpHandlerPromises.add(handlerPromise);
@@ -15162,10 +15457,24 @@ try {
           ).length,
           cumulativeBrowserRequestFailureCount: browserRequestFailureCount,
           cumulativeAppCheckCdpHandlerErrorCount: appCheckCdpHandlerErrorCount,
+          groupAppCheckCdpHandlerErrorCount:
+            appCheckCdpHandlerErrorCount - groupBaselineBridgeHandlerErrorStart,
+          groupCdpHandlerFailureClasses: snapshotSafeDiagnosticClasses(
+            cdpHandlerFailureClassCounts,
+            groupCdpHandlerFailureClassCountsStart,
+          ),
           cumulativeNetworkHeaderAttestationErrorCount:
             networkHeaderAttestationErrorCount,
           cumulativePreTransmissionBoundaryFailRequestCount:
             preTransmissionBoundaryFailRequestCount,
+          groupPreTransmissionBoundaryFailRequestCount:
+            preTransmissionBoundaryFailRequestCount -
+            groupPreTransmissionBoundaryFailRequestStart,
+          groupPreTransmissionBoundaryBlockClasses:
+            snapshotSafeDiagnosticClasses(
+              preTransmissionBoundaryBlockClassCounts,
+              groupPreTransmissionBoundaryBlockClassCountsStart,
+            ),
           cumulativeAllowedEgressResponseErrorAbortCount:
             allowedEgressResponseErrorAbortCount,
         };
@@ -15602,9 +15911,28 @@ try {
       assert.equal(groupPendingBridgeDecisionResidualCount, 0);
       assert.equal(groupPendingBridgeObservationResidualCount, 0);
       assert.equal(
+        safeDiagnosticClassTotal(cdpHandlerFailureClassCounts),
+        appCheckCdpHandlerErrorCount,
+        "The safe CDP handler failure histogram drifted from its counter.",
+      );
+      assert.equal(
+        safeDiagnosticClassTotal(preTransmissionBoundaryBlockClassCounts),
+        preTransmissionBoundaryBlockAttemptCount,
+        "The safe pre-transmission block histogram drifted from its counter.",
+      );
+      assert.equal(
         appCheckCdpHandlerErrorCount - groupBaselineBridgeHandlerErrorStart,
         0,
-        "A baseline CDP Fetch bridge handler failed.",
+        `A baseline CDP Fetch bridge handler failed: ${JSON.stringify({
+          handlerFailureClasses: snapshotSafeDiagnosticClasses(
+            cdpHandlerFailureClassCounts,
+            groupCdpHandlerFailureClassCountsStart,
+          ),
+          boundaryBlockClasses: snapshotSafeDiagnosticClasses(
+            preTransmissionBoundaryBlockClassCounts,
+            groupPreTransmissionBoundaryBlockClassCountsStart,
+          ),
+        })}`,
       );
       appCheckCdpSession = null;
     }
@@ -17678,6 +18006,10 @@ assert.equal(
   preTransmissionBoundaryFailRequestCount,
   preTransmissionBoundaryBlockAttemptCount,
 );
+assert.equal(
+  safeDiagnosticClassTotal(preTransmissionBoundaryBlockClassCounts),
+  preTransmissionBoundaryBlockAttemptCount,
+);
 for (const [label, count] of Object.entries({
   preTransmissionBoundaryBlockAttemptCount,
   preTransmissionBoundaryProductionBlockCount,
@@ -17687,7 +18019,13 @@ for (const [label, count] of Object.entries({
   preTransmissionBoundaryMalformedUrlBlockCount,
   preTransmissionBoundaryFailRequestCount,
 })) {
-  assert.equal(count, 0, `${label} must be zero in a passing visual capture.`);
+  assert.equal(
+    count,
+    0,
+    `${label} must be zero in a passing visual capture: ${JSON.stringify(
+      snapshotSafeDiagnosticClasses(preTransmissionBoundaryBlockClassCounts),
+    )}`,
+  );
 }
 assert.equal(
   deterministicResponseObservations.length,
