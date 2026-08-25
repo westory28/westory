@@ -577,6 +577,209 @@ const blockBrowserSecondaryExecutionAndWebTransport = () => {
 };
 const EXACT_PARSER_MODULEPRELOAD_TAG_PATTERN =
   /^<link rel="modulepreload" crossorigin href="(?<href>\/assets\/[A-Za-z0-9._-]+\.js)">$/u;
+const VERCEL_PREVIEW_TOOLBAR_SCRIPT_URL =
+  "https://vercel.live/_next-live/feedback/feedback.js";
+const VERCEL_PREVIEW_TOOLBAR_SCRIPT_PATH = "/_next-live/feedback/feedback.js";
+const FIXED_HTML_ATTRIBUTE_CHARACTER_REFERENCES = Object.freeze({
+  AMP: "&",
+  amp: "&",
+  bsol: "\\",
+  colon: ":",
+  equals: "=",
+  num: "#",
+  period: ".",
+  quest: "?",
+  NewLine: "\n",
+  sol: "/",
+  Tab: "\t",
+});
+const decodeFixedHtmlAttributeCharacterReferences = (value) =>
+  String(value).replace(
+    /&(?:(?:#(?<decimal>[0-9]+)|#[xX](?<hex>[0-9A-Fa-f]+));?|(?<named>AMP|NewLine|Tab|amp|bsol|colon|equals|num|period|quest|sol);)/gu,
+    (match, _numeric, _hexNumeric, _named, _offset, _input, groups) => {
+      const numericValue = groups.decimal
+        ? Number.parseInt(groups.decimal, 10)
+        : groups.hex
+          ? Number.parseInt(groups.hex, 16)
+          : null;
+      if (numericValue !== null) {
+        return Number.isSafeInteger(numericValue) &&
+          numericValue > 0 &&
+          numericValue <= 0x10ffff &&
+          !(numericValue >= 0xd800 && numericValue <= 0xdfff)
+          ? String.fromCodePoint(numericValue)
+          : match;
+      }
+      return (
+        FIXED_HTML_ATTRIBUTE_CHARACTER_REFERENCES[groups.named || ""] ?? match
+      );
+    },
+  );
+const isVercelPreviewToolbarScriptSource = (value) => {
+  const decodedValue = decodeFixedHtmlAttributeCharacterReferences(
+    value,
+  ).replace(/^[\t\n\f\r ]+|[\t\n\f\r ]+$/gu, "");
+  try {
+    const parsed = new URL(decodedValue, "https://w10p.invalid/");
+    return parsed.pathname.toLowerCase() === VERCEL_PREVIEW_TOOLBAR_SCRIPT_PATH;
+  } catch {
+    return false;
+  }
+};
+const scanHtmlOpeningTags = (markup) => {
+  const source = String(markup);
+  const lowerSource = source.toLowerCase();
+  const tags = [];
+  let index = 0;
+  while (index < source.length) {
+    if (source.startsWith("<!--", index)) {
+      let commentEnd = source.length;
+      for (let cursor = index + 4; cursor < source.length; cursor += 1) {
+        if (cursor === index + 4 && source[cursor] === ">") {
+          commentEnd = cursor + 1;
+          break;
+        }
+        if (cursor === index + 4 && source.startsWith("->", cursor)) {
+          commentEnd = cursor + 2;
+          break;
+        }
+        if (source.startsWith("-->", cursor)) {
+          commentEnd = cursor + 3;
+          break;
+        }
+        if (source.startsWith("--!>", cursor)) {
+          commentEnd = cursor + 4;
+          break;
+        }
+      }
+      index = commentEnd;
+      continue;
+    }
+    if (source[index] !== "<" || !/[A-Za-z]/u.test(source[index + 1] || "")) {
+      index += 1;
+      continue;
+    }
+    let quote = null;
+    let end = index + 1;
+    for (; end < source.length; end += 1) {
+      const character = source[end];
+      if (quote !== null) {
+        if (character === quote) quote = null;
+        continue;
+      }
+      if (character === '"' || character === "'") {
+        quote = character;
+        continue;
+      }
+      if (character === ">") break;
+    }
+    if (end >= source.length) break;
+    const tagMarkup = source.slice(index, end + 1);
+    const tagName = tagMarkup.match(/^<([A-Za-z][^\s/>]*)/u)?.[1] || "";
+    tags.push({ tagName: tagName.toLowerCase(), tagMarkup });
+    index = end + 1;
+    if (tagName.toLowerCase() === "script" && !/\/\s*>$/u.test(tagMarkup)) {
+      const rawTextEnd = lowerSource.indexOf("</script", index);
+      if (rawTextEnd < 0) break;
+      const rawTextClose = source.indexOf(">", rawTextEnd + 8);
+      index = rawTextClose < 0 ? source.length : rawTextClose + 1;
+    }
+  }
+  return tags;
+};
+const parseHtmlOpeningTagAttributes = (tagMarkup) => {
+  const tagStart = String(tagMarkup).match(/^<([A-Za-z][^\s/>]*)/u);
+  assert.ok(tagStart);
+  const attributes = new Map();
+  let index = tagStart[0].length;
+  while (index < tagMarkup.length) {
+    while (/\s/u.test(tagMarkup[index] || "")) index += 1;
+    if (tagMarkup[index] === ">") break;
+    if (tagMarkup[index] === "/") {
+      if (tagMarkup[index + 1] === ">") break;
+      index += 1;
+      continue;
+    }
+    const nameStart = index;
+    while (index < tagMarkup.length && !/[\s=/>]/u.test(tagMarkup[index])) {
+      index += 1;
+    }
+    if (index === nameStart) {
+      index += 1;
+      continue;
+    }
+    const name = tagMarkup.slice(nameStart, index).toLowerCase();
+    while (/\s/u.test(tagMarkup[index] || "")) index += 1;
+    let value = "";
+    if (tagMarkup[index] === "=") {
+      index += 1;
+      while (/\s/u.test(tagMarkup[index] || "")) index += 1;
+      const quote = ["'", '"'].includes(tagMarkup[index])
+        ? tagMarkup[index]
+        : null;
+      if (quote !== null) {
+        index += 1;
+        const valueStart = index;
+        while (index < tagMarkup.length && tagMarkup[index] !== quote) {
+          index += 1;
+        }
+        value = tagMarkup.slice(valueStart, index);
+        if (tagMarkup[index] === quote) index += 1;
+      } else {
+        const valueStart = index;
+        while (index < tagMarkup.length && !/[\s>]/u.test(tagMarkup[index])) {
+          index += 1;
+        }
+        value = tagMarkup.slice(valueStart, index);
+      }
+    }
+    if (!attributes.has(name)) attributes.set(name, value);
+  }
+  return attributes;
+};
+const containsVercelPreviewToolbarMarkup = (bodyBytes) => {
+  const markup = Buffer.isBuffer(bodyBytes)
+    ? bodyBytes.toString("utf8")
+    : String(bodyBytes);
+  for (const { tagName, tagMarkup } of scanHtmlOpeningTags(markup)) {
+    const attributes = parseHtmlOpeningTagAttributes(tagMarkup);
+    if (attributes.has("data-vercel-toolbar")) return true;
+    if (
+      tagName === "script" &&
+      attributes.has("src") &&
+      isVercelPreviewToolbarScriptSource(attributes.get("src"))
+    ) {
+      return true;
+    }
+  }
+  return false;
+};
+const createNodeOwnedVercelRequestHeaders = (protectionBypassSecret = "") => {
+  const normalizedSecret = String(protectionBypassSecret);
+  if (/[\r\n\0]/u.test(normalizedSecret)) {
+    throw new Error("Invalid Vercel bypass secret header value.");
+  }
+  const headers = {
+    "cache-control": "no-cache",
+    "x-vercel-skip-toolbar": "1",
+    ...(normalizedSecret
+      ? { "x-vercel-protection-bypass": normalizedSecret }
+      : {}),
+  };
+  assert.deepEqual(
+    Object.keys(headers).sort(),
+    [
+      "cache-control",
+      ...(normalizedSecret ? ["x-vercel-protection-bypass"] : []),
+      "x-vercel-skip-toolbar",
+    ].sort(),
+  );
+  return Object.freeze(headers);
+};
+const hasVercelSkipToolbarRequestHeader = (headers) =>
+  Object.keys(headers || {}).some(
+    (name) => name.toLowerCase() === "x-vercel-skip-toolbar",
+  );
 const immutableDocumentParserMarkupDecision = (
   bodyBytes,
   { allowExactInertTestFixture = false, documentOrigin = null } = {},
@@ -820,7 +1023,7 @@ const attestBrowserPreTransmissionCommandLine = async (
 
 const readJson = (path) => JSON.parse(readFileSync(resolve(path), "utf8"));
 const contract = readJson("scripts/w10p-visual-parity-contract.json");
-assert.equal(contract.schemaVersion, 11);
+assert.equal(contract.schemaVersion, 12);
 const BROWSER_CONNECT_PROXY_ALLOWED_FIREBASE_HOSTNAMES = [
   "content-firebaseappcheck.googleapis.com",
   "firebaseappcheck.googleapis.com",
@@ -1225,10 +1428,267 @@ const responseStageCorrelationDecision = ({
   }
   return { kind: "final", status, terminal: true };
 };
+const allowedEgressRequestInvariantForEvent = (event) => {
+  const request = event?.request;
+  if (
+    !request ||
+    typeof request !== "object" ||
+    typeof request.url !== "string" ||
+    request.url.length === 0 ||
+    typeof request.method !== "string" ||
+    request.method.length === 0 ||
+    typeof event.resourceType !== "string" ||
+    event.resourceType.length === 0 ||
+    (event.frameId !== undefined &&
+      (typeof event.frameId !== "string" || event.frameId.length === 0)) ||
+    (event.networkId !== undefined &&
+      (typeof event.networkId !== "string" || event.networkId.length === 0))
+  ) {
+    return null;
+  }
+  return Object.freeze({
+    url: request.url,
+    method: request.method,
+    resourceType: event.resourceType,
+    frameId: event.frameId ?? null,
+    networkId: event.networkId ?? null,
+  });
+};
+const allowedEgressRequestInvariantsEqual = (left, right) =>
+  left !== null &&
+  right !== null &&
+  left.url === right.url &&
+  left.method === right.method &&
+  left.resourceType === right.resourceType &&
+  left.frameId === right.frameId &&
+  left.networkId === right.networkId;
+const activeAllowedEgressResponseCorrelationStates = new Set([
+  "request-continue-in-flight",
+  "response-awaiting",
+  "final-response-command-in-flight",
+  "final-response-released",
+  "post-final-error-command-in-flight",
+]);
+const resolveAllowedEgressResponseCorrelation = ({
+  event,
+  lifecycleByFetchRequestId,
+  fetchRequestIdsByNetworkId,
+}) => {
+  assert.ok(lifecycleByFetchRequestId instanceof Map);
+  assert.ok(fetchRequestIdsByNetworkId instanceof Map);
+  const currentRequestId =
+    typeof event?.requestId === "string" && event.requestId.length > 0
+      ? event.requestId
+      : null;
+  const currentInvariant = allowedEgressRequestInvariantForEvent(event);
+  if (currentRequestId === null || currentInvariant === null) {
+    return Object.freeze({
+      valid: false,
+      reason: "response-correlation-request-invariant-invalid",
+      source: null,
+      primaryRequestId: null,
+      lifecycle: null,
+    });
+  }
+  const directLifecycle =
+    lifecycleByFetchRequestId.get(currentRequestId) || null;
+  if (directLifecycle !== null) {
+    const invariantMatch = allowedEgressRequestInvariantsEqual(
+      directLifecycle.requestInvariant,
+      currentInvariant,
+    );
+    return Object.freeze({
+      valid: invariantMatch,
+      reason: invariantMatch
+        ? null
+        : "response-correlation-request-invariant-mismatch",
+      source: "same-fetch",
+      primaryRequestId: directLifecycle.primaryRequestId,
+      lifecycle: directLifecycle,
+    });
+  }
+  if (currentInvariant.networkId === null) {
+    return Object.freeze({
+      valid: false,
+      reason: "response-correlation-network-id-missing",
+      source: null,
+      primaryRequestId: null,
+      lifecycle: null,
+    });
+  }
+  const aliasLifecycles = [
+    ...(fetchRequestIdsByNetworkId.get(currentInvariant.networkId) || []),
+  ]
+    .filter((requestId) => requestId !== currentRequestId)
+    .map((requestId) => lifecycleByFetchRequestId.get(requestId) || null)
+    .filter((lifecycle) => lifecycle !== null);
+  const activeAliasLifecycles = aliasLifecycles.filter(({ state }) =>
+    activeAllowedEgressResponseCorrelationStates.has(state),
+  );
+  if (activeAliasLifecycles.length !== 1) {
+    const singleRetiredAlias =
+      activeAliasLifecycles.length === 0 && aliasLifecycles.length === 1
+        ? aliasLifecycles[0]
+        : null;
+    return Object.freeze({
+      valid: false,
+      reason:
+        activeAliasLifecycles.length > 1 || aliasLifecycles.length > 1
+          ? "response-correlation-same-network-ambiguous"
+          : singleRetiredAlias
+            ? "response-correlation-same-network-single-retired-alias"
+            : "response-correlation-network-id-unseen",
+      source: singleRetiredAlias ? "same-network-single-alias" : null,
+      primaryRequestId: singleRetiredAlias?.primaryRequestId || null,
+      lifecycle: singleRetiredAlias,
+    });
+  }
+  const lifecycle = activeAliasLifecycles[0];
+  const invariantMatch = allowedEgressRequestInvariantsEqual(
+    lifecycle.requestInvariant,
+    currentInvariant,
+  );
+  return Object.freeze({
+    valid: invariantMatch,
+    reason: invariantMatch
+      ? null
+      : "response-correlation-request-invariant-mismatch",
+    source: "same-network-single-alias",
+    primaryRequestId: lifecycle.primaryRequestId,
+    lifecycle,
+  });
+};
+const allowedEgressResponseLifecycleDecision = ({
+  lifecycleState,
+  responseStageDecision,
+}) => {
+  assert.equal(typeof lifecycleState, "string");
+  assert.ok(responseStageDecision && typeof responseStageDecision === "object");
+  if (lifecycleState === "final-response-released") {
+    return responseStageDecision.kind === "response-error"
+      ? Object.freeze({
+          valid: true,
+          kind: "post-final-error",
+          reason: null,
+        })
+      : Object.freeze({
+          valid: false,
+          kind: "reject",
+          reason: "response-correlation-final-released-invalid-transition",
+        });
+  }
+  if (lifecycleState === "response-awaiting") {
+    return Object.freeze({ valid: true, kind: "primary", reason: null });
+  }
+  return Object.freeze({
+    valid: false,
+    kind: "reject",
+    reason: "response-correlation-lifecycle-transition-invalid",
+  });
+};
+const postFinalErrorContinueResponseParams = (requestId) => {
+  assert.equal(typeof requestId, "string");
+  assert.ok(requestId.length > 0);
+  return Object.freeze({ requestId });
+};
+const POST_FINAL_ALREADY_RETIRED_INTERCEPTION_ERROR_MESSAGES = new Set([
+  "Protocol error (Fetch.continueResponse): Invalid InterceptionId.",
+  "cdpSession.send: Protocol error (Fetch.continueResponse): Invalid InterceptionId.",
+]);
+const isPostFinalAlreadyRetiredInterceptionError = (error) =>
+  error instanceof Error &&
+  ["Error", "ProtocolError"].includes(error.name) &&
+  POST_FINAL_ALREADY_RETIRED_INTERCEPTION_ERROR_MESSAGES.has(error.message);
+const createPerCorrelationTaskCoordinator = () => {
+  const tailsByCorrelation = new Map();
+  return Object.freeze({
+    enqueue(correlationId, task) {
+      assert.equal(typeof correlationId, "string");
+      assert.ok(correlationId.length > 0);
+      assert.equal(typeof task, "function");
+      const previous =
+        tailsByCorrelation.get(correlationId) || Promise.resolve();
+      const run = previous.catch(() => undefined).then(task);
+      let settled;
+      settled = run.finally(() => {
+        if (tailsByCorrelation.get(correlationId) === settled) {
+          tailsByCorrelation.delete(correlationId);
+        }
+      });
+      tailsByCorrelation.set(correlationId, settled);
+      return settled;
+    },
+    pendingCount() {
+      return tailsByCorrelation.size;
+    },
+  });
+};
+const createSingleOwnerProxyAuthorizationCoordinator = ({
+  onAuthorize,
+  onComplete,
+  onRevoke,
+}) => {
+  assert.equal(typeof onAuthorize, "function");
+  assert.equal(typeof onComplete, "function");
+  assert.equal(typeof onRevoke, "function");
+  const statesByOwner = new Map();
+  const transitionActiveOwner = (
+    ownerId,
+    inFlightState,
+    finalState,
+    action,
+  ) => {
+    assert.equal(typeof ownerId, "string");
+    assert.ok(ownerId.length > 0);
+    if (statesByOwner.get(ownerId) !== "active") return false;
+    statesByOwner.set(ownerId, inFlightState);
+    try {
+      action(ownerId);
+      statesByOwner.set(ownerId, finalState);
+      return true;
+    } catch (error) {
+      statesByOwner.set(ownerId, "active");
+      throw error;
+    }
+  };
+  return Object.freeze({
+    authorize(ownerId, authorization) {
+      assert.equal(typeof ownerId, "string");
+      assert.ok(ownerId.length > 0);
+      assert.equal(statesByOwner.has(ownerId), false);
+      onAuthorize(ownerId, authorization);
+      statesByOwner.set(ownerId, "active");
+    },
+    complete(ownerId) {
+      return transitionActiveOwner(
+        ownerId,
+        "complete-in-flight",
+        "completed",
+        onComplete,
+      );
+    },
+    revoke(ownerId) {
+      return transitionActiveOwner(
+        ownerId,
+        "revoke-in-flight",
+        "revoked",
+        onRevoke,
+      );
+    },
+    stateFor(ownerId) {
+      return statesByOwner.get(ownerId) || null;
+    },
+    activeCount() {
+      return [...statesByOwner.values()].filter((state) => state === "active")
+        .length;
+    },
+  });
+};
 const retiredAllowedEgressLifecycleStates = new Set([
   "request-continue-failed",
   "terminal-command-in-flight",
   "terminal-complete",
+  "post-final-error-observed-retired",
   "redirect-retired",
   "handler-failed",
 ]);
@@ -4605,6 +5065,90 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     }),
     { valid: true, marker: null },
   );
+  for (const toolbarMarkup of [
+    `<script src="${VERCEL_PREVIEW_TOOLBAR_SCRIPT_URL}"></script>`,
+    '<script src="//vercel.live/_next-live/feedback/feedback.js"></script>',
+    '<script src="https://candidate.invalid/_next-live/feedback/feedback.js"></script>',
+    '<script src="HTTPS://VERCEL.LIVE/_NEXT-LIVE/FEEDBACK/FEEDBACK.JS?variant=1"></script>',
+    '<script src="/_next-live/feedback/feedback.js"></script>',
+    '<script src="./_next-live/feedback/feedback.js"></script>',
+    '<script src="_next-live/feedback/feedback.js"></script>',
+    '<script src="https:&#x2f;&#x2f;vercel.live&#x2f;_next-live&#x2f;feedback&#x2f;feedback.js"></script>',
+    '<script src="https://vercel.live/_next-live/feedback/fee&#x64;back.js"></script>',
+    '<script src="&Tab;https://vercel.live/_next-live/feedback/feedback.js"></script>',
+    '<script src=" &#x2f;_next-live/feedback/feedback.js&#x20;"></script>',
+    '<script src="&#92;_next-live&#92;feedback&#92;feedback.js"></script>',
+    '<script src="&bsol;_next-live&bsol;feedback&bsol;feedback.js"></script>',
+    '<script src="https://vercel.live/_next-live/feedback/feed&NewLine;back.js"></script>',
+    '<script data-x="> src=\'/safe.js\'" src="https://vercel.live/_next-live/feedback/feedback.js"></script>',
+    '<script/src="https://vercel.live/_next-live/feedback/feedback.js"></script>',
+    '<!--><script src="https://vercel.live/_next-live/feedback/feedback.js"></script>',
+    '<!---><script src="https://vercel.live/_next-live/feedback/feedback.js"></script>',
+    '<!--x--!><script src="https://vercel.live/_next-live/feedback/feedback.js"></script>',
+    '<div data-vercel-toolbar="true"></div>',
+  ]) {
+    assert.equal(containsVercelPreviewToolbarMarkup(toolbarMarkup), true);
+  }
+  for (const ordinaryMarkup of [
+    '<script type="module" src="/assets/app.js"></script>',
+    "<p>Deployed with Vercel.</p>",
+    '<!-- <script src="https://vercel.live/_next-live/feedback/feedback.js"></script> -->',
+    '<div data-vercel-toolbar-disabled="true"></div>',
+    "<p>/_next-live/feedback/feedback.js</p>",
+    '<script data-x=" src=\'https://vercel.live/_next-live/feedback/feedback.js\'" src="/assets/app.js"></script>',
+    "<script>const inert = \"<script src='https://vercel.live/_next-live/feedback/feedback.js'>\";</script>",
+    '<script src="&SOL;_next-live/feedback/feedback.js"></script>',
+    '<script src="&sol_next-live/feedback/feedback.js"></script>',
+    '<script src="&Backslash;_next-live&Backslash;feedback&Backslash;feedback.js"></script>',
+    '<script src="&tab;_next-live/feedback/feedback.js"></script>',
+  ]) {
+    assert.equal(containsVercelPreviewToolbarMarkup(ordinaryMarkup), false);
+  }
+  assert.deepEqual(createNodeOwnedVercelRequestHeaders(), {
+    "cache-control": "no-cache",
+    "x-vercel-skip-toolbar": "1",
+  });
+  assert.deepEqual(createNodeOwnedVercelRequestHeaders("fixed-test-secret"), {
+    "cache-control": "no-cache",
+    "x-vercel-protection-bypass": "fixed-test-secret",
+    "x-vercel-skip-toolbar": "1",
+  });
+  assert.equal(
+    hasVercelSkipToolbarRequestHeader({ "X-Vercel-Skip-Toolbar": "1" }),
+    true,
+  );
+  assert.equal(
+    hasVercelSkipToolbarRequestHeader({ "cache-control": "no-cache" }),
+    false,
+  );
+  const malformedHeaderFixture = "fixed-test-secret\r\ninvalid: 1";
+  let malformedHeaderError = null;
+  try {
+    createNodeOwnedVercelRequestHeaders(malformedHeaderFixture);
+  } catch (error) {
+    malformedHeaderError = error;
+  }
+  assert.ok(malformedHeaderError instanceof Error);
+  assert.equal(
+    `${malformedHeaderError.message}\n${malformedHeaderError.stack || ""}`.includes(
+      "fixed-test-secret",
+    ),
+    false,
+  );
+  for (const forbiddenHeader of [
+    "authorization",
+    "cookie",
+    "origin",
+    "referer",
+  ]) {
+    assert.equal(
+      Object.hasOwn(
+        createNodeOwnedVercelRequestHeaders("fixed-test-secret"),
+        forbiddenHeader,
+      ),
+      false,
+    );
+  }
   const firebaseRule =
     contract.networkBoundary.externalStaticRequestAllowlist.rules.find(
       ({ id }) => id === "firebase-esm-12.9.0",
@@ -4656,6 +5200,313 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     acceptedImmutableParserMarkupCaseCount: 2,
     verifiedLocalFirebaseModuleCaseCount: Object.keys(firebaseRule.localModules)
       .length,
+  };
+};
+const verifyAllowedEgressResponseLifecycleFixtures = async () => {
+  const primaryRequestEvent = {
+    requestId: "fixture-primary-fetch",
+    networkId: "fixture-network",
+    frameId: "fixture-frame",
+    resourceType: "XHR",
+    request: {
+      url: "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel",
+      method: "POST",
+    },
+  };
+  const primaryRequestInvariant =
+    allowedEgressRequestInvariantForEvent(primaryRequestEvent);
+  assert.ok(primaryRequestInvariant);
+  const lifecycleByFetchRequestId = new Map([
+    [
+      primaryRequestEvent.requestId,
+      Object.freeze({
+        primaryRequestId: primaryRequestEvent.requestId,
+        requestInvariant: primaryRequestInvariant,
+        networkId: primaryRequestEvent.networkId,
+        state: "final-response-released",
+        diagnosticPhase: "screen-interaction",
+      }),
+    ],
+  ]);
+  const fetchRequestIdsByNetworkId = new Map([
+    [primaryRequestEvent.networkId, new Set([primaryRequestEvent.requestId])],
+  ]);
+  const directPostFinalErrorEvent = {
+    ...primaryRequestEvent,
+    responseErrorReason: "Aborted",
+  };
+  const directCorrelation = resolveAllowedEgressResponseCorrelation({
+    event: directPostFinalErrorEvent,
+    lifecycleByFetchRequestId,
+    fetchRequestIdsByNetworkId,
+  });
+  assert.equal(directCorrelation.valid, true);
+  assert.equal(directCorrelation.source, "same-fetch");
+  const directTransition = allowedEgressResponseLifecycleDecision({
+    lifecycleState: directCorrelation.lifecycle.state,
+    responseStageDecision: responseStageCorrelationDecision({
+      responseErrorReason: directPostFinalErrorEvent.responseErrorReason,
+    }),
+  });
+  assert.deepEqual(directTransition, {
+    valid: true,
+    kind: "post-final-error",
+    reason: null,
+  });
+  assert.deepEqual(
+    postFinalErrorContinueResponseParams(directPostFinalErrorEvent.requestId),
+    { requestId: directPostFinalErrorEvent.requestId },
+  );
+  for (const message of POST_FINAL_ALREADY_RETIRED_INTERCEPTION_ERROR_MESSAGES) {
+    assert.equal(
+      isPostFinalAlreadyRetiredInterceptionError(new Error(message)),
+      true,
+    );
+  }
+  const protocolErrorFixture = new Error(
+    "Protocol error (Fetch.continueResponse): Invalid InterceptionId.",
+  );
+  protocolErrorFixture.name = "ProtocolError";
+  assert.equal(
+    isPostFinalAlreadyRetiredInterceptionError(protocolErrorFixture),
+    true,
+  );
+  for (const rejectedError of [
+    new Error("Invalid InterceptionId"),
+    new Error(
+      "Protocol error (Fetch.continueResponse): Invalid InterceptionId",
+    ),
+    new Error("Protocol error (Fetch.continueResponse): Other failure"),
+    new Error(
+      "Protocol error (Fetch.continueRequest): Invalid InterceptionId.",
+    ),
+    new Error("Protocol error (Fetch.failRequest): Invalid InterceptionId."),
+    new Error(
+      "Protocol error (Fetch.continueResponse): Invalid state for continueInterceptedRequest",
+    ),
+    new Error(
+      "Protocol error (Fetch.continueResponse): Invalid InterceptionId. trailing",
+    ),
+    {
+      message:
+        "Protocol error (Fetch.continueResponse): Invalid InterceptionId.",
+    },
+  ]) {
+    assert.equal(
+      isPostFinalAlreadyRetiredInterceptionError(rejectedError),
+      false,
+    );
+  }
+  const aliasPostFinalErrorEvent = {
+    ...directPostFinalErrorEvent,
+    requestId: "fixture-response-fetch-alias",
+  };
+  const aliasCorrelation = resolveAllowedEgressResponseCorrelation({
+    event: aliasPostFinalErrorEvent,
+    lifecycleByFetchRequestId,
+    fetchRequestIdsByNetworkId,
+  });
+  assert.equal(aliasCorrelation.valid, true);
+  assert.equal(aliasCorrelation.source, "same-network-single-alias");
+  assert.equal(
+    aliasCorrelation.primaryRequestId,
+    primaryRequestEvent.requestId,
+  );
+  const mismatchCorrelation = resolveAllowedEgressResponseCorrelation({
+    event: {
+      ...aliasPostFinalErrorEvent,
+      request: {
+        ...aliasPostFinalErrorEvent.request,
+        url: `${aliasPostFinalErrorEvent.request.url}/mismatch`,
+      },
+    },
+    lifecycleByFetchRequestId,
+    fetchRequestIdsByNetworkId,
+  });
+  assert.equal(mismatchCorrelation.valid, false);
+  assert.equal(
+    mismatchCorrelation.reason,
+    "response-correlation-request-invariant-mismatch",
+  );
+  const ambiguousLifecycleByFetchRequestId = new Map(lifecycleByFetchRequestId);
+  ambiguousLifecycleByFetchRequestId.set(
+    "fixture-second-primary-fetch",
+    Object.freeze({
+      primaryRequestId: "fixture-second-primary-fetch",
+      requestInvariant: primaryRequestInvariant,
+      networkId: primaryRequestEvent.networkId,
+      state: "response-awaiting",
+      diagnosticPhase: "screen-interaction",
+    }),
+  );
+  const ambiguousFetchRequestIdsByNetworkId = new Map([
+    [
+      primaryRequestEvent.networkId,
+      new Set([primaryRequestEvent.requestId, "fixture-second-primary-fetch"]),
+    ],
+  ]);
+  const ambiguousCorrelation = resolveAllowedEgressResponseCorrelation({
+    event: aliasPostFinalErrorEvent,
+    lifecycleByFetchRequestId: ambiguousLifecycleByFetchRequestId,
+    fetchRequestIdsByNetworkId: ambiguousFetchRequestIdsByNetworkId,
+  });
+  assert.equal(ambiguousCorrelation.valid, false);
+  assert.equal(
+    ambiguousCorrelation.reason,
+    "response-correlation-same-network-ambiguous",
+  );
+  const invalidCorrelation = resolveAllowedEgressResponseCorrelation({
+    event: { ...aliasPostFinalErrorEvent, resourceType: undefined },
+    lifecycleByFetchRequestId,
+    fetchRequestIdsByNetworkId,
+  });
+  assert.equal(invalidCorrelation.valid, false);
+  assert.equal(
+    invalidCorrelation.reason,
+    "response-correlation-request-invariant-invalid",
+  );
+  assert.deepEqual(
+    allowedEgressResponseLifecycleDecision({
+      lifecycleState: "final-response-released",
+      responseStageDecision: responseStageCorrelationDecision({
+        responseStatusCode: 200,
+      }),
+    }),
+    {
+      valid: false,
+      kind: "reject",
+      reason: "response-correlation-final-released-invalid-transition",
+    },
+  );
+
+  const proxyCounts = { authorize: 0, complete: 0, revoke: 0 };
+  const proxyCoordinator = createSingleOwnerProxyAuthorizationCoordinator({
+    onAuthorize: () => {
+      proxyCounts.authorize += 1;
+    },
+    onComplete: () => {
+      proxyCounts.complete += 1;
+    },
+    onRevoke: () => {
+      proxyCounts.revoke += 1;
+    },
+  });
+  proxyCoordinator.authorize(primaryRequestEvent.requestId, {});
+  const taskCoordinator = createPerCorrelationTaskCoordinator();
+  const serializedOrder = [];
+  let resolveFinalStarted;
+  const finalStarted = new Promise((resolve) => {
+    resolveFinalStarted = resolve;
+  });
+  let releaseFinalCommand;
+  const finalCommandGate = new Promise((resolve) => {
+    releaseFinalCommand = resolve;
+  });
+  let serializedLifecycleState = "final-response-command-in-flight";
+  const finalTask = taskCoordinator.enqueue(
+    primaryRequestEvent.requestId,
+    async () => {
+      serializedOrder.push("final-start");
+      resolveFinalStarted();
+      await finalCommandGate;
+      assert.equal(
+        proxyCoordinator.complete(primaryRequestEvent.requestId),
+        true,
+      );
+      serializedLifecycleState = "final-response-released";
+      serializedOrder.push("final-released");
+    },
+  );
+  const postFinalErrorTask = taskCoordinator.enqueue(
+    primaryRequestEvent.requestId,
+    async () => {
+      serializedOrder.push("post-final-error-start");
+      const transition = allowedEgressResponseLifecycleDecision({
+        lifecycleState: serializedLifecycleState,
+        responseStageDecision: responseStageCorrelationDecision({
+          responseErrorReason: "Aborted",
+        }),
+      });
+      assert.equal(transition.kind, "post-final-error");
+      assert.deepEqual(
+        postFinalErrorContinueResponseParams(
+          aliasPostFinalErrorEvent.requestId,
+        ),
+        { requestId: aliasPostFinalErrorEvent.requestId },
+      );
+      serializedLifecycleState = "terminal-complete";
+      serializedOrder.push("post-final-error-complete");
+    },
+  );
+  await finalStarted;
+  assert.deepEqual(serializedOrder, ["final-start"]);
+  releaseFinalCommand();
+  await Promise.all([finalTask, postFinalErrorTask]);
+  assert.deepEqual(serializedOrder, [
+    "final-start",
+    "final-released",
+    "post-final-error-start",
+    "post-final-error-complete",
+  ]);
+  assert.equal(serializedLifecycleState, "terminal-complete");
+  assert.equal(proxyCoordinator.complete(primaryRequestEvent.requestId), false);
+  assert.equal(proxyCoordinator.revoke(primaryRequestEvent.requestId), false);
+  assert.deepEqual(proxyCounts, { authorize: 1, complete: 1, revoke: 0 });
+  assert.equal(proxyCoordinator.activeCount(), 0);
+  assert.equal(taskCoordinator.pendingCount(), 0);
+  const retiredProxyCounts = { authorize: 0, complete: 0, revoke: 0 };
+  const retiredProxyCoordinator =
+    createSingleOwnerProxyAuthorizationCoordinator({
+      onAuthorize: () => {
+        retiredProxyCounts.authorize += 1;
+      },
+      onComplete: () => {
+        retiredProxyCounts.complete += 1;
+      },
+      onRevoke: () => {
+        retiredProxyCounts.revoke += 1;
+      },
+    });
+  retiredProxyCoordinator.authorize(primaryRequestEvent.requestId, {});
+  assert.equal(
+    retiredProxyCoordinator.complete(primaryRequestEvent.requestId),
+    true,
+  );
+  let retiredLifecycleState = "final-response-released";
+  try {
+    throw new Error(
+      "Protocol error (Fetch.continueResponse): Invalid InterceptionId.",
+    );
+  } catch (error) {
+    assert.equal(isPostFinalAlreadyRetiredInterceptionError(error), true);
+    retiredLifecycleState = "post-final-error-observed-retired";
+  }
+  assert.equal(retiredLifecycleState, "post-final-error-observed-retired");
+  assert.equal(
+    allowedEgressResponseLifecycleDecision({
+      lifecycleState: retiredLifecycleState,
+      responseStageDecision: responseStageCorrelationDecision({
+        responseErrorReason: "Failed",
+      }),
+    }).valid,
+    false,
+  );
+  assert.equal(
+    retiredProxyCoordinator.revoke(primaryRequestEvent.requestId),
+    false,
+  );
+  assert.deepEqual(retiredProxyCounts, {
+    authorize: 1,
+    complete: 1,
+    revoke: 0,
+  });
+  return {
+    allowedEgressFinalToErrorTransitionCaseCount: 1,
+    allowedEgressSerializedInFlightCaseCount: 1,
+    allowedEgressSingleNetworkAliasCaseCount: 1,
+    rejectedAllowedEgressCorrelationCaseCount: 3,
+    allowedEgressProxySingleCompletionCaseCount: 1,
+    allowedEgressRetiredInterceptionCaseCount: 1,
   };
 };
 const verifyPostDataAndResponseSanitizationNegativeFixtures = async () => {
@@ -5285,6 +6136,8 @@ const fixtureAuditFreshnessNegativeSelfTest =
 const stableOriginRewriteNegativeSelfTest =
   verifyStableOriginRewriteNegativeFixtures();
 const networkPolicyNegativeSelfTest = verifyNetworkPolicyNegativeFixtures();
+const allowedEgressResponseLifecycleSelfTest =
+  await verifyAllowedEgressResponseLifecycleFixtures();
 const postDataAndResponseSanitizationNegativeSelfTest =
   await verifyPostDataAndResponseSanitizationNegativeFixtures();
 const verifyDirectCdpAllHeadersLoopback = async () => {
@@ -5347,9 +6200,14 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
   let directEarlyHintsLinkHeader = "";
   const unsafeParserDocumentPayload =
     '<!doctype html><iframe srcdoc="&lt;img src=http://127.0.0.1/unsafe-srcdoc-wire&gt;"></iframe><link rel="preconnect" href="http://127.0.0.1/unsafe-parser-wire"><title>unsafe</title>';
+  const toolbarParserDocumentPayload =
+    '<!doctype html><script src="https:&#x2f;&#x2f;vercel.live&#x2f;_next-live&#x2f;feedback&#x2f;fee&#x64;back.js"></script><title>toolbar</title>';
   const scriptPayload =
     'globalThis.__w10pImmutableScript = "w10p-cdp-url-override-payload-v2";';
   const networkBackedProbeResponseBody = JSON.stringify({ ok: true });
+  const postFinalAbortResponseBodyPrefix = '{"partial":true';
+  const postFinalAbortDeclaredContentLength =
+    Buffer.byteLength(postFinalAbortResponseBodyPrefix) + 4096;
   const syntheticJwt = `${"a".repeat(24)}.${"b".repeat(24)}.${"c".repeat(24)}`;
   const syntheticBypassSecret = "w10p-loopback-bypass-secret";
   const stableWireRequests = [];
@@ -5366,6 +6224,14 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
   const rawExternalWireConnections = [];
   const rawExternalWireBytes = [];
   const udpStunWireDatagrams = [];
+  const postFinalAbortOpenResponses = new Set();
+  const postFinalAbortLifecycleByFetchRequestId = new Map();
+  const postFinalAbortFetchRequestIdsByNetworkId = new Map();
+  const loopbackHandlerTaskCoordinator = createPerCorrelationTaskCoordinator();
+  let resolvePostFinalAbortErrorPauseEnqueued;
+  const postFinalAbortErrorPauseEnqueued = new Promise((resolve) => {
+    resolvePostFinalAbortErrorPauseEnqueued = resolve;
+  });
   let immutableEarlyHintsSentCount = 0;
   let immutableFinalLinkHeaderSentCount = 0;
   let networkBackedEarlyHintsSentCount = 0;
@@ -5378,6 +6244,20 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
   let networkBackedResponseHeaderSuppressionCount = 0;
   let networkBackedEgressHeaderForwardCount = 0;
   let networkBackedResponseBodyHashMatchCount = 0;
+  let postFinalAbortFinalResponsePauseCount = 0;
+  let postFinalAbortResponseErrorPauseCount = 0;
+  let postFinalAbortNoOverrideContinueResponseSuccessCount = 0;
+  let postFinalAbortProxyCompleteCount = 0;
+  let postFinalAbortProxyRevokeCount = 0;
+  let postFinalAbortHeadersObserved = false;
+  let postFinalAbortBodyRejected = false;
+  let postFinalAbortWatchdogFired = false;
+  let postFinalAbortErrorPauseEnqueuedCount = 0;
+  let postFinalAbortErrorPauseEnqueuedBeforeFinalReleaseCount = 0;
+  let postFinalAbortRequestFailureCount = 0;
+  const postFinalAbortRequestFailureTexts = [];
+  let postFinalAbortSameFetchCorrelationCount = 0;
+  let postFinalAbortAliasCorrelationCount = 0;
   let directBrowserEarlyHintsObservationCount = 0;
   let directBrowserEarlyHintsEgressHeaderObservationCount = 0;
   let directBrowserEarlyHintsCaptureInvalidationCount = 0;
@@ -5475,6 +6355,7 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
     upstreamWireRequests.push({
       requestPath,
       bypassHeader: request.headers["x-vercel-protection-bypass"] || "",
+      skipToolbarHeader: request.headers["x-vercel-skip-toolbar"] || "",
     });
     if (requestPath === "/document.html") {
       if (typeof response.writeEarlyHints === "function") {
@@ -5501,6 +6382,13 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
         "content-type": "text/html; charset=utf-8",
       });
       response.end(unsafeParserDocumentPayload);
+      return;
+    }
+    if (requestPath === "/toolbar-parser.html") {
+      response.writeHead(200, {
+        "content-type": "text/html; charset=utf-8",
+      });
+      response.end(toolbarParserDocumentPayload);
       return;
     }
     if (requestPath === "/redirect.css") {
@@ -5547,6 +6435,22 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
       appCheckHeader: request.headers["x-firebase-appcheck"] || "",
       bypassHeader: request.headers["x-vercel-protection-bypass"] || "",
     });
+    if (requestPath === "/post-final-abort") {
+      postFinalAbortOpenResponses.add(response);
+      const forgetOpenResponse = () =>
+        postFinalAbortOpenResponses.delete(response);
+      response.once("close", forgetOpenResponse);
+      response.once("error", forgetOpenResponse);
+      response.writeHead(200, {
+        "access-control-allow-origin": stableOrigin,
+        "cache-control": "no-store",
+        "content-type": "application/json; charset=utf-8",
+        "content-length": postFinalAbortDeclaredContentLength,
+      });
+      response.flushHeaders();
+      response.write(postFinalAbortResponseBodyPrefix);
+      return;
+    }
     if (requestPath === "/probe") {
       response.writeEarlyHints({
         link: directEarlyHintsLinkHeader,
@@ -5671,7 +6575,10 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
   const stableScriptUrl = `${stableOrigin}/rewrite.js`;
   const stableRedirectUrl = `${stableOrigin}/redirect.css`;
   const stableUnsafeParserUrl = `${stableOrigin}/unsafe-parser.html`;
+  const stableToolbarParserUrl = `${stableOrigin}/toolbar-parser.html`;
+  const browserSkipToolbarHeaderNegativeUrl = `${stableOrigin}/browser-skip-toolbar-negative`;
   const probeUrl = `https://identitytoolkit.googleapis.com/probe?key=${encodeURIComponent(syntheticStagingApiKey)}`;
+  const postFinalAbortUrl = `https://identitytoolkit.googleapis.com/post-final-abort?key=${encodeURIComponent(syntheticStagingApiKey)}`;
   const wrongApiKeyAllowedHostnameUrl = `https://identitytoolkit.googleapis.com/wrong-key-before-tunnel?key=${encodeURIComponent(syntheticProductionApiKey)}`;
   const wrongCredentialScopeAllowedHostnameUrl = `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${encodeURIComponent(syntheticStagingApiKey)}`;
   const nodeOwnedExternalProbeUrl = `${apiOrigin}/node-owned-external-probe`;
@@ -5751,6 +6658,7 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
     [stableScriptUrl, `${upstreamOrigin}/rewrite.js`],
     [stableRedirectUrl, `${upstreamOrigin}/redirect.css`],
     [stableUnsafeParserUrl, `${upstreamOrigin}/unsafe-parser.html`],
+    [stableToolbarParserUrl, `${upstreamOrigin}/toolbar-parser.html`],
   ]);
   const loopbackAllowedNonFirebaseOrigins = [
     stableOrigin,
@@ -5773,6 +6681,7 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
   );
   for (const outOfScopeUrl of [
     probeUrl,
+    postFinalAbortUrl,
     productionImmutableUrl,
     unknownVercelUrl,
     vercelApexUrl,
@@ -5837,6 +6746,7 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
   let rewriteRedirectResponseAbortCount = 0;
   let rewriteRedirectFollowAttemptCount = 0;
   let unsafeParserDocumentRejectCount = 0;
+  let toolbarParserDocumentRejectCount = 0;
   let unexpectedContinueRequestCount = 0;
   const unexpectedRequestUrls = [];
   let preTransmissionBoundaryInspectionCount = 0;
@@ -5878,6 +6788,22 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
   let firebaseModuleHeadRequestFailureCount = 0;
   let firebaseModuleDynamicImportSuccessCount = 0;
   let recaptchaIframeDocumentRequestCount = 0;
+  let loopbackBrowserSkipToolbarHeaderPreTransmissionBlockCount = 0;
+  const setPostFinalAbortLifecycleState = (primaryRequestId, state) => {
+    const lifecycle =
+      postFinalAbortLifecycleByFetchRequestId.get(primaryRequestId) || null;
+    assert.ok(lifecycle);
+    postFinalAbortLifecycleByFetchRequestId.set(
+      primaryRequestId,
+      Object.freeze({ ...lifecycle, state }),
+    );
+  };
+  const resolvePostFinalAbortResponseCorrelation = (event) =>
+    resolveAllowedEgressResponseCorrelation({
+      event,
+      lifecycleByFetchRequestId: postFinalAbortLifecycleByFetchRequestId,
+      fetchRequestIdsByNetworkId: postFinalAbortFetchRequestIdsByNetworkId,
+    });
   const dottedProductionBlockedMethods = [];
   const dottedFirebaseBlockedPaths = [];
   const regionalRealtimeDatabaseBlockedPaths = [];
@@ -6021,6 +6947,12 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
     });
     const page = await context.newPage();
     page.on("requestfailed", (request) => {
+      if (request.url() === postFinalAbortUrl) {
+        postFinalAbortRequestFailureCount += 1;
+        postFinalAbortRequestFailureTexts.push(
+          String(request.failure()?.errorText || ""),
+        );
+      }
       if (request.url() === recaptchaScriptUrl) {
         recaptchaRequestFailureCount += 1;
       }
@@ -6054,11 +6986,158 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
     });
     const handlerPromises = new Set();
     cdp.on("Fetch.requestPaused", (event) => {
-      const handlerPromise = (async () => {
-        if (
-          event.responseStatusCode !== undefined ||
-          event.responseErrorReason !== undefined
-        ) {
+      const responseStagePause =
+        event.responseStatusCode !== undefined ||
+        event.responseErrorReason !== undefined;
+      const postFinalAbortResponseCorrelation =
+        responseStagePause && event.request.url === postFinalAbortUrl
+          ? resolvePostFinalAbortResponseCorrelation(event)
+          : null;
+      const handlerCorrelationId =
+        postFinalAbortResponseCorrelation?.primaryRequestId || event.requestId;
+      if (
+        event.request.url === postFinalAbortUrl &&
+        event.responseErrorReason !== undefined
+      ) {
+        postFinalAbortErrorPauseEnqueuedCount += 1;
+        postFinalAbortErrorPauseEnqueuedBeforeFinalReleaseCount += Number(
+          postFinalAbortResponseCorrelation?.valid === true &&
+            postFinalAbortResponseCorrelation.lifecycle?.state ===
+              "final-response-command-in-flight",
+        );
+        resolvePostFinalAbortErrorPauseEnqueued();
+      }
+      const handleLoopbackPausedRequest = async () => {
+        if (responseStagePause) {
+          if (event.request.url === postFinalAbortUrl) {
+            const responseCorrelation =
+              postFinalAbortResponseCorrelation ||
+              resolvePostFinalAbortResponseCorrelation(event);
+            assert.equal(responseCorrelation.valid, true);
+            assert.equal(
+              ["same-fetch", "same-network-single-alias"].includes(
+                responseCorrelation.source,
+              ),
+              true,
+            );
+            postFinalAbortSameFetchCorrelationCount += Number(
+              responseCorrelation.source === "same-fetch",
+            );
+            postFinalAbortAliasCorrelationCount += Number(
+              responseCorrelation.source === "same-network-single-alias",
+            );
+            const primaryRequestId = responseCorrelation.primaryRequestId;
+            assert.equal(typeof primaryRequestId, "string");
+            const lifecycle =
+              postFinalAbortLifecycleByFetchRequestId.get(primaryRequestId) ||
+              null;
+            assert.ok(lifecycle);
+            const responseDecision = responseStageCorrelationDecision({
+              responseStatusCode: event.responseStatusCode,
+              responseErrorReason: event.responseErrorReason,
+            });
+            const lifecycleDecision = allowedEgressResponseLifecycleDecision({
+              lifecycleState: lifecycle.state,
+              responseStageDecision: responseDecision,
+            });
+            assert.equal(lifecycleDecision.valid, true);
+            if (lifecycleDecision.kind === "post-final-error") {
+              assert.equal(responseDecision.kind, "response-error");
+              assert.equal(
+                loopbackProxy.hasRequestStageAuthorization(primaryRequestId),
+                false,
+              );
+              postFinalAbortResponseErrorPauseCount += 1;
+              setPostFinalAbortLifecycleState(
+                primaryRequestId,
+                "post-final-error-command-in-flight",
+              );
+              const continueResponseParams =
+                postFinalErrorContinueResponseParams(event.requestId);
+              assert.deepEqual(Object.keys(continueResponseParams), [
+                "requestId",
+              ]);
+              await cdp.send("Fetch.continueResponse", continueResponseParams);
+              postFinalAbortNoOverrideContinueResponseSuccessCount += 1;
+              setPostFinalAbortLifecycleState(
+                primaryRequestId,
+                "terminal-complete",
+              );
+              postFinalAbortLifecycleByFetchRequestId.delete(primaryRequestId);
+              if (lifecycle.networkId !== null) {
+                const aliases =
+                  postFinalAbortFetchRequestIdsByNetworkId.get(
+                    lifecycle.networkId,
+                  ) || new Set();
+                aliases.delete(primaryRequestId);
+                if (aliases.size === 0) {
+                  postFinalAbortFetchRequestIdsByNetworkId.delete(
+                    lifecycle.networkId,
+                  );
+                }
+              }
+              return;
+            }
+            assert.equal(lifecycleDecision.kind, "primary");
+            assert.equal(responseDecision.kind, "final");
+            assert.equal(responseDecision.status, 200);
+            assert.equal(event.responseErrorReason, undefined);
+            const sanitizedFinal = sanitizeBrowserResponseHeaders(
+              event.responseHeaders || [],
+            );
+            postFinalAbortFinalResponsePauseCount += 1;
+            setPostFinalAbortLifecycleState(
+              primaryRequestId,
+              "final-response-command-in-flight",
+            );
+            await cdp.send("Fetch.continueResponse", {
+              requestId: event.requestId,
+              responseCode: responseDecision.status,
+              responseHeaders: sanitizedFinal.responseHeaders,
+            });
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            assert.equal(postFinalAbortOpenResponses.size, 1);
+            for (const response of postFinalAbortOpenResponses) {
+              response.destroy();
+            }
+            let errorPauseEnqueueTimeout = null;
+            try {
+              await Promise.race([
+                postFinalAbortErrorPauseEnqueued,
+                new Promise((_, reject) => {
+                  errorPauseEnqueueTimeout = setTimeout(
+                    () =>
+                      reject(
+                        new Error(
+                          "Timed out waiting for the post-final response error pause.",
+                        ),
+                      ),
+                    2000,
+                  );
+                }),
+              ]);
+            } finally {
+              if (errorPauseEnqueueTimeout !== null) {
+                clearTimeout(errorPauseEnqueueTimeout);
+              }
+            }
+            assert.equal(postFinalAbortErrorPauseEnqueuedCount, 1);
+            assert.equal(
+              postFinalAbortErrorPauseEnqueuedBeforeFinalReleaseCount,
+              1,
+            );
+            assert.equal(
+              loopbackProxy.hasRequestStageAuthorization(primaryRequestId),
+              true,
+            );
+            loopbackProxy.completeRequestStageAuthorization(primaryRequestId);
+            postFinalAbortProxyCompleteCount += 1;
+            setPostFinalAbortLifecycleState(
+              primaryRequestId,
+              "final-response-released",
+            );
+            return;
+          }
           const observation = rewriteObservations.get(event.requestId);
           assert.ok(observation);
           assert.equal(event.responseErrorReason, undefined);
@@ -6127,6 +7206,14 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
             body: responseBytes.toString("base64"),
           });
           loopbackProxy.completeRequestStageAuthorization(event.requestId);
+          return;
+        }
+        if (hasVercelSkipToolbarRequestHeader(event.request.headers)) {
+          loopbackBrowserSkipToolbarHeaderPreTransmissionBlockCount += 1;
+          await cdp.send("Fetch.failRequest", {
+            requestId: event.requestId,
+            errorReason: "BlockedByClient",
+          });
           return;
         }
         const postDataOmissionFixture =
@@ -6432,11 +7519,7 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
           rewriteRequestCount += 1;
           const immutableResponse = await fetch(rewriteTarget, {
             method: "GET",
-            headers: {
-              "cache-control": "no-cache, no-store, max-age=0",
-              pragma: "no-cache",
-              "x-vercel-protection-bypass": syntheticBypassSecret,
-            },
+            headers: createNodeOwnedVercelRequestHeaders(syntheticBypassSecret),
             redirect: "manual",
           });
           if (redirectResponseMustAbort(immutableResponse.status)) {
@@ -6454,6 +7537,14 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
             await immutableResponse.arrayBuffer(),
           );
           if (event.resourceType === "Document") {
+            if (containsVercelPreviewToolbarMarkup(responseBytes)) {
+              toolbarParserDocumentRejectCount += 1;
+              await cdp.send("Fetch.failRequest", {
+                requestId: event.requestId,
+                errorReason: "BlockedByClient",
+              });
+              return;
+            }
             const parserMarkupDecision = immutableDocumentParserMarkupDecision(
               responseBytes,
               {
@@ -6498,7 +7589,7 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
           });
           return;
         }
-        if (event.request.url === probeUrl) {
+        if ([probeUrl, postFinalAbortUrl].includes(event.request.url)) {
           assert.equal(
             exactOriginTransportAllowed({
               value: event.request.url,
@@ -6510,10 +7601,33 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
           const headerEntries = Object.entries(event.request.headers || {}).map(
             ([name, value]) => ({ name, value: String(value) }),
           );
-          rewriteObservations.set(event.requestId, {
-            kind: "network-backed-probe",
-            expectedBody: networkBackedProbeResponseBody,
-          });
+          const postFinalAbortProbe = event.request.url === postFinalAbortUrl;
+          if (postFinalAbortProbe) {
+            const requestInvariant =
+              allowedEgressRequestInvariantForEvent(event);
+            assert.ok(requestInvariant);
+            const networkId = requestInvariant.networkId;
+            postFinalAbortLifecycleByFetchRequestId.set(
+              event.requestId,
+              Object.freeze({
+                primaryRequestId: event.requestId,
+                requestInvariant,
+                networkId,
+                state: "request-continue-in-flight",
+              }),
+            );
+            if (networkId !== null) {
+              postFinalAbortFetchRequestIdsByNetworkId.set(
+                networkId,
+                new Set([event.requestId]),
+              );
+            }
+          } else {
+            rewriteObservations.set(event.requestId, {
+              kind: "network-backed-probe",
+              expectedBody: networkBackedProbeResponseBody,
+            });
+          }
           loopbackProxy.authorizeRequestStage({
             requestId: event.requestId,
             requestUrl: event.request.url,
@@ -6532,9 +7646,25 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
               ],
               interceptResponse: true,
             });
+            if (postFinalAbortProbe) {
+              setPostFinalAbortLifecycleState(
+                event.requestId,
+                "response-awaiting",
+              );
+            }
           } catch (error) {
+            if (
+              postFinalAbortProbe &&
+              loopbackProxy.hasRequestStageAuthorization(event.requestId)
+            ) {
+              postFinalAbortProxyRevokeCount += 1;
+            }
             loopbackProxy.revokeRequestStageAuthorization(event.requestId);
             rewriteObservations.delete(event.requestId);
+            postFinalAbortLifecycleByFetchRequestId.delete(event.requestId);
+            if (event.networkId) {
+              postFinalAbortFetchRequestIdsByNetworkId.delete(event.networkId);
+            }
             throw error;
           }
           return;
@@ -6545,9 +7675,26 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
           requestId: event.requestId,
           errorReason: "BlockedByClient",
         });
-      })()
+      };
+      const handlerPromise = (
+        event.request.url === postFinalAbortUrl
+          ? loopbackHandlerTaskCoordinator.enqueue(
+              handlerCorrelationId,
+              handleLoopbackPausedRequest,
+            )
+          : handleLoopbackPausedRequest()
+      )
         .catch(async (error) => {
-          loopbackProxy.revokeRequestStageAuthorization(event.requestId);
+          const revokeRequestId =
+            postFinalAbortResponseCorrelation?.primaryRequestId ||
+            event.requestId;
+          if (
+            event.request.url === postFinalAbortUrl &&
+            loopbackProxy.hasRequestStageAuthorization(revokeRequestId)
+          ) {
+            postFinalAbortProxyRevokeCount += 1;
+          }
+          loopbackProxy.revokeRequestStageAuthorization(revokeRequestId);
           if (error instanceof PausedRequestPostDataResolutionError) {
             fullPostDataResolutionFailureCount += 1;
           }
@@ -6594,6 +7741,24 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
       navigationOrigin: stableOrigin,
       resourceOrigin: stableOrigin,
     });
+    const browserSkipToolbarHeaderRejectedBeforeWire = await page.evaluate(
+      async (url) => {
+        try {
+          await fetch(url, {
+            headers: { "x-vercel-skip-toolbar": "1" },
+          });
+          return false;
+        } catch {
+          return true;
+        }
+      },
+      browserSkipToolbarHeaderNegativeUrl,
+    );
+    assert.equal(browserSkipToolbarHeaderRejectedBeforeWire, true);
+    while (handlerPromises.size > 0) {
+      await Promise.all([...handlerPromises]);
+    }
+    assert.equal(loopbackBrowserSkipToolbarHeaderPreTransmissionBlockCount, 1);
     await page.waitForTimeout(250);
     assert.deepEqual(
       rawExternalWireConnections,
@@ -6614,6 +7779,21 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
     assert.deepEqual(rawExternalWireConnections, []);
     await page.evaluate(() =>
       document.querySelector("#w10p-unsafe-parser-negative")?.remove(),
+    );
+    await page.evaluate((url) => {
+      const frame = document.createElement("iframe");
+      frame.id = "w10p-toolbar-parser-negative";
+      frame.src = url;
+      document.body.append(frame);
+    }, stableToolbarParserUrl);
+    await page.waitForTimeout(250);
+    while (handlerPromises.size > 0) {
+      await Promise.all([...handlerPromises]);
+    }
+    assert.equal(toolbarParserDocumentRejectCount, 1);
+    assert.deepEqual(rawExternalWireConnections, []);
+    await page.evaluate(() =>
+      document.querySelector("#w10p-toolbar-parser-negative")?.remove(),
     );
     const proxyAllowedTunnelCountBeforeSensitiveNegatives =
       loopbackProxy.snapshot().allowedConnectCount;
@@ -6704,6 +7884,80 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
       directEarlyHintsAllowedHostFetchRequestStageBlockCount,
       directEarlyHintsAllowedHostFetchRequestStageObservationCount,
     );
+    const postFinalAbortResult = await page.evaluate(async (url) => {
+      let watchdogFired = false;
+      const controller = new AbortController();
+      const watchdog = setTimeout(() => {
+        watchdogFired = true;
+        controller.abort();
+      }, 5000);
+      try {
+        const response = await fetch(url, { signal: controller.signal });
+        const headersObserved = response.status === 200;
+        try {
+          await response.text();
+          return { headersObserved, bodyRejected: false, watchdogFired };
+        } catch {
+          return { headersObserved, bodyRejected: true, watchdogFired };
+        }
+      } catch {
+        return {
+          headersObserved: false,
+          bodyRejected: true,
+          watchdogFired,
+        };
+      } finally {
+        clearTimeout(watchdog);
+      }
+    }, postFinalAbortUrl);
+    postFinalAbortHeadersObserved = postFinalAbortResult.headersObserved;
+    postFinalAbortBodyRejected = postFinalAbortResult.bodyRejected;
+    postFinalAbortWatchdogFired = postFinalAbortResult.watchdogFired;
+    assert.equal(postFinalAbortHeadersObserved, true);
+    assert.equal(postFinalAbortBodyRejected, true);
+    assert.equal(postFinalAbortWatchdogFired, false);
+    while (handlerPromises.size > 0) {
+      await Promise.all([...handlerPromises]);
+    }
+    await page.waitForTimeout(250);
+    assert.equal(postFinalAbortFinalResponsePauseCount, 1);
+    assert.equal(postFinalAbortResponseErrorPauseCount, 1);
+    assert.equal(postFinalAbortNoOverrideContinueResponseSuccessCount, 1);
+    assert.equal(postFinalAbortProxyCompleteCount, 1);
+    assert.equal(postFinalAbortProxyRevokeCount, 0);
+    assert.equal(postFinalAbortErrorPauseEnqueuedCount, 1);
+    assert.equal(postFinalAbortErrorPauseEnqueuedBeforeFinalReleaseCount, 1);
+    assert.equal(postFinalAbortRequestFailureCount, 1);
+    assert.deepEqual(postFinalAbortRequestFailureTexts, [
+      "net::ERR_CONTENT_LENGTH_MISMATCH",
+    ]);
+    assert.equal(
+      optionalTelemetrySuppressionDecision({
+        requestUrl: postFinalAbortUrl,
+        method: "GET",
+      }).eligible,
+      false,
+    );
+    assert.equal(
+      postFinalAbortSameFetchCorrelationCount +
+        postFinalAbortAliasCorrelationCount,
+      2,
+    );
+    assert.equal(loopbackHandlerTaskCoordinator.pendingCount(), 0);
+    assert.equal(postFinalAbortLifecycleByFetchRequestId.size, 0);
+    assert.equal(postFinalAbortFetchRequestIdsByNetworkId.size, 0);
+    assert.equal(postFinalAbortOpenResponses.size, 0);
+    const postFinalAbortProxySnapshot = loopbackProxy.snapshot();
+    assert.ok(
+      postFinalAbortProxySnapshot.allowedConnectCount >=
+        positiveProxySnapshot.allowedConnectCount,
+    );
+    assert.ok(
+      postFinalAbortProxySnapshot.allowedConnectCount <=
+        positiveProxySnapshot.allowedConnectCount + 1,
+    );
+    directBrowserAllowedFirebaseTunnelCount =
+      postFinalAbortProxySnapshot.allowedConnectCount;
     const deniedProxyFixtures = [
       `CONNECT ${productionImmutableHostname}:443 HTTP/1.1\r\nHost: ${productionImmutableHostname}:443\r\n\r\n`,
       "CONNECT unknown-external.invalid:443 HTTP/1.1\r\nHost: unknown-external.invalid:443\r\n\r\n",
@@ -7538,6 +8792,11 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
         url: `/probe?key=${encodeURIComponent(syntheticStagingApiKey)}`,
         host: "identitytoolkit.googleapis.com",
       },
+      {
+        method: "GET",
+        url: `/post-final-abort?key=${encodeURIComponent(syntheticStagingApiKey)}`,
+        host: "identitytoolkit.googleapis.com",
+      },
     ]);
     assert.deepEqual(stableWireRequests, []);
     assert.deepEqual(preTransmissionBlockedWirePaths, []);
@@ -7645,12 +8904,19 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
         "/document.html",
         "/redirect.css",
         "/rewrite.js",
+        "/toolbar-parser.html",
         "/unsafe-parser.html",
       ].sort(),
     );
     assert.equal(
       upstreamWireRequests.every(
         ({ bypassHeader }) => bypassHeader === syntheticBypassSecret,
+      ),
+      true,
+    );
+    assert.equal(
+      upstreamWireRequests.every(
+        ({ skipToolbarHeader }) => skipToolbarHeader === "1",
       ),
       true,
     );
@@ -7682,12 +8948,20 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
         appCheckHeader: syntheticJwt,
         bypassHeader: "",
       },
+      {
+        requestPath: "/post-final-abort",
+        origin: stableOrigin,
+        referer: `${stableOrigin}/`,
+        appCheckHeader: syntheticJwt,
+        bypassHeader: "",
+      },
     ]);
-    assert.equal(rewriteRequestCount, 4);
+    assert.equal(rewriteRequestCount, 5);
     assert.equal(rewriteResponseCount, 2);
     assert.equal(rewriteBodyHashMatchCount, 2);
     assert.equal(rewriteRedirectResponseAbortCount, 1);
     assert.equal(unsafeParserDocumentRejectCount, 1);
+    assert.equal(toolbarParserDocumentRejectCount, 1);
     assert.equal(rewriteRedirectFollowAttemptCount, 0);
     assert.equal(rewriteObservations.size, 0);
     assert.deepEqual(unexpectedRequestUrls, []);
@@ -7750,6 +9024,10 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
     assert.equal(loopbackBoundarySnapshot.fatalErrorCount, 0);
     await loopbackBoundaryController.restore();
   } finally {
+    for (const response of postFinalAbortOpenResponses) {
+      response.destroy();
+    }
+    postFinalAbortOpenResponses.clear();
     if (loopbackContext) {
       try {
         await loopbackContext.close();
@@ -7804,15 +9082,18 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
   assert.equal(loopbackProxySnapshot.listenerCloseCount, 1);
   assert.equal(loopbackProxySnapshot.activeClientSocketCount, 0);
   assert.equal(loopbackProxySnapshot.activeUpstreamSocketCount, 0);
-  assert.equal(loopbackProxySnapshot.requestStageAuthorizationCount, 1);
-  assert.equal(loopbackProxySnapshot.requestStageAuthorizationCompleteCount, 1);
+  assert.equal(loopbackProxySnapshot.requestStageAuthorizationCount, 2);
+  assert.equal(loopbackProxySnapshot.requestStageAuthorizationCompleteCount, 2);
   assert.equal(
     loopbackProxySnapshot.requestStageAuthorizationRevocationCount,
     0,
   );
-  assert.equal(loopbackProxySnapshot.authorityLeaseIssueCount, 1);
-  assert.equal(loopbackProxySnapshot.authorityLeaseConsumeCount, 1);
-  assert.equal(loopbackProxySnapshot.authorityLeaseUnusedCompletionCount, 0);
+  assert.equal(loopbackProxySnapshot.authorityLeaseIssueCount, 2);
+  assert.equal(
+    loopbackProxySnapshot.authorityLeaseConsumeCount +
+      loopbackProxySnapshot.authorityLeaseUnusedCompletionCount,
+    2,
+  );
   assert.equal(loopbackProxySnapshot.authorityLeaseRevocationCount, 0);
   assert.equal(
     loopbackProxySnapshot.authorityLeaseExpiredBeforeConnectCount,
@@ -7971,6 +9252,28 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
     networkBackedResponseCorrelationResidualCount: rewriteObservations.size,
     networkBackedResponseEgressRawWireConnectionCount:
       rawExternalWireConnections.length,
+    postFinalAbortFinalResponsePauseCount,
+    postFinalAbortResponseErrorPauseCount,
+    postFinalAbortNoOverrideContinueResponseSuccessCount,
+    postFinalAbortProxyCompleteCount,
+    postFinalAbortProxyRevokeCount,
+    postFinalAbortHeadersObserved,
+    postFinalAbortBodyRejected,
+    postFinalAbortWatchdogFired,
+    postFinalAbortErrorPauseEnqueuedCount,
+    postFinalAbortErrorPauseEnqueuedBeforeFinalReleaseCount,
+    postFinalAbortRequestFailureCount,
+    postFinalAbortRequestFailureText:
+      postFinalAbortRequestFailureTexts[0] || null,
+    postFinalAbortProductionRequestFailureDisposition: "fatal-non-telemetry",
+    postFinalAbortSameFetchCorrelationCount,
+    postFinalAbortAliasCorrelationCount,
+    postFinalAbortHandlerQueueResidualCount:
+      loopbackHandlerTaskCoordinator.pendingCount(),
+    postFinalAbortLifecycleResidualCount:
+      postFinalAbortLifecycleByFetchRequestId.size,
+    postFinalAbortNetworkAliasResidualCount:
+      postFinalAbortFetchRequestIdsByNetworkId.size,
     fullPostDataResolutionCount,
     fullPostDataNetworkFallbackCount,
     fullPostDataResolutionFailureCount,
@@ -7988,6 +9291,14 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
     browserConnectProxy: loopbackProxySnapshot,
     unsafeParserDocumentRejectedBeforeBrowserCount:
       unsafeParserDocumentRejectCount,
+    toolbarParserDocumentRejectedBeforeBrowserCount:
+      toolbarParserDocumentRejectCount,
+    immutableUpstreamSkipToolbarHeaderWireObservationCount:
+      upstreamWireRequests.filter(
+        ({ skipToolbarHeader }) => skipToolbarHeader === "1",
+      ).length,
+    browserSkipToolbarHeaderRejectedBeforeWireCount:
+      loopbackBrowserSkipToolbarHeaderPreTransmissionBlockCount,
     sendBeaconWireConnectionCount: 0,
     anchorPingWireConnectionCount: 0,
     prefetchSpeculationWireConnectionCount: 0,
@@ -8004,7 +9315,7 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
     allowedFirebaseParserPreconnectBlockedBeforeConnection: true,
     allowedFirebaseWebSocketRouteBlockedBeforeConnection: true,
     allowedFirebaseNegativeRawTlsRequestCount:
-      directAllowedTlsWireRequests.length - 1,
+      directAllowedTlsWireRequests.length - 2,
     webSocketStreamHandshakeWireRequestCount: 0,
     websocketRouteInterceptCount,
     websocketConnectToServerCount,
@@ -8073,6 +9384,7 @@ if (args.includes("--self-test-app-check")) {
       ...fixtureAuditFreshnessNegativeSelfTest,
       ...stableOriginRewriteNegativeSelfTest,
       ...networkPolicyNegativeSelfTest,
+      ...allowedEgressResponseLifecycleSelfTest,
       ...postDataAndResponseSanitizationNegativeSelfTest,
       productionAccess: 0,
       networkAccess: 0,
@@ -8559,12 +9871,16 @@ assert.deepEqual(contract.networkBoundary, {
 });
 assert.equal(contract.browserTransport?.browserOrigin, stableBrowserOrigin);
 assert.deepEqual(contract.browserTransport, {
-  schemaVersion: 5,
+  schemaVersion: 6,
   mechanism:
     "cdp-fetch-request-stage-local-fulfill-from-node-attested-immutable-bytes",
   browserOrigin: stableBrowserOrigin,
   upstreamSource: "stage-immutable-deployment-url",
   immutableFetchOwner: "node-only-exact-origin-no-redirect",
+  immutableRequestHeaderPolicy:
+    "node-owned-cache-control-no-cache-x-vercel-skip-toolbar-1-and-optional-exact-origin-protection-bypass",
+  injectedToolbarMarkupPolicy:
+    "reject-any-url-resolving-to-fixed-vercel-preview-toolbar-script-path-and-data-marker-before-browser-fulfill",
   browserWirePolicy: "zero-browser-network-to-immutable-upstream",
   responseHeaderPolicy:
     "synthetic-no-store-content-type-and-x-dns-prefetch-control-link-omitted",
@@ -12801,17 +14117,18 @@ const summarizeNetwork = (observations, responses = []) => {
     ).length,
   };
 };
-const deploymentBypassHeaders = bypassSecret
-  ? { "x-vercel-protection-bypass": bypassSecret }
-  : {};
+const deploymentNodeRequestHeaders =
+  createNodeOwnedVercelRequestHeaders(bypassSecret);
 const immutableResourceFetchCache = new Map();
 let immutableResourceAttestationRequestCount = 0;
 let immutableResourceAttestationCacheHitCount = 0;
 let immutableResourceAttestationHttp200Count = 0;
 let immutableResourceAttestationRedirectResponseCount = 0;
 let immutableResourceAttestationBypassHeaderRequestCount = 0;
+let immutableResourceAttestationSkipToolbarHeaderRequestCount = 0;
 let immutableResourceAttestationLinkHeaderObservationCount = 0;
 let immutableResourceAttestationParserMarkupRejectCount = 0;
+let immutableResourceAttestationVercelToolbarMarkupObservationCount = 0;
 const fetchImmutableResourceAttestation = async (stage, upstreamUrl) => {
   const parsed = new URL(upstreamUrl);
   assert.equal(parsed.origin, upstreamOrigins[stage]);
@@ -12824,11 +14141,9 @@ const fetchImmutableResourceAttestation = async (stage, upstreamUrl) => {
   const attestationPromise = (async () => {
     immutableResourceAttestationRequestCount += 1;
     if (bypassSecret) immutableResourceAttestationBypassHeaderRequestCount += 1;
+    immutableResourceAttestationSkipToolbarHeaderRequestCount += 1;
     const response = await fetch(parsed, {
-      headers: {
-        "cache-control": "no-cache",
-        ...deploymentBypassHeaders,
-      },
+      headers: deploymentNodeRequestHeaders,
       redirect: "error",
       signal: AbortSignal.timeout(20_000),
     });
@@ -12850,6 +14165,16 @@ const fetchImmutableResourceAttestation = async (stage, upstreamUrl) => {
       response.headers.get("content-type") || "application/octet-stream";
     assert.doesNotMatch(contentType, /[\r\n\0]/u);
     if (/^text\/html(?:;|$)/iu.test(contentType)) {
+      const vercelToolbarMarkupObserved =
+        containsVercelPreviewToolbarMarkup(bytes);
+      immutableResourceAttestationVercelToolbarMarkupObservationCount += Number(
+        vercelToolbarMarkupObserved,
+      );
+      assert.equal(
+        vercelToolbarMarkupObserved,
+        false,
+        `${stage} immutable Document contains Vercel Preview Toolbar markup.`,
+      );
       const parserMarkupDecision = immutableDocumentParserMarkupDecision(
         bytes,
         {
@@ -12981,6 +14306,10 @@ const SAFE_CDP_CORRELATION_FAILURE_REASONS = [
   "response-correlation-same-network-ambiguous",
   "response-correlation-network-id-unseen",
   "response-correlation-network-id-missing",
+  "response-correlation-request-invariant-invalid",
+  "response-correlation-request-invariant-mismatch",
+  "response-correlation-final-released-invalid-transition",
+  "response-correlation-lifecycle-transition-invalid",
   "response-stage-status-invalid",
 ];
 const SAFE_CDP_HANDLER_FAILURE_REASONS = [
@@ -13153,6 +14482,9 @@ let allowedEgressInvalidResponseStatusAbortCount = 0;
 let allowedEgressRedirectAbortCount = 0;
 let allowedEgressHttpErrorAbortCount = 0;
 let allowedEgressResponseErrorAbortCount = 0;
+let allowedEgressPostFinalResponseErrorPauseCount = 0;
+let allowedEgressPostFinalContinueResponseSuccessCount = 0;
+let allowedEgressPostFinalAlreadyRetiredInterceptionCount = 0;
 let allowedEgressInformationalEgressHeaderObservationCount = 0;
 let allowedEgressFinalEgressHeaderObservationCount = 0;
 let allowedEgressResponseHeaderSuppressionCount = 0;
@@ -13259,6 +14591,8 @@ let stableOriginRewriteExternalRequestCount = 0;
 let stableOriginRewriteFirebaseGoogleRequestCount = 0;
 let stableOriginRewriteScopeMismatchRequestCount = 0;
 let directImmutableOriginBrowserRequestCount = 0;
+let browserSkipToolbarHeaderObservationCount = 0;
+let browserSkipToolbarHeaderPreTransmissionBlockCount = 0;
 const createStableOriginRewriteSummary = ({
   stage,
   groupKey,
@@ -14029,6 +15363,9 @@ try {
       const headerAttestation = trackNetworkAttestation(
         (async () => {
           const allHeaders = await request.allHeaders();
+          browserSkipToolbarHeaderObservationCount += Number(
+            hasVercelSkipToolbarRequestHeader(allHeaders),
+          );
           correlation.apiKeyHeaderValues =
             extractApiKeyHeaderValues(allHeaders);
           const reconciledBoundaryObservation = inspectNetworkRequest({
@@ -14323,12 +15660,34 @@ try {
     const allowedEgressLifecycleByFetchRequestId = new Map();
     const allowedEgressFetchRequestIdsByNetworkId = new Map();
     const cdpHandlerDiagnosticContexts = new WeakMap();
+    const cdpHandlerPrimaryRequestIds = new WeakMap();
+    const allowedEgressHandlerTaskCoordinator =
+      createPerCorrelationTaskCoordinator();
+    const allowedEgressProxyAuthorizationCoordinator =
+      createSingleOwnerProxyAuthorizationCoordinator({
+        onAuthorize: (requestId, authorization) => {
+          browserConnectProxy.authorizeRequestStage({
+            requestId,
+            ...authorization,
+          });
+        },
+        onComplete: (requestId) => {
+          browserConnectProxy.completeRequestStageAuthorization(requestId);
+        },
+        onRevoke: (requestId) => {
+          browserConnectProxy.revokeRequestStageAuthorization(requestId);
+        },
+      });
     const allowedEgressLifecycleStates = new Set([
       "request-continue-in-flight",
       "response-awaiting",
       "request-continue-failed",
+      "final-response-command-in-flight",
+      "final-response-released",
+      "post-final-error-command-in-flight",
       "terminal-command-in-flight",
       "terminal-complete",
+      "post-final-error-observed-retired",
       "redirect-retired",
       "handler-failed",
     ]);
@@ -14342,6 +15701,8 @@ try {
         allowedEgressLifecycleByFetchRequestId.has(event.requestId),
         false,
       );
+      const requestInvariant = allowedEgressRequestInvariantForEvent(event);
+      assert.ok(requestInvariant);
       const networkId =
         typeof event.networkId === "string" && event.networkId.length > 0
           ? event.networkId
@@ -14349,6 +15710,8 @@ try {
       allowedEgressLifecycleByFetchRequestId.set(
         event.requestId,
         Object.freeze({
+          primaryRequestId: event.requestId,
+          requestInvariant,
           networkId,
           state: "request-continue-in-flight",
           diagnosticPhase,
@@ -14371,32 +15734,21 @@ try {
         Object.freeze({ ...lifecycle, state }),
       );
     };
-    const missingResponseCorrelationReasonForEvent = (event) => {
-      const sameFetchState =
-        allowedEgressLifecycleByFetchRequestId.get(event.requestId)?.state ||
-        null;
-      const networkIdPresent =
-        typeof event.networkId === "string" && event.networkId.length > 0;
-      const networkAliasStates = networkIdPresent
-        ? [
-            ...(allowedEgressFetchRequestIdsByNetworkId.get(event.networkId) ||
-              []),
-          ]
-            .filter((requestId) => requestId !== event.requestId)
-            .map(
-              (requestId) =>
-                allowedEgressLifecycleByFetchRequestId.get(requestId)?.state ||
-                null,
-            )
-            .filter((state) => state !== null)
-        : [];
-      return missingResponseCorrelationFailureReason({
-        sameFetchState,
-        networkIdPresent,
-        networkAliasStates,
+    const resolveResponseCorrelationForEvent = (event) =>
+      resolveAllowedEgressResponseCorrelation({
+        event,
+        lifecycleByFetchRequestId: allowedEgressLifecycleByFetchRequestId,
+        fetchRequestIdsByNetworkId: allowedEgressFetchRequestIdsByNetworkId,
       });
-    };
     const correlatedDiagnosticPhaseForEvent = (event) => {
+      if (
+        event.responseStatusCode !== undefined ||
+        event.responseErrorReason !== undefined
+      ) {
+        const correlation = resolveResponseCorrelationForEvent(event);
+        const correlatedPhase = correlation.lifecycle?.diagnosticPhase || null;
+        if (correlatedPhase !== null) return correlatedPhase;
+      }
       const directPhase =
         allowedEgressRequestsByFetchRequestId.get(event.requestId)
           ?.diagnosticPhase || null;
@@ -14459,8 +15811,7 @@ try {
       recordAllowedEgressRequestStageLifecycle(event, diagnosticContext.phase);
       diagnosticContext.operation = "request-proxy-authorize";
       diagnosticContext.reason = "unexpected-handler-error";
-      browserConnectProxy.authorizeRequestStage({
-        requestId: event.requestId,
+      allowedEgressProxyAuthorizationCoordinator.authorize(event.requestId, {
         requestUrl,
         requestMethod,
         requestOrigin: stableBrowserOrigin,
@@ -14479,7 +15830,7 @@ try {
           event.requestId,
           "request-continue-failed",
         );
-        browserConnectProxy.revokeRequestStageAuthorization(event.requestId);
+        allowedEgressProxyAuthorizationCoordinator.revoke(event.requestId);
         allowedEgressRequestsByFetchRequestId.delete(event.requestId);
         sensitiveAppCheckRequestsByFetchRequestId.delete(event.requestId);
         throw error;
@@ -14494,37 +15845,99 @@ try {
       ) {
         diagnosticContext.operation = "response-correlation";
         diagnosticContext.reason = "unexpected-handler-error";
-        const sensitiveRequestKind =
-          sensitiveAppCheckRequestsByFetchRequestId.get(event.requestId);
-        const rewriteObservation =
-          stableOriginRewriteRequestsByFetchRequestId.get(event.requestId);
-        const allowedEgressObservation =
-          allowedEgressRequestsByFetchRequestId.get(event.requestId);
+        const responseCorrelation = resolveResponseCorrelationForEvent(event);
+        if (responseCorrelation.primaryRequestId !== null) {
+          cdpHandlerPrimaryRequestIds.set(
+            event,
+            responseCorrelation.primaryRequestId,
+          );
+        }
         diagnosticContext.reason =
-          missingResponseCorrelationReasonForEvent(event);
-        assert.ok(
-          sensitiveRequestKind ||
-            rewriteObservation ||
-            allowedEgressObservation,
-          "A response-stage request pause had no request-stage decision.",
+          responseCorrelation.reason || "unexpected-handler-error";
+        assert.equal(
+          responseCorrelation.valid,
+          true,
+          "A response-stage request pause failed exact correlation.",
         );
+        const primaryRequestId = responseCorrelation.primaryRequestId;
+        assert.equal(typeof primaryRequestId, "string");
+        const lifecycle =
+          allowedEgressLifecycleByFetchRequestId.get(primaryRequestId) || null;
+        assert.ok(lifecycle);
         diagnosticContext.reason = "response-stage-status-invalid";
         const responseStageDecision = responseStageCorrelationDecision({
           responseStatusCode: event.responseStatusCode,
           responseErrorReason: event.responseErrorReason,
         });
+        const lifecycleDecision = allowedEgressResponseLifecycleDecision({
+          lifecycleState: lifecycle.state,
+          responseStageDecision,
+        });
+        diagnosticContext.reason =
+          lifecycleDecision.reason || "unexpected-handler-error";
+        assert.equal(
+          lifecycleDecision.valid,
+          true,
+          "A response-stage request pause had an invalid lifecycle transition.",
+        );
+        if (lifecycleDecision.kind === "post-final-error") {
+          // Chromium can re-pause a streamed response with its body error after
+          // final headers were released. Preserve that original terminal error.
+          assert.equal(responseStageDecision.kind, "response-error");
+          assert.equal(
+            allowedEgressProxyAuthorizationCoordinator.stateFor(
+              primaryRequestId,
+            ),
+            "completed",
+          );
+          allowedEgressPostFinalResponseErrorPauseCount += 1;
+          setAllowedEgressLifecycleState(
+            primaryRequestId,
+            "post-final-error-command-in-flight",
+          );
+          diagnosticContext.operation = "response-continue-final";
+          diagnosticContext.reason = "unexpected-handler-error";
+          try {
+            await appCheckCdpSession.send(
+              "Fetch.continueResponse",
+              postFinalErrorContinueResponseParams(event.requestId),
+            );
+            allowedEgressPostFinalContinueResponseSuccessCount += 1;
+          } catch (error) {
+            if (!isPostFinalAlreadyRetiredInterceptionError(error)) {
+              throw error;
+            }
+            // A reload/cancel can retire the interception after Chromium emits
+            // the terminal event but before Playwright delivers it to JS.
+            allowedEgressPostFinalAlreadyRetiredInterceptionCount += 1;
+            setAllowedEgressLifecycleState(
+              primaryRequestId,
+              "post-final-error-observed-retired",
+            );
+            return;
+          }
+          setAllowedEgressLifecycleState(primaryRequestId, "terminal-complete");
+          return;
+        }
+        assert.equal(lifecycleDecision.kind, "primary");
+        const sensitiveRequestKind =
+          sensitiveAppCheckRequestsByFetchRequestId.get(primaryRequestId);
+        const rewriteObservation =
+          stableOriginRewriteRequestsByFetchRequestId.get(primaryRequestId);
+        const allowedEgressObservation =
+          allowedEgressRequestsByFetchRequestId.get(primaryRequestId);
+        diagnosticContext.reason =
+          "response-correlation-lifecycle-transition-invalid";
+        assert.ok(allowedEgressObservation);
         const completeProxyAuthorization = () => {
           diagnosticContext.operation = "response-proxy-complete";
           diagnosticContext.reason = "unexpected-handler-error";
           assert.equal(
-            browserConnectProxy.hasRequestStageAuthorization(event.requestId),
-            Boolean(allowedEgressObservation),
+            allowedEgressProxyAuthorizationCoordinator.complete(
+              primaryRequestId,
+            ),
+            true,
           );
-          if (allowedEgressObservation) {
-            browserConnectProxy.completeRequestStageAuthorization(
-              event.requestId,
-            );
-          }
         };
         if (responseStageDecision.kind === "response-error") {
           allowedEgressResponsePauseCount += 1;
@@ -14549,27 +15962,29 @@ try {
             rewriteObservation.responseError = true;
           }
           setAllowedEgressLifecycleState(
-            event.requestId,
+            primaryRequestId,
             "terminal-command-in-flight",
           );
-          allowedEgressRequestsByFetchRequestId.delete(event.requestId);
-          sensitiveAppCheckRequestsByFetchRequestId.delete(event.requestId);
-          stableOriginRewriteRequestsByFetchRequestId.delete(event.requestId);
-          informationalResponseRequestsByFetchRequestId.delete(event.requestId);
+          allowedEgressRequestsByFetchRequestId.delete(primaryRequestId);
+          sensitiveAppCheckRequestsByFetchRequestId.delete(primaryRequestId);
+          stableOriginRewriteRequestsByFetchRequestId.delete(primaryRequestId);
+          informationalResponseRequestsByFetchRequestId.delete(
+            primaryRequestId,
+          );
           diagnosticContext.operation = "response-fail";
           await appCheckCdpSession.send("Fetch.failRequest", {
             requestId: event.requestId,
             errorReason: "BlockedByClient",
           });
           completeProxyAuthorization();
-          setAllowedEgressLifecycleState(event.requestId, "terminal-complete");
+          setAllowedEgressLifecycleState(primaryRequestId, "terminal-complete");
           return;
         }
         const responseStatus = responseStageDecision.status;
         if (responseStageDecision.kind === "informational") {
           assert.equal(responseStageDecision.terminal, false);
           allowedEgressInformationalResponsePauseCount += 1;
-          informationalResponseRequestsByFetchRequestId.add(event.requestId);
+          informationalResponseRequestsByFetchRequestId.add(primaryRequestId);
           diagnosticContext.operation = "response-sanitize-informational";
           diagnosticContext.reason = "unexpected-handler-error";
           const sanitizedInformational = sanitizeBrowserResponseHeaders(
@@ -14591,20 +16006,22 @@ try {
             responseCode: responseStatus,
             responseHeaders: sanitizedInformational.responseHeaders,
           });
-          setAllowedEgressLifecycleState(event.requestId, "response-awaiting");
+          setAllowedEgressLifecycleState(primaryRequestId, "response-awaiting");
           return;
         }
         if (responseStageDecision.kind === "invalid-pre-final") {
           assert.equal(responseStageDecision.terminal, true);
           allowedEgressInvalidResponseStatusAbortCount += 1;
           setAllowedEgressLifecycleState(
-            event.requestId,
+            primaryRequestId,
             "terminal-command-in-flight",
           );
-          allowedEgressRequestsByFetchRequestId.delete(event.requestId);
-          sensitiveAppCheckRequestsByFetchRequestId.delete(event.requestId);
-          stableOriginRewriteRequestsByFetchRequestId.delete(event.requestId);
-          informationalResponseRequestsByFetchRequestId.delete(event.requestId);
+          allowedEgressRequestsByFetchRequestId.delete(primaryRequestId);
+          sensitiveAppCheckRequestsByFetchRequestId.delete(primaryRequestId);
+          stableOriginRewriteRequestsByFetchRequestId.delete(primaryRequestId);
+          informationalResponseRequestsByFetchRequestId.delete(
+            primaryRequestId,
+          );
           diagnosticContext.operation = "response-fail";
           diagnosticContext.reason = "unexpected-handler-error";
           await appCheckCdpSession.send("Fetch.failRequest", {
@@ -14612,7 +16029,7 @@ try {
             errorReason: "BlockedByClient",
           });
           completeProxyAuthorization();
-          setAllowedEgressLifecycleState(event.requestId, "terminal-complete");
+          setAllowedEgressLifecycleState(primaryRequestId, "terminal-complete");
           return;
         }
         assert.equal(responseStageDecision.kind, "final");
@@ -14639,7 +16056,7 @@ try {
         allowedEgressResponseHeaderSuppressionCount +=
           sanitizedFinal.omittedHeaderCount;
         if (
-          informationalResponseRequestsByFetchRequestId.delete(event.requestId)
+          informationalResponseRequestsByFetchRequestId.delete(primaryRequestId)
         ) {
           allowedEgressInformationalFinalResponseCount += 1;
         }
@@ -14689,12 +16106,12 @@ try {
             rewriteObservation.redirectResponse = true;
           }
           setAllowedEgressLifecycleState(
-            event.requestId,
+            primaryRequestId,
             "terminal-command-in-flight",
           );
-          allowedEgressRequestsByFetchRequestId.delete(event.requestId);
-          sensitiveAppCheckRequestsByFetchRequestId.delete(event.requestId);
-          stableOriginRewriteRequestsByFetchRequestId.delete(event.requestId);
+          allowedEgressRequestsByFetchRequestId.delete(primaryRequestId);
+          sensitiveAppCheckRequestsByFetchRequestId.delete(primaryRequestId);
+          stableOriginRewriteRequestsByFetchRequestId.delete(primaryRequestId);
           diagnosticContext.operation = "response-fail";
           diagnosticContext.reason = "unexpected-handler-error";
           await appCheckCdpSession.send("Fetch.failRequest", {
@@ -14702,7 +16119,7 @@ try {
             errorReason: "BlockedByClient",
           });
           completeProxyAuthorization();
-          setAllowedEgressLifecycleState(event.requestId, "terminal-complete");
+          setAllowedEgressLifecycleState(primaryRequestId, "terminal-complete");
           return;
         }
         if (rewriteObservation) {
@@ -14755,14 +16172,14 @@ try {
             rewriteObservation.immutableAttestationBytes = null;
             rewriteObservation.byteMatch = null;
           }
-          stableOriginRewriteRequestsByFetchRequestId.delete(event.requestId);
+          stableOriginRewriteRequestsByFetchRequestId.delete(primaryRequestId);
         }
         setAllowedEgressLifecycleState(
-          event.requestId,
-          "terminal-command-in-flight",
+          primaryRequestId,
+          "final-response-command-in-flight",
         );
-        sensitiveAppCheckRequestsByFetchRequestId.delete(event.requestId);
-        allowedEgressRequestsByFetchRequestId.delete(event.requestId);
+        sensitiveAppCheckRequestsByFetchRequestId.delete(primaryRequestId);
+        allowedEgressRequestsByFetchRequestId.delete(primaryRequestId);
         diagnosticContext.operation = "response-continue-final";
         diagnosticContext.reason = "unexpected-handler-error";
         await appCheckCdpSession.send("Fetch.continueResponse", {
@@ -14771,7 +16188,20 @@ try {
           responseHeaders: sanitizedFinal.responseHeaders,
         });
         completeProxyAuthorization();
-        setAllowedEgressLifecycleState(event.requestId, "terminal-complete");
+        setAllowedEgressLifecycleState(
+          primaryRequestId,
+          "final-response-released",
+        );
+        return;
+      }
+      if (hasVercelSkipToolbarRequestHeader(event.request.headers)) {
+        browserSkipToolbarHeaderPreTransmissionBlockCount += 1;
+        diagnosticContext.operation = "request-fail";
+        diagnosticContext.reason = "unexpected-handler-error";
+        await appCheckCdpSession.send("Fetch.failRequest", {
+          requestId: event.requestId,
+          errorReason: "BlockedByClient",
+        });
         return;
       }
       diagnosticContext.operation = "request-post-data";
@@ -15354,15 +16784,12 @@ try {
           redirectedRewriteObservation.redirectRequest = true;
         }
         if (event.redirectedRequestId) {
-          if (
-            browserConnectProxy.hasRequestStageAuthorization(
+          assert.equal(
+            allowedEgressProxyAuthorizationCoordinator.complete(
               event.redirectedRequestId,
-            )
-          ) {
-            browserConnectProxy.completeRequestStageAuthorization(
-              event.redirectedRequestId,
-            );
-          }
+            ),
+            Boolean(redirectedAllowedEgressObservation),
+          );
           setAllowedEgressLifecycleState(
             event.redirectedRequestId,
             "redirect-retired",
@@ -15622,6 +17049,22 @@ try {
       });
     };
     appCheckCdpSession.on("Fetch.requestPaused", (event) => {
+      const responseStagePause =
+        event.responseStatusCode !== undefined ||
+        event.responseErrorReason !== undefined;
+      const responseCorrelationHint = responseStagePause
+        ? resolveResponseCorrelationForEvent(event)
+        : null;
+      const redirectedLifecycle =
+        !responseStagePause && event.redirectedRequestId
+          ? allowedEgressLifecycleByFetchRequestId.get(
+              event.redirectedRequestId,
+            ) || null
+          : null;
+      const handlerCorrelationId =
+        responseCorrelationHint?.primaryRequestId ||
+        redirectedLifecycle?.primaryRequestId ||
+        event.requestId;
       const correlatedDiagnosticPhase =
         correlatedDiagnosticPhaseForEvent(event);
       const diagnosticContext = {
@@ -15638,43 +17081,52 @@ try {
         resourceClass: safeCdpDiagnosticResourceClassForEvent(event),
       };
       cdpHandlerDiagnosticContexts.set(event, diagnosticContext);
-      const handlerPromise = handlePausedRequest(event)
-        .catch(async (error) => {
-          incrementSafeDiagnosticClass(
-            cdpHandlerFailureClassCounts,
-            {
-              ...diagnosticContext,
-              reason: safeCdpHandlerFailureReason(error, diagnosticContext),
-            },
-            SAFE_CDP_HANDLER_FAILURE_REASONS,
-          );
-          appCheckCdpHandlerErrorCount += 1;
-          setAllowedEgressLifecycleState(event.requestId, "handler-failed");
-          browserConnectProxy.revokeRequestStageAuthorization(event.requestId);
-          allowedEgressRequestsByFetchRequestId.delete(event.requestId);
-          sensitiveAppCheckRequestsByFetchRequestId.delete(event.requestId);
-          stableOriginRewriteRequestsByFetchRequestId.delete(event.requestId);
-          informationalResponseRequestsByFetchRequestId.delete(event.requestId);
-          if (error instanceof PausedRequestPostDataResolutionError) {
-            fullPostDataResolutionFailureCount += 1;
-            fullPostDataOversizeBlockCount += Number(
-              error.code === "maximum-bytes-exceeded",
+      const handlerPromise = allowedEgressHandlerTaskCoordinator
+        .enqueue(handlerCorrelationId, () =>
+          handlePausedRequest(event).catch(async (error) => {
+            incrementSafeDiagnosticClass(
+              cdpHandlerFailureClassCounts,
+              {
+                ...diagnosticContext,
+                reason: safeCdpHandlerFailureReason(error, diagnosticContext),
+              },
+              SAFE_CDP_HANDLER_FAILURE_REASONS,
             );
-            fullPostDataRepresentationMismatchBlockCount += Number(
-              error.code === "representation-mismatch",
+            appCheckCdpHandlerErrorCount += 1;
+            const primaryRequestId =
+              cdpHandlerPrimaryRequestIds.get(event) || event.requestId;
+            setAllowedEgressLifecycleState(primaryRequestId, "handler-failed");
+            allowedEgressProxyAuthorizationCoordinator.revoke(primaryRequestId);
+            allowedEgressRequestsByFetchRequestId.delete(primaryRequestId);
+            sensitiveAppCheckRequestsByFetchRequestId.delete(primaryRequestId);
+            stableOriginRewriteRequestsByFetchRequestId.delete(
+              primaryRequestId,
             );
-          }
-          try {
-            await appCheckCdpSession.send("Fetch.failRequest", {
-              requestId: event.requestId,
-              errorReason: "BlockedByClient",
-            });
-          } catch (_error) {
-            // The request may already have been terminated by the browser.
-          }
-        })
+            informationalResponseRequestsByFetchRequestId.delete(
+              primaryRequestId,
+            );
+            if (error instanceof PausedRequestPostDataResolutionError) {
+              fullPostDataResolutionFailureCount += 1;
+              fullPostDataOversizeBlockCount += Number(
+                error.code === "maximum-bytes-exceeded",
+              );
+              fullPostDataRepresentationMismatchBlockCount += Number(
+                error.code === "representation-mismatch",
+              );
+            }
+            try {
+              await appCheckCdpSession.send("Fetch.failRequest", {
+                requestId: event.requestId,
+                errorReason: "BlockedByClient",
+              });
+            } catch (_error) {
+              // The request may already have been terminated by the browser.
+            }
+          }),
+        )
         .finally(() => {
           cdpHandlerDiagnosticContexts.delete(event);
+          cdpHandlerPrimaryRequestIds.delete(event);
           appCheckCdpHandlerPromises.delete(handlerPromise);
         });
       appCheckCdpHandlerPromises.add(handlerPromise);
@@ -16162,6 +17614,11 @@ try {
       while (appCheckCdpHandlerPromises.size > 0) {
         await Promise.all([...appCheckCdpHandlerPromises]);
       }
+      assert.equal(
+        allowedEgressHandlerTaskCoordinator.pendingCount(),
+        0,
+        `Allowed-egress handler queue must be empty for ${groupKey}.`,
+      );
       await flushNetworkAttestations();
       groupRetainedPageCount = context.pages().length;
       groupServiceWorkerCount = context.serviceWorkers().length;
@@ -16317,6 +17774,16 @@ try {
       while (appCheckCdpHandlerPromises.size > 0) {
         await Promise.all([...appCheckCdpHandlerPromises]);
       }
+      assert.equal(
+        allowedEgressHandlerTaskCoordinator.pendingCount(),
+        0,
+        `Allowed-egress handler queue must be empty after cleanup for ${groupKey}.`,
+      );
+      assert.equal(
+        allowedEgressProxyAuthorizationCoordinator.activeCount(),
+        0,
+        `Allowed-egress proxy authorization must be settled for ${groupKey}.`,
+      );
       await flushNetworkAttestations();
       groupOopifTargetCount = discoveredTargetIdsByType.get("iframe").size;
       groupDedicatedWorkerTargetCount =
@@ -17590,13 +19057,16 @@ let nodeDeploymentFetchRequestCount = 0;
 let nodeDeploymentFetchHttp200Count = 0;
 let nodeDeploymentRedirectResponseCount = 0;
 let nodeVercelBypassHeaderRequestCount = 0;
+let nodeDeploymentSkipToolbarHeaderRequestCount = 0;
+let nodeDeploymentVercelToolbarMarkupObservationCount = 0;
 const fetchHtml = async (url) => {
   const parsed = new URL(url);
   assert.ok(vercelBypassAllowedOrigins.includes(exactVercelOrigin(parsed)));
   nodeDeploymentFetchRequestCount += 1;
   if (bypassSecret) nodeVercelBypassHeaderRequestCount += 1;
+  nodeDeploymentSkipToolbarHeaderRequestCount += 1;
   const response = await fetch(parsed, {
-    headers: deploymentBypassHeaders,
+    headers: deploymentNodeRequestHeaders,
     redirect: "error",
   });
   if (response.status >= 300 && response.status < 400) {
@@ -17604,7 +19074,17 @@ const fetchHtml = async (url) => {
   }
   assert.equal(response.status, 200, `${url} is not available.`);
   nodeDeploymentFetchHttp200Count += 1;
-  return Buffer.from(await response.arrayBuffer());
+  const bytes = Buffer.from(await response.arrayBuffer());
+  const vercelToolbarMarkupObserved = containsVercelPreviewToolbarMarkup(bytes);
+  nodeDeploymentVercelToolbarMarkupObservationCount += Number(
+    vercelToolbarMarkupObserved,
+  );
+  assert.equal(
+    vercelToolbarMarkupObserved,
+    false,
+    `${parsed.origin} HTML contains Vercel Preview Toolbar markup.`,
+  );
+  return bytes;
 };
 const inspectFirebaseBundle = async (deploymentUrl, html) => {
   const deploymentOrigin = new URL(deploymentUrl).origin;
@@ -17631,8 +19111,9 @@ const inspectFirebaseBundle = async (deploymentUrl, html) => {
     assert.ok(vercelBypassAllowedOrigins.includes(exactVercelOrigin(assetUrl)));
     nodeDeploymentFetchRequestCount += 1;
     if (bypassSecret) nodeVercelBypassHeaderRequestCount += 1;
+    nodeDeploymentSkipToolbarHeaderRequestCount += 1;
     const response = await fetch(assetUrl, {
-      headers: deploymentBypassHeaders,
+      headers: deploymentNodeRequestHeaders,
       redirect: "error",
     });
     if (response.status >= 300 && response.status < 400) {
@@ -17696,6 +19177,11 @@ assert.equal(
   nodeVercelBypassHeaderRequestCount,
   bypassSecret ? nodeDeploymentFetchRequestCount : 0,
 );
+assert.equal(
+  nodeDeploymentSkipToolbarHeaderRequestCount,
+  nodeDeploymentFetchRequestCount,
+);
+assert.equal(nodeDeploymentVercelToolbarMarkupObservationCount, 0);
 assert.ok(
   Date.parse(completedAt) <= fixtureAuditExpiresAt,
   "The fixture audit expired before browser capture completed.",
@@ -17928,6 +19414,14 @@ assert.equal(
   immutableResourceAttestationBypassHeaderRequestCount,
   bypassSecret ? immutableResourceAttestationRequestCount : 0,
 );
+assert.equal(
+  immutableResourceAttestationSkipToolbarHeaderRequestCount,
+  immutableResourceAttestationRequestCount,
+);
+assert.equal(
+  immutableResourceAttestationVercelToolbarMarkupObservationCount,
+  0,
+);
 if (bypassSecret) {
   assert.equal(
     immutableResourceAttestationBypassHeaderRequestCount,
@@ -17953,8 +19447,10 @@ assert.equal(
 );
 assert.equal(stableOriginRewriteBrowserNetworkRequestCount, 0);
 assert.equal(stableOriginRewriteResponseLinkHeaderForwardCount, 0);
+assert.equal(browserSkipToolbarHeaderObservationCount, 0);
+assert.equal(browserSkipToolbarHeaderPreTransmissionBlockCount, 0);
 const browserTransportBinding = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   contract: contract.browserTransport,
   contractHash: stableOriginRewriteTransportContractHash,
   browserOrigin: stableBrowserOrigin,
@@ -17983,10 +19479,14 @@ const browserTransportBinding = {
   immutableResourceAttestationHttp200Count,
   immutableResourceAttestationRedirectResponseCount,
   immutableResourceAttestationBypassHeaderRequestCount,
+  immutableResourceAttestationSkipToolbarHeaderRequestCount,
   immutableResourceAttestationLinkHeaderObservationCount,
   immutableResourceAttestationParserMarkupRejectCount,
+  immutableResourceAttestationVercelToolbarMarkupObservationCount,
   localFulfillCount: stableOriginRewriteLocalFulfillCount,
   browserNetworkRequestCount: stableOriginRewriteBrowserNetworkRequestCount,
+  browserSkipToolbarHeaderObservationCount,
+  browserSkipToolbarHeaderPreTransmissionBlockCount,
   responseLinkHeaderForwardCount:
     stableOriginRewriteResponseLinkHeaderForwardCount,
   playwrightRouteRegistrationCount,
@@ -18333,6 +19833,11 @@ const appCheckBinding = {
   nodeDeploymentFetchHttp200Count,
   nodeDeploymentRedirectResponseCount,
   nodeVercelBypassHeaderRequestCount,
+  nodeDeploymentSkipToolbarHeaderRequestCount,
+  nodeDeploymentVercelToolbarMarkupObservationCount,
+  allowedEgressPostFinalResponseErrorPauseCount,
+  allowedEgressPostFinalContinueResponseSuccessCount,
+  allowedEgressPostFinalAlreadyRetiredInterceptionCount,
   traceWriteCount,
   harWriteCount,
   storageStateWriteCount,
@@ -18510,6 +20015,11 @@ assert.equal(externalStaticTrackingResidualCount, 0);
 assert.equal(allowedEgressInformationalTrackingResidualCount, 0);
 assert.equal(allowedEgressInvalidResponseStatusAbortCount, 0);
 assert.equal(allowedEgressEgressHeaderForwardCount, 0);
+assert.equal(
+  allowedEgressPostFinalResponseErrorPauseCount,
+  allowedEgressPostFinalContinueResponseSuccessCount +
+    allowedEgressPostFinalAlreadyRetiredInterceptionCount,
+);
 assert.equal(nodeOwnedExternalInformationalBrowserExposureCount, 0);
 assert.equal(directBrowserEarlyHintsObservationCount, 0);
 assert.equal(directBrowserEarlyHintsEgressHeaderObservationCount, 0);

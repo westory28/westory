@@ -7,7 +7,7 @@ import { inflateSync } from "node:zlib";
 
 const readJson = (path) => JSON.parse(readFileSync(resolve(path), "utf8"));
 const contract = readJson("scripts/w10p-visual-parity-contract.json");
-assert.equal(contract.schemaVersion, 11);
+assert.equal(contract.schemaVersion, 12);
 const MAX_RESOLVED_REQUEST_POST_DATA_BYTES = 8 * 1024 * 1024;
 const NODE_OWNED_EXTERNAL_STATIC_RESPONSE_HEADER_MAXIMUM_BYTES = 64 * 1024;
 const NODE_OWNED_EXTERNAL_STATIC_RESPONSE_BODY_MAXIMUM_BYTES = 16 * 1024 * 1024;
@@ -1797,6 +1797,14 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "ignoreDefaultArgs: BROWSER_PRETRANSMISSION_IGNORE_DEFAULT_ARGS",
     "const rawSensitiveDecision = unifiedSensitivePreTransmissionDecision({",
     "const responseStageCorrelationDecision = ({",
+    "const resolveAllowedEgressResponseCorrelation = ({",
+    "const createPerCorrelationTaskCoordinator = () =>",
+    "const createSingleOwnerProxyAuthorizationCoordinator = ({",
+    "POST_FINAL_ALREADY_RETIRED_INTERCEPTION_ERROR_MESSAGES",
+    '"Protocol error (Fetch.continueResponse): Invalid InterceptionId."',
+    '"cdpSession.send: Protocol error (Fetch.continueResponse): Invalid InterceptionId."',
+    "if (!isPostFinalAlreadyRetiredInterceptionError(error))",
+    '"post-final-error-observed-retired"',
     "const resolvePausedRequestPostData = async ({",
     'send("Network.getRequestPostData"',
     "const postDataOmissionFixtureEvent =",
@@ -1814,7 +1822,11 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "const exactStagingFirestoreWebChannelEncodedApiKeyBodyScope = (",
     "conditionalResponseHeaderRuleId,",
     'if (responseStageDecision.kind === "informational")',
-    "informationalResponseRequestsByFetchRequestId.add(event.requestId)",
+    "informationalResponseRequestsByFetchRequestId.add(primaryRequestId)",
+    "postFinalErrorContinueResponseParams(event.requestId)",
+    "const createNodeOwnedVercelRequestHeaders = (",
+    "headers: deploymentNodeRequestHeaders",
+    "containsVercelPreviewToolbarMarkup(bytes)",
     "stableOriginRewriteLocalFulfillCount += 1",
     "const exactAuthCredentialBodyScope = exactAuthCredentialBodyRequestScope({",
     "const exactRefreshTokenBodyScope = exactRefreshTokenBodyRequestScope({",
@@ -1843,6 +1855,16 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
       `The all-target pre-transmission source contract is missing: ${requiredSourceFragment}`,
     );
   }
+  assert.match(
+    sourceText,
+    /const POST_FINAL_ALREADY_RETIRED_INTERCEPTION_ERROR_MESSAGES\s*=\s*new Set\(\[\s*"Protocol error \(Fetch\.continueResponse\): Invalid InterceptionId\.",\s*"cdpSession\.send: Protocol error \(Fetch\.continueResponse\): Invalid InterceptionId\.",?\s*\]\);/u,
+    "The already-retired interception matcher must retain exactly its two closed error messages.",
+  );
+  assert.match(
+    sourceText,
+    /const isPostFinalAlreadyRetiredInterceptionError\s*=\s*\(error\)\s*=>\s*error instanceof Error\s*&&\s*\["Error",\s*"ProtocolError"\]\.includes\(error\.name\)\s*&&\s*POST_FINAL_ALREADY_RETIRED_INTERCEPTION_ERROR_MESSAGES\.has\(error\.message\);/u,
+    "The already-retired interception matcher must require Error identity, an exact name, and exact Set membership.",
+  );
   const informationalBranchStart = sourceText.lastIndexOf(
     'if (responseStageDecision.kind === "informational")',
   );
@@ -1889,7 +1911,27 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   );
   assert.equal(
     (publicResponseBranch.match(/Fetch\.continueResponse/gu) || []).length,
-    2,
+    3,
+  );
+  assert.match(
+    publicResponseBranch,
+    /appCheckCdpSession\.send\(\s*"Fetch\.continueResponse",\s*postFinalErrorContinueResponseParams\(event\.requestId\),?\s*\)/u,
+    "A post-final body error must continue the original response without overrides.",
+  );
+  assert.match(
+    publicResponseBranch,
+    /allowedEgressProxyAuthorizationCoordinator\.stateFor\(\s*primaryRequestId,?\s*\)[\s\S]*?"completed"/u,
+    "A post-final body error must observe an already-completed proxy owner.",
+  );
+  assert.match(
+    publicResponseBranch,
+    /if\s*\(!isPostFinalAlreadyRetiredInterceptionError\(error\)\)\s*\{\s*throw error;\s*\}/u,
+    "Only an exact already-retired Fetch.continueResponse error may be absorbed.",
+  );
+  assert.match(
+    publicResponseBranch,
+    /setAllowedEgressLifecycleState\(\s*primaryRequestId,\s*"post-final-error-observed-retired",?\s*\)/u,
+    "An already-retired post-final observation must enter its fixed retired state.",
   );
   assert.match(
     publicResponseBranch,
@@ -1909,6 +1951,7 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     /fetchedExternal\s*=\s*await\s+nodeOwnedExactExternalStaticGet\([\s\S]*source:\s*"baseline-node-network"[\s\S]*Fetch\.fulfillRequest[\s\S]*responseHeaders:\s*nodeOwnedCachedExternal\.responseHeaders,[\s\S]*body:\s*nodeOwnedCachedExternal\.body/u,
   );
   assert.doesNotMatch(sourceText, /\.connectToServer\s*\(/u);
+  assert.doesNotMatch(sourceText, /deploymentBypassHeaders/u);
   assert.match(
     sourceText,
     /const canonicalHostname = canonicalNetworkHostname\(hostname\);[\s\S]*contract\.networkBoundary\.forbiddenWebHosts\.includes\(canonicalHostname\)/u,
@@ -2545,12 +2588,16 @@ const nonFirebaseNetworkAllowedHostnameSetHash = sha256(
 );
 assert.equal(contract.browserTransport?.browserOrigin, stableBrowserOrigin);
 assert.deepEqual(contract.browserTransport, {
-  schemaVersion: 5,
+  schemaVersion: 6,
   mechanism:
     "cdp-fetch-request-stage-local-fulfill-from-node-attested-immutable-bytes",
   browserOrigin: stableBrowserOrigin,
   upstreamSource: "stage-immutable-deployment-url",
   immutableFetchOwner: "node-only-exact-origin-no-redirect",
+  immutableRequestHeaderPolicy:
+    "node-owned-cache-control-no-cache-x-vercel-skip-toolbar-1-and-optional-exact-origin-protection-bypass",
+  injectedToolbarMarkupPolicy:
+    "reject-any-url-resolving-to-fixed-vercel-preview-toolbar-script-path-and-data-marker-before-browser-fulfill",
   browserWirePolicy: "zero-browser-network-to-immutable-upstream",
   responseHeaderPolicy:
     "synthetic-no-store-content-type-and-x-dns-prefetch-control-link-omitted",
@@ -8761,10 +8808,14 @@ assertExactObjectKeys(browserTransport, [
   "immutableResourceAttestationHttp200Count",
   "immutableResourceAttestationRedirectResponseCount",
   "immutableResourceAttestationBypassHeaderRequestCount",
+  "immutableResourceAttestationSkipToolbarHeaderRequestCount",
   "immutableResourceAttestationLinkHeaderObservationCount",
   "immutableResourceAttestationParserMarkupRejectCount",
+  "immutableResourceAttestationVercelToolbarMarkupObservationCount",
   "localFulfillCount",
   "browserNetworkRequestCount",
+  "browserSkipToolbarHeaderObservationCount",
+  "browserSkipToolbarHeaderPreTransmissionBlockCount",
   "responseLinkHeaderForwardCount",
   "playwrightRouteRegistrationCount",
   "groups",
@@ -8773,7 +8824,7 @@ assert.equal(
   sha256(Buffer.from(canonicalJson(browserTransport))),
   manifest.browserTransportHash,
 );
-assert.equal(browserTransport.schemaVersion, 2);
+assert.equal(browserTransport.schemaVersion, 3);
 assert.deepEqual(browserTransport.contract, contract.browserTransport);
 assert.equal(
   browserTransport.contractHash,
@@ -8874,8 +8925,28 @@ assert.equal(
     ? browserTransport.immutableResourceAttestationRequestCount
     : 0,
 );
+assert.equal(
+  browserTransport.immutableResourceAttestationSkipToolbarHeaderRequestCount,
+  browserTransport.immutableResourceAttestationRequestCount,
+);
+assert.ok(
+  Number.isSafeInteger(
+    browserTransport.immutableResourceAttestationSkipToolbarHeaderRequestCount,
+  ) &&
+    browserTransport.immutableResourceAttestationSkipToolbarHeaderRequestCount >=
+      0,
+);
+assert.equal(
+  browserTransport.immutableResourceAttestationVercelToolbarMarkupObservationCount,
+  0,
+);
 assert.equal(browserTransport.localFulfillCount, browserTransport.requestCount);
 assert.equal(browserTransport.browserNetworkRequestCount, 0);
+assert.equal(browserTransport.browserSkipToolbarHeaderObservationCount, 0);
+assert.equal(
+  browserTransport.browserSkipToolbarHeaderPreTransmissionBlockCount,
+  0,
+);
 assert.equal(browserTransport.responseLinkHeaderForwardCount, 0);
 assert.equal(
   browserTransport.immutableResourceAttestationParserMarkupRejectCount,
@@ -9450,6 +9521,11 @@ assertExactObjectKeys(appCheckBinding, [
   "nodeDeploymentFetchHttp200Count",
   "nodeDeploymentRedirectResponseCount",
   "nodeVercelBypassHeaderRequestCount",
+  "nodeDeploymentSkipToolbarHeaderRequestCount",
+  "nodeDeploymentVercelToolbarMarkupObservationCount",
+  "allowedEgressPostFinalResponseErrorPauseCount",
+  "allowedEgressPostFinalContinueResponseSuccessCount",
+  "allowedEgressPostFinalAlreadyRetiredInterceptionCount",
   "pageRawDebugTokenInjectionCount",
   "pageAppCheckSecretInitRegistrationCount",
   "pendingBridgeDecisionResidualCount",
@@ -10391,6 +10467,32 @@ assert.equal(
     ? appCheckBinding.nodeDeploymentFetchRequestCount
     : 0,
 );
+assert.equal(
+  appCheckBinding.nodeDeploymentSkipToolbarHeaderRequestCount,
+  appCheckBinding.nodeDeploymentFetchRequestCount,
+);
+assert.ok(
+  Number.isSafeInteger(
+    appCheckBinding.nodeDeploymentSkipToolbarHeaderRequestCount,
+  ) && appCheckBinding.nodeDeploymentSkipToolbarHeaderRequestCount >= 0,
+);
+assert.equal(
+  appCheckBinding.nodeDeploymentVercelToolbarMarkupObservationCount,
+  0,
+);
+assert.equal(
+  appCheckBinding.allowedEgressPostFinalResponseErrorPauseCount,
+  appCheckBinding.allowedEgressPostFinalContinueResponseSuccessCount +
+    appCheckBinding.allowedEgressPostFinalAlreadyRetiredInterceptionCount,
+);
+for (const field of [
+  "allowedEgressPostFinalResponseErrorPauseCount",
+  "allowedEgressPostFinalContinueResponseSuccessCount",
+  "allowedEgressPostFinalAlreadyRetiredInterceptionCount",
+]) {
+  assert.ok(Number.isSafeInteger(appCheckBinding[field]));
+  assert.ok(appCheckBinding[field] >= 0);
+}
 assert.equal(
   appCheckBinding.baselineProtectedDataRequestCount,
   auditedBaselineProtectedDataRequests,
