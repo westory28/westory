@@ -575,9 +575,11 @@ const blockBrowserSecondaryExecutionAndWebTransport = () => {
     },
   });
 };
+const EXACT_PARSER_MODULEPRELOAD_TAG_PATTERN =
+  /^<link rel="modulepreload" crossorigin href="(?<href>\/assets\/[A-Za-z0-9._-]+\.js)">$/u;
 const immutableDocumentParserMarkupDecision = (
   bodyBytes,
-  { allowExactInertTestFixture = false } = {},
+  { allowExactInertTestFixture = false, documentOrigin = null } = {},
 ) => {
   let markup = Buffer.isBuffer(bodyBytes)
     ? bodyBytes.toString("utf8")
@@ -587,6 +589,9 @@ const immutableDocumentParserMarkupDecision = (
       /<template\s+id=["']w10p-inert-parser-fixtures["'][^>]*>[\s\S]*?<\/template\s*>/giu,
       "",
     );
+  }
+  if (/<base\b/iu.test(markup)) {
+    return { valid: false, marker: "parser-base-url" };
   }
   for (const match of markup.matchAll(/<(link|script|a|iframe)\b[^>]*>/giu)) {
     const tagName = match[1].toLowerCase();
@@ -611,22 +616,52 @@ const immutableDocumentParserMarkupDecision = (
         /\brel\s*=\s*(?:(["'])(.*?)\1|([^\s>]+))/iu,
       );
       const relValue = relMatch?.[2] ?? relMatch?.[3] ?? "";
-      if (
-        /&/u.test(relValue) ||
-        relValue
-          .toLowerCase()
-          .split(/\s+/u)
-          .some((token) =>
-            [
-              "dns-prefetch",
-              "modulepreload",
-              "preconnect",
-              "prefetch",
-              "preload",
-              "prerender",
-            ].includes(token),
-          )
-      ) {
+      if (/&/u.test(relValue)) {
+        return { valid: false, marker: "parser-speculative-link" };
+      }
+      const relTokens = relValue.toLowerCase().split(/\s+/u).filter(Boolean);
+      const speculativeRelTokens = [
+        "dns-prefetch",
+        "modulepreload",
+        "preconnect",
+        "prefetch",
+        "preload",
+        "prerender",
+      ];
+      if (relTokens.some((token) => speculativeRelTokens.includes(token))) {
+        const exactModulepreloadMatch = tagMarkup.match(
+          EXACT_PARSER_MODULEPRELOAD_TAG_PATTERN,
+        );
+        let exactParserModulepreloadAllowed = false;
+        if (
+          relTokens.length === 1 &&
+          relTokens[0] === "modulepreload" &&
+          exactModulepreloadMatch?.groups?.href
+        ) {
+          try {
+            const parsedDocumentOrigin = new URL(String(documentOrigin));
+            const resolvedModulepreload = new URL(
+              exactModulepreloadMatch.groups.href,
+              parsedDocumentOrigin,
+            );
+            exactParserModulepreloadAllowed =
+              parsedDocumentOrigin.protocol === "https:" &&
+              parsedDocumentOrigin.username === "" &&
+              parsedDocumentOrigin.password === "" &&
+              ["", "443"].includes(parsedDocumentOrigin.port) &&
+              parsedDocumentOrigin.pathname === "/" &&
+              parsedDocumentOrigin.search === "" &&
+              parsedDocumentOrigin.hash === "" &&
+              resolvedModulepreload.origin === parsedDocumentOrigin.origin &&
+              resolvedModulepreload.pathname ===
+                exactModulepreloadMatch.groups.href &&
+              resolvedModulepreload.search === "" &&
+              resolvedModulepreload.hash === "";
+          } catch {
+            exactParserModulepreloadAllowed = false;
+          }
+        }
+        if (exactParserModulepreloadAllowed) continue;
         return { valid: false, marker: "parser-speculative-link" };
       }
     }
@@ -3977,6 +4012,9 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     responseStageCorrelationDecision({ responseErrorReason: "Failed" }),
     { kind: "response-error", status: null, terminal: true },
   );
+  const parserDocumentOrigin = "https://westory-staging.example";
+  const exactParserModulepreloadMarkup =
+    '<link rel="modulepreload" crossorigin href="/assets/app-123_ABC.js">';
   const rejectedParserMarkupFixtures = [
     '<link rel="preconnect" href="https://outside.invalid">',
     '<link rel="prefetch" href="https://outside.invalid">',
@@ -3984,14 +4022,49 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     '<a ping="https://outside.invalid">ping</a>',
     '<iframe srcdoc="&lt;img src=https://outside.invalid&gt;"></iframe>',
     '<link rel="pre&#99;onnect" href="https://outside.invalid">',
+    `<base href="https://outside.invalid/">${exactParserModulepreloadMarkup}`,
+    '<link rel="modulepreload" crossorigin href="https://outside.invalid/assets/app.js">',
+    '<link rel="modulepreload" crossorigin href="//outside.invalid/assets/app.js">',
+    '<link rel="modulepreload" crossorigin href="/assets/app.js?v=1">',
+    '<link rel="modulepreload" crossorigin href="/assets/app.js#fragment">',
+    '<link rel="modulepreload" crossorigin href="/assets/nested/app.js">',
+    '<link rel="modulepreload" crossorigin href="/assets/app.mjs">',
+    '<link rel="modulepreload preload" crossorigin href="/assets/app.js">',
+    '<link rel="modulepreload" crossorigin href="/assets/app&#46;js">',
+    '<link rel="modulepreload" crossorigin crossorigin href="/assets/app.js">',
   ];
   for (const markup of rejectedParserMarkupFixtures) {
-    assert.equal(immutableDocumentParserMarkupDecision(markup).valid, false);
+    assert.equal(
+      immutableDocumentParserMarkupDecision(markup, {
+        documentOrigin: parserDocumentOrigin,
+      }).valid,
+      false,
+    );
+  }
+  const rejectedParserModulepreloadOrigins = [
+    null,
+    "http://westory-staging.example",
+    "https://user@westory-staging.example",
+    "https://westory-staging.example:8443",
+  ];
+  for (const documentOrigin of rejectedParserModulepreloadOrigins) {
+    assert.equal(
+      immutableDocumentParserMarkupDecision(exactParserModulepreloadMarkup, {
+        documentOrigin,
+      }).valid,
+      false,
+    );
   }
   assert.deepEqual(
     immutableDocumentParserMarkupDecision(
       '<link rel="stylesheet" href="/app.css"><script type="module" src="/app.js"></script>',
     ),
+    { valid: true, marker: null },
+  );
+  assert.deepEqual(
+    immutableDocumentParserMarkupDecision(exactParserModulepreloadMarkup, {
+      documentOrigin: parserDocumentOrigin,
+    }),
     { valid: true, marker: null },
   );
   const firebaseRule =
@@ -4032,8 +4105,10 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     sensitiveBeforeTelemetryPrecedenceCaseCount: telemetrySensitiveCases.length,
     informationalResponseNonterminalCaseCount: informationalStatuses.length,
     informationalResponseTerminalCaseCount: terminalStatuses.length,
-    rejectedImmutableParserMarkupCaseCount: rejectedParserMarkupFixtures.length,
-    acceptedImmutableParserMarkupCaseCount: 1,
+    rejectedImmutableParserMarkupCaseCount:
+      rejectedParserMarkupFixtures.length +
+      rejectedParserModulepreloadOrigins.length,
+    acceptedImmutableParserMarkupCaseCount: 2,
     verifiedLocalFirebaseModuleCaseCount: Object.keys(firebaseRule.localModules)
       .length,
   };
@@ -5782,6 +5857,7 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
               {
                 allowExactInertTestFixture:
                   event.request.url === stableDocumentUrl,
+                documentOrigin: stableOrigin,
               },
             );
             if (!parserMarkupDecision.valid) {
@@ -7784,7 +7860,7 @@ assert.deepEqual(contract.networkBoundary, {
 });
 assert.equal(contract.browserTransport?.browserOrigin, stableBrowserOrigin);
 assert.deepEqual(contract.browserTransport, {
-  schemaVersion: 4,
+  schemaVersion: 5,
   mechanism:
     "cdp-fetch-request-stage-local-fulfill-from-node-attested-immutable-bytes",
   browserOrigin: stableBrowserOrigin,
@@ -7795,7 +7871,7 @@ assert.deepEqual(contract.browserTransport, {
     "synthetic-no-store-content-type-and-x-dns-prefetch-control-link-omitted",
   informationalResponsePolicy: "immutable-one-xx-never-exposed-to-browser",
   parserMarkupPolicy:
-    "node-scan-fail-closed-before-browser-fulfill-on-speculative-link-speculationrules-anchor-ping-or-iframe-srcdoc",
+    "node-scan-fail-closed-before-browser-fulfill-on-speculative-link-except-exact-parser-same-origin-root-assets-js-modulepreload-without-base-query-or-fragment-speculationrules-anchor-ping-or-iframe-srcdoc",
   domMutationPolicy:
     "locked-common-attribute-validator-plus-srcdoc-set-html-unsafe-parse-html-unsafe-range-insert-node-move-before-and-insert-html-entrypoints",
   requiredProtocol: "https:",
@@ -11993,7 +12069,12 @@ const fetchImmutableResourceAttestation = async (stage, upstreamUrl) => {
       response.headers.get("content-type") || "application/octet-stream";
     assert.doesNotMatch(contentType, /[\r\n\0]/u);
     if (/^text\/html(?:;|$)/iu.test(contentType)) {
-      const parserMarkupDecision = immutableDocumentParserMarkupDecision(bytes);
+      const parserMarkupDecision = immutableDocumentParserMarkupDecision(
+        bytes,
+        {
+          documentOrigin: stableBrowserOrigin,
+        },
+      );
       if (!parserMarkupDecision.valid) {
         immutableResourceAttestationParserMarkupRejectCount += 1;
         assert.fail(

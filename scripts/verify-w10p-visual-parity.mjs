@@ -1460,7 +1460,10 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     'String(command).toLowerCase() === "inserthtml"',
     'marker: "parser-iframe-srcdoc"',
     'String(node.type || "").toLowerCase() === "speculationrules"',
+    "const EXACT_PARSER_MODULEPRELOAD_TAG_PATTERN =",
     "const immutableDocumentParserMarkupDecision = (",
+    'marker: "parser-base-url"',
+    "documentOrigin: stableBrowserOrigin",
     "immutableResourceAttestationParserMarkupRejectCount += 1",
     'result = await session.send("Browser.getBrowserCommandLine")',
     "ignoreDefaultArgs: BROWSER_PRETRANSMISSION_IGNORE_DEFAULT_ARGS",
@@ -2201,7 +2204,7 @@ const nonFirebaseNetworkAllowedHostnameSetHash = sha256(
 );
 assert.equal(contract.browserTransport?.browserOrigin, stableBrowserOrigin);
 assert.deepEqual(contract.browserTransport, {
-  schemaVersion: 4,
+  schemaVersion: 5,
   mechanism:
     "cdp-fetch-request-stage-local-fulfill-from-node-attested-immutable-bytes",
   browserOrigin: stableBrowserOrigin,
@@ -2212,7 +2215,7 @@ assert.deepEqual(contract.browserTransport, {
     "synthetic-no-store-content-type-and-x-dns-prefetch-control-link-omitted",
   informationalResponsePolicy: "immutable-one-xx-never-exposed-to-browser",
   parserMarkupPolicy:
-    "node-scan-fail-closed-before-browser-fulfill-on-speculative-link-speculationrules-anchor-ping-or-iframe-srcdoc",
+    "node-scan-fail-closed-before-browser-fulfill-on-speculative-link-except-exact-parser-same-origin-root-assets-js-modulepreload-without-base-query-or-fragment-speculationrules-anchor-ping-or-iframe-srcdoc",
   domMutationPolicy:
     "locked-common-attribute-validator-plus-srcdoc-set-html-unsafe-parse-html-unsafe-range-insert-node-move-before-and-insert-html-entrypoints",
   requiredProtocol: "https:",

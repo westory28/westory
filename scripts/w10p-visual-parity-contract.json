@@ -395,7 +395,7 @@
   },
   "stableAlias": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
   "browserTransport": {
-    "schemaVersion": 4,
+    "schemaVersion": 5,
     "mechanism": "cdp-fetch-request-stage-local-fulfill-from-node-attested-immutable-bytes",
     "browserOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
     "upstreamSource": "stage-immutable-deployment-url",
@@ -403,7 +403,7 @@
     "browserWirePolicy": "zero-browser-network-to-immutable-upstream",
     "responseHeaderPolicy": "synthetic-no-store-content-type-and-x-dns-prefetch-control-link-omitted",
     "informationalResponsePolicy": "immutable-one-xx-never-exposed-to-browser",
-    "parserMarkupPolicy": "node-scan-fail-closed-before-browser-fulfill-on-speculative-link-speculationrules-anchor-ping-or-iframe-srcdoc",
+    "parserMarkupPolicy": "node-scan-fail-closed-before-browser-fulfill-on-speculative-link-except-exact-parser-same-origin-root-assets-js-modulepreload-without-base-query-or-fragment-speculationrules-anchor-ping-or-iframe-srcdoc",
     "domMutationPolicy": "locked-common-attribute-validator-plus-srcdoc-set-html-unsafe-parse-html-unsafe-range-insert-node-move-before-and-insert-html-entrypoints",
     "requiredProtocol": "https:",
     "allowedPorts": ["", "443"],
