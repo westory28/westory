@@ -21530,7 +21530,9 @@ try {
       assert.equal(
         pageErrorAccumulator.totalCount,
         0,
-        `${target.screen.id} browser error count must be zero.`,
+        `${target.screen.id} browser error count must be zero: ${JSON.stringify(
+          snapshotSafeBrowserErrorAccumulator(pageErrorAccumulator),
+        )}`,
       );
       const anchorRequirements =
         stage === "candidate" && !target.screen.productionPresentation
@@ -21573,7 +21575,9 @@ try {
       assert.equal(
         pageErrorAccumulator.totalCount,
         0,
-        `${target.screen.id} emitted an error during screenshot capture.`,
+        `${target.screen.id} emitted an error during screenshot capture: ${JSON.stringify(
+          snapshotSafeBrowserErrorAccumulator(pageErrorAccumulator),
+        )}`,
       );
       const postScreenshotMetadata = await describePage(
         page,
