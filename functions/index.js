@@ -11703,6 +11703,7 @@ const authorizeCommandGatewayActor = async ({
     semesterCutover.CUTOVER_COMMAND_TYPES,
   );
   if (
+    commandType !== commandGateway.GET_SEMESTER_CORE_STATE_COMMAND_TYPE &&
     commandType !== commandGateway.COMMAND_TYPES.ADJUST_TEACHER_POINTS &&
     !assessmentCommandTypes.includes(commandType) &&
     !gradeCommandTypes.includes(commandType) &&
@@ -11773,6 +11774,33 @@ const authorizeCommandGatewayActor = async ({
       actorEmail,
       actorRole: "admin",
       actorCapability: `command:${commandType}`,
+    };
+  }
+  if (commandType === commandGateway.GET_SEMESTER_CORE_STATE_COMMAND_TYPE) {
+    // The normal highest administrator was handled above. This branch is the
+    // exact Staging visual-fixture exception for the read-only resolver.
+    const profileSnapshot = await db.doc(`users/${actorUid}`).get();
+    const profile = profileSnapshot.exists ? profileSnapshot.data() || {} : {};
+    if (
+      !commandGateway.isTrustedW10PVisualFixtureAdmin({
+        projectId: commandGateway.resolveProjectId(),
+        commandType,
+        request,
+        identity,
+        profile,
+      })
+    ) {
+      throw new HttpsError(
+        "permission-denied",
+        "Only the Westory administrator can execute this command.",
+        { reason: "COMMAND_ADMIN_REQUIRED" },
+      );
+    }
+    return {
+      actorUid,
+      actorEmail,
+      actorRole: "admin",
+      actorCapability: "w10p_visual_fixture:semester_core_read",
     };
   }
   const profileSnapshot = await db.doc(`users/${actorUid}`).get();

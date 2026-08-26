@@ -22,6 +22,18 @@ const semesterCutover = require("./semesterCutover");
 
 const REGION = "asia-northeast3";
 const ADMIN_EMAIL = "westoria28@gmail.com";
+const GET_SEMESTER_CORE_STATE_COMMAND_TYPE = "getSemesterCoreState";
+// This synthetic identity may read semester-core state only while the exact
+// isolated W10P Staging fixture is active. It never grants a mutation command
+// and the production project cannot satisfy the project fence.
+const W10P_VISUAL_FIXTURE_ADMIN_CONTRACT = Object.freeze({
+  projectId: "westory-staging-177587430482",
+  uid: "w10p-visual-admin",
+  email: "w10p-visual-admin@yongshin-ms.ms.kr",
+  fixtureOwner: "w10p-visual-parity",
+  fixtureId: "w10p-visual-fixture-v1",
+  fixtureRole: "admin",
+});
 const RECEIPT_COLLECTION = "command_receipts";
 const AUDIT_COLLECTION = "command_audit_events";
 const COMMAND_ID_PATTERN =
@@ -64,6 +76,47 @@ const fail = (code, message, reason, details = {}) => {
 
 const sha256 = (value) =>
   createHash("sha256").update(String(value), "utf8").digest("hex");
+
+const isTrustedW10PVisualFixtureAdmin = ({
+  projectId,
+  commandType,
+  request,
+  identity,
+  profile,
+}) => {
+  const contract = W10P_VISUAL_FIXTURE_ADMIN_CONTRACT;
+  const token = request?.auth?.token || {};
+  const profilePermissions = Array.isArray(profile?.staffPermissions)
+    ? profile.staffPermissions
+    : null;
+  return (
+    projectId === contract.projectId &&
+    commandType === GET_SEMESTER_CORE_STATE_COMMAND_TYPE &&
+    String(request?.auth?.uid || "").trim() === contract.uid &&
+    String(identity?.uid || "").trim() === contract.uid &&
+    String(token.email || "")
+      .trim()
+      .toLowerCase() === contract.email &&
+    String(identity?.email || "")
+      .trim()
+      .toLowerCase() === contract.email &&
+    token.email_verified === true &&
+    String(token.firebase?.sign_in_provider || "") === "password" &&
+    token.fixtureOwner === contract.fixtureOwner &&
+    token.fixtureId === contract.fixtureId &&
+    token.fixtureRole === contract.fixtureRole &&
+    String(profile?.uid || "").trim() === contract.uid &&
+    String(profile?.email || "")
+      .trim()
+      .toLowerCase() === contract.email &&
+    profile?.role === "teacher" &&
+    profile?.teacherPortalEnabled === true &&
+    profilePermissions !== null &&
+    profilePermissions.length === 0 &&
+    profile?.fixtureOwner === contract.fixtureOwner &&
+    profile?.fixtureId === contract.fixtureId
+  );
+};
 
 const readDocuments = async (reader, paths) => {
   if (paths.length === 0) return [];
@@ -1347,7 +1400,7 @@ const createCommandGatewayCore = ({
   };
 
   const getSemesterCoreState = async (request) => {
-    await authorize(request, "getSemesterCoreState");
+    await authorize(request, GET_SEMESTER_CORE_STATE_COMMAND_TYPE);
     const data = request.data || {};
     assertAllowedKeys(
       data,
@@ -1385,13 +1438,16 @@ module.exports = {
   ADMIN_EMAIL,
   AUDIT_COLLECTION,
   COMMAND_TYPES,
+  GET_SEMESTER_CORE_STATE_COMMAND_TYPE,
   RECEIPT_COLLECTION,
+  W10P_VISUAL_FIXTURE_ADMIN_CONTRACT,
   buildHolidayDocumentId,
   buildReceiptId,
   canonicalize,
   createCallableExports,
   createCommandGatewayCore,
   createFirestoreStore,
+  isTrustedW10PVisualFixtureAdmin,
   resolveProjectId,
   sha256,
   callableExports: createCallableExports(),
