@@ -16686,6 +16686,9 @@ const authenticate = async (page, credential, origin) => {
       if (!auxiliaryAppCheckToken?.token) {
         throw new Error("VISUAL_APPCHECK_TOKEN_MISSING");
       }
+      let applicationSessionAppCheckToken = String(
+        auxiliaryAppCheckToken.token,
+      );
       auxiliaryAppCheckToken = null;
       const auth = authModule.getAuth(app);
       await authModule.setPersistence(auth, authModule.browserLocalPersistence);
@@ -16696,6 +16699,54 @@ const authenticate = async (page, credential, origin) => {
       );
       await auth.authStateReady();
       const token = await authModule.getIdTokenResult(credentialResult.user);
+      let applicationSessionIdToken = await authModule.getIdToken(
+        credentialResult.user,
+      );
+      let applicationSessionResponse;
+      try {
+        applicationSessionResponse = await fetch(
+          `https://asia-northeast3-${config.projectId}.cloudfunctions.net/openApplicationSession`,
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${applicationSessionIdToken}`,
+              "Content-Type": "application/json",
+              "X-Firebase-AppCheck": applicationSessionAppCheckToken,
+            },
+            body: JSON.stringify({
+              data: {
+                authorityGeneration: "w1r2-2026-08-09",
+                protocolVersion: 2,
+              },
+            }),
+            redirect: "error",
+          },
+        );
+      } finally {
+        applicationSessionIdToken = "";
+        applicationSessionAppCheckToken = "";
+      }
+      let applicationSessionEnvelope = null;
+      try {
+        applicationSessionEnvelope = await applicationSessionResponse.json();
+      } catch {
+        throw new Error("VISUAL_APPLICATION_SESSION_RESPONSE_INVALID");
+      }
+      if (!applicationSessionResponse.ok || applicationSessionEnvelope?.error) {
+        throw new Error("VISUAL_APPLICATION_SESSION_OPEN_FAILED");
+      }
+      const applicationSession = applicationSessionEnvelope?.result;
+      const tokenAuthTime = Number(token.claims.auth_time || 0);
+      if (
+        !applicationSession ||
+        applicationSession.status !== "active" ||
+        applicationSession.authorityGeneration !== "w1r2-2026-08-09" ||
+        Number(applicationSession.protocolVersion) < 2 ||
+        Number(applicationSession.authTime) !== tokenAuthTime ||
+        !/^[a-f0-9]{64}$/u.test(String(applicationSession.revision || ""))
+      ) {
+        throw new Error("VISUAL_APPLICATION_SESSION_ATTESTATION_FAILED");
+      }
       const database = firestoreModule.getFirestore(app);
       const profileSnapshot = await firestoreModule.getDoc(
         firestoreModule.doc(database, "users", credentialResult.user.uid),
