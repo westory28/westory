@@ -627,7 +627,7 @@
     "settleIntervalMs": 250,
     "requiredStableSamples": 3,
     "maxSettleSamples": 20,
-    "blockingVisibleTextPattern": "(?:불러오는 중|준비하는 중|^준비 중\\.\\.\\.$|로딩 중|잠시만 기다려|불러오지 못했습니다|접근 권한이 없습니다|권한이 부족합니다|문제가 발생했습니다)"
+    "blockingVisibleTextPattern": "(?:불러오는 중|준비하는 중|^확인 중(?:\\.\\.\\.|…)$|^준비 중\\.\\.\\.$|로딩 중|잠시만 기다려|불러오지 못했습니다|접근 권한이 없습니다|권한이 부족합니다|문제가 발생했습니다)"
   },
   "requiredDpr": 1,
   "fullPageViewportKeys": ["390x844", "1440x900"],
