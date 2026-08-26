@@ -79,7 +79,91 @@ const createBrowserChildEnvironment = () =>
       BROWSER_CHILD_ENVIRONMENT_ALLOWLIST.includes(name.toUpperCase()),
     ),
   );
-const blockBrowserSecondaryExecutionAndWebTransport = () => {
+const EXACT_DOM_MODULEPRELOAD_POLICY = Object.freeze({
+  allowedAttributeNames: Object.freeze(["as", "crossorigin", "href", "rel"]),
+  asValue: "script",
+  crossoriginValue: "",
+  hrefPathPatternSource: "^/assets/[A-Za-z0-9._-]+\\.js$",
+  relValue: "modulepreload",
+});
+const exactDomModulepreloadDescriptorAllowed = ({
+  documentUrl,
+  attributes,
+  relTokens,
+}) => {
+  if (!attributes || typeof attributes !== "object") return false;
+  if (
+    JSON.stringify(Object.keys(attributes).sort()) !==
+    JSON.stringify(EXACT_DOM_MODULEPRELOAD_POLICY.allowedAttributeNames)
+  ) {
+    return false;
+  }
+  if (
+    attributes.rel !== EXACT_DOM_MODULEPRELOAD_POLICY.relValue ||
+    attributes.as !== EXACT_DOM_MODULEPRELOAD_POLICY.asValue ||
+    attributes.crossorigin !==
+      EXACT_DOM_MODULEPRELOAD_POLICY.crossoriginValue ||
+    !Array.isArray(relTokens) ||
+    relTokens.length !== 1 ||
+    relTokens[0] !== EXACT_DOM_MODULEPRELOAD_POLICY.relValue ||
+    !new RegExp(EXACT_DOM_MODULEPRELOAD_POLICY.hrefPathPatternSource, "u").test(
+      attributes.href,
+    )
+  ) {
+    return false;
+  }
+  try {
+    const parsedDocumentUrl = new URL(String(documentUrl));
+    const parsedHref = new URL(attributes.href, parsedDocumentUrl.origin);
+    return (
+      parsedDocumentUrl.protocol === "https:" &&
+      parsedDocumentUrl.username === "" &&
+      parsedDocumentUrl.password === "" &&
+      ["", "443"].includes(parsedDocumentUrl.port) &&
+      parsedHref.origin === parsedDocumentUrl.origin &&
+      parsedHref.pathname === attributes.href &&
+      parsedHref.search === "" &&
+      parsedHref.hash === ""
+    );
+  } catch {
+    return false;
+  }
+};
+const blockBrowserSecondaryExecutionAndWebTransport = (modulepreloadPolicy) => {
+  const {
+    Array,
+    Boolean,
+    DOMException,
+    Function,
+    Object,
+    Reflect,
+    RegExp,
+    Set,
+    String,
+    Symbol,
+    URL,
+    WeakMap,
+    WeakSet,
+  } = globalThis;
+  const nativeReflectApply = Reflect.apply;
+  const callNative = (callable, receiver, ...args) =>
+    nativeReflectApply(callable, receiver, args);
+  const nativeArrayIteratorPrototype = Object.getPrototypeOf(
+    callNative(Array.prototype.values, []),
+  );
+  for (const intrinsicPrototype of [
+    Array.prototype,
+    nativeArrayIteratorPrototype,
+    Function.prototype,
+    RegExp.prototype,
+    Set.prototype,
+    String.prototype,
+    URL.prototype,
+    WeakMap.prototype,
+    WeakSet.prototype,
+  ]) {
+    Object.freeze(intrinsicPrototype);
+  }
   class BlockedBrowserCapability {
     constructor() {
       throw new DOMException(
@@ -163,26 +247,628 @@ const blockBrowserSecondaryExecutionAndWebTransport = () => {
     "preload",
     "prerender",
   ]);
+  const nativeObjectDefineProperty = Object.defineProperty;
+  const nativeObjectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+  const nativeObjectHasOwn = Object.hasOwn;
+  const nativeObjectKeys = Object.keys;
+  const nativeReflectOwnKeys = Reflect.ownKeys;
   const hasBlockedRelToken = (value) =>
     String(value || "")
       .toLowerCase()
       .split(/\s+/u)
       .some((token) => speculativeRelTokens.has(token));
-  const blockedRelLists = new WeakSet();
+  const NativeURL = globalThis.URL;
+  const findNativePropertyDescriptor = (target, property) => {
+    let descriptorTarget = target;
+    while (descriptorTarget) {
+      const descriptor = Object.getOwnPropertyDescriptor(
+        descriptorTarget,
+        property,
+      );
+      if (descriptor) return descriptor;
+      descriptorTarget = Object.getPrototypeOf(descriptorTarget);
+    }
+    return null;
+  };
+  const nativeGetAttribute = Element.prototype.getAttribute;
+  const nativeGetAttributeNames = Element.prototype.getAttributeNames;
+  const nativeAttrOwnerElementDescriptor = findNativePropertyDescriptor(
+    Attr.prototype,
+    "ownerElement",
+  );
+  const nativeAttrLocalNameDescriptor = findNativePropertyDescriptor(
+    Attr.prototype,
+    "localName",
+  );
+  const nativeAttrNameDescriptor = findNativePropertyDescriptor(
+    Attr.prototype,
+    "name",
+  );
+  const nativeAttrValueDescriptor = findNativePropertyDescriptor(
+    Attr.prototype,
+    "value",
+  );
+  const nativeNodeOwnerDocumentDescriptor = findNativePropertyDescriptor(
+    Node.prototype,
+    "ownerDocument",
+  );
+  const nativeNodeTypeDescriptor = findNativePropertyDescriptor(
+    Node.prototype,
+    "nodeType",
+  );
+  const nativeElementLocalNameDescriptor = findNativePropertyDescriptor(
+    Element.prototype,
+    "localName",
+  );
+  const nativeElementNamespaceUriDescriptor = findNativePropertyDescriptor(
+    Element.prototype,
+    "namespaceURI",
+  );
+  const nativeEventTypeDescriptor = findNativePropertyDescriptor(
+    Event.prototype,
+    "type",
+  );
+  const nativeTokenListValueDescriptor = findNativePropertyDescriptor(
+    DOMTokenList.prototype,
+    "value",
+  );
+  const nativeRangeStartContainerDescriptor = findNativePropertyDescriptor(
+    Range.prototype,
+    "startContainer",
+  );
+  const nativeTemplateContentDescriptor = findNativePropertyDescriptor(
+    HTMLTemplateElement.prototype,
+    "content",
+  );
+  const nativeNodeListLengthDescriptor = findNativePropertyDescriptor(
+    NodeList.prototype,
+    "length",
+  );
+  const nativeNodeListItem = NodeList.prototype.item;
+  const nativeDocumentCreateElement = Document.prototype.createElement;
+  const nativeElementQuerySelectorAll = Element.prototype.querySelectorAll;
+  const nativeDocumentQuerySelectorAll = Document.prototype.querySelectorAll;
+  const nativeDocumentFragmentQuerySelectorAll =
+    DocumentFragment.prototype.querySelectorAll;
+  const nativeAttributesDescriptor = Object.getOwnPropertyDescriptor(
+    Element.prototype,
+    "attributes",
+  );
+  const nativeParentNodeDescriptor = Object.getOwnPropertyDescriptor(
+    Node.prototype,
+    "parentNode",
+  );
+  const nativeIsConnectedDescriptor = Object.getOwnPropertyDescriptor(
+    Node.prototype,
+    "isConnected",
+  );
+  const nativeDocumentHeadDescriptor = Object.getOwnPropertyDescriptor(
+    Document.prototype,
+    "head",
+  );
   const nativeRelListDescriptor = Object.getOwnPropertyDescriptor(
     HTMLLinkElement.prototype,
     "relList",
   );
+  const nativeLinkPropertyDescriptors = Object.fromEntries(
+    ["as", "crossOrigin", "href", "rel"].map((property) => [
+      property,
+      Object.getOwnPropertyDescriptor(HTMLLinkElement.prototype, property),
+    ]),
+  );
+  const nativeLinkInheritanceAccessorDescriptors = [];
+  for (const target of [
+    Element.prototype,
+    HTMLElement.prototype,
+    HTMLLinkElement.prototype,
+    globalThis.SVGElement?.prototype,
+    globalThis.MathMLElement?.prototype,
+    globalThis.ElementInternals?.prototype,
+  ].filter(Boolean)) {
+    for (const property of nativeReflectOwnKeys(target)) {
+      const descriptor = nativeObjectGetOwnPropertyDescriptor(target, property);
+      if (descriptor?.get || descriptor?.set) {
+        nativeLinkInheritanceAccessorDescriptors.push({
+          descriptor,
+          property,
+          target,
+        });
+      }
+    }
+  }
+  Object.freeze(nativeLinkInheritanceAccessorDescriptors);
+  const getNativeAttribute = (node, name) =>
+    callNative(nativeGetAttribute, node, name);
+  const getNativeAttributeNames = (node) =>
+    callNative(nativeGetAttributeNames, node);
+  const getNativeAttrOwnerElement = (attribute) =>
+    nativeAttrOwnerElementDescriptor?.get
+      ? callNative(nativeAttrOwnerElementDescriptor.get, attribute)
+      : null;
+  const getNativeAttrMutationName = (attribute) =>
+    (nativeAttrLocalNameDescriptor?.get
+      ? callNative(nativeAttrLocalNameDescriptor.get, attribute)
+      : "") ||
+    (nativeAttrNameDescriptor?.get
+      ? callNative(nativeAttrNameDescriptor.get, attribute)
+      : "");
+  const getNativeAttrValue = (attribute) =>
+    nativeAttrValueDescriptor?.get
+      ? callNative(nativeAttrValueDescriptor.get, attribute)
+      : "";
+  const getNativeNodeIdentity = (node) => {
+    if (
+      !nativeNodeOwnerDocumentDescriptor?.get ||
+      !nativeNodeTypeDescriptor?.get
+    ) {
+      return null;
+    }
+    try {
+      return {
+        nodeType: callNative(nativeNodeTypeDescriptor.get, node),
+        ownerDocument: callNative(nativeNodeOwnerDocumentDescriptor.get, node),
+      };
+    } catch {
+      return null;
+    }
+  };
+  const getNativeElementIdentity = (node) => {
+    const nodeIdentity = getNativeNodeIdentity(node);
+    if (
+      nodeIdentity?.nodeType !== 1 ||
+      !nativeElementLocalNameDescriptor?.get ||
+      !nativeElementNamespaceUriDescriptor?.get
+    ) {
+      return null;
+    }
+    try {
+      return {
+        ...nodeIdentity,
+        localName: callNative(nativeElementLocalNameDescriptor.get, node),
+        namespaceUri: callNative(nativeElementNamespaceUriDescriptor.get, node),
+      };
+    } catch {
+      return null;
+    }
+  };
+  const isNativeHtmlElement = (node, localName) => {
+    const identity = getNativeElementIdentity(node);
+    return (
+      identity?.namespaceUri === "http://www.w3.org/1999/xhtml" &&
+      identity.localName === localName
+    );
+  };
+  const isNativePingElement = (node) =>
+    isNativeHtmlElement(node, "a") || isNativeHtmlElement(node, "area");
+  const isNativeCurrentDocumentNode = (node) => {
+    const identity = getNativeNodeIdentity(node);
+    return (
+      identity === null ||
+      node === document ||
+      identity.ownerDocument === document
+    );
+  };
+  const isNativeCurrentDocumentElement = (node) => {
+    const identity = getNativeElementIdentity(node);
+    return identity !== null && identity.ownerDocument === document;
+  };
+  const isNativeCurrentDocumentAttr = (attribute) => {
+    const identity = getNativeNodeIdentity(attribute);
+    return identity?.nodeType === 2 && identity.ownerDocument === document;
+  };
+  const isNativeAttr = (attribute) =>
+    getNativeNodeIdentity(attribute)?.nodeType === 2;
+  const isNativeTokenList = (tokenList) => {
+    if (!nativeTokenListValueDescriptor?.get) return false;
+    try {
+      callNative(nativeTokenListValueDescriptor.get, tokenList);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const isNativeCurrentDocumentRange = (range) => {
+    if (!nativeRangeStartContainerDescriptor?.get) return false;
+    try {
+      return isNativeCurrentDocumentNode(
+        callNative(nativeRangeStartContainerDescriptor.get, range),
+      );
+    } catch {
+      return false;
+    }
+  };
+  const getNativeEventType = (event) => {
+    if (!nativeEventTypeDescriptor?.get) return null;
+    try {
+      return callNative(nativeEventTypeDescriptor.get, event);
+    } catch {
+      return null;
+    }
+  };
+  const getNativeTemplateContent = (template) => {
+    if (!nativeTemplateContentDescriptor?.get) return null;
+    try {
+      return callNative(nativeTemplateContentDescriptor.get, template);
+    } catch {
+      return null;
+    }
+  };
+  const snapshotNativeNodeList = (nodeList) => {
+    if (!nativeNodeListLengthDescriptor?.get) return [];
+    const snapshot = [];
+    let length;
+    try {
+      length = callNative(nativeNodeListLengthDescriptor.get, nodeList);
+    } catch {
+      return snapshot;
+    }
+    for (let index = 0; index < length; index += 1) {
+      const node = callNative(nativeNodeListItem, nodeList, index);
+      if (node !== null) snapshot.push(node);
+    }
+    return snapshot;
+  };
+  const queryNativeDescendants = (node, selector) => {
+    const identity = getNativeNodeIdentity(node);
+    if (identity?.nodeType === 9) {
+      return snapshotNativeNodeList(
+        callNative(nativeDocumentQuerySelectorAll, node, selector),
+      );
+    }
+    if (identity?.nodeType === 11) {
+      return snapshotNativeNodeList(
+        callNative(nativeDocumentFragmentQuerySelectorAll, node, selector),
+      );
+    }
+    if (identity?.nodeType === 1) {
+      return snapshotNativeNodeList(
+        callNative(nativeElementQuerySelectorAll, node, selector),
+      );
+    }
+    return [];
+  };
+  const getNativeParentNode = (node) =>
+    nativeParentNodeDescriptor?.get
+      ? callNative(nativeParentNodeDescriptor.get, node)
+      : node.parentNode;
+  const getNativeIsConnected = (node) =>
+    nativeIsConnectedDescriptor?.get
+      ? callNative(nativeIsConnectedDescriptor.get, node)
+      : node.isConnected;
+  const getNativeDocumentHead = () =>
+    nativeDocumentHeadDescriptor?.get
+      ? callNative(nativeDocumentHeadDescriptor.get, document)
+      : document.head;
+  const canReplaceModulepreloadContainer = (node) => {
+    const head = getNativeDocumentHead();
+    return (
+      node === document ||
+      node === head ||
+      (head !== null && node === getNativeParentNode(head))
+    );
+  };
+  const capturedDocumentUrl = new NativeURL(location.href);
+  const exactModulepreloadHrefPattern = new RegExp(
+    modulepreloadPolicy.hrefPathPatternSource,
+    "u",
+  );
+  const allowedModulepreloadAttributeNames = [
+    ...modulepreloadPolicy.allowedAttributeNames,
+  ].sort();
+  const exactModulepreloadHrefAllowed = (rawHref) => {
+    if (
+      typeof rawHref !== "string" ||
+      !exactModulepreloadHrefPattern.test(rawHref)
+    ) {
+      return false;
+    }
+    try {
+      const parsedHref = new NativeURL(rawHref, capturedDocumentUrl.origin);
+      const secureDocumentOrigin =
+        capturedDocumentUrl.protocol === "https:" &&
+        capturedDocumentUrl.username === "" &&
+        capturedDocumentUrl.password === "" &&
+        ["", "443"].includes(capturedDocumentUrl.port);
+      const exactLoopbackDocumentOrigin =
+        capturedDocumentUrl.protocol === "http:" &&
+        capturedDocumentUrl.hostname === "127.0.0.1" &&
+        capturedDocumentUrl.username === "" &&
+        capturedDocumentUrl.password === "" &&
+        capturedDocumentUrl.origin ===
+          modulepreloadPolicy.exactLoopbackDocumentOrigin;
+      return (
+        (secureDocumentOrigin || exactLoopbackDocumentOrigin) &&
+        parsedHref.origin === capturedDocumentUrl.origin &&
+        parsedHref.pathname === rawHref &&
+        parsedHref.search === "" &&
+        parsedHref.hash === ""
+      );
+    } catch {
+      return false;
+    }
+  };
+  const isExactAllowedModulepreload = (node) => {
+    if (!isNativeHtmlElement(node, "link")) return false;
+    const attributeNames = getNativeAttributeNames(node)
+      .map((name) => name.toLowerCase())
+      .sort();
+    if (
+      attributeNames.length !== allowedModulepreloadAttributeNames.length ||
+      attributeNames.some(
+        (name, index) => name !== allowedModulepreloadAttributeNames[index],
+      )
+    ) {
+      return false;
+    }
+    const rawHref = getNativeAttribute(node, "href");
+    if (
+      getNativeAttribute(node, "rel") !== modulepreloadPolicy.relValue ||
+      getNativeAttribute(node, "as") !== modulepreloadPolicy.asValue ||
+      getNativeAttribute(node, "crossorigin") !==
+        modulepreloadPolicy.crossoriginValue ||
+      !exactModulepreloadHrefAllowed(rawHref) ||
+      !exactResolvedModulepreloadHrefAllowed(node)
+    ) {
+      return false;
+    }
+    return true;
+  };
+  const pendingModulepreloadLinks = new WeakSet();
+  const admittedModulepreloadLinks = new WeakSet();
+  const retiredModulepreloadLinks = new WeakSet();
+  const modulepreloadStateByLink = new WeakMap();
+  const retireModulepreloadLink = (node) => {
+    if (!isNativeHtmlElement(node, "link")) return;
+    pendingModulepreloadLinks.delete(node);
+    if (!admittedModulepreloadLinks.has(node)) {
+      retiredModulepreloadLinks.add(node);
+    }
+  };
+  const exactAttributeState = (node, expectedAttributes) => {
+    const expectedNames = nativeObjectKeys(expectedAttributes).sort();
+    const actualNames = getNativeAttributeNames(node)
+      .map((name) => name.toLowerCase())
+      .sort();
+    return (
+      actualNames.length === expectedNames.length &&
+      actualNames.every((name, index) => name === expectedNames[index]) &&
+      expectedNames.every(
+        (name) => getNativeAttribute(node, name) === expectedAttributes[name],
+      )
+    );
+  };
+  const isNativeDetachedLink = (node) =>
+    isNativeHtmlElement(node, "link") &&
+    isNativeCurrentDocumentElement(node) &&
+    !getNativeIsConnected(node) &&
+    getNativeParentNode(node) === null;
+  const setNativeLinkProperty = (node, property, value) => {
+    const descriptor = nativeLinkPropertyDescriptors[property];
+    if (!descriptor?.set) return blockedOperation();
+    return callNative(descriptor.set, node, value);
+  };
+  const getNativeLinkProperty = (node, property) => {
+    const descriptor = nativeLinkPropertyDescriptors[property];
+    if (!descriptor?.get) return null;
+    return callNative(descriptor.get, node);
+  };
+  const exactResolvedModulepreloadHrefAllowed = (node) => {
+    const rawHref = getNativeAttribute(node, "href");
+    if (!exactModulepreloadHrefAllowed(rawHref)) return false;
+    try {
+      return (
+        getNativeLinkProperty(node, "href") ===
+        new NativeURL(rawHref, capturedDocumentUrl.origin).href
+      );
+    } catch {
+      return false;
+    }
+  };
+  const setInitialModulepreloadRel = (node, value) => {
+    const state = modulepreloadStateByLink.get(node) || "S0";
+    const currentRel = getNativeAttribute(node, "rel") || "";
+    if (
+      state !== "S0" ||
+      admittedModulepreloadLinks.has(node) ||
+      retiredModulepreloadLinks.has(node) ||
+      hasBlockedRelToken(currentRel)
+    ) {
+      retireModulepreloadLink(node);
+      return blockedOperation();
+    }
+    if (!hasBlockedRelToken(value)) {
+      return setNativeLinkProperty(node, "rel", value);
+    }
+    if (
+      typeof value !== "string" ||
+      value !== modulepreloadPolicy.relValue ||
+      !isNativeDetachedLink(node) ||
+      getNativeAttributeNames(node).length !== 0
+    ) {
+      retireModulepreloadLink(node);
+      return blockedOperation();
+    }
+    let result;
+    try {
+      result = setNativeLinkProperty(node, "rel", value);
+    } catch (error) {
+      retireModulepreloadLink(node);
+      throw error;
+    }
+    if (
+      !isNativeDetachedLink(node) ||
+      !exactAttributeState(node, { rel: modulepreloadPolicy.relValue })
+    ) {
+      retireModulepreloadLink(node);
+      return blockedOperation();
+    }
+    modulepreloadStateByLink.set(node, "S1");
+    pendingModulepreloadLinks.add(node);
+    return result;
+  };
+  const setPendingModulepreloadProperty = ({
+    node,
+    property,
+    value,
+    expectedState,
+    expectedAttributes,
+    expectedValue,
+    nextAttributes,
+    nextState,
+    validateValue = () => true,
+    validateNextNode = () => true,
+  }) => {
+    if (
+      admittedModulepreloadLinks.has(node) ||
+      retiredModulepreloadLinks.has(node)
+    ) {
+      return blockedOperation();
+    }
+    if (!pendingModulepreloadLinks.has(node)) {
+      if (hasBlockedRelToken(getNativeAttribute(node, "rel"))) {
+        retireModulepreloadLink(node);
+        return blockedOperation();
+      }
+      return setNativeLinkProperty(node, property, value);
+    }
+    if (
+      !isNativeDetachedLink(node) ||
+      modulepreloadStateByLink.get(node) !== expectedState ||
+      !exactAttributeState(node, expectedAttributes) ||
+      typeof value !== "string" ||
+      value !== expectedValue ||
+      !validateValue(value)
+    ) {
+      retireModulepreloadLink(node);
+      return blockedOperation();
+    }
+    let result;
+    try {
+      result = setNativeLinkProperty(node, property, value);
+    } catch (error) {
+      retireModulepreloadLink(node);
+      throw error;
+    }
+    if (
+      !isNativeDetachedLink(node) ||
+      !exactAttributeState(node, nextAttributes) ||
+      !validateNextNode(node)
+    ) {
+      retireModulepreloadLink(node);
+      return blockedOperation();
+    }
+    modulepreloadStateByLink.set(node, nextState);
+    return result;
+  };
+  const hasSpeculativeLinkToken = (node) =>
+    hasBlockedRelToken(getNativeAttribute(node, "rel"));
+  const prepareExactModulepreloadAdmission = (node) => {
+    if (
+      !isNativeHtmlElement(node, "link") ||
+      !isNativeCurrentDocumentElement(node) ||
+      !isNativeDetachedLink(node) ||
+      !pendingModulepreloadLinks.has(node) ||
+      modulepreloadStateByLink.get(node) !== "S4" ||
+      admittedModulepreloadLinks.has(node) ||
+      retiredModulepreloadLinks.has(node) ||
+      !isExactAllowedModulepreload(node)
+    ) {
+      retireModulepreloadLink(node);
+      return false;
+    }
+    pendingModulepreloadLinks.delete(node);
+    modulepreloadStateByLink.set(node, "S5");
+    admittedModulepreloadLinks.add(node);
+    return true;
+  };
+  const guardedRelLists = new WeakMap();
+  const guardedTokenListOwnerSymbol = Symbol.for(
+    "w10p.capture.guarded-token-list-owner",
+  );
+  const rememberGuardedTokenListOwner = (tokenList, ownerElement) => {
+    if (!isNativeTokenList(tokenList)) return blockedOperation();
+    guardedRelLists.set(tokenList, ownerElement);
+    if (!nativeObjectHasOwn(tokenList, guardedTokenListOwnerSymbol)) {
+      nativeObjectDefineProperty(tokenList, guardedTokenListOwnerSymbol, {
+        configurable: false,
+        enumerable: false,
+        writable: false,
+        value: ownerElement,
+      });
+    }
+    return tokenList;
+  };
+  const getGuardedTokenListOwner = (tokenList) =>
+    tokenList?.[guardedTokenListOwnerSymbol] ||
+    guardedRelLists.get(tokenList) ||
+    null;
   if (nativeRelListDescriptor?.get) {
-    Object.defineProperty(HTMLLinkElement.prototype, "relList", {
+    const guardedRelListDescriptor = {
       ...nativeRelListDescriptor,
       configurable: false,
       get() {
-        const relList = nativeRelListDescriptor.get.call(this);
-        blockedRelLists.add(relList);
-        return relList;
+        const relList = callNative(nativeRelListDescriptor.get, this);
+        return rememberGuardedTokenListOwner(relList, this);
       },
-    });
+    };
+    if (nativeRelListDescriptor.set) {
+      guardedRelListDescriptor.set = function (value) {
+        const stableValue = String(value);
+        if (
+          !isNativeCurrentDocumentElement(this) ||
+          pendingModulepreloadLinks.has(this) ||
+          admittedModulepreloadLinks.has(this) ||
+          retiredModulepreloadLinks.has(this) ||
+          hasBlockedRelToken(getNativeAttribute(this, "rel")) ||
+          hasBlockedRelToken(stableValue)
+        ) {
+          retireModulepreloadLink(this);
+          return blockedOperation();
+        }
+        return callNative(nativeRelListDescriptor.set, this, stableValue);
+      };
+    }
+    Object.defineProperty(
+      HTMLLinkElement.prototype,
+      "relList",
+      guardedRelListDescriptor,
+    );
+  }
+  for (const property of ["blocking", "sizes"]) {
+    const descriptor = Object.getOwnPropertyDescriptor(
+      HTMLLinkElement.prototype,
+      property,
+    );
+    if (!descriptor?.get) continue;
+    const guardedTokenListDescriptor = {
+      ...descriptor,
+      configurable: false,
+      get() {
+        const tokenList = callNative(descriptor.get, this);
+        return rememberGuardedTokenListOwner(tokenList, this);
+      },
+    };
+    if (descriptor.set) {
+      guardedTokenListDescriptor.set = function (value) {
+        const stableValue = String(value);
+        if (!isNativeCurrentDocumentElement(this)) return blockedOperation();
+        if (
+          pendingModulepreloadLinks.has(this) ||
+          admittedModulepreloadLinks.has(this) ||
+          retiredModulepreloadLinks.has(this) ||
+          hasBlockedRelToken(getNativeAttribute(this, "rel"))
+        ) {
+          retireModulepreloadLink(this);
+          return blockedOperation();
+        }
+        return callNative(descriptor.set, this, stableValue);
+      };
+    }
+    Object.defineProperty(
+      HTMLLinkElement.prototype,
+      property,
+      guardedTokenListDescriptor,
+    );
   }
   const blockRelListMutation = (name, tokenSelector) => {
     const original = DOMTokenList.prototype[name];
@@ -191,90 +877,213 @@ const blockBrowserSecondaryExecutionAndWebTransport = () => {
       configurable: false,
       writable: false,
       value(...args) {
+        const stableArgs =
+          name === "toggle"
+            ? [String(args[0]), ...args.slice(1)]
+            : args.map((value) => String(value));
+        const ownerElement = getGuardedTokenListOwner(this);
         if (
-          blockedRelLists.has(this) &&
-          tokenSelector(args).some((token) =>
-            speculativeRelTokens.has(String(token).toLowerCase()),
-          )
+          ownerElement &&
+          (!isNativeCurrentDocumentElement(ownerElement) ||
+            pendingModulepreloadLinks.has(ownerElement) ||
+            admittedModulepreloadLinks.has(ownerElement) ||
+            retiredModulepreloadLinks.has(ownerElement) ||
+            hasBlockedRelToken(getNativeAttribute(ownerElement, "rel")) ||
+            tokenSelector(stableArgs).some((token) =>
+              speculativeRelTokens.has(String(token).toLowerCase()),
+            ))
         ) {
+          retireModulepreloadLink(ownerElement);
           return blockedOperation();
         }
-        return original.apply(this, args);
+        return callNative(original, this, ...stableArgs);
       },
     });
   };
   blockRelListMutation("add", (args) => args);
+  blockRelListMutation("remove", (args) => args);
   blockRelListMutation("replace", (args) => args.slice(1));
   blockRelListMutation("toggle", (args) => args.slice(0, 1));
-  const nativeTokenListValueDescriptor = Object.getOwnPropertyDescriptor(
-    DOMTokenList.prototype,
-    "value",
-  );
   if (nativeTokenListValueDescriptor?.set) {
     Object.defineProperty(DOMTokenList.prototype, "value", {
       ...nativeTokenListValueDescriptor,
       configurable: false,
       set(value) {
-        if (blockedRelLists.has(this) && hasBlockedRelToken(value)) {
+        const stableValue = String(value);
+        const ownerElement = getGuardedTokenListOwner(this);
+        if (
+          ownerElement &&
+          (!isNativeCurrentDocumentElement(ownerElement) ||
+            pendingModulepreloadLinks.has(ownerElement) ||
+            admittedModulepreloadLinks.has(ownerElement) ||
+            retiredModulepreloadLinks.has(ownerElement) ||
+            hasBlockedRelToken(getNativeAttribute(ownerElement, "rel")) ||
+            hasBlockedRelToken(stableValue))
+        ) {
+          retireModulepreloadLink(ownerElement);
           return blockedOperation();
         }
-        return nativeTokenListValueDescriptor.set.call(this, value);
+        return callNative(
+          nativeTokenListValueDescriptor.set,
+          this,
+          stableValue,
+        );
       },
     });
   }
   const isBlockedSpeculativeNode = (node) => {
-    if (node instanceof HTMLLinkElement) {
-      return node.relList
-        ? [...node.relList].some((token) => speculativeRelTokens.has(token))
-        : hasBlockedRelToken(node.rel);
+    if (isNativeHtmlElement(node, "base")) return true;
+    if (isNativeHtmlElement(node, "link")) {
+      return (
+        pendingModulepreloadLinks.has(node) ||
+        admittedModulepreloadLinks.has(node) ||
+        retiredModulepreloadLinks.has(node) ||
+        hasSpeculativeLinkToken(node)
+      );
     }
     if (
-      node instanceof HTMLScriptElement &&
-      String(node.type || "").toLowerCase() === "speculationrules"
+      isNativeHtmlElement(node, "script") &&
+      String(getNativeAttribute(node, "type") || "").toLowerCase() ===
+        "speculationrules"
     ) {
       return true;
     }
-    if (node instanceof HTMLAnchorElement && Boolean(node.ping)) return true;
-    return node instanceof HTMLIFrameElement && node.hasAttribute("srcdoc");
+    if (
+      isNativePingElement(node) &&
+      Boolean(getNativeAttribute(node, "ping"))
+    ) {
+      return true;
+    }
+    return (
+      isNativeHtmlElement(node, "iframe") &&
+      getNativeAttribute(node, "srcdoc") !== null
+    );
   };
   const containsBlockedSpeculativeNode = (node) => {
     if (isBlockedSpeculativeNode(node)) return true;
-    return (
-      typeof node?.querySelectorAll === "function" &&
-      [...node.querySelectorAll("link,script,a,iframe[srcdoc]")].some(
-        (candidate) => isBlockedSpeculativeNode(candidate),
-      )
+    if (
+      [
+        ...queryNativeDescendants(
+          node,
+          "base,link,script,a,area,iframe[srcdoc]",
+        ),
+      ].some((candidate) => isBlockedSpeculativeNode(candidate))
+    ) {
+      return true;
+    }
+    const nestedTemplates = [
+      ...(isNativeHtmlElement(node, "template") ? [node] : []),
+      ...queryNativeDescendants(node, "template"),
+    ];
+    for (const template of nestedTemplates) {
+      const content = getNativeTemplateContent(template);
+      if (content && containsBlockedSpeculativeNode(content)) return true;
+    }
+    return false;
+  };
+  const retirePendingModulepreloadsWithin = (node) => {
+    if (isNativeHtmlElement(node, "link")) retireModulepreloadLink(node);
+    for (const link of queryNativeDescendants(node, "link")) {
+      retireModulepreloadLink(link);
+    }
+  };
+  const containsAdmittedModulepreload = (node) => {
+    if (admittedModulepreloadLinks.has(node)) {
+      return true;
+    }
+    return [...queryNativeDescendants(node, "link")].some((link) =>
+      admittedModulepreloadLinks.has(link),
     );
   };
   const assertNodesAllowed = (nodes) => {
-    if (
-      nodes.some(
-        (node) =>
-          typeof node !== "string" && containsBlockedSpeculativeNode(node),
-      )
-    ) {
-      return blockedOperation();
+    for (const node of nodes) {
+      if (!isNativeCurrentDocumentNode(node)) return blockedOperation();
+      if (typeof node === "string") continue;
+      if (containsBlockedSpeculativeNode(node)) {
+        retirePendingModulepreloadsWithin(node);
+        return blockedOperation();
+      }
     }
   };
+  const snapshotNodesOrStrings = (nodes) =>
+    nodes.map((node) =>
+      typeof node === "string" || getNativeNodeIdentity(node) !== null
+        ? node
+        : String(node),
+    );
   const nativeElementInnerHtmlDescriptor = Object.getOwnPropertyDescriptor(
     Element.prototype,
     "innerHTML",
   );
   const assertMarkupAllowed = (markup) => {
-    if (!nativeElementInnerHtmlDescriptor?.set) return;
-    const template = document.createElement("template");
-    nativeElementInnerHtmlDescriptor.set.call(template, markup);
-    if (containsBlockedSpeculativeNode(template.content)) {
+    const stableMarkup = String(markup);
+    if (!nativeElementInnerHtmlDescriptor?.set) return stableMarkup;
+    const template = callNative(
+      nativeDocumentCreateElement,
+      document,
+      "template",
+    );
+    callNative(nativeElementInnerHtmlDescriptor.set, template, stableMarkup);
+    const templateContent = getNativeTemplateContent(template);
+    if (!templateContent || containsBlockedSpeculativeNode(templateContent)) {
       return blockedOperation();
     }
+    return stableMarkup;
   };
   const originalAppendChild = Node.prototype.appendChild;
   Object.defineProperty(Node.prototype, "appendChild", {
     configurable: false,
     writable: false,
     value(node) {
+      if (
+        !isNativeCurrentDocumentNode(this) ||
+        !isNativeCurrentDocumentNode(node)
+      ) {
+        return blockedOperation();
+      }
+      if (
+        isNativeHtmlElement(node, "link") &&
+        (pendingModulepreloadLinks.has(node) ||
+          admittedModulepreloadLinks.has(node) ||
+          retiredModulepreloadLinks.has(node) ||
+          hasSpeculativeLinkToken(node))
+      ) {
+        if (
+          this !== getNativeDocumentHead() ||
+          !prepareExactModulepreloadAdmission(node)
+        ) {
+          retireModulepreloadLink(node);
+          return blockedOperation();
+        }
+        const result = callNative(originalAppendChild, this, node);
+        if (
+          modulepreloadStateByLink.get(node) !== "S5" ||
+          !admittedModulepreloadLinks.has(node) ||
+          getNativeParentNode(node) !== getNativeDocumentHead() ||
+          !getNativeIsConnected(node) ||
+          !isExactAllowedModulepreload(node)
+        ) {
+          return blockedOperation();
+        }
+        return result;
+      }
       assertNodesAllowed([node]);
-      return originalAppendChild.call(this, node);
+      return callNative(originalAppendChild, this, node);
+    },
+  });
+  const originalRemoveChild = Node.prototype.removeChild;
+  Object.defineProperty(Node.prototype, "removeChild", {
+    configurable: false,
+    writable: false,
+    value(node) {
+      if (
+        !isNativeCurrentDocumentNode(this) ||
+        !isNativeCurrentDocumentNode(node)
+      ) {
+        return blockedOperation();
+      }
+      if (containsAdmittedModulepreload(node)) return blockedOperation();
+      return callNative(originalRemoveChild, this, node);
     },
   });
   const originalInsertBefore = Node.prototype.insertBefore;
@@ -282,8 +1091,14 @@ const blockBrowserSecondaryExecutionAndWebTransport = () => {
     configurable: false,
     writable: false,
     value(node, referenceNode) {
+      if (
+        !isNativeCurrentDocumentNode(this) ||
+        !isNativeCurrentDocumentNode(referenceNode)
+      ) {
+        return blockedOperation();
+      }
       assertNodesAllowed([node]);
-      return originalInsertBefore.call(this, node, referenceNode);
+      return callNative(originalInsertBefore, this, node, referenceNode);
     },
   });
   const originalReplaceChild = Node.prototype.replaceChild;
@@ -291,8 +1106,15 @@ const blockBrowserSecondaryExecutionAndWebTransport = () => {
     configurable: false,
     writable: false,
     value(node, child) {
+      if (
+        !isNativeCurrentDocumentNode(this) ||
+        !isNativeCurrentDocumentNode(child)
+      ) {
+        return blockedOperation();
+      }
+      if (containsAdmittedModulepreload(child)) return blockedOperation();
       assertNodesAllowed([node]);
-      return originalReplaceChild.call(this, node, child);
+      return callNative(originalReplaceChild, this, node, child);
     },
   });
   for (const target of [
@@ -308,8 +1130,17 @@ const blockBrowserSecondaryExecutionAndWebTransport = () => {
         configurable: false,
         writable: false,
         value(...nodes) {
-          assertNodesAllowed(nodes);
-          return original.apply(this, nodes);
+          if (!isNativeCurrentDocumentNode(this)) return blockedOperation();
+          const stableNodes = snapshotNodesOrStrings(nodes);
+          if (!isNativeCurrentDocumentNode(this)) return blockedOperation();
+          if (
+            name === "replaceChildren" &&
+            containsAdmittedModulepreload(this)
+          ) {
+            return blockedOperation();
+          }
+          assertNodesAllowed(stableNodes);
+          return callNative(original, this, ...stableNodes);
         },
       });
     }
@@ -326,8 +1157,14 @@ const blockBrowserSecondaryExecutionAndWebTransport = () => {
         configurable: false,
         writable: false,
         value(...nodes) {
-          assertNodesAllowed(nodes);
-          return original.apply(this, nodes);
+          if (!isNativeCurrentDocumentNode(this)) return blockedOperation();
+          const stableNodes = snapshotNodesOrStrings(nodes);
+          if (!isNativeCurrentDocumentNode(this)) return blockedOperation();
+          if (name === "replaceWith" && containsAdmittedModulepreload(this)) {
+            return blockedOperation();
+          }
+          assertNodesAllowed(stableNodes);
+          return callNative(original, this, ...stableNodes);
         },
       });
     }
@@ -337,8 +1174,16 @@ const blockBrowserSecondaryExecutionAndWebTransport = () => {
     Element.prototype,
     "insertAdjacentElement",
     function (position, node) {
+      if (!isNativeCurrentDocumentNode(this)) return blockedOperation();
+      const stablePosition = String(position);
+      if (!isNativeCurrentDocumentNode(this)) return blockedOperation();
       assertNodesAllowed([node]);
-      return originalInsertAdjacentElement.call(this, position, node);
+      return callNative(
+        originalInsertAdjacentElement,
+        this,
+        stablePosition,
+        node,
+      );
     },
   );
   const originalInsertAdjacentHtml = Element.prototype.insertAdjacentHTML;
@@ -346,8 +1191,21 @@ const blockBrowserSecondaryExecutionAndWebTransport = () => {
     Element.prototype,
     "insertAdjacentHTML",
     function (position, markup) {
-      assertMarkupAllowed(markup);
-      return originalInsertAdjacentHtml.call(this, position, markup);
+      if (!isNativeCurrentDocumentNode(this)) return blockedOperation();
+      const stablePosition = String(position);
+      const stableMarkup = assertMarkupAllowed(markup);
+      if (
+        !isNativeCurrentDocumentNode(this) ||
+        containsAdmittedModulepreload(this)
+      ) {
+        return blockedOperation();
+      }
+      return callNative(
+        originalInsertAdjacentHtml,
+        this,
+        stablePosition,
+        stableMarkup,
+      );
     },
   );
   for (const [target, property] of [
@@ -362,80 +1220,131 @@ const blockBrowserSecondaryExecutionAndWebTransport = () => {
       ...descriptor,
       configurable: false,
       set(markup) {
-        assertMarkupAllowed(markup);
-        return descriptor.set.call(this, markup);
+        if (!isNativeCurrentDocumentNode(this)) return blockedOperation();
+        if (canReplaceModulepreloadContainer(this)) return blockedOperation();
+        const stableMarkup = assertMarkupAllowed(markup);
+        if (
+          !isNativeCurrentDocumentNode(this) ||
+          containsAdmittedModulepreload(this)
+        ) {
+          return blockedOperation();
+        }
+        return callNative(descriptor.set, this, stableMarkup);
       },
     });
   }
-  for (const name of ["write", "writeln"]) {
-    const original = Document.prototype[name];
-    lockMethod(Document.prototype, name, function (...markupParts) {
-      assertMarkupAllowed(markupParts.join(""));
-      return original.apply(this, markupParts);
+  for (const target of [
+    Element.prototype,
+    CharacterData.prototype,
+    DocumentType.prototype,
+  ]) {
+    const originalRemove = target.remove;
+    lockMethod(target, "remove", function () {
+      if (!isNativeCurrentDocumentNode(this)) return blockedOperation();
+      if (containsAdmittedModulepreload(this)) return blockedOperation();
+      return callNative(originalRemove, this);
     });
   }
+  lockMethod(Document.prototype, "write", blockedOperation);
+  lockMethod(Document.prototype, "writeln", blockedOperation);
+  lockMethod(Document.prototype, "open", blockedOperation);
   const originalParseFromString = DOMParser.prototype.parseFromString;
   lockMethod(DOMParser.prototype, "parseFromString", function (markup, type) {
-    if (String(type).toLowerCase().includes("html")) {
-      assertMarkupAllowed(markup);
+    const stableMarkup = String(markup);
+    const stableType = String(type);
+    if (stableType.toLowerCase().includes("html")) {
+      assertMarkupAllowed(stableMarkup);
     }
-    return originalParseFromString.call(this, markup, type);
+    return callNative(originalParseFromString, this, stableMarkup, stableType);
   });
   const originalCreateContextualFragment =
     Range.prototype.createContextualFragment;
   lockMethod(Range.prototype, "createContextualFragment", function (markup) {
-    assertMarkupAllowed(markup);
-    const fragment = originalCreateContextualFragment.call(this, markup);
+    if (!isNativeCurrentDocumentRange(this)) return blockedOperation();
+    const stableMarkup = assertMarkupAllowed(markup);
+    if (!isNativeCurrentDocumentRange(this)) return blockedOperation();
+    const fragment = callNative(
+      originalCreateContextualFragment,
+      this,
+      stableMarkup,
+    );
     assertNodesAllowed([fragment]);
     return fragment;
   });
   const originalRangeInsertNode = Range.prototype.insertNode;
   lockMethod(Range.prototype, "insertNode", function (node) {
+    if (!isNativeCurrentDocumentRange(this)) return blockedOperation();
     assertNodesAllowed([node]);
-    return originalRangeInsertNode.call(this, node);
+    return callNative(originalRangeInsertNode, this, node);
+  });
+  const nativeRangeIntersectsNode = Range.prototype.intersectsNode;
+  const rangeTouchesAdmittedModulepreload = (range) =>
+    [...queryNativeDescendants(document, "link")].some(
+      (link) =>
+        admittedModulepreloadLinks.has(link) &&
+        callNative(nativeRangeIntersectsNode, range, link),
+    );
+  for (const name of ["deleteContents", "extractContents"]) {
+    const original = Range.prototype[name];
+    lockMethod(Range.prototype, name, function (...args) {
+      if (!isNativeCurrentDocumentRange(this)) return blockedOperation();
+      if (rangeTouchesAdmittedModulepreload(this)) return blockedOperation();
+      return callNative(original, this, ...args);
+    });
+  }
+  const originalRangeSurroundContents = Range.prototype.surroundContents;
+  lockMethod(Range.prototype, "surroundContents", function (newParent) {
+    if (!isNativeCurrentDocumentRange(this)) return blockedOperation();
+    if (rangeTouchesAdmittedModulepreload(this)) return blockedOperation();
+    assertNodesAllowed([newParent]);
+    return callNative(originalRangeSurroundContents, this, newParent);
+  });
+  lockMethod(
+    globalThis.Selection?.prototype,
+    "deleteFromDocument",
+    blockedOperation,
+  );
+  lockMethod(Document.prototype, "adoptNode", function () {
+    return blockedOperation();
   });
   for (const target of [Element.prototype, DocumentFragment.prototype]) {
     const originalMoveBefore = target.moveBefore;
     lockMethod(target, "moveBefore", function (node, referenceNode) {
+      if (
+        !isNativeCurrentDocumentNode(this) ||
+        !isNativeCurrentDocumentNode(referenceNode)
+      ) {
+        return blockedOperation();
+      }
       assertNodesAllowed([node]);
-      return originalMoveBefore.call(this, node, referenceNode);
+      return callNative(originalMoveBefore, this, node, referenceNode);
     });
   }
   for (const target of [Element.prototype, globalThis.ShadowRoot?.prototype]) {
     if (!target) continue;
-    const originalSetHtmlUnsafe = target.setHTMLUnsafe;
-    lockMethod(target, "setHTMLUnsafe", function (markup, ...options) {
-      assertMarkupAllowed(markup);
-      return originalSetHtmlUnsafe.call(this, markup, ...options);
-    });
+    for (const name of ["setHTML", "setHTMLUnsafe"]) {
+      const originalSetHtml = target[name];
+      lockMethod(target, name, function (markup, ...options) {
+        if (!isNativeCurrentDocumentNode(this)) return blockedOperation();
+        if (canReplaceModulepreloadContainer(this)) return blockedOperation();
+        if (options.length > 0) return blockedOperation();
+        const stableMarkup = assertMarkupAllowed(markup);
+        if (
+          !isNativeCurrentDocumentNode(this) ||
+          containsAdmittedModulepreload(this)
+        ) {
+          return blockedOperation();
+        }
+        return callNative(originalSetHtml, this, stableMarkup);
+      });
+    }
   }
-  const originalDocumentParseHtmlUnsafe = globalThis.Document?.parseHTMLUnsafe;
-  lockMethod(
-    globalThis.Document,
-    "parseHTMLUnsafe",
-    function (markup, ...options) {
-      assertMarkupAllowed(markup);
-      const parsed = originalDocumentParseHtmlUnsafe.call(
-        this,
-        markup,
-        ...options,
-      );
-      assertNodesAllowed([parsed]);
-      return parsed;
-    },
-  );
-  const originalExecCommand = Document.prototype.execCommand;
-  lockMethod(
-    Document.prototype,
-    "execCommand",
-    function (command, showUi, value) {
-      if (String(command).toLowerCase() === "inserthtml") {
-        assertMarkupAllowed(value);
-      }
-      return originalExecCommand.call(this, command, showUi, value);
-    },
-  );
+  lockMethod(globalThis.Document, "parseHTML", blockedOperation);
+  lockMethod(globalThis.Document, "parseHTMLUnsafe", blockedOperation);
+  lockMethod(Document.prototype, "execCommand", blockedOperation);
   const attributeMutationRelevantNames = new Set([
+    "as",
+    "crossorigin",
     "href",
     "ping",
     "rel",
@@ -447,59 +1356,188 @@ const blockBrowserSecondaryExecutionAndWebTransport = () => {
       .split(":")
       .at(-1)
       .toLowerCase();
-    if (!attributeMutationRelevantNames.has(normalizedName)) return;
-    if (!(element instanceof Element)) return blockedOperation();
+    if (!isNativeCurrentDocumentElement(element)) return blockedOperation();
+    if (isNativeHtmlElement(element, "base")) return blockedOperation();
     if (
-      (element instanceof HTMLLinkElement &&
-        ((normalizedName === "rel" && hasBlockedRelToken(value)) ||
-          (normalizedName === "href" && hasBlockedRelToken(element.rel)))) ||
-      (element instanceof HTMLScriptElement &&
+      isNativeHtmlElement(element, "link") &&
+      (pendingModulepreloadLinks.has(element) ||
+        admittedModulepreloadLinks.has(element) ||
+        retiredModulepreloadLinks.has(element) ||
+        hasBlockedRelToken(getNativeAttribute(element, "rel")) ||
+        (normalizedName === "rel" && hasBlockedRelToken(value)))
+    ) {
+      retireModulepreloadLink(element);
+      return blockedOperation();
+    }
+    if (!attributeMutationRelevantNames.has(normalizedName)) return;
+    if (
+      (isNativeHtmlElement(element, "script") &&
         normalizedName === "type" &&
         String(value).toLowerCase() === "speculationrules") ||
-      (element instanceof HTMLAnchorElement &&
+      (isNativePingElement(element) &&
         normalizedName === "ping" &&
         Boolean(String(value))) ||
-      (element instanceof HTMLIFrameElement && normalizedName === "srcdoc")
+      (isNativeHtmlElement(element, "iframe") && normalizedName === "srcdoc")
     ) {
       return blockedOperation();
     }
   };
   const originalSetAttribute = Element.prototype.setAttribute;
   lockMethod(Element.prototype, "setAttribute", function (name, value) {
-    validateAttributeMutation({ element: this, name, value });
-    return originalSetAttribute.call(this, name, value);
+    const stableName = String(name);
+    const stableValue = String(value);
+    validateAttributeMutation({
+      element: this,
+      name: stableName,
+      value: stableValue,
+    });
+    return callNative(originalSetAttribute, this, stableName, stableValue);
   });
   const originalSetAttributeNs = Element.prototype.setAttributeNS;
   lockMethod(
     Element.prototype,
     "setAttributeNS",
     function (namespace, name, value) {
-      validateAttributeMutation({ element: this, name, value });
-      return originalSetAttributeNs.call(this, namespace, name, value);
+      const stableNamespace = namespace == null ? null : String(namespace);
+      const stableName = String(name);
+      const stableValue = String(value);
+      validateAttributeMutation({
+        element: this,
+        name: stableName,
+        value: stableValue,
+      });
+      return callNative(
+        originalSetAttributeNs,
+        this,
+        stableNamespace,
+        stableName,
+        stableValue,
+      );
     },
   );
+  const originalToggleAttribute = Element.prototype.toggleAttribute;
+  lockMethod(Element.prototype, "toggleAttribute", function (name, ...force) {
+    const stableName = String(name);
+    const stableForce = force.length > 0 ? [Boolean(force[0])] : [];
+    validateAttributeMutation({
+      element: this,
+      name: stableName,
+      value:
+        stableForce[0] === false
+          ? ""
+          : (getNativeAttribute(this, stableName) ?? ""),
+    });
+    return callNative(
+      originalToggleAttribute,
+      this,
+      stableName,
+      ...stableForce,
+    );
+  });
+  const validateAttributeRemoval = (element, name) => {
+    if (!isNativeCurrentDocumentElement(element)) return blockedOperation();
+    if (!isNativeHtmlElement(element, "link")) return;
+    const normalizedName = String(name || "")
+      .split(":")
+      .at(-1)
+      .toLowerCase();
+    if (
+      pendingModulepreloadLinks.has(element) ||
+      admittedModulepreloadLinks.has(element) ||
+      retiredModulepreloadLinks.has(element) ||
+      hasBlockedRelToken(getNativeAttribute(element, "rel")) ||
+      (normalizedName === "rel" &&
+        hasBlockedRelToken(getNativeAttribute(element, normalizedName)))
+    ) {
+      retireModulepreloadLink(element);
+      return blockedOperation();
+    }
+  };
+  const originalRemoveAttribute = Element.prototype.removeAttribute;
+  lockMethod(Element.prototype, "removeAttribute", function (name) {
+    const stableName = String(name);
+    validateAttributeRemoval(this, stableName);
+    return callNative(originalRemoveAttribute, this, stableName);
+  });
+  const originalRemoveAttributeNs = Element.prototype.removeAttributeNS;
+  lockMethod(
+    Element.prototype,
+    "removeAttributeNS",
+    function (namespace, localName) {
+      const stableNamespace = namespace == null ? null : String(namespace);
+      const stableLocalName = String(localName);
+      validateAttributeRemoval(this, stableLocalName);
+      return callNative(
+        originalRemoveAttributeNs,
+        this,
+        stableNamespace,
+        stableLocalName,
+      );
+    },
+  );
+  const originalRemoveAttributeNode = Element.prototype.removeAttributeNode;
+  lockMethod(Element.prototype, "removeAttributeNode", function (attribute) {
+    if (!isNativeCurrentDocumentAttr(attribute)) return blockedOperation();
+    validateAttributeRemoval(this, getNativeAttrMutationName(attribute));
+    return callNative(originalRemoveAttributeNode, this, attribute);
+  });
+  const guardedAttributeMaps = new WeakMap();
+  if (nativeAttributesDescriptor?.get) {
+    Object.defineProperty(Element.prototype, "attributes", {
+      ...nativeAttributesDescriptor,
+      configurable: false,
+      get() {
+        if (!isNativeCurrentDocumentElement(this)) return blockedOperation();
+        if (isNativeHtmlElement(this, "link")) return blockedOperation();
+        const attributes = callNative(nativeAttributesDescriptor.get, this);
+        guardedAttributeMaps.set(attributes, this);
+        return attributes;
+      },
+    });
+  }
   for (const name of ["setAttributeNode", "setAttributeNodeNS"]) {
     const original = Element.prototype[name];
     lockMethod(Element.prototype, name, function (attribute) {
-      if (!(attribute instanceof Attr)) return blockedOperation();
+      if (!isNativeCurrentDocumentAttr(attribute)) return blockedOperation();
       validateAttributeMutation({
         element: this,
-        name: attribute.localName || attribute.name,
-        value: attribute.value,
+        name: getNativeAttrMutationName(attribute),
+        value: getNativeAttrValue(attribute),
       });
-      return original.call(this, attribute);
+      return callNative(original, this, attribute);
     });
   }
   for (const name of ["setNamedItem", "setNamedItemNS"]) {
     const original = NamedNodeMap.prototype[name];
     lockMethod(NamedNodeMap.prototype, name, function (attribute) {
-      if (!(attribute instanceof Attr)) return blockedOperation();
+      if (!isNativeCurrentDocumentAttr(attribute)) return blockedOperation();
+      const guardedOwnerElement = guardedAttributeMaps.get(this);
+      if (!isNativeCurrentDocumentElement(guardedOwnerElement)) {
+        return blockedOperation();
+      }
       validateAttributeMutation({
-        element: attribute.ownerElement,
-        name: attribute.localName || attribute.name,
-        value: attribute.value,
+        element: guardedOwnerElement,
+        name: getNativeAttrMutationName(attribute),
+        value: getNativeAttrValue(attribute),
       });
-      return original.call(this, attribute);
+      return callNative(original, this, attribute);
+    });
+  }
+  for (const name of ["removeNamedItem", "removeNamedItemNS"]) {
+    const original = NamedNodeMap.prototype[name];
+    lockMethod(NamedNodeMap.prototype, name, function (...args) {
+      const guardedOwnerElement = guardedAttributeMaps.get(this);
+      if (!isNativeCurrentDocumentElement(guardedOwnerElement)) {
+        return blockedOperation();
+      }
+      const stableArgs = name.endsWith("NS")
+        ? [args[0] == null ? null : String(args[0]), String(args[1])]
+        : [String(args[0])];
+      validateAttributeRemoval(
+        guardedOwnerElement,
+        name.endsWith("NS") ? stableArgs[1] : stableArgs[0],
+      );
+      return callNative(original, this, ...stableArgs);
     });
   }
   const lockAttrValueSetter = (target, property) => {
@@ -509,55 +1547,325 @@ const blockBrowserSecondaryExecutionAndWebTransport = () => {
       ...descriptor,
       configurable: false,
       set(value) {
-        if (this instanceof Attr) {
-          validateAttributeMutation({
-            element: this.ownerElement,
-            name: this.localName || this.name,
-            value,
-          });
+        if (
+          property === "textContent" &&
+          canReplaceModulepreloadContainer(this)
+        ) {
+          return blockedOperation();
         }
-        return descriptor.set.call(this, value);
+        const stableValue =
+          property === "nodeValue" && value == null
+            ? null
+            : property === "textContent" && value == null
+              ? ""
+              : String(value);
+        const nodeIdentity = getNativeNodeIdentity(this);
+        if (nodeIdentity && !isNativeCurrentDocumentNode(this)) {
+          return blockedOperation();
+        }
+        if (property === "textContent" && containsAdmittedModulepreload(this)) {
+          return blockedOperation();
+        }
+        if (isNativeAttr(this)) {
+          if (!isNativeCurrentDocumentAttr(this)) return blockedOperation();
+          const stableAttributeValue = String(stableValue);
+          validateAttributeMutation({
+            element: getNativeAttrOwnerElement(this),
+            name: getNativeAttrMutationName(this),
+            value: stableAttributeValue,
+          });
+          return callNative(descriptor.set, this, stableAttributeValue);
+        }
+        return callNative(descriptor.set, this, stableValue);
       },
     });
   };
   lockAttrValueSetter(Attr.prototype, "value");
   lockAttrValueSetter(Node.prototype, "nodeValue");
   lockAttrValueSetter(Node.prototype, "textContent");
-  const lockPropertySetter = (target, property, blocked) => {
-    const descriptor = Object.getOwnPropertyDescriptor(target, property);
+  const lockPropertySetter = (
+    target,
+    property,
+    blocked,
+    normalizeValue = (value) => value,
+  ) => {
+    let descriptorTarget = target;
+    let descriptor = null;
+    while (descriptorTarget && !descriptor) {
+      descriptor = Object.getOwnPropertyDescriptor(descriptorTarget, property);
+      descriptorTarget = Object.getPrototypeOf(descriptorTarget);
+    }
     if (!descriptor?.set) return;
     Object.defineProperty(target, property, {
       ...descriptor,
       configurable: false,
       set(value) {
-        if (blocked.call(this, value)) return blockedOperation();
-        return descriptor.set.call(this, value);
+        if (!isNativeCurrentDocumentNode(this)) return blockedOperation();
+        const stableValue = normalizeValue(value);
+        if (!isNativeCurrentDocumentNode(this)) return blockedOperation();
+        if (callNative(blocked, this, stableValue)) return blockedOperation();
+        return callNative(descriptor.set, this, stableValue);
       },
     });
   };
-  lockPropertySetter(HTMLLinkElement.prototype, "rel", (value) =>
-    hasBlockedRelToken(value),
-  );
-  lockPropertySetter(HTMLLinkElement.prototype, "href", function () {
-    return hasBlockedRelToken(this.rel);
+  const lockStatefulLinkPropertySetter = (
+    property,
+    setter,
+    normalizeValue = (value) => String(value),
+  ) => {
+    const descriptor = nativeLinkPropertyDescriptors[property];
+    if (!descriptor?.set) return;
+    Object.defineProperty(HTMLLinkElement.prototype, property, {
+      ...descriptor,
+      configurable: false,
+      set(value) {
+        if (!isNativeCurrentDocumentElement(this)) return blockedOperation();
+        const stableValue = normalizeValue(value);
+        if (!isNativeCurrentDocumentElement(this)) return blockedOperation();
+        return callNative(setter, this, stableValue);
+      },
+    });
+  };
+  lockStatefulLinkPropertySetter("rel", function (value) {
+    return setInitialModulepreloadRel(this, value);
   });
+  lockStatefulLinkPropertySetter("as", function (value) {
+    return setPendingModulepreloadProperty({
+      node: this,
+      property: "as",
+      value,
+      expectedState: "S1",
+      expectedAttributes: { rel: modulepreloadPolicy.relValue },
+      expectedValue: modulepreloadPolicy.asValue,
+      nextAttributes: {
+        as: modulepreloadPolicy.asValue,
+        rel: modulepreloadPolicy.relValue,
+      },
+      nextState: "S2",
+    });
+  });
+  lockStatefulLinkPropertySetter(
+    "crossOrigin",
+    function (value) {
+      return setPendingModulepreloadProperty({
+        node: this,
+        property: "crossOrigin",
+        value,
+        expectedState: "S2",
+        expectedAttributes: {
+          as: modulepreloadPolicy.asValue,
+          rel: modulepreloadPolicy.relValue,
+        },
+        expectedValue: modulepreloadPolicy.crossoriginValue,
+        nextAttributes: {
+          as: modulepreloadPolicy.asValue,
+          crossorigin: modulepreloadPolicy.crossoriginValue,
+          rel: modulepreloadPolicy.relValue,
+        },
+        nextState: "S3",
+      });
+    },
+    (value) => (value == null ? null : String(value)),
+  );
+  lockStatefulLinkPropertySetter("href", function (value) {
+    return setPendingModulepreloadProperty({
+      node: this,
+      property: "href",
+      value,
+      expectedState: "S3",
+      expectedAttributes: {
+        as: modulepreloadPolicy.asValue,
+        crossorigin: modulepreloadPolicy.crossoriginValue,
+        rel: modulepreloadPolicy.relValue,
+      },
+      expectedValue: value,
+      nextAttributes: {
+        as: modulepreloadPolicy.asValue,
+        crossorigin: modulepreloadPolicy.crossoriginValue,
+        href: value,
+        rel: modulepreloadPolicy.relValue,
+      },
+      nextState: "S4",
+      validateValue: exactModulepreloadHrefAllowed,
+      validateNextNode: exactResolvedModulepreloadHrefAllowed,
+    });
+  });
+  for (const property of [
+    "charset",
+    "fetchPriority",
+    "hreflang",
+    "imageSizes",
+    "imageSrcset",
+    "integrity",
+    "media",
+    "referrerPolicy",
+    "rev",
+    "target",
+    "type",
+  ]) {
+    lockPropertySetter(
+      HTMLLinkElement.prototype,
+      property,
+      function () {
+        return (
+          pendingModulepreloadLinks.has(this) ||
+          admittedModulepreloadLinks.has(this) ||
+          retiredModulepreloadLinks.has(this) ||
+          hasBlockedRelToken(getNativeAttribute(this, "rel"))
+        );
+      },
+      (value) => String(value),
+    );
+  }
+  lockPropertySetter(
+    HTMLLinkElement.prototype,
+    "disabled",
+    function () {
+      return (
+        pendingModulepreloadLinks.has(this) ||
+        admittedModulepreloadLinks.has(this) ||
+        retiredModulepreloadLinks.has(this) ||
+        hasBlockedRelToken(getNativeAttribute(this, "rel"))
+      );
+    },
+    (value) => Boolean(value),
+  );
+  lockPropertySetter(HTMLBaseElement.prototype, "href", () => true);
+  lockPropertySetter(HTMLBaseElement.prototype, "target", () => true);
+  for (const property of ["innerText", "outerText"]) {
+    lockPropertySetter(
+      HTMLElement.prototype,
+      property,
+      function () {
+        return containsAdmittedModulepreload(this);
+      },
+      (value) => String(value),
+    );
+  }
+  lockPropertySetter(
+    HTMLElement.prototype,
+    "nonce",
+    function () {
+      return (
+        isNativeHtmlElement(this, "link") &&
+        (pendingModulepreloadLinks.has(this) ||
+          admittedModulepreloadLinks.has(this) ||
+          retiredModulepreloadLinks.has(this) ||
+          hasBlockedRelToken(getNativeAttribute(this, "rel")))
+      );
+    },
+    (value) => String(value),
+  );
   lockPropertySetter(
     HTMLScriptElement.prototype,
     "type",
     (value) => String(value).toLowerCase() === "speculationrules",
+    (value) => String(value),
   );
-  lockPropertySetter(HTMLAnchorElement.prototype, "ping", (value) =>
-    Boolean(String(value)),
-  );
+  for (const target of [
+    HTMLAnchorElement.prototype,
+    HTMLAreaElement.prototype,
+  ]) {
+    lockPropertySetter(
+      target,
+      "ping",
+      (value) => Boolean(String(value)),
+      (value) => String(value),
+    );
+  }
   lockPropertySetter(HTMLIFrameElement.prototype, "srcdoc", () => true);
-  const originalAnchorClick = HTMLAnchorElement.prototype.click;
+  const speciallyGuardedLinkAccessorProperties = new Set([
+    "as",
+    "attributes",
+    "blocking",
+    "charset",
+    "crossOrigin",
+    "disabled",
+    "fetchPriority",
+    "href",
+    "hreflang",
+    "imageSizes",
+    "imageSrcset",
+    "innerHTML",
+    "innerText",
+    "integrity",
+    "media",
+    "nonce",
+    "outerHTML",
+    "outerText",
+    "referrerPolicy",
+    "rel",
+    "relList",
+    "rev",
+    "sizes",
+    "target",
+    "type",
+  ]);
+  const blockedLinkMutableFacadeProperties = new Set([
+    "attributeStyleMap",
+    "classList",
+    "dataset",
+    "part",
+    "style",
+  ]);
+  for (const {
+    descriptor,
+    property,
+    target,
+  } of nativeLinkInheritanceAccessorDescriptors) {
+    if (
+      [
+        Element.prototype,
+        HTMLElement.prototype,
+        HTMLLinkElement.prototype,
+      ].includes(target) &&
+      speciallyGuardedLinkAccessorProperties.has(property)
+    ) {
+      continue;
+    }
+    if (
+      !descriptor.configurable &&
+      (descriptor.set || blockedLinkMutableFacadeProperties.has(property))
+    ) {
+      return blockedOperation();
+    }
+    const guardedDescriptor = { ...descriptor, configurable: false };
+    if (descriptor.get && blockedLinkMutableFacadeProperties.has(property)) {
+      guardedDescriptor.get = function () {
+        if (isNativeHtmlElement(this, "link")) return blockedOperation();
+        return callNative(descriptor.get, this);
+      };
+    }
+    if (descriptor.set) {
+      guardedDescriptor.set = function (value) {
+        if (isNativeHtmlElement(this, "link")) return blockedOperation();
+        return callNative(descriptor.set, this, value);
+      };
+    }
+    nativeObjectDefineProperty(target, property, guardedDescriptor);
+  }
+  const originalHtmlElementClick = HTMLElement.prototype.click;
+  const guardedHtmlElementClick = function () {
+    if (
+      isNativePingElement(this) &&
+      Boolean(getNativeAttribute(this, "ping"))
+    ) {
+      return blockedOperation();
+    }
+    return callNative(originalHtmlElementClick, this);
+  };
+  lockMethod(HTMLElement.prototype, "click", guardedHtmlElementClick);
   Object.defineProperty(HTMLAnchorElement.prototype, "click", {
     configurable: false,
+    enumerable: false,
     writable: false,
-    value() {
-      if (this.ping) return blockedOperation();
-      return originalAnchorClick.call(this);
-    },
+    value: guardedHtmlElementClick,
+  });
+  Object.defineProperty(HTMLAreaElement.prototype, "click", {
+    configurable: false,
+    enumerable: false,
+    writable: false,
+    value: guardedHtmlElementClick,
   });
   const originalDispatchEvent = EventTarget.prototype.dispatchEvent;
   Object.defineProperty(EventTarget.prototype, "dispatchEvent", {
@@ -565,13 +1873,13 @@ const blockBrowserSecondaryExecutionAndWebTransport = () => {
     writable: false,
     value(event) {
       if (
-        this instanceof HTMLAnchorElement &&
-        this.ping &&
-        String(event?.type).toLowerCase() === "click"
+        isNativePingElement(this) &&
+        Boolean(getNativeAttribute(this, "ping")) &&
+        String(getNativeEventType(event) || "").toLowerCase() === "click"
       ) {
         return blockedOperation();
       }
-      return originalDispatchEvent.call(this, event);
+      return callNative(originalDispatchEvent, this, event);
     },
   });
 };
@@ -673,10 +1981,23 @@ const scanHtmlOpeningTags = (markup) => {
       }
       if (character === ">") break;
     }
-    if (end >= source.length) break;
+    if (end >= source.length) {
+      const tagMarkup = source.slice(index);
+      const tagName = tagMarkup.match(/^<([A-Za-z][^\s/>]*)/u)?.[1] || "";
+      tags.push({
+        malformed: true,
+        tagName: tagName.toLowerCase(),
+        tagMarkup,
+      });
+      break;
+    }
     const tagMarkup = source.slice(index, end + 1);
     const tagName = tagMarkup.match(/^<([A-Za-z][^\s/>]*)/u)?.[1] || "";
-    tags.push({ tagName: tagName.toLowerCase(), tagMarkup });
+    tags.push({
+      malformed: false,
+      tagName: tagName.toLowerCase(),
+      tagMarkup,
+    });
     index = end + 1;
     if (tagName.toLowerCase() === "script" && !/\/\s*>$/u.test(tagMarkup)) {
       const rawTextEnd = lowerSource.indexOf("</script", index);
@@ -689,8 +2010,12 @@ const scanHtmlOpeningTags = (markup) => {
 };
 const parseHtmlOpeningTagAttributes = (tagMarkup) => {
   const tagStart = String(tagMarkup).match(/^<([A-Za-z][^\s/>]*)/u);
-  assert.ok(tagStart);
   const attributes = new Map();
+  const duplicateAttributeNames = new Set();
+  let malformed = !tagStart;
+  if (!tagStart) {
+    return { attributes, duplicateAttributeNames, malformed };
+  }
   let index = tagStart[0].length;
   while (index < tagMarkup.length) {
     while (/\s/u.test(tagMarkup[index] || "")) index += 1;
@@ -724,7 +2049,11 @@ const parseHtmlOpeningTagAttributes = (tagMarkup) => {
           index += 1;
         }
         value = tagMarkup.slice(valueStart, index);
-        if (tagMarkup[index] === quote) index += 1;
+        if (tagMarkup[index] === quote) {
+          index += 1;
+        } else {
+          malformed = true;
+        }
       } else {
         const valueStart = index;
         while (index < tagMarkup.length && !/[\s>]/u.test(tagMarkup[index])) {
@@ -733,16 +2062,20 @@ const parseHtmlOpeningTagAttributes = (tagMarkup) => {
         value = tagMarkup.slice(valueStart, index);
       }
     }
-    if (!attributes.has(name)) attributes.set(name, value);
+    if (attributes.has(name)) {
+      duplicateAttributeNames.add(name);
+    } else {
+      attributes.set(name, value);
+    }
   }
-  return attributes;
+  return { attributes, duplicateAttributeNames, malformed };
 };
 const containsVercelPreviewToolbarMarkup = (bodyBytes) => {
   const markup = Buffer.isBuffer(bodyBytes)
     ? bodyBytes.toString("utf8")
     : String(bodyBytes);
   for (const { tagName, tagMarkup } of scanHtmlOpeningTags(markup)) {
-    const attributes = parseHtmlOpeningTagAttributes(tagMarkup);
+    const { attributes } = parseHtmlOpeningTagAttributes(tagMarkup);
     if (attributes.has("data-vercel-toolbar")) return true;
     if (
       tagName === "script" &&
@@ -793,32 +2126,49 @@ const immutableDocumentParserMarkupDecision = (
       "",
     );
   }
-  if (/<base\b/iu.test(markup)) {
-    return { valid: false, marker: "parser-base-url" };
-  }
-  for (const match of markup.matchAll(/<(link|script|a|iframe)\b[^>]*>/giu)) {
-    const tagName = match[1].toLowerCase();
-    const tagMarkup = match[0];
-    if (tagName === "iframe" && /\bsrcdoc\s*(?:=|\s|>)/iu.test(tagMarkup)) {
+  const parserRelevantTagNames = new Set([
+    "a",
+    "area",
+    "base",
+    "iframe",
+    "link",
+    "script",
+  ]);
+  for (const {
+    malformed: malformedOpeningTag,
+    tagName,
+    tagMarkup,
+  } of scanHtmlOpeningTags(markup)) {
+    if (!parserRelevantTagNames.has(tagName)) continue;
+    const {
+      attributes,
+      duplicateAttributeNames,
+      malformed: malformedAttributes,
+    } = parseHtmlOpeningTagAttributes(tagMarkup);
+    if (
+      malformedOpeningTag ||
+      malformedAttributes ||
+      duplicateAttributeNames.size > 0
+    ) {
+      return { valid: false, marker: `parser-malformed-${tagName}` };
+    }
+    if (tagName === "base") {
+      return { valid: false, marker: "parser-base-url" };
+    }
+    if (tagName === "iframe" && attributes.has("srcdoc")) {
       return { valid: false, marker: "parser-iframe-srcdoc" };
     }
-    if (tagName === "a" && /\bping\s*(?:=|\s|>)/iu.test(tagMarkup)) {
+    if (["a", "area"].includes(tagName) && attributes.has("ping")) {
       return { valid: false, marker: "parser-anchor-ping" };
     }
     if (tagName === "script") {
-      const typeMatch = tagMarkup.match(
-        /\btype\s*=\s*(?:(["'])(.*?)\1|([^\s>]+))/iu,
-      );
-      const typeValue = typeMatch?.[2] ?? typeMatch?.[3] ?? "";
+      const typeValue = attributes.get("type") || "";
       if (/&|speculationrules/iu.test(typeValue)) {
         return { valid: false, marker: "parser-speculation-rules" };
       }
     }
     if (tagName === "link") {
-      const relMatch = tagMarkup.match(
-        /\brel\s*=\s*(?:(["'])(.*?)\1|([^\s>]+))/iu,
-      );
-      const relValue = relMatch?.[2] ?? relMatch?.[3] ?? "";
+      const relValue = attributes.get("rel") || "";
       if (/&/u.test(relValue)) {
         return { valid: false, marker: "parser-speculative-link" };
       }
@@ -5018,8 +6368,12 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     '<link rel="prefetch" href="https://outside.invalid">',
     '<script type="speculationrules">{}</script>',
     '<a ping="https://outside.invalid">ping</a>',
+    '<area ping="https://outside.invalid">',
     '<iframe srcdoc="&lt;img src=https://outside.invalid&gt;"></iframe>',
+    '<link rel="benign> prefetch" href="https://outside.invalid">',
+    '<script type="benign>speculationrules">{}</script>',
     '<link rel="pre&#99;onnect" href="https://outside.invalid">',
+    '<script type="speculation&#114;ules">{}</script>',
     `<base href="https://outside.invalid/">${exactParserModulepreloadMarkup}`,
     '<link rel="modulepreload" crossorigin href="https://outside.invalid/assets/app.js">',
     '<link rel="modulepreload" crossorigin href="//outside.invalid/assets/app.js">',
@@ -5028,6 +6382,7 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     '<link rel="modulepreload" crossorigin href="/assets/nested/app.js">',
     '<link rel="modulepreload" crossorigin href="/assets/app.mjs">',
     '<link rel="modulepreload preload" crossorigin href="/assets/app.js">',
+    '<link rel="stylesheet" rel="prefetch" href="https://outside.invalid">',
     '<link rel="modulepreload" crossorigin href="/assets/app&#46;js">',
     '<link rel="modulepreload" crossorigin crossorigin href="/assets/app.js">',
   ];
@@ -5065,6 +6420,141 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     }),
     { valid: true, marker: null },
   );
+  const exactDomModulepreloadFixture = {
+    documentUrl: `${parserDocumentOrigin}/#/teacher/settings`,
+    attributes: {
+      as: "script",
+      crossorigin: "",
+      href: "/assets/TeacherSettings-Bx_1.2.js",
+      rel: "modulepreload",
+    },
+    relTokens: ["modulepreload"],
+  };
+  assert.equal(
+    exactDomModulepreloadDescriptorAllowed(exactDomModulepreloadFixture),
+    true,
+  );
+  const rejectedDomModulepreloadFixtures = [
+    {
+      ...exactDomModulepreloadFixture,
+      documentUrl: "http://westory-staging.example",
+    },
+    {
+      ...exactDomModulepreloadFixture,
+      documentUrl: "https://user@westory-staging.example",
+    },
+    {
+      ...exactDomModulepreloadFixture,
+      documentUrl: "https://westory-staging.example:8443",
+    },
+    {
+      ...exactDomModulepreloadFixture,
+      attributes: {
+        ...exactDomModulepreloadFixture.attributes,
+        href: "https://westory-staging.example/assets/app.js",
+      },
+    },
+    {
+      ...exactDomModulepreloadFixture,
+      attributes: {
+        ...exactDomModulepreloadFixture.attributes,
+        href: "//westory-staging.example/assets/app.js",
+      },
+    },
+    {
+      ...exactDomModulepreloadFixture,
+      attributes: {
+        ...exactDomModulepreloadFixture.attributes,
+        href: "/assets/app.js?v=1",
+      },
+    },
+    {
+      ...exactDomModulepreloadFixture,
+      attributes: {
+        ...exactDomModulepreloadFixture.attributes,
+        href: "/assets/app.js#fragment",
+      },
+    },
+    {
+      ...exactDomModulepreloadFixture,
+      attributes: {
+        ...exactDomModulepreloadFixture.attributes,
+        href: "/assets/nested/app.js",
+      },
+    },
+    {
+      ...exactDomModulepreloadFixture,
+      attributes: {
+        ...exactDomModulepreloadFixture.attributes,
+        href: "/assets/app.mjs",
+      },
+    },
+    {
+      ...exactDomModulepreloadFixture,
+      attributes: {
+        ...exactDomModulepreloadFixture.attributes,
+        href: "/assets/%61pp.js",
+      },
+    },
+    {
+      ...exactDomModulepreloadFixture,
+      attributes: {
+        ...exactDomModulepreloadFixture.attributes,
+        href: "/assets/../app.js",
+      },
+    },
+    {
+      ...exactDomModulepreloadFixture,
+      attributes: {
+        crossorigin: "",
+        href: "/assets/app.js",
+        rel: "modulepreload",
+      },
+    },
+    {
+      ...exactDomModulepreloadFixture,
+      attributes: {
+        ...exactDomModulepreloadFixture.attributes,
+        nonce: "fixed-nonce",
+      },
+    },
+    {
+      ...exactDomModulepreloadFixture,
+      relTokens: ["modulepreload", "preload"],
+    },
+    {
+      ...exactDomModulepreloadFixture,
+      attributes: {
+        ...exactDomModulepreloadFixture.attributes,
+        rel: "MODULEPRELOAD",
+      },
+      relTokens: ["MODULEPRELOAD"],
+    },
+    {
+      ...exactDomModulepreloadFixture,
+      attributes: {
+        ...exactDomModulepreloadFixture.attributes,
+        as: "style",
+      },
+    },
+    {
+      ...exactDomModulepreloadFixture,
+      attributes: {
+        ...exactDomModulepreloadFixture.attributes,
+        crossorigin: "anonymous",
+      },
+    },
+    {
+      ...exactDomModulepreloadFixture,
+      attributes: {
+        ...exactDomModulepreloadFixture.attributes,
+        href: "\\assets\\app.js",
+      },
+    },
+  ];
+  for (const fixture of rejectedDomModulepreloadFixtures) {
+    assert.equal(exactDomModulepreloadDescriptorAllowed(fixture), false);
+  }
   for (const toolbarMarkup of [
     `<script src="${VERCEL_PREVIEW_TOOLBAR_SCRIPT_URL}"></script>`,
     '<script src="//vercel.live/_next-live/feedback/feedback.js"></script>',
@@ -5198,6 +6688,8 @@ const verifyNetworkPolicyNegativeFixtures = () => {
       rejectedParserMarkupFixtures.length +
       rejectedParserModulepreloadOrigins.length,
     acceptedImmutableParserMarkupCaseCount: 2,
+    acceptedExactDomModulepreloadCaseCount: 1,
+    rejectedDomModulepreloadCaseCount: rejectedDomModulepreloadFixtures.length,
     verifiedLocalFirebaseModuleCaseCount: Object.keys(firebaseRule.localModules)
       .length,
   };
@@ -6102,6 +7594,560 @@ const sanitizeAppCheckDiagnostic = (
   }
   return sanitized;
 };
+const SAFE_BROWSER_ERROR_SOURCE_CLASSES = Object.freeze([
+  "console-error",
+  "pageerror",
+]);
+const SAFE_BROWSER_ERROR_NAME_CLASSES = Object.freeze([
+  "aggregate-error",
+  "console-error",
+  "dom-exception",
+  "error",
+  "eval-error",
+  "firebase-error",
+  "range-error",
+  "reference-error",
+  "security-error",
+  "syntax-error",
+  "type-error",
+  "unknown-error",
+  "uri-error",
+]);
+const SAFE_BROWSER_ERROR_MESSAGE_CLASSES = Object.freeze([
+  "binding-not-defined",
+  "dom-operation-failed",
+  "firebase-app-check",
+  "firebase-failed-precondition",
+  "firebase-permission-denied",
+  "firebase-unauthenticated",
+  "firebase-unavailable",
+  "module-load-failed",
+  "network-fetch-failed",
+  "not-a-function",
+  "nullish-property-access",
+  "other-runtime-error",
+  "react-render-failure",
+  "speculative-egress-guard",
+]);
+const SAFE_HTTP_ERROR_RESOURCE_TYPE_CLASSES = Object.freeze([
+  "document",
+  "eventsource",
+  "fetch",
+  "font",
+  "image",
+  "manifest",
+  "media",
+  "other",
+  "script",
+  "stylesheet",
+  "texttrack",
+  "websocket",
+  "xhr",
+]);
+const classifySafeBrowserErrorName = (sourceClass, errorName) => {
+  if (sourceClass === "console-error") return "console-error";
+  const normalizedName = String(errorName || "")
+    .trim()
+    .toLowerCase();
+  const fixedClassByName = {
+    aggregateerror: "aggregate-error",
+    domexception: "dom-exception",
+    error: "error",
+    evalerror: "eval-error",
+    firebaseerror: "firebase-error",
+    rangeerror: "range-error",
+    referenceerror: "reference-error",
+    securityerror: "security-error",
+    syntaxerror: "syntax-error",
+    typeerror: "type-error",
+    urierror: "uri-error",
+  };
+  return fixedClassByName[normalizedName] || "unknown-error";
+};
+const classifySafeBrowserErrorMessage = (value, errorCode = "") => {
+  const normalizedCode = String(errorCode || "")
+    .trim()
+    .toLowerCase();
+  const normalizedMessage = String(value || "").toLowerCase();
+  const speculativeEgressGuardMessage =
+    "securityerror: speculative browser egress is disabled during capture.";
+  if (
+    normalizedMessage === speculativeEgressGuardMessage ||
+    normalizedMessage ===
+      `unhandled render error: ${speculativeEgressGuardMessage}`
+  ) {
+    return "speculative-egress-guard";
+  }
+  if (
+    /^(?:app-check|appcheck)\//u.test(normalizedCode) ||
+    /\bapp[ -]?check\b|firebase app check/iu.test(normalizedMessage)
+  ) {
+    return "firebase-app-check";
+  }
+  if (
+    ["permission-denied", "firestore/permission-denied"].includes(
+      normalizedCode,
+    ) ||
+    /\bpermission-denied\b|missing or insufficient permissions|permission denied|권한[^\n]*(?:없|거부)/iu.test(
+      normalizedMessage,
+    )
+  ) {
+    return "firebase-permission-denied";
+  }
+  if (
+    ["failed-precondition", "firestore/failed-precondition"].includes(
+      normalizedCode,
+    ) ||
+    /\bfailed-precondition\b|requires an index|failed precondition|사전 조건/iu.test(
+      normalizedMessage,
+    )
+  ) {
+    return "firebase-failed-precondition";
+  }
+  if (
+    [
+      "auth/invalid-user-token",
+      "auth/user-token-expired",
+      "firestore/unauthenticated",
+      "unauthenticated",
+    ].includes(normalizedCode) ||
+    /\bunauthenticated\b|로그인[^\n]*필요|인증[^\n]*필요/iu.test(
+      normalizedMessage,
+    )
+  ) {
+    return "firebase-unauthenticated";
+  }
+  if (
+    ["firestore/unavailable", "unavailable"].includes(normalizedCode) ||
+    /\bunavailable\b|service unavailable/iu.test(normalizedMessage)
+  ) {
+    return "firebase-unavailable";
+  }
+  if (
+    /chunkloaderror|loading chunk[^\n]*failed|failed to fetch dynamically imported module|failed to load module script|importing a module script failed/iu.test(
+      normalizedMessage,
+    )
+  ) {
+    return "module-load-failed";
+  }
+  if (
+    /\bfailed to fetch\b|\bnetworkerror\b|network request failed/iu.test(
+      normalizedMessage,
+    )
+  ) {
+    return "network-fetch-failed";
+  }
+  if (
+    /cannot (?:read|set) properties of (?:null|undefined)|(?:null|undefined) is not an object/iu.test(
+      normalizedMessage,
+    )
+  ) {
+    return "nullish-property-access";
+  }
+  if (/is not a function|is not callable/iu.test(normalizedMessage)) {
+    return "not-a-function";
+  }
+  if (
+    /(?:is |was )?not defined|can't find variable|cannot access[^\n]*before initialization/iu.test(
+      normalizedMessage,
+    )
+  ) {
+    return "binding-not-defined";
+  }
+  if (
+    /minified react error|invalid hook call|error occurred in the <[^>]+> component|objects are not valid as a react child|maximum update depth exceeded/iu.test(
+      normalizedMessage,
+    )
+  ) {
+    return "react-render-failure";
+  }
+  if (
+    /\bdomexception\b|failed to execute[^\n]* on |the operation is insecure/iu.test(
+      normalizedMessage,
+    )
+  ) {
+    return "dom-operation-failed";
+  }
+  return "other-runtime-error";
+};
+const createSafeBrowserErrorRecord = ({
+  sourceClass,
+  value,
+  errorName = "",
+  errorCode = "",
+  debugToken,
+  debugSentinel = APP_CHECK_DEBUG_SENTINEL,
+  deploymentBypassSecret = "",
+}) => {
+  assert.equal(SAFE_BROWSER_ERROR_SOURCE_CLASSES.includes(sourceClass), true);
+  const sanitizedValue = sanitizeAppCheckDiagnostic(
+    value,
+    debugToken,
+    debugSentinel,
+    deploymentBypassSecret,
+  );
+  const record = Object.freeze({
+    sourceClass,
+    errorNameClass: classifySafeBrowserErrorName(sourceClass, errorName),
+    messageClass: classifySafeBrowserErrorMessage(sanitizedValue, errorCode),
+    sha256: secretSha256(sanitizedValue),
+  });
+  assert.equal(
+    SAFE_BROWSER_ERROR_NAME_CLASSES.includes(record.errorNameClass),
+    true,
+  );
+  assert.equal(
+    SAFE_BROWSER_ERROR_MESSAGE_CLASSES.includes(record.messageClass),
+    true,
+  );
+  return record;
+};
+const canonicalSafeBrowserErrorHistogram = (records) => {
+  const counts = new Map();
+  for (const record of records) {
+    assert.deepEqual(Object.keys(record).sort(), [
+      "errorNameClass",
+      "messageClass",
+      "sha256",
+      "sourceClass",
+    ]);
+    assert.equal(
+      SAFE_BROWSER_ERROR_SOURCE_CLASSES.includes(record.sourceClass),
+      true,
+    );
+    assert.equal(
+      SAFE_BROWSER_ERROR_NAME_CLASSES.includes(record.errorNameClass),
+      true,
+    );
+    assert.equal(
+      SAFE_BROWSER_ERROR_MESSAGE_CLASSES.includes(record.messageClass),
+      true,
+    );
+    assert.match(record.sha256, /^[0-9a-f]{64}$/u);
+    const key = `${record.sourceClass}\u0000${record.errorNameClass}\u0000${record.messageClass}`;
+    const previous = counts.get(key);
+    counts.set(key, {
+      sourceClass: record.sourceClass,
+      errorNameClass: record.errorNameClass,
+      messageClass: record.messageClass,
+      count: (previous?.count || 0) + 1,
+    });
+  }
+  return [...counts.values()].sort(
+    (left, right) =>
+      left.sourceClass.localeCompare(right.sourceClass) ||
+      left.errorNameClass.localeCompare(right.errorNameClass) ||
+      left.messageClass.localeCompare(right.messageClass),
+  );
+};
+const SAFE_BROWSER_ERROR_HASH_SAMPLE_LIMIT = 16;
+const createSafeBrowserErrorAccumulator = () => ({
+  totalCount: 0,
+  classCounts: new Map(),
+  hashSample: new Set(),
+  hashSampleTruncated: false,
+});
+const resetSafeBrowserErrorAccumulator = (accumulator) => {
+  accumulator.totalCount = 0;
+  accumulator.classCounts.clear();
+  accumulator.hashSample.clear();
+  accumulator.hashSampleTruncated = false;
+};
+const appendSafeBrowserErrorRecord = (accumulator, record) => {
+  canonicalSafeBrowserErrorHistogram([record]);
+  accumulator.totalCount += 1;
+  const key = `${record.sourceClass}\u0000${record.errorNameClass}\u0000${record.messageClass}`;
+  const previous = accumulator.classCounts.get(key);
+  accumulator.classCounts.set(key, {
+    sourceClass: record.sourceClass,
+    errorNameClass: record.errorNameClass,
+    messageClass: record.messageClass,
+    count: (previous?.count || 0) + 1,
+  });
+  if (accumulator.hashSample.has(record.sha256)) return;
+  const candidates = [...accumulator.hashSample, record.sha256].sort();
+  accumulator.hashSample.clear();
+  for (const hash of candidates.slice(
+    0,
+    SAFE_BROWSER_ERROR_HASH_SAMPLE_LIMIT,
+  )) {
+    accumulator.hashSample.add(hash);
+  }
+  if (candidates.length > SAFE_BROWSER_ERROR_HASH_SAMPLE_LIMIT) {
+    accumulator.hashSampleTruncated = true;
+  }
+};
+const snapshotSafeBrowserErrorAccumulator = (accumulator) => ({
+  pageErrorCount: accumulator.totalCount,
+  pageErrorClassHistogram: [...accumulator.classCounts.values()].sort(
+    (left, right) =>
+      left.sourceClass.localeCompare(right.sourceClass) ||
+      left.errorNameClass.localeCompare(right.errorNameClass) ||
+      left.messageClass.localeCompare(right.messageClass),
+  ),
+  pageErrorSha256Sample: [...accumulator.hashSample].sort(),
+  pageErrorSha256SampleLimit: SAFE_BROWSER_ERROR_HASH_SAMPLE_LIMIT,
+  pageErrorSha256SampleTruncated: accumulator.hashSampleTruncated,
+});
+const safeHttpErrorResourceTypeClass = (resourceType) => {
+  const normalizedResourceType = String(resourceType || "")
+    .trim()
+    .toLowerCase();
+  return SAFE_HTTP_ERROR_RESOURCE_TYPE_CLASSES.includes(normalizedResourceType)
+    ? normalizedResourceType
+    : "other";
+};
+const summarizeSafeRouteResponseStatuses = (responses) => {
+  let http3xxResponseCount = 0;
+  let httpGe400ResponseCount = 0;
+  const errorResourceTypeCounts = new Map();
+  for (const response of responses) {
+    const status = Number(response.status);
+    if (!Number.isInteger(status)) continue;
+    if (status >= 300 && status < 400) http3xxResponseCount += 1;
+    if (status < 400) continue;
+    httpGe400ResponseCount += 1;
+    const resourceType = safeHttpErrorResourceTypeClass(response.resourceType);
+    errorResourceTypeCounts.set(
+      resourceType,
+      (errorResourceTypeCounts.get(resourceType) || 0) + 1,
+    );
+  }
+  return {
+    routeObservedHttp3xxResponseCount: http3xxResponseCount,
+    routeObservedHttpGe400ResponseCount: httpGe400ResponseCount,
+    routeObservedHttpGe400ResourceTypeHistogram: [
+      ...errorResourceTypeCounts.entries(),
+    ]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([resourceType, count]) => ({ resourceType, count })),
+  };
+};
+const createSafeFinishedRequestAccumulator = () => ({
+  totalCount: 0,
+  firebaseCount: 0,
+  resourceTypeCounts: new Map(),
+});
+const appendSafeFinishedRequest = (accumulator, observation) => {
+  accumulator.totalCount += 1;
+  accumulator.firebaseCount += Number(observation.isFirebaseRequest === true);
+  const resourceType = safeHttpErrorResourceTypeClass(observation.resourceType);
+  accumulator.resourceTypeCounts.set(
+    resourceType,
+    (accumulator.resourceTypeCounts.get(resourceType) || 0) + 1,
+  );
+};
+const snapshotSafeFinishedRequests = (accumulator) => {
+  return {
+    routeRequestFinishedCount: accumulator?.totalCount || 0,
+    routeFirebaseRequestFinishedCount: accumulator?.firebaseCount || 0,
+    routeRequestFinishedResourceTypeHistogram: [
+      ...(accumulator?.resourceTypeCounts || new Map()).entries(),
+    ]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([resourceType, count]) => ({ resourceType, count })),
+  };
+};
+const summarizeSafeFinishedRequests = (observations) => {
+  const accumulator = createSafeFinishedRequestAccumulator();
+  for (const observation of observations) {
+    appendSafeFinishedRequest(accumulator, observation);
+  }
+  return snapshotSafeFinishedRequests(accumulator);
+};
+const verifySafeBrowserErrorDiagnosticFixtures = () => {
+  const debugToken = "12345678-1234-4123-8123-123456789abc";
+  const debugSentinel = "fixed-pageerror-debug-sentinel";
+  const deploymentBypassSecret = "fixed-pageerror-bypass-secret";
+  const exchangedToken = `${"d".repeat(24)}.${"e".repeat(24)}.${"f".repeat(
+    24,
+  )}`;
+  const privateFragment = "fixed-private-teacher@example.invalid/secret-doc-id";
+  const permissionMessage = `FirebaseError: Missing or insufficient permissions ${debugToken} ${debugSentinel} ${deploymentBypassSecret} ${exchangedToken} ${privateFragment}`;
+  const records = [
+    createSafeBrowserErrorRecord({
+      sourceClass: "pageerror",
+      value: permissionMessage,
+      errorName: "FirebaseError",
+      errorCode: "permission-denied",
+      debugToken,
+      debugSentinel,
+      deploymentBypassSecret,
+    }),
+    createSafeBrowserErrorRecord({
+      sourceClass: "pageerror",
+      value:
+        "TypeError: Cannot read properties of undefined (reading 'lesson')",
+      errorName: "TypeError",
+      debugToken,
+      debugSentinel,
+      deploymentBypassSecret,
+    }),
+    createSafeBrowserErrorRecord({
+      sourceClass: "console-error",
+      value: "Failed to fetch dynamically imported module: fixed-private-url",
+      debugToken,
+      debugSentinel,
+      deploymentBypassSecret,
+    }),
+    createSafeBrowserErrorRecord({
+      sourceClass: "pageerror",
+      value: "opaque fixed-private-runtime-message",
+      errorName: "PrivateErrorName",
+      debugToken,
+      debugSentinel,
+      deploymentBypassSecret,
+    }),
+    createSafeBrowserErrorRecord({
+      sourceClass: "pageerror",
+      value:
+        "SecurityError: Speculative browser egress is disabled during capture.",
+      errorName: "SecurityError",
+      debugToken,
+      debugSentinel,
+      deploymentBypassSecret,
+    }),
+    createSafeBrowserErrorRecord({
+      sourceClass: "console-error",
+      value:
+        "Unhandled render error: SecurityError: Speculative browser egress is disabled during capture.",
+      debugToken,
+      debugSentinel,
+      deploymentBypassSecret,
+    }),
+  ];
+  assert.equal(records[0].errorNameClass, "firebase-error");
+  assert.equal(records[0].messageClass, "firebase-permission-denied");
+  assert.equal(records[1].errorNameClass, "type-error");
+  assert.equal(records[1].messageClass, "nullish-property-access");
+  assert.equal(records[2].errorNameClass, "console-error");
+  assert.equal(records[2].messageClass, "module-load-failed");
+  assert.equal(records[3].errorNameClass, "unknown-error");
+  assert.equal(records[3].messageClass, "other-runtime-error");
+  assert.equal(records[4].errorNameClass, "security-error");
+  assert.equal(records[4].messageClass, "speculative-egress-guard");
+  assert.equal(records[5].errorNameClass, "console-error");
+  assert.equal(records[5].messageClass, "speculative-egress-guard");
+  assert.equal(
+    records[0].sha256,
+    secretSha256(
+      sanitizeAppCheckDiagnostic(
+        permissionMessage,
+        debugToken,
+        debugSentinel,
+        deploymentBypassSecret,
+      ),
+    ),
+  );
+  const histogram = canonicalSafeBrowserErrorHistogram([
+    ...records,
+    records[0],
+  ]);
+  assert.equal(
+    histogram.reduce((sum, entry) => sum + entry.count, 0),
+    records.length + 1,
+  );
+  assert.equal(
+    histogram.find(
+      (entry) => entry.messageClass === "firebase-permission-denied",
+    )?.count,
+    2,
+  );
+  const accumulator = createSafeBrowserErrorAccumulator();
+  for (const record of records) {
+    appendSafeBrowserErrorRecord(accumulator, record);
+  }
+  for (
+    let index = 0;
+    index < SAFE_BROWSER_ERROR_HASH_SAMPLE_LIMIT + 4;
+    index += 1
+  ) {
+    appendSafeBrowserErrorRecord(
+      accumulator,
+      createSafeBrowserErrorRecord({
+        sourceClass: "console-error",
+        value: `fixed-bounded-error-fixture-${index}`,
+        debugToken,
+        debugSentinel,
+        deploymentBypassSecret,
+      }),
+    );
+  }
+  const accumulatorSnapshot = snapshotSafeBrowserErrorAccumulator(accumulator);
+  assert.equal(
+    accumulatorSnapshot.pageErrorCount,
+    records.length + SAFE_BROWSER_ERROR_HASH_SAMPLE_LIMIT + 4,
+  );
+  assert.equal(
+    accumulatorSnapshot.pageErrorSha256Sample.length,
+    SAFE_BROWSER_ERROR_HASH_SAMPLE_LIMIT,
+  );
+  assert.equal(accumulatorSnapshot.pageErrorSha256SampleTruncated, true);
+  assert.equal(
+    accumulatorSnapshot.pageErrorClassHistogram.reduce(
+      (sum, entry) => sum + entry.count,
+      0,
+    ),
+    accumulatorSnapshot.pageErrorCount,
+  );
+  const routeResponseSummary = summarizeSafeRouteResponseStatuses([
+    { status: 302, resourceType: "document" },
+    { status: 404, resourceType: "script" },
+    { status: 500, resourceType: "xhr" },
+    { status: 418, resourceType: `private/${privateFragment}` },
+    { status: 200, resourceType: "document" },
+  ]);
+  assert.deepEqual(routeResponseSummary, {
+    routeObservedHttp3xxResponseCount: 1,
+    routeObservedHttpGe400ResponseCount: 3,
+    routeObservedHttpGe400ResourceTypeHistogram: [
+      { resourceType: "other", count: 1 },
+      { resourceType: "script", count: 1 },
+      { resourceType: "xhr", count: 1 },
+    ],
+  });
+  const requestFinishedSummary = summarizeSafeFinishedRequests([
+    { isFirebaseRequest: false, resourceType: "document" },
+    { isFirebaseRequest: true, resourceType: "xhr" },
+    { isFirebaseRequest: false, resourceType: `private/${privateFragment}` },
+  ]);
+  assert.deepEqual(requestFinishedSummary, {
+    routeRequestFinishedCount: 3,
+    routeFirebaseRequestFinishedCount: 1,
+    routeRequestFinishedResourceTypeHistogram: [
+      { resourceType: "document", count: 1 },
+      { resourceType: "other", count: 1 },
+      { resourceType: "xhr", count: 1 },
+    ],
+  });
+  const serializedDiagnostic = JSON.stringify({
+    ...accumulatorSnapshot,
+    ...routeResponseSummary,
+    ...requestFinishedSummary,
+  });
+  for (const rawValue of [
+    debugToken,
+    debugSentinel,
+    deploymentBypassSecret,
+    exchangedToken,
+    privateFragment,
+    permissionMessage,
+    "fixed-private-url",
+    "opaque fixed-private-runtime-message",
+    "PrivateErrorName",
+  ]) {
+    assert.equal(serializedDiagnostic.includes(rawValue), false);
+  }
+  return {
+    safeBrowserErrorDiagnosticFixtureCount: records.length,
+    safeBrowserErrorDiagnosticHistogramEntryCount: histogram.length,
+    safeRouteResponseDiagnosticFixtureCount: 5,
+    safeRequestFinishedDiagnosticFixtureCount: 3,
+    safeBrowserErrorDiagnosticRawValueOutputCount: 0,
+    safeBrowserErrorDiagnosticHashSampleLimit:
+      SAFE_BROWSER_ERROR_HASH_SAMPLE_LIMIT,
+  };
+};
 const verifyAppCheckSecretNegativeFixtures = () => {
   const debugToken = "12345678-1234-4123-8123-123456789abc";
   const exchangedToken = `${"a".repeat(24)}.${"b".repeat(24)}.${"c".repeat(
@@ -6129,6 +8175,8 @@ const verifyAppCheckSecretNegativeFixtures = () => {
   return { rejectedRawSecretCaseCount: 3, acceptedSanitizedCaseCount: 1 };
 };
 const appCheckSecretNegativeSelfTest = verifyAppCheckSecretNegativeFixtures();
+const safeBrowserErrorDiagnosticSelfTest =
+  verifySafeBrowserErrorDiagnosticFixtures();
 const preTransmissionBoundaryNegativeSelfTest =
   verifyPreTransmissionBoundaryNegativeFixtures();
 const fixtureAuditFreshnessNegativeSelfTest =
@@ -6198,12 +8246,13 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
   let documentPayload = "";
   let immutableResponseLinkHeader = "";
   let directEarlyHintsLinkHeader = "";
-  const unsafeParserDocumentPayload =
-    '<!doctype html><iframe srcdoc="&lt;img src=http://127.0.0.1/unsafe-srcdoc-wire&gt;"></iframe><link rel="preconnect" href="http://127.0.0.1/unsafe-parser-wire"><title>unsafe</title>';
+  let unsafeParserDocumentPayload = "";
   const toolbarParserDocumentPayload =
     '<!doctype html><script src="https:&#x2f;&#x2f;vercel.live&#x2f;_next-live&#x2f;feedback&#x2f;fee&#x64;back.js"></script><title>toolbar</title>';
   const scriptPayload =
     'globalThis.__w10pImmutableScript = "w10p-cdp-url-override-payload-v2";';
+  const crossRealmDocumentPayload =
+    "<!doctype html><title>cross-realm-fixture</title>";
   const networkBackedProbeResponseBody = JSON.stringify({ ok: true });
   const postFinalAbortResponseBodyPrefix = '{"partial":true';
   const postFinalAbortDeclaredContentLength =
@@ -6370,11 +8419,18 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
       response.end(documentPayload);
       return;
     }
-    if (requestPath === "/rewrite.js") {
+    if (["/modulepreload.js", "/rewrite.js"].includes(requestPath)) {
       response.writeHead(200, {
         "content-type": "text/javascript; charset=utf-8",
       });
       response.end(scriptPayload);
+      return;
+    }
+    if (requestPath === "/cross-realm.html") {
+      response.writeHead(200, {
+        "content-type": "text/html; charset=utf-8",
+      });
+      response.end(crossRealmDocumentPayload);
       return;
     }
     if (requestPath === "/unsafe-parser.html") {
@@ -6551,6 +8607,7 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
   );
   assert.ok(udpStunAddress && typeof udpStunAddress === "object");
   const rawExternalLoopbackOrigin = `http://127.0.0.1:${rawExternalWireAddress.port}`;
+  unsafeParserDocumentPayload = `<!doctype html><link rel="benign> prefetch" href="${rawExternalLoopbackOrigin}/unsafe-parser-quoted-wire"><title>unsafe quoted parser attribute</title>`;
   immutableResponseLinkHeader = `<${rawExternalLoopbackOrigin}/response-link-wire>; rel=preconnect`;
   const directEarlyHintsAllowedHostTargetUrl =
     "https://identitytoolkit.googleapis.com/early-hints-preload-wire";
@@ -6559,12 +8616,16 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
     "<!doctype html><title>direct-cdp-probe</title>",
     '<link rel="icon" href="data:,w10p">',
     '<template id="w10p-inert-parser-fixtures">',
+    '<div id="parser-element-fixture-wrapper">',
     `<link rel="preconnect" href="${rawExternalLoopbackOrigin}/parser-preconnect-wire">`,
     `<link rel="prefetch" href="${rawExternalLoopbackOrigin}/parser-prefetch-wire">`,
     `<script type="speculationrules">${JSON.stringify({ prefetch: [{ source: "list", urls: [`${rawExternalLoopbackOrigin}/parser-speculation-wire`] }] })}</script>`,
     `<a id="parser-ping" href="#parser-ping-target" ping="${rawExternalLoopbackOrigin}/parser-ping-wire">parser ping</a>`,
+    `<area id="parser-area-ping" href="#parser-area-ping-target" ping="${rawExternalLoopbackOrigin}/parser-area-ping-wire">`,
     `<iframe id="parser-srcdoc" srcdoc="&lt;img src='${rawExternalLoopbackOrigin}/parser-srcdoc-wire'&gt;"></iframe>`,
+    "</div>",
     "</template>",
+    `<script>globalThis.__w10pSplitDocumentWriteRejected=false;try{document.write('<li');document.write('nk rel="prefetch" href="${rawExternalLoopbackOrigin}/parser-split-write-wire">')}catch(error){globalThis.__w10pSplitDocumentWriteRejected=Boolean(error&&error.name==="SecurityError")}</script>`,
     '<script src="/rewrite.js"></script>',
     '<link rel="stylesheet" href="/redirect.css">',
   ].join("");
@@ -6573,6 +8634,8 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
   const apiOrigin = `http://127.0.0.1:${apiAddress.port}`;
   const stableDocumentUrl = `${stableOrigin}/document.html`;
   const stableScriptUrl = `${stableOrigin}/rewrite.js`;
+  const stableModulepreloadUrl = `${stableOrigin}/assets/w10p-modulepreload-fixture.js`;
+  const stableCrossRealmDocumentUrl = `${stableOrigin}/cross-realm.html`;
   const stableRedirectUrl = `${stableOrigin}/redirect.css`;
   const stableUnsafeParserUrl = `${stableOrigin}/unsafe-parser.html`;
   const stableToolbarParserUrl = `${stableOrigin}/toolbar-parser.html`;
@@ -6656,6 +8719,8 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
   const loopbackRewriteTargets = new Map([
     [stableDocumentUrl, `${upstreamOrigin}/document.html`],
     [stableScriptUrl, `${upstreamOrigin}/rewrite.js`],
+    [stableModulepreloadUrl, `${upstreamOrigin}/modulepreload.js`],
+    [stableCrossRealmDocumentUrl, `${upstreamOrigin}/cross-realm.html`],
     [stableRedirectUrl, `${upstreamOrigin}/redirect.css`],
     [stableUnsafeParserUrl, `${upstreamOrigin}/unsafe-parser.html`],
     [stableToolbarParserUrl, `${upstreamOrigin}/toolbar-parser.html`],
@@ -6743,6 +8808,7 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
   let rewriteRequestCount = 0;
   let rewriteResponseCount = 0;
   let rewriteBodyHashMatchCount = 0;
+  let exactDomModulepreloadRuntimeAttestation = null;
   let rewriteRedirectResponseAbortCount = 0;
   let rewriteRedirectFollowAttemptCount = 0;
   let unsafeParserDocumentRejectCount = 0;
@@ -6931,7 +8997,13 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
       serviceWorkers: "block",
     });
     loopbackContext = context;
-    await context.addInitScript(blockBrowserSecondaryExecutionAndWebTransport);
+    await context.addInitScript(
+      blockBrowserSecondaryExecutionAndWebTransport,
+      Object.freeze({
+        ...EXACT_DOM_MODULEPRELOAD_POLICY,
+        exactLoopbackDocumentOrigin: stableOrigin,
+      }),
+    );
     await context.routeWebSocket("**/*", async (webSocketRoute) => {
       websocketRouteInterceptCount += 1;
       assert.equal(
@@ -7565,7 +9637,9 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
           const expectedBody =
             event.request.url === stableDocumentUrl
               ? documentPayload
-              : scriptPayload;
+              : event.request.url === stableCrossRealmDocumentUrl
+                ? crossRealmDocumentPayload
+                : scriptPayload;
           rewriteResponseCount += 1;
           rewriteBodyHashMatchCount += Number(
             secretSha256(responseBytes) === secretSha256(expectedBody),
@@ -7740,6 +9814,724 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
       locationOrigin: stableOrigin,
       navigationOrigin: stableOrigin,
       resourceOrigin: stableOrigin,
+    });
+    exactDomModulepreloadRuntimeAttestation = await page.evaluate(
+      async ({ crossRealmDocumentUrl, modulepreloadPath, expectedUrl }) => {
+        const expectSecurityError = (operation) => {
+          try {
+            operation();
+            return false;
+          } catch (error) {
+            return (
+              Object.prototype.toString.call(error) ===
+                "[object DOMException]" && error.name === "SecurityError"
+            );
+          }
+        };
+        const prepareExactLink = () => {
+          const link = document.createElement("link");
+          link.rel = "modulepreload";
+          link.as = "script";
+          link.crossOrigin = "";
+          link.href = modulepreloadPath;
+          return link;
+        };
+        const admittedLink = document.createElement("link");
+        let loadEventCount = 0;
+        let errorEventCount = 0;
+        const settled = new Promise((resolve) => {
+          admittedLink.addEventListener(
+            "load",
+            () => {
+              loadEventCount += 1;
+              resolve("load");
+            },
+            { once: true },
+          );
+          admittedLink.addEventListener(
+            "error",
+            () => {
+              errorEventCount += 1;
+              resolve("error");
+            },
+            { once: true },
+          );
+        });
+        admittedLink.rel = "modulepreload";
+        admittedLink.as = "script";
+        admittedLink.crossOrigin = "";
+        admittedLink.href = modulepreloadPath;
+        let reentrantTextContentAdmissionRemoval = false;
+        try {
+          document.head.textContent = {
+            toString() {
+              document.head.appendChild(admittedLink);
+              return "";
+            },
+          };
+        } catch (error) {
+          reentrantTextContentAdmissionRemoval =
+            Object.prototype.toString.call(error) === "[object DOMException]" &&
+            error.name === "SecurityError";
+        }
+        document.head.appendChild(admittedLink);
+        const settlement = await Promise.race([
+          settled,
+          new Promise((resolve) => setTimeout(() => resolve("timeout"), 5000)),
+        ]);
+        globalThis.__w10pExactModulepreloadLink = admittedLink;
+
+        const rejected = { reentrantTextContentAdmissionRemoval };
+        const recordRejection = (name, operation) => {
+          rejected[name] = expectSecurityError(operation);
+        };
+        const initialBlankFrame = document.createElement("iframe");
+        document.body.appendChild(initialBlankFrame);
+        const initialBlankWindow = initialBlankFrame.contentWindow;
+        recordRejection("initialBlankRealmRemoveChildCall", () => {
+          initialBlankWindow.Node.prototype.removeChild.call(
+            document.head,
+            admittedLink,
+          );
+        });
+        const initialBlankRealmSnapshot = {
+          locationHref: initialBlankWindow.location.href,
+          admittedStillConnected: admittedLink.isConnected,
+        };
+        initialBlankFrame.remove();
+        const crossRealmFrame = document.createElement("iframe");
+        const crossRealmFrameSettled = new Promise((resolve) => {
+          crossRealmFrame.addEventListener("load", () => resolve("load"), {
+            once: true,
+          });
+          crossRealmFrame.addEventListener("error", () => resolve("error"), {
+            once: true,
+          });
+        });
+        crossRealmFrame.src = crossRealmDocumentUrl;
+        document.body.appendChild(crossRealmFrame);
+        const crossRealmFrameSettlement = await Promise.race([
+          crossRealmFrameSettled,
+          new Promise((resolve) => setTimeout(() => resolve("timeout"), 5000)),
+        ]);
+        const crossRealmDocument = crossRealmFrame.contentDocument;
+        const crossRealmLink = crossRealmDocument.createElement("link");
+        crossRealmLink.rel = "modulepreload";
+        crossRealmLink.as = "script";
+        crossRealmLink.crossOrigin = "";
+        crossRealmLink.href = modulepreloadPath;
+        recordRejection("crossRealmExactLinkAppend", () => {
+          document.head.appendChild(crossRealmLink);
+        });
+        const crossRealmWindow = crossRealmFrame.contentWindow;
+        recordRejection("crossRealmRemoveChildCall", () => {
+          crossRealmWindow.Node.prototype.removeChild.call(
+            document.head,
+            admittedLink,
+          );
+        });
+        recordRejection("crossRealmElementRemoveCall", () => {
+          crossRealmWindow.Element.prototype.remove.call(admittedLink);
+        });
+        recordRejection("crossRealmInnerHtmlSetterCall", () => {
+          Object.getOwnPropertyDescriptor(
+            crossRealmWindow.Element.prototype,
+            "innerHTML",
+          ).set.call(document.head, "<meta>");
+        });
+        recordRejection("crossRealmTextContentSetterCall", () => {
+          Object.getOwnPropertyDescriptor(
+            crossRealmWindow.Node.prototype,
+            "textContent",
+          ).set.call(document.head, "");
+        });
+        recordRejection("crossRealmIdSetterCall", () => {
+          Object.getOwnPropertyDescriptor(
+            crossRealmWindow.Element.prototype,
+            "id",
+          ).set.call(admittedLink, "blocked");
+        });
+        recordRejection("crossRealmAttrValueSetterCall", () => {
+          Object.getOwnPropertyDescriptor(
+            crossRealmWindow.Attr.prototype,
+            "value",
+          ).set.call(admittedLink.getAttributeNode("href"), "/assets/other.js");
+        });
+        recordRejection("crossRealmNamedNodeMapRemovalCall", () => {
+          crossRealmWindow.NamedNodeMap.prototype.removeNamedItem.call(
+            admittedLink.attributes,
+            "href",
+          );
+        });
+        recordRejection("crossRealmRelListMutationCall", () => {
+          crossRealmWindow.DOMTokenList.prototype.remove.call(
+            admittedLink.relList,
+            "modulepreload",
+          );
+        });
+        recordRejection("crossRealmRangeDeleteCall", () => {
+          const parentRange = document.createRange();
+          parentRange.selectNode(admittedLink);
+          crossRealmWindow.Range.prototype.deleteContents.call(parentRange);
+        });
+        const crossRealmSnapshot = {
+          frameSettlement: crossRealmFrameSettlement,
+          ownerDocumentPreserved:
+            crossRealmLink.ownerDocument === crossRealmDocument,
+          linkConnected: crossRealmLink.isConnected,
+        };
+        crossRealmFrame.remove();
+        recordRejection("wrongPropertyOrder", () => {
+          const link = document.createElement("link");
+          link.as = "script";
+          link.rel = "modulepreload";
+        });
+        recordRejection("extraAttributeMutation", () => {
+          const link = prepareExactLink();
+          link.setAttribute("data-extra", "blocked");
+        });
+        recordRejection("extraReflectedAttributeAppend", () => {
+          const link = prepareExactLink();
+          link.id = "blocked";
+          document.head.appendChild(link);
+        });
+        recordRejection("wrongParentAppendChild", () => {
+          document.body.appendChild(prepareExactLink());
+        });
+        recordRejection("alternateHeadAppend", () => {
+          document.head.append(prepareExactLink());
+        });
+        recordRejection("alternateHeadInsertBefore", () => {
+          document.head.insertBefore(
+            prepareExactLink(),
+            document.head.firstChild,
+          );
+        });
+        recordRejection("rangeInsertNode", () => {
+          const range = document.createRange();
+          range.selectNodeContents(document.head);
+          range.collapse(false);
+          range.insertNode(prepareExactLink());
+        });
+        recordRejection("rangeSurroundSpeculativeNode", () => {
+          const parserTemplate = document.querySelector(
+            "#w10p-inert-parser-fixtures",
+          );
+          const speculativeLink = parserTemplate.content
+            .querySelector('link[rel="preconnect"]')
+            .cloneNode(true);
+          const range = document.createRange();
+          range.selectNodeContents(document.body);
+          range.collapse(false);
+          range.surroundContents(speculativeLink);
+        });
+        recordRejection("baseHrefProperty", () => {
+          const base = document.createElement("base");
+          base.href = "https://outside.invalid/";
+        });
+        recordRejection("baseSetAttribute", () => {
+          const base = document.createElement("base");
+          base.setAttribute("href", "https://outside.invalid/");
+        });
+        recordRejection("baseInsertion", () => {
+          document.head.insertBefore(
+            document.createElement("base"),
+            document.head.firstChild,
+          );
+        });
+        recordRejection("admittedReappend", () => {
+          document.head.appendChild(admittedLink);
+        });
+        recordRejection("admittedHrefMutation", () => {
+          admittedLink.href = "/assets/other.js";
+        });
+        recordRejection("admittedToggleAttribute", () => {
+          admittedLink.toggleAttribute("href", false);
+        });
+        recordRejection("admittedNamedNodeMapRemoval", () => {
+          admittedLink.attributes.removeNamedItem("href");
+        });
+        recordRejection("admittedSpoofedAttrOwnerMutation", () => {
+          const hrefAttribute = admittedLink.getAttributeNode("href");
+          Object.defineProperty(hrefAttribute, "ownerElement", {
+            configurable: true,
+            value: document.body,
+          });
+          hrefAttribute.value = "/assets/other.js";
+        });
+        const spoofedRelAttributeLink = document.createElement("link");
+        spoofedRelAttributeLink.rel = "alternate";
+        document.head.appendChild(spoofedRelAttributeLink);
+        recordRejection("connectedSpoofedRelAttrNameMutation", () => {
+          const relAttribute = spoofedRelAttributeLink.getAttributeNode("rel");
+          Object.defineProperty(relAttribute, "localName", {
+            configurable: true,
+            value: "title",
+          });
+          Object.defineProperty(relAttribute, "name", {
+            configurable: true,
+            value: "title",
+          });
+          relAttribute.value = "modulepreload";
+        });
+        spoofedRelAttributeLink.remove();
+        recordRejection("admittedFetchPropertyMutation", () => {
+          admittedLink.media = "print";
+        });
+        recordRejection("admittedIdMutation", () => {
+          admittedLink.id = "blocked";
+        });
+        recordRejection("admittedClassListMutation", () => {
+          admittedLink.classList.add("blocked");
+        });
+        recordRejection("admittedDatasetMutation", () => {
+          admittedLink.dataset.blocked = "true";
+        });
+        recordRejection("admittedStyleMutation", () => {
+          admittedLink.style.cssText = "display:none";
+        });
+        const svgStyleDescriptor = globalThis.SVGElement
+          ? Object.getOwnPropertyDescriptor(SVGElement.prototype, "style")
+          : null;
+        if (svgStyleDescriptor?.get) {
+          recordRejection("admittedSvgStyleGetterCall", () => {
+            svgStyleDescriptor.get.call(admittedLink);
+          });
+        } else {
+          rejected.admittedSvgStyleGetterCall = true;
+        }
+        const elementInternalsAriaLabelDescriptor = globalThis.ElementInternals
+          ? Object.getOwnPropertyDescriptor(
+              ElementInternals.prototype,
+              "ariaLabel",
+            )
+          : null;
+        if (elementInternalsAriaLabelDescriptor?.set) {
+          recordRejection("admittedElementInternalsAriaSetterCall", () => {
+            elementInternalsAriaLabelDescriptor.set.call(
+              admittedLink,
+              "blocked",
+            );
+          });
+        } else {
+          rejected.admittedElementInternalsAriaSetterCall = true;
+        }
+        recordRejection("admittedRelListAssignment", () => {
+          admittedLink.relList = "stylesheet";
+        });
+        recordRejection("admittedNonceMutation", () => {
+          admittedLink.nonce = "blocked";
+        });
+        recordRejection("admittedSizesTokenMutation", () => {
+          admittedLink.sizes.add("1x");
+        });
+        recordRejection("admittedSizesAssignment", () => {
+          admittedLink.sizes = "1x";
+        });
+        if ("blocking" in admittedLink) {
+          recordRejection("admittedBlockingTokenMutation", () => {
+            admittedLink.blocking.add("render");
+          });
+          recordRejection("admittedBlockingAssignment", () => {
+            admittedLink.blocking = "render";
+          });
+        } else {
+          rejected.admittedBlockingTokenMutation = true;
+          rejected.admittedBlockingAssignment = true;
+        }
+        recordRejection("admittedRangeExtraction", () => {
+          const range = document.createRange();
+          range.selectNode(admittedLink);
+          range.extractContents();
+        });
+        recordRejection("admittedAdoptNode", () => {
+          document.adoptNode(admittedLink);
+        });
+        recordRejection("admittedOuterTextRemoval", () => {
+          admittedLink.outerText = "blocked";
+        });
+        recordRejection("admittedRemove", () => {
+          admittedLink.remove();
+        });
+        recordRejection("admittedCharacterDataRemoveCall", () => {
+          CharacterData.prototype.remove.call(admittedLink);
+        });
+        recordRejection("admittedDocumentTypeRemoveCall", () => {
+          DocumentType.prototype.remove.call(admittedLink);
+        });
+        recordRejection("admittedCloneAppend", () => {
+          document.head.appendChild(admittedLink.cloneNode(true));
+        });
+        for (const [name, rejectionName] of [
+          ["setHTML", "admittedSetHtmlRemoval"],
+          ["setHTMLUnsafe", "admittedSetHtmlUnsafeRemoval"],
+        ]) {
+          if (typeof document.head[name] === "function") {
+            recordRejection(rejectionName, () => {
+              document.head[name]("<meta>");
+            });
+          } else {
+            rejected[rejectionName] = true;
+          }
+        }
+        const selection = getSelection();
+        if (selection && typeof selection.deleteFromDocument === "function") {
+          const selectionRange = document.createRange();
+          selectionRange.selectNode(admittedLink);
+          selection.removeAllRanges();
+          selection.addRange(selectionRange);
+          recordRejection("admittedSelectionDelete", () => {
+            selection.deleteFromDocument();
+          });
+          selection.removeAllRanges();
+        } else {
+          rejected.admittedSelectionDelete = true;
+        }
+        recordRejection("admittedDocumentOpen", () => {
+          document.open();
+        });
+        recordRejection("admittedDocumentWrite", () => {
+          document.write("<span></span>");
+        });
+        recordRejection("admittedExecCommandDelete", () => {
+          document.execCommand("delete");
+        });
+        const reentrantFetchPropertyLink = document.createElement("link");
+        recordRejection("reentrantFetchPropertyMutation", () => {
+          reentrantFetchPropertyLink.integrity = {
+            toString() {
+              reentrantFetchPropertyLink.rel = "modulepreload";
+              return "evil-integrity";
+            },
+          };
+        });
+        const reentrantAdjacentLink = document.createElement("link");
+        recordRejection("reentrantInsertAdjacentElementPosition", () => {
+          document.body.insertAdjacentElement(
+            {
+              toString() {
+                reentrantAdjacentLink.rel = "modulepreload";
+                reentrantAdjacentLink.as = "script";
+                reentrantAdjacentLink.crossOrigin = "";
+                reentrantAdjacentLink.href = modulepreloadPath;
+                return "beforeend";
+              },
+            },
+            reentrantAdjacentLink,
+          );
+        });
+        const reentrantVariadicLink = document.createElement("link");
+        const reentrantVariadicContainer = document.createElement("div");
+        recordRejection("reentrantVariadicNodeCoercion", () => {
+          reentrantVariadicContainer.replaceChildren(
+            {
+              toString() {
+                reentrantVariadicLink.rel = "modulepreload";
+                reentrantVariadicLink.as = "script";
+                reentrantVariadicLink.crossOrigin = "";
+                reentrantVariadicLink.href = modulepreloadPath;
+                return "safe-text";
+              },
+            },
+            reentrantVariadicLink,
+          );
+        });
+        const changingString = (counter, firstValue, laterValue) => ({
+          toString() {
+            counter.count += 1;
+            return counter.count === 1 ? firstValue : laterValue;
+          },
+        });
+        const relPropertyCounter = { count: 0 };
+        const relPropertyLink = document.createElement("link");
+        document.head.appendChild(relPropertyLink);
+        relPropertyLink.rel = changingString(
+          relPropertyCounter,
+          "stylesheet",
+          "modulepreload",
+        );
+        const relPropertySnapshot = {
+          coercionCount: relPropertyCounter.count,
+          rel: relPropertyLink.rel,
+        };
+        relPropertyLink.remove();
+
+        const setAttributeNameCounter = { count: 0 };
+        const setAttributeValueCounter = { count: 0 };
+        const setAttributeLink = document.createElement("link");
+        document.head.appendChild(setAttributeLink);
+        setAttributeLink.setAttribute(
+          changingString(setAttributeNameCounter, "title", "rel"),
+          changingString(
+            setAttributeValueCounter,
+            "stylesheet",
+            "modulepreload",
+          ),
+        );
+        const setAttributeSnapshot = {
+          nameCoercionCount: setAttributeNameCounter.count,
+          valueCoercionCount: setAttributeValueCounter.count,
+          rel: setAttributeLink.getAttribute("rel"),
+          title: setAttributeLink.getAttribute("title"),
+        };
+        setAttributeLink.remove();
+
+        const relListCounter = { count: 0 };
+        const relListLink = document.createElement("link");
+        document.head.appendChild(relListLink);
+        relListLink.relList.add(
+          changingString(relListCounter, "stylesheet", "modulepreload"),
+        );
+        const relListSnapshot = {
+          coercionCount: relListCounter.count,
+          rel: relListLink.rel,
+        };
+        relListLink.remove();
+
+        const attrValueCounter = { count: 0 };
+        const attrValueLink = document.createElement("link");
+        attrValueLink.rel = "alternate";
+        document.head.appendChild(attrValueLink);
+        attrValueLink.getAttributeNode("rel").value = changingString(
+          attrValueCounter,
+          "alternate",
+          "modulepreload",
+        );
+        const attrValueSnapshot = {
+          coercionCount: attrValueCounter.count,
+          rel: attrValueLink.rel,
+        };
+        attrValueLink.remove();
+
+        const safeMarkup = "<span></span>";
+        const laterSpeculativeMarkup =
+          '<link rel="modulepreload" as="script" crossorigin href="/assets/w10p-modulepreload-fixture.js">';
+        const nestedTemplateSpeculativeMarkup =
+          '<template shadowrootmode="open"><link rel="preconnect" href="https://outside.invalid"></template>';
+        recordRejection("nestedTemplateInnerHtml", () => {
+          const container = document.createElement("div");
+          container.innerHTML = nestedTemplateSpeculativeMarkup;
+        });
+        if (typeof Element.prototype.setHTMLUnsafe === "function") {
+          recordRejection("nestedTemplateSetHtmlUnsafe", () => {
+            const container = document.createElement("div");
+            container.setHTMLUnsafe(nestedTemplateSpeculativeMarkup);
+          });
+        } else {
+          rejected.nestedTemplateSetHtmlUnsafe = true;
+        }
+        const innerHtmlCounter = { count: 0 };
+        const innerHtmlContainer = document.createElement("div");
+        innerHtmlContainer.innerHTML = changingString(
+          innerHtmlCounter,
+          safeMarkup,
+          laterSpeculativeMarkup,
+        );
+        const innerHtmlSnapshot = {
+          coercionCount: innerHtmlCounter.count,
+          firstElementLocalName:
+            innerHtmlContainer.firstElementChild?.localName || null,
+        };
+
+        const outerHtmlCounter = { count: 0 };
+        const outerHtmlContainer = document.createElement("div");
+        const outerHtmlTarget = document.createElement("div");
+        outerHtmlContainer.appendChild(outerHtmlTarget);
+        outerHtmlTarget.outerHTML = changingString(
+          outerHtmlCounter,
+          safeMarkup,
+          laterSpeculativeMarkup,
+        );
+        const outerHtmlSnapshot = {
+          coercionCount: outerHtmlCounter.count,
+          firstElementLocalName:
+            outerHtmlContainer.firstElementChild?.localName || null,
+        };
+
+        const adjacentHtmlCounter = { count: 0 };
+        const adjacentHtmlContainer = document.createElement("div");
+        adjacentHtmlContainer.insertAdjacentHTML(
+          "beforeend",
+          changingString(
+            adjacentHtmlCounter,
+            safeMarkup,
+            laterSpeculativeMarkup,
+          ),
+        );
+        const adjacentHtmlSnapshot = {
+          coercionCount: adjacentHtmlCounter.count,
+          firstElementLocalName:
+            adjacentHtmlContainer.firstElementChild?.localName || null,
+        };
+
+        const domParserCounter = { count: 0 };
+        const parsedDocument = new DOMParser().parseFromString(
+          changingString(domParserCounter, safeMarkup, laterSpeculativeMarkup),
+          "text/html",
+        );
+        const domParserSnapshot = {
+          coercionCount: domParserCounter.count,
+          firstElementLocalName:
+            parsedDocument.body.firstElementChild?.localName || null,
+        };
+
+        recordRejection("reentrantContextualRangeMutation", () => {
+          const mutableRange = document.createRange();
+          mutableRange.selectNodeContents(document.body);
+          const foreignDocument = document.implementation.createHTMLDocument(
+            "foreign-range-context",
+          );
+          mutableRange.createContextualFragment({
+            toString() {
+              mutableRange.selectNodeContents(foreignDocument.body);
+              return safeMarkup;
+            },
+          });
+        });
+        const contextualFragmentCounter = { count: 0 };
+        const contextualFragment = document
+          .createRange()
+          .createContextualFragment(
+            changingString(
+              contextualFragmentCounter,
+              safeMarkup,
+              laterSpeculativeMarkup,
+            ),
+          );
+        const contextualFragmentSnapshot = {
+          coercionCount: contextualFragmentCounter.count,
+          firstElementLocalName:
+            contextualFragment.firstElementChild?.localName || null,
+        };
+        return {
+          settlement,
+          loadEventCount,
+          errorEventCount,
+          resolvedHref: admittedLink.href,
+          attributeNames: admittedLink.getAttributeNames().sort(),
+          resourceEntryCount: performance.getEntriesByName(expectedUrl).length,
+          admittedStillConnected: admittedLink.isConnected,
+          rejected,
+          initialBlankRealmSnapshot,
+          crossRealmSnapshot,
+          coercionSnapshots: {
+            relProperty: relPropertySnapshot,
+            setAttribute: setAttributeSnapshot,
+            relList: relListSnapshot,
+            attrValue: attrValueSnapshot,
+            innerHtml: innerHtmlSnapshot,
+            outerHtml: outerHtmlSnapshot,
+            adjacentHtml: adjacentHtmlSnapshot,
+            domParser: domParserSnapshot,
+            contextualFragment: contextualFragmentSnapshot,
+          },
+        };
+      },
+      {
+        crossRealmDocumentUrl: stableCrossRealmDocumentUrl,
+        modulepreloadPath: new URL(stableModulepreloadUrl).pathname,
+        expectedUrl: stableModulepreloadUrl,
+      },
+    );
+    assert.deepEqual(exactDomModulepreloadRuntimeAttestation, {
+      settlement: "load",
+      loadEventCount: 1,
+      errorEventCount: 0,
+      resolvedHref: stableModulepreloadUrl,
+      attributeNames: ["as", "crossorigin", "href", "rel"],
+      resourceEntryCount: 1,
+      admittedStillConnected: true,
+      rejected: {
+        reentrantTextContentAdmissionRemoval: true,
+        initialBlankRealmRemoveChildCall: true,
+        crossRealmExactLinkAppend: true,
+        crossRealmRemoveChildCall: true,
+        crossRealmElementRemoveCall: true,
+        crossRealmInnerHtmlSetterCall: true,
+        crossRealmTextContentSetterCall: true,
+        crossRealmIdSetterCall: true,
+        crossRealmAttrValueSetterCall: true,
+        crossRealmNamedNodeMapRemovalCall: true,
+        crossRealmRelListMutationCall: true,
+        crossRealmRangeDeleteCall: true,
+        wrongPropertyOrder: true,
+        extraAttributeMutation: true,
+        extraReflectedAttributeAppend: true,
+        wrongParentAppendChild: true,
+        alternateHeadAppend: true,
+        alternateHeadInsertBefore: true,
+        rangeInsertNode: true,
+        rangeSurroundSpeculativeNode: true,
+        baseHrefProperty: true,
+        baseSetAttribute: true,
+        baseInsertion: true,
+        admittedReappend: true,
+        admittedHrefMutation: true,
+        admittedToggleAttribute: true,
+        admittedNamedNodeMapRemoval: true,
+        admittedSpoofedAttrOwnerMutation: true,
+        connectedSpoofedRelAttrNameMutation: true,
+        admittedFetchPropertyMutation: true,
+        admittedIdMutation: true,
+        admittedClassListMutation: true,
+        admittedDatasetMutation: true,
+        admittedStyleMutation: true,
+        admittedSvgStyleGetterCall: true,
+        admittedElementInternalsAriaSetterCall: true,
+        admittedRelListAssignment: true,
+        admittedNonceMutation: true,
+        admittedSizesTokenMutation: true,
+        admittedSizesAssignment: true,
+        admittedBlockingTokenMutation: true,
+        admittedBlockingAssignment: true,
+        admittedRangeExtraction: true,
+        admittedAdoptNode: true,
+        admittedOuterTextRemoval: true,
+        admittedRemove: true,
+        admittedCharacterDataRemoveCall: true,
+        admittedDocumentTypeRemoveCall: true,
+        admittedCloneAppend: true,
+        admittedSetHtmlRemoval: true,
+        admittedSetHtmlUnsafeRemoval: true,
+        admittedSelectionDelete: true,
+        admittedDocumentOpen: true,
+        admittedDocumentWrite: true,
+        admittedExecCommandDelete: true,
+        reentrantFetchPropertyMutation: true,
+        reentrantInsertAdjacentElementPosition: true,
+        reentrantVariadicNodeCoercion: true,
+        reentrantContextualRangeMutation: true,
+        nestedTemplateInnerHtml: true,
+        nestedTemplateSetHtmlUnsafe: true,
+      },
+      initialBlankRealmSnapshot: {
+        locationHref: "about:blank",
+        admittedStillConnected: true,
+      },
+      crossRealmSnapshot: {
+        frameSettlement: "load",
+        ownerDocumentPreserved: true,
+        linkConnected: false,
+      },
+      coercionSnapshots: {
+        relProperty: { coercionCount: 1, rel: "stylesheet" },
+        setAttribute: {
+          nameCoercionCount: 1,
+          valueCoercionCount: 1,
+          rel: null,
+          title: "stylesheet",
+        },
+        relList: { coercionCount: 1, rel: "stylesheet" },
+        attrValue: { coercionCount: 1, rel: "alternate" },
+        innerHtml: { coercionCount: 1, firstElementLocalName: "span" },
+        outerHtml: { coercionCount: 1, firstElementLocalName: "span" },
+        adjacentHtml: { coercionCount: 1, firstElementLocalName: "span" },
+        domParser: { coercionCount: 1, firstElementLocalName: "span" },
+        contextualFragment: {
+          coercionCount: 1,
+          firstElementLocalName: "span",
+        },
+      },
     });
     const browserSkipToolbarHeaderRejectedBeforeWire = await page.evaluate(
       async (url) => {
@@ -8452,20 +11244,30 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
         const parserSpeculation = parserFixtureRoot.querySelector(
           'script[type="speculationrules"]',
         );
+        const parserElementWrapper = parserFixtureRoot.querySelector(
+          "#parser-element-fixture-wrapper",
+        );
         const parserPing = parserFixtureRoot.querySelector("#parser-ping");
+        const parserAreaPing =
+          parserFixtureRoot.querySelector("#parser-area-ping");
         const parserSrcdoc = parserFixtureRoot.querySelector("#parser-srcdoc");
         if (
           !parserPreconnect ||
           !parserPrefetch ||
           !parserSpeculation ||
+          !parserElementWrapper ||
           !parserPing ||
+          !parserAreaPing ||
           !parserSrcdoc
         ) {
           throw new Error("parser speculative fixtures are missing");
         }
         const speculativeMarkup = `<link rel="preconnect" href="${preconnectUrl}">`;
         const ping = parserPing.cloneNode(true);
+        const areaPing = parserAreaPing.cloneNode(true);
         return {
+          splitDocumentWrite:
+            globalThis.__w10pSplitDocumentWriteRejected === true,
           allowedFirebasePreconnectConnectedNode: blocked(() => {
             const link = document.createElement("link");
             link.rel = "preconnect";
@@ -8644,16 +11446,75 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
                 container.innerHTML = policy.createHTML(speculativeMarkup);
               })
             : true,
+          nativeQuerySelectorAllCallPoison: blocked(() => {
+            const nativeQuerySelectorAll = Element.prototype.querySelectorAll;
+            Object.defineProperty(nativeQuerySelectorAll, "call", {
+              configurable: true,
+              value: () => ({ item: () => null, length: 0 }),
+            });
+            try {
+              document.body.appendChild(parserElementWrapper.cloneNode(true));
+            } finally {
+              delete nativeQuerySelectorAll.call;
+            }
+          }),
+          nativeLocalNameGetterCallPoison: blocked(() => {
+            const nativeLocalNameGetter = Object.getOwnPropertyDescriptor(
+              Element.prototype,
+              "localName",
+            ).get;
+            Object.defineProperty(nativeLocalNameGetter, "call", {
+              configurable: true,
+              value: () => "div",
+            });
+            try {
+              const anchor = document.createElement("a");
+              anchor.setAttribute("ping", pingUrl);
+            } finally {
+              delete nativeLocalNameGetter.call;
+            }
+          }),
+          nativeTemplateCreationSpoof: blocked(() => {
+            const container = document.createElement("div");
+            const spoofedTemplate = document.createElement("template");
+            Object.defineProperty(spoofedTemplate, "content", {
+              configurable: true,
+              value: document.createDocumentFragment(),
+            });
+            Object.defineProperty(document, "createElement", {
+              configurable: true,
+              value: () => spoofedTemplate,
+            });
+            try {
+              container.innerHTML = speculativeMarkup;
+            } finally {
+              delete document.createElement;
+            }
+          }),
           anchorSetAttribute: blocked(() => {
             const anchor = document.createElement("a");
             anchor.setAttribute("ping", pingUrl);
           }),
           anchorPing: blocked(() => ping.click()),
+          anchorPrototypeClick: blocked(() =>
+            HTMLElement.prototype.click.call(ping),
+          ),
           anchorDispatch: blocked(() =>
             ping.dispatchEvent(new MouseEvent("click", { bubbles: true })),
           ),
+          areaSetAttribute: blocked(() => {
+            const area = document.createElement("area");
+            area.setAttribute("ping", pingUrl);
+          }),
+          areaPing: blocked(() => areaPing.click()),
+          areaPrototypeClick: blocked(() =>
+            HTMLElement.prototype.click.call(areaPing),
+          ),
+          areaDispatch: blocked(() =>
+            areaPing.dispatchEvent(new MouseEvent("click", { bubbles: true })),
+          ),
           parserFixtureCount: parserFixtureRoot.querySelectorAll(
-            'link[rel~="preconnect"],link[rel~="prefetch"],script[type="speculationrules"],a[ping],iframe[srcdoc]',
+            'link[rel~="preconnect"],link[rel~="prefetch"],script[type="speculationrules"],a[ping],area[ping],iframe[srcdoc]',
           ).length,
         };
       },
@@ -8666,6 +11527,7 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
       },
     );
     assert.deepEqual(speculativeCapabilityBlocks, {
+      splitDocumentWrite: true,
       allowedFirebasePreconnectConnectedNode: true,
       appendChild: true,
       prepend: true,
@@ -8700,10 +11562,18 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
       documentParseHTMLUnsafe: true,
       execCommandInsertHTML: true,
       trustedHTML: true,
+      nativeQuerySelectorAllCallPoison: true,
+      nativeLocalNameGetterCallPoison: true,
+      nativeTemplateCreationSpoof: true,
       anchorSetAttribute: true,
       anchorPing: true,
+      anchorPrototypeClick: true,
       anchorDispatch: true,
-      parserFixtureCount: 5,
+      areaSetAttribute: true,
+      areaPing: true,
+      areaPrototypeClick: true,
+      areaDispatch: true,
+      parserFixtureCount: 6,
     });
     await page.waitForTimeout(250);
     await page.evaluate((url) => {
@@ -8901,7 +11771,9 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
     assert.deepEqual(
       upstreamWireRequests.map(({ requestPath }) => requestPath).sort(),
       [
+        "/cross-realm.html",
         "/document.html",
+        "/modulepreload.js",
         "/redirect.css",
         "/rewrite.js",
         "/toolbar-parser.html",
@@ -8935,6 +11807,12 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
       1,
     );
     assert.equal(
+      upstreamWireRequests.filter(
+        ({ requestPath }) => requestPath === "/modulepreload.js",
+      ).length,
+      1,
+    );
+    assert.equal(
       upstreamWireRequests.some(
         ({ requestPath }) => requestPath === "/redirect-target.css",
       ),
@@ -8956,9 +11834,9 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
         bypassHeader: "",
       },
     ]);
-    assert.equal(rewriteRequestCount, 5);
-    assert.equal(rewriteResponseCount, 2);
-    assert.equal(rewriteBodyHashMatchCount, 2);
+    assert.equal(rewriteRequestCount, 7);
+    assert.equal(rewriteResponseCount, 4);
+    assert.equal(rewriteBodyHashMatchCount, 4);
     assert.equal(rewriteRedirectResponseAbortCount, 1);
     assert.equal(unsafeParserDocumentRejectCount, 1);
     assert.equal(toolbarParserDocumentRejectCount, 1);
@@ -9342,7 +12220,8 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
     stableTopLevelDocumentWireRequestCount: 0,
     stableStaticWireRequestCount: 0,
     immutableDocumentWireRequestCount: 1,
-    immutableScriptWireRequestCount: 1,
+    immutableScriptWireRequestCount: 2,
+    exactDomModulepreloadRuntimeAttestation,
     immutableRedirectWireRequestCount: 1,
     immutableRedirectFollowWireRequestCount: 0,
     immutableRedirectResponseAbortCount: rewriteRedirectResponseAbortCount,
@@ -9380,6 +12259,7 @@ if (args.includes("--self-test-app-check")) {
       suite: "w10p-app-check-capture-secret-self-test",
       passed: true,
       ...appCheckSecretNegativeSelfTest,
+      ...safeBrowserErrorDiagnosticSelfTest,
       ...preTransmissionBoundaryNegativeSelfTest,
       ...fixtureAuditFreshnessNegativeSelfTest,
       ...stableOriginRewriteNegativeSelfTest,
@@ -9871,7 +12751,7 @@ assert.deepEqual(contract.networkBoundary, {
 });
 assert.equal(contract.browserTransport?.browserOrigin, stableBrowserOrigin);
 assert.deepEqual(contract.browserTransport, {
-  schemaVersion: 6,
+  schemaVersion: 8,
   mechanism:
     "cdp-fetch-request-stage-local-fulfill-from-node-attested-immutable-bytes",
   browserOrigin: stableBrowserOrigin,
@@ -9886,9 +12766,9 @@ assert.deepEqual(contract.browserTransport, {
     "synthetic-no-store-content-type-and-x-dns-prefetch-control-link-omitted",
   informationalResponsePolicy: "immutable-one-xx-never-exposed-to-browser",
   parserMarkupPolicy:
-    "node-scan-fail-closed-before-browser-fulfill-on-speculative-link-except-exact-parser-same-origin-root-assets-js-modulepreload-without-base-query-or-fragment-speculationrules-anchor-ping-or-iframe-srcdoc",
+    "node-quote-aware-opening-tag-scan-fail-closed-before-browser-fulfill-on-speculative-link-except-exact-parser-same-origin-root-assets-js-modulepreload-without-base-query-or-fragment-speculationrules-anchor-or-area-ping-iframe-srcdoc-or-duplicate-relevant-attributes",
   domMutationPolicy:
-    "locked-common-attribute-validator-plus-srcdoc-set-html-unsafe-parse-html-unsafe-range-insert-node-move-before-and-insert-html-entrypoints",
+    "locked-link-fail-closed-accessor-and-mutable-facade-membrane-plus-exact-one-shot-vite-same-origin-root-assets-js-modulepreload-state-machine-and-uncurried-native-dom-entrypoints-with-base-srcdoc-markup-nested-template-range-cross-document-selection-document-open-write-writeln-and-exec-command-blocks",
   requiredProtocol: "https:",
   allowedPorts: ["", "443"],
   userinfoAllowed: false,
@@ -13236,6 +16116,44 @@ const waitForScreenReady = async (page, screenId) => {
     const blockingVisibleMatches = returnDiagnostic
       ? blockingCandidates.filter(isBlockingVisible)
       : [];
+    const blockingVisibleClass = (element) => {
+      const text = normalizedText(element);
+      if (
+        /\b(?:permission|unauthorized|forbidden)\b|권한|접근\s*(?:거부|불가)|인증\s*(?:필요|실패)|로그인\s*(?:필요|요청)/iu.test(
+          text,
+        )
+      ) {
+        return "permission";
+      }
+      if (
+        /\b(?:error|failed|failure|problem|exception)\b|오류|실패|문제|예외/iu.test(
+          text,
+        )
+      ) {
+        return "problem";
+      }
+      if (
+        /\b(?:loading|pending|please wait)\b|불러오|로딩|처리\s*중|잠시만|기다려/iu.test(
+          text,
+        )
+      ) {
+        return "loading";
+      }
+      return "other-safe";
+    };
+    const blockingVisibleClassCounts = new Map();
+    for (const element of blockingVisibleMatches) {
+      const className = blockingVisibleClass(element);
+      blockingVisibleClassCounts.set(
+        className,
+        (blockingVisibleClassCounts.get(className) || 0) + 1,
+      );
+    }
+    const blockingVisibleClassHistogram = [
+      ...blockingVisibleClassCounts.entries(),
+    ]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([className, count]) => ({ className, count }));
     const blockingVisible = returnDiagnostic
       ? blockingVisibleMatches.length > 0
       : blockingCandidates.some(isBlockingVisible);
@@ -13253,6 +16171,7 @@ const waitForScreenReady = async (page, screenId) => {
       contentRootPresent: Boolean(contentRoot),
       blockingVisible,
       blockingVisibleMatchCount: blockingVisibleMatches.length,
+      blockingVisibleClassHistogram,
       signalStates,
       evaluationFailed: false,
     };
@@ -13266,6 +16185,7 @@ const waitForScreenReady = async (page, screenId) => {
       contentRootPresent: false,
       blockingVisible: null,
       blockingVisibleMatchCount: -1,
+      blockingVisibleClassHistogram: [],
       signalStates: [],
       evaluationFailed: true,
     };
@@ -14950,6 +17870,7 @@ const browserAudits = [];
 const identityAttestations = new Map();
 const networkObservations = [];
 const networkResponseObservations = [];
+const requestFinishedAccumulatorsByCaptureId = new Map();
 let appCheckInitScriptInjectionCount = 0;
 let pageRawDebugTokenInjectionCount = 0;
 let browserGlobalRawDebugTokenWriteCount = 0;
@@ -15498,10 +18419,35 @@ try {
         }),
       );
     });
+    context.on("requestfinished", (request) => {
+      if (
+        optionalTelemetrySuppressionDecision({
+          requestUrl: request.url(),
+          method: request.method(),
+        }).eligible
+      ) {
+        return;
+      }
+      const observation = requestObservations.get(request);
+      const captureId = observation?.captureId || null;
+      if (!captureId) return;
+      let accumulator = requestFinishedAccumulatorsByCaptureId.get(captureId);
+      if (!accumulator) {
+        accumulator = createSafeFinishedRequestAccumulator();
+        requestFinishedAccumulatorsByCaptureId.set(captureId, accumulator);
+      }
+      appendSafeFinishedRequest(accumulator, {
+        isFirebaseRequest: observation?.isFirebaseRequest === true,
+        resourceType: safeHttpErrorResourceTypeClass(request.resourceType()),
+      });
+    });
     await context.addInitScript(fixedClockScript, {
       fixedTimestamp: fixedTime,
     });
-    await context.addInitScript(blockBrowserSecondaryExecutionAndWebTransport);
+    await context.addInitScript(
+      blockBrowserSecondaryExecutionAndWebTransport,
+      EXACT_DOM_MODULEPRELOAD_POLICY,
+    );
     secondaryExecutionGuardInitScriptRegistrationCount += 1;
     await context.routeWebSocket("**/*", async (webSocketRoute) => {
       playwrightWebSocketRouteInterceptCount += 1;
@@ -17136,9 +20082,20 @@ try {
     });
     browserConnectProxy.setAuditStage(stage);
     await browserWideBoundaryController.handoffPrimaryRequestBoundary(groupKey);
-    const pageErrors = [];
+    const pageErrorAccumulator = createSafeBrowserErrorAccumulator();
     page.on("pageerror", (error) => {
-      const rawText = String(error);
+      let rawText = String(error);
+      const safeRecord = createSafeBrowserErrorRecord({
+        sourceClass: "pageerror",
+        value: rawText,
+        errorName:
+          error && typeof error === "object" ? String(error.name || "") : "",
+        errorCode:
+          error && typeof error === "object" ? String(error.code || "") : "",
+        debugToken: appCheckDebugToken,
+        debugSentinel: APP_CHECK_DEBUG_SENTINEL,
+        deploymentBypassSecret: bypassSecret,
+      });
       if (
         /\bcors\b|cross-origin request blocked|access-control-allow-origin/iu.test(
           rawText,
@@ -17154,14 +20111,8 @@ try {
       ) {
         browserConsoleSecretObservationCount += 1;
       }
-      pageErrors.push(
-        sanitizeAppCheckDiagnostic(
-          rawText,
-          appCheckDebugToken,
-          APP_CHECK_DEBUG_SENTINEL,
-          bypassSecret,
-        ),
-      );
+      appendSafeBrowserErrorRecord(pageErrorAccumulator, safeRecord);
+      rawText = "";
     });
     page.on("requestfailed", (request) => {
       if (
@@ -17175,10 +20126,21 @@ try {
       browserRequestFailureCount += 1;
     });
     page.on("console", (message) => {
-      const rawText = message.text();
+      let rawText = message.text();
+      const messageType = message.type();
+      const safeRecord =
+        messageType === "error"
+          ? createSafeBrowserErrorRecord({
+              sourceClass: "console-error",
+              value: rawText,
+              debugToken: appCheckDebugToken,
+              debugSentinel: APP_CHECK_DEBUG_SENTINEL,
+              deploymentBypassSecret: bypassSecret,
+            })
+          : null;
       browserConsoleMessageCount += 1;
       if (
-        message.type() === "error" &&
+        messageType === "error" &&
         /\bcors\b|cross-origin request blocked|access-control-allow-origin/iu.test(
           rawText,
         )
@@ -17193,13 +20155,10 @@ try {
       ) {
         browserConsoleSecretObservationCount += 1;
       }
-      const textValue = sanitizeAppCheckDiagnostic(
-        rawText,
-        appCheckDebugToken,
-        APP_CHECK_DEBUG_SENTINEL,
-        bypassSecret,
-      );
-      if (message.type() === "error") pageErrors.push(textValue);
+      if (safeRecord) {
+        appendSafeBrowserErrorRecord(pageErrorAccumulator, safeRecord);
+      }
+      rawText = "";
     });
     const authenticationRole = groupTargets[0].authenticationRole;
     assert.equal(
@@ -17226,8 +20185,12 @@ try {
         identityAttestations.set(authenticationRole, groupIdentityAttestation);
     }
     for (const target of groupTargets) {
-      pageErrors.length = 0;
+      resetSafeBrowserErrorAccumulator(pageErrorAccumulator);
       activeCaptureId = captureKey(stage, target.screen.id, viewport);
+      requestFinishedAccumulatorsByCaptureId.set(
+        activeCaptureId,
+        createSafeFinishedRequestAccumulator(),
+      );
       networkPhase = "screen-capture";
       const networkObservationStart = networkObservations.length;
       const networkResponseObservationStart =
@@ -17317,11 +20280,15 @@ try {
       try {
         await waitForScreenReady(page, target.screen.id);
       } catch (error) {
-        const routeRequests = networkObservations.slice(
-          networkObservationStart,
-        );
-        const routeResponses = networkResponseObservations.slice(
-          networkResponseObservationStart,
+        await flushNetworkAttestations();
+        const routeRequests = networkObservations
+          .slice(networkObservationStart)
+          .filter((observation) => observation.captureId === activeCaptureId);
+        const routeResponses = networkResponseObservations
+          .slice(networkResponseObservationStart)
+          .filter((observation) => observation.captureId === activeCaptureId);
+        const routeFinishedRequests = snapshotSafeFinishedRequests(
+          requestFinishedAccumulatorsByCaptureId.get(activeCaptureId),
         );
         const failureDiagnostic = {
           stage,
@@ -17337,12 +20304,11 @@ try {
             error && typeof error === "object"
               ? error.w10pReadinessDiagnostic || null
               : null,
-          pageErrorCount: pageErrors.length,
-          pageErrorSha256s: pageErrors
-            .map((value) => sha256(String(value)))
-            .sort(),
+          ...snapshotSafeBrowserErrorAccumulator(pageErrorAccumulator),
           routeObservedRequestCount: routeRequests.length,
           routeObservedResponseCount: routeResponses.length,
+          ...summarizeSafeRouteResponseStatuses(routeResponses),
+          ...routeFinishedRequests,
           routeObservedFirebaseRequestCount: routeRequests.filter(
             (observation) => observation.isFirebaseRequest,
           ).length,
@@ -17390,7 +20356,11 @@ try {
           `W10P screen readiness failure: ${JSON.stringify(failureDiagnostic)}`,
         );
       }
-      assert.deepEqual(pageErrors, [], `${target.screen.id} browser errors.`);
+      assert.equal(
+        pageErrorAccumulator.totalCount,
+        0,
+        `${target.screen.id} browser error count must be zero.`,
+      );
       const anchorRequirements =
         stage === "candidate" && !target.screen.productionPresentation
           ? contract.newSurfaceRequiredAnchors[target.screen.id]
@@ -17429,9 +20399,9 @@ try {
       const fileName = `${stage}/${target.screen.id}-${viewportName}.png`;
       const absoluteFile = resolve(outputRoot, fileName);
       await page.screenshot({ path: absoluteFile, fullPage });
-      assert.deepEqual(
-        pageErrors,
-        [],
+      assert.equal(
+        pageErrorAccumulator.totalCount,
+        0,
         `${target.screen.id} emitted an error during screenshot capture.`,
       );
       const postScreenshotMetadata = await describePage(
@@ -17585,6 +20555,7 @@ try {
       );
       captures.push(captureRow);
       groupCaptureAttestations.push(captureAttestation);
+      requestFinishedAccumulatorsByCaptureId.delete(activeCaptureId);
     }
     if (appCheckCdpSession) {
       for (const frame of page.frames()) observeFrameOrigin(frame);
@@ -17911,6 +20882,11 @@ try {
     assert.equal(groupRetainedDedicatedWorkerTargetCount, 0);
     assert.equal(groupRetainedSharedWorkerTargetCount, 0);
     assert.equal(groupRetainedServiceWorkerTargetCount, 0);
+    for (const target of groupTargets) {
+      requestFinishedAccumulatorsByCaptureId.delete(
+        captureKey(stage, target.screen.id, viewport),
+      );
+    }
     activeCaptureId = null;
     networkPhase = "browser-audit-finalization";
     const groupRequests = networkObservations.slice(
