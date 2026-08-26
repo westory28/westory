@@ -5080,6 +5080,97 @@ const classifyExactStagingFirestoreWebChannelHeaderCorrelationScope = ({
 const exactStagingFirestoreWebChannelHeaderCorrelationScope = (options) =>
   classifyExactStagingFirestoreWebChannelHeaderCorrelationScope(options) !==
   null;
+const SAFE_FIRESTORE_WEBCHANNEL_LISTENER_DIAGNOSTIC_REASONS = [
+  "classified",
+  "inspection-missing",
+  "service-not-firestore",
+  "firebase-marker-invalid",
+  "staging-marker-invalid",
+  "production-marker-invalid",
+  "unbound-marker-invalid",
+  "malformed-marker-invalid",
+  "transport-invalid",
+  "resource-unbound",
+  "resource-type-not-fetch",
+  "redirected",
+  "method-not-webchannel",
+  "post-data-state",
+  "content-type-shape",
+  "url-topology",
+];
+const exactFirestoreWebChannelListenerDiagnosticCandidate = (requestUrl) => {
+  try {
+    const parsed = new URL(requestUrl);
+    return (
+      parsed.protocol === "https:" &&
+      parsed.hostname.toLowerCase() === "firestore.googleapis.com" &&
+      parsed.username === "" &&
+      parsed.password === "" &&
+      (parsed.port === "" || parsed.port === "443") &&
+      parsed.hash === "" &&
+      FIRESTORE_WEBCHANNEL_PATHNAMES.has(parsed.pathname)
+    );
+  } catch {
+    return false;
+  }
+};
+const diagnoseExactStagingFirestoreWebChannelHeaderCorrelationScope = (
+  options,
+) => {
+  const requestClass =
+    classifyExactStagingFirestoreWebChannelHeaderCorrelationScope(options);
+  if (requestClass !== null) {
+    return { requestClass, reason: "classified" };
+  }
+  const { inspection } = options;
+  if (!inspection) return { requestClass: null, reason: "inspection-missing" };
+  if (inspection.firebaseService !== "firestore") {
+    return { requestClass: null, reason: "service-not-firestore" };
+  }
+  if (inspection.isFirebaseRequest !== true) {
+    return { requestClass: null, reason: "firebase-marker-invalid" };
+  }
+  if (inspection.stagingMarker !== true) {
+    return { requestClass: null, reason: "staging-marker-invalid" };
+  }
+  if (inspection.productionMarker !== false) {
+    return { requestClass: null, reason: "production-marker-invalid" };
+  }
+  if (inspection.unboundFirebaseRequest !== false) {
+    return { requestClass: null, reason: "unbound-marker-invalid" };
+  }
+  if (inspection.malformedUrlEncoding !== false) {
+    return { requestClass: null, reason: "malformed-marker-invalid" };
+  }
+  if (inspection.firebaseTransportValid !== true) {
+    return { requestClass: null, reason: "transport-invalid" };
+  }
+  if (inspection.serviceResourceBound !== true) {
+    return { requestClass: null, reason: "resource-unbound" };
+  }
+  if (String(options.resourceType).toLowerCase() !== "fetch") {
+    return { requestClass: null, reason: "resource-type-not-fetch" };
+  }
+  if (options.redirected !== false) {
+    return { requestClass: null, reason: "redirected" };
+  }
+  const normalizedMethod = String(options.method).toUpperCase();
+  if (normalizedMethod === "POST") {
+    if (![true, null].includes(options.postDataPresent)) {
+      return { requestClass: null, reason: "post-data-state" };
+    }
+    if (!exactStagingFirestoreWebChannelFormContentType(options.headers)) {
+      return { requestClass: null, reason: "content-type-shape" };
+    }
+  } else if (normalizedMethod === "GET") {
+    if (options.postDataPresent !== false) {
+      return { requestClass: null, reason: "post-data-state" };
+    }
+  } else {
+    return { requestClass: null, reason: "method-not-webchannel" };
+  }
+  return { requestClass: null, reason: "url-topology" };
+};
 const stagingApiKeyScopeDecision = ({
   requestUrl,
   method = "GET",
@@ -6382,6 +6473,111 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     }),
     "initial-forward-post",
   );
+  const firestoreWebChannelListenerDiagnosticBase = {
+    requestUrl: firestoreWebChannelUrl.toString(),
+    method: "POST",
+    resourceType: "Fetch",
+    headers: firestoreHeaders,
+    postDataPresent: true,
+    redirected: false,
+    inspection: firestoreFetchInspection,
+  };
+  assert.deepEqual(
+    diagnoseExactStagingFirestoreWebChannelHeaderCorrelationScope(
+      firestoreWebChannelListenerDiagnosticBase,
+    ),
+    { requestClass: "initial-forward-post", reason: "classified" },
+  );
+  const firestoreWebChannelUnexpectedQueryUrl = new URL(firestoreWebChannelUrl);
+  firestoreWebChannelUnexpectedQueryUrl.searchParams.set("unexpected", "1");
+  for (const fixture of [
+    { inspection: null, expectedReason: "inspection-missing" },
+    {
+      inspection: { ...firestoreFetchInspection, firebaseService: "auth" },
+      expectedReason: "service-not-firestore",
+    },
+    {
+      inspection: {
+        ...firestoreFetchInspection,
+        isFirebaseRequest: false,
+      },
+      expectedReason: "firebase-marker-invalid",
+    },
+    {
+      inspection: { ...firestoreFetchInspection, stagingMarker: false },
+      expectedReason: "staging-marker-invalid",
+    },
+    {
+      inspection: { ...firestoreFetchInspection, productionMarker: true },
+      expectedReason: "production-marker-invalid",
+    },
+    {
+      inspection: {
+        ...firestoreFetchInspection,
+        unboundFirebaseRequest: true,
+      },
+      expectedReason: "unbound-marker-invalid",
+    },
+    {
+      inspection: {
+        ...firestoreFetchInspection,
+        malformedUrlEncoding: true,
+      },
+      expectedReason: "malformed-marker-invalid",
+    },
+    {
+      inspection: {
+        ...firestoreFetchInspection,
+        firebaseTransportValid: false,
+      },
+      expectedReason: "transport-invalid",
+    },
+    {
+      inspection: {
+        ...firestoreFetchInspection,
+        serviceResourceBound: false,
+      },
+      expectedReason: "resource-unbound",
+    },
+    { resourceType: "XHR", expectedReason: "resource-type-not-fetch" },
+    { redirected: true, expectedReason: "redirected" },
+    { method: "PUT", expectedReason: "method-not-webchannel" },
+    { postDataPresent: false, expectedReason: "post-data-state" },
+    {
+      headers: { "content-type": "application/json" },
+      expectedReason: "content-type-shape",
+    },
+    {
+      requestUrl: firestoreWebChannelUnexpectedQueryUrl.toString(),
+      expectedReason: "url-topology",
+    },
+  ]) {
+    const { expectedReason, ...overrides } = fixture;
+    const diagnostic =
+      diagnoseExactStagingFirestoreWebChannelHeaderCorrelationScope({
+        ...firestoreWebChannelListenerDiagnosticBase,
+        ...overrides,
+      });
+    assert.equal(diagnostic.requestClass, null);
+    assert.equal(diagnostic.reason, expectedReason);
+    assert.ok(
+      SAFE_FIRESTORE_WEBCHANNEL_LISTENER_DIAGNOSTIC_REASONS.includes(
+        diagnostic.reason,
+      ),
+    );
+  }
+  assert.equal(
+    exactFirestoreWebChannelListenerDiagnosticCandidate(
+      firestoreWebChannelUrl.toString(),
+    ),
+    true,
+  );
+  assert.equal(
+    exactFirestoreWebChannelListenerDiagnosticCandidate(
+      "https://firestore.googleapis.com/google.firestore.v1.Firestore/Commit",
+    ),
+    false,
+  );
   for (const method of ["HEAD", "PUT"]) {
     assert.equal(
       classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
@@ -7305,6 +7501,7 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     rejectedStagingApiKeyExfiltrationCaseCount: 1,
     acceptedFirestoreWebChannelEncodedApiKeyCaseCount: 2,
     verifiedPausedRequestPostDataPresenceCaseCount: 13,
+    verifiedWebChannelListenerDiagnosticCaseCount: 18,
     rejectedFirestoreWebChannelEncodedApiKeyCaseCount:
       rejectedFirestoreWebChannelApiKeyScopes.length,
     rejectedSensitiveMaterialExfiltrationCaseCount: sensitiveFixtures.length,
@@ -17945,6 +18142,7 @@ let playwrightAllHeadersHeaderAttestationRequestCount = 0;
 let playwrightAllHeadersHeaderAttestationCompletedRequestCount = 0;
 let appCheckCdpHandlerErrorCount = 0;
 const cdpHandlerFailureClassCounts = new Map();
+const webChannelListenerDiagnosticClassCounts = new Map();
 let baselineBridgeInjectedRedirectResponseAbortCount = 0;
 let appCheckCdpMonitorPausedRequestCount = 0;
 let preTransmissionBoundaryInspectionCount = 0;
@@ -18849,6 +19047,9 @@ try {
     const groupCdpHandlerFailureClassCountsStart = new Map(
       cdpHandlerFailureClassCounts,
     );
+    const groupWebChannelListenerDiagnosticClassCountsStart = new Map(
+      webChannelListenerDiagnosticClassCounts,
+    );
     const groupPreTransmissionBoundaryBlockClassCountsStart = new Map(
       preTransmissionBoundaryBlockClassCounts,
     );
@@ -19099,6 +19300,10 @@ try {
         pendingNetworkAttestationCount: pendingNetworkAttestations.size,
         pendingWebChannelBindingCount:
           webChannelCdpHeaderAttestationsByNetworkId.size,
+        webChannelListenerDiagnosticClasses: snapshotSafeDiagnosticClasses(
+          webChannelListenerDiagnosticClassCounts,
+          groupWebChannelListenerDiagnosticClassCountsStart,
+        ),
       };
       assert.equal(
         networkHeaderAttestationErrorCount,
@@ -21285,18 +21490,36 @@ try {
           captureId: requestCaptureScope.captureId,
           correlationId: `${groupKey}:cdp-webchannel-scope`,
         });
-        const listenerRequestClass =
-          classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
+        const listenerPostDataPresent =
+          pausedRequestPostDataPresenceForCorrelation(event.request);
+        const listenerDiagnostic =
+          diagnoseExactStagingFirestoreWebChannelHeaderCorrelationScope({
             requestUrl: event.request.url,
             method: event.request.method,
             resourceType: event.resourceType,
             headers: event.request.headers,
-            postDataPresent: pausedRequestPostDataPresenceForCorrelation(
-              event.request,
-            ),
+            postDataPresent: listenerPostDataPresent,
             redirected: Boolean(event.redirectedRequestId),
             inspection: listenerInspection,
           });
+        if (
+          exactFirestoreWebChannelListenerDiagnosticCandidate(event.request.url)
+        ) {
+          incrementSafeDiagnosticClass(
+            webChannelListenerDiagnosticClassCounts,
+            {
+              captureStage: stage,
+              phase: requestCaptureScope.phase,
+              operation: "request-post-data",
+              reason: listenerDiagnostic.reason,
+              service: "firestore",
+              requestClass: "firebase",
+              resourceClass: safeCdpDiagnosticResourceClassForEvent(event),
+            },
+            SAFE_FIRESTORE_WEBCHANNEL_LISTENER_DIAGNOSTIC_REASONS,
+          );
+        }
+        const listenerRequestClass = listenerDiagnostic.requestClass;
         if (listenerRequestClass !== null) {
           const webChannelEntry = registerWebChannelCdpHeaderAttestation({
             event,
