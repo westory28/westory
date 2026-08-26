@@ -1800,7 +1800,16 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "candidate.request === requestImpl",
     "identity._interceptionId,",
     "networkRequestId: identity._requestId",
-    "const exactStagingFirestoreWebChannelHeaderCorrelationScope = ({",
+    "const exactStagingFirestoreWebChannelHeaderCorrelationScope = (options) =>",
+    "const classifyExactStagingFirestoreWebChannelHeaderCorrelationScope = ({",
+    "const FIRESTORE_WEBCHANNEL_FORWARD_QUERY_NAMES = [",
+    "const PLAYWRIGHT_ALL_HEADERS_ATTESTATION_TIMEOUT_MS = 30_000;",
+    "const NETWORK_ATTESTATION_FLUSH_TIMEOUT_MS = 45_000;",
+    "const CDP_HANDLER_DRAIN_TIMEOUT_MS = 45_000;",
+    "const withExplicitTimeout = async (promise, timeoutMs, message) =>",
+    "const drainAppCheckCdpHandlerPromises = async () =>",
+    "event.request.hasPostData === true",
+    "request.allHeaders(),\n            PLAYWRIGHT_ALL_HEADERS_ATTESTATION_TIMEOUT_MS,",
     "const advanceWebChannelCdpHeaderAttestationRendezvous = (entry) =>",
     "webChannelCdpHeaderAttestationsByNetworkId",
     "webChannelCdpHeaderAttestationCompletionTimeoutCount",
@@ -3035,7 +3044,7 @@ const FIXTURE_APP_CHECK_EXCHANGE_TRANSPORT_CONTRACT = {
   ttlPattern: "^([\\d.]+)s$",
 };
 const BASELINE_APP_CHECK_BRIDGE_SCOPE = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   baselinePresentationSha: "676869fa289d3e7ecef234cbb5cca65c60ec4597",
   reason: "baseline-presentation-source-has-no-app-check-initialization",
   firebaseProjectId: contract.firebaseProjectId,
@@ -3061,7 +3070,7 @@ const BASELINE_APP_CHECK_BRIDGE_SCOPE = {
   functionsPathRuleHash: sha256("single-callable-path-segment-v1"),
   interceptionMechanism: "cdp-fetch-request-stage",
   headerCorrelationMechanism:
-    "cdp-fetch-network-id-firestore-webchannel-backchannel-and-playwright-request-allHeaders",
+    "cdp-fetch-network-id-firestore-webchannel-transport-and-bounded-playwright-request-allHeaders",
   urlMethodFifoCorrelationAllowed: false,
   redirectHeaderOverridePropagation: false,
   redirectPolicyHash: sha256(
@@ -7673,7 +7682,7 @@ for (const audit of manifest.browserAudits) {
   );
   assert.equal(
     bridgeEvent.headerCorrelationMechanism,
-    "cdp-fetch-network-id-firestore-webchannel-backchannel-and-playwright-request-allHeaders",
+    "cdp-fetch-network-id-firestore-webchannel-transport-and-bounded-playwright-request-allHeaders",
   );
   assert.match(
     bridgeEvent.webChannelCdpHeaderAttestationBindingSetHash,
@@ -10690,7 +10699,7 @@ assert.equal(appCheckBinding.secretInitScope, "primary-page-only");
 assert.equal(appCheckBinding.pageAppCheckSecretInitRegistrationCount, 1);
 assert.equal(
   appCheckBinding.headerCorrelationMechanism,
-  "cdp-fetch-network-id-firestore-webchannel-backchannel-and-playwright-request-allHeaders",
+  "cdp-fetch-network-id-firestore-webchannel-transport-and-bounded-playwright-request-allHeaders",
 );
 assert.equal(appCheckBinding.urlMethodFifoCorrelationUsed, false);
 assert.equal(appCheckBinding.protocolDebugLoggingDisabled, true);

@@ -3293,10 +3293,21 @@ const FIRESTORE_WEBCHANNEL_BACKCHANNEL_QUERY_NAMES = [
   "TYPE",
   "VER",
   "database",
-  "gsessionid",
   "t",
   "zx",
 ].sort();
+const FIRESTORE_WEBCHANNEL_FORWARD_QUERY_NAMES = [
+  "AID",
+  "RID",
+  "SID",
+  "VER",
+  "database",
+  "t",
+  "zx",
+].sort();
+const PLAYWRIGHT_ALL_HEADERS_ATTESTATION_TIMEOUT_MS = 30_000;
+const NETWORK_ATTESTATION_FLUSH_TIMEOUT_MS = 45_000;
+const CDP_HANDLER_DRAIN_TIMEOUT_MS = 45_000;
 const BROWSER_EGRESS_CAPABLE_RESPONSE_HEADER_NAMES = new Set([
   "alt-svc",
   "clear-site-data",
@@ -4751,6 +4762,20 @@ const externalStaticRequestDecision = ({
 };
 const literalOccurrenceCount = (textValue, needle) =>
   needle ? String(textValue).split(String(needle)).length - 1 : 0;
+const withExplicitTimeout = async (promise, timeoutMs, message) => {
+  assert.ok(Number.isSafeInteger(timeoutMs) && timeoutMs > 0);
+  let timeoutId = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutId !== null) clearTimeout(timeoutId);
+  }
+};
 const exactStagingFirestoreWebChannelInitialRequestScope = ({
   requestUrl,
   method,
@@ -4885,10 +4910,22 @@ const exactStagingFirestoreWebChannelEncodedApiKeyBodyScope = ({
     apiKeyHeaderLines[0].value === stagingApiKey
   );
 };
-const exactStagingFirestoreWebChannelHeaderCorrelationScope = ({
+const exactStagingFirestoreWebChannelFormContentType = (headers = {}) => {
+  const contentTypeValues = Object.entries(headers)
+    .filter(([name]) => String(name).toLowerCase() === "content-type")
+    .map(([, value]) => String(value));
+  return (
+    contentTypeValues.length === 1 &&
+    /^application\/x-www-form-urlencoded(?:\s*;\s*charset=utf-8)?$/iu.test(
+      contentTypeValues[0],
+    )
+  );
+};
+const classifyExactStagingFirestoreWebChannelHeaderCorrelationScope = ({
   requestUrl,
   method,
   resourceType,
+  headers = {},
   postDataPresent,
   redirected,
   inspection,
@@ -4903,12 +4940,30 @@ const exactStagingFirestoreWebChannelHeaderCorrelationScope = ({
     inspection.malformedUrlEncoding !== false ||
     inspection.firebaseTransportValid !== true ||
     inspection.serviceResourceBound !== true ||
-    String(method).toUpperCase() !== "GET" ||
     String(resourceType).toLowerCase() !== "fetch" ||
-    postDataPresent !== false ||
     redirected !== false
   ) {
-    return false;
+    return null;
+  }
+  const normalizedMethod = String(method).toUpperCase();
+  if (normalizedMethod === "POST") {
+    if (
+      ![true, null].includes(postDataPresent) ||
+      !exactStagingFirestoreWebChannelFormContentType(headers)
+    ) {
+      return null;
+    }
+    if (
+      exactStagingFirestoreWebChannelInitialRequestScope({
+        requestUrl,
+        method: normalizedMethod,
+        inspection,
+      })
+    ) {
+      return "initial-forward-post";
+    }
+  } else if (normalizedMethod !== "GET" || postDataPresent !== false) {
+    return null;
   }
   try {
     const parsed = new URL(requestUrl);
@@ -4924,14 +4979,7 @@ const exactStagingFirestoreWebChannelHeaderCorrelationScope = ({
     const attemptValues = parsed.searchParams.getAll("t");
     const cacheBusterValues = parsed.searchParams.getAll("zx");
     const timeoutValues = parsed.searchParams.getAll("TO");
-    const queryNamesValid = [
-      FIRESTORE_WEBCHANNEL_BACKCHANNEL_QUERY_NAMES,
-      [...FIRESTORE_WEBCHANNEL_BACKCHANNEL_QUERY_NAMES, "TO"].sort(),
-    ].some(
-      (allowedQueryNames) =>
-        JSON.stringify(queryNames) === JSON.stringify(allowedQueryNames),
-    );
-    return (
+    const commonTransportBound =
       parsed.protocol === "https:" &&
       parsed.hostname.toLowerCase() === "firestore.googleapis.com" &&
       parsed.username === "" &&
@@ -4939,35 +4987,74 @@ const exactStagingFirestoreWebChannelHeaderCorrelationScope = ({
       (parsed.port === "" || parsed.port === "443") &&
       parsed.hash === "" &&
       FIRESTORE_WEBCHANNEL_PATHNAMES.has(parsed.pathname) &&
-      queryNamesValid &&
       databaseValues.length === 1 &&
       databaseValues[0] ===
         `projects/${contract.firebaseProjectId}/databases/(default)` &&
       versionValues.length === 1 &&
       versionValues[0] === "8" &&
       requestIdValues.length === 1 &&
-      requestIdValues[0] === "rpc" &&
-      sessionIdValues.length === 1 &&
-      /^[0-9A-Za-z_-]+$/u.test(sessionIdValues[0]) &&
       applicationIdValues.length === 1 &&
       /^(?:0|[1-9][0-9]*)$/u.test(applicationIdValues[0]) &&
+      sessionIdValues.length === 1 &&
+      /^[0-9A-Za-z_-]+$/u.test(sessionIdValues[0]) &&
+      attemptValues.length === 1 &&
+      /^[1-9][0-9]*$/u.test(attemptValues[0]) &&
+      cacheBusterValues.length === 1 &&
+      /^[0-9a-z]+$/u.test(cacheBusterValues[0]);
+    if (!commonTransportBound) return null;
+    if (normalizedMethod === "POST") {
+      const queryNamesValid = [
+        FIRESTORE_WEBCHANNEL_FORWARD_QUERY_NAMES,
+        [...FIRESTORE_WEBCHANNEL_FORWARD_QUERY_NAMES, "gsessionid"].sort(),
+      ].some(
+        (allowedQueryNames) =>
+          JSON.stringify(queryNames) === JSON.stringify(allowedQueryNames),
+      );
+      return queryNamesValid &&
+        /^(?:0|[1-9][0-9]*)$/u.test(requestIdValues[0]) &&
+        Number.isSafeInteger(Number(requestIdValues[0])) &&
+        (globalSessionIdValues.length === 0 ||
+          (globalSessionIdValues.length === 1 &&
+            /^[0-9A-Za-z_-]+$/u.test(globalSessionIdValues[0]))) &&
+        connectionIndexValues.length === 0 &&
+        transportTypeValues.length === 0 &&
+        timeoutValues.length === 0
+        ? "session-forward-post"
+        : null;
+    }
+    const queryNamesValid = [
+      FIRESTORE_WEBCHANNEL_BACKCHANNEL_QUERY_NAMES,
+      [...FIRESTORE_WEBCHANNEL_BACKCHANNEL_QUERY_NAMES, "gsessionid"].sort(),
+      [...FIRESTORE_WEBCHANNEL_BACKCHANNEL_QUERY_NAMES, "TO"].sort(),
+      [
+        ...FIRESTORE_WEBCHANNEL_BACKCHANNEL_QUERY_NAMES,
+        "gsessionid",
+        "TO",
+      ].sort(),
+    ].some(
+      (allowedQueryNames) =>
+        JSON.stringify(queryNames) === JSON.stringify(allowedQueryNames),
+    );
+    return queryNamesValid &&
+      requestIdValues[0] === "rpc" &&
       connectionIndexValues.length === 1 &&
       /^[01]$/u.test(connectionIndexValues[0]) &&
       transportTypeValues.length === 1 &&
       transportTypeValues[0] === "xmlhttp" &&
-      globalSessionIdValues.length === 1 &&
-      /^[0-9A-Za-z_-]+$/u.test(globalSessionIdValues[0]) &&
-      attemptValues.length === 1 &&
-      /^[1-9][0-9]*$/u.test(attemptValues[0]) &&
-      cacheBusterValues.length === 1 &&
-      /^[0-9a-z]+$/u.test(cacheBusterValues[0]) &&
+      (globalSessionIdValues.length === 0 ||
+        (globalSessionIdValues.length === 1 &&
+          /^[0-9A-Za-z_-]+$/u.test(globalSessionIdValues[0]))) &&
       (timeoutValues.length === 0 ||
         (timeoutValues.length === 1 && /^[1-9][0-9]*$/u.test(timeoutValues[0])))
-    );
+      ? "backchannel-get"
+      : null;
   } catch {
-    return false;
+    return null;
   }
 };
+const exactStagingFirestoreWebChannelHeaderCorrelationScope = (options) =>
+  classifyExactStagingFirestoreWebChannelHeaderCorrelationScope(options) !==
+  null;
 const stagingApiKeyScopeDecision = ({
   requestUrl,
   method = "GET",
@@ -6206,6 +6293,97 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     allowedNonFirebaseOrigins: [stableBrowserOrigin],
   });
   assert.equal(firestoreInspection.stagingMarker, true);
+  const firestoreFetchInspection = inspectNetworkBoundary({
+    requestUrl: firestoreWebChannelUrl.toString(),
+    method: "POST",
+    resourceType: "Fetch",
+    stagingApiKey,
+    allowedNonFirebaseOrigins: [stableBrowserOrigin],
+  });
+  assert.equal(
+    classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
+      requestUrl: firestoreWebChannelUrl.toString(),
+      method: "POST",
+      resourceType: "Fetch",
+      headers: firestoreHeaders,
+      postDataPresent: true,
+      redirected: false,
+      inspection: firestoreFetchInspection,
+    }),
+    "initial-forward-post",
+  );
+  assert.equal(
+    exactStagingFirestoreWebChannelHeaderCorrelationScope({
+      requestUrl: firestoreWebChannelUrl.toString(),
+      method: "POST",
+      resourceType: "XHR",
+      headers: firestoreHeaders,
+      postDataPresent: true,
+      redirected: false,
+      inspection: firestoreFetchInspection,
+    }),
+    false,
+  );
+  const firestoreForwardUrl = new URL(
+    "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel",
+  );
+  for (const [name, value] of Object.entries({
+    gsessionid: "synthetic-global-session",
+    VER: "8",
+    database: firestoreDatabase,
+    RID: "100000",
+    SID: "synthetic-session",
+    AID: "0",
+    zx: "abc123",
+    t: "1",
+  })) {
+    firestoreForwardUrl.searchParams.set(name, value);
+  }
+  const firestoreForwardInspection = inspectNetworkBoundary({
+    requestUrl: firestoreForwardUrl.toString(),
+    method: "POST",
+    resourceType: "Fetch",
+    stagingApiKey,
+    allowedNonFirebaseOrigins: [stableBrowserOrigin],
+  });
+  assert.equal(
+    classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
+      requestUrl: firestoreForwardUrl.toString(),
+      method: "POST",
+      resourceType: "Fetch",
+      headers: firestoreHeaders,
+      postDataPresent: true,
+      redirected: false,
+      inspection: firestoreForwardInspection,
+    }),
+    "session-forward-post",
+  );
+  assert.equal(
+    classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
+      requestUrl: firestoreForwardUrl.toString(),
+      method: "POST",
+      resourceType: "Fetch",
+      headers: firestoreHeaders,
+      postDataPresent: null,
+      redirected: false,
+      inspection: firestoreForwardInspection,
+    }),
+    "session-forward-post",
+  );
+  const firestoreForwardWithoutGlobalSessionUrl = new URL(firestoreForwardUrl);
+  firestoreForwardWithoutGlobalSessionUrl.searchParams.delete("gsessionid");
+  assert.equal(
+    classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
+      requestUrl: firestoreForwardWithoutGlobalSessionUrl.toString(),
+      method: "POST",
+      resourceType: "Fetch",
+      headers: firestoreHeaders,
+      postDataPresent: true,
+      redirected: false,
+      inspection: firestoreForwardInspection,
+    }),
+    "session-forward-post",
+  );
   const firestoreBackchannelUrl = new URL(
     "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel",
   );
@@ -6231,6 +6409,17 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     allowedNonFirebaseOrigins: [stableBrowserOrigin],
   });
   assert.equal(
+    classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
+      requestUrl: firestoreBackchannelUrl.toString(),
+      method: "GET",
+      resourceType: "Fetch",
+      postDataPresent: false,
+      redirected: false,
+      inspection: firestoreBackchannelInspection,
+    }),
+    "backchannel-get",
+  );
+  assert.equal(
     exactStagingFirestoreWebChannelHeaderCorrelationScope({
       requestUrl: firestoreBackchannelUrl.toString(),
       method: "GET",
@@ -6253,6 +6442,21 @@ const verifyNetworkPolicyNegativeFixtures = () => {
       inspection: firestoreBackchannelInspection,
     }),
     true,
+  );
+  const firestoreBackchannelWithoutGlobalSessionUrl = new URL(
+    firestoreBackchannelUrl,
+  );
+  firestoreBackchannelWithoutGlobalSessionUrl.searchParams.delete("gsessionid");
+  assert.equal(
+    classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
+      requestUrl: firestoreBackchannelWithoutGlobalSessionUrl.toString(),
+      method: "GET",
+      resourceType: "Fetch",
+      postDataPresent: false,
+      redirected: false,
+      inspection: firestoreBackchannelInspection,
+    }),
+    "backchannel-get",
   );
   assert.equal(
     exactStagingFirestoreWebChannelEncodedApiKeyBodyScope({
@@ -6310,6 +6514,15 @@ const verifyNetworkPolicyNegativeFixtures = () => {
   extraBackchannelQueryUrl.searchParams.set("unexpected", "1");
   const invalidTimedBackchannelUrl = new URL(firestoreBackchannelUrl);
   invalidTimedBackchannelUrl.searchParams.set("TO", "0");
+  const duplicateForwardDatabaseUrl = new URL(firestoreForwardUrl);
+  duplicateForwardDatabaseUrl.searchParams.append(
+    "database",
+    firestoreDatabase,
+  );
+  const extraForwardQueryUrl = new URL(firestoreForwardUrl);
+  extraForwardQueryUrl.searchParams.set("unexpected", "1");
+  const invalidForwardRidUrl = new URL(firestoreForwardUrl);
+  invalidForwardRidUrl.searchParams.set("RID", "rpc");
   for (const fixture of [
     { method: "POST" },
     { resourceType: "XHR" },
@@ -6350,6 +6563,48 @@ const verifyNetworkPolicyNegativeFixtures = () => {
         postDataPresent: false,
         redirected: false,
         inspection: firestoreBackchannelInspection,
+        ...fixture,
+      }),
+      false,
+    );
+  }
+  for (const fixture of [
+    { method: "GET" },
+    { resourceType: "XHR" },
+    { headers: { "content-type": "application/json" } },
+    { postDataPresent: false },
+    { redirected: true },
+    { requestUrl: duplicateForwardDatabaseUrl.toString() },
+    { requestUrl: extraForwardQueryUrl.toString() },
+    { requestUrl: invalidForwardRidUrl.toString() },
+    {
+      inspection: {
+        ...firestoreForwardInspection,
+        stagingMarker: false,
+      },
+    },
+    {
+      inspection: {
+        ...firestoreForwardInspection,
+        productionMarker: true,
+      },
+    },
+    {
+      inspection: {
+        ...firestoreForwardInspection,
+        unboundFirebaseRequest: true,
+      },
+    },
+  ]) {
+    assert.equal(
+      exactStagingFirestoreWebChannelHeaderCorrelationScope({
+        requestUrl: firestoreForwardUrl.toString(),
+        method: "POST",
+        resourceType: "Fetch",
+        headers: firestoreHeaders,
+        postDataPresent: true,
+        redirected: false,
+        inspection: firestoreForwardInspection,
         ...fixture,
       }),
       false,
@@ -13719,7 +13974,7 @@ const FIXTURE_APP_CHECK_EXCHANGE_TRANSPORT_CONTRACT = {
   ttlPattern: "^([\\d.]+)s$",
 };
 const BASELINE_APP_CHECK_BRIDGE_SCOPE = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   baselinePresentationSha: "676869fa289d3e7ecef234cbb5cca65c60ec4597",
   reason: "baseline-presentation-source-has-no-app-check-initialization",
   firebaseProjectId: contract.firebaseProjectId,
@@ -13741,7 +13996,7 @@ const BASELINE_APP_CHECK_BRIDGE_SCOPE = {
   functionsPathRuleHash: sha256("single-callable-path-segment-v1"),
   interceptionMechanism: "cdp-fetch-request-stage",
   headerCorrelationMechanism:
-    "cdp-fetch-network-id-firestore-webchannel-backchannel-and-playwright-request-allHeaders",
+    "cdp-fetch-network-id-firestore-webchannel-transport-and-bounded-playwright-request-allHeaders",
   urlMethodFifoCorrelationAllowed: false,
   redirectHeaderOverridePropagation: false,
   redirectPolicyHash: sha256(
@@ -18685,14 +18940,39 @@ try {
       return promise;
     };
     const flushNetworkAttestations = async () => {
+      const deadline = Date.now() + NETWORK_ATTESTATION_FLUSH_TIMEOUT_MS;
       while (pendingNetworkAttestations.size > 0) {
-        await Promise.all([...pendingNetworkAttestations]);
+        const remainingMs = deadline - Date.now();
+        assert.ok(
+          remainingMs > 0,
+          "Browser request header attestations did not drain before the deadline.",
+        );
+        await withExplicitTimeout(
+          Promise.all([...pendingNetworkAttestations]),
+          remainingMs,
+          "Browser request header attestations did not drain before the deadline.",
+        );
       }
       assert.equal(
         networkHeaderAttestationErrorCount,
         0,
         "A browser request header attestation failed.",
       );
+    };
+    const drainAppCheckCdpHandlerPromises = async () => {
+      const deadline = Date.now() + CDP_HANDLER_DRAIN_TIMEOUT_MS;
+      while (appCheckCdpHandlerPromises.size > 0) {
+        const remainingMs = deadline - Date.now();
+        assert.ok(
+          remainingMs > 0,
+          "App Check CDP handler promises did not drain before the deadline.",
+        );
+        await withExplicitTimeout(
+          Promise.all([...appCheckCdpHandlerPromises]),
+          remainingMs,
+          "App Check CDP handler promises did not drain before the deadline.",
+        );
+      }
     };
     const getOrCreateWebChannelCdpHeaderAttestation = (networkRequestId) => {
       assert.equal(typeof networkRequestId, "string");
@@ -18715,6 +18995,8 @@ try {
         resourceType: null,
         phase: null,
         captureId: null,
+        cdpRequestClass: null,
+        playwrightRequestClass: null,
         promise,
         resolveAttestation,
         rejectAttestation,
@@ -18745,6 +19027,11 @@ try {
     };
     const advanceWebChannelCdpHeaderAttestationRendezvous = (entry) => {
       if (!entry.cdpRegistered || !entry.playwrightRegistered) return;
+      assert.equal(
+        entry.cdpRequestClass,
+        entry.playwrightRequestClass,
+        "Firestore WebChannel CDP/Playwright request classes diverged.",
+      );
       if (entry.pairingTimeoutId !== null) {
         clearTimeout(entry.pairingTimeoutId);
         entry.pairingTimeoutId = null;
@@ -18773,9 +19060,17 @@ try {
     const registerWebChannelCdpHeaderAttestation = ({
       event,
       captureScope,
+      requestClass,
     }) => {
       assert.equal(typeof event.networkId, "string");
       assert.ok(event.networkId.length > 0);
+      assert.ok(
+        [
+          "initial-forward-post",
+          "session-forward-post",
+          "backchannel-get",
+        ].includes(requestClass),
+      );
       const entry = getOrCreateWebChannelCdpHeaderAttestation(event.networkId);
       assert.equal(
         entry.cdpRegistered,
@@ -18787,6 +19082,7 @@ try {
       entry.resourceType = String(event.resourceType).toLowerCase();
       entry.phase = captureScope.phase;
       entry.captureId = captureScope.captureId;
+      entry.cdpRequestClass = requestClass;
       entry.cdpRegistered = true;
       webChannelCdpHeaderAttestationRegisteredRequestCount += 1;
       advanceWebChannelCdpHeaderAttestationRendezvous(entry);
@@ -18824,6 +19120,7 @@ try {
           resourceType: entry.resourceType,
           phase: entry.phase,
           captureId: entry.captureId,
+          requestClass: entry.cdpRequestClass,
           appCheckHeaderPresent,
           appCheckHeaderSource,
           appCheckHeaderJwtShapeValid,
@@ -19009,22 +19306,30 @@ try {
         }
       };
       const provisionalHeaders = request.headers();
-      // Firestore WebChannel Listen/Write requests can keep Playwright's raw
-      // header promise unresolved until the browser context closes. Bind only
-      // that exact endpoint to the completed request-stage CDP decision using
-      // Chromium's Network.requestId. Every other request keeps allHeaders().
-      const cdpAuthoritativeWebChannelRequest =
-        exactStagingFirestoreWebChannelHeaderCorrelationScope({
+      const provisionalPostData = request.postData();
+      // Firestore WebChannel forward and back channels can keep Playwright's
+      // raw header promise unresolved until the browser context closes. Bind
+      // only those exact transports to the completed request-stage CDP
+      // decision using Chromium's Network.requestId. Every other request keeps
+      // a separately bounded allHeaders() attestation.
+      const cdpAuthoritativeWebChannelRequestClass =
+        classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
           requestUrl: request.url(),
           method: request.method(),
           resourceType: request.resourceType(),
-          postDataPresent: request.postData() !== null,
+          headers: provisionalHeaders,
+          postDataPresent:
+            request.method().toUpperCase() === "GET"
+              ? false
+              : provisionalPostData === null
+                ? null
+                : provisionalPostData.length > 0,
           redirected: Boolean(request.redirectedFrom()),
           inspection: observation,
         });
       const headerAttestation = trackNetworkAttestation(
         (async () => {
-          if (cdpAuthoritativeWebChannelRequest) {
+          if (cdpAuthoritativeWebChannelRequestClass !== null) {
             const chromiumIdentity = resolveExactChromiumNetworkRequestIdentity(
               {
                 browser,
@@ -19040,6 +19345,8 @@ try {
               false,
               "A Firestore WebChannel Playwright request was bound twice.",
             );
+            cdpAttestationEntry.playwrightRequestClass =
+              cdpAuthoritativeWebChannelRequestClass;
             cdpAttestationEntry.playwrightRegistered = true;
             advanceWebChannelCdpHeaderAttestationRendezvous(
               cdpAttestationEntry,
@@ -19070,6 +19377,10 @@ try {
               authoritativeHeaderAttestation.captureId,
               correlation.captureId,
             );
+            assert.equal(
+              authoritativeHeaderAttestation.requestClass,
+              cdpAuthoritativeWebChannelRequestClass,
+            );
             reconcileEffectiveRequestHeaders(provisionalHeaders, {
               authoritativeHeaderAttestation,
             });
@@ -19094,12 +19405,16 @@ try {
             return;
           }
           playwrightAllHeadersHeaderAttestationRequestCount += 1;
-          const allHeaders = await request.allHeaders();
+          const allHeaders = await withExplicitTimeout(
+            request.allHeaders(),
+            PLAYWRIGHT_ALL_HEADERS_ATTESTATION_TIMEOUT_MS,
+            "Playwright request.allHeaders() did not settle before the deadline.",
+          );
           playwrightAllHeadersHeaderAttestationCompletedRequestCount += 1;
           reconcileEffectiveRequestHeaders(allHeaders);
         })().catch(() => {
           webChannelCdpHeaderAttestationBindingFailureCount += Number(
-            cdpAuthoritativeWebChannelRequest,
+            cdpAuthoritativeWebChannelRequestClass !== null,
           );
           networkHeaderAttestationErrorCount += 1;
           browserNetworkHeaderAttestationErrorCount += 1;
@@ -20622,11 +20937,12 @@ try {
         });
         return;
       }
-      const exactWebChannelHeaderCorrelationScope =
-        exactStagingFirestoreWebChannelHeaderCorrelationScope({
+      const exactWebChannelHeaderCorrelationClass =
+        classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
           requestUrl,
           method: requestMethod,
           resourceType: event.resourceType,
+          headers: event.request.headers,
           postDataPresent: postData.length > 0,
           redirected: Boolean(event.redirectedRequestId),
           inspection: preTransmissionInspection,
@@ -20635,9 +20951,16 @@ try {
         webChannelCdpHeaderAttestationEntriesByEvent.get(event) || null;
       assert.equal(
         Boolean(webChannelCdpHeaderAttestationEntry),
-        exactWebChannelHeaderCorrelationScope,
+        exactWebChannelHeaderCorrelationClass !== null,
         "Firestore WebChannel listener and handler scopes diverged.",
       );
+      if (webChannelCdpHeaderAttestationEntry) {
+        assert.equal(
+          webChannelCdpHeaderAttestationEntry.cdpRequestClass,
+          exactWebChannelHeaderCorrelationClass,
+          "Firestore WebChannel listener and handler classes diverged.",
+        );
+      }
       if (stage !== "baseline") {
         if (nativeHeaderPresent) {
           sensitiveAppCheckRequestsByFetchRequestId.set(
@@ -20807,21 +21130,24 @@ try {
           captureId: requestCaptureScope.captureId,
           correlationId: `${groupKey}:cdp-webchannel-scope`,
         });
-        if (
-          exactStagingFirestoreWebChannelHeaderCorrelationScope({
+        const listenerRequestClass =
+          classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
             requestUrl: event.request.url,
             method: event.request.method,
             resourceType: event.resourceType,
+            headers: event.request.headers,
             postDataPresent:
               event.request.postData !== undefined ||
-              (event.request.postDataEntries?.length || 0) > 0,
+              (event.request.postDataEntries?.length || 0) > 0 ||
+              event.request.hasPostData === true,
             redirected: Boolean(event.redirectedRequestId),
             inspection: listenerInspection,
-          })
-        ) {
+          });
+        if (listenerRequestClass !== null) {
           const webChannelEntry = registerWebChannelCdpHeaderAttestation({
             event,
             captureScope: requestCaptureScope,
+            requestClass: listenerRequestClass,
           });
           webChannelCdpHeaderAttestationEntriesByEvent.set(
             event,
@@ -21427,9 +21753,7 @@ try {
           targetInfo.browserContextId === groupBrowserContextId &&
           targetInfo.type === "service_worker",
       ).length;
-      while (appCheckCdpHandlerPromises.size > 0) {
-        await Promise.all([...appCheckCdpHandlerPromises]);
-      }
+      await drainAppCheckCdpHandlerPromises();
       assert.equal(
         allowedEgressHandlerTaskCoordinator.pendingCount(),
         0,
@@ -21587,9 +21911,7 @@ try {
         id: groupKey,
         ...groupBrowserWideBoundaryAttestation,
       });
-      while (appCheckCdpHandlerPromises.size > 0) {
-        await Promise.all([...appCheckCdpHandlerPromises]);
-      }
+      await drainAppCheckCdpHandlerPromises();
       assert.equal(
         allowedEgressHandlerTaskCoordinator.pendingCount(),
         0,
@@ -22223,7 +22545,7 @@ try {
           groupFullPostDataRepresentationMismatchBlockStart,
         networkPolicySummaryHash: groupNetworkPolicySummary.summarySha256,
         headerCorrelationMechanism:
-          "cdp-fetch-network-id-firestore-webchannel-backchannel-and-playwright-request-allHeaders",
+          "cdp-fetch-network-id-firestore-webchannel-transport-and-bounded-playwright-request-allHeaders",
         secretInitScope: "primary-page-only",
         browserGlobalValueKind: "non-secret-fixed-sentinel",
         debugSentinelHash: sha256(APP_CHECK_DEBUG_SENTINEL),
@@ -23761,7 +24083,7 @@ const appCheckBinding = {
   storageStateWriteCount,
   playwrightRouteRegistrationCount,
   headerCorrelationMechanism:
-    "cdp-fetch-network-id-firestore-webchannel-backchannel-and-playwright-request-allHeaders",
+    "cdp-fetch-network-id-firestore-webchannel-transport-and-bounded-playwright-request-allHeaders",
   urlMethodFifoCorrelationUsed: false,
   pendingBridgeDecisionResidualCount,
   pendingBridgeObservationResidualCount,
