@@ -21,7 +21,26 @@ const adminUid = "w3-admin";
 const adminEmail = "westoria28@gmail.com";
 const teacherUid = "w3-teacher";
 const teacherEmail = "w3-teacher@yongshin-ms.ms.kr";
+const fixtureAdminUid = "w10p-visual-admin";
+const fixtureAdminEmail = "w10p-visual-admin@yongshin-ms.ms.kr";
+const fixtureWrongUid = "w10p-visual-admin-wrong-uid";
+const fixtureOwner = "w10p-visual-parity";
+const fixtureId = "w10p-visual-fixture-v1";
 const authTime = Math.floor(Date.now() / 1000) - 10;
+const fixtureAdminProfile = {
+  uid: fixtureAdminUid,
+  email: fixtureAdminEmail,
+  role: "teacher",
+  fixtureOwner,
+  fixtureId,
+};
+const fixtureAdminClaims = {
+  email: fixtureAdminEmail,
+  auth_time: authTime,
+  fixtureOwner,
+  fixtureId,
+  fixtureRole: "admin",
+};
 const semesterId = "2027-2";
 const semesterMetaSeed = {
   grading_plans_meta: { planCount: 2 },
@@ -89,6 +108,50 @@ try {
           highRiskExpiresAt: Timestamp.fromMillis(Date.now() + 15 * 60 * 1000),
         },
       ),
+      setDoc(
+        doc(
+          db,
+          "application_sessions",
+          fixtureWrongUid,
+          "sessions",
+          String(authTime),
+        ),
+        {
+          uid: fixtureWrongUid,
+          email: fixtureAdminEmail,
+          authTime,
+          status: "active",
+          schemaVersion: 2,
+          authorityGeneration: "w1r2-2026-08-09",
+          protocolVersion: 2,
+          sessionRevision: "f".repeat(64),
+          authorityModeAtOpen: "ENFORCE",
+          generalExpiresAt: Timestamp.fromMillis(Date.now() + 30 * 60 * 1000),
+          highRiskExpiresAt: Timestamp.fromMillis(Date.now() + 15 * 60 * 1000),
+        },
+      ),
+      setDoc(
+        doc(
+          db,
+          "application_sessions",
+          fixtureAdminUid,
+          "sessions",
+          String(authTime),
+        ),
+        {
+          uid: fixtureAdminUid,
+          email: fixtureAdminEmail,
+          authTime,
+          status: "active",
+          schemaVersion: 2,
+          authorityGeneration: "w1r2-2026-08-09",
+          protocolVersion: 2,
+          sessionRevision: "e".repeat(64),
+          authorityModeAtOpen: "ENFORCE",
+          generalExpiresAt: Timestamp.fromMillis(Date.now() + 30 * 60 * 1000),
+          highRiskExpiresAt: Timestamp.fromMillis(Date.now() + 15 * 60 * 1000),
+        },
+      ),
       setDoc(doc(db, "site_settings", "config"), {
         year: "2026",
         semester: "1",
@@ -142,6 +205,8 @@ try {
         email: teacherEmail,
         role: "teacher",
       }),
+      setDoc(doc(db, "users", fixtureAdminUid), fixtureAdminProfile),
+      setDoc(doc(db, "users", fixtureWrongUid), fixtureAdminProfile),
       setDoc(
         doc(db, "years", "2027", "semesters", "2", "point_policies", "current"),
         { manualAdjustEnabled: true },
@@ -225,12 +290,102 @@ try {
       auth_time: authTime,
     })
     .firestore();
+  const fixtureAdminDb = testEnv
+    .authenticatedContext(fixtureAdminUid, fixtureAdminClaims)
+    .firestore();
+  const fixtureTrustFactorDbs = [
+    testEnv
+      .authenticatedContext(fixtureAdminUid, {
+        email: fixtureAdminEmail,
+        auth_time: authTime,
+      })
+      .firestore(),
+    testEnv
+      .authenticatedContext(fixtureAdminUid, {
+        ...fixtureAdminClaims,
+        email: "w10p-visual-admin-altered@yongshin-ms.ms.kr",
+      })
+      .firestore(),
+    testEnv
+      .authenticatedContext(fixtureAdminUid, {
+        ...fixtureAdminClaims,
+        fixtureOwner: "w10p-visual-parity-altered",
+      })
+      .firestore(),
+    testEnv
+      .authenticatedContext(fixtureAdminUid, {
+        ...fixtureAdminClaims,
+        fixtureId: "w10p-visual-fixture-v1-altered",
+      })
+      .firestore(),
+    testEnv
+      .authenticatedContext(fixtureAdminUid, {
+        ...fixtureAdminClaims,
+        fixtureRole: "teacher",
+      })
+      .firestore(),
+    testEnv
+      .authenticatedContext(fixtureAdminUid, {
+        ...fixtureAdminClaims,
+        auth_time: authTime + 1,
+      })
+      .firestore(),
+    testEnv
+      .authenticatedContext(fixtureWrongUid, fixtureAdminClaims)
+      .firestore(),
+  ];
   const unauthenticatedDb = testEnv.unauthenticatedContext().firestore();
   for (const collectionName of semesterMetaCollections) {
+    await assertSucceeds(
+      getDoc(semesterMetaRef(fixtureAdminDb, collectionName)),
+    );
+    await assertFails(
+      updateDoc(semesterMetaRef(fixtureAdminDb, collectionName), {
+        directClientMutation: true,
+      }),
+    );
     await assertFails(getDoc(semesterMetaRef(teacherDb, collectionName)));
+    for (const deniedDb of fixtureTrustFactorDbs) {
+      await assertFails(getDoc(semesterMetaRef(deniedDb, collectionName)));
+    }
     await assertFails(
       getDoc(semesterMetaRef(unauthenticatedDb, collectionName)),
     );
+  }
+
+  const fixtureAdminProfileRef = (db) => doc(db, "users", fixtureAdminUid);
+  const writeFixtureAdminProfile = async (profile) =>
+    testEnv.withSecurityRulesDisabled((context) =>
+      setDoc(fixtureAdminProfileRef(context.firestore()), profile),
+    );
+  const fixtureAdminMetaProbe = semesterMetaRef(
+    fixtureAdminDb,
+    "calendar_meta",
+  );
+  await testEnv.withSecurityRulesDisabled((context) =>
+    deleteDoc(fixtureAdminProfileRef(context.firestore())),
+  );
+  try {
+    await assertFails(getDoc(fixtureAdminMetaProbe));
+  } finally {
+    await writeFixtureAdminProfile(fixtureAdminProfile);
+  }
+  for (const [field, invalidValue] of Object.entries({
+    uid: fixtureWrongUid,
+    email: "w10p-visual-admin-altered@yongshin-ms.ms.kr",
+    role: "student",
+    fixtureOwner: "w10p-visual-parity-altered",
+    fixtureId: "w10p-visual-fixture-v1-altered",
+  })) {
+    await writeFixtureAdminProfile({
+      ...fixtureAdminProfile,
+      [field]: invalidValue,
+    });
+    try {
+      await assertFails(getDoc(fixtureAdminMetaProbe));
+    } finally {
+      await writeFixtureAdminProfile(fixtureAdminProfile);
+    }
   }
 
   await assertFails(
@@ -306,7 +461,8 @@ try {
         "ACTIVE_POINTER_CREATE_UPDATE_DELETE_DENIED",
         "COMPAT_CONFIG_CREATE_UPDATE_DELETE_DENIED",
         "SERVER_OWNED_DOCUMENTS_READABLE_TO_AUTHORIZED_CLIENT",
-        "LEGACY_SEMESTER_META_CURRENT_READABLE_TO_ADMIN_ONLY",
+        "LEGACY_SEMESTER_META_CURRENT_READABLE_TO_ADMIN_OR_TRUSTED_VISUAL_FIXTURE_ADMIN",
+        "LEGACY_SEMESTER_META_VISUAL_FIXTURE_TRUST_FACTORS_ENFORCED",
         "LEGACY_SEMESTER_META_DIRECT_WRITES_DENIED",
         "UNMIGRATED_SETTINGS_WRITE_RETAINED_AND_W7_POINT_POLICY_WRITE_RETIRED",
       ],
