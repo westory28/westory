@@ -7,9 +7,13 @@ import {
   initializeTestEnvironment,
 } from "@firebase/rules-unit-testing";
 import {
+  collection,
   deleteDoc,
   doc,
   getDoc,
+  getDocs,
+  limit,
+  query,
   setDoc,
   Timestamp,
   updateDoc,
@@ -214,6 +218,22 @@ try {
       ...Object.entries(semesterMetaSeed).map(([collectionName, data]) =>
         setDoc(semesterMetaRef(db, collectionName), data),
       ),
+      setDoc(
+        doc(db, "years", "2027", "semesters", "2", "exam_config", "final_exam"),
+        { title: "W10P 정기시험" },
+      ),
+      setDoc(
+        doc(
+          db,
+          "years",
+          "2027",
+          "semesters",
+          "2",
+          "history_classrooms",
+          "w10p-history-classroom",
+        ),
+        { title: "W10P 역사교실" },
+      ),
     ]);
   });
 
@@ -293,6 +313,132 @@ try {
   const fixtureAdminDb = testEnv
     .authenticatedContext(fixtureAdminUid, fixtureAdminClaims)
     .firestore();
+  const unauthenticatedDb = testEnv.unauthenticatedContext().firestore();
+  const fixtureAdminExamRef = doc(
+    fixtureAdminDb,
+    "years",
+    "2027",
+    "semesters",
+    "2",
+    "exam_config",
+    "final_exam",
+  );
+  const fixtureAdminHistoryClassroomsQuery = query(
+    collection(
+      fixtureAdminDb,
+      "years",
+      "2027",
+      "semesters",
+      "2",
+      "history_classrooms",
+    ),
+    limit(1),
+  );
+  const fixtureAdminHistoryClassroomRef = doc(
+    fixtureAdminDb,
+    "years",
+    "2027",
+    "semesters",
+    "2",
+    "history_classrooms",
+    "w10p-history-classroom",
+  );
+  await assertSucceeds(getDoc(fixtureAdminExamRef));
+  await assertSucceeds(getDocs(fixtureAdminHistoryClassroomsQuery));
+  await assertFails(
+    updateDoc(fixtureAdminExamRef, { directClientMutation: true }),
+  );
+  await assertFails(deleteDoc(fixtureAdminExamRef));
+  await assertFails(
+    setDoc(
+      doc(
+        fixtureAdminDb,
+        "years",
+        "2027",
+        "semesters",
+        "2",
+        "exam_config",
+        "fixture-write-denied",
+      ),
+      { title: "직접 생성 금지" },
+    ),
+  );
+  await assertFails(
+    updateDoc(fixtureAdminHistoryClassroomRef, {
+      directClientMutation: true,
+    }),
+  );
+  await assertFails(deleteDoc(fixtureAdminHistoryClassroomRef));
+  await assertFails(
+    setDoc(
+      doc(
+        fixtureAdminDb,
+        "years",
+        "2027",
+        "semesters",
+        "2",
+        "history_classrooms",
+        "fixture-write-denied",
+      ),
+      { title: "직접 생성 금지" },
+    ),
+  );
+  await assertSucceeds(
+    getDoc(
+      doc(
+        teacherDb,
+        "years",
+        "2027",
+        "semesters",
+        "2",
+        "exam_config",
+        "final_exam",
+      ),
+    ),
+  );
+  await assertSucceeds(
+    getDocs(
+      query(
+        collection(
+          teacherDb,
+          "years",
+          "2027",
+          "semesters",
+          "2",
+          "history_classrooms",
+        ),
+        limit(1),
+      ),
+    ),
+  );
+  await assertFails(
+    getDoc(
+      doc(
+        unauthenticatedDb,
+        "years",
+        "2027",
+        "semesters",
+        "2",
+        "exam_config",
+        "final_exam",
+      ),
+    ),
+  );
+  await assertFails(
+    getDocs(
+      query(
+        collection(
+          unauthenticatedDb,
+          "years",
+          "2027",
+          "semesters",
+          "2",
+          "history_classrooms",
+        ),
+        limit(1),
+      ),
+    ),
+  );
   const fixtureTrustFactorDbs = [
     testEnv
       .authenticatedContext(fixtureAdminUid, {
@@ -334,7 +480,6 @@ try {
       .authenticatedContext(fixtureWrongUid, fixtureAdminClaims)
       .firestore(),
   ];
-  const unauthenticatedDb = testEnv.unauthenticatedContext().firestore();
   for (const collectionName of semesterMetaCollections) {
     await assertSucceeds(
       getDoc(semesterMetaRef(fixtureAdminDb, collectionName)),
@@ -464,6 +609,7 @@ try {
         "LEGACY_SEMESTER_META_CURRENT_READABLE_TO_ADMIN_OR_TRUSTED_VISUAL_FIXTURE_ADMIN",
         "LEGACY_SEMESTER_META_VISUAL_FIXTURE_TRUST_FACTORS_ENFORCED",
         "LEGACY_SEMESTER_META_DIRECT_WRITES_DENIED",
+        "TRUSTED_VISUAL_FIXTURE_ADMIN_READS_EXAM_AND_HISTORY_WITH_WRITES_DENIED",
         "UNMIGRATED_SETTINGS_WRITE_RETAINED_AND_W7_POINT_POLICY_WRITE_RETIRED",
       ],
     }),

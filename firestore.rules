@@ -1554,7 +1554,7 @@ service cloud.firestore {
 
       match /calendar_meta/{docId} {
         allow read: if docId == 'current'
-          && (isAdmin() || isTrustedW10PVisualFixtureAdmin());
+          && (isTrustedW10PVisualFixtureAdmin() || isAdmin());
         allow create, update, delete: if false;
       }
 
@@ -1565,7 +1565,7 @@ service cloud.firestore {
 
       match /notices_meta/{docId} {
         allow read: if docId == 'current'
-          && (isAdmin() || isTrustedW10PVisualFixtureAdmin());
+          && (isTrustedW10PVisualFixtureAdmin() || isAdmin());
         allow create, update, delete: if false;
       }
 
@@ -1590,7 +1590,8 @@ service cloud.firestore {
       }
 
       match /history_classrooms/{docId} {
-        allow read: if canReadHistoryClassroomResource(resource.data);
+        allow read: if isTrustedW10PVisualFixtureAdmin()
+          || canReadHistoryClassroomResource(resource.data);
         allow create, update, delete: if false;
       }
 
@@ -1623,12 +1624,13 @@ service cloud.firestore {
 
       match /grading_plans_meta/{docId} {
         allow read: if docId == 'current'
-          && (isAdmin() || isTrustedW10PVisualFixtureAdmin());
+          && (isTrustedW10PVisualFixtureAdmin() || isAdmin());
         allow create, update, delete: if false;
       }
 
       match /exam_config/{docId} {
-        allow read: if canManagePerformanceScores();
+        allow read: if isTrustedW10PVisualFixtureAdmin()
+          || canManagePerformanceScores();
         allow write: if false;
       }
 
