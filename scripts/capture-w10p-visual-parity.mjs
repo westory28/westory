@@ -16660,7 +16660,7 @@ const appCheckDebugInitScript = ({ allowedOrigin, debugToken }) => {
   });
 };
 
-const authenticate = async (page, credential, origin) => {
+const authenticate = async (page, credential, origin, role) => {
   await page.goto(`${origin}/#/`, { waitUntil: "domcontentloaded" });
   const identity = await page.evaluate(
     async ({ email, password, config }) => {
@@ -16770,10 +16770,12 @@ const authenticate = async (page, credential, origin) => {
     { ...credential, config: firebaseConfig },
   );
   await page.reload({ waitUntil: "domcontentloaded" });
-  await page.waitForFunction(() => {
+  const expectedAuthenticatedRoute =
+    role === "student" ? "/student/dashboard" : "/teacher/dashboard";
+  await page.waitForFunction((expectedRoute) => {
     const restoredRoute = decodeURIComponent(location.hash.slice(1));
-    return restoredRoute !== "" && restoredRoute !== "/";
-  });
+    return restoredRoute === expectedRoute;
+  }, expectedAuthenticatedRoute);
   return identity;
 };
 
@@ -20229,6 +20231,7 @@ try {
         page,
         credentials[authenticationRole],
         origin,
+        authenticationRole,
       );
       groupIdentityAttestation = createIdentityAttestation(
         authenticationRole,
