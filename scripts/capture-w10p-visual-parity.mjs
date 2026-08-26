@@ -4921,6 +4921,31 @@ const exactStagingFirestoreWebChannelFormContentType = (headers = {}) => {
     )
   );
 };
+const pausedRequestPostDataPresenceForCorrelation = (request = {}) => {
+  const normalizedMethod = String(request.method).toUpperCase();
+  if (normalizedMethod === "GET") return false;
+  if (normalizedMethod !== "POST") return null;
+  if (request.hasPostData === true) return true;
+  if (request.postData !== undefined) {
+    return typeof request.postData === "string"
+      ? request.postData.length > 0
+      : null;
+  }
+  if (request.postDataEntries !== undefined) {
+    if (!Array.isArray(request.postDataEntries)) return null;
+    if (request.postDataEntries.length === 0) return false;
+    if (
+      request.postDataEntries.some(
+        (entry) => !entry || typeof entry.bytes !== "string",
+      )
+    ) {
+      return null;
+    }
+    return request.postDataEntries.some((entry) => entry.bytes.length > 0);
+  }
+  if (request.hasPostData === false) return false;
+  return null;
+};
 const classifyExactStagingFirestoreWebChannelHeaderCorrelationScope = ({
   requestUrl,
   method,
@@ -6273,6 +6298,51 @@ const verifyNetworkPolicyNegativeFixtures = () => {
   const firestoreHeaders = {
     "content-type": "application/x-www-form-urlencoded;charset=UTF-8",
   };
+  assert.deepEqual(
+    [
+      pausedRequestPostDataPresenceForCorrelation({ method: "GET" }),
+      pausedRequestPostDataPresenceForCorrelation({ method: "POST" }),
+      pausedRequestPostDataPresenceForCorrelation({
+        method: "post",
+        hasPostData: true,
+      }),
+      pausedRequestPostDataPresenceForCorrelation({
+        method: "POST",
+        hasPostData: false,
+      }),
+      pausedRequestPostDataPresenceForCorrelation({
+        method: "POST",
+        postData: "",
+      }),
+      pausedRequestPostDataPresenceForCorrelation({
+        method: "POST",
+        postData: "",
+        hasPostData: true,
+      }),
+      pausedRequestPostDataPresenceForCorrelation({
+        method: "POST",
+        postData: "synthetic-body",
+      }),
+      pausedRequestPostDataPresenceForCorrelation({
+        method: "POST",
+        postDataEntries: [{ bytes: "" }],
+      }),
+      pausedRequestPostDataPresenceForCorrelation({
+        method: "POST",
+        postDataEntries: [{ bytes: "c3ludGhldGljLWJvZHk=" }],
+      }),
+      pausedRequestPostDataPresenceForCorrelation({
+        method: "POST",
+        postDataEntries: [],
+        hasPostData: true,
+      }),
+      pausedRequestPostDataPresenceForCorrelation({
+        method: "HEAD",
+        hasPostData: true,
+      }),
+    ],
+    [false, null, true, false, false, true, true, false, true, true, null],
+  );
   const firestoreEncodedHeaderBlock = [
     "X-Goog-Api-Client:gl-js/fire/12.9.0",
     `X-Goog-Api-Key:${stagingApiKey}`,
@@ -6307,6 +6377,37 @@ const verifyNetworkPolicyNegativeFixtures = () => {
       resourceType: "Fetch",
       headers: firestoreHeaders,
       postDataPresent: true,
+      redirected: false,
+      inspection: firestoreFetchInspection,
+    }),
+    "initial-forward-post",
+  );
+  for (const method of ["HEAD", "PUT"]) {
+    assert.equal(
+      classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
+        requestUrl: firestoreWebChannelUrl.toString(),
+        method,
+        resourceType: "Fetch",
+        headers: firestoreHeaders,
+        postDataPresent: pausedRequestPostDataPresenceForCorrelation({
+          method,
+          hasPostData: true,
+        }),
+        redirected: false,
+        inspection: firestoreFetchInspection,
+      }),
+      null,
+    );
+  }
+  assert.equal(
+    classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
+      requestUrl: firestoreWebChannelUrl.toString(),
+      method: "POST",
+      resourceType: "Fetch",
+      headers: firestoreHeaders,
+      postDataPresent: pausedRequestPostDataPresenceForCorrelation({
+        method: "POST",
+      }),
       redirected: false,
       inspection: firestoreFetchInspection,
     }),
@@ -7203,6 +7304,7 @@ const verifyNetworkPolicyNegativeFixtures = () => {
       rejectedProductionPresentationExternalFixtures.length,
     rejectedStagingApiKeyExfiltrationCaseCount: 1,
     acceptedFirestoreWebChannelEncodedApiKeyCaseCount: 2,
+    verifiedPausedRequestPostDataPresenceCaseCount: 13,
     rejectedFirestoreWebChannelEncodedApiKeyCaseCount:
       rejectedFirestoreWebChannelApiKeyScopes.length,
     rejectedSensitiveMaterialExfiltrationCaseCount: sensitiveFixtures.length,
@@ -21189,10 +21291,9 @@ try {
             method: event.request.method,
             resourceType: event.resourceType,
             headers: event.request.headers,
-            postDataPresent:
-              event.request.postData !== undefined ||
-              (event.request.postDataEntries?.length || 0) > 0 ||
-              event.request.hasPostData === true,
+            postDataPresent: pausedRequestPostDataPresenceForCorrelation(
+              event.request,
+            ),
             redirected: Boolean(event.redirectedRequestId),
             inspection: listenerInspection,
           });
