@@ -1702,7 +1702,7 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "inspectNetworkRequest must return the allowlist boolean consumed by the pre-transmission decision.",
   );
   const publicRequestHandlerStart = sourceText.lastIndexOf(
-    "const handlePausedRequest = async (event) => {",
+    "const handlePausedRequest = async (event, requestCaptureScope) => {",
   );
   assert.ok(publicRequestHandlerStart >= 0);
   const directFirebaseContinuationStart = sourceText.lastIndexOf(
@@ -1794,6 +1794,17 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "The unified raw-sensitive scan must run before telemetry, deterministic fulfillment, external handling, and stable-origin fulfillment.",
   );
   for (const requiredSourceFragment of [
+    "const resolveExactChromiumNetworkRequestIdentity = ({ browser, request }) =>",
+    'symbol.description === "InterceptableRequest"',
+    'candidate.constructor?.name === "_InterceptableRequest"',
+    "candidate.request === requestImpl",
+    "identity._interceptionId,",
+    "networkRequestId: identity._requestId",
+    "const exactStagingFirestoreWebChannelHeaderCorrelationScope = ({",
+    "const advanceWebChannelCdpHeaderAttestationRendezvous = (entry) =>",
+    "webChannelCdpHeaderAttestationsByNetworkId",
+    "webChannelCdpHeaderAttestationCompletionTimeoutCount",
+    "exactPlaywrightToFetchNetworkRequestBindingCount",
     "const installBrowserWidePreTransmissionBoundary = async",
     'method === "Runtime.runIfWaitingForDebugger"',
     'originalSend.call(rootSession, "Target.closeTarget"',
@@ -3024,7 +3035,7 @@ const FIXTURE_APP_CHECK_EXCHANGE_TRANSPORT_CONTRACT = {
   ttlPattern: "^([\\d.]+)s$",
 };
 const BASELINE_APP_CHECK_BRIDGE_SCOPE = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   baselinePresentationSha: "676869fa289d3e7ecef234cbb5cca65c60ec4597",
   reason: "baseline-presentation-source-has-no-app-check-initialization",
   firebaseProjectId: contract.firebaseProjectId,
@@ -3049,7 +3060,8 @@ const BASELINE_APP_CHECK_BRIDGE_SCOPE = {
     : "",
   functionsPathRuleHash: sha256("single-callable-path-segment-v1"),
   interceptionMechanism: "cdp-fetch-request-stage",
-  headerCorrelationMechanism: "playwright-request-allHeaders",
+  headerCorrelationMechanism:
+    "cdp-fetch-network-id-firestore-webchannel-backchannel-and-playwright-request-allHeaders",
   urlMethodFifoCorrelationAllowed: false,
   redirectHeaderOverridePropagation: false,
   redirectPolicyHash: sha256(
@@ -6460,6 +6472,15 @@ let auditedBaselineBridgeRedirectAbortRequests = 0;
 let auditedBaselineBridgeCdpPausedRequests = 0;
 let auditedBaselineBridgeCdpResponsePausedRequests = 0;
 let auditedBaselineBridgeCdpReconciledRequests = 0;
+let auditedWebChannelCdpHeaderAttestationRegisteredRequests = 0;
+let auditedWebChannelCdpHeaderAttestationCompletedRequests = 0;
+let auditedWebChannelCdpHeaderAttestationBoundRequests = 0;
+let auditedWebChannelCdpHeaderAttestationBindingResiduals = 0;
+let auditedWebChannelCdpHeaderAttestationBindingFailures = 0;
+let auditedWebChannelCdpHeaderAttestationPairingTimeouts = 0;
+let auditedWebChannelCdpHeaderAttestationCompletionTimeouts = 0;
+let auditedPlaywrightAllHeadersHeaderAttestationRequests = 0;
+let auditedPlaywrightAllHeadersHeaderAttestationCompletedRequests = 0;
 let auditedBaselineBridgeHandlerErrors = 0;
 let auditedBaselineBridgeInjectedRedirectResponseAborts = 0;
 let auditedAppCheckCdpMonitorPausedRequests = 0;
@@ -7433,6 +7454,16 @@ for (const audit of manifest.browserAudits) {
     "cdpPausedRequestCount",
     "cdpResponsePausedRequestCount",
     "cdpReconciledRequestCount",
+    "webChannelCdpHeaderAttestationRegisteredRequestCount",
+    "webChannelCdpHeaderAttestationCompletedRequestCount",
+    "webChannelCdpHeaderAttestationBoundRequestCount",
+    "webChannelCdpHeaderAttestationBindingResidualCount",
+    "webChannelCdpHeaderAttestationBindingFailureCount",
+    "webChannelCdpHeaderAttestationPairingTimeoutCount",
+    "webChannelCdpHeaderAttestationCompletionTimeoutCount",
+    "webChannelCdpHeaderAttestationBindingSetHash",
+    "playwrightAllHeadersHeaderAttestationRequestCount",
+    "playwrightAllHeadersHeaderAttestationCompletedRequestCount",
     "handlerErrorCount",
     "injectedRedirectResponseAbortRequestCount",
     "cdpMonitorPausedRequestCount",
@@ -7642,7 +7673,39 @@ for (const audit of manifest.browserAudits) {
   );
   assert.equal(
     bridgeEvent.headerCorrelationMechanism,
-    "playwright-request-allHeaders",
+    "cdp-fetch-network-id-firestore-webchannel-backchannel-and-playwright-request-allHeaders",
+  );
+  assert.match(
+    bridgeEvent.webChannelCdpHeaderAttestationBindingSetHash,
+    /^[a-f0-9]{64}$/u,
+  );
+  assert.equal(
+    bridgeEvent.webChannelCdpHeaderAttestationRegisteredRequestCount,
+    bridgeEvent.webChannelCdpHeaderAttestationCompletedRequestCount,
+  );
+  assert.equal(
+    bridgeEvent.webChannelCdpHeaderAttestationCompletedRequestCount,
+    bridgeEvent.webChannelCdpHeaderAttestationBoundRequestCount,
+  );
+  assert.equal(
+    bridgeEvent.webChannelCdpHeaderAttestationBindingResidualCount,
+    0,
+  );
+  assert.equal(
+    bridgeEvent.webChannelCdpHeaderAttestationBindingFailureCount,
+    0,
+  );
+  assert.equal(
+    bridgeEvent.webChannelCdpHeaderAttestationPairingTimeoutCount,
+    0,
+  );
+  assert.equal(
+    bridgeEvent.webChannelCdpHeaderAttestationCompletionTimeoutCount,
+    0,
+  );
+  assert.equal(
+    bridgeEvent.playwrightAllHeadersHeaderAttestationRequestCount,
+    bridgeEvent.playwrightAllHeadersHeaderAttestationCompletedRequestCount,
   );
   assert.equal(bridgeEvent.secretInitScope, "primary-page-only");
   assert.equal(bridgeEvent.browserGlobalValueKind, "non-secret-fixed-sentinel");
@@ -7705,6 +7768,15 @@ for (const audit of manifest.browserAudits) {
     "cdpPausedRequestCount",
     "cdpResponsePausedRequestCount",
     "cdpReconciledRequestCount",
+    "webChannelCdpHeaderAttestationRegisteredRequestCount",
+    "webChannelCdpHeaderAttestationCompletedRequestCount",
+    "webChannelCdpHeaderAttestationBoundRequestCount",
+    "webChannelCdpHeaderAttestationBindingResidualCount",
+    "webChannelCdpHeaderAttestationBindingFailureCount",
+    "webChannelCdpHeaderAttestationPairingTimeoutCount",
+    "webChannelCdpHeaderAttestationCompletionTimeoutCount",
+    "playwrightAllHeadersHeaderAttestationRequestCount",
+    "playwrightAllHeadersHeaderAttestationCompletedRequestCount",
     "handlerErrorCount",
     "injectedRedirectResponseAbortRequestCount",
     "cdpMonitorPausedRequestCount",
@@ -7916,6 +7988,24 @@ for (const audit of manifest.browserAudits) {
     bridgeEvent.cdpResponsePausedRequestCount;
   auditedBaselineBridgeCdpReconciledRequests +=
     bridgeEvent.cdpReconciledRequestCount;
+  auditedWebChannelCdpHeaderAttestationRegisteredRequests +=
+    bridgeEvent.webChannelCdpHeaderAttestationRegisteredRequestCount;
+  auditedWebChannelCdpHeaderAttestationCompletedRequests +=
+    bridgeEvent.webChannelCdpHeaderAttestationCompletedRequestCount;
+  auditedWebChannelCdpHeaderAttestationBoundRequests +=
+    bridgeEvent.webChannelCdpHeaderAttestationBoundRequestCount;
+  auditedWebChannelCdpHeaderAttestationBindingResiduals +=
+    bridgeEvent.webChannelCdpHeaderAttestationBindingResidualCount;
+  auditedWebChannelCdpHeaderAttestationBindingFailures +=
+    bridgeEvent.webChannelCdpHeaderAttestationBindingFailureCount;
+  auditedWebChannelCdpHeaderAttestationPairingTimeouts +=
+    bridgeEvent.webChannelCdpHeaderAttestationPairingTimeoutCount;
+  auditedWebChannelCdpHeaderAttestationCompletionTimeouts +=
+    bridgeEvent.webChannelCdpHeaderAttestationCompletionTimeoutCount;
+  auditedPlaywrightAllHeadersHeaderAttestationRequests +=
+    bridgeEvent.playwrightAllHeadersHeaderAttestationRequestCount;
+  auditedPlaywrightAllHeadersHeaderAttestationCompletedRequests +=
+    bridgeEvent.playwrightAllHeadersHeaderAttestationCompletedRequestCount;
   auditedBaselineBridgeHandlerErrors += bridgeEvent.handlerErrorCount;
   auditedBaselineBridgeInjectedRedirectResponseAborts +=
     bridgeEvent.injectedRedirectResponseAbortRequestCount;
@@ -9567,6 +9657,15 @@ assertExactObjectKeys(appCheckBinding, [
   "baselineBridgeRedirectAbortRequestCount",
   "baselineBridgeCdpPausedRequestCount",
   "baselineBridgeCdpReconciledRequestCount",
+  "webChannelCdpHeaderAttestationRegisteredRequestCount",
+  "webChannelCdpHeaderAttestationCompletedRequestCount",
+  "webChannelCdpHeaderAttestationBoundRequestCount",
+  "webChannelCdpHeaderAttestationBindingResidualCount",
+  "webChannelCdpHeaderAttestationBindingFailureCount",
+  "webChannelCdpHeaderAttestationPairingTimeoutCount",
+  "webChannelCdpHeaderAttestationCompletionTimeoutCount",
+  "playwrightAllHeadersHeaderAttestationRequestCount",
+  "playwrightAllHeadersHeaderAttestationCompletedRequestCount",
   "baselineBridgeInjectedRedirectResponseAbortCount",
   "baselineBridgeDecisionUnmatchedProtectedRequestCount",
   "baselineBridgeScopeIneligibleProtectedRequestCount",
@@ -10591,7 +10690,7 @@ assert.equal(appCheckBinding.secretInitScope, "primary-page-only");
 assert.equal(appCheckBinding.pageAppCheckSecretInitRegistrationCount, 1);
 assert.equal(
   appCheckBinding.headerCorrelationMechanism,
-  "playwright-request-allHeaders",
+  "cdp-fetch-network-id-firestore-webchannel-backchannel-and-playwright-request-allHeaders",
 );
 assert.equal(appCheckBinding.urlMethodFifoCorrelationUsed, false);
 assert.equal(appCheckBinding.protocolDebugLoggingDisabled, true);
@@ -10686,6 +10785,24 @@ for (const [field, auditedValue] of Object.entries({
     auditedBaselineBridgeCdpResponsePausedRequests,
   baselineBridgeCdpReconciledRequestCount:
     auditedBaselineBridgeCdpReconciledRequests,
+  webChannelCdpHeaderAttestationRegisteredRequestCount:
+    auditedWebChannelCdpHeaderAttestationRegisteredRequests,
+  webChannelCdpHeaderAttestationCompletedRequestCount:
+    auditedWebChannelCdpHeaderAttestationCompletedRequests,
+  webChannelCdpHeaderAttestationBoundRequestCount:
+    auditedWebChannelCdpHeaderAttestationBoundRequests,
+  webChannelCdpHeaderAttestationBindingResidualCount:
+    auditedWebChannelCdpHeaderAttestationBindingResiduals,
+  webChannelCdpHeaderAttestationBindingFailureCount:
+    auditedWebChannelCdpHeaderAttestationBindingFailures,
+  webChannelCdpHeaderAttestationPairingTimeoutCount:
+    auditedWebChannelCdpHeaderAttestationPairingTimeouts,
+  webChannelCdpHeaderAttestationCompletionTimeoutCount:
+    auditedWebChannelCdpHeaderAttestationCompletionTimeouts,
+  playwrightAllHeadersHeaderAttestationRequestCount:
+    auditedPlaywrightAllHeadersHeaderAttestationRequests,
+  playwrightAllHeadersHeaderAttestationCompletedRequestCount:
+    auditedPlaywrightAllHeadersHeaderAttestationCompletedRequests,
   appCheckCdpHandlerErrorCount: auditedBaselineBridgeHandlerErrors,
   baselineBridgeInjectedRedirectResponseAbortCount:
     auditedBaselineBridgeInjectedRedirectResponseAborts,
@@ -10884,6 +11001,40 @@ assert.equal(
 assert.equal(appCheckBinding.baselineEffectiveHeaderMissingRequestCount, 0);
 assert.ok(appCheckBinding.baselineBridgeCdpPausedRequestCount > 0);
 assert.ok(appCheckBinding.baselineBridgeCdpReconciledRequestCount > 0);
+assert.ok(
+  appCheckBinding.webChannelCdpHeaderAttestationRegisteredRequestCount > 0,
+);
+assert.equal(
+  appCheckBinding.webChannelCdpHeaderAttestationRegisteredRequestCount,
+  appCheckBinding.webChannelCdpHeaderAttestationCompletedRequestCount,
+);
+assert.equal(
+  appCheckBinding.webChannelCdpHeaderAttestationCompletedRequestCount,
+  appCheckBinding.webChannelCdpHeaderAttestationBoundRequestCount,
+);
+assert.equal(
+  appCheckBinding.webChannelCdpHeaderAttestationBindingResidualCount,
+  0,
+);
+assert.equal(
+  appCheckBinding.webChannelCdpHeaderAttestationBindingFailureCount,
+  0,
+);
+assert.equal(
+  appCheckBinding.webChannelCdpHeaderAttestationPairingTimeoutCount,
+  0,
+);
+assert.equal(
+  appCheckBinding.webChannelCdpHeaderAttestationCompletionTimeoutCount,
+  0,
+);
+assert.ok(
+  appCheckBinding.playwrightAllHeadersHeaderAttestationRequestCount > 0,
+);
+assert.equal(
+  appCheckBinding.playwrightAllHeadersHeaderAttestationRequestCount,
+  appCheckBinding.playwrightAllHeadersHeaderAttestationCompletedRequestCount,
+);
 assert.ok(appCheckBinding.appCheckCdpMonitorPausedRequestCount > 0);
 assert.ok(appCheckBinding.preTransmissionBoundaryInspectionCount > 0);
 assert.equal(
