@@ -4955,6 +4955,8 @@ const classifyExactStagingFirestoreWebChannelHeaderCorrelationScope = ({
   redirected,
   inspection,
 }) => {
+  // The CDP domain is named Fetch, but Firestore WebChannel itself uses
+  // XMLHttpRequest. Its Image-based termination fallback must stay excluded.
   if (
     !inspection ||
     inspection.firebaseService !== "firestore" ||
@@ -4965,7 +4967,7 @@ const classifyExactStagingFirestoreWebChannelHeaderCorrelationScope = ({
     inspection.malformedUrlEncoding !== false ||
     inspection.firebaseTransportValid !== true ||
     inspection.serviceResourceBound !== true ||
-    String(resourceType).toLowerCase() !== "fetch" ||
+    String(resourceType).toLowerCase() !== "xhr" ||
     redirected !== false
   ) {
     return null;
@@ -5091,7 +5093,7 @@ const SAFE_FIRESTORE_WEBCHANNEL_LISTENER_DIAGNOSTIC_REASONS = [
   "malformed-marker-invalid",
   "transport-invalid",
   "resource-unbound",
-  "resource-type-not-fetch",
+  "resource-type-not-xhr",
   "redirected",
   "method-not-webchannel",
   "post-data-state",
@@ -5148,8 +5150,8 @@ const diagnoseExactStagingFirestoreWebChannelHeaderCorrelationScope = (
   if (inspection.serviceResourceBound !== true) {
     return { requestClass: null, reason: "resource-unbound" };
   }
-  if (String(options.resourceType).toLowerCase() !== "fetch") {
-    return { requestClass: null, reason: "resource-type-not-fetch" };
+  if (String(options.resourceType).toLowerCase() !== "xhr") {
+    return { requestClass: null, reason: "resource-type-not-xhr" };
   }
   if (options.redirected !== false) {
     return { requestClass: null, reason: "redirected" };
@@ -6454,33 +6456,26 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     allowedNonFirebaseOrigins: [stableBrowserOrigin],
   });
   assert.equal(firestoreInspection.stagingMarker, true);
-  const firestoreFetchInspection = inspectNetworkBoundary({
-    requestUrl: firestoreWebChannelUrl.toString(),
-    method: "POST",
-    resourceType: "Fetch",
-    stagingApiKey,
-    allowedNonFirebaseOrigins: [stableBrowserOrigin],
-  });
   assert.equal(
     classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
       requestUrl: firestoreWebChannelUrl.toString(),
       method: "POST",
-      resourceType: "Fetch",
+      resourceType: "XHR",
       headers: firestoreHeaders,
       postDataPresent: true,
       redirected: false,
-      inspection: firestoreFetchInspection,
+      inspection: firestoreInspection,
     }),
     "initial-forward-post",
   );
   const firestoreWebChannelListenerDiagnosticBase = {
     requestUrl: firestoreWebChannelUrl.toString(),
     method: "POST",
-    resourceType: "Fetch",
+    resourceType: "XHR",
     headers: firestoreHeaders,
     postDataPresent: true,
     redirected: false,
-    inspection: firestoreFetchInspection,
+    inspection: firestoreInspection,
   };
   assert.deepEqual(
     diagnoseExactStagingFirestoreWebChannelHeaderCorrelationScope(
@@ -6493,53 +6488,54 @@ const verifyNetworkPolicyNegativeFixtures = () => {
   for (const fixture of [
     { inspection: null, expectedReason: "inspection-missing" },
     {
-      inspection: { ...firestoreFetchInspection, firebaseService: "auth" },
+      inspection: { ...firestoreInspection, firebaseService: "auth" },
       expectedReason: "service-not-firestore",
     },
     {
       inspection: {
-        ...firestoreFetchInspection,
+        ...firestoreInspection,
         isFirebaseRequest: false,
       },
       expectedReason: "firebase-marker-invalid",
     },
     {
-      inspection: { ...firestoreFetchInspection, stagingMarker: false },
+      inspection: { ...firestoreInspection, stagingMarker: false },
       expectedReason: "staging-marker-invalid",
     },
     {
-      inspection: { ...firestoreFetchInspection, productionMarker: true },
+      inspection: { ...firestoreInspection, productionMarker: true },
       expectedReason: "production-marker-invalid",
     },
     {
       inspection: {
-        ...firestoreFetchInspection,
+        ...firestoreInspection,
         unboundFirebaseRequest: true,
       },
       expectedReason: "unbound-marker-invalid",
     },
     {
       inspection: {
-        ...firestoreFetchInspection,
+        ...firestoreInspection,
         malformedUrlEncoding: true,
       },
       expectedReason: "malformed-marker-invalid",
     },
     {
       inspection: {
-        ...firestoreFetchInspection,
+        ...firestoreInspection,
         firebaseTransportValid: false,
       },
       expectedReason: "transport-invalid",
     },
     {
       inspection: {
-        ...firestoreFetchInspection,
+        ...firestoreInspection,
         serviceResourceBound: false,
       },
       expectedReason: "resource-unbound",
     },
-    { resourceType: "XHR", expectedReason: "resource-type-not-fetch" },
+    { resourceType: "Fetch", expectedReason: "resource-type-not-xhr" },
+    { resourceType: "Image", expectedReason: "resource-type-not-xhr" },
     { redirected: true, expectedReason: "redirected" },
     { method: "PUT", expectedReason: "method-not-webchannel" },
     { postDataPresent: false, expectedReason: "post-data-state" },
@@ -6583,14 +6579,14 @@ const verifyNetworkPolicyNegativeFixtures = () => {
       classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
         requestUrl: firestoreWebChannelUrl.toString(),
         method,
-        resourceType: "Fetch",
+        resourceType: "XHR",
         headers: firestoreHeaders,
         postDataPresent: pausedRequestPostDataPresenceForCorrelation({
           method,
           hasPostData: true,
         }),
         redirected: false,
-        inspection: firestoreFetchInspection,
+        inspection: firestoreInspection,
       }),
       null,
     );
@@ -6599,13 +6595,13 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
       requestUrl: firestoreWebChannelUrl.toString(),
       method: "POST",
-      resourceType: "Fetch",
+      resourceType: "XHR",
       headers: firestoreHeaders,
       postDataPresent: pausedRequestPostDataPresenceForCorrelation({
         method: "POST",
       }),
       redirected: false,
-      inspection: firestoreFetchInspection,
+      inspection: firestoreInspection,
     }),
     "initial-forward-post",
   );
@@ -6613,11 +6609,11 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     exactStagingFirestoreWebChannelHeaderCorrelationScope({
       requestUrl: firestoreWebChannelUrl.toString(),
       method: "POST",
-      resourceType: "XHR",
+      resourceType: "Fetch",
       headers: firestoreHeaders,
       postDataPresent: true,
       redirected: false,
-      inspection: firestoreFetchInspection,
+      inspection: firestoreInspection,
     }),
     false,
   );
@@ -6639,7 +6635,7 @@ const verifyNetworkPolicyNegativeFixtures = () => {
   const firestoreForwardInspection = inspectNetworkBoundary({
     requestUrl: firestoreForwardUrl.toString(),
     method: "POST",
-    resourceType: "Fetch",
+    resourceType: "XHR",
     stagingApiKey,
     allowedNonFirebaseOrigins: [stableBrowserOrigin],
   });
@@ -6647,7 +6643,7 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
       requestUrl: firestoreForwardUrl.toString(),
       method: "POST",
-      resourceType: "Fetch",
+      resourceType: "XHR",
       headers: firestoreHeaders,
       postDataPresent: true,
       redirected: false,
@@ -6659,7 +6655,7 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
       requestUrl: firestoreForwardUrl.toString(),
       method: "POST",
-      resourceType: "Fetch",
+      resourceType: "XHR",
       headers: firestoreHeaders,
       postDataPresent: null,
       redirected: false,
@@ -6673,7 +6669,7 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
       requestUrl: firestoreForwardWithoutGlobalSessionUrl.toString(),
       method: "POST",
-      resourceType: "Fetch",
+      resourceType: "XHR",
       headers: firestoreHeaders,
       postDataPresent: true,
       redirected: false,
@@ -6701,7 +6697,7 @@ const verifyNetworkPolicyNegativeFixtures = () => {
   const firestoreBackchannelInspection = inspectNetworkBoundary({
     requestUrl: firestoreBackchannelUrl.toString(),
     method: "GET",
-    resourceType: "Fetch",
+    resourceType: "XHR",
     stagingApiKey,
     allowedNonFirebaseOrigins: [stableBrowserOrigin],
   });
@@ -6709,7 +6705,7 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
       requestUrl: firestoreBackchannelUrl.toString(),
       method: "GET",
-      resourceType: "Fetch",
+      resourceType: "XHR",
       postDataPresent: false,
       redirected: false,
       inspection: firestoreBackchannelInspection,
@@ -6720,7 +6716,7 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     exactStagingFirestoreWebChannelHeaderCorrelationScope({
       requestUrl: firestoreBackchannelUrl.toString(),
       method: "GET",
-      resourceType: "Fetch",
+      resourceType: "XHR",
       postDataPresent: false,
       redirected: false,
       inspection: firestoreBackchannelInspection,
@@ -6733,7 +6729,7 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     exactStagingFirestoreWebChannelHeaderCorrelationScope({
       requestUrl: firestoreTimedBackchannelUrl.toString(),
       method: "GET",
-      resourceType: "Fetch",
+      resourceType: "XHR",
       postDataPresent: false,
       redirected: false,
       inspection: firestoreBackchannelInspection,
@@ -6748,7 +6744,7 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
       requestUrl: firestoreBackchannelWithoutGlobalSessionUrl.toString(),
       method: "GET",
-      resourceType: "Fetch",
+      resourceType: "XHR",
       postDataPresent: false,
       redirected: false,
       inspection: firestoreBackchannelInspection,
@@ -6822,7 +6818,7 @@ const verifyNetworkPolicyNegativeFixtures = () => {
   invalidForwardRidUrl.searchParams.set("RID", "rpc");
   for (const fixture of [
     { method: "POST" },
-    { resourceType: "XHR" },
+    { resourceType: "Fetch" },
     { postDataPresent: true },
     { redirected: true },
     {
@@ -6856,7 +6852,7 @@ const verifyNetworkPolicyNegativeFixtures = () => {
       exactStagingFirestoreWebChannelHeaderCorrelationScope({
         requestUrl: firestoreBackchannelUrl.toString(),
         method: "GET",
-        resourceType: "Fetch",
+        resourceType: "XHR",
         postDataPresent: false,
         redirected: false,
         inspection: firestoreBackchannelInspection,
@@ -6867,7 +6863,7 @@ const verifyNetworkPolicyNegativeFixtures = () => {
   }
   for (const fixture of [
     { method: "GET" },
-    { resourceType: "XHR" },
+    { resourceType: "Fetch" },
     { headers: { "content-type": "application/json" } },
     { postDataPresent: false },
     { redirected: true },
@@ -6897,7 +6893,7 @@ const verifyNetworkPolicyNegativeFixtures = () => {
       exactStagingFirestoreWebChannelHeaderCorrelationScope({
         requestUrl: firestoreForwardUrl.toString(),
         method: "POST",
-        resourceType: "Fetch",
+        resourceType: "XHR",
         headers: firestoreHeaders,
         postDataPresent: true,
         redirected: false,
@@ -7501,7 +7497,7 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     rejectedStagingApiKeyExfiltrationCaseCount: 1,
     acceptedFirestoreWebChannelEncodedApiKeyCaseCount: 2,
     verifiedPausedRequestPostDataPresenceCaseCount: 13,
-    verifiedWebChannelListenerDiagnosticCaseCount: 18,
+    verifiedWebChannelListenerDiagnosticCaseCount: 19,
     rejectedFirestoreWebChannelEncodedApiKeyCaseCount:
       rejectedFirestoreWebChannelApiKeyScopes.length,
     rejectedSensitiveMaterialExfiltrationCaseCount: sensitiveFixtures.length,
