@@ -18934,6 +18934,9 @@ try {
             : 0;
       });
     let networkHeaderAttestationErrorCount = 0;
+    let webChannelRequestHeaderAttestationFailureCount = 0;
+    let genericRequestHeaderAttestationFailureCount = 0;
+    let responseHeaderAttestationFailureCount = 0;
     const trackNetworkAttestation = (promise) => {
       pendingNetworkAttestations.add(promise);
       promise.finally(() => pendingNetworkAttestations.delete(promise));
@@ -18953,10 +18956,54 @@ try {
           "Browser request header attestations did not drain before the deadline.",
         );
       }
+      const safeFailureDiagnostic = {
+        groupKey,
+        phase: networkPhase,
+        captureId: activeCaptureId,
+        networkHeaderAttestationErrorCount,
+        webChannelRequestHeaderAttestationFailureCount,
+        genericRequestHeaderAttestationFailureCount,
+        responseHeaderAttestationFailureCount,
+        directBrowserEarlyHintsObservationCount:
+          directBrowserEarlyHintsObservationCount -
+          groupDirectBrowserEarlyHintsObservationStart,
+        directBrowserEarlyHintsCaptureInvalidationCount:
+          directBrowserEarlyHintsCaptureInvalidationCount -
+          groupDirectBrowserEarlyHintsCaptureInvalidationStart,
+        playwrightAllHeadersRequestCount:
+          playwrightAllHeadersHeaderAttestationRequestCount -
+          groupPlaywrightAllHeadersHeaderAttestationStart,
+        playwrightAllHeadersCompletedRequestCount:
+          playwrightAllHeadersHeaderAttestationCompletedRequestCount -
+          groupPlaywrightAllHeadersHeaderAttestationCompletedStart,
+        webChannelRegisteredRequestCount:
+          webChannelCdpHeaderAttestationRegisteredRequestCount -
+          groupWebChannelCdpHeaderAttestationRegisteredStart,
+        webChannelCompletedRequestCount:
+          webChannelCdpHeaderAttestationCompletedRequestCount -
+          groupWebChannelCdpHeaderAttestationCompletedStart,
+        webChannelBoundRequestCount:
+          webChannelCdpHeaderAttestationBoundRequestCount -
+          groupWebChannelCdpHeaderAttestationBoundStart,
+        webChannelBindingFailureCount:
+          webChannelCdpHeaderAttestationBindingFailureCount -
+          groupWebChannelCdpHeaderAttestationBindingFailureStart,
+        webChannelPairingTimeoutCount:
+          webChannelCdpHeaderAttestationPairingTimeoutCount -
+          groupWebChannelCdpHeaderAttestationPairingTimeoutStart,
+        webChannelCompletionTimeoutCount:
+          webChannelCdpHeaderAttestationCompletionTimeoutCount -
+          groupWebChannelCdpHeaderAttestationCompletionTimeoutStart,
+        pendingNetworkAttestationCount: pendingNetworkAttestations.size,
+        pendingWebChannelBindingCount:
+          webChannelCdpHeaderAttestationsByNetworkId.size,
+      };
       assert.equal(
         networkHeaderAttestationErrorCount,
         0,
-        "A browser request header attestation failed.",
+        `A browser request header attestation failed: ${JSON.stringify(
+          safeFailureDiagnostic,
+        )}`,
       );
     };
     const drainAppCheckCdpHandlerPromises = async () => {
@@ -19413,9 +19460,14 @@ try {
           playwrightAllHeadersHeaderAttestationCompletedRequestCount += 1;
           reconcileEffectiveRequestHeaders(allHeaders);
         })().catch(() => {
-          webChannelCdpHeaderAttestationBindingFailureCount += Number(
-            cdpAuthoritativeWebChannelRequestClass !== null,
-          );
+          const webChannelFailure =
+            cdpAuthoritativeWebChannelRequestClass !== null;
+          webChannelCdpHeaderAttestationBindingFailureCount +=
+            Number(webChannelFailure);
+          webChannelRequestHeaderAttestationFailureCount +=
+            Number(webChannelFailure);
+          genericRequestHeaderAttestationFailureCount +=
+            Number(!webChannelFailure);
           networkHeaderAttestationErrorCount += 1;
           browserNetworkHeaderAttestationErrorCount += 1;
         }),
@@ -19458,6 +19510,7 @@ try {
             status: response.status(),
           });
         })().catch(() => {
+          responseHeaderAttestationFailureCount += 1;
           networkHeaderAttestationErrorCount += 1;
           browserNetworkHeaderAttestationErrorCount += 1;
         }),
