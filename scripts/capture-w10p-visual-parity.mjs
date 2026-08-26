@@ -16719,6 +16719,10 @@ const authenticate = async (page, credential, origin) => {
     { ...credential, config: firebaseConfig },
   );
   await page.reload({ waitUntil: "domcontentloaded" });
+  await page.waitForFunction(() => {
+    const restoredRoute = decodeURIComponent(location.hash.slice(1));
+    return restoredRoute !== "" && restoredRoute !== "/";
+  });
   return identity;
 };
 
