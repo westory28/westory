@@ -19,8 +19,23 @@ const projectId =
   process.env.WESTORY_TEST_PROJECT_ID || "demo-westory-session-w3";
 const adminUid = "w3-admin";
 const adminEmail = "westoria28@gmail.com";
+const teacherUid = "w3-teacher";
+const teacherEmail = "w3-teacher@yongshin-ms.ms.kr";
 const authTime = Math.floor(Date.now() / 1000) - 10;
 const semesterId = "2027-2";
+const semesterMetaSeed = {
+  grading_plans_meta: { planCount: 2 },
+  calendar_meta: { eventCount: 3 },
+  notices_meta: { noticeCount: 4 },
+};
+const semesterMetaCollections = Object.keys(semesterMetaSeed);
+const semesterMetaRef = (
+  db,
+  collectionName,
+  documentId = "current",
+  year = "2027",
+  semester = "2",
+) => doc(db, "years", year, "semesters", semester, collectionName, documentId);
 const rules = readFileSync(resolve("firestore.rules"), "utf8");
 
 const testEnv = await initializeTestEnvironment({
@@ -47,6 +62,28 @@ try {
           authorityGeneration: "w1r2-2026-08-09",
           protocolVersion: 2,
           sessionRevision: "c".repeat(64),
+          authorityModeAtOpen: "ENFORCE",
+          generalExpiresAt: Timestamp.fromMillis(Date.now() + 30 * 60 * 1000),
+          highRiskExpiresAt: Timestamp.fromMillis(Date.now() + 15 * 60 * 1000),
+        },
+      ),
+      setDoc(
+        doc(
+          db,
+          "application_sessions",
+          teacherUid,
+          "sessions",
+          String(authTime),
+        ),
+        {
+          uid: teacherUid,
+          email: teacherEmail,
+          authTime,
+          status: "active",
+          schemaVersion: 2,
+          authorityGeneration: "w1r2-2026-08-09",
+          protocolVersion: 2,
+          sessionRevision: "d".repeat(64),
           authorityModeAtOpen: "ENFORCE",
           generalExpiresAt: Timestamp.fromMillis(Date.now() + 30 * 60 * 1000),
           highRiskExpiresAt: Timestamp.fromMillis(Date.now() + 15 * 60 * 1000),
@@ -101,17 +138,16 @@ try {
       setDoc(doc(db, "site_settings", "school_config"), {
         schoolName: "회귀 검증 학교",
       }),
+      setDoc(doc(db, "users", teacherUid), {
+        email: teacherEmail,
+        role: "teacher",
+      }),
       setDoc(
-        doc(
-          db,
-          "years",
-          "2027",
-          "semesters",
-          "2",
-          "point_policies",
-          "current",
-        ),
+        doc(db, "years", "2027", "semesters", "2", "point_policies", "current"),
         { manualAdjustEnabled: true },
+      ),
+      ...Object.entries(semesterMetaSeed).map(([collectionName, data]) =>
+        setDoc(semesterMetaRef(db, collectionName), data),
       ),
     ]);
   });
@@ -138,12 +174,18 @@ try {
   );
   const activePointerRef = doc(adminDb, "site_settings", "semester_active");
   const configRef = doc(adminDb, "site_settings", "config");
+  const semesterMetaRefs = semesterMetaCollections.map((collectionName) =>
+    semesterMetaRef(adminDb, collectionName),
+  );
 
   await assertSucceeds(getDoc(manifestRef));
   await assertSucceeds(getDoc(latestReadinessRef));
   await assertSucceeds(getDoc(readinessVersionRef));
   await assertSucceeds(getDoc(activePointerRef));
   await assertSucceeds(getDoc(configRef));
+  for (const reference of semesterMetaRefs) {
+    await assertSucceeds(getDoc(reference));
+  }
 
   for (const reference of [
     manifestRef,
@@ -154,6 +196,41 @@ try {
   ]) {
     await assertFails(updateDoc(reference, { directClientMutation: true }));
     await assertFails(deleteDoc(reference));
+  }
+
+  for (const reference of semesterMetaRefs) {
+    await assertFails(updateDoc(reference, { directClientMutation: true }));
+    await assertFails(deleteDoc(reference));
+  }
+
+  await assertFails(
+    getDoc(semesterMetaRef(adminDb, "calendar_meta", "preview")),
+  );
+  await assertFails(
+    setDoc(semesterMetaRef(adminDb, "calendar_meta", "preview"), {
+      eventCount: 1,
+    }),
+  );
+  for (const collectionName of semesterMetaCollections) {
+    await assertFails(
+      setDoc(semesterMetaRef(adminDb, collectionName, "current", "2028", "1"), {
+        directClientMutation: true,
+      }),
+    );
+  }
+
+  const teacherDb = testEnv
+    .authenticatedContext(teacherUid, {
+      email: teacherEmail,
+      auth_time: authTime,
+    })
+    .firestore();
+  const unauthenticatedDb = testEnv.unauthenticatedContext().firestore();
+  for (const collectionName of semesterMetaCollections) {
+    await assertFails(getDoc(semesterMetaRef(teacherDb, collectionName)));
+    await assertFails(
+      getDoc(semesterMetaRef(unauthenticatedDb, collectionName)),
+    );
   }
 
   await assertFails(
@@ -229,6 +306,8 @@ try {
         "ACTIVE_POINTER_CREATE_UPDATE_DELETE_DENIED",
         "COMPAT_CONFIG_CREATE_UPDATE_DELETE_DENIED",
         "SERVER_OWNED_DOCUMENTS_READABLE_TO_AUTHORIZED_CLIENT",
+        "LEGACY_SEMESTER_META_CURRENT_READABLE_TO_ADMIN_ONLY",
+        "LEGACY_SEMESTER_META_DIRECT_WRITES_DENIED",
         "UNMIGRATED_SETTINGS_WRITE_RETAINED_AND_W7_POINT_POLICY_WRITE_RETIRED",
       ],
     }),

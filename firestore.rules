@@ -1537,8 +1537,18 @@ service cloud.firestore {
         allow create, update, delete: if false;
       }
 
+      match /calendar_meta/{docId} {
+        allow read: if docId == 'current' && isAdmin();
+        allow create, update, delete: if false;
+      }
+
       match /notices/{docId} {
         allow read: if canUseWestory();
+        allow create, update, delete: if false;
+      }
+
+      match /notices_meta/{docId} {
+        allow read: if docId == 'current' && isAdmin();
         allow create, update, delete: if false;
       }
 
@@ -1592,6 +1602,11 @@ service cloud.firestore {
       match /grading_plans/{docId} {
         allow read: if canUseWestory();
         allow write: if false;
+      }
+
+      match /grading_plans_meta/{docId} {
+        allow read: if docId == 'current' && isAdmin();
+        allow create, update, delete: if false;
       }
 
       match /exam_config/{docId} {
