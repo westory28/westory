@@ -16873,6 +16873,16 @@ const authenticate = async (page, credential, origin, role) => {
     const restoredRoute = decodeURIComponent(location.hash.slice(1));
     return restoredRoute === expectedRoute;
   }, expectedAuthenticatedRoute);
+  // Login.forceRoute schedules an 80 ms hash correction after its immediate
+  // navigation. Let that same-document timer drain before the first capture
+  // route replaces the hash, then require the authenticated route to remain
+  // exact. Otherwise the stale correction can send the first screen back to
+  // the dashboard after capture navigation has already started.
+  await page.waitForTimeout(250);
+  await page.waitForFunction((expectedRoute) => {
+    const restoredRoute = decodeURIComponent(location.hash.slice(1));
+    return restoredRoute === expectedRoute;
+  }, expectedAuthenticatedRoute);
   return identity;
 };
 
