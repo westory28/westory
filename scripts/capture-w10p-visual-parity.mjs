@@ -4946,17 +4946,34 @@ const pausedRequestPostDataPresenceForCorrelation = (request = {}) => {
   if (request.hasPostData === false) return false;
   return null;
 };
+const expectedFirestoreWebChannelResourceTypeForObserver = (
+  observerSurface,
+) => {
+  switch (observerSurface) {
+    case "cdp-request-paused":
+      return "xhr";
+    case "playwright-request":
+      return "fetch";
+    default:
+      return null;
+  }
+};
 const classifyExactStagingFirestoreWebChannelHeaderCorrelationScope = ({
   requestUrl,
   method,
+  observerSurface,
   resourceType,
   headers = {},
   postDataPresent,
   redirected,
   inspection,
 }) => {
-  // The CDP domain is named Fetch, but Firestore WebChannel itself uses
-  // XMLHttpRequest. Its Image-based termination fallback must stay excluded.
+  // Chromium's Fetch-domain pause reports Firestore WebChannel as XHR while
+  // Playwright reports the same request as fetch. Bind each observer to its
+  // exact label so neither surface can broaden the scope. The Image-based
+  // termination fallback must stay excluded.
+  const expectedResourceType =
+    expectedFirestoreWebChannelResourceTypeForObserver(observerSurface);
   if (
     !inspection ||
     inspection.firebaseService !== "firestore" ||
@@ -4967,7 +4984,8 @@ const classifyExactStagingFirestoreWebChannelHeaderCorrelationScope = ({
     inspection.malformedUrlEncoding !== false ||
     inspection.firebaseTransportValid !== true ||
     inspection.serviceResourceBound !== true ||
-    String(resourceType).toLowerCase() !== "xhr" ||
+    expectedResourceType === null ||
+    String(resourceType).toLowerCase() !== expectedResourceType ||
     redirected !== false
   ) {
     return null;
@@ -5093,7 +5111,8 @@ const SAFE_FIRESTORE_WEBCHANNEL_LISTENER_DIAGNOSTIC_REASONS = [
   "malformed-marker-invalid",
   "transport-invalid",
   "resource-unbound",
-  "resource-type-not-xhr",
+  "observer-surface-invalid",
+  "resource-type-mismatch",
   "redirected",
   "method-not-webchannel",
   "post-data-state",
@@ -5150,8 +5169,13 @@ const diagnoseExactStagingFirestoreWebChannelHeaderCorrelationScope = (
   if (inspection.serviceResourceBound !== true) {
     return { requestClass: null, reason: "resource-unbound" };
   }
-  if (String(options.resourceType).toLowerCase() !== "xhr") {
-    return { requestClass: null, reason: "resource-type-not-xhr" };
+  const expectedResourceType =
+    expectedFirestoreWebChannelResourceTypeForObserver(options.observerSurface);
+  if (expectedResourceType === null) {
+    return { requestClass: null, reason: "observer-surface-invalid" };
+  }
+  if (String(options.resourceType).toLowerCase() !== expectedResourceType) {
+    return { requestClass: null, reason: "resource-type-mismatch" };
   }
   if (options.redirected !== false) {
     return { requestClass: null, reason: "redirected" };
@@ -6455,34 +6479,68 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     stagingApiKey,
     allowedNonFirebaseOrigins: [stableBrowserOrigin],
   });
+  const firestorePlaywrightInspection = inspectNetworkBoundary({
+    requestUrl: firestoreWebChannelUrl.toString(),
+    method: "POST",
+    resourceType: "fetch",
+    stagingApiKey,
+    allowedNonFirebaseOrigins: [stableBrowserOrigin],
+  });
   assert.equal(firestoreInspection.stagingMarker, true);
-  assert.equal(
-    classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
+  assert.equal(firestorePlaywrightInspection.stagingMarker, true);
+  assert.deepEqual(
+    [
+      "cdp-request-paused",
+      "playwright-request",
+      "unknown-observer",
+      undefined,
+    ].map(expectedFirestoreWebChannelResourceTypeForObserver),
+    ["xhr", "fetch", null, null],
+  );
+  const firestoreWebChannelObserverFixtures = [
+    {
+      observerSurface: "cdp-request-paused",
+      resourceType: "XHR",
+      inspection: firestoreInspection,
+    },
+    {
+      observerSurface: "playwright-request",
+      resourceType: "fetch",
+      inspection: firestorePlaywrightInspection,
+    },
+  ];
+  for (const observerFixture of firestoreWebChannelObserverFixtures) {
+    const initialRequest = {
       requestUrl: firestoreWebChannelUrl.toString(),
       method: "POST",
-      resourceType: "XHR",
       headers: firestoreHeaders,
       postDataPresent: true,
       redirected: false,
-      inspection: firestoreInspection,
-    }),
-    "initial-forward-post",
-  );
+      ...observerFixture,
+    };
+    assert.equal(
+      classifyExactStagingFirestoreWebChannelHeaderCorrelationScope(
+        initialRequest,
+      ),
+      "initial-forward-post",
+    );
+    assert.deepEqual(
+      diagnoseExactStagingFirestoreWebChannelHeaderCorrelationScope(
+        initialRequest,
+      ),
+      { requestClass: "initial-forward-post", reason: "classified" },
+    );
+  }
   const firestoreWebChannelListenerDiagnosticBase = {
     requestUrl: firestoreWebChannelUrl.toString(),
     method: "POST",
+    observerSurface: "cdp-request-paused",
     resourceType: "XHR",
     headers: firestoreHeaders,
     postDataPresent: true,
     redirected: false,
     inspection: firestoreInspection,
   };
-  assert.deepEqual(
-    diagnoseExactStagingFirestoreWebChannelHeaderCorrelationScope(
-      firestoreWebChannelListenerDiagnosticBase,
-    ),
-    { requestClass: "initial-forward-post", reason: "classified" },
-  );
   const firestoreWebChannelUnexpectedQueryUrl = new URL(firestoreWebChannelUrl);
   firestoreWebChannelUnexpectedQueryUrl.searchParams.set("unexpected", "1");
   for (const fixture of [
@@ -6534,8 +6592,40 @@ const verifyNetworkPolicyNegativeFixtures = () => {
       },
       expectedReason: "resource-unbound",
     },
-    { resourceType: "Fetch", expectedReason: "resource-type-not-xhr" },
-    { resourceType: "Image", expectedReason: "resource-type-not-xhr" },
+    {
+      observerSurface: undefined,
+      expectedReason: "observer-surface-invalid",
+    },
+    {
+      observerSurface: "unknown-observer",
+      expectedReason: "observer-surface-invalid",
+    },
+    {
+      observerSurface: "CDP-REQUEST-PAUSED",
+      expectedReason: "observer-surface-invalid",
+    },
+    {
+      observerSurface: "cdp-request-paused",
+      resourceType: "Fetch",
+      expectedReason: "resource-type-mismatch",
+    },
+    {
+      observerSurface: "playwright-request",
+      resourceType: "XHR",
+      inspection: firestorePlaywrightInspection,
+      expectedReason: "resource-type-mismatch",
+    },
+    {
+      observerSurface: "cdp-request-paused",
+      resourceType: "Image",
+      expectedReason: "resource-type-mismatch",
+    },
+    {
+      observerSurface: "playwright-request",
+      resourceType: "Image",
+      inspection: firestorePlaywrightInspection,
+      expectedReason: "resource-type-mismatch",
+    },
     { redirected: true, expectedReason: "redirected" },
     { method: "PUT", expectedReason: "method-not-webchannel" },
     { postDataPresent: false, expectedReason: "post-data-state" },
@@ -6579,6 +6669,7 @@ const verifyNetworkPolicyNegativeFixtures = () => {
       classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
         requestUrl: firestoreWebChannelUrl.toString(),
         method,
+        observerSurface: "cdp-request-paused",
         resourceType: "XHR",
         headers: firestoreHeaders,
         postDataPresent: pausedRequestPostDataPresenceForCorrelation({
@@ -6595,6 +6686,7 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
       requestUrl: firestoreWebChannelUrl.toString(),
       method: "POST",
+      observerSurface: "cdp-request-paused",
       resourceType: "XHR",
       headers: firestoreHeaders,
       postDataPresent: pausedRequestPostDataPresenceForCorrelation({
@@ -6609,6 +6701,7 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     exactStagingFirestoreWebChannelHeaderCorrelationScope({
       requestUrl: firestoreWebChannelUrl.toString(),
       method: "POST",
+      observerSurface: "cdp-request-paused",
       resourceType: "Fetch",
       headers: firestoreHeaders,
       postDataPresent: true,
@@ -6639,22 +6732,42 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     stagingApiKey,
     allowedNonFirebaseOrigins: [stableBrowserOrigin],
   });
-  assert.equal(
-    classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
-      requestUrl: firestoreForwardUrl.toString(),
-      method: "POST",
+  const firestoreForwardPlaywrightInspection = inspectNetworkBoundary({
+    requestUrl: firestoreForwardUrl.toString(),
+    method: "POST",
+    resourceType: "fetch",
+    stagingApiKey,
+    allowedNonFirebaseOrigins: [stableBrowserOrigin],
+  });
+  for (const observerFixture of [
+    {
+      observerSurface: "cdp-request-paused",
       resourceType: "XHR",
-      headers: firestoreHeaders,
-      postDataPresent: true,
-      redirected: false,
       inspection: firestoreForwardInspection,
-    }),
-    "session-forward-post",
-  );
+    },
+    {
+      observerSurface: "playwright-request",
+      resourceType: "fetch",
+      inspection: firestoreForwardPlaywrightInspection,
+    },
+  ]) {
+    assert.equal(
+      classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
+        requestUrl: firestoreForwardUrl.toString(),
+        method: "POST",
+        headers: firestoreHeaders,
+        postDataPresent: true,
+        redirected: false,
+        ...observerFixture,
+      }),
+      "session-forward-post",
+    );
+  }
   assert.equal(
     classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
       requestUrl: firestoreForwardUrl.toString(),
       method: "POST",
+      observerSurface: "cdp-request-paused",
       resourceType: "XHR",
       headers: firestoreHeaders,
       postDataPresent: null,
@@ -6669,6 +6782,7 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
       requestUrl: firestoreForwardWithoutGlobalSessionUrl.toString(),
       method: "POST",
+      observerSurface: "cdp-request-paused",
       resourceType: "XHR",
       headers: firestoreHeaders,
       postDataPresent: true,
@@ -6701,21 +6815,41 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     stagingApiKey,
     allowedNonFirebaseOrigins: [stableBrowserOrigin],
   });
-  assert.equal(
-    classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
-      requestUrl: firestoreBackchannelUrl.toString(),
-      method: "GET",
+  const firestoreBackchannelPlaywrightInspection = inspectNetworkBoundary({
+    requestUrl: firestoreBackchannelUrl.toString(),
+    method: "GET",
+    resourceType: "fetch",
+    stagingApiKey,
+    allowedNonFirebaseOrigins: [stableBrowserOrigin],
+  });
+  for (const observerFixture of [
+    {
+      observerSurface: "cdp-request-paused",
       resourceType: "XHR",
-      postDataPresent: false,
-      redirected: false,
       inspection: firestoreBackchannelInspection,
-    }),
-    "backchannel-get",
-  );
+    },
+    {
+      observerSurface: "playwright-request",
+      resourceType: "fetch",
+      inspection: firestoreBackchannelPlaywrightInspection,
+    },
+  ]) {
+    assert.equal(
+      classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
+        requestUrl: firestoreBackchannelUrl.toString(),
+        method: "GET",
+        postDataPresent: false,
+        redirected: false,
+        ...observerFixture,
+      }),
+      "backchannel-get",
+    );
+  }
   assert.equal(
     exactStagingFirestoreWebChannelHeaderCorrelationScope({
       requestUrl: firestoreBackchannelUrl.toString(),
       method: "GET",
+      observerSurface: "cdp-request-paused",
       resourceType: "XHR",
       postDataPresent: false,
       redirected: false,
@@ -6729,6 +6863,7 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     exactStagingFirestoreWebChannelHeaderCorrelationScope({
       requestUrl: firestoreTimedBackchannelUrl.toString(),
       method: "GET",
+      observerSurface: "cdp-request-paused",
       resourceType: "XHR",
       postDataPresent: false,
       redirected: false,
@@ -6744,12 +6879,36 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
       requestUrl: firestoreBackchannelWithoutGlobalSessionUrl.toString(),
       method: "GET",
+      observerSurface: "cdp-request-paused",
       resourceType: "XHR",
       postDataPresent: false,
       redirected: false,
       inspection: firestoreBackchannelInspection,
     }),
     "backchannel-get",
+  );
+  const firestoreTerminationUrl = new URL(firestoreBackchannelUrl);
+  firestoreTerminationUrl.searchParams.set("RID", "100001");
+  firestoreTerminationUrl.searchParams.delete("CI");
+  firestoreTerminationUrl.searchParams.set("TYPE", "terminate");
+  const firestoreTerminationPlaywrightInspection = inspectNetworkBoundary({
+    requestUrl: firestoreTerminationUrl.toString(),
+    method: "GET",
+    resourceType: "fetch",
+    stagingApiKey,
+    allowedNonFirebaseOrigins: [stableBrowserOrigin],
+  });
+  assert.deepEqual(
+    diagnoseExactStagingFirestoreWebChannelHeaderCorrelationScope({
+      requestUrl: firestoreTerminationUrl.toString(),
+      method: "GET",
+      observerSurface: "playwright-request",
+      resourceType: "fetch",
+      postDataPresent: false,
+      redirected: false,
+      inspection: firestoreTerminationPlaywrightInspection,
+    }),
+    { requestClass: null, reason: "url-topology" },
   );
   assert.equal(
     exactStagingFirestoreWebChannelEncodedApiKeyBodyScope({
@@ -6852,6 +7011,7 @@ const verifyNetworkPolicyNegativeFixtures = () => {
       exactStagingFirestoreWebChannelHeaderCorrelationScope({
         requestUrl: firestoreBackchannelUrl.toString(),
         method: "GET",
+        observerSurface: "cdp-request-paused",
         resourceType: "XHR",
         postDataPresent: false,
         redirected: false,
@@ -6893,6 +7053,7 @@ const verifyNetworkPolicyNegativeFixtures = () => {
       exactStagingFirestoreWebChannelHeaderCorrelationScope({
         requestUrl: firestoreForwardUrl.toString(),
         method: "POST",
+        observerSurface: "cdp-request-paused",
         resourceType: "XHR",
         headers: firestoreHeaders,
         postDataPresent: true,
@@ -7497,7 +7658,7 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     rejectedStagingApiKeyExfiltrationCaseCount: 1,
     acceptedFirestoreWebChannelEncodedApiKeyCaseCount: 2,
     verifiedPausedRequestPostDataPresenceCaseCount: 13,
-    verifiedWebChannelListenerDiagnosticCaseCount: 19,
+    verifiedWebChannelListenerDiagnosticCaseCount: 26,
     rejectedFirestoreWebChannelEncodedApiKeyCaseCount:
       rejectedFirestoreWebChannelApiKeyScopes.length,
     rejectedSensitiveMaterialExfiltrationCaseCount: sensitiveFixtures.length,
@@ -19793,6 +19954,7 @@ try {
         classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
           requestUrl: request.url(),
           method: request.method(),
+          observerSurface: "playwright-request",
           resourceType: request.resourceType(),
           headers: provisionalHeaders,
           postDataPresent:
@@ -19844,7 +20006,15 @@ try {
             );
             assert.equal(
               authoritativeHeaderAttestation.resourceType,
+              expectedFirestoreWebChannelResourceTypeForObserver(
+                "cdp-request-paused",
+              ),
+            );
+            assert.equal(
               request.resourceType().toLowerCase(),
+              expectedFirestoreWebChannelResourceTypeForObserver(
+                "playwright-request",
+              ),
             );
             assert.equal(
               authoritativeHeaderAttestation.phase,
@@ -21424,6 +21594,7 @@ try {
         classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
           requestUrl,
           method: requestMethod,
+          observerSurface: "cdp-request-paused",
           resourceType: event.resourceType,
           headers: event.request.headers,
           postDataPresent: postData.length > 0,
@@ -21619,6 +21790,7 @@ try {
           diagnoseExactStagingFirestoreWebChannelHeaderCorrelationScope({
             requestUrl: event.request.url,
             method: event.request.method,
+            observerSurface: "cdp-request-paused",
             resourceType: event.resourceType,
             headers: event.request.headers,
             postDataPresent: listenerPostDataPresent,

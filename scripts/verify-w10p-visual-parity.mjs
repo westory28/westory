@@ -1801,11 +1801,14 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "identity._interceptionId,",
     "networkRequestId: identity._requestId",
     "const exactStagingFirestoreWebChannelHeaderCorrelationScope = (options) =>",
+    "const expectedFirestoreWebChannelResourceTypeForObserver = (",
     "const classifyExactStagingFirestoreWebChannelHeaderCorrelationScope = ({",
-    'String(resourceType).toLowerCase() !== "xhr"',
+    "expectedResourceType === null ||",
+    "String(resourceType).toLowerCase() !== expectedResourceType",
     "const pausedRequestPostDataPresenceForCorrelation = (request = {}) =>",
     "const SAFE_FIRESTORE_WEBCHANNEL_LISTENER_DIAGNOSTIC_REASONS = [",
-    '"resource-type-not-xhr",',
+    '"observer-surface-invalid",',
+    '"resource-type-mismatch",',
     "const diagnoseExactStagingFirestoreWebChannelHeaderCorrelationScope = (",
     "const FIRESTORE_WEBCHANNEL_FORWARD_QUERY_NAMES = [",
     "const PLAYWRIGHT_ALL_HEADERS_ATTESTATION_TIMEOUT_MS = 30_000;",
@@ -1995,6 +1998,46 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
       `The all-target pre-transmission source contract is missing: ${requiredSourceFragment}`,
     );
   }
+  assert.match(
+    sourceText,
+    /const expectedFirestoreWebChannelResourceTypeForObserver\s*=\s*\(\s*observerSurface,?\s*\)\s*=>\s*\{\s*switch \(observerSurface\) \{\s*case "cdp-request-paused":\s*return "xhr";\s*case "playwright-request":\s*return "fetch";\s*default:\s*return null;\s*\}\s*\};/u,
+    "The Firestore WebChannel observer surfaces must retain their exact resource-type mapping.",
+  );
+  assert.match(
+    sourceText,
+    /const cdpAuthoritativeWebChannelRequestClass\s*=\s*classifyExactStagingFirestoreWebChannelHeaderCorrelationScope\(\{\s*requestUrl: request\.url\(\),\s*method: request\.method\(\),\s*observerSurface: "playwright-request",\s*resourceType: request\.resourceType\(\),/u,
+    "The Playwright request observer must use the Playwright-only WebChannel resource type.",
+  );
+  assert.match(
+    sourceText,
+    /const exactWebChannelHeaderCorrelationClass\s*=\s*classifyExactStagingFirestoreWebChannelHeaderCorrelationScope\(\{\s*requestUrl,\s*method: requestMethod,\s*observerSurface: "cdp-request-paused",\s*resourceType: event\.resourceType,/u,
+    "The CDP request handler must use the CDP-only WebChannel resource type.",
+  );
+  assert.match(
+    sourceText,
+    /const listenerDiagnostic\s*=\s*diagnoseExactStagingFirestoreWebChannelHeaderCorrelationScope\(\{\s*requestUrl: event\.request\.url,\s*method: event\.request\.method,\s*observerSurface: "cdp-request-paused",\s*resourceType: event\.resourceType,/u,
+    "The CDP request listener must use the CDP-only WebChannel resource type.",
+  );
+  assert.match(
+    sourceText,
+    /authoritativeHeaderAttestation\.resourceType,\s*expectedFirestoreWebChannelResourceTypeForObserver\(\s*"cdp-request-paused",?\s*\),/u,
+    "The authoritative CDP resource type must be asserted against its observer mapping.",
+  );
+  assert.match(
+    sourceText,
+    /request\.resourceType\(\)\.toLowerCase\(\),\s*expectedFirestoreWebChannelResourceTypeForObserver\(\s*"playwright-request",?\s*\),/u,
+    "The Playwright resource type must be asserted against its observer mapping.",
+  );
+  assert.doesNotMatch(
+    sourceText,
+    /authoritativeHeaderAttestation\.resourceType,\s*request\.resourceType\(\)\.toLowerCase\(\)/u,
+    "CDP and Playwright resource-type labels must not be compared directly.",
+  );
+  assert.doesNotMatch(
+    sourceText,
+    /resource-type-not-xhr/u,
+    "The retired single-observer WebChannel diagnostic must not remain.",
+  );
   assert.match(
     sourceText,
     /const POST_FINAL_ALREADY_RETIRED_INTERCEPTION_ERROR_MESSAGES\s*=\s*new Set\(\[\s*"Protocol error \(Fetch\.continueResponse\): Invalid InterceptionId\.",\s*"cdpSession\.send: Protocol error \(Fetch\.continueResponse\): Invalid InterceptionId\.",?\s*\]\);/u,
