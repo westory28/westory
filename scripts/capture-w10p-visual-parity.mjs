@@ -8509,6 +8509,20 @@ const SAFE_BROWSER_ERROR_MESSAGE_CLASSES = Object.freeze([
   "react-render-failure",
   "speculative-egress-guard",
 ]);
+const SAFE_BROWSER_ERROR_OPERATION_CLASSES = Object.freeze([
+  "application-session-sync",
+  "auth-interface-config-read",
+  "auth-listener",
+  "auth-maintenance-read",
+  "auth-menu-config-read",
+  "auth-system-config-read",
+  "auth-user-profile-read",
+  "semester-core-read",
+  "semester-readiness-read",
+  "settings-general-config-read",
+  "settings-school-config-read",
+  "unknown-operation",
+]);
 const SAFE_HTTP_ERROR_RESOURCE_TYPE_CLASSES = Object.freeze([
   "document",
   "eventsource",
@@ -8650,6 +8664,32 @@ const classifySafeBrowserErrorMessage = (value, errorCode = "") => {
   }
   return "other-runtime-error";
 };
+const classifySafeBrowserErrorOperation = (value) => {
+  const message = String(value || "");
+  const fixedOperationByPrefix = [
+    ["Failed to load interface config", "auth-interface-config-read"],
+    ["Failed to load system config", "auth-system-config-read"],
+    ["Failed to load menu config", "auth-menu-config-read"],
+    ["Failed to sync user data", "auth-user-profile-read"],
+    ["Failed to subscribe user data", "auth-user-profile-read"],
+    ["Failed to refresh application session", "application-session-sync"],
+    ["Failed to open application session", "application-session-sync"],
+    ["Failed to initialize auth listener", "auth-listener"],
+    ["Failed to resume after maintenance", "auth-maintenance-read"],
+    ["Invalid student maintenance configuration", "auth-maintenance-read"],
+    ["Failed to subscribe student maintenance", "auth-maintenance-read"],
+    ["Failed to load school config:", "settings-school-config-read"],
+    ["Failed to load config:", "settings-general-config-read"],
+    ["Failed to load semester core:", "semester-core-read"],
+    ["Failed to load canonical semester readiness:", "semester-readiness-read"],
+    ["Failed to load semester readiness:", "semester-readiness-read"],
+  ];
+  return (
+    fixedOperationByPrefix.find(([prefix]) =>
+      message.startsWith(prefix),
+    )?.[1] || "unknown-operation"
+  );
+};
 const createSafeBrowserErrorRecord = ({
   sourceClass,
   value,
@@ -8670,6 +8710,7 @@ const createSafeBrowserErrorRecord = ({
     sourceClass,
     errorNameClass: classifySafeBrowserErrorName(sourceClass, errorName),
     messageClass: classifySafeBrowserErrorMessage(sanitizedValue, errorCode),
+    operationClass: classifySafeBrowserErrorOperation(sanitizedValue),
     sha256: secretSha256(sanitizedValue),
   });
   assert.equal(
@@ -8680,6 +8721,10 @@ const createSafeBrowserErrorRecord = ({
     SAFE_BROWSER_ERROR_MESSAGE_CLASSES.includes(record.messageClass),
     true,
   );
+  assert.equal(
+    SAFE_BROWSER_ERROR_OPERATION_CLASSES.includes(record.operationClass),
+    true,
+  );
   return record;
 };
 const canonicalSafeBrowserErrorHistogram = (records) => {
@@ -8688,6 +8733,7 @@ const canonicalSafeBrowserErrorHistogram = (records) => {
     assert.deepEqual(Object.keys(record).sort(), [
       "errorNameClass",
       "messageClass",
+      "operationClass",
       "sha256",
       "sourceClass",
     ]);
@@ -8703,13 +8749,18 @@ const canonicalSafeBrowserErrorHistogram = (records) => {
       SAFE_BROWSER_ERROR_MESSAGE_CLASSES.includes(record.messageClass),
       true,
     );
+    assert.equal(
+      SAFE_BROWSER_ERROR_OPERATION_CLASSES.includes(record.operationClass),
+      true,
+    );
     assert.match(record.sha256, /^[0-9a-f]{64}$/u);
-    const key = `${record.sourceClass}\u0000${record.errorNameClass}\u0000${record.messageClass}`;
+    const key = `${record.sourceClass}\u0000${record.errorNameClass}\u0000${record.messageClass}\u0000${record.operationClass}`;
     const previous = counts.get(key);
     counts.set(key, {
       sourceClass: record.sourceClass,
       errorNameClass: record.errorNameClass,
       messageClass: record.messageClass,
+      operationClass: record.operationClass,
       count: (previous?.count || 0) + 1,
     });
   }
@@ -8717,7 +8768,8 @@ const canonicalSafeBrowserErrorHistogram = (records) => {
     (left, right) =>
       left.sourceClass.localeCompare(right.sourceClass) ||
       left.errorNameClass.localeCompare(right.errorNameClass) ||
-      left.messageClass.localeCompare(right.messageClass),
+      left.messageClass.localeCompare(right.messageClass) ||
+      left.operationClass.localeCompare(right.operationClass),
   );
 };
 const SAFE_BROWSER_ERROR_HASH_SAMPLE_LIMIT = 16;
@@ -8736,12 +8788,13 @@ const resetSafeBrowserErrorAccumulator = (accumulator) => {
 const appendSafeBrowserErrorRecord = (accumulator, record) => {
   canonicalSafeBrowserErrorHistogram([record]);
   accumulator.totalCount += 1;
-  const key = `${record.sourceClass}\u0000${record.errorNameClass}\u0000${record.messageClass}`;
+  const key = `${record.sourceClass}\u0000${record.errorNameClass}\u0000${record.messageClass}\u0000${record.operationClass}`;
   const previous = accumulator.classCounts.get(key);
   accumulator.classCounts.set(key, {
     sourceClass: record.sourceClass,
     errorNameClass: record.errorNameClass,
     messageClass: record.messageClass,
+    operationClass: record.operationClass,
     count: (previous?.count || 0) + 1,
   });
   if (accumulator.hashSample.has(record.sha256)) return;
@@ -8763,7 +8816,8 @@ const snapshotSafeBrowserErrorAccumulator = (accumulator) => ({
     (left, right) =>
       left.sourceClass.localeCompare(right.sourceClass) ||
       left.errorNameClass.localeCompare(right.errorNameClass) ||
-      left.messageClass.localeCompare(right.messageClass),
+      left.messageClass.localeCompare(right.messageClass) ||
+      left.operationClass.localeCompare(right.operationClass),
   ),
   pageErrorSha256Sample: [...accumulator.hashSample].sort(),
   pageErrorSha256SampleLimit: SAFE_BROWSER_ERROR_HASH_SAMPLE_LIMIT,
@@ -8908,6 +8962,76 @@ const verifySafeBrowserErrorDiagnosticFixtures = () => {
   assert.equal(records[4].messageClass, "speculative-egress-guard");
   assert.equal(records[5].errorNameClass, "console-error");
   assert.equal(records[5].messageClass, "speculative-egress-guard");
+  const operationFixtures = [
+    ["Failed to load interface config", "auth-interface-config-read"],
+    ["Failed to load system config", "auth-system-config-read"],
+    ["Failed to load menu config", "auth-menu-config-read"],
+    ["Failed to sync user data", "auth-user-profile-read"],
+    ["Failed to subscribe user data", "auth-user-profile-read"],
+    ["Failed to refresh application session", "application-session-sync"],
+    ["Failed to open application session", "application-session-sync"],
+    ["Failed to initialize auth listener", "auth-listener"],
+    ["Failed to resume after maintenance", "auth-maintenance-read"],
+    ["Invalid student maintenance configuration", "auth-maintenance-read"],
+    ["Failed to subscribe student maintenance", "auth-maintenance-read"],
+    ["Failed to load school config:", "settings-school-config-read"],
+    ["Failed to load config:", "settings-general-config-read"],
+    ["Failed to load semester core:", "semester-core-read"],
+    ["Failed to load canonical semester readiness:", "semester-readiness-read"],
+    ["Failed to load semester readiness:", "semester-readiness-read"],
+    ["opaque fixed-private-runtime-message", "unknown-operation"],
+  ];
+  for (const [prefix, expectedOperationClass] of operationFixtures) {
+    const operationRecord = createSafeBrowserErrorRecord({
+      sourceClass: "console-error",
+      value: `${prefix} ${permissionMessage}`,
+      debugToken,
+      debugSentinel,
+      deploymentBypassSecret,
+    });
+    assert.equal(operationRecord.operationClass, expectedOperationClass);
+  }
+  const operationHistogramRecords = [
+    "Failed to load config:",
+    "Failed to load semester readiness:",
+  ].map((prefix) =>
+    createSafeBrowserErrorRecord({
+      sourceClass: "console-error",
+      value: `${prefix} FirebaseError: Missing or insufficient permissions.`,
+      debugToken,
+      debugSentinel,
+      deploymentBypassSecret,
+    }),
+  );
+  const operationHistogram = canonicalSafeBrowserErrorHistogram(
+    operationHistogramRecords,
+  );
+  assert.deepEqual(
+    operationHistogram.map((entry) => entry.operationClass),
+    ["semester-readiness-read", "settings-general-config-read"],
+  );
+  const operationAccumulator = createSafeBrowserErrorAccumulator();
+  for (const operationRecord of operationHistogramRecords) {
+    appendSafeBrowserErrorRecord(operationAccumulator, operationRecord);
+  }
+  const operationAccumulatorSnapshot =
+    snapshotSafeBrowserErrorAccumulator(operationAccumulator);
+  assert.equal(operationAccumulatorSnapshot.pageErrorCount, 2);
+  assert.deepEqual(
+    operationAccumulatorSnapshot.pageErrorClassHistogram,
+    operationHistogram,
+  );
+  assert.deepEqual(
+    records.map((record) => record.operationClass),
+    [
+      "unknown-operation",
+      "unknown-operation",
+      "unknown-operation",
+      "unknown-operation",
+      "unknown-operation",
+      "unknown-operation",
+    ],
+  );
   assert.equal(
     records[0].sha256,
     secretSha256(
@@ -9020,6 +9144,9 @@ const verifySafeBrowserErrorDiagnosticFixtures = () => {
   }
   return {
     safeBrowserErrorDiagnosticFixtureCount: records.length,
+    safeBrowserErrorOperationFixtureCount: operationFixtures.length,
+    safeBrowserErrorOperationHistogramFixtureCount:
+      operationHistogramRecords.length,
     safeBrowserErrorDiagnosticHistogramEntryCount: histogram.length,
     safeRouteResponseDiagnosticFixtureCount: 5,
     safeRequestFinishedDiagnosticFixtureCount: 3,
