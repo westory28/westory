@@ -349,6 +349,8 @@ const FIXTURE_AUDIT_FRESHNESS_KEYS = [
   "maxAgeSeconds",
   "fixedFixtureTime",
 ].sort();
+const FIXTURE_AUDIT_MAX_AGE_SECONDS = 2 * 60 * 60;
+const FIXTURE_AUDIT_CAPTURE_START_MAX_DELAY_SECONDS = 5 * 60;
 const assertFixtureAuditFreshnessBinding = ({
   freshness,
   captureBindingFreshness,
@@ -372,14 +374,57 @@ const assertFixtureAuditFreshnessBinding = ({
   assert.equal(Number.isNaN(expiresAt), false);
   assert.equal(new Date(issuedAt).toISOString(), freshness.issuedAt);
   assert.equal(new Date(expiresAt).toISOString(), freshness.expiresAt);
-  assert.equal(freshness.maxAgeSeconds, 3600);
+  assert.equal(freshness.maxAgeSeconds, FIXTURE_AUDIT_MAX_AGE_SECONDS);
   assert.equal(freshness.fixedFixtureTime, expectedFixedTime);
   assert.equal(
     expiresAt - issuedAt,
-    3600 * 1000,
-    "The fixture audit freshness window must be exactly one hour.",
+    FIXTURE_AUDIT_MAX_AGE_SECONDS * 1000,
+    "The fixture audit freshness window must be exactly two hours.",
   );
   return { issuedAt, expiresAt };
+};
+const assertFixtureAuditCaptureWindow = ({
+  issuedAt,
+  expiresAt,
+  startedAt,
+  completedAt = null,
+}) => {
+  for (const [label, value] of [
+    ["issuedAt", issuedAt],
+    ["expiresAt", expiresAt],
+    ["startedAt", startedAt],
+  ]) {
+    assert.equal(Number.isFinite(value), true, `${label} must be finite.`);
+  }
+  const startDelayMilliseconds = startedAt - issuedAt;
+  assert.ok(
+    startDelayMilliseconds >= 0,
+    "The browser capture started before the fixture audit was issued.",
+  );
+  assert.ok(
+    startDelayMilliseconds <=
+      FIXTURE_AUDIT_CAPTURE_START_MAX_DELAY_SECONDS * 1000,
+    "The browser capture did not start within five minutes of the fixture audit.",
+  );
+  assert.ok(
+    startedAt < expiresAt,
+    "The fixture audit expired before browser capture began.",
+  );
+  if (completedAt !== null) {
+    assert.equal(
+      Number.isFinite(completedAt),
+      true,
+      "completedAt must be finite.",
+    );
+    assert.ok(
+      completedAt >= startedAt,
+      "The browser capture completed before it started.",
+    );
+    assert.ok(
+      completedAt <= expiresAt,
+      "The fixture audit expired before browser capture completed.",
+    );
+  }
 };
 const PRE_TRANSMISSION_NETWORK_BOUNDARY_ATTESTATION = {
   schemaVersion: 8,
@@ -2384,8 +2429,8 @@ const verifyPreTransmissionBoundaryNegativeFixtures = () => {
 const verifyFixtureAuditFreshnessNegativeFixtures = () => {
   const freshness = {
     issuedAt: "2026-08-24T00:00:00.000Z",
-    expiresAt: "2026-08-24T01:00:00.000Z",
-    maxAgeSeconds: 3600,
+    expiresAt: "2026-08-24T02:00:00.000Z",
+    maxAgeSeconds: 7200,
     fixedFixtureTime: contract.fixedTime,
   };
   assert.doesNotThrow(() =>
@@ -2414,16 +2459,26 @@ const verifyFixtureAuditFreshnessNegativeFixtures = () => {
     {
       freshness: {
         ...freshness,
-        expiresAt: "2026-08-24T01:00:00.001Z",
+        expiresAt: "2026-08-24T02:00:00.001Z",
       },
       captureBindingFreshness: {
         ...freshness,
-        expiresAt: "2026-08-24T01:00:00.001Z",
+        expiresAt: "2026-08-24T02:00:00.001Z",
       },
     },
     {
-      freshness: { ...freshness, maxAgeSeconds: 3599 },
-      captureBindingFreshness: { ...freshness, maxAgeSeconds: 3599 },
+      freshness: {
+        ...freshness,
+        expiresAt: "2026-08-24T01:59:59.999Z",
+      },
+      captureBindingFreshness: {
+        ...freshness,
+        expiresAt: "2026-08-24T01:59:59.999Z",
+      },
+    },
+    {
+      freshness: { ...freshness, maxAgeSeconds: 7199 },
+      captureBindingFreshness: { ...freshness, maxAgeSeconds: 7199 },
     },
     {
       freshness: { ...freshness, fixedFixtureTime: "2026-08-17T06:00:00.001Z" },
@@ -2441,9 +2496,51 @@ const verifyFixtureAuditFreshnessNegativeFixtures = () => {
       }),
     );
   }
+  const issuedAt = Date.parse(freshness.issuedAt);
+  const expiresAt = Date.parse(freshness.expiresAt);
+  const acceptedCaptureWindows = [
+    { issuedAt, expiresAt, startedAt: issuedAt, completedAt: expiresAt },
+    {
+      issuedAt,
+      expiresAt,
+      startedAt:
+        issuedAt + FIXTURE_AUDIT_CAPTURE_START_MAX_DELAY_SECONDS * 1000,
+      completedAt: expiresAt,
+    },
+  ];
+  for (const captureWindow of acceptedCaptureWindows) {
+    assert.doesNotThrow(() => assertFixtureAuditCaptureWindow(captureWindow));
+  }
+  const rejectedCaptureWindows = [
+    { issuedAt, expiresAt, startedAt: issuedAt - 1 },
+    {
+      issuedAt,
+      expiresAt,
+      startedAt:
+        issuedAt + FIXTURE_AUDIT_CAPTURE_START_MAX_DELAY_SECONDS * 1000 + 1,
+    },
+    { issuedAt, expiresAt, startedAt: expiresAt },
+    {
+      issuedAt,
+      expiresAt,
+      startedAt: issuedAt,
+      completedAt: expiresAt + 1,
+    },
+    {
+      issuedAt,
+      expiresAt,
+      startedAt: issuedAt + 1,
+      completedAt: issuedAt,
+    },
+  ];
+  for (const captureWindow of rejectedCaptureWindows) {
+    assert.throws(() => assertFixtureAuditCaptureWindow(captureWindow));
+  }
   return {
     acceptedFreshnessBindingCaseCount: 1,
     rejectedFreshnessMutationCaseCount: mutations.length,
+    acceptedFreshnessCaptureWindowCaseCount: acceptedCaptureWindows.length,
+    rejectedFreshnessCaptureWindowCaseCount: rejectedCaptureWindows.length,
   };
 };
 const appCheckSecretNegativeSelfTest = verifyAppCheckSecretNegativeFixtures();
@@ -5593,8 +5690,12 @@ const { issuedAt: fixtureIssuedAt, expiresAt: fixtureExpiresAt } =
   });
 assert.equal(manifest.fixtureAudit.issuedAt, fixtureAudit.freshness.issuedAt);
 assert.equal(manifest.fixtureAudit.expiresAt, fixtureAudit.freshness.expiresAt);
-assert.ok(startedAt >= fixtureIssuedAt);
-assert.ok(completedAt <= fixtureExpiresAt);
+assertFixtureAuditCaptureWindow({
+  issuedAt: fixtureIssuedAt,
+  expiresAt: fixtureExpiresAt,
+  startedAt,
+  completedAt,
+});
 
 assert.deepEqual(
   manifest.environment?.viewports,
