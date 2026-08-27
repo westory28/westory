@@ -6744,12 +6744,13 @@ assert.deepEqual(
   "Every evidence PNG must be represented exactly once.",
 );
 
+const authenticationRoleForCapture = (capture) =>
+  contract.captureAuthenticationRoles[capture.screenId] ??
+  (capture.role === "support" ? null : capture.role);
 const expectedAuditCaptures = new Map();
 const expectedAuthenticationLandingGuardAuditIds = new Set();
 for (const capture of captures.values()) {
-  const authenticationRole =
-    contract.captureAuthenticationRoles[capture.screenId] ??
-    (capture.role === "support" ? null : capture.role);
+  const authenticationRole = authenticationRoleForCapture(capture);
   const auditRole =
     capture.role === "support"
       ? authenticationRole
@@ -6960,6 +6961,14 @@ let auditedStableOriginRewriteBodyHashMismatches = 0;
 let auditedStableOriginRewriteRedirectRequests = 0;
 let auditedStableOriginRewriteRedirectResponses = 0;
 let auditedStableOriginRewriteResponseErrors = 0;
+const auditedApplicationSessionKeepaliveRequestCounts = {
+  baseline: 0,
+  candidate: 0,
+};
+const auditedApplicationSessionKeepaliveResponseCounts = {
+  baseline: 0,
+  candidate: 0,
+};
 const auditedStableOriginRewriteGroups = new Map();
 const auditedBrowserWideBoundaryGroupAttestations = [];
 for (const audit of manifest.browserAudits) {
@@ -8882,9 +8891,12 @@ for (const audit of manifest.browserAudits) {
       assert.equal(typeof event[field], "boolean");
     }
     assert.ok(
-      [null, "native-sdk", "baseline-cdp-fetch-bridge"].includes(
-        event.appCheckHeaderSource,
-      ),
+      [
+        null,
+        "native-sdk",
+        "capture-owned-fetch",
+        "baseline-cdp-fetch-bridge",
+      ].includes(event.appCheckHeaderSource),
     );
     assert.equal(
       event.appCheckHeaderPresent,
@@ -9018,6 +9030,73 @@ for (const audit of manifest.browserAudits) {
     }
     assert.deepEqual(response.observedProjectIds, request.observedProjectIds);
   }
+  const expectedAuditApplicationSessionKeepaliveCount = audit.captureIds.filter(
+    (captureId) =>
+      Boolean(authenticationRoleForCapture(captures.get(captureId))),
+  ).length;
+  const expectedFunctionsHostname = `asia-northeast3-${contract.firebaseProjectId}.cloudfunctions.net`;
+  const applicationSessionKeepaliveRequests = requestEvents.filter(
+    (request) =>
+      request.phase === "session-keepalive" &&
+      request.method === "POST" &&
+      request.firebaseService === "functions",
+  );
+  const applicationSessionKeepaliveResponses = responseEvents.filter(
+    (response) =>
+      response.phase === "session-keepalive" &&
+      response.method === "POST" &&
+      response.firebaseService === "functions",
+  );
+  for (const event of [
+    ...applicationSessionKeepaliveRequests,
+    ...applicationSessionKeepaliveResponses,
+  ]) {
+    assert.equal(event.captureId, null);
+    assert.equal(event.hostname, expectedFunctionsHostname);
+    assert.equal(event.canonicalHostname, expectedFunctionsHostname);
+    assert.equal(event.firebase, true);
+    assert.equal(event.staging, true);
+    assert.equal(event.production, false);
+    assert.equal(event.unboundFirebase, false);
+    assert.equal(event.firebaseTransportValid, true);
+    assert.equal(event.serviceResourceBound, true);
+    assert.equal(event.appCheckHeaderPresent, true);
+    assert.equal(event.appCheckHeaderJwtShapeValid, true);
+    assert.equal(event.appCheckHeaderSource, "capture-owned-fetch");
+    assert.equal(
+      event.appCheckBridgeDecisionObserved,
+      audit.stage === "baseline",
+    );
+    assert.equal(event.appCheckBridgeScopeEligible, audit.stage === "baseline");
+    assert.equal(event.appCheckBridgeHeaderStripped, false);
+    assert.equal(event.appCheckBridgeRedirectedRequest, false);
+  }
+  for (const response of applicationSessionKeepaliveResponses) {
+    assert.ok(response.status >= 200 && response.status < 300);
+  }
+  assert.equal(
+    applicationSessionKeepaliveRequests.length,
+    expectedAuditApplicationSessionKeepaliveCount,
+    `${audit.id} has an invalid application-session keepalive request count.`,
+  );
+  assert.equal(
+    applicationSessionKeepaliveResponses.length,
+    expectedAuditApplicationSessionKeepaliveCount,
+    `${audit.id} has an invalid application-session keepalive response count.`,
+  );
+  assert.deepEqual(
+    applicationSessionKeepaliveResponses
+      .map((response) => response.correlationId)
+      .sort(),
+    applicationSessionKeepaliveRequests
+      .map((request) => request.correlationId)
+      .sort(),
+    `${audit.id} has an unpaired application-session keepalive exchange.`,
+  );
+  auditedApplicationSessionKeepaliveRequestCounts[audit.stage] +=
+    applicationSessionKeepaliveRequests.length;
+  auditedApplicationSessionKeepaliveResponseCounts[audit.stage] +=
+    applicationSessionKeepaliveResponses.length;
   for (const event of captureEvents) {
     const capture = captures.get(event.id);
     if (!capture.fixtureMarker) continue;
@@ -9203,7 +9282,9 @@ for (const audit of manifest.browserAudits) {
     assert.equal(
       bridgeEvent.nativeHeaderRequestCount,
       appCheckProtectedDataRequests.filter(
-        (request) => request.appCheckHeaderSource === "native-sdk",
+        (request) =>
+          request.appCheckHeaderSource === "native-sdk" ||
+          request.appCheckHeaderSource === "capture-owned-fetch",
       ).length,
     );
   } else {
@@ -9360,7 +9441,8 @@ for (const audit of manifest.browserAudits) {
       appCheckProtectedDataRequests.filter(
         (request) =>
           request.appCheckHeaderPresent &&
-          request.appCheckHeaderSource === "native-sdk",
+          (request.appCheckHeaderSource === "native-sdk" ||
+            request.appCheckHeaderSource === "capture-owned-fetch"),
       ).length;
     auditedCandidateNativeHeaderMissingRequests +=
       appCheckProtectedDataRequests.filter(
@@ -10022,6 +10104,12 @@ assertExactObjectKeys(appCheckBinding, [
   "allExchangesAdminVerified",
   "allExchangesHttp200",
   "appCheckBound",
+  "applicationSessionKeepaliveExpectedCount",
+  "applicationSessionKeepaliveAttemptCount",
+  "applicationSessionKeepaliveSuccessCount",
+  "baselineApplicationSessionKeepaliveSuccessCount",
+  "candidateApplicationSessionKeepaliveSuccessCount",
+  "applicationSessionProofRetentionResidualCount",
   "appCheckCdpHandlerErrorCount",
   "appCheckCdpMonitorPausedRequestCount",
   "appCheckHeaderNetworkObservationCount",
@@ -10323,6 +10411,62 @@ assert.equal(
 );
 assert.equal(appCheckBinding.status, "VERIFIED_EXCHANGED");
 assert.equal(appCheckBinding.appCheckBound, true);
+const expectedApplicationSessionKeepaliveCounts = {
+  baseline: manifest.captures.filter(
+    (capture) =>
+      capture.stage === "baseline" &&
+      Boolean(authenticationRoleForCapture(capture)),
+  ).length,
+  candidate: manifest.captures.filter(
+    (capture) =>
+      capture.stage === "candidate" &&
+      Boolean(authenticationRoleForCapture(capture)),
+  ).length,
+};
+const expectedApplicationSessionKeepaliveCount =
+  expectedApplicationSessionKeepaliveCounts.baseline +
+  expectedApplicationSessionKeepaliveCounts.candidate;
+for (const field of [
+  "applicationSessionKeepaliveExpectedCount",
+  "applicationSessionKeepaliveAttemptCount",
+  "applicationSessionKeepaliveSuccessCount",
+  "baselineApplicationSessionKeepaliveSuccessCount",
+  "candidateApplicationSessionKeepaliveSuccessCount",
+  "applicationSessionProofRetentionResidualCount",
+]) {
+  assert.ok(Number.isInteger(appCheckBinding[field]));
+  assert.ok(appCheckBinding[field] >= 0);
+}
+assert.ok(expectedApplicationSessionKeepaliveCount > 0);
+assert.equal(
+  appCheckBinding.applicationSessionKeepaliveExpectedCount,
+  expectedApplicationSessionKeepaliveCount,
+);
+assert.equal(
+  appCheckBinding.applicationSessionKeepaliveAttemptCount,
+  expectedApplicationSessionKeepaliveCount,
+);
+assert.equal(
+  appCheckBinding.applicationSessionKeepaliveSuccessCount,
+  expectedApplicationSessionKeepaliveCount,
+);
+assert.equal(
+  appCheckBinding.baselineApplicationSessionKeepaliveSuccessCount,
+  expectedApplicationSessionKeepaliveCounts.baseline,
+);
+assert.equal(
+  appCheckBinding.candidateApplicationSessionKeepaliveSuccessCount,
+  expectedApplicationSessionKeepaliveCounts.candidate,
+);
+assert.deepEqual(
+  auditedApplicationSessionKeepaliveRequestCounts,
+  expectedApplicationSessionKeepaliveCounts,
+);
+assert.deepEqual(
+  auditedApplicationSessionKeepaliveResponseCounts,
+  expectedApplicationSessionKeepaliveCounts,
+);
+assert.equal(appCheckBinding.applicationSessionProofRetentionResidualCount, 0);
 assert.equal(
   appCheckBinding.debugTokenSha256,
   fixtureAudit.isolation.preBackupAccessProbe.appCheckDebugTokenHash,

@@ -28,6 +28,7 @@ import { chromium } from "playwright-core";
 
 const STAGING_PROJECT_NUMBER = "894916304910";
 const STAGING_APP_ID = "1:894916304910:web:bd8c8a9e3ed8bd1620dc5f";
+const STAGING_FUNCTIONS_REGION = "asia-northeast3";
 const APP_CHECK_DEBUG_SENTINEL = "w10p-visual-app-check-debug-sentinel-v1";
 const BROWSER_SECRET_ENVIRONMENT_VARIABLE_NAMES = [
   "W10P_VISUAL_APPCHECK_DEBUG_TOKEN",
@@ -16338,6 +16339,14 @@ const createCaptureAppCheckTokenManager = () => {
       }
       return token;
     },
+    get expiresAtMillis() {
+      assert.ok(
+        token,
+        "An App Check token must be issued before its expiry is read.",
+      );
+      assert.ok(Number.isSafeInteger(expiresAt) && expiresAt > 0);
+      return expiresAt * 1_000;
+    },
     matchesIssuedToken(candidate) {
       return (
         APP_CHECK_JWT_SHAPE_PATTERN.test(String(candidate || "")) &&
@@ -19861,7 +19870,7 @@ const appCheckDebugInitScript = ({ allowedOrigin, debugToken }) => {
 const authenticate = async (page, credential, origin, role) => {
   await page.goto(`${origin}/#/`, { waitUntil: "domcontentloaded" });
   const identity = await page.evaluate(
-    async ({ email, password, config }) => {
+    async ({ email, password, config, functionsRegion }) => {
       const appModule =
         await import("https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js");
       const authModule =
@@ -19903,7 +19912,7 @@ const authenticate = async (page, credential, origin, role) => {
       let applicationSessionResponse;
       try {
         applicationSessionResponse = await fetch(
-          `https://asia-northeast3-${config.projectId}.cloudfunctions.net/openApplicationSession`,
+          `https://${functionsRegion}-${config.projectId}.cloudfunctions.net/openApplicationSession`,
           {
             method: "POST",
             headers: {
@@ -19963,9 +19972,25 @@ const authenticate = async (page, credential, origin, role) => {
         appCheckBound: true,
         tokenRole:
           typeof token.claims.role === "string" ? token.claims.role : null,
+        applicationSessionAuthorityMode: String(
+          applicationSession.authorityMode || "",
+        ),
+        applicationSessionProof: {
+          authTime: tokenAuthTime,
+          authorityGeneration: String(
+            applicationSession.authorityGeneration || "",
+          ),
+          protocolVersion: Number(applicationSession.protocolVersion),
+          revision: String(applicationSession.revision || ""),
+          uid: credentialResult.user.uid,
+        },
       };
     },
-    { ...credential, config: firebaseConfig },
+    {
+      ...credential,
+      config: firebaseConfig,
+      functionsRegion: STAGING_FUNCTIONS_REGION,
+    },
   );
   await page.reload({ waitUntil: "domcontentloaded" });
   const expectedAuthenticatedRoute =
@@ -19985,6 +20010,240 @@ const authenticate = async (page, credential, origin, role) => {
     return restoredRoute === expectedRoute;
   }, expectedAuthenticatedRoute);
   return identity;
+};
+
+const CAPTURE_APPLICATION_SESSION_MINIMUM_REMAINING_LEASE_MS = 10 * 60 * 1000;
+
+const refreshCaptureApplicationSession = async ({
+  page,
+  proof,
+  appCheckToken,
+  appCheckTokenExpiresAtMs,
+  nodeNowMs,
+}) => {
+  assert.ok(proof && typeof proof === "object");
+  assert.ok(Number.isSafeInteger(proof.authTime) && proof.authTime > 0);
+  assert.equal(proof.authorityGeneration, "w1r2-2026-08-09");
+  assert.ok(Number.isInteger(proof.protocolVersion));
+  assert.ok(proof.protocolVersion >= 2);
+  assert.match(proof.revision, /^[a-f0-9]{64}$/u);
+  assert.ok(typeof proof.uid === "string" && proof.uid.length > 0);
+  assert.equal(APP_CHECK_JWT_SHAPE_PATTERN.test(appCheckToken), true);
+  assert.ok(
+    Number.isSafeInteger(appCheckTokenExpiresAtMs) &&
+      appCheckTokenExpiresAtMs - nodeNowMs >= 5 * 60 * 1000,
+  );
+  assert.ok(Number.isSafeInteger(nodeNowMs) && nodeNowMs > 0);
+  assert.equal(firebaseConfig.projectId, contract.firebaseProjectId);
+  assert.equal(firebaseConfig.appId, STAGING_APP_ID);
+
+  const functionsEndpoint = `https://${STAGING_FUNCTIONS_REGION}-${contract.firebaseProjectId}.cloudfunctions.net/touchApplicationSession`;
+  assert.equal(
+    new URL(functionsEndpoint).hostname,
+    `${STAGING_FUNCTIONS_REGION}-${contract.firebaseProjectId}.cloudfunctions.net`,
+  );
+
+  let ephemeralAppCheckToken = appCheckToken;
+  try {
+    const attestation = await withExplicitTimeout(
+      page.evaluate(
+        async ({
+          config,
+          sessionProof,
+          token,
+          tokenExpiresAtMs,
+          expectedProjectId,
+          expectedAppId,
+          expectedFunctionsRegion,
+          expectedFunctionsEndpoint,
+          observedNowMs,
+          minimumRemainingLeaseMs,
+        }) => {
+          let app = null;
+          let appModule = null;
+          let ephemeralIdToken = "";
+          let ephemeralToken = token;
+          const ephemeralProof = { ...sessionProof };
+          try {
+            if (
+              config.projectId !== expectedProjectId ||
+              config.appId !== expectedAppId ||
+              expectedFunctionsEndpoint !==
+                `https://${expectedFunctionsRegion}-${expectedProjectId}.cloudfunctions.net/touchApplicationSession` ||
+              tokenExpiresAtMs - observedNowMs < 5 * 60 * 1000
+            ) {
+              throw new Error(
+                "VISUAL_APPLICATION_SESSION_KEEPALIVE_BACKEND_MISMATCH",
+              );
+            }
+            [appModule] = await Promise.all([
+              import("https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js"),
+            ]);
+            const authModule =
+              await import("https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js");
+            const existingDefaultApp = appModule
+              .getApps()
+              .find((candidate) => candidate.name === "[DEFAULT]");
+            if (existingDefaultApp) {
+              throw new Error(
+                "VISUAL_APPLICATION_SESSION_KEEPALIVE_APP_RESIDUAL",
+              );
+            }
+            app = appModule.initializeApp(config);
+            const auth = authModule.getAuth(app);
+            let authStateReadyTimeoutId = null;
+            try {
+              await Promise.race([
+                auth.authStateReady(),
+                new Promise((_, reject) => {
+                  authStateReadyTimeoutId = setTimeout(
+                    () =>
+                      reject(
+                        new Error(
+                          "VISUAL_APPLICATION_SESSION_KEEPALIVE_AUTH_TIMEOUT",
+                        ),
+                      ),
+                    10_000,
+                  );
+                }),
+              ]);
+            } finally {
+              if (authStateReadyTimeoutId !== null) {
+                clearTimeout(authStateReadyTimeoutId);
+              }
+            }
+            const user = auth.currentUser;
+            if (!user) {
+              throw new Error(
+                "VISUAL_APPLICATION_SESSION_KEEPALIVE_AUTH_MISSING",
+              );
+            }
+            if (user.uid !== ephemeralProof.uid) {
+              throw new Error(
+                "VISUAL_APPLICATION_SESSION_KEEPALIVE_UID_MISMATCH",
+              );
+            }
+            const tokenResult = await authModule.getIdTokenResult(user);
+            ephemeralIdToken = String(tokenResult.token || "");
+            if (!ephemeralIdToken) {
+              throw new Error(
+                "VISUAL_APPLICATION_SESSION_KEEPALIVE_ID_TOKEN_MISSING",
+              );
+            }
+            const tokenAuthTime = Number(tokenResult.claims.auth_time || 0);
+            if (tokenAuthTime !== Number(ephemeralProof.authTime)) {
+              throw new Error(
+                "VISUAL_APPLICATION_SESSION_KEEPALIVE_AUTH_TIME_MISMATCH",
+              );
+            }
+            const keepaliveAbortController = new AbortController();
+            const keepaliveTimeoutId = setTimeout(
+              () => keepaliveAbortController.abort(),
+              20_000,
+            );
+            let responseEnvelope = null;
+            try {
+              const response = await fetch(expectedFunctionsEndpoint, {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${ephemeralIdToken}`,
+                  "Content-Type": "application/json",
+                  "X-Firebase-AppCheck": ephemeralToken,
+                },
+                body: JSON.stringify({
+                  data: {
+                    scope: "GENERAL",
+                    _session: {
+                      authorityGeneration: ephemeralProof.authorityGeneration,
+                      protocolVersion: ephemeralProof.protocolVersion,
+                      revision: ephemeralProof.revision,
+                    },
+                  },
+                }),
+                redirect: "error",
+                signal: keepaliveAbortController.signal,
+              });
+              try {
+                responseEnvelope = await response.json();
+              } catch {
+                throw new Error(
+                  "VISUAL_APPLICATION_SESSION_KEEPALIVE_RESPONSE_INVALID",
+                );
+              }
+              if (!response.ok || responseEnvelope?.error) {
+                throw new Error(
+                  "VISUAL_APPLICATION_SESSION_KEEPALIVE_REQUEST_FAILED",
+                );
+              }
+            } finally {
+              clearTimeout(keepaliveTimeoutId);
+            }
+            const session = responseEnvelope?.result;
+            const authorityGenerationBound =
+              session?.authorityGeneration ===
+              ephemeralProof.authorityGeneration;
+            const protocolVersionBound =
+              Number(session?.protocolVersion) ===
+              Number(ephemeralProof.protocolVersion);
+            const revisionUnchanged =
+              session?.revision === ephemeralProof.revision;
+            const authTimeBound =
+              Number(session?.authTime || 0) ===
+              Number(ephemeralProof.authTime);
+            const leaseBound =
+              Number(session?.generalExpiresAt || 0) - observedNowMs >=
+              minimumRemainingLeaseMs;
+            const authorityMode = String(session?.authorityMode || "");
+            return {
+              statusActive: session?.status === "active",
+              authorityGenerationBound,
+              protocolVersionBound,
+              revisionUnchanged,
+              authTimeBound,
+              leaseBound,
+              authorityModeAllowed: [
+                "ENFORCE",
+                "OBSERVE_ONLY",
+                "DISABLED",
+              ].includes(authorityMode),
+            };
+          } finally {
+            ephemeralIdToken = "";
+            ephemeralToken = "";
+            ephemeralProof.revision = "";
+            ephemeralProof.uid = "";
+            if (app && appModule) await appModule.deleteApp(app);
+          }
+        },
+        {
+          config: firebaseConfig,
+          sessionProof: proof,
+          token: ephemeralAppCheckToken,
+          tokenExpiresAtMs: appCheckTokenExpiresAtMs,
+          expectedProjectId: contract.firebaseProjectId,
+          expectedAppId: STAGING_APP_ID,
+          expectedFunctionsRegion: STAGING_FUNCTIONS_REGION,
+          expectedFunctionsEndpoint: functionsEndpoint,
+          observedNowMs: nodeNowMs,
+          minimumRemainingLeaseMs:
+            CAPTURE_APPLICATION_SESSION_MINIMUM_REMAINING_LEASE_MS,
+        },
+      ),
+      60_000,
+      "The visual application-session keepalive did not settle before the deadline.",
+    );
+    assert.deepEqual(attestation, {
+      statusActive: true,
+      authorityGenerationBound: true,
+      protocolVersionBound: true,
+      revisionUnchanged: true,
+      authTimeBound: true,
+      leaseBound: true,
+      authorityModeAllowed: true,
+    });
+  } finally {
+    ephemeralAppCheckToken = "";
+  }
 };
 
 const createIdentityAttestation = (role, identity) => {
@@ -21147,6 +21406,7 @@ assertFixtureAuditCaptureWindow({
 const captures = [];
 const browserAudits = [];
 const identityAttestations = new Map();
+const liveApplicationSessionProofsByPage = new Map();
 const networkObservations = [];
 const networkResponseObservations = [];
 const requestFinishedAccumulatorsByCaptureId = new Map();
@@ -21154,6 +21414,10 @@ let appCheckInitScriptInjectionCount = 0;
 let authenticationLandingGuardInitScriptRegistrationCount = 0;
 let authenticationLandingGuardStorageAttestationCount = 0;
 let authenticationLandingGuardBrowserDateAttestationCount = 0;
+let applicationSessionKeepaliveAttemptCount = 0;
+let applicationSessionKeepaliveSuccessCount = 0;
+let baselineApplicationSessionKeepaliveSuccessCount = 0;
+let candidateApplicationSessionKeepaliveSuccessCount = 0;
 let pageRawDebugTokenInjectionCount = 0;
 let browserGlobalRawDebugTokenWriteCount = 0;
 let browserGlobalDebugSentinelWriteCount = 0;
@@ -21208,6 +21472,13 @@ const authenticationLandingGuardExpectedGroupCount = [
     groupTargets[0]?.authenticationRole,
   ),
 ).length;
+const applicationSessionKeepaliveExpectedCount = [
+  ...groupedTargets.values(),
+].reduce(
+  (count, groupTargets) =>
+    count + (groupTargets[0]?.authenticationRole ? groupTargets.length : 0),
+  0,
+);
 
 try {
   browserWideBoundaryController =
@@ -21758,9 +22029,12 @@ try {
       assert.equal(entry.cdpRegistered, true);
       assert.equal(typeof appCheckHeaderPresent, "boolean");
       assert.ok(
-        [null, "native-sdk", "baseline-cdp-fetch-bridge"].includes(
-          appCheckHeaderSource,
-        ),
+        [
+          null,
+          "native-sdk",
+          "capture-owned-fetch",
+          "baseline-cdp-fetch-bridge",
+        ].includes(appCheckHeaderSource),
       );
       assert.equal(typeof appCheckHeaderJwtShapeValid, "boolean");
       if (entry.completionTimeoutId !== null) {
@@ -21840,7 +22114,11 @@ try {
         phase: networkPhase,
         captureId: activeCaptureId,
         appCheckHeaderPresent,
-        appCheckHeaderSource: appCheckHeaderPresent ? "native-sdk" : null,
+        appCheckHeaderSource: appCheckHeaderPresent
+          ? networkPhase === "session-keepalive"
+            ? "capture-owned-fetch"
+            : "native-sdk"
+          : null,
         appCheckHeaderJwtShapeValid,
         appCheckBridgeDecisionObserved: false,
         appCheckBridgeScopeEligible: false,
@@ -21925,8 +22203,11 @@ try {
         const effectiveHeaderValue =
           effectiveHeaders["x-firebase-appcheck"] || "";
         const provisionalHeaderPresent = Boolean(effectiveHeaderValue);
+        const provisionalCaptureOwnedHeader =
+          correlation.appCheckHeaderSource === "capture-owned-fetch";
         const provisionalBridgeInjectedHeader =
           stage === "baseline" &&
+          !correlation.appCheckHeaderPresent &&
           captureAppCheckTokenManager.matchesIssuedToken(effectiveHeaderValue);
         const effectiveHeaderPresent = authoritativeHeaderAttestation
           ? authoritativeHeaderAttestation.appCheckHeaderPresent
@@ -21937,9 +22218,11 @@ try {
         const effectiveHeaderSource = authoritativeHeaderAttestation
           ? authoritativeHeaderAttestation.appCheckHeaderSource
           : effectiveHeaderPresent
-            ? provisionalBridgeInjectedHeader
-              ? "baseline-cdp-fetch-bridge"
-              : "native-sdk"
+            ? provisionalCaptureOwnedHeader
+              ? "capture-owned-fetch"
+              : provisionalBridgeInjectedHeader
+                ? "baseline-cdp-fetch-bridge"
+                : "native-sdk"
             : null;
         const bridgeDecision = baselineAppCheckBridgeDecision({
           method: request.method(),
@@ -24101,13 +24384,30 @@ try {
       rawText = "";
     });
     let groupIdentityAttestation = null;
+    let groupApplicationSessionProof = null;
     if (authenticationRole) {
       networkPhase = "authentication";
-      const identity = await authenticate(
+      const authentication = await authenticate(
         page,
         credentials[authenticationRole],
         origin,
         authenticationRole,
+      );
+      const {
+        applicationSessionProof,
+        applicationSessionAuthorityMode,
+        ...identity
+      } = authentication;
+      assert.ok(
+        ["ENFORCE", "OBSERVE_ONLY", "DISABLED"].includes(
+          applicationSessionAuthorityMode,
+        ),
+      );
+      groupApplicationSessionProof = applicationSessionProof;
+      assert.equal(liveApplicationSessionProofsByPage.has(page), false);
+      liveApplicationSessionProofsByPage.set(
+        page,
+        groupApplicationSessionProof,
       );
       if (groupAuthenticationLandingGuard) {
         const landingGuardAttestation = await page.evaluate((markers) => {
@@ -24145,7 +24445,47 @@ try {
     }
     for (const target of groupTargets) {
       resetSafeBrowserErrorAccumulator(pageErrorAccumulator);
-      activeCaptureId = captureKey(stage, target.screen.id, viewport);
+      const nextCaptureId = captureKey(stage, target.screen.id, viewport);
+      activeCaptureId = null;
+      if (authenticationRole) {
+        assert.ok(groupApplicationSessionProof);
+        assert.equal(
+          liveApplicationSessionProofsByPage.get(page),
+          groupApplicationSessionProof,
+        );
+        networkPhase = "session-keepalive";
+        applicationSessionKeepaliveAttemptCount += 1;
+        const keepaliveNowMs = Date.now();
+        let keepaliveAppCheckToken = "";
+        try {
+          await withExplicitTimeout(
+            (async () => {
+              keepaliveAppCheckToken =
+                await captureAppCheckTokenManager.ensureFresh();
+              await refreshCaptureApplicationSession({
+                page,
+                proof: groupApplicationSessionProof,
+                appCheckToken: keepaliveAppCheckToken,
+                appCheckTokenExpiresAtMs:
+                  captureAppCheckTokenManager.expiresAtMillis,
+                nodeNowMs: keepaliveNowMs,
+              });
+            })(),
+            60_000,
+            "The complete visual application-session keepalive did not settle before the deadline.",
+          );
+        } finally {
+          keepaliveAppCheckToken = "";
+        }
+        applicationSessionKeepaliveSuccessCount += 1;
+        if (stage === "baseline") {
+          baselineApplicationSessionKeepaliveSuccessCount += 1;
+        } else {
+          candidateApplicationSessionKeepaliveSuccessCount += 1;
+        }
+        await flushNetworkAttestations();
+      }
+      activeCaptureId = nextCaptureId;
       requestFinishedAccumulatorsByCaptureId.set(
         activeCaptureId,
         createSafeFinishedRequestAccumulator(),
@@ -24519,6 +24859,12 @@ try {
       captures.push(captureRow);
       groupCaptureAttestations.push(captureAttestation);
       requestFinishedAccumulatorsByCaptureId.delete(activeCaptureId);
+    }
+    if (groupApplicationSessionProof) {
+      groupApplicationSessionProof.revision = "";
+      groupApplicationSessionProof.uid = "";
+      assert.equal(liveApplicationSessionProofsByPage.delete(page), true);
+      groupApplicationSessionProof = null;
     }
     if (appCheckCdpSession) {
       for (const frame of page.frames()) observeFrameOrigin(frame);
@@ -25796,6 +26142,11 @@ try {
   assert.equal(browserWideBoundaryFinalSnapshot.fatalErrorCount, 0);
   await browserWideBoundaryController.restore();
 } finally {
+  for (const proof of liveApplicationSessionProofsByPage.values()) {
+    proof.revision = "";
+    proof.uid = "";
+  }
+  liveApplicationSessionProofsByPage.clear();
   try {
     browserConnectProxy.setAuditStage("browser-cleanup");
     if (browserWideBoundaryController) {
@@ -25814,6 +26165,23 @@ try {
     }
   }
 }
+assert.ok(applicationSessionKeepaliveExpectedCount > 0);
+assert.equal(
+  applicationSessionKeepaliveAttemptCount,
+  applicationSessionKeepaliveExpectedCount,
+);
+assert.equal(
+  applicationSessionKeepaliveSuccessCount,
+  applicationSessionKeepaliveExpectedCount,
+);
+assert.equal(
+  baselineApplicationSessionKeepaliveSuccessCount +
+    candidateApplicationSessionKeepaliveSuccessCount,
+  applicationSessionKeepaliveSuccessCount,
+);
+assert.ok(baselineApplicationSessionKeepaliveSuccessCount > 0);
+assert.ok(candidateApplicationSessionKeepaliveSuccessCount > 0);
+assert.equal(liveApplicationSessionProofsByPage.size, 0);
 assert.ok(browserConnectProxyFinalSnapshot);
 browserConnectProxy.assertHealthy();
 assert.equal(browserConnectProxyFinalSnapshot.listenerStartCount, 1);
@@ -26794,6 +27162,13 @@ const networkPolicyBinding = {
 const networkPolicyBindingHash = sha256(canonicalJson(networkPolicyBinding));
 const appCheckBinding = {
   ...captureAppCheckTokenManager.binding,
+  applicationSessionKeepaliveExpectedCount,
+  applicationSessionKeepaliveAttemptCount,
+  applicationSessionKeepaliveSuccessCount,
+  baselineApplicationSessionKeepaliveSuccessCount,
+  candidateApplicationSessionKeepaliveSuccessCount,
+  applicationSessionProofRetentionResidualCount:
+    liveApplicationSessionProofsByPage.size,
   fixturePreBackupAttestationHash: preBackupNamespaceAccessAttestationHash,
   fixturePostBackupAttestationHash: backupNamespaceAccessAttestationHash,
   baselineBridgeScope: BASELINE_APP_CHECK_BRIDGE_SCOPE,
