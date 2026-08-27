@@ -1944,10 +1944,15 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "const createPerCorrelationTaskCoordinator = () =>",
     "const createSingleOwnerProxyAuthorizationCoordinator = ({",
     "const contextClosedWebChannelBackchannelRetirementDecision = ({",
-    "const retireExactContextClosedWebChannelBackchannelAuthorizations = ({",
+    "const contextClosedWebChannelTerminationRetirementDecision = ({",
+    "const retireExactContextClosedWebChannelAuthorizations = ({",
+    "const classifyExactStagingFirestoreWebChannelTerminationLifecycleScope = ({",
     '"context-closed-webchannel-backchannel-retired"',
-    "retireContextClosedWebChannelBackchannelAuthorizations();",
+    '"context-closed-webchannel-termination-retired"',
+    "retireContextClosedWebChannelAuthorizations();",
     "webChannelRequestClass: exactWebChannelHeaderCorrelationClass",
+    "webChannelTerminationClass: exactWebChannelTerminationLifecycleClass",
+    "webChannelTerminationClassifiedRequestCount += Number(",
     "POST_FINAL_ALREADY_RETIRED_INTERCEPTION_ERROR_MESSAGES",
     '"Protocol error (Fetch.continueResponse): Invalid InterceptionId."',
     '"cdpSession.send: Protocol error (Fetch.continueResponse): Invalid InterceptionId."',
@@ -2018,8 +2023,13 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     /const exactWebChannelHeaderCorrelationClass\s*=\s*classifyExactStagingFirestoreWebChannelHeaderCorrelationScope\(\{\s*requestUrl,\s*method: requestMethod,\s*observerSurface: "cdp-request-paused",\s*resourceType: event\.resourceType,/u,
     "The CDP request handler must use the CDP-only WebChannel resource type.",
   );
+  assert.match(
+    sourceText,
+    /const exactWebChannelTerminationLifecycleClass\s*=\s*classifyExactStagingFirestoreWebChannelTerminationLifecycleScope\(\{\s*requestUrl,\s*method: requestMethod,\s*observerSurface: "cdp-request-paused",\s*resourceType: event\.resourceType,\s*postDataPresent: postData\.length > 0,\s*redirected: Boolean\(event\.redirectedRequestId\),\s*inspection: preTransmissionInspection,/u,
+    "The CDP request handler must bind Image termination classification to the exact paused request scope.",
+  );
   const exactRetirementStart = sourceText.indexOf(
-    "const retireExactContextClosedWebChannelBackchannelAuthorizations = ({",
+    "const retireExactContextClosedWebChannelAuthorizations = ({",
   );
   const exactRetirementEnd = sourceText.indexOf(
     "const missingResponseCorrelationFailureReason = ({",
@@ -2034,25 +2044,27 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   for (const requiredRetirementFragment of [
     "authorizationCoordinator.activeOwnerIds()",
     "authorizationCoordinator.activeCount()",
-    "contextClosedWebChannelBackchannelRetirementDecision({",
+    "contextClosedWebChannelBackchannelRetirementDecision(decisionInput)",
+    "contextClosedWebChannelTerminationRetirementDecision(decisionInput)",
     "const retirementEntries = activeOwnerIds.map",
     "authorizationCoordinator.complete(ownerId)",
     '"context-closed-webchannel-backchannel-retired"',
+    '"context-closed-webchannel-termination-retired"',
     "collection.delete(ownerId)",
   ]) {
     assert.equal(
       exactRetirementSource.includes(requiredRetirementFragment),
       true,
-      `The context-close backchannel retirement contract is missing: ${requiredRetirementFragment}`,
+      `The context-close WebChannel retirement contract is missing: ${requiredRetirementFragment}`,
     );
   }
   assert.doesNotMatch(
     exactRetirementSource,
     /authorizationCoordinator\.revoke/u,
-    "Context-close WebChannel backchannels must complete, never revoke, their request-stage authorization.",
+    "Context-close WebChannel backchannels and termination images must complete, never revoke, their request-stage authorization.",
   );
   const contextClosedRetirementWrapperStart = sourceText.indexOf(
-    "const retireContextClosedWebChannelBackchannelAuthorizations = () =>",
+    "const retireContextClosedWebChannelAuthorizations = () =>",
   );
   const contextClosedRetirementWrapperEnd = sourceText.indexOf(
     "const resolveResponseCorrelationForEvent = (event) =>",
@@ -2067,7 +2079,7 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     contextClosedRetirementWrapperEnd,
   );
   for (const requiredWrapperFragment of [
-    "retireExactContextClosedWebChannelBackchannelAuthorizations({",
+    "const retirementCounts = retireExactContextClosedWebChannelAuthorizations(",
     "contextClosed: groupBrowserContextClosed",
     "authorizationCoordinator:",
     "allowedEgressProxyAuthorizationCoordinator",
@@ -2088,8 +2100,8 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   }
   assert.match(
     sourceText,
-    /await context\.close\(\);\s*groupBrowserContextClosed = true;[\s\S]*?await drainAppCheckCdpHandlerPromises\(\);\s*assert\.equal\(\s*allowedEgressHandlerTaskCoordinator\.pendingCount\(\),\s*0,[\s\S]*?await flushNetworkAttestations\(\);\s*retireContextClosedWebChannelBackchannelAuthorizations\(\);\s*assert\.equal\(\s*allowedEgressProxyAuthorizationCoordinator\.activeCount\(\),\s*0,/u,
-    "The context-close backchannel retirement must follow close, late handler drain, and network-attestation flush.",
+    /await context\.close\(\);\s*groupBrowserContextClosed = true;[\s\S]*?await drainAppCheckCdpHandlerPromises\(\);\s*assert\.equal\(\s*allowedEgressHandlerTaskCoordinator\.pendingCount\(\),\s*0,[\s\S]*?await flushNetworkAttestations\(\);\s*retireContextClosedWebChannelAuthorizations\(\);\s*assert\.equal\(\s*allowedEgressProxyAuthorizationCoordinator\.activeCount\(\),\s*0,/u,
+    "The context-close WebChannel retirement must follow close, late handler drain, and network-attestation flush.",
   );
   assert.match(
     sourceText,
@@ -6621,6 +6633,8 @@ let auditedWebChannelCdpHeaderAttestationBindingFailures = 0;
 let auditedWebChannelCdpHeaderAttestationPairingTimeouts = 0;
 let auditedWebChannelCdpHeaderAttestationCompletionTimeouts = 0;
 let auditedAllowedEgressContextCloseBackchannelRetirements = 0;
+let auditedAllowedEgressContextCloseTerminationRetirements = 0;
+let auditedWebChannelTerminationClassifiedRequests = 0;
 let auditedPlaywrightAllHeadersHeaderAttestationRequests = 0;
 let auditedPlaywrightAllHeadersHeaderAttestationCompletedRequests = 0;
 let auditedBaselineBridgeHandlerErrors = 0;
@@ -7604,6 +7618,8 @@ for (const audit of manifest.browserAudits) {
     "webChannelCdpHeaderAttestationPairingTimeoutCount",
     "webChannelCdpHeaderAttestationCompletionTimeoutCount",
     "allowedEgressContextCloseBackchannelRetirementCount",
+    "allowedEgressContextCloseTerminationRetirementCount",
+    "webChannelTerminationClassifiedRequestCount",
     "webChannelCdpHeaderAttestationBindingSetHash",
     "playwrightAllHeadersHeaderAttestationRequestCount",
     "playwrightAllHeadersHeaderAttestationCompletedRequestCount",
@@ -7858,6 +7874,24 @@ for (const audit of manifest.browserAudits) {
     bridgeEvent.allowedEgressContextCloseBackchannelRetirementCount <=
       bridgeEvent.webChannelCdpHeaderAttestationBoundRequestCount,
   );
+  assert.ok(
+    Number.isSafeInteger(
+      bridgeEvent.allowedEgressContextCloseTerminationRetirementCount,
+    ),
+  );
+  assert.ok(
+    bridgeEvent.allowedEgressContextCloseTerminationRetirementCount >= 0,
+  );
+  assert.ok(
+    Number.isSafeInteger(
+      bridgeEvent.webChannelTerminationClassifiedRequestCount,
+    ),
+  );
+  assert.ok(bridgeEvent.webChannelTerminationClassifiedRequestCount >= 0);
+  assert.ok(
+    bridgeEvent.allowedEgressContextCloseTerminationRetirementCount <=
+      bridgeEvent.webChannelTerminationClassifiedRequestCount,
+  );
   assert.equal(
     bridgeEvent.playwrightAllHeadersHeaderAttestationRequestCount,
     bridgeEvent.playwrightAllHeadersHeaderAttestationCompletedRequestCount,
@@ -7931,6 +7965,8 @@ for (const audit of manifest.browserAudits) {
     "webChannelCdpHeaderAttestationPairingTimeoutCount",
     "webChannelCdpHeaderAttestationCompletionTimeoutCount",
     "allowedEgressContextCloseBackchannelRetirementCount",
+    "allowedEgressContextCloseTerminationRetirementCount",
+    "webChannelTerminationClassifiedRequestCount",
     "playwrightAllHeadersHeaderAttestationRequestCount",
     "playwrightAllHeadersHeaderAttestationCompletedRequestCount",
     "handlerErrorCount",
@@ -8160,6 +8196,10 @@ for (const audit of manifest.browserAudits) {
     bridgeEvent.webChannelCdpHeaderAttestationCompletionTimeoutCount;
   auditedAllowedEgressContextCloseBackchannelRetirements +=
     bridgeEvent.allowedEgressContextCloseBackchannelRetirementCount;
+  auditedAllowedEgressContextCloseTerminationRetirements +=
+    bridgeEvent.allowedEgressContextCloseTerminationRetirementCount;
+  auditedWebChannelTerminationClassifiedRequests +=
+    bridgeEvent.webChannelTerminationClassifiedRequestCount;
   auditedPlaywrightAllHeadersHeaderAttestationRequests +=
     bridgeEvent.playwrightAllHeadersHeaderAttestationRequestCount;
   auditedPlaywrightAllHeadersHeaderAttestationCompletedRequests +=
@@ -9823,6 +9863,8 @@ assertExactObjectKeys(appCheckBinding, [
   "webChannelCdpHeaderAttestationPairingTimeoutCount",
   "webChannelCdpHeaderAttestationCompletionTimeoutCount",
   "allowedEgressContextCloseBackchannelRetirementCount",
+  "allowedEgressContextCloseTerminationRetirementCount",
+  "webChannelTerminationClassifiedRequestCount",
   "playwrightAllHeadersHeaderAttestationRequestCount",
   "playwrightAllHeadersHeaderAttestationCompletedRequestCount",
   "baselineBridgeInjectedRedirectResponseAbortCount",
@@ -10555,8 +10597,9 @@ assert.equal(
 assert.equal(
   browserConnectProxyAttestation.requestStageAuthorizationCount,
   appCheckBinding.allowedEgressResponsePauseCount +
-    appCheckBinding.allowedEgressContextCloseBackchannelRetirementCount,
-  "Every request-stage proxy authorization must have a terminal response pause or an exact context-close backchannel retirement.",
+    appCheckBinding.allowedEgressContextCloseBackchannelRetirementCount +
+    appCheckBinding.allowedEgressContextCloseTerminationRetirementCount,
+  "Every request-stage proxy authorization must have a terminal response pause or an exact context-close WebChannel retirement.",
 );
 assert.equal(
   browserConnectProxyAttestation.requestStageAuthorizationRevocationCount,
@@ -10966,6 +11009,10 @@ for (const [field, auditedValue] of Object.entries({
     auditedWebChannelCdpHeaderAttestationCompletionTimeouts,
   allowedEgressContextCloseBackchannelRetirementCount:
     auditedAllowedEgressContextCloseBackchannelRetirements,
+  allowedEgressContextCloseTerminationRetirementCount:
+    auditedAllowedEgressContextCloseTerminationRetirements,
+  webChannelTerminationClassifiedRequestCount:
+    auditedWebChannelTerminationClassifiedRequests,
   playwrightAllHeadersHeaderAttestationRequestCount:
     auditedPlaywrightAllHeadersHeaderAttestationRequests,
   playwrightAllHeadersHeaderAttestationCompletedRequestCount:
@@ -11206,6 +11253,24 @@ assert.ok(
 assert.ok(
   appCheckBinding.allowedEgressContextCloseBackchannelRetirementCount <=
     appCheckBinding.webChannelCdpHeaderAttestationBoundRequestCount,
+);
+assert.ok(
+  Number.isSafeInteger(
+    appCheckBinding.allowedEgressContextCloseTerminationRetirementCount,
+  ),
+);
+assert.ok(
+  appCheckBinding.allowedEgressContextCloseTerminationRetirementCount >= 0,
+);
+assert.ok(
+  Number.isSafeInteger(
+    appCheckBinding.webChannelTerminationClassifiedRequestCount,
+  ),
+);
+assert.ok(appCheckBinding.webChannelTerminationClassifiedRequestCount >= 0);
+assert.ok(
+  appCheckBinding.allowedEgressContextCloseTerminationRetirementCount <=
+    appCheckBinding.webChannelTerminationClassifiedRequestCount,
 );
 assert.ok(
   appCheckBinding.playwrightAllHeadersHeaderAttestationRequestCount > 0,

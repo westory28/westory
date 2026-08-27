@@ -3092,6 +3092,7 @@ const retiredAllowedEgressLifecycleStates = new Set([
   "post-final-error-observed-retired",
   "redirect-retired",
   "context-closed-webchannel-backchannel-retired",
+  "context-closed-webchannel-termination-retired",
   "handler-failed",
 ]);
 const contextClosedWebChannelBackchannelRetirementDecision = ({
@@ -3114,6 +3115,7 @@ const contextClosedWebChannelBackchannelRetirementDecision = ({
   }
   if (
     observation.webChannelRequestClass !== "backchannel-get" ||
+    observation.webChannelTerminationClass !== null ||
     observation.firebaseService !== "firestore" ||
     observation.isFirebaseRequest !== true ||
     observation.stagingMarker !== true ||
@@ -3133,7 +3135,71 @@ const contextClosedWebChannelBackchannelRetirementDecision = ({
     reason: "exact-context-closed-webchannel-backchannel",
   };
 };
-const retireExactContextClosedWebChannelBackchannelAuthorizations = ({
+const contextClosedWebChannelTerminationRetirementDecision = ({
+  contextClosed,
+  authorizationState,
+  lifecycleState,
+  observation,
+}) => {
+  if (contextClosed !== true) {
+    return { eligible: false, reason: "browser-context-open" };
+  }
+  if (authorizationState !== "active") {
+    return { eligible: false, reason: "proxy-authorization-not-active" };
+  }
+  if (lifecycleState !== "response-awaiting") {
+    return { eligible: false, reason: "lifecycle-not-response-awaiting" };
+  }
+  if (!observation || typeof observation !== "object") {
+    return { eligible: false, reason: "allowed-egress-observation-missing" };
+  }
+  if (
+    observation.webChannelRequestClass !== null ||
+    observation.webChannelTerminationClass !== "termination-image-get" ||
+    observation.firebaseService !== "firestore" ||
+    observation.isFirebaseRequest !== true ||
+    observation.stagingMarker !== true ||
+    observation.productionMarker !== false ||
+    observation.unboundFirebaseRequest !== false ||
+    observation.malformedUrlEncoding !== false ||
+    observation.firebaseTransportValid !== true ||
+    observation.serviceResourceBound !== true ||
+    observation.requestMethod !== "GET" ||
+    observation.resourceType !== "image" ||
+    observation.conditionalResponseHeaderRuleId !== null
+  ) {
+    return { eligible: false, reason: "request-scope-not-exact-termination" };
+  }
+  return {
+    eligible: true,
+    reason: "exact-context-closed-webchannel-termination",
+  };
+};
+const SAFE_CONTEXT_CLOSED_WEBCHANNEL_RETIREMENT_PROFILES = new Set([
+  "backchannel-get",
+  "initial-forward-post",
+  "session-forward-post",
+  "termination-image-get",
+  "unclassified",
+]);
+const safeContextClosedWebChannelRetirementProfile = (observation) => {
+  const profile =
+    observation?.webChannelTerminationClass === "termination-image-get"
+      ? "termination-image-get"
+      : [
+            "backchannel-get",
+            "initial-forward-post",
+            "session-forward-post",
+          ].includes(observation?.webChannelRequestClass)
+        ? observation.webChannelRequestClass
+        : "unclassified";
+  assert.equal(
+    SAFE_CONTEXT_CLOSED_WEBCHANNEL_RETIREMENT_PROFILES.has(profile),
+    true,
+  );
+  return profile;
+};
+const retireExactContextClosedWebChannelAuthorizations = ({
   contextClosed,
   authorizationCoordinator,
   pendingHandlerCount,
@@ -3187,42 +3253,78 @@ const retireExactContextClosedWebChannelBackchannelAuthorizations = ({
   const retirementEntries = activeOwnerIds.map((ownerId) => {
     const lifecycle = lifecycleByOwnerId.get(ownerId) || null;
     const observation = observationsByOwnerId.get(ownerId) || null;
-    const decision = contextClosedWebChannelBackchannelRetirementDecision({
+    const decisionInput = {
       contextClosed,
       authorizationState: authorizationCoordinator.stateFor(ownerId),
       lifecycleState: lifecycle?.state || null,
       observation,
-    });
+    };
+    const backchannelDecision =
+      contextClosedWebChannelBackchannelRetirementDecision(decisionInput);
+    const terminationDecision =
+      contextClosedWebChannelTerminationRetirementDecision(decisionInput);
     assert.equal(
-      decision.eligible,
-      true,
-      `A context-closed allowed-egress owner was not an exact Firestore WebChannel backchannel: ${decision.reason}.`,
+      backchannelDecision.eligible && terminationDecision.eligible,
+      false,
+      "A context-closed WebChannel owner matched overlapping retirement contracts.",
     );
     assert.equal(
       stableOriginRewriteByOwnerId.has(ownerId),
       false,
-      "A context-closed WebChannel backchannel overlapped a stable-origin rewrite.",
+      "A context-closed WebChannel request overlapped a stable-origin rewrite.",
     );
-    return { ownerId, lifecycle };
+    return {
+      ownerId,
+      lifecycle,
+      retirementKind: backchannelDecision.eligible
+        ? "backchannel"
+        : terminationDecision.eligible
+          ? "termination"
+          : null,
+      safeProfile: safeContextClosedWebChannelRetirementProfile(observation),
+    };
   });
-  for (const { ownerId, lifecycle } of retirementEntries) {
+  const rejectedProfileCounts = retirementEntries
+    .filter(({ retirementKind }) => retirementKind === null)
+    .reduce((counts, { safeProfile }) => {
+      counts[safeProfile] = (counts[safeProfile] || 0) + 1;
+      return counts;
+    }, {});
+  assert.deepEqual(
+    rejectedProfileCounts,
+    {},
+    `Context-closed allowed-egress owners were outside the exact Firestore WebChannel retirement contracts: ${JSON.stringify(rejectedProfileCounts)}.`,
+  );
+  let backchannelRetirementCount = 0;
+  let terminationRetirementCount = 0;
+  for (const { ownerId, lifecycle, retirementKind } of retirementEntries) {
     assert.equal(
       authorizationCoordinator.complete(ownerId),
       true,
-      "A context-closed WebChannel backchannel authorization was not active at completion.",
+      "A context-closed WebChannel authorization was not active at completion.",
     );
+    const lifecycleState =
+      retirementKind === "backchannel"
+        ? "context-closed-webchannel-backchannel-retired"
+        : "context-closed-webchannel-termination-retired";
     lifecycleByOwnerId.set(
       ownerId,
       Object.freeze({
         ...lifecycle,
-        state: "context-closed-webchannel-backchannel-retired",
+        state: lifecycleState,
       }),
     );
+    backchannelRetirementCount += Number(retirementKind === "backchannel");
+    terminationRetirementCount += Number(retirementKind === "termination");
     for (const collection of cleanupOwnerCollections) {
       collection.delete(ownerId);
     }
   }
-  return retirementEntries.length;
+  return Object.freeze({
+    backchannelRetirementCount,
+    terminationRetirementCount,
+    totalRetirementCount: retirementEntries.length,
+  });
 };
 const missingResponseCorrelationFailureReason = ({
   sameFetchState = null,
@@ -3440,6 +3542,14 @@ const FIRESTORE_WEBCHANNEL_FORWARD_QUERY_NAMES = [
   "VER",
   "database",
   "t",
+  "zx",
+].sort();
+const FIRESTORE_WEBCHANNEL_TERMINATION_QUERY_NAMES = [
+  "RID",
+  "SID",
+  "TYPE",
+  "VER",
+  "database",
   "zx",
 ].sort();
 const PLAYWRIGHT_ALL_HEADERS_ATTESTATION_TIMEOUT_MS = 30_000;
@@ -5237,6 +5347,86 @@ const classifyExactStagingFirestoreWebChannelHeaderCorrelationScope = ({
 const exactStagingFirestoreWebChannelHeaderCorrelationScope = (options) =>
   classifyExactStagingFirestoreWebChannelHeaderCorrelationScope(options) !==
   null;
+const classifyExactStagingFirestoreWebChannelTerminationLifecycleScope = ({
+  requestUrl,
+  method,
+  observerSurface,
+  resourceType,
+  postDataPresent,
+  redirected,
+  inspection,
+}) => {
+  if (
+    !inspection ||
+    inspection.firebaseService !== "firestore" ||
+    inspection.isFirebaseRequest !== true ||
+    inspection.stagingMarker !== true ||
+    inspection.productionMarker !== false ||
+    inspection.unboundFirebaseRequest !== false ||
+    inspection.malformedUrlEncoding !== false ||
+    inspection.firebaseTransportValid !== true ||
+    inspection.serviceResourceBound !== true ||
+    observerSurface !== "cdp-request-paused" ||
+    String(method).toUpperCase() !== "GET" ||
+    String(resourceType).toLowerCase() !== "image" ||
+    postDataPresent !== false ||
+    redirected !== false
+  ) {
+    return null;
+  }
+  try {
+    const parsed = new URL(requestUrl);
+    const queryNames = [...parsed.searchParams.keys()].sort();
+    const allowedQueryNameSets = [
+      FIRESTORE_WEBCHANNEL_TERMINATION_QUERY_NAMES,
+      [...FIRESTORE_WEBCHANNEL_TERMINATION_QUERY_NAMES, "gsessionid"].sort(),
+    ];
+    const databaseValues = parsed.searchParams.getAll("database");
+    const versionValues = parsed.searchParams.getAll("VER");
+    const requestIdValues = parsed.searchParams.getAll("RID");
+    const sessionIdValues = parsed.searchParams.getAll("SID");
+    const transportTypeValues = parsed.searchParams.getAll("TYPE");
+    const globalSessionIdValues = parsed.searchParams.getAll("gsessionid");
+    const cacheBusterValues = parsed.searchParams.getAll("zx");
+    const requestId = Number(requestIdValues[0]);
+    return allowedQueryNameSets.some(
+      (allowedQueryNames) =>
+        JSON.stringify(queryNames) === JSON.stringify(allowedQueryNames),
+    ) &&
+      parsed.protocol === "https:" &&
+      parsed.hostname.toLowerCase() === "firestore.googleapis.com" &&
+      parsed.username === "" &&
+      parsed.password === "" &&
+      (parsed.port === "" || parsed.port === "443") &&
+      parsed.hash === "" &&
+      FIRESTORE_WEBCHANNEL_PATHNAMES.has(parsed.pathname) &&
+      databaseValues.length === 1 &&
+      databaseValues[0] ===
+        `projects/${contract.firebaseProjectId}/databases/(default)` &&
+      versionValues.length === 1 &&
+      versionValues[0] === "8" &&
+      requestIdValues.length === 1 &&
+      requestIdValues[0].length <= 16 &&
+      /^(?:0|[1-9][0-9]*)$/u.test(requestIdValues[0]) &&
+      Number.isSafeInteger(requestId) &&
+      sessionIdValues.length === 1 &&
+      sessionIdValues[0].length <= 256 &&
+      /^[0-9A-Za-z_-]+$/u.test(sessionIdValues[0]) &&
+      transportTypeValues.length === 1 &&
+      transportTypeValues[0] === "terminate" &&
+      (globalSessionIdValues.length === 0 ||
+        (globalSessionIdValues.length === 1 &&
+          globalSessionIdValues[0].length <= 256 &&
+          /^[0-9A-Za-z_-]+$/u.test(globalSessionIdValues[0]))) &&
+      cacheBusterValues.length === 1 &&
+      cacheBusterValues[0].length <= 128 &&
+      /^[0-9a-z]+$/u.test(cacheBusterValues[0])
+      ? "termination-image-get"
+      : null;
+  } catch {
+    return null;
+  }
+};
 const SAFE_FIRESTORE_WEBCHANNEL_LISTENER_DIAGNOSTIC_REASONS = [
   "classified",
   "inspection-missing",
@@ -7026,8 +7216,10 @@ const verifyNetworkPolicyNegativeFixtures = () => {
   );
   const firestoreTerminationUrl = new URL(firestoreBackchannelUrl);
   firestoreTerminationUrl.searchParams.set("RID", "100001");
+  firestoreTerminationUrl.searchParams.delete("AID");
   firestoreTerminationUrl.searchParams.delete("CI");
   firestoreTerminationUrl.searchParams.set("TYPE", "terminate");
+  firestoreTerminationUrl.searchParams.delete("t");
   const firestoreTerminationPlaywrightInspection = inspectNetworkBoundary({
     requestUrl: firestoreTerminationUrl.toString(),
     method: "GET",
@@ -7047,6 +7239,90 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     }),
     { requestClass: null, reason: "url-topology" },
   );
+  const firestoreTerminationCdpInspection = inspectNetworkBoundary({
+    requestUrl: firestoreTerminationUrl.toString(),
+    method: "GET",
+    resourceType: "Image",
+    stagingApiKey,
+    allowedNonFirebaseOrigins: [stableBrowserOrigin],
+  });
+  assert.equal(
+    classifyExactStagingFirestoreWebChannelTerminationLifecycleScope({
+      requestUrl: firestoreTerminationUrl.toString(),
+      method: "GET",
+      observerSurface: "cdp-request-paused",
+      resourceType: "Image",
+      postDataPresent: false,
+      redirected: false,
+      inspection: firestoreTerminationCdpInspection,
+    }),
+    "termination-image-get",
+  );
+  const firestoreTerminationWithoutGlobalSessionUrl = new URL(
+    firestoreTerminationUrl,
+  );
+  firestoreTerminationWithoutGlobalSessionUrl.searchParams.delete("gsessionid");
+  assert.equal(
+    classifyExactStagingFirestoreWebChannelTerminationLifecycleScope({
+      requestUrl: firestoreTerminationWithoutGlobalSessionUrl.toString(),
+      method: "GET",
+      observerSurface: "cdp-request-paused",
+      resourceType: "Image",
+      postDataPresent: false,
+      redirected: false,
+      inspection: firestoreTerminationCdpInspection,
+    }),
+    "termination-image-get",
+  );
+  for (const rejectedTerminationFixture of [
+    { method: "POST" },
+    { observerSurface: "playwright-request" },
+    { resourceType: "XHR" },
+    { postDataPresent: true },
+    { redirected: true },
+    {
+      requestUrl: (() => {
+        const value = new URL(firestoreTerminationUrl);
+        value.searchParams.set("RID", "rpc");
+        return value.toString();
+      })(),
+    },
+    {
+      requestUrl: (() => {
+        const value = new URL(firestoreTerminationUrl);
+        value.searchParams.set("TYPE", "xmlhttp");
+        return value.toString();
+      })(),
+    },
+    {
+      requestUrl: (() => {
+        const value = new URL(firestoreTerminationUrl);
+        value.searchParams.set("CI", "0");
+        return value.toString();
+      })(),
+    },
+    {
+      requestUrl: (() => {
+        const value = new URL(firestoreTerminationUrl);
+        value.searchParams.set("gsessionid", "invalid/session");
+        return value.toString();
+      })(),
+    },
+  ]) {
+    assert.equal(
+      classifyExactStagingFirestoreWebChannelTerminationLifecycleScope({
+        requestUrl: firestoreTerminationUrl.toString(),
+        method: "GET",
+        observerSurface: "cdp-request-paused",
+        resourceType: "Image",
+        postDataPresent: false,
+        redirected: false,
+        inspection: firestoreTerminationCdpInspection,
+        ...rejectedTerminationFixture,
+      }),
+      null,
+    );
+  }
   assert.equal(
     exactStagingFirestoreWebChannelEncodedApiKeyBodyScope({
       requestUrl: firestoreWebChannelUrl.toString(),
@@ -8121,6 +8397,7 @@ const verifyAllowedEgressResponseLifecycleFixtures = async () => {
   });
   const exactContextClosedBackchannelObservation = Object.freeze({
     webChannelRequestClass: "backchannel-get",
+    webChannelTerminationClass: null,
     firebaseService: "firestore",
     isFirebaseRequest: true,
     stagingMarker: true,
@@ -8144,6 +8421,23 @@ const verifyAllowedEgressResponseLifecycleFixtures = async () => {
     eligible: true,
     reason: "exact-context-closed-webchannel-backchannel",
   });
+  const exactContextClosedTerminationObservation = Object.freeze({
+    ...exactContextClosedBackchannelObservation,
+    webChannelRequestClass: null,
+    webChannelTerminationClass: "termination-image-get",
+    resourceType: "image",
+  });
+  const exactContextClosedTerminationDecision =
+    contextClosedWebChannelTerminationRetirementDecision({
+      contextClosed: true,
+      authorizationState: "active",
+      lifecycleState: "response-awaiting",
+      observation: exactContextClosedTerminationObservation,
+    });
+  assert.deepEqual(exactContextClosedTerminationDecision, {
+    eligible: true,
+    reason: "exact-context-closed-webchannel-termination",
+  });
   const rejectedContextClosedBackchannelRetirementFixtures = [
     { contextClosed: false },
     { authorizationState: "completed" },
@@ -8153,6 +8447,12 @@ const verifyAllowedEgressResponseLifecycleFixtures = async () => {
       observation: {
         ...exactContextClosedBackchannelObservation,
         webChannelRequestClass: "session-forward-post",
+      },
+    },
+    {
+      observation: {
+        ...exactContextClosedBackchannelObservation,
+        webChannelTerminationClass: "termination-image-get",
       },
     },
     {
@@ -8231,6 +8531,50 @@ const verifyAllowedEgressResponseLifecycleFixtures = async () => {
       "exact-context-closed-webchannel-backchannel",
     );
   }
+  const rejectedContextClosedTerminationRetirementFixtures = [
+    { contextClosed: false },
+    { authorizationState: "completed" },
+    { lifecycleState: "final-response-released" },
+    { observation: null },
+    {
+      observation: {
+        ...exactContextClosedTerminationObservation,
+        webChannelTerminationClass: null,
+      },
+    },
+    {
+      observation: {
+        ...exactContextClosedTerminationObservation,
+        webChannelRequestClass: "backchannel-get",
+      },
+    },
+    {
+      observation: {
+        ...exactContextClosedTerminationObservation,
+        requestMethod: "POST",
+      },
+    },
+    {
+      observation: {
+        ...exactContextClosedTerminationObservation,
+        resourceType: "xhr",
+      },
+    },
+  ];
+  for (const fixture of rejectedContextClosedTerminationRetirementFixtures) {
+    const decision = contextClosedWebChannelTerminationRetirementDecision({
+      contextClosed: true,
+      authorizationState: "active",
+      lifecycleState: "response-awaiting",
+      observation: exactContextClosedTerminationObservation,
+      ...fixture,
+    });
+    assert.equal(decision.eligible, false);
+    assert.notEqual(
+      decision.reason,
+      "exact-context-closed-webchannel-termination",
+    );
+  }
   const contextClosedProxyCounts = { authorize: 0, complete: 0, revoke: 0 };
   const contextClosedProxyCoordinator =
     createSingleOwnerProxyAuthorizationCoordinator({
@@ -8255,8 +8599,8 @@ const verifyAllowedEgressResponseLifecycleFixtures = async () => {
   const contextClosedObservationsByOwnerId = new Map([
     [contextClosedOwnerId, exactContextClosedBackchannelObservation],
   ]);
-  assert.equal(
-    retireExactContextClosedWebChannelBackchannelAuthorizations({
+  assert.deepEqual(
+    retireExactContextClosedWebChannelAuthorizations({
       contextClosed: true,
       authorizationCoordinator: contextClosedProxyCoordinator,
       pendingHandlerCount: 0,
@@ -8265,7 +8609,11 @@ const verifyAllowedEgressResponseLifecycleFixtures = async () => {
       stableOriginRewriteByOwnerId: new Map(),
       cleanupOwnerCollections: [contextClosedObservationsByOwnerId],
     }),
-    1,
+    {
+      backchannelRetirementCount: 1,
+      terminationRetirementCount: 0,
+      totalRetirementCount: 1,
+    },
   );
   assert.deepEqual(contextClosedProxyCoordinator.activeOwnerIds(), []);
   assert.equal(contextClosedProxyCoordinator.activeCount(), 0);
@@ -8277,6 +8625,63 @@ const verifyAllowedEgressResponseLifecycleFixtures = async () => {
   assert.deepEqual(contextClosedProxyCounts, {
     authorize: 1,
     complete: 1,
+    revoke: 0,
+  });
+  const mixedProxyCounts = { authorize: 0, complete: 0, revoke: 0 };
+  const mixedProxyCoordinator = createSingleOwnerProxyAuthorizationCoordinator({
+    onAuthorize: () => {
+      mixedProxyCounts.authorize += 1;
+    },
+    onComplete: () => {
+      mixedProxyCounts.complete += 1;
+    },
+    onRevoke: () => {
+      mixedProxyCounts.revoke += 1;
+    },
+  });
+  const mixedOwnerIds = [
+    "fixture-mixed-backchannel",
+    "fixture-mixed-termination",
+  ];
+  for (const ownerId of mixedOwnerIds)
+    mixedProxyCoordinator.authorize(ownerId, {});
+  const mixedLifecycleByOwnerId = new Map(
+    mixedOwnerIds.map((ownerId) => [
+      ownerId,
+      Object.freeze({ state: "response-awaiting", diagnosticPhase: "fixture" }),
+    ]),
+  );
+  const mixedObservationsByOwnerId = new Map([
+    [mixedOwnerIds[0], exactContextClosedBackchannelObservation],
+    [mixedOwnerIds[1], exactContextClosedTerminationObservation],
+  ]);
+  assert.deepEqual(
+    retireExactContextClosedWebChannelAuthorizations({
+      contextClosed: true,
+      authorizationCoordinator: mixedProxyCoordinator,
+      pendingHandlerCount: 0,
+      lifecycleByOwnerId: mixedLifecycleByOwnerId,
+      observationsByOwnerId: mixedObservationsByOwnerId,
+      stableOriginRewriteByOwnerId: new Map(),
+      cleanupOwnerCollections: [mixedObservationsByOwnerId],
+    }),
+    {
+      backchannelRetirementCount: 1,
+      terminationRetirementCount: 1,
+      totalRetirementCount: 2,
+    },
+  );
+  assert.equal(
+    mixedLifecycleByOwnerId.get(mixedOwnerIds[0])?.state,
+    "context-closed-webchannel-backchannel-retired",
+  );
+  assert.equal(
+    mixedLifecycleByOwnerId.get(mixedOwnerIds[1])?.state,
+    "context-closed-webchannel-termination-retired",
+  );
+  assert.deepEqual(mixedProxyCounts, {
+    authorize: 2,
+    complete: 2,
     revoke: 0,
   });
   const atomicProxyCounts = { authorize: 0, complete: 0, revoke: 0 };
@@ -8315,7 +8720,7 @@ const verifyAllowedEgressResponseLifecycleFixtures = async () => {
   ]);
   assert.throws(
     () =>
-      retireExactContextClosedWebChannelBackchannelAuthorizations({
+      retireExactContextClosedWebChannelAuthorizations({
         contextClosed: true,
         authorizationCoordinator: atomicProxyCoordinator,
         pendingHandlerCount: 0,
@@ -8324,7 +8729,7 @@ const verifyAllowedEgressResponseLifecycleFixtures = async () => {
         stableOriginRewriteByOwnerId: new Map(),
         cleanupOwnerCollections: [atomicObservationsByOwnerId],
       }),
-    /not an exact Firestore WebChannel backchannel/u,
+    /outside the exact Firestore WebChannel retirement contracts/u,
   );
   assert.deepEqual(atomicProxyCounts, {
     authorize: 2,
@@ -8342,9 +8747,13 @@ const verifyAllowedEgressResponseLifecycleFixtures = async () => {
     allowedEgressProxySingleCompletionCaseCount: 1,
     allowedEgressRetiredInterceptionCaseCount: 1,
     acceptedContextClosedWebChannelBackchannelRetirementCaseCount: 1,
-    rejectedAtomicContextClosedWebChannelBackchannelRetirementCaseCount: 1,
+    acceptedContextClosedWebChannelTerminationRetirementCaseCount: 1,
+    acceptedAtomicMixedContextClosedWebChannelRetirementCaseCount: 1,
+    rejectedAtomicContextClosedWebChannelRetirementCaseCount: 1,
     rejectedContextClosedWebChannelBackchannelRetirementCaseCount:
       rejectedContextClosedBackchannelRetirementFixtures.length,
+    rejectedContextClosedWebChannelTerminationRetirementCaseCount:
+      rejectedContextClosedTerminationRetirementFixtures.length,
   };
 };
 const verifyPostDataAndResponseSanitizationNegativeFixtures = async () => {
@@ -9815,6 +10224,10 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
   const contextCloseBackchannelWireObserved = new Promise((resolve) => {
     resolveContextCloseBackchannelWireObserved = resolve;
   });
+  let resolveContextCloseTerminationWireObserved;
+  const contextCloseTerminationWireObserved = new Promise((resolve) => {
+    resolveContextCloseTerminationWireObserved = resolve;
+  });
   let resolveContextCloseBackchannelWireClosed;
   const contextCloseBackchannelWireClosed = new Promise((resolve) => {
     resolveContextCloseBackchannelWireClosed = resolve;
@@ -9851,6 +10264,8 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
   let contextCloseBackchannelContinueSuccessCount = 0;
   let contextCloseBackchannelResponseStagePauseCount = 0;
   let contextCloseBackchannelRetirementCount = 0;
+  let contextCloseTerminationClassifiedRequestCount = 0;
+  let contextCloseTerminationRetirementCount = 0;
   let contextCloseBackchannelContextCloseSuccessCount = 0;
   let contextCloseBackchannelLateHandlerDrainCount = 0;
   let contextCloseBackchannelContextClosed = false;
@@ -10035,11 +10450,14 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
       assert.equal(request.method, "GET");
       assert.equal(request.headers.host, "firestore.googleapis.com");
       assert.equal(
-        request.url === contextCloseBackchannelRequestTarget,
+        [
+          contextCloseBackchannelRequestTarget,
+          contextCloseTerminationRequestTarget,
+        ].includes(request.url),
         true,
         "The held-open WebChannel wire request target drifted.",
       );
-      assert.equal(contextCloseBackchannelWireRequests.length, 0);
+      assert.ok(contextCloseBackchannelWireRequests.length < 2);
       const wireObservation = Object.freeze({
         method: request.method,
         url: request.url,
@@ -10069,7 +10487,11 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
         contextCloseBackchannelOpenSockets.delete(request.socket);
         resolveWireClosedIfDrained();
       });
-      resolveContextCloseBackchannelWireObserved(wireObservation);
+      if (request.url === contextCloseBackchannelRequestTarget) {
+        resolveContextCloseBackchannelWireObserved(wireObservation);
+      } else {
+        resolveContextCloseTerminationWireObserved(wireObservation);
+      }
       return;
     }
     apiWireRequests.push({
@@ -10183,10 +10605,7 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
       await listenLoopbackServer(upstreamServer, upstreamListenPort);
       break;
     } catch (error) {
-      if (
-        !["EADDRINUSE", "EACCES"].includes(error?.code) ||
-        attempt === 127
-      ) {
+      if (!["EADDRINUSE", "EACCES"].includes(error?.code) || attempt === 127) {
         throw error;
       }
       upstreamListenPort += 1;
@@ -10270,6 +10689,19 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
   const contextCloseBackchannelRequestUrl =
     contextCloseBackchannelUrl.toString();
   const contextCloseBackchannelRequestTarget = `${contextCloseBackchannelUrl.pathname}${contextCloseBackchannelUrl.search}`;
+  const contextCloseTerminationUrl = new URL(contextCloseBackchannelUrl);
+  contextCloseTerminationUrl.searchParams.set("RID", "100001");
+  contextCloseTerminationUrl.searchParams.delete("AID");
+  contextCloseTerminationUrl.searchParams.delete("CI");
+  contextCloseTerminationUrl.searchParams.set(
+    "gsessionid",
+    "w10p_context_close_global",
+  );
+  contextCloseTerminationUrl.searchParams.set("TYPE", "terminate");
+  contextCloseTerminationUrl.searchParams.delete("t");
+  const contextCloseTerminationRequestUrl =
+    contextCloseTerminationUrl.toString();
+  const contextCloseTerminationRequestTarget = `${contextCloseTerminationUrl.pathname}${contextCloseTerminationUrl.search}`;
   const wrongApiKeyAllowedHostnameUrl = `https://identitytoolkit.googleapis.com/wrong-key-before-tunnel?key=${encodeURIComponent(syntheticProductionApiKey)}`;
   const wrongCredentialScopeAllowedHostnameUrl = `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${encodeURIComponent(syntheticStagingApiKey)}`;
   const nodeOwnedExternalProbeUrl = `${apiOrigin}/node-owned-external-probe`;
@@ -10376,6 +10808,7 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
     probeUrl,
     postFinalAbortUrl,
     contextCloseBackchannelRequestUrl,
+    contextCloseTerminationRequestUrl,
     productionImmutableUrl,
     unknownVercelUrl,
     vercelApexUrl,
@@ -10761,10 +11194,15 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
       }
       const handleLoopbackPausedRequest = async () => {
         if (responseStagePause) {
-          if (event.request.url === contextCloseBackchannelRequestUrl) {
+          if (
+            [
+              contextCloseBackchannelRequestUrl,
+              contextCloseTerminationRequestUrl,
+            ].includes(event.request.url)
+          ) {
             contextCloseBackchannelResponseStagePauseCount += 1;
             throw new Error(
-              "The held-open context-close backchannel unexpectedly reached a terminal Fetch pause.",
+              "A held-open context-close WebChannel request unexpectedly reached a terminal Fetch pause.",
             );
           }
           if (event.request.url === postFinalAbortUrl) {
@@ -11349,9 +11787,19 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
           });
           return;
         }
-        if (event.request.url === contextCloseBackchannelRequestUrl) {
+        if (
+          [
+            contextCloseBackchannelRequestUrl,
+            contextCloseTerminationRequestUrl,
+          ].includes(event.request.url)
+        ) {
+          const terminationRequest =
+            event.request.url === contextCloseTerminationRequestUrl;
           assert.equal(event.request.method, "GET");
-          assert.equal(event.resourceType, "XHR");
+          assert.equal(
+            event.resourceType,
+            terminationRequest ? "Image" : "XHR",
+          );
           assert.equal(Boolean(event.redirectedRequestId), false);
           assert.equal(
             contextCloseBackchannelLifecycleByFetchRequestId.has(
@@ -11378,7 +11826,29 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
               redirected: Boolean(event.redirectedRequestId),
               inspection: preTransmissionInspection,
             });
-          assert.equal(webChannelRequestClass, "backchannel-get");
+          const webChannelTerminationClass =
+            classifyExactStagingFirestoreWebChannelTerminationLifecycleScope({
+              requestUrl: event.request.url,
+              method: event.request.method,
+              observerSurface: "cdp-request-paused",
+              resourceType: event.resourceType,
+              postDataPresent: pausedRequestPostDataPresenceForCorrelation(
+                event.request,
+              ),
+              redirected: Boolean(event.redirectedRequestId),
+              inspection: preTransmissionInspection,
+            });
+          assert.equal(
+            webChannelRequestClass,
+            terminationRequest ? null : "backchannel-get",
+          );
+          assert.equal(
+            webChannelTerminationClass,
+            terminationRequest ? "termination-image-get" : null,
+          );
+          contextCloseTerminationClassifiedRequestCount += Number(
+            webChannelTerminationClass !== null,
+          );
           const requestInvariant = allowedEgressRequestInvariantForEvent(event);
           assert.ok(requestInvariant);
           contextCloseBackchannelLifecycleByFetchRequestId.set(
@@ -11393,6 +11863,7 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
             event.requestId,
             Object.freeze({
               webChannelRequestClass,
+              webChannelTerminationClass,
               firebaseService: preTransmissionInspection.firebaseService,
               isFirebaseRequest: preTransmissionInspection.isFirebaseRequest,
               stagingMarker: preTransmissionInspection.stagingMarker,
@@ -11545,9 +12016,11 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
         });
       };
       const handlerPromise = (
-        [postFinalAbortUrl, contextCloseBackchannelRequestUrl].includes(
-          event.request.url,
-        )
+        [
+          postFinalAbortUrl,
+          contextCloseBackchannelRequestUrl,
+          contextCloseTerminationRequestUrl,
+        ].includes(event.request.url)
           ? loopbackHandlerTaskCoordinator.enqueue(
               handlerCorrelationId,
               handleLoopbackPausedRequest,
@@ -11558,7 +12031,12 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
           const revokeRequestId =
             postFinalAbortResponseCorrelation?.primaryRequestId ||
             event.requestId;
-          if (event.request.url === contextCloseBackchannelRequestUrl) {
+          if (
+            [
+              contextCloseBackchannelRequestUrl,
+              contextCloseTerminationRequestUrl,
+            ].includes(event.request.url)
+          ) {
             contextCloseBackchannelAuthorizationCoordinator.revoke(
               revokeRequestId,
             );
@@ -13700,16 +14178,27 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
       loopbackStableDocumentFetchNetworkRequestId,
       "The stable-document Playwright request identity did not match Fetch.requestPaused.networkId.",
     );
-    await page.evaluate((url) => {
-      const request = new XMLHttpRequest();
-      request.open("GET", url, true);
-      request.send();
-      globalThis.__w10pContextCloseBackchannel = request;
-    }, contextCloseBackchannelRequestUrl);
+    await page.evaluate(
+      ([backchannelUrl, terminationUrl]) => {
+        const request = new XMLHttpRequest();
+        request.open("GET", backchannelUrl, true);
+        request.send();
+        globalThis.__w10pContextCloseBackchannel = request;
+        const terminationImage = new Image();
+        terminationImage.src = terminationUrl;
+        globalThis.__w10pContextCloseTerminationImage = terminationImage;
+      },
+      [contextCloseBackchannelRequestUrl, contextCloseTerminationRequestUrl],
+    );
     const contextCloseBackchannelWireObservation = await withExplicitTimeout(
       contextCloseBackchannelWireObserved,
       5000,
       "Timed out waiting for the held-open Firestore WebChannel backchannel wire request.",
+    );
+    const contextCloseTerminationWireObservation = await withExplicitTimeout(
+      contextCloseTerminationWireObserved,
+      5000,
+      "Timed out waiting for the held-open Firestore WebChannel termination Image request.",
     );
     while (handlerPromises.size > 0) {
       await Promise.all([...handlerPromises]);
@@ -13719,9 +14208,25 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
     const contextCloseBackchannelRequestIds = [
       ...contextCloseBackchannelLifecycleByFetchRequestId.keys(),
     ];
-    assert.equal(contextCloseBackchannelRequestIds.length, 1);
-    const [contextCloseBackchannelRequestId] =
-      contextCloseBackchannelRequestIds;
+    assert.equal(contextCloseBackchannelRequestIds.length, 2);
+    const contextCloseBackchannelRequestId =
+      contextCloseBackchannelRequestIds.find(
+        (requestId) =>
+          contextCloseBackchannelObservationsByFetchRequestId.get(requestId)
+            ?.webChannelRequestClass === "backchannel-get",
+      );
+    const contextCloseTerminationRequestId =
+      contextCloseBackchannelRequestIds.find(
+        (requestId) =>
+          contextCloseBackchannelObservationsByFetchRequestId.get(requestId)
+            ?.webChannelTerminationClass === "termination-image-get",
+      );
+    assert.equal(typeof contextCloseBackchannelRequestId, "string");
+    assert.equal(typeof contextCloseTerminationRequestId, "string");
+    assert.notEqual(
+      contextCloseBackchannelRequestId,
+      contextCloseTerminationRequestId,
+    );
     const contextCloseBackchannelLifecycle =
       contextCloseBackchannelLifecycleByFetchRequestId.get(
         contextCloseBackchannelRequestId,
@@ -13730,22 +14235,42 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
       contextCloseBackchannelObservationsByFetchRequestId.get(
         contextCloseBackchannelRequestId,
       );
+    const contextCloseTerminationLifecycle =
+      contextCloseBackchannelLifecycleByFetchRequestId.get(
+        contextCloseTerminationRequestId,
+      );
+    const contextCloseTerminationObservation =
+      contextCloseBackchannelObservationsByFetchRequestId.get(
+        contextCloseTerminationRequestId,
+      );
     assert.ok(contextCloseBackchannelLifecycle);
     assert.ok(contextCloseBackchannelObservation);
+    assert.ok(contextCloseTerminationLifecycle);
+    assert.ok(contextCloseTerminationObservation);
     assert.equal(contextCloseBackchannelLifecycle.state, "response-awaiting");
+    assert.equal(contextCloseTerminationLifecycle.state, "response-awaiting");
     assert.equal(
       contextCloseBackchannelAuthorizationCoordinator.stateFor(
         contextCloseBackchannelRequestId,
       ),
       "active",
     );
+    assert.equal(
+      contextCloseBackchannelAuthorizationCoordinator.stateFor(
+        contextCloseTerminationRequestId,
+      ),
+      "active",
+    );
     const preCloseActiveOwnerIds =
       contextCloseBackchannelAuthorizationCoordinator.activeOwnerIds();
-    assert.equal(preCloseActiveOwnerIds.length, 1);
+    assert.equal(preCloseActiveOwnerIds.length, 2);
     assert.equal(
-      preCloseActiveOwnerIds[0] === contextCloseBackchannelRequestId,
+      [
+        contextCloseBackchannelRequestId,
+        contextCloseTerminationRequestId,
+      ].every((requestId) => preCloseActiveOwnerIds.includes(requestId)),
       true,
-      "The held-open backchannel authorization owner drifted.",
+      "A held-open WebChannel authorization owner drifted.",
     );
     assert.equal(
       loopbackProxy.hasRequestStageAuthorization(
@@ -13753,21 +14278,31 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
       ),
       true,
     );
-    assert.equal(contextCloseBackchannelAuthorizationCount, 1);
-    assert.equal(contextCloseBackchannelContinueSuccessCount, 1);
+    assert.equal(
+      loopbackProxy.hasRequestStageAuthorization(
+        contextCloseTerminationRequestId,
+      ),
+      true,
+    );
+    assert.equal(contextCloseBackchannelAuthorizationCount, 2);
+    assert.equal(contextCloseBackchannelContinueSuccessCount, 2);
     assert.equal(contextCloseBackchannelCompletionCount, 0);
     assert.equal(contextCloseBackchannelRevocationCount, 0);
     assert.equal(contextCloseBackchannelResponseStagePauseCount, 0);
-    assert.equal(contextCloseBackchannelOpenResponses.size, 1);
-    assert.equal(contextCloseBackchannelOpenSockets.size, 1);
-    assert.equal(contextCloseBackchannelWireRequests.length, 1);
+    assert.equal(contextCloseTerminationClassifiedRequestCount, 1);
+    assert.equal(contextCloseBackchannelOpenResponses.size, 2);
+    assert.equal(contextCloseBackchannelOpenSockets.size, 2);
+    assert.equal(contextCloseBackchannelWireRequests.length, 2);
     assert.equal(
       contextCloseBackchannelWireRequests.every(
         (observation) =>
           observation.method === "GET" &&
-          observation.url === contextCloseBackchannelRequestTarget &&
+          [
+            contextCloseBackchannelRequestTarget,
+            contextCloseTerminationRequestTarget,
+          ].includes(observation.url) &&
           observation.host === "firestore.googleapis.com" &&
-          observation.origin === stableOrigin &&
+          ["", stableOrigin].includes(observation.origin) &&
           observation.referer === `${stableOrigin}/` &&
           observation.appCheckHeader === syntheticJwt,
       ),
@@ -13776,20 +14311,33 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
     );
     assert.equal(
       contextCloseBackchannelWireObservation ===
-        contextCloseBackchannelWireRequests[0],
+        contextCloseBackchannelWireRequests.find(
+          ({ url }) => url === contextCloseBackchannelRequestTarget,
+        ),
       true,
-      "The held-open WebChannel wire observation lost its exact binding.",
+      "The held-open WebChannel backchannel wire observation lost its exact binding.",
+    );
+    assert.equal(
+      contextCloseTerminationWireObservation ===
+        contextCloseBackchannelWireRequests.find(
+          ({ url }) => url === contextCloseTerminationRequestTarget,
+        ),
+      true,
+      "The held-open WebChannel termination wire observation lost its exact binding.",
     );
     const contextCloseBackchannelTlsWireRequests =
       directAllowedTlsWireRequests.filter(
         ({ host }) => host === "firestore.googleapis.com",
       );
-    assert.equal(contextCloseBackchannelTlsWireRequests.length, 1);
+    assert.equal(contextCloseBackchannelTlsWireRequests.length, 2);
     assert.equal(
       contextCloseBackchannelTlsWireRequests.every(
         ({ method, url, host }) =>
           method === "GET" &&
-          url === contextCloseBackchannelRequestTarget &&
+          [
+            contextCloseBackchannelRequestTarget,
+            contextCloseTerminationRequestTarget,
+          ].includes(url) &&
           host === "firestore.googleapis.com",
       ),
       true,
@@ -13809,10 +14357,24 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
       eligible: false,
       reason: "browser-context-open",
     });
+    const openContextTerminationRetirementDecision =
+      contextClosedWebChannelTerminationRetirementDecision({
+        contextClosed: contextCloseBackchannelContextClosed,
+        authorizationState:
+          contextCloseBackchannelAuthorizationCoordinator.stateFor(
+            contextCloseTerminationRequestId,
+          ),
+        lifecycleState: contextCloseTerminationLifecycle.state,
+        observation: contextCloseTerminationObservation,
+      });
+    assert.deepEqual(openContextTerminationRetirementDecision, {
+      eligible: false,
+      reason: "browser-context-open",
+    });
     const preContextCloseProxySnapshot = loopbackProxy.snapshot();
     assert.equal(
       preContextCloseProxySnapshot.requestStageAuthorizationCount,
-      3,
+      4,
     );
     assert.equal(
       preContextCloseProxySnapshot.requestStageAuthorizationCompleteCount,
@@ -13824,7 +14386,7 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
     );
     assert.equal(
       preContextCloseProxySnapshot.requestStageAuthorizationResidualCount,
-      1,
+      2,
     );
     assert.ok(
       preContextCloseProxySnapshot.activeAllowedTunnelResidualCount > 0,
@@ -13845,11 +14407,14 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
     assert.equal(contextCloseBackchannelResponseStagePauseCount, 0);
     const activeContextClosedOwnerIds =
       contextCloseBackchannelAuthorizationCoordinator.activeOwnerIds();
-    assert.equal(activeContextClosedOwnerIds.length, 1);
+    assert.equal(activeContextClosedOwnerIds.length, 2);
     assert.equal(
-      activeContextClosedOwnerIds[0] === contextCloseBackchannelRequestId,
+      [
+        contextCloseBackchannelRequestId,
+        contextCloseTerminationRequestId,
+      ].every((requestId) => activeContextClosedOwnerIds.includes(requestId)),
       true,
-      "The context-closed backchannel authorization owner drifted.",
+      "A context-closed WebChannel authorization owner drifted.",
     );
     assert.equal(
       activeContextClosedOwnerIds.length,
@@ -13863,8 +14428,8 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
       activeContextClosedOwnerIds.length,
       contextCloseBackchannelLifecycleByFetchRequestId.size,
     );
-    contextCloseBackchannelRetirementCount +=
-      retireExactContextClosedWebChannelBackchannelAuthorizations({
+    const contextCloseWebChannelRetirementCounts =
+      retireExactContextClosedWebChannelAuthorizations({
         contextClosed: contextCloseBackchannelContextClosed,
         authorizationCoordinator:
           contextCloseBackchannelAuthorizationCoordinator,
@@ -13877,6 +14442,10 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
           contextCloseBackchannelObservationsByFetchRequestId,
         ],
       });
+    contextCloseBackchannelRetirementCount +=
+      contextCloseWebChannelRetirementCounts.backchannelRetirementCount;
+    contextCloseTerminationRetirementCount +=
+      contextCloseWebChannelRetirementCounts.terminationRetirementCount;
     assert.equal(
       contextCloseBackchannelLifecycleByFetchRequestId.get(
         contextCloseBackchannelRequestId,
@@ -13884,12 +14453,28 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
       true,
       "The context-closed backchannel lifecycle was not retired.",
     );
+    assert.equal(
+      contextCloseBackchannelLifecycleByFetchRequestId.get(
+        contextCloseTerminationRequestId,
+      )?.state === "context-closed-webchannel-termination-retired",
+      true,
+      "The context-closed termination lifecycle was not retired.",
+    );
     contextCloseBackchannelLifecycleByFetchRequestId.delete(
       contextCloseBackchannelRequestId,
+    );
+    contextCloseBackchannelLifecycleByFetchRequestId.delete(
+      contextCloseTerminationRequestId,
     );
     assert.equal(
       contextCloseBackchannelAuthorizationCoordinator.stateFor(
         contextCloseBackchannelRequestId,
+      ),
+      "completed",
+    );
+    assert.equal(
+      contextCloseBackchannelAuthorizationCoordinator.stateFor(
+        contextCloseTerminationRequestId,
       ),
       "completed",
     );
@@ -13903,8 +14488,15 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
       ),
       false,
     );
+    assert.equal(
+      loopbackProxy.hasRequestStageAuthorization(
+        contextCloseTerminationRequestId,
+      ),
+      false,
+    );
     assert.equal(contextCloseBackchannelRetirementCount, 1);
-    assert.equal(contextCloseBackchannelCompletionCount, 1);
+    assert.equal(contextCloseTerminationRetirementCount, 1);
+    assert.equal(contextCloseBackchannelCompletionCount, 2);
     assert.equal(contextCloseBackchannelRevocationCount, 0);
     assert.equal(
       contextCloseBackchannelAuthorizationCount,
@@ -13940,11 +14532,11 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
     );
     assert.equal(
       postContextCloseProxySnapshot.requestStageAuthorizationCount,
-      3,
+      4,
     );
     assert.equal(
       postContextCloseProxySnapshot.requestStageAuthorizationCompleteCount,
-      3,
+      4,
     );
     assert.equal(
       postContextCloseProxySnapshot.requestStageAuthorizationRevocationCount,
@@ -14035,13 +14627,15 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
   assert.equal(contextCloseBackchannelContextClosed, true);
   assert.equal(contextCloseBackchannelContextCloseSuccessCount, 1);
   assert.equal(contextCloseBackchannelLateHandlerDrainCount, 1);
-  assert.equal(contextCloseBackchannelWireRequests.length, 1);
-  assert.equal(contextCloseBackchannelAuthorizationCount, 1);
-  assert.equal(contextCloseBackchannelContinueSuccessCount, 1);
-  assert.equal(contextCloseBackchannelCompletionCount, 1);
+  assert.equal(contextCloseBackchannelWireRequests.length, 2);
+  assert.equal(contextCloseBackchannelAuthorizationCount, 2);
+  assert.equal(contextCloseBackchannelContinueSuccessCount, 2);
+  assert.equal(contextCloseBackchannelCompletionCount, 2);
   assert.equal(contextCloseBackchannelRevocationCount, 0);
   assert.equal(contextCloseBackchannelResponseStagePauseCount, 0);
   assert.equal(contextCloseBackchannelRetirementCount, 1);
+  assert.equal(contextCloseTerminationClassifiedRequestCount, 1);
+  assert.equal(contextCloseTerminationRetirementCount, 1);
   assert.equal(
     contextCloseBackchannelAuthorizationCount,
     contextCloseBackchannelCompletionCount +
@@ -14076,17 +14670,17 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
   assert.equal(loopbackProxySnapshot.listenerCloseCount, 1);
   assert.equal(loopbackProxySnapshot.activeClientSocketCount, 0);
   assert.equal(loopbackProxySnapshot.activeUpstreamSocketCount, 0);
-  assert.equal(loopbackProxySnapshot.requestStageAuthorizationCount, 3);
-  assert.equal(loopbackProxySnapshot.requestStageAuthorizationCompleteCount, 3);
+  assert.equal(loopbackProxySnapshot.requestStageAuthorizationCount, 4);
+  assert.equal(loopbackProxySnapshot.requestStageAuthorizationCompleteCount, 4);
   assert.equal(
     loopbackProxySnapshot.requestStageAuthorizationRevocationCount,
     0,
   );
-  assert.equal(loopbackProxySnapshot.authorityLeaseIssueCount, 3);
+  assert.equal(loopbackProxySnapshot.authorityLeaseIssueCount, 4);
   assert.equal(
     loopbackProxySnapshot.authorityLeaseConsumeCount +
       loopbackProxySnapshot.authorityLeaseUnusedCompletionCount,
-    3,
+    4,
   );
   assert.equal(loopbackProxySnapshot.authorityLeaseRevocationCount, 0);
   assert.equal(
@@ -14276,6 +14870,7 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
     postFinalAbortNetworkAliasResidualCount:
       postFinalAbortFetchRequestIdsByNetworkId.size,
     contextCloseBackchannelRequestStageResourceType: "XHR",
+    contextCloseTerminationRequestStageResourceType: "Image",
     contextCloseBackchannelWireRequestCount:
       contextCloseBackchannelWireRequests.length,
     contextCloseBackchannelAuthorizationCount,
@@ -14286,6 +14881,8 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
     contextCloseBackchannelContextCloseSuccessCount,
     contextCloseBackchannelLateHandlerDrainCount,
     contextCloseBackchannelRetirementCount,
+    contextCloseTerminationClassifiedRequestCount,
+    contextCloseTerminationRetirementCount,
     contextCloseBackchannelAuthorizationResidualCount:
       contextCloseBackchannelAuthorizationCoordinator.activeCount(),
     contextCloseBackchannelLifecycleResidualCount:
@@ -19355,6 +19952,8 @@ let webChannelCdpHeaderAttestationBindingFailureCount = 0;
 let webChannelCdpHeaderAttestationPairingTimeoutCount = 0;
 let webChannelCdpHeaderAttestationCompletionTimeoutCount = 0;
 let allowedEgressContextCloseBackchannelRetirementCount = 0;
+let webChannelTerminationClassifiedRequestCount = 0;
+let allowedEgressContextCloseTerminationRetirementCount = 0;
 let playwrightAllHeadersHeaderAttestationRequestCount = 0;
 let playwrightAllHeadersHeaderAttestationCompletedRequestCount = 0;
 let appCheckCdpHandlerErrorCount = 0;
@@ -20247,6 +20846,10 @@ try {
       webChannelCdpHeaderAttestationCompletionTimeoutCount;
     const groupAllowedEgressContextCloseBackchannelRetirementStart =
       allowedEgressContextCloseBackchannelRetirementCount;
+    const groupWebChannelTerminationClassifiedStart =
+      webChannelTerminationClassifiedRequestCount;
+    const groupAllowedEgressContextCloseTerminationRetirementStart =
+      allowedEgressContextCloseTerminationRetirementCount;
     const groupPlaywrightAllHeadersHeaderAttestationStart =
       playwrightAllHeadersHeaderAttestationRequestCount;
     const groupPlaywrightAllHeadersHeaderAttestationCompletedStart =
@@ -21269,6 +21872,7 @@ try {
       "post-final-error-observed-retired",
       "redirect-retired",
       "context-closed-webchannel-backchannel-retired",
+      "context-closed-webchannel-termination-retired",
       "handler-failed",
     ]);
     const recordAllowedEgressRequestStageLifecycle = (
@@ -21314,9 +21918,9 @@ try {
         Object.freeze({ ...lifecycle, state }),
       );
     };
-    const retireContextClosedWebChannelBackchannelAuthorizations = () => {
-      const retirementCount =
-        retireExactContextClosedWebChannelBackchannelAuthorizations({
+    const retireContextClosedWebChannelAuthorizations = () => {
+      const retirementCounts = retireExactContextClosedWebChannelAuthorizations(
+        {
           contextClosed: groupBrowserContextClosed,
           authorizationCoordinator: allowedEgressProxyAuthorizationCoordinator,
           pendingHandlerCount:
@@ -21330,9 +21934,13 @@ try {
             sensitiveAppCheckRequestsByFetchRequestId,
             informationalResponseRequestsByFetchRequestId,
           ],
-        });
-      allowedEgressContextCloseBackchannelRetirementCount += retirementCount;
-      return retirementCount;
+        },
+      );
+      allowedEgressContextCloseBackchannelRetirementCount +=
+        retirementCounts.backchannelRetirementCount;
+      allowedEgressContextCloseTerminationRetirementCount +=
+        retirementCounts.terminationRetirementCount;
+      return retirementCounts;
     };
     const resolveResponseCorrelationForEvent = (event) =>
       resolveAllowedEgressResponseCorrelation({
@@ -21383,6 +21991,7 @@ try {
       preTransmissionInspection,
       diagnosticContext,
       webChannelRequestClass = null,
+      webChannelTerminationClass = null,
       overrides = {},
     }) => {
       assert.equal(preTransmissionInspection.isFirebaseRequest, true);
@@ -21408,6 +22017,7 @@ try {
           conditionalResponseHeaderRuleId,
           diagnosticPhase: diagnosticContext.phase,
           webChannelRequestClass,
+          webChannelTerminationClass,
           firebaseService: preTransmissionInspection.firebaseService,
           isFirebaseRequest: preTransmissionInspection.isFirebaseRequest,
           stagingMarker: preTransmissionInspection.stagingMarker,
@@ -22572,6 +23182,25 @@ try {
           redirected: Boolean(event.redirectedRequestId),
           inspection: preTransmissionInspection,
         });
+      const exactWebChannelTerminationLifecycleClass =
+        classifyExactStagingFirestoreWebChannelTerminationLifecycleScope({
+          requestUrl,
+          method: requestMethod,
+          observerSurface: "cdp-request-paused",
+          resourceType: event.resourceType,
+          postDataPresent: postData.length > 0,
+          redirected: Boolean(event.redirectedRequestId),
+          inspection: preTransmissionInspection,
+        });
+      assert.equal(
+        exactWebChannelHeaderCorrelationClass !== null &&
+          exactWebChannelTerminationLifecycleClass !== null,
+        false,
+        "Firestore WebChannel header and termination scopes overlapped.",
+      );
+      webChannelTerminationClassifiedRequestCount += Number(
+        exactWebChannelTerminationLifecycleClass !== null,
+      );
       const webChannelCdpHeaderAttestationEntry =
         webChannelCdpHeaderAttestationEntriesByEvent.get(event) || null;
       assert.equal(
@@ -22607,6 +23236,7 @@ try {
           preTransmissionInspection,
           diagnosticContext,
           webChannelRequestClass: exactWebChannelHeaderCorrelationClass,
+          webChannelTerminationClass: exactWebChannelTerminationLifecycleClass,
         });
         completeWebChannelCdpHeaderAttestation(
           webChannelCdpHeaderAttestationEntry,
@@ -22642,6 +23272,7 @@ try {
           preTransmissionInspection,
           diagnosticContext,
           webChannelRequestClass: exactWebChannelHeaderCorrelationClass,
+          webChannelTerminationClass: exactWebChannelTerminationLifecycleClass,
         });
         completeWebChannelCdpHeaderAttestation(
           webChannelCdpHeaderAttestationEntry,
@@ -22672,6 +23303,7 @@ try {
           preTransmissionInspection,
           diagnosticContext,
           webChannelRequestClass: exactWebChannelHeaderCorrelationClass,
+          webChannelTerminationClass: exactWebChannelTerminationLifecycleClass,
         });
         completeWebChannelCdpHeaderAttestation(
           webChannelCdpHeaderAttestationEntry,
@@ -22707,6 +23339,7 @@ try {
         preTransmissionInspection,
         diagnosticContext,
         webChannelRequestClass: exactWebChannelHeaderCorrelationClass,
+        webChannelTerminationClass: exactWebChannelTerminationLifecycleClass,
         overrides: {
           headers: [
             ...headerEntries.filter(
@@ -23570,7 +24203,7 @@ try {
         `Allowed-egress handler queue must be empty after cleanup for ${groupKey}.`,
       );
       await flushNetworkAttestations();
-      retireContextClosedWebChannelBackchannelAuthorizations();
+      retireContextClosedWebChannelAuthorizations();
       assert.equal(
         allowedEgressProxyAuthorizationCoordinator.activeCount(),
         0,
@@ -23666,6 +24299,13 @@ try {
           webChannelCdpHeaderAttestationBoundRequestCount -
             groupWebChannelCdpHeaderAttestationBoundStart,
         "Context-close WebChannel backchannel retirements exceeded exact header bindings.",
+      );
+      assert.ok(
+        allowedEgressContextCloseTerminationRetirementCount -
+          groupAllowedEgressContextCloseTerminationRetirementStart <=
+          webChannelTerminationClassifiedRequestCount -
+            groupWebChannelTerminationClassifiedStart,
+        "Context-close WebChannel termination retirements exceeded exact lifecycle classifications.",
       );
       assert.equal(
         webChannelCdpHeaderAttestationBindingRecords.length,
@@ -24342,6 +24982,12 @@ try {
         allowedEgressContextCloseBackchannelRetirementCount:
           allowedEgressContextCloseBackchannelRetirementCount -
           groupAllowedEgressContextCloseBackchannelRetirementStart,
+        webChannelTerminationClassifiedRequestCount:
+          webChannelTerminationClassifiedRequestCount -
+          groupWebChannelTerminationClassifiedStart,
+        allowedEgressContextCloseTerminationRetirementCount:
+          allowedEgressContextCloseTerminationRetirementCount -
+          groupAllowedEgressContextCloseTerminationRetirementStart,
         webChannelCdpHeaderAttestationBindingSetHash: sha256(
           canonicalJson(sortedWebChannelCdpHeaderAttestationBindingRecords()),
         ),
@@ -24707,8 +25353,9 @@ assert.equal(
 assert.equal(
   browserConnectProxyFinalSnapshot.requestStageAuthorizationCount,
   allowedEgressResponsePauseCount +
-    allowedEgressContextCloseBackchannelRetirementCount,
-  "Every request-stage proxy authorization must have a terminal response pause or an exact context-close backchannel retirement.",
+    allowedEgressContextCloseBackchannelRetirementCount +
+    allowedEgressContextCloseTerminationRetirementCount,
+  "Every request-stage proxy authorization must have a terminal response pause or an exact context-close WebChannel retirement.",
 );
 assert.equal(
   browserConnectProxyFinalSnapshot.requestStageAuthorizationRevocationCount,
@@ -25192,6 +25839,10 @@ assert.equal(webChannelCdpHeaderAttestationCompletionTimeoutCount, 0);
 assert.ok(
   allowedEgressContextCloseBackchannelRetirementCount <=
     webChannelCdpHeaderAttestationBoundRequestCount,
+);
+assert.ok(
+  allowedEgressContextCloseTerminationRetirementCount <=
+    webChannelTerminationClassifiedRequestCount,
 );
 assert.ok(playwrightAllHeadersHeaderAttestationRequestCount > 0);
 assert.equal(
@@ -25780,6 +26431,8 @@ const appCheckBinding = {
   webChannelCdpHeaderAttestationPairingTimeoutCount,
   webChannelCdpHeaderAttestationCompletionTimeoutCount,
   allowedEgressContextCloseBackchannelRetirementCount,
+  webChannelTerminationClassifiedRequestCount,
+  allowedEgressContextCloseTerminationRetirementCount,
   playwrightAllHeadersHeaderAttestationRequestCount,
   playwrightAllHeadersHeaderAttestationCompletedRequestCount,
   appCheckCdpHandlerErrorCount,
