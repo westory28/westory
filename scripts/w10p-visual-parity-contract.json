@@ -2464,7 +2464,7 @@
         {
           "id": "notification-manager-title",
           "selector": "h3",
-          "textPattern": "^알림 관리$",
+          "textPattern": "^알림 관리(?:\\s|$)",
           "tagPattern": "^H3$"
         },
         {
