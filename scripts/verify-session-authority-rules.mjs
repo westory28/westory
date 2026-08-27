@@ -5,9 +5,17 @@ import {
   assertSucceeds,
   initializeTestEnvironment,
 } from "@firebase/rules-unit-testing";
-import { doc, getDoc, setDoc, Timestamp } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+  Timestamp,
+} from "firebase/firestore";
 
-const projectId = process.env.GCLOUD_PROJECT || "demo-westory-session-authority";
+const projectId =
+  process.env.GCLOUD_PROJECT || "demo-westory-session-authority";
 const authTime = Math.floor(Date.now() / 1000) - 30;
 const staleAdminAuthTime = Math.floor(Date.now() / 1000) - 6 * 60;
 const future = Timestamp.fromMillis(Date.now() + 10 * 60 * 1000);
@@ -50,6 +58,67 @@ const main = async () => {
         year: "2026",
         semester: "1",
       });
+      await setDoc(doc(adminDb, "site_settings", "student_maintenance"), {
+        enabled: false,
+        blockedRoles: ["student"],
+        bypassUids: [],
+        title: "W10P 시각 검증 점검 안내",
+        message: "W10P 시각 검증에서는 점검 모드를 사용하지 않습니다.",
+        startedAt: null,
+        updatedAt: Timestamp.fromMillis(Date.now()),
+        updatedBy: "fixture-admin",
+        revision: 1,
+      });
+      const userProfiles = [
+        [
+          "w10p-visual-admin",
+          "w10p-visual-admin@yongshin-ms.ms.kr",
+          "teacher",
+          true,
+          [],
+        ],
+        ["teacher-user", "teacher@yongshin-ms.ms.kr", "teacher", true, []],
+        [
+          "staff-user",
+          "staff@yongshin-ms.ms.kr",
+          "staff",
+          true,
+          ["student_list_read"],
+        ],
+        ["student-user", "student@yongshin-ms.ms.kr", "student", false, []],
+        ["staff-denied", "staff.denied@yongshin-ms.ms.kr", "staff", true, []],
+        [
+          "expired-list-user",
+          "expired.list@yongshin-ms.ms.kr",
+          "teacher",
+          true,
+          [],
+        ],
+      ];
+      for (const [
+        uid,
+        email,
+        role,
+        teacherPortalEnabled,
+        staffPermissions,
+      ] of userProfiles) {
+        await setDoc(doc(adminDb, "users", uid), {
+          uid,
+          email,
+          role,
+          teacherPortalEnabled,
+          staffPermissions,
+        });
+        await setDoc(doc(adminDb, sessionPath(uid)), activeSession(uid));
+      }
+      await setDoc(doc(adminDb, sessionPath("expired-list-user")), {
+        ...activeSession("expired-list-user"),
+        generalExpiresAt: past,
+      });
+      await setDoc(
+        doc(adminDb, sessionPath("real-admin")),
+        activeSession("real-admin"),
+      );
       await setDoc(
         doc(adminDb, sessionPath("active-user")),
         activeSession("active-user"),
@@ -114,7 +183,11 @@ const main = async () => {
         },
       );
       await setDoc(
-        doc(adminDb, "application_session_transitions", "expired-transition-user"),
+        doc(
+          adminDb,
+          "application_session_transitions",
+          "expired-transition-user",
+        ),
         {
           uid: "expired-transition-user",
           status: "pending",
@@ -128,7 +201,13 @@ const main = async () => {
     });
 
     const protectedRead = (uid, claims) =>
-      getDoc(doc(env.authenticatedContext(uid, claims).firestore(), "site_settings", "config"));
+      getDoc(
+        doc(
+          env.authenticatedContext(uid, claims).firestore(),
+          "site_settings",
+          "config",
+        ),
+      );
 
     await assertSucceeds(
       protectedRead("active-user", token("active@yongshin-ms.ms.kr")),
@@ -155,14 +234,49 @@ const main = async () => {
       ),
     );
 
-    const recentAdminDb = env.authenticatedContext("recent-admin", {
-      email: "westoria28@gmail.com",
-      auth_time: authTime,
-    }).firestore();
-    const staleAdminDb = env.authenticatedContext("stale-admin", {
-      email: "westoria28@gmail.com",
-      auth_time: staleAdminAuthTime,
-    }).firestore();
+    const listUsers = (uid, claims) =>
+      getDocs(
+        collection(env.authenticatedContext(uid, claims).firestore(), "users"),
+      );
+    await assertSucceeds(
+      listUsers("w10p-visual-admin", {
+        ...token("w10p-visual-admin@yongshin-ms.ms.kr"),
+        fixtureOwner: "w10p-visual-parity",
+        fixtureId: "w10p-visual-fixture-v1",
+        fixtureRole: "admin",
+      }),
+    );
+    await assertSucceeds(
+      listUsers("teacher-user", token("teacher@yongshin-ms.ms.kr")),
+    );
+    await assertSucceeds(
+      listUsers("staff-user", token("staff@yongshin-ms.ms.kr")),
+    );
+    await assertSucceeds(
+      listUsers("real-admin", token("westoria28@gmail.com")),
+    );
+    await assertFails(
+      listUsers("student-user", token("student@yongshin-ms.ms.kr")),
+    );
+    await assertFails(
+      listUsers("staff-denied", token("staff.denied@yongshin-ms.ms.kr")),
+    );
+    await assertFails(
+      listUsers("expired-list-user", token("expired.list@yongshin-ms.ms.kr")),
+    );
+
+    const recentAdminDb = env
+      .authenticatedContext("recent-admin", {
+        email: "westoria28@gmail.com",
+        auth_time: authTime,
+      })
+      .firestore();
+    const staleAdminDb = env
+      .authenticatedContext("stale-admin", {
+        email: "westoria28@gmail.com",
+        auth_time: staleAdminAuthTime,
+      })
+      .firestore();
     await assertSucceeds(
       setDoc(doc(recentAdminDb, "site_settings", "menu_config"), {
         updatedAt: "recent-auth",
@@ -186,41 +300,86 @@ const main = async () => {
       protectedRead("mismatch-user", token("mismatch@yongshin-ms.ms.kr")),
     );
     await assertFails(
-      protectedRead("old-protocol-user", token("old.protocol@yongshin-ms.ms.kr")),
+      protectedRead(
+        "old-protocol-user",
+        token("old.protocol@yongshin-ms.ms.kr"),
+      ),
     );
     await assertSucceeds(
-      protectedRead("observe-expired-user", token("observe.expired@yongshin-ms.ms.kr")),
+      protectedRead(
+        "observe-expired-user",
+        token("observe.expired@yongshin-ms.ms.kr"),
+      ),
     );
     await assertFails(
-      protectedRead("observe-closed-user", token("observe.closed@yongshin-ms.ms.kr")),
+      protectedRead(
+        "observe-closed-user",
+        token("observe.closed@yongshin-ms.ms.kr"),
+      ),
     );
     await assertSucceeds(
-      protectedRead("disabled-expired-user", token("disabled.expired@yongshin-ms.ms.kr")),
+      protectedRead(
+        "disabled-expired-user",
+        token("disabled.expired@yongshin-ms.ms.kr"),
+      ),
     );
     await assertFails(
-      protectedRead("invalid-mode-user", token("invalid.mode@yongshin-ms.ms.kr")),
+      protectedRead(
+        "invalid-mode-user",
+        token("invalid.mode@yongshin-ms.ms.kr"),
+      ),
     );
 
     const directDb = env
       .authenticatedContext("active-user", token("active@yongshin-ms.ms.kr"))
       .firestore();
     await assertFails(
-      setDoc(doc(directDb, sessionPath("active-user")), {
-        generalExpiresAt: Timestamp.fromMillis(Date.now() + 60 * 60 * 1000),
-      }, { merge: true }),
+      setDoc(
+        doc(directDb, sessionPath("active-user")),
+        {
+          generalExpiresAt: Timestamp.fromMillis(Date.now() + 60 * 60 * 1000),
+        },
+        { merge: true },
+      ),
     );
     await assertFails(
-      setDoc(
-        doc(directDb, "application_session_transitions", "active-user"),
-        { status: "pending" },
-      ),
+      setDoc(doc(directDb, "application_session_transitions", "active-user"), {
+        status: "pending",
+      }),
     );
 
     console.log(
       JSON.stringify({
         suite: "session-authority-firestore-rules",
         passed: true,
-        cases: ["ACTIVE", "MISSING", "REAUTH_TRANSITION_NEW_EPOCH", "REAUTH_TRANSITION_OLD_EPOCH_DENIED", "REAUTH_TRANSITION_EXPIRED_DENIED", "EXPIRED", "CLOSED", "CORRUPT", "AUTH_TIME_MISMATCH", "OLD_PROTOCOL_DENIED", "OBSERVE_IDLE_EXPIRED_ALLOWED", "OBSERVE_CLOSED_DENIED", "DISABLED_IDLE_EXPIRED_ALLOWED", "INVALID_MODE_DENIED", "STALE_ENFORCE_MODE_NOT_DOWNGRADED", "DIRECT_SESSION_WRITE", "DIRECT_TRANSITION_WRITE_DENIED", "RECENT_ADMIN_WRITE", "STALE_ADMIN_WRITE_DENIED"],
+        cases: [
+          "ACTIVE",
+          "MISSING",
+          "REAUTH_TRANSITION_NEW_EPOCH",
+          "REAUTH_TRANSITION_OLD_EPOCH_DENIED",
+          "REAUTH_TRANSITION_EXPIRED_DENIED",
+          "EXACT_FIXTURE_ADMIN_USER_LIST",
+          "TEACHER_USER_LIST",
+          "STAFF_PERMISSION_USER_LIST",
+          "REAL_ADMIN_USER_LIST",
+          "STUDENT_USER_LIST_DENIED",
+          "STAFF_WITHOUT_PERMISSION_USER_LIST_DENIED",
+          "EXPIRED_SESSION_USER_LIST_DENIED",
+          "EXPIRED",
+          "CLOSED",
+          "CORRUPT",
+          "AUTH_TIME_MISMATCH",
+          "OLD_PROTOCOL_DENIED",
+          "OBSERVE_IDLE_EXPIRED_ALLOWED",
+          "OBSERVE_CLOSED_DENIED",
+          "DISABLED_IDLE_EXPIRED_ALLOWED",
+          "INVALID_MODE_DENIED",
+          "STALE_ENFORCE_MODE_NOT_DOWNGRADED",
+          "DIRECT_SESSION_WRITE",
+          "DIRECT_TRANSITION_WRITE_DENIED",
+          "RECENT_ADMIN_WRITE",
+          "STALE_ADMIN_WRITE_DENIED",
+        ],
         productionAccess: 0,
       }),
     );

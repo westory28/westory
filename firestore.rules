@@ -439,6 +439,14 @@ service cloud.firestore {
         );
     }
 
+    function canListUserDocuments() {
+      return canUseWestory()
+        && (
+          request.auth.token.email == "westoria28@gmail.com"
+          || currentUserCanReadStudentListProfile()
+        );
+    }
+
     function canGetUserDocument(userId) {
       return (hasWestoryIdentity() && request.auth.uid == userId)
         || (
@@ -1042,7 +1050,7 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow get: if canGetUserDocument(userId);
-      allow list: if isAdmin() || isTeacherRole() || hasPermission('student_list_read');
+      allow list: if canListUserDocuments();
       allow create: if isRecentlyAuthenticatedAdmin() || isValidOwnStudentCreate(userId);
       allow update: if isRecentlyAuthenticatedAdmin() || isValidOwnStudentUpdate(userId);
       allow delete: if isRecentlyAuthenticatedAdmin();

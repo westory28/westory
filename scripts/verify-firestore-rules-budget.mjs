@@ -62,6 +62,22 @@ assert.equal(
   1,
 );
 
+const userList = functionBody("canListUserDocuments");
+assert.equal(count(userList, /canUseWestory\(\)/g), 1);
+assert.match(
+  userList,
+  /request\.auth\.token\.email == "westoria28@gmail\.com"/,
+);
+assert.equal(count(userList, /currentUserCanReadStudentListProfile\(\)/g), 1);
+assert.equal(count(rules, /allow list: if canListUserDocuments\(\);/g), 1);
+assert.equal(
+  count(
+    rules,
+    /allow list: if isAdmin\(\) \|\| isTeacherRole\(\) \|\| hasPermission\('student_list_read'\);/g,
+  ),
+  0,
+);
+
 const teacherPatchListQuery = functionBody("isTeacherPatchNoteListQuery");
 assert.match(teacherPatchListQuery, /request\.query\.limit <= 100/);
 assert.match(teacherPatchListQuery, /orderBy\.updatedAt == 'DESC'/);
@@ -84,6 +100,9 @@ console.log(
     teacherPatchTeacherDocumentGets: 2,
     teacherPatchAdminDocumentGets: 1,
     ownUserGetDocumentGets: 1,
+    userListCanUseWestoryEvaluations: 1,
+    userListProfileDocumentGets: 1,
+    userListRuleBoundToBudgetHelper: true,
     officialSingleRequestAccessLimit: 10,
     teacherPatchTeacherAccessHeadroom: 8,
     teacherPatchAdminAccessHeadroom: 9,
