@@ -795,6 +795,14 @@
     "developer-log-postid": "W10P 시각 검증 일지"
   },
   "screenFixtureActions": {
+    "teacher-settings": [
+      {
+        "id": "select-general-settings-tab",
+        "type": "click",
+        "selector": "main aside nav.flex.flex-col > button:nth-of-type(1)",
+        "exactMatchCount": 1
+      }
+    ],
     "teacher-settings-school": [
       {
         "id": "select-school-settings-tab",
