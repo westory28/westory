@@ -861,6 +861,7 @@ const createDocs = new Map([
       email: STUDENT_EMAIL,
       name: "W10P 학생",
       displayName: "W10P 학생",
+      customNameConfirmed: true,
       grade: "3",
       class: "1",
       number: "1",
@@ -2171,10 +2172,12 @@ const assertSeedPlanIntegrity = () => {
     "w10p-quiz-unit_formative",
   ]);
 
+  const studentUser = createDocs.get(`users/${STUDENT_UID}`);
   const identity = createDocs.get(`student_identities/${STUDENT_UID}`);
   const semesterClass = createDocs.get(`semester_classes/${CLASS_ID}`);
   const enrollment = createDocs.get(`semester_enrollments/${ENROLLMENT_ID}`);
   const enrollmentSlot = createDocs.get(`semester_enrollment_slots/${slotId}`);
+  assert.equal(studentUser?.customNameConfirmed, true);
   assert.deepEqual(
     [
       identity?.studentUid,

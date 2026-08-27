@@ -613,7 +613,7 @@
   },
   "fixtureId": "w10p-visual-fixture-v1",
   "fixtureRevision": 1,
-  "fixturePlanHash": "fe18dbf369602af95b3ed35496a1bf7dcf64364ecd20b4b29cab1a818a5d850e",
+  "fixturePlanHash": "94b2ec48add0ffb0632f35c409e5c5a8049721c39cc8240bdbc0fda6258078b8",
   "fixedTime": "2026-08-17T06:00:00.000Z",
   "authenticationLandingGuard": {
     "id": "korean-public-holiday-sync-v1",
