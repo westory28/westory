@@ -5292,6 +5292,61 @@ const exactStagingFirestoreWebChannelInitialRequestScope = ({
     return false;
   }
 };
+const parseExactFirestoreWebChannelEncodedHeaders = ({
+  headers = {},
+  postData = "",
+}) => {
+  const rawPostData = String(postData);
+  if (safelyDecodeUrl(rawPostData.replace(/\+/gu, "%20")) === null) {
+    return null;
+  }
+  const contentTypeValues = Object.entries(headers)
+    .filter(([name]) => String(name).toLowerCase() === "content-type")
+    .map(([, value]) => String(value));
+  if (
+    contentTypeValues.length !== 1 ||
+    !/^application\/x-www-form-urlencoded(?:\s*;\s*charset=utf-8)?$/iu.test(
+      contentTypeValues[0],
+    )
+  ) {
+    return null;
+  }
+  const rawHeaderFieldCount = rawPostData
+    .split("&")
+    .filter((segment) => segment.split("=", 1)[0] === "headers").length;
+  const bodyParams = new URLSearchParams(rawPostData);
+  const encodedHeaderFields = [...bodyParams.entries()].filter(
+    ([name]) => String(name).toLowerCase() === "headers",
+  );
+  if (
+    rawHeaderFieldCount !== 1 ||
+    encodedHeaderFields.length !== 1 ||
+    encodedHeaderFields[0][0] !== "headers"
+  ) {
+    return null;
+  }
+  const encodedHeaderBlock = encodedHeaderFields[0][1];
+  if (
+    !encodedHeaderBlock.endsWith("\r\n") ||
+    encodedHeaderBlock.includes("\0")
+  ) {
+    return null;
+  }
+  const headerLines = encodedHeaderBlock.split("\r\n");
+  if (headerLines.pop() !== "" || headerLines.some((line) => line === "")) {
+    return null;
+  }
+  const parsedHeaderLines = [];
+  for (const line of headerLines) {
+    const separatorIndex = line.indexOf(":");
+    if (separatorIndex <= 0) return null;
+    const name = line.slice(0, separatorIndex);
+    const value = line.slice(separatorIndex + 1);
+    if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/u.test(name)) return null;
+    parsedHeaderLines.push({ name: name.toLowerCase(), value });
+  }
+  return parsedHeaderLines;
+};
 const exactStagingFirestoreWebChannelEncodedApiKeyBodyScope = ({
   requestUrl,
   method,
@@ -5316,51 +5371,11 @@ const exactStagingFirestoreWebChannelEncodedApiKeyBodyScope = ({
   ) {
     return false;
   }
-  const contentTypeValues = Object.entries(headers)
-    .filter(([name]) => String(name).toLowerCase() === "content-type")
-    .map(([, value]) => String(value));
-  if (
-    contentTypeValues.length !== 1 ||
-    !/^application\/x-www-form-urlencoded(?:\s*;\s*charset=utf-8)?$/iu.test(
-      contentTypeValues[0],
-    )
-  ) {
-    return false;
-  }
-  const rawHeaderFieldCount = rawPostData
-    .split("&")
-    .filter((segment) => segment.split("=", 1)[0] === "headers").length;
-  const bodyParams = new URLSearchParams(rawPostData);
-  const encodedHeaderFields = [...bodyParams.entries()].filter(
-    ([name]) => String(name).toLowerCase() === "headers",
-  );
-  if (
-    rawHeaderFieldCount !== 1 ||
-    encodedHeaderFields.length !== 1 ||
-    encodedHeaderFields[0][0] !== "headers"
-  ) {
-    return false;
-  }
-  const encodedHeaderBlock = encodedHeaderFields[0][1];
-  if (
-    !encodedHeaderBlock.endsWith("\r\n") ||
-    encodedHeaderBlock.includes("\0")
-  ) {
-    return false;
-  }
-  const headerLines = encodedHeaderBlock.split("\r\n");
-  if (headerLines.pop() !== "" || headerLines.some((line) => line === "")) {
-    return false;
-  }
-  const parsedHeaderLines = [];
-  for (const line of headerLines) {
-    const separatorIndex = line.indexOf(":");
-    if (separatorIndex <= 0) return false;
-    const name = line.slice(0, separatorIndex);
-    const value = line.slice(separatorIndex + 1);
-    if (!/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/u.test(name)) return false;
-    parsedHeaderLines.push({ name: name.toLowerCase(), value });
-  }
+  const parsedHeaderLines = parseExactFirestoreWebChannelEncodedHeaders({
+    headers,
+    postData: rawPostData,
+  });
+  if (parsedHeaderLines === null) return false;
   const apiKeyHeaderLines = parsedHeaderLines.filter(
     ({ name }) => name === "x-goog-api-key",
   );
@@ -5368,6 +5383,285 @@ const exactStagingFirestoreWebChannelEncodedApiKeyBodyScope = ({
     apiKeyHeaderLines.length === 1 &&
     apiKeyHeaderLines[0].value === stagingApiKey
   );
+};
+const SAFE_FIRESTORE_WEBCHANNEL_AUTH_BINDING_CLASSES = Object.freeze([
+  "initial-auth-time-mismatch",
+  "initial-authorization-duplicate",
+  "initial-authorization-missing",
+  "initial-bearer-malformed",
+  "initial-claims-malformed",
+  "initial-encoded-headers-malformed",
+  "initial-exp-unhealthy",
+  "initial-jwt-malformed",
+  "initial-project-mismatch",
+  "initial-proof-bound",
+  "initial-proof-unavailable",
+  "initial-subject-mismatch",
+  "session-backchannel-inherited",
+  "session-forward-inherited",
+]);
+const SAFE_FIRESTORE_WEBCHANNEL_AUTH_DIAGNOSTIC_PHASES = Object.freeze([
+  "context-bootstrap",
+  "authentication",
+  "session-keepalive",
+  "screen-capture",
+  "browser-audit-finalization",
+]);
+const createSafeFirestoreWebChannelAuthRecord = ({
+  bindingClass,
+  authorizationPresent,
+  authorizationUnique,
+  bearerSchemeValid,
+  jwtShapeValid,
+  jwtPayloadValid,
+  audienceMatchesStagingProject,
+  issuerMatchesStagingProject,
+  subjectMatchesApplicationSessionProof,
+  authTimeMatchesApplicationSessionProof,
+  expirationHealthy,
+  applicationSessionProofAvailable,
+  inherited,
+}) => {
+  assert.ok(
+    SAFE_FIRESTORE_WEBCHANNEL_AUTH_BINDING_CLASSES.includes(bindingClass),
+  );
+  for (const value of [
+    authorizationPresent,
+    authorizationUnique,
+    bearerSchemeValid,
+    jwtShapeValid,
+    jwtPayloadValid,
+    audienceMatchesStagingProject,
+    issuerMatchesStagingProject,
+    subjectMatchesApplicationSessionProof,
+    authTimeMatchesApplicationSessionProof,
+    expirationHealthy,
+  ]) {
+    assert.ok(value === null || typeof value === "boolean");
+  }
+  assert.equal(typeof applicationSessionProofAvailable, "boolean");
+  assert.equal(typeof inherited, "boolean");
+  return Object.freeze({
+    bindingClass,
+    authorizationPresent,
+    authorizationUnique,
+    bearerSchemeValid,
+    jwtShapeValid,
+    jwtPayloadValid,
+    audienceMatchesStagingProject,
+    issuerMatchesStagingProject,
+    subjectMatchesApplicationSessionProof,
+    authTimeMatchesApplicationSessionProof,
+    expirationHealthy,
+    applicationSessionProofAvailable,
+    inherited,
+  });
+};
+const firestoreWebChannelApplicationSessionProofAvailable = (proof) =>
+  Boolean(
+    proof &&
+    typeof proof === "object" &&
+    typeof proof.uid === "string" &&
+    proof.uid.length > 0 &&
+    Number.isSafeInteger(proof.authTime) &&
+    proof.authTime > 0,
+  );
+const decodeTransientJwtPayload = (token) => {
+  const segments = String(token).split(".");
+  if (
+    segments.length !== 3 ||
+    segments.some(
+      (segment) => segment.length === 0 || !/^[A-Za-z0-9_-]+$/u.test(segment),
+    )
+  ) {
+    return { jwtShapeValid: false, payload: null };
+  }
+  try {
+    const payloadBytes = Buffer.from(segments[1], "base64url");
+    if (
+      payloadBytes.length === 0 ||
+      payloadBytes.toString("base64url") !== segments[1]
+    ) {
+      return { jwtShapeValid: false, payload: null };
+    }
+    const payload = JSON.parse(
+      new TextDecoder("utf-8", { fatal: true }).decode(payloadBytes),
+    );
+    return {
+      jwtShapeValid: true,
+      payload:
+        payload && typeof payload === "object" && !Array.isArray(payload)
+          ? payload
+          : null,
+    };
+  } catch {
+    return { jwtShapeValid: true, payload: null };
+  }
+};
+const classifySafeFirestoreWebChannelAuth = ({
+  requestClass,
+  headers = {},
+  postData = "",
+  applicationSessionProof = null,
+  nowEpochSeconds = Math.floor(Date.now() / 1000),
+}) => {
+  assert.ok(
+    [
+      "initial-forward-post",
+      "session-forward-post",
+      "backchannel-get",
+    ].includes(requestClass),
+  );
+  assert.ok(Number.isSafeInteger(nowEpochSeconds) && nowEpochSeconds > 0);
+  const applicationSessionProofAvailable =
+    firestoreWebChannelApplicationSessionProofAvailable(
+      applicationSessionProof,
+    );
+  const base = {
+    authorizationPresent: null,
+    authorizationUnique: null,
+    bearerSchemeValid: null,
+    jwtShapeValid: null,
+    jwtPayloadValid: null,
+    audienceMatchesStagingProject: null,
+    issuerMatchesStagingProject: null,
+    subjectMatchesApplicationSessionProof: null,
+    authTimeMatchesApplicationSessionProof: null,
+    expirationHealthy: null,
+    applicationSessionProofAvailable,
+    inherited: requestClass !== "initial-forward-post",
+  };
+  if (requestClass === "session-forward-post") {
+    return createSafeFirestoreWebChannelAuthRecord({
+      ...base,
+      bindingClass: "session-forward-inherited",
+    });
+  }
+  if (requestClass === "backchannel-get") {
+    return createSafeFirestoreWebChannelAuthRecord({
+      ...base,
+      bindingClass: "session-backchannel-inherited",
+    });
+  }
+  const parsedHeaders = parseExactFirestoreWebChannelEncodedHeaders({
+    headers,
+    postData,
+  });
+  if (parsedHeaders === null) {
+    return createSafeFirestoreWebChannelAuthRecord({
+      ...base,
+      bindingClass: "initial-encoded-headers-malformed",
+    });
+  }
+  const authorizationHeaders = parsedHeaders.filter(
+    ({ name }) => name === "authorization",
+  );
+  if (authorizationHeaders.length === 0) {
+    return createSafeFirestoreWebChannelAuthRecord({
+      ...base,
+      bindingClass: "initial-authorization-missing",
+      authorizationPresent: false,
+    });
+  }
+  if (authorizationHeaders.length !== 1) {
+    return createSafeFirestoreWebChannelAuthRecord({
+      ...base,
+      bindingClass: "initial-authorization-duplicate",
+      authorizationPresent: true,
+      authorizationUnique: false,
+    });
+  }
+  const authorizationValue = authorizationHeaders[0].value;
+  const bearerMatch =
+    /^Bearer ([A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/u.exec(
+      authorizationValue,
+    );
+  if (!bearerMatch) {
+    return createSafeFirestoreWebChannelAuthRecord({
+      ...base,
+      bindingClass: "initial-bearer-malformed",
+      authorizationPresent: true,
+      authorizationUnique: true,
+      bearerSchemeValid: false,
+    });
+  }
+  let token = bearerMatch[1];
+  const decoded = decodeTransientJwtPayload(token);
+  token = "";
+  if (!decoded.jwtShapeValid) {
+    return createSafeFirestoreWebChannelAuthRecord({
+      ...base,
+      bindingClass: "initial-jwt-malformed",
+      authorizationPresent: true,
+      authorizationUnique: true,
+      bearerSchemeValid: true,
+      jwtShapeValid: false,
+    });
+  }
+  const claims = decoded.payload;
+  if (
+    !claims ||
+    typeof claims.aud !== "string" ||
+    typeof claims.iss !== "string" ||
+    typeof claims.sub !== "string" ||
+    claims.sub.length === 0 ||
+    !Number.isSafeInteger(claims.auth_time) ||
+    claims.auth_time <= 0 ||
+    !Number.isSafeInteger(claims.exp) ||
+    claims.exp <= 0
+  ) {
+    return createSafeFirestoreWebChannelAuthRecord({
+      ...base,
+      bindingClass: "initial-claims-malformed",
+      authorizationPresent: true,
+      authorizationUnique: true,
+      bearerSchemeValid: true,
+      jwtShapeValid: true,
+      jwtPayloadValid: false,
+    });
+  }
+  const audienceMatchesStagingProject =
+    claims.aud === contract.firebaseProjectId;
+  const issuerMatchesStagingProject =
+    claims.iss ===
+    `https://securetoken.google.com/${contract.firebaseProjectId}`;
+  const subjectMatchesApplicationSessionProof = applicationSessionProofAvailable
+    ? claims.sub === applicationSessionProof.uid
+    : null;
+  const authTimeMatchesApplicationSessionProof =
+    applicationSessionProofAvailable
+      ? claims.auth_time === applicationSessionProof.authTime
+      : null;
+  const expirationHealthy = claims.exp > nowEpochSeconds;
+  const classified = {
+    ...base,
+    authorizationPresent: true,
+    authorizationUnique: true,
+    bearerSchemeValid: true,
+    jwtShapeValid: true,
+    jwtPayloadValid: true,
+    audienceMatchesStagingProject,
+    issuerMatchesStagingProject,
+    subjectMatchesApplicationSessionProof,
+    authTimeMatchesApplicationSessionProof,
+    expirationHealthy,
+  };
+  let bindingClass = "initial-proof-bound";
+  if (!audienceMatchesStagingProject || !issuerMatchesStagingProject) {
+    bindingClass = "initial-project-mismatch";
+  } else if (!applicationSessionProofAvailable) {
+    bindingClass = "initial-proof-unavailable";
+  } else if (!subjectMatchesApplicationSessionProof) {
+    bindingClass = "initial-subject-mismatch";
+  } else if (!authTimeMatchesApplicationSessionProof) {
+    bindingClass = "initial-auth-time-mismatch";
+  } else if (!expirationHealthy) {
+    bindingClass = "initial-exp-unhealthy";
+  }
+  return createSafeFirestoreWebChannelAuthRecord({
+    ...classified,
+    bindingClass,
+  });
 };
 const exactStagingFirestoreWebChannelFormContentType = (headers = {}) => {
   const contentTypeValues = Object.entries(headers)
@@ -7557,6 +7851,153 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     }),
     true,
   );
+  const syntheticAuthTime = 1_900_000_000;
+  const syntheticNowEpochSeconds = syntheticAuthTime + 60;
+  const syntheticUid = "fixed-private-webchannel-user-uid";
+  const syntheticSessionProof = {
+    authTime: syntheticAuthTime,
+    uid: syntheticUid,
+  };
+  const encodeSyntheticJwtPart = (value) =>
+    Buffer.from(JSON.stringify(value), "utf8").toString("base64url");
+  const createSyntheticJwt = (claims) =>
+    [
+      encodeSyntheticJwtPart({ alg: "RS256", typ: "JWT" }),
+      encodeSyntheticJwtPart(claims),
+      Buffer.from("fixed-private-webchannel-signature", "utf8").toString(
+        "base64url",
+      ),
+    ].join(".");
+  const syntheticClaims = {
+    aud: contract.firebaseProjectId,
+    iss: `https://securetoken.google.com/${contract.firebaseProjectId}`,
+    sub: syntheticUid,
+    auth_time: syntheticAuthTime,
+    exp: syntheticNowEpochSeconds + 3_600,
+  };
+  const syntheticAuthorizationToken = createSyntheticJwt(syntheticClaims);
+  const createSyntheticWebChannelPostData = (authorizationLines) => {
+    const encodedHeaderBlock = [
+      "X-Goog-Api-Client:gl-js/fire/12.9.0",
+      `X-Goog-Api-Key:${stagingApiKey}`,
+      ...authorizationLines,
+      "",
+    ].join("\r\n");
+    return [
+      `headers=${encodeURIComponent(encodedHeaderBlock)}`,
+      "count=1",
+      "ofs=0",
+      `req0___data__=${encodeURIComponent('{"database":"staging"}')}`,
+    ].join("&");
+  };
+  const classifySyntheticWebChannelAuth = ({
+    requestClass = "initial-forward-post",
+    authorizationLines = [
+      `Authorization:Bearer ${syntheticAuthorizationToken}`,
+    ],
+    applicationSessionProof = syntheticSessionProof,
+    postData = null,
+  } = {}) =>
+    classifySafeFirestoreWebChannelAuth({
+      requestClass,
+      headers: firestoreHeaders,
+      postData:
+        postData === null
+          ? createSyntheticWebChannelPostData(authorizationLines)
+          : postData,
+      applicationSessionProof,
+      nowEpochSeconds: syntheticNowEpochSeconds,
+    });
+  const safeWebChannelAuthFixtures = [
+    classifySyntheticWebChannelAuth(),
+    classifySyntheticWebChannelAuth({ postData: "headers=malformed" }),
+    classifySyntheticWebChannelAuth({ authorizationLines: [] }),
+    classifySyntheticWebChannelAuth({
+      authorizationLines: [
+        `Authorization:Bearer ${syntheticAuthorizationToken}`,
+        `authorization:Bearer ${syntheticAuthorizationToken}`,
+      ],
+    }),
+    classifySyntheticWebChannelAuth({
+      authorizationLines: ["Authorization:Basic fixed-private-basic-secret"],
+    }),
+    classifySyntheticWebChannelAuth({
+      authorizationLines: ["Authorization:Bearer A.A.A"],
+    }),
+    classifySyntheticWebChannelAuth({
+      authorizationLines: [
+        `Authorization:Bearer ${createSyntheticJwt({ aud: contract.firebaseProjectId })}`,
+      ],
+    }),
+    classifySyntheticWebChannelAuth({
+      authorizationLines: [
+        `Authorization:Bearer ${createSyntheticJwt({ ...syntheticClaims, aud: "wrong-project" })}`,
+      ],
+    }),
+    classifySyntheticWebChannelAuth({
+      authorizationLines: [
+        `Authorization:Bearer ${createSyntheticJwt({ ...syntheticClaims, auth_time: syntheticAuthTime + 1 })}`,
+      ],
+    }),
+    classifySyntheticWebChannelAuth({
+      authorizationLines: [
+        `Authorization:Bearer ${createSyntheticJwt({ ...syntheticClaims, sub: "wrong-user" })}`,
+      ],
+    }),
+    classifySyntheticWebChannelAuth({ applicationSessionProof: null }),
+    classifySyntheticWebChannelAuth({
+      authorizationLines: [
+        `Authorization:Bearer ${createSyntheticJwt({ ...syntheticClaims, exp: syntheticNowEpochSeconds })}`,
+      ],
+    }),
+    classifySyntheticWebChannelAuth({
+      requestClass: "session-forward-post",
+      postData: "",
+    }),
+    classifySyntheticWebChannelAuth({
+      requestClass: "backchannel-get",
+      postData: "",
+    }),
+  ];
+  assert.deepEqual(
+    safeWebChannelAuthFixtures.map(({ bindingClass }) => bindingClass),
+    [
+      "initial-proof-bound",
+      "initial-encoded-headers-malformed",
+      "initial-authorization-missing",
+      "initial-authorization-duplicate",
+      "initial-bearer-malformed",
+      "initial-jwt-malformed",
+      "initial-claims-malformed",
+      "initial-project-mismatch",
+      "initial-auth-time-mismatch",
+      "initial-subject-mismatch",
+      "initial-proof-unavailable",
+      "initial-exp-unhealthy",
+      "session-forward-inherited",
+      "session-backchannel-inherited",
+    ],
+  );
+  assert.equal(safeWebChannelAuthFixtures[0].expirationHealthy, true);
+  assert.equal(safeWebChannelAuthFixtures.at(-2).authorizationPresent, null);
+  assert.equal(safeWebChannelAuthFixtures.at(-2).inherited, true);
+  const serializedSafeWebChannelAuthFixtures = JSON.stringify(
+    safeWebChannelAuthFixtures,
+  );
+  for (const rawValue of [
+    syntheticAuthorizationToken,
+    syntheticUid,
+    String(syntheticAuthTime),
+    "fixed-private-webchannel-signature",
+    "fixed-private-basic-secret",
+    "wrong-project",
+    "wrong-user",
+  ]) {
+    assert.equal(
+      serializedSafeWebChannelAuthFixtures.includes(rawValue),
+      false,
+    );
+  }
   assert.deepEqual(
     stagingApiKeyScopeDecision({
       requestUrl: firestoreWebChannelUrl.toString(),
@@ -8282,6 +8723,9 @@ const verifyNetworkPolicyNegativeFixtures = () => {
       rejectedProductionPresentationExternalFixtures.length,
     rejectedStagingApiKeyExfiltrationCaseCount: 1,
     acceptedFirestoreWebChannelEncodedApiKeyCaseCount: 2,
+    safeFirestoreWebChannelAuthDiagnosticFixtureCount:
+      safeWebChannelAuthFixtures.length,
+    safeFirestoreWebChannelAuthDiagnosticRawValueOutputCount: 0,
     verifiedPausedRequestPostDataPresenceCaseCount: 13,
     verifiedWebChannelListenerDiagnosticCaseCount: 26,
     rejectedFirestoreWebChannelEncodedApiKeyCaseCount:
@@ -10198,6 +10642,137 @@ const createSafeNetworkAttestationDrainDiagnostic = ({
     errorCount,
   });
 };
+const safeFixedValueHistogram = ({ values, allowedValues, key }) => {
+  assert.ok(Array.isArray(values));
+  assert.ok(Array.isArray(allowedValues));
+  assert.equal(typeof key, "string");
+  return [
+    ...values.reduce((counts, rawValue) => {
+      const value = allowedValues.includes(rawValue) ? rawValue : "unknown";
+      counts.set(value, (counts.get(value) || 0) + 1);
+      return counts;
+    }, new Map()),
+  ]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([value, count]) => ({ [key]: value, count }));
+};
+const summarizeSafeFirestoreWebChannelAuthBindings = ({
+  records,
+  activeCaptureId,
+}) => {
+  assert.ok(Array.isArray(records));
+  assert.ok(activeCaptureId === null || typeof activeCaptureId === "string");
+  const initialBindings = records.filter(
+    (record) => record.requestClass === "initial-forward-post",
+  );
+  const activeRouteBindings =
+    activeCaptureId === null
+      ? []
+      : records.filter((record) => record.captureId === activeCaptureId);
+  const activeRouteInitialBindings = activeRouteBindings.filter(
+    (record) => record.requestClass === "initial-forward-post",
+  );
+  const authBindingClasses = (bindings) =>
+    bindings.map((record) => record.firebaseAuth?.bindingClass);
+  const phaseCaptureBindingHistogram = (bindings) =>
+    [
+      ...bindings.reduce((counts, record) => {
+        const phase = SAFE_FIRESTORE_WEBCHANNEL_AUTH_DIAGNOSTIC_PHASES.includes(
+          record.phase,
+        )
+          ? record.phase
+          : "unknown";
+        const captureBinding =
+          record.captureId === null ? "group-unbound" : "capture-bound";
+        const key = `${phase}\0${captureBinding}`;
+        const existing = counts.get(key) || {
+          phase,
+          captureBinding,
+          count: 0,
+        };
+        existing.count += 1;
+        counts.set(key, existing);
+        return counts;
+      }, new Map()),
+    ]
+      .map(([, entry]) => entry)
+      .sort(
+        (left, right) =>
+          left.phase.localeCompare(right.phase) ||
+          left.captureBinding.localeCompare(right.captureBinding),
+      );
+  const proofAvailableCount = (bindings) =>
+    bindings.filter(
+      (record) =>
+        record.firebaseAuth?.applicationSessionProofAvailable === true,
+    ).length;
+  const proofBoundCount = (bindings) =>
+    bindings.filter(
+      (record) => record.firebaseAuth?.bindingClass === "initial-proof-bound",
+    ).length;
+  return Object.freeze({
+    groupWebChannelInitialHandshakeCount: initialBindings.length,
+    groupWebChannelInitialHandshakePhaseHistogram: safeFixedValueHistogram({
+      values: initialBindings.map((record) => record.phase),
+      allowedValues: SAFE_FIRESTORE_WEBCHANNEL_AUTH_DIAGNOSTIC_PHASES,
+      key: "phase",
+    }),
+    groupWebChannelInitialHandshakeCaptureBindingHistogram:
+      safeFixedValueHistogram({
+        values: initialBindings.map((record) =>
+          record.captureId === null ? "group-unbound" : "capture-bound",
+        ),
+        allowedValues: ["capture-bound", "group-unbound"],
+        key: "captureBinding",
+      }),
+    groupWebChannelInitialHandshakePhaseCaptureBindingHistogram:
+      phaseCaptureBindingHistogram(initialBindings),
+    groupWebChannelInitialHandshakeAuthBindingClassHistogram:
+      safeFixedValueHistogram({
+        values: authBindingClasses(initialBindings),
+        allowedValues: SAFE_FIRESTORE_WEBCHANNEL_AUTH_BINDING_CLASSES,
+        key: "bindingClass",
+      }),
+    groupWebChannelInitialHandshakeProofAvailableCount:
+      proofAvailableCount(initialBindings),
+    groupWebChannelInitialHandshakeProofBoundCount:
+      proofBoundCount(initialBindings),
+    groupWebChannelInitialHandshakeAuthorizationMissingCount:
+      initialBindings.filter(
+        (record) =>
+          record.firebaseAuth?.bindingClass === "initial-authorization-missing",
+      ).length,
+    activeRouteWebChannelBoundRequestCount: activeRouteBindings.length,
+    activeRouteWebChannelRequestClassHistogram: safeFixedValueHistogram({
+      values: activeRouteBindings.map((record) => record.requestClass),
+      allowedValues: [
+        "initial-forward-post",
+        "session-forward-post",
+        "backchannel-get",
+      ],
+      key: "requestClass",
+    }),
+    activeRouteWebChannelAuthBindingClassHistogram: safeFixedValueHistogram({
+      values: authBindingClasses(activeRouteBindings),
+      allowedValues: SAFE_FIRESTORE_WEBCHANNEL_AUTH_BINDING_CLASSES,
+      key: "bindingClass",
+    }),
+    activeRouteWebChannelInitialHandshakeCount:
+      activeRouteInitialBindings.length,
+    activeRouteWebChannelInitialHandshakeObserved:
+      activeRouteInitialBindings.length > 0,
+    activeRouteWebChannelInitialHandshakeProofAvailableCount:
+      proofAvailableCount(activeRouteInitialBindings),
+    activeRouteWebChannelInitialHandshakeProofBoundCount: proofBoundCount(
+      activeRouteInitialBindings,
+    ),
+    activeRouteWebChannelInitialHandshakeAllProofBound:
+      activeRouteInitialBindings.length === 0
+        ? null
+        : proofBoundCount(activeRouteInitialBindings) ===
+          activeRouteInitialBindings.length,
+  });
+};
 const SAFE_AUTHENTICATION_FAILURE_CLASSES = Object.freeze([
   "navigation-failed",
   "authentication-evaluate-failed",
@@ -11091,10 +11666,91 @@ const verifySafeBrowserErrorDiagnosticFixtures = () => {
     { completed: true, passed: false, errorCount: 1 },
     { completed: false, passed: false, errorCount: 0 },
   ]);
+  const safeWebChannelBooleanDefaults = {
+    authorizationPresent: null,
+    authorizationUnique: null,
+    bearerSchemeValid: null,
+    jwtShapeValid: null,
+    jwtPayloadValid: null,
+    audienceMatchesStagingProject: null,
+    issuerMatchesStagingProject: null,
+    subjectMatchesApplicationSessionProof: null,
+    authTimeMatchesApplicationSessionProof: null,
+    expirationHealthy: null,
+    applicationSessionProofAvailable: false,
+    inherited: false,
+  };
+  const missingInitialAuth = createSafeFirestoreWebChannelAuthRecord({
+    ...safeWebChannelBooleanDefaults,
+    bindingClass: "initial-authorization-missing",
+    authorizationPresent: false,
+  });
+  const proofBoundInitialAuth = createSafeFirestoreWebChannelAuthRecord({
+    ...safeWebChannelBooleanDefaults,
+    bindingClass: "initial-proof-bound",
+    authorizationPresent: true,
+    authorizationUnique: true,
+    bearerSchemeValid: true,
+    jwtShapeValid: true,
+    jwtPayloadValid: true,
+    audienceMatchesStagingProject: true,
+    issuerMatchesStagingProject: true,
+    subjectMatchesApplicationSessionProof: true,
+    authTimeMatchesApplicationSessionProof: true,
+    expirationHealthy: true,
+    applicationSessionProofAvailable: true,
+  });
+  const inheritedForwardAuth = createSafeFirestoreWebChannelAuthRecord({
+    ...safeWebChannelBooleanDefaults,
+    bindingClass: "session-forward-inherited",
+    applicationSessionProofAvailable: true,
+    inherited: true,
+  });
+  const safeWebChannelAuthBindingSummary =
+    summarizeSafeFirestoreWebChannelAuthBindings({
+      activeCaptureId: "fixed-active-capture",
+      records: [
+        {
+          requestClass: "initial-forward-post",
+          phase: "context-bootstrap",
+          captureId: null,
+          firebaseAuth: missingInitialAuth,
+        },
+        {
+          requestClass: "initial-forward-post",
+          phase: "screen-capture",
+          captureId: "fixed-active-capture",
+          firebaseAuth: proofBoundInitialAuth,
+        },
+        {
+          requestClass: "session-forward-post",
+          phase: "screen-capture",
+          captureId: "fixed-active-capture",
+          firebaseAuth: inheritedForwardAuth,
+        },
+      ],
+    });
+  assert.equal(
+    safeWebChannelAuthBindingSummary.groupWebChannelInitialHandshakeCount,
+    2,
+  );
+  assert.equal(
+    safeWebChannelAuthBindingSummary.groupWebChannelInitialHandshakeAuthorizationMissingCount,
+    1,
+  );
+  assert.equal(
+    safeWebChannelAuthBindingSummary.activeRouteWebChannelBoundRequestCount,
+    2,
+  );
+  assert.equal(
+    safeWebChannelAuthBindingSummary.activeRouteWebChannelInitialHandshakeAllProofBound,
+    true,
+  );
   const serializedDiagnostic = JSON.stringify({
     ...accumulatorSnapshot,
     ...routeResponseSummary,
     ...requestFinishedSummary,
+    ...safeWebChannelAuthBindingSummary,
   });
   for (const rawValue of [
     debugToken,
@@ -11120,6 +11776,7 @@ const verifySafeBrowserErrorDiagnosticFixtures = () => {
     safeRequestFinishedDiagnosticFixtureCount: 3,
     safeNetworkAttestationDrainDiagnosticFixtureCount:
       networkAttestationDrainDiagnostics.length,
+    safeFirestoreWebChannelAuthBindingSummaryFixtureCount: 3,
     safeBrowserErrorDiagnosticRawValueOutputCount: 0,
     safeBrowserErrorDiagnosticHashSampleLimit:
       SAFE_BROWSER_ERROR_HASH_SAMPLE_LIMIT,
@@ -20895,6 +21552,7 @@ const authenticateCore = async (
   origin,
   role,
   setFailureClass,
+  registerApplicationSessionProof,
 ) => {
   setFailureClass("navigation-failed");
   await page.goto(`${origin}/#/`, { waitUntil: "domcontentloaded" });
@@ -20985,6 +21643,12 @@ const authenticateCore = async (
         throw new Error("VISUAL_APPLICATION_SESSION_ATTESTATION_FAILED");
       }
       const database = firestoreModule.getFirestore(app);
+      // Prove the freshly opened session can cross the same canUseWestory()
+      // fence as the dashboard listeners. The document may be absent; a
+      // permission denial still rejects getDoc before the snapshot is returned.
+      await firestoreModule.getDoc(
+        firestoreModule.doc(database, "site_settings", "schedule_categories"),
+      );
       const profileSnapshot = await firestoreModule.getDoc(
         firestoreModule.doc(database, "users", credentialResult.user.uid),
       );
@@ -21022,6 +21686,7 @@ const authenticateCore = async (
       functionsRegion: STAGING_FUNCTIONS_REGION,
     },
   );
+  registerApplicationSessionProof(identity.applicationSessionProof);
   setFailureClass("post-auth-reload-failed");
   await page.reload({ waitUntil: "domcontentloaded" });
   const expectedAuthenticatedRoute =
@@ -21059,7 +21724,13 @@ const authenticate = async (
   credential,
   origin,
   authRole,
-  { stage, captureRole, viewport },
+  {
+    stage,
+    captureRole,
+    viewport,
+    registerApplicationSessionProof,
+    unregisterApplicationSessionProof,
+  },
 ) => {
   let failureClass = "navigation-failed";
   try {
@@ -21071,8 +21742,10 @@ const authenticate = async (
       (nextFailureClass) => {
         failureClass = nextFailureClass;
       },
+      registerApplicationSessionProof,
     );
   } catch {
+    unregisterApplicationSessionProof();
     const expectedRoute =
       authRole === "student" ? "/student/dashboard" : "/teacher/dashboard";
     const pageState = await collectSafeAuthenticationPageState(
@@ -23179,6 +23852,7 @@ try {
       vercelBypassHeaderMismatchRequestCount;
     let networkPhase = "context-bootstrap";
     let activeCaptureId = null;
+    let groupApplicationSessionProof = null;
     let groupBrowserWideBoundaryAttestation = null;
     let networkRequestSequence = 0;
     const requestCorrelations = new WeakMap();
@@ -23300,6 +23974,33 @@ try {
         );
       }
     };
+    const collectSafeFailureNetworkAttestationDrainDiagnostic = async () => {
+      let drainAttemptCompleted = false;
+      try {
+        await drainAppCheckCdpHandlerPromises();
+        await flushNetworkAttestations({ failOnAttestationError: false });
+        drainAttemptCompleted = true;
+      } catch {
+        drainAttemptCompleted = false;
+      }
+      const pendingAppCheckCdpHandlerCount = appCheckCdpHandlerPromises.size;
+      const pendingNetworkAttestationCount = pendingNetworkAttestations.size;
+      const pendingWebChannelBindingCount =
+        webChannelCdpHeaderAttestationsByNetworkId.size;
+      const completed =
+        drainAttemptCompleted &&
+        pendingAppCheckCdpHandlerCount === 0 &&
+        pendingNetworkAttestationCount === 0 &&
+        pendingWebChannelBindingCount === 0;
+      return Object.freeze({
+        completed,
+        passed: completed && networkHeaderAttestationErrorCount === 0,
+        errorCount: networkHeaderAttestationErrorCount,
+        pendingAppCheckCdpHandlerCount,
+        pendingNetworkAttestationCount,
+        pendingWebChannelBindingCount,
+      });
+    };
     const getOrCreateWebChannelCdpHeaderAttestation = (networkRequestId) => {
       assert.equal(typeof networkRequestId, "string");
       assert.ok(networkRequestId.length > 0);
@@ -23420,6 +24121,7 @@ try {
         appCheckHeaderPresent,
         appCheckHeaderSource,
         appCheckHeaderJwtShapeValid,
+        firebaseAuth,
       },
     ) => {
       if (!entry) return;
@@ -23435,6 +24137,12 @@ try {
         ].includes(appCheckHeaderSource),
       );
       assert.equal(typeof appCheckHeaderJwtShapeValid, "boolean");
+      assert.ok(firebaseAuth && typeof firebaseAuth === "object");
+      assert.ok(
+        SAFE_FIRESTORE_WEBCHANNEL_AUTH_BINDING_CLASSES.includes(
+          firebaseAuth.bindingClass,
+        ),
+      );
       if (entry.completionTimeoutId !== null) {
         clearTimeout(entry.completionTimeoutId);
         entry.completionTimeoutId = null;
@@ -23453,6 +24161,7 @@ try {
           appCheckHeaderPresent,
           appCheckHeaderSource,
           appCheckHeaderJwtShapeValid,
+          firebaseAuth,
         }),
       );
     };
@@ -25386,6 +26095,15 @@ try {
           "Firestore WebChannel listener and handler classes diverged.",
         );
       }
+      const safeFirestoreWebChannelAuth =
+        exactWebChannelHeaderCorrelationClass === null
+          ? null
+          : classifySafeFirestoreWebChannelAuth({
+              requestClass: exactWebChannelHeaderCorrelationClass,
+              headers: event.request.headers,
+              postData,
+              applicationSessionProof: groupApplicationSessionProof,
+            });
       if (stage !== "baseline") {
         if (nativeHeaderPresent) {
           sensitiveAppCheckRequestsByFetchRequestId.set(
@@ -25415,6 +26133,7 @@ try {
             appCheckHeaderPresent: nativeHeaderPresent,
             appCheckHeaderSource: nativeHeaderPresent ? "native-sdk" : null,
             appCheckHeaderJwtShapeValid: nativeHeaderJwtShapeValid,
+            firebaseAuth: safeFirestoreWebChannelAuth,
           },
         );
         return;
@@ -25451,6 +26170,7 @@ try {
             appCheckHeaderPresent: nativeHeaderPresent,
             appCheckHeaderSource: nativeHeaderPresent ? "native-sdk" : null,
             appCheckHeaderJwtShapeValid: nativeHeaderJwtShapeValid,
+            firebaseAuth: safeFirestoreWebChannelAuth,
           },
         );
         return;
@@ -25482,6 +26202,7 @@ try {
             appCheckHeaderPresent: true,
             appCheckHeaderSource: "native-sdk",
             appCheckHeaderJwtShapeValid: nativeHeaderJwtShapeValid,
+            firebaseAuth: safeFirestoreWebChannelAuth,
           },
         );
         return;
@@ -25526,6 +26247,7 @@ try {
           appCheckHeaderPresent: true,
           appCheckHeaderSource: "baseline-cdp-fetch-bridge",
           appCheckHeaderJwtShapeValid: true,
+          firebaseAuth: safeFirestoreWebChannelAuth,
         },
       );
     };
@@ -25782,7 +26504,6 @@ try {
       rawText = "";
     });
     let groupIdentityAttestation = null;
-    let groupApplicationSessionProof = null;
     let groupApplicationSessionKeepaliveClient = null;
     let groupApplicationSessionKeepaliveClientInitializationAttestation = null;
     let groupApplicationSessionKeepaliveClientDisposalAttestation = null;
@@ -25802,7 +26523,31 @@ try {
         credentials[authenticationRole],
         origin,
         authenticationRole,
-        { stage, captureRole, viewport: viewportName },
+        {
+          stage,
+          captureRole,
+          viewport: viewportName,
+          registerApplicationSessionProof: (proof) => {
+            assert.equal(groupApplicationSessionProof, null);
+            assert.equal(
+              firestoreWebChannelApplicationSessionProofAvailable(proof),
+              true,
+            );
+            assert.equal(liveApplicationSessionProofsByPage.has(page), false);
+            groupApplicationSessionProof = proof;
+            liveApplicationSessionProofsByPage.set(
+              page,
+              groupApplicationSessionProof,
+            );
+          },
+          unregisterApplicationSessionProof: () => {
+            if (!groupApplicationSessionProof) return;
+            groupApplicationSessionProof.revision = "";
+            groupApplicationSessionProof.uid = "";
+            assert.equal(liveApplicationSessionProofsByPage.delete(page), true);
+            groupApplicationSessionProof = null;
+          },
+        },
       );
       const {
         applicationSessionProof,
@@ -25814,11 +26559,10 @@ try {
           applicationSessionAuthorityMode,
         ),
       );
-      groupApplicationSessionProof = applicationSessionProof;
-      assert.equal(liveApplicationSessionProofsByPage.has(page), false);
-      liveApplicationSessionProofsByPage.set(
-        page,
+      assert.equal(
         groupApplicationSessionProof,
+        applicationSessionProof,
+        "The registered application-session proof changed after reload.",
       );
       if (groupAuthenticationLandingGuard) {
         const landingGuardAttestation = await page.evaluate((markers) => {
@@ -26001,19 +26745,8 @@ try {
         try {
           await waitForScreenReady(page, target.screen.id);
         } catch (error) {
-          let routeNetworkAttestationDrainDiagnostic;
-          try {
-            routeNetworkAttestationDrainDiagnostic =
-              await flushNetworkAttestations({
-                failOnAttestationError: false,
-              });
-          } catch {
-            routeNetworkAttestationDrainDiagnostic =
-              createSafeNetworkAttestationDrainDiagnostic({
-                completed: false,
-                errorCount: networkHeaderAttestationErrorCount,
-              });
-          }
+          const routeNetworkAttestationDrainDiagnostic =
+            await collectSafeFailureNetworkAttestationDrainDiagnostic();
           const routeRequests = networkObservations
             .slice(networkObservationStart)
             .filter((observation) => observation.captureId === activeCaptureId);
@@ -26158,6 +26891,10 @@ try {
             routeWebChannelCompletionTimeoutCount:
               webChannelCdpHeaderAttestationCompletionTimeoutCount -
               routeWebChannelCompletionTimeoutStart,
+            ...summarizeSafeFirestoreWebChannelAuthBindings({
+              records: webChannelCdpHeaderAttestationBindingRecords,
+              activeCaptureId,
+            }),
             routeObservedUnboundFirebaseRequestCount: routeRequests.filter(
               (observation) => observation.unboundFirebaseRequest,
             ).length,
@@ -26190,8 +26927,15 @@ try {
             `W10P screen readiness failure: ${JSON.stringify(failureDiagnostic)}`,
           );
         }
+        const browserErrorNetworkAttestationDrainDiagnostic =
+          await collectSafeFailureNetworkAttestationDrainDiagnostic();
         const browserErrorDiagnostic = {
           ...snapshotSafeBrowserErrorAccumulator(pageErrorAccumulator),
+          browserErrorNetworkAttestationDrainDiagnostic,
+          ...summarizeSafeFirestoreWebChannelAuthBindings({
+            records: webChannelCdpHeaderAttestationBindingRecords,
+            activeCaptureId,
+          }),
           cumulativeBrowserRequestFailureCount: browserRequestFailureCount,
           groupExternalStaticNetworkFetchCount:
             externalStaticRequestNetworkFetchCount -
