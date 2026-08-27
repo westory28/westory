@@ -20690,6 +20690,7 @@ const SAFE_CDP_DIAGNOSTIC_CAPTURE_STAGES = ["baseline", "candidate"];
 const SAFE_CDP_DIAGNOSTIC_PHASES = [
   "context-bootstrap",
   "authentication",
+  "session-keepalive",
   "screen-capture",
   "browser-audit-finalization",
 ];
