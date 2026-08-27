@@ -617,6 +617,7 @@ const blockBrowserSecondaryExecutionAndWebTransport = (modulepreloadPolicy) => {
   const pendingModulepreloadLinks = new WeakSet();
   const admittedModulepreloadLinks = new WeakSet();
   const retiredModulepreloadLinks = new WeakSet();
+  const ordinaryLinkSetterInProgress = new WeakSet();
   const modulepreloadStateByLink = new WeakMap();
   const retireModulepreloadLink = (node) => {
     if (!isNativeHtmlElement(node, "link")) return;
@@ -670,6 +671,7 @@ const blockBrowserSecondaryExecutionAndWebTransport = (modulepreloadPolicy) => {
     const currentRel = getNativeAttribute(node, "rel") || "";
     if (
       state !== "S0" ||
+      ordinaryLinkSetterInProgress.has(node) ||
       admittedModulepreloadLinks.has(node) ||
       retiredModulepreloadLinks.has(node) ||
       hasBlockedRelToken(currentRel)
@@ -720,6 +722,7 @@ const blockBrowserSecondaryExecutionAndWebTransport = (modulepreloadPolicy) => {
     validateNextNode = () => true,
   }) => {
     if (
+      ordinaryLinkSetterInProgress.has(node) ||
       admittedModulepreloadLinks.has(node) ||
       retiredModulepreloadLinks.has(node)
     ) {
@@ -768,6 +771,7 @@ const blockBrowserSecondaryExecutionAndWebTransport = (modulepreloadPolicy) => {
       !isNativeHtmlElement(node, "link") ||
       !isNativeCurrentDocumentElement(node) ||
       !isNativeDetachedLink(node) ||
+      ordinaryLinkSetterInProgress.has(node) ||
       !pendingModulepreloadLinks.has(node) ||
       modulepreloadStateByLink.get(node) !== "S4" ||
       admittedModulepreloadLinks.has(node) ||
@@ -817,6 +821,7 @@ const blockBrowserSecondaryExecutionAndWebTransport = (modulepreloadPolicy) => {
         const stableValue = String(value);
         if (
           !isNativeCurrentDocumentElement(this) ||
+          ordinaryLinkSetterInProgress.has(this) ||
           pendingModulepreloadLinks.has(this) ||
           admittedModulepreloadLinks.has(this) ||
           retiredModulepreloadLinks.has(this) ||
@@ -854,6 +859,7 @@ const blockBrowserSecondaryExecutionAndWebTransport = (modulepreloadPolicy) => {
         const stableValue = String(value);
         if (!isNativeCurrentDocumentElement(this)) return blockedOperation();
         if (
+          ordinaryLinkSetterInProgress.has(this) ||
           pendingModulepreloadLinks.has(this) ||
           admittedModulepreloadLinks.has(this) ||
           retiredModulepreloadLinks.has(this) ||
@@ -886,6 +892,7 @@ const blockBrowserSecondaryExecutionAndWebTransport = (modulepreloadPolicy) => {
         if (
           ownerElement &&
           (!isNativeCurrentDocumentElement(ownerElement) ||
+            ordinaryLinkSetterInProgress.has(ownerElement) ||
             pendingModulepreloadLinks.has(ownerElement) ||
             admittedModulepreloadLinks.has(ownerElement) ||
             retiredModulepreloadLinks.has(ownerElement) ||
@@ -915,6 +922,7 @@ const blockBrowserSecondaryExecutionAndWebTransport = (modulepreloadPolicy) => {
         if (
           ownerElement &&
           (!isNativeCurrentDocumentElement(ownerElement) ||
+            ordinaryLinkSetterInProgress.has(ownerElement) ||
             pendingModulepreloadLinks.has(ownerElement) ||
             admittedModulepreloadLinks.has(ownerElement) ||
             retiredModulepreloadLinks.has(ownerElement) ||
@@ -936,6 +944,7 @@ const blockBrowserSecondaryExecutionAndWebTransport = (modulepreloadPolicy) => {
     if (isNativeHtmlElement(node, "base")) return true;
     if (isNativeHtmlElement(node, "link")) {
       return (
+        ordinaryLinkSetterInProgress.has(node) ||
         pendingModulepreloadLinks.has(node) ||
         admittedModulepreloadLinks.has(node) ||
         retiredModulepreloadLinks.has(node) ||
@@ -1361,7 +1370,8 @@ const blockBrowserSecondaryExecutionAndWebTransport = (modulepreloadPolicy) => {
     if (isNativeHtmlElement(element, "base")) return blockedOperation();
     if (
       isNativeHtmlElement(element, "link") &&
-      (pendingModulepreloadLinks.has(element) ||
+      (ordinaryLinkSetterInProgress.has(element) ||
+        pendingModulepreloadLinks.has(element) ||
         admittedModulepreloadLinks.has(element) ||
         retiredModulepreloadLinks.has(element) ||
         hasBlockedRelToken(getNativeAttribute(element, "rel")) ||
@@ -1443,6 +1453,7 @@ const blockBrowserSecondaryExecutionAndWebTransport = (modulepreloadPolicy) => {
       .at(-1)
       .toLowerCase();
     if (
+      ordinaryLinkSetterInProgress.has(element) ||
       pendingModulepreloadLinks.has(element) ||
       admittedModulepreloadLinks.has(element) ||
       retiredModulepreloadLinks.has(element) ||
@@ -1809,6 +1820,24 @@ const blockBrowserSecondaryExecutionAndWebTransport = (modulepreloadPolicy) => {
     "part",
     "style",
   ]);
+  const allowedOrdinaryLinkSetterProperties = new Set([
+    "id",
+    "onerror",
+    "onload",
+  ]);
+  const exactOrdinaryLinkId = "westory-quill-style";
+  const ordinaryLinkSetterAllowed = (node, property) =>
+    isNativeHtmlElement(node, "link") &&
+    allowedOrdinaryLinkSetterProperties.has(property) &&
+    isNativeCurrentDocumentElement(node) &&
+    !ordinaryLinkSetterInProgress.has(node) &&
+    !pendingModulepreloadLinks.has(node) &&
+    !admittedModulepreloadLinks.has(node) &&
+    !retiredModulepreloadLinks.has(node) &&
+    !hasBlockedRelToken(getNativeAttribute(node, "rel")) &&
+    (property === "id" ||
+      (getNativeAttribute(node, "id") === exactOrdinaryLinkId &&
+        getNativeAttribute(node, "rel") === "stylesheet"));
   for (const {
     descriptor,
     property,
@@ -1839,7 +1868,29 @@ const blockBrowserSecondaryExecutionAndWebTransport = (modulepreloadPolicy) => {
     }
     if (descriptor.set) {
       guardedDescriptor.set = function (value) {
-        if (isNativeHtmlElement(this, "link")) return blockedOperation();
+        if (isNativeHtmlElement(this, "link")) {
+          if (!ordinaryLinkSetterAllowed(this, property)) {
+            return blockedOperation();
+          }
+          let stableValue = value;
+          if (property === "id") {
+            if (value !== exactOrdinaryLinkId) return blockedOperation();
+          } else if (value !== null && typeof value !== "function") {
+            return blockedOperation();
+          }
+          ordinaryLinkSetterInProgress.add(this);
+          let result;
+          try {
+            result = callNative(descriptor.set, this, stableValue);
+          } finally {
+            ordinaryLinkSetterInProgress.delete(this);
+          }
+          if (!ordinaryLinkSetterAllowed(this, property)) {
+            retireModulepreloadLink(this);
+            return blockedOperation();
+          }
+          return result;
+        }
         return callNative(descriptor.set, this, value);
       };
     }
@@ -9704,6 +9755,7 @@ const SAFE_BROWSER_ERROR_NAME_CLASSES = Object.freeze([
 ]);
 const SAFE_BROWSER_ERROR_MESSAGE_CLASSES = Object.freeze([
   "binding-not-defined",
+  "content-security-policy",
   "dom-operation-failed",
   "firebase-app-check",
   "firebase-failed-precondition",
@@ -9715,7 +9767,9 @@ const SAFE_BROWSER_ERROR_MESSAGE_CLASSES = Object.freeze([
   "not-a-function",
   "nullish-property-access",
   "other-runtime-error",
+  "quill-load-failed",
   "react-render-failure",
+  "resource-load-failed",
   "speculative-egress-guard",
 ]);
 const SAFE_BROWSER_ERROR_OPERATION_CLASSES = Object.freeze([
@@ -9726,10 +9780,14 @@ const SAFE_BROWSER_ERROR_OPERATION_CLASSES = Object.freeze([
   "auth-menu-config-read",
   "auth-system-config-read",
   "auth-user-profile-read",
+  "quill-editor-init",
   "semester-core-read",
   "semester-readiness-read",
   "settings-access-users-list",
   "settings-general-config-read",
+  "settings-privacy-consent-list",
+  "settings-privacy-policy-read",
+  "settings-privacy-terms-read",
   "settings-school-config-read",
   "unknown-operation",
 ]);
@@ -9781,6 +9839,23 @@ const classifySafeBrowserErrorMessage = (value, errorCode = "") => {
       `unhandled render error: ${speculativeEgressGuardMessage}`
   ) {
     return "speculative-egress-guard";
+  }
+  if (
+    /content security policy|violates the following content security policy directive/iu.test(
+      normalizedMessage,
+    )
+  ) {
+    return "content-security-policy";
+  }
+  if (
+    /quill (?:css|script) load failed|quill cdn load timeout|quill did not initialize after script load/iu.test(
+      normalizedMessage,
+    )
+  ) {
+    return "quill-load-failed";
+  }
+  if (/^failed to load resource:/iu.test(normalizedMessage)) {
+    return "resource-load-failed";
   }
   if (
     /^(?:app-check|appcheck)\//u.test(normalizedCode) ||
@@ -9876,6 +9951,13 @@ const classifySafeBrowserErrorMessage = (value, errorCode = "") => {
 };
 const classifySafeBrowserErrorOperation = (value) => {
   const message = String(value || "");
+  if (
+    /https:\/\/cdn\.quilljs\.com\/1\.3\.6\/quill(?:\.js|\.snow\.css)/u.test(
+      message,
+    )
+  ) {
+    return "quill-editor-init";
+  }
   const fixedOperationByPrefix = [
     ["Failed to load interface config", "auth-interface-config-read"],
     ["Failed to load system config", "auth-system-config-read"],
@@ -9888,9 +9970,13 @@ const classifySafeBrowserErrorOperation = (value) => {
     ["Failed to resume after maintenance", "auth-maintenance-read"],
     ["Invalid student maintenance configuration", "auth-maintenance-read"],
     ["Failed to subscribe student maintenance", "auth-maintenance-read"],
+    ["Failed to initialize Quill editor", "quill-editor-init"],
     ["Failed to load access settings users:", "settings-access-users-list"],
     ["Failed to load school config:", "settings-school-config-read"],
     ["Failed to load config:", "settings-general-config-read"],
+    ["Failed to load consent items:", "settings-privacy-consent-list"],
+    ["Failed to load privacy:", "settings-privacy-policy-read"],
+    ["Failed to load terms:", "settings-privacy-terms-read"],
     ["Failed to load semester core:", "semester-core-read"],
     ["Failed to load canonical semester readiness:", "semester-readiness-read"],
     ["Failed to load semester readiness:", "semester-readiness-read"],
@@ -10197,9 +10283,13 @@ const verifySafeBrowserErrorDiagnosticFixtures = () => {
     ["Failed to resume after maintenance", "auth-maintenance-read"],
     ["Invalid student maintenance configuration", "auth-maintenance-read"],
     ["Failed to subscribe student maintenance", "auth-maintenance-read"],
+    ["Failed to initialize Quill editor", "quill-editor-init"],
     ["Failed to load access settings users:", "settings-access-users-list"],
     ["Failed to load school config:", "settings-school-config-read"],
     ["Failed to load config:", "settings-general-config-read"],
+    ["Failed to load consent items:", "settings-privacy-consent-list"],
+    ["Failed to load privacy:", "settings-privacy-policy-read"],
+    ["Failed to load terms:", "settings-privacy-terms-read"],
     ["Failed to load semester core:", "semester-core-read"],
     ["Failed to load canonical semester readiness:", "semester-readiness-read"],
     ["Failed to load semester readiness:", "semester-readiness-read"],
@@ -10214,6 +10304,38 @@ const verifySafeBrowserErrorDiagnosticFixtures = () => {
       deploymentBypassSecret,
     });
     assert.equal(operationRecord.operationClass, expectedOperationClass);
+  }
+  const messageClassFixtures = [
+    [
+      "Refused to load the script 'https://cdn.quilljs.com/1.3.6/quill.js' because it violates the following Content Security Policy directive.",
+      "content-security-policy",
+      "quill-editor-init",
+    ],
+    [
+      "Failed to initialize Quill editor Error: Quill script load failed",
+      "quill-load-failed",
+      "quill-editor-init",
+    ],
+    [
+      "Failed to load resource: net::ERR_FAILED",
+      "resource-load-failed",
+      "unknown-operation",
+    ],
+  ];
+  for (const [
+    value,
+    expectedMessageClass,
+    expectedOperationClass,
+  ] of messageClassFixtures) {
+    const messageRecord = createSafeBrowserErrorRecord({
+      sourceClass: "console-error",
+      value,
+      debugToken,
+      debugSentinel,
+      deploymentBypassSecret,
+    });
+    assert.equal(messageRecord.messageClass, expectedMessageClass);
+    assert.equal(messageRecord.operationClass, expectedOperationClass);
   }
   const operationHistogramRecords = [
     "Failed to load config:",
@@ -10388,6 +10510,7 @@ const verifySafeBrowserErrorDiagnosticFixtures = () => {
   return {
     safeBrowserErrorDiagnosticFixtureCount: records.length,
     safeBrowserErrorOperationFixtureCount: operationFixtures.length,
+    safeBrowserErrorMessageClassFixtureCount: messageClassFixtures.length,
     safeBrowserErrorOperationHistogramFixtureCount:
       operationHistogramRecords.length,
     safeBrowserErrorDiagnosticHistogramEntryCount: histogram.length,
@@ -12479,6 +12602,45 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
           link.href = modulepreloadPath;
           return link;
         };
+        const ordinaryStylesheetLink = document.createElement("link");
+        let stylesheetLoadEventCount = 0;
+        let stylesheetErrorEventCount = 0;
+        let resolveStylesheetSettlement;
+        const stylesheetSettled = new Promise((resolve) => {
+          resolveStylesheetSettlement = resolve;
+        });
+        const stylesheetLoadHandler = () => {
+          stylesheetLoadEventCount += 1;
+          resolveStylesheetSettlement("load");
+        };
+        const stylesheetErrorHandler = () => {
+          stylesheetErrorEventCount += 1;
+          resolveStylesheetSettlement("error");
+        };
+        ordinaryStylesheetLink.id = "westory-quill-style";
+        ordinaryStylesheetLink.rel = "stylesheet";
+        ordinaryStylesheetLink.href =
+          "data:text/css,html%7B--w10p-quill-style-loader-fixture%3A1%7D";
+        ordinaryStylesheetLink.onload = stylesheetLoadHandler;
+        ordinaryStylesheetLink.onerror = stylesheetErrorHandler;
+        document.head.appendChild(ordinaryStylesheetLink);
+        const stylesheetSettlement = await Promise.race([
+          stylesheetSettled,
+          new Promise((resolve) => setTimeout(() => resolve("timeout"), 5000)),
+        ]);
+        const ordinaryStylesheetSnapshot = {
+          settlement: stylesheetSettlement,
+          loadEventCount: stylesheetLoadEventCount,
+          errorEventCount: stylesheetErrorEventCount,
+          id: ordinaryStylesheetLink.id,
+          rel: ordinaryStylesheetLink.rel,
+          onloadHandlerRetained:
+            ordinaryStylesheetLink.onload === stylesheetLoadHandler,
+          onerrorHandlerRetained:
+            ordinaryStylesheetLink.onerror === stylesheetErrorHandler,
+          connected: ordinaryStylesheetLink.isConnected,
+        };
+        ordinaryStylesheetLink.remove();
         const admittedLink = document.createElement("link");
         let loadEventCount = 0;
         let errorEventCount = 0;
@@ -12638,6 +12800,18 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
           link.id = "blocked";
           document.head.appendChild(link);
         });
+        recordRejection("pendingIdMutation", () => {
+          const link = prepareExactLink();
+          link.id = "blocked";
+        });
+        recordRejection("pendingOnloadMutation", () => {
+          const link = prepareExactLink();
+          link.onload = () => {};
+        });
+        recordRejection("pendingOnerrorMutation", () => {
+          const link = prepareExactLink();
+          link.onerror = () => {};
+        });
         recordRejection("wrongParentAppendChild", () => {
           document.body.appendChild(prepareExactLink());
         });
@@ -12723,6 +12897,12 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
         });
         recordRejection("admittedIdMutation", () => {
           admittedLink.id = "blocked";
+        });
+        recordRejection("admittedOnloadMutation", () => {
+          admittedLink.onload = () => {};
+        });
+        recordRejection("admittedOnerrorMutation", () => {
+          admittedLink.onerror = () => {};
         });
         recordRejection("admittedClassListMutation", () => {
           admittedLink.classList.add("blocked");
@@ -12848,6 +13028,72 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
             },
           };
         });
+        let reentrantOrdinaryIdCoercionCount = 0;
+        const reentrantOrdinaryIdLink = document.createElement("link");
+        recordRejection("reentrantOrdinaryIdMutation", () => {
+          reentrantOrdinaryIdLink.id = {
+            toString() {
+              reentrantOrdinaryIdCoercionCount += 1;
+              reentrantOrdinaryIdLink.rel = "modulepreload";
+              reentrantOrdinaryIdLink.as = "script";
+              reentrantOrdinaryIdLink.crossOrigin = "";
+              reentrantOrdinaryIdLink.href = modulepreloadPath;
+              document.head.appendChild(reentrantOrdinaryIdLink);
+              return "blocked";
+            },
+          };
+        });
+        const reentrantOrdinaryIdSnapshot = {
+          coercionCount: reentrantOrdinaryIdCoercionCount,
+          attributeNames: reentrantOrdinaryIdLink.getAttributeNames().sort(),
+          connected: reentrantOrdinaryIdLink.isConnected,
+        };
+        let customizedBuiltInReactionCount = 0;
+        let customizedBuiltInBlockedMutationCount = 0;
+        class W10PReentrantLink extends HTMLLinkElement {
+          static get observedAttributes() {
+            return ["id"];
+          }
+
+          attributeChangedCallback() {
+            customizedBuiltInReactionCount += 1;
+            try {
+              this.removeAttribute("id");
+              this.removeAttribute("is");
+              this.rel = "modulepreload";
+              this.as = "script";
+              this.crossOrigin = "";
+              this.href = modulepreloadPath;
+              document.head.appendChild(this);
+            } catch (error) {
+              if (
+                Object.prototype.toString.call(error) ===
+                  "[object DOMException]" &&
+                error.name === "SecurityError"
+              ) {
+                customizedBuiltInBlockedMutationCount += 1;
+                return;
+              }
+              throw error;
+            }
+          }
+        }
+        customElements.define("w10p-reentrant-link", W10PReentrantLink, {
+          extends: "link",
+        });
+        const customizedBuiltInLink = document.createElement("link", {
+          is: "w10p-reentrant-link",
+        });
+        Object.setPrototypeOf(customizedBuiltInLink, HTMLLinkElement.prototype);
+        recordRejection("customizedBuiltInIdReaction", () => {
+          customizedBuiltInLink.id = "westory-quill-style";
+        });
+        const customizedBuiltInSnapshot = {
+          reactionCount: customizedBuiltInReactionCount,
+          blockedMutationCount: customizedBuiltInBlockedMutationCount,
+          speculativeRelPresent: customizedBuiltInLink.rel === "modulepreload",
+          connected: customizedBuiltInLink.isConnected,
+        };
         const reentrantAdjacentLink = document.createElement("link");
         recordRejection("reentrantInsertAdjacentElementPosition", () => {
           document.body.insertAdjacentElement(
@@ -13054,6 +13300,7 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
           attributeNames: admittedLink.getAttributeNames().sort(),
           resourceEntryCount: performance.getEntriesByName(expectedUrl).length,
           admittedStillConnected: admittedLink.isConnected,
+          ordinaryStylesheetSnapshot,
           rejected,
           initialBlankRealmSnapshot,
           crossRealmSnapshot,
@@ -13062,6 +13309,8 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
             setAttribute: setAttributeSnapshot,
             relList: relListSnapshot,
             attrValue: attrValueSnapshot,
+            ordinaryId: reentrantOrdinaryIdSnapshot,
+            customizedBuiltIn: customizedBuiltInSnapshot,
             innerHtml: innerHtmlSnapshot,
             outerHtml: outerHtmlSnapshot,
             adjacentHtml: adjacentHtmlSnapshot,
@@ -13084,6 +13333,16 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
       attributeNames: ["as", "crossorigin", "href", "rel"],
       resourceEntryCount: 1,
       admittedStillConnected: true,
+      ordinaryStylesheetSnapshot: {
+        settlement: "load",
+        loadEventCount: 1,
+        errorEventCount: 0,
+        id: "westory-quill-style",
+        rel: "stylesheet",
+        onloadHandlerRetained: true,
+        onerrorHandlerRetained: true,
+        connected: true,
+      },
       rejected: {
         reentrantTextContentAdmissionRemoval: true,
         initialBlankRealmRemoveChildCall: true,
@@ -13100,6 +13359,9 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
         wrongPropertyOrder: true,
         extraAttributeMutation: true,
         extraReflectedAttributeAppend: true,
+        pendingIdMutation: true,
+        pendingOnloadMutation: true,
+        pendingOnerrorMutation: true,
         wrongParentAppendChild: true,
         alternateHeadAppend: true,
         alternateHeadInsertBefore: true,
@@ -13116,6 +13378,8 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
         connectedSpoofedRelAttrNameMutation: true,
         admittedFetchPropertyMutation: true,
         admittedIdMutation: true,
+        admittedOnloadMutation: true,
+        admittedOnerrorMutation: true,
         admittedClassListMutation: true,
         admittedDatasetMutation: true,
         admittedStyleMutation: true,
@@ -13141,6 +13405,8 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
         admittedDocumentWrite: true,
         admittedExecCommandDelete: true,
         reentrantFetchPropertyMutation: true,
+        reentrantOrdinaryIdMutation: true,
+        customizedBuiltInIdReaction: true,
         reentrantInsertAdjacentElementPosition: true,
         reentrantVariadicNodeCoercion: true,
         reentrantContextualRangeMutation: true,
@@ -13166,6 +13432,17 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
         },
         relList: { coercionCount: 1, rel: "stylesheet" },
         attrValue: { coercionCount: 1, rel: "alternate" },
+        ordinaryId: {
+          coercionCount: 0,
+          attributeNames: [],
+          connected: false,
+        },
+        customizedBuiltIn: {
+          reactionCount: 1,
+          blockedMutationCount: 1,
+          speculativeRelPresent: false,
+          connected: false,
+        },
         innerHtml: { coercionCount: 1, firstElementLocalName: "span" },
         outerHtml: { coercionCount: 1, firstElementLocalName: "span" },
         adjacentHtml: { coercionCount: 1, firstElementLocalName: "span" },
@@ -25128,12 +25405,41 @@ try {
             `W10P screen readiness failure: ${JSON.stringify(failureDiagnostic)}`,
           );
         }
+        const browserErrorDiagnostic = {
+          ...snapshotSafeBrowserErrorAccumulator(pageErrorAccumulator),
+          cumulativeBrowserRequestFailureCount: browserRequestFailureCount,
+          groupExternalStaticNetworkFetchCount:
+            externalStaticRequestNetworkFetchCount -
+            groupExternalStaticNetworkFetchStart,
+          groupExternalStaticCacheFulfillCount:
+            externalStaticRequestCacheFulfillCount -
+            groupExternalStaticCacheFulfillStart,
+          groupExternalStaticScopeMismatchBlockCount:
+            externalStaticRequestScopeMismatchBlockCount -
+            groupExternalStaticScopeMismatchBlockStart,
+          groupExternalStaticResponseNon200AbortCount:
+            externalStaticResponseNon200AbortCount -
+            groupExternalStaticResponseNon200AbortStart,
+          groupAllowedEgressResponseErrorAbortCount:
+            allowedEgressResponseErrorAbortCount -
+            groupAllowedEgressResponseErrorAbortStart,
+          groupPreTransmissionBoundaryFailRequestCount:
+            preTransmissionBoundaryFailRequestCount -
+            groupPreTransmissionBoundaryFailRequestStart,
+          groupPreTransmissionBoundaryBlockClasses:
+            snapshotSafeDiagnosticClasses(
+              preTransmissionBoundaryBlockClassCounts,
+              groupPreTransmissionBoundaryBlockClassCountsStart,
+            ),
+          groupAppCheckCdpHandlerErrorCount:
+            appCheckCdpHandlerErrorCount - groupBaselineBridgeHandlerErrorStart,
+          cumulativeNetworkHeaderAttestationErrorCount:
+            networkHeaderAttestationErrorCount,
+        };
         assert.equal(
           pageErrorAccumulator.totalCount,
           0,
-          `${target.screen.id} browser error count must be zero: ${JSON.stringify(
-            snapshotSafeBrowserErrorAccumulator(pageErrorAccumulator),
-          )}`,
+          `${target.screen.id} browser error count must be zero: ${JSON.stringify(browserErrorDiagnostic)}`,
         );
         const anchorRequirements =
           stage === "candidate" && !target.screen.productionPresentation
