@@ -29,6 +29,13 @@ const SESSION_IDLE_MODES = Object.freeze({
 });
 const STAGING_PROJECT_ID = "westory-staging-177587430482";
 const PRODUCTION_PROJECT_ID = "history-quiz-yongsin";
+const W10P_VISUAL_FIXTURE_ADMIN = Object.freeze({
+  uid: "w10p-visual-admin",
+  email: "w10p-visual-admin@yongshin-ms.ms.kr",
+  fixtureOwner: "w10p-visual-parity",
+  fixtureId: "w10p-visual-fixture-v1",
+  fixtureRole: "admin",
+});
 const APP_CHECK_OBSERVATION_LOG_INTERVAL_MS = 5 * 60 * 1000;
 let lastAppCheckObservationLogAt = 0;
 
@@ -164,6 +171,16 @@ const assertAllowedIdentity = (request) => {
   }
 
   return { uid, email, authTime: getAuthTimeSeconds(request) };
+};
+
+const isTrustedW10PVisualFixtureAdmin = (request, identity, config) => {
+  const token = request.auth?.token || {};
+  return config.projectId === STAGING_PROJECT_ID
+    && identity.uid === W10P_VISUAL_FIXTURE_ADMIN.uid
+    && identity.email === W10P_VISUAL_FIXTURE_ADMIN.email
+    && token.fixtureOwner === W10P_VISUAL_FIXTURE_ADMIN.fixtureOwner
+    && token.fixtureId === W10P_VISUAL_FIXTURE_ADMIN.fixtureId
+    && token.fixtureRole === W10P_VISUAL_FIXTURE_ADMIN.fixtureRole;
 };
 
 const getSessionRef = (uid, authTime) =>
@@ -485,7 +502,11 @@ const touchApplicationSession = onCall({ region: REGION }, async (request) => {
     String(request.data?.scope || "GENERAL").trim().toUpperCase() === "HIGH_RISK"
       ? "HIGH_RISK"
       : "GENERAL";
-  if (requestedScope === "HIGH_RISK" && identity.email !== ADMIN_EMAIL) {
+  if (
+    requestedScope === "HIGH_RISK"
+    && identity.email !== ADMIN_EMAIL
+    && !isTrustedW10PVisualFixtureAdmin(request, identity, config)
+  ) {
     throw new HttpsError(
       "permission-denied",
       "Only the administrator can extend a high-risk application session.",

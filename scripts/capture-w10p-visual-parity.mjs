@@ -9728,6 +9728,7 @@ const SAFE_BROWSER_ERROR_OPERATION_CLASSES = Object.freeze([
   "auth-user-profile-read",
   "semester-core-read",
   "semester-readiness-read",
+  "settings-access-users-list",
   "settings-general-config-read",
   "settings-school-config-read",
   "unknown-operation",
@@ -9887,6 +9888,7 @@ const classifySafeBrowserErrorOperation = (value) => {
     ["Failed to resume after maintenance", "auth-maintenance-read"],
     ["Invalid student maintenance configuration", "auth-maintenance-read"],
     ["Failed to subscribe student maintenance", "auth-maintenance-read"],
+    ["Failed to load access settings users:", "settings-access-users-list"],
     ["Failed to load school config:", "settings-school-config-read"],
     ["Failed to load config:", "settings-general-config-read"],
     ["Failed to load semester core:", "semester-core-read"],
@@ -10183,6 +10185,7 @@ const verifySafeBrowserErrorDiagnosticFixtures = () => {
     ["Failed to resume after maintenance", "auth-maintenance-read"],
     ["Invalid student maintenance configuration", "auth-maintenance-read"],
     ["Failed to subscribe student maintenance", "auth-maintenance-read"],
+    ["Failed to load access settings users:", "settings-access-users-list"],
     ["Failed to load school config:", "settings-school-config-read"],
     ["Failed to load config:", "settings-general-config-read"],
     ["Failed to load semester core:", "semester-core-read"],
@@ -20215,7 +20218,7 @@ const refreshCaptureApplicationSession = async ({
 
   let ephemeralAppCheckToken = appCheckToken;
   try {
-    const attestation = await client.evaluate(
+    const refreshResult = await client.evaluate(
       async (state, input) => {
         const { app, auth, appModule, authModule, disposed } = state;
         let ephemeralIdToken = "";
@@ -20381,7 +20384,10 @@ const refreshCaptureApplicationSession = async ({
             );
           }
           state.refreshSuccessCount += 1;
-          return attestation;
+          return {
+            attestation,
+            idTokenRefreshMode: forceRefreshCount === 1 ? "forced" : "cached",
+          };
         } finally {
           ephemeralIdToken = "";
           ephemeralToken = "";
@@ -20408,6 +20414,7 @@ const refreshCaptureApplicationSession = async ({
           CAPTURE_APPLICATION_SESSION_MINIMUM_REMAINING_LEASE_MS,
       },
     );
+    const attestation = refreshResult.attestation;
     assert.deepEqual(attestation, {
       clientReused: true,
       clientNotDisposed: true,
@@ -20428,8 +20435,19 @@ const refreshCaptureApplicationSession = async ({
       leaseBound: true,
       authorityModeAllowed: true,
     });
+    assert.ok(["cached", "forced"].includes(refreshResult.idTokenRefreshMode));
     client.markSuccessfulReuse();
     applicationSessionKeepaliveClientReuseCount += 1;
+    return Object.freeze({
+      completed: true,
+      completedBeforeRouteNavigation: true,
+      idTokenRefreshMode: refreshResult.idTokenRefreshMode,
+      tokenLifetimeBound: attestation.tokenLifetimeBound,
+      leaseBound: attestation.leaseBound,
+      revisionUnchanged: attestation.revisionUnchanged,
+      authTimeBound: attestation.authTimeBound,
+      appCheckMinimumLeaseBound: true,
+    });
   } finally {
     ephemeralAppCheckToken = "";
   }
@@ -24736,6 +24754,7 @@ try {
         resetSafeBrowserErrorAccumulator(pageErrorAccumulator);
         const nextCaptureId = captureKey(stage, target.screen.id, viewport);
         activeCaptureId = null;
+        let screenApplicationSessionKeepaliveAttestation = null;
         if (authenticationRole) {
           assert.ok(groupApplicationSessionProof);
           assert.equal(
@@ -24749,14 +24768,15 @@ try {
             keepaliveAppCheckToken =
               await captureAppCheckTokenManager.ensureFresh();
             const keepaliveNowMs = Date.now();
-            await refreshCaptureApplicationSession({
-              client: groupApplicationSessionKeepaliveClient,
-              proof: groupApplicationSessionProof,
-              appCheckToken: keepaliveAppCheckToken,
-              appCheckTokenExpiresAtMs:
-                captureAppCheckTokenManager.expiresAtMillis,
-              nodeNowMs: keepaliveNowMs,
-            });
+            screenApplicationSessionKeepaliveAttestation =
+              await refreshCaptureApplicationSession({
+                client: groupApplicationSessionKeepaliveClient,
+                proof: groupApplicationSessionProof,
+                appCheckToken: keepaliveAppCheckToken,
+                appCheckTokenExpiresAtMs:
+                  captureAppCheckTokenManager.expiresAtMillis,
+                nodeNowMs: keepaliveNowMs,
+              });
           } finally {
             keepaliveAppCheckToken = "";
           }
@@ -24777,6 +24797,12 @@ try {
         const networkObservationStart = networkObservations.length;
         const networkResponseObservationStart =
           networkResponseObservations.length;
+        const routeWebChannelBindingFailureStart =
+          webChannelCdpHeaderAttestationBindingFailureCount;
+        const routeWebChannelPairingTimeoutStart =
+          webChannelCdpHeaderAttestationPairingTimeoutCount;
+        const routeWebChannelCompletionTimeoutStart =
+          webChannelCdpHeaderAttestationCompletionTimeoutCount;
         const routeUrl = `${origin}/#${target.screen.captureRoute}`;
         await page.goto(routeUrl, { waitUntil: "domcontentloaded" });
         await page.waitForFunction(
@@ -24873,6 +24899,51 @@ try {
           const routeFinishedRequests = snapshotSafeFinishedRequests(
             requestFinishedAccumulatorsByCaptureId.get(activeCaptureId),
           );
+          const routeFirestoreRequests = routeRequests.filter(
+            (observation) =>
+              observation.firebaseService === "firestore" &&
+              observation.method !== "OPTIONS",
+          );
+          const routeFirestoreResponses = routeResponses.filter(
+            (observation) =>
+              observation.firebaseService === "firestore" &&
+              observation.method !== "OPTIONS",
+          );
+          const routeFirestoreAppCheckHeaderSourceHistogram = [
+            ...routeFirestoreRequests.reduce((counts, observation) => {
+              const source = [
+                "baseline-cdp-fetch-bridge",
+                "capture-owned-fetch",
+                "native-sdk",
+              ].includes(observation.appCheckHeaderSource)
+                ? observation.appCheckHeaderSource
+                : observation.appCheckHeaderSource === null
+                  ? "missing"
+                  : "unknown";
+              counts.set(source, (counts.get(source) || 0) + 1);
+              return counts;
+            }, new Map()),
+          ]
+            .sort(([left], [right]) => left.localeCompare(right))
+            .map(([source, count]) => ({ source, count }));
+          const routeWebChannelBindings =
+            webChannelCdpHeaderAttestationBindingRecords.filter(
+              (record) => record.captureId === activeCaptureId,
+            );
+          const safeWebChannelHistogram = (records, field, allowedValues) =>
+            [
+              ...records.reduce((counts, record) => {
+                const value = allowedValues.includes(record[field])
+                  ? record[field]
+                  : record[field] === null
+                    ? "missing"
+                    : "unknown";
+                counts.set(value, (counts.get(value) || 0) + 1);
+                return counts;
+              }, new Map()),
+            ]
+              .sort(([left], [right]) => left.localeCompare(right))
+              .map(([value, count]) => ({ value, count }));
           const failureDiagnostic = {
             stage,
             screenId: target.screen.id,
@@ -24887,6 +24958,8 @@ try {
               error && typeof error === "object"
                 ? error.w10pReadinessDiagnostic || null
                 : null,
+            applicationSessionKeepaliveAttestation:
+              screenApplicationSessionKeepaliveAttestation,
             ...snapshotSafeBrowserErrorAccumulator(pageErrorAccumulator),
             routeObservedRequestCount: routeRequests.length,
             routeObservedResponseCount: routeResponses.length,
@@ -24898,17 +24971,66 @@ try {
             routeObservedFirebaseResponseCount: routeResponses.filter(
               (observation) => observation.isFirebaseRequest,
             ).length,
-            routeObservedFirestoreRequestCount: routeRequests.filter(
-              (observation) => observation.firebaseService === "firestore",
-            ).length,
-            routeObservedFirestoreResponseCount: routeResponses.filter(
-              (observation) => observation.firebaseService === "firestore",
-            ).length,
-            routeObservedFirestoreHttpErrorResponseCount: routeResponses.filter(
-              (observation) =>
-                observation.firebaseService === "firestore" &&
-                Number(observation.status) >= 400,
-            ).length,
+            routeObservedFirestoreRequestCount: routeFirestoreRequests.length,
+            routeObservedFirestoreResponseCount: routeFirestoreResponses.length,
+            routeObservedFirestoreHttpErrorResponseCount:
+              routeFirestoreResponses.filter(
+                (observation) => Number(observation.status) >= 400,
+              ).length,
+            routeObservedFirestoreAppCheckHeaderPresentRequestCount:
+              routeFirestoreRequests.filter(
+                (observation) => observation.appCheckHeaderPresent,
+              ).length,
+            routeObservedFirestoreAppCheckHeaderMissingRequestCount:
+              routeFirestoreRequests.filter(
+                (observation) => !observation.appCheckHeaderPresent,
+              ).length,
+            routeObservedFirestoreAppCheckHeaderJwtShapeValidRequestCount:
+              routeFirestoreRequests.filter(
+                (observation) => observation.appCheckHeaderJwtShapeValid,
+              ).length,
+            routeObservedFirestoreAppCheckHeaderJwtShapeInvalidRequestCount:
+              routeFirestoreRequests.filter(
+                (observation) => !observation.appCheckHeaderJwtShapeValid,
+              ).length,
+            routeObservedFirestoreAppCheckHeaderSourceHistogram:
+              routeFirestoreAppCheckHeaderSourceHistogram,
+            routeObservedFirestoreBridgeDecisionRequestCount:
+              routeFirestoreRequests.filter(
+                (observation) => observation.appCheckBridgeDecisionObserved,
+              ).length,
+            routeObservedFirestoreBridgeScopeEligibleRequestCount:
+              routeFirestoreRequests.filter(
+                (observation) => observation.appCheckBridgeScopeEligible,
+              ).length,
+            routeWebChannelBoundRequestCount: routeWebChannelBindings.length,
+            routeWebChannelRequestClassHistogram: safeWebChannelHistogram(
+              routeWebChannelBindings,
+              "requestClass",
+              [
+                "initial-forward-post",
+                "session-forward-post",
+                "backchannel-get",
+              ],
+            ),
+            routeWebChannelHeaderSourceHistogram: safeWebChannelHistogram(
+              routeWebChannelBindings,
+              "appCheckHeaderSource",
+              [
+                "baseline-cdp-fetch-bridge",
+                "capture-owned-fetch",
+                "native-sdk",
+              ],
+            ),
+            routeWebChannelBindingFailureCount:
+              webChannelCdpHeaderAttestationBindingFailureCount -
+              routeWebChannelBindingFailureStart,
+            routeWebChannelPairingTimeoutCount:
+              webChannelCdpHeaderAttestationPairingTimeoutCount -
+              routeWebChannelPairingTimeoutStart,
+            routeWebChannelCompletionTimeoutCount:
+              webChannelCdpHeaderAttestationCompletionTimeoutCount -
+              routeWebChannelCompletionTimeoutStart,
             routeObservedUnboundFirebaseRequestCount: routeRequests.filter(
               (observation) => observation.unboundFirebaseRequest,
             ).length,

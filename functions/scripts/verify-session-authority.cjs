@@ -35,6 +35,29 @@ const requestFor = (uid, authTime, overrides = {}) => ({
   },
 });
 
+const highRiskRequestFor = ({
+  uid,
+  authTime,
+  email: requestEmail,
+  token = {},
+  includeAppCheck = false,
+}) => ({
+  ...requestFor(uid, authTime),
+  auth: {
+    uid,
+    token: {
+      email: requestEmail,
+      auth_time: authTime,
+      ...token,
+    },
+  },
+  data: {
+    ...requestFor(uid, authTime).data,
+    scope: "HIGH_RISK",
+  },
+  ...(includeAppCheck ? { app: { appId: "test-app-id" } } : {}),
+});
+
 const seedSession = async (uid, authTime, overrides = {}) => {
   await getFirestore()
     .doc(`application_sessions/${uid}/sessions/${authTime}`)
@@ -366,6 +389,87 @@ const main = async () => {
     "HIGH_RISK_SESSION_ADMIN_ONLY",
   );
 
+  await seedSession("actual-admin", nowSeconds, {
+    email: "westoria28@gmail.com",
+  });
+  await assert.doesNotReject(() =>
+    callableExports.touchApplicationSession.run(
+      highRiskRequestFor({
+        uid: "actual-admin",
+        authTime: nowSeconds,
+        email: "westoria28@gmail.com",
+      }),
+    ),
+  );
+
+  const visualFixtureIdentity = {
+    uid: "w10p-visual-admin",
+    authTime: nowSeconds,
+    email: "w10p-visual-admin@yongshin-ms.ms.kr",
+    token: {
+      fixtureOwner: "w10p-visual-parity",
+      fixtureId: "w10p-visual-fixture-v1",
+      fixtureRole: "admin",
+    },
+  };
+  await seedSession(visualFixtureIdentity.uid, nowSeconds, {
+    email: visualFixtureIdentity.email,
+  });
+  try {
+    process.env.GCLOUD_PROJECT = "westory-staging-177587430482";
+    assert.equal(
+      await rejectionReason(() =>
+        callableExports.touchApplicationSession.run(
+          highRiskRequestFor(visualFixtureIdentity),
+        )),
+      "APP_CHECK_REQUIRED",
+    );
+    const visualFixtureSession =
+      await callableExports.touchApplicationSession.run(
+        highRiskRequestFor({
+          ...visualFixtureIdentity,
+          includeAppCheck: true,
+        }),
+      );
+    assert.equal(visualFixtureSession.status, "active");
+    assert.equal(visualFixtureSession.throttled, false);
+    assert.ok(visualFixtureSession.highRiskExpiresAt > Date.now());
+
+    for (const overrides of [
+      { uid: "w10p-visual-admin-mismatch" },
+      { email: "w10p-visual-admin-mismatch@yongshin-ms.ms.kr" },
+      { token: { ...visualFixtureIdentity.token, fixtureOwner: "mismatch" } },
+      { token: { ...visualFixtureIdentity.token, fixtureId: "mismatch" } },
+      { token: { ...visualFixtureIdentity.token, fixtureRole: "teacher" } },
+    ]) {
+      assert.equal(
+        await rejectionReason(() =>
+          callableExports.touchApplicationSession.run(
+            highRiskRequestFor({
+              ...visualFixtureIdentity,
+              ...overrides,
+              includeAppCheck: true,
+            }),
+          )),
+        "HIGH_RISK_SESSION_ADMIN_ONLY",
+      );
+    }
+
+    process.env.GCLOUD_PROJECT = "history-quiz-yongsin";
+    assert.equal(
+      await rejectionReason(() =>
+        callableExports.touchApplicationSession.run(
+          highRiskRequestFor({
+            ...visualFixtureIdentity,
+            includeAppCheck: true,
+          }),
+        )),
+      "HIGH_RISK_SESSION_ADMIN_ONLY",
+    );
+  } finally {
+    process.env.GCLOUD_PROJECT = demoProjectId;
+  }
+
   assert.equal(
     await rejectionReason(() =>
       assertActiveApplicationSession(requestFor("active", nowSeconds, {
@@ -445,6 +549,11 @@ const main = async () => {
         "UNAUTHENTICATED_DENIED",
         "ACCOUNT_PERMISSION_DENIED",
         "HIGH_RISK_SCOPE_ADMIN_ONLY",
+        "HIGH_RISK_SCOPE_ACTUAL_ADMIN_ALLOWED",
+        "HIGH_RISK_SCOPE_STAGING_VISUAL_FIXTURE_ALLOWED",
+        "HIGH_RISK_SCOPE_STAGING_VISUAL_FIXTURE_APPCHECK_REQUIRED",
+        "HIGH_RISK_SCOPE_STAGING_VISUAL_FIXTURE_EXACT_CLAIMS_REQUIRED",
+        "HIGH_RISK_SCOPE_PRODUCTION_VISUAL_FIXTURE_DENIED",
         "STAGING_APP_CHECK_REQUIRED",
         "PRODUCTION_OBSERVE_IDLE_ONLY",
         "PRODUCTION_OBSERVE_SESSION_FENCE_RETAINED",
