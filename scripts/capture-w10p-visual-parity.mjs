@@ -10198,6 +10198,608 @@ const createSafeNetworkAttestationDrainDiagnostic = ({
     errorCount,
   });
 };
+const SAFE_AUTHENTICATION_FAILURE_CLASSES = Object.freeze([
+  "navigation-failed",
+  "authentication-evaluate-failed",
+  "post-auth-reload-failed",
+  "post-reload-route-wait-failed",
+  "stability-delay-failed",
+  "post-stability-route-wait-failed",
+]);
+const SAFE_AUTHENTICATION_STAGES = Object.freeze(["baseline", "candidate"]);
+const SAFE_AUTHENTICATION_CAPTURE_ROLES = Object.freeze([
+  "admin",
+  "student",
+  "support-teacher",
+  "teacher",
+]);
+const SAFE_AUTHENTICATION_AUTH_ROLES = Object.freeze([
+  "admin",
+  "student",
+  "teacher",
+]);
+const SAFE_AUTHENTICATION_ROLE_PAIRS = Object.freeze({
+  admin: "admin",
+  student: "student",
+  "support-teacher": "teacher",
+  teacher: "teacher",
+});
+const SAFE_AUTHENTICATION_ROUTE_CLASSES = Object.freeze([
+  "decode-failed",
+  "expected-dashboard",
+  "expected-dashboard-with-search",
+  "maintenance",
+  "missing-hash",
+  "other",
+  "other-dashboard",
+  "root",
+  "unavailable",
+]);
+const SAFE_DOCUMENT_READY_STATES = Object.freeze([
+  "complete",
+  "interactive",
+  "loading",
+  "unknown",
+]);
+const SAFE_AUTHENTICATION_SNAPSHOT_STATUSES = Object.freeze([
+  "available",
+  "evaluate-failed",
+  "invalid-input",
+  "normalization-failed",
+  "page-closed",
+  "preflight-failed",
+  "timed-out",
+]);
+const SAFE_AUTHENTICATION_VIEWPORT_KEYS = Object.freeze(
+  ["390x844", "768x1024", "1024x768", "1440x900", "1600x900"].sort(),
+);
+const contractAuthenticationViewportKeys = Object.freeze(
+  contract.viewports.map(({ width, height }) => `${width}x${height}`).sort(),
+);
+const createUnavailableSafeAuthenticationPageState = (snapshotStatus) =>
+  Object.freeze({
+    snapshotStatus,
+    snapshotAvailable: false,
+    routeClass: "unavailable",
+    readyState: "unknown",
+    rootPresent: false,
+    rootHeadingCount: 0,
+    rootAlertCount: 0,
+  });
+const unavailableSafeAuthenticationPageStates = Object.freeze(
+  Object.fromEntries(
+    SAFE_AUTHENTICATION_SNAPSHOT_STATUSES.filter(
+      (snapshotStatus) => snapshotStatus !== "available",
+    ).map((snapshotStatus) => [
+      snapshotStatus,
+      createUnavailableSafeAuthenticationPageState(snapshotStatus),
+    ]),
+  ),
+);
+const AUTHENTICATION_DIAGNOSTIC_TIMEOUT_MS = 1_000;
+const evaluateSafeAuthenticationPageState = ({
+  expectedRoute,
+  testSnapshot = null,
+}) => {
+  const hasTestSnapshot =
+    testSnapshot !== null && typeof testSnapshot === "object";
+  const rawHash = hasTestSnapshot ? testSnapshot.hash : location.hash;
+  const rawReadyState = hasTestSnapshot
+    ? testSnapshot.readyState
+    : document.readyState;
+  const rootPresent = hasTestSnapshot
+    ? testSnapshot.rootPresent === true
+    : document.getElementById("root") !== null;
+  const saturateCount = (value) =>
+    Number.isSafeInteger(value) && value >= 0 ? Math.min(value, 2) : 0;
+  let routeClass = "unavailable";
+  if (typeof rawHash === "string") {
+    if (rawHash === "") {
+      routeClass = "missing-hash";
+    } else {
+      try {
+        const restoredRoute = decodeURIComponent(rawHash.replace(/^#/u, ""));
+        const pathname = restoredRoute.split("?", 1)[0];
+        const expectedPathname = expectedRoute.split("?", 1)[0];
+        if (restoredRoute === expectedRoute) {
+          routeClass = "expected-dashboard";
+        } else if (
+          pathname === expectedPathname &&
+          restoredRoute.startsWith(`${expectedPathname}?`)
+        ) {
+          routeClass = "expected-dashboard-with-search";
+        } else if (
+          pathname === "/student/dashboard" ||
+          pathname === "/teacher/dashboard"
+        ) {
+          routeClass = "other-dashboard";
+        } else if (pathname === "" || pathname === "/") {
+          routeClass = "root";
+        } else if (pathname === "/maintenance") {
+          routeClass = "maintenance";
+        } else {
+          routeClass = "other";
+        }
+      } catch {
+        routeClass = "decode-failed";
+      }
+    }
+  }
+  const rawRootHeadingCount = hasTestSnapshot
+    ? testSnapshot.rootHeadingCount
+    : routeClass === "root"
+      ? document.querySelectorAll("#root h1").length
+      : 0;
+  const rawRootAlertCount = hasTestSnapshot
+    ? testSnapshot.rootAlertCount
+    : document.querySelectorAll("#root [role='alert']").length;
+  const readyState = ["complete", "interactive", "loading"].includes(
+    rawReadyState,
+  )
+    ? rawReadyState
+    : "unknown";
+  return {
+    snapshotStatus: "available",
+    snapshotAvailable: true,
+    routeClass,
+    readyState,
+    rootPresent,
+    rootHeadingCount: saturateCount(rawRootHeadingCount),
+    rootAlertCount: saturateCount(rawRootAlertCount),
+  };
+};
+const normalizeSafeAuthenticationPageState = (state) => {
+  const reject = () => {
+    throw new Error("W10P_SAFE_AUTH_DIAGNOSTIC_REJECTED");
+  };
+  if (!state || typeof state !== "object" || Array.isArray(state)) reject();
+  if (
+    !SAFE_AUTHENTICATION_SNAPSHOT_STATUSES.includes(state.snapshotStatus) ||
+    !SAFE_AUTHENTICATION_ROUTE_CLASSES.includes(state.routeClass) ||
+    !SAFE_DOCUMENT_READY_STATES.includes(state.readyState) ||
+    typeof state.snapshotAvailable !== "boolean" ||
+    typeof state.rootPresent !== "boolean"
+  ) {
+    reject();
+  }
+  if (
+    (state.snapshotStatus === "available") !== state.snapshotAvailable ||
+    (state.snapshotAvailable && state.routeClass === "unavailable") ||
+    (!state.snapshotAvailable &&
+      (state.routeClass !== "unavailable" ||
+        state.readyState !== "unknown" ||
+        state.rootPresent !== false))
+  ) {
+    reject();
+  }
+  for (const count of [state.rootHeadingCount, state.rootAlertCount]) {
+    if (!Number.isSafeInteger(count) || count < 0 || count > 2) reject();
+  }
+  if (
+    !state.snapshotAvailable &&
+    (state.rootHeadingCount !== 0 || state.rootAlertCount !== 0)
+  ) {
+    reject();
+  }
+  if (
+    (!state.rootPresent &&
+      (state.rootHeadingCount !== 0 || state.rootAlertCount !== 0)) ||
+    (state.routeClass !== "root" && state.rootHeadingCount !== 0)
+  ) {
+    reject();
+  }
+  return Object.freeze({
+    snapshotStatus: state.snapshotStatus,
+    snapshotAvailable: state.snapshotAvailable,
+    routeClass: state.routeClass,
+    readyState: state.readyState,
+    rootPresent: state.rootPresent,
+    rootHeadingCount: state.rootHeadingCount,
+    rootAlertCount: state.rootAlertCount,
+  });
+};
+const collectSafeAuthenticationPageState = async (
+  page,
+  expectedRoute,
+  diagnosticTimeoutMs = AUTHENTICATION_DIAGNOSTIC_TIMEOUT_MS,
+) => {
+  let diagnosticTimeout = null;
+  try {
+    if (
+      !page ||
+      typeof page.isClosed !== "function" ||
+      typeof page.evaluate !== "function" ||
+      !Number.isSafeInteger(diagnosticTimeoutMs) ||
+      diagnosticTimeoutMs < 1 ||
+      diagnosticTimeoutMs > AUTHENTICATION_DIAGNOSTIC_TIMEOUT_MS
+    ) {
+      return unavailableSafeAuthenticationPageStates["invalid-input"];
+    }
+    let pageClosed;
+    try {
+      pageClosed = page.isClosed();
+    } catch {
+      return unavailableSafeAuthenticationPageStates["preflight-failed"];
+    }
+    if (pageClosed) {
+      return unavailableSafeAuthenticationPageStates["page-closed"];
+    }
+    let evaluationPromise;
+    try {
+      evaluationPromise = Promise.resolve(
+        page.evaluate(evaluateSafeAuthenticationPageState, { expectedRoute }),
+      );
+    } catch {
+      return unavailableSafeAuthenticationPageStates["evaluate-failed"];
+    }
+    const outcome = await Promise.race([
+      evaluationPromise.then(
+        (state) => ({ status: "resolved", state }),
+        () => ({ status: "evaluate-failed" }),
+      ),
+      new Promise((resolveDiagnosticTimeout) => {
+        diagnosticTimeout = setTimeout(
+          () => resolveDiagnosticTimeout({ status: "timed-out" }),
+          diagnosticTimeoutMs,
+        );
+      }),
+    ]);
+    if (outcome.status !== "resolved") {
+      return unavailableSafeAuthenticationPageStates[outcome.status];
+    }
+    try {
+      return normalizeSafeAuthenticationPageState(outcome.state);
+    } catch {
+      return unavailableSafeAuthenticationPageStates["normalization-failed"];
+    }
+  } catch {
+    return unavailableSafeAuthenticationPageStates["preflight-failed"];
+  } finally {
+    if (diagnosticTimeout !== null) clearTimeout(diagnosticTimeout);
+  }
+};
+const createSafeAuthenticationFailureDiagnostic = ({
+  failureClass,
+  stage,
+  captureRole,
+  authRole,
+  viewport,
+  pageState,
+}) => {
+  const reject = () => {
+    throw new Error("W10P_SAFE_AUTH_DIAGNOSTIC_REJECTED");
+  };
+  if (
+    typeof failureClass !== "string" ||
+    !SAFE_AUTHENTICATION_FAILURE_CLASSES.includes(failureClass) ||
+    typeof stage !== "string" ||
+    !SAFE_AUTHENTICATION_STAGES.includes(stage) ||
+    typeof captureRole !== "string" ||
+    !SAFE_AUTHENTICATION_CAPTURE_ROLES.includes(captureRole) ||
+    typeof authRole !== "string" ||
+    !SAFE_AUTHENTICATION_AUTH_ROLES.includes(authRole) ||
+    SAFE_AUTHENTICATION_ROLE_PAIRS[captureRole] !== authRole ||
+    typeof viewport !== "string" ||
+    !SAFE_AUTHENTICATION_VIEWPORT_KEYS.includes(viewport)
+  ) {
+    reject();
+  }
+  const normalizedPageState = normalizeSafeAuthenticationPageState(pageState);
+  return Object.freeze({
+    schemaVersion: 1,
+    failureClass,
+    stage,
+    captureRole,
+    authRole,
+    viewport,
+    routeClass: normalizedPageState.routeClass,
+    readyState: normalizedPageState.readyState,
+    snapshotStatus: normalizedPageState.snapshotStatus,
+    snapshotAvailable: normalizedPageState.snapshotAvailable,
+    rootPresent: normalizedPageState.rootPresent,
+    rootHeadingCount: normalizedPageState.rootHeadingCount,
+    rootAlertCount: normalizedPageState.rootAlertCount,
+  });
+};
+const serializeSafeAuthenticationFailure = (
+  diagnostic,
+  forbiddenValues = [],
+) => {
+  const serialized = JSON.stringify(diagnostic);
+  for (const forbiddenValue of forbiddenValues) {
+    if (
+      typeof forbiddenValue === "string" &&
+      forbiddenValue.length > 0 &&
+      serialized.includes(forbiddenValue)
+    ) {
+      throw new Error("W10P_SAFE_AUTH_DIAGNOSTIC_REJECTED");
+    }
+  }
+  if (JWT_PATTERN.test(serialized)) {
+    throw new Error("W10P_SAFE_AUTH_DIAGNOSTIC_REJECTED");
+  }
+  return `W10P_SAFE_AUTH_FAILURE ${serialized}`;
+};
+const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
+  const debugToken = "12345678-1234-4123-8123-123456789abc";
+  const exchangedToken = `${"g".repeat(24)}.${"h".repeat(24)}.${"i".repeat(
+    24,
+  )}`;
+  const apiKey = `AIza${"z".repeat(35)}`;
+  const bypassSecret = "fixed-safe-auth-bypass-secret";
+  const privateEmail = "fixed-safe-auth@example.invalid";
+  const rawSecretUrl = `https://private.invalid/#/${debugToken}?token=${exchangedToken}&email=${privateEmail}&key=${apiKey}&bypass=${bypassSecret}`;
+  const baseSnapshot = {
+    readyState: "complete",
+    rootPresent: true,
+    rootHeadingCount: 0,
+    rootAlertCount: 0,
+  };
+  assert.deepEqual(
+    contractAuthenticationViewportKeys,
+    SAFE_AUTHENTICATION_VIEWPORT_KEYS,
+  );
+  const safeAuthenticationEvaluatorSource = String(
+    evaluateSafeAuthenticationPageState,
+  );
+  for (const forbiddenBrowserDataSource of [
+    "caches",
+    "cookie",
+    "indexedDB",
+    "innerHTML",
+    "innerText",
+    "localStorage",
+    "outerHTML",
+    "sessionStorage",
+    "textContent",
+  ]) {
+    assert.equal(
+      safeAuthenticationEvaluatorSource.includes(forbiddenBrowserDataSource),
+      false,
+    );
+  }
+  const routeFixtures = [
+    ["#/teacher/dashboard", "/teacher/dashboard", "expected-dashboard"],
+    [
+      "#/teacher/dashboard?tab=one",
+      "/teacher/dashboard",
+      "expected-dashboard-with-search",
+    ],
+    ["#/student/dashboard", "/teacher/dashboard", "other-dashboard"],
+    ["#/", "/teacher/dashboard", "root"],
+    ["", "/teacher/dashboard", "missing-hash"],
+    ["#/maintenance", "/teacher/dashboard", "maintenance"],
+    ["#/teacher/lesson", "/teacher/dashboard", "other"],
+    ["#/%E0%A4%A", "/teacher/dashboard", "decode-failed"],
+    [`#/${rawSecretUrl}`, "/teacher/dashboard", "other"],
+  ];
+  for (const [hash, expectedRoute, expectedClass] of routeFixtures) {
+    const state = evaluateSafeAuthenticationPageState({
+      expectedRoute,
+      testSnapshot: { ...baseSnapshot, hash },
+    });
+    assert.equal(state.routeClass, expectedClass);
+  }
+  const saturatedState = evaluateSafeAuthenticationPageState({
+    expectedRoute: "/teacher/dashboard",
+    testSnapshot: {
+      ...baseSnapshot,
+      hash: "#/",
+      rootHeadingCount: 99,
+      rootAlertCount: 3,
+    },
+  });
+  assert.equal(saturatedState.rootHeadingCount, 2);
+  assert.equal(saturatedState.rootAlertCount, 2);
+  const rolePairFixtures = [
+    ["admin", "admin"],
+    ["student", "student"],
+    ["teacher", "teacher"],
+    ["support-teacher", "teacher"],
+  ];
+  const rolePairDiagnostics = rolePairFixtures.map(([captureRole, authRole]) =>
+    createSafeAuthenticationFailureDiagnostic({
+      failureClass: "post-reload-route-wait-failed",
+      stage: "baseline",
+      captureRole,
+      authRole,
+      viewport: "1440x900",
+      pageState: saturatedState,
+    }),
+  );
+  const diagnostic = rolePairDiagnostics[0];
+  assert.deepEqual(Object.keys(diagnostic), [
+    "schemaVersion",
+    "failureClass",
+    "stage",
+    "captureRole",
+    "authRole",
+    "viewport",
+    "routeClass",
+    "readyState",
+    "snapshotStatus",
+    "snapshotAvailable",
+    "rootPresent",
+    "rootHeadingCount",
+    "rootAlertCount",
+  ]);
+  const forbiddenValues = [
+    debugToken,
+    exchangedToken,
+    apiKey,
+    bypassSecret,
+    privateEmail,
+    rawSecretUrl,
+  ];
+  const serializedFailure = serializeSafeAuthenticationFailure(
+    diagnostic,
+    forbiddenValues,
+  );
+  assert.notEqual(
+    serializeSafeAuthenticationFailure(rolePairDiagnostics[2], forbiddenValues),
+    serializeSafeAuthenticationFailure(rolePairDiagnostics[3], forbiddenValues),
+  );
+  const safeError = new Error(serializedFailure);
+  assert.equal("cause" in safeError, false);
+  for (const forbiddenValue of [
+    debugToken,
+    exchangedToken,
+    apiKey,
+    bypassSecret,
+    privateEmail,
+    rawSecretUrl,
+  ]) {
+    assert.equal(serializedFailure.includes(forbiddenValue), false);
+    assert.equal(String(safeError.stack || "").includes(forbiddenValue), false);
+  }
+  let coercionCount = 0;
+  const coercionValue = {
+    toString() {
+      coercionCount += 1;
+      return "baseline";
+    },
+    [Symbol.toPrimitive]() {
+      coercionCount += 1;
+      return "baseline";
+    },
+  };
+  const rejectedMutations = [
+    { stage: coercionValue },
+    { captureRole: coercionValue },
+    { authRole: coercionValue },
+    { viewport: coercionValue },
+    { failureClass: coercionValue },
+    { pageState: { ...saturatedState, readyState: coercionValue } },
+    { pageState: { ...saturatedState, snapshotStatus: coercionValue } },
+    { pageState: { ...saturatedState, routeClass: coercionValue } },
+    { pageState: { ...saturatedState, rootPresent: coercionValue } },
+    { pageState: { ...saturatedState, rootHeadingCount: coercionValue } },
+    { pageState: { ...saturatedState, rootHeadingCount: -1 } },
+    { pageState: { ...saturatedState, rootAlertCount: Number.NaN } },
+    { pageState: { ...saturatedState, rootAlertCount: 3 } },
+    {
+      pageState: {
+        ...saturatedState,
+        rootPresent: false,
+        rootHeadingCount: 1,
+      },
+    },
+    {
+      pageState: {
+        ...saturatedState,
+        routeClass: "expected-dashboard",
+        rootHeadingCount: 1,
+      },
+    },
+    {
+      pageState: {
+        ...saturatedState,
+        snapshotStatus: "timed-out",
+      },
+    },
+    { captureRole: "support-public", authRole: "teacher" },
+    { captureRole: "support-student", authRole: "student" },
+    { captureRole: "teacher", authRole: "admin" },
+    {
+      captureRole: "baseline:support-teacher:1440x900",
+      authRole: "teacher",
+    },
+  ];
+  for (const mutation of rejectedMutations) {
+    assert.throws(
+      () =>
+        createSafeAuthenticationFailureDiagnostic({
+          failureClass: "post-reload-route-wait-failed",
+          stage: "baseline",
+          captureRole: "admin",
+          authRole: "admin",
+          viewport: "1440x900",
+          pageState: saturatedState,
+          ...mutation,
+        }),
+      /W10P_SAFE_AUTH_DIAGNOSTIC_REJECTED/u,
+    );
+  }
+  assert.equal(coercionCount, 0);
+  const rejectedEvaluationState = await collectSafeAuthenticationPageState(
+    {
+      isClosed: () => false,
+      evaluate: async () => {
+        throw new Error(rawSecretUrl);
+      },
+    },
+    "/teacher/dashboard",
+    1,
+  );
+  const timedOutEvaluationState = await collectSafeAuthenticationPageState(
+    {
+      isClosed: () => false,
+      evaluate: () => new Promise(() => {}),
+    },
+    "/teacher/dashboard",
+    1,
+  );
+  const closedPageState = await collectSafeAuthenticationPageState(
+    {
+      isClosed: () => true,
+      evaluate: async () => {
+        throw new Error(rawSecretUrl);
+      },
+    },
+    "/teacher/dashboard",
+    1,
+  );
+  const failedPreflightState = await collectSafeAuthenticationPageState(
+    {
+      isClosed: () => {
+        throw new Error(rawSecretUrl);
+      },
+      evaluate: async () => saturatedState,
+    },
+    "/teacher/dashboard",
+    1,
+  );
+  const invalidInputState = await collectSafeAuthenticationPageState(
+    null,
+    "/teacher/dashboard",
+    1,
+  );
+  const rejectedNormalizationState = await collectSafeAuthenticationPageState(
+    {
+      isClosed: () => false,
+      evaluate: async () => ({
+        ...saturatedState,
+        routeClass: rawSecretUrl,
+      }),
+    },
+    "/teacher/dashboard",
+    1,
+  );
+  const fallbackFixtures = [
+    [rejectedEvaluationState, "evaluate-failed"],
+    [timedOutEvaluationState, "timed-out"],
+    [closedPageState, "page-closed"],
+    [failedPreflightState, "preflight-failed"],
+    [invalidInputState, "invalid-input"],
+    [rejectedNormalizationState, "normalization-failed"],
+  ];
+  for (const [fallbackState, expectedStatus] of fallbackFixtures) {
+    assert.deepEqual(
+      fallbackState,
+      unavailableSafeAuthenticationPageStates[expectedStatus],
+    );
+    assert.equal(JSON.stringify(fallbackState).includes(rawSecretUrl), false);
+  }
+  return {
+    safeAuthenticationRouteDiagnosticFixtureCount: routeFixtures.length,
+    safeAuthenticationRolePairFixtureCount: rolePairFixtures.length,
+    safeAuthenticationDiagnosticRejectedFixtureCount: rejectedMutations.length,
+    safeAuthenticationDiagnosticRawValueOutputCount: 0,
+    safeAuthenticationDiagnosticForbiddenBrowserDataSourceReferenceCount: 0,
+    safeAuthenticationDiagnosticCoercionCount: coercionCount,
+    safeAuthenticationDiagnosticFallbackFixtureCount: fallbackFixtures.length,
+  };
+};
 const verifySafeBrowserErrorDiagnosticFixtures = () => {
   const debugToken = "12345678-1234-4123-8123-123456789abc";
   const debugSentinel = "fixed-pageerror-debug-sentinel";
@@ -10550,6 +11152,8 @@ const verifyAppCheckSecretNegativeFixtures = () => {
   return { rejectedRawSecretCaseCount: 3, acceptedSanitizedCaseCount: 1 };
 };
 const appCheckSecretNegativeSelfTest = verifyAppCheckSecretNegativeFixtures();
+const safeAuthenticationFailureDiagnosticSelfTest =
+  await verifySafeAuthenticationFailureDiagnosticFixtures();
 const safeBrowserErrorDiagnosticSelfTest =
   verifySafeBrowserErrorDiagnosticFixtures();
 const preTransmissionBoundaryNegativeSelfTest =
@@ -10736,6 +11340,10 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
   let fullPostDataRecoveredBodyExactMatchCount = 0;
   let fullPostDataRecoveredBodyBytes = 0;
   let fullPostDataRecoveredBodySha256 = "";
+  let safeAuthenticationPlaywrightSerializationFixtureCount = 0;
+  let safeAuthenticationPlaywrightStorageAccessCount = 0;
+  let safeAuthenticationPlaywrightWireRequestDelta = 0;
+  let safeAuthenticationPlaywrightRawValueOutputCount = 0;
   let stableOrigin = "";
   const preTransmissionSyntheticMarkers = new Map([
     ["/production-get", "production"],
@@ -15101,6 +15709,100 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
       eligible: false,
       reason: "browser-context-open",
     });
+    const safeAuthenticationPrivateDomValue =
+      "w10p-private-auth-diagnostic-dom-and-hash-value";
+    await page.evaluate((privateDomValue) => {
+      globalThis.__w10pSafeAuthenticationStorageAccessCount = 0;
+      for (const propertyName of [
+        "caches",
+        "indexedDB",
+        "localStorage",
+        "sessionStorage",
+      ]) {
+        Object.defineProperty(globalThis, propertyName, {
+          configurable: true,
+          get() {
+            globalThis.__w10pSafeAuthenticationStorageAccessCount += 1;
+            throw new Error("W10P_SAFE_AUTH_DIAGNOSTIC_STORAGE_ACCESSED");
+          },
+        });
+      }
+      const root = document.createElement("div");
+      root.id = "root";
+      const heading = document.createElement("h1");
+      heading.textContent = privateDomValue;
+      const alert = document.createElement("div");
+      alert.setAttribute("role", "alert");
+      alert.textContent = privateDomValue;
+      root.append(heading, alert);
+      document.body.replaceChildren(root);
+      location.hash = `/teacher/dashboard?tab=${encodeURIComponent(
+        privateDomValue,
+      )}`;
+    }, safeAuthenticationPrivateDomValue);
+    const safeAuthenticationWireCountsBefore = [
+      stableWireRequests.length,
+      upstreamWireRequests.length,
+      apiWireRequests.length,
+      directAllowedTlsWireRequests.length,
+      nodeExternalWireRequests.length,
+      rawExternalWireConnections.length,
+      rawExternalWireBytes.length,
+    ];
+    const queryPageState = await collectSafeAuthenticationPageState(
+      page,
+      "/teacher/dashboard",
+    );
+    assert.equal(queryPageState.routeClass, "expected-dashboard-with-search");
+    assert.equal(queryPageState.snapshotStatus, "available");
+    assert.equal(queryPageState.snapshotAvailable, true);
+    assert.equal(queryPageState.rootPresent, true);
+    assert.equal(queryPageState.rootHeadingCount, 0);
+    assert.equal(queryPageState.rootAlertCount, 1);
+    await page.evaluate(() => {
+      location.hash = "/";
+    });
+    const rootPageState = await collectSafeAuthenticationPageState(
+      page,
+      "/teacher/dashboard",
+    );
+    assert.equal(rootPageState.routeClass, "root");
+    assert.equal(rootPageState.snapshotStatus, "available");
+    assert.equal(rootPageState.snapshotAvailable, true);
+    assert.equal(rootPageState.rootPresent, true);
+    assert.equal(rootPageState.rootHeadingCount, 1);
+    assert.equal(rootPageState.rootAlertCount, 1);
+    safeAuthenticationPlaywrightStorageAccessCount = await page.evaluate(
+      () => globalThis.__w10pSafeAuthenticationStorageAccessCount,
+    );
+    assert.equal(safeAuthenticationPlaywrightStorageAccessCount, 0);
+    for (const pageState of [queryPageState, rootPageState]) {
+      const serializedPageState = JSON.stringify(pageState);
+      assert.equal(
+        serializedPageState.includes(safeAuthenticationPrivateDomValue),
+        false,
+      );
+      safeAuthenticationPlaywrightRawValueOutputCount += Number(
+        serializedPageState.includes(safeAuthenticationPrivateDomValue),
+      );
+    }
+    const safeAuthenticationWireCountsAfter = [
+      stableWireRequests.length,
+      upstreamWireRequests.length,
+      apiWireRequests.length,
+      directAllowedTlsWireRequests.length,
+      nodeExternalWireRequests.length,
+      rawExternalWireConnections.length,
+      rawExternalWireBytes.length,
+    ];
+    safeAuthenticationPlaywrightWireRequestDelta =
+      safeAuthenticationWireCountsAfter.reduce(
+        (sum, count, index) =>
+          sum + (count - safeAuthenticationWireCountsBefore[index]),
+        0,
+      );
+    assert.equal(safeAuthenticationPlaywrightWireRequestDelta, 0);
+    safeAuthenticationPlaywrightSerializationFixtureCount = 2;
     const preContextCloseProxySnapshot = loopbackProxy.snapshot();
     assert.equal(
       preContextCloseProxySnapshot.requestStageAuthorizationCount,
@@ -15740,6 +16442,10 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
     testOwnedProcessResidualCount: 0,
     testOwnedServerCloseCount,
     testOwnedListenerResidualCount: 0,
+    safeAuthenticationPlaywrightSerializationFixtureCount,
+    safeAuthenticationPlaywrightStorageAccessCount,
+    safeAuthenticationPlaywrightWireRequestDelta,
+    safeAuthenticationPlaywrightRawValueOutputCount,
     externalNetworkAccess: 0,
   };
 };
@@ -15760,6 +16466,7 @@ if (args.includes("--self-test-app-check")) {
       passed: true,
       ...appCheckSecretNegativeSelfTest,
       ...authenticationLandingGuardSelfTest,
+      ...safeAuthenticationFailureDiagnosticSelfTest,
       ...safeBrowserErrorDiagnosticSelfTest,
       ...preTransmissionBoundaryNegativeSelfTest,
       ...fixtureAuditFreshnessNegativeSelfTest,
@@ -20182,8 +20889,16 @@ const appCheckDebugInitScript = ({ allowedOrigin, debugToken }) => {
 
 const AUTHENTICATED_ROUTE_TIMEOUT_MS = 60_000;
 
-const authenticate = async (page, credential, origin, role) => {
+const authenticateCore = async (
+  page,
+  credential,
+  origin,
+  role,
+  setFailureClass,
+) => {
+  setFailureClass("navigation-failed");
   await page.goto(`${origin}/#/`, { waitUntil: "domcontentloaded" });
+  setFailureClass("authentication-evaluate-failed");
   const identity = await page.evaluate(
     async ({ email, password, config, functionsRegion }) => {
       const appModule =
@@ -20307,9 +21022,11 @@ const authenticate = async (page, credential, origin, role) => {
       functionsRegion: STAGING_FUNCTIONS_REGION,
     },
   );
+  setFailureClass("post-auth-reload-failed");
   await page.reload({ waitUntil: "domcontentloaded" });
   const expectedAuthenticatedRoute =
     role === "student" ? "/student/dashboard" : "/teacher/dashboard";
+  setFailureClass("post-reload-route-wait-failed");
   await page.waitForFunction(
     (expectedRoute) => {
       const restoredRoute = decodeURIComponent(location.hash.slice(1));
@@ -20323,7 +21040,9 @@ const authenticate = async (page, credential, origin, role) => {
   // route replaces the hash, then require the authenticated route to remain
   // exact. Otherwise the stale correction can send the first screen back to
   // the dashboard after capture navigation has already started.
+  setFailureClass("stability-delay-failed");
   await page.waitForTimeout(250);
+  setFailureClass("post-stability-route-wait-failed");
   await page.waitForFunction(
     (expectedRoute) => {
       const restoredRoute = decodeURIComponent(location.hash.slice(1));
@@ -20333,6 +21052,53 @@ const authenticate = async (page, credential, origin, role) => {
     { timeout: AUTHENTICATED_ROUTE_TIMEOUT_MS },
   );
   return identity;
+};
+
+const authenticate = async (
+  page,
+  credential,
+  origin,
+  authRole,
+  { stage, captureRole, viewport },
+) => {
+  let failureClass = "navigation-failed";
+  try {
+    return await authenticateCore(
+      page,
+      credential,
+      origin,
+      authRole,
+      (nextFailureClass) => {
+        failureClass = nextFailureClass;
+      },
+    );
+  } catch {
+    const expectedRoute =
+      authRole === "student" ? "/student/dashboard" : "/teacher/dashboard";
+    const pageState = await collectSafeAuthenticationPageState(
+      page,
+      expectedRoute,
+    );
+    const diagnostic = createSafeAuthenticationFailureDiagnostic({
+      failureClass,
+      stage,
+      captureRole,
+      authRole,
+      viewport,
+      pageState,
+    });
+    const safeFailure = serializeSafeAuthenticationFailure(diagnostic, [
+      origin,
+      credential.email,
+      credential.password,
+      firebaseConfig.apiKey,
+      firebaseConfig.appId,
+      appCheckDebugToken,
+      APP_CHECK_DEBUG_SENTINEL,
+      bypassSecret,
+    ]);
+    throw new Error(safeFailure);
+  }
 };
 
 const CAPTURE_APPLICATION_SESSION_MINIMUM_REMAINING_LEASE_MS = 10 * 60 * 1000;
@@ -25023,11 +25789,20 @@ try {
     let groupApplicationSessionKeepaliveClientLifecycleEvidence = null;
     if (authenticationRole) {
       networkPhase = "authentication";
+      const captureRole = SAFE_AUTHENTICATION_CAPTURE_ROLES.find(
+        (allowedCaptureRole) => allowedCaptureRole === traceRole,
+      );
+      assert.ok(captureRole);
+      assert.equal(
+        SAFE_AUTHENTICATION_ROLE_PAIRS[captureRole],
+        authenticationRole,
+      );
       const authentication = await authenticate(
         page,
         credentials[authenticationRole],
         origin,
         authenticationRole,
+        { stage, captureRole, viewport: viewportName },
       );
       const {
         applicationSessionProof,
