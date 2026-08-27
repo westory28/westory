@@ -20990,6 +20990,13 @@ const authenticateCore = async (
       );
       if (!profileSnapshot.exists()) throw new Error("VISUAL_PROFILE_MISSING");
       const profile = profileSnapshot.data();
+      await authModule.setPersistence(
+        auth,
+        authModule.indexedDBLocalPersistence,
+      );
+      if (auth.currentUser?.uid !== credentialResult.user.uid) {
+        throw new Error("VISUAL_AUTH_PERSISTENCE_MIGRATION_FAILED");
+      }
       return {
         uid: credentialResult.user.uid,
         email: credentialResult.user.email || "",
