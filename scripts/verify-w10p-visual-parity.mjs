@@ -7,7 +7,107 @@ import { inflateSync } from "node:zlib";
 
 const readJson = (path) => JSON.parse(readFileSync(resolve(path), "utf8"));
 const contract = readJson("scripts/w10p-visual-parity-contract.json");
-assert.equal(contract.schemaVersion, 12);
+assert.equal(contract.schemaVersion, 13);
+const resolveAuthenticationLandingGuard = ({
+  guardContract,
+  fixedTimeValue,
+}) => {
+  assert.deepEqual(Object.keys(guardContract || {}).sort(), [
+    "id",
+    "keyPrefix",
+    "purpose",
+    "roles",
+    "scope",
+    "semesters",
+    "storage",
+    "utcOffsetMinutes",
+    "year",
+  ]);
+  assert.equal(guardContract.id, "korean-public-holiday-sync-v1");
+  assert.equal(guardContract.storage, "localStorage");
+  assert.equal(guardContract.keyPrefix, "westory:holiday-sync");
+  assert.match(guardContract.year, /^\d{4}$/u);
+  assert.deepEqual(guardContract.semesters, ["1", "2"]);
+  assert.deepEqual(guardContract.roles, ["admin", "teacher"]);
+  assert.equal(guardContract.utcOffsetMinutes, 9 * 60);
+  assert.equal(guardContract.scope, "ephemeral-capture-browser-context");
+  assert.equal(
+    guardContract.purpose,
+    "prevent-authentication-landing-staging-write",
+  );
+  assert.match(
+    fixedTimeValue,
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u,
+  );
+  const fixedTimestamp = Date.parse(fixedTimeValue);
+  assert.equal(Number.isSafeInteger(fixedTimestamp), true);
+  const markerValue = new Date(
+    fixedTimestamp + guardContract.utcOffsetMinutes * 60_000,
+  )
+    .toISOString()
+    .slice(0, 10);
+  assert.equal(markerValue.slice(0, 4), guardContract.year);
+  const markers = guardContract.semesters.map((semester) =>
+    Object.freeze({
+      key: `${guardContract.keyPrefix}:${guardContract.year}:${semester}`,
+      value: markerValue,
+    }),
+  );
+  return Object.freeze({
+    id: guardContract.id,
+    storage: guardContract.storage,
+    markers: Object.freeze(markers),
+    roles: Object.freeze([...guardContract.roles]),
+    scope: guardContract.scope,
+    purpose: guardContract.purpose,
+  });
+};
+const authenticationLandingGuard = resolveAuthenticationLandingGuard({
+  guardContract: contract.authenticationLandingGuard,
+  fixedTimeValue: contract.fixedTime,
+});
+const verifyAuthenticationLandingGuardFixtures = () => {
+  const validGuardContract = contract.authenticationLandingGuard;
+  const invalidGuardContracts = [
+    { ...validGuardContract, id: "wrong-guard" },
+    { ...validGuardContract, storage: "sessionStorage" },
+    { ...validGuardContract, keyPrefix: "westory:other-sync" },
+    { ...validGuardContract, year: "2025" },
+    { ...validGuardContract, semesters: ["1", "3"] },
+    { ...validGuardContract, semesters: ["2", "1"] },
+    { ...validGuardContract, roles: ["teacher", "admin"] },
+    { ...validGuardContract, utcOffsetMinutes: 0 },
+    { ...validGuardContract, scope: "persistent-browser-profile" },
+    { ...validGuardContract, purpose: "allow-staging-write" },
+    { ...validGuardContract, unexpectedField: true },
+  ];
+  for (const guardContract of invalidGuardContracts) {
+    assert.throws(() =>
+      resolveAuthenticationLandingGuard({
+        guardContract,
+        fixedTimeValue: contract.fixedTime,
+      }),
+    );
+  }
+  assert.throws(() =>
+    resolveAuthenticationLandingGuard({
+      guardContract: validGuardContract,
+      fixedTimeValue: "not-a-fixed-time",
+    }),
+  );
+  assert.deepEqual(authenticationLandingGuard.markers, [
+    { key: "westory:holiday-sync:2026:1", value: "2026-08-17" },
+    { key: "westory:holiday-sync:2026:2", value: "2026-08-17" },
+  ]);
+  return {
+    authenticationLandingGuardAcceptedFixtureCount: 1,
+    authenticationLandingGuardRejectedFixtureCount:
+      invalidGuardContracts.length + 1,
+    authenticationLandingGuardNetworkAccess: 0,
+  };
+};
+const authenticationLandingGuardSelfTest =
+  verifyAuthenticationLandingGuardFixtures();
 const MAX_RESOLVED_REQUEST_POST_DATA_BYTES = 8 * 1024 * 1024;
 const NODE_OWNED_EXTERNAL_STATIC_RESPONSE_HEADER_MAXIMUM_BYTES = 64 * 1024;
 const NODE_OWNED_EXTERNAL_STATIC_RESPONSE_BODY_MAXIMUM_BYTES = 16 * 1024 * 1024;
@@ -2727,6 +2827,7 @@ if (args.includes("--self-test-app-check")) {
       suite: "w10p-app-check-verifier-secret-self-test",
       passed: true,
       ...appCheckSecretNegativeSelfTest,
+      ...authenticationLandingGuardSelfTest,
       ...preTransmissionBoundaryNegativeSelfTest,
       ...fixtureAuditFreshnessNegativeSelfTest,
       ...stableOriginRewriteNegativeSelfTest,
@@ -5883,6 +5984,60 @@ assert.equal(
   contract.fixedTime,
   "The visual capture clock drifted from the contract.",
 );
+assertExactObjectKeys(manifest.authenticationLandingGuard, [
+  "id",
+  "storage",
+  "scope",
+  "purpose",
+  "roles",
+  "markerCount",
+  "markerSetSha256",
+  "expectedGroupCount",
+  "initScriptRegistrationCount",
+  "storageAttestationCount",
+  "browserDateAttestationCount",
+]);
+assert.equal(
+  manifest.authenticationLandingGuard.id,
+  authenticationLandingGuard.id,
+);
+assert.equal(
+  manifest.authenticationLandingGuard.storage,
+  authenticationLandingGuard.storage,
+);
+assert.equal(
+  manifest.authenticationLandingGuard.scope,
+  authenticationLandingGuard.scope,
+);
+assert.equal(
+  manifest.authenticationLandingGuard.purpose,
+  authenticationLandingGuard.purpose,
+);
+assert.deepEqual(
+  manifest.authenticationLandingGuard.roles,
+  authenticationLandingGuard.roles,
+);
+assert.equal(
+  manifest.authenticationLandingGuard.markerCount,
+  authenticationLandingGuard.markers.length,
+);
+assert.equal(
+  manifest.authenticationLandingGuard.markerSetSha256,
+  sha256(canonicalJson(authenticationLandingGuard.markers)),
+);
+assert.ok(manifest.authenticationLandingGuard.expectedGroupCount > 0);
+assert.equal(
+  manifest.authenticationLandingGuard.initScriptRegistrationCount,
+  manifest.authenticationLandingGuard.expectedGroupCount,
+);
+assert.equal(
+  manifest.authenticationLandingGuard.storageAttestationCount,
+  manifest.authenticationLandingGuard.expectedGroupCount,
+);
+assert.equal(
+  manifest.authenticationLandingGuard.browserDateAttestationCount,
+  manifest.authenticationLandingGuard.expectedGroupCount,
+);
 assert.equal(manifest.environment?.fixtureId, contract.fixtureId);
 assert.equal(manifest.environment?.fixtureRevision, contract.fixtureRevision);
 assert.equal(manifest.environment?.fixturePlanHash, contract.fixturePlanHash);
@@ -5931,6 +6086,8 @@ assert.match(
   manifest.environment?.firebaseConfig?.appIdSha256 ?? "",
   /^[a-f0-9]{64}$/u,
 );
+assert.equal(manifest.environment?.locale, "ko-KR");
+assert.equal(manifest.environment?.timezone, "Asia/Seoul");
 for (const field of [
   "browserVersion",
   "operatingSystem",
@@ -6588,9 +6745,11 @@ assert.deepEqual(
 );
 
 const expectedAuditCaptures = new Map();
+const expectedAuthenticationLandingGuardAuditIds = new Set();
 for (const capture of captures.values()) {
   const authenticationRole =
-    contract.captureAuthenticationRoles[capture.screenId];
+    contract.captureAuthenticationRoles[capture.screenId] ??
+    (capture.role === "support" ? null : capture.role);
   const auditRole =
     capture.role === "support"
       ? authenticationRole
@@ -6601,7 +6760,14 @@ for (const capture of captures.values()) {
   const current = expectedAuditCaptures.get(auditId) || [];
   current.push(capture.id);
   expectedAuditCaptures.set(auditId, current);
+  if (authenticationLandingGuard.roles.includes(authenticationRole)) {
+    expectedAuthenticationLandingGuardAuditIds.add(auditId);
+  }
 }
+assert.equal(
+  manifest.authenticationLandingGuard.expectedGroupCount,
+  expectedAuthenticationLandingGuardAuditIds.size,
+);
 assert.equal(Array.isArray(manifest.browserAudits), true);
 assert.equal(manifest.browserAudits.length, expectedAuditCaptures.size);
 const representedAuditFiles = new Set();

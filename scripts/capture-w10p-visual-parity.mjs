@@ -2373,7 +2373,107 @@ const attestBrowserPreTransmissionCommandLine = async (
 
 const readJson = (path) => JSON.parse(readFileSync(resolve(path), "utf8"));
 const contract = readJson("scripts/w10p-visual-parity-contract.json");
-assert.equal(contract.schemaVersion, 12);
+assert.equal(contract.schemaVersion, 13);
+const resolveAuthenticationLandingGuard = ({
+  guardContract,
+  fixedTimeValue,
+}) => {
+  assert.deepEqual(Object.keys(guardContract || {}).sort(), [
+    "id",
+    "keyPrefix",
+    "purpose",
+    "roles",
+    "scope",
+    "semesters",
+    "storage",
+    "utcOffsetMinutes",
+    "year",
+  ]);
+  assert.equal(guardContract.id, "korean-public-holiday-sync-v1");
+  assert.equal(guardContract.storage, "localStorage");
+  assert.equal(guardContract.keyPrefix, "westory:holiday-sync");
+  assert.match(guardContract.year, /^\d{4}$/u);
+  assert.deepEqual(guardContract.semesters, ["1", "2"]);
+  assert.deepEqual(guardContract.roles, ["admin", "teacher"]);
+  assert.equal(guardContract.utcOffsetMinutes, 9 * 60);
+  assert.equal(guardContract.scope, "ephemeral-capture-browser-context");
+  assert.equal(
+    guardContract.purpose,
+    "prevent-authentication-landing-staging-write",
+  );
+  assert.match(
+    fixedTimeValue,
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u,
+  );
+  const fixedTimestamp = Date.parse(fixedTimeValue);
+  assert.equal(Number.isSafeInteger(fixedTimestamp), true);
+  const markerValue = new Date(
+    fixedTimestamp + guardContract.utcOffsetMinutes * 60_000,
+  )
+    .toISOString()
+    .slice(0, 10);
+  assert.equal(markerValue.slice(0, 4), guardContract.year);
+  const markers = guardContract.semesters.map((semester) =>
+    Object.freeze({
+      key: `${guardContract.keyPrefix}:${guardContract.year}:${semester}`,
+      value: markerValue,
+    }),
+  );
+  return Object.freeze({
+    id: guardContract.id,
+    storage: guardContract.storage,
+    markers: Object.freeze(markers),
+    roles: Object.freeze([...guardContract.roles]),
+    scope: guardContract.scope,
+    purpose: guardContract.purpose,
+  });
+};
+const authenticationLandingGuard = resolveAuthenticationLandingGuard({
+  guardContract: contract.authenticationLandingGuard,
+  fixedTimeValue: contract.fixedTime,
+});
+const verifyAuthenticationLandingGuardFixtures = () => {
+  const validGuardContract = contract.authenticationLandingGuard;
+  const invalidGuardContracts = [
+    { ...validGuardContract, id: "wrong-guard" },
+    { ...validGuardContract, storage: "sessionStorage" },
+    { ...validGuardContract, keyPrefix: "westory:other-sync" },
+    { ...validGuardContract, year: "2025" },
+    { ...validGuardContract, semesters: ["1", "3"] },
+    { ...validGuardContract, semesters: ["2", "1"] },
+    { ...validGuardContract, roles: ["teacher", "admin"] },
+    { ...validGuardContract, utcOffsetMinutes: 0 },
+    { ...validGuardContract, scope: "persistent-browser-profile" },
+    { ...validGuardContract, purpose: "allow-staging-write" },
+    { ...validGuardContract, unexpectedField: true },
+  ];
+  for (const guardContract of invalidGuardContracts) {
+    assert.throws(() =>
+      resolveAuthenticationLandingGuard({
+        guardContract,
+        fixedTimeValue: contract.fixedTime,
+      }),
+    );
+  }
+  assert.throws(() =>
+    resolveAuthenticationLandingGuard({
+      guardContract: validGuardContract,
+      fixedTimeValue: "not-a-fixed-time",
+    }),
+  );
+  assert.deepEqual(authenticationLandingGuard.markers, [
+    { key: "westory:holiday-sync:2026:1", value: "2026-08-17" },
+    { key: "westory:holiday-sync:2026:2", value: "2026-08-17" },
+  ]);
+  return {
+    authenticationLandingGuardAcceptedFixtureCount: 1,
+    authenticationLandingGuardRejectedFixtureCount:
+      invalidGuardContracts.length + 1,
+    authenticationLandingGuardNetworkAccess: 0,
+  };
+};
+const authenticationLandingGuardSelfTest =
+  verifyAuthenticationLandingGuardFixtures();
 const BROWSER_CONNECT_PROXY_ALLOWED_FIREBASE_HOSTNAMES = [
   "content-firebaseappcheck.googleapis.com",
   "firebaseappcheck.googleapis.com",
@@ -15345,6 +15445,7 @@ if (args.includes("--self-test-app-check")) {
       suite: "w10p-app-check-capture-secret-self-test",
       passed: true,
       ...appCheckSecretNegativeSelfTest,
+      ...authenticationLandingGuardSelfTest,
       ...safeBrowserErrorDiagnosticSelfTest,
       ...preTransmissionBoundaryNegativeSelfTest,
       ...fixtureAuditFreshnessNegativeSelfTest,
@@ -19717,6 +19818,16 @@ const fixedClockScript = ({ fixedTimestamp }) => {
   });
 };
 
+const authenticationLandingGuardInitScript = ({ allowedOrigin, markers }) => {
+  if (location.origin !== allowedOrigin) return;
+  for (const { key, value } of markers) {
+    localStorage.setItem(key, value);
+    if (localStorage.getItem(key) !== value) {
+      throw new Error("VISUAL_AUTH_LANDING_GUARD_WRITE_FAILED");
+    }
+  }
+};
+
 const appCheckDebugInitScript = ({ allowedOrigin, debugToken }) => {
   if (location.origin !== allowedOrigin) return;
   const jwtPattern =
@@ -21040,6 +21151,9 @@ const networkObservations = [];
 const networkResponseObservations = [];
 const requestFinishedAccumulatorsByCaptureId = new Map();
 let appCheckInitScriptInjectionCount = 0;
+let authenticationLandingGuardInitScriptRegistrationCount = 0;
+let authenticationLandingGuardStorageAttestationCount = 0;
+let authenticationLandingGuardBrowserDateAttestationCount = 0;
 let pageRawDebugTokenInjectionCount = 0;
 let browserGlobalRawDebugTokenWriteCount = 0;
 let browserGlobalDebugSentinelWriteCount = 0;
@@ -21087,6 +21201,13 @@ for (const target of targets) {
   current.push({ ...target, authenticationRole });
   groupedTargets.set(key, current);
 }
+const authenticationLandingGuardExpectedGroupCount = [
+  ...groupedTargets.values(),
+].filter((groupTargets) =>
+  authenticationLandingGuard.roles.includes(
+    groupTargets[0]?.authenticationRole,
+  ),
+).length;
 
 try {
   browserWideBoundaryController =
@@ -21143,6 +21264,17 @@ try {
     });
   for (const [groupKey, groupTargets] of [...groupedTargets.entries()].sort()) {
     const [stage, traceRole, viewportName] = groupKey.split(":");
+    const authenticationRole = groupTargets[0].authenticationRole;
+    assert.equal(
+      groupTargets.every(
+        (target) => target.authenticationRole === authenticationRole,
+      ),
+      true,
+    );
+    const groupAuthenticationLandingGuard =
+      authenticationLandingGuard.roles.includes(authenticationRole)
+        ? authenticationLandingGuard
+        : null;
     const viewport = contract.viewports.find(
       (candidate) => viewportKey(candidate) === viewportName,
     );
@@ -22028,6 +22160,13 @@ try {
     await context.addInitScript(fixedClockScript, {
       fixedTimestamp: fixedTime,
     });
+    if (groupAuthenticationLandingGuard) {
+      await context.addInitScript(authenticationLandingGuardInitScript, {
+        allowedOrigin: origin,
+        markers: groupAuthenticationLandingGuard.markers,
+      });
+      authenticationLandingGuardInitScriptRegistrationCount += 1;
+    }
     await context.addInitScript(
       blockBrowserSecondaryExecutionAndWebTransport,
       EXACT_DOM_MODULEPRELOAD_POLICY,
@@ -23961,13 +24100,6 @@ try {
       }
       rawText = "";
     });
-    const authenticationRole = groupTargets[0].authenticationRole;
-    assert.equal(
-      groupTargets.every(
-        (target) => target.authenticationRole === authenticationRole,
-      ),
-      true,
-    );
     let groupIdentityAttestation = null;
     if (authenticationRole) {
       networkPhase = "authentication";
@@ -23977,6 +24109,31 @@ try {
         origin,
         authenticationRole,
       );
+      if (groupAuthenticationLandingGuard) {
+        const landingGuardAttestation = await page.evaluate((markers) => {
+          const browserToday = new Date().toLocaleDateString("en-CA");
+          return {
+            storageBound: markers.every(
+              ({ key, value }) => localStorage.getItem(key) === value,
+            ),
+            browserDateBound: markers.every(
+              ({ value }) => value === browserToday,
+            ),
+          };
+        }, groupAuthenticationLandingGuard.markers);
+        assert.equal(
+          landingGuardAttestation.storageBound,
+          true,
+          "The authentication landing guard was not bound to localStorage.",
+        );
+        assert.equal(
+          landingGuardAttestation.browserDateBound,
+          true,
+          "The authentication landing guard did not match browser date semantics.",
+        );
+        authenticationLandingGuardStorageAttestationCount += 1;
+        authenticationLandingGuardBrowserDateAttestationCount += 1;
+      }
       groupIdentityAttestation = createIdentityAttestation(
         authenticationRole,
         identity,
@@ -25876,6 +26033,19 @@ assert.deepEqual(
 assert.ok(browserConnectProxyFinalSnapshot.allowedConnectCount > 0);
 assert.equal(appCheckInitScriptInjectionCount, groupedTargets.size);
 assert.equal(
+  authenticationLandingGuardInitScriptRegistrationCount,
+  authenticationLandingGuardExpectedGroupCount,
+);
+assert.equal(
+  authenticationLandingGuardStorageAttestationCount,
+  authenticationLandingGuardExpectedGroupCount,
+);
+assert.equal(
+  authenticationLandingGuardBrowserDateAttestationCount,
+  authenticationLandingGuardExpectedGroupCount,
+);
+assert.ok(authenticationLandingGuardExpectedGroupCount > 0);
+assert.equal(
   secondaryExecutionGuardInitScriptRegistrationCount,
   groupedTargets.size,
 );
@@ -27089,6 +27259,21 @@ const manifest = {
   networkPolicyHash: networkPolicyBindingHash,
   appCheckBinding,
   appCheckBindingHash,
+  authenticationLandingGuard: {
+    id: authenticationLandingGuard.id,
+    storage: authenticationLandingGuard.storage,
+    scope: authenticationLandingGuard.scope,
+    purpose: authenticationLandingGuard.purpose,
+    roles: authenticationLandingGuard.roles,
+    markerCount: authenticationLandingGuard.markers.length,
+    markerSetSha256: sha256(canonicalJson(authenticationLandingGuard.markers)),
+    expectedGroupCount: authenticationLandingGuardExpectedGroupCount,
+    initScriptRegistrationCount:
+      authenticationLandingGuardInitScriptRegistrationCount,
+    storageAttestationCount: authenticationLandingGuardStorageAttestationCount,
+    browserDateAttestationCount:
+      authenticationLandingGuardBrowserDateAttestationCount,
+  },
   status: "CAPTURED",
   startedAt,
   completedAt,

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 12,
+  "schemaVersion": 13,
   "phase": "W10P",
   "functionalBaselineSha": "ef74b571a6964ddbc61eb7877a98d21b3c7c8c85",
   "productionPresentationSha": "676869fa289d3e7ecef234cbb5cca65c60ec4597",
@@ -615,6 +615,17 @@
   "fixtureRevision": 1,
   "fixturePlanHash": "fe18dbf369602af95b3ed35496a1bf7dcf64364ecd20b4b29cab1a818a5d850e",
   "fixedTime": "2026-08-17T06:00:00.000Z",
+  "authenticationLandingGuard": {
+    "id": "korean-public-holiday-sync-v1",
+    "storage": "localStorage",
+    "keyPrefix": "westory:holiday-sync",
+    "year": "2026",
+    "semesters": ["1", "2"],
+    "roles": ["admin", "teacher"],
+    "utcOffsetMinutes": 540,
+    "scope": "ephemeral-capture-browser-context",
+    "purpose": "prevent-authentication-landing-staging-write"
+  },
   "evidenceRootPrefix": "docs/evidence/w10p-presentation-freeze",
   "finalReportPath": "docs/phase-6-w10p-presentation-freeze-functional-modernization.md",
   "captureRunner": {
