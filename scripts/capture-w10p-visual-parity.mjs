@@ -25242,7 +25242,7 @@ try {
         id: groupKey,
         stage,
         scopeHash: baselineAppCheckBridgeScopeHash,
-        browserCdpSecurityScopeHash,
+        browserCdpSecurityScopeHash: browserAppCheckCdpSecurityScopeHash,
         browserWideBoundaryAttestation: groupBrowserWideBoundaryAttestation,
         browserWideBoundaryAttestationHash: sha256(
           canonicalJson(groupBrowserWideBoundaryAttestation),
