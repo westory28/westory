@@ -20014,8 +20014,178 @@ const authenticate = async (page, credential, origin, role) => {
 
 const CAPTURE_APPLICATION_SESSION_MINIMUM_REMAINING_LEASE_MS = 10 * 60 * 1000;
 
-const refreshCaptureApplicationSession = async ({
+const createCaptureApplicationSessionKeepaliveClient = async ({
   page,
+  proof,
+}) => {
+  assert.ok(page);
+  assert.ok(proof && typeof proof === "object");
+  assert.ok(Number.isSafeInteger(proof.authTime) && proof.authTime > 0);
+  assert.equal(proof.authorityGeneration, "w1r2-2026-08-09");
+  assert.ok(Number.isInteger(proof.protocolVersion));
+  assert.ok(proof.protocolVersion >= 2);
+  assert.match(proof.revision, /^[a-f0-9]{64}$/u);
+  assert.ok(typeof proof.uid === "string" && proof.uid.length > 0);
+  assert.equal(firebaseConfig.projectId, contract.firebaseProjectId);
+  assert.equal(firebaseConfig.appId, STAGING_APP_ID);
+  applicationSessionKeepaliveClientInitAttemptCount += 1;
+  let clientHandle = null;
+  try {
+    clientHandle = await page.evaluateHandle(
+      async ({ config, expectedProjectId, expectedAppId, sessionProof }) => {
+        let app = null;
+        let appModule = null;
+        let authModule = null;
+        let tokenResult = null;
+        try {
+          [appModule, authModule] = await Promise.all([
+            import("https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js"),
+            import("https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js"),
+          ]);
+          const existingDefaultApps = appModule
+            .getApps()
+            .filter((candidate) => candidate.name === "[DEFAULT]");
+          if (existingDefaultApps.length !== 0) {
+            throw new Error(
+              "VISUAL_APPLICATION_SESSION_KEEPALIVE_APP_RESIDUAL",
+            );
+          }
+          if (
+            config.projectId !== expectedProjectId ||
+            config.appId !== expectedAppId
+          ) {
+            throw new Error(
+              "VISUAL_APPLICATION_SESSION_KEEPALIVE_BACKEND_MISMATCH",
+            );
+          }
+          app = appModule.initializeApp(config);
+          const auth = authModule.getAuth(app);
+          let authStateReadyTimeoutId = null;
+          try {
+            await Promise.race([
+              auth.authStateReady(),
+              new Promise((_, reject) => {
+                authStateReadyTimeoutId = setTimeout(
+                  () =>
+                    reject(
+                      new Error(
+                        "VISUAL_APPLICATION_SESSION_KEEPALIVE_AUTH_TIMEOUT",
+                      ),
+                    ),
+                  10_000,
+                );
+              }),
+            ]);
+          } finally {
+            if (authStateReadyTimeoutId !== null) {
+              clearTimeout(authStateReadyTimeoutId);
+            }
+          }
+          const currentUser = auth.currentUser;
+          if (!currentUser) {
+            throw new Error(
+              "VISUAL_APPLICATION_SESSION_KEEPALIVE_AUTH_MISSING",
+            );
+          }
+          tokenResult = await authModule.getIdTokenResult(currentUser);
+          const initializationAttestation = Object.freeze({
+            defaultRegistryWasEmpty: existingDefaultApps.length === 0,
+            appNameBound: app.name === "[DEFAULT]",
+            appIdentityBound:
+              appModule
+                .getApps()
+                .filter((candidate) => candidate.name === "[DEFAULT]")
+                .length === 1 &&
+              appModule
+                .getApps()
+                .find((candidate) => candidate.name === "[DEFAULT]") === app,
+            projectIdBound: app.options.projectId === expectedProjectId,
+            appIdBound: app.options.appId === expectedAppId,
+            configBound: Object.entries(config).every(
+              ([name, value]) => app.options[name] === value,
+            ),
+            currentUserPresent: Boolean(currentUser),
+            uidBound: currentUser.uid === sessionProof.uid,
+            authTimeBound:
+              Number(tokenResult.claims.auth_time || 0) ===
+              Number(sessionProof.authTime),
+          });
+          if (
+            !Object.values(initializationAttestation).every(
+              (value) => value === true,
+            )
+          ) {
+            throw new Error(
+              "VISUAL_APPLICATION_SESSION_KEEPALIVE_CLIENT_ATTESTATION_FAILED",
+            );
+          }
+          return {
+            app,
+            auth,
+            appModule,
+            authModule,
+            initializationAttestation,
+            refreshSuccessCount: 0,
+            deleteCallCount: 0,
+            disposed: false,
+          };
+        } catch (error) {
+          if (app && appModule) await appModule.deleteApp(app);
+          throw error;
+        } finally {
+          tokenResult = null;
+          sessionProof.revision = "";
+          sessionProof.uid = "";
+        }
+      },
+      {
+        config: firebaseConfig,
+        expectedProjectId: contract.firebaseProjectId,
+        expectedAppId: STAGING_APP_ID,
+        sessionProof: proof,
+      },
+    );
+    const initializationAttestation = await clientHandle.evaluate(
+      (state) => state.initializationAttestation,
+    );
+    assert.equal(
+      Object.values(initializationAttestation).every((value) => value === true),
+      true,
+    );
+    let handleReleased = false;
+    let successfulReuseCount = 0;
+    const client = Object.freeze({
+      initializationAttestation,
+      evaluate(pageFunction, argument) {
+        assert.equal(handleReleased, false);
+        return clientHandle.evaluate(pageFunction, argument);
+      },
+      markSuccessfulReuse() {
+        assert.equal(handleReleased, false);
+        successfulReuseCount += 1;
+      },
+      successfulReuseCount() {
+        return successfulReuseCount;
+      },
+      async releaseHandle() {
+        if (handleReleased) return false;
+        handleReleased = true;
+        await clientHandle.dispose();
+        clientHandle = null;
+        return true;
+      },
+    });
+    applicationSessionKeepaliveClientInitSuccessCount += 1;
+    return client;
+  } catch (error) {
+    if (clientHandle) await clientHandle.dispose();
+    clientHandle = null;
+    throw error;
+  }
+};
+
+const refreshCaptureApplicationSession = async ({
+  client,
   proof,
   appCheckToken,
   appCheckTokenExpiresAtMs,
@@ -20045,194 +20215,211 @@ const refreshCaptureApplicationSession = async ({
 
   let ephemeralAppCheckToken = appCheckToken;
   try {
-    const attestation = await withExplicitTimeout(
-      page.evaluate(
-        async ({
-          config,
-          sessionProof,
-          token,
-          tokenExpiresAtMs,
-          expectedProjectId,
-          expectedAppId,
-          expectedFunctionsRegion,
-          expectedFunctionsEndpoint,
-          observedNowMs,
-          minimumRemainingLeaseMs,
-        }) => {
-          let app = null;
-          let appModule = null;
-          let ephemeralIdToken = "";
-          let ephemeralToken = token;
-          const ephemeralProof = { ...sessionProof };
-          try {
-            if (
-              config.projectId !== expectedProjectId ||
-              config.appId !== expectedAppId ||
-              expectedFunctionsEndpoint !==
-                `https://${expectedFunctionsRegion}-${expectedProjectId}.cloudfunctions.net/touchApplicationSession` ||
-              tokenExpiresAtMs - observedNowMs < 5 * 60 * 1000
-            ) {
-              throw new Error(
-                "VISUAL_APPLICATION_SESSION_KEEPALIVE_BACKEND_MISMATCH",
-              );
-            }
-            [appModule] = await Promise.all([
-              import("https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js"),
-            ]);
-            const authModule =
-              await import("https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js");
-            const existingDefaultApp = appModule
-              .getApps()
-              .find((candidate) => candidate.name === "[DEFAULT]");
-            if (existingDefaultApp) {
-              throw new Error(
-                "VISUAL_APPLICATION_SESSION_KEEPALIVE_APP_RESIDUAL",
-              );
-            }
-            app = appModule.initializeApp(config);
-            const auth = authModule.getAuth(app);
-            let authStateReadyTimeoutId = null;
-            try {
-              await Promise.race([
-                auth.authStateReady(),
-                new Promise((_, reject) => {
-                  authStateReadyTimeoutId = setTimeout(
-                    () =>
-                      reject(
-                        new Error(
-                          "VISUAL_APPLICATION_SESSION_KEEPALIVE_AUTH_TIMEOUT",
-                        ),
-                      ),
-                    10_000,
-                  );
-                }),
-              ]);
-            } finally {
-              if (authStateReadyTimeoutId !== null) {
-                clearTimeout(authStateReadyTimeoutId);
-              }
-            }
-            const user = auth.currentUser;
-            if (!user) {
-              throw new Error(
-                "VISUAL_APPLICATION_SESSION_KEEPALIVE_AUTH_MISSING",
-              );
-            }
-            if (user.uid !== ephemeralProof.uid) {
-              throw new Error(
-                "VISUAL_APPLICATION_SESSION_KEEPALIVE_UID_MISMATCH",
-              );
-            }
-            const tokenResult = await authModule.getIdTokenResult(user);
-            ephemeralIdToken = String(tokenResult.token || "");
-            if (!ephemeralIdToken) {
-              throw new Error(
-                "VISUAL_APPLICATION_SESSION_KEEPALIVE_ID_TOKEN_MISSING",
-              );
-            }
-            const tokenAuthTime = Number(tokenResult.claims.auth_time || 0);
-            if (tokenAuthTime !== Number(ephemeralProof.authTime)) {
-              throw new Error(
-                "VISUAL_APPLICATION_SESSION_KEEPALIVE_AUTH_TIME_MISMATCH",
-              );
-            }
-            const keepaliveAbortController = new AbortController();
-            const keepaliveTimeoutId = setTimeout(
-              () => keepaliveAbortController.abort(),
-              20_000,
+    const attestation = await client.evaluate(
+      async (state, input) => {
+        const { app, auth, appModule, authModule, disposed } = state;
+        let ephemeralIdToken = "";
+        let ephemeralToken = String(input.token || "");
+        const ephemeralProof = { ...input.sessionProof };
+        let tokenResult = null;
+        let tokenClaims = null;
+        let responseEnvelope = null;
+        try {
+          const {
+            config,
+            tokenExpiresAtMs,
+            expectedProjectId,
+            expectedAppId,
+            expectedFunctionsRegion,
+            expectedFunctionsEndpoint,
+            observedNowMs,
+            minimumRemainingLeaseMs,
+          } = input;
+          if (disposed) {
+            throw new Error(
+              "VISUAL_APPLICATION_SESSION_KEEPALIVE_CLIENT_DISPOSED",
             );
-            let responseEnvelope = null;
-            try {
-              const response = await fetch(expectedFunctionsEndpoint, {
-                method: "POST",
-                headers: {
-                  Authorization: `Bearer ${ephemeralIdToken}`,
-                  "Content-Type": "application/json",
-                  "X-Firebase-AppCheck": ephemeralToken,
-                },
-                body: JSON.stringify({
-                  data: {
-                    scope: "GENERAL",
-                    _session: {
-                      authorityGeneration: ephemeralProof.authorityGeneration,
-                      protocolVersion: ephemeralProof.protocolVersion,
-                      revision: ephemeralProof.revision,
-                    },
-                  },
-                }),
-                redirect: "error",
-                signal: keepaliveAbortController.signal,
-              });
-              try {
-                responseEnvelope = await response.json();
-              } catch {
-                throw new Error(
-                  "VISUAL_APPLICATION_SESSION_KEEPALIVE_RESPONSE_INVALID",
-                );
-              }
-              if (!response.ok || responseEnvelope?.error) {
-                throw new Error(
-                  "VISUAL_APPLICATION_SESSION_KEEPALIVE_REQUEST_FAILED",
-                );
-              }
-            } finally {
-              clearTimeout(keepaliveTimeoutId);
-            }
-            const session = responseEnvelope?.result;
-            const authorityGenerationBound =
-              session?.authorityGeneration ===
-              ephemeralProof.authorityGeneration;
-            const protocolVersionBound =
-              Number(session?.protocolVersion) ===
-              Number(ephemeralProof.protocolVersion);
-            const revisionUnchanged =
-              session?.revision === ephemeralProof.revision;
-            const authTimeBound =
-              Number(session?.authTime || 0) ===
-              Number(ephemeralProof.authTime);
-            const leaseBound =
-              Number(session?.generalExpiresAt || 0) - observedNowMs >=
-              minimumRemainingLeaseMs;
-            const authorityMode = String(session?.authorityMode || "");
-            return {
-              statusActive: session?.status === "active",
-              authorityGenerationBound,
-              protocolVersionBound,
-              revisionUnchanged,
-              authTimeBound,
-              leaseBound,
-              authorityModeAllowed: [
-                "ENFORCE",
-                "OBSERVE_ONLY",
-                "DISABLED",
-              ].includes(authorityMode),
-            };
-          } finally {
-            ephemeralIdToken = "";
-            ephemeralToken = "";
-            ephemeralProof.revision = "";
-            ephemeralProof.uid = "";
-            if (app && appModule) await appModule.deleteApp(app);
           }
-        },
-        {
-          config: firebaseConfig,
-          sessionProof: proof,
-          token: ephemeralAppCheckToken,
-          tokenExpiresAtMs: appCheckTokenExpiresAtMs,
-          expectedProjectId: contract.firebaseProjectId,
-          expectedAppId: STAGING_APP_ID,
-          expectedFunctionsRegion: STAGING_FUNCTIONS_REGION,
-          expectedFunctionsEndpoint: functionsEndpoint,
-          observedNowMs: nodeNowMs,
-          minimumRemainingLeaseMs:
-            CAPTURE_APPLICATION_SESSION_MINIMUM_REMAINING_LEASE_MS,
-        },
-      ),
-      60_000,
-      "The visual application-session keepalive did not settle before the deadline.",
+          if (
+            config.projectId !== expectedProjectId ||
+            config.appId !== expectedAppId ||
+            expectedFunctionsEndpoint !==
+              `https://${expectedFunctionsRegion}-${expectedProjectId}.cloudfunctions.net/touchApplicationSession` ||
+            tokenExpiresAtMs - observedNowMs < 5 * 60 * 1000
+          ) {
+            throw new Error(
+              "VISUAL_APPLICATION_SESSION_KEEPALIVE_BACKEND_MISMATCH",
+            );
+          }
+          const defaultApps = appModule
+            .getApps()
+            .filter((candidate) => candidate.name === "[DEFAULT]");
+          const user = auth.currentUser;
+          if (!user) {
+            throw new Error(
+              "VISUAL_APPLICATION_SESSION_KEEPALIVE_AUTH_MISSING",
+            );
+          }
+          if (user.uid !== ephemeralProof.uid) {
+            throw new Error(
+              "VISUAL_APPLICATION_SESSION_KEEPALIVE_UID_MISMATCH",
+            );
+          }
+          tokenResult = await authModule.getIdTokenResult(user, false);
+          tokenClaims = tokenResult.claims;
+          const realtimeNowMs = observedNowMs;
+          const tokenExpiresAt = Number(tokenClaims.exp || 0) * 1000;
+          const forceRefreshRequired =
+            tokenExpiresAt - realtimeNowMs < 5 * 60 * 1000;
+          let forceRefreshCount = 0;
+          if (forceRefreshRequired) {
+            tokenResult = null;
+            tokenClaims = null;
+            tokenResult = await authModule.getIdTokenResult(user, true);
+            tokenClaims = tokenResult.claims;
+            forceRefreshCount = 1;
+          }
+          ephemeralIdToken = String(tokenResult.token || "");
+          if (!ephemeralIdToken) {
+            throw new Error(
+              "VISUAL_APPLICATION_SESSION_KEEPALIVE_ID_TOKEN_MISSING",
+            );
+          }
+          const tokenAuthTime = Number(tokenClaims.auth_time || 0);
+          if (tokenAuthTime !== Number(ephemeralProof.authTime)) {
+            throw new Error(
+              "VISUAL_APPLICATION_SESSION_KEEPALIVE_AUTH_TIME_MISMATCH",
+            );
+          }
+          const keepaliveAbortController = new AbortController();
+          const keepaliveTimeoutId = setTimeout(
+            () => keepaliveAbortController.abort(),
+            20_000,
+          );
+          try {
+            const response = await fetch(expectedFunctionsEndpoint, {
+              method: "POST",
+              headers: {
+                Authorization: `Bearer ${ephemeralIdToken}`,
+                "Content-Type": "application/json",
+                "X-Firebase-AppCheck": ephemeralToken,
+              },
+              body: JSON.stringify({
+                data: {
+                  scope: "GENERAL",
+                  _session: {
+                    authorityGeneration: ephemeralProof.authorityGeneration,
+                    protocolVersion: ephemeralProof.protocolVersion,
+                    revision: ephemeralProof.revision,
+                  },
+                },
+              }),
+              redirect: "error",
+              signal: keepaliveAbortController.signal,
+            });
+            try {
+              responseEnvelope = await response.json();
+            } catch {
+              throw new Error(
+                "VISUAL_APPLICATION_SESSION_KEEPALIVE_RESPONSE_INVALID",
+              );
+            }
+            if (!response.ok || responseEnvelope?.error) {
+              throw new Error(
+                "VISUAL_APPLICATION_SESSION_KEEPALIVE_REQUEST_FAILED",
+              );
+            }
+          } finally {
+            clearTimeout(keepaliveTimeoutId);
+          }
+          const session = responseEnvelope?.result;
+          const authorityGenerationBound =
+            session?.authorityGeneration === ephemeralProof.authorityGeneration;
+          const protocolVersionBound =
+            Number(session?.protocolVersion) ===
+            Number(ephemeralProof.protocolVersion);
+          const revisionUnchanged =
+            session?.revision === ephemeralProof.revision;
+          const authTimeBound =
+            Number(session?.authTime || 0) === Number(ephemeralProof.authTime);
+          const leaseBound =
+            Number(session?.generalExpiresAt || 0) - observedNowMs >=
+            minimumRemainingLeaseMs;
+          const authorityMode = String(session?.authorityMode || "");
+          const attestation = {
+            clientReused: true,
+            clientNotDisposed: disposed === false,
+            defaultRegistryIdentityBound:
+              defaultApps.length === 1 && defaultApps[0] === app,
+            appNameBound: app.name === "[DEFAULT]",
+            projectIdBound: app.options.projectId === expectedProjectId,
+            appIdBound: app.options.appId === expectedAppId,
+            configBound: Object.entries(config).every(
+              ([name, value]) => app.options[name] === value,
+            ),
+            currentUserPresent: Boolean(user),
+            uidBound: user.uid === ephemeralProof.uid,
+            tokenForceRefreshAtMostOnce: forceRefreshCount <= 1,
+            tokenLifetimeBound:
+              Number.isSafeInteger(tokenClaims.exp) &&
+              tokenClaims.exp * 1000 - realtimeNowMs >= 5 * 60 * 1000,
+            statusActive: session?.status === "active",
+            authorityGenerationBound,
+            protocolVersionBound,
+            revisionUnchanged,
+            authTimeBound,
+            leaseBound,
+            authorityModeAllowed: [
+              "ENFORCE",
+              "OBSERVE_ONLY",
+              "DISABLED",
+            ].includes(authorityMode),
+          };
+          if (!Object.values(attestation).every((value) => value === true)) {
+            throw new Error(
+              "VISUAL_APPLICATION_SESSION_KEEPALIVE_ATTESTATION_FAILED",
+            );
+          }
+          state.refreshSuccessCount += 1;
+          return attestation;
+        } finally {
+          ephemeralIdToken = "";
+          ephemeralToken = "";
+          ephemeralProof.revision = "";
+          ephemeralProof.uid = "";
+          tokenResult = null;
+          tokenClaims = null;
+          responseEnvelope = null;
+          input.token = "";
+          input.sessionProof = null;
+        }
+      },
+      {
+        config: firebaseConfig,
+        sessionProof: proof,
+        token: ephemeralAppCheckToken,
+        tokenExpiresAtMs: appCheckTokenExpiresAtMs,
+        expectedProjectId: contract.firebaseProjectId,
+        expectedAppId: STAGING_APP_ID,
+        expectedFunctionsRegion: STAGING_FUNCTIONS_REGION,
+        expectedFunctionsEndpoint: functionsEndpoint,
+        observedNowMs: nodeNowMs,
+        minimumRemainingLeaseMs:
+          CAPTURE_APPLICATION_SESSION_MINIMUM_REMAINING_LEASE_MS,
+      },
     );
     assert.deepEqual(attestation, {
+      clientReused: true,
+      clientNotDisposed: true,
+      defaultRegistryIdentityBound: true,
+      appNameBound: true,
+      projectIdBound: true,
+      appIdBound: true,
+      configBound: true,
+      currentUserPresent: true,
+      uidBound: true,
+      tokenForceRefreshAtMostOnce: true,
+      tokenLifetimeBound: true,
       statusActive: true,
       authorityGenerationBound: true,
       protocolVersionBound: true,
@@ -20241,8 +20428,70 @@ const refreshCaptureApplicationSession = async ({
       leaseBound: true,
       authorityModeAllowed: true,
     });
+    client.markSuccessfulReuse();
+    applicationSessionKeepaliveClientReuseCount += 1;
   } finally {
     ephemeralAppCheckToken = "";
+  }
+};
+
+const disposeCaptureApplicationSessionKeepaliveClient = async ({ client }) => {
+  assert.ok(client && typeof client.evaluate === "function");
+  applicationSessionKeepaliveClientDisposeAttemptCount += 1;
+  let attestation = null;
+  try {
+    attestation = await client.evaluate(
+      async (state, { expectedReuseCount }) => {
+        const defaultAppsBeforeDelete = state.appModule
+          .getApps()
+          .filter((candidate) => candidate.name === "[DEFAULT]");
+        const registryIdentityBoundBeforeDelete =
+          defaultAppsBeforeDelete.length === 1 &&
+          defaultAppsBeforeDelete[0] === state.app;
+        const appNameBoundBeforeDelete = state.app?.name === "[DEFAULT]";
+        const reuseCountBound =
+          state.refreshSuccessCount === expectedReuseCount;
+        const deleteWasNotPreviouslyCalled =
+          state.deleteCallCount === 0 && state.disposed === false;
+        let deleteCalledExactlyOnce = false;
+        if (deleteWasNotPreviouslyCalled) {
+          state.deleteCallCount += 1;
+          await state.appModule.deleteApp(state.app);
+          deleteCalledExactlyOnce = state.deleteCallCount === 1;
+        }
+        state.disposed = true;
+        state.app = null;
+        state.auth = null;
+        const registryResidualAbsent =
+          state.appModule
+            .getApps()
+            .filter((candidate) => candidate.name === "[DEFAULT]").length === 0;
+        return {
+          registryIdentityBoundBeforeDelete,
+          appNameBoundBeforeDelete,
+          reuseCountBound,
+          deleteWasNotPreviouslyCalled,
+          deleteCalledExactlyOnce,
+          registryResidualAbsent,
+          opaqueStateCleared: state.app === null && state.auth === null,
+        };
+      },
+      { expectedReuseCount: client.successfulReuseCount() },
+    );
+    assert.equal(
+      Object.values(attestation).every((value) => value === true),
+      true,
+    );
+    applicationSessionKeepaliveClientDeleteCount += 1;
+    applicationSessionKeepaliveClientDisposeSuccessCount += 1;
+    applicationSessionKeepaliveClientRegistryResidualCount += Number(
+      !attestation.registryResidualAbsent,
+    );
+    return attestation;
+  } finally {
+    const handleReleased = await client.releaseHandle();
+    applicationSessionKeepaliveClientHandleDisposeCount +=
+      Number(handleReleased);
   }
 };
 
@@ -21419,6 +21668,14 @@ let applicationSessionKeepaliveAttemptCount = 0;
 let applicationSessionKeepaliveSuccessCount = 0;
 let baselineApplicationSessionKeepaliveSuccessCount = 0;
 let candidateApplicationSessionKeepaliveSuccessCount = 0;
+let applicationSessionKeepaliveClientInitAttemptCount = 0;
+let applicationSessionKeepaliveClientInitSuccessCount = 0;
+let applicationSessionKeepaliveClientReuseCount = 0;
+let applicationSessionKeepaliveClientDisposeAttemptCount = 0;
+let applicationSessionKeepaliveClientDisposeSuccessCount = 0;
+let applicationSessionKeepaliveClientDeleteCount = 0;
+let applicationSessionKeepaliveClientRegistryResidualCount = 0;
+let applicationSessionKeepaliveClientHandleDisposeCount = 0;
 let pageRawDebugTokenInjectionCount = 0;
 let browserGlobalRawDebugTokenWriteCount = 0;
 let browserGlobalDebugSentinelWriteCount = 0;
@@ -21480,6 +21737,9 @@ const applicationSessionKeepaliveExpectedCount = [
     count + (groupTargets[0]?.authenticationRole ? groupTargets.length : 0),
   0,
 );
+const applicationSessionKeepaliveClientExpectedGroupCount = [
+  ...groupedTargets.values(),
+].filter((groupTargets) => Boolean(groupTargets[0]?.authenticationRole)).length;
 
 try {
   browserWideBoundaryController =
@@ -21594,6 +21854,22 @@ try {
       webChannelCdpHeaderAttestationPairingTimeoutCount;
     const groupWebChannelCdpHeaderAttestationCompletionTimeoutStart =
       webChannelCdpHeaderAttestationCompletionTimeoutCount;
+    const groupApplicationSessionKeepaliveClientInitAttemptStart =
+      applicationSessionKeepaliveClientInitAttemptCount;
+    const groupApplicationSessionKeepaliveClientInitSuccessStart =
+      applicationSessionKeepaliveClientInitSuccessCount;
+    const groupApplicationSessionKeepaliveClientReuseStart =
+      applicationSessionKeepaliveClientReuseCount;
+    const groupApplicationSessionKeepaliveClientDisposeAttemptStart =
+      applicationSessionKeepaliveClientDisposeAttemptCount;
+    const groupApplicationSessionKeepaliveClientDisposeSuccessStart =
+      applicationSessionKeepaliveClientDisposeSuccessCount;
+    const groupApplicationSessionKeepaliveClientDeleteStart =
+      applicationSessionKeepaliveClientDeleteCount;
+    const groupApplicationSessionKeepaliveClientRegistryResidualStart =
+      applicationSessionKeepaliveClientRegistryResidualCount;
+    const groupApplicationSessionKeepaliveClientHandleDisposeStart =
+      applicationSessionKeepaliveClientHandleDisposeCount;
     const groupAllowedEgressContextCloseBackchannelRetirementStart =
       allowedEgressContextCloseBackchannelRetirementCount;
     const groupAllowedEgressContextCloseSessionForwardPostRetirementStart =
@@ -24386,6 +24662,10 @@ try {
     });
     let groupIdentityAttestation = null;
     let groupApplicationSessionProof = null;
+    let groupApplicationSessionKeepaliveClient = null;
+    let groupApplicationSessionKeepaliveClientInitializationAttestation = null;
+    let groupApplicationSessionKeepaliveClientDisposalAttestation = null;
+    let groupApplicationSessionKeepaliveClientLifecycleEvidence = null;
     if (authenticationRole) {
       networkPhase = "authentication";
       const authentication = await authenticate(
@@ -24443,429 +24723,461 @@ try {
       if (previous) assert.deepEqual(groupIdentityAttestation, previous);
       else
         identityAttestations.set(authenticationRole, groupIdentityAttestation);
+      groupApplicationSessionKeepaliveClient =
+        await createCaptureApplicationSessionKeepaliveClient({
+          page,
+          proof: groupApplicationSessionProof,
+        });
+      groupApplicationSessionKeepaliveClientInitializationAttestation =
+        groupApplicationSessionKeepaliveClient.initializationAttestation;
     }
-    for (const target of groupTargets) {
-      resetSafeBrowserErrorAccumulator(pageErrorAccumulator);
-      const nextCaptureId = captureKey(stage, target.screen.id, viewport);
-      activeCaptureId = null;
-      if (authenticationRole) {
-        assert.ok(groupApplicationSessionProof);
-        assert.equal(
-          liveApplicationSessionProofsByPage.get(page),
-          groupApplicationSessionProof,
-        );
-        networkPhase = "session-keepalive";
-        applicationSessionKeepaliveAttemptCount += 1;
-        const keepaliveNowMs = Date.now();
-        let keepaliveAppCheckToken = "";
-        try {
-          await withExplicitTimeout(
-            (async () => {
-              keepaliveAppCheckToken =
-                await captureAppCheckTokenManager.ensureFresh();
-              await refreshCaptureApplicationSession({
-                page,
-                proof: groupApplicationSessionProof,
-                appCheckToken: keepaliveAppCheckToken,
-                appCheckTokenExpiresAtMs:
-                  captureAppCheckTokenManager.expiresAtMillis,
-                nodeNowMs: keepaliveNowMs,
-              });
-            })(),
-            60_000,
-            "The complete visual application-session keepalive did not settle before the deadline.",
+    try {
+      for (const target of groupTargets) {
+        resetSafeBrowserErrorAccumulator(pageErrorAccumulator);
+        const nextCaptureId = captureKey(stage, target.screen.id, viewport);
+        activeCaptureId = null;
+        if (authenticationRole) {
+          assert.ok(groupApplicationSessionProof);
+          assert.equal(
+            liveApplicationSessionProofsByPage.get(page),
+            groupApplicationSessionProof,
           );
-        } finally {
-          keepaliveAppCheckToken = "";
+          networkPhase = "session-keepalive";
+          applicationSessionKeepaliveAttemptCount += 1;
+          let keepaliveAppCheckToken = "";
+          try {
+            keepaliveAppCheckToken =
+              await captureAppCheckTokenManager.ensureFresh();
+            const keepaliveNowMs = Date.now();
+            await refreshCaptureApplicationSession({
+              client: groupApplicationSessionKeepaliveClient,
+              proof: groupApplicationSessionProof,
+              appCheckToken: keepaliveAppCheckToken,
+              appCheckTokenExpiresAtMs:
+                captureAppCheckTokenManager.expiresAtMillis,
+              nodeNowMs: keepaliveNowMs,
+            });
+          } finally {
+            keepaliveAppCheckToken = "";
+          }
+          applicationSessionKeepaliveSuccessCount += 1;
+          if (stage === "baseline") {
+            baselineApplicationSessionKeepaliveSuccessCount += 1;
+          } else {
+            candidateApplicationSessionKeepaliveSuccessCount += 1;
+          }
+          await flushNetworkAttestations();
         }
-        applicationSessionKeepaliveSuccessCount += 1;
-        if (stage === "baseline") {
-          baselineApplicationSessionKeepaliveSuccessCount += 1;
-        } else {
-          candidateApplicationSessionKeepaliveSuccessCount += 1;
-        }
-        await flushNetworkAttestations();
-      }
-      activeCaptureId = nextCaptureId;
-      requestFinishedAccumulatorsByCaptureId.set(
-        activeCaptureId,
-        createSafeFinishedRequestAccumulator(),
-      );
-      networkPhase = "screen-capture";
-      const networkObservationStart = networkObservations.length;
-      const networkResponseObservationStart =
-        networkResponseObservations.length;
-      const routeUrl = `${origin}/#${target.screen.captureRoute}`;
-      await page.goto(routeUrl, { waitUntil: "domcontentloaded" });
-      await page.waitForFunction(
-        (expectedRoute) =>
-          decodeURIComponent(location.hash.slice(1)) ===
-          decodeURIComponent(expectedRoute),
-        target.screen.captureRoute,
-      );
-      await page.waitForLoadState("load");
-      await page.evaluate(async () => document.fonts.ready);
-      const appCheckDebugGlobalDescriptor = await page.evaluate(() => {
-        const descriptor = Object.getOwnPropertyDescriptor(
-          self,
-          "FIREBASE_APPCHECK_DEBUG_TOKEN",
+        activeCaptureId = nextCaptureId;
+        requestFinishedAccumulatorsByCaptureId.set(
+          activeCaptureId,
+          createSafeFinishedRequestAccumulator(),
         );
-        return {
-          value: typeof descriptor?.value === "string" ? descriptor.value : "",
-          enumerable: descriptor?.enumerable,
+        networkPhase = "screen-capture";
+        const networkObservationStart = networkObservations.length;
+        const networkResponseObservationStart =
+          networkResponseObservations.length;
+        const routeUrl = `${origin}/#${target.screen.captureRoute}`;
+        await page.goto(routeUrl, { waitUntil: "domcontentloaded" });
+        await page.waitForFunction(
+          (expectedRoute) =>
+            decodeURIComponent(location.hash.slice(1)) ===
+            decodeURIComponent(expectedRoute),
+          target.screen.captureRoute,
+        );
+        await page.waitForLoadState("load");
+        await page.evaluate(async () => document.fonts.ready);
+        const appCheckDebugGlobalDescriptor = await page.evaluate(() => {
+          const descriptor = Object.getOwnPropertyDescriptor(
+            self,
+            "FIREBASE_APPCHECK_DEBUG_TOKEN",
+          );
+          return {
+            value:
+              typeof descriptor?.value === "string" ? descriptor.value : "",
+            enumerable: descriptor?.enumerable,
+          };
+        });
+        const browserGlobalContainsRawDebugToken =
+          appCheckDebugGlobalDescriptor.value === appCheckDebugToken;
+        browserGlobalRawDebugTokenWriteCount += Number(
+          browserGlobalContainsRawDebugToken,
+        );
+        browserGlobalDebugSentinelWriteCount += Number(
+          appCheckDebugGlobalDescriptor.value === APP_CHECK_DEBUG_SENTINEL,
+        );
+        assert.equal(
+          browserGlobalContainsRawDebugToken,
+          false,
+          "The App Check browser global contained the raw debug token.",
+        );
+        assert.equal(
+          appCheckDebugGlobalDescriptor.value === APP_CHECK_DEBUG_SENTINEL,
+          true,
+          "The App Check browser global did not contain the fixed sentinel.",
+        );
+        assert.equal(appCheckDebugGlobalDescriptor.enumerable, false);
+        appCheckDebugGlobalDescriptor.value = "";
+
+        const localStorageSnapshot = await page.evaluate(() =>
+          Object.entries(localStorage).flatMap(([key, value]) => [key, value]),
+        );
+        const localStorageContainsRawDebugToken = localStorageSnapshot.some(
+          (value) => String(value).includes(appCheckDebugToken),
+        );
+        browserLocalStorageSecretWriteCount += Number(
+          localStorageContainsRawDebugToken,
+        );
+        localStorageSnapshot.fill("");
+        assert.equal(
+          localStorageContainsRawDebugToken,
+          false,
+          "Browser localStorage contained the raw App Check debug token.",
+        );
+
+        let appCheckDomText = await page.evaluate(
+          () => document.documentElement?.outerHTML || "",
+        );
+        const appCheckSecretObservedInDom =
+          appCheckDomText.includes(appCheckDebugToken) ||
+          appCheckDomText.includes(APP_CHECK_DEBUG_SENTINEL) ||
+          /[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/u.test(
+            appCheckDomText,
+          );
+        appCheckDomText = "";
+        if (appCheckSecretObservedInDom) browserDomSecretObservationCount += 1;
+        assert.equal(
+          appCheckSecretObservedInDom,
+          false,
+          "Raw App Check token material reached the rendered DOM.",
+        );
+        await page.addStyleTag({
+          content:
+            "*,*::before,*::after{animation-duration:0s!important;transition-duration:0s!important;caret-color:transparent!important}",
+        });
+        const fixtureActions = await applyScreenFixtureActions(
+          page,
+          target.screen.id,
+          viewport,
+        );
+        try {
+          await waitForScreenReady(page, target.screen.id);
+        } catch (error) {
+          await flushNetworkAttestations();
+          const routeRequests = networkObservations
+            .slice(networkObservationStart)
+            .filter((observation) => observation.captureId === activeCaptureId);
+          const routeResponses = networkResponseObservations
+            .slice(networkResponseObservationStart)
+            .filter((observation) => observation.captureId === activeCaptureId);
+          const routeFinishedRequests = snapshotSafeFinishedRequests(
+            requestFinishedAccumulatorsByCaptureId.get(activeCaptureId),
+          );
+          const failureDiagnostic = {
+            stage,
+            screenId: target.screen.id,
+            viewport: viewportName,
+            originalErrorName:
+              error &&
+              typeof error === "object" &&
+              ["Error", "TimeoutError"].includes(String(error.name))
+                ? String(error.name)
+                : "UnknownError",
+            readiness:
+              error && typeof error === "object"
+                ? error.w10pReadinessDiagnostic || null
+                : null,
+            ...snapshotSafeBrowserErrorAccumulator(pageErrorAccumulator),
+            routeObservedRequestCount: routeRequests.length,
+            routeObservedResponseCount: routeResponses.length,
+            ...summarizeSafeRouteResponseStatuses(routeResponses),
+            ...routeFinishedRequests,
+            routeObservedFirebaseRequestCount: routeRequests.filter(
+              (observation) => observation.isFirebaseRequest,
+            ).length,
+            routeObservedFirebaseResponseCount: routeResponses.filter(
+              (observation) => observation.isFirebaseRequest,
+            ).length,
+            routeObservedFirestoreRequestCount: routeRequests.filter(
+              (observation) => observation.firebaseService === "firestore",
+            ).length,
+            routeObservedFirestoreResponseCount: routeResponses.filter(
+              (observation) => observation.firebaseService === "firestore",
+            ).length,
+            routeObservedFirestoreHttpErrorResponseCount: routeResponses.filter(
+              (observation) =>
+                observation.firebaseService === "firestore" &&
+                Number(observation.status) >= 400,
+            ).length,
+            routeObservedUnboundFirebaseRequestCount: routeRequests.filter(
+              (observation) => observation.unboundFirebaseRequest,
+            ).length,
+            cumulativeBrowserRequestFailureCount: browserRequestFailureCount,
+            cumulativeAppCheckCdpHandlerErrorCount:
+              appCheckCdpHandlerErrorCount,
+            groupAppCheckCdpHandlerErrorCount:
+              appCheckCdpHandlerErrorCount -
+              groupBaselineBridgeHandlerErrorStart,
+            groupCdpHandlerFailureClasses: snapshotSafeDiagnosticClasses(
+              cdpHandlerFailureClassCounts,
+              groupCdpHandlerFailureClassCountsStart,
+            ),
+            cumulativeNetworkHeaderAttestationErrorCount:
+              networkHeaderAttestationErrorCount,
+            cumulativePreTransmissionBoundaryFailRequestCount:
+              preTransmissionBoundaryFailRequestCount,
+            groupPreTransmissionBoundaryFailRequestCount:
+              preTransmissionBoundaryFailRequestCount -
+              groupPreTransmissionBoundaryFailRequestStart,
+            groupPreTransmissionBoundaryBlockClasses:
+              snapshotSafeDiagnosticClasses(
+                preTransmissionBoundaryBlockClassCounts,
+                groupPreTransmissionBoundaryBlockClassCountsStart,
+              ),
+            cumulativeAllowedEgressResponseErrorAbortCount:
+              allowedEgressResponseErrorAbortCount,
+          };
+          throw new Error(
+            `W10P screen readiness failure: ${JSON.stringify(failureDiagnostic)}`,
+          );
+        }
+        assert.equal(
+          pageErrorAccumulator.totalCount,
+          0,
+          `${target.screen.id} browser error count must be zero: ${JSON.stringify(
+            snapshotSafeBrowserErrorAccumulator(pageErrorAccumulator),
+          )}`,
+        );
+        const anchorRequirements =
+          stage === "candidate" && !target.screen.productionPresentation
+            ? contract.newSurfaceRequiredAnchors[target.screen.id]
+            : [];
+        const readyRequirements =
+          contract.screenReadyStates[target.screen.id].signals;
+        const metadata = await describePage(
+          page,
+          anchorRequirements,
+          readyRequirements,
+          target.primitiveRequirements,
+          contract.fixtureDomAssertions[target.screen.id] ?? null,
+        );
+        assert.deepEqual(
+          metadata.fixtureEvidence.privacy.unexpectedEmailSha256s,
+          [],
+          `${target.screen.id} exposed a non-fixture email.`,
+        );
+        assert.deepEqual(
+          metadata.fixtureEvidence.privacy.unexpectedPersonLabels,
+          [],
+          `${target.screen.id} exposed an unapproved fixture person label.`,
+        );
+        assert.equal(
+          Object.values(
+            metadata.fixtureEvidence.privacy.forbiddenPatternMatchCounts,
+          ).every((count) => count === 0),
+          true,
+          `${target.screen.id} exposed a forbidden personal-data pattern.`,
+        );
+        metadata.finalUrl = sanitizeBrowserUrl(metadata.finalUrl);
+        metadata.performanceNavigationUrl = sanitizeBrowserUrl(
+          metadata.performanceNavigationUrl,
+        );
+        const fullPage = contract.fullPageViewportKeys.includes(viewportName);
+        const fileName = `${stage}/${target.screen.id}-${viewportName}.png`;
+        const absoluteFile = resolve(outputRoot, fileName);
+        await page.screenshot({ path: absoluteFile, fullPage });
+        assert.equal(
+          pageErrorAccumulator.totalCount,
+          0,
+          `${target.screen.id} emitted an error during screenshot capture: ${JSON.stringify(
+            snapshotSafeBrowserErrorAccumulator(pageErrorAccumulator),
+          )}`,
+        );
+        const postScreenshotMetadata = await describePage(
+          page,
+          anchorRequirements,
+          readyRequirements,
+          target.primitiveRequirements,
+          contract.fixtureDomAssertions[target.screen.id] ?? null,
+        );
+        postScreenshotMetadata.finalUrl = sanitizeBrowserUrl(
+          postScreenshotMetadata.finalUrl,
+        );
+        postScreenshotMetadata.performanceNavigationUrl = sanitizeBrowserUrl(
+          postScreenshotMetadata.performanceNavigationUrl,
+        );
+        assert.deepEqual(
+          postScreenshotMetadata,
+          metadata,
+          `${target.screen.id} DOM or paint evidence changed during screenshot capture.`,
+        );
+        const png = readFileSync(absoluteFile);
+        const actualPixelSize = {
+          width: viewport.width,
+          height: fullPage
+            ? Math.max(viewport.height, metadata.dom.scrollHeight)
+            : viewport.height,
         };
-      });
-      const browserGlobalContainsRawDebugToken =
-        appCheckDebugGlobalDescriptor.value === appCheckDebugToken;
-      browserGlobalRawDebugTokenWriteCount += Number(
-        browserGlobalContainsRawDebugToken,
-      );
-      browserGlobalDebugSentinelWriteCount += Number(
-        appCheckDebugGlobalDescriptor.value === APP_CHECK_DEBUG_SENTINEL,
-      );
-      assert.equal(
-        browserGlobalContainsRawDebugToken,
-        false,
-        "The App Check browser global contained the raw debug token.",
-      );
-      assert.equal(
-        appCheckDebugGlobalDescriptor.value === APP_CHECK_DEBUG_SENTINEL,
-        true,
-        "The App Check browser global did not contain the fixed sentinel.",
-      );
-      assert.equal(appCheckDebugGlobalDescriptor.enumerable, false);
-      appCheckDebugGlobalDescriptor.value = "";
-
-      const localStorageSnapshot = await page.evaluate(() =>
-        Object.entries(localStorage).flatMap(([key, value]) => [key, value]),
-      );
-      const localStorageContainsRawDebugToken = localStorageSnapshot.some(
-        (value) => String(value).includes(appCheckDebugToken),
-      );
-      browserLocalStorageSecretWriteCount += Number(
-        localStorageContainsRawDebugToken,
-      );
-      localStorageSnapshot.fill("");
-      assert.equal(
-        localStorageContainsRawDebugToken,
-        false,
-        "Browser localStorage contained the raw App Check debug token.",
-      );
-
-      let appCheckDomText = await page.evaluate(
-        () => document.documentElement?.outerHTML || "",
-      );
-      const appCheckSecretObservedInDom =
-        appCheckDomText.includes(appCheckDebugToken) ||
-        appCheckDomText.includes(APP_CHECK_DEBUG_SENTINEL) ||
-        /[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/u.test(
-          appCheckDomText,
-        );
-      appCheckDomText = "";
-      if (appCheckSecretObservedInDom) browserDomSecretObservationCount += 1;
-      assert.equal(
-        appCheckSecretObservedInDom,
-        false,
-        "Raw App Check token material reached the rendered DOM.",
-      );
-      await page.addStyleTag({
-        content:
-          "*,*::before,*::after{animation-duration:0s!important;transition-duration:0s!important;caret-color:transparent!important}",
-      });
-      const fixtureActions = await applyScreenFixtureActions(
-        page,
-        target.screen.id,
-        viewport,
-      );
-      try {
-        await waitForScreenReady(page, target.screen.id);
-      } catch (error) {
         await flushNetworkAttestations();
-        const routeRequests = networkObservations
+        const captureRequests = networkObservations
           .slice(networkObservationStart)
           .filter((observation) => observation.captureId === activeCaptureId);
-        const routeResponses = networkResponseObservations
+        const captureResponses = networkResponseObservations
           .slice(networkResponseObservationStart)
           .filter((observation) => observation.captureId === activeCaptureId);
-        const routeFinishedRequests = snapshotSafeFinishedRequests(
-          requestFinishedAccumulatorsByCaptureId.get(activeCaptureId),
+        const captureNetwork = summarizeNetwork(
+          captureRequests,
+          captureResponses,
         );
-        const failureDiagnostic = {
+        if (contract.fixtureMarkers[target.screen.id]) {
+          assert.ok(
+            captureNetwork.stagingDataRequestCount > 0,
+            `${target.screen.id} rendered fixture data without a capture-bound staging data request.`,
+          );
+          assert.ok(
+            captureNetwork.stagingDataResponseCount > 0,
+            `${target.screen.id} rendered fixture data without a successful capture-bound staging data response.`,
+          );
+          const successfulDataResponseIds = new Set(
+            captureResponses
+              .filter(
+                (response) =>
+                  response.stagingMarker &&
+                  fixtureDataServices.has(response.firebaseService) &&
+                  response.status >= 200 &&
+                  response.status < 300,
+              )
+              .map((response) => response.correlationId),
+          );
+          const successfulProtectedRequests = captureRequests.filter(
+            (request) =>
+              request.method !== "OPTIONS" &&
+              request.stagingMarker &&
+              fixtureDataServices.has(request.firebaseService) &&
+              successfulDataResponseIds.has(request.correlationId),
+          );
+          assert.ok(
+            successfulProtectedRequests.length > 0,
+            `${target.screen.id} has no correlated successful staging data exchange.`,
+          );
+          const requiredHeaderSource =
+            stage === "baseline" ? "baseline-cdp-fetch-bridge" : "native-sdk";
+          assert.equal(
+            successfulProtectedRequests.every(
+              (request) =>
+                request.appCheckHeaderPresent &&
+                request.appCheckHeaderJwtShapeValid &&
+                request.appCheckHeaderSource === requiredHeaderSource,
+            ),
+            true,
+            `${target.screen.id} has a successful capture-bound data request without the required ${requiredHeaderSource} App Check JWT.`,
+          );
+        }
+        const captureRow = {
+          id: captureKey(stage, target.screen.id, viewport),
           stage,
           screenId: target.screen.id,
-          viewport: viewportName,
-          originalErrorName:
-            error &&
-            typeof error === "object" &&
-            ["Error", "TimeoutError"].includes(String(error.name))
-              ? String(error.name)
-              : "UnknownError",
-          readiness:
-            error && typeof error === "object"
-              ? error.w10pReadinessDiagnostic || null
-              : null,
-          ...snapshotSafeBrowserErrorAccumulator(pageErrorAccumulator),
-          routeObservedRequestCount: routeRequests.length,
-          routeObservedResponseCount: routeResponses.length,
-          ...summarizeSafeRouteResponseStatuses(routeResponses),
-          ...routeFinishedRequests,
-          routeObservedFirebaseRequestCount: routeRequests.filter(
-            (observation) => observation.isFirebaseRequest,
-          ).length,
-          routeObservedFirebaseResponseCount: routeResponses.filter(
-            (observation) => observation.isFirebaseRequest,
-          ).length,
-          routeObservedFirestoreRequestCount: routeRequests.filter(
-            (observation) => observation.firebaseService === "firestore",
-          ).length,
-          routeObservedFirestoreResponseCount: routeResponses.filter(
-            (observation) => observation.firebaseService === "firestore",
-          ).length,
-          routeObservedFirestoreHttpErrorResponseCount: routeResponses.filter(
-            (observation) =>
-              observation.firebaseService === "firestore" &&
-              Number(observation.status) >= 400,
-          ).length,
-          routeObservedUnboundFirebaseRequestCount: routeRequests.filter(
-            (observation) => observation.unboundFirebaseRequest,
-          ).length,
-          cumulativeBrowserRequestFailureCount: browserRequestFailureCount,
-          cumulativeAppCheckCdpHandlerErrorCount: appCheckCdpHandlerErrorCount,
-          groupAppCheckCdpHandlerErrorCount:
-            appCheckCdpHandlerErrorCount - groupBaselineBridgeHandlerErrorStart,
-          groupCdpHandlerFailureClasses: snapshotSafeDiagnosticClasses(
-            cdpHandlerFailureClassCounts,
-            groupCdpHandlerFailureClassCountsStart,
-          ),
-          cumulativeNetworkHeaderAttestationErrorCount:
-            networkHeaderAttestationErrorCount,
-          cumulativePreTransmissionBoundaryFailRequestCount:
-            preTransmissionBoundaryFailRequestCount,
-          groupPreTransmissionBoundaryFailRequestCount:
-            preTransmissionBoundaryFailRequestCount -
-            groupPreTransmissionBoundaryFailRequestStart,
-          groupPreTransmissionBoundaryBlockClasses:
-            snapshotSafeDiagnosticClasses(
-              preTransmissionBoundaryBlockClassCounts,
-              groupPreTransmissionBoundaryBlockClassCountsStart,
-            ),
-          cumulativeAllowedEgressResponseErrorAbortCount:
-            allowedEgressResponseErrorAbortCount,
+          role: target.screen.role,
+          route: target.screen.captureRoute,
+          sourceCommitSha:
+            stage === "baseline"
+              ? contract.productionPresentationSha
+              : sourceCommitSha,
+          observedOrigin: origin,
+          finalUrl: metadata.finalUrl,
+          performanceNavigationUrl: metadata.performanceNavigationUrl,
+          documentReadyState: metadata.documentReadyState,
+          capturedAt: new Date().toISOString(),
+          viewport,
+          actualPixelSize,
+          dpr: contract.requiredDpr,
+          fullPage,
+          fileName,
+          sha256: sha256(png),
+          status: "CAPTURED",
+          dom: metadata.dom,
+          elements: metadata.elements,
+          anchors: metadata.anchors,
+          primitives: metadata.primitives,
+          readyStateId: target.screen.id,
+          readySignals: metadata.readySignals,
+          fixtureMarker: contract.fixtureMarkers[target.screen.id] ?? null,
+          fixtureId,
+          fixturePlanHash: contract.fixturePlanHash,
+          fixtureCaptureBindingHash: fixtureAudit.captureBindingHash,
+          fixtureAuditSha256,
+          fixtureActions,
+          fixtureEvidence: metadata.fixtureEvidence,
+          network: captureNetwork,
         };
-        throw new Error(
-          `W10P screen readiness failure: ${JSON.stringify(failureDiagnostic)}`,
-        );
-      }
-      assert.equal(
-        pageErrorAccumulator.totalCount,
-        0,
-        `${target.screen.id} browser error count must be zero: ${JSON.stringify(
-          snapshotSafeBrowserErrorAccumulator(pageErrorAccumulator),
-        )}`,
-      );
-      const anchorRequirements =
-        stage === "candidate" && !target.screen.productionPresentation
-          ? contract.newSurfaceRequiredAnchors[target.screen.id]
-          : [];
-      const readyRequirements =
-        contract.screenReadyStates[target.screen.id].signals;
-      const metadata = await describePage(
-        page,
-        anchorRequirements,
-        readyRequirements,
-        target.primitiveRequirements,
-        contract.fixtureDomAssertions[target.screen.id] ?? null,
-      );
-      assert.deepEqual(
-        metadata.fixtureEvidence.privacy.unexpectedEmailSha256s,
-        [],
-        `${target.screen.id} exposed a non-fixture email.`,
-      );
-      assert.deepEqual(
-        metadata.fixtureEvidence.privacy.unexpectedPersonLabels,
-        [],
-        `${target.screen.id} exposed an unapproved fixture person label.`,
-      );
-      assert.equal(
-        Object.values(
-          metadata.fixtureEvidence.privacy.forbiddenPatternMatchCounts,
-        ).every((count) => count === 0),
-        true,
-        `${target.screen.id} exposed a forbidden personal-data pattern.`,
-      );
-      metadata.finalUrl = sanitizeBrowserUrl(metadata.finalUrl);
-      metadata.performanceNavigationUrl = sanitizeBrowserUrl(
-        metadata.performanceNavigationUrl,
-      );
-      const fullPage = contract.fullPageViewportKeys.includes(viewportName);
-      const fileName = `${stage}/${target.screen.id}-${viewportName}.png`;
-      const absoluteFile = resolve(outputRoot, fileName);
-      await page.screenshot({ path: absoluteFile, fullPage });
-      assert.equal(
-        pageErrorAccumulator.totalCount,
-        0,
-        `${target.screen.id} emitted an error during screenshot capture: ${JSON.stringify(
-          snapshotSafeBrowserErrorAccumulator(pageErrorAccumulator),
-        )}`,
-      );
-      const postScreenshotMetadata = await describePage(
-        page,
-        anchorRequirements,
-        readyRequirements,
-        target.primitiveRequirements,
-        contract.fixtureDomAssertions[target.screen.id] ?? null,
-      );
-      postScreenshotMetadata.finalUrl = sanitizeBrowserUrl(
-        postScreenshotMetadata.finalUrl,
-      );
-      postScreenshotMetadata.performanceNavigationUrl = sanitizeBrowserUrl(
-        postScreenshotMetadata.performanceNavigationUrl,
-      );
-      assert.deepEqual(
-        postScreenshotMetadata,
-        metadata,
-        `${target.screen.id} DOM or paint evidence changed during screenshot capture.`,
-      );
-      const png = readFileSync(absoluteFile);
-      const actualPixelSize = {
-        width: viewport.width,
-        height: fullPage
-          ? Math.max(viewport.height, metadata.dom.scrollHeight)
-          : viewport.height,
-      };
-      await flushNetworkAttestations();
-      const captureRequests = networkObservations
-        .slice(networkObservationStart)
-        .filter((observation) => observation.captureId === activeCaptureId);
-      const captureResponses = networkResponseObservations
-        .slice(networkResponseObservationStart)
-        .filter((observation) => observation.captureId === activeCaptureId);
-      const captureNetwork = summarizeNetwork(
-        captureRequests,
-        captureResponses,
-      );
-      if (contract.fixtureMarkers[target.screen.id]) {
-        assert.ok(
-          captureNetwork.stagingDataRequestCount > 0,
-          `${target.screen.id} rendered fixture data without a capture-bound staging data request.`,
-        );
-        assert.ok(
-          captureNetwork.stagingDataResponseCount > 0,
-          `${target.screen.id} rendered fixture data without a successful capture-bound staging data response.`,
-        );
-        const successfulDataResponseIds = new Set(
-          captureResponses
-            .filter(
-              (response) =>
-                response.stagingMarker &&
-                fixtureDataServices.has(response.firebaseService) &&
-                response.status >= 200 &&
-                response.status < 300,
-            )
-            .map((response) => response.correlationId),
-        );
-        const successfulProtectedRequests = captureRequests.filter(
-          (request) =>
-            request.method !== "OPTIONS" &&
-            request.stagingMarker &&
-            fixtureDataServices.has(request.firebaseService) &&
-            successfulDataResponseIds.has(request.correlationId),
-        );
-        assert.ok(
-          successfulProtectedRequests.length > 0,
-          `${target.screen.id} has no correlated successful staging data exchange.`,
-        );
-        const requiredHeaderSource =
-          stage === "baseline" ? "baseline-cdp-fetch-bridge" : "native-sdk";
-        assert.equal(
-          successfulProtectedRequests.every(
-            (request) =>
-              request.appCheckHeaderPresent &&
-              request.appCheckHeaderJwtShapeValid &&
-              request.appCheckHeaderSource === requiredHeaderSource,
+        const captureAttestation = {
+          type: "capture",
+          id: captureRow.id,
+          route: captureRow.route,
+          finalUrl: captureRow.finalUrl,
+          fixtureId,
+          fixturePlanHash: contract.fixturePlanHash,
+          fixtureCaptureBindingHash: fixtureAudit.captureBindingHash,
+          fixtureAuditSha256,
+          screenshotFile: captureRow.fileName,
+          screenshotSha256: captureRow.sha256,
+          readySignalsSha256: sha256(
+            Buffer.from(JSON.stringify(captureRow.readySignals)),
           ),
-          true,
-          `${target.screen.id} has a successful capture-bound data request without the required ${requiredHeaderSource} App Check JWT.`,
+          domSha256: sha256(Buffer.from(JSON.stringify(captureRow.dom))),
+          elementsSha256: sha256(
+            Buffer.from(JSON.stringify(captureRow.elements)),
+          ),
+          anchorsSha256: sha256(
+            Buffer.from(JSON.stringify(captureRow.anchors)),
+          ),
+          primitivesSha256: sha256(
+            Buffer.from(JSON.stringify(captureRow.primitives)),
+          ),
+          fixtureActionsSha256: sha256(
+            Buffer.from(JSON.stringify(captureRow.fixtureActions)),
+          ),
+          fixtureEvidenceSha256: sha256(
+            Buffer.from(JSON.stringify(captureRow.fixtureEvidence)),
+          ),
+        };
+        captureRow.browserAttestationSha256 = sha256(
+          Buffer.from(JSON.stringify(captureAttestation)),
         );
+        captures.push(captureRow);
+        groupCaptureAttestations.push(captureAttestation);
+        requestFinishedAccumulatorsByCaptureId.delete(activeCaptureId);
       }
-      const captureRow = {
-        id: captureKey(stage, target.screen.id, viewport),
-        stage,
-        screenId: target.screen.id,
-        role: target.screen.role,
-        route: target.screen.captureRoute,
-        sourceCommitSha:
-          stage === "baseline"
-            ? contract.productionPresentationSha
-            : sourceCommitSha,
-        observedOrigin: origin,
-        finalUrl: metadata.finalUrl,
-        performanceNavigationUrl: metadata.performanceNavigationUrl,
-        documentReadyState: metadata.documentReadyState,
-        capturedAt: new Date().toISOString(),
-        viewport,
-        actualPixelSize,
-        dpr: contract.requiredDpr,
-        fullPage,
-        fileName,
-        sha256: sha256(png),
-        status: "CAPTURED",
-        dom: metadata.dom,
-        elements: metadata.elements,
-        anchors: metadata.anchors,
-        primitives: metadata.primitives,
-        readyStateId: target.screen.id,
-        readySignals: metadata.readySignals,
-        fixtureMarker: contract.fixtureMarkers[target.screen.id] ?? null,
-        fixtureId,
-        fixturePlanHash: contract.fixturePlanHash,
-        fixtureCaptureBindingHash: fixtureAudit.captureBindingHash,
-        fixtureAuditSha256,
-        fixtureActions,
-        fixtureEvidence: metadata.fixtureEvidence,
-        network: captureNetwork,
-      };
-      const captureAttestation = {
-        type: "capture",
-        id: captureRow.id,
-        route: captureRow.route,
-        finalUrl: captureRow.finalUrl,
-        fixtureId,
-        fixturePlanHash: contract.fixturePlanHash,
-        fixtureCaptureBindingHash: fixtureAudit.captureBindingHash,
-        fixtureAuditSha256,
-        screenshotFile: captureRow.fileName,
-        screenshotSha256: captureRow.sha256,
-        readySignalsSha256: sha256(
-          Buffer.from(JSON.stringify(captureRow.readySignals)),
-        ),
-        domSha256: sha256(Buffer.from(JSON.stringify(captureRow.dom))),
-        elementsSha256: sha256(
-          Buffer.from(JSON.stringify(captureRow.elements)),
-        ),
-        anchorsSha256: sha256(Buffer.from(JSON.stringify(captureRow.anchors))),
-        primitivesSha256: sha256(
-          Buffer.from(JSON.stringify(captureRow.primitives)),
-        ),
-        fixtureActionsSha256: sha256(
-          Buffer.from(JSON.stringify(captureRow.fixtureActions)),
-        ),
-        fixtureEvidenceSha256: sha256(
-          Buffer.from(JSON.stringify(captureRow.fixtureEvidence)),
-        ),
-      };
-      captureRow.browserAttestationSha256 = sha256(
-        Buffer.from(JSON.stringify(captureAttestation)),
-      );
-      captures.push(captureRow);
-      groupCaptureAttestations.push(captureAttestation);
-      requestFinishedAccumulatorsByCaptureId.delete(activeCaptureId);
-    }
-    if (groupApplicationSessionProof) {
-      groupApplicationSessionProof.revision = "";
-      groupApplicationSessionProof.uid = "";
-      assert.equal(liveApplicationSessionProofsByPage.delete(page), true);
-      groupApplicationSessionProof = null;
+    } finally {
+      activeCaptureId = null;
+      if (groupApplicationSessionKeepaliveClient) {
+        networkPhase = "session-keepalive";
+        try {
+          await drainAppCheckCdpHandlerPromises();
+          assert.equal(
+            allowedEgressHandlerTaskCoordinator.pendingCount(),
+            0,
+            `Allowed-egress handler queue must be empty before keepalive client disposal for ${groupKey}.`,
+          );
+          await flushNetworkAttestations();
+        } finally {
+          try {
+            groupApplicationSessionKeepaliveClientDisposalAttestation =
+              await disposeCaptureApplicationSessionKeepaliveClient({
+                client: groupApplicationSessionKeepaliveClient,
+              });
+          } finally {
+            groupApplicationSessionKeepaliveClient = null;
+            await drainAppCheckCdpHandlerPromises();
+            assert.equal(
+              allowedEgressHandlerTaskCoordinator.pendingCount(),
+              0,
+              `Allowed-egress handler queue must be empty after keepalive client disposal for ${groupKey}.`,
+            );
+            await flushNetworkAttestations();
+          }
+        }
+      }
     }
     if (appCheckCdpSession) {
       for (const frame of page.frames()) observeFrameOrigin(frame);
@@ -25064,6 +25376,12 @@ try {
         0,
         `Allowed-egress proxy authorization must be settled for ${groupKey}.`,
       );
+      if (groupApplicationSessionProof) {
+        groupApplicationSessionProof.revision = "";
+        groupApplicationSessionProof.uid = "";
+        assert.equal(liveApplicationSessionProofsByPage.delete(page), true);
+        groupApplicationSessionProof = null;
+      }
       groupOopifTargetCount = discoveredTargetIdsByType.get("iframe").size;
       groupDedicatedWorkerTargetCount =
         discoveredTargetIdsByType.get("worker").size;
@@ -25201,6 +25519,89 @@ try {
       );
       appCheckCdpSession = null;
     }
+    const keepaliveClientRequired = Boolean(authenticationRole);
+    const expectedKeepaliveClientLifecycleCount = Number(
+      keepaliveClientRequired,
+    );
+    const expectedKeepaliveClientReuseCount = keepaliveClientRequired
+      ? groupTargets.length
+      : 0;
+    assert.equal(
+      applicationSessionKeepaliveClientInitAttemptCount -
+        groupApplicationSessionKeepaliveClientInitAttemptStart,
+      expectedKeepaliveClientLifecycleCount,
+    );
+    assert.equal(
+      applicationSessionKeepaliveClientInitSuccessCount -
+        groupApplicationSessionKeepaliveClientInitSuccessStart,
+      expectedKeepaliveClientLifecycleCount,
+    );
+    assert.equal(
+      applicationSessionKeepaliveClientReuseCount -
+        groupApplicationSessionKeepaliveClientReuseStart,
+      expectedKeepaliveClientReuseCount,
+    );
+    for (const count of [
+      applicationSessionKeepaliveClientDisposeAttemptCount -
+        groupApplicationSessionKeepaliveClientDisposeAttemptStart,
+      applicationSessionKeepaliveClientDisposeSuccessCount -
+        groupApplicationSessionKeepaliveClientDisposeSuccessStart,
+      applicationSessionKeepaliveClientDeleteCount -
+        groupApplicationSessionKeepaliveClientDeleteStart,
+      applicationSessionKeepaliveClientHandleDisposeCount -
+        groupApplicationSessionKeepaliveClientHandleDisposeStart,
+    ]) {
+      assert.equal(count, expectedKeepaliveClientLifecycleCount);
+    }
+    assert.equal(
+      applicationSessionKeepaliveClientRegistryResidualCount -
+        groupApplicationSessionKeepaliveClientRegistryResidualStart,
+      0,
+    );
+    groupApplicationSessionKeepaliveClientLifecycleEvidence = Object.freeze({
+      clientRequired: keepaliveClientRequired,
+      initializationCountBound:
+        applicationSessionKeepaliveClientInitSuccessCount -
+          groupApplicationSessionKeepaliveClientInitSuccessStart ===
+        expectedKeepaliveClientLifecycleCount,
+      reuseCountBound:
+        applicationSessionKeepaliveClientReuseCount -
+          groupApplicationSessionKeepaliveClientReuseStart ===
+        expectedKeepaliveClientReuseCount,
+      disposalCountBound:
+        applicationSessionKeepaliveClientDisposeSuccessCount -
+          groupApplicationSessionKeepaliveClientDisposeSuccessStart ===
+        expectedKeepaliveClientLifecycleCount,
+      deleteCountBound:
+        applicationSessionKeepaliveClientDeleteCount -
+          groupApplicationSessionKeepaliveClientDeleteStart ===
+        expectedKeepaliveClientLifecycleCount,
+      registryResidualAbsent:
+        applicationSessionKeepaliveClientRegistryResidualCount -
+          groupApplicationSessionKeepaliveClientRegistryResidualStart ===
+        0,
+      handleDisposeCountBound:
+        applicationSessionKeepaliveClientHandleDisposeCount -
+          groupApplicationSessionKeepaliveClientHandleDisposeStart ===
+        expectedKeepaliveClientLifecycleCount,
+      initializationAttestationBound: keepaliveClientRequired
+        ? Object.values(
+            groupApplicationSessionKeepaliveClientInitializationAttestation,
+          ).every((value) => value === true)
+        : groupApplicationSessionKeepaliveClientInitializationAttestation ===
+          null,
+      disposalAttestationBound: keepaliveClientRequired
+        ? Object.values(
+            groupApplicationSessionKeepaliveClientDisposalAttestation,
+          ).every((value) => value === true)
+        : groupApplicationSessionKeepaliveClientDisposalAttestation === null,
+    });
+    assert.equal(
+      Object.entries(groupApplicationSessionKeepaliveClientLifecycleEvidence)
+        .filter(([name]) => name !== "clientRequired")
+        .every(([, value]) => value === true),
+      true,
+    );
     unexpectedExtraPageCount += Math.max(0, groupPageCount - 1);
     unexpectedDedicatedWorkerCount += groupDedicatedWorkerCount;
     unexpectedServiceWorkerCount += groupServiceWorkerCount;
@@ -25836,6 +26237,32 @@ try {
         webChannelCdpHeaderAttestationCompletionTimeoutCount:
           webChannelCdpHeaderAttestationCompletionTimeoutCount -
           groupWebChannelCdpHeaderAttestationCompletionTimeoutStart,
+        applicationSessionKeepaliveClientInitAttemptCount:
+          applicationSessionKeepaliveClientInitAttemptCount -
+          groupApplicationSessionKeepaliveClientInitAttemptStart,
+        applicationSessionKeepaliveClientInitSuccessCount:
+          applicationSessionKeepaliveClientInitSuccessCount -
+          groupApplicationSessionKeepaliveClientInitSuccessStart,
+        applicationSessionKeepaliveClientReuseCount:
+          applicationSessionKeepaliveClientReuseCount -
+          groupApplicationSessionKeepaliveClientReuseStart,
+        applicationSessionKeepaliveClientDisposeAttemptCount:
+          applicationSessionKeepaliveClientDisposeAttemptCount -
+          groupApplicationSessionKeepaliveClientDisposeAttemptStart,
+        applicationSessionKeepaliveClientDisposeSuccessCount:
+          applicationSessionKeepaliveClientDisposeSuccessCount -
+          groupApplicationSessionKeepaliveClientDisposeSuccessStart,
+        applicationSessionKeepaliveClientDeleteCount:
+          applicationSessionKeepaliveClientDeleteCount -
+          groupApplicationSessionKeepaliveClientDeleteStart,
+        applicationSessionKeepaliveClientRegistryResidualCount:
+          applicationSessionKeepaliveClientRegistryResidualCount -
+          groupApplicationSessionKeepaliveClientRegistryResidualStart,
+        applicationSessionKeepaliveClientHandleDisposeCount:
+          applicationSessionKeepaliveClientHandleDisposeCount -
+          groupApplicationSessionKeepaliveClientHandleDisposeStart,
+        applicationSessionKeepaliveClientLifecycleEvidence:
+          groupApplicationSessionKeepaliveClientLifecycleEvidence,
         allowedEgressContextCloseBackchannelRetirementCount:
           allowedEgressContextCloseBackchannelRetirementCount -
           groupAllowedEgressContextCloseBackchannelRetirementStart,
@@ -26183,6 +26610,28 @@ assert.equal(
 assert.ok(baselineApplicationSessionKeepaliveSuccessCount > 0);
 assert.ok(candidateApplicationSessionKeepaliveSuccessCount > 0);
 assert.equal(liveApplicationSessionProofsByPage.size, 0);
+assert.ok(applicationSessionKeepaliveClientExpectedGroupCount > 0);
+assert.equal(
+  applicationSessionKeepaliveClientInitAttemptCount,
+  applicationSessionKeepaliveClientExpectedGroupCount,
+);
+assert.equal(
+  applicationSessionKeepaliveClientInitSuccessCount,
+  applicationSessionKeepaliveClientExpectedGroupCount,
+);
+assert.equal(
+  applicationSessionKeepaliveClientReuseCount,
+  applicationSessionKeepaliveExpectedCount,
+);
+for (const count of [
+  applicationSessionKeepaliveClientDisposeAttemptCount,
+  applicationSessionKeepaliveClientDisposeSuccessCount,
+  applicationSessionKeepaliveClientDeleteCount,
+  applicationSessionKeepaliveClientHandleDisposeCount,
+]) {
+  assert.equal(count, applicationSessionKeepaliveClientExpectedGroupCount);
+}
+assert.equal(applicationSessionKeepaliveClientRegistryResidualCount, 0);
 assert.ok(browserConnectProxyFinalSnapshot);
 browserConnectProxy.assertHealthy();
 assert.equal(browserConnectProxyFinalSnapshot.listenerStartCount, 1);
@@ -27168,6 +27617,15 @@ const appCheckBinding = {
   applicationSessionKeepaliveSuccessCount,
   baselineApplicationSessionKeepaliveSuccessCount,
   candidateApplicationSessionKeepaliveSuccessCount,
+  applicationSessionKeepaliveClientExpectedGroupCount,
+  applicationSessionKeepaliveClientInitAttemptCount,
+  applicationSessionKeepaliveClientInitSuccessCount,
+  applicationSessionKeepaliveClientReuseCount,
+  applicationSessionKeepaliveClientDisposeAttemptCount,
+  applicationSessionKeepaliveClientDisposeSuccessCount,
+  applicationSessionKeepaliveClientDeleteCount,
+  applicationSessionKeepaliveClientRegistryResidualCount,
+  applicationSessionKeepaliveClientHandleDisposeCount,
   applicationSessionProofRetentionResidualCount:
     liveApplicationSessionProofsByPage.size,
   fixturePreBackupAttestationHash: preBackupNamespaceAccessAttestationHash,
