@@ -10100,6 +10100,18 @@ const summarizeSafeFinishedRequests = (observations) => {
   }
   return snapshotSafeFinishedRequests(accumulator);
 };
+const createSafeNetworkAttestationDrainDiagnostic = ({
+  completed,
+  errorCount,
+}) => {
+  assert.equal(typeof completed, "boolean");
+  assert.ok(Number.isSafeInteger(errorCount) && errorCount >= 0);
+  return Object.freeze({
+    completed,
+    passed: completed && errorCount === 0,
+    errorCount,
+  });
+};
 const verifySafeBrowserErrorDiagnosticFixtures = () => {
   const debugToken = "12345678-1234-4123-8123-123456789abc";
   const debugSentinel = "fixed-pageerror-debug-sentinel";
@@ -10336,6 +10348,25 @@ const verifySafeBrowserErrorDiagnosticFixtures = () => {
       { resourceType: "xhr", count: 1 },
     ],
   });
+  const networkAttestationDrainDiagnostics = [
+    createSafeNetworkAttestationDrainDiagnostic({
+      completed: true,
+      errorCount: 0,
+    }),
+    createSafeNetworkAttestationDrainDiagnostic({
+      completed: true,
+      errorCount: 1,
+    }),
+    createSafeNetworkAttestationDrainDiagnostic({
+      completed: false,
+      errorCount: 0,
+    }),
+  ];
+  assert.deepEqual(networkAttestationDrainDiagnostics, [
+    { completed: true, passed: true, errorCount: 0 },
+    { completed: true, passed: false, errorCount: 1 },
+    { completed: false, passed: false, errorCount: 0 },
+  ]);
   const serializedDiagnostic = JSON.stringify({
     ...accumulatorSnapshot,
     ...routeResponseSummary,
@@ -10362,6 +10393,8 @@ const verifySafeBrowserErrorDiagnosticFixtures = () => {
     safeBrowserErrorDiagnosticHistogramEntryCount: histogram.length,
     safeRouteResponseDiagnosticFixtureCount: 5,
     safeRequestFinishedDiagnosticFixtureCount: 3,
+    safeNetworkAttestationDrainDiagnosticFixtureCount:
+      networkAttestationDrainDiagnostics.length,
     safeBrowserErrorDiagnosticRawValueOutputCount: 0,
     safeBrowserErrorDiagnosticHashSampleLimit:
       SAFE_BROWSER_ERROR_HASH_SAMPLE_LIMIT,
@@ -20386,7 +20419,10 @@ const refreshCaptureApplicationSession = async ({
           state.refreshSuccessCount += 1;
           return {
             attestation,
-            idTokenRefreshMode: forceRefreshCount === 1 ? "forced" : "cached",
+            idTokenResultCallMode:
+              forceRefreshCount === 1
+                ? "forced-refresh-second-call"
+                : "initial-call-only",
           };
         } finally {
           ephemeralIdToken = "";
@@ -20435,13 +20471,17 @@ const refreshCaptureApplicationSession = async ({
       leaseBound: true,
       authorityModeAllowed: true,
     });
-    assert.ok(["cached", "forced"].includes(refreshResult.idTokenRefreshMode));
+    assert.ok(
+      ["initial-call-only", "forced-refresh-second-call"].includes(
+        refreshResult.idTokenResultCallMode,
+      ),
+    );
     client.markSuccessfulReuse();
     applicationSessionKeepaliveClientReuseCount += 1;
     return Object.freeze({
       completed: true,
       completedBeforeRouteNavigation: true,
-      idTokenRefreshMode: refreshResult.idTokenRefreshMode,
+      idTokenResultCallMode: refreshResult.idTokenResultCallMode,
       tokenLifetimeBound: attestation.tokenLifetimeBound,
       leaseBound: attestation.leaseBound,
       revisionUnchanged: attestation.revisionUnchanged,
@@ -22114,7 +22154,10 @@ try {
       promise.finally(() => pendingNetworkAttestations.delete(promise));
       return promise;
     };
-    const flushNetworkAttestations = async () => {
+    const flushNetworkAttestations = async ({
+      failOnAttestationError = true,
+    } = {}) => {
+      assert.equal(typeof failOnAttestationError, "boolean");
       const deadline = Date.now() + NETWORK_ATTESTATION_FLUSH_TIMEOUT_MS;
       while (pendingNetworkAttestations.size > 0) {
         const remainingMs = deadline - Date.now();
@@ -22174,13 +22217,20 @@ try {
           groupWebChannelListenerDiagnosticClassCountsStart,
         ),
       };
-      assert.equal(
-        networkHeaderAttestationErrorCount,
-        0,
-        `A browser request header attestation failed: ${JSON.stringify(
-          safeFailureDiagnostic,
-        )}`,
-      );
+      const drainDiagnostic = createSafeNetworkAttestationDrainDiagnostic({
+        completed: true,
+        errorCount: networkHeaderAttestationErrorCount,
+      });
+      if (failOnAttestationError) {
+        assert.equal(
+          drainDiagnostic.passed,
+          true,
+          `A browser request header attestation failed: ${JSON.stringify(
+            safeFailureDiagnostic,
+          )}`,
+        );
+      }
+      return drainDiagnostic;
     };
     const drainAppCheckCdpHandlerPromises = async () => {
       const deadline = Date.now() + CDP_HANDLER_DRAIN_TIMEOUT_MS;
@@ -24889,7 +24939,19 @@ try {
         try {
           await waitForScreenReady(page, target.screen.id);
         } catch (error) {
-          await flushNetworkAttestations();
+          let routeNetworkAttestationDrainDiagnostic;
+          try {
+            routeNetworkAttestationDrainDiagnostic =
+              await flushNetworkAttestations({
+                failOnAttestationError: false,
+              });
+          } catch {
+            routeNetworkAttestationDrainDiagnostic =
+              createSafeNetworkAttestationDrainDiagnostic({
+                completed: false,
+                errorCount: networkHeaderAttestationErrorCount,
+              });
+          }
           const routeRequests = networkObservations
             .slice(networkObservationStart)
             .filter((observation) => observation.captureId === activeCaptureId);
@@ -24960,6 +25022,7 @@ try {
                 : null,
             applicationSessionKeepaliveAttestation:
               screenApplicationSessionKeepaliveAttestation,
+            routeNetworkAttestationDrainDiagnostic,
             ...snapshotSafeBrowserErrorAccumulator(pageErrorAccumulator),
             routeObservedRequestCount: routeRequests.length,
             routeObservedResponseCount: routeResponses.length,
@@ -24991,7 +25054,9 @@ try {
               ).length,
             routeObservedFirestoreAppCheckHeaderJwtShapeInvalidRequestCount:
               routeFirestoreRequests.filter(
-                (observation) => !observation.appCheckHeaderJwtShapeValid,
+                (observation) =>
+                  observation.appCheckHeaderPresent &&
+                  !observation.appCheckHeaderJwtShapeValid,
               ).length,
             routeObservedFirestoreAppCheckHeaderSourceHistogram:
               routeFirestoreAppCheckHeaderSourceHistogram,
