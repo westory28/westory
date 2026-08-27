@@ -1944,10 +1944,12 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "const createPerCorrelationTaskCoordinator = () =>",
     "const createSingleOwnerProxyAuthorizationCoordinator = ({",
     "const contextClosedWebChannelBackchannelRetirementDecision = ({",
+    "const contextClosedWebChannelSessionForwardPostRetirementDecision = ({",
     "const contextClosedWebChannelTerminationRetirementDecision = ({",
     "const retireExactContextClosedWebChannelAuthorizations = ({",
     "const classifyExactStagingFirestoreWebChannelTerminationLifecycleScope = ({",
     '"context-closed-webchannel-backchannel-retired"',
+    '"context-closed-webchannel-session-forward-post-retired"',
     '"context-closed-webchannel-termination-retired"',
     "retireContextClosedWebChannelAuthorizations();",
     "webChannelRequestClass: exactWebChannelHeaderCorrelationClass",
@@ -2045,10 +2047,12 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "authorizationCoordinator.activeOwnerIds()",
     "authorizationCoordinator.activeCount()",
     "contextClosedWebChannelBackchannelRetirementDecision(decisionInput)",
+    "contextClosedWebChannelSessionForwardPostRetirementDecision(",
     "contextClosedWebChannelTerminationRetirementDecision(decisionInput)",
     "const retirementEntries = activeOwnerIds.map",
     "authorizationCoordinator.complete(ownerId)",
     '"context-closed-webchannel-backchannel-retired"',
+    '"context-closed-webchannel-session-forward-post-retired"',
     '"context-closed-webchannel-termination-retired"',
     "collection.delete(ownerId)",
   ]) {
@@ -2061,7 +2065,7 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   assert.doesNotMatch(
     exactRetirementSource,
     /authorizationCoordinator\.revoke/u,
-    "Context-close WebChannel backchannels and termination images must complete, never revoke, their request-stage authorization.",
+    "Context-close WebChannel backchannels, session forward posts, and termination images must complete, never revoke, their request-stage authorization.",
   );
   const contextClosedRetirementWrapperStart = sourceText.indexOf(
     "const retireContextClosedWebChannelAuthorizations = () =>",
@@ -2091,6 +2095,8 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "allowedEgressRequestsByFetchRequestId",
     "sensitiveAppCheckRequestsByFetchRequestId",
     "informationalResponseRequestsByFetchRequestId",
+    "allowedEgressContextCloseSessionForwardPostRetirementCount",
+    "retirementCounts.sessionForwardPostRetirementCount",
   ]) {
     assert.equal(
       contextClosedRetirementWrapperSource.includes(requiredWrapperFragment),
@@ -6633,6 +6639,7 @@ let auditedWebChannelCdpHeaderAttestationBindingFailures = 0;
 let auditedWebChannelCdpHeaderAttestationPairingTimeouts = 0;
 let auditedWebChannelCdpHeaderAttestationCompletionTimeouts = 0;
 let auditedAllowedEgressContextCloseBackchannelRetirements = 0;
+let auditedAllowedEgressContextCloseSessionForwardPostRetirements = 0;
 let auditedAllowedEgressContextCloseTerminationRetirements = 0;
 let auditedWebChannelTerminationClassifiedRequests = 0;
 let auditedPlaywrightAllHeadersHeaderAttestationRequests = 0;
@@ -7618,6 +7625,7 @@ for (const audit of manifest.browserAudits) {
     "webChannelCdpHeaderAttestationPairingTimeoutCount",
     "webChannelCdpHeaderAttestationCompletionTimeoutCount",
     "allowedEgressContextCloseBackchannelRetirementCount",
+    "allowedEgressContextCloseSessionForwardPostRetirementCount",
     "allowedEgressContextCloseTerminationRetirementCount",
     "webChannelTerminationClassifiedRequestCount",
     "webChannelCdpHeaderAttestationBindingSetHash",
@@ -7871,7 +7879,16 @@ for (const audit of manifest.browserAudits) {
     bridgeEvent.allowedEgressContextCloseBackchannelRetirementCount >= 0,
   );
   assert.ok(
-    bridgeEvent.allowedEgressContextCloseBackchannelRetirementCount <=
+    Number.isSafeInteger(
+      bridgeEvent.allowedEgressContextCloseSessionForwardPostRetirementCount,
+    ),
+  );
+  assert.ok(
+    bridgeEvent.allowedEgressContextCloseSessionForwardPostRetirementCount >= 0,
+  );
+  assert.ok(
+    bridgeEvent.allowedEgressContextCloseBackchannelRetirementCount +
+      bridgeEvent.allowedEgressContextCloseSessionForwardPostRetirementCount <=
       bridgeEvent.webChannelCdpHeaderAttestationBoundRequestCount,
   );
   assert.ok(
@@ -7965,6 +7982,7 @@ for (const audit of manifest.browserAudits) {
     "webChannelCdpHeaderAttestationPairingTimeoutCount",
     "webChannelCdpHeaderAttestationCompletionTimeoutCount",
     "allowedEgressContextCloseBackchannelRetirementCount",
+    "allowedEgressContextCloseSessionForwardPostRetirementCount",
     "allowedEgressContextCloseTerminationRetirementCount",
     "webChannelTerminationClassifiedRequestCount",
     "playwrightAllHeadersHeaderAttestationRequestCount",
@@ -8196,6 +8214,8 @@ for (const audit of manifest.browserAudits) {
     bridgeEvent.webChannelCdpHeaderAttestationCompletionTimeoutCount;
   auditedAllowedEgressContextCloseBackchannelRetirements +=
     bridgeEvent.allowedEgressContextCloseBackchannelRetirementCount;
+  auditedAllowedEgressContextCloseSessionForwardPostRetirements +=
+    bridgeEvent.allowedEgressContextCloseSessionForwardPostRetirementCount;
   auditedAllowedEgressContextCloseTerminationRetirements +=
     bridgeEvent.allowedEgressContextCloseTerminationRetirementCount;
   auditedWebChannelTerminationClassifiedRequests +=
@@ -9863,6 +9883,7 @@ assertExactObjectKeys(appCheckBinding, [
   "webChannelCdpHeaderAttestationPairingTimeoutCount",
   "webChannelCdpHeaderAttestationCompletionTimeoutCount",
   "allowedEgressContextCloseBackchannelRetirementCount",
+  "allowedEgressContextCloseSessionForwardPostRetirementCount",
   "allowedEgressContextCloseTerminationRetirementCount",
   "webChannelTerminationClassifiedRequestCount",
   "playwrightAllHeadersHeaderAttestationRequestCount",
@@ -10598,6 +10619,7 @@ assert.equal(
   browserConnectProxyAttestation.requestStageAuthorizationCount,
   appCheckBinding.allowedEgressResponsePauseCount +
     appCheckBinding.allowedEgressContextCloseBackchannelRetirementCount +
+    appCheckBinding.allowedEgressContextCloseSessionForwardPostRetirementCount +
     appCheckBinding.allowedEgressContextCloseTerminationRetirementCount,
   "Every request-stage proxy authorization must have a terminal response pause or an exact context-close WebChannel retirement.",
 );
@@ -11009,6 +11031,8 @@ for (const [field, auditedValue] of Object.entries({
     auditedWebChannelCdpHeaderAttestationCompletionTimeouts,
   allowedEgressContextCloseBackchannelRetirementCount:
     auditedAllowedEgressContextCloseBackchannelRetirements,
+  allowedEgressContextCloseSessionForwardPostRetirementCount:
+    auditedAllowedEgressContextCloseSessionForwardPostRetirements,
   allowedEgressContextCloseTerminationRetirementCount:
     auditedAllowedEgressContextCloseTerminationRetirements,
   webChannelTerminationClassifiedRequestCount:
@@ -11251,7 +11275,17 @@ assert.ok(
   appCheckBinding.allowedEgressContextCloseBackchannelRetirementCount >= 0,
 );
 assert.ok(
-  appCheckBinding.allowedEgressContextCloseBackchannelRetirementCount <=
+  Number.isSafeInteger(
+    appCheckBinding.allowedEgressContextCloseSessionForwardPostRetirementCount,
+  ),
+);
+assert.ok(
+  appCheckBinding.allowedEgressContextCloseSessionForwardPostRetirementCount >=
+    0,
+);
+assert.ok(
+  appCheckBinding.allowedEgressContextCloseBackchannelRetirementCount +
+    appCheckBinding.allowedEgressContextCloseSessionForwardPostRetirementCount <=
     appCheckBinding.webChannelCdpHeaderAttestationBoundRequestCount,
 );
 assert.ok(
