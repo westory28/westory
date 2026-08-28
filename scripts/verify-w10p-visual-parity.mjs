@@ -7,7 +7,7 @@ import { inflateSync } from "node:zlib";
 
 const readJson = (path) => JSON.parse(readFileSync(resolve(path), "utf8"));
 const contract = readJson("scripts/w10p-visual-parity-contract.json");
-assert.equal(contract.schemaVersion, 13);
+assert.equal(contract.schemaVersion, 14);
 const resolveAuthenticationLandingGuard = ({
   guardContract,
   fixedTimeValue,
@@ -1348,6 +1348,155 @@ const stableOriginRewriteDecision = ({
     upstreamUrl: upstreamUrl.toString(),
   };
 };
+const telemetryCapabilityGuardDecision = ({
+  documentUrl,
+  stableBrowserOrigin,
+  guardContract = contract.networkBoundary.optionalTelemetrySuppression
+    .documentStartGuard,
+}) => {
+  const parsed = new URL(documentUrl);
+  const exactOrigin =
+    parsed.protocol === "https:" &&
+    parsed.username === "" &&
+    parsed.password === "" &&
+    (!parsed.port || parsed.port === "443") &&
+    parsed.origin === stableBrowserOrigin;
+  return {
+    eligible: exactOrigin,
+    property: exactOrigin ? guardContract.property : null,
+    value: exactOrigin ? guardContract.value : null,
+    action: exactOrigin ? "define-locked-own-data-property" : "leave-native",
+  };
+};
+const stableOriginFaviconFallbackDecision = ({
+  stage,
+  requestUrl,
+  method,
+  resourceType,
+  postData = "",
+  browserOrigin,
+  transportContract = contract.browserTransport,
+}) => {
+  const fallback = transportContract.stableOriginFaviconFallback;
+  const parsed = new URL(requestUrl);
+  const exactStableOrigin =
+    parsed.protocol === transportContract.requiredProtocol &&
+    parsed.username === "" &&
+    parsed.password === "" &&
+    transportContract.allowedPorts.includes(parsed.port) &&
+    parsed.origin === browserOrigin;
+  const eligible =
+    fallback.stages.includes(stage) &&
+    exactStableOrigin &&
+    String(method).toUpperCase() === fallback.method &&
+    parsed.pathname === fallback.pathname &&
+    parsed.search === "" &&
+    parsed.hash === "" &&
+    String(resourceType) === fallback.resourceType &&
+    String(postData || "") === "";
+  return {
+    eligible,
+    id: eligible ? fallback.id : null,
+    browserOrigin: parsed.origin,
+    browserPath: `${parsed.pathname}${parsed.search}`,
+    responseStatus: eligible ? fallback.responseStatus : null,
+    responseBodySha256: eligible ? fallback.responseBodySha256 : null,
+  };
+};
+const verifyTelemetryCapabilityGuardNegativeFixtures = () => {
+  const stableBrowserOrigin = "https://stable.example.vercel.app";
+  const accepted = telemetryCapabilityGuardDecision({
+    documentUrl: `${stableBrowserOrigin}/#/teacher/dashboard`,
+    stableBrowserOrigin,
+  });
+  assert.deepEqual(accepted, {
+    eligible: true,
+    property: "cookieEnabled",
+    value: false,
+    action: "define-locked-own-data-property",
+  });
+  const rejectedDocumentUrls = [
+    "about:blank",
+    "https://candidate.example.vercel.app/",
+    "https://stable.example.vercel.app.evil.invalid/",
+    "https://user@stable.example.vercel.app/",
+    "http://stable.example.vercel.app/",
+  ];
+  for (const documentUrl of rejectedDocumentUrls) {
+    assert.deepEqual(
+      telemetryCapabilityGuardDecision({
+        documentUrl,
+        stableBrowserOrigin,
+      }),
+      {
+        eligible: false,
+        property: null,
+        value: null,
+        action: "leave-native",
+      },
+    );
+  }
+  return {
+    acceptedTelemetryCapabilityGuardCaseCount: 1,
+    rejectedTelemetryCapabilityGuardScopeCaseCount: rejectedDocumentUrls.length,
+  };
+};
+const verifyStableOriginFaviconFallbackNegativeFixtures = () => {
+  const browserOrigin = "https://stable.example.vercel.app";
+  const acceptedFixtures =
+    contract.browserTransport.stableOriginFaviconFallback.stages.map(
+      (stage) => ({
+        stage,
+        requestUrl: `${browserOrigin}/favicon.ico`,
+        method: "GET",
+        resourceType: "Other",
+      }),
+    );
+  for (const fixture of acceptedFixtures) {
+    assert.deepEqual(
+      stableOriginFaviconFallbackDecision({
+        ...fixture,
+        browserOrigin,
+      }),
+      {
+        eligible: true,
+        id: "stable-origin-favicon-empty-204-v1",
+        browserOrigin,
+        browserPath: "/favicon.ico",
+        responseStatus: 204,
+        responseBodySha256:
+          "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      },
+    );
+  }
+  const rejectedFixtures = [
+    { requestUrl: `${browserOrigin}/favicon.ico?cache=1` },
+    { requestUrl: `${browserOrigin}/favicon.ico#fragment` },
+    { requestUrl: "https://candidate.example.vercel.app/favicon.ico" },
+    { method: "HEAD" },
+    { resourceType: "Image" },
+    { postData: "unexpected" },
+    { requestUrl: "https://user@stable.example.vercel.app/favicon.ico" },
+    { requestUrl: "http://stable.example.vercel.app/favicon.ico" },
+    { requestUrl: "https://stable.example.vercel.app:444/favicon.ico" },
+  ];
+  for (const mutation of rejectedFixtures) {
+    const decision = stableOriginFaviconFallbackDecision({
+      ...acceptedFixtures[0],
+      ...mutation,
+      browserOrigin,
+    });
+    assert.equal(decision.eligible, false);
+    assert.equal(decision.id, null);
+    assert.equal(decision.responseStatus, null);
+    assert.equal(decision.responseBodySha256, null);
+  }
+  return {
+    acceptedStableOriginFaviconFallbackCaseCount: acceptedFixtures.length,
+    rejectedStableOriginFaviconFallbackCaseCount: rejectedFixtures.length,
+    stableOriginFaviconFallbackNodeUpstreamFetchCount: 0,
+  };
+};
 const verifyStableOriginRewriteNegativeFixtures = () => {
   const browserOrigin = "https://stable.example.vercel.app";
   const upstreamOrigins = {
@@ -1876,6 +2025,18 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "const rewriteDecision = stableOriginRewriteDecision({",
     externalStaticDecisionIndex,
   );
+  const faviconFallbackDecisionIndex = sourceText.indexOf(
+    "const faviconFallbackDecision =",
+    stableOriginDecisionIndex,
+  );
+  const faviconFallbackFulfillIndex = sourceText.indexOf(
+    "if (faviconFallbackDecision.eligible) {",
+    faviconFallbackDecisionIndex,
+  );
+  const immutableResourceFetchIndex = sourceText.indexOf(
+    "const immutableAttestation = await fetchImmutableResourceAttestation(",
+    faviconFallbackFulfillIndex,
+  );
   assert.ok(
     publicRequestHandlerStart < resolvedPostDataIndex &&
       resolvedPostDataIndex < requestStageStart &&
@@ -1890,8 +2051,104 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
       decisionIndex < blockIndex &&
       blockIndex < deterministicDecisionIndex &&
       deterministicDecisionIndex < externalStaticDecisionIndex &&
-      externalStaticDecisionIndex < stableOriginDecisionIndex,
+      externalStaticDecisionIndex < stableOriginDecisionIndex &&
+      stableOriginDecisionIndex < faviconFallbackDecisionIndex &&
+      faviconFallbackDecisionIndex < faviconFallbackFulfillIndex &&
+      faviconFallbackFulfillIndex < immutableResourceFetchIndex,
     "The unified raw-sensitive scan must run before telemetry, deterministic fulfillment, external handling, and stable-origin fulfillment.",
+  );
+  const faviconFallbackBranchSource = sourceText.slice(
+    faviconFallbackFulfillIndex,
+    immutableResourceFetchIndex,
+  );
+  assert.equal(
+    (faviconFallbackBranchSource.match(/\bfetch\s*\(/gu) || []).length,
+    0,
+    "The exact favicon fallback must not perform a Node fetch.",
+  );
+  assert.equal(
+    (
+      faviconFallbackBranchSource.match(
+        /Fetch\.(?:continueRequest|continueResponse|getResponseBody)/gu,
+      ) || []
+    ).length,
+    0,
+    "The exact favicon fallback must not continue a browser network request.",
+  );
+  assert.equal(
+    (faviconFallbackBranchSource.match(/Fetch\.fulfillRequest/gu) || []).length,
+    1,
+    "The exact favicon fallback must have one local CDP fulfillment.",
+  );
+  assert.match(
+    faviconFallbackBranchSource,
+    /await appCheckCdpSession\.send\("Fetch\.fulfillRequest",\s*\{[\s\S]*?\}\);\s*return;/u,
+    "The exact favicon fallback must return immediately after local CDP fulfillment.",
+  );
+  const primaryContextCreationIndex = sourceText.lastIndexOf(
+    "const context = await browser.newContext({",
+  );
+  const telemetryCapabilityGuardRegistrationIndex = sourceText.indexOf(
+    "await context.addInitScript(telemetryCapabilityGuardInitScript, {",
+    primaryContextCreationIndex,
+  );
+  const telemetryCapabilityGuardRegistrationCountIndex = sourceText.indexOf(
+    "telemetryCapabilityGuardInitScriptRegistrationCount += 1;",
+    telemetryCapabilityGuardRegistrationIndex,
+  );
+  const fixedClockRegistrationIndex = sourceText.indexOf(
+    "await context.addInitScript(fixedClockScript, {",
+    telemetryCapabilityGuardRegistrationCountIndex,
+  );
+  const primaryPageCreationIndex = sourceText.indexOf(
+    "const page = await context.newPage();",
+    fixedClockRegistrationIndex,
+  );
+  assert.ok(
+    primaryContextCreationIndex >= 0 &&
+      primaryContextCreationIndex < telemetryCapabilityGuardRegistrationIndex &&
+      telemetryCapabilityGuardRegistrationIndex <
+        telemetryCapabilityGuardRegistrationCountIndex &&
+      telemetryCapabilityGuardRegistrationCountIndex <
+        fixedClockRegistrationIndex &&
+      fixedClockRegistrationIndex < primaryPageCreationIndex,
+    "The exact-origin telemetry capability guard must be registered at document start before the primary page is created.",
+  );
+  const telemetryCapabilityGuardFunctionStart = sourceText.indexOf(
+    "function telemetryCapabilityGuardInitScript({ allowedOrigin, guard })",
+  );
+  const telemetryCapabilityGuardFunctionEnd = sourceText.indexOf(
+    "function evaluateTelemetryCapabilityGuardRuntime({ expectedOrigin, guard })",
+    telemetryCapabilityGuardFunctionStart,
+  );
+  assert.ok(
+    telemetryCapabilityGuardFunctionStart >= 0 &&
+      telemetryCapabilityGuardFunctionEnd >
+        telemetryCapabilityGuardFunctionStart,
+  );
+  assert.match(
+    sourceText.slice(
+      telemetryCapabilityGuardFunctionStart,
+      telemetryCapabilityGuardFunctionEnd,
+    ),
+    /if \(location\.origin !== allowedOrigin\) return;[\s\S]*Object\.defineProperty\(navigator, guard\.property, \{[\s\S]*configurable: guard\.descriptor\.configurable,[\s\S]*enumerable: guard\.descriptor\.enumerable,[\s\S]*writable: guard\.descriptor\.writable,[\s\S]*value: guard\.value,/u,
+    "The telemetry capability guard must remain exact-origin and define the contracted locked navigator own property.",
+  );
+  const faviconFallbackFunctionStart = sourceText.indexOf(
+    "const stableOriginFaviconFallbackDecision = ({",
+  );
+  const faviconFallbackFunctionEnd = sourceText.indexOf(
+    "const exactAuthCredentialBodyRequestScope = ({",
+    faviconFallbackFunctionStart,
+  );
+  assert.ok(
+    faviconFallbackFunctionStart >= 0 &&
+      faviconFallbackFunctionEnd > faviconFallbackFunctionStart,
+  );
+  assert.match(
+    sourceText.slice(faviconFallbackFunctionStart, faviconFallbackFunctionEnd),
+    /fallback\.stages\.includes\(stage\)[\s\S]*parsed\.protocol === transportContract\.requiredProtocol[\s\S]*transportContract\.userinfoAllowed[\s\S]*parsed\.username === "" && parsed\.password === ""[\s\S]*transportContract\.allowedPorts\.includes\(parsed\.port\)[\s\S]*parsed\.origin === browserOrigin[\s\S]*parsed\.pathname === fallback\.pathname[\s\S]*parsed\.search === ""[\s\S]*parsed\.hash === ""[\s\S]*String\(method\)\.toUpperCase\(\) === fallback\.method[\s\S]*String\(resourceType\) === fallback\.resourceType[\s\S]*String\(postData \|\| ""\) === ""/u,
+    "The favicon fallback must remain bound to the exact stable origin, GET /favicon.ico Other request, and an absent body.",
   );
   for (const requiredSourceFragment of [
     "const resolveExactChromiumNetworkRequestIdentity = ({ browser, request }) =>",
@@ -2016,6 +2273,17 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     'String(getNativeAttribute(node, "type") || "").toLowerCase()',
     "const EXACT_PARSER_MODULEPRELOAD_TAG_PATTERN =",
     "const immutableDocumentParserMarkupDecision = (",
+    "function telemetryCapabilityGuardInitScript({ allowedOrigin, guard })",
+    "if (location.origin !== allowedOrigin) return;",
+    "Object.defineProperty(navigator, guard.property, {",
+    "function evaluateTelemetryCapabilityGuardRuntime({ expectedOrigin, guard })",
+    "const collectTelemetryCapabilityGuardAttestation = async ({",
+    'point: "post-authentication",',
+    'point: "post-screen-navigation",',
+    "telemetryCapabilityGuardRuntimeAttestations.push(",
+    "const stableOriginFaviconFallbackDecision = ({",
+    "stableOriginFaviconFallbackFulfillCount += 1",
+    "responseCode: fallbackPayload.responseCode",
     'marker: "parser-base-url"',
     "documentOrigin: stableBrowserOrigin",
     "immutableResourceAttestationParserMarkupRejectCount += 1",
@@ -2820,6 +3088,10 @@ const fixtureAuditFreshnessNegativeSelfTest =
   verifyFixtureAuditFreshnessNegativeFixtures();
 const stableOriginRewriteNegativeSelfTest =
   verifyStableOriginRewriteNegativeFixtures();
+const telemetryCapabilityGuardNegativeSelfTest =
+  verifyTelemetryCapabilityGuardNegativeFixtures();
+const stableOriginFaviconFallbackNegativeSelfTest =
+  verifyStableOriginFaviconFallbackNegativeFixtures();
 const networkPolicyNegativeSelfTest = verifyNetworkPolicyNegativeFixtures();
 if (args.includes("--self-test-app-check")) {
   console.log(
@@ -2831,6 +3103,8 @@ if (args.includes("--self-test-app-check")) {
       ...preTransmissionBoundaryNegativeSelfTest,
       ...fixtureAuditFreshnessNegativeSelfTest,
       ...stableOriginRewriteNegativeSelfTest,
+      ...telemetryCapabilityGuardNegativeSelfTest,
+      ...stableOriginFaviconFallbackNegativeSelfTest,
       ...networkPolicyNegativeSelfTest,
       verifierChildSecretEnvScrubbed: true,
       verifierChildSecretEnvironmentVariableCount,
@@ -3020,7 +3294,7 @@ const nonFirebaseNetworkAllowedHostnameSetHash = sha256(
 );
 assert.equal(contract.browserTransport?.browserOrigin, stableBrowserOrigin);
 assert.deepEqual(contract.browserTransport, {
-  schemaVersion: 8,
+  schemaVersion: 9,
   mechanism:
     "cdp-fetch-request-stage-local-fulfill-from-node-attested-immutable-bytes",
   browserOrigin: stableBrowserOrigin,
@@ -3077,6 +3351,29 @@ assert.deepEqual(contract.browserTransport, {
   redirectPolicy: "abort-before-follow",
   responseBodyHashResourceTypes: ["Document", "Script"],
   requiredPerGroupResourceTypes: ["Document", "Script"],
+  stableOriginFaviconFallback: {
+    schemaVersion: 1,
+    id: "stable-origin-favicon-empty-204-v1",
+    stages: ["baseline", "candidate"],
+    browserOriginSource: "stable-alias",
+    method: "GET",
+    pathname: "/favicon.ico",
+    queryPolicy: "none",
+    hashPolicy: "none",
+    resourceType: "Other",
+    requestBodyPolicy: "absent",
+    responseStatus: 204,
+    responseHeaders: {
+      "cache-control": "no-store",
+    },
+    responseBodyUtf8: "",
+    responseBodyBytes: 0,
+    responseBodySha256:
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    nodeUpstreamFetchPolicy: "forbidden",
+    browserWirePolicy: "local-cdp-fulfill",
+    nonmatchingPolicy: "existing-stable-origin-rewrite",
+  },
   deterministicLocalResponse: {
     schemaVersion: 1,
     id: "korean-holidays-empty-v1",
@@ -3167,6 +3464,56 @@ const immutableUpstreamBinding = {
 const immutableUpstreamBindingHash = sha256(
   Buffer.from(canonicalJson(immutableUpstreamBinding)),
 );
+const TELEMETRY_CAPABILITY_GUARD_ATTESTATION_KEYS = [
+  "schemaVersion",
+  "guardId",
+  "point",
+  "stage",
+  "groupKey",
+  "captureId",
+  "originExact",
+  "ownProperty",
+  "valueExact",
+  "descriptorExact",
+  "preservedCapabilitiesPresent",
+];
+const assertTelemetryCapabilityGuardAttestation = (
+  attestation,
+  { expectedStage, expectedGroupKey, expectedCaptureIds },
+) => {
+  assertExactObjectKeys(
+    attestation,
+    TELEMETRY_CAPABILITY_GUARD_ATTESTATION_KEYS,
+  );
+  assert.equal(attestation.schemaVersion, 1);
+  assert.equal(
+    attestation.guardId,
+    contract.networkBoundary.optionalTelemetrySuppression.documentStartGuard.id,
+  );
+  assert.ok(
+    contract.networkBoundary.optionalTelemetrySuppression.documentStartGuard.runtimeAttestationPoints.includes(
+      attestation.point,
+    ),
+  );
+  assert.equal(attestation.stage, expectedStage);
+  assert.equal(attestation.groupKey, expectedGroupKey);
+  if (attestation.point === "post-authentication") {
+    assert.equal(attestation.captureId, null);
+  } else {
+    assert.equal(attestation.point, "post-screen-navigation");
+    assert.equal(expectedCaptureIds.includes(attestation.captureId), true);
+  }
+  for (const field of [
+    "originExact",
+    "ownProperty",
+    "valueExact",
+    "descriptorExact",
+    "preservedCapabilitiesPresent",
+  ]) {
+    assert.equal(attestation[field], true);
+  }
+  return attestation;
+};
 const STABLE_ORIGIN_REWRITE_SUMMARY_KEYS = [
   "schemaVersion",
   "transportContractHash",
@@ -4555,7 +4902,7 @@ assert.deepEqual(
         "request-stage-node-owned-exact-get-no-redirect-no-error-hash-cache-safe-header-synthetic-final-fulfill-browser-wire-zero",
     },
     optionalTelemetrySuppression: {
-      schemaVersion: 1,
+      schemaVersion: 2,
       transport: "https-default-443-no-userinfo",
       methods: ["GET", "POST", "OPTIONS"],
       hostnames: [
@@ -4568,6 +4915,33 @@ assert.deepEqual(
         "www.googletagmanager.com",
       ],
       action: "fail-request-before-transmission-nonfatal",
+      documentStartGuard: {
+        schemaVersion: 1,
+        id: "firebase-analytics-cookie-capability-guard-v1",
+        registration: "browser-context-add-init-script-before-page-creation",
+        originScope: "exact-stable-alias-document-origin",
+        target: "navigator-instance",
+        property: "cookieEnabled",
+        value: false,
+        descriptor: {
+          configurable: false,
+          enumerable: false,
+          writable: false,
+        },
+        preservedCapabilities: [
+          "document.cookie",
+          "indexedDB",
+          "localStorage",
+          "sessionStorage",
+        ],
+        runtimeAttestationPoints: [
+          "post-authentication",
+          "post-screen-navigation",
+        ],
+        outOfScopeAction: "leave-native-property-unmodified",
+      },
+      requiredLiveSuppressedRequestCount: 0,
+      requiredLiveObservationCount: 0,
     },
     sensitiveValueScope: {
       schemaVersion: 3,
@@ -5233,6 +5607,26 @@ const stableOriginLocalFulfillCounterSourceCount = (
     /stableOriginRewriteLocalFulfillCount \+= 1/gu,
   ) || []
 ).length;
+const telemetryCapabilityGuardInitScriptRegistrationSourceCount = (
+  captureRunnerSourceText.match(
+    /context\.addInitScript\(telemetryCapabilityGuardInitScript,/gu,
+  ) || []
+).length;
+const stableOriginFaviconFallbackFulfillCounterSourceCount = (
+  captureRunnerSourceText.match(
+    /stableOriginFaviconFallbackFulfillCount \+= 1/gu,
+  ) || []
+).length;
+const stableOriginFaviconFallbackNodeUpstreamIncrementSourceCount = (
+  captureRunnerSourceText.match(
+    /stableOriginFaviconFallbackNodeUpstreamFetchCount \+=/gu,
+  ) || []
+).length;
+const stableOriginFaviconFallbackBrowserNetworkIncrementSourceCount = (
+  captureRunnerSourceText.match(
+    /stableOriginFaviconFallbackBrowserNetworkRequestCount \+=/gu,
+  ) || []
+).length;
 const targetDiscoveryRegistrationCount = (
   captureRunnerSourceText.match(/"Target\.setDiscoverTargets"/gu) || []
 ).length;
@@ -5267,6 +5661,10 @@ assert.equal(
   "Immutable bytes must never be reached by a browser URL override.",
 );
 assert.equal(stableOriginLocalFulfillCounterSourceCount, 1);
+assert.equal(telemetryCapabilityGuardInitScriptRegistrationSourceCount, 2);
+assert.equal(stableOriginFaviconFallbackFulfillCounterSourceCount, 1);
+assert.equal(stableOriginFaviconFallbackNodeUpstreamIncrementSourceCount, 0);
+assert.equal(stableOriginFaviconFallbackBrowserNetworkIncrementSourceCount, 0);
 assert.equal(targetDiscoveryRegistrationCount, 1);
 assert.equal(pageAppCheckSecretInitRegistrationCount, 1);
 assert.equal(pageAppCheckSentinelInitArgumentSourceCount, 1);
@@ -6875,6 +7273,8 @@ let auditedFullPostDataRepresentationMismatchBlocks = 0;
 const auditedDeterministicResponseObservations = [];
 const auditedExternalStaticResponseObservations = [];
 const auditedOptionalTelemetryObservations = [];
+const auditedTelemetryCapabilityGuardAttestations = [];
+const auditedStableOriginFaviconFallbackObservations = [];
 const auditedNetworkPolicySummaries = new Map();
 let auditedDebugTokenNetworkObservations = 0;
 let auditedDebugSentinelNetworkObservations = 0;
@@ -7029,6 +7429,8 @@ for (const audit of manifest.browserAudits) {
     "deterministic-local-response",
     "external-static-response",
     "optional-telemetry-suppression",
+    "telemetry-capability-guard-attestation",
+    "stable-origin-favicon-fallback",
     "app-check-bridge",
     "network-request",
     "network-response",
@@ -7111,6 +7513,12 @@ for (const audit of manifest.browserAudits) {
     "schemaVersion",
     "externalStaticAllowlistHash",
     "optionalTelemetrySuppressionContractHash",
+    "telemetryCapabilityGuardContractHash",
+    "telemetryCapabilityGuardInitScriptRegistrationCount",
+    "telemetryCapabilityGuardAuthenticationAttestationCount",
+    "telemetryCapabilityGuardScreenAttestationCount",
+    "telemetryCapabilityGuardRuntimeAttestationCount",
+    "telemetryCapabilityGuardRuntimeAttestationSetHash",
     "sensitiveValueScopeContractHash",
     "deterministicResponseContractHash",
     "optionalTelemetrySuppressedRequestCount",
@@ -7175,7 +7583,7 @@ for (const audit of manifest.browserAudits) {
   ]);
   assert.equal(networkPolicyEvent.id, audit.id);
   assert.equal(networkPolicyEvent.stage, audit.stage);
-  assert.equal(networkPolicyEvent.schemaVersion, 4);
+  assert.equal(networkPolicyEvent.schemaVersion, 5);
   assert.equal(
     networkPolicyEvent.externalStaticAllowlistHash,
     sha256(
@@ -7186,6 +7594,15 @@ for (const audit of manifest.browserAudits) {
     networkPolicyEvent.optionalTelemetrySuppressionContractHash,
     sha256(
       canonicalJson(contract.networkBoundary.optionalTelemetrySuppression),
+    ),
+  );
+  assert.equal(
+    networkPolicyEvent.telemetryCapabilityGuardContractHash,
+    sha256(
+      canonicalJson(
+        contract.networkBoundary.optionalTelemetrySuppression
+          .documentStartGuard,
+      ),
     ),
   );
   assert.equal(
@@ -7448,6 +7865,135 @@ for (const audit of manifest.browserAudits) {
       return observation;
     },
   );
+  const telemetryCapabilityGuardEvents = events.filter(
+    (event) => event.type === "telemetry-capability-guard-attestation",
+  );
+  const telemetryCapabilityGuardAttestations =
+    telemetryCapabilityGuardEvents.map(
+      ({ type, auditEventId, ...attestation }, index) => {
+        assert.equal(
+          auditEventId,
+          `${audit.id}:telemetry-capability-guard-${index}`,
+        );
+        return assertTelemetryCapabilityGuardAttestation(attestation, {
+          expectedStage: audit.stage,
+          expectedGroupKey: audit.id,
+          expectedCaptureIds: audit.captureIds,
+        });
+      },
+    );
+  const telemetryCapabilityGuardAuthenticationAttestations =
+    telemetryCapabilityGuardAttestations.filter(
+      ({ point }) => point === "post-authentication",
+    );
+  const telemetryCapabilityGuardScreenAttestations =
+    telemetryCapabilityGuardAttestations.filter(
+      ({ point }) => point === "post-screen-navigation",
+    );
+  const expectedAuthenticationAttestationCount = Number(
+    authenticatedAuditRole !== "public",
+  );
+  assert.equal(
+    telemetryCapabilityGuardAuthenticationAttestations.length,
+    expectedAuthenticationAttestationCount,
+  );
+  assert.deepEqual(
+    telemetryCapabilityGuardScreenAttestations
+      .map(({ captureId }) => captureId)
+      .sort(),
+    [...audit.captureIds].sort(),
+    `${audit.id} telemetry guard screen attestations are incomplete.`,
+  );
+  assert.equal(
+    networkPolicyEvent.telemetryCapabilityGuardInitScriptRegistrationCount,
+    1,
+  );
+  assert.equal(
+    networkPolicyEvent.telemetryCapabilityGuardAuthenticationAttestationCount,
+    expectedAuthenticationAttestationCount,
+  );
+  assert.equal(
+    networkPolicyEvent.telemetryCapabilityGuardScreenAttestationCount,
+    audit.captureIds.length,
+  );
+  assert.equal(
+    networkPolicyEvent.telemetryCapabilityGuardRuntimeAttestationCount,
+    telemetryCapabilityGuardAttestations.length,
+  );
+  assert.equal(
+    networkPolicyEvent.telemetryCapabilityGuardRuntimeAttestationCount,
+    expectedAuthenticationAttestationCount + audit.captureIds.length,
+  );
+  assert.equal(
+    networkPolicyEvent.telemetryCapabilityGuardRuntimeAttestationSetHash,
+    sha256(canonicalJson(telemetryCapabilityGuardAttestations)),
+  );
+  const faviconFallbackEvents = events.filter(
+    (event) => event.type === "stable-origin-favicon-fallback",
+  );
+  const faviconFallbackObservations = faviconFallbackEvents.map(
+    ({ type, auditEventId, ...observation }, index) => {
+      assert.equal(auditEventId, `${audit.id}:favicon-fallback-${index}`);
+      assertExactObjectKeys(observation, [
+        "schemaVersion",
+        "stage",
+        "groupKey",
+        "phase",
+        "captureId",
+        "id",
+        "method",
+        "resourceType",
+        "browserPath",
+        "browserUrlSha256",
+        "browserOriginExact",
+        "responseStatus",
+        "responseBodyBytes",
+        "responseBodySha256",
+        "nodeUpstreamFetchCount",
+        "browserNetworkRequestCount",
+      ]);
+      const fallback = contract.browserTransport.stableOriginFaviconFallback;
+      assert.equal(observation.schemaVersion, 1);
+      assert.equal(observation.stage, audit.stage);
+      assert.equal(observation.groupKey, audit.id);
+      assert.ok(
+        ["context-bootstrap", "authentication", "screen-capture"].includes(
+          observation.phase,
+        ),
+      );
+      assert.equal(
+        observation.captureId === null ||
+          audit.captureIds.includes(observation.captureId),
+        true,
+      );
+      assert.equal(observation.id, fallback.id);
+      assert.equal(observation.method, fallback.method);
+      assert.equal(observation.resourceType, fallback.resourceType);
+      assert.equal(observation.browserPath, fallback.pathname);
+      assert.equal(
+        observation.browserUrlSha256,
+        sha256(`${stableBrowserOrigin}${fallback.pathname}`),
+      );
+      assert.equal(observation.browserOriginExact, true);
+      assert.equal(observation.responseStatus, fallback.responseStatus);
+      assert.equal(observation.responseBodyBytes, fallback.responseBodyBytes);
+      assert.equal(observation.responseBodySha256, fallback.responseBodySha256);
+      assert.equal(observation.nodeUpstreamFetchCount, 0);
+      assert.equal(observation.browserNetworkRequestCount, 0);
+      const decision = stableOriginFaviconFallbackDecision({
+        stage: observation.stage,
+        requestUrl: `${stableBrowserOrigin}${observation.browserPath}`,
+        method: observation.method,
+        resourceType: observation.resourceType,
+        browserOrigin: stableBrowserOrigin,
+      });
+      assert.equal(decision.eligible, true);
+      assert.equal(decision.id, observation.id);
+      assert.equal(decision.responseStatus, observation.responseStatus);
+      assert.equal(decision.responseBodySha256, observation.responseBodySha256);
+      return observation;
+    },
+  );
   assert.equal(
     networkPolicyEvent.deterministicResponseObservationCount,
     deterministicObservations.length,
@@ -7483,6 +8029,16 @@ for (const audit of manifest.browserAudits) {
   assert.equal(
     networkPolicyEvent.optionalTelemetrySuppressedRequestCount,
     telemetryObservations.length,
+  );
+  assert.equal(
+    networkPolicyEvent.optionalTelemetrySuppressedRequestCount,
+    contract.networkBoundary.optionalTelemetrySuppression
+      .requiredLiveSuppressedRequestCount,
+  );
+  assert.equal(
+    networkPolicyEvent.optionalTelemetryObservationCount,
+    contract.networkBoundary.optionalTelemetrySuppression
+      .requiredLiveObservationCount,
   );
   assert.equal(
     networkPolicyEvent.deterministicHolidayResponseFulfillCount,
@@ -7587,6 +8143,12 @@ for (const audit of manifest.browserAudits) {
   auditedDeterministicResponseObservations.push(...deterministicObservations);
   auditedExternalStaticResponseObservations.push(...externalStaticObservations);
   auditedOptionalTelemetryObservations.push(...telemetryObservations);
+  auditedTelemetryCapabilityGuardAttestations.push(
+    ...telemetryCapabilityGuardAttestations,
+  );
+  auditedStableOriginFaviconFallbackObservations.push(
+    ...faviconFallbackObservations,
+  );
   auditedOptionalTelemetrySuppressedRequests +=
     networkPolicyEvent.optionalTelemetrySuppressedRequestCount;
   auditedDeterministicHolidayResponseFulfills +=
@@ -8544,6 +9106,29 @@ for (const audit of manifest.browserAudits) {
   for (const event of captureEvents) {
     const capture = captures.get(event.id);
     assert.ok(capture, `${event.id} is not a manifest capture.`);
+    assertTelemetryCapabilityGuardAttestation(
+      capture.telemetryCapabilityGuardAttestation,
+      {
+        expectedStage: audit.stage,
+        expectedGroupKey: audit.id,
+        expectedCaptureIds: audit.captureIds,
+      },
+    );
+    assert.equal(
+      capture.telemetryCapabilityGuardAttestation.point,
+      "post-screen-navigation",
+    );
+    assert.equal(
+      capture.telemetryCapabilityGuardAttestation.captureId,
+      capture.id,
+    );
+    const matchingTelemetryCapabilityGuardAttestations =
+      telemetryCapabilityGuardScreenAttestations.filter(
+        ({ captureId }) => captureId === capture.id,
+      );
+    assert.deepEqual(matchingTelemetryCapabilityGuardAttestations, [
+      capture.telemetryCapabilityGuardAttestation,
+    ]);
     const expectedEvent = {
       type: "capture",
       id: capture.id,
@@ -8568,6 +9153,8 @@ for (const audit of manifest.browserAudits) {
       fixtureEvidenceSha256: sha256(
         Buffer.from(JSON.stringify(capture.fixtureEvidence)),
       ),
+      telemetryCapabilityGuardAttestation:
+        capture.telemetryCapabilityGuardAttestation,
       upstreamProvenance: capture.upstreamProvenance,
       networkPolicy: capture.networkPolicy,
     };
@@ -8596,6 +9183,8 @@ for (const audit of manifest.browserAudits) {
       deterministicEvents.length +
       externalStaticEvents.length +
       telemetryEvents.length +
+      telemetryCapabilityGuardEvents.length +
+      faviconFallbackEvents.length +
       captureEvents.length,
     `${audit.id} has an unexpected browser-audit event count.`,
   );
@@ -9533,6 +10122,11 @@ assertExactObjectKeys(browserTransport, [
   "immutableResourceAttestationLinkHeaderObservationCount",
   "immutableResourceAttestationParserMarkupRejectCount",
   "immutableResourceAttestationVercelToolbarMarkupObservationCount",
+  "stableOriginFaviconFallbackFulfillCount",
+  "stableOriginFaviconFallbackNodeUpstreamFetchCount",
+  "stableOriginFaviconFallbackBrowserNetworkRequestCount",
+  "stableOriginFaviconFallbackObservationCount",
+  "stableOriginFaviconFallbackObservationSetHash",
   "localFulfillCount",
   "browserNetworkRequestCount",
   "browserSkipToolbarHeaderObservationCount",
@@ -9545,7 +10139,7 @@ assert.equal(
   sha256(Buffer.from(canonicalJson(browserTransport))),
   manifest.browserTransportHash,
 );
-assert.equal(browserTransport.schemaVersion, 3);
+assert.equal(browserTransport.schemaVersion, 4);
 assert.deepEqual(browserTransport.contract, contract.browserTransport);
 assert.equal(
   browserTransport.contractHash,
@@ -9661,6 +10255,35 @@ assert.equal(
   browserTransport.immutableResourceAttestationVercelToolbarMarkupObservationCount,
   0,
 );
+assert.equal(
+  browserTransport.stableOriginFaviconFallbackObservationCount,
+  auditedStableOriginFaviconFallbackObservations.length,
+);
+assert.equal(
+  browserTransport.stableOriginFaviconFallbackObservationSetHash,
+  sha256(canonicalJson(auditedStableOriginFaviconFallbackObservations)),
+);
+assert.equal(
+  browserTransport.stableOriginFaviconFallbackFulfillCount,
+  browserTransport.stableOriginFaviconFallbackObservationCount,
+);
+assert.ok(browserTransport.stableOriginFaviconFallbackFulfillCount > 0);
+assert.deepEqual(
+  [
+    ...new Set(
+      auditedStableOriginFaviconFallbackObservations.map(({ stage }) => stage),
+    ),
+  ].sort(),
+  contract.browserTransport.stableOriginFaviconFallback.stages,
+);
+assert.equal(
+  browserTransport.stableOriginFaviconFallbackNodeUpstreamFetchCount,
+  0,
+);
+assert.equal(
+  browserTransport.stableOriginFaviconFallbackBrowserNetworkRequestCount,
+  0,
+);
 assert.equal(browserTransport.localFulfillCount, browserTransport.requestCount);
 assert.equal(browserTransport.browserNetworkRequestCount, 0);
 assert.equal(browserTransport.browserSkipToolbarHeaderObservationCount, 0);
@@ -9725,6 +10348,12 @@ assertExactObjectKeys(networkPolicy, [
   "schemaVersion",
   "externalStaticAllowlistHash",
   "optionalTelemetrySuppressionContractHash",
+  "telemetryCapabilityGuardContractHash",
+  "telemetryCapabilityGuardInitScriptRegistrationCount",
+  "telemetryCapabilityGuardAuthenticationAttestationCount",
+  "telemetryCapabilityGuardScreenAttestationCount",
+  "telemetryCapabilityGuardRuntimeAttestationCount",
+  "telemetryCapabilityGuardRuntimeAttestationSetHash",
   "sensitiveValueScopeContractHash",
   "deterministicResponseContractHash",
   "optionalTelemetrySuppressedRequestCount",
@@ -9792,7 +10421,7 @@ assertExactObjectKeys(networkPolicy, [
   "pinnedStartupSourceAttestationCount",
   "pinnedStartupSourceAttestationSetHash",
 ]);
-assert.equal(networkPolicy.schemaVersion, 4);
+assert.equal(networkPolicy.schemaVersion, 5);
 assert.equal(sha256(canonicalJson(networkPolicy)), manifest.networkPolicyHash);
 assert.equal(
   networkPolicy.externalStaticAllowlistHash,
@@ -9803,6 +10432,14 @@ assert.equal(
 assert.equal(
   networkPolicy.optionalTelemetrySuppressionContractHash,
   sha256(canonicalJson(contract.networkBoundary.optionalTelemetrySuppression)),
+);
+assert.equal(
+  networkPolicy.telemetryCapabilityGuardContractHash,
+  sha256(
+    canonicalJson(
+      contract.networkBoundary.optionalTelemetrySuppression.documentStartGuard,
+    ),
+  ),
 );
 assert.equal(
   networkPolicy.sensitiveValueScopeContractHash,
@@ -9936,6 +10573,38 @@ assert.equal(
   auditedOptionalTelemetrySuppressedRequests,
 );
 assert.equal(
+  networkPolicy.optionalTelemetrySuppressedRequestCount,
+  contract.networkBoundary.optionalTelemetrySuppression
+    .requiredLiveSuppressedRequestCount,
+);
+const expectedTelemetryCapabilityGuardAuthenticationAttestationCount =
+  manifest.browserAudits.filter(({ role }) => role !== "support-public").length;
+assert.equal(
+  networkPolicy.telemetryCapabilityGuardInitScriptRegistrationCount,
+  manifest.browserAudits.length,
+);
+assert.equal(
+  networkPolicy.telemetryCapabilityGuardAuthenticationAttestationCount,
+  expectedTelemetryCapabilityGuardAuthenticationAttestationCount,
+);
+assert.equal(
+  networkPolicy.telemetryCapabilityGuardScreenAttestationCount,
+  manifest.captures.length,
+);
+assert.equal(
+  networkPolicy.telemetryCapabilityGuardRuntimeAttestationCount,
+  auditedTelemetryCapabilityGuardAttestations.length,
+);
+assert.equal(
+  networkPolicy.telemetryCapabilityGuardRuntimeAttestationCount,
+  networkPolicy.telemetryCapabilityGuardAuthenticationAttestationCount +
+    networkPolicy.telemetryCapabilityGuardScreenAttestationCount,
+);
+assert.equal(
+  networkPolicy.telemetryCapabilityGuardRuntimeAttestationSetHash,
+  sha256(canonicalJson(auditedTelemetryCapabilityGuardAttestations)),
+);
+assert.equal(
   networkPolicy.deterministicHolidayResponseFulfillCount,
   auditedDeterministicHolidayResponseFulfills,
 );
@@ -10030,6 +10699,11 @@ assert.equal(
 assert.equal(
   networkPolicy.optionalTelemetryObservationCount,
   auditedOptionalTelemetryObservations.length,
+);
+assert.equal(
+  networkPolicy.optionalTelemetryObservationCount,
+  contract.networkBoundary.optionalTelemetrySuppression
+    .requiredLiveObservationCount,
 );
 assert.equal(
   networkPolicy.optionalTelemetryObservationSetHash,

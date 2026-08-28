@@ -2425,7 +2425,7 @@ const attestBrowserPreTransmissionCommandLine = async (
 
 const readJson = (path) => JSON.parse(readFileSync(resolve(path), "utf8"));
 const contract = readJson("scripts/w10p-visual-parity-contract.json");
-assert.equal(contract.schemaVersion, 13);
+assert.equal(contract.schemaVersion, 14);
 const resolveAuthenticationLandingGuard = ({
   guardContract,
   fixedTimeValue,
@@ -5029,6 +5029,37 @@ const optionalTelemetrySuppressionDecision = ({ requestUrl, method }) => {
     ruleId: eligible ? "optional-telemetry-host" : null,
   };
 };
+const stableOriginFaviconFallbackDecision = ({
+  stage,
+  requestUrl,
+  method,
+  resourceType,
+  postData = "",
+  browserOrigin,
+  transportContract = contract.browserTransport,
+}) => {
+  assert.ok(["baseline", "candidate"].includes(stage));
+  const parsed = new URL(requestUrl);
+  const fallback = transportContract.stableOriginFaviconFallback;
+  const eligible =
+    fallback.stages.includes(stage) &&
+    parsed.protocol === transportContract.requiredProtocol &&
+    (transportContract.userinfoAllowed ||
+      (parsed.username === "" && parsed.password === "")) &&
+    transportContract.allowedPorts.includes(parsed.port) &&
+    parsed.origin === browserOrigin &&
+    parsed.pathname === fallback.pathname &&
+    parsed.search === "" &&
+    parsed.hash === "" &&
+    String(method).toUpperCase() === fallback.method &&
+    String(resourceType) === fallback.resourceType &&
+    String(postData || "") === "";
+  return {
+    eligible,
+    id: eligible ? fallback.id : null,
+    responseContract: eligible ? fallback : null,
+  };
+};
 const exactAuthCredentialBodyRequestScope = ({
   requestUrl,
   method,
@@ -7242,6 +7273,49 @@ const verifyStableOriginRewriteNegativeFixtures = () => {
   assert.equal(script.eligible, true);
   assert.equal(script.kind, "static");
   assert.equal(script.upstreamOrigin, upstreamOrigins.candidate);
+  for (const stage of ["baseline", "candidate"]) {
+    const faviconFallback = stableOriginFaviconFallbackDecision({
+      stage,
+      requestUrl: `${browserOrigin}/favicon.ico`,
+      method: "GET",
+      resourceType: "Other",
+      browserOrigin,
+      transportContract,
+    });
+    assert.equal(faviconFallback.eligible, true);
+    assert.equal(
+      faviconFallback.id,
+      transportContract.stableOriginFaviconFallback.id,
+    );
+    assert.equal(
+      faviconFallback.responseContract.responseBodySha256,
+      createHash("sha256").update(Buffer.alloc(0)).digest("hex"),
+    );
+  }
+  for (const fixture of [
+    { requestUrl: `${browserOrigin}/favicon.ico?cache=1` },
+    { requestUrl: `${browserOrigin}/favicon.ico#fragment` },
+    { method: "HEAD" },
+    { resourceType: "Image" },
+    { postData: "unexpected" },
+    { requestUrl: `${upstreamOrigins.baseline}/favicon.ico` },
+    { requestUrl: "https://user@stable.example.vercel.app/favicon.ico" },
+    { requestUrl: "http://stable.example.vercel.app/favicon.ico" },
+    { requestUrl: "https://stable.example.vercel.app:444/favicon.ico" },
+  ]) {
+    assert.equal(
+      stableOriginFaviconFallbackDecision({
+        stage: "baseline",
+        requestUrl: `${browserOrigin}/favicon.ico`,
+        method: "GET",
+        resourceType: "Other",
+        browserOrigin,
+        transportContract,
+        ...fixture,
+      }).eligible,
+      false,
+    );
+  }
   for (const fixture of [
     {
       requestUrl:
@@ -7279,6 +7353,8 @@ const verifyStableOriginRewriteNegativeFixtures = () => {
     acceptedStableDocumentCaseCount: 1,
     acceptedStableStaticCaseCount: 1,
     rejectedExternalOrNonStaticCaseCount: 4,
+    acceptedStableOriginFaviconFallbackCaseCount: 2,
+    rejectedStableOriginFaviconFallbackCaseCount: 9,
   };
 };
 const verifyNetworkPolicyNegativeFixtures = () => {
@@ -12884,6 +12960,7 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
   documentPayload = [
     "<!doctype html><title>direct-cdp-probe</title>",
     '<link rel="icon" href="data:,w10p">',
+    '<script>globalThis.__w10pTelemetryCapabilityGuardParserStart=(()=>{const descriptor=Object.getOwnPropertyDescriptor(navigator,"cookieEnabled");return{origin:location.origin,cookieEnabled:navigator.cookieEnabled,ownProperty:Object.prototype.hasOwnProperty.call(navigator,"cookieEnabled"),configurable:descriptor?.configurable,enumerable:descriptor?.enumerable,writable:descriptor?.writable,value:descriptor?.value,getAbsent:descriptor?.get===undefined,setAbsent:descriptor?.set===undefined}})()</script>',
     '<template id="w10p-inert-parser-fixtures">',
     '<div id="parser-element-fixture-wrapper">',
     `<link rel="preconnect" href="${rawExternalLoopbackOrigin}/parser-preconnect-wire">`,
@@ -13152,6 +13229,8 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
   let rewriteResponseCount = 0;
   let rewriteBodyHashMatchCount = 0;
   let exactDomModulepreloadRuntimeAttestation = null;
+  let telemetryCapabilityGuardLoopbackAttestation = null;
+  let telemetryCapabilityGuardOutOfScopeAttestation = null;
   let rewriteRedirectResponseAbortCount = 0;
   let rewriteRedirectFollowAttemptCount = 0;
   let unsafeParserDocumentRejectCount = 0;
@@ -13352,6 +13431,12 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
           identity.networkRequestId;
       }
     });
+    await context.addInitScript(telemetryCapabilityGuardInitScript, {
+      allowedOrigin: stableOrigin,
+      guard:
+        contract.networkBoundary.optionalTelemetrySuppression
+          .documentStartGuard,
+    });
     await context.addInitScript(
       blockBrowserSecondaryExecutionAndWebTransport,
       Object.freeze({
@@ -13373,6 +13458,26 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
       });
     });
     const page = await context.newPage();
+    telemetryCapabilityGuardOutOfScopeAttestation = await page.evaluate(() => {
+      const prototypeDescriptor = Object.getOwnPropertyDescriptor(
+        Object.getPrototypeOf(navigator),
+        "cookieEnabled",
+      );
+      return {
+        nullOrigin: location.origin === "null",
+        ownPropertyAbsent: !Object.prototype.hasOwnProperty.call(
+          navigator,
+          "cookieEnabled",
+        ),
+        nativePrototypeGetterPresent:
+          typeof prototypeDescriptor?.get === "function",
+      };
+    });
+    assert.deepEqual(telemetryCapabilityGuardOutOfScopeAttestation, {
+      nullOrigin: true,
+      ownPropertyAbsent: true,
+      nativePrototypeGetterPresent: true,
+    });
     page.on("requestfailed", (request) => {
       if (request.url() === postFinalAbortUrl) {
         postFinalAbortRequestFailureCount += 1;
@@ -14365,6 +14470,41 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
       locationOrigin: stableOrigin,
       navigationOrigin: stableOrigin,
       resourceOrigin: stableOrigin,
+    });
+    telemetryCapabilityGuardLoopbackAttestation = await page.evaluate(
+      evaluateTelemetryCapabilityGuardPreservedCapabilities,
+      {
+        expectedOrigin: stableOrigin,
+        guard:
+          contract.networkBoundary.optionalTelemetrySuppression
+            .documentStartGuard,
+      },
+    );
+    assert.deepEqual(telemetryCapabilityGuardLoopbackAttestation, {
+      parserStart: {
+        origin: stableOrigin,
+        cookieEnabled: false,
+        ownProperty: true,
+        configurable: false,
+        enumerable: false,
+        writable: false,
+        value: false,
+        getAbsent: true,
+        setAbsent: true,
+      },
+      runtime: {
+        originExact: true,
+        ownProperty: true,
+        valueExact: true,
+        descriptorExact: true,
+      },
+      localStorageRoundTrip: true,
+      sessionStorageRoundTrip: true,
+      cookieRoundTrip: true,
+      indexedDbRoundTrip: true,
+      localStorageCleanup: true,
+      sessionStorageCleanup: true,
+      cookieCleanup: true,
     });
     exactDomModulepreloadRuntimeAttestation = await page.evaluate(
       async ({ crossRealmDocumentUrl, modulepreloadPath, expectedUrl }) => {
@@ -17600,6 +17740,8 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
     stableStaticWireRequestCount: 0,
     immutableDocumentWireRequestCount: 1,
     immutableScriptWireRequestCount: 2,
+    telemetryCapabilityGuardLoopbackAttestation,
+    telemetryCapabilityGuardOutOfScopeAttestation,
     exactDomModulepreloadRuntimeAttestation,
     immutableRedirectWireRequestCount: 1,
     immutableRedirectFollowWireRequestCount: 0,
@@ -18104,7 +18246,7 @@ assert.deepEqual(contract.networkBoundary, {
       "request-stage-node-owned-exact-get-no-redirect-no-error-hash-cache-safe-header-synthetic-final-fulfill-browser-wire-zero",
   },
   optionalTelemetrySuppression: {
-    schemaVersion: 1,
+    schemaVersion: 2,
     transport: "https-default-443-no-userinfo",
     methods: ["GET", "POST", "OPTIONS"],
     hostnames: [
@@ -18117,6 +18259,33 @@ assert.deepEqual(contract.networkBoundary, {
       "www.googletagmanager.com",
     ],
     action: "fail-request-before-transmission-nonfatal",
+    documentStartGuard: {
+      schemaVersion: 1,
+      id: "firebase-analytics-cookie-capability-guard-v1",
+      registration: "browser-context-add-init-script-before-page-creation",
+      originScope: "exact-stable-alias-document-origin",
+      target: "navigator-instance",
+      property: "cookieEnabled",
+      value: false,
+      descriptor: {
+        configurable: false,
+        enumerable: false,
+        writable: false,
+      },
+      preservedCapabilities: [
+        "document.cookie",
+        "indexedDB",
+        "localStorage",
+        "sessionStorage",
+      ],
+      runtimeAttestationPoints: [
+        "post-authentication",
+        "post-screen-navigation",
+      ],
+      outOfScopeAction: "leave-native-property-unmodified",
+    },
+    requiredLiveSuppressedRequestCount: 0,
+    requiredLiveObservationCount: 0,
   },
   sensitiveValueScope: {
     schemaVersion: 3,
@@ -18136,7 +18305,7 @@ assert.deepEqual(contract.networkBoundary, {
 });
 assert.equal(contract.browserTransport?.browserOrigin, stableBrowserOrigin);
 assert.deepEqual(contract.browserTransport, {
-  schemaVersion: 8,
+  schemaVersion: 9,
   mechanism:
     "cdp-fetch-request-stage-local-fulfill-from-node-attested-immutable-bytes",
   browserOrigin: stableBrowserOrigin,
@@ -18193,6 +18362,29 @@ assert.deepEqual(contract.browserTransport, {
   redirectPolicy: "abort-before-follow",
   responseBodyHashResourceTypes: ["Document", "Script"],
   requiredPerGroupResourceTypes: ["Document", "Script"],
+  stableOriginFaviconFallback: {
+    schemaVersion: 1,
+    id: "stable-origin-favicon-empty-204-v1",
+    stages: ["baseline", "candidate"],
+    browserOriginSource: "stable-alias",
+    method: "GET",
+    pathname: "/favicon.ico",
+    queryPolicy: "none",
+    hashPolicy: "none",
+    resourceType: "Other",
+    requestBodyPolicy: "absent",
+    responseStatus: 204,
+    responseHeaders: {
+      "cache-control": "no-store",
+    },
+    responseBodyUtf8: "",
+    responseBodyBytes: 0,
+    responseBodySha256:
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    nodeUpstreamFetchPolicy: "forbidden",
+    browserWirePolicy: "local-cdp-fulfill",
+    nonmatchingPolicy: "existing-stable-origin-rewrite",
+  },
   deterministicLocalResponse: {
     schemaVersion: 1,
     id: "korean-holidays-empty-v1",
@@ -22034,6 +22226,166 @@ const authenticationLandingGuardInitScript = ({ allowedOrigin, markers }) => {
   }
 };
 
+function telemetryCapabilityGuardInitScript({ allowedOrigin, guard }) {
+  if (location.origin !== allowedOrigin) return;
+  if (
+    guard.target !== "navigator-instance" ||
+    guard.property !== "cookieEnabled" ||
+    guard.value !== false ||
+    guard.descriptor.configurable !== false ||
+    guard.descriptor.enumerable !== false ||
+    guard.descriptor.writable !== false
+  ) {
+    throw new Error("VISUAL_TELEMETRY_CAPABILITY_GUARD_CONTRACT_INVALID");
+  }
+  Object.defineProperty(navigator, guard.property, {
+    configurable: guard.descriptor.configurable,
+    enumerable: guard.descriptor.enumerable,
+    writable: guard.descriptor.writable,
+    value: guard.value,
+  });
+}
+
+function evaluateTelemetryCapabilityGuardRuntime({ expectedOrigin, guard }) {
+  const descriptor = Object.getOwnPropertyDescriptor(navigator, guard.property);
+  return {
+    originExact: location.origin === expectedOrigin,
+    ownProperty: Object.prototype.hasOwnProperty.call(
+      navigator,
+      guard.property,
+    ),
+    valueExact: navigator[guard.property] === guard.value,
+    descriptorExact:
+      descriptor?.configurable === guard.descriptor.configurable &&
+      descriptor?.enumerable === guard.descriptor.enumerable &&
+      descriptor?.writable === guard.descriptor.writable &&
+      descriptor?.value === guard.value &&
+      descriptor?.get === undefined &&
+      descriptor?.set === undefined,
+    preservedCapabilitiesPresent:
+      typeof document.cookie === "string" &&
+      typeof indexedDB?.open === "function" &&
+      typeof localStorage?.getItem === "function" &&
+      typeof sessionStorage?.getItem === "function",
+  };
+}
+
+async function evaluateTelemetryCapabilityGuardPreservedCapabilities({
+  expectedOrigin,
+  guard,
+}) {
+  const descriptor = Object.getOwnPropertyDescriptor(navigator, guard.property);
+  const runtime = {
+    originExact: location.origin === expectedOrigin,
+    ownProperty: Object.prototype.hasOwnProperty.call(
+      navigator,
+      guard.property,
+    ),
+    valueExact: navigator[guard.property] === guard.value,
+    descriptorExact:
+      descriptor?.configurable === guard.descriptor.configurable &&
+      descriptor?.enumerable === guard.descriptor.enumerable &&
+      descriptor?.writable === guard.descriptor.writable &&
+      descriptor?.value === guard.value &&
+      descriptor?.get === undefined &&
+      descriptor?.set === undefined,
+  };
+  const localStorageKey = "w10p-telemetry-guard-local";
+  const sessionStorageKey = "w10p-telemetry-guard-session";
+  const cookieName = "w10p_telemetry_guard_cookie";
+  const databaseName = "w10p-telemetry-capability-guard";
+  localStorage.setItem(localStorageKey, "local-ok");
+  sessionStorage.setItem(sessionStorageKey, "session-ok");
+  document.cookie = `${cookieName}=cookie-ok; Path=/; SameSite=Lax`;
+  const localStorageRoundTrip =
+    localStorage.getItem(localStorageKey) === "local-ok";
+  const sessionStorageRoundTrip =
+    sessionStorage.getItem(sessionStorageKey) === "session-ok";
+  const cookieRoundTrip = document.cookie
+    .split(";")
+    .map((part) => part.trim())
+    .includes(`${cookieName}=cookie-ok`);
+  localStorage.removeItem(localStorageKey);
+  sessionStorage.removeItem(sessionStorageKey);
+  document.cookie = `${cookieName}=; Path=/; Max-Age=0; SameSite=Lax`;
+  const requestResult = (request) =>
+    new Promise((resolveRequest, rejectRequest) => {
+      request.onsuccess = () => resolveRequest(request.result);
+      request.onerror = () => rejectRequest(request.error);
+    });
+  const openRequest = indexedDB.open(databaseName, 1);
+  openRequest.onupgradeneeded = () => {
+    openRequest.result.createObjectStore("values");
+  };
+  const database = await requestResult(openRequest);
+  const transaction = database.transaction("values", "readwrite");
+  const transactionDone = new Promise(
+    (resolveTransaction, rejectTransaction) => {
+      transaction.oncomplete = resolveTransaction;
+      transaction.onerror = () => rejectTransaction(transaction.error);
+      transaction.onabort = () => rejectTransaction(transaction.error);
+    },
+  );
+  const store = transaction.objectStore("values");
+  await requestResult(store.put("indexeddb-ok", "guard"));
+  const indexedDbRoundTrip =
+    (await requestResult(store.get("guard"))) === "indexeddb-ok";
+  await transactionDone;
+  database.close();
+  await requestResult(indexedDB.deleteDatabase(databaseName));
+  return {
+    parserStart: globalThis.__w10pTelemetryCapabilityGuardParserStart || null,
+    runtime,
+    localStorageRoundTrip,
+    sessionStorageRoundTrip,
+    cookieRoundTrip,
+    indexedDbRoundTrip,
+    localStorageCleanup: localStorage.getItem(localStorageKey) === null,
+    sessionStorageCleanup: sessionStorage.getItem(sessionStorageKey) === null,
+    cookieCleanup: !document.cookie
+      .split(";")
+      .map((part) => part.trim())
+      .some((part) => part.startsWith(`${cookieName}=`)),
+  };
+}
+
+const collectTelemetryCapabilityGuardAttestation = async ({
+  page,
+  point,
+  stage,
+  groupKey,
+  captureId,
+  expectedOrigin,
+}) => {
+  const guard =
+    contract.networkBoundary.optionalTelemetrySuppression.documentStartGuard;
+  const runtime = await page.evaluate(evaluateTelemetryCapabilityGuardRuntime, {
+    expectedOrigin,
+    guard,
+  });
+  const attestation = {
+    schemaVersion: 1,
+    guardId: guard.id,
+    point,
+    stage,
+    groupKey,
+    captureId,
+    ...runtime,
+  };
+  assert.deepEqual(
+    runtime,
+    {
+      originExact: true,
+      ownProperty: true,
+      valueExact: true,
+      descriptorExact: true,
+      preservedCapabilitiesPresent: true,
+    },
+    `The telemetry capability guard failed its ${point} runtime attestation.`,
+  );
+  return attestation;
+};
+
 const appCheckDebugInitScript = ({ allowedOrigin, debugToken }) => {
   if (location.origin !== allowedOrigin) return;
   const jwtPattern =
@@ -23695,6 +24047,10 @@ let rawRefreshTokenPreTransmissionBlockCount = 0;
 let rawDebugTokenPreTransmissionBlockCount = 0;
 let rawDebugSentinelPreTransmissionBlockCount = 0;
 let optionalTelemetrySuppressedRequestCount = 0;
+let telemetryCapabilityGuardInitScriptRegistrationCount = 0;
+let telemetryCapabilityGuardAuthenticationAttestationCount = 0;
+let telemetryCapabilityGuardScreenAttestationCount = 0;
+const telemetryCapabilityGuardRuntimeAttestations = [];
 let deterministicHolidayResponseFulfillCount = 0;
 let deterministicRecaptchaResponseFulfillCount = 0;
 let deterministicFirebaseModuleFulfillCount = 0;
@@ -23735,6 +24091,10 @@ let fullPostDataRepresentationMismatchBlockCount = 0;
 const deterministicResponseObservations = [];
 const externalStaticResponseObservations = [];
 const optionalTelemetrySuppressionObservations = [];
+let stableOriginFaviconFallbackFulfillCount = 0;
+let stableOriginFaviconFallbackNodeUpstreamFetchCount = 0;
+let stableOriginFaviconFallbackBrowserNetworkRequestCount = 0;
+const stableOriginFaviconFallbackObservations = [];
 const externalStaticByteCache = new Map();
 const pinnedExternalStaticStartup = await fetchPinnedExternalStaticSources();
 for (const [
@@ -24454,6 +24814,12 @@ try {
       preTransmissionBoundaryFailRequestCount;
     const groupOptionalTelemetrySuppressedStart =
       optionalTelemetrySuppressedRequestCount;
+    const groupTelemetryCapabilityGuardInitScriptRegistrationStart =
+      telemetryCapabilityGuardInitScriptRegistrationCount;
+    const groupTelemetryCapabilityGuardAuthenticationAttestationStart =
+      telemetryCapabilityGuardAuthenticationAttestationCount;
+    const groupTelemetryCapabilityGuardScreenAttestationStart =
+      telemetryCapabilityGuardScreenAttestationCount;
     const groupDeterministicHolidayFulfillStart =
       deterministicHolidayResponseFulfillCount;
     const groupDeterministicRecaptchaFulfillStart =
@@ -24964,6 +25330,10 @@ try {
       externalStaticResponseObservations.length;
     const groupOptionalTelemetryObservationStart =
       optionalTelemetrySuppressionObservations.length;
+    const groupTelemetryCapabilityGuardRuntimeAttestationStart =
+      telemetryCapabilityGuardRuntimeAttestations.length;
+    const groupStableOriginFaviconFallbackObservationStart =
+      stableOriginFaviconFallbackObservations.length;
     const groupCaptureAttestations = [];
     context.on("request", (request) => {
       if (
@@ -25310,6 +25680,13 @@ try {
         resourceType: safeHttpErrorResourceTypeClass(request.resourceType()),
       });
     });
+    await context.addInitScript(telemetryCapabilityGuardInitScript, {
+      allowedOrigin: origin,
+      guard:
+        contract.networkBoundary.optionalTelemetrySuppression
+          .documentStartGuard,
+    });
+    telemetryCapabilityGuardInitScriptRegistrationCount += 1;
     await context.addInitScript(fixedClockScript, {
       fixedTimestamp: fixedTime,
     });
@@ -26701,6 +27078,55 @@ try {
       }
       let rewriteObservation = null;
       if (rewriteDecision.eligible) {
+        const faviconFallbackDecision = stableOriginFaviconFallbackDecision({
+          stage,
+          requestUrl,
+          method: requestMethod,
+          resourceType: event.resourceType,
+          postData,
+          browserOrigin: stableBrowserOrigin,
+          transportContract: contract.browserTransport,
+        });
+        if (faviconFallbackDecision.eligible) {
+          const fallbackPayload = deterministicFulfillPayload(
+            faviconFallbackDecision.responseContract,
+          );
+          assert.equal(fallbackPayload.responseCode, 204);
+          assert.equal(fallbackPayload.bodyBytes, 0);
+          assert.equal(
+            fallbackPayload.bodySha256,
+            faviconFallbackDecision.responseContract.responseBodySha256,
+          );
+          stableOriginFaviconFallbackFulfillCount += 1;
+          stableOriginFaviconFallbackObservations.push({
+            schemaVersion: 1,
+            stage,
+            groupKey,
+            phase: requestCaptureScope.phase,
+            captureId: requestCaptureScope.captureId,
+            id: faviconFallbackDecision.id,
+            method: requestMethod,
+            resourceType: event.resourceType,
+            browserPath: rewriteDecision.browserPath,
+            browserUrlSha256: sha256(requestUrl),
+            browserOriginExact:
+              new URL(requestUrl).origin === stableBrowserOrigin,
+            responseStatus: fallbackPayload.responseCode,
+            responseBodyBytes: fallbackPayload.bodyBytes,
+            responseBodySha256: fallbackPayload.bodySha256,
+            nodeUpstreamFetchCount: 0,
+            browserNetworkRequestCount: 0,
+          });
+          diagnosticContext.operation = "request-fulfill";
+          diagnosticContext.reason = "unexpected-handler-error";
+          await appCheckCdpSession.send("Fetch.fulfillRequest", {
+            requestId: event.requestId,
+            responseCode: fallbackPayload.responseCode,
+            responseHeaders: fallbackPayload.responseHeaders,
+            body: fallbackPayload.body,
+          });
+          return;
+        }
         const upstreamParsed = new URL(rewriteDecision.upstreamUrl);
         const googleOrFirebaseUpstream =
           upstreamParsed.hostname.endsWith(".googleapis.com") ||
@@ -27388,6 +27814,17 @@ try {
           },
         },
       );
+      telemetryCapabilityGuardRuntimeAttestations.push(
+        await collectTelemetryCapabilityGuardAttestation({
+          page,
+          point: "post-authentication",
+          stage,
+          groupKey,
+          captureId: null,
+          expectedOrigin: origin,
+        }),
+      );
+      telemetryCapabilityGuardAuthenticationAttestationCount += 1;
       const {
         applicationSessionProof,
         applicationSessionAuthorityMode,
@@ -27587,6 +28024,19 @@ try {
           target.screen.captureRoute,
         );
         await page.waitForLoadState("load");
+        const screenTelemetryCapabilityGuardAttestation =
+          await collectTelemetryCapabilityGuardAttestation({
+            page,
+            point: "post-screen-navigation",
+            stage,
+            groupKey,
+            captureId: activeCaptureId,
+            expectedOrigin: origin,
+          });
+        telemetryCapabilityGuardRuntimeAttestations.push(
+          screenTelemetryCapabilityGuardAttestation,
+        );
+        telemetryCapabilityGuardScreenAttestationCount += 1;
         await page.evaluate(async () => document.fonts.ready);
         const appCheckDebugGlobalDescriptor = await page.evaluate(() => {
           const descriptor = Object.getOwnPropertyDescriptor(
@@ -28050,6 +28500,8 @@ try {
           fixtureActions,
           fixtureEvidence: metadata.fixtureEvidence,
           network: captureNetwork,
+          telemetryCapabilityGuardAttestation:
+            screenTelemetryCapabilityGuardAttestation,
         };
         const captureAttestation = {
           type: "capture",
@@ -28081,6 +28533,8 @@ try {
           fixtureEvidenceSha256: sha256(
             Buffer.from(JSON.stringify(captureRow.fixtureEvidence)),
           ),
+          telemetryCapabilityGuardAttestation:
+            screenTelemetryCapabilityGuardAttestation,
         };
         captureRow.browserAttestationSha256 = sha256(
           Buffer.from(JSON.stringify(captureAttestation)),
@@ -28633,13 +29087,27 @@ try {
       optionalTelemetrySuppressionObservations.slice(
         groupOptionalTelemetryObservationStart,
       );
+    const groupTelemetryCapabilityGuardRuntimeAttestations =
+      telemetryCapabilityGuardRuntimeAttestations.slice(
+        groupTelemetryCapabilityGuardRuntimeAttestationStart,
+      );
+    const groupStableOriginFaviconFallbackObservations =
+      stableOriginFaviconFallbackObservations.slice(
+        groupStableOriginFaviconFallbackObservationStart,
+      );
     const groupNetworkPolicySummary = {
-      schemaVersion: 4,
+      schemaVersion: 5,
       externalStaticAllowlistHash: sha256(
         canonicalJson(contract.networkBoundary.externalStaticRequestAllowlist),
       ),
       optionalTelemetrySuppressionContractHash: sha256(
         canonicalJson(contract.networkBoundary.optionalTelemetrySuppression),
+      ),
+      telemetryCapabilityGuardContractHash: sha256(
+        canonicalJson(
+          contract.networkBoundary.optionalTelemetrySuppression
+            .documentStartGuard,
+        ),
       ),
       sensitiveValueScopeContractHash: sha256(
         canonicalJson(contract.networkBoundary.sensitiveValueScope),
@@ -28653,6 +29121,20 @@ try {
       optionalTelemetrySuppressedRequestCount:
         optionalTelemetrySuppressedRequestCount -
         groupOptionalTelemetrySuppressedStart,
+      telemetryCapabilityGuardInitScriptRegistrationCount:
+        telemetryCapabilityGuardInitScriptRegistrationCount -
+        groupTelemetryCapabilityGuardInitScriptRegistrationStart,
+      telemetryCapabilityGuardAuthenticationAttestationCount:
+        telemetryCapabilityGuardAuthenticationAttestationCount -
+        groupTelemetryCapabilityGuardAuthenticationAttestationStart,
+      telemetryCapabilityGuardScreenAttestationCount:
+        telemetryCapabilityGuardScreenAttestationCount -
+        groupTelemetryCapabilityGuardScreenAttestationStart,
+      telemetryCapabilityGuardRuntimeAttestationCount:
+        groupTelemetryCapabilityGuardRuntimeAttestations.length,
+      telemetryCapabilityGuardRuntimeAttestationSetHash: sha256(
+        canonicalJson(groupTelemetryCapabilityGuardRuntimeAttestations),
+      ),
       deterministicHolidayResponseFulfillCount:
         deterministicHolidayResponseFulfillCount -
         groupDeterministicHolidayFulfillStart,
@@ -28839,6 +29321,32 @@ try {
       groupNetworkPolicySummary.directBrowserEarlyHintsCaptureInvalidationCount,
       0,
     );
+    assert.equal(
+      groupNetworkPolicySummary.optionalTelemetrySuppressedRequestCount,
+      contract.networkBoundary.optionalTelemetrySuppression
+        .requiredLiveSuppressedRequestCount,
+    );
+    assert.equal(
+      groupNetworkPolicySummary.optionalTelemetryObservationCount,
+      contract.networkBoundary.optionalTelemetrySuppression
+        .requiredLiveObservationCount,
+    );
+    assert.equal(
+      groupNetworkPolicySummary.telemetryCapabilityGuardInitScriptRegistrationCount,
+      1,
+    );
+    assert.equal(
+      groupNetworkPolicySummary.telemetryCapabilityGuardAuthenticationAttestationCount,
+      Number(Boolean(authenticationRole)),
+    );
+    assert.equal(
+      groupNetworkPolicySummary.telemetryCapabilityGuardScreenAttestationCount,
+      groupTargets.length,
+    );
+    assert.equal(
+      groupNetworkPolicySummary.telemetryCapabilityGuardRuntimeAttestationCount,
+      Number(Boolean(authenticationRole)) + groupTargets.length,
+    );
     groupNetworkPolicySummary.summarySha256 = sha256(
       canonicalJson(groupNetworkPolicySummary),
     );
@@ -28926,6 +29434,20 @@ try {
         auditEventId: `${groupKey}:telemetry-${index}`,
         ...observation,
       })),
+      ...groupTelemetryCapabilityGuardRuntimeAttestations.map(
+        (attestation, index) => ({
+          type: "telemetry-capability-guard-attestation",
+          auditEventId: `${groupKey}:telemetry-capability-guard-${index}`,
+          ...attestation,
+        }),
+      ),
+      ...groupStableOriginFaviconFallbackObservations.map(
+        (observation, index) => ({
+          type: "stable-origin-favicon-fallback",
+          auditEventId: `${groupKey}:favicon-fallback-${index}`,
+          ...observation,
+        }),
+      ),
       {
         type: "app-check-bridge",
         id: groupKey,
@@ -30300,8 +30822,44 @@ assert.equal(stableOriginRewriteBrowserNetworkRequestCount, 0);
 assert.equal(stableOriginRewriteResponseLinkHeaderForwardCount, 0);
 assert.equal(browserSkipToolbarHeaderObservationCount, 0);
 assert.equal(browserSkipToolbarHeaderPreTransmissionBlockCount, 0);
+assert.ok(stableOriginFaviconFallbackFulfillCount > 0);
+assert.equal(
+  stableOriginFaviconFallbackFulfillCount,
+  stableOriginFaviconFallbackObservations.length,
+);
+assert.equal(stableOriginFaviconFallbackNodeUpstreamFetchCount, 0);
+assert.equal(stableOriginFaviconFallbackBrowserNetworkRequestCount, 0);
+assert.deepEqual(
+  [
+    ...new Set(
+      stableOriginFaviconFallbackObservations.map(
+        (observation) => observation.stage,
+      ),
+    ),
+  ].sort(),
+  ["baseline", "candidate"],
+);
+assert.equal(
+  stableOriginFaviconFallbackObservations.every(
+    (observation) =>
+      observation.id ===
+        contract.browserTransport.stableOriginFaviconFallback.id &&
+      observation.method === "GET" &&
+      observation.resourceType === "Other" &&
+      observation.browserPath === "/favicon.ico" &&
+      observation.browserOriginExact === true &&
+      observation.responseStatus === 204 &&
+      observation.responseBodyBytes === 0 &&
+      observation.responseBodySha256 ===
+        contract.browserTransport.stableOriginFaviconFallback
+          .responseBodySha256 &&
+      observation.nodeUpstreamFetchCount === 0 &&
+      observation.browserNetworkRequestCount === 0,
+  ),
+  true,
+);
 const browserTransportBinding = {
-  schemaVersion: 3,
+  schemaVersion: 4,
   contract: contract.browserTransport,
   contractHash: stableOriginRewriteTransportContractHash,
   browserOrigin: stableBrowserOrigin,
@@ -30340,6 +30898,14 @@ const browserTransportBinding = {
   browserSkipToolbarHeaderPreTransmissionBlockCount,
   responseLinkHeaderForwardCount:
     stableOriginRewriteResponseLinkHeaderForwardCount,
+  stableOriginFaviconFallbackFulfillCount,
+  stableOriginFaviconFallbackNodeUpstreamFetchCount,
+  stableOriginFaviconFallbackBrowserNetworkRequestCount,
+  stableOriginFaviconFallbackObservationCount:
+    stableOriginFaviconFallbackObservations.length,
+  stableOriginFaviconFallbackObservationSetHash: sha256(
+    canonicalJson(stableOriginFaviconFallbackObservations),
+  ),
   playwrightRouteRegistrationCount,
   groups: stableOriginRewriteGroups.sort((left, right) =>
     left.id.localeCompare(right.id),
@@ -30449,12 +31015,17 @@ const browserWideBoundaryAttestation = {
     browserConnectProxyFinalSnapshot.authorityLeaseQueueResidualCount,
 };
 const networkPolicyBinding = {
-  schemaVersion: 4,
+  schemaVersion: 5,
   externalStaticAllowlistHash: sha256(
     canonicalJson(contract.networkBoundary.externalStaticRequestAllowlist),
   ),
   optionalTelemetrySuppressionContractHash: sha256(
     canonicalJson(contract.networkBoundary.optionalTelemetrySuppression),
+  ),
+  telemetryCapabilityGuardContractHash: sha256(
+    canonicalJson(
+      contract.networkBoundary.optionalTelemetrySuppression.documentStartGuard,
+    ),
   ),
   sensitiveValueScopeContractHash: sha256(
     canonicalJson(contract.networkBoundary.sensitiveValueScope),
@@ -30466,6 +31037,14 @@ const networkPolicyBinding = {
     }),
   ),
   optionalTelemetrySuppressedRequestCount,
+  telemetryCapabilityGuardInitScriptRegistrationCount,
+  telemetryCapabilityGuardAuthenticationAttestationCount,
+  telemetryCapabilityGuardScreenAttestationCount,
+  telemetryCapabilityGuardRuntimeAttestationCount:
+    telemetryCapabilityGuardRuntimeAttestations.length,
+  telemetryCapabilityGuardRuntimeAttestationSetHash: sha256(
+    canonicalJson(telemetryCapabilityGuardRuntimeAttestations),
+  ),
   deterministicHolidayResponseFulfillCount,
   deterministicRecaptchaResponseFulfillCount,
   deterministicFirebaseModuleFulfillCount,
@@ -30878,6 +31457,41 @@ assert.equal(
 assert.equal(
   optionalTelemetrySuppressionObservations.length,
   optionalTelemetrySuppressedRequestCount,
+);
+assert.equal(
+  optionalTelemetrySuppressedRequestCount,
+  contract.networkBoundary.optionalTelemetrySuppression
+    .requiredLiveSuppressedRequestCount,
+);
+assert.equal(
+  optionalTelemetrySuppressionObservations.length,
+  contract.networkBoundary.optionalTelemetrySuppression
+    .requiredLiveObservationCount,
+);
+assert.equal(
+  telemetryCapabilityGuardInitScriptRegistrationCount,
+  groupedTargets.size,
+);
+assert.equal(
+  telemetryCapabilityGuardAuthenticationAttestationCount,
+  applicationSessionKeepaliveClientExpectedGroupCount,
+);
+assert.equal(telemetryCapabilityGuardScreenAttestationCount, captures.length);
+assert.equal(
+  telemetryCapabilityGuardRuntimeAttestations.length,
+  telemetryCapabilityGuardAuthenticationAttestationCount +
+    telemetryCapabilityGuardScreenAttestationCount,
+);
+assert.equal(
+  telemetryCapabilityGuardRuntimeAttestations.every(
+    (attestation) =>
+      attestation.originExact === true &&
+      attestation.ownProperty === true &&
+      attestation.valueExact === true &&
+      attestation.descriptorExact === true &&
+      attestation.preservedCapabilitiesPresent === true,
+  ),
+  true,
 );
 assert.equal(
   externalStaticStartupSourceAttestations.length,

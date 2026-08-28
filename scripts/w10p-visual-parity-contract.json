@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 13,
+  "schemaVersion": 14,
   "phase": "W10P",
   "functionalBaselineSha": "ef74b571a6964ddbc61eb7877a98d21b3c7c8c85",
   "productionPresentationSha": "676869fa289d3e7ecef234cbb5cca65c60ec4597",
@@ -458,7 +458,7 @@
       "networkResponsePolicy": "request-stage-node-owned-exact-get-no-redirect-no-error-hash-cache-safe-header-synthetic-final-fulfill-browser-wire-zero"
     },
     "optionalTelemetrySuppression": {
-      "schemaVersion": 1,
+      "schemaVersion": 2,
       "transport": "https-default-443-no-userinfo",
       "methods": ["GET", "POST", "OPTIONS"],
       "hostnames": [
@@ -470,7 +470,34 @@
         "www.google-analytics.com",
         "www.googletagmanager.com"
       ],
-      "action": "fail-request-before-transmission-nonfatal"
+      "action": "fail-request-before-transmission-nonfatal",
+      "documentStartGuard": {
+        "schemaVersion": 1,
+        "id": "firebase-analytics-cookie-capability-guard-v1",
+        "registration": "browser-context-add-init-script-before-page-creation",
+        "originScope": "exact-stable-alias-document-origin",
+        "target": "navigator-instance",
+        "property": "cookieEnabled",
+        "value": false,
+        "descriptor": {
+          "configurable": false,
+          "enumerable": false,
+          "writable": false
+        },
+        "preservedCapabilities": [
+          "document.cookie",
+          "indexedDB",
+          "localStorage",
+          "sessionStorage"
+        ],
+        "runtimeAttestationPoints": [
+          "post-authentication",
+          "post-screen-navigation"
+        ],
+        "outOfScopeAction": "leave-native-property-unmodified"
+      },
+      "requiredLiveSuppressedRequestCount": 0,
+      "requiredLiveObservationCount": 0
     },
     "sensitiveValueScope": {
       "schemaVersion": 3,
@@ -486,7 +513,7 @@
   },
   "stableAlias": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
   "browserTransport": {
-    "schemaVersion": 8,
+    "schemaVersion": 9,
     "mechanism": "cdp-fetch-request-stage-local-fulfill-from-node-attested-immutable-bytes",
     "browserOrigin": "https://westory-staging-westoria28-8028-bbbs-projects-44f9da30.vercel.app",
     "upstreamSource": "stage-immutable-deployment-url",
@@ -537,6 +564,28 @@
     "redirectPolicy": "abort-before-follow",
     "responseBodyHashResourceTypes": ["Document", "Script"],
     "requiredPerGroupResourceTypes": ["Document", "Script"],
+    "stableOriginFaviconFallback": {
+      "schemaVersion": 1,
+      "id": "stable-origin-favicon-empty-204-v1",
+      "stages": ["baseline", "candidate"],
+      "browserOriginSource": "stable-alias",
+      "method": "GET",
+      "pathname": "/favicon.ico",
+      "queryPolicy": "none",
+      "hashPolicy": "none",
+      "resourceType": "Other",
+      "requestBodyPolicy": "absent",
+      "responseStatus": 204,
+      "responseHeaders": {
+        "cache-control": "no-store"
+      },
+      "responseBodyUtf8": "",
+      "responseBodyBytes": 0,
+      "responseBodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "nodeUpstreamFetchPolicy": "forbidden",
+      "browserWirePolicy": "local-cdp-fulfill",
+      "nonmatchingPolicy": "existing-stable-origin-rewrite"
+    },
     "deterministicLocalResponse": {
       "schemaVersion": 1,
       "id": "korean-holidays-empty-v1",
