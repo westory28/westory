@@ -10732,6 +10732,10 @@ const SAFE_BROWSER_ERROR_OPERATION_CLASSES = Object.freeze([
   "auth-menu-config-read",
   "auth-system-config-read",
   "auth-user-profile-read",
+  "dashboard-holiday-sync",
+  "dashboard-notices-read",
+  "dashboard-schedule-categories-read",
+  "firestore-unhandled-snapshot-listener",
   "quill-editor-init",
   "semester-core-read",
   "semester-readiness-read",
@@ -10741,6 +10745,7 @@ const SAFE_BROWSER_ERROR_OPERATION_CLASSES = Object.freeze([
   "settings-privacy-policy-read",
   "settings-privacy-terms-read",
   "settings-school-config-read",
+  "teacher-patch-notes-read",
   "unknown-operation",
 ]);
 const SAFE_HTTP_ERROR_RESOURCE_TYPE_CLASSES = Object.freeze([
@@ -10757,6 +10762,24 @@ const SAFE_HTTP_ERROR_RESOURCE_TYPE_CLASSES = Object.freeze([
   "texttrack",
   "websocket",
   "xhr",
+]);
+const SAFE_FIREBASE_SERVICE_DIAGNOSTIC_CLASSES = Object.freeze([
+  "app-check",
+  "auth",
+  "firestore",
+  "functions",
+  "hosting",
+  "non-firebase",
+  "realtime-database",
+  "storage",
+  "unknown",
+]);
+const SAFE_HTTP_STATUS_CLASSES = Object.freeze([
+  "2xx",
+  "3xx",
+  "4xx",
+  "5xx",
+  "other",
 ]);
 const classifySafeBrowserErrorName = (sourceClass, errorName) => {
   if (sourceClass === "console-error") return "console-error";
@@ -10910,6 +10933,9 @@ const classifySafeBrowserErrorOperation = (value) => {
   ) {
     return "quill-editor-init";
   }
+  if (message.includes("Uncaught Error in snapshot listener:")) {
+    return "firestore-unhandled-snapshot-listener";
+  }
   const fixedOperationByPrefix = [
     ["Failed to load interface config", "auth-interface-config-read"],
     ["Failed to load system config", "auth-system-config-read"],
@@ -10922,6 +10948,13 @@ const classifySafeBrowserErrorOperation = (value) => {
     ["Failed to resume after maintenance", "auth-maintenance-read"],
     ["Invalid student maintenance configuration", "auth-maintenance-read"],
     ["Failed to subscribe student maintenance", "auth-maintenance-read"],
+    [
+      "Failed to load schedule categories:",
+      "dashboard-schedule-categories-read",
+    ],
+    ["Notice fetch error:", "dashboard-notices-read"],
+    ["Failed to subscribe teacher patch notes:", "teacher-patch-notes-read"],
+    ["Failed to sync Korean public holidays:", "dashboard-holiday-sync"],
     ["Failed to initialize Quill editor", "quill-editor-init"],
     ["Failed to load access settings users:", "settings-access-users-list"],
     ["Failed to load school config:", "settings-school-config-read"],
@@ -11080,6 +11113,113 @@ const safeHttpErrorResourceTypeClass = (resourceType) => {
     ? normalizedResourceType
     : "other";
 };
+const safeFirebaseServiceDiagnosticClass = (observation) => {
+  if (observation?.isFirebaseRequest === false) return "non-firebase";
+  const service = observation?.firebaseService;
+  return SAFE_FIREBASE_SERVICE_DIAGNOSTIC_CLASSES.includes(service)
+    ? service
+    : "unknown";
+};
+const safeHttpStatusClass = (status) => {
+  const numericStatus = Number(status);
+  if (!Number.isInteger(numericStatus)) return "other";
+  if (numericStatus >= 200 && numericStatus < 300) return "2xx";
+  if (numericStatus >= 300 && numericStatus < 400) return "3xx";
+  if (numericStatus >= 400 && numericStatus < 500) return "4xx";
+  if (numericStatus >= 500 && numericStatus < 600) return "5xx";
+  return "other";
+};
+const summarizeSafeFirebaseResponseStatuses = (responses) => {
+  const firebaseResponses = responses.filter(
+    (response) => response?.isFirebaseRequest === true,
+  );
+  const counts = new Map();
+  for (const response of firebaseResponses) {
+    const firebaseService = safeFirebaseServiceDiagnosticClass(response);
+    const statusClass = SAFE_HTTP_STATUS_CLASSES.includes(response.statusClass)
+      ? response.statusClass
+      : safeHttpStatusClass(response.status);
+    assert.equal(
+      SAFE_FIREBASE_SERVICE_DIAGNOSTIC_CLASSES.includes(firebaseService),
+      true,
+    );
+    assert.equal(SAFE_HTTP_STATUS_CLASSES.includes(statusClass), true);
+    const key = `${firebaseService}\u0000${statusClass}`;
+    const previous = counts.get(key);
+    counts.set(key, {
+      firebaseService,
+      statusClass,
+      count: (previous?.count || 0) + 1,
+    });
+  }
+  return Object.freeze({
+    authenticationFirebaseResponseCount: firebaseResponses.length,
+    authenticationFirebaseHttpGe400ResponseCount: firebaseResponses.filter(
+      (response) =>
+        ["4xx", "5xx"].includes(
+          SAFE_HTTP_STATUS_CLASSES.includes(response.statusClass)
+            ? response.statusClass
+            : safeHttpStatusClass(response.status),
+        ),
+    ).length,
+    authenticationFirebaseServiceStatusClassHistogram: [
+      ...counts.values(),
+    ].sort(
+      (left, right) =>
+        left.firebaseService.localeCompare(right.firebaseService) ||
+        left.statusClass.localeCompare(right.statusClass),
+    ),
+  });
+};
+const safeBrowserRequestFailureClass = (errorText) => {
+  const normalizedErrorText = String(errorText || "");
+  return Object.prototype.hasOwnProperty.call(
+    SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_ERROR_TEXT_CLASS_MAP,
+    normalizedErrorText,
+  )
+    ? SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_ERROR_TEXT_CLASS_MAP[
+        normalizedErrorText
+      ]
+    : "other";
+};
+const summarizeSafeBrowserRequestFailures = (records) => {
+  const counts = new Map();
+  for (const record of records) {
+    assert.ok(record && typeof record === "object");
+    assert.equal(
+      SAFE_FIREBASE_SERVICE_DIAGNOSTIC_CLASSES.includes(record.firebaseService),
+      true,
+    );
+    assert.equal(
+      SAFE_HTTP_ERROR_RESOURCE_TYPE_CLASSES.includes(record.resourceType),
+      true,
+    );
+    assert.equal(
+      SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_CLASSES.includes(
+        record.failureClass,
+      ),
+      true,
+    );
+    const key = `${record.firebaseService}\u0000${record.resourceType}\u0000${record.failureClass}`;
+    const previous = counts.get(key);
+    counts.set(key, {
+      firebaseService: record.firebaseService,
+      resourceType: record.resourceType,
+      failureClass: record.failureClass,
+      count: (previous?.count || 0) + 1,
+    });
+  }
+  return Object.freeze({
+    authenticationBrowserRequestFailureClassHistogram: [
+      ...counts.values(),
+    ].sort(
+      (left, right) =>
+        left.firebaseService.localeCompare(right.firebaseService) ||
+        left.resourceType.localeCompare(right.resourceType) ||
+        left.failureClass.localeCompare(right.failureClass),
+    ),
+  });
+};
 const summarizeSafeRouteResponseStatuses = (responses) => {
   let http3xxResponseCount = 0;
   let httpGe400ResponseCount = 0;
@@ -11182,6 +11322,26 @@ const summarizeSafeFirestoreWebChannelAuthBindings = ({
   );
   const authBindingClasses = (bindings) =>
     bindings.map((record) => record.firebaseAuth?.bindingClass);
+  const appCheckHeaderSources = (bindings) =>
+    bindings.map((record) => {
+      if (
+        record.appCheckHeaderPresent === false &&
+        record.appCheckHeaderSource === null
+      ) {
+        return "missing";
+      }
+      if (
+        record.appCheckHeaderPresent === true &&
+        [
+          "baseline-cdp-fetch-bridge",
+          "capture-owned-fetch",
+          "native-sdk",
+        ].includes(record.appCheckHeaderSource)
+      ) {
+        return record.appCheckHeaderSource;
+      }
+      return "unknown";
+    });
   const phaseCaptureBindingHistogram = (bindings) =>
     [
       ...bindings.reduce((counts, record) => {
@@ -11241,6 +11401,17 @@ const summarizeSafeFirestoreWebChannelAuthBindings = ({
         allowedValues: SAFE_FIRESTORE_WEBCHANNEL_AUTH_BINDING_CLASSES,
         key: "bindingClass",
       }),
+    groupWebChannelInitialHandshakeAppCheckHeaderSourceHistogram:
+      safeFixedValueHistogram({
+        values: appCheckHeaderSources(initialBindings),
+        allowedValues: [
+          "baseline-cdp-fetch-bridge",
+          "capture-owned-fetch",
+          "missing",
+          "native-sdk",
+        ],
+        key: "appCheckHeaderSource",
+      }),
     groupWebChannelInitialHandshakeProofAvailableCount:
       proofAvailableCount(initialBindings),
     groupWebChannelInitialHandshakeProofBoundCount:
@@ -11265,6 +11436,18 @@ const summarizeSafeFirestoreWebChannelAuthBindings = ({
       allowedValues: SAFE_FIRESTORE_WEBCHANNEL_AUTH_BINDING_CLASSES,
       key: "bindingClass",
     }),
+    activeRouteWebChannelAppCheckHeaderSourceHistogram: safeFixedValueHistogram(
+      {
+        values: appCheckHeaderSources(activeRouteBindings),
+        allowedValues: [
+          "baseline-cdp-fetch-bridge",
+          "capture-owned-fetch",
+          "missing",
+          "native-sdk",
+        ],
+        key: "appCheckHeaderSource",
+      },
+    ),
     activeRouteWebChannelInitialHandshakeCount:
       activeRouteInitialBindings.length,
     activeRouteWebChannelInitialHandshakeObserved:
@@ -16490,6 +16673,17 @@ const verifySafeBrowserErrorDiagnosticFixtures = () => {
     ["Failed to resume after maintenance", "auth-maintenance-read"],
     ["Invalid student maintenance configuration", "auth-maintenance-read"],
     ["Failed to subscribe student maintenance", "auth-maintenance-read"],
+    [
+      "Failed to load schedule categories:",
+      "dashboard-schedule-categories-read",
+    ],
+    ["Notice fetch error:", "dashboard-notices-read"],
+    ["Failed to subscribe teacher patch notes:", "teacher-patch-notes-read"],
+    [
+      "[2026-08-17T06:00:00.000Z]  @firebase/firestore: Firestore (12.9.0): Uncaught Error in snapshot listener:",
+      "firestore-unhandled-snapshot-listener",
+    ],
+    ["Failed to sync Korean public holidays:", "dashboard-holiday-sync"],
     ["Failed to initialize Quill editor", "quill-editor-init"],
     ["Failed to load access settings users:", "settings-access-users-list"],
     ["Failed to load school config:", "settings-school-config-read"],
@@ -16663,6 +16857,55 @@ const verifySafeBrowserErrorDiagnosticFixtures = () => {
       { resourceType: "xhr", count: 1 },
     ],
   });
+  const firebaseResponseSummary = summarizeSafeFirebaseResponseStatuses([
+    { isFirebaseRequest: true, firebaseService: "firestore", status: 200 },
+    {
+      isFirebaseRequest: true,
+      firebaseService: "firestore",
+      statusClass: "4xx",
+    },
+    { isFirebaseRequest: true, firebaseService: "auth", status: 500 },
+    { isFirebaseRequest: false, firebaseService: null, status: 404 },
+  ]);
+  assert.deepEqual(firebaseResponseSummary, {
+    authenticationFirebaseResponseCount: 3,
+    authenticationFirebaseHttpGe400ResponseCount: 2,
+    authenticationFirebaseServiceStatusClassHistogram: [
+      { firebaseService: "auth", statusClass: "5xx", count: 1 },
+      { firebaseService: "firestore", statusClass: "2xx", count: 1 },
+      { firebaseService: "firestore", statusClass: "4xx", count: 1 },
+    ],
+  });
+  const browserRequestFailureSummary = summarizeSafeBrowserRequestFailures([
+    {
+      firebaseService: "firestore",
+      resourceType: "xhr",
+      failureClass: safeBrowserRequestFailureClass(
+        "net::ERR_BLOCKED_BY_CLIENT",
+      ),
+    },
+    {
+      firebaseService: "non-firebase",
+      resourceType: "other",
+      failureClass: safeBrowserRequestFailureClass("private failure text"),
+    },
+  ]);
+  assert.deepEqual(browserRequestFailureSummary, {
+    authenticationBrowserRequestFailureClassHistogram: [
+      {
+        firebaseService: "firestore",
+        resourceType: "xhr",
+        failureClass: "blocked-by-client",
+        count: 1,
+      },
+      {
+        firebaseService: "non-firebase",
+        resourceType: "other",
+        failureClass: "other",
+        count: 1,
+      },
+    ],
+  });
   const requestFinishedSummary = summarizeSafeFinishedRequests([
     { isFirebaseRequest: false, resourceType: "document" },
     { isFirebaseRequest: true, resourceType: "xhr" },
@@ -16744,18 +16987,24 @@ const verifySafeBrowserErrorDiagnosticFixtures = () => {
           requestClass: "initial-forward-post",
           phase: "context-bootstrap",
           captureId: null,
+          appCheckHeaderPresent: false,
+          appCheckHeaderSource: null,
           firebaseAuth: missingInitialAuth,
         },
         {
           requestClass: "initial-forward-post",
           phase: "screen-capture",
           captureId: "fixed-active-capture",
+          appCheckHeaderPresent: true,
+          appCheckHeaderSource: "native-sdk",
           firebaseAuth: proofBoundInitialAuth,
         },
         {
           requestClass: "session-forward-post",
           phase: "screen-capture",
           captureId: "fixed-active-capture",
+          appCheckHeaderPresent: true,
+          appCheckHeaderSource: "native-sdk",
           firebaseAuth: inheritedForwardAuth,
         },
       ],
@@ -16775,6 +17024,17 @@ const verifySafeBrowserErrorDiagnosticFixtures = () => {
   assert.equal(
     safeWebChannelAuthBindingSummary.activeRouteWebChannelInitialHandshakeAllProofBound,
     true,
+  );
+  assert.deepEqual(
+    safeWebChannelAuthBindingSummary.groupWebChannelInitialHandshakeAppCheckHeaderSourceHistogram,
+    [
+      { appCheckHeaderSource: "missing", count: 1 },
+      { appCheckHeaderSource: "native-sdk", count: 1 },
+    ],
+  );
+  assert.deepEqual(
+    safeWebChannelAuthBindingSummary.activeRouteWebChannelAppCheckHeaderSourceHistogram,
+    [{ appCheckHeaderSource: "native-sdk", count: 2 }],
   );
   const bootstrapAttestationFixture = {
     responseUrlExact: true,
@@ -16934,6 +17194,8 @@ const verifySafeBrowserErrorDiagnosticFixtures = () => {
   const serializedDiagnostic = JSON.stringify({
     ...accumulatorSnapshot,
     ...routeResponseSummary,
+    ...firebaseResponseSummary,
+    ...browserRequestFailureSummary,
     ...requestFinishedSummary,
     ...safeWebChannelAuthBindingSummary,
   });
@@ -16958,6 +17220,8 @@ const verifySafeBrowserErrorDiagnosticFixtures = () => {
       operationHistogramRecords.length,
     safeBrowserErrorDiagnosticHistogramEntryCount: histogram.length,
     safeRouteResponseDiagnosticFixtureCount: 5,
+    safeFirebaseResponseDiagnosticFixtureCount: 4,
+    safeBrowserRequestFailureDiagnosticFixtureCount: 2,
     safeRequestFinishedDiagnosticFixtureCount: 3,
     safeNetworkAttestationDrainDiagnosticFixtureCount:
       networkAttestationDrainDiagnostics.length,
@@ -30184,6 +30448,8 @@ try {
     const groupStableOriginFaviconFallbackObservationStart =
       stableOriginFaviconFallbackObservations.length;
     const groupCaptureAttestations = [];
+    const groupBrowserRequestFailureDiagnostics = [];
+    const groupCdpFirebaseResponseDiagnostics = [];
     context.on("request", (request) => {
       if (
         optionalTelemetrySuppressionDecision({
@@ -31285,6 +31551,22 @@ try {
         assert.equal(responseStageDecision.kind, "final");
         assert.equal(responseStageDecision.terminal, true);
         allowedEgressResponsePauseCount += 1;
+        if (allowedEgressObservation.isFirebaseRequest === true) {
+          groupCdpFirebaseResponseDiagnostics.push(
+            Object.freeze({
+              isFirebaseRequest: true,
+              firebaseService: safeFirebaseServiceDiagnosticClass(
+                allowedEgressObservation,
+              ),
+              phase: SAFE_FIRESTORE_WEBCHANNEL_AUTH_DIAGNOSTIC_PHASES.includes(
+                allowedEgressObservation.diagnosticPhase,
+              )
+                ? allowedEgressObservation.diagnosticPhase
+                : "unknown",
+              statusClass: safeHttpStatusClass(responseStatus),
+            }),
+          );
+        }
         const finalConditionalResponseHeaderRuleId =
           responseStatus >= 200 && responseStatus < 300
             ? allowedEgressObservation?.conditionalResponseHeaderRuleId || null
@@ -32731,6 +33013,18 @@ try {
         return;
       }
       browserRequestFailureCount += 1;
+      const observation = requestObservations.get(request);
+      let rawFailureText = String(request.failure()?.errorText || "");
+      groupBrowserRequestFailureDiagnostics.push(
+        Object.freeze({
+          firebaseService: safeFirebaseServiceDiagnosticClass(observation),
+          resourceType: safeHttpErrorResourceTypeClass(
+            observation?.resourceType || request.resourceType(),
+          ),
+          failureClass: safeBrowserRequestFailureClass(rawFailureText),
+        }),
+      );
+      rawFailureText = "";
     });
     page.on("console", (message) => {
       let rawText = message.text();
@@ -33024,8 +33318,18 @@ try {
       const authenticationOptionalTelemetrySuppressedRequestCount =
         optionalTelemetrySuppressedRequestCount -
         groupOptionalTelemetrySuppressedStart;
+      const authenticationFirebaseResponses =
+        groupCdpFirebaseResponseDiagnostics.filter(
+          (response) => response.phase === "authentication",
+        );
       const authenticationBrowserErrorDiagnostic = {
         ...snapshotSafeBrowserErrorAccumulator(pageErrorAccumulator),
+        ...summarizeSafeFirebaseResponseStatuses(
+          authenticationFirebaseResponses,
+        ),
+        ...summarizeSafeBrowserRequestFailures(
+          groupBrowserRequestFailureDiagnostics,
+        ),
         authenticationNetworkAttestationDrainDiagnostic,
         authenticationBootstrapRetirementAttestation:
           groupAuthenticationBootstrapRetirementAttestation,
@@ -33038,6 +33342,9 @@ try {
         authenticationBrowserRequestFailureCount,
         authenticationAppCheckCdpHandlerErrorCount,
         authenticationOptionalTelemetrySuppressedRequestCount,
+        authenticationAllowedEgressHttpErrorAbortCount:
+          allowedEgressHttpErrorAbortCount -
+          groupAllowedEgressHttpErrorAbortStart,
         groupCdpContinueRequestInvalidInterceptionErrorCount:
           cdpContinueRequestInvalidInterceptionErrorCount -
           groupCdpContinueRequestInvalidInterceptionErrorStart,
