@@ -27466,6 +27466,9 @@ try {
         browserRequestFailureCount - groupBrowserRequestFailureStart;
       const authenticationAppCheckCdpHandlerErrorCount =
         appCheckCdpHandlerErrorCount - groupBaselineBridgeHandlerErrorStart;
+      const authenticationOptionalTelemetrySuppressedRequestCount =
+        optionalTelemetrySuppressedRequestCount -
+        groupOptionalTelemetrySuppressedStart;
       const authenticationBrowserErrorDiagnostic = {
         ...snapshotSafeBrowserErrorAccumulator(pageErrorAccumulator),
         authenticationNetworkAttestationDrainDiagnostic,
@@ -27479,6 +27482,16 @@ try {
         cumulativeBrowserRequestFailureCount: browserRequestFailureCount,
         authenticationBrowserRequestFailureCount,
         authenticationAppCheckCdpHandlerErrorCount,
+        authenticationOptionalTelemetrySuppressedRequestCount,
+        groupCdpContinueRequestInvalidInterceptionErrorCount:
+          cdpContinueRequestInvalidInterceptionErrorCount -
+          groupCdpContinueRequestInvalidInterceptionErrorStart,
+        groupCdpOtherProtocolErrorCount:
+          cdpOtherProtocolErrorCount - groupCdpOtherProtocolErrorStart,
+        groupCdpHandlerFailureClasses: snapshotSafeDiagnosticClasses(
+          cdpHandlerFailureClassCounts,
+          groupCdpHandlerFailureClassCountsStart,
+        ),
         cumulativeNetworkHeaderAttestationErrorCount:
           networkHeaderAttestationErrorCount,
       };
