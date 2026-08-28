@@ -5779,7 +5779,72 @@ const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_PROXY_LEASE_CLASSES =
 const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_CURRENT_TUNNEL_CLASSES =
   Object.freeze(["current-active-tunnel"]);
 const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_ECHO_CLASSES =
-  Object.freeze(["generic-failed", "blocked-by-client"]);
+  Object.freeze([
+    "http2-protocol",
+    "proxy-tunnel",
+    "tls",
+    "connection-reset",
+    "connection-closed",
+    "connection",
+    "network-changed",
+    "incomplete-chunked",
+    "content-length-mismatch",
+    "timeout",
+    "name-resolution",
+    "aborted",
+    "generic-failed",
+    "blocked-by-client",
+  ]);
+const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES = Object.freeze({
+  generic: "authentication-protected-read-retry-attestation-failed",
+  callbackPreconditionMismatch:
+    "authentication-protected-read-callback-precondition-mismatch",
+  pageAttestationInvalid:
+    "authentication-protected-read-page-attestation-invalid",
+  cdpHandlerDrainFailed:
+    "authentication-protected-read-cdp-handler-drain-failed",
+  networkAttestationDrainFailed:
+    "authentication-protected-read-network-attestation-drain-failed",
+  attemptCountUnsettled:
+    "authentication-protected-read-attempt-count-unsettled",
+  networkIdentityUnsettled:
+    "authentication-protected-read-network-identity-unsettled",
+  responseRecordUnsettled:
+    "authentication-protected-read-response-record-unsettled",
+  requestFailureRecordUnsettled:
+    "authentication-protected-read-request-failure-record-unsettled",
+  recordExtractionFailed:
+    "authentication-protected-read-record-extraction-failed",
+  pageContractMismatch: "authentication-protected-read-page-contract-mismatch",
+  bindingContractMismatch:
+    "authentication-protected-read-binding-contract-mismatch",
+  cdpContractMismatch: "authentication-protected-read-cdp-contract-mismatch",
+  proxyProvenanceContractMismatch:
+    "authentication-protected-read-proxy-provenance-contract-mismatch",
+  requestFailureContractMismatch:
+    "authentication-protected-read-request-failure-contract-mismatch",
+  browserFailureCountMismatch:
+    "authentication-protected-read-browser-failure-count-mismatch",
+  egressResponseErrorCountMismatch:
+    "authentication-protected-read-egress-response-error-count-mismatch",
+  sensitiveResponseErrorCountMismatch:
+    "authentication-protected-read-sensitive-response-error-count-mismatch",
+  cdpRecoveredCountMismatch:
+    "authentication-protected-read-cdp-recovered-count-mismatch",
+});
+const setSafeAuthenticationProtectedReadRetryFailureClass = (
+  setFailureClass,
+  failureClass,
+) => {
+  assert.equal(typeof setFailureClass, "function");
+  assert.equal(typeof failureClass, "string");
+  assert.ok(
+    Object.values(
+      SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES,
+    ).includes(failureClass),
+  );
+  setFailureClass(failureClass);
+};
 const normalizeSafeAuthenticationProtectedReadRetryAttestation = (
   attestation,
 ) => {
@@ -5876,16 +5941,38 @@ const normalizeSafeAuthenticationProtectedReadRetryAttestation = (
   assert.equal(attestation.profileFinalOutcomeClass, "response-2xx");
   return Object.freeze({ ...attestation });
 };
-const confirmSafeAuthenticationProtectedReadRetry = ({
-  pageAttestation,
-  cdpResponseRecords,
-  requestFailureRecords,
-  bindingAttestation,
-}) => {
+const confirmSafeAuthenticationProtectedReadRetry = (
+  {
+    pageAttestation,
+    cdpResponseRecords,
+    requestFailureRecords,
+    bindingAttestation,
+  },
+  setFailureClass = null,
+) => {
+  const markFailureClass = (failureClass) => {
+    if (setFailureClass === null) return;
+    setSafeAuthenticationProtectedReadRetryFailureClass(
+      setFailureClass,
+      failureClass,
+    );
+  };
+  markFailureClass(
+    SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.pageContractMismatch,
+  );
   const attestation =
     normalizeSafeAuthenticationProtectedReadRetryAttestation(pageAttestation);
+  markFailureClass(
+    SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.cdpContractMismatch,
+  );
   assert.ok(Array.isArray(cdpResponseRecords));
+  markFailureClass(
+    SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.requestFailureContractMismatch,
+  );
   assert.ok(Array.isArray(requestFailureRecords));
+  markFailureClass(
+    SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.bindingContractMismatch,
+  );
   assert.ok(bindingAttestation && typeof bindingAttestation === "object");
   assert.deepEqual(Object.keys(bindingAttestation).sort(), [
     "appCheckHeaderJwtShapeValid",
@@ -5910,6 +5997,9 @@ const confirmSafeAuthenticationProtectedReadRetry = ({
   };
   const finalResponseClassByTarget = {};
   const firstResponseClassByTarget = {};
+  markFailureClass(
+    SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.cdpContractMismatch,
+  );
   assert.equal(
     cdpResponseRecords.length,
     attestation.configAttemptCount + attestation.profileAttemptCount,
@@ -5942,6 +6032,9 @@ const confirmSafeAuthenticationProtectedReadRetry = ({
         ),
       );
       if (record.responseClass === "response-error-failed") {
+        markFailureClass(
+          SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.proxyProvenanceContractMismatch,
+        );
         assert.ok(
           SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_PROXY_LEASE_CLASSES.includes(
             record.proxyLeaseClass,
@@ -5953,9 +6046,15 @@ const confirmSafeAuthenticationProtectedReadRetry = ({
           ),
         );
       } else {
+        markFailureClass(
+          SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.cdpContractMismatch,
+        );
         assert.equal(record.proxyLeaseClass, null);
         assert.equal(record.currentTunnelClass, null);
       }
+      markFailureClass(
+        SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.cdpContractMismatch,
+      );
     }
     firstResponseClassByTarget[target] = targetRecords[0].responseClass;
     finalResponseClassByTarget[target] =
@@ -5967,6 +6066,9 @@ const confirmSafeAuthenticationProtectedReadRetry = ({
     }
     assert.equal(finalResponseClassByTarget[target], "response-2xx");
   }
+  markFailureClass(
+    SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.requestFailureContractMismatch,
+  );
   for (const record of requestFailureRecords) {
     assert.deepEqual(Object.keys(record).sort(), [
       "attemptNumber",
@@ -12997,7 +13099,7 @@ const SAFE_AUTHENTICATION_FAILURE_CLASSES = Object.freeze([
     SAFE_AUTHENTICATION_PROFILE_RESPONSE_ERROR_RUNTIME_FAILURE_CLASSES,
   ),
   ...Object.values(SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_FAILURE_CLASSES),
-  "authentication-protected-read-retry-attestation-failed",
+  ...Object.values(SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES),
   "application-session-proof-registration-failed",
   "authentication-bootstrap-pre-retirement-drain-failed",
   "authentication-bootstrap-retirement-failed",
@@ -13562,21 +13664,45 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
   const accepted = ["none", "config", "profile"].map((retryTarget) =>
     confirmSafeAuthenticationProtectedReadRetry(createFixture(retryTarget)),
   );
+  const consumedActiveTunnelFixture = createFixture("config");
+  consumedActiveTunnelFixture.cdpResponseRecords[0].proxyLeaseClass =
+    "consumed-active-tunnel";
+  accepted.push(
+    confirmSafeAuthenticationProtectedReadRetry(consumedActiveTunnelFixture),
+  );
+  const acceptedFailureEchoAttestations =
+    SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_ECHO_CLASSES.map(
+      (failureClass) => {
+        const fixture = createFixture("config");
+        fixture.requestFailureRecords[0].failureClass = failureClass;
+        return confirmSafeAuthenticationProtectedReadRetry(fixture);
+      },
+    );
+  assert.equal(
+    acceptedFailureEchoAttestations.every(
+      (attestation) =>
+        attestation.recoveredProtectedReadTransportFailureCount === 1 &&
+        attestation.passed === true,
+    ),
+    true,
+  );
   assert.deepEqual(
     accepted.map(
       (attestation) => attestation.recoveredProtectedReadTransportFailureCount,
     ),
-    [0, 1, 1],
+    [0, 1, 1, 1],
   );
   assert.equal(
     accepted.every((attestation) => attestation.passed),
     true,
   );
   const clone = (value) => JSON.parse(JSON.stringify(value));
+  const privateRawValue =
+    "private-protected-read-request-id-and-token-material";
   const rejectedFixtures = [
     () => {
       const fixture = createFixture();
-      fixture.pageAttestation.extra = true;
+      fixture.pageAttestation[privateRawValue] = privateRawValue;
       return fixture;
     },
     () => {
@@ -13634,6 +13760,16 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     },
     () => {
       const fixture = createFixture("profile");
+      fixture.requestFailureRecords[0].failureClass = "policy-blocked";
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("profile");
+      fixture.requestFailureRecords[0].failureClass = "cors-blocked";
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("profile");
       fixture.requestFailureRecords[0].extra = true;
       return fixture;
     },
@@ -13649,20 +13785,78 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     },
     () => {
       const fixture = createFixture("profile");
-      fixture.cdpResponseRecords[0].currentTunnelClass =
-        "current-no-active-tunnel";
+      fixture.cdpResponseRecords.find(
+        (record) => record.responseClass === "response-error-failed",
+      ).currentTunnelClass = "current-no-active-tunnel";
       return fixture;
     },
   ];
-  for (const createRejectedFixture of rejectedFixtures) {
+  const expectedRejectedFailureClasses = [
+    ...Array(3).fill(
+      SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.pageContractMismatch,
+    ),
+    ...Array(5).fill(
+      SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.cdpContractMismatch,
+    ),
+    ...Array(6).fill(
+      SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.requestFailureContractMismatch,
+    ),
+    SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.bindingContractMismatch,
+    ...Array(2).fill(
+      SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.proxyProvenanceContractMismatch,
+    ),
+  ];
+  assert.equal(expectedRejectedFailureClasses.length, rejectedFixtures.length);
+  for (const [index, createRejectedFixture] of rejectedFixtures.entries()) {
+    const observedRejectedFailureClasses = [];
     assert.throws(() =>
       confirmSafeAuthenticationProtectedReadRetry(
         clone(createRejectedFixture()),
+        (failureClass) => {
+          observedRejectedFailureClasses.push(failureClass);
+        },
       ),
     );
+    assert.equal(
+      observedRejectedFailureClasses.at(-1),
+      expectedRejectedFailureClasses[index],
+    );
   }
-  const privateRawValue =
-    "private-protected-read-request-id-and-token-material";
+  const observedFailureClasses = [];
+  for (const failureClass of Object.values(
+    SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES,
+  )) {
+    setSafeAuthenticationProtectedReadRetryFailureClass(
+      (observedFailureClass) => {
+        observedFailureClasses.push(observedFailureClass);
+      },
+      failureClass,
+    );
+  }
+  assert.deepEqual(
+    observedFailureClasses,
+    Object.values(SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES),
+  );
+  let failureClassCoercionCount = 0;
+  const failureClassCoercionValue = {
+    toString() {
+      failureClassCoercionCount += 1;
+      return SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.generic;
+    },
+  };
+  assert.throws(() =>
+    setSafeAuthenticationProtectedReadRetryFailureClass(
+      () => {},
+      failureClassCoercionValue,
+    ),
+  );
+  assert.throws(() =>
+    setSafeAuthenticationProtectedReadRetryFailureClass(
+      () => {},
+      `${SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.generic}-${privateRawValue}`,
+    ),
+  );
+  assert.equal(failureClassCoercionCount, 0);
   const serializedAccepted = JSON.stringify(accepted);
   assert.equal(serializedAccepted.includes(privateRawValue), false);
   assert.equal(JWT_PATTERN.test(serializedAccepted), false);
@@ -13673,6 +13867,10 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     safeAuthenticationProtectedReadRetryRecoveredFixtureCount: accepted.filter(
       (attestation) => attestation.recoveredByRetry,
     ).length,
+    safeAuthenticationProtectedReadRetryFailureClassFixtureCount:
+      observedFailureClasses.length,
+    safeAuthenticationProtectedReadRetryFailureEchoFixtureCount:
+      acceptedFailureEchoAttestations.length,
     safeAuthenticationProtectedReadRetryRawValueOutputCount: 0,
     safeAuthenticationProtectedReadRetryNetworkAccess: 0,
   };
@@ -16310,6 +16508,7 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     ...Object.values(
       SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_FAILURE_CLASSES,
     ),
+    ...Object.values(SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES),
     "application-session-proof-registration-failed",
   ];
   assert.equal(
@@ -16478,6 +16677,32 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
   assert.equal(
     new Set(serializedProfileFailures).size,
     serializedProfileFailures.length,
+  );
+  const serializedProtectedReadRetryFailures = Object.values(
+    SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES,
+  ).map((failureClass) =>
+    serializeSafeAuthenticationFailure(
+      createSafeAuthenticationFailureDiagnostic({
+        failureClass,
+        stage: "baseline",
+        captureRole: "admin",
+        authRole: "admin",
+        viewport: "1440x900",
+        pageState: saturatedState,
+      }),
+      forbiddenValues,
+    ),
+  );
+  for (const serialized of serializedProtectedReadRetryFailures) {
+    for (const forbiddenValue of forbiddenValues) {
+      assert.equal(serialized.includes(forbiddenValue), false);
+    }
+    assert.equal(JWT_PATTERN.test(serialized), false);
+  }
+  assert.equal(
+    new Set(serializedProtectedReadRetryFailures).size,
+    Object.keys(SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES)
+      .length,
   );
   assert.equal(
     safeAuthenticationConfigReadResponseFailureClass(rawSecretUrl),
@@ -28216,10 +28441,17 @@ const authenticateCore = async (
       protectedReadRetryDelayMs: 250,
     },
   );
-  setFailureClass("authentication-protected-read-retry-attestation-failed");
+  setFailureClass(
+    SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.generic,
+  );
   identity.authenticationProtectedReadRetryAttestation =
     await confirmAuthenticationProtectedReadRetry(
       identity.protectedReadRetryAttestation,
+      (failureClass) =>
+        setSafeAuthenticationProtectedReadRetryFailureClass(
+          setFailureClass,
+          failureClass,
+        ),
     );
   delete identity.protectedReadRetryAttestation;
   setFailureClass("application-session-proof-registration-failed");
@@ -33819,12 +34051,21 @@ try {
               groupApplicationSessionProof,
             );
           },
-          confirmAuthenticationProtectedReadRetry: async (pageAttestation) => {
+          confirmAuthenticationProtectedReadRetry: async (
+            pageAttestation,
+            setProtectedReadFailureClass,
+          ) => {
+            setProtectedReadFailureClass(
+              SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.callbackPreconditionMismatch,
+            );
             assert.equal(
               groupAuthenticationProtectedReadRetryAttestation,
               null,
             );
             assert.equal(activeCaptureId, null);
+            setProtectedReadFailureClass(
+              SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.pageAttestationInvalid,
+            );
             const normalizedPageAttestation =
               normalizeSafeAuthenticationProtectedReadRetryAttestation(
                 pageAttestation,
@@ -33837,7 +34078,13 @@ try {
             const settlementDeadline = Date.now() + 5_000;
             let attempts = [];
             while (true) {
+              setProtectedReadFailureClass(
+                SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.cdpHandlerDrainFailed,
+              );
               await drainAppCheckCdpHandlerPromises();
+              setProtectedReadFailureClass(
+                SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.networkAttestationDrainFailed,
+              );
               await flushNetworkAttestations();
               attempts = [
                 ...authenticationProtectedReadAttemptsByFetchRequestId.values(),
@@ -33873,12 +34120,24 @@ try {
               ) {
                 break;
               }
+              const unsettledFailureClass =
+                attempts.length !== expectedAttemptCount
+                  ? SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.attemptCountUnsettled
+                  : !exactNetworkIdentityBound
+                    ? SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.networkIdentityUnsettled
+                    : !responseRecordsSettled
+                      ? SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.responseRecordUnsettled
+                      : SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.requestFailureRecordUnsettled;
+              setProtectedReadFailureClass(unsettledFailureClass);
               assert.ok(
                 Date.now() < settlementDeadline,
                 "Protected-read CDP and Playwright attestations did not settle within the bounded window.",
               );
               await page.waitForTimeout(25);
             }
+            setProtectedReadFailureClass(
+              SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.networkIdentityUnsettled,
+            );
             assert.equal(
               attempts.length,
               authenticationProtectedReadAttemptsByNetworkId.size,
@@ -33892,6 +34151,9 @@ try {
                   ) === attempt,
               ),
               true,
+            );
+            setProtectedReadFailureClass(
+              SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.recordExtractionFailed,
             );
             const cdpResponseRecords = attempts.map((attempt) => {
               assert.ok(attempt.responseRecord);
@@ -33944,23 +34206,39 @@ try {
                 requestFailureRecords,
                 bindingAttestation,
               },
+              setProtectedReadFailureClass,
             );
             const recoveredCount =
               safeAttestation.recoveredProtectedReadTransportFailureCount;
+            setProtectedReadFailureClass(
+              SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.cdpRecoveredCountMismatch,
+            );
             assert.ok([0, 1].includes(recoveredCount));
+            setProtectedReadFailureClass(
+              SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.browserFailureCountMismatch,
+            );
             assert.equal(
               browserRequestFailureCount - groupBrowserRequestFailureStart,
               recoveredCount,
+            );
+            setProtectedReadFailureClass(
+              SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.egressResponseErrorCountMismatch,
             );
             assert.equal(
               allowedEgressResponseErrorAbortCount -
                 groupAllowedEgressResponseErrorAbortStart,
               recoveredCount,
             );
+            setProtectedReadFailureClass(
+              SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.sensitiveResponseErrorCountMismatch,
+            );
             assert.equal(
               sensitiveAppCheckResponseErrorAbortRequestCount -
                 groupSensitiveAppCheckResponseErrorAbortStart,
               recoveredCount,
+            );
+            setProtectedReadFailureClass(
+              SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.cdpRecoveredCountMismatch,
             );
             assert.equal(requestFailureRecords.length, recoveredCount);
             assert.equal(
