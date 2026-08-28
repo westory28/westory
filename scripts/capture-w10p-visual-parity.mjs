@@ -5765,6 +5765,246 @@ const summarizeSafeAuthenticationBootstrapRetirement = ({ before, after }) => {
     passed: Object.values(summary).every((delta) => delta === 0),
   });
 };
+const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_POLICY_ID =
+  "w10p-protected-read-shared-transport-retry-v1";
+const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_TARGETS = Object.freeze([
+  "none",
+  "config",
+  "profile",
+]);
+const SAFE_AUTHENTICATION_PROTECTED_READ_BROWSER_OUTCOME_CLASSES =
+  Object.freeze(["response-2xx", "transport-error"]);
+const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_PROXY_LEASE_CLASSES =
+  Object.freeze(["issued-active-tunnel", "consumed-active-tunnel"]);
+const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_CURRENT_TUNNEL_CLASSES =
+  Object.freeze(["current-active-tunnel"]);
+const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_ECHO_CLASSES =
+  Object.freeze(["generic-failed", "blocked-by-client"]);
+const normalizeSafeAuthenticationProtectedReadRetryAttestation = (
+  attestation,
+) => {
+  assert.ok(attestation && typeof attestation === "object");
+  assert.deepEqual(Object.keys(attestation).sort(), [
+    "authTimeUnchanged",
+    "configAttemptCount",
+    "configFinalOutcomeClass",
+    "configFirstOutcomeClass",
+    "exactUrlMethodBound",
+    "policyId",
+    "profileAttemptCount",
+    "profileFinalOutcomeClass",
+    "profileFirstOutcomeClass",
+    "recoveredByRetry",
+    "retryBudget",
+    "retryDelayMs",
+    "retryTarget",
+    "retryUsed",
+    "sameAppCheckToken",
+    "sameAuthorizationToken",
+    "schemaVersion",
+    "sessionMutationCount",
+    "sessionRevisionUnchanged",
+    "tokenRefreshCount",
+  ]);
+  assert.equal(attestation.schemaVersion, 1);
+  assert.equal(
+    attestation.policyId,
+    SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_POLICY_ID,
+  );
+  assert.equal(attestation.retryBudget, 1);
+  assert.ok([0, 1].includes(attestation.retryUsed));
+  assert.ok(
+    SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_TARGETS.includes(
+      attestation.retryTarget,
+    ),
+  );
+  assert.equal(attestation.retryDelayMs, 250);
+  for (const key of ["configAttemptCount", "profileAttemptCount"]) {
+    assert.ok([1, 2].includes(attestation[key]));
+  }
+  for (const key of [
+    "configFirstOutcomeClass",
+    "configFinalOutcomeClass",
+    "profileFirstOutcomeClass",
+    "profileFinalOutcomeClass",
+  ]) {
+    assert.ok(
+      SAFE_AUTHENTICATION_PROTECTED_READ_BROWSER_OUTCOME_CLASSES.includes(
+        attestation[key],
+      ),
+    );
+  }
+  for (const key of [
+    "authTimeUnchanged",
+    "exactUrlMethodBound",
+    "recoveredByRetry",
+    "sameAppCheckToken",
+    "sameAuthorizationToken",
+    "sessionRevisionUnchanged",
+  ]) {
+    assert.equal(typeof attestation[key], "boolean");
+  }
+  assert.equal(attestation.sameAuthorizationToken, true);
+  assert.equal(attestation.sameAppCheckToken, true);
+  assert.equal(attestation.authTimeUnchanged, true);
+  assert.equal(attestation.sessionRevisionUnchanged, true);
+  assert.equal(attestation.tokenRefreshCount, 0);
+  assert.equal(attestation.sessionMutationCount, 0);
+  assert.equal(attestation.exactUrlMethodBound, true);
+  const expectedRetryTarget =
+    attestation.configAttemptCount === 2
+      ? "config"
+      : attestation.profileAttemptCount === 2
+        ? "profile"
+        : "none";
+  assert.equal(attestation.retryTarget, expectedRetryTarget);
+  assert.equal(attestation.retryUsed, Number(expectedRetryTarget !== "none"));
+  assert.equal(
+    attestation.configAttemptCount + attestation.profileAttemptCount,
+    2 + attestation.retryUsed,
+  );
+  assert.equal(attestation.recoveredByRetry, expectedRetryTarget !== "none");
+  assert.equal(
+    attestation.configFirstOutcomeClass,
+    expectedRetryTarget === "config" ? "transport-error" : "response-2xx",
+  );
+  assert.equal(attestation.configFinalOutcomeClass, "response-2xx");
+  assert.equal(
+    attestation.profileFirstOutcomeClass,
+    expectedRetryTarget === "profile" ? "transport-error" : "response-2xx",
+  );
+  assert.equal(attestation.profileFinalOutcomeClass, "response-2xx");
+  return Object.freeze({ ...attestation });
+};
+const confirmSafeAuthenticationProtectedReadRetry = ({
+  pageAttestation,
+  cdpResponseRecords,
+  requestFailureRecords,
+  bindingAttestation,
+}) => {
+  const attestation =
+    normalizeSafeAuthenticationProtectedReadRetryAttestation(pageAttestation);
+  assert.ok(Array.isArray(cdpResponseRecords));
+  assert.ok(Array.isArray(requestFailureRecords));
+  assert.ok(bindingAttestation && typeof bindingAttestation === "object");
+  assert.deepEqual(Object.keys(bindingAttestation).sort(), [
+    "appCheckHeaderJwtShapeValid",
+    "authorizationHeaderJwtShapeValid",
+    "exactFetchNetworkIdentityBound",
+    "requestFailureFetchNetworkIdentityBound",
+    "sameAppCheckHeader",
+    "sameAuthorizationHeader",
+  ]);
+  for (const key of Object.keys(bindingAttestation)) {
+    assert.equal(bindingAttestation[key], true);
+  }
+  const expectedAttemptCountByTarget = {
+    config: attestation.configAttemptCount,
+    profile: attestation.profileAttemptCount,
+  };
+  const expectedFirstClassByTarget = {
+    config:
+      attestation.retryTarget === "config" ? "response-error" : "response-2xx",
+    profile:
+      attestation.retryTarget === "profile" ? "response-error" : "response-2xx",
+  };
+  const finalResponseClassByTarget = {};
+  const firstResponseClassByTarget = {};
+  assert.equal(
+    cdpResponseRecords.length,
+    attestation.configAttemptCount + attestation.profileAttemptCount,
+  );
+  assert.equal(
+    cdpResponseRecords.every((record) =>
+      ["config", "profile"].includes(record?.target),
+    ),
+    true,
+  );
+  for (const target of ["config", "profile"]) {
+    const targetRecords = cdpResponseRecords
+      .filter((record) => record?.target === target)
+      .sort((left, right) => left.attemptNumber - right.attemptNumber);
+    assert.equal(targetRecords.length, expectedAttemptCountByTarget[target]);
+    for (const [index, record] of targetRecords.entries()) {
+      assert.deepEqual(Object.keys(record).sort(), [
+        "attemptNumber",
+        "currentTunnelClass",
+        "lifecycleKind",
+        "proxyLeaseClass",
+        "responseClass",
+        "target",
+      ]);
+      assert.equal(record.attemptNumber, index + 1);
+      assert.equal(record.lifecycleKind, "primary");
+      assert.ok(
+        SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_CLASSES.includes(
+          record.responseClass,
+        ),
+      );
+      if (record.responseClass === "response-error-failed") {
+        assert.ok(
+          SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_PROXY_LEASE_CLASSES.includes(
+            record.proxyLeaseClass,
+          ),
+        );
+        assert.ok(
+          SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_CURRENT_TUNNEL_CLASSES.includes(
+            record.currentTunnelClass,
+          ),
+        );
+      } else {
+        assert.equal(record.proxyLeaseClass, null);
+        assert.equal(record.currentTunnelClass, null);
+      }
+    }
+    firstResponseClassByTarget[target] = targetRecords[0].responseClass;
+    finalResponseClassByTarget[target] =
+      targetRecords[targetRecords.length - 1].responseClass;
+    if (expectedFirstClassByTarget[target] === "response-error") {
+      assert.equal(firstResponseClassByTarget[target], "response-error-failed");
+    } else {
+      assert.equal(firstResponseClassByTarget[target], "response-2xx");
+    }
+    assert.equal(finalResponseClassByTarget[target], "response-2xx");
+  }
+  for (const record of requestFailureRecords) {
+    assert.deepEqual(Object.keys(record).sort(), [
+      "attemptNumber",
+      "failureClass",
+      "target",
+    ]);
+    assert.ok(["config", "profile"].includes(record.target));
+    assert.equal(record.attemptNumber, 1);
+    assert.ok(
+      SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_ECHO_CLASSES.includes(
+        record.failureClass,
+      ),
+    );
+  }
+  assert.equal(requestFailureRecords.length, attestation.retryUsed);
+  if (attestation.retryUsed === 1) {
+    assert.equal(requestFailureRecords[0].target, attestation.retryTarget);
+  }
+  return Object.freeze({
+    ...attestation,
+    cdpConfigFirstResponseClass: firstResponseClassByTarget.config,
+    cdpConfigFinalResponseClass: finalResponseClassByTarget.config,
+    cdpProfileFirstResponseClass: firstResponseClassByTarget.profile,
+    cdpProfileFinalResponseClass: finalResponseClassByTarget.profile,
+    cdpExactFetchNetworkIdentityBound:
+      bindingAttestation.exactFetchNetworkIdentityBound,
+    cdpSameAuthorizationHeader: bindingAttestation.sameAuthorizationHeader,
+    cdpSameAppCheckHeader: bindingAttestation.sameAppCheckHeader,
+    cdpAuthorizationHeaderJwtShapeValid:
+      bindingAttestation.authorizationHeaderJwtShapeValid,
+    cdpAppCheckHeaderJwtShapeValid:
+      bindingAttestation.appCheckHeaderJwtShapeValid,
+    playwrightRequestFailureFetchNetworkIdentityBound:
+      bindingAttestation.requestFailureFetchNetworkIdentityBound,
+    recoveredProtectedReadTransportFailureCount: requestFailureRecords.length,
+    passed: true,
+  });
+};
 const summarizeSafeAuthenticatedApplicationWebChannelEpoch = (records) => {
   assert.equal(Array.isArray(records), true);
   let authenticationPhaseBindingCount = 0;
@@ -12757,6 +12997,7 @@ const SAFE_AUTHENTICATION_FAILURE_CLASSES = Object.freeze([
     SAFE_AUTHENTICATION_PROFILE_RESPONSE_ERROR_RUNTIME_FAILURE_CLASSES,
   ),
   ...Object.values(SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_FAILURE_CLASSES),
+  "authentication-protected-read-retry-attestation-failed",
   "application-session-proof-registration-failed",
   "authentication-bootstrap-pre-retirement-drain-failed",
   "authentication-bootstrap-retirement-failed",
@@ -13238,6 +13479,203 @@ const serializeSafeAuthenticationFailure = (
     throw new Error("W10P_SAFE_AUTH_DIAGNOSTIC_REJECTED");
   }
   return `W10P_SAFE_AUTH_FAILURE ${serialized}`;
+};
+const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
+  const createPageAttestation = (retryTarget = "none") => ({
+    schemaVersion: 1,
+    policyId: SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_POLICY_ID,
+    retryBudget: 1,
+    retryUsed: Number(retryTarget !== "none"),
+    retryTarget,
+    retryDelayMs: 250,
+    configAttemptCount: retryTarget === "config" ? 2 : 1,
+    configFirstOutcomeClass:
+      retryTarget === "config" ? "transport-error" : "response-2xx",
+    configFinalOutcomeClass: "response-2xx",
+    profileAttemptCount: retryTarget === "profile" ? 2 : 1,
+    profileFirstOutcomeClass:
+      retryTarget === "profile" ? "transport-error" : "response-2xx",
+    profileFinalOutcomeClass: "response-2xx",
+    recoveredByRetry: retryTarget !== "none",
+    sameAuthorizationToken: true,
+    sameAppCheckToken: true,
+    authTimeUnchanged: true,
+    sessionRevisionUnchanged: true,
+    tokenRefreshCount: 0,
+    sessionMutationCount: 0,
+    exactUrlMethodBound: true,
+  });
+  const createResponseRecord = (
+    target,
+    attemptNumber,
+    responseClass = "response-2xx",
+  ) => ({
+    target,
+    attemptNumber,
+    lifecycleKind: "primary",
+    responseClass,
+    proxyLeaseClass:
+      responseClass === "response-error-failed" ? "issued-active-tunnel" : null,
+    currentTunnelClass:
+      responseClass === "response-error-failed"
+        ? "current-active-tunnel"
+        : null,
+  });
+  const createCdpResponseRecords = (retryTarget = "none") => [
+    createResponseRecord(
+      "config",
+      1,
+      retryTarget === "config" ? "response-error-failed" : "response-2xx",
+    ),
+    ...(retryTarget === "config" ? [createResponseRecord("config", 2)] : []),
+    createResponseRecord(
+      "profile",
+      1,
+      retryTarget === "profile" ? "response-error-failed" : "response-2xx",
+    ),
+    ...(retryTarget === "profile" ? [createResponseRecord("profile", 2)] : []),
+  ];
+  const createRequestFailureRecords = (retryTarget = "none") =>
+    retryTarget === "none"
+      ? []
+      : [
+          {
+            target: retryTarget,
+            attemptNumber: 1,
+            failureClass: "generic-failed",
+          },
+        ];
+  const bindingAttestation = {
+    exactFetchNetworkIdentityBound: true,
+    sameAuthorizationHeader: true,
+    sameAppCheckHeader: true,
+    authorizationHeaderJwtShapeValid: true,
+    appCheckHeaderJwtShapeValid: true,
+    requestFailureFetchNetworkIdentityBound: true,
+  };
+  const createFixture = (retryTarget = "none") => ({
+    pageAttestation: createPageAttestation(retryTarget),
+    cdpResponseRecords: createCdpResponseRecords(retryTarget),
+    requestFailureRecords: createRequestFailureRecords(retryTarget),
+    bindingAttestation: { ...bindingAttestation },
+  });
+  const accepted = ["none", "config", "profile"].map((retryTarget) =>
+    confirmSafeAuthenticationProtectedReadRetry(createFixture(retryTarget)),
+  );
+  assert.deepEqual(
+    accepted.map(
+      (attestation) => attestation.recoveredProtectedReadTransportFailureCount,
+    ),
+    [0, 1, 1],
+  );
+  assert.equal(
+    accepted.every((attestation) => attestation.passed),
+    true,
+  );
+  const clone = (value) => JSON.parse(JSON.stringify(value));
+  const rejectedFixtures = [
+    () => {
+      const fixture = createFixture();
+      fixture.pageAttestation.extra = true;
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture();
+      fixture.pageAttestation.retryBudget = 2;
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("config");
+      fixture.pageAttestation.profileAttemptCount = 2;
+      fixture.cdpResponseRecords.push(createResponseRecord("profile", 2));
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("config");
+      fixture.cdpResponseRecords[0].responseClass = "response-4xx";
+      fixture.cdpResponseRecords[0].proxyLeaseClass = null;
+      fixture.cdpResponseRecords[0].currentTunnelClass = null;
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("config");
+      fixture.cdpResponseRecords[0].responseClass = "response-error-aborted";
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("profile");
+      fixture.cdpResponseRecords.at(-1).lifecycleKind = "post-final-error";
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("profile");
+      fixture.cdpResponseRecords.pop();
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("profile");
+      fixture.cdpResponseRecords.push(createResponseRecord("other", 1));
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("config");
+      fixture.requestFailureRecords = [];
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("config");
+      fixture.requestFailureRecords[0].target = "profile";
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("profile");
+      fixture.requestFailureRecords[0].failureClass = "other";
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("profile");
+      fixture.requestFailureRecords[0].extra = true;
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("config");
+      fixture.bindingAttestation.exactFetchNetworkIdentityBound = false;
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("config");
+      fixture.cdpResponseRecords[0].proxyLeaseClass = "issued-no-active-tunnel";
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("profile");
+      fixture.cdpResponseRecords[0].currentTunnelClass =
+        "current-no-active-tunnel";
+      return fixture;
+    },
+  ];
+  for (const createRejectedFixture of rejectedFixtures) {
+    assert.throws(() =>
+      confirmSafeAuthenticationProtectedReadRetry(
+        clone(createRejectedFixture()),
+      ),
+    );
+  }
+  const privateRawValue =
+    "private-protected-read-request-id-and-token-material";
+  const serializedAccepted = JSON.stringify(accepted);
+  assert.equal(serializedAccepted.includes(privateRawValue), false);
+  assert.equal(JWT_PATTERN.test(serializedAccepted), false);
+  return {
+    safeAuthenticationProtectedReadRetryAcceptedFixtureCount: accepted.length,
+    safeAuthenticationProtectedReadRetryRejectedFixtureCount:
+      rejectedFixtures.length,
+    safeAuthenticationProtectedReadRetryRecoveredFixtureCount: accepted.filter(
+      (attestation) => attestation.recoveredByRetry,
+    ).length,
+    safeAuthenticationProtectedReadRetryRawValueOutputCount: 0,
+    safeAuthenticationProtectedReadRetryNetworkAccess: 0,
+  };
 };
 const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
   const debugToken = "12345678-1234-4123-8123-123456789abc";
@@ -17311,6 +17749,8 @@ const verifyAppCheckSecretNegativeFixtures = () => {
   };
 };
 const appCheckSecretNegativeSelfTest = verifyAppCheckSecretNegativeFixtures();
+const safeAuthenticationProtectedReadRetrySelfTest =
+  verifySafeAuthenticationProtectedReadRetryFixtures();
 const safeAuthenticationFailureDiagnosticSelfTest =
   await verifySafeAuthenticationFailureDiagnosticFixtures();
 const safeBrowserErrorDiagnosticSelfTest =
@@ -22691,6 +23131,7 @@ if (args.includes("--self-test-app-check")) {
       passed: true,
       ...appCheckSecretNegativeSelfTest,
       ...authenticationLandingGuardSelfTest,
+      ...safeAuthenticationProtectedReadRetrySelfTest,
       ...safeAuthenticationFailureDiagnosticSelfTest,
       ...safeBrowserErrorDiagnosticSelfTest,
       ...preTransmissionBoundaryNegativeSelfTest,
@@ -27343,6 +27784,7 @@ const authenticateCore = async (
   role,
   setFailureClass,
   registerApplicationSessionProof,
+  confirmAuthenticationProtectedReadRetry,
   prepareAuthenticationBootstrapRetirement,
   confirmAuthenticationBootstrapRetirement,
   prepareApplicationNavigation,
@@ -27412,6 +27854,8 @@ const authenticateCore = async (
       evaluationStepRuntimeKey,
       evaluationAttemptId,
       authSignInCodeClasses,
+      protectedReadRetryPolicyId,
+      protectedReadRetryDelayMs,
     }) => {
       if (
         Object.prototype.hasOwnProperty.call(
@@ -27598,39 +28042,107 @@ const authenticateCore = async (
       )}/databases/(default)/documents`;
       let profileDocument = null;
       let protectedReadHeaders = null;
+      let protectedReadRetryAttestation = null;
       try {
         protectedReadHeaders = {
           Authorization: `Bearer ${protectedReadIdToken}`,
           "X-Firebase-AppCheck": protectedReadAppCheckToken,
         };
-        setEvaluationStep("config-read");
-        const protectedConfigResponse = await fetch(
-          `${firestoreDocumentsBase}/site_settings/config`,
-          {
-            headers: protectedReadHeaders,
-            redirect: "error",
-          },
-        );
+        const protectedReadUrls = Object.freeze({
+          config: `${firestoreDocumentsBase}/site_settings/config`,
+          profile: `${firestoreDocumentsBase}/users/${encodeURIComponent(
+            credentialResult.user.uid,
+          )}`,
+        });
+        const protectedReadOutcomes = { config: [], profile: [] };
+        let protectedReadRetryUsed = 0;
+        let protectedReadRetryTarget = "none";
+        const fetchExactProtectedRead = async (target) => {
+          if (
+            !Object.prototype.hasOwnProperty.call(protectedReadUrls, target)
+          ) {
+            throw new Error("VISUAL_PROTECTED_READ_TARGET_INVALID");
+          }
+          const evaluationStep =
+            target === "config" ? "config-read" : "profile-fetch";
+          const failureMessage =
+            target === "config"
+              ? "VISUAL_PROTECTED_READ_FENCE_FAILED"
+              : "VISUAL_PROFILE_FETCH_FAILED";
+          for (let attemptNumber = 1; attemptNumber <= 2; attemptNumber += 1) {
+            setEvaluationStep(evaluationStep);
+            let response;
+            try {
+              response = await fetch(protectedReadUrls[target], {
+                method: "GET",
+                headers: protectedReadHeaders,
+                redirect: "error",
+              });
+            } catch {
+              protectedReadOutcomes[target].push("transport-error");
+              if (attemptNumber === 1 && protectedReadRetryUsed === 0) {
+                protectedReadRetryUsed = 1;
+                protectedReadRetryTarget = target;
+                await new Promise((resolveDelay) =>
+                  setTimeout(resolveDelay, protectedReadRetryDelayMs),
+                );
+                continue;
+              }
+              throw new Error(failureMessage);
+            }
+            if (response.status !== 200) {
+              throw new Error(failureMessage);
+            }
+            protectedReadOutcomes[target].push("response-2xx");
+            return response;
+          }
+          throw new Error(failureMessage);
+        };
+        const protectedConfigResponse = await fetchExactProtectedRead("config");
         if (protectedConfigResponse.status !== 200) {
           throw new Error("VISUAL_PROTECTED_READ_FENCE_FAILED");
         }
         await protectedConfigResponse.arrayBuffer();
-        setEvaluationStep("profile-fetch");
-        const profileResponse = await fetch(
-          `${firestoreDocumentsBase}/users/${encodeURIComponent(
-            credentialResult.user.uid,
-          )}`,
-          {
-            headers: protectedReadHeaders,
-            redirect: "error",
-          },
-        );
+        const profileResponse = await fetchExactProtectedRead("profile");
         setEvaluationStep("profile-status");
         if (profileResponse.status !== 200) {
           throw new Error("VISUAL_PROFILE_MISSING");
         }
         setEvaluationStep("profile-json");
         profileDocument = await profileResponse.json();
+        const configAttemptCount = protectedReadOutcomes.config.length;
+        const profileAttemptCount = protectedReadOutcomes.profile.length;
+        protectedReadRetryAttestation = Object.freeze({
+          schemaVersion: 1,
+          policyId: protectedReadRetryPolicyId,
+          retryBudget: 1,
+          retryUsed: protectedReadRetryUsed,
+          retryTarget: protectedReadRetryTarget,
+          retryDelayMs: protectedReadRetryDelayMs,
+          configAttemptCount,
+          configFirstOutcomeClass: protectedReadOutcomes.config[0],
+          configFinalOutcomeClass:
+            protectedReadOutcomes.config[configAttemptCount - 1],
+          profileAttemptCount,
+          profileFirstOutcomeClass: protectedReadOutcomes.profile[0],
+          profileFinalOutcomeClass:
+            protectedReadOutcomes.profile[profileAttemptCount - 1],
+          recoveredByRetry: protectedReadRetryUsed === 1,
+          sameAuthorizationToken:
+            protectedReadHeaders.Authorization ===
+            `Bearer ${protectedReadIdToken}`,
+          sameAppCheckToken:
+            protectedReadHeaders["X-Firebase-AppCheck"] ===
+            protectedReadAppCheckToken,
+          authTimeUnchanged:
+            Number(token.claims.auth_time || 0) === tokenAuthTime,
+          sessionRevisionUnchanged:
+            String(applicationSession.revision || "") ===
+            String(applicationSessionEnvelope?.result?.revision || ""),
+          tokenRefreshCount: 0,
+          sessionMutationCount: 0,
+          exactUrlMethodBound: true,
+        });
       } finally {
         if (protectedReadHeaders) {
           protectedReadHeaders.Authorization = "";
@@ -27680,6 +28192,7 @@ const authenticateCore = async (
           revision: String(applicationSession.revision || ""),
           uid: credentialResult.user.uid,
         },
+        protectedReadRetryAttestation,
       };
       Object.defineProperty(globalThis, runtimeKey, {
         configurable: true,
@@ -27698,8 +28211,17 @@ const authenticateCore = async (
       evaluationStepRuntimeKey: AUTHENTICATION_EVALUATION_STEP_RUNTIME_KEY,
       evaluationAttemptId: authenticationEvaluationAttemptId,
       authSignInCodeClasses: SAFE_AUTHENTICATION_AUTH_SIGN_IN_CODE_CLASSES,
+      protectedReadRetryPolicyId:
+        SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_POLICY_ID,
+      protectedReadRetryDelayMs: 250,
     },
   );
+  setFailureClass("authentication-protected-read-retry-attestation-failed");
+  identity.authenticationProtectedReadRetryAttestation =
+    await confirmAuthenticationProtectedReadRetry(
+      identity.protectedReadRetryAttestation,
+    );
+  delete identity.protectedReadRetryAttestation;
   setFailureClass("application-session-proof-registration-failed");
   registerApplicationSessionProof(identity.applicationSessionProof);
   setFailureClass("authentication-bootstrap-pre-retirement-drain-failed");
@@ -27826,6 +28348,7 @@ const authenticate = async (
     captureRole,
     viewport,
     registerApplicationSessionProof,
+    confirmAuthenticationProtectedReadRetry,
     prepareAuthenticationBootstrapRetirement,
     confirmAuthenticationBootstrapRetirement,
     prepareApplicationNavigation,
@@ -27850,6 +28373,7 @@ const authenticate = async (
         failureClass = nextFailureClass;
       },
       registerApplicationSessionProof,
+      confirmAuthenticationProtectedReadRetry,
       prepareAuthenticationBootstrapRetirement,
       confirmAuthenticationBootstrapRetirement,
       prepareApplicationNavigation,
@@ -29183,6 +29707,7 @@ let allowedEgressInvalidResponseStatusAbortCount = 0;
 let allowedEgressRedirectAbortCount = 0;
 let allowedEgressHttpErrorAbortCount = 0;
 let allowedEgressResponseErrorAbortCount = 0;
+let allowedEgressResponseErrorRecoveredProtectedReadCount = 0;
 let allowedEgressPostFinalResponseErrorPauseCount = 0;
 let allowedEgressPostFinalContinueResponseSuccessCount = 0;
 let allowedEgressPostFinalAlreadyRetiredInterceptionCount = 0;
@@ -29257,6 +29782,7 @@ let sensitiveAppCheckRedirectAbortRequestCount = 0;
 let sensitiveAppCheckCdpResponsePausedRequestCount = 0;
 let sensitiveAppCheckRedirectResponseAbortRequestCount = 0;
 let sensitiveAppCheckResponseErrorAbortRequestCount = 0;
+let sensitiveAppCheckResponseErrorRecoveredProtectedReadCount = 0;
 let sensitiveAppCheckRequestTrackingResidualCount = 0;
 let vercelBypassCdpInjectedRequestCount = 0;
 let vercelBypassPreexistingHeaderObservationCount = 0;
@@ -29653,6 +30179,7 @@ assertFixtureAuditCaptureWindow({
 const captures = [];
 const browserAudits = [];
 const identityAttestations = new Map();
+const authenticationProtectedReadRetryAttestations = [];
 const liveApplicationSessionProofsByPage = new Map();
 const networkObservations = [];
 const networkResponseObservations = [];
@@ -29682,6 +30209,7 @@ let browserConsoleSecretObservationCount = 0;
 let browserCorsConsoleErrorCount = 0;
 let browserDomSecretObservationCount = 0;
 let browserRequestFailureCount = 0;
+let browserRequestFailureRecoveredProtectedReadCount = 0;
 let browserContextCloseCount = 0;
 let unexpectedExtraPageCount = 0;
 let unexpectedDedicatedWorkerCount = 0;
@@ -29893,6 +30421,8 @@ try {
     const groupTargetSnapshotStart = targetSnapshotCount;
     const groupBaselineBridgeHandlerErrorStart = appCheckCdpHandlerErrorCount;
     const groupBrowserRequestFailureStart = browserRequestFailureCount;
+    const groupBrowserRequestFailureRecoveredProtectedReadStart =
+      browserRequestFailureRecoveredProtectedReadCount;
     const groupCdpContinueRequestInvalidInterceptionErrorStart =
       cdpContinueRequestInvalidInterceptionErrorCount;
     const groupCdpOtherProtocolErrorStart = cdpOtherProtocolErrorCount;
@@ -29997,6 +30527,8 @@ try {
       allowedEgressHttpErrorAbortCount;
     const groupAllowedEgressResponseErrorAbortStart =
       allowedEgressResponseErrorAbortCount;
+    const groupAllowedEgressResponseErrorRecoveredProtectedReadStart =
+      allowedEgressResponseErrorRecoveredProtectedReadCount;
     const groupAllowedEgressInformationalEgressHeaderObservationStart =
       allowedEgressInformationalEgressHeaderObservationCount;
     const groupAllowedEgressFinalEgressHeaderObservationStart =
@@ -30045,6 +30577,8 @@ try {
       sensitiveAppCheckRedirectResponseAbortRequestCount;
     const groupSensitiveAppCheckResponseErrorAbortStart =
       sensitiveAppCheckResponseErrorAbortRequestCount;
+    const groupSensitiveAppCheckResponseErrorRecoveredProtectedReadStart =
+      sensitiveAppCheckResponseErrorRecoveredProtectedReadCount;
     const groupVercelBypassCdpInjectedStart =
       vercelBypassCdpInjectedRequestCount;
     const groupVercelBypassPreexistingHeaderObservationStart =
@@ -30076,6 +30610,7 @@ try {
     let networkPhase = "context-bootstrap";
     let activeCaptureId = null;
     let groupApplicationSessionProof = null;
+    let groupAuthenticationProtectedReadRetryAttestation = null;
     let groupAuthenticationBootstrapRetirementBoundary = null;
     let groupAuthenticationBootstrapRetirementAttestation = null;
     let groupApplicationNavigationWebChannelBindingStart = null;
@@ -30973,6 +31508,106 @@ try {
     const informationalResponseRequestsByFetchRequestId = new Set();
     const authenticationConfigReadRequestClassesByFetchRequestId = new Map();
     const authenticationProfileRequestClassesByFetchRequestId = new Map();
+    const authenticationProtectedReadAttemptsByFetchRequestId = new Map();
+    const authenticationProtectedReadAttemptsByNetworkId = new Map();
+    const authenticationProtectedReadAttemptCounts = {
+      config: 0,
+      profile: 0,
+    };
+    let authenticationProtectedReadSharedRetryTarget = null;
+    let authenticationProtectedReadAuthorizationHeaderSha256 = null;
+    let authenticationProtectedReadAppCheckHeaderSha256 = null;
+    const exactCaseInsensitiveRequestHeaderValue = (headers, headerName) => {
+      const values = Object.entries(headers || {})
+        .filter(
+          ([name]) => String(name).toLowerCase() === headerName.toLowerCase(),
+        )
+        .map(([, value]) => String(value));
+      assert.equal(values.length, 1);
+      assert.ok(values[0].length > 0);
+      return values[0];
+    };
+    const registerAuthenticationProtectedReadAttempt = ({ event, target }) => {
+      assert.ok(["config", "profile"].includes(target));
+      assert.equal(networkPhase, "authentication");
+      assert.equal(typeof event.requestId, "string");
+      assert.ok(event.requestId.length > 0);
+      assert.equal(typeof event.networkId, "string");
+      assert.ok(event.networkId.length > 0);
+      assert.equal(
+        authenticationProtectedReadAttemptsByFetchRequestId.has(
+          event.requestId,
+        ),
+        false,
+      );
+      assert.equal(
+        authenticationProtectedReadAttemptsByNetworkId.has(event.networkId),
+        false,
+      );
+      authenticationProtectedReadAttemptCounts[target] += 1;
+      const attemptNumber = authenticationProtectedReadAttemptCounts[target];
+      assert.ok([1, 2].includes(attemptNumber));
+      const protectedReadAttemptCount =
+        authenticationProtectedReadAttemptCounts.config +
+        authenticationProtectedReadAttemptCounts.profile;
+      assert.ok(protectedReadAttemptCount <= 3);
+      if (attemptNumber === 2) {
+        assert.equal(authenticationProtectedReadSharedRetryTarget, null);
+        authenticationProtectedReadSharedRetryTarget = target;
+      }
+      const authorizationHeader = exactCaseInsensitiveRequestHeaderValue(
+        event.request.headers,
+        "authorization",
+      );
+      const appCheckHeader = exactCaseInsensitiveRequestHeaderValue(
+        event.request.headers,
+        "x-firebase-appcheck",
+      );
+      const authorizationMatch = /^Bearer ([^\s]+)$/u.exec(authorizationHeader);
+      assert.ok(authorizationMatch);
+      assert.equal(
+        APP_CHECK_JWT_SHAPE_PATTERN.test(authorizationMatch[1]),
+        true,
+      );
+      assert.equal(APP_CHECK_JWT_SHAPE_PATTERN.test(appCheckHeader), true);
+      const authorizationHeaderSha256 = secretSha256(authorizationHeader);
+      const appCheckHeaderSha256 = secretSha256(appCheckHeader);
+      if (authenticationProtectedReadAuthorizationHeaderSha256 === null) {
+        authenticationProtectedReadAuthorizationHeaderSha256 =
+          authorizationHeaderSha256;
+        authenticationProtectedReadAppCheckHeaderSha256 = appCheckHeaderSha256;
+      } else {
+        assert.equal(
+          authorizationHeaderSha256,
+          authenticationProtectedReadAuthorizationHeaderSha256,
+        );
+        assert.equal(
+          appCheckHeaderSha256,
+          authenticationProtectedReadAppCheckHeaderSha256,
+        );
+      }
+      const attempt = {
+        target,
+        attemptNumber,
+        primaryRequestId: event.requestId,
+        networkId: event.networkId,
+        authorizationHeaderSha256,
+        appCheckHeaderSha256,
+        authorizationHeaderJwtShapeValid: true,
+        appCheckHeaderJwtShapeValid: true,
+        responseRecord: null,
+        requestFailureClass: null,
+        requestFailureFetchNetworkIdentityBound: false,
+      };
+      authenticationProtectedReadAttemptsByFetchRequestId.set(
+        event.requestId,
+        attempt,
+      );
+      authenticationProtectedReadAttemptsByNetworkId.set(
+        event.networkId,
+        attempt,
+      );
+    };
     let groupAuthenticationConfigReadGetRequestObserved = false;
     let groupAuthenticationConfigReadGetOutcomeClass = null;
     let groupAuthenticationConfigReadPreflightOutcomeClass = null;
@@ -31305,6 +31940,46 @@ try {
           true,
           "A response-stage request pause had an invalid lifecycle transition.",
         );
+        const authenticationProtectedReadAttempt =
+          authenticationProtectedReadAttemptsByFetchRequestId.get(
+            primaryRequestId,
+          ) || null;
+        if (authenticationProtectedReadAttempt !== null) {
+          const responseClass =
+            authenticationProtectedReadAttempt.target === "config"
+              ? authenticationConfigReadResponseClass
+              : authenticationProfileResponseClass;
+          assert.ok(
+            SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_CLASSES.includes(
+              responseClass,
+            ),
+          );
+          if (lifecycleDecision.kind === "primary") {
+            assert.equal(
+              authenticationProtectedReadAttempt.responseRecord,
+              null,
+            );
+            const responseError = responseClass.startsWith("response-error-");
+            authenticationProtectedReadAttempt.responseRecord = Object.freeze({
+              target: authenticationProtectedReadAttempt.target,
+              attemptNumber: authenticationProtectedReadAttempt.attemptNumber,
+              lifecycleKind: lifecycleDecision.kind,
+              responseClass,
+              proxyLeaseClass: responseError
+                ? browserConnectProxy.requestStageAuthorityLeaseDiagnosticClass(
+                    primaryRequestId,
+                  )
+                : null,
+              currentTunnelClass: responseError
+                ? browserConnectProxy.requestStageCurrentAuthorityTunnelDiagnosticClass(
+                    primaryRequestId,
+                  )
+                : null,
+            });
+          } else {
+            assert.ok(authenticationProtectedReadAttempt.responseRecord);
+          }
+        }
         if (authenticationConfigReadRequestClass !== null) {
           const previousOutcomeClass =
             authenticationConfigReadRequestClass === "get"
@@ -32771,6 +33446,10 @@ try {
             authenticationConfigReadRequestClass,
           );
           if (authenticationConfigReadRequestClass === "get") {
+            registerAuthenticationProtectedReadAttempt({
+              event,
+              target: "config",
+            });
             groupAuthenticationConfigReadGetRequestObserved = true;
             groupAuthenticationConfigReadGetOutcomeClass = initialResponseClass;
             groupAuthenticationConfigReadGetProxyLeaseClass = null;
@@ -32803,6 +33482,10 @@ try {
             authenticationProfileRequestClass,
           );
           if (authenticationProfileRequestClass === "get") {
+            registerAuthenticationProtectedReadAttempt({
+              event,
+              target: "profile",
+            });
             groupAuthenticationProfileGetRequestObserved = true;
             groupAuthenticationProfileGetOutcomeClass = initialResponseClass;
             groupAuthenticationProfileGetProxyLeaseClass = null;
@@ -33015,15 +33698,53 @@ try {
       browserRequestFailureCount += 1;
       const observation = requestObservations.get(request);
       let rawFailureText = String(request.failure()?.errorText || "");
+      const failureClass = safeBrowserRequestFailureClass(rawFailureText);
       groupBrowserRequestFailureDiagnostics.push(
         Object.freeze({
           firebaseService: safeFirebaseServiceDiagnosticClass(observation),
           resourceType: safeHttpErrorResourceTypeClass(
             observation?.resourceType || request.resourceType(),
           ),
-          failureClass: safeBrowserRequestFailureClass(rawFailureText),
+          failureClass,
         }),
       );
+      const configRequestClass = classifyExactAuthenticationConfigReadRequest({
+        requestUrl: request.url(),
+        method: request.method(),
+        phase: observation?.phase || networkPhase,
+      });
+      const profileRequestClass = classifyExactAuthenticationProfileRequest({
+        requestUrl: request.url(),
+        method: request.method(),
+        phase: observation?.phase || networkPhase,
+        expectedUidHash:
+          trustedAuthenticationUidHashesByRole.get(authenticationRole) || null,
+      });
+      const protectedReadTarget =
+        configRequestClass === "get"
+          ? "config"
+          : profileRequestClass === "get"
+            ? "profile"
+            : null;
+      if (protectedReadTarget !== null) {
+        trackNetworkAttestation(
+          Promise.resolve().then(() => {
+            const chromiumIdentity = resolveExactChromiumNetworkRequestIdentity(
+              { browser, request },
+            );
+            const attempt =
+              authenticationProtectedReadAttemptsByNetworkId.get(
+                chromiumIdentity.networkRequestId,
+              ) || null;
+            assert.ok(attempt);
+            assert.equal(attempt.target, protectedReadTarget);
+            assert.equal(attempt.networkId, chromiumIdentity.networkRequestId);
+            assert.equal(attempt.requestFailureClass, null);
+            attempt.requestFailureClass = failureClass;
+            attempt.requestFailureFetchNetworkIdentityBound = true;
+          }),
+        );
+      }
       rawFailureText = "";
     });
     page.on("console", (message) => {
@@ -33097,6 +33818,174 @@ try {
               page,
               groupApplicationSessionProof,
             );
+          },
+          confirmAuthenticationProtectedReadRetry: async (pageAttestation) => {
+            assert.equal(
+              groupAuthenticationProtectedReadRetryAttestation,
+              null,
+            );
+            assert.equal(activeCaptureId, null);
+            const normalizedPageAttestation =
+              normalizeSafeAuthenticationProtectedReadRetryAttestation(
+                pageAttestation,
+              );
+            const expectedAttemptCount =
+              normalizedPageAttestation.configAttemptCount +
+              normalizedPageAttestation.profileAttemptCount;
+            const expectedRequestFailureCount =
+              normalizedPageAttestation.retryUsed;
+            const settlementDeadline = Date.now() + 5_000;
+            let attempts = [];
+            while (true) {
+              await drainAppCheckCdpHandlerPromises();
+              await flushNetworkAttestations();
+              attempts = [
+                ...authenticationProtectedReadAttemptsByFetchRequestId.values(),
+              ];
+              const exactNetworkIdentityBound =
+                attempts.length ===
+                  authenticationProtectedReadAttemptsByNetworkId.size &&
+                new Set(attempts).size === attempts.length &&
+                attempts.every(
+                  (attempt) =>
+                    authenticationProtectedReadAttemptsByNetworkId.get(
+                      attempt.networkId,
+                    ) === attempt,
+                );
+              const responseRecordsSettled = attempts.every(
+                (attempt) => attempt.responseRecord !== null,
+              );
+              const requestFailureRecordsSettled =
+                attempts.filter(
+                  (attempt) => attempt.requestFailureClass !== null,
+                ).length === expectedRequestFailureCount &&
+                attempts
+                  .filter((attempt) => attempt.requestFailureClass !== null)
+                  .every(
+                    (attempt) =>
+                      attempt.requestFailureFetchNetworkIdentityBound === true,
+                  );
+              if (
+                attempts.length === expectedAttemptCount &&
+                exactNetworkIdentityBound &&
+                responseRecordsSettled &&
+                requestFailureRecordsSettled
+              ) {
+                break;
+              }
+              assert.ok(
+                Date.now() < settlementDeadline,
+                "Protected-read CDP and Playwright attestations did not settle within the bounded window.",
+              );
+              await page.waitForTimeout(25);
+            }
+            assert.equal(
+              attempts.length,
+              authenticationProtectedReadAttemptsByNetworkId.size,
+            );
+            assert.equal(new Set(attempts).size, attempts.length);
+            assert.equal(
+              attempts.every(
+                (attempt) =>
+                  authenticationProtectedReadAttemptsByNetworkId.get(
+                    attempt.networkId,
+                  ) === attempt,
+              ),
+              true,
+            );
+            const cdpResponseRecords = attempts.map((attempt) => {
+              assert.ok(attempt.responseRecord);
+              return attempt.responseRecord;
+            });
+            const requestFailureRecords = attempts
+              .filter((attempt) => attempt.requestFailureClass !== null)
+              .map((attempt) => ({
+                target: attempt.target,
+                attemptNumber: attempt.attemptNumber,
+                failureClass: attempt.requestFailureClass,
+              }));
+            const bindingAttestation = {
+              exactFetchNetworkIdentityBound: attempts.every(
+                (attempt) =>
+                  authenticationProtectedReadAttemptsByFetchRequestId.get(
+                    attempt.primaryRequestId,
+                  ) === attempt &&
+                  authenticationProtectedReadAttemptsByNetworkId.get(
+                    attempt.networkId,
+                  ) === attempt,
+              ),
+              sameAuthorizationHeader: attempts.every(
+                (attempt) =>
+                  attempt.authorizationHeaderSha256 ===
+                  authenticationProtectedReadAuthorizationHeaderSha256,
+              ),
+              sameAppCheckHeader: attempts.every(
+                (attempt) =>
+                  attempt.appCheckHeaderSha256 ===
+                  authenticationProtectedReadAppCheckHeaderSha256,
+              ),
+              authorizationHeaderJwtShapeValid: attempts.every(
+                (attempt) => attempt.authorizationHeaderJwtShapeValid,
+              ),
+              appCheckHeaderJwtShapeValid: attempts.every(
+                (attempt) => attempt.appCheckHeaderJwtShapeValid,
+              ),
+              requestFailureFetchNetworkIdentityBound: attempts
+                .filter((attempt) => attempt.requestFailureClass !== null)
+                .every(
+                  (attempt) =>
+                    attempt.requestFailureFetchNetworkIdentityBound === true,
+                ),
+            };
+            const safeAttestation = confirmSafeAuthenticationProtectedReadRetry(
+              {
+                pageAttestation: normalizedPageAttestation,
+                cdpResponseRecords,
+                requestFailureRecords,
+                bindingAttestation,
+              },
+            );
+            const recoveredCount =
+              safeAttestation.recoveredProtectedReadTransportFailureCount;
+            assert.ok([0, 1].includes(recoveredCount));
+            assert.equal(
+              browserRequestFailureCount - groupBrowserRequestFailureStart,
+              recoveredCount,
+            );
+            assert.equal(
+              allowedEgressResponseErrorAbortCount -
+                groupAllowedEgressResponseErrorAbortStart,
+              recoveredCount,
+            );
+            assert.equal(
+              sensitiveAppCheckResponseErrorAbortRequestCount -
+                groupSensitiveAppCheckResponseErrorAbortStart,
+              recoveredCount,
+            );
+            assert.equal(requestFailureRecords.length, recoveredCount);
+            assert.equal(
+              cdpResponseRecords.filter(
+                (record) => record.responseClass === "response-error-failed",
+              ).length,
+              recoveredCount,
+            );
+            browserRequestFailureRecoveredProtectedReadCount += recoveredCount;
+            allowedEgressResponseErrorRecoveredProtectedReadCount +=
+              recoveredCount;
+            sensitiveAppCheckResponseErrorRecoveredProtectedReadCount +=
+              recoveredCount;
+            groupAuthenticationProtectedReadRetryAttestation = safeAttestation;
+            authenticationProtectedReadRetryAttestations.push(
+              Object.freeze({
+                groupKey,
+                stage,
+                role: captureRole,
+                authenticationRole,
+                viewport: viewportName,
+                ...safeAttestation,
+              }),
+            );
+            return safeAttestation;
           },
           prepareAuthenticationBootstrapRetirement: async () => {
             assert.ok(groupApplicationSessionProof);
@@ -33240,8 +34129,14 @@ try {
       const {
         applicationSessionProof,
         applicationSessionAuthorityMode,
+        authenticationProtectedReadRetryAttestation,
         ...identity
       } = authentication;
+      assert.equal(
+        authenticationProtectedReadRetryAttestation,
+        groupAuthenticationProtectedReadRetryAttestation,
+      );
+      assert.equal(authenticationProtectedReadRetryAttestation?.passed, true);
       assert.ok(
         ["ENFORCE", "OBSERVE_ONLY", "DISABLED"].includes(
           applicationSessionAuthorityMode,
@@ -33311,8 +34206,20 @@ try {
           authenticatedApplicationWebChannelEpoch,
         )}`,
       );
-      const authenticationBrowserRequestFailureCount =
+      const authenticationObservedBrowserRequestFailureCount =
         browserRequestFailureCount - groupBrowserRequestFailureStart;
+      const authenticationRecoveredBrowserRequestFailureCount =
+        browserRequestFailureRecoveredProtectedReadCount -
+        groupBrowserRequestFailureRecoveredProtectedReadStart;
+      const authenticationFatalBrowserRequestFailureCount =
+        authenticationObservedBrowserRequestFailureCount -
+        authenticationRecoveredBrowserRequestFailureCount;
+      assert.ok(authenticationFatalBrowserRequestFailureCount >= 0);
+      assert.equal(
+        authenticationObservedBrowserRequestFailureCount,
+        authenticationRecoveredBrowserRequestFailureCount +
+          authenticationFatalBrowserRequestFailureCount,
+      );
       const authenticationAppCheckCdpHandlerErrorCount =
         appCheckCdpHandlerErrorCount - groupBaselineBridgeHandlerErrorStart;
       const authenticationOptionalTelemetrySuppressedRequestCount =
@@ -33338,8 +34245,18 @@ try {
           records: webChannelCdpHeaderAttestationBindingRecords,
           activeCaptureId,
         }),
-        cumulativeBrowserRequestFailureCount: browserRequestFailureCount,
-        authenticationBrowserRequestFailureCount,
+        cumulativeObservedBrowserRequestFailureCount:
+          browserRequestFailureCount,
+        cumulativeRecoveredBrowserRequestFailureCount:
+          browserRequestFailureRecoveredProtectedReadCount,
+        cumulativeFatalBrowserRequestFailureCount:
+          browserRequestFailureCount -
+          browserRequestFailureRecoveredProtectedReadCount,
+        authenticationObservedBrowserRequestFailureCount,
+        authenticationRecoveredBrowserRequestFailureCount,
+        authenticationFatalBrowserRequestFailureCount,
+        authenticationProtectedReadRetryAttestation:
+          groupAuthenticationProtectedReadRetryAttestation,
         authenticationAppCheckCdpHandlerErrorCount,
         authenticationOptionalTelemetrySuppressedRequestCount,
         authenticationAllowedEgressHttpErrorAbortCount:
@@ -33365,9 +34282,9 @@ try {
         )}`,
       );
       assert.equal(
-        authenticationBrowserRequestFailureCount,
+        authenticationFatalBrowserRequestFailureCount,
         0,
-        `Authentication browser request failure count must be zero: ${JSON.stringify(
+        `Authentication fatal browser request failure count must be zero: ${JSON.stringify(
           authenticationBrowserErrorDiagnostic,
         )}`,
       );
@@ -34337,6 +35254,24 @@ try {
           ),
         })}`,
       );
+      const expectedProtectedReadAttemptCount =
+        groupAuthenticationProtectedReadRetryAttestation === null
+          ? 0
+          : 2 + groupAuthenticationProtectedReadRetryAttestation.retryUsed;
+      assert.equal(
+        authenticationProtectedReadAttemptsByFetchRequestId.size,
+        expectedProtectedReadAttemptCount,
+      );
+      assert.equal(
+        authenticationProtectedReadAttemptsByNetworkId.size,
+        expectedProtectedReadAttemptCount,
+      );
+      authenticationProtectedReadAttemptsByFetchRequestId.clear();
+      authenticationProtectedReadAttemptsByNetworkId.clear();
+      authenticationProtectedReadAuthorizationHeaderSha256 = null;
+      authenticationProtectedReadAppCheckHeaderSha256 = null;
+      assert.equal(authenticationProtectedReadAttemptsByFetchRequestId.size, 0);
+      assert.equal(authenticationProtectedReadAttemptsByNetworkId.size, 0);
       appCheckCdpSession = null;
     }
     const keepaliveClientRequired = Boolean(authenticationRole);
@@ -34657,7 +35592,9 @@ try {
         groupAllowedEgressHttpErrorAbortStart,
       allowedEgressResponseErrorAbortCount:
         allowedEgressResponseErrorAbortCount -
-        groupAllowedEgressResponseErrorAbortStart,
+        groupAllowedEgressResponseErrorAbortStart -
+        (allowedEgressResponseErrorRecoveredProtectedReadCount -
+          groupAllowedEgressResponseErrorRecoveredProtectedReadStart),
       allowedEgressInformationalEgressHeaderObservationCount:
         allowedEgressInformationalEgressHeaderObservationCount -
         groupAllowedEgressInformationalEgressHeaderObservationStart,
@@ -35218,7 +36155,9 @@ try {
           groupSensitiveAppCheckRedirectResponseAbortStart,
         sensitiveResponseErrorAbortRequestCount:
           sensitiveAppCheckResponseErrorAbortRequestCount -
-          groupSensitiveAppCheckResponseErrorAbortStart,
+          groupSensitiveAppCheckResponseErrorAbortStart -
+          (sensitiveAppCheckResponseErrorRecoveredProtectedReadCount -
+            groupSensitiveAppCheckResponseErrorRecoveredProtectedReadStart),
         sensitiveRequestTrackingResidualCount:
           groupSensitiveRequestTrackingResidualCount,
         allowedEgressTrackingResidualCount:
@@ -35751,6 +36690,127 @@ assert.equal(
   authenticationLandingGuardExpectedGroupCount,
 );
 assert.ok(authenticationLandingGuardExpectedGroupCount > 0);
+const sortedAuthenticationProtectedReadRetryAttestations = [
+  ...authenticationProtectedReadRetryAttestations,
+].sort((left, right) => left.groupKey.localeCompare(right.groupKey));
+assert.equal(
+  sortedAuthenticationProtectedReadRetryAttestations.length,
+  applicationSessionKeepaliveClientExpectedGroupCount,
+);
+assert.equal(
+  new Set(
+    sortedAuthenticationProtectedReadRetryAttestations.map(
+      (attestation) => attestation.groupKey,
+    ),
+  ).size,
+  sortedAuthenticationProtectedReadRetryAttestations.length,
+);
+assert.equal(
+  sortedAuthenticationProtectedReadRetryAttestations.every(
+    (attestation) =>
+      attestation.passed === true &&
+      [0, 1].includes(attestation.retryUsed) &&
+      attestation.retryUsed ===
+        attestation.recoveredProtectedReadTransportFailureCount,
+  ),
+  true,
+);
+const observedProtectedReadTransportFailureCount =
+  sortedAuthenticationProtectedReadRetryAttestations.reduce(
+    (total, attestation) => total + attestation.retryUsed,
+    0,
+  );
+const recoveredProtectedReadTransportFailureCount =
+  sortedAuthenticationProtectedReadRetryAttestations.reduce(
+    (total, attestation) =>
+      total + attestation.recoveredProtectedReadTransportFailureCount,
+    0,
+  );
+const fatalProtectedReadTransportFailureCount =
+  observedProtectedReadTransportFailureCount -
+  recoveredProtectedReadTransportFailureCount;
+const browserRequestFailureFatalCount =
+  browserRequestFailureCount - browserRequestFailureRecoveredProtectedReadCount;
+const allowedEgressResponseErrorFatalCount =
+  allowedEgressResponseErrorAbortCount -
+  allowedEgressResponseErrorRecoveredProtectedReadCount;
+const sensitiveAppCheckResponseErrorFatalCount =
+  sensitiveAppCheckResponseErrorAbortRequestCount -
+  sensitiveAppCheckResponseErrorRecoveredProtectedReadCount;
+for (const count of [
+  fatalProtectedReadTransportFailureCount,
+  browserRequestFailureFatalCount,
+  allowedEgressResponseErrorFatalCount,
+  sensitiveAppCheckResponseErrorFatalCount,
+]) {
+  assert.ok(count >= 0);
+}
+assert.equal(
+  observedProtectedReadTransportFailureCount,
+  recoveredProtectedReadTransportFailureCount +
+    fatalProtectedReadTransportFailureCount,
+);
+assert.equal(
+  browserRequestFailureCount,
+  browserRequestFailureRecoveredProtectedReadCount +
+    browserRequestFailureFatalCount,
+);
+assert.equal(
+  allowedEgressResponseErrorAbortCount,
+  allowedEgressResponseErrorRecoveredProtectedReadCount +
+    allowedEgressResponseErrorFatalCount,
+);
+assert.equal(
+  sensitiveAppCheckResponseErrorAbortRequestCount,
+  sensitiveAppCheckResponseErrorRecoveredProtectedReadCount +
+    sensitiveAppCheckResponseErrorFatalCount,
+);
+assert.equal(
+  browserRequestFailureRecoveredProtectedReadCount,
+  recoveredProtectedReadTransportFailureCount,
+);
+assert.equal(
+  allowedEgressResponseErrorRecoveredProtectedReadCount,
+  recoveredProtectedReadTransportFailureCount,
+);
+assert.equal(
+  sensitiveAppCheckResponseErrorRecoveredProtectedReadCount,
+  recoveredProtectedReadTransportFailureCount,
+);
+const authenticationProtectedReadRetry = Object.freeze({
+  schemaVersion: 1,
+  policyId: SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_POLICY_ID,
+  retryBudgetPerGroup: 1,
+  retryDelayMs: 250,
+  expectedGroupCount: applicationSessionKeepaliveClientExpectedGroupCount,
+  attestationCount: sortedAuthenticationProtectedReadRetryAttestations.length,
+  attestationSetSha256: sha256(
+    canonicalJson(sortedAuthenticationProtectedReadRetryAttestations),
+  ),
+  observedProtectedReadTransportFailureCount,
+  recoveredProtectedReadTransportFailureCount,
+  fatalProtectedReadTransportFailureCount,
+  browserRequestFailureObservedCount: browserRequestFailureCount,
+  browserRequestFailureRecoveredCount:
+    browserRequestFailureRecoveredProtectedReadCount,
+  browserRequestFailureFatalCount,
+  allowedEgressResponseErrorObservedCount: allowedEgressResponseErrorAbortCount,
+  allowedEgressResponseErrorRecoveredCount:
+    allowedEgressResponseErrorRecoveredProtectedReadCount,
+  allowedEgressResponseErrorFatalCount,
+  sensitiveAppCheckResponseErrorObservedCount:
+    sensitiveAppCheckResponseErrorAbortRequestCount,
+  sensitiveAppCheckResponseErrorRecoveredCount:
+    sensitiveAppCheckResponseErrorRecoveredProtectedReadCount,
+  sensitiveAppCheckResponseErrorFatalCount,
+  attestations: sortedAuthenticationProtectedReadRetryAttestations,
+  passed:
+    fatalProtectedReadTransportFailureCount === 0 &&
+    browserRequestFailureFatalCount === 0 &&
+    allowedEgressResponseErrorFatalCount === 0 &&
+    sensitiveAppCheckResponseErrorFatalCount === 0,
+});
+assert.equal(authenticationProtectedReadRetry.passed, true);
 assert.equal(
   secondaryExecutionGuardInitScriptRegistrationCount,
   groupedTargets.size,
@@ -35779,9 +36839,9 @@ assert.equal(
   "Raw App Check token material reached the rendered DOM.",
 );
 assert.equal(
-  browserRequestFailureCount,
+  browserRequestFailureFatalCount,
   0,
-  "A browser request failed during App Check-bound capture.",
+  "A fatal browser request failed during App Check-bound capture.",
 );
 assert.equal(
   browserCorsConsoleErrorCount,
@@ -36139,7 +37199,7 @@ assert.equal(unauthorizedAppCheckHeaderEgressCount, 0);
 assert.equal(sensitiveAppCheckRedirectRequestCount, 0);
 assert.equal(sensitiveAppCheckRedirectAbortRequestCount, 0);
 assert.equal(sensitiveAppCheckRedirectResponseAbortRequestCount, 0);
-assert.equal(sensitiveAppCheckResponseErrorAbortRequestCount, 0);
+assert.equal(sensitiveAppCheckResponseErrorFatalCount, 0);
 assert.equal(sensitiveAppCheckRequestTrackingResidualCount, 0);
 assert.equal(pendingBridgeDecisionResidualCount, 0);
 assert.equal(pendingBridgeObservationResidualCount, 0);
@@ -36514,7 +37574,7 @@ const networkPolicyBinding = {
   allowedEgressInvalidResponseStatusAbortCount,
   allowedEgressRedirectAbortCount,
   allowedEgressHttpErrorAbortCount,
-  allowedEgressResponseErrorAbortCount,
+  allowedEgressResponseErrorAbortCount: allowedEgressResponseErrorFatalCount,
   allowedEgressInformationalEgressHeaderObservationCount,
   allowedEgressFinalEgressHeaderObservationCount,
   allowedEgressResponseHeaderSuppressionCount,
@@ -36638,7 +37698,7 @@ const appCheckBinding = {
   allowedEgressInvalidResponseStatusAbortCount,
   allowedEgressRedirectAbortCount,
   allowedEgressHttpErrorAbortCount,
-  allowedEgressResponseErrorAbortCount,
+  allowedEgressResponseErrorAbortCount: allowedEgressResponseErrorFatalCount,
   allowedEgressInformationalEgressHeaderObservationCount,
   allowedEgressFinalEgressHeaderObservationCount,
   allowedEgressResponseHeaderSuppressionCount,
@@ -36779,7 +37839,8 @@ const appCheckBinding = {
   sensitiveAppCheckRedirectAbortRequestCount,
   sensitiveAppCheckCdpResponsePausedRequestCount,
   sensitiveAppCheckRedirectResponseAbortRequestCount,
-  sensitiveAppCheckResponseErrorAbortRequestCount,
+  sensitiveAppCheckResponseErrorAbortRequestCount:
+    sensitiveAppCheckResponseErrorFatalCount,
   sensitiveAppCheckRequestTrackingResidualCount,
   browserNetworkHeaderAttestationErrorCount,
   firebaseDataRedirectResponseCount,
@@ -36806,7 +37867,7 @@ const appCheckBinding = {
   consoleSecretObservationCount: browserConsoleSecretObservationCount,
   corsConsoleErrorCount: browserCorsConsoleErrorCount,
   domSecretObservationCount: browserDomSecretObservationCount,
-  requestFailureCount: browserRequestFailureCount,
+  requestFailureCount: browserRequestFailureFatalCount,
   rawHeaderValueOutputCount,
   rawTokenOutputCount,
 };
@@ -36971,7 +38032,7 @@ for (const [label, count] of Object.entries({
   refreshTokenScopeViolationBlockCount,
   allowedEgressRedirectAbortCount,
   allowedEgressHttpErrorAbortCount,
-  allowedEgressResponseErrorAbortCount,
+  allowedEgressResponseErrorAbortCount: allowedEgressResponseErrorFatalCount,
   rawSensitivePreTransmissionBlockCount,
   rawProductionPreTransmissionBlockCount,
   rawVercelBypassPreTransmissionBlockCount,
@@ -37073,6 +38134,7 @@ const manifest = {
   networkPolicyHash: networkPolicyBindingHash,
   appCheckBinding,
   appCheckBindingHash,
+  authenticationProtectedReadRetry,
   authenticationLandingGuard: {
     id: authenticationLandingGuard.id,
     storage: authenticationLandingGuard.storage,

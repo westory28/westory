@@ -5958,6 +5958,265 @@ assert.equal(manifest.vercelProjectId, contract.vercelProjectId);
 assert.equal(manifest.stableAlias, contract.stableAlias);
 assert.equal(manifest.productionAccess, 0);
 assert.equal(manifest.productionWrites, 0);
+const authenticationProtectedReadRetry =
+  manifest.authenticationProtectedReadRetry;
+assertExactObjectKeys(authenticationProtectedReadRetry, [
+  "allowedEgressResponseErrorFatalCount",
+  "allowedEgressResponseErrorObservedCount",
+  "allowedEgressResponseErrorRecoveredCount",
+  "attestationCount",
+  "attestationSetSha256",
+  "attestations",
+  "browserRequestFailureFatalCount",
+  "browserRequestFailureObservedCount",
+  "browserRequestFailureRecoveredCount",
+  "expectedGroupCount",
+  "fatalProtectedReadTransportFailureCount",
+  "observedProtectedReadTransportFailureCount",
+  "passed",
+  "policyId",
+  "recoveredProtectedReadTransportFailureCount",
+  "retryBudgetPerGroup",
+  "retryDelayMs",
+  "schemaVersion",
+  "sensitiveAppCheckResponseErrorFatalCount",
+  "sensitiveAppCheckResponseErrorObservedCount",
+  "sensitiveAppCheckResponseErrorRecoveredCount",
+]);
+assert.equal(authenticationProtectedReadRetry.schemaVersion, 1);
+assert.equal(
+  authenticationProtectedReadRetry.policyId,
+  "w10p-protected-read-shared-transport-retry-v1",
+);
+assert.equal(authenticationProtectedReadRetry.retryBudgetPerGroup, 1);
+assert.equal(authenticationProtectedReadRetry.retryDelayMs, 250);
+assert.equal(authenticationProtectedReadRetry.passed, true);
+for (const field of [
+  "expectedGroupCount",
+  "attestationCount",
+  "observedProtectedReadTransportFailureCount",
+  "recoveredProtectedReadTransportFailureCount",
+  "fatalProtectedReadTransportFailureCount",
+  "browserRequestFailureObservedCount",
+  "browserRequestFailureRecoveredCount",
+  "browserRequestFailureFatalCount",
+  "allowedEgressResponseErrorObservedCount",
+  "allowedEgressResponseErrorRecoveredCount",
+  "allowedEgressResponseErrorFatalCount",
+  "sensitiveAppCheckResponseErrorObservedCount",
+  "sensitiveAppCheckResponseErrorRecoveredCount",
+  "sensitiveAppCheckResponseErrorFatalCount",
+]) {
+  assert.equal(Number.isInteger(authenticationProtectedReadRetry[field]), true);
+  assert.ok(authenticationProtectedReadRetry[field] >= 0);
+}
+assert.ok(authenticationProtectedReadRetry.expectedGroupCount > 0);
+assert.equal(
+  Array.isArray(authenticationProtectedReadRetry.attestations),
+  true,
+);
+assert.equal(
+  authenticationProtectedReadRetry.attestationCount,
+  authenticationProtectedReadRetry.expectedGroupCount,
+);
+assert.equal(
+  authenticationProtectedReadRetry.attestations.length,
+  authenticationProtectedReadRetry.attestationCount,
+);
+assert.deepEqual(
+  authenticationProtectedReadRetry.attestations.map(
+    (attestation) => attestation.groupKey,
+  ),
+  authenticationProtectedReadRetry.attestations
+    .map((attestation) => attestation.groupKey)
+    .sort((left, right) => left.localeCompare(right)),
+);
+assert.match(
+  authenticationProtectedReadRetry.attestationSetSha256,
+  /^[a-f0-9]{64}$/u,
+);
+assert.equal(
+  authenticationProtectedReadRetry.attestationSetSha256,
+  sha256(canonicalJson(authenticationProtectedReadRetry.attestations)),
+);
+const protectedReadRetryRolePairs = {
+  admin: "admin",
+  student: "student",
+  "support-teacher": "teacher",
+  teacher: "teacher",
+};
+const protectedReadRetryGroupKeys = new Set();
+for (const attestation of authenticationProtectedReadRetry.attestations) {
+  assertExactObjectKeys(attestation, [
+    "authTimeUnchanged",
+    "authenticationRole",
+    "cdpAppCheckHeaderJwtShapeValid",
+    "cdpAuthorizationHeaderJwtShapeValid",
+    "cdpConfigFinalResponseClass",
+    "cdpConfigFirstResponseClass",
+    "cdpExactFetchNetworkIdentityBound",
+    "cdpProfileFinalResponseClass",
+    "cdpProfileFirstResponseClass",
+    "cdpSameAppCheckHeader",
+    "cdpSameAuthorizationHeader",
+    "configAttemptCount",
+    "configFinalOutcomeClass",
+    "configFirstOutcomeClass",
+    "exactUrlMethodBound",
+    "groupKey",
+    "passed",
+    "playwrightRequestFailureFetchNetworkIdentityBound",
+    "policyId",
+    "profileAttemptCount",
+    "profileFinalOutcomeClass",
+    "profileFirstOutcomeClass",
+    "recoveredByRetry",
+    "recoveredProtectedReadTransportFailureCount",
+    "retryBudget",
+    "retryDelayMs",
+    "retryTarget",
+    "retryUsed",
+    "role",
+    "sameAppCheckToken",
+    "sameAuthorizationToken",
+    "schemaVersion",
+    "sessionMutationCount",
+    "sessionRevisionUnchanged",
+    "stage",
+    "tokenRefreshCount",
+    "viewport",
+  ]);
+  assert.equal(attestation.schemaVersion, 1);
+  assert.equal(attestation.policyId, authenticationProtectedReadRetry.policyId);
+  assert.equal(attestation.retryBudget, 1);
+  assert.equal(attestation.retryDelayMs, 250);
+  assert.ok(["baseline", "candidate"].includes(attestation.stage));
+  assert.ok(Object.hasOwn(protectedReadRetryRolePairs, attestation.role));
+  assert.equal(
+    attestation.authenticationRole,
+    protectedReadRetryRolePairs[attestation.role],
+  );
+  assert.match(attestation.viewport, /^\d+x\d+$/u);
+  assert.equal(
+    attestation.groupKey,
+    `${attestation.stage}:${attestation.role}:${attestation.viewport}`,
+  );
+  assert.equal(protectedReadRetryGroupKeys.has(attestation.groupKey), false);
+  protectedReadRetryGroupKeys.add(attestation.groupKey);
+  assert.ok(["none", "config", "profile"].includes(attestation.retryTarget));
+  assert.ok([0, 1].includes(attestation.retryUsed));
+  assert.equal(
+    attestation.retryUsed,
+    Number(attestation.retryTarget !== "none"),
+  );
+  assert.equal(attestation.recoveredByRetry, attestation.retryUsed === 1);
+  assert.equal(
+    attestation.recoveredProtectedReadTransportFailureCount,
+    attestation.retryUsed,
+  );
+  assert.equal(
+    attestation.configAttemptCount,
+    attestation.retryTarget === "config" ? 2 : 1,
+  );
+  assert.equal(
+    attestation.profileAttemptCount,
+    attestation.retryTarget === "profile" ? 2 : 1,
+  );
+  assert.equal(
+    attestation.configAttemptCount + attestation.profileAttemptCount,
+    2 + attestation.retryUsed,
+  );
+  assert.equal(
+    attestation.configFirstOutcomeClass,
+    attestation.retryTarget === "config" ? "transport-error" : "response-2xx",
+  );
+  assert.equal(attestation.configFinalOutcomeClass, "response-2xx");
+  assert.equal(
+    attestation.profileFirstOutcomeClass,
+    attestation.retryTarget === "profile" ? "transport-error" : "response-2xx",
+  );
+  assert.equal(attestation.profileFinalOutcomeClass, "response-2xx");
+  assert.equal(
+    attestation.cdpConfigFirstResponseClass,
+    attestation.retryTarget === "config"
+      ? "response-error-failed"
+      : "response-2xx",
+  );
+  assert.equal(attestation.cdpConfigFinalResponseClass, "response-2xx");
+  assert.equal(
+    attestation.cdpProfileFirstResponseClass,
+    attestation.retryTarget === "profile"
+      ? "response-error-failed"
+      : "response-2xx",
+  );
+  assert.equal(attestation.cdpProfileFinalResponseClass, "response-2xx");
+  for (const field of [
+    "authTimeUnchanged",
+    "cdpAppCheckHeaderJwtShapeValid",
+    "cdpAuthorizationHeaderJwtShapeValid",
+    "cdpExactFetchNetworkIdentityBound",
+    "cdpSameAppCheckHeader",
+    "cdpSameAuthorizationHeader",
+    "exactUrlMethodBound",
+    "passed",
+    "playwrightRequestFailureFetchNetworkIdentityBound",
+    "sameAppCheckToken",
+    "sameAuthorizationToken",
+    "sessionRevisionUnchanged",
+  ]) {
+    assert.equal(attestation[field], true);
+  }
+  assert.equal(attestation.tokenRefreshCount, 0);
+  assert.equal(attestation.sessionMutationCount, 0);
+}
+assert.equal(
+  authenticationProtectedReadRetry.observedProtectedReadTransportFailureCount,
+  authenticationProtectedReadRetry.attestations.reduce(
+    (total, attestation) => total + attestation.retryUsed,
+    0,
+  ),
+);
+assert.equal(
+  authenticationProtectedReadRetry.recoveredProtectedReadTransportFailureCount,
+  authenticationProtectedReadRetry.attestations.reduce(
+    (total, attestation) =>
+      total + attestation.recoveredProtectedReadTransportFailureCount,
+    0,
+  ),
+);
+for (const [observedField, recoveredField, fatalField] of [
+  [
+    "observedProtectedReadTransportFailureCount",
+    "recoveredProtectedReadTransportFailureCount",
+    "fatalProtectedReadTransportFailureCount",
+  ],
+  [
+    "browserRequestFailureObservedCount",
+    "browserRequestFailureRecoveredCount",
+    "browserRequestFailureFatalCount",
+  ],
+  [
+    "allowedEgressResponseErrorObservedCount",
+    "allowedEgressResponseErrorRecoveredCount",
+    "allowedEgressResponseErrorFatalCount",
+  ],
+  [
+    "sensitiveAppCheckResponseErrorObservedCount",
+    "sensitiveAppCheckResponseErrorRecoveredCount",
+    "sensitiveAppCheckResponseErrorFatalCount",
+  ],
+]) {
+  assert.equal(
+    authenticationProtectedReadRetry[observedField],
+    authenticationProtectedReadRetry[recoveredField] +
+      authenticationProtectedReadRetry[fatalField],
+  );
+  assert.equal(authenticationProtectedReadRetry[fatalField], 0);
+  assert.equal(
+    authenticationProtectedReadRetry[recoveredField],
+    authenticationProtectedReadRetry.recoveredProtectedReadTransportFailureCount,
+  );
+}
 const networkSummary = manifest.networkSummary;
 for (const field of [
   "requestCount",
@@ -7362,6 +7621,26 @@ for (const capture of captures.values()) {
     expectedAuthenticationLandingGuardAuditIds.add(auditId);
   }
 }
+const expectedProtectedReadRetryAuditIds = new Set(
+  [...captures.values()]
+    .filter((capture) => Boolean(authenticationRoleForCapture(capture)))
+    .map((capture) => {
+      const authenticationRole = authenticationRoleForCapture(capture);
+      const auditRole =
+        capture.role === "support"
+          ? `support-${authenticationRole}`
+          : capture.role;
+      return `${capture.stage}:${auditRole}:${viewportKey(capture.viewport)}`;
+    }),
+);
+assert.equal(
+  authenticationProtectedReadRetry.expectedGroupCount,
+  expectedProtectedReadRetryAuditIds.size,
+);
+assert.deepEqual(
+  [...protectedReadRetryGroupKeys].sort(),
+  [...expectedProtectedReadRetryAuditIds].sort(),
+);
 assert.equal(
   manifest.authenticationLandingGuard.expectedGroupCount,
   expectedAuthenticationLandingGuardAuditIds.size,
@@ -8560,6 +8839,15 @@ for (const audit of manifest.browserAudits) {
     "webChannelCdpHeaderAttestationBindingFailureCount",
     "webChannelCdpHeaderAttestationPairingTimeoutCount",
     "webChannelCdpHeaderAttestationCompletionTimeoutCount",
+    "applicationSessionKeepaliveClientInitAttemptCount",
+    "applicationSessionKeepaliveClientInitSuccessCount",
+    "applicationSessionKeepaliveClientReuseCount",
+    "applicationSessionKeepaliveClientDisposeAttemptCount",
+    "applicationSessionKeepaliveClientDisposeSuccessCount",
+    "applicationSessionKeepaliveClientDeleteCount",
+    "applicationSessionKeepaliveClientRegistryResidualCount",
+    "applicationSessionKeepaliveClientHandleDisposeCount",
+    "applicationSessionKeepaliveClientLifecycleEvidence",
     "allowedEgressContextCloseBackchannelRetirementCount",
     "allowedEgressContextCloseSessionForwardPostRetirementCount",
     "allowedEgressContextCloseTerminationRetirementCount",
@@ -8806,6 +9094,58 @@ for (const audit of manifest.browserAudits) {
     bridgeEvent.webChannelCdpHeaderAttestationCompletionTimeoutCount,
     0,
   );
+  const auditAuthenticationRoles = new Set(
+    audit.captureIds
+      .map((captureId) => captures.get(captureId))
+      .map((capture) => authenticationRoleForCapture(capture))
+      .filter(Boolean),
+  );
+  assert.ok(auditAuthenticationRoles.size <= 1);
+  const keepaliveClientRequired = auditAuthenticationRoles.size === 1;
+  const expectedKeepaliveClientLifecycleCount = Number(keepaliveClientRequired);
+  for (const field of [
+    "applicationSessionKeepaliveClientInitAttemptCount",
+    "applicationSessionKeepaliveClientInitSuccessCount",
+    "applicationSessionKeepaliveClientDisposeAttemptCount",
+    "applicationSessionKeepaliveClientDisposeSuccessCount",
+    "applicationSessionKeepaliveClientDeleteCount",
+    "applicationSessionKeepaliveClientHandleDisposeCount",
+  ]) {
+    assert.equal(bridgeEvent[field], expectedKeepaliveClientLifecycleCount);
+  }
+  assert.equal(
+    bridgeEvent.applicationSessionKeepaliveClientReuseCount,
+    keepaliveClientRequired ? audit.captureIds.length : 0,
+  );
+  assert.equal(
+    bridgeEvent.applicationSessionKeepaliveClientRegistryResidualCount,
+    0,
+  );
+  assertExactObjectKeys(
+    bridgeEvent.applicationSessionKeepaliveClientLifecycleEvidence,
+    [
+      "clientRequired",
+      "deleteCountBound",
+      "disposalAttestationBound",
+      "disposalCountBound",
+      "handleDisposeCountBound",
+      "initializationAttestationBound",
+      "initializationCountBound",
+      "registryResidualAbsent",
+      "reuseCountBound",
+    ],
+  );
+  assert.equal(
+    bridgeEvent.applicationSessionKeepaliveClientLifecycleEvidence
+      .clientRequired,
+    keepaliveClientRequired,
+  );
+  for (const [field, value] of Object.entries(
+    bridgeEvent.applicationSessionKeepaliveClientLifecycleEvidence,
+  )) {
+    if (field === "clientRequired") continue;
+    assert.equal(value, true);
+  }
   assert.ok(
     Number.isSafeInteger(
       bridgeEvent.allowedEgressContextCloseBackchannelRetirementCount,
@@ -8917,6 +9257,14 @@ for (const audit of manifest.browserAudits) {
     "webChannelCdpHeaderAttestationBindingFailureCount",
     "webChannelCdpHeaderAttestationPairingTimeoutCount",
     "webChannelCdpHeaderAttestationCompletionTimeoutCount",
+    "applicationSessionKeepaliveClientInitAttemptCount",
+    "applicationSessionKeepaliveClientInitSuccessCount",
+    "applicationSessionKeepaliveClientReuseCount",
+    "applicationSessionKeepaliveClientDisposeAttemptCount",
+    "applicationSessionKeepaliveClientDisposeSuccessCount",
+    "applicationSessionKeepaliveClientDeleteCount",
+    "applicationSessionKeepaliveClientRegistryResidualCount",
+    "applicationSessionKeepaliveClientHandleDisposeCount",
     "allowedEgressContextCloseBackchannelRetirementCount",
     "allowedEgressContextCloseSessionForwardPostRetirementCount",
     "allowedEgressContextCloseTerminationRetirementCount",
@@ -10982,6 +11330,15 @@ assertExactObjectKeys(appCheckBinding, [
   "applicationSessionKeepaliveSuccessCount",
   "baselineApplicationSessionKeepaliveSuccessCount",
   "candidateApplicationSessionKeepaliveSuccessCount",
+  "applicationSessionKeepaliveClientExpectedGroupCount",
+  "applicationSessionKeepaliveClientInitAttemptCount",
+  "applicationSessionKeepaliveClientInitSuccessCount",
+  "applicationSessionKeepaliveClientReuseCount",
+  "applicationSessionKeepaliveClientDisposeAttemptCount",
+  "applicationSessionKeepaliveClientDisposeSuccessCount",
+  "applicationSessionKeepaliveClientDeleteCount",
+  "applicationSessionKeepaliveClientRegistryResidualCount",
+  "applicationSessionKeepaliveClientHandleDisposeCount",
   "applicationSessionProofRetentionResidualCount",
   "appCheckCdpHandlerErrorCount",
   "appCheckCdpMonitorPausedRequestCount",
@@ -11305,6 +11662,15 @@ for (const field of [
   "applicationSessionKeepaliveSuccessCount",
   "baselineApplicationSessionKeepaliveSuccessCount",
   "candidateApplicationSessionKeepaliveSuccessCount",
+  "applicationSessionKeepaliveClientExpectedGroupCount",
+  "applicationSessionKeepaliveClientInitAttemptCount",
+  "applicationSessionKeepaliveClientInitSuccessCount",
+  "applicationSessionKeepaliveClientReuseCount",
+  "applicationSessionKeepaliveClientDisposeAttemptCount",
+  "applicationSessionKeepaliveClientDisposeSuccessCount",
+  "applicationSessionKeepaliveClientDeleteCount",
+  "applicationSessionKeepaliveClientRegistryResidualCount",
+  "applicationSessionKeepaliveClientHandleDisposeCount",
   "applicationSessionProofRetentionResidualCount",
 ]) {
   assert.ok(Number.isInteger(appCheckBinding[field]));
@@ -11330,6 +11696,28 @@ assert.equal(
 assert.equal(
   appCheckBinding.candidateApplicationSessionKeepaliveSuccessCount,
   expectedApplicationSessionKeepaliveCounts.candidate,
+);
+assert.equal(
+  appCheckBinding.applicationSessionKeepaliveClientExpectedGroupCount,
+  expectedProtectedReadRetryAuditIds.size,
+);
+for (const field of [
+  "applicationSessionKeepaliveClientInitAttemptCount",
+  "applicationSessionKeepaliveClientInitSuccessCount",
+  "applicationSessionKeepaliveClientDisposeAttemptCount",
+  "applicationSessionKeepaliveClientDisposeSuccessCount",
+  "applicationSessionKeepaliveClientDeleteCount",
+  "applicationSessionKeepaliveClientHandleDisposeCount",
+]) {
+  assert.equal(appCheckBinding[field], expectedProtectedReadRetryAuditIds.size);
+}
+assert.equal(
+  appCheckBinding.applicationSessionKeepaliveClientReuseCount,
+  expectedApplicationSessionKeepaliveCount,
+);
+assert.equal(
+  appCheckBinding.applicationSessionKeepaliveClientRegistryResidualCount,
+  0,
 );
 assert.deepEqual(
   auditedApplicationSessionKeepaliveRequestCounts,
