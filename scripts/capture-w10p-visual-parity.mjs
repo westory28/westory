@@ -12453,8 +12453,18 @@ const selectSafeAuthenticationProfileFailureClass = (input) => {
         loadingFailureClass,
         loadingFailureTimingClass,
       });
+    // Fetch.failRequest(BlockedByClient) is the local fail-closed action used
+    // after a response-stage error. Its later Network.loadingFailed echo must
+    // not replace the earlier, causally primary runtime transport diagnostic.
+    const localBlockedByClientEcho =
+      loadingFailureClass === "blocked-by-client" &&
+      ["local-fail-in-flight", "post-local-fail"].includes(
+        loadingFailureTimingClass,
+      );
     return (
-      loadingFailedFailureClass || runtimeFailureClass || profileFailureClass
+      (localBlockedByClientEcho ? null : loadingFailedFailureClass) ||
+      runtimeFailureClass ||
+      profileFailureClass
     );
   } catch {
     return null;
@@ -14926,6 +14936,88 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     );
     assert.equal(
       selectSafeAuthenticationProfileFailureClass(selectionInput),
+      loadingFailureClass === "blocked-by-client" &&
+        ["local-fail-in-flight", "post-local-fail"].includes(
+          loadingFailureTimingClass,
+        )
+        ? "authentication-evaluate-profile-fetch-cdp-issued-active-tunnel-current-active-tunnel-response-error-failed"
+        : expectedFailureClass,
+    );
+  }
+  const profileLoadingFailedCausalPrecedenceFixtures = [
+    [
+      {
+        step: "profile-fetch",
+        responseClass: "response-error-failed",
+        proxyLeaseClass: "issued-active-tunnel",
+        currentTunnelClass: "current-active-tunnel",
+        loadingFailureClass: "blocked-by-client",
+        loadingFailureTimingClass: "pre-local-fail",
+      },
+      "authentication-evaluate-profile-fetch-cdp-issued-active-tunnel-current-active-tunnel-loading-pre-local-fail-blocked-by-client-failed",
+    ],
+    [
+      {
+        step: "profile-fetch",
+        responseClass: "response-error-failed",
+        proxyLeaseClass: "issued-active-tunnel",
+        currentTunnelClass: "current-active-tunnel",
+        loadingFailureClass: "blocked-by-client",
+        loadingFailureTimingClass: "local-fail-in-flight",
+      },
+      "authentication-evaluate-profile-fetch-cdp-issued-active-tunnel-current-active-tunnel-response-error-failed",
+    ],
+    [
+      {
+        step: "profile-fetch",
+        responseClass: "response-error-failed",
+        proxyLeaseClass: "issued-active-tunnel",
+        currentTunnelClass: "current-active-tunnel",
+        loadingFailureClass: "blocked-by-client",
+        loadingFailureTimingClass: "post-local-fail",
+      },
+      "authentication-evaluate-profile-fetch-cdp-issued-active-tunnel-current-active-tunnel-response-error-failed",
+    ],
+    [
+      {
+        step: "profile-fetch",
+        responseClass: "response-error-failed",
+        proxyLeaseClass: "issued-active-tunnel",
+        currentTunnelClass: "current-active-tunnel",
+        loadingFailureClass: "http2-protocol",
+        loadingFailureTimingClass: "post-local-fail",
+      },
+      "authentication-evaluate-profile-fetch-cdp-issued-active-tunnel-current-active-tunnel-loading-post-local-fail-http2-protocol-failed",
+    ],
+    [
+      {
+        step: "profile-fetch",
+        responseClass: "response-error-failed",
+        proxyLeaseClass: "issued-no-active-tunnel",
+        currentTunnelClass: "current-no-active-tunnel",
+        loadingFailureClass: "blocked-by-client",
+        loadingFailureTimingClass: "post-local-fail",
+      },
+      "authentication-evaluate-profile-fetch-cdp-proxy-issued-no-active-tunnel-failed",
+    ],
+    [
+      {
+        step: "profile-fetch",
+        responseClass: "response-error-failed",
+        proxyLeaseClass: "consumed-active-tunnel",
+        currentTunnelClass: "current-active-tunnel",
+        loadingFailureClass: "blocked-by-client",
+        loadingFailureTimingClass: "post-local-fail",
+      },
+      "authentication-evaluate-profile-fetch-cdp-consumed-active-tunnel-current-active-tunnel-response-error-failed",
+    ],
+  ];
+  for (const [
+    precedenceInput,
+    expectedFailureClass,
+  ] of profileLoadingFailedCausalPrecedenceFixtures) {
+    assert.equal(
+      selectSafeAuthenticationProfileFailureClass(precedenceInput),
       expectedFailureClass,
     );
   }
@@ -16287,6 +16379,8 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
       loadingFailedTimingNegativeFixtures.length,
     safeAuthenticationProfileLoadingFailedFailureClassFixtureCount:
       profileLoadingFailedFailureFixtures.length,
+    safeAuthenticationProfileLoadingFailedCausalPrecedenceFixtureCount:
+      profileLoadingFailedCausalPrecedenceFixtures.length,
     safeAuthenticationProfileLoadingFailedFailureClassNegativeFixtureCount:
       profileLoadingFailedNegativeFixtures.length,
     safeAuthenticationProfileLoadingFailedObserverAcceptedFixtureCount: 6,
