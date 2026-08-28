@@ -5794,6 +5794,7 @@ const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_ECHO_CLASSES =
     "aborted",
     "generic-failed",
     "blocked-by-client",
+    "other",
   ]);
 const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES = Object.freeze({
   generic: "authentication-protected-read-retry-attestation-failed",
@@ -6089,6 +6090,7 @@ const confirmSafeAuthenticationProtectedReadRetry = (
   }
   return Object.freeze({
     ...attestation,
+    schemaVersion: 2,
     cdpConfigFirstResponseClass: firstResponseClassByTarget.config,
     cdpConfigFinalResponseClass: finalResponseClassByTarget.config,
     cdpProfileFirstResponseClass: firstResponseClassByTarget.profile,
@@ -6103,6 +6105,7 @@ const confirmSafeAuthenticationProtectedReadRetry = (
       bindingAttestation.appCheckHeaderJwtShapeValid,
     playwrightRequestFailureFetchNetworkIdentityBound:
       bindingAttestation.requestFailureFetchNetworkIdentityBound,
+    playwrightFailureEchoClass: requestFailureRecords[0]?.failureClass ?? null,
     recoveredProtectedReadTransportFailureCount: requestFailureRecords.length,
     passed: true,
   });
@@ -13680,8 +13683,12 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     );
   assert.equal(
     acceptedFailureEchoAttestations.every(
-      (attestation) =>
+      (attestation, index) =>
         attestation.recoveredProtectedReadTransportFailureCount === 1 &&
+        attestation.playwrightFailureEchoClass ===
+          SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_ECHO_CLASSES[
+            index
+          ] &&
         attestation.passed === true,
     ),
     true,
@@ -13691,6 +13698,10 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
       (attestation) => attestation.recoveredProtectedReadTransportFailureCount,
     ),
     [0, 1, 1, 1],
+  );
+  assert.deepEqual(
+    accepted.map((attestation) => attestation.playwrightFailureEchoClass),
+    [null, "generic-failed", "generic-failed", "generic-failed"],
   );
   assert.equal(
     accepted.every((attestation) => attestation.passed),
@@ -13755,11 +13766,6 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     },
     () => {
       const fixture = createFixture("profile");
-      fixture.requestFailureRecords[0].failureClass = "other";
-      return fixture;
-    },
-    () => {
-      const fixture = createFixture("profile");
       fixture.requestFailureRecords[0].failureClass = "policy-blocked";
       return fixture;
     },
@@ -13798,7 +13804,7 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     ...Array(5).fill(
       SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.cdpContractMismatch,
     ),
-    ...Array(6).fill(
+    ...Array(5).fill(
       SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.requestFailureContractMismatch,
     ),
     SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.bindingContractMismatch,
@@ -13857,7 +13863,10 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     ),
   );
   assert.equal(failureClassCoercionCount, 0);
-  const serializedAccepted = JSON.stringify(accepted);
+  const serializedAccepted = JSON.stringify([
+    ...accepted,
+    ...acceptedFailureEchoAttestations,
+  ]);
   assert.equal(serializedAccepted.includes(privateRawValue), false);
   assert.equal(JWT_PATTERN.test(serializedAccepted), false);
   return {
@@ -37056,7 +37065,7 @@ assert.equal(
   recoveredProtectedReadTransportFailureCount,
 );
 const authenticationProtectedReadRetry = Object.freeze({
-  schemaVersion: 1,
+  schemaVersion: 2,
   policyId: SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_POLICY_ID,
   retryBudgetPerGroup: 1,
   retryDelayMs: 250,

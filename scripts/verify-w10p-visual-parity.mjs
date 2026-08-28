@@ -5983,7 +5983,7 @@ assertExactObjectKeys(authenticationProtectedReadRetry, [
   "sensitiveAppCheckResponseErrorObservedCount",
   "sensitiveAppCheckResponseErrorRecoveredCount",
 ]);
-assert.equal(authenticationProtectedReadRetry.schemaVersion, 1);
+assert.equal(authenticationProtectedReadRetry.schemaVersion, 2);
 assert.equal(
   authenticationProtectedReadRetry.policyId,
   "w10p-protected-read-shared-transport-retry-v1",
@@ -6045,6 +6045,79 @@ const protectedReadRetryRolePairs = {
   "support-teacher": "teacher",
   teacher: "teacher",
 };
+const protectedReadRetryPlaywrightFailureEchoClasses = Object.freeze([
+  "http2-protocol",
+  "proxy-tunnel",
+  "tls",
+  "connection-reset",
+  "connection-closed",
+  "connection",
+  "network-changed",
+  "incomplete-chunked",
+  "content-length-mismatch",
+  "timeout",
+  "name-resolution",
+  "aborted",
+  "generic-failed",
+  "blocked-by-client",
+  "other",
+]);
+assert.equal(
+  new Set(protectedReadRetryPlaywrightFailureEchoClasses).size,
+  protectedReadRetryPlaywrightFailureEchoClasses.length,
+);
+assert.equal(
+  protectedReadRetryPlaywrightFailureEchoClasses.includes("other"),
+  true,
+);
+for (const rejectedFailureEchoClass of ["policy-blocked", "cors-blocked"]) {
+  assert.equal(
+    protectedReadRetryPlaywrightFailureEchoClasses.includes(
+      rejectedFailureEchoClass,
+    ),
+    false,
+  );
+}
+const assertProtectedReadRetryPlaywrightFailureEchoClass = ({
+  retryUsed,
+  playwrightFailureEchoClass,
+}) => {
+  assert.ok([0, 1].includes(retryUsed));
+  if (retryUsed === 0) {
+    assert.equal(playwrightFailureEchoClass, null);
+    return;
+  }
+  assert.equal(typeof playwrightFailureEchoClass, "string");
+  assert.equal(
+    protectedReadRetryPlaywrightFailureEchoClasses.includes(
+      playwrightFailureEchoClass,
+    ),
+    true,
+  );
+};
+assert.doesNotThrow(() =>
+  assertProtectedReadRetryPlaywrightFailureEchoClass({
+    retryUsed: 0,
+    playwrightFailureEchoClass: null,
+  }),
+);
+assert.doesNotThrow(() =>
+  assertProtectedReadRetryPlaywrightFailureEchoClass({
+    retryUsed: 1,
+    playwrightFailureEchoClass: "other",
+  }),
+);
+for (const invalidFixture of [
+  { retryUsed: 0, playwrightFailureEchoClass: "other" },
+  { retryUsed: 1, playwrightFailureEchoClass: null },
+  { retryUsed: 1, playwrightFailureEchoClass: "policy-blocked" },
+  { retryUsed: 1, playwrightFailureEchoClass: "cors-blocked" },
+  { retryUsed: 1, playwrightFailureEchoClass: "raw-network-error-text" },
+]) {
+  assert.throws(() =>
+    assertProtectedReadRetryPlaywrightFailureEchoClass(invalidFixture),
+  );
+}
 const protectedReadRetryGroupKeys = new Set();
 for (const attestation of authenticationProtectedReadRetry.attestations) {
   assertExactObjectKeys(attestation, [
@@ -6065,6 +6138,7 @@ for (const attestation of authenticationProtectedReadRetry.attestations) {
     "exactUrlMethodBound",
     "groupKey",
     "passed",
+    "playwrightFailureEchoClass",
     "playwrightRequestFailureFetchNetworkIdentityBound",
     "policyId",
     "profileAttemptCount",
@@ -6086,7 +6160,7 @@ for (const attestation of authenticationProtectedReadRetry.attestations) {
     "tokenRefreshCount",
     "viewport",
   ]);
-  assert.equal(attestation.schemaVersion, 1);
+  assert.equal(attestation.schemaVersion, 2);
   assert.equal(attestation.policyId, authenticationProtectedReadRetry.policyId);
   assert.equal(attestation.retryBudget, 1);
   assert.equal(attestation.retryDelayMs, 250);
@@ -6109,6 +6183,7 @@ for (const attestation of authenticationProtectedReadRetry.attestations) {
     attestation.retryUsed,
     Number(attestation.retryTarget !== "none"),
   );
+  assertProtectedReadRetryPlaywrightFailureEchoClass(attestation);
   assert.equal(attestation.recoveredByRetry, attestation.retryUsed === 1);
   assert.equal(
     attestation.recoveredProtectedReadTransportFailureCount,
