@@ -11283,11 +11283,54 @@ const summarizeSafeFirestoreWebChannelAuthBindings = ({
 };
 const AUTHENTICATION_EVALUATION_STEP_RUNTIME_KEY =
   "__w10pAuthenticationEvaluationStep";
+const SAFE_AUTHENTICATION_AUTH_SIGN_IN_ERROR_CLASSES = Object.freeze([
+  "account-disabled",
+  "configuration",
+  "credential-rejected",
+  "internal",
+  "network-request",
+  "storage-unavailable",
+  "throttled",
+]);
+const SAFE_AUTHENTICATION_AUTH_SIGN_IN_CODE_CLASSES = Object.freeze({
+  "auth/app-deleted": "internal",
+  "auth/app-not-authorized": "configuration",
+  "auth/auth-domain-config-required": "configuration",
+  "auth/internal-error": "internal",
+  "auth/invalid-api-key": "configuration",
+  "auth/invalid-credential": "credential-rejected",
+  "auth/invalid-email": "credential-rejected",
+  "auth/missing-email": "credential-rejected",
+  "auth/missing-password": "credential-rejected",
+  "auth/network-request-failed": "network-request",
+  "auth/operation-not-allowed": "configuration",
+  "auth/quota-exceeded": "throttled",
+  "auth/timeout": "network-request",
+  "auth/too-many-requests": "throttled",
+  "auth/unauthorized-domain": "configuration",
+  "auth/user-disabled": "account-disabled",
+  "auth/user-not-found": "credential-rejected",
+  "auth/web-storage-unsupported": "storage-unavailable",
+  "auth/wrong-password": "credential-rejected",
+});
+const SAFE_AUTHENTICATION_AUTH_SIGN_IN_ERROR_FAILURE_CLASSES = Object.freeze(
+  Object.fromEntries(
+    SAFE_AUTHENTICATION_AUTH_SIGN_IN_ERROR_CLASSES.map((errorClass) => [
+      errorClass,
+      `authentication-evaluate-auth-sign-in-${errorClass}-failed`,
+    ]),
+  ),
+);
 const SAFE_AUTHENTICATION_EVALUATION_FAILURE_CLASSES = Object.freeze({
   "module-import": "authentication-evaluate-module-import-failed",
   "runtime-init": "authentication-evaluate-runtime-init-failed",
   "app-check-token": "authentication-evaluate-app-check-token-failed",
+  "auth-instance": "authentication-evaluate-auth-instance-failed",
+  "auth-persistence": "authentication-evaluate-auth-persistence-failed",
   "auth-sign-in": "authentication-evaluate-auth-sign-in-failed",
+  "auth-state-ready": "authentication-evaluate-auth-state-ready-failed",
+  "auth-token-result": "authentication-evaluate-auth-token-result-failed",
+  "auth-id-token": "authentication-evaluate-auth-id-token-failed",
   "session-open": "authentication-evaluate-session-open-failed",
   "session-attestation": "authentication-evaluate-session-attestation-failed",
   "protected-token": "authentication-evaluate-protected-token-failed",
@@ -11298,6 +11341,33 @@ const SAFE_AUTHENTICATION_EVALUATION_FAILURE_CLASSES = Object.freeze({
   "profile-json": "authentication-evaluate-profile-json-failed",
   "identity-finalize": "authentication-evaluate-identity-finalize-failed",
 });
+const classifySafeAuthenticationAuthSignInErrorClass = (error) => {
+  try {
+    if (!error || typeof error !== "object" || Array.isArray(error))
+      return null;
+    const codeDescriptor = Object.getOwnPropertyDescriptor(error, "code");
+    if (
+      !codeDescriptor ||
+      !Object.prototype.hasOwnProperty.call(codeDescriptor, "value") ||
+      codeDescriptor.get !== undefined ||
+      codeDescriptor.set !== undefined ||
+      typeof codeDescriptor.value !== "string" ||
+      !Object.prototype.hasOwnProperty.call(
+        SAFE_AUTHENTICATION_AUTH_SIGN_IN_CODE_CLASSES,
+        codeDescriptor.value,
+      )
+    ) {
+      return null;
+    }
+    const errorClass =
+      SAFE_AUTHENTICATION_AUTH_SIGN_IN_CODE_CLASSES[codeDescriptor.value];
+    return SAFE_AUTHENTICATION_AUTH_SIGN_IN_ERROR_CLASSES.includes(errorClass)
+      ? errorClass
+      : null;
+  } catch {
+    return null;
+  }
+};
 const SAFE_AUTHENTICATION_CONFIG_READ_REQUEST_CLASSES = Object.freeze([
   "get",
   "preflight",
@@ -12484,6 +12554,7 @@ const SAFE_AUTHENTICATION_FAILURE_CLASSES = Object.freeze([
   "navigation-failed",
   "authentication-evaluate-failed",
   ...Object.values(SAFE_AUTHENTICATION_EVALUATION_FAILURE_CLASSES),
+  ...Object.values(SAFE_AUTHENTICATION_AUTH_SIGN_IN_ERROR_FAILURE_CLASSES),
   ...Object.values(SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_FAILURE_CLASSES),
   ...Object.values(SAFE_AUTHENTICATION_CONFIG_READ_PROXY_FAILURE_CLASSES),
   ...Object.values(SAFE_AUTHENTICATION_PROFILE_RESPONSE_FAILURE_CLASSES),
@@ -12595,7 +12666,12 @@ const collectSafeAuthenticationEvaluationFailureClass = async (
     const outcome = await Promise.race([
       Promise.resolve(
         page.evaluate(
-          ({ runtimeKey, expectedAttemptId, failureClasses }) => {
+          ({
+            runtimeKey,
+            expectedAttemptId,
+            failureClasses,
+            authSignInErrorFailureClasses,
+          }) => {
             try {
               const runtimeDescriptor = Object.getOwnPropertyDescriptor(
                 globalThis,
@@ -12620,15 +12696,19 @@ const collectSafeAuthenticationEvaluationFailureClass = async (
               ) {
                 return null;
               }
-              const markerDescriptors =
-                Object.getOwnPropertyDescriptors(marker);
+              const markerKeys = Reflect.ownKeys(marker);
               if (
-                Object.keys(markerDescriptors).sort().join(",") !==
-                "attemptId,step"
+                markerKeys.length !== 3 ||
+                markerKeys.some((key) => typeof key !== "string") ||
+                [...markerKeys].sort().join(",") !==
+                  "attemptId,detailClass,step"
               ) {
                 return null;
               }
+              const markerDescriptors =
+                Object.getOwnPropertyDescriptors(marker);
               const attemptIdDescriptor = markerDescriptors.attemptId;
+              const detailClassDescriptor = markerDescriptors.detailClass;
               const stepDescriptor = markerDescriptors.step;
               if (
                 !Object.prototype.hasOwnProperty.call(
@@ -12637,6 +12717,12 @@ const collectSafeAuthenticationEvaluationFailureClass = async (
                 ) ||
                 attemptIdDescriptor.get !== undefined ||
                 attemptIdDescriptor.set !== undefined ||
+                !Object.prototype.hasOwnProperty.call(
+                  detailClassDescriptor,
+                  "value",
+                ) ||
+                detailClassDescriptor.get !== undefined ||
+                detailClassDescriptor.set !== undefined ||
                 !Object.prototype.hasOwnProperty.call(
                   stepDescriptor,
                   "value",
@@ -12647,6 +12733,7 @@ const collectSafeAuthenticationEvaluationFailureClass = async (
                 return null;
               }
               const attemptId = attemptIdDescriptor.value;
+              const detailClass = detailClassDescriptor.value;
               const step = stepDescriptor.value;
               if (
                 attemptId !== expectedAttemptId ||
@@ -12654,6 +12741,23 @@ const collectSafeAuthenticationEvaluationFailureClass = async (
                 !Object.prototype.hasOwnProperty.call(failureClasses, step)
               ) {
                 return null;
+              }
+              if (detailClass !== null) {
+                if (
+                  step !== "auth-sign-in" ||
+                  typeof detailClass !== "string" ||
+                  !Object.prototype.hasOwnProperty.call(
+                    authSignInErrorFailureClasses,
+                    detailClass,
+                  )
+                ) {
+                  return null;
+                }
+                const detailedFailureClass =
+                  authSignInErrorFailureClasses[detailClass];
+                return typeof detailedFailureClass === "string"
+                  ? detailedFailureClass
+                  : null;
               }
               const failureClass = failureClasses[step];
               return typeof failureClass === "string" ? failureClass : null;
@@ -12671,6 +12775,8 @@ const collectSafeAuthenticationEvaluationFailureClass = async (
             runtimeKey: AUTHENTICATION_EVALUATION_STEP_RUNTIME_KEY,
             expectedAttemptId,
             failureClasses: SAFE_AUTHENTICATION_EVALUATION_FAILURE_CLASSES,
+            authSignInErrorFailureClasses:
+              SAFE_AUTHENTICATION_AUTH_SIGN_IN_ERROR_FAILURE_CLASSES,
           },
         ),
       ).then(
@@ -12685,9 +12791,10 @@ const collectSafeAuthenticationEvaluationFailureClass = async (
       }),
     ]);
     if (outcome.status !== "resolved") return null;
-    return Object.values(
-      SAFE_AUTHENTICATION_EVALUATION_FAILURE_CLASSES,
-    ).includes(outcome.value)
+    return [
+      ...Object.values(SAFE_AUTHENTICATION_EVALUATION_FAILURE_CLASSES),
+      ...Object.values(SAFE_AUTHENTICATION_AUTH_SIGN_IN_ERROR_FAILURE_CLASSES),
+    ].includes(outcome.value)
       ? outcome.value
       : null;
   } catch {
@@ -15478,6 +15585,7 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
   );
   const boundedAuthenticationEvaluationFailureClassFixtures = [
     ...Object.values(SAFE_AUTHENTICATION_EVALUATION_FAILURE_CLASSES),
+    ...Object.values(SAFE_AUTHENTICATION_AUTH_SIGN_IN_ERROR_FAILURE_CLASSES),
     ...Object.values(SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_FAILURE_CLASSES),
     ...Object.values(SAFE_AUTHENTICATION_CONFIG_READ_PROXY_FAILURE_CLASSES),
     ...Object.values(SAFE_AUTHENTICATION_PROFILE_RESPONSE_FAILURE_CLASSES),
@@ -15588,6 +15696,34 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     new Set(serializedConfigReadProxyFailures).size,
     Object.keys(SAFE_AUTHENTICATION_CONFIG_READ_PROXY_FAILURE_CLASSES).length,
   );
+  const serializedAuthSignInFailures = Object.values(
+    SAFE_AUTHENTICATION_AUTH_SIGN_IN_ERROR_FAILURE_CLASSES,
+  ).map((failureClass) =>
+    serializeSafeAuthenticationFailure(
+      createSafeAuthenticationFailureDiagnostic({
+        failureClass,
+        stage: "baseline",
+        captureRole: "admin",
+        authRole: "admin",
+        viewport: "1440x900",
+        pageState: saturatedState,
+      }),
+      forbiddenValues,
+    ),
+  );
+  for (const serialized of serializedAuthSignInFailures) {
+    for (const forbiddenValue of [
+      ...forbiddenValues,
+      ...Object.keys(SAFE_AUTHENTICATION_AUTH_SIGN_IN_CODE_CLASSES),
+    ]) {
+      assert.equal(serialized.includes(forbiddenValue), false);
+    }
+    assert.equal(JWT_PATTERN.test(serialized), false);
+  }
+  assert.equal(
+    new Set(serializedAuthSignInFailures).size,
+    SAFE_AUTHENTICATION_AUTH_SIGN_IN_ERROR_CLASSES.length,
+  );
   const serializedProfileFailures = [
     ...Object.values(SAFE_AUTHENTICATION_PROFILE_RESPONSE_FAILURE_CLASSES),
     ...Object.values(SAFE_AUTHENTICATION_PROFILE_PROXY_FAILURE_CLASSES),
@@ -15641,6 +15777,122 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     null,
   );
   assert.equal(configReadClassifierCoercionCount, 0);
+  const authSignInErrorCodeFixtures = [
+    ["auth/app-deleted", "internal"],
+    ["auth/app-not-authorized", "configuration"],
+    ["auth/auth-domain-config-required", "configuration"],
+    ["auth/internal-error", "internal"],
+    ["auth/invalid-api-key", "configuration"],
+    ["auth/invalid-credential", "credential-rejected"],
+    ["auth/invalid-email", "credential-rejected"],
+    ["auth/missing-email", "credential-rejected"],
+    ["auth/missing-password", "credential-rejected"],
+    ["auth/network-request-failed", "network-request"],
+    ["auth/operation-not-allowed", "configuration"],
+    ["auth/quota-exceeded", "throttled"],
+    ["auth/timeout", "network-request"],
+    ["auth/too-many-requests", "throttled"],
+    ["auth/unauthorized-domain", "configuration"],
+    ["auth/user-disabled", "account-disabled"],
+    ["auth/user-not-found", "credential-rejected"],
+    ["auth/web-storage-unsupported", "storage-unavailable"],
+    ["auth/wrong-password", "credential-rejected"],
+  ];
+  assert.deepEqual(
+    Object.entries(SAFE_AUTHENTICATION_AUTH_SIGN_IN_CODE_CLASSES).sort(
+      ([leftCode], [rightCode]) => leftCode.localeCompare(rightCode),
+    ),
+    [...authSignInErrorCodeFixtures].sort(([leftCode], [rightCode]) =>
+      leftCode.localeCompare(rightCode),
+    ),
+  );
+  assert.equal(
+    new Set(Object.values(SAFE_AUTHENTICATION_AUTH_SIGN_IN_CODE_CLASSES)).size,
+    SAFE_AUTHENTICATION_AUTH_SIGN_IN_ERROR_CLASSES.length,
+  );
+  assert.deepEqual(
+    [
+      ...new Set(Object.values(SAFE_AUTHENTICATION_AUTH_SIGN_IN_CODE_CLASSES)),
+    ].sort(),
+    [...SAFE_AUTHENTICATION_AUTH_SIGN_IN_ERROR_CLASSES].sort(),
+  );
+  assert.equal(
+    new Set(
+      Object.values(SAFE_AUTHENTICATION_AUTH_SIGN_IN_ERROR_FAILURE_CLASSES),
+    ).size,
+    SAFE_AUTHENTICATION_AUTH_SIGN_IN_ERROR_CLASSES.length,
+  );
+  for (const [errorCode, expectedErrorClass] of authSignInErrorCodeFixtures) {
+    assert.equal(
+      classifySafeAuthenticationAuthSignInErrorClass({ code: errorCode }),
+      expectedErrorClass,
+    );
+  }
+  let authSignInErrorCodeGetterReadCount = 0;
+  const authSignInAccessorError = {};
+  Object.defineProperty(authSignInAccessorError, "code", {
+    get() {
+      authSignInErrorCodeGetterReadCount += 1;
+      return "auth/network-request-failed";
+    },
+  });
+  let authSignInErrorCoercionCount = 0;
+  const authSignInErrorCoercionValue = {
+    toString() {
+      authSignInErrorCoercionCount += 1;
+      return "auth/network-request-failed";
+    },
+    [Symbol.toPrimitive]() {
+      authSignInErrorCoercionCount += 1;
+      return "auth/network-request-failed";
+    },
+  };
+  let authSignInUnrelatedFieldReadCount = 0;
+  const authSignInSensitiveError = { code: "auth/network-request-failed" };
+  for (const field of ["message", "customData", "stack"]) {
+    Object.defineProperty(authSignInSensitiveError, field, {
+      get() {
+        authSignInUnrelatedFieldReadCount += 1;
+        throw new Error(rawSecretUrl);
+      },
+    });
+  }
+  Object.defineProperty(authSignInSensitiveError, Symbol(rawSecretUrl), {
+    get() {
+      authSignInUnrelatedFieldReadCount += 1;
+      throw new Error(rawSecretUrl);
+    },
+  });
+  assert.equal(
+    classifySafeAuthenticationAuthSignInErrorClass(authSignInSensitiveError),
+    "network-request",
+  );
+  for (const rejectedError of [
+    null,
+    "auth/network-request-failed",
+    [],
+    Object.create({ code: "auth/network-request-failed" }),
+    { code: rawSecretUrl },
+    { code: new String("auth/network-request-failed") },
+    { code: authSignInErrorCoercionValue },
+    authSignInAccessorError,
+    new Proxy(
+      {},
+      {
+        getOwnPropertyDescriptor() {
+          throw new Error(rawSecretUrl);
+        },
+      },
+    ),
+  ]) {
+    assert.equal(
+      classifySafeAuthenticationAuthSignInErrorClass(rejectedError),
+      null,
+    );
+  }
+  assert.equal(authSignInErrorCodeGetterReadCount, 0);
+  assert.equal(authSignInErrorCoercionCount, 0);
+  assert.equal(authSignInUnrelatedFieldReadCount, 0);
   const safeEvaluationAttemptId = "11111111-1111-4111-8111-111111111111";
   let safeEvaluationMarkerCleanupCount = 0;
   const collectEvaluationFailureClassFixture = (
@@ -15688,15 +15940,105 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
   assert.equal(
     await collectEvaluationFailureClassFixture({
       attemptId: safeEvaluationAttemptId,
+      detailClass: null,
       step: "module-import",
     }),
     SAFE_AUTHENTICATION_EVALUATION_FAILURE_CLASSES["module-import"],
   );
+  for (const step of [
+    "auth-instance",
+    "auth-persistence",
+    "auth-sign-in",
+    "auth-state-ready",
+    "auth-token-result",
+    "auth-id-token",
+  ]) {
+    assert.equal(
+      await collectEvaluationFailureClassFixture({
+        attemptId: safeEvaluationAttemptId,
+        detailClass: null,
+        step,
+      }),
+      SAFE_AUTHENTICATION_EVALUATION_FAILURE_CLASSES[step],
+    );
+  }
+  for (const errorClass of SAFE_AUTHENTICATION_AUTH_SIGN_IN_ERROR_CLASSES) {
+    assert.equal(
+      await collectEvaluationFailureClassFixture({
+        attemptId: safeEvaluationAttemptId,
+        detailClass: errorClass,
+        step: "auth-sign-in",
+      }),
+      SAFE_AUTHENTICATION_AUTH_SIGN_IN_ERROR_FAILURE_CLASSES[errorClass],
+    );
+  }
   assert.equal(
     await collectEvaluationFailureClassFixture({
       attemptId: safeEvaluationAttemptId,
+      detailClass: null,
       step: rawSecretUrl,
     }),
+    null,
+  );
+  assert.equal(
+    await collectEvaluationFailureClassFixture({
+      attemptId: safeEvaluationAttemptId,
+      detailClass: rawSecretUrl,
+      step: "auth-sign-in",
+    }),
+    null,
+  );
+  assert.equal(
+    await collectEvaluationFailureClassFixture({
+      attemptId: safeEvaluationAttemptId,
+      detailClass: "network-request",
+      step: "auth-id-token",
+    }),
+    null,
+  );
+  const authSignInDetailAccessorMarker = {
+    attemptId: safeEvaluationAttemptId,
+    step: "auth-sign-in",
+  };
+  let authSignInDetailGetterReadCount = 0;
+  Object.defineProperty(authSignInDetailAccessorMarker, "detailClass", {
+    enumerable: true,
+    get() {
+      authSignInDetailGetterReadCount += 1;
+      return "network-request";
+    },
+  });
+  assert.equal(
+    await collectEvaluationFailureClassFixture(authSignInDetailAccessorMarker),
+    null,
+  );
+  assert.equal(authSignInDetailGetterReadCount, 0);
+  assert.equal(
+    await collectEvaluationFailureClassFixture({
+      attemptId: safeEvaluationAttemptId,
+      detailClass: null,
+      extra: rawSecretUrl,
+      step: "module-import",
+    }),
+    null,
+  );
+  assert.equal(
+    await collectEvaluationFailureClassFixture({
+      attemptId: safeEvaluationAttemptId,
+      step: "module-import",
+    }),
+    null,
+  );
+  const symbolExtraEvaluationMarker = {
+    attemptId: safeEvaluationAttemptId,
+    detailClass: null,
+    step: "module-import",
+  };
+  Object.defineProperty(symbolExtraEvaluationMarker, Symbol(rawSecretUrl), {
+    value: rawSecretUrl,
+  });
+  assert.equal(
+    await collectEvaluationFailureClassFixture(symbolExtraEvaluationMarker),
     null,
   );
   assert.equal(
@@ -15721,11 +16063,15 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
   assert.equal(
     await collectEvaluationFailureClassFixture({
       attemptId: "22222222-2222-4222-8222-222222222222",
+      detailClass: null,
       step: "profile-read",
     }),
     null,
   );
-  assert.equal(safeEvaluationMarkerCleanupCount, 5);
+  assert.equal(
+    safeEvaluationMarkerCleanupCount,
+    1 + 6 + SAFE_AUTHENTICATION_AUTH_SIGN_IN_ERROR_CLASSES.length + 10,
+  );
   assert.notEqual(
     serializeSafeAuthenticationFailure(rolePairDiagnostics[2], forbiddenValues),
     serializeSafeAuthenticationFailure(rolePairDiagnostics[3], forbiddenValues),
@@ -15889,6 +16235,20 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     safeAuthenticationDiagnosticForbiddenBrowserDataSourceReferenceCount: 0,
     safeAuthenticationDiagnosticCoercionCount: coercionCount,
     safeAuthenticationDiagnosticFallbackFixtureCount: fallbackFixtures.length,
+    safeAuthenticationAuthSignInRawCodeFixtureCount: Object.keys(
+      Object.fromEntries(authSignInErrorCodeFixtures),
+    ).length,
+    safeAuthenticationAuthSignInDetailClassFixtureCount:
+      SAFE_AUTHENTICATION_AUTH_SIGN_IN_ERROR_CLASSES.length,
+    safeAuthenticationAuthSignInFailureSerializationFixtureCount:
+      serializedAuthSignInFailures.length,
+    safeAuthenticationAuthSignInMarkerCleanupFixtureCount:
+      safeEvaluationMarkerCleanupCount,
+    safeAuthenticationAuthSignInIgnoredFieldReadCount:
+      authSignInErrorCodeGetterReadCount +
+      authSignInUnrelatedFieldReadCount +
+      authSignInDetailGetterReadCount,
+    safeAuthenticationAuthSignInRawValueOutputCount: 0,
     safeAuthenticationConfigReadScopeNegativeFixtureCount:
       configReadScopeNegativeFixtures.length,
     safeAuthenticationConfigReadResponseClassFixtureCount:
@@ -26693,6 +27053,7 @@ const authenticateCore = async (
       runtimeKey,
       evaluationStepRuntimeKey,
       evaluationAttemptId,
+      authSignInCodeClasses,
     }) => {
       if (
         Object.prototype.hasOwnProperty.call(
@@ -26708,14 +27069,52 @@ const authenticateCore = async (
         writable: true,
         value: Object.freeze({
           attemptId: evaluationAttemptId,
+          detailClass: null,
           step: "module-import",
         }),
       });
-      const setEvaluationStep = (step) => {
+      const setEvaluationStep = (step, detailClass = null) => {
         globalThis[evaluationStepRuntimeKey] = Object.freeze({
           attemptId: evaluationAttemptId,
+          detailClass,
           step,
         });
+      };
+      const classifyAuthSignInErrorClass = (error) => {
+        try {
+          if (!error || typeof error !== "object" || Array.isArray(error)) {
+            return null;
+          }
+          const codeDescriptor = Object.getOwnPropertyDescriptor(error, "code");
+          if (
+            !codeDescriptor ||
+            !Object.prototype.hasOwnProperty.call(codeDescriptor, "value") ||
+            codeDescriptor.get !== undefined ||
+            codeDescriptor.set !== undefined ||
+            typeof codeDescriptor.value !== "string"
+          ) {
+            return null;
+          }
+          const errorClassDescriptor = Object.getOwnPropertyDescriptor(
+            authSignInCodeClasses,
+            codeDescriptor.value,
+          );
+          if (
+            !errorClassDescriptor ||
+            !Object.prototype.hasOwnProperty.call(
+              errorClassDescriptor,
+              "value",
+            ) ||
+            errorClassDescriptor.get !== undefined ||
+            errorClassDescriptor.set !== undefined ||
+            typeof errorClassDescriptor.value !== "string"
+          ) {
+            return null;
+          }
+          return errorClassDescriptor.value;
+        } catch {
+          return null;
+        }
       };
       const appModule =
         await import("https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js");
@@ -26749,16 +27148,27 @@ const authenticateCore = async (
         auxiliaryAppCheckToken.token,
       );
       auxiliaryAppCheckToken = null;
-      setEvaluationStep("auth-sign-in");
+      setEvaluationStep("auth-instance");
       const auth = authModule.getAuth(app);
+      setEvaluationStep("auth-persistence");
       await authModule.setPersistence(auth, authModule.browserLocalPersistence);
-      const credentialResult = await authModule.signInWithEmailAndPassword(
-        auth,
-        email,
-        password,
-      );
+      setEvaluationStep("auth-sign-in");
+      let credentialResult;
+      try {
+        credentialResult = await authModule.signInWithEmailAndPassword(
+          auth,
+          email,
+          password,
+        );
+      } catch (error) {
+        setEvaluationStep("auth-sign-in", classifyAuthSignInErrorClass(error));
+        throw new Error("VISUAL_AUTH_SIGN_IN_FAILED");
+      }
+      setEvaluationStep("auth-state-ready");
       await auth.authStateReady();
+      setEvaluationStep("auth-token-result");
       const token = await authModule.getIdTokenResult(credentialResult.user);
+      setEvaluationStep("auth-id-token");
       let applicationSessionIdToken = await authModule.getIdToken(
         credentialResult.user,
       );
@@ -26929,6 +27339,7 @@ const authenticateCore = async (
       runtimeKey: AUTHENTICATION_BOOTSTRAP_RUNTIME_KEY,
       evaluationStepRuntimeKey: AUTHENTICATION_EVALUATION_STEP_RUNTIME_KEY,
       evaluationAttemptId: authenticationEvaluationAttemptId,
+      authSignInCodeClasses: SAFE_AUTHENTICATION_AUTH_SIGN_IN_CODE_CLASSES,
     },
   );
   setFailureClass("application-session-proof-registration-failed");

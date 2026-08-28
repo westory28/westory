@@ -2628,6 +2628,187 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   );
   return true;
 };
+const assertCaptureSafeAuthenticationSignInSourceContract = (sourceText) => {
+  assert.match(
+    sourceText,
+    /const SAFE_AUTHENTICATION_AUTH_SIGN_IN_CODE_CLASSES = Object\.freeze\(\{[\s\S]*?\}\);/u,
+    "The authentication diagnostic must retain a fixed raw-code-to-safe-class map.",
+  );
+  assert.match(
+    sourceText,
+    /"auth\/network-request-failed": "network-request"/u,
+  );
+  assert.match(
+    sourceText,
+    /"auth\/invalid-credential": "credential-rejected"/u,
+  );
+  assert.match(
+    sourceText,
+    /const SAFE_AUTHENTICATION_AUTH_SIGN_IN_ERROR_FAILURE_CLASSES = Object\.freeze\([\s\S]*`authentication-evaluate-auth-sign-in-\$\{errorClass\}-failed`/u,
+    "The authentication diagnostic must derive only fixed safe failure classes.",
+  );
+  assert.match(
+    sourceText,
+    /const markerKeys = Reflect\.ownKeys\(marker\);[\s\S]*markerKeys\.some\(\(key\) => typeof key !== "string"\)[\s\S]*"attemptId,detailClass,step"/u,
+    "The authentication marker must reject extra string and symbol keys.",
+  );
+  assert.match(
+    sourceText,
+    /detailClass !== null[\s\S]*step !== "auth-sign-in"[\s\S]*authSignInErrorFailureClasses/u,
+    "A detailed authentication error class must be accepted only for the exact sign-in step.",
+  );
+  const evaluationStart = sourceText.indexOf(
+    "const identity = await page.evaluate(",
+  );
+  const evaluationEnd = sourceText.indexOf(
+    'setFailureClass("application-session-proof-registration-failed")',
+    evaluationStart,
+  );
+  assert.ok(evaluationStart >= 0 && evaluationEnd > evaluationStart);
+  const evaluationSource = sourceText.slice(evaluationStart, evaluationEnd);
+  const classifierStart = evaluationSource.indexOf(
+    "const classifyAuthSignInErrorClass = (error) => {",
+  );
+  const classifierEnd = evaluationSource.indexOf(
+    "const appModule =",
+    classifierStart,
+  );
+  assert.ok(classifierStart >= 0 && classifierEnd > classifierStart);
+  const classifierSource = evaluationSource.slice(
+    classifierStart,
+    classifierEnd,
+  );
+  const orderedSteps = [
+    "auth-instance",
+    "auth-persistence",
+    "auth-sign-in",
+    "auth-state-ready",
+    "auth-token-result",
+    "auth-id-token",
+    "session-open",
+  ];
+  let previousStepOffset = -1;
+  for (const step of orderedSteps) {
+    const stepOffset = evaluationSource.indexOf(
+      `setEvaluationStep("${step}")`,
+      previousStepOffset + 1,
+    );
+    assert.ok(
+      stepOffset > previousStepOffset,
+      `The authentication evaluation step order drifted at ${step}.`,
+    );
+    previousStepOffset = stepOffset;
+  }
+  const signInStart = evaluationSource.indexOf(
+    'setEvaluationStep("auth-sign-in")',
+  );
+  const signInEnd = evaluationSource.indexOf(
+    'setEvaluationStep("auth-state-ready")',
+    signInStart,
+  );
+  assert.ok(signInStart >= 0 && signInEnd > signInStart);
+  const signInSource = evaluationSource.slice(signInStart, signInEnd);
+  assert.match(
+    signInSource,
+    /try \{[\s\S]*signInWithEmailAndPassword\([\s\S]*\} catch \(error\) \{/u,
+  );
+  assert.match(
+    classifierSource,
+    /Object\.getOwnPropertyDescriptor\(error, "code"\)/u,
+  );
+  assert.match(
+    classifierSource,
+    /Object\.getOwnPropertyDescriptor\([\s\S]*authSignInCodeClasses,[\s\S]*codeDescriptor\.value/u,
+  );
+  assert.match(
+    classifierSource,
+    /!codeDescriptor\s*\|\|[\s\S]*Object\.prototype\.hasOwnProperty\.call\(codeDescriptor, "value"\)[\s\S]*codeDescriptor\.get !== undefined[\s\S]*codeDescriptor\.set !== undefined[\s\S]*typeof codeDescriptor\.value !== "string"/u,
+    "The raw Firebase code must remain an own primitive-string data property.",
+  );
+  assert.match(
+    classifierSource,
+    /!errorClassDescriptor\s*\|\|[\s\S]*Object\.prototype\.hasOwnProperty\.call\([\s\S]*errorClassDescriptor,[\s\S]*"value"[\s\S]*errorClassDescriptor\.get !== undefined[\s\S]*errorClassDescriptor\.set !== undefined[\s\S]*typeof errorClassDescriptor\.value !== "string"/u,
+    "The safe class map result must remain an own primitive-string data property.",
+  );
+  assert.match(
+    classifierSource,
+    /return errorClassDescriptor\.value;/u,
+    "The browser helper must return only the fixed map value.",
+  );
+  assert.match(
+    signInSource,
+    /\} catch \(error\) \{\s*setEvaluationStep\(\s*"auth-sign-in",\s*classifyAuthSignInErrorClass\(error\),?\s*\);\s*throw new Error\("VISUAL_AUTH_SIGN_IN_FAILED"\);\s*\}/u,
+    "The raw Firebase error must not cross the page-evaluation boundary.",
+  );
+  assert.doesNotMatch(
+    classifierSource,
+    /error\s*\.|error\s*\[|Object\.(?:keys|values|entries|getOwnPropertyDescriptors)\(error\)|Reflect\.ownKeys\(error\)|String\(error\)|JSON\.stringify\(error\)|\.\.\.error|\{[^}]*\}\s*=\s*error|throw\s+error|cause\s*:/u,
+    "The authentication diagnostic must not read or serialize raw Firebase error material.",
+  );
+  assert.match(
+    evaluationSource,
+    /authSignInCodeClasses:\s*SAFE_AUTHENTICATION_AUTH_SIGN_IN_CODE_CLASSES/u,
+  );
+  return true;
+};
+const verifyCaptureSafeAuthenticationSignInSourceContractNegativeFixtures = (
+  sourceText,
+) => {
+  const replaceLastExact = (needle, replacement) => {
+    const offset = sourceText.lastIndexOf(needle);
+    assert.ok(
+      offset >= 0,
+      "A safe-authentication source mutation fixture is unbound.",
+    );
+    return `${sourceText.slice(0, offset)}${replacement}${sourceText.slice(
+      offset + needle.length,
+    )}`;
+  };
+  const descriptorNeedle =
+    'const codeDescriptor = Object.getOwnPropertyDescriptor(error, "code");';
+  const mutations = [
+    replaceLastExact("classifyAuthSignInErrorClass(error)", "null"),
+    replaceLastExact(
+      descriptorNeedle,
+      'const leakedMessage = error.message;\n          const codeDescriptor = Object.getOwnPropertyDescriptor(error, "code");',
+    ),
+    replaceLastExact(
+      'throw new Error("VISUAL_AUTH_SIGN_IN_FAILED");',
+      "throw error;",
+    ),
+    replaceLastExact(
+      descriptorNeedle,
+      'const leakedMessage = error["message"];\n          const codeDescriptor = Object.getOwnPropertyDescriptor(error, "code");',
+    ),
+    replaceLastExact(
+      descriptorNeedle,
+      'const leakedCopy = { ...error };\n          const codeDescriptor = Object.getOwnPropertyDescriptor(error, "code");',
+    ),
+    replaceLastExact(
+      descriptorNeedle,
+      'const { message: leakedMessage } = error;\n          const codeDescriptor = Object.getOwnPropertyDescriptor(error, "code");',
+    ),
+    replaceLastExact("return errorClassDescriptor.value;", "return null;"),
+    replaceLastExact(
+      "return errorClassDescriptor.value;",
+      "return codeDescriptor.value;",
+    ),
+    replaceLastExact('typeof codeDescriptor.value !== "string"', "false"),
+    replaceLastExact("codeDescriptor.get !== undefined", "false"),
+    replaceLastExact('typeof errorClassDescriptor.value !== "string"', "false"),
+  ];
+  assert.equal(
+    mutations.every((mutation) => mutation !== sourceText),
+    true,
+    "A safe-authentication source mutation fixture did not bind to live source.",
+  );
+  for (const mutation of mutations) {
+    assert.throws(() =>
+      assertCaptureSafeAuthenticationSignInSourceContract(mutation),
+    );
+  }
+  return mutations.length;
+};
 const assertNoAppCheckSecretMaterial = (
   textValue,
   { debugToken = "", debugSentinel = "", exchangedToken = "" } = {},
@@ -2937,12 +3118,24 @@ const verifyPreTransmissionBoundaryNegativeFixtures = () => {
     }),
     false,
   );
+  const captureRunnerSourceText = readFileSync(
+    resolve(contract.captureRunner.scriptPath),
+    "utf8",
+  );
   assert.equal(
-    assertCapturePreTransmissionBoundarySourceOrdering(
-      readFileSync(resolve(contract.captureRunner.scriptPath), "utf8"),
+    assertCapturePreTransmissionBoundarySourceOrdering(captureRunnerSourceText),
+    true,
+  );
+  assert.equal(
+    assertCaptureSafeAuthenticationSignInSourceContract(
+      captureRunnerSourceText,
     ),
     true,
   );
+  const safeAuthenticationSignInSourceMutationRejectedCaseCount =
+    verifyCaptureSafeAuthenticationSignInSourceContractNegativeFixtures(
+      captureRunnerSourceText,
+    );
   return {
     preTransmissionProductionGetRejectedCaseCount: 1,
     preTransmissionProductionPostRejectedCaseCount: 1,
@@ -2962,6 +3155,8 @@ const verifyPreTransmissionBoundaryNegativeFixtures = () => {
     preTransmissionRegionalRealtimeDatabaseRejectedCaseCount: 4,
     preTransmissionMalformedEncodingRejectedCaseCount: 1,
     preTransmissionSourceOrderingVerified: true,
+    safeAuthenticationSignInSourceContractVerified: true,
+    safeAuthenticationSignInSourceMutationRejectedCaseCount,
   };
 };
 const verifyFixtureAuditFreshnessNegativeFixtures = () => {
@@ -5591,6 +5786,10 @@ const captureRunnerSourceText = readFileSync(
 );
 assert.equal(
   assertCapturePreTransmissionBoundarySourceOrdering(captureRunnerSourceText),
+  true,
+);
+assert.equal(
+  assertCaptureSafeAuthenticationSignInSourceContract(captureRunnerSourceText),
   true,
 );
 const playwrightRouteRegistrationCount = (
