@@ -5474,6 +5474,184 @@ const summarizeSafePendingWebChannelHeaderBindings = (entries) => {
     JSON.stringify(left).localeCompare(JSON.stringify(right)),
   );
 };
+const SAFE_AUTHENTICATION_BOOTSTRAP_CONTENT_TYPE_CLASSES = Object.freeze([
+  "json",
+  "manifest-json",
+  "other",
+]);
+const normalizeSafeAuthenticationBootstrapAttestation = (attestation) => {
+  assert.ok(attestation && typeof attestation === "object");
+  assert.deepEqual(Object.keys(attestation).sort(), [
+    "activeContentCount",
+    "contentTypeClass",
+    "emptyHash",
+    "emptySearch",
+    "exactPath",
+    "finalOriginExact",
+    "inlineEventHandlerCount",
+    "responseUrlExact",
+    "rootAbsent",
+    "scriptCount",
+  ]);
+  for (const name of [
+    "emptyHash",
+    "emptySearch",
+    "exactPath",
+    "finalOriginExact",
+    "responseUrlExact",
+    "rootAbsent",
+  ]) {
+    assert.equal(typeof attestation[name], "boolean");
+  }
+  for (const name of [
+    "activeContentCount",
+    "inlineEventHandlerCount",
+    "scriptCount",
+  ]) {
+    assert.ok(Number.isSafeInteger(attestation[name]));
+    assert.ok(attestation[name] >= 0);
+  }
+  assert.ok(
+    SAFE_AUTHENTICATION_BOOTSTRAP_CONTENT_TYPE_CLASSES.includes(
+      attestation.contentTypeClass,
+    ),
+  );
+  return Object.freeze({
+    responseUrlExact: attestation.responseUrlExact,
+    finalOriginExact: attestation.finalOriginExact,
+    exactPath: attestation.exactPath,
+    emptySearch: attestation.emptySearch,
+    emptyHash: attestation.emptyHash,
+    rootAbsent: attestation.rootAbsent,
+    scriptCount: attestation.scriptCount,
+    activeContentCount: attestation.activeContentCount,
+    inlineEventHandlerCount: attestation.inlineEventHandlerCount,
+    contentTypeClass: attestation.contentTypeClass,
+  });
+};
+const assertSafeAuthenticationBootstrapAttestation = (attestation) => {
+  const normalized =
+    normalizeSafeAuthenticationBootstrapAttestation(attestation);
+  assert.equal(normalized.responseUrlExact, true);
+  assert.equal(normalized.finalOriginExact, true);
+  assert.equal(normalized.exactPath, true);
+  assert.equal(normalized.emptySearch, true);
+  assert.equal(normalized.emptyHash, true);
+  assert.equal(normalized.rootAbsent, true);
+  assert.equal(normalized.scriptCount, 0);
+  assert.equal(normalized.activeContentCount, 0);
+  assert.equal(normalized.inlineEventHandlerCount, 0);
+  assert.ok(["json", "manifest-json"].includes(normalized.contentTypeClass));
+  return normalized;
+};
+const SAFE_AUTHENTICATION_BOOTSTRAP_RETIREMENT_COUNT_KEYS = Object.freeze([
+  "appCheckCdpHandlerErrorCount",
+  "browserRequestFailureCount",
+  "networkHeaderAttestationErrorCount",
+  "webChannelBindingCount",
+]);
+const summarizeSafeAuthenticationBootstrapRetirement = ({ before, after }) => {
+  for (const counts of [before, after]) {
+    assert.ok(counts && typeof counts === "object");
+    assert.deepEqual(
+      Object.keys(counts).sort(),
+      [...SAFE_AUTHENTICATION_BOOTSTRAP_RETIREMENT_COUNT_KEYS].sort(),
+    );
+    for (const key of SAFE_AUTHENTICATION_BOOTSTRAP_RETIREMENT_COUNT_KEYS) {
+      assert.ok(Number.isSafeInteger(counts[key]));
+      assert.ok(counts[key] >= 0);
+    }
+  }
+  const summary = Object.freeze({
+    appCheckCdpHandlerErrorDelta:
+      after.appCheckCdpHandlerErrorCount - before.appCheckCdpHandlerErrorCount,
+    browserRequestFailureDelta:
+      after.browserRequestFailureCount - before.browserRequestFailureCount,
+    networkHeaderAttestationErrorDelta:
+      after.networkHeaderAttestationErrorCount -
+      before.networkHeaderAttestationErrorCount,
+    webChannelBindingDelta:
+      after.webChannelBindingCount - before.webChannelBindingCount,
+  });
+  return Object.freeze({
+    ...summary,
+    passed: Object.values(summary).every((delta) => delta === 0),
+  });
+};
+const summarizeSafeAuthenticatedApplicationWebChannelEpoch = (records) => {
+  assert.equal(Array.isArray(records), true);
+  let authenticationPhaseBindingCount = 0;
+  let captureUnboundBindingCount = 0;
+  let initialHandshakeCount = 0;
+  let proofBoundInitialHandshakeCount = 0;
+  let invalidInitialHandshakeCount = 0;
+  let inheritedRequestCount = 0;
+  let inheritedProofAvailableCount = 0;
+  let invalidInheritedRequestCount = 0;
+  for (const record of records) {
+    assert.ok(record && typeof record === "object");
+    const authenticationPhase = record.phase === "authentication";
+    const captureUnbound = record.captureId === null;
+    authenticationPhaseBindingCount += Number(authenticationPhase);
+    captureUnboundBindingCount += Number(captureUnbound);
+    if (record.requestClass === "initial-forward-post") {
+      initialHandshakeCount += 1;
+      const validInitial =
+        authenticationPhase &&
+        captureUnbound &&
+        record.appCheckHeaderPresent === true &&
+        record.appCheckHeaderJwtShapeValid === true &&
+        record.firebaseAuth?.bindingClass === "initial-proof-bound";
+      proofBoundInitialHandshakeCount += Number(validInitial);
+      invalidInitialHandshakeCount += Number(!validInitial);
+      continue;
+    }
+    if (
+      record.requestClass === "session-forward-post" ||
+      record.requestClass === "backchannel-get"
+    ) {
+      inheritedRequestCount += 1;
+      const expectedBindingClass =
+        record.requestClass === "session-forward-post"
+          ? "session-forward-inherited"
+          : "session-backchannel-inherited";
+      const validInherited =
+        authenticationPhase &&
+        captureUnbound &&
+        record.appCheckHeaderPresent === true &&
+        record.appCheckHeaderJwtShapeValid === true &&
+        record.firebaseAuth?.bindingClass === expectedBindingClass &&
+        record.firebaseAuth?.applicationSessionProofAvailable === true;
+      inheritedProofAvailableCount += Number(validInherited);
+      invalidInheritedRequestCount += Number(!validInherited);
+      continue;
+    }
+    assert.fail(
+      "Unexpected authenticated application WebChannel request class.",
+    );
+  }
+  const summary = Object.freeze({
+    bindingCount: records.length,
+    authenticationPhaseBindingCount,
+    captureUnboundBindingCount,
+    initialHandshakeCount,
+    proofBoundInitialHandshakeCount,
+    invalidInitialHandshakeCount,
+    inheritedRequestCount,
+    inheritedProofAvailableCount,
+    invalidInheritedRequestCount,
+    passed:
+      records.length > 0 &&
+      authenticationPhaseBindingCount === records.length &&
+      captureUnboundBindingCount === records.length &&
+      initialHandshakeCount > 0 &&
+      proofBoundInitialHandshakeCount === initialHandshakeCount &&
+      invalidInitialHandshakeCount === 0 &&
+      inheritedProofAvailableCount === inheritedRequestCount &&
+      invalidInheritedRequestCount === 0,
+  });
+  return summary;
+};
 const createSafeFirestoreWebChannelAuthRecord = ({
   bindingClass,
   authorizationPresent,
@@ -10874,6 +11052,9 @@ const summarizeSafeFirestoreWebChannelAuthBindings = ({
 const SAFE_AUTHENTICATION_FAILURE_CLASSES = Object.freeze([
   "navigation-failed",
   "authentication-evaluate-failed",
+  "authentication-bootstrap-pre-retirement-drain-failed",
+  "authentication-bootstrap-retirement-failed",
+  "authentication-bootstrap-post-retirement-drain-failed",
   "auth-persistence-migration-failed",
   "post-auth-reload-failed",
   "post-reload-route-wait-failed",
@@ -11293,6 +11474,25 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     }).failureClass,
     "auth-persistence-migration-failed",
   );
+  const authenticationBootstrapRetirementFailureClassFixtures = [
+    "authentication-bootstrap-pre-retirement-drain-failed",
+    "authentication-bootstrap-retirement-failed",
+    "authentication-bootstrap-post-retirement-drain-failed",
+  ];
+  assert.deepEqual(
+    authenticationBootstrapRetirementFailureClassFixtures.map(
+      (failureClass) =>
+        createSafeAuthenticationFailureDiagnostic({
+          failureClass,
+          stage: "candidate",
+          captureRole: "student",
+          authRole: "student",
+          viewport: "1440x900",
+          pageState: saturatedState,
+        }).failureClass,
+    ),
+    authenticationBootstrapRetirementFailureClassFixtures,
+  );
   assert.deepEqual(Object.keys(diagnostic), [
     "schemaVersion",
     "failureClass",
@@ -11483,6 +11683,8 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     safeAuthenticationDiagnosticForbiddenBrowserDataSourceReferenceCount: 0,
     safeAuthenticationDiagnosticCoercionCount: coercionCount,
     safeAuthenticationDiagnosticFallbackFixtureCount: fallbackFixtures.length,
+    safeAuthenticationBootstrapRetirementFailureClassFixtureCount:
+      authenticationBootstrapRetirementFailureClassFixtures.length,
   };
 };
 const verifySafeBrowserErrorDiagnosticFixtures = () => {
@@ -11856,6 +12058,161 @@ const verifySafeBrowserErrorDiagnosticFixtures = () => {
     safeWebChannelAuthBindingSummary.activeRouteWebChannelInitialHandshakeAllProofBound,
     true,
   );
+  const bootstrapAttestationFixture = {
+    responseUrlExact: true,
+    finalOriginExact: true,
+    exactPath: true,
+    emptySearch: true,
+    emptyHash: true,
+    rootAbsent: true,
+    scriptCount: 0,
+    activeContentCount: 0,
+    inlineEventHandlerCount: 0,
+    contentTypeClass: "manifest-json",
+  };
+  assert.deepEqual(
+    assertSafeAuthenticationBootstrapAttestation(bootstrapAttestationFixture),
+    bootstrapAttestationFixture,
+  );
+  const rejectedBootstrapAttestationFixtures = [
+    { ...bootstrapAttestationFixture, responseUrlExact: false },
+    { ...bootstrapAttestationFixture, finalOriginExact: false },
+    { ...bootstrapAttestationFixture, exactPath: false },
+    { ...bootstrapAttestationFixture, emptySearch: false },
+    { ...bootstrapAttestationFixture, emptyHash: false },
+    { ...bootstrapAttestationFixture, rootAbsent: false },
+    { ...bootstrapAttestationFixture, scriptCount: 1 },
+    { ...bootstrapAttestationFixture, activeContentCount: 1 },
+    { ...bootstrapAttestationFixture, inlineEventHandlerCount: 1 },
+    { ...bootstrapAttestationFixture, contentTypeClass: "other" },
+  ];
+  for (const rejectedFixture of rejectedBootstrapAttestationFixtures) {
+    assert.throws(() =>
+      assertSafeAuthenticationBootstrapAttestation(rejectedFixture),
+    );
+  }
+  const authenticationBootstrapRetirementCountFixture = {
+    appCheckCdpHandlerErrorCount: 0,
+    browserRequestFailureCount: 0,
+    networkHeaderAttestationErrorCount: 0,
+    webChannelBindingCount: 3,
+  };
+  const safeAuthenticationBootstrapRetirementSummary =
+    summarizeSafeAuthenticationBootstrapRetirement({
+      before: authenticationBootstrapRetirementCountFixture,
+      after: { ...authenticationBootstrapRetirementCountFixture },
+    });
+  assert.equal(safeAuthenticationBootstrapRetirementSummary.passed, true);
+  const rejectedAuthenticationBootstrapRetirementFixtures =
+    SAFE_AUTHENTICATION_BOOTSTRAP_RETIREMENT_COUNT_KEYS.map((key) => ({
+      before: authenticationBootstrapRetirementCountFixture,
+      after: {
+        ...authenticationBootstrapRetirementCountFixture,
+        [key]: authenticationBootstrapRetirementCountFixture[key] + 1,
+      },
+    }));
+  for (const rejectedFixture of rejectedAuthenticationBootstrapRetirementFixtures) {
+    assert.equal(
+      summarizeSafeAuthenticationBootstrapRetirement(rejectedFixture).passed,
+      false,
+    );
+  }
+  const inheritedBackchannelAuth = createSafeFirestoreWebChannelAuthRecord({
+    ...safeWebChannelBooleanDefaults,
+    bindingClass: "session-backchannel-inherited",
+    applicationSessionProofAvailable: true,
+    inherited: true,
+  });
+  const authenticatedApplicationEpochRecords = [
+    {
+      requestClass: "initial-forward-post",
+      phase: "authentication",
+      captureId: null,
+      appCheckHeaderPresent: true,
+      appCheckHeaderJwtShapeValid: true,
+      firebaseAuth: proofBoundInitialAuth,
+      privateUrl: "https://private.invalid/authenticated-epoch",
+    },
+    {
+      requestClass: "session-forward-post",
+      phase: "authentication",
+      captureId: null,
+      appCheckHeaderPresent: true,
+      appCheckHeaderJwtShapeValid: true,
+      firebaseAuth: inheritedForwardAuth,
+    },
+    {
+      requestClass: "backchannel-get",
+      phase: "authentication",
+      captureId: null,
+      appCheckHeaderPresent: true,
+      appCheckHeaderJwtShapeValid: true,
+      firebaseAuth: inheritedBackchannelAuth,
+    },
+  ];
+  const authenticatedApplicationEpochSummary =
+    summarizeSafeAuthenticatedApplicationWebChannelEpoch(
+      authenticatedApplicationEpochRecords,
+    );
+  assert.equal(authenticatedApplicationEpochSummary.passed, true);
+  const rejectedAuthenticatedApplicationEpochFixtures = [
+    [],
+    authenticatedApplicationEpochRecords.slice(1),
+    [
+      {
+        ...authenticatedApplicationEpochRecords[0],
+        firebaseAuth: missingInitialAuth,
+      },
+    ],
+    [
+      {
+        ...authenticatedApplicationEpochRecords[0],
+        phase: "context-bootstrap",
+      },
+    ],
+    [
+      {
+        ...authenticatedApplicationEpochRecords[0],
+        captureId: "fixed-active-capture",
+      },
+    ],
+    [
+      {
+        ...authenticatedApplicationEpochRecords[0],
+        appCheckHeaderPresent: false,
+      },
+    ],
+    [
+      authenticatedApplicationEpochRecords[0],
+      {
+        ...authenticatedApplicationEpochRecords[1],
+        firebaseAuth: createSafeFirestoreWebChannelAuthRecord({
+          ...safeWebChannelBooleanDefaults,
+          bindingClass: "session-forward-inherited",
+          applicationSessionProofAvailable: false,
+          inherited: true,
+        }),
+      },
+    ],
+  ];
+  for (const rejectedFixture of rejectedAuthenticatedApplicationEpochFixtures) {
+    assert.equal(
+      summarizeSafeAuthenticatedApplicationWebChannelEpoch(rejectedFixture)
+        .passed,
+      false,
+    );
+  }
+  const serializedAuthenticationContracts = JSON.stringify({
+    bootstrapAttestationFixture,
+    safeAuthenticationBootstrapRetirementSummary,
+    authenticatedApplicationEpochSummary,
+  });
+  assert.equal(
+    serializedAuthenticationContracts.includes(
+      authenticatedApplicationEpochRecords[0].privateUrl,
+    ),
+    false,
+  );
   const serializedDiagnostic = JSON.stringify({
     ...accumulatorSnapshot,
     ...routeResponseSummary,
@@ -11887,6 +12244,17 @@ const verifySafeBrowserErrorDiagnosticFixtures = () => {
     safeNetworkAttestationDrainDiagnosticFixtureCount:
       networkAttestationDrainDiagnostics.length,
     safeFirestoreWebChannelAuthBindingSummaryFixtureCount: 3,
+    safeAuthenticationBootstrapAcceptedFixtureCount: 1,
+    safeAuthenticationBootstrapRejectedFixtureCount:
+      rejectedBootstrapAttestationFixtures.length,
+    safeAuthenticationBootstrapRetirementAcceptedFixtureCount: 1,
+    safeAuthenticationBootstrapRetirementRejectedFixtureCount:
+      rejectedAuthenticationBootstrapRetirementFixtures.length,
+    safeAuthenticationBootstrapRetirementRawValueOutputCount: 0,
+    safeAuthenticatedApplicationWebChannelEpochAcceptedFixtureCount: 1,
+    safeAuthenticatedApplicationWebChannelEpochRejectedFixtureCount:
+      rejectedAuthenticatedApplicationEpochFixtures.length,
+    safeAuthenticatedApplicationWebChannelEpochRawValueOutputCount: 0,
     safeBrowserErrorDiagnosticRawValueOutputCount: 0,
     safeBrowserErrorDiagnosticHashSampleLimit:
       SAFE_BROWSER_ERROR_HASH_SAMPLE_LIMIT,
@@ -21697,6 +22065,9 @@ const appCheckDebugInitScript = ({ allowedOrigin, debugToken }) => {
 };
 
 const AUTHENTICATED_ROUTE_TIMEOUT_MS = 60_000;
+const AUTHENTICATION_BOOTSTRAP_PATH = "/manifest.webmanifest";
+const AUTHENTICATION_BOOTSTRAP_RUNTIME_KEY =
+  "__W10P_CAPTURE_AUTHENTICATION_BOOTSTRAP_RUNTIME__";
 
 const authenticateCore = async (
   page,
@@ -21705,12 +22076,66 @@ const authenticateCore = async (
   role,
   setFailureClass,
   registerApplicationSessionProof,
+  prepareAuthenticationBootstrapRetirement,
+  confirmAuthenticationBootstrapRetirement,
+  prepareApplicationNavigation,
 ) => {
   setFailureClass("navigation-failed");
-  await page.goto(`${origin}/#/`, { waitUntil: "domcontentloaded" });
+  const authenticationBootstrapUrl = new URL(
+    AUTHENTICATION_BOOTSTRAP_PATH,
+    `${origin}/`,
+  );
+  assert.equal(authenticationBootstrapUrl.origin, origin);
+  assert.equal(
+    authenticationBootstrapUrl.pathname,
+    AUTHENTICATION_BOOTSTRAP_PATH,
+  );
+  assert.equal(authenticationBootstrapUrl.search, "");
+  assert.equal(authenticationBootstrapUrl.hash, "");
+  const authenticationBootstrapResponse = await page.goto(
+    authenticationBootstrapUrl.href,
+    { waitUntil: "domcontentloaded" },
+  );
+  assert.ok(authenticationBootstrapResponse);
+  assert.equal(
+    authenticationBootstrapResponse.status(),
+    200,
+    "The capture authentication bootstrap must resolve as a static document.",
+  );
+  const authenticationBootstrapPageAttestation = await page.evaluate(
+    ({ expectedOrigin, expectedPath }) => ({
+      finalOriginExact: location.origin === expectedOrigin,
+      exactPath: location.pathname === expectedPath,
+      emptySearch: location.search === "",
+      emptyHash: location.hash === "",
+      rootAbsent: document.getElementById("root") === null,
+      scriptCount: document.scripts.length,
+      activeContentCount: document.querySelectorAll(
+        "script,iframe,frame,object,embed,applet,base,meta[http-equiv='refresh'],link[rel~='preload'],link[rel~='modulepreload'],link[rel~='prefetch'],link[rel~='preconnect'],link[rel~='dns-prefetch']",
+      ).length,
+      inlineEventHandlerCount: [...document.querySelectorAll("*")].filter(
+        (element) =>
+          [...element.attributes].some((attribute) =>
+            attribute.name.toLowerCase().startsWith("on"),
+          ),
+      ).length,
+      contentTypeClass:
+        document.contentType === "application/manifest+json"
+          ? "manifest-json"
+          : document.contentType === "application/json"
+            ? "json"
+            : "other",
+    }),
+    { expectedOrigin: origin, expectedPath: AUTHENTICATION_BOOTSTRAP_PATH },
+  );
+  assertSafeAuthenticationBootstrapAttestation({
+    responseUrlExact:
+      authenticationBootstrapResponse.url() === authenticationBootstrapUrl.href,
+    ...authenticationBootstrapPageAttestation,
+  });
   setFailureClass("authentication-evaluate-failed");
   const identity = await page.evaluate(
-    async ({ email, password, config, functionsRegion }) => {
+    async ({ email, password, config, functionsRegion, runtimeKey }) => {
       const appModule =
         await import("https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js");
       const authModule =
@@ -21719,6 +22144,12 @@ const authenticateCore = async (
         await import("https://www.gstatic.com/firebasejs/12.9.0/firebase-app-check.js");
       const firestoreModule =
         await import("https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js");
+      if (
+        Object.prototype.hasOwnProperty.call(globalThis, runtimeKey) ||
+        appModule.getApps().length !== 0
+      ) {
+        throw new Error("VISUAL_AUTH_BOOTSTRAP_RUNTIME_RESIDUAL");
+      }
       const app = appModule.initializeApp(config);
       const auxiliaryAppCheck = appCheckModule.initializeAppCheck(app, {
         provider: new appCheckModule.CustomProvider({
@@ -21806,7 +22237,7 @@ const authenticateCore = async (
       );
       if (!profileSnapshot.exists()) throw new Error("VISUAL_PROFILE_MISSING");
       const profile = profileSnapshot.data();
-      return {
+      const identity = {
         uid: credentialResult.user.uid,
         email: credentialResult.user.email || "",
         profileEmail: String(profile.email || ""),
@@ -21831,18 +22262,70 @@ const authenticateCore = async (
           uid: credentialResult.user.uid,
         },
       };
+      Object.defineProperty(globalThis, runtimeKey, {
+        configurable: true,
+        enumerable: false,
+        writable: false,
+        value: Object.freeze({ app, appModule, database, firestoreModule }),
+      });
+      return identity;
     },
     {
       ...credential,
       config: firebaseConfig,
       functionsRegion: STAGING_FUNCTIONS_REGION,
+      runtimeKey: AUTHENTICATION_BOOTSTRAP_RUNTIME_KEY,
     },
   );
   registerApplicationSessionProof(identity.applicationSessionProof);
-  // The app restores desktop Auth from IndexedDB first. Register the protected
-  // session proof before migrating capture-only persistence so any storage
-  // notification remains attributable, then require the same user on both
-  // sides of the completed migration before the first application reload.
+  setFailureClass("authentication-bootstrap-pre-retirement-drain-failed");
+  await prepareAuthenticationBootstrapRetirement();
+  setFailureClass("authentication-bootstrap-retirement-failed");
+  const authenticationBootstrapRetirement = await page.evaluate(
+    async (runtimeKey) => {
+      const descriptor = Object.getOwnPropertyDescriptor(
+        globalThis,
+        runtimeKey,
+      );
+      if (
+        !descriptor ||
+        descriptor.configurable !== true ||
+        descriptor.enumerable !== false ||
+        descriptor.writable !== false ||
+        !descriptor.value
+      ) {
+        throw new Error("VISUAL_AUTH_BOOTSTRAP_RUNTIME_MISSING");
+      }
+      const { app, appModule, database, firestoreModule } = descriptor.value;
+      try {
+        try {
+          await firestoreModule.terminate(database);
+        } finally {
+          await appModule.deleteApp(app);
+        }
+      } finally {
+        delete globalThis[runtimeKey];
+      }
+      return {
+        appRegistryEmpty: appModule.getApps().length === 0,
+        runtimeRemoved: !Object.prototype.hasOwnProperty.call(
+          globalThis,
+          runtimeKey,
+        ),
+      };
+    },
+    AUTHENTICATION_BOOTSTRAP_RUNTIME_KEY,
+  );
+  assert.deepEqual(authenticationBootstrapRetirement, {
+    appRegistryEmpty: true,
+    runtimeRemoved: true,
+  });
+  setFailureClass("authentication-bootstrap-post-retirement-drain-failed");
+  await confirmAuthenticationBootstrapRetirement();
+  // Authenticate on the inert same-origin bootstrap before the SPA exists.
+  // Register the protected session proof before migrating capture-only
+  // persistence, then require the same user on both sides of the completed
+  // migration before the first application document is allowed to load.
   setFailureClass("auth-persistence-migration-failed");
   const persistedUid = await page.evaluate(
     async ({ config, expectedUid }) => {
@@ -21850,8 +22333,12 @@ const authenticateCore = async (
         await import("https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js");
       const authModule =
         await import("https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js");
+      if (appModule.getApps().length !== 0) {
+        throw new Error("VISUAL_AUTH_PERSISTENCE_APP_RESIDUAL");
+      }
       const app = appModule.initializeApp(config);
       const auth = authModule.getAuth(app);
+      await auth.authStateReady();
       if (auth.currentUser?.uid !== expectedUid) {
         throw new Error("VISUAL_AUTH_PERSISTENCE_SOURCE_MISMATCH");
       }
@@ -21862,7 +22349,12 @@ const authenticateCore = async (
       if (auth.currentUser?.uid !== expectedUid) {
         throw new Error("VISUAL_AUTH_PERSISTENCE_MIGRATION_FAILED");
       }
-      return auth.currentUser.uid;
+      const persistedUid = auth.currentUser.uid;
+      await appModule.deleteApp(app);
+      if (appModule.getApps().length !== 0) {
+        throw new Error("VISUAL_AUTH_PERSISTENCE_APP_RETIREMENT_FAILED");
+      }
+      return persistedUid;
     },
     { config: firebaseConfig, expectedUid: identity.uid },
   );
@@ -21872,7 +22364,8 @@ const authenticateCore = async (
     "The authenticated identity changed during persistence migration.",
   );
   setFailureClass("post-auth-reload-failed");
-  await page.reload({ waitUntil: "domcontentloaded" });
+  await prepareApplicationNavigation();
+  await page.goto(`${origin}/#/`, { waitUntil: "domcontentloaded" });
   const expectedAuthenticatedRoute =
     role === "student" ? "/student/dashboard" : "/teacher/dashboard";
   setFailureClass("post-reload-route-wait-failed");
@@ -21913,6 +22406,9 @@ const authenticate = async (
     captureRole,
     viewport,
     registerApplicationSessionProof,
+    prepareAuthenticationBootstrapRetirement,
+    confirmAuthenticationBootstrapRetirement,
+    prepareApplicationNavigation,
     unregisterApplicationSessionProof,
   },
 ) => {
@@ -21927,6 +22423,9 @@ const authenticate = async (
         failureClass = nextFailureClass;
       },
       registerApplicationSessionProof,
+      prepareAuthenticationBootstrapRetirement,
+      confirmAuthenticationBootstrapRetirement,
+      prepareApplicationNavigation,
     );
   } catch {
     unregisterApplicationSessionProof();
@@ -23865,6 +24364,7 @@ try {
     const groupTargetDiscoveryActivationStart = targetDiscoveryActivationCount;
     const groupTargetSnapshotStart = targetSnapshotCount;
     const groupBaselineBridgeHandlerErrorStart = appCheckCdpHandlerErrorCount;
+    const groupBrowserRequestFailureStart = browserRequestFailureCount;
     const groupCdpContinueRequestInvalidInterceptionErrorStart =
       cdpContinueRequestInvalidInterceptionErrorCount;
     const groupCdpOtherProtocolErrorStart = cdpOtherProtocolErrorCount;
@@ -24042,6 +24542,9 @@ try {
     let networkPhase = "context-bootstrap";
     let activeCaptureId = null;
     let groupApplicationSessionProof = null;
+    let groupAuthenticationBootstrapRetirementBoundary = null;
+    let groupAuthenticationBootstrapRetirementAttestation = null;
+    let groupApplicationNavigationWebChannelBindingStart = null;
     let groupBrowserWideBoundaryAttestation = null;
     let networkRequestSequence = 0;
     const requestCorrelations = new WeakMap();
@@ -26753,6 +27256,74 @@ try {
               groupApplicationSessionProof,
             );
           },
+          prepareAuthenticationBootstrapRetirement: async () => {
+            assert.ok(groupApplicationSessionProof);
+            assert.equal(activeCaptureId, null);
+            assert.equal(groupAuthenticationBootstrapRetirementBoundary, null);
+            assert.equal(
+              groupAuthenticationBootstrapRetirementAttestation,
+              null,
+            );
+            await drainAppCheckCdpHandlerPromises();
+            await flushNetworkAttestations();
+            assert.equal(webChannelCdpHeaderAttestationsByNetworkId.size, 0);
+            groupAuthenticationBootstrapRetirementBoundary = Object.freeze({
+              appCheckCdpHandlerErrorCount,
+              browserRequestFailureCount,
+              networkHeaderAttestationErrorCount,
+              webChannelBindingCount:
+                webChannelCdpHeaderAttestationBindingRecords.length,
+            });
+          },
+          confirmAuthenticationBootstrapRetirement: async () => {
+            assert.ok(groupApplicationSessionProof);
+            assert.equal(activeCaptureId, null);
+            assert.ok(groupAuthenticationBootstrapRetirementBoundary);
+            assert.equal(
+              groupAuthenticationBootstrapRetirementAttestation,
+              null,
+            );
+            await drainAppCheckCdpHandlerPromises();
+            await flushNetworkAttestations();
+            assert.equal(webChannelCdpHeaderAttestationsByNetworkId.size, 0);
+            groupAuthenticationBootstrapRetirementAttestation =
+              summarizeSafeAuthenticationBootstrapRetirement({
+                before: groupAuthenticationBootstrapRetirementBoundary,
+                after: {
+                  appCheckCdpHandlerErrorCount,
+                  browserRequestFailureCount,
+                  networkHeaderAttestationErrorCount,
+                  webChannelBindingCount:
+                    webChannelCdpHeaderAttestationBindingRecords.length,
+                },
+              });
+            groupAuthenticationBootstrapRetirementBoundary = null;
+            assert.equal(
+              groupAuthenticationBootstrapRetirementAttestation.passed,
+              true,
+              `The authentication bootstrap retirement was not quiescent: ${JSON.stringify(
+                groupAuthenticationBootstrapRetirementAttestation,
+              )}`,
+            );
+          },
+          prepareApplicationNavigation: async () => {
+            assert.ok(groupApplicationSessionProof);
+            assert.equal(activeCaptureId, null);
+            assert.equal(groupAuthenticationBootstrapRetirementBoundary, null);
+            assert.equal(
+              groupAuthenticationBootstrapRetirementAttestation?.passed,
+              true,
+            );
+            assert.equal(
+              groupApplicationNavigationWebChannelBindingStart,
+              null,
+            );
+            await drainAppCheckCdpHandlerPromises();
+            await flushNetworkAttestations();
+            assert.equal(webChannelCdpHeaderAttestationsByNetworkId.size, 0);
+            groupApplicationNavigationWebChannelBindingStart =
+              webChannelCdpHeaderAttestationBindingRecords.length;
+          },
           unregisterApplicationSessionProof: () => {
             if (!groupApplicationSessionProof) return;
             groupApplicationSessionProof.revision = "";
@@ -26817,6 +27388,73 @@ try {
         });
       groupApplicationSessionKeepaliveClientInitializationAttestation =
         groupApplicationSessionKeepaliveClient.initializationAttestation;
+      await drainAppCheckCdpHandlerPromises();
+      const authenticationNetworkAttestationDrainDiagnostic =
+        await flushNetworkAttestations();
+      assert.ok(
+        Number.isSafeInteger(groupApplicationNavigationWebChannelBindingStart),
+      );
+      const authenticatedApplicationWebChannelEpoch =
+        summarizeSafeAuthenticatedApplicationWebChannelEpoch(
+          webChannelCdpHeaderAttestationBindingRecords.slice(
+            groupApplicationNavigationWebChannelBindingStart,
+          ),
+        );
+      assert.equal(
+        authenticatedApplicationWebChannelEpoch.passed,
+        true,
+        `The authenticated application WebChannel epoch was not proof-bound: ${JSON.stringify(
+          authenticatedApplicationWebChannelEpoch,
+        )}`,
+      );
+      const authenticationBrowserRequestFailureCount =
+        browserRequestFailureCount - groupBrowserRequestFailureStart;
+      const authenticationAppCheckCdpHandlerErrorCount =
+        appCheckCdpHandlerErrorCount - groupBaselineBridgeHandlerErrorStart;
+      const authenticationBrowserErrorDiagnostic = {
+        ...snapshotSafeBrowserErrorAccumulator(pageErrorAccumulator),
+        authenticationNetworkAttestationDrainDiagnostic,
+        authenticationBootstrapRetirementAttestation:
+          groupAuthenticationBootstrapRetirementAttestation,
+        authenticatedApplicationWebChannelEpoch,
+        ...summarizeSafeFirestoreWebChannelAuthBindings({
+          records: webChannelCdpHeaderAttestationBindingRecords,
+          activeCaptureId,
+        }),
+        cumulativeBrowserRequestFailureCount: browserRequestFailureCount,
+        authenticationBrowserRequestFailureCount,
+        authenticationAppCheckCdpHandlerErrorCount,
+        cumulativeNetworkHeaderAttestationErrorCount:
+          networkHeaderAttestationErrorCount,
+      };
+      assert.equal(
+        pageErrorAccumulator.totalCount,
+        0,
+        `Authentication browser error count must be zero: ${JSON.stringify(
+          authenticationBrowserErrorDiagnostic,
+        )}`,
+      );
+      assert.equal(
+        authenticationBrowserRequestFailureCount,
+        0,
+        `Authentication browser request failure count must be zero: ${JSON.stringify(
+          authenticationBrowserErrorDiagnostic,
+        )}`,
+      );
+      assert.equal(
+        authenticationAppCheckCdpHandlerErrorCount,
+        0,
+        `Authentication CDP handler error count must be zero: ${JSON.stringify(
+          authenticationBrowserErrorDiagnostic,
+        )}`,
+      );
+      assert.equal(
+        networkHeaderAttestationErrorCount,
+        0,
+        `Authentication network attestation error count must be zero: ${JSON.stringify(
+          authenticationBrowserErrorDiagnostic,
+        )}`,
+      );
     }
     try {
       for (const target of groupTargets) {

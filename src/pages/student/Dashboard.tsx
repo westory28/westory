@@ -177,7 +177,9 @@ const projectAttendance = (
     recordedStatuses.length !== todayStatuses.length ||
     uniqueStatuses.length > 1
       ? "기록 확인"
-      : ATTENDANCE_STATUS_LABELS[uniqueStatuses[0]];
+      : uniqueStatuses[0] === "EXCUSED"
+        ? "출석 완료"
+        : ATTENDANCE_STATUS_LABELS[uniqueStatuses[0]];
   const details = todaySessions.map((session, index) => {
     const period = session.period ? `${session.period} ` : "";
     return `${period}${ATTENDANCE_STATUS_LABELS[todayStatuses[index]]}`;

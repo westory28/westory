@@ -1687,7 +1687,10 @@ const createDocs = new Map([
     }),
   ],
   [
-    `years/${YEAR}/semesters/${SEMESTER}/point_transactions/w10p-point-transaction`,
+    // Frozen Dashboard checks this deterministic attendance activity path.
+    // Keep the single manual-adjust ledger row and its visible marker intact;
+    // only the fixture document ID bridges that legacy presentation read.
+    `years/${YEAR}/semesters/${SEMESTER}/point_transactions/activity_${STUDENT_UID}_attendance_attendance-2026-08-17`,
     owned({
       uid: STUDENT_UID,
       type: "manual_adjust",
@@ -2055,7 +2058,7 @@ const strictCollections = new Map([
   [`years/${YEAR}/semesters/${SEMESTER}/point_wallets`, [STUDENT_UID]],
   [
     `years/${YEAR}/semesters/${SEMESTER}/point_transactions`,
-    ["w10p-point-transaction"],
+    [`activity_${STUDENT_UID}_attendance_attendance-2026-08-17`],
   ],
   [
     `years/${YEAR}/semesters/${SEMESTER}/point_products`,
@@ -2177,7 +2180,33 @@ const assertSeedPlanIntegrity = () => {
   const semesterClass = createDocs.get(`semester_classes/${CLASS_ID}`);
   const enrollment = createDocs.get(`semester_enrollments/${ENROLLMENT_ID}`);
   const enrollmentSlot = createDocs.get(`semester_enrollment_slots/${slotId}`);
+  const semesterAttendance = createDocs.get(
+    "semester_attendance_records/w10p-attendance-record",
+  );
+  const compatibilityAttendanceTransaction = createDocs.get(
+    `years/${YEAR}/semesters/${SEMESTER}/point_transactions/activity_${STUDENT_UID}_attendance_attendance-2026-08-17`,
+  );
   assert.equal(studentUser?.customNameConfirmed, true);
+  assert.deepEqual(
+    [
+      semesterAttendance?.studentUid,
+      semesterAttendance?.attendanceStatus,
+      compatibilityAttendanceTransaction?.uid,
+      compatibilityAttendanceTransaction?.type,
+      compatibilityAttendanceTransaction?.activityType,
+      compatibilityAttendanceTransaction?.sourceId,
+      compatibilityAttendanceTransaction?.sourceLabel,
+    ],
+    [
+      STUDENT_UID,
+      "EXCUSED",
+      STUDENT_UID,
+      "manual_adjust",
+      "manual_adjust",
+      "w10p-visual-grant",
+      "W10P 위스 기록",
+    ],
+  );
   assert.deepEqual(
     [
       identity?.studentUid,
