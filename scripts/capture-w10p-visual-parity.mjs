@@ -4241,14 +4241,76 @@ const listenOnLoopback = (server) =>
     server.once("listening", onListening);
     server.listen(0, "127.0.0.1");
   });
+const SAFE_BROWSER_CONNECT_PROXY_AUTHORITY_LEASE_DIAGNOSTIC_CLASSES =
+  Object.freeze([
+    "issued-active-tunnel",
+    "issued-no-active-tunnel",
+    "consumed-active-tunnel",
+    "consumed-no-active-tunnel",
+    "expired-active-tunnel",
+    "expired-no-active-tunnel",
+  ]);
+const classifyBrowserConnectProxyAuthorityLeaseDiagnostic = (input) => {
+  try {
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      return null;
+    }
+    const descriptors = Object.getOwnPropertyDescriptors(input);
+    if (
+      Object.keys(descriptors).sort().join(",") !==
+      "activeTunnelPresent,expiresAt,leaseState,nowMilliseconds"
+    ) {
+      return null;
+    }
+    for (const descriptor of Object.values(descriptors)) {
+      if (
+        !Object.prototype.hasOwnProperty.call(descriptor, "value") ||
+        descriptor.get !== undefined ||
+        descriptor.set !== undefined
+      ) {
+        return null;
+      }
+    }
+    const activeTunnelPresent = descriptors.activeTunnelPresent.value;
+    const expiresAt = descriptors.expiresAt.value;
+    const leaseState = descriptors.leaseState.value;
+    const nowMilliseconds = descriptors.nowMilliseconds.value;
+    if (
+      typeof activeTunnelPresent !== "boolean" ||
+      !Number.isSafeInteger(expiresAt) ||
+      expiresAt < 0 ||
+      !Number.isSafeInteger(nowMilliseconds) ||
+      nowMilliseconds < 0 ||
+      !["issued", "consumed", "expired"].includes(leaseState)
+    ) {
+      return null;
+    }
+    const effectiveLeaseState =
+      leaseState === "issued" && nowMilliseconds > expiresAt
+        ? "expired"
+        : leaseState;
+    const diagnosticClass = `${effectiveLeaseState}-${
+      activeTunnelPresent ? "active-tunnel" : "no-active-tunnel"
+    }`;
+    return SAFE_BROWSER_CONNECT_PROXY_AUTHORITY_LEASE_DIAGNOSTIC_CLASSES.includes(
+      diagnosticClass,
+    )
+      ? diagnosticClass
+      : null;
+  } catch {
+    return null;
+  }
+};
 const createBrowserConnectProxyGate = ({
   allowedHostnames,
   allowedRequestOrigins,
   nonFatalBrowserProductHostnames = [],
   fatalOnDeny = true,
+  nowMilliseconds = () => Date.now(),
   connectAllowed = ({ hostname, port }) =>
     connectTcp({ host: hostname, port: Number(port) }),
 }) => {
+  assert.equal(typeof nowMilliseconds, "function");
   const allowedHostnameSet = new Set(
     [...allowedHostnames].map((hostname) => String(hostname).toLowerCase()),
   );
@@ -4292,6 +4354,11 @@ const createBrowserConnectProxyGate = ({
   const authorityLeaseConsumeCounts = new Map();
   let auditStage = "browser-launch";
   const authorityLeaseTtlMilliseconds = 5_000;
+  const currentTimeMilliseconds = () => {
+    const value = nowMilliseconds();
+    assert.ok(Number.isSafeInteger(value) && value >= 0);
+    return value;
+  };
   const stats = {
     listenerStartCount: 0,
     listenerCloseCount: 0,
@@ -4434,13 +4501,13 @@ const createBrowserConnectProxyGate = ({
         const requestId = queue.shift();
         const lease = authorityLeasesByRequestId.get(requestId);
         if (!lease || lease.state !== "issued") continue;
-        if (Date.now() > lease.expiresAt) {
+        if (currentTimeMilliseconds() > lease.expiresAt) {
           lease.state = "expired";
           stats.authorityLeaseExpiredBeforeConnectCount += 1;
           continue;
         }
         lease.state = "consumed";
-        lease.consumedAt = Date.now();
+        lease.consumedAt = currentTimeMilliseconds();
         consumedAuthorityLease = lease;
       }
       if (queue.length > 0) {
@@ -4673,7 +4740,7 @@ const createBrowserConnectProxyGate = ({
           ? "authority-lease-active-tunnel-present"
           : "authority-lease-no-active-tunnel",
       });
-      const issuedAt = Date.now();
+      const issuedAt = currentTimeMilliseconds();
       const lease = {
         requestId,
         stage,
@@ -4699,6 +4766,35 @@ const createBrowserConnectProxyGate = ({
     },
     hasRequestStageAuthorization(requestId) {
       return requestStageAuthorizationsByRequestId.has(requestId);
+    },
+    requestStageAuthorityLeaseDiagnosticClass(requestId) {
+      try {
+        if (typeof requestId !== "string" || requestId.length === 0) {
+          return null;
+        }
+        const authorization =
+          requestStageAuthorizationsByRequestId.get(requestId) || null;
+        const lease = authorityLeasesByRequestId.get(requestId) || null;
+        if (
+          !authorization ||
+          !lease ||
+          authorization.requestId !== requestId ||
+          lease.requestId !== requestId ||
+          typeof authorization.authority !== "string" ||
+          authorization.authority.length === 0 ||
+          lease.authority !== authorization.authority
+        ) {
+          return null;
+        }
+        return classifyBrowserConnectProxyAuthorityLeaseDiagnostic({
+          leaseState: lease.state,
+          expiresAt: lease.expiresAt,
+          nowMilliseconds: currentTimeMilliseconds(),
+          activeTunnelPresent: authorization.activeTunnelPresentAtAuthorization,
+        });
+      } catch {
+        return null;
+      }
     },
     completeRequestStageAuthorization(requestId) {
       const authorization =
@@ -11143,20 +11239,33 @@ const SAFE_AUTHENTICATION_CONFIG_READ_REQUEST_CLASSES = Object.freeze([
   "get",
   "preflight",
 ]);
+const SAFE_CDP_NETWORK_ERROR_REASON_GROUPS = Object.freeze([
+  "aborted",
+  "blocked",
+  "connection",
+  "name-resolution",
+  "timeout",
+  "failed",
+  "other",
+]);
 const SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_CLASSES = Object.freeze([
   "response-2xx",
   "response-3xx",
   "response-4xx",
   "response-5xx",
   "response-other-status",
-  "response-error",
+  ...SAFE_CDP_NETWORK_ERROR_REASON_GROUPS.map(
+    (reasonGroup) => `response-error-${reasonGroup}`,
+  ),
   "handler-before-response",
   "preflight-response-2xx",
   "preflight-response-3xx",
   "preflight-response-4xx",
   "preflight-response-5xx",
   "preflight-response-other-status",
-  "preflight-response-error",
+  ...SAFE_CDP_NETWORK_ERROR_REASON_GROUPS.map(
+    (reasonGroup) => `preflight-response-error-${reasonGroup}`,
+  ),
   "preflight-handler-before-response",
 ]);
 const SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_FAILURE_CLASSES = Object.freeze({
@@ -11166,8 +11275,14 @@ const SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_FAILURE_CLASSES = Object.freeze({
   "response-5xx": "authentication-evaluate-config-read-cdp-response-5xx-failed",
   "response-other-status":
     "authentication-evaluate-config-read-cdp-response-other-status-failed",
-  "response-error":
-    "authentication-evaluate-config-read-cdp-response-error-failed",
+  ...Object.fromEntries(
+    SAFE_CDP_NETWORK_ERROR_REASON_GROUPS.map((reasonGroup) => [
+      `response-error-${reasonGroup}`,
+      `authentication-evaluate-config-read-cdp-response-error-${reasonGroup}${
+        reasonGroup === "failed" ? "" : "-failed"
+      }`,
+    ]),
+  ),
   "handler-before-response":
     "authentication-evaluate-config-read-cdp-handler-before-response-failed",
   "preflight-response-2xx":
@@ -11180,11 +11295,33 @@ const SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_FAILURE_CLASSES = Object.freeze({
     "authentication-evaluate-config-read-cdp-preflight-response-5xx-failed",
   "preflight-response-other-status":
     "authentication-evaluate-config-read-cdp-preflight-response-other-status-failed",
-  "preflight-response-error":
-    "authentication-evaluate-config-read-cdp-preflight-response-error-failed",
+  ...Object.fromEntries(
+    SAFE_CDP_NETWORK_ERROR_REASON_GROUPS.map((reasonGroup) => [
+      `preflight-response-error-${reasonGroup}`,
+      `authentication-evaluate-config-read-cdp-preflight-response-error-${reasonGroup}${
+        reasonGroup === "failed" ? "" : "-failed"
+      }`,
+    ]),
+  ),
   "preflight-handler-before-response":
     "authentication-evaluate-config-read-cdp-preflight-handler-before-response-failed",
 });
+const SAFE_AUTHENTICATION_CONFIG_READ_PROXY_FAILURE_CLASSES = Object.freeze(
+  Object.fromEntries(
+    ["get", "preflight"].flatMap((requestClass) =>
+      [
+        "issued-no-active-tunnel",
+        "expired-active-tunnel",
+        "expired-no-active-tunnel",
+      ].map((leaseClass) => [
+        `${requestClass}:${leaseClass}`,
+        `authentication-evaluate-config-read-cdp-${
+          requestClass === "preflight" ? "preflight-" : ""
+        }proxy-${leaseClass}-failed`,
+      ]),
+    ),
+  ),
+);
 const classifyExactAuthenticationConfigReadRequest = (input) => {
   try {
     if (!input || typeof input !== "object" || Array.isArray(input)) {
@@ -11235,6 +11372,59 @@ const classifyExactAuthenticationConfigReadRequest = (input) => {
     return null;
   }
 };
+const classifySafeCdpNetworkErrorReason = (input) => {
+  try {
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      return null;
+    }
+    const descriptors = Object.getOwnPropertyDescriptors(input);
+    if (Object.keys(descriptors).sort().join(",") !== "responseErrorReason") {
+      return null;
+    }
+    const reasonDescriptor = descriptors.responseErrorReason;
+    if (
+      !Object.prototype.hasOwnProperty.call(reasonDescriptor, "value") ||
+      reasonDescriptor.get !== undefined ||
+      reasonDescriptor.set !== undefined
+    ) {
+      return null;
+    }
+    const responseErrorReason = reasonDescriptor.value;
+    if (
+      typeof responseErrorReason !== "string" ||
+      responseErrorReason.length === 0
+    ) {
+      return null;
+    }
+    if (responseErrorReason === "Aborted") return "aborted";
+    if (
+      ["AccessDenied", "BlockedByClient", "BlockedByResponse"].includes(
+        responseErrorReason,
+      )
+    ) {
+      return "blocked";
+    }
+    if (
+      [
+        "AddressUnreachable",
+        "ConnectionAborted",
+        "ConnectionClosed",
+        "ConnectionFailed",
+        "ConnectionRefused",
+        "ConnectionReset",
+        "InternetDisconnected",
+      ].includes(responseErrorReason)
+    ) {
+      return "connection";
+    }
+    if (responseErrorReason === "NameNotResolved") return "name-resolution";
+    if (responseErrorReason === "TimedOut") return "timeout";
+    if (responseErrorReason === "Failed") return "failed";
+    return "other";
+  } catch {
+    return null;
+  }
+};
 const classifySafeAuthenticationConfigReadResponse = (input) => {
   try {
     if (!input || typeof input !== "object" || Array.isArray(input)) {
@@ -11276,12 +11466,18 @@ const classifySafeAuthenticationConfigReadResponse = (input) => {
     }
     if (responseObserved !== true) return null;
     if (responseErrorReason !== undefined) {
-      return responseStatusCode === undefined &&
-        typeof responseErrorReason === "string" &&
-        responseErrorReason.length > 0
-        ? preflight
-          ? "preflight-response-error"
-          : "response-error"
+      if (responseStatusCode !== undefined) return null;
+      const reasonGroup = classifySafeCdpNetworkErrorReason({
+        responseErrorReason,
+      });
+      if (reasonGroup === null) return null;
+      const responseClass = preflight
+        ? `preflight-response-error-${reasonGroup}`
+        : `response-error-${reasonGroup}`;
+      return SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_CLASSES.includes(
+        responseClass,
+      )
+        ? responseClass
         : null;
     }
     if (!Number.isSafeInteger(responseStatusCode)) return null;
@@ -11312,6 +11508,68 @@ const safeAuthenticationConfigReadResponseFailureClass = (responseClass) =>
   )
     ? SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_FAILURE_CLASSES[responseClass]
     : null;
+const resolveSafeAuthenticationConfigReadFailureClass = (input) => {
+  try {
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      return null;
+    }
+    const descriptors = Object.getOwnPropertyDescriptors(input);
+    if (
+      Object.keys(descriptors).sort().join(",") !==
+      "proxyLeaseClass,responseClass"
+    ) {
+      return null;
+    }
+    for (const descriptor of Object.values(descriptors)) {
+      if (
+        !Object.prototype.hasOwnProperty.call(descriptor, "value") ||
+        descriptor.get !== undefined ||
+        descriptor.set !== undefined
+      ) {
+        return null;
+      }
+    }
+    const responseClass = descriptors.responseClass.value;
+    const proxyLeaseClass = descriptors.proxyLeaseClass.value;
+    if (
+      !SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_CLASSES.includes(
+        responseClass,
+      ) ||
+      (proxyLeaseClass !== null &&
+        !SAFE_BROWSER_CONNECT_PROXY_AUTHORITY_LEASE_DIAGNOSTIC_CLASSES.includes(
+          proxyLeaseClass,
+        ))
+    ) {
+      return null;
+    }
+    const preflight = responseClass.startsWith("preflight-");
+    const responseErrorPrefix = preflight
+      ? "preflight-response-error-"
+      : "response-error-";
+    if (
+      proxyLeaseClass !== null &&
+      !responseClass.startsWith(responseErrorPrefix)
+    ) {
+      return null;
+    }
+    const proxyFailurePriority =
+      proxyLeaseClass === "issued-no-active-tunnel" ||
+      proxyLeaseClass === "expired-active-tunnel" ||
+      proxyLeaseClass === "expired-no-active-tunnel";
+    if (proxyFailurePriority) {
+      const proxyFailureKey = `${preflight ? "preflight" : "get"}:${proxyLeaseClass}`;
+      return Object.prototype.hasOwnProperty.call(
+        SAFE_AUTHENTICATION_CONFIG_READ_PROXY_FAILURE_CLASSES,
+        proxyFailureKey,
+      )
+        ? SAFE_AUTHENTICATION_CONFIG_READ_PROXY_FAILURE_CLASSES[proxyFailureKey]
+        : null;
+    }
+    return safeAuthenticationConfigReadResponseFailureClass(responseClass);
+  } catch {
+    return null;
+  }
+};
 const resolveSafeAuthenticationConfigReadResponseOutcome = (input) => {
   try {
     if (!input || typeof input !== "object" || Array.isArray(input))
@@ -11376,11 +11634,38 @@ const authenticationConfigReadOutcomeAfterLifecycle = (
   }
   return lifecycleKind === "primary" ? responseClass : previousOutcomeClass;
 };
+const authenticationConfigReadProxyLeaseAfterLifecycle = (
+  previousProxyLeaseClass,
+  observedProxyLeaseClass,
+  lifecycleKind,
+) => {
+  const previousClassValid =
+    previousProxyLeaseClass === null ||
+    SAFE_BROWSER_CONNECT_PROXY_AUTHORITY_LEASE_DIAGNOSTIC_CLASSES.includes(
+      previousProxyLeaseClass,
+    );
+  const observedClassValid =
+    observedProxyLeaseClass === null ||
+    SAFE_BROWSER_CONNECT_PROXY_AUTHORITY_LEASE_DIAGNOSTIC_CLASSES.includes(
+      observedProxyLeaseClass,
+    );
+  if (
+    !previousClassValid ||
+    !observedClassValid ||
+    !["primary", "post-final-error"].includes(lifecycleKind)
+  ) {
+    return null;
+  }
+  return lifecycleKind === "primary"
+    ? observedProxyLeaseClass
+    : previousProxyLeaseClass;
+};
 const SAFE_AUTHENTICATION_FAILURE_CLASSES = Object.freeze([
   "navigation-failed",
   "authentication-evaluate-failed",
   ...Object.values(SAFE_AUTHENTICATION_EVALUATION_FAILURE_CLASSES),
   ...Object.values(SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_FAILURE_CLASSES),
+  ...Object.values(SAFE_AUTHENTICATION_CONFIG_READ_PROXY_FAILURE_CLASSES),
   "application-session-proof-registration-failed",
   "authentication-bootstrap-pre-retirement-drain-failed",
   "authentication-bootstrap-retirement-failed",
@@ -11959,7 +12244,7 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     ["get", true, 599, undefined, "response-5xx"],
     ["get", true, 199, undefined, "response-other-status"],
     ["get", true, 600, undefined, "response-other-status"],
-    ["get", true, undefined, rawSecretUrl, "response-error"],
+    ["get", true, undefined, rawSecretUrl, "response-error-other"],
     [
       "preflight",
       false,
@@ -11972,7 +12257,13 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     ["preflight", true, 400, undefined, "preflight-response-4xx"],
     ["preflight", true, 500, undefined, "preflight-response-5xx"],
     ["preflight", true, 600, undefined, "preflight-response-other-status"],
-    ["preflight", true, undefined, rawSecretUrl, "preflight-response-error"],
+    [
+      "preflight",
+      true,
+      undefined,
+      rawSecretUrl,
+      "preflight-response-error-other",
+    ],
   ];
   for (const [
     requestClass,
@@ -12002,6 +12293,442 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
       return "403";
     },
   };
+  const cdpNetworkErrorReasonFixtures = [
+    ["Aborted", "aborted"],
+    ["BlockedByClient", "blocked"],
+    ["ConnectionReset", "connection"],
+    ["NameNotResolved", "name-resolution"],
+    ["TimedOut", "timeout"],
+    ["Failed", "failed"],
+    [rawSecretUrl, "other"],
+  ];
+  for (const [
+    responseErrorReason,
+    expectedGroup,
+  ] of cdpNetworkErrorReasonFixtures) {
+    const reasonGroup = classifySafeCdpNetworkErrorReason({
+      responseErrorReason,
+    });
+    assert.equal(reasonGroup, expectedGroup);
+    assert.equal(String(reasonGroup).includes(responseErrorReason), false);
+    assert.equal(
+      classifySafeAuthenticationConfigReadResponse({
+        requestClass: "get",
+        responseObserved: true,
+        responseStatusCode: undefined,
+        responseErrorReason,
+      }),
+      `response-error-${expectedGroup}`,
+    );
+    assert.equal(
+      classifySafeAuthenticationConfigReadResponse({
+        requestClass: "preflight",
+        responseObserved: true,
+        responseStatusCode: undefined,
+        responseErrorReason,
+      }),
+      `preflight-response-error-${expectedGroup}`,
+    );
+  }
+  assert.deepEqual(
+    [
+      ...new Set(cdpNetworkErrorReasonFixtures.map(([, group]) => group)),
+    ].sort(),
+    [...SAFE_CDP_NETWORK_ERROR_REASON_GROUPS].sort(),
+  );
+  let cdpNetworkErrorReasonCoercionCount = 0;
+  const cdpNetworkErrorReasonCoercionValue = {
+    toString() {
+      cdpNetworkErrorReasonCoercionCount += 1;
+      return "Failed";
+    },
+    [Symbol.toPrimitive]() {
+      cdpNetworkErrorReasonCoercionCount += 1;
+      return "Failed";
+    },
+  };
+  const cdpNetworkErrorReasonNegativeFixtures = [
+    null,
+    [],
+    {},
+    { responseErrorReason: "" },
+    { responseErrorReason: cdpNetworkErrorReasonCoercionValue },
+    { responseErrorReason: "Failed", extra: rawSecretUrl },
+    Object.defineProperty({}, "responseErrorReason", {
+      enumerable: true,
+      get() {
+        throw new Error(rawSecretUrl);
+      },
+    }),
+    new Proxy(
+      {},
+      {
+        ownKeys() {
+          throw new Error(rawSecretUrl);
+        },
+      },
+    ),
+  ];
+  for (const reasonFixture of cdpNetworkErrorReasonNegativeFixtures) {
+    assert.equal(classifySafeCdpNetworkErrorReason(reasonFixture), null);
+  }
+  assert.equal(cdpNetworkErrorReasonCoercionCount, 0);
+  const proxyLeaseDiagnosticFixtures = [
+    ["issued", 200, 100, true, "issued-active-tunnel"],
+    ["issued", 200, 100, false, "issued-no-active-tunnel"],
+    ["consumed", 200, 100, true, "consumed-active-tunnel"],
+    ["consumed", 200, 100, false, "consumed-no-active-tunnel"],
+    ["issued", 100, 101, true, "expired-active-tunnel"],
+    ["issued", 100, 101, false, "expired-no-active-tunnel"],
+  ];
+  for (const [
+    leaseState,
+    expiresAt,
+    nowMilliseconds,
+    activeTunnelPresent,
+    expectedClass,
+  ] of proxyLeaseDiagnosticFixtures) {
+    assert.equal(
+      classifyBrowserConnectProxyAuthorityLeaseDiagnostic({
+        leaseState,
+        expiresAt,
+        nowMilliseconds,
+        activeTunnelPresent,
+      }),
+      expectedClass,
+    );
+  }
+  assert.deepEqual(
+    proxyLeaseDiagnosticFixtures.map((fixture) => fixture[4]).sort(),
+    [...SAFE_BROWSER_CONNECT_PROXY_AUTHORITY_LEASE_DIAGNOSTIC_CLASSES].sort(),
+  );
+  let proxyLeaseClassifierCoercionCount = 0;
+  const proxyLeaseClassifierCoercionValue = {
+    valueOf() {
+      proxyLeaseClassifierCoercionCount += 1;
+      return 100;
+    },
+    toString() {
+      proxyLeaseClassifierCoercionCount += 1;
+      return "issued";
+    },
+  };
+  const proxyLeaseDiagnosticNegativeFixtures = [
+    null,
+    [],
+    {
+      leaseState: "issued",
+      expiresAt: 200,
+      nowMilliseconds: 100,
+    },
+    {
+      leaseState: "issued",
+      expiresAt: 200,
+      nowMilliseconds: 100,
+      activeTunnelPresent: false,
+      extra: rawSecretUrl,
+    },
+    {
+      leaseState: "other",
+      expiresAt: 200,
+      nowMilliseconds: 100,
+      activeTunnelPresent: false,
+    },
+    {
+      leaseState: "issued",
+      expiresAt: proxyLeaseClassifierCoercionValue,
+      nowMilliseconds: 100,
+      activeTunnelPresent: false,
+    },
+    Object.defineProperty(
+      {
+        leaseState: "issued",
+        expiresAt: 200,
+        activeTunnelPresent: false,
+      },
+      "nowMilliseconds",
+      {
+        enumerable: true,
+        get() {
+          throw new Error(rawSecretUrl);
+        },
+      },
+    ),
+    new Proxy(
+      {},
+      {
+        ownKeys() {
+          throw new Error(rawSecretUrl);
+        },
+      },
+    ),
+  ];
+  for (const leaseFixture of proxyLeaseDiagnosticNegativeFixtures) {
+    assert.equal(
+      classifyBrowserConnectProxyAuthorityLeaseDiagnostic(leaseFixture),
+      null,
+    );
+  }
+  assert.equal(proxyLeaseClassifierCoercionCount, 0);
+  let proxyLeaseDiagnosticNowMilliseconds = 1_000;
+  const proxyLeaseDiagnosticGate = createBrowserConnectProxyGate({
+    allowedHostnames: ["firestore.googleapis.com"],
+    allowedRequestOrigins: ["https://capture.invalid"],
+    fatalOnDeny: false,
+    nowMilliseconds: () => proxyLeaseDiagnosticNowMilliseconds,
+  });
+  const proxyLeaseDiagnosticRequestId = "fixed-proxy-lease-diagnostic";
+  assert.equal(
+    proxyLeaseDiagnosticGate.requestStageAuthorityLeaseDiagnosticClass(
+      proxyLeaseDiagnosticRequestId,
+    ),
+    null,
+  );
+  assert.equal(
+    proxyLeaseDiagnosticGate.requestStageAuthorityLeaseDiagnosticClass(
+      proxyLeaseClassifierCoercionValue,
+    ),
+    null,
+  );
+  assert.equal(proxyLeaseClassifierCoercionCount, 0);
+  proxyLeaseDiagnosticGate.authorizeRequestStage({
+    requestId: proxyLeaseDiagnosticRequestId,
+    requestUrl:
+      "https://firestore.googleapis.com/v1/projects/fixed/databases/(default)/documents/site_settings/config",
+    requestMethod: "GET",
+    requestOrigin: "https://capture.invalid",
+    stage: "browser-launch",
+  });
+  const proxyLeaseSnapshotBeforeRead = proxyLeaseDiagnosticGate.snapshot();
+  assert.equal(
+    proxyLeaseDiagnosticGate.requestStageAuthorityLeaseDiagnosticClass(
+      proxyLeaseDiagnosticRequestId,
+    ),
+    "issued-no-active-tunnel",
+  );
+  assert.deepEqual(
+    proxyLeaseDiagnosticGate.snapshot(),
+    proxyLeaseSnapshotBeforeRead,
+  );
+  proxyLeaseDiagnosticNowMilliseconds = 7_000;
+  assert.equal(
+    proxyLeaseDiagnosticGate.requestStageAuthorityLeaseDiagnosticClass(
+      proxyLeaseDiagnosticRequestId,
+    ),
+    "expired-no-active-tunnel",
+  );
+  proxyLeaseDiagnosticNowMilliseconds = 1_000;
+  assert.equal(
+    proxyLeaseDiagnosticGate.requestStageAuthorityLeaseDiagnosticClass(
+      proxyLeaseDiagnosticRequestId,
+    ),
+    "issued-no-active-tunnel",
+  );
+  proxyLeaseDiagnosticGate.revokeRequestStageAuthorization(
+    proxyLeaseDiagnosticRequestId,
+  );
+  await proxyLeaseDiagnosticGate.close();
+  const activeTunnelFixtureUpstreamSockets = new Set();
+  let resolveActiveTunnelFixtureUpstreamConnected;
+  let resolveActiveTunnelFixtureUpstreamClosed;
+  const activeTunnelFixtureUpstreamConnected = new Promise((resolveFixture) => {
+    resolveActiveTunnelFixtureUpstreamConnected = resolveFixture;
+  });
+  const activeTunnelFixtureUpstreamClosed = new Promise((resolveFixture) => {
+    resolveActiveTunnelFixtureUpstreamClosed = resolveFixture;
+  });
+  const activeTunnelFixtureUpstreamServer = createTcpServer((socket) => {
+    activeTunnelFixtureUpstreamSockets.add(socket);
+    socket.on("error", () => {});
+    socket.once("close", () => {
+      activeTunnelFixtureUpstreamSockets.delete(socket);
+      resolveActiveTunnelFixtureUpstreamClosed();
+    });
+    resolveActiveTunnelFixtureUpstreamConnected();
+  });
+  const activeTunnelFixtureBootstrapRequestId =
+    "fixed-proxy-active-tunnel-bootstrap";
+  const activeTunnelFixtureExactRequestId = "fixed-proxy-active-tunnel-exact";
+  const activeTunnelFixtureUnknownRequestId =
+    "fixed-proxy-active-tunnel-unknown";
+  let activeTunnelFixtureUpstreamAddress = null;
+  let activeTunnelFixtureGate = null;
+  let activeTunnelFixtureClientSocket = null;
+  try {
+    activeTunnelFixtureUpstreamAddress = await withExplicitTimeout(
+      listenOnLoopback(activeTunnelFixtureUpstreamServer),
+      5_000,
+      "The active-tunnel diagnostic fixture did not start its loopback listener.",
+    );
+    activeTunnelFixtureGate = createBrowserConnectProxyGate({
+      allowedHostnames: ["firestore.googleapis.com"],
+      allowedRequestOrigins: ["https://capture.invalid"],
+      fatalOnDeny: false,
+      nowMilliseconds: () => 1_000,
+      connectAllowed: ({ hostname, port }) => {
+        assert.equal(hostname, "firestore.googleapis.com");
+        assert.equal(port, "443");
+        return connectTcp({
+          host: "127.0.0.1",
+          port: activeTunnelFixtureUpstreamAddress.port,
+        });
+      },
+    });
+    const activeTunnelFixtureProxyUrl = await withExplicitTimeout(
+      activeTunnelFixtureGate.start(),
+      5_000,
+      "The active-tunnel diagnostic fixture did not start its loopback proxy.",
+    );
+    activeTunnelFixtureGate.authorizeRequestStage({
+      requestId: activeTunnelFixtureBootstrapRequestId,
+      requestUrl: "https://firestore.googleapis.com/v1/fixture-bootstrap",
+      requestMethod: "GET",
+      requestOrigin: "https://capture.invalid",
+      stage: "browser-launch",
+    });
+    const parsedActiveTunnelFixtureProxyUrl = new URL(
+      activeTunnelFixtureProxyUrl,
+    );
+    let activeTunnelFixtureResponseText = "";
+    let resolveActiveTunnelFixtureReady;
+    let rejectActiveTunnelFixtureReady;
+    const activeTunnelFixtureReady = new Promise(
+      (resolveFixture, rejectFixture) => {
+        resolveActiveTunnelFixtureReady = resolveFixture;
+        rejectActiveTunnelFixtureReady = rejectFixture;
+      },
+    );
+    activeTunnelFixtureClientSocket = connectTcp({
+      host: parsedActiveTunnelFixtureProxyUrl.hostname,
+      port: Number(parsedActiveTunnelFixtureProxyUrl.port),
+    });
+    const activeTunnelFixtureClientClosed = new Promise((resolveFixture) => {
+      activeTunnelFixtureClientSocket.once("close", resolveFixture);
+    });
+    const rejectActiveTunnelFixtureOnError = (error) =>
+      rejectActiveTunnelFixtureReady(error);
+    activeTunnelFixtureClientSocket.once(
+      "error",
+      rejectActiveTunnelFixtureOnError,
+    );
+    activeTunnelFixtureClientSocket.on("data", (chunk) => {
+      try {
+        activeTunnelFixtureResponseText +=
+          Buffer.from(chunk).toString("latin1");
+        if (!activeTunnelFixtureResponseText.includes("\r\n\r\n")) return;
+        assert.match(
+          activeTunnelFixtureResponseText,
+          /^HTTP\/1\.1 200 Connection Established\r\n/iu,
+        );
+        activeTunnelFixtureClientSocket.removeListener(
+          "error",
+          rejectActiveTunnelFixtureOnError,
+        );
+        activeTunnelFixtureClientSocket.on("error", () => {});
+        resolveActiveTunnelFixtureReady();
+      } catch (error) {
+        rejectActiveTunnelFixtureReady(error);
+      }
+    });
+    activeTunnelFixtureClientSocket.once("connect", () => {
+      activeTunnelFixtureClientSocket.write(
+        "CONNECT firestore.googleapis.com:443 HTTP/1.1\r\nHost: firestore.googleapis.com:443\r\n\r\n",
+      );
+    });
+    await withExplicitTimeout(
+      Promise.all([
+        activeTunnelFixtureReady,
+        activeTunnelFixtureUpstreamConnected,
+      ]),
+      5_000,
+      "The active-tunnel diagnostic fixture did not establish its loopback tunnel.",
+    );
+    const activeTunnelFixtureAuthorization =
+      activeTunnelFixtureGate.authorizeRequestStage({
+        requestId: activeTunnelFixtureExactRequestId,
+        requestUrl: exactConfigReadUrl,
+        requestMethod: "GET",
+        requestOrigin: "https://capture.invalid",
+        stage: "browser-launch",
+      });
+    assert.deepEqual(activeTunnelFixtureAuthorization, {
+      activeTunnelPresentAtAuthorization: true,
+      authorityLeaseIssued: true,
+    });
+    activeTunnelFixtureClientSocket.destroy();
+    for (const socket of activeTunnelFixtureUpstreamSockets) socket.destroy();
+    await withExplicitTimeout(
+      Promise.all([
+        activeTunnelFixtureClientClosed,
+        activeTunnelFixtureUpstreamClosed,
+      ]),
+      5_000,
+      "The active-tunnel diagnostic fixture did not close its loopback tunnel.",
+    );
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      if (
+        activeTunnelFixtureGate.snapshot().activeAllowedTunnelResidualCount ===
+        0
+      ) {
+        break;
+      }
+      await new Promise((resolveFixture) => setImmediate(resolveFixture));
+    }
+    assert.equal(
+      activeTunnelFixtureGate.snapshot().activeAllowedTunnelResidualCount,
+      0,
+    );
+    assert.equal(
+      activeTunnelFixtureGate.requestStageAuthorityLeaseDiagnosticClass(
+        activeTunnelFixtureExactRequestId,
+      ),
+      "issued-active-tunnel",
+    );
+    assert.equal(
+      activeTunnelFixtureGate.requestStageAuthorityLeaseDiagnosticClass(
+        activeTunnelFixtureUnknownRequestId,
+      ),
+      null,
+    );
+    activeTunnelFixtureGate.completeRequestStageAuthorization(
+      activeTunnelFixtureBootstrapRequestId,
+    );
+    activeTunnelFixtureGate.revokeRequestStageAuthorization(
+      activeTunnelFixtureExactRequestId,
+    );
+  } finally {
+    activeTunnelFixtureClientSocket?.destroy();
+    for (const socket of activeTunnelFixtureUpstreamSockets) socket.destroy();
+    try {
+      if (activeTunnelFixtureGate) {
+        for (const requestId of [
+          activeTunnelFixtureBootstrapRequestId,
+          activeTunnelFixtureExactRequestId,
+        ]) {
+          if (activeTunnelFixtureGate.hasRequestStageAuthorization(requestId)) {
+            activeTunnelFixtureGate.revokeRequestStageAuthorization(requestId);
+          }
+        }
+        await withExplicitTimeout(
+          activeTunnelFixtureGate.close(),
+          5_000,
+          "The active-tunnel diagnostic fixture did not close its loopback proxy.",
+        );
+      }
+    } finally {
+      if (activeTunnelFixtureUpstreamServer.listening) {
+        await withExplicitTimeout(
+          new Promise((resolveFixture, rejectFixture) =>
+            activeTunnelFixtureUpstreamServer.close((error) =>
+              error ? rejectFixture(error) : resolveFixture(),
+            ),
+          ),
+          5_000,
+          "The active-tunnel diagnostic fixture did not close its loopback listener.",
+        );
+      }
+    }
+  }
   const configReadResponseClassNegativeFixtures = [
     null,
     [],
@@ -12190,10 +12917,102 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
       null,
     );
   }
+  const configReadProxyPrecedenceFixtures = [
+    [
+      "response-error-connection",
+      "issued-no-active-tunnel",
+      "authentication-evaluate-config-read-cdp-proxy-issued-no-active-tunnel-failed",
+    ],
+    [
+      "response-error-timeout",
+      "expired-active-tunnel",
+      "authentication-evaluate-config-read-cdp-proxy-expired-active-tunnel-failed",
+    ],
+    [
+      "preflight-response-error-blocked",
+      "expired-no-active-tunnel",
+      "authentication-evaluate-config-read-cdp-preflight-proxy-expired-no-active-tunnel-failed",
+    ],
+    [
+      "response-error-connection",
+      "consumed-no-active-tunnel",
+      "authentication-evaluate-config-read-cdp-response-error-connection-failed",
+    ],
+    [
+      "response-error-name-resolution",
+      "issued-active-tunnel",
+      "authentication-evaluate-config-read-cdp-response-error-name-resolution-failed",
+    ],
+    [
+      "preflight-response-error-failed",
+      null,
+      "authentication-evaluate-config-read-cdp-preflight-response-error-failed",
+    ],
+  ];
+  for (const [
+    responseClass,
+    proxyLeaseClass,
+    expectedFailureClass,
+  ] of configReadProxyPrecedenceFixtures) {
+    assert.equal(
+      resolveSafeAuthenticationConfigReadFailureClass({
+        responseClass,
+        proxyLeaseClass,
+      }),
+      expectedFailureClass,
+    );
+  }
+  const configReadProxyPrecedenceNegativeFixtures = [
+    null,
+    [],
+    {
+      responseClass: "response-error-failed",
+      proxyLeaseClass: "issued-no-active-tunnel",
+      extra: rawSecretUrl,
+    },
+    {
+      responseClass: "response-4xx",
+      proxyLeaseClass: "expired-no-active-tunnel",
+    },
+    {
+      responseClass: configReadClassifierCoercionValue,
+      proxyLeaseClass: null,
+    },
+    {
+      responseClass: "response-error-failed",
+      proxyLeaseClass: proxyLeaseClassifierCoercionValue,
+    },
+    Object.defineProperty(
+      { responseClass: "response-error-failed" },
+      "proxyLeaseClass",
+      {
+        enumerable: true,
+        get() {
+          throw new Error(rawSecretUrl);
+        },
+      },
+    ),
+    new Proxy(
+      {},
+      {
+        ownKeys() {
+          throw new Error(rawSecretUrl);
+        },
+      },
+    ),
+  ];
+  for (const precedenceFixture of configReadProxyPrecedenceNegativeFixtures) {
+    assert.equal(
+      resolveSafeAuthenticationConfigReadFailureClass(precedenceFixture),
+      null,
+    );
+  }
+  assert.equal(configReadClassifierCoercionCount, 0);
+  assert.equal(proxyLeaseClassifierCoercionCount, 0);
   assert.equal(
     authenticationConfigReadOutcomeAfterLifecycle(
       "response-4xx",
-      "response-error",
+      "response-error-aborted",
       "post-final-error",
     ),
     "response-4xx",
@@ -12201,16 +13020,40 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
   assert.equal(
     authenticationConfigReadOutcomeAfterLifecycle(
       "handler-before-response",
-      "response-error",
+      "response-error-failed",
       "primary",
     ),
-    "response-error",
+    "response-error-failed",
   );
   assert.equal(
     authenticationConfigReadOutcomeAfterLifecycle(
       rawSecretUrl,
-      "response-error",
+      "response-error-other",
       "primary",
+    ),
+    null,
+  );
+  assert.equal(
+    authenticationConfigReadProxyLeaseAfterLifecycle(
+      "consumed-no-active-tunnel",
+      "expired-no-active-tunnel",
+      "post-final-error",
+    ),
+    "consumed-no-active-tunnel",
+  );
+  assert.equal(
+    authenticationConfigReadProxyLeaseAfterLifecycle(
+      "issued-no-active-tunnel",
+      "consumed-active-tunnel",
+      "primary",
+    ),
+    "consumed-active-tunnel",
+  );
+  assert.equal(
+    authenticationConfigReadProxyLeaseAfterLifecycle(
+      rawSecretUrl,
+      "consumed-active-tunnel",
+      "post-final-error",
     ),
     null,
   );
@@ -12348,6 +13191,7 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
   const boundedAuthenticationEvaluationFailureClassFixtures = [
     ...Object.values(SAFE_AUTHENTICATION_EVALUATION_FAILURE_CLASSES),
     ...Object.values(SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_FAILURE_CLASSES),
+    ...Object.values(SAFE_AUTHENTICATION_CONFIG_READ_PROXY_FAILURE_CLASSES),
     "application-session-proof-registration-failed",
   ];
   assert.equal(
@@ -12420,6 +13264,30 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
   assert.equal(
     new Set(serializedConfigReadResponseFailures).size,
     SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_CLASSES.length,
+  );
+  const serializedConfigReadProxyFailures = Object.values(
+    SAFE_AUTHENTICATION_CONFIG_READ_PROXY_FAILURE_CLASSES,
+  ).map((failureClass) => {
+    const serialized = serializeSafeAuthenticationFailure(
+      createSafeAuthenticationFailureDiagnostic({
+        failureClass,
+        stage: "baseline",
+        captureRole: "admin",
+        authRole: "admin",
+        viewport: "1440x900",
+        pageState: saturatedState,
+      }),
+      forbiddenValues,
+    );
+    for (const forbiddenValue of forbiddenValues) {
+      assert.equal(serialized.includes(forbiddenValue), false);
+    }
+    assert.equal(JWT_PATTERN.test(serialized), false);
+    return serialized;
+  });
+  assert.equal(
+    new Set(serializedConfigReadProxyFailures).size,
+    Object.keys(SAFE_AUTHENTICATION_CONFIG_READ_PROXY_FAILURE_CLASSES).length,
   );
   assert.equal(
     safeAuthenticationConfigReadResponseFailureClass(rawSecretUrl),
@@ -12688,8 +13556,25 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
       configReadResponseClassNegativeFixtures.length,
     safeAuthenticationConfigReadResponseFailureClassFixtureCount:
       serializedConfigReadResponseFailures.length,
+    safeAuthenticationConfigReadProxyFailureClassFixtureCount:
+      serializedConfigReadProxyFailures.length,
+    safeAuthenticationConfigReadErrorReasonFixtureCount:
+      cdpNetworkErrorReasonFixtures.length,
+    safeAuthenticationConfigReadErrorReasonNegativeFixtureCount:
+      cdpNetworkErrorReasonNegativeFixtures.length,
+    safeAuthenticationConfigReadProxyLeaseFixtureCount:
+      proxyLeaseDiagnosticFixtures.length,
+    safeAuthenticationConfigReadProxyLeaseNegativeFixtureCount:
+      proxyLeaseDiagnosticNegativeFixtures.length,
+    safeAuthenticationConfigReadProxyPrecedenceFixtureCount:
+      configReadProxyPrecedenceFixtures.length,
+    safeAuthenticationConfigReadRawNetworkValueOutputCount: 0,
     safeAuthenticationConfigReadClassifierCoercionCount:
       configReadClassifierCoercionCount,
+    safeAuthenticationConfigReadErrorReasonCoercionCount:
+      cdpNetworkErrorReasonCoercionCount,
+    safeAuthenticationConfigReadProxyLeaseCoercionCount:
+      proxyLeaseClassifierCoercionCount,
     safeAuthenticationBootstrapRetirementFailureClassFixtureCount:
       authenticationBootstrapRetirementFailureClassFixtures.length,
   };
@@ -23794,6 +24679,7 @@ const authenticate = async (
     prepareApplicationNavigation,
     unregisterApplicationSessionProof,
     collectAuthenticationConfigReadResponseClass,
+    collectAuthenticationConfigReadProxyLeaseClass,
   },
 ) => {
   let failureClass = "navigation-failed";
@@ -23828,16 +24714,24 @@ const authenticate = async (
       SAFE_AUTHENTICATION_EVALUATION_FAILURE_CLASSES["config-read"]
     ) {
       let configReadResponseClass = null;
+      let configReadProxyLeaseClass = null;
       try {
         configReadResponseClass =
           collectAuthenticationConfigReadResponseClass();
       } catch {
         // The bounded CDP diagnostic is optional and fails closed.
       }
+      try {
+        configReadProxyLeaseClass =
+          collectAuthenticationConfigReadProxyLeaseClass();
+      } catch {
+        // The bounded proxy diagnostic is optional and fails closed.
+      }
       const configReadResponseFailureClass =
-        safeAuthenticationConfigReadResponseFailureClass(
-          configReadResponseClass,
-        );
+        resolveSafeAuthenticationConfigReadFailureClass({
+          responseClass: configReadResponseClass,
+          proxyLeaseClass: configReadProxyLeaseClass,
+        });
       if (configReadResponseFailureClass !== null) {
         failureClass = configReadResponseFailureClass;
       }
@@ -26866,6 +27760,8 @@ try {
     let groupAuthenticationConfigReadGetRequestObserved = false;
     let groupAuthenticationConfigReadGetOutcomeClass = null;
     let groupAuthenticationConfigReadPreflightOutcomeClass = null;
+    let groupAuthenticationConfigReadGetProxyLeaseClass = null;
+    let groupAuthenticationConfigReadPreflightProxyLeaseClass = null;
     const allowedEgressLifecycleByFetchRequestId = new Map();
     const allowedEgressFetchRequestIdsByNetworkId = new Map();
     const cdpHandlerDiagnosticContexts = new WeakMap();
@@ -27172,6 +28068,31 @@ try {
           } else {
             groupAuthenticationConfigReadPreflightOutcomeClass =
               nextOutcomeClass;
+          }
+          if (responseStageDecision.kind === "response-error") {
+            const previousProxyLeaseClass =
+              authenticationConfigReadRequestClass === "get"
+                ? groupAuthenticationConfigReadGetProxyLeaseClass
+                : groupAuthenticationConfigReadPreflightProxyLeaseClass;
+            const observedProxyLeaseClass =
+              lifecycleDecision.kind === "primary"
+                ? browserConnectProxy.requestStageAuthorityLeaseDiagnosticClass(
+                    primaryRequestId,
+                  )
+                : null;
+            const nextProxyLeaseClass =
+              authenticationConfigReadProxyLeaseAfterLifecycle(
+                previousProxyLeaseClass,
+                observedProxyLeaseClass,
+                lifecycleDecision.kind,
+              );
+            if (authenticationConfigReadRequestClass === "get") {
+              groupAuthenticationConfigReadGetProxyLeaseClass =
+                nextProxyLeaseClass;
+            } else {
+              groupAuthenticationConfigReadPreflightProxyLeaseClass =
+                nextProxyLeaseClass;
+            }
           }
         }
         if (lifecycleDecision.kind === "post-final-error") {
@@ -28535,9 +29456,11 @@ try {
           if (authenticationConfigReadRequestClass === "get") {
             groupAuthenticationConfigReadGetRequestObserved = true;
             groupAuthenticationConfigReadGetOutcomeClass = initialResponseClass;
+            groupAuthenticationConfigReadGetProxyLeaseClass = null;
           } else {
             groupAuthenticationConfigReadPreflightOutcomeClass =
               initialResponseClass;
+            groupAuthenticationConfigReadPreflightProxyLeaseClass = null;
           }
         }
         const listenerInspection = inspectNetworkRequest({
@@ -28897,6 +29820,17 @@ try {
               responseClass,
             )
               ? responseClass
+              : null;
+          },
+          collectAuthenticationConfigReadProxyLeaseClass: () => {
+            const proxyLeaseClass =
+              groupAuthenticationConfigReadGetRequestObserved
+                ? groupAuthenticationConfigReadGetProxyLeaseClass
+                : groupAuthenticationConfigReadPreflightProxyLeaseClass;
+            return SAFE_BROWSER_CONNECT_PROXY_AUTHORITY_LEASE_DIAGNOSTIC_CLASSES.includes(
+              proxyLeaseClass,
+            )
+              ? proxyLeaseClass
               : null;
           },
         },
