@@ -11354,6 +11354,28 @@ const resolveSafeAuthenticationConfigReadResponseOutcome = (input) => {
     return null;
   }
 };
+const authenticationConfigReadOutcomeAfterLifecycle = (
+  previousOutcomeClass,
+  responseClass,
+  lifecycleKind,
+) => {
+  const previousOutcomeValid =
+    previousOutcomeClass === null ||
+    SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_CLASSES.includes(
+      previousOutcomeClass,
+    );
+  const responseClassValid =
+    responseClass === null ||
+    SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_CLASSES.includes(responseClass);
+  if (
+    !previousOutcomeValid ||
+    !responseClassValid ||
+    !["primary", "post-final-error"].includes(lifecycleKind)
+  ) {
+    return null;
+  }
+  return lifecycleKind === "primary" ? responseClass : previousOutcomeClass;
+};
 const SAFE_AUTHENTICATION_FAILURE_CLASSES = Object.freeze([
   "navigation-failed",
   "authentication-evaluate-failed",
@@ -12168,6 +12190,38 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
       null,
     );
   }
+  assert.equal(
+    authenticationConfigReadOutcomeAfterLifecycle(
+      "response-4xx",
+      "response-error",
+      "post-final-error",
+    ),
+    "response-4xx",
+  );
+  assert.equal(
+    authenticationConfigReadOutcomeAfterLifecycle(
+      "handler-before-response",
+      "response-error",
+      "primary",
+    ),
+    "response-error",
+  );
+  assert.equal(
+    authenticationConfigReadOutcomeAfterLifecycle(
+      rawSecretUrl,
+      "response-error",
+      "primary",
+    ),
+    null,
+  );
+  assert.equal(
+    authenticationConfigReadOutcomeAfterLifecycle(
+      "response-2xx",
+      configReadClassifierCoercionValue,
+      "primary",
+    ),
+    null,
+  );
   assert.equal(
     runConfigReadResponseTransitionFixture({
       requestClass: "preflight",
@@ -27074,6 +27128,7 @@ try {
           authenticationConfigReadRequestClassesByFetchRequestId.get(
             primaryRequestId,
           ) || null;
+        let authenticationConfigReadResponseClass = null;
         if (authenticationConfigReadRequestClass !== null) {
           const observedAuthenticationConfigReadRequestClass =
             classifyExactAuthenticationConfigReadRequest({
@@ -27081,7 +27136,7 @@ try {
               method: event.request.method,
               phase: requestCaptureScope.phase,
             });
-          const responseClass =
+          authenticationConfigReadResponseClass =
             resolveSafeAuthenticationConfigReadResponseOutcome({
               requestClass: authenticationConfigReadRequestClass,
               observedRequestClass:
@@ -27089,11 +27144,6 @@ try {
               responseStatusCode: event.responseStatusCode,
               responseErrorReason: event.responseErrorReason,
             });
-          if (authenticationConfigReadRequestClass === "get") {
-            groupAuthenticationConfigReadGetOutcomeClass = responseClass;
-          } else {
-            groupAuthenticationConfigReadPreflightOutcomeClass = responseClass;
-          }
         }
         const lifecycleDecision = allowedEgressResponseLifecycleDecision({
           lifecycleState: lifecycle.state,
@@ -27106,6 +27156,24 @@ try {
           true,
           "A response-stage request pause had an invalid lifecycle transition.",
         );
+        if (authenticationConfigReadRequestClass !== null) {
+          const previousOutcomeClass =
+            authenticationConfigReadRequestClass === "get"
+              ? groupAuthenticationConfigReadGetOutcomeClass
+              : groupAuthenticationConfigReadPreflightOutcomeClass;
+          const nextOutcomeClass =
+            authenticationConfigReadOutcomeAfterLifecycle(
+              previousOutcomeClass,
+              authenticationConfigReadResponseClass,
+              lifecycleDecision.kind,
+            );
+          if (authenticationConfigReadRequestClass === "get") {
+            groupAuthenticationConfigReadGetOutcomeClass = nextOutcomeClass;
+          } else {
+            groupAuthenticationConfigReadPreflightOutcomeClass =
+              nextOutcomeClass;
+          }
+        }
         if (lifecycleDecision.kind === "post-final-error") {
           // Chromium can re-pause a streamed response with its body error after
           // final headers were released. Preserve that original terminal error.
