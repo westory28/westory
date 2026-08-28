@@ -22142,8 +22142,6 @@ const authenticateCore = async (
         await import("https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js");
       const appCheckModule =
         await import("https://www.gstatic.com/firebasejs/12.9.0/firebase-app-check.js");
-      const firestoreModule =
-        await import("https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js");
       if (
         Object.prototype.hasOwnProperty.call(globalThis, runtimeKey) ||
         appModule.getApps().length !== 0
@@ -22225,18 +22223,79 @@ const authenticateCore = async (
       ) {
         throw new Error("VISUAL_APPLICATION_SESSION_ATTESTATION_FAILED");
       }
-      const database = firestoreModule.getFirestore(app);
       // Prove the freshly opened session can cross the same canUseWestory()
-      // fence as the dashboard listeners. The document may be absent; a
-      // permission denial still rejects getDoc before the snapshot is returned.
-      await firestoreModule.getDoc(
-        firestoreModule.doc(database, "site_settings", "schedule_categories"),
+      // fence as the dashboard listeners without creating an auxiliary
+      // Firestore WebChannel. Both one-shot REST reads must carry the same Auth
+      // and App Check authority, and neither response is exposed to Node. The
+      // fixture guarantees site_settings/config exists, so both reads are
+      // required to return 200 and remain inside the zero-HTTP-error contract.
+      let protectedReadIdToken = await authModule.getIdToken(
+        credentialResult.user,
       );
-      const profileSnapshot = await firestoreModule.getDoc(
-        firestoreModule.doc(database, "users", credentialResult.user.uid),
+      let protectedReadAppCheckToken = String(
+        (await appCheckModule.getToken(auxiliaryAppCheck)).token || "",
       );
-      if (!profileSnapshot.exists()) throw new Error("VISUAL_PROFILE_MISSING");
-      const profile = profileSnapshot.data();
+      if (!protectedReadAppCheckToken) {
+        throw new Error("VISUAL_PROTECTED_READ_APPCHECK_TOKEN_MISSING");
+      }
+      const firestoreDocumentsBase = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(
+        config.projectId,
+      )}/databases/(default)/documents`;
+      let profileDocument = null;
+      let protectedReadHeaders = null;
+      try {
+        protectedReadHeaders = {
+          Authorization: `Bearer ${protectedReadIdToken}`,
+          "X-Firebase-AppCheck": protectedReadAppCheckToken,
+        };
+        const protectedConfigResponse = await fetch(
+          `${firestoreDocumentsBase}/site_settings/config`,
+          {
+            headers: protectedReadHeaders,
+            redirect: "error",
+          },
+        );
+        if (protectedConfigResponse.status !== 200) {
+          throw new Error("VISUAL_PROTECTED_READ_FENCE_FAILED");
+        }
+        await protectedConfigResponse.arrayBuffer();
+        const profileResponse = await fetch(
+          `${firestoreDocumentsBase}/users/${encodeURIComponent(
+            credentialResult.user.uid,
+          )}`,
+          {
+            headers: protectedReadHeaders,
+            redirect: "error",
+          },
+        );
+        if (profileResponse.status !== 200) {
+          throw new Error("VISUAL_PROFILE_MISSING");
+        }
+        profileDocument = await profileResponse.json();
+      } finally {
+        if (protectedReadHeaders) {
+          protectedReadHeaders.Authorization = "";
+          protectedReadHeaders["X-Firebase-AppCheck"] = "";
+          protectedReadHeaders = null;
+        }
+        protectedReadIdToken = "";
+        protectedReadAppCheckToken = "";
+      }
+      const profileFields = profileDocument?.fields || {};
+      const profile = {
+        email: String(profileFields.email?.stringValue || ""),
+        role: String(profileFields.role?.stringValue || ""),
+        teacherPortalEnabled:
+          profileFields.teacherPortalEnabled?.booleanValue === true,
+        staffPermissions: Array.isArray(
+          profileFields.staffPermissions?.arrayValue?.values,
+        )
+          ? profileFields.staffPermissions.arrayValue.values.map((value) =>
+              String(value?.stringValue || ""),
+            )
+          : [],
+      };
+      profileDocument = null;
       const identity = {
         uid: credentialResult.user.uid,
         email: credentialResult.user.email || "",
@@ -22266,7 +22325,7 @@ const authenticateCore = async (
         configurable: true,
         enumerable: false,
         writable: false,
-        value: Object.freeze({ app, appModule, database, firestoreModule }),
+        value: Object.freeze({ app, appModule }),
       });
       return identity;
     },
@@ -22296,13 +22355,9 @@ const authenticateCore = async (
       ) {
         throw new Error("VISUAL_AUTH_BOOTSTRAP_RUNTIME_MISSING");
       }
-      const { app, appModule, database, firestoreModule } = descriptor.value;
+      const { app, appModule } = descriptor.value;
       try {
-        try {
-          await firestoreModule.terminate(database);
-        } finally {
-          await appModule.deleteApp(app);
-        }
+        await appModule.deleteApp(app);
       } finally {
         delete globalThis[runtimeKey];
       }
