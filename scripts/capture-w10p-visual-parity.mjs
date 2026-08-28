@@ -10776,6 +10776,7 @@ const summarizeSafeFirestoreWebChannelAuthBindings = ({
 const SAFE_AUTHENTICATION_FAILURE_CLASSES = Object.freeze([
   "navigation-failed",
   "authentication-evaluate-failed",
+  "auth-persistence-migration-failed",
   "post-auth-reload-failed",
   "post-reload-route-wait-failed",
   "stability-delay-failed",
@@ -11183,6 +11184,17 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     }),
   );
   const diagnostic = rolePairDiagnostics[0];
+  assert.equal(
+    createSafeAuthenticationFailureDiagnostic({
+      failureClass: "auth-persistence-migration-failed",
+      stage: "candidate",
+      captureRole: "student",
+      authRole: "student",
+      viewport: "1440x900",
+      pageState: saturatedState,
+    }).failureClass,
+    "auth-persistence-migration-failed",
+  );
   assert.deepEqual(Object.keys(diagnostic), [
     "schemaVersion",
     "failureClass",
@@ -21687,6 +21699,38 @@ const authenticateCore = async (
     },
   );
   registerApplicationSessionProof(identity.applicationSessionProof);
+  // The app restores desktop Auth from IndexedDB first. Register the protected
+  // session proof before migrating capture-only persistence so any storage
+  // notification remains attributable, then require the same user on both
+  // sides of the completed migration before the first application reload.
+  setFailureClass("auth-persistence-migration-failed");
+  const persistedUid = await page.evaluate(
+    async ({ config, expectedUid }) => {
+      const appModule =
+        await import("https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js");
+      const authModule =
+        await import("https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js");
+      const app = appModule.initializeApp(config);
+      const auth = authModule.getAuth(app);
+      if (auth.currentUser?.uid !== expectedUid) {
+        throw new Error("VISUAL_AUTH_PERSISTENCE_SOURCE_MISMATCH");
+      }
+      await authModule.setPersistence(
+        auth,
+        authModule.indexedDBLocalPersistence,
+      );
+      if (auth.currentUser?.uid !== expectedUid) {
+        throw new Error("VISUAL_AUTH_PERSISTENCE_MIGRATION_FAILED");
+      }
+      return auth.currentUser.uid;
+    },
+    { config: firebaseConfig, expectedUid: identity.uid },
+  );
+  assert.equal(
+    persistedUid,
+    identity.uid,
+    "The authenticated identity changed during persistence migration.",
+  );
   setFailureClass("post-auth-reload-failed");
   await page.reload({ waitUntil: "domcontentloaded" });
   const expectedAuthenticatedRoute =
