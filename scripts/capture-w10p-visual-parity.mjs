@@ -11125,9 +11125,25 @@ const summarizeSafeFirestoreWebChannelAuthBindings = ({
           activeRouteInitialBindings.length,
   });
 };
+const AUTHENTICATION_EVALUATION_STEP_RUNTIME_KEY =
+  "__w10pAuthenticationEvaluationStep";
+const SAFE_AUTHENTICATION_EVALUATION_FAILURE_CLASSES = Object.freeze({
+  "module-import": "authentication-evaluate-module-import-failed",
+  "runtime-init": "authentication-evaluate-runtime-init-failed",
+  "app-check-token": "authentication-evaluate-app-check-token-failed",
+  "auth-sign-in": "authentication-evaluate-auth-sign-in-failed",
+  "session-open": "authentication-evaluate-session-open-failed",
+  "session-attestation": "authentication-evaluate-session-attestation-failed",
+  "protected-token": "authentication-evaluate-protected-token-failed",
+  "config-read": "authentication-evaluate-config-read-failed",
+  "profile-read": "authentication-evaluate-profile-read-failed",
+  "identity-finalize": "authentication-evaluate-identity-finalize-failed",
+});
 const SAFE_AUTHENTICATION_FAILURE_CLASSES = Object.freeze([
   "navigation-failed",
   "authentication-evaluate-failed",
+  ...Object.values(SAFE_AUTHENTICATION_EVALUATION_FAILURE_CLASSES),
+  "application-session-proof-registration-failed",
   "authentication-bootstrap-pre-retirement-drain-failed",
   "authentication-bootstrap-retirement-failed",
   "authentication-bootstrap-post-retirement-drain-failed",
@@ -11208,6 +11224,128 @@ const unavailableSafeAuthenticationPageStates = Object.freeze(
   ),
 );
 const AUTHENTICATION_DIAGNOSTIC_TIMEOUT_MS = 1_000;
+const collectSafeAuthenticationEvaluationFailureClass = async (
+  page,
+  expectedAttemptId,
+) => {
+  let diagnosticTimeout = null;
+  try {
+    if (
+      !page ||
+      typeof page.isClosed !== "function" ||
+      typeof page.evaluate !== "function" ||
+      typeof expectedAttemptId !== "string" ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(
+        expectedAttemptId,
+      ) ||
+      page.isClosed()
+    ) {
+      return null;
+    }
+    const outcome = await Promise.race([
+      Promise.resolve(
+        page.evaluate(
+          ({ runtimeKey, expectedAttemptId, failureClasses }) => {
+            try {
+              const runtimeDescriptor = Object.getOwnPropertyDescriptor(
+                globalThis,
+                runtimeKey,
+              );
+              if (
+                !runtimeDescriptor ||
+                !Object.prototype.hasOwnProperty.call(
+                  runtimeDescriptor,
+                  "value",
+                ) ||
+                runtimeDescriptor.get !== undefined ||
+                runtimeDescriptor.set !== undefined
+              ) {
+                return null;
+              }
+              const marker = runtimeDescriptor.value;
+              if (
+                !marker ||
+                typeof marker !== "object" ||
+                Array.isArray(marker)
+              ) {
+                return null;
+              }
+              const markerDescriptors =
+                Object.getOwnPropertyDescriptors(marker);
+              if (
+                Object.keys(markerDescriptors).sort().join(",") !==
+                "attemptId,step"
+              ) {
+                return null;
+              }
+              const attemptIdDescriptor = markerDescriptors.attemptId;
+              const stepDescriptor = markerDescriptors.step;
+              if (
+                !Object.prototype.hasOwnProperty.call(
+                  attemptIdDescriptor,
+                  "value",
+                ) ||
+                attemptIdDescriptor.get !== undefined ||
+                attemptIdDescriptor.set !== undefined ||
+                !Object.prototype.hasOwnProperty.call(
+                  stepDescriptor,
+                  "value",
+                ) ||
+                stepDescriptor.get !== undefined ||
+                stepDescriptor.set !== undefined
+              ) {
+                return null;
+              }
+              const attemptId = attemptIdDescriptor.value;
+              const step = stepDescriptor.value;
+              if (
+                attemptId !== expectedAttemptId ||
+                typeof step !== "string" ||
+                !Object.prototype.hasOwnProperty.call(failureClasses, step)
+              ) {
+                return null;
+              }
+              const failureClass = failureClasses[step];
+              return typeof failureClass === "string" ? failureClass : null;
+            } catch {
+              return null;
+            } finally {
+              try {
+                delete globalThis[runtimeKey];
+              } catch {
+                // The diagnostic remains fail-closed when cleanup is unavailable.
+              }
+            }
+          },
+          {
+            runtimeKey: AUTHENTICATION_EVALUATION_STEP_RUNTIME_KEY,
+            expectedAttemptId,
+            failureClasses: SAFE_AUTHENTICATION_EVALUATION_FAILURE_CLASSES,
+          },
+        ),
+      ).then(
+        (value) => ({ status: "resolved", value }),
+        () => ({ status: "evaluate-failed", value: null }),
+      ),
+      new Promise((resolveDiagnosticTimeout) => {
+        diagnosticTimeout = setTimeout(
+          () => resolveDiagnosticTimeout({ status: "timed-out", value: null }),
+          AUTHENTICATION_DIAGNOSTIC_TIMEOUT_MS,
+        );
+      }),
+    ]);
+    if (outcome.status !== "resolved") return null;
+    return Object.values(
+      SAFE_AUTHENTICATION_EVALUATION_FAILURE_CLASSES,
+    ).includes(outcome.value)
+      ? outcome.value
+      : null;
+  } catch {
+    return null;
+  } finally {
+    if (diagnosticTimeout !== null) clearTimeout(diagnosticTimeout);
+  }
+};
 const evaluateSafeAuthenticationPageState = ({
   expectedRoute,
   testSnapshot = null,
@@ -11569,6 +11707,28 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     ),
     authenticationBootstrapRetirementFailureClassFixtures,
   );
+  const boundedAuthenticationEvaluationFailureClassFixtures = [
+    ...Object.values(SAFE_AUTHENTICATION_EVALUATION_FAILURE_CLASSES),
+    "application-session-proof-registration-failed",
+  ];
+  assert.equal(
+    new Set(boundedAuthenticationEvaluationFailureClassFixtures).size,
+    boundedAuthenticationEvaluationFailureClassFixtures.length,
+  );
+  assert.deepEqual(
+    boundedAuthenticationEvaluationFailureClassFixtures.map(
+      (failureClass) =>
+        createSafeAuthenticationFailureDiagnostic({
+          failureClass,
+          stage: "baseline",
+          captureRole: "admin",
+          authRole: "admin",
+          viewport: "1440x900",
+          pageState: saturatedState,
+        }).failureClass,
+    ),
+    boundedAuthenticationEvaluationFailureClassFixtures,
+  );
   assert.deepEqual(Object.keys(diagnostic), [
     "schemaVersion",
     "failureClass",
@@ -11596,6 +11756,91 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     diagnostic,
     forbiddenValues,
   );
+  const safeEvaluationAttemptId = "11111111-1111-4111-8111-111111111111";
+  let safeEvaluationMarkerCleanupCount = 0;
+  const collectEvaluationFailureClassFixture = (
+    marker,
+    { runtimeAccessorError = null } = {},
+  ) =>
+    collectSafeAuthenticationEvaluationFailureClass(
+      {
+        isClosed: () => false,
+        evaluate: async (evaluator, evaluatorArguments) => {
+          Object.defineProperty(
+            globalThis,
+            evaluatorArguments.runtimeKey,
+            runtimeAccessorError === null
+              ? {
+                  configurable: true,
+                  enumerable: false,
+                  writable: true,
+                  value: marker,
+                }
+              : {
+                  configurable: true,
+                  enumerable: false,
+                  get() {
+                    throw runtimeAccessorError;
+                  },
+                },
+          );
+          try {
+            return evaluator(evaluatorArguments);
+          } finally {
+            assert.equal(
+              Object.prototype.hasOwnProperty.call(
+                globalThis,
+                evaluatorArguments.runtimeKey,
+              ),
+              false,
+            );
+            safeEvaluationMarkerCleanupCount += 1;
+          }
+        },
+      },
+      safeEvaluationAttemptId,
+    );
+  assert.equal(
+    await collectEvaluationFailureClassFixture({
+      attemptId: safeEvaluationAttemptId,
+      step: "module-import",
+    }),
+    SAFE_AUTHENTICATION_EVALUATION_FAILURE_CLASSES["module-import"],
+  );
+  assert.equal(
+    await collectEvaluationFailureClassFixture({
+      attemptId: safeEvaluationAttemptId,
+      step: rawSecretUrl,
+    }),
+    null,
+  );
+  assert.equal(
+    await collectEvaluationFailureClassFixture(
+      new Proxy(
+        {},
+        {
+          ownKeys() {
+            throw new Error(rawSecretUrl);
+          },
+        },
+      ),
+    ),
+    null,
+  );
+  assert.equal(
+    await collectEvaluationFailureClassFixture(null, {
+      runtimeAccessorError: new Error(rawSecretUrl),
+    }),
+    null,
+  );
+  assert.equal(
+    await collectEvaluationFailureClassFixture({
+      attemptId: "22222222-2222-4222-8222-222222222222",
+      step: "profile-read",
+    }),
+    null,
+  );
+  assert.equal(safeEvaluationMarkerCleanupCount, 5);
   assert.notEqual(
     serializeSafeAuthenticationFailure(rolePairDiagnostics[2], forbiddenValues),
     serializeSafeAuthenticationFailure(rolePairDiagnostics[3], forbiddenValues),
@@ -22431,6 +22676,7 @@ const authenticateCore = async (
   prepareAuthenticationBootstrapRetirement,
   confirmAuthenticationBootstrapRetirement,
   prepareApplicationNavigation,
+  authenticationEvaluationAttemptId,
 ) => {
   setFailureClass("navigation-failed");
   const authenticationBootstrapUrl = new URL(
@@ -22487,13 +22733,45 @@ const authenticateCore = async (
   });
   setFailureClass("authentication-evaluate-failed");
   const identity = await page.evaluate(
-    async ({ email, password, config, functionsRegion, runtimeKey }) => {
+    async ({
+      email,
+      password,
+      config,
+      functionsRegion,
+      runtimeKey,
+      evaluationStepRuntimeKey,
+      evaluationAttemptId,
+    }) => {
+      if (
+        Object.prototype.hasOwnProperty.call(
+          globalThis,
+          evaluationStepRuntimeKey,
+        )
+      ) {
+        throw new Error("VISUAL_AUTH_EVALUATION_STEP_RUNTIME_RESIDUAL");
+      }
+      Object.defineProperty(globalThis, evaluationStepRuntimeKey, {
+        configurable: true,
+        enumerable: false,
+        writable: true,
+        value: Object.freeze({
+          attemptId: evaluationAttemptId,
+          step: "module-import",
+        }),
+      });
+      const setEvaluationStep = (step) => {
+        globalThis[evaluationStepRuntimeKey] = Object.freeze({
+          attemptId: evaluationAttemptId,
+          step,
+        });
+      };
       const appModule =
         await import("https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js");
       const authModule =
         await import("https://www.gstatic.com/firebasejs/12.9.0/firebase-auth.js");
       const appCheckModule =
         await import("https://www.gstatic.com/firebasejs/12.9.0/firebase-app-check.js");
+      setEvaluationStep("runtime-init");
       if (
         Object.prototype.hasOwnProperty.call(globalThis, runtimeKey) ||
         appModule.getApps().length !== 0
@@ -22501,6 +22779,7 @@ const authenticateCore = async (
         throw new Error("VISUAL_AUTH_BOOTSTRAP_RUNTIME_RESIDUAL");
       }
       const app = appModule.initializeApp(config);
+      setEvaluationStep("app-check-token");
       const auxiliaryAppCheck = appCheckModule.initializeAppCheck(app, {
         provider: new appCheckModule.CustomProvider({
           getToken: async () => {
@@ -22518,6 +22797,7 @@ const authenticateCore = async (
         auxiliaryAppCheckToken.token,
       );
       auxiliaryAppCheckToken = null;
+      setEvaluationStep("auth-sign-in");
       const auth = authModule.getAuth(app);
       await authModule.setPersistence(auth, authModule.browserLocalPersistence);
       const credentialResult = await authModule.signInWithEmailAndPassword(
@@ -22530,6 +22810,7 @@ const authenticateCore = async (
       let applicationSessionIdToken = await authModule.getIdToken(
         credentialResult.user,
       );
+      setEvaluationStep("session-open");
       let applicationSessionResponse;
       try {
         applicationSessionResponse = await fetch(
@@ -22560,6 +22841,7 @@ const authenticateCore = async (
       } catch {
         throw new Error("VISUAL_APPLICATION_SESSION_RESPONSE_INVALID");
       }
+      setEvaluationStep("session-attestation");
       if (!applicationSessionResponse.ok || applicationSessionEnvelope?.error) {
         throw new Error("VISUAL_APPLICATION_SESSION_OPEN_FAILED");
       }
@@ -22581,6 +22863,7 @@ const authenticateCore = async (
       // and App Check authority, and neither response is exposed to Node. The
       // fixture guarantees site_settings/config exists, so both reads are
       // required to return 200 and remain inside the zero-HTTP-error contract.
+      setEvaluationStep("protected-token");
       let protectedReadIdToken = await authModule.getIdToken(
         credentialResult.user,
       );
@@ -22600,6 +22883,7 @@ const authenticateCore = async (
           Authorization: `Bearer ${protectedReadIdToken}`,
           "X-Firebase-AppCheck": protectedReadAppCheckToken,
         };
+        setEvaluationStep("config-read");
         const protectedConfigResponse = await fetch(
           `${firestoreDocumentsBase}/site_settings/config`,
           {
@@ -22611,6 +22895,7 @@ const authenticateCore = async (
           throw new Error("VISUAL_PROTECTED_READ_FENCE_FAILED");
         }
         await protectedConfigResponse.arrayBuffer();
+        setEvaluationStep("profile-read");
         const profileResponse = await fetch(
           `${firestoreDocumentsBase}/users/${encodeURIComponent(
             credentialResult.user.uid,
@@ -22633,6 +22918,7 @@ const authenticateCore = async (
         protectedReadIdToken = "";
         protectedReadAppCheckToken = "";
       }
+      setEvaluationStep("identity-finalize");
       const profileFields = profileDocument?.fields || {};
       const profile = {
         email: String(profileFields.email?.stringValue || ""),
@@ -22679,6 +22965,7 @@ const authenticateCore = async (
         writable: false,
         value: Object.freeze({ app, appModule }),
       });
+      delete globalThis[evaluationStepRuntimeKey];
       return identity;
     },
     {
@@ -22686,8 +22973,11 @@ const authenticateCore = async (
       config: firebaseConfig,
       functionsRegion: STAGING_FUNCTIONS_REGION,
       runtimeKey: AUTHENTICATION_BOOTSTRAP_RUNTIME_KEY,
+      evaluationStepRuntimeKey: AUTHENTICATION_EVALUATION_STEP_RUNTIME_KEY,
+      evaluationAttemptId: authenticationEvaluationAttemptId,
     },
   );
+  setFailureClass("application-session-proof-registration-failed");
   registerApplicationSessionProof(identity.applicationSessionProof);
   setFailureClass("authentication-bootstrap-pre-retirement-drain-failed");
   await prepareAuthenticationBootstrapRetirement();
@@ -22820,6 +23110,7 @@ const authenticate = async (
   },
 ) => {
   let failureClass = "navigation-failed";
+  const authenticationEvaluationAttemptId = randomUUID();
   try {
     return await authenticateCore(
       page,
@@ -22833,9 +23124,18 @@ const authenticate = async (
       prepareAuthenticationBootstrapRetirement,
       confirmAuthenticationBootstrapRetirement,
       prepareApplicationNavigation,
+      authenticationEvaluationAttemptId,
     );
   } catch {
     unregisterApplicationSessionProof();
+    if (failureClass === "authentication-evaluate-failed") {
+      const refinedFailureClass =
+        await collectSafeAuthenticationEvaluationFailureClass(
+          page,
+          authenticationEvaluationAttemptId,
+        );
+      if (refinedFailureClass !== null) failureClass = refinedFailureClass;
+    }
     const expectedRoute =
       authRole === "student" ? "/student/dashboard" : "/teacher/dashboard";
     const pageState = await collectSafeAuthenticationPageState(
