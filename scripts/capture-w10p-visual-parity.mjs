@@ -4250,6 +4250,8 @@ const SAFE_BROWSER_CONNECT_PROXY_AUTHORITY_LEASE_DIAGNOSTIC_CLASSES =
     "expired-active-tunnel",
     "expired-no-active-tunnel",
   ]);
+const SAFE_BROWSER_CONNECT_PROXY_CURRENT_AUTHORITY_TUNNEL_DIAGNOSTIC_CLASSES =
+  Object.freeze(["current-active-tunnel", "current-no-active-tunnel"]);
 const classifyBrowserConnectProxyAuthorityLeaseDiagnostic = (input) => {
   try {
     if (!input || typeof input !== "object" || Array.isArray(input)) {
@@ -4297,6 +4299,37 @@ const classifyBrowserConnectProxyAuthorityLeaseDiagnostic = (input) => {
     )
       ? diagnosticClass
       : null;
+  } catch {
+    return null;
+  }
+};
+const classifyBrowserConnectProxyCurrentAuthorityTunnelDiagnostic = (input) => {
+  try {
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      return null;
+    }
+    const descriptors = Object.getOwnPropertyDescriptors(input);
+    if (
+      Object.keys(descriptors).sort().join(",") !== "currentActiveTunnelPresent"
+    ) {
+      return null;
+    }
+    const currentActiveTunnelPresentDescriptor =
+      descriptors.currentActiveTunnelPresent;
+    if (
+      !Object.prototype.hasOwnProperty.call(
+        currentActiveTunnelPresentDescriptor,
+        "value",
+      ) ||
+      currentActiveTunnelPresentDescriptor.get !== undefined ||
+      currentActiveTunnelPresentDescriptor.set !== undefined ||
+      typeof currentActiveTunnelPresentDescriptor.value !== "boolean"
+    ) {
+      return null;
+    }
+    return currentActiveTunnelPresentDescriptor.value
+      ? "current-active-tunnel"
+      : "current-no-active-tunnel";
   } catch {
     return null;
   }
@@ -4791,6 +4824,33 @@ const createBrowserConnectProxyGate = ({
           expiresAt: lease.expiresAt,
           nowMilliseconds: currentTimeMilliseconds(),
           activeTunnelPresent: authorization.activeTunnelPresentAtAuthorization,
+        });
+      } catch {
+        return null;
+      }
+    },
+    requestStageCurrentAuthorityTunnelDiagnosticClass(requestId) {
+      try {
+        if (typeof requestId !== "string" || requestId.length === 0) {
+          return null;
+        }
+        const authorization =
+          requestStageAuthorizationsByRequestId.get(requestId) || null;
+        const lease = authorityLeasesByRequestId.get(requestId) || null;
+        if (
+          !authorization ||
+          !lease ||
+          authorization.requestId !== requestId ||
+          lease.requestId !== requestId ||
+          typeof authorization.authority !== "string" ||
+          authorization.authority.length === 0 ||
+          lease.authority !== authorization.authority
+        ) {
+          return null;
+        }
+        return classifyBrowserConnectProxyCurrentAuthorityTunnelDiagnostic({
+          currentActiveTunnelPresent:
+            (activeAllowedTunnelCounts.get(authorization.authority) || 0) > 0,
         });
       } catch {
         return null;
@@ -11309,19 +11369,23 @@ const SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_FAILURE_CLASSES = Object.freeze({
   "preflight-handler-before-response":
     "authentication-evaluate-config-read-cdp-preflight-handler-before-response-failed",
 });
+const SAFE_AUTHENTICATION_CONFIG_READ_PROXY_PRIORITY_LEASE_CLASSES =
+  Object.freeze([
+    "issued-no-active-tunnel",
+    "expired-active-tunnel",
+    "expired-no-active-tunnel",
+  ]);
 const SAFE_AUTHENTICATION_CONFIG_READ_PROXY_FAILURE_CLASSES = Object.freeze(
   Object.fromEntries(
     ["get", "preflight"].flatMap((requestClass) =>
-      [
-        "issued-no-active-tunnel",
-        "expired-active-tunnel",
-        "expired-no-active-tunnel",
-      ].map((leaseClass) => [
-        `${requestClass}:${leaseClass}`,
-        `authentication-evaluate-config-read-cdp-${
-          requestClass === "preflight" ? "preflight-" : ""
-        }proxy-${leaseClass}-failed`,
-      ]),
+      SAFE_AUTHENTICATION_CONFIG_READ_PROXY_PRIORITY_LEASE_CLASSES.map(
+        (leaseClass) => [
+          `${requestClass}:${leaseClass}`,
+          `authentication-evaluate-config-read-cdp-${
+            requestClass === "preflight" ? "preflight-" : ""
+          }proxy-${leaseClass}-failed`,
+        ],
+      ),
     ),
   ),
 );
@@ -11357,6 +11421,26 @@ const SAFE_AUTHENTICATION_PROFILE_STATUS_FAILURE_CLASSES = Object.freeze(
       ]),
   ),
 );
+const SAFE_AUTHENTICATION_PROFILE_RESPONSE_ERROR_RUNTIME_LEASE_CLASSES =
+  Object.freeze([
+    "issued-active-tunnel",
+    "consumed-active-tunnel",
+    "consumed-no-active-tunnel",
+  ]);
+const SAFE_AUTHENTICATION_PROFILE_RESPONSE_ERROR_RUNTIME_FAILURE_CLASSES =
+  Object.freeze(
+    Object.fromEntries(
+      SAFE_AUTHENTICATION_PROFILE_RESPONSE_ERROR_RUNTIME_LEASE_CLASSES.flatMap(
+        (leaseClass) =>
+          SAFE_BROWSER_CONNECT_PROXY_CURRENT_AUTHORITY_TUNNEL_DIAGNOSTIC_CLASSES.map(
+            (currentTunnelClass) => [
+              `${leaseClass}:${currentTunnelClass}`,
+              `authentication-evaluate-profile-fetch-cdp-${leaseClass}-${currentTunnelClass}-response-error-failed`,
+            ],
+          ),
+      ),
+    ),
+  );
 const classifyExactAuthenticationConfigReadRequest = (input) => {
   try {
     if (!input || typeof input !== "object" || Array.isArray(input)) {
@@ -11654,9 +11738,9 @@ const resolveSafeAuthenticationConfigReadFailureClass = (input) => {
       return null;
     }
     const proxyFailurePriority =
-      proxyLeaseClass === "issued-no-active-tunnel" ||
-      proxyLeaseClass === "expired-active-tunnel" ||
-      proxyLeaseClass === "expired-no-active-tunnel";
+      SAFE_AUTHENTICATION_CONFIG_READ_PROXY_PRIORITY_LEASE_CLASSES.includes(
+        proxyLeaseClass,
+      );
     if (proxyFailurePriority) {
       const proxyFailureKey = `${preflight ? "preflight" : "get"}:${proxyLeaseClass}`;
       return Object.prototype.hasOwnProperty.call(
@@ -11723,6 +11807,100 @@ const resolveSafeAuthenticationProfileFailureClass = (input) => {
     ].includes(profileFailureClass)
       ? profileFailureClass
       : null;
+  } catch {
+    return null;
+  }
+};
+const resolveSafeAuthenticationProfileResponseErrorRuntimeFailureClass = (
+  input,
+) => {
+  try {
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      return null;
+    }
+    const descriptors = Object.getOwnPropertyDescriptors(input);
+    if (
+      Object.keys(descriptors).sort().join(",") !==
+      "currentTunnelClass,proxyLeaseClass,responseClass,step"
+    ) {
+      return null;
+    }
+    for (const descriptor of Object.values(descriptors)) {
+      if (
+        !Object.prototype.hasOwnProperty.call(descriptor, "value") ||
+        descriptor.get !== undefined ||
+        descriptor.set !== undefined
+      ) {
+        return null;
+      }
+    }
+    const step = descriptors.step.value;
+    const responseClass = descriptors.responseClass.value;
+    const proxyLeaseClass = descriptors.proxyLeaseClass.value;
+    const currentTunnelClass = descriptors.currentTunnelClass.value;
+    if (
+      step !== "profile-fetch" ||
+      responseClass !== "response-error-failed" ||
+      !SAFE_AUTHENTICATION_PROFILE_RESPONSE_ERROR_RUNTIME_LEASE_CLASSES.includes(
+        proxyLeaseClass,
+      ) ||
+      !SAFE_BROWSER_CONNECT_PROXY_CURRENT_AUTHORITY_TUNNEL_DIAGNOSTIC_CLASSES.includes(
+        currentTunnelClass,
+      )
+    ) {
+      return null;
+    }
+    const failureKey = `${proxyLeaseClass}:${currentTunnelClass}`;
+    return Object.prototype.hasOwnProperty.call(
+      SAFE_AUTHENTICATION_PROFILE_RESPONSE_ERROR_RUNTIME_FAILURE_CLASSES,
+      failureKey,
+    )
+      ? SAFE_AUTHENTICATION_PROFILE_RESPONSE_ERROR_RUNTIME_FAILURE_CLASSES[
+          failureKey
+        ]
+      : null;
+  } catch {
+    return null;
+  }
+};
+const selectSafeAuthenticationProfileFailureClass = (input) => {
+  try {
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      return null;
+    }
+    const descriptors = Object.getOwnPropertyDescriptors(input);
+    if (
+      Object.keys(descriptors).sort().join(",") !==
+      "currentTunnelClass,proxyLeaseClass,responseClass,step"
+    ) {
+      return null;
+    }
+    for (const descriptor of Object.values(descriptors)) {
+      if (
+        !Object.prototype.hasOwnProperty.call(descriptor, "value") ||
+        descriptor.get !== undefined ||
+        descriptor.set !== undefined
+      ) {
+        return null;
+      }
+    }
+    const step = descriptors.step.value;
+    const responseClass = descriptors.responseClass.value;
+    const proxyLeaseClass = descriptors.proxyLeaseClass.value;
+    const currentTunnelClass = descriptors.currentTunnelClass.value;
+    const profileFailureClass = resolveSafeAuthenticationProfileFailureClass({
+      step,
+      responseClass,
+      proxyLeaseClass,
+    });
+    const runtimeFailureClass =
+      resolveSafeAuthenticationProfileResponseErrorRuntimeFailureClass({
+        step,
+        responseClass,
+        proxyLeaseClass,
+        currentTunnelClass,
+      });
+    return runtimeFailureClass || profileFailureClass;
   } catch {
     return null;
   }
@@ -11826,6 +12004,9 @@ const SAFE_AUTHENTICATION_FAILURE_CLASSES = Object.freeze([
   ...Object.values(SAFE_AUTHENTICATION_PROFILE_RESPONSE_FAILURE_CLASSES),
   ...Object.values(SAFE_AUTHENTICATION_PROFILE_PROXY_FAILURE_CLASSES),
   ...Object.values(SAFE_AUTHENTICATION_PROFILE_STATUS_FAILURE_CLASSES),
+  ...Object.values(
+    SAFE_AUTHENTICATION_PROFILE_RESPONSE_ERROR_RUNTIME_FAILURE_CLASSES,
+  ),
   "application-session-proof-registration-failed",
   "authentication-bootstrap-pre-retirement-drain-failed",
   "authentication-bootstrap-retirement-failed",
@@ -12690,6 +12871,29 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     proxyLeaseDiagnosticFixtures.map((fixture) => fixture[4]).sort(),
     [...SAFE_BROWSER_CONNECT_PROXY_AUTHORITY_LEASE_DIAGNOSTIC_CLASSES].sort(),
   );
+  const currentAuthorityTunnelDiagnosticFixtures = [
+    [true, "current-active-tunnel"],
+    [false, "current-no-active-tunnel"],
+  ];
+  for (const [
+    currentActiveTunnelPresent,
+    expectedClass,
+  ] of currentAuthorityTunnelDiagnosticFixtures) {
+    assert.equal(
+      classifyBrowserConnectProxyCurrentAuthorityTunnelDiagnostic({
+        currentActiveTunnelPresent,
+      }),
+      expectedClass,
+    );
+  }
+  assert.deepEqual(
+    currentAuthorityTunnelDiagnosticFixtures
+      .map((fixture) => fixture[1])
+      .sort(),
+    [
+      ...SAFE_BROWSER_CONNECT_PROXY_CURRENT_AUTHORITY_TUNNEL_DIAGNOSTIC_CLASSES,
+    ].sort(),
+  );
   let proxyLeaseClassifierCoercionCount = 0;
   const proxyLeaseClassifierCoercionValue = {
     valueOf() {
@@ -12757,6 +12961,36 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
       null,
     );
   }
+  const currentAuthorityTunnelDiagnosticNegativeFixtures = [
+    null,
+    [],
+    {},
+    { currentActiveTunnelPresent: "false" },
+    { currentActiveTunnelPresent: false, extra: rawSecretUrl },
+    { currentActiveTunnelPresent: proxyLeaseClassifierCoercionValue },
+    Object.defineProperty({}, "currentActiveTunnelPresent", {
+      enumerable: true,
+      get() {
+        throw new Error(rawSecretUrl);
+      },
+    }),
+    new Proxy(
+      {},
+      {
+        ownKeys() {
+          throw new Error(rawSecretUrl);
+        },
+      },
+    ),
+  ];
+  for (const tunnelFixture of currentAuthorityTunnelDiagnosticNegativeFixtures) {
+    assert.equal(
+      classifyBrowserConnectProxyCurrentAuthorityTunnelDiagnostic(
+        tunnelFixture,
+      ),
+      null,
+    );
+  }
   assert.equal(proxyLeaseClassifierCoercionCount, 0);
   let proxyLeaseDiagnosticNowMilliseconds = 1_000;
   const proxyLeaseDiagnosticGate = createBrowserConnectProxyGate({
@@ -12768,6 +13002,12 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
   const proxyLeaseDiagnosticRequestId = "fixed-proxy-lease-diagnostic";
   assert.equal(
     proxyLeaseDiagnosticGate.requestStageAuthorityLeaseDiagnosticClass(
+      proxyLeaseDiagnosticRequestId,
+    ),
+    null,
+  );
+  assert.equal(
+    proxyLeaseDiagnosticGate.requestStageCurrentAuthorityTunnelDiagnosticClass(
       proxyLeaseDiagnosticRequestId,
     ),
     null,
@@ -12793,6 +13033,12 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
       proxyLeaseDiagnosticRequestId,
     ),
     "issued-no-active-tunnel",
+  );
+  assert.equal(
+    proxyLeaseDiagnosticGate.requestStageCurrentAuthorityTunnelDiagnosticClass(
+      proxyLeaseDiagnosticRequestId,
+    ),
+    "current-no-active-tunnel",
   );
   assert.deepEqual(
     proxyLeaseDiagnosticGate.snapshot(),
@@ -12943,6 +13189,18 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
       activeTunnelPresentAtAuthorization: true,
       authorityLeaseIssued: true,
     });
+    const activeTunnelSnapshotBeforeDiagnostic =
+      activeTunnelFixtureGate.snapshot();
+    assert.equal(
+      activeTunnelFixtureGate.requestStageCurrentAuthorityTunnelDiagnosticClass(
+        activeTunnelFixtureExactRequestId,
+      ),
+      "current-active-tunnel",
+    );
+    assert.deepEqual(
+      activeTunnelFixtureGate.snapshot(),
+      activeTunnelSnapshotBeforeDiagnostic,
+    );
     activeTunnelFixtureClientSocket.destroy();
     for (const socket of activeTunnelFixtureUpstreamSockets) socket.destroy();
     await withExplicitTimeout(
@@ -12973,7 +13231,19 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
       "issued-active-tunnel",
     );
     assert.equal(
+      activeTunnelFixtureGate.requestStageCurrentAuthorityTunnelDiagnosticClass(
+        activeTunnelFixtureExactRequestId,
+      ),
+      "current-no-active-tunnel",
+    );
+    assert.equal(
       activeTunnelFixtureGate.requestStageAuthorityLeaseDiagnosticClass(
+        activeTunnelFixtureUnknownRequestId,
+      ),
+      null,
+    );
+    assert.equal(
+      activeTunnelFixtureGate.requestStageCurrentAuthorityTunnelDiagnosticClass(
         activeTunnelFixtureUnknownRequestId,
       ),
       null,
@@ -13281,6 +13551,190 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
       expectedFailureClass,
     );
   }
+  const profileResponseErrorRuntimeFixtures = [
+    [
+      "issued-active-tunnel",
+      "current-active-tunnel",
+      "authentication-evaluate-profile-fetch-cdp-issued-active-tunnel-current-active-tunnel-response-error-failed",
+    ],
+    [
+      "issued-active-tunnel",
+      "current-no-active-tunnel",
+      "authentication-evaluate-profile-fetch-cdp-issued-active-tunnel-current-no-active-tunnel-response-error-failed",
+    ],
+    [
+      "consumed-active-tunnel",
+      "current-active-tunnel",
+      "authentication-evaluate-profile-fetch-cdp-consumed-active-tunnel-current-active-tunnel-response-error-failed",
+    ],
+    [
+      "consumed-active-tunnel",
+      "current-no-active-tunnel",
+      "authentication-evaluate-profile-fetch-cdp-consumed-active-tunnel-current-no-active-tunnel-response-error-failed",
+    ],
+    [
+      "consumed-no-active-tunnel",
+      "current-active-tunnel",
+      "authentication-evaluate-profile-fetch-cdp-consumed-no-active-tunnel-current-active-tunnel-response-error-failed",
+    ],
+    [
+      "consumed-no-active-tunnel",
+      "current-no-active-tunnel",
+      "authentication-evaluate-profile-fetch-cdp-consumed-no-active-tunnel-current-no-active-tunnel-response-error-failed",
+    ],
+  ];
+  for (const [
+    proxyLeaseClass,
+    currentTunnelClass,
+    expectedFailureClass,
+  ] of profileResponseErrorRuntimeFixtures) {
+    assert.equal(
+      resolveSafeAuthenticationProfileResponseErrorRuntimeFailureClass({
+        step: "profile-fetch",
+        responseClass: "response-error-failed",
+        proxyLeaseClass,
+        currentTunnelClass,
+      }),
+      expectedFailureClass,
+    );
+    assert.equal(
+      selectSafeAuthenticationProfileFailureClass({
+        step: "profile-fetch",
+        responseClass: "response-error-failed",
+        proxyLeaseClass,
+        currentTunnelClass,
+      }),
+      expectedFailureClass,
+    );
+  }
+  assert.deepEqual(
+    Object.values(
+      SAFE_AUTHENTICATION_PROFILE_RESPONSE_ERROR_RUNTIME_FAILURE_CLASSES,
+    ).sort(),
+    profileResponseErrorRuntimeFixtures.map((fixture) => fixture[2]).sort(),
+  );
+  assert.deepEqual(
+    SAFE_AUTHENTICATION_CONFIG_READ_PROXY_PRIORITY_LEASE_CLASSES.filter(
+      (leaseClass) =>
+        SAFE_AUTHENTICATION_PROFILE_RESPONSE_ERROR_RUNTIME_LEASE_CLASSES.includes(
+          leaseClass,
+        ),
+    ),
+    [],
+  );
+  assert.deepEqual(
+    [
+      ...new Set([
+        ...SAFE_AUTHENTICATION_CONFIG_READ_PROXY_PRIORITY_LEASE_CLASSES,
+        ...SAFE_AUTHENTICATION_PROFILE_RESPONSE_ERROR_RUNTIME_LEASE_CLASSES,
+      ]),
+    ].sort(),
+    [...SAFE_BROWSER_CONNECT_PROXY_AUTHORITY_LEASE_DIAGNOSTIC_CLASSES].sort(),
+  );
+  const profileResponseErrorRuntimeNegativeFixtures = [
+    null,
+    [],
+    {
+      step: "profile-fetch",
+      responseClass: "response-error-failed",
+      proxyLeaseClass: "issued-active-tunnel",
+      currentTunnelClass: "current-active-tunnel",
+      extra: rawSecretUrl,
+    },
+    {
+      step: "profile-status",
+      responseClass: "response-error-failed",
+      proxyLeaseClass: "issued-active-tunnel",
+      currentTunnelClass: "current-active-tunnel",
+    },
+    {
+      step: "profile-fetch",
+      responseClass: "response-error-connection",
+      proxyLeaseClass: "issued-active-tunnel",
+      currentTunnelClass: "current-active-tunnel",
+    },
+    {
+      step: "profile-fetch",
+      responseClass: "response-error-failed",
+      proxyLeaseClass: "issued-no-active-tunnel",
+      currentTunnelClass: "current-no-active-tunnel",
+    },
+    {
+      step: "profile-fetch",
+      responseClass: "response-error-failed",
+      proxyLeaseClass: "issued-active-tunnel",
+      currentTunnelClass: null,
+    },
+    {
+      step: "profile-fetch",
+      responseClass: "response-error-failed",
+      proxyLeaseClass: proxyLeaseClassifierCoercionValue,
+      currentTunnelClass: "current-active-tunnel",
+    },
+    Object.defineProperty(
+      {
+        step: "profile-fetch",
+        responseClass: "response-error-failed",
+        proxyLeaseClass: "issued-active-tunnel",
+      },
+      "currentTunnelClass",
+      {
+        enumerable: true,
+        get() {
+          throw new Error(rawSecretUrl);
+        },
+      },
+    ),
+    new Proxy(
+      {},
+      {
+        ownKeys() {
+          throw new Error(rawSecretUrl);
+        },
+      },
+    ),
+  ];
+  for (const runtimeFixture of profileResponseErrorRuntimeNegativeFixtures) {
+    assert.equal(
+      resolveSafeAuthenticationProfileResponseErrorRuntimeFailureClass(
+        runtimeFixture,
+      ),
+      null,
+    );
+  }
+  assert.equal(
+    selectSafeAuthenticationProfileFailureClass({
+      step: "profile-fetch",
+      responseClass: "response-error-failed",
+      proxyLeaseClass: null,
+      currentTunnelClass: null,
+    }),
+    "authentication-evaluate-profile-fetch-cdp-response-error-failed",
+  );
+  assert.equal(
+    selectSafeAuthenticationProfileFailureClass({
+      step: "profile-fetch",
+      responseClass: "response-error-failed",
+      proxyLeaseClass: "issued-no-active-tunnel",
+      currentTunnelClass: "current-no-active-tunnel",
+    }),
+    "authentication-evaluate-profile-fetch-cdp-proxy-issued-no-active-tunnel-failed",
+  );
+  assert.equal(
+    selectSafeAuthenticationProfileFailureClass({
+      step: "profile-status",
+      responseClass: "response-4xx",
+      proxyLeaseClass: null,
+      currentTunnelClass: null,
+    }),
+    "authentication-evaluate-profile-status-cdp-response-4xx-failed",
+  );
+  assert.equal(
+    selectSafeAuthenticationProfileFailureClass(
+      profileResponseErrorRuntimeNegativeFixtures[8],
+    ),
+    null,
+  );
   assert.equal(
     resolveSafeAuthenticationProfileFailureClass({
       step: "profile-fetch",
@@ -13329,6 +13783,9 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
       ...Object.values(SAFE_AUTHENTICATION_CONFIG_READ_PROXY_FAILURE_CLASSES),
       ...Object.values(SAFE_AUTHENTICATION_PROFILE_RESPONSE_FAILURE_CLASSES),
       ...Object.values(SAFE_AUTHENTICATION_PROFILE_PROXY_FAILURE_CLASSES),
+      ...Object.values(
+        SAFE_AUTHENTICATION_PROFILE_RESPONSE_ERROR_RUNTIME_FAILURE_CLASSES,
+      ),
     ]).size,
     Object.values(SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_FAILURE_CLASSES)
       .length +
@@ -13336,7 +13793,10 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
         .length +
       Object.values(SAFE_AUTHENTICATION_PROFILE_RESPONSE_FAILURE_CLASSES)
         .length +
-      Object.values(SAFE_AUTHENTICATION_PROFILE_PROXY_FAILURE_CLASSES).length,
+      Object.values(SAFE_AUTHENTICATION_PROFILE_PROXY_FAILURE_CLASSES).length +
+      Object.values(
+        SAFE_AUTHENTICATION_PROFILE_RESPONSE_ERROR_RUNTIME_FAILURE_CLASSES,
+      ).length,
   );
   const configReadProxyPrecedenceNegativeFixtures = [
     null,
@@ -13571,6 +14031,9 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     ...Object.values(SAFE_AUTHENTICATION_PROFILE_RESPONSE_FAILURE_CLASSES),
     ...Object.values(SAFE_AUTHENTICATION_PROFILE_PROXY_FAILURE_CLASSES),
     ...Object.values(SAFE_AUTHENTICATION_PROFILE_STATUS_FAILURE_CLASSES),
+    ...Object.values(
+      SAFE_AUTHENTICATION_PROFILE_RESPONSE_ERROR_RUNTIME_FAILURE_CLASSES,
+    ),
     "application-session-proof-registration-failed",
   ];
   assert.equal(
@@ -13672,6 +14135,9 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     ...Object.values(SAFE_AUTHENTICATION_PROFILE_RESPONSE_FAILURE_CLASSES),
     ...Object.values(SAFE_AUTHENTICATION_PROFILE_PROXY_FAILURE_CLASSES),
     ...Object.values(SAFE_AUTHENTICATION_PROFILE_STATUS_FAILURE_CLASSES),
+    ...Object.values(
+      SAFE_AUTHENTICATION_PROFILE_RESPONSE_ERROR_RUNTIME_FAILURE_CLASSES,
+    ),
   ].map((failureClass) =>
     serializeSafeAuthenticationFailure(
       createSafeAuthenticationFailureDiagnostic({
@@ -13981,8 +14447,16 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
       proxyLeaseDiagnosticFixtures.length,
     safeAuthenticationConfigReadProxyLeaseNegativeFixtureCount:
       proxyLeaseDiagnosticNegativeFixtures.length,
+    safeAuthenticationConfigReadCurrentTunnelFixtureCount:
+      currentAuthorityTunnelDiagnosticFixtures.length,
+    safeAuthenticationConfigReadCurrentTunnelNegativeFixtureCount:
+      currentAuthorityTunnelDiagnosticNegativeFixtures.length,
     safeAuthenticationConfigReadProxyPrecedenceFixtureCount:
       configReadProxyPrecedenceFixtures.length,
+    safeAuthenticationProfileResponseErrorRuntimeFixtureCount:
+      profileResponseErrorRuntimeFixtures.length,
+    safeAuthenticationProfileResponseErrorRuntimeNegativeFixtureCount:
+      profileResponseErrorRuntimeNegativeFixtures.length,
     safeAuthenticationConfigReadRawNetworkValueOutputCount: 0,
     safeAuthenticationConfigReadClassifierCoercionCount:
       configReadClassifierCoercionCount,
@@ -25108,6 +25582,7 @@ const authenticate = async (
     collectAuthenticationConfigReadProxyLeaseClass,
     collectAuthenticationProfileResponseClass,
     collectAuthenticationProfileProxyLeaseClass,
+    collectAuthenticationProfileCurrentTunnelClass,
   },
 ) => {
   let failureClass = "navigation-failed";
@@ -25175,6 +25650,7 @@ const authenticate = async (
     if (profileFailureStep !== null) {
       let profileResponseClass = null;
       let profileProxyLeaseClass = null;
+      let profileCurrentTunnelClass = null;
       try {
         profileResponseClass = collectAuthenticationProfileResponseClass();
       } catch {
@@ -25187,11 +25663,18 @@ const authenticate = async (
         } catch {
           // The bounded proxy diagnostic is optional and fails closed.
         }
+        try {
+          profileCurrentTunnelClass =
+            collectAuthenticationProfileCurrentTunnelClass();
+        } catch {
+          // The bounded current-tunnel diagnostic is optional and fails closed.
+        }
       }
-      const profileFailureClass = resolveSafeAuthenticationProfileFailureClass({
+      const profileFailureClass = selectSafeAuthenticationProfileFailureClass({
         step: profileFailureStep,
         responseClass: profileResponseClass,
         proxyLeaseClass: profileProxyLeaseClass,
+        currentTunnelClass: profileCurrentTunnelClass,
       });
       if (profileFailureClass !== null) failureClass = profileFailureClass;
     }
@@ -28227,6 +28710,7 @@ try {
     let groupAuthenticationProfilePreflightOutcomeClass = null;
     let groupAuthenticationProfileGetProxyLeaseClass = null;
     let groupAuthenticationProfilePreflightProxyLeaseClass = null;
+    let groupAuthenticationProfileGetCurrentTunnelClass = null;
     const allowedEgressLifecycleByFetchRequestId = new Map();
     const allowedEgressFetchRequestIdsByNetworkId = new Map();
     const cdpHandlerDiagnosticContexts = new WeakMap();
@@ -28619,6 +29103,12 @@ try {
             if (authenticationProfileRequestClass === "get") {
               groupAuthenticationProfileGetProxyLeaseClass =
                 nextProxyLeaseClass;
+              if (lifecycleDecision.kind === "primary") {
+                groupAuthenticationProfileGetCurrentTunnelClass =
+                  browserConnectProxy.requestStageCurrentAuthorityTunnelDiagnosticClass(
+                    primaryRequestId,
+                  );
+              }
             } else {
               groupAuthenticationProfilePreflightProxyLeaseClass =
                 nextProxyLeaseClass;
@@ -30019,6 +30509,7 @@ try {
             groupAuthenticationProfileGetRequestObserved = true;
             groupAuthenticationProfileGetOutcomeClass = initialResponseClass;
             groupAuthenticationProfileGetProxyLeaseClass = null;
+            groupAuthenticationProfileGetCurrentTunnelClass = null;
           } else {
             groupAuthenticationProfilePreflightOutcomeClass =
               initialResponseClass;
@@ -30415,6 +30906,13 @@ try {
               ? proxyLeaseClass
               : null;
           },
+          collectAuthenticationProfileCurrentTunnelClass: () =>
+            groupAuthenticationProfileGetRequestObserved &&
+            SAFE_BROWSER_CONNECT_PROXY_CURRENT_AUTHORITY_TUNNEL_DIAGNOSTIC_CLASSES.includes(
+              groupAuthenticationProfileGetCurrentTunnelClass,
+            )
+              ? groupAuthenticationProfileGetCurrentTunnelClass
+              : null,
         },
       );
       telemetryCapabilityGuardRuntimeAttestations.push(
