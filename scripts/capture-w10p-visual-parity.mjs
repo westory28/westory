@@ -11441,6 +11441,433 @@ const SAFE_AUTHENTICATION_PROFILE_RESPONSE_ERROR_RUNTIME_FAILURE_CLASSES =
       ),
     ),
   );
+const SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_CLASSES = Object.freeze([
+  "http2-protocol",
+  "proxy-tunnel",
+  "tls",
+  "connection-reset",
+  "connection-closed",
+  "connection",
+  "network-changed",
+  "incomplete-chunked",
+  "content-length-mismatch",
+  "timeout",
+  "name-resolution",
+  "aborted",
+  "generic-failed",
+  "blocked-by-client",
+  "policy-blocked",
+  "cors-blocked",
+  "other",
+]);
+const SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_TIMING_CLASSES = Object.freeze(
+  ["pre-local-fail", "local-fail-in-flight", "post-local-fail"],
+);
+const SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_TIMING_BY_LIFECYCLE_STATE =
+  Object.freeze({
+    "response-awaiting": "pre-local-fail",
+    "terminal-command-in-flight": "local-fail-in-flight",
+    "terminal-complete": "post-local-fail",
+  });
+const SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_ERROR_TEXT_CLASS_MAP =
+  Object.freeze({
+    "net::ERR_HTTP2_PROTOCOL_ERROR": "http2-protocol",
+    "net::ERR_TUNNEL_CONNECTION_FAILED": "proxy-tunnel",
+    "net::ERR_PROXY_CONNECTION_FAILED": "proxy-tunnel",
+    "net::ERR_SSL_PROTOCOL_ERROR": "tls",
+    "net::ERR_SSL_VERSION_OR_CIPHER_MISMATCH": "tls",
+    "net::ERR_CERT_AUTHORITY_INVALID": "tls",
+    "net::ERR_CERT_COMMON_NAME_INVALID": "tls",
+    "net::ERR_CERT_DATE_INVALID": "tls",
+    "net::ERR_CONNECTION_RESET": "connection-reset",
+    "net::ERR_CONNECTION_CLOSED": "connection-closed",
+    "net::ERR_CONNECTION_ABORTED": "connection",
+    "net::ERR_CONNECTION_FAILED": "connection",
+    "net::ERR_CONNECTION_REFUSED": "connection",
+    "net::ERR_ADDRESS_UNREACHABLE": "connection",
+    "net::ERR_INTERNET_DISCONNECTED": "connection",
+    "net::ERR_NETWORK_CHANGED": "network-changed",
+    "net::ERR_INCOMPLETE_CHUNKED_ENCODING": "incomplete-chunked",
+    "net::ERR_CONTENT_LENGTH_MISMATCH": "content-length-mismatch",
+    "net::ERR_TIMED_OUT": "timeout",
+    "net::ERR_NAME_NOT_RESOLVED": "name-resolution",
+    "net::ERR_ABORTED": "aborted",
+    "net::ERR_FAILED": "generic-failed",
+    "net::ERR_BLOCKED_BY_CLIENT": "blocked-by-client",
+    "net::ERR_BLOCKED_BY_RESPONSE": "policy-blocked",
+    "net::ERR_CORS_DISABLED_SCHEME": "cors-blocked",
+  });
+const SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_FAILURE_CLASSES =
+  Object.freeze(
+    Object.fromEntries(
+      SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_TIMING_CLASSES.flatMap(
+        (timingClass) =>
+          SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_CLASSES.map(
+            (loadingFailureClass) => [
+              `${timingClass}:${loadingFailureClass}`,
+              `authentication-evaluate-profile-fetch-cdp-issued-active-tunnel-current-active-tunnel-loading-${timingClass}-${loadingFailureClass}-failed`,
+            ],
+          ),
+      ),
+    ),
+  );
+const exactOwnDataDescriptors = (input, expectedPropertyNames) => {
+  try {
+    if (
+      !input ||
+      typeof input !== "object" ||
+      Array.isArray(input) ||
+      !Array.isArray(expectedPropertyNames)
+    ) {
+      return null;
+    }
+    const descriptors = Object.getOwnPropertyDescriptors(input);
+    const descriptorKeys = Reflect.ownKeys(descriptors);
+    if (
+      descriptorKeys.some((key) => typeof key !== "string") ||
+      descriptorKeys.length !== expectedPropertyNames.length ||
+      [...descriptorKeys].sort().join(",") !==
+        [...expectedPropertyNames].sort().join(",")
+    ) {
+      return null;
+    }
+    for (const propertyName of expectedPropertyNames) {
+      const descriptor = descriptors[propertyName];
+      if (
+        !descriptor ||
+        !Object.prototype.hasOwnProperty.call(descriptor, "value") ||
+        descriptor.get !== undefined ||
+        descriptor.set !== undefined
+      ) {
+        return null;
+      }
+    }
+    return descriptors;
+  } catch {
+    return null;
+  }
+};
+const classifySafeAuthenticationProfileLoadingFailed = (input) => {
+  try {
+    const descriptors = exactOwnDataDescriptors(input, [
+      "errorText",
+      "canceled",
+      "blockedReason",
+      "corsError",
+    ]);
+    if (descriptors === null) return null;
+    const errorText = descriptors.errorText.value;
+    const canceled = descriptors.canceled.value;
+    const blockedReason = descriptors.blockedReason.value;
+    const corsError = descriptors.corsError.value;
+    if (
+      typeof errorText !== "string" ||
+      errorText.length === 0 ||
+      typeof canceled !== "boolean" ||
+      (blockedReason !== undefined &&
+        (typeof blockedReason !== "string" || blockedReason.length === 0)) ||
+      (corsError !== undefined &&
+        (typeof corsError !== "string" || corsError.length === 0))
+    ) {
+      return null;
+    }
+    if (corsError !== undefined) return "cors-blocked";
+    if (blockedReason !== undefined) {
+      return blockedReason === "inspector"
+        ? "blocked-by-client"
+        : "policy-blocked";
+    }
+    if (
+      Object.prototype.hasOwnProperty.call(
+        SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_ERROR_TEXT_CLASS_MAP,
+        errorText,
+      )
+    ) {
+      return SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_ERROR_TEXT_CLASS_MAP[
+        errorText
+      ];
+    }
+    if (canceled) return "aborted";
+    return "other";
+  } catch {
+    return null;
+  }
+};
+const classifySafeAuthenticationProfileLoadingFailedTiming = (input) => {
+  try {
+    const descriptors = exactOwnDataDescriptors(input, ["lifecycleState"]);
+    if (descriptors === null) return null;
+    const lifecycleStateDescriptor = descriptors.lifecycleState;
+    const lifecycleState = lifecycleStateDescriptor.value;
+    return typeof lifecycleState === "string" &&
+      Object.prototype.hasOwnProperty.call(
+        SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_TIMING_BY_LIFECYCLE_STATE,
+        lifecycleState,
+      )
+      ? SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_TIMING_BY_LIFECYCLE_STATE[
+          lifecycleState
+        ]
+      : null;
+  } catch {
+    return null;
+  }
+};
+const normalizeSafeAuthenticationProfileLoadingFailedDiagnostic = (input) => {
+  try {
+    const descriptors = exactOwnDataDescriptors(input, [
+      "loadingFailureClass",
+      "loadingFailureTimingClass",
+    ]);
+    if (descriptors === null) return null;
+    const loadingFailureClass = descriptors.loadingFailureClass.value;
+    const loadingFailureTimingClass =
+      descriptors.loadingFailureTimingClass.value;
+    if (
+      !SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_CLASSES.includes(
+        loadingFailureClass,
+      ) ||
+      !SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_TIMING_CLASSES.includes(
+        loadingFailureTimingClass,
+      )
+    ) {
+      return null;
+    }
+    return Object.freeze({
+      loadingFailureClass,
+      loadingFailureTimingClass,
+    });
+  } catch {
+    return null;
+  }
+};
+const exactAuthenticationProfileLoadingFailedLifecycleDescriptors = (
+  lifecycle,
+) => {
+  const descriptors = exactOwnDataDescriptors(lifecycle, [
+    "primaryRequestId",
+    "requestInvariant",
+    "networkId",
+    "state",
+    "diagnosticPhase",
+  ]);
+  if (descriptors === null) return null;
+  const primaryRequestId = descriptors.primaryRequestId.value;
+  const requestInvariant = descriptors.requestInvariant.value;
+  const networkId = descriptors.networkId.value;
+  const diagnosticPhase = descriptors.diagnosticPhase.value;
+  if (
+    typeof primaryRequestId !== "string" ||
+    primaryRequestId.length === 0 ||
+    !requestInvariant ||
+    typeof requestInvariant !== "object" ||
+    Array.isArray(requestInvariant) ||
+    typeof networkId !== "string" ||
+    networkId.length === 0 ||
+    typeof diagnosticPhase !== "string"
+  ) {
+    return null;
+  }
+  return descriptors;
+};
+const createExactAuthenticationProfileLoadingFailedObserver = ({
+  fetchRequestIdsByNetworkId,
+  profileRequestClassesByFetchRequestId,
+  lifecycleByFetchRequestId,
+}) => {
+  assert.ok(fetchRequestIdsByNetworkId instanceof Map);
+  assert.ok(profileRequestClassesByFetchRequestId instanceof Map);
+  assert.ok(lifecycleByFetchRequestId instanceof Map);
+  let firstDiagnostic = null;
+  let firstRequestInvariant = null;
+  const listener = (event) => {
+    if (firstDiagnostic !== null) return;
+    try {
+      if (!event || typeof event !== "object" || Array.isArray(event)) return;
+      const requestIdDescriptor = Object.getOwnPropertyDescriptor(
+        event,
+        "requestId",
+      );
+      const errorTextDescriptor = Object.getOwnPropertyDescriptor(
+        event,
+        "errorText",
+      );
+      const resourceTypeDescriptor = Object.getOwnPropertyDescriptor(
+        event,
+        "type",
+      );
+      const canceledDescriptor = Object.getOwnPropertyDescriptor(
+        event,
+        "canceled",
+      );
+      const blockedReasonDescriptor = Object.getOwnPropertyDescriptor(
+        event,
+        "blockedReason",
+      );
+      const corsErrorStatusDescriptor = Object.getOwnPropertyDescriptor(
+        event,
+        "corsErrorStatus",
+      );
+      for (const descriptor of [
+        requestIdDescriptor,
+        errorTextDescriptor,
+        resourceTypeDescriptor,
+        ...(canceledDescriptor ? [canceledDescriptor] : []),
+        ...(blockedReasonDescriptor ? [blockedReasonDescriptor] : []),
+        ...(corsErrorStatusDescriptor ? [corsErrorStatusDescriptor] : []),
+      ]) {
+        if (
+          !descriptor ||
+          !Object.prototype.hasOwnProperty.call(descriptor, "value") ||
+          descriptor.get !== undefined ||
+          descriptor.set !== undefined
+        ) {
+          return;
+        }
+      }
+      const networkRequestId = requestIdDescriptor.value;
+      if (
+        typeof networkRequestId !== "string" ||
+        networkRequestId.length === 0 ||
+        resourceTypeDescriptor.value !== "Fetch"
+      ) {
+        return;
+      }
+      const correlatedFetchRequestIds =
+        fetchRequestIdsByNetworkId.get(networkRequestId);
+      if (
+        !(correlatedFetchRequestIds instanceof Set) ||
+        correlatedFetchRequestIds.size !== 1
+      ) {
+        return;
+      }
+      const candidateFetchRequestIds = [...correlatedFetchRequestIds].filter(
+        (requestId) =>
+          profileRequestClassesByFetchRequestId.get(requestId) === "get",
+      );
+      if (candidateFetchRequestIds.length !== 1) return;
+      const fetchRequestId = candidateFetchRequestIds[0];
+      if (
+        typeof fetchRequestId !== "string" ||
+        fetchRequestId.length === 0 ||
+        profileRequestClassesByFetchRequestId.get(fetchRequestId) !== "get"
+      ) {
+        return;
+      }
+      const lifecycle = lifecycleByFetchRequestId.get(fetchRequestId);
+      const lifecycleDescriptors =
+        exactAuthenticationProfileLoadingFailedLifecycleDescriptors(lifecycle);
+      if (lifecycleDescriptors === null) return;
+      if (
+        lifecycleDescriptors.primaryRequestId.value !== fetchRequestId ||
+        lifecycleDescriptors.networkId.value !== networkRequestId ||
+        lifecycleDescriptors.diagnosticPhase.value !== "authentication"
+      ) {
+        return;
+      }
+      let corsError;
+      if (corsErrorStatusDescriptor !== undefined) {
+        const corsErrorStatus = corsErrorStatusDescriptor.value;
+        if (
+          !corsErrorStatus ||
+          typeof corsErrorStatus !== "object" ||
+          Array.isArray(corsErrorStatus)
+        ) {
+          return;
+        }
+        const corsErrorDescriptor = Object.getOwnPropertyDescriptor(
+          corsErrorStatus,
+          "corsError",
+        );
+        if (
+          !corsErrorDescriptor ||
+          !Object.prototype.hasOwnProperty.call(corsErrorDescriptor, "value") ||
+          corsErrorDescriptor.get !== undefined ||
+          corsErrorDescriptor.set !== undefined
+        ) {
+          return;
+        }
+        corsError = corsErrorDescriptor.value;
+      }
+      const loadingFailureClass =
+        classifySafeAuthenticationProfileLoadingFailed({
+          errorText: errorTextDescriptor.value,
+          canceled:
+            canceledDescriptor === undefined ? false : canceledDescriptor.value,
+          blockedReason:
+            blockedReasonDescriptor === undefined
+              ? undefined
+              : blockedReasonDescriptor.value,
+          corsError,
+        });
+      const loadingFailureTimingClass =
+        classifySafeAuthenticationProfileLoadingFailedTiming({
+          lifecycleState: lifecycleDescriptors.state.value,
+        });
+      if (loadingFailureClass === null || loadingFailureTimingClass === null) {
+        return;
+      }
+      firstDiagnostic = Object.freeze({
+        loadingFailureClass,
+        loadingFailureTimingClass,
+      });
+      firstRequestInvariant = lifecycleDescriptors.requestInvariant.value;
+    } catch {
+      // The bounded CDP diagnostic is optional and fails closed.
+    }
+  };
+  const collect = () => {
+    if (firstDiagnostic === null || firstRequestInvariant === null) return null;
+    try {
+      let profileGetRequestCount = 0;
+      let soleProfileGetRequestId = null;
+      for (const [
+        requestId,
+        requestClass,
+      ] of profileRequestClassesByFetchRequestId) {
+        if (requestClass !== "get") continue;
+        profileGetRequestCount += 1;
+        soleProfileGetRequestId = requestId;
+        if (profileGetRequestCount > 1) return null;
+      }
+      if (
+        profileGetRequestCount !== 1 ||
+        typeof soleProfileGetRequestId !== "string" ||
+        soleProfileGetRequestId.length === 0
+      ) {
+        return null;
+      }
+      const lifecycleDescriptors =
+        exactAuthenticationProfileLoadingFailedLifecycleDescriptors(
+          lifecycleByFetchRequestId.get(soleProfileGetRequestId),
+        );
+      return lifecycleDescriptors !== null &&
+        lifecycleDescriptors.requestInvariant.value === firstRequestInvariant
+        ? firstDiagnostic
+        : null;
+    } catch {
+      return null;
+    }
+  };
+  return Object.freeze({
+    listener,
+    collect,
+  });
+};
+const attachExactAuthenticationProfileLoadingFailedObserver = ({
+  session,
+  fetchRequestIdsByNetworkId,
+  profileRequestClassesByFetchRequestId,
+  lifecycleByFetchRequestId,
+}) => {
+  assert.ok(session && typeof session.on === "function");
+  const observer = createExactAuthenticationProfileLoadingFailedObserver({
+    fetchRequestIdsByNetworkId,
+    profileRequestClassesByFetchRequestId,
+    lifecycleByFetchRequestId,
+  });
+  session.on("Network.loadingFailed", observer.listener);
+  return Object.freeze({ collect: observer.collect });
+};
 const classifyExactAuthenticationConfigReadRequest = (input) => {
   try {
     if (!input || typeof input !== "object" || Array.isArray(input)) {
@@ -11863,31 +12290,78 @@ const resolveSafeAuthenticationProfileResponseErrorRuntimeFailureClass = (
     return null;
   }
 };
-const selectSafeAuthenticationProfileFailureClass = (input) => {
+const resolveSafeAuthenticationProfileLoadingFailedFailureClass = (input) => {
   try {
-    if (!input || typeof input !== "object" || Array.isArray(input)) {
-      return null;
-    }
-    const descriptors = Object.getOwnPropertyDescriptors(input);
-    if (
-      Object.keys(descriptors).sort().join(",") !==
-      "currentTunnelClass,proxyLeaseClass,responseClass,step"
-    ) {
-      return null;
-    }
-    for (const descriptor of Object.values(descriptors)) {
-      if (
-        !Object.prototype.hasOwnProperty.call(descriptor, "value") ||
-        descriptor.get !== undefined ||
-        descriptor.set !== undefined
-      ) {
-        return null;
-      }
-    }
+    const descriptors = exactOwnDataDescriptors(input, [
+      "step",
+      "responseClass",
+      "proxyLeaseClass",
+      "currentTunnelClass",
+      "loadingFailureClass",
+      "loadingFailureTimingClass",
+    ]);
+    if (descriptors === null) return null;
     const step = descriptors.step.value;
     const responseClass = descriptors.responseClass.value;
     const proxyLeaseClass = descriptors.proxyLeaseClass.value;
     const currentTunnelClass = descriptors.currentTunnelClass.value;
+    const loadingFailureClass = descriptors.loadingFailureClass.value;
+    const loadingFailureTimingClass =
+      descriptors.loadingFailureTimingClass.value;
+    if (
+      step !== "profile-fetch" ||
+      responseClass !== "response-error-failed" ||
+      proxyLeaseClass !== "issued-active-tunnel" ||
+      currentTunnelClass !== "current-active-tunnel" ||
+      !SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_CLASSES.includes(
+        loadingFailureClass,
+      ) ||
+      !SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_TIMING_CLASSES.includes(
+        loadingFailureTimingClass,
+      )
+    ) {
+      return null;
+    }
+    const failureKey = `${loadingFailureTimingClass}:${loadingFailureClass}`;
+    return Object.prototype.hasOwnProperty.call(
+      SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_FAILURE_CLASSES,
+      failureKey,
+    )
+      ? SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_FAILURE_CLASSES[failureKey]
+      : null;
+  } catch {
+    return null;
+  }
+};
+const selectSafeAuthenticationProfileFailureClass = (input) => {
+  try {
+    const descriptors = exactOwnDataDescriptors(input, [
+      "step",
+      "responseClass",
+      "proxyLeaseClass",
+      "currentTunnelClass",
+      "loadingFailureClass",
+      "loadingFailureTimingClass",
+    ]);
+    if (descriptors === null) return null;
+    const step = descriptors.step.value;
+    const responseClass = descriptors.responseClass.value;
+    const proxyLeaseClass = descriptors.proxyLeaseClass.value;
+    const currentTunnelClass = descriptors.currentTunnelClass.value;
+    const loadingFailureClass = descriptors.loadingFailureClass.value;
+    const loadingFailureTimingClass =
+      descriptors.loadingFailureTimingClass.value;
+    const loadingFailedDiagnosticAbsent =
+      loadingFailureClass === null && loadingFailureTimingClass === null;
+    if (
+      !loadingFailedDiagnosticAbsent &&
+      normalizeSafeAuthenticationProfileLoadingFailedDiagnostic({
+        loadingFailureClass,
+        loadingFailureTimingClass,
+      }) === null
+    ) {
+      return null;
+    }
     const profileFailureClass = resolveSafeAuthenticationProfileFailureClass({
       step,
       responseClass,
@@ -11900,7 +12374,18 @@ const selectSafeAuthenticationProfileFailureClass = (input) => {
         proxyLeaseClass,
         currentTunnelClass,
       });
-    return runtimeFailureClass || profileFailureClass;
+    const loadingFailedFailureClass =
+      resolveSafeAuthenticationProfileLoadingFailedFailureClass({
+        step,
+        responseClass,
+        proxyLeaseClass,
+        currentTunnelClass,
+        loadingFailureClass,
+        loadingFailureTimingClass,
+      });
+    return (
+      loadingFailedFailureClass || runtimeFailureClass || profileFailureClass
+    );
   } catch {
     return null;
   }
@@ -12007,6 +12492,7 @@ const SAFE_AUTHENTICATION_FAILURE_CLASSES = Object.freeze([
   ...Object.values(
     SAFE_AUTHENTICATION_PROFILE_RESPONSE_ERROR_RUNTIME_FAILURE_CLASSES,
   ),
+  ...Object.values(SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_FAILURE_CLASSES),
   "application-session-proof-registration-failed",
   "authentication-bootstrap-pre-retirement-drain-failed",
   "authentication-bootstrap-retirement-failed",
@@ -12842,6 +13328,694 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     assert.equal(classifySafeCdpNetworkErrorReason(reasonFixture), null);
   }
   assert.equal(cdpNetworkErrorReasonCoercionCount, 0);
+  const loadingFailedClassFixtures = [
+    [
+      "net::ERR_HTTP2_PROTOCOL_ERROR",
+      false,
+      undefined,
+      undefined,
+      "http2-protocol",
+    ],
+    [
+      "net::ERR_TUNNEL_CONNECTION_FAILED",
+      false,
+      undefined,
+      undefined,
+      "proxy-tunnel",
+    ],
+    ["net::ERR_SSL_PROTOCOL_ERROR", false, undefined, undefined, "tls"],
+    [
+      "net::ERR_CONNECTION_RESET",
+      false,
+      undefined,
+      undefined,
+      "connection-reset",
+    ],
+    [
+      "net::ERR_CONNECTION_CLOSED",
+      false,
+      undefined,
+      undefined,
+      "connection-closed",
+    ],
+    ["net::ERR_CONNECTION_REFUSED", false, undefined, undefined, "connection"],
+    [
+      "net::ERR_NETWORK_CHANGED",
+      false,
+      undefined,
+      undefined,
+      "network-changed",
+    ],
+    [
+      "net::ERR_INCOMPLETE_CHUNKED_ENCODING",
+      false,
+      undefined,
+      undefined,
+      "incomplete-chunked",
+    ],
+    [
+      "net::ERR_CONTENT_LENGTH_MISMATCH",
+      false,
+      undefined,
+      undefined,
+      "content-length-mismatch",
+    ],
+    ["net::ERR_TIMED_OUT", false, undefined, undefined, "timeout"],
+    [
+      "net::ERR_NAME_NOT_RESOLVED",
+      false,
+      undefined,
+      undefined,
+      "name-resolution",
+    ],
+    ["net::ERR_ABORTED", false, undefined, undefined, "aborted"],
+    ["net::ERR_FAILED", false, undefined, undefined, "generic-failed"],
+    ["net::ERR_FAILED", false, "inspector", undefined, "blocked-by-client"],
+    ["net::ERR_FAILED", false, "csp", undefined, "policy-blocked"],
+    ["net::ERR_FAILED", false, undefined, "CorsDisabledScheme", "cors-blocked"],
+    [rawSecretUrl, false, undefined, undefined, "other"],
+  ];
+  for (const [
+    errorText,
+    canceled,
+    blockedReason,
+    corsError,
+    expectedClass,
+  ] of loadingFailedClassFixtures) {
+    const loadingFailureClass = classifySafeAuthenticationProfileLoadingFailed({
+      errorText,
+      canceled,
+      blockedReason,
+      corsError,
+    });
+    assert.equal(loadingFailureClass, expectedClass);
+    assert.equal(String(loadingFailureClass).includes(errorText), false);
+  }
+  assert.equal(
+    classifySafeAuthenticationProfileLoadingFailed({
+      errorText: rawSecretUrl,
+      canceled: true,
+      blockedReason: undefined,
+      corsError: undefined,
+    }),
+    "aborted",
+  );
+  assert.deepEqual(
+    [
+      ...new Set(loadingFailedClassFixtures.map((fixture) => fixture[4])),
+    ].sort(),
+    [...SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_CLASSES].sort(),
+  );
+  assert.deepEqual(
+    [
+      ...new Set([
+        ...Object.values(
+          SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_ERROR_TEXT_CLASS_MAP,
+        ),
+        "other",
+      ]),
+    ].sort(),
+    [...SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_CLASSES].sort(),
+  );
+  assert.equal(
+    Object.keys(SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_ERROR_TEXT_CLASS_MAP)
+      .length,
+    new Set(
+      Object.keys(
+        SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_ERROR_TEXT_CLASS_MAP,
+      ),
+    ).size,
+  );
+  let loadingFailedClassifierCoercionCount = 0;
+  const loadingFailedClassifierCoercionValue = {
+    toString() {
+      loadingFailedClassifierCoercionCount += 1;
+      return "net::ERR_HTTP2_PROTOCOL_ERROR";
+    },
+    valueOf() {
+      loadingFailedClassifierCoercionCount += 1;
+      return false;
+    },
+    [Symbol.toPrimitive]() {
+      loadingFailedClassifierCoercionCount += 1;
+      return "net::ERR_HTTP2_PROTOCOL_ERROR";
+    },
+  };
+  const loadingFailedSymbolExtra = Symbol("loading-failed-extra");
+  const loadingFailedClassifierNegativeFixtures = [
+    null,
+    [],
+    {},
+    {
+      errorText: "net::ERR_FAILED",
+      canceled: false,
+      blockedReason: undefined,
+      corsError: undefined,
+      extra: rawSecretUrl,
+    },
+    {
+      errorText: loadingFailedClassifierCoercionValue,
+      canceled: false,
+      blockedReason: undefined,
+      corsError: undefined,
+    },
+    {
+      errorText: "net::ERR_FAILED",
+      canceled: loadingFailedClassifierCoercionValue,
+      blockedReason: undefined,
+      corsError: undefined,
+    },
+    {
+      errorText: "net::ERR_FAILED",
+      canceled: false,
+      blockedReason: loadingFailedClassifierCoercionValue,
+      corsError: undefined,
+    },
+    Object.defineProperty(
+      {
+        errorText: "net::ERR_FAILED",
+        canceled: false,
+        blockedReason: undefined,
+        corsError: undefined,
+      },
+      loadingFailedSymbolExtra,
+      { enumerable: true, value: rawSecretUrl },
+    ),
+    Object.defineProperty(
+      {
+        canceled: false,
+        blockedReason: undefined,
+        corsError: undefined,
+      },
+      "errorText",
+      {
+        enumerable: true,
+        get() {
+          throw new Error(rawSecretUrl);
+        },
+      },
+    ),
+    new Proxy(
+      {},
+      {
+        ownKeys() {
+          throw new Error(rawSecretUrl);
+        },
+      },
+    ),
+  ];
+  for (const loadingFailedFixture of loadingFailedClassifierNegativeFixtures) {
+    assert.equal(
+      classifySafeAuthenticationProfileLoadingFailed(loadingFailedFixture),
+      null,
+    );
+  }
+  const loadingFailedTimingFixtures = [
+    ["response-awaiting", "pre-local-fail"],
+    ["terminal-command-in-flight", "local-fail-in-flight"],
+    ["terminal-complete", "post-local-fail"],
+  ];
+  for (const [
+    lifecycleState,
+    expectedTimingClass,
+  ] of loadingFailedTimingFixtures) {
+    assert.equal(
+      classifySafeAuthenticationProfileLoadingFailedTiming({ lifecycleState }),
+      expectedTimingClass,
+    );
+  }
+  assert.deepEqual(
+    loadingFailedTimingFixtures.map((fixture) => fixture[1]).sort(),
+    [...SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_TIMING_CLASSES].sort(),
+  );
+  assert.deepEqual(
+    Object.entries(
+      SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_TIMING_BY_LIFECYCLE_STATE,
+    ).sort(),
+    loadingFailedTimingFixtures.sort(),
+  );
+  const loadingFailedTimingNegativeFixtures = [
+    null,
+    [],
+    {},
+    { lifecycleState: "response-awaiting", extra: rawSecretUrl },
+    { lifecycleState: loadingFailedClassifierCoercionValue },
+    { lifecycleState: "final-response-released" },
+    Object.defineProperty(
+      { lifecycleState: "response-awaiting" },
+      loadingFailedSymbolExtra,
+      { enumerable: true, value: rawSecretUrl },
+    ),
+    Object.defineProperty({}, "lifecycleState", {
+      enumerable: true,
+      get() {
+        throw new Error(rawSecretUrl);
+      },
+    }),
+    new Proxy(
+      {},
+      {
+        ownKeys() {
+          throw new Error(rawSecretUrl);
+        },
+      },
+    ),
+  ];
+  for (const timingFixture of loadingFailedTimingNegativeFixtures) {
+    assert.equal(
+      classifySafeAuthenticationProfileLoadingFailedTiming(timingFixture),
+      null,
+    );
+  }
+  const loadingFailedDiagnostic = Object.freeze({
+    loadingFailureClass: "http2-protocol",
+    loadingFailureTimingClass: "pre-local-fail",
+  });
+  assert.deepEqual(
+    normalizeSafeAuthenticationProfileLoadingFailedDiagnostic(
+      loadingFailedDiagnostic,
+    ),
+    loadingFailedDiagnostic,
+  );
+  for (const diagnosticFixture of [
+    null,
+    [],
+    { loadingFailureClass: "http2-protocol" },
+    { ...loadingFailedDiagnostic, extra: rawSecretUrl },
+    {
+      loadingFailureClass: loadingFailedClassifierCoercionValue,
+      loadingFailureTimingClass: "pre-local-fail",
+    },
+    Object.defineProperty(
+      { ...loadingFailedDiagnostic },
+      loadingFailedSymbolExtra,
+      { enumerable: true, value: rawSecretUrl },
+    ),
+    Object.defineProperty(
+      { loadingFailureTimingClass: "pre-local-fail" },
+      "loadingFailureClass",
+      {
+        enumerable: true,
+        get() {
+          throw new Error(rawSecretUrl);
+        },
+      },
+    ),
+    new Proxy(
+      {},
+      {
+        ownKeys() {
+          throw new Error(rawSecretUrl);
+        },
+      },
+    ),
+  ]) {
+    assert.equal(
+      normalizeSafeAuthenticationProfileLoadingFailedDiagnostic(
+        diagnosticFixture,
+      ),
+      null,
+    );
+  }
+  const createLoadingFailedObserverFixture = ({
+    requestClass = "get",
+    lifecycleState = "response-awaiting",
+    diagnosticPhase = "authentication",
+    correlatedFetchRequestIds = [privateEmail],
+    lifecycleNetworkRequestId = rawSecretUrl,
+    lifecyclePrimaryRequestId = privateEmail,
+    transformLifecycle = (lifecycle) => lifecycle,
+  } = {}) => {
+    const fetchRequestIdsByNetworkId = new Map();
+    const profileRequestClassesByFetchRequestId = new Map();
+    const lifecycleByFetchRequestId = new Map();
+    let registeredEventName = null;
+    let registeredListener = null;
+    const observer = attachExactAuthenticationProfileLoadingFailedObserver({
+      session: {
+        on(eventName, listener) {
+          assert.equal(fetchRequestIdsByNetworkId.size, 0);
+          assert.equal(profileRequestClassesByFetchRequestId.size, 0);
+          assert.equal(lifecycleByFetchRequestId.size, 0);
+          registeredEventName = eventName;
+          registeredListener = listener;
+        },
+      },
+      fetchRequestIdsByNetworkId,
+      profileRequestClassesByFetchRequestId,
+      lifecycleByFetchRequestId,
+    });
+    assert.equal(registeredEventName, "Network.loadingFailed");
+    assert.equal(typeof registeredListener, "function");
+    for (const requestId of correlatedFetchRequestIds) {
+      profileRequestClassesByFetchRequestId.set(requestId, requestClass);
+    }
+    const initialRequestInvariant = Object.freeze({
+      url: exactProfileReadUrls[0],
+    });
+    lifecycleByFetchRequestId.set(
+      privateEmail,
+      transformLifecycle(
+        Object.freeze({
+          primaryRequestId: lifecyclePrimaryRequestId,
+          requestInvariant: initialRequestInvariant,
+          networkId: lifecycleNetworkRequestId,
+          state: lifecycleState,
+          diagnosticPhase,
+        }),
+      ),
+    );
+    fetchRequestIdsByNetworkId.set(
+      rawSecretUrl,
+      new Set(correlatedFetchRequestIds),
+    );
+    return Object.freeze({
+      emit: registeredListener,
+      collect: observer.collect,
+      attachedBeforeRequestStageRegistration: true,
+      registerDistinctProfileGet: () => {
+        const distinctFetchRequestId = `${privateEmail}-distinct`;
+        const distinctNetworkRequestId = `${rawSecretUrl}-distinct`;
+        profileRequestClassesByFetchRequestId.set(
+          distinctFetchRequestId,
+          "get",
+        );
+        const distinctRequestInvariant = Object.freeze({
+          url: exactProfileReadUrls[1],
+        });
+        lifecycleByFetchRequestId.set(
+          distinctFetchRequestId,
+          Object.freeze({
+            primaryRequestId: distinctFetchRequestId,
+            requestInvariant: distinctRequestInvariant,
+            networkId: distinctNetworkRequestId,
+            state: "response-awaiting",
+            diagnosticPhase: "authentication",
+          }),
+        );
+        fetchRequestIdsByNetworkId.set(
+          distinctNetworkRequestId,
+          new Set([distinctFetchRequestId]),
+        );
+      },
+      replaceSoleRequestInvariant: () => {
+        const lifecycle = lifecycleByFetchRequestId.get(privateEmail);
+        lifecycleByFetchRequestId.set(
+          privateEmail,
+          Object.freeze({
+            ...lifecycle,
+            requestInvariant: Object.freeze({
+              url: exactProfileReadUrls[0],
+            }),
+          }),
+        );
+      },
+    });
+  };
+  const exactLoadingFailedObserverFixture =
+    createLoadingFailedObserverFixture();
+  assert.equal(
+    exactLoadingFailedObserverFixture.attachedBeforeRequestStageRegistration,
+    true,
+  );
+  const rawLoadingFailedEvent = {
+    requestId: rawSecretUrl,
+    errorText: "net::ERR_HTTP2_PROTOCOL_ERROR",
+    canceled: false,
+    timestamp: 123,
+    type: "Fetch",
+    url: exactProfileReadUrls[0],
+    failedParameter: bypassSecret,
+  };
+  let loadingFailedTopLevelSymbolReadCount = 0;
+  Object.defineProperty(rawLoadingFailedEvent, loadingFailedSymbolExtra, {
+    enumerable: true,
+    get() {
+      loadingFailedTopLevelSymbolReadCount += 1;
+      throw new Error(rawSecretUrl);
+    },
+  });
+  exactLoadingFailedObserverFixture.emit(rawLoadingFailedEvent);
+  const exactLoadingFailedObservation =
+    exactLoadingFailedObserverFixture.collect();
+  assert.deepEqual(exactLoadingFailedObservation, loadingFailedDiagnostic);
+  assert.equal(Object.isFrozen(exactLoadingFailedObservation), true);
+  assert.equal(loadingFailedTopLevelSymbolReadCount, 0);
+  rawLoadingFailedEvent.errorText = "net::ERR_TUNNEL_CONNECTION_FAILED";
+  exactLoadingFailedObserverFixture.emit(rawLoadingFailedEvent);
+  assert.equal(
+    exactLoadingFailedObserverFixture.collect(),
+    exactLoadingFailedObservation,
+  );
+  const serializedLoadingFailedObservation = JSON.stringify(
+    exactLoadingFailedObservation,
+  );
+  for (const forbiddenValue of [
+    debugToken,
+    exchangedToken,
+    apiKey,
+    rawSecretUrl,
+    exactProfileReadUrls[0],
+    privateEmail,
+    bypassSecret,
+    "net::ERR_HTTP2_PROTOCOL_ERROR",
+  ]) {
+    assert.equal(
+      serializedLoadingFailedObservation.includes(forbiddenValue),
+      false,
+    );
+  }
+  const distinctRequestLoadingFailedObserverFixture =
+    createLoadingFailedObserverFixture();
+  distinctRequestLoadingFailedObserverFixture.emit({
+    requestId: rawSecretUrl,
+    errorText: "net::ERR_HTTP2_PROTOCOL_ERROR",
+    canceled: false,
+    type: "Fetch",
+  });
+  assert.deepEqual(
+    distinctRequestLoadingFailedObserverFixture.collect(),
+    loadingFailedDiagnostic,
+  );
+  distinctRequestLoadingFailedObserverFixture.registerDistinctProfileGet();
+  assert.equal(distinctRequestLoadingFailedObserverFixture.collect(), null);
+  const replacedInvariantLoadingFailedObserverFixture =
+    createLoadingFailedObserverFixture();
+  replacedInvariantLoadingFailedObserverFixture.emit({
+    requestId: rawSecretUrl,
+    errorText: "net::ERR_HTTP2_PROTOCOL_ERROR",
+    canceled: false,
+    type: "Fetch",
+  });
+  assert.deepEqual(
+    replacedInvariantLoadingFailedObserverFixture.collect(),
+    loadingFailedDiagnostic,
+  );
+  replacedInvariantLoadingFailedObserverFixture.replaceSoleRequestInvariant();
+  assert.equal(replacedInvariantLoadingFailedObserverFixture.collect(), null);
+  const corsLoadingFailedObserverFixture = createLoadingFailedObserverFixture({
+    lifecycleState: "terminal-command-in-flight",
+  });
+  corsLoadingFailedObserverFixture.emit({
+    requestId: rawSecretUrl,
+    errorText: "net::ERR_FAILED",
+    canceled: false,
+    type: "Fetch",
+    corsErrorStatus: {
+      corsError: "CorsDisabledScheme",
+      failedParameter: bypassSecret,
+    },
+  });
+  assert.deepEqual(corsLoadingFailedObserverFixture.collect(), {
+    loadingFailureClass: "cors-blocked",
+    loadingFailureTimingClass: "local-fail-in-flight",
+  });
+  const serializedCorsLoadingFailedObservation = JSON.stringify(
+    corsLoadingFailedObserverFixture.collect(),
+  );
+  for (const forbiddenValue of [
+    debugToken,
+    exchangedToken,
+    apiKey,
+    rawSecretUrl,
+    "net::ERR_FAILED",
+    bypassSecret,
+  ]) {
+    assert.equal(
+      serializedCorsLoadingFailedObservation.includes(forbiddenValue),
+      false,
+    );
+  }
+  let corsFailedParameterReadCount = 0;
+  let corsSymbolExtraReadCount = 0;
+  const corsIgnoredExtrasStatus = { corsError: "CorsDisabledScheme" };
+  Object.defineProperty(corsIgnoredExtrasStatus, "failedParameter", {
+    enumerable: true,
+    get() {
+      corsFailedParameterReadCount += 1;
+      throw new Error(bypassSecret);
+    },
+  });
+  Object.defineProperty(corsIgnoredExtrasStatus, loadingFailedSymbolExtra, {
+    enumerable: true,
+    get() {
+      corsSymbolExtraReadCount += 1;
+      throw new Error(rawSecretUrl);
+    },
+  });
+  const corsIgnoredExtrasObserverFixture = createLoadingFailedObserverFixture();
+  corsIgnoredExtrasObserverFixture.emit({
+    requestId: rawSecretUrl,
+    errorText: "net::ERR_FAILED",
+    canceled: false,
+    type: "Fetch",
+    corsErrorStatus: corsIgnoredExtrasStatus,
+  });
+  assert.deepEqual(corsIgnoredExtrasObserverFixture.collect(), {
+    loadingFailureClass: "cors-blocked",
+    loadingFailureTimingClass: "pre-local-fail",
+  });
+  assert.equal(corsFailedParameterReadCount, 0);
+  assert.equal(corsSymbolExtraReadCount, 0);
+  const corsAccessorObserverFixture = createLoadingFailedObserverFixture();
+  corsAccessorObserverFixture.emit({
+    requestId: rawSecretUrl,
+    errorText: "net::ERR_FAILED",
+    canceled: false,
+    type: "Fetch",
+    corsErrorStatus: Object.defineProperty(
+      { failedParameter: bypassSecret },
+      "corsError",
+      {
+        enumerable: true,
+        get() {
+          throw new Error(rawSecretUrl);
+        },
+      },
+    ),
+  });
+  assert.equal(corsAccessorObserverFixture.collect(), null);
+  const corsProxyObserverFixture = createLoadingFailedObserverFixture();
+  corsProxyObserverFixture.emit({
+    requestId: rawSecretUrl,
+    errorText: "net::ERR_FAILED",
+    canceled: false,
+    type: "Fetch",
+    corsErrorStatus: new Proxy(
+      {},
+      {
+        getOwnPropertyDescriptor() {
+          throw new Error(rawSecretUrl);
+        },
+      },
+    ),
+  });
+  assert.equal(corsProxyObserverFixture.collect(), null);
+  const postLocalLoadingFailedObserverFixture =
+    createLoadingFailedObserverFixture({ lifecycleState: "terminal-complete" });
+  postLocalLoadingFailedObserverFixture.emit({
+    requestId: rawSecretUrl,
+    errorText: "net::ERR_BLOCKED_BY_CLIENT",
+    canceled: true,
+    type: "Fetch",
+  });
+  assert.deepEqual(postLocalLoadingFailedObserverFixture.collect(), {
+    loadingFailureClass: "blocked-by-client",
+    loadingFailureTimingClass: "post-local-fail",
+  });
+  const ignoredLoadingFailedObserverFixtures = [
+    createLoadingFailedObserverFixture({ requestClass: "preflight" }),
+    createLoadingFailedObserverFixture({ diagnosticPhase: "screen-capture" }),
+    createLoadingFailedObserverFixture({
+      correlatedFetchRequestIds: [privateEmail, `${privateEmail}-alias`],
+    }),
+    createLoadingFailedObserverFixture({
+      lifecycleNetworkRequestId: `${rawSecretUrl}-mismatch`,
+    }),
+    createLoadingFailedObserverFixture({
+      lifecyclePrimaryRequestId: `${privateEmail}-mismatch`,
+    }),
+    createLoadingFailedObserverFixture({
+      lifecycleState: "final-response-released",
+    }),
+    createLoadingFailedObserverFixture({
+      transformLifecycle: (lifecycle) =>
+        Object.freeze({ ...lifecycle, extra: rawSecretUrl }),
+    }),
+    createLoadingFailedObserverFixture({
+      transformLifecycle: (lifecycle) => {
+        const lifecycleWithSymbol = { ...lifecycle };
+        Object.defineProperty(lifecycleWithSymbol, loadingFailedSymbolExtra, {
+          enumerable: true,
+          value: rawSecretUrl,
+        });
+        return Object.freeze(lifecycleWithSymbol);
+      },
+    }),
+    createLoadingFailedObserverFixture({
+      transformLifecycle: (lifecycle) => {
+        const { state: _state, ...lifecycleWithoutState } = lifecycle;
+        return Object.defineProperty(lifecycleWithoutState, "state", {
+          enumerable: true,
+          get() {
+            throw new Error(rawSecretUrl);
+          },
+        });
+      },
+    }),
+    createLoadingFailedObserverFixture({
+      transformLifecycle: (lifecycle) =>
+        new Proxy(lifecycle, {
+          ownKeys() {
+            throw new Error(rawSecretUrl);
+          },
+        }),
+    }),
+  ];
+  for (const ignoredObserverFixture of ignoredLoadingFailedObserverFixtures) {
+    ignoredObserverFixture.emit({
+      requestId: rawSecretUrl,
+      errorText: "net::ERR_HTTP2_PROTOCOL_ERROR",
+      canceled: false,
+      type: "Fetch",
+    });
+    assert.equal(ignoredObserverFixture.collect(), null);
+  }
+  const getterLoadingFailedObserverFixture =
+    createLoadingFailedObserverFixture();
+  getterLoadingFailedObserverFixture.emit(
+    Object.defineProperty(
+      { requestId: rawSecretUrl, canceled: false, type: "Fetch" },
+      "errorText",
+      {
+        enumerable: true,
+        get() {
+          throw new Error(rawSecretUrl);
+        },
+      },
+    ),
+  );
+  getterLoadingFailedObserverFixture.emit(
+    new Proxy(
+      {},
+      {
+        getOwnPropertyDescriptor() {
+          throw new Error(rawSecretUrl);
+        },
+      },
+    ),
+  );
+  assert.equal(getterLoadingFailedObserverFixture.collect(), null);
+  const wrongResourceLoadingFailedObserverFixture =
+    createLoadingFailedObserverFixture();
+  wrongResourceLoadingFailedObserverFixture.emit({
+    requestId: rawSecretUrl,
+    errorText: "net::ERR_HTTP2_PROTOCOL_ERROR",
+    canceled: false,
+    type: "XHR",
+  });
+  assert.equal(wrongResourceLoadingFailedObserverFixture.collect(), null);
+  assert.equal(loadingFailedClassifierCoercionCount, 0);
   const proxyLeaseDiagnosticFixtures = [
     ["issued", 200, 100, true, "issued-active-tunnel"],
     ["issued", 200, 100, false, "issued-no-active-tunnel"],
@@ -13603,6 +14777,8 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
         responseClass: "response-error-failed",
         proxyLeaseClass,
         currentTunnelClass,
+        loadingFailureClass: null,
+        loadingFailureTimingClass: null,
       }),
       expectedFailureClass,
     );
@@ -13613,6 +14789,163 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     ).sort(),
     profileResponseErrorRuntimeFixtures.map((fixture) => fixture[2]).sort(),
   );
+  const profileLoadingFailedFailureFixtures =
+    SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_TIMING_CLASSES.flatMap(
+      (loadingFailureTimingClass) =>
+        SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_CLASSES.map(
+          (loadingFailureClass) => [
+            loadingFailureTimingClass,
+            loadingFailureClass,
+            `authentication-evaluate-profile-fetch-cdp-issued-active-tunnel-current-active-tunnel-loading-${loadingFailureTimingClass}-${loadingFailureClass}-failed`,
+          ],
+        ),
+    );
+  for (const [
+    loadingFailureTimingClass,
+    loadingFailureClass,
+    expectedFailureClass,
+  ] of profileLoadingFailedFailureFixtures) {
+    const selectionInput = {
+      step: "profile-fetch",
+      responseClass: "response-error-failed",
+      proxyLeaseClass: "issued-active-tunnel",
+      currentTunnelClass: "current-active-tunnel",
+      loadingFailureClass,
+      loadingFailureTimingClass,
+    };
+    assert.equal(
+      resolveSafeAuthenticationProfileLoadingFailedFailureClass(selectionInput),
+      expectedFailureClass,
+    );
+    assert.equal(
+      selectSafeAuthenticationProfileFailureClass(selectionInput),
+      expectedFailureClass,
+    );
+  }
+  assert.equal(
+    profileLoadingFailedFailureFixtures.find(
+      ([timingClass, failureClass]) =>
+        timingClass === "pre-local-fail" && failureClass === "http2-protocol",
+    )[2],
+    "authentication-evaluate-profile-fetch-cdp-issued-active-tunnel-current-active-tunnel-loading-pre-local-fail-http2-protocol-failed",
+  );
+  assert.deepEqual(
+    Object.values(
+      SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_FAILURE_CLASSES,
+    ).sort(),
+    profileLoadingFailedFailureFixtures.map((fixture) => fixture[2]).sort(),
+  );
+  assert.equal(
+    Object.keys(SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_FAILURE_CLASSES)
+      .length,
+    SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_TIMING_CLASSES.length *
+      SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_CLASSES.length,
+  );
+  assert.equal(
+    new Set(
+      Object.values(SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_FAILURE_CLASSES),
+    ).size,
+    Object.keys(SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_FAILURE_CLASSES)
+      .length,
+  );
+  const profileLoadingFailedNegativeFixtures = [
+    null,
+    [],
+    {
+      step: "profile-fetch",
+      responseClass: "response-error-failed",
+      proxyLeaseClass: "issued-active-tunnel",
+      currentTunnelClass: "current-active-tunnel",
+      loadingFailureClass: "http2-protocol",
+      loadingFailureTimingClass: "pre-local-fail",
+      extra: rawSecretUrl,
+    },
+    Object.defineProperty(
+      {
+        step: "profile-fetch",
+        responseClass: "response-error-failed",
+        proxyLeaseClass: "issued-active-tunnel",
+        currentTunnelClass: "current-active-tunnel",
+        loadingFailureClass: "http2-protocol",
+        loadingFailureTimingClass: "pre-local-fail",
+      },
+      loadingFailedSymbolExtra,
+      { enumerable: true, value: rawSecretUrl },
+    ),
+    {
+      step: "profile-status",
+      responseClass: "response-error-failed",
+      proxyLeaseClass: "issued-active-tunnel",
+      currentTunnelClass: "current-active-tunnel",
+      loadingFailureClass: "http2-protocol",
+      loadingFailureTimingClass: "pre-local-fail",
+    },
+    {
+      step: "profile-fetch",
+      responseClass: "response-error-connection",
+      proxyLeaseClass: "issued-active-tunnel",
+      currentTunnelClass: "current-active-tunnel",
+      loadingFailureClass: "http2-protocol",
+      loadingFailureTimingClass: "pre-local-fail",
+    },
+    {
+      step: "profile-fetch",
+      responseClass: "response-error-failed",
+      proxyLeaseClass: "consumed-active-tunnel",
+      currentTunnelClass: "current-active-tunnel",
+      loadingFailureClass: "http2-protocol",
+      loadingFailureTimingClass: "pre-local-fail",
+    },
+    {
+      step: "profile-fetch",
+      responseClass: "response-error-failed",
+      proxyLeaseClass: "issued-active-tunnel",
+      currentTunnelClass: "current-no-active-tunnel",
+      loadingFailureClass: "http2-protocol",
+      loadingFailureTimingClass: "pre-local-fail",
+    },
+    {
+      step: "profile-fetch",
+      responseClass: "response-error-failed",
+      proxyLeaseClass: "issued-active-tunnel",
+      currentTunnelClass: "current-active-tunnel",
+      loadingFailureClass: loadingFailedClassifierCoercionValue,
+      loadingFailureTimingClass: "pre-local-fail",
+    },
+    Object.defineProperty(
+      {
+        step: "profile-fetch",
+        responseClass: "response-error-failed",
+        proxyLeaseClass: "issued-active-tunnel",
+        currentTunnelClass: "current-active-tunnel",
+        loadingFailureTimingClass: "pre-local-fail",
+      },
+      "loadingFailureClass",
+      {
+        enumerable: true,
+        get() {
+          throw new Error(rawSecretUrl);
+        },
+      },
+    ),
+    new Proxy(
+      {},
+      {
+        ownKeys() {
+          throw new Error(rawSecretUrl);
+        },
+      },
+    ),
+  ];
+  for (const loadingFailureFixture of profileLoadingFailedNegativeFixtures) {
+    assert.equal(
+      resolveSafeAuthenticationProfileLoadingFailedFailureClass(
+        loadingFailureFixture,
+      ),
+      null,
+    );
+  }
+  assert.equal(loadingFailedClassifierCoercionCount, 0);
   assert.deepEqual(
     SAFE_AUTHENTICATION_CONFIG_READ_PROXY_PRIORITY_LEASE_CLASSES.filter(
       (leaseClass) =>
@@ -13708,6 +15041,8 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
       responseClass: "response-error-failed",
       proxyLeaseClass: null,
       currentTunnelClass: null,
+      loadingFailureClass: null,
+      loadingFailureTimingClass: null,
     }),
     "authentication-evaluate-profile-fetch-cdp-response-error-failed",
   );
@@ -13717,8 +15052,65 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
       responseClass: "response-error-failed",
       proxyLeaseClass: "issued-no-active-tunnel",
       currentTunnelClass: "current-no-active-tunnel",
+      loadingFailureClass: null,
+      loadingFailureTimingClass: null,
     }),
     "authentication-evaluate-profile-fetch-cdp-proxy-issued-no-active-tunnel-failed",
+  );
+  assert.equal(
+    selectSafeAuthenticationProfileFailureClass({
+      step: "profile-fetch",
+      responseClass: "response-error-failed",
+      proxyLeaseClass: "issued-no-active-tunnel",
+      currentTunnelClass: "current-active-tunnel",
+      loadingFailureClass: "http2-protocol",
+      loadingFailureTimingClass: "pre-local-fail",
+    }),
+    "authentication-evaluate-profile-fetch-cdp-proxy-issued-no-active-tunnel-failed",
+  );
+  assert.equal(
+    selectSafeAuthenticationProfileFailureClass({
+      step: "profile-fetch",
+      responseClass: "response-error-failed",
+      proxyLeaseClass: "consumed-active-tunnel",
+      currentTunnelClass: "current-active-tunnel",
+      loadingFailureClass: "http2-protocol",
+      loadingFailureTimingClass: "pre-local-fail",
+    }),
+    "authentication-evaluate-profile-fetch-cdp-consumed-active-tunnel-current-active-tunnel-response-error-failed",
+  );
+  assert.equal(
+    selectSafeAuthenticationProfileFailureClass({
+      step: "profile-fetch",
+      responseClass: "response-error-failed",
+      proxyLeaseClass: "issued-active-tunnel",
+      currentTunnelClass: "current-active-tunnel",
+      loadingFailureClass: null,
+      loadingFailureTimingClass: null,
+    }),
+    "authentication-evaluate-profile-fetch-cdp-issued-active-tunnel-current-active-tunnel-response-error-failed",
+  );
+  assert.equal(
+    selectSafeAuthenticationProfileFailureClass({
+      step: "profile-fetch",
+      responseClass: "response-error-connection",
+      proxyLeaseClass: "issued-active-tunnel",
+      currentTunnelClass: "current-active-tunnel",
+      loadingFailureClass: "http2-protocol",
+      loadingFailureTimingClass: "pre-local-fail",
+    }),
+    "authentication-evaluate-profile-fetch-cdp-response-error-connection-failed",
+  );
+  assert.equal(
+    selectSafeAuthenticationProfileFailureClass({
+      step: "profile-fetch",
+      responseClass: "response-error-failed",
+      proxyLeaseClass: "issued-active-tunnel",
+      currentTunnelClass: "current-no-active-tunnel",
+      loadingFailureClass: "http2-protocol",
+      loadingFailureTimingClass: "pre-local-fail",
+    }),
+    "authentication-evaluate-profile-fetch-cdp-issued-active-tunnel-current-no-active-tunnel-response-error-failed",
   );
   assert.equal(
     selectSafeAuthenticationProfileFailureClass({
@@ -13726,6 +15118,8 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
       responseClass: "response-4xx",
       proxyLeaseClass: null,
       currentTunnelClass: null,
+      loadingFailureClass: null,
+      loadingFailureTimingClass: null,
     }),
     "authentication-evaluate-profile-status-cdp-response-4xx-failed",
   );
@@ -13735,6 +15129,59 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     ),
     null,
   );
+  for (const selectorFixture of [
+    {
+      step: "profile-fetch",
+      responseClass: "response-error-failed",
+      proxyLeaseClass: "issued-active-tunnel",
+      currentTunnelClass: "current-active-tunnel",
+      loadingFailureClass: "http2-protocol",
+      loadingFailureTimingClass: "pre-local-fail",
+      extra: rawSecretUrl,
+    },
+    Object.defineProperty(
+      {
+        step: "profile-fetch",
+        responseClass: "response-error-failed",
+        proxyLeaseClass: "issued-active-tunnel",
+        currentTunnelClass: "current-active-tunnel",
+        loadingFailureClass: "http2-protocol",
+        loadingFailureTimingClass: "pre-local-fail",
+      },
+      loadingFailedSymbolExtra,
+      { enumerable: true, value: rawSecretUrl },
+    ),
+    {
+      step: "profile-fetch",
+      responseClass: "response-error-failed",
+      proxyLeaseClass: "issued-active-tunnel",
+      currentTunnelClass: "current-active-tunnel",
+      loadingFailureClass: loadingFailedClassifierCoercionValue,
+      loadingFailureTimingClass: "pre-local-fail",
+    },
+    Object.defineProperty(
+      {
+        step: "profile-fetch",
+        responseClass: "response-error-failed",
+        proxyLeaseClass: "issued-active-tunnel",
+        currentTunnelClass: "current-active-tunnel",
+        loadingFailureTimingClass: "pre-local-fail",
+      },
+      "loadingFailureClass",
+      {
+        enumerable: true,
+        get() {
+          throw new Error(rawSecretUrl);
+        },
+      },
+    ),
+  ]) {
+    assert.equal(
+      selectSafeAuthenticationProfileFailureClass(selectorFixture),
+      null,
+    );
+  }
+  assert.equal(loadingFailedClassifierCoercionCount, 0);
   assert.equal(
     resolveSafeAuthenticationProfileFailureClass({
       step: "profile-fetch",
@@ -13786,6 +15233,9 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
       ...Object.values(
         SAFE_AUTHENTICATION_PROFILE_RESPONSE_ERROR_RUNTIME_FAILURE_CLASSES,
       ),
+      ...Object.values(
+        SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_FAILURE_CLASSES,
+      ),
     ]).size,
     Object.values(SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_FAILURE_CLASSES)
       .length +
@@ -13796,7 +15246,9 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
       Object.values(SAFE_AUTHENTICATION_PROFILE_PROXY_FAILURE_CLASSES).length +
       Object.values(
         SAFE_AUTHENTICATION_PROFILE_RESPONSE_ERROR_RUNTIME_FAILURE_CLASSES,
-      ).length,
+      ).length +
+      Object.values(SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_FAILURE_CLASSES)
+        .length,
   );
   const configReadProxyPrecedenceNegativeFixtures = [
     null,
@@ -14034,6 +15486,9 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     ...Object.values(
       SAFE_AUTHENTICATION_PROFILE_RESPONSE_ERROR_RUNTIME_FAILURE_CLASSES,
     ),
+    ...Object.values(
+      SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_FAILURE_CLASSES,
+    ),
     "application-session-proof-registration-failed",
   ];
   assert.equal(
@@ -14076,6 +15531,8 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     bypassSecret,
     privateEmail,
     rawSecretUrl,
+    "net::ERR_HTTP2_PROTOCOL_ERROR",
+    "CorsDisabledScheme",
   ];
   const serializedFailure = serializeSafeAuthenticationFailure(
     diagnostic,
@@ -14137,6 +15594,9 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     ...Object.values(SAFE_AUTHENTICATION_PROFILE_STATUS_FAILURE_CLASSES),
     ...Object.values(
       SAFE_AUTHENTICATION_PROFILE_RESPONSE_ERROR_RUNTIME_FAILURE_CLASSES,
+    ),
+    ...Object.values(
+      SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_FAILURE_CLASSES,
     ),
   ].map((failureClass) =>
     serializeSafeAuthenticationFailure(
@@ -14457,6 +15917,29 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
       profileResponseErrorRuntimeFixtures.length,
     safeAuthenticationProfileResponseErrorRuntimeNegativeFixtureCount:
       profileResponseErrorRuntimeNegativeFixtures.length,
+    safeAuthenticationProfileLoadingFailedClassFixtureCount:
+      loadingFailedClassFixtures.length,
+    safeAuthenticationProfileLoadingFailedClassNegativeFixtureCount:
+      loadingFailedClassifierNegativeFixtures.length,
+    safeAuthenticationProfileLoadingFailedTimingFixtureCount:
+      loadingFailedTimingFixtures.length,
+    safeAuthenticationProfileLoadingFailedTimingNegativeFixtureCount:
+      loadingFailedTimingNegativeFixtures.length,
+    safeAuthenticationProfileLoadingFailedFailureClassFixtureCount:
+      profileLoadingFailedFailureFixtures.length,
+    safeAuthenticationProfileLoadingFailedFailureClassNegativeFixtureCount:
+      profileLoadingFailedNegativeFixtures.length,
+    safeAuthenticationProfileLoadingFailedObserverAcceptedFixtureCount: 6,
+    safeAuthenticationProfileLoadingFailedObserverIgnoredFixtureCount:
+      ignoredLoadingFailedObserverFixtures.length + 4,
+    safeAuthenticationProfileLoadingFailedRequestBindingInvalidationFixtureCount: 2,
+    safeAuthenticationProfileLoadingFailedIgnoredFieldReadCount:
+      loadingFailedTopLevelSymbolReadCount +
+      corsFailedParameterReadCount +
+      corsSymbolExtraReadCount,
+    safeAuthenticationProfileLoadingFailedRawValueOutputCount: 0,
+    safeAuthenticationProfileLoadingFailedClassifierCoercionCount:
+      loadingFailedClassifierCoercionCount,
     safeAuthenticationConfigReadRawNetworkValueOutputCount: 0,
     safeAuthenticationConfigReadClassifierCoercionCount:
       configReadClassifierCoercionCount,
@@ -25583,6 +27066,7 @@ const authenticate = async (
     collectAuthenticationProfileResponseClass,
     collectAuthenticationProfileProxyLeaseClass,
     collectAuthenticationProfileCurrentTunnelClass,
+    collectAuthenticationProfileLoadingFailedDiagnostic,
   },
 ) => {
   let failureClass = "navigation-failed";
@@ -25651,6 +27135,8 @@ const authenticate = async (
       let profileResponseClass = null;
       let profileProxyLeaseClass = null;
       let profileCurrentTunnelClass = null;
+      let profileLoadingFailureClass = null;
+      let profileLoadingFailureTimingClass = null;
       try {
         profileResponseClass = collectAuthenticationProfileResponseClass();
       } catch {
@@ -25669,12 +27155,28 @@ const authenticate = async (
         } catch {
           // The bounded current-tunnel diagnostic is optional and fails closed.
         }
+        try {
+          const loadingFailedDiagnostic =
+            normalizeSafeAuthenticationProfileLoadingFailedDiagnostic(
+              collectAuthenticationProfileLoadingFailedDiagnostic(),
+            );
+          if (loadingFailedDiagnostic !== null) {
+            profileLoadingFailureClass =
+              loadingFailedDiagnostic.loadingFailureClass;
+            profileLoadingFailureTimingClass =
+              loadingFailedDiagnostic.loadingFailureTimingClass;
+          }
+        } catch {
+          // The bounded loading-failed diagnostic is optional and fails closed.
+        }
       }
       const profileFailureClass = selectSafeAuthenticationProfileFailureClass({
         step: profileFailureStep,
         responseClass: profileResponseClass,
         proxyLeaseClass: profileProxyLeaseClass,
         currentTunnelClass: profileCurrentTunnelClass,
+        loadingFailureClass: profileLoadingFailureClass,
+        loadingFailureTimingClass: profileLoadingFailureTimingClass,
       });
       if (profileFailureClass !== null) failureClass = profileFailureClass;
     }
@@ -28791,6 +30293,14 @@ try {
         Object.freeze({ ...lifecycle, state }),
       );
     };
+    const authenticationProfileLoadingFailedObserver =
+      attachExactAuthenticationProfileLoadingFailedObserver({
+        session: appCheckCdpSession,
+        fetchRequestIdsByNetworkId: allowedEgressFetchRequestIdsByNetworkId,
+        profileRequestClassesByFetchRequestId:
+          authenticationProfileRequestClassesByFetchRequestId,
+        lifecycleByFetchRequestId: allowedEgressLifecycleByFetchRequestId,
+      });
     const retireContextClosedWebChannelAuthorizations = () => {
       const retirementCounts = retireExactContextClosedWebChannelAuthorizations(
         {
@@ -30913,6 +32423,8 @@ try {
             )
               ? groupAuthenticationProfileGetCurrentTunnelClass
               : null,
+          collectAuthenticationProfileLoadingFailedDiagnostic: () =>
+            authenticationProfileLoadingFailedObserver.collect(),
         },
       );
       telemetryCapabilityGuardRuntimeAttestations.push(
