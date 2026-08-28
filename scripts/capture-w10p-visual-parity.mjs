@@ -3146,6 +3146,22 @@ const isPostFinalAlreadyRetiredInterceptionError = (error) =>
   error instanceof Error &&
   ["Error", "ProtocolError"].includes(error.name) &&
   POST_FINAL_ALREADY_RETIRED_INTERCEPTION_ERROR_MESSAGES.has(error.message);
+const CONTINUE_REQUEST_INVALID_INTERCEPTION_ERROR_MESSAGES = new Set([
+  "Protocol error (Fetch.continueRequest): Invalid InterceptionId.",
+  "cdpSession.send: Protocol error (Fetch.continueRequest): Invalid InterceptionId.",
+]);
+const safeCdpHandlerProtocolErrorClass = (error) => {
+  if (
+    error instanceof Error &&
+    ["Error", "ProtocolError"].includes(error.name) &&
+    CONTINUE_REQUEST_INVALID_INTERCEPTION_ERROR_MESSAGES.has(error.message)
+  ) {
+    return "continue-request-invalid-interception";
+  }
+  return error instanceof Error && error.name === "ProtocolError"
+    ? "other-protocol-error"
+    : "non-protocol-error";
+};
 const createPerCorrelationTaskCoordinator = () => {
   const tailsByCorrelation = new Map();
   return Object.freeze({
@@ -5407,6 +5423,57 @@ const SAFE_FIRESTORE_WEBCHANNEL_AUTH_DIAGNOSTIC_PHASES = Object.freeze([
   "screen-capture",
   "browser-audit-finalization",
 ]);
+const SAFE_FIRESTORE_WEBCHANNEL_HEADER_REQUEST_CLASSES = Object.freeze([
+  "initial-forward-post",
+  "session-forward-post",
+  "backchannel-get",
+]);
+const summarizeSafePendingWebChannelHeaderBindings = (entries) => {
+  assert.equal(Array.isArray(entries), true);
+  const counts = new Map();
+  for (const entry of entries) {
+    assert.ok(entry && typeof entry === "object");
+    assert.ok(
+      entry.phase === null ||
+        SAFE_FIRESTORE_WEBCHANNEL_AUTH_DIAGNOSTIC_PHASES.includes(entry.phase),
+    );
+    for (const requestClass of [
+      entry.cdpRequestClass,
+      entry.playwrightRequestClass,
+    ]) {
+      assert.ok(
+        requestClass === null ||
+          SAFE_FIRESTORE_WEBCHANNEL_HEADER_REQUEST_CLASSES.includes(
+            requestClass,
+          ),
+      );
+    }
+    for (const value of [
+      entry.cdpRegistered,
+      entry.playwrightRegistered,
+      entry.settled,
+    ]) {
+      assert.equal(typeof value, "boolean");
+    }
+    const safeClass = Object.freeze({
+      phase: entry.phase,
+      captureBound: entry.captureId !== null,
+      cdpRequestClass: entry.cdpRequestClass,
+      playwrightRequestClass: entry.playwrightRequestClass,
+      cdpRegistered: entry.cdpRegistered,
+      playwrightRegistered: entry.playwrightRegistered,
+      settled: entry.settled,
+    });
+    const key = JSON.stringify(safeClass);
+    counts.set(key, {
+      ...safeClass,
+      count: (counts.get(key)?.count || 0) + 1,
+    });
+  }
+  return [...counts.values()].sort((left, right) =>
+    JSON.stringify(left).localeCompare(JSON.stringify(right)),
+  );
+};
 const createSafeFirestoreWebChannelAuthRecord = ({
   bindingClass,
   authorizationPresent,
@@ -8843,6 +8910,36 @@ const verifyAllowedEgressResponseLifecycleFixtures = async () => {
       false,
     );
   }
+  for (const message of CONTINUE_REQUEST_INVALID_INTERCEPTION_ERROR_MESSAGES) {
+    assert.equal(
+      safeCdpHandlerProtocolErrorClass(new Error(message)),
+      "continue-request-invalid-interception",
+    );
+  }
+  const continueRequestProtocolErrorFixture = new Error(
+    "Protocol error (Fetch.continueRequest): Invalid InterceptionId.",
+  );
+  continueRequestProtocolErrorFixture.name = "ProtocolError";
+  assert.equal(
+    safeCdpHandlerProtocolErrorClass(continueRequestProtocolErrorFixture),
+    "continue-request-invalid-interception",
+  );
+  const otherProtocolErrorFixture = new Error(
+    "Protocol error (Fetch.continueRequest): Other failure.",
+  );
+  otherProtocolErrorFixture.name = "ProtocolError";
+  assert.equal(
+    safeCdpHandlerProtocolErrorClass(otherProtocolErrorFixture),
+    "other-protocol-error",
+  );
+  assert.equal(
+    safeCdpHandlerProtocolErrorClass(
+      new Error(
+        "Protocol error (Fetch.continueRequest): Invalid InterceptionId. trailing",
+      ),
+    ),
+    "non-protocol-error",
+  );
   const aliasPostFinalErrorEvent = {
     ...directPostFinalErrorEvent,
     requestId: "fixture-response-fetch-alias",
@@ -9520,6 +9617,7 @@ const verifyAllowedEgressResponseLifecycleFixtures = async () => {
     rejectedAllowedEgressCorrelationCaseCount: 3,
     allowedEgressProxySingleCompletionCaseCount: 1,
     allowedEgressRetiredInterceptionCaseCount: 1,
+    safeContinueRequestProtocolErrorClassificationCaseCount: 5,
     acceptedContextClosedWebChannelBackchannelRetirementCaseCount: 1,
     acceptedContextClosedWebChannelSessionForwardPostRetirementCaseCount: 1,
     acceptedContextClosedWebChannelTerminationRetirementCaseCount: 1,
@@ -11799,6 +11897,9 @@ const verifyAppCheckSecretNegativeFixtures = () => {
   const exchangedToken = `${"a".repeat(24)}.${"b".repeat(24)}.${"c".repeat(
     24,
   )}`;
+  const privateNetworkId = "private-firestore-network-id";
+  const privateRequestUrl =
+    "https://firestore.googleapis.com/private-webchannel-url";
   assert.throws(() =>
     assertNoAppCheckSecretMaterial(`raw=${debugToken}`, { debugToken }),
   );
@@ -11818,7 +11919,46 @@ const verifyAppCheckSecretNegativeFixtures = () => {
       { debugToken },
     ),
   );
-  return { rejectedRawSecretCaseCount: 3, acceptedSanitizedCaseCount: 1 };
+  const pendingBindingSummary = summarizeSafePendingWebChannelHeaderBindings([
+    {
+      networkRequestId: privateNetworkId,
+      requestUrl: privateRequestUrl,
+      phase: "session-keepalive",
+      captureId: null,
+      cdpRequestClass: "backchannel-get",
+      playwrightRequestClass: "backchannel-get",
+      cdpRegistered: true,
+      playwrightRegistered: true,
+      settled: true,
+    },
+  ]);
+  assert.deepEqual(pendingBindingSummary, [
+    {
+      phase: "session-keepalive",
+      captureBound: false,
+      cdpRequestClass: "backchannel-get",
+      playwrightRequestClass: "backchannel-get",
+      cdpRegistered: true,
+      playwrightRegistered: true,
+      settled: true,
+      count: 1,
+    },
+  ]);
+  const serializedPendingBindingSummary = JSON.stringify(pendingBindingSummary);
+  assert.equal(
+    serializedPendingBindingSummary.includes(privateNetworkId),
+    false,
+  );
+  assert.equal(
+    serializedPendingBindingSummary.includes(privateRequestUrl),
+    false,
+  );
+  return {
+    rejectedRawSecretCaseCount: 3,
+    acceptedSanitizedCaseCount: 1,
+    safePendingWebChannelHeaderBindingFixtureCount: 1,
+    safePendingWebChannelHeaderBindingRawValueOutputCount: 0,
+  };
 };
 const appCheckSecretNegativeSelfTest = verifyAppCheckSecretNegativeFixtures();
 const safeAuthenticationFailureDiagnosticSelfTest =
@@ -22750,6 +22890,8 @@ let allowedEgressContextCloseTerminationRetirementCount = 0;
 let playwrightAllHeadersHeaderAttestationRequestCount = 0;
 let playwrightAllHeadersHeaderAttestationCompletedRequestCount = 0;
 let appCheckCdpHandlerErrorCount = 0;
+let cdpContinueRequestInvalidInterceptionErrorCount = 0;
+let cdpOtherProtocolErrorCount = 0;
 const cdpHandlerFailureClassCounts = new Map();
 const webChannelListenerDiagnosticClassCounts = new Map();
 let baselineBridgeInjectedRedirectResponseAbortCount = 0;
@@ -23723,6 +23865,9 @@ try {
     const groupTargetDiscoveryActivationStart = targetDiscoveryActivationCount;
     const groupTargetSnapshotStart = targetSnapshotCount;
     const groupBaselineBridgeHandlerErrorStart = appCheckCdpHandlerErrorCount;
+    const groupCdpContinueRequestInvalidInterceptionErrorStart =
+      cdpContinueRequestInvalidInterceptionErrorCount;
+    const groupCdpOtherProtocolErrorStart = cdpOtherProtocolErrorCount;
     const groupCdpHandlerFailureClassCountsStart = new Map(
       cdpHandlerFailureClassCounts,
     );
@@ -23950,6 +24095,18 @@ try {
         webChannelRequestHeaderAttestationFailureCount,
         genericRequestHeaderAttestationFailureCount,
         responseHeaderAttestationFailureCount,
+        cumulativeAppCheckCdpHandlerErrorCount: appCheckCdpHandlerErrorCount,
+        groupAppCheckCdpHandlerErrorCount:
+          appCheckCdpHandlerErrorCount - groupBaselineBridgeHandlerErrorStart,
+        groupCdpContinueRequestInvalidInterceptionErrorCount:
+          cdpContinueRequestInvalidInterceptionErrorCount -
+          groupCdpContinueRequestInvalidInterceptionErrorStart,
+        groupCdpOtherProtocolErrorCount:
+          cdpOtherProtocolErrorCount - groupCdpOtherProtocolErrorStart,
+        groupCdpHandlerFailureClasses: snapshotSafeDiagnosticClasses(
+          cdpHandlerFailureClassCounts,
+          groupCdpHandlerFailureClassCountsStart,
+        ),
         directBrowserEarlyHintsObservationCount:
           directBrowserEarlyHintsObservationCount -
           groupDirectBrowserEarlyHintsObservationStart,
@@ -23983,6 +24140,10 @@ try {
         pendingNetworkAttestationCount: pendingNetworkAttestations.size,
         pendingWebChannelBindingCount:
           webChannelCdpHeaderAttestationsByNetworkId.size,
+        pendingWebChannelBindingClasses:
+          summarizeSafePendingWebChannelHeaderBindings([
+            ...webChannelCdpHeaderAttestationsByNetworkId.values(),
+          ]),
         webChannelListenerDiagnosticClasses: snapshotSafeDiagnosticClasses(
           webChannelListenerDiagnosticClassCounts,
           groupWebChannelListenerDiagnosticClassCountsStart,
@@ -26401,6 +26562,14 @@ try {
               }
             })
             .catch(async (error) => {
+              const protocolErrorClass =
+                safeCdpHandlerProtocolErrorClass(error);
+              cdpContinueRequestInvalidInterceptionErrorCount += Number(
+                protocolErrorClass === "continue-request-invalid-interception",
+              );
+              cdpOtherProtocolErrorCount += Number(
+                protocolErrorClass === "other-protocol-error",
+              );
               const webChannelEntry =
                 webChannelCdpHeaderAttestationEntriesByEvent.get(event) ||
                 (typeof event.networkId === "string"
