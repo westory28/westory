@@ -11139,10 +11139,226 @@ const SAFE_AUTHENTICATION_EVALUATION_FAILURE_CLASSES = Object.freeze({
   "profile-read": "authentication-evaluate-profile-read-failed",
   "identity-finalize": "authentication-evaluate-identity-finalize-failed",
 });
+const SAFE_AUTHENTICATION_CONFIG_READ_REQUEST_CLASSES = Object.freeze([
+  "get",
+  "preflight",
+]);
+const SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_CLASSES = Object.freeze([
+  "response-2xx",
+  "response-3xx",
+  "response-4xx",
+  "response-5xx",
+  "response-other-status",
+  "response-error",
+  "handler-before-response",
+  "preflight-response-2xx",
+  "preflight-response-3xx",
+  "preflight-response-4xx",
+  "preflight-response-5xx",
+  "preflight-response-other-status",
+  "preflight-response-error",
+  "preflight-handler-before-response",
+]);
+const SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_FAILURE_CLASSES = Object.freeze({
+  "response-2xx": "authentication-evaluate-config-read-cdp-response-2xx-failed",
+  "response-3xx": "authentication-evaluate-config-read-cdp-response-3xx-failed",
+  "response-4xx": "authentication-evaluate-config-read-cdp-response-4xx-failed",
+  "response-5xx": "authentication-evaluate-config-read-cdp-response-5xx-failed",
+  "response-other-status":
+    "authentication-evaluate-config-read-cdp-response-other-status-failed",
+  "response-error":
+    "authentication-evaluate-config-read-cdp-response-error-failed",
+  "handler-before-response":
+    "authentication-evaluate-config-read-cdp-handler-before-response-failed",
+  "preflight-response-2xx":
+    "authentication-evaluate-config-read-cdp-preflight-response-2xx-failed",
+  "preflight-response-3xx":
+    "authentication-evaluate-config-read-cdp-preflight-response-3xx-failed",
+  "preflight-response-4xx":
+    "authentication-evaluate-config-read-cdp-preflight-response-4xx-failed",
+  "preflight-response-5xx":
+    "authentication-evaluate-config-read-cdp-preflight-response-5xx-failed",
+  "preflight-response-other-status":
+    "authentication-evaluate-config-read-cdp-preflight-response-other-status-failed",
+  "preflight-response-error":
+    "authentication-evaluate-config-read-cdp-preflight-response-error-failed",
+  "preflight-handler-before-response":
+    "authentication-evaluate-config-read-cdp-preflight-handler-before-response-failed",
+});
+const classifyExactAuthenticationConfigReadRequest = (input) => {
+  try {
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      return null;
+    }
+    const descriptors = Object.getOwnPropertyDescriptors(input);
+    if (
+      Object.keys(descriptors).sort().join(",") !== "method,phase,requestUrl"
+    ) {
+      return null;
+    }
+    for (const descriptor of Object.values(descriptors)) {
+      if (
+        !Object.prototype.hasOwnProperty.call(descriptor, "value") ||
+        descriptor.get !== undefined ||
+        descriptor.set !== undefined
+      ) {
+        return null;
+      }
+    }
+    const method = descriptors.method.value;
+    const phase = descriptors.phase.value;
+    const requestUrl = descriptors.requestUrl.value;
+    if (
+      !["GET", "OPTIONS"].includes(method) ||
+      phase !== "authentication" ||
+      typeof requestUrl !== "string"
+    ) {
+      return null;
+    }
+    const parsed = new URL(requestUrl);
+    const expectedPath = `/v1/projects/${contract.firebaseProjectId}/databases/(default)/documents/site_settings/config`;
+    const expectedUrl = `https://firestore.googleapis.com${expectedPath}`;
+    const exactUrl =
+      requestUrl === expectedUrl &&
+      parsed.protocol === "https:" &&
+      parsed.hostname === "firestore.googleapis.com" &&
+      parsed.port === "" &&
+      parsed.username === "" &&
+      parsed.password === "" &&
+      parsed.pathname === expectedPath &&
+      parsed.search === "" &&
+      parsed.hash === "" &&
+      parsed.href === expectedUrl;
+    if (!exactUrl) return null;
+    return method === "GET" ? "get" : "preflight";
+  } catch {
+    return null;
+  }
+};
+const classifySafeAuthenticationConfigReadResponse = (input) => {
+  try {
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      return null;
+    }
+    const descriptors = Object.getOwnPropertyDescriptors(input);
+    if (
+      Object.keys(descriptors).sort().join(",") !==
+      "requestClass,responseErrorReason,responseObserved,responseStatusCode"
+    ) {
+      return null;
+    }
+    for (const descriptor of Object.values(descriptors)) {
+      if (
+        !Object.prototype.hasOwnProperty.call(descriptor, "value") ||
+        descriptor.get !== undefined ||
+        descriptor.set !== undefined
+      ) {
+        return null;
+      }
+    }
+    const requestClass = descriptors.requestClass.value;
+    const responseObserved = descriptors.responseObserved.value;
+    const responseStatusCode = descriptors.responseStatusCode.value;
+    const responseErrorReason = descriptors.responseErrorReason.value;
+    if (
+      !SAFE_AUTHENTICATION_CONFIG_READ_REQUEST_CLASSES.includes(requestClass)
+    ) {
+      return null;
+    }
+    const preflight = requestClass === "preflight";
+    if (responseObserved === false) {
+      return responseStatusCode === undefined &&
+        responseErrorReason === undefined
+        ? preflight
+          ? "preflight-handler-before-response"
+          : "handler-before-response"
+        : null;
+    }
+    if (responseObserved !== true) return null;
+    if (responseErrorReason !== undefined) {
+      return responseStatusCode === undefined &&
+        typeof responseErrorReason === "string" &&
+        responseErrorReason.length > 0
+        ? preflight
+          ? "preflight-response-error"
+          : "response-error"
+        : null;
+    }
+    if (!Number.isSafeInteger(responseStatusCode)) return null;
+    if (responseStatusCode >= 200 && responseStatusCode < 300) {
+      return preflight ? "preflight-response-2xx" : "response-2xx";
+    }
+    if (responseStatusCode >= 300 && responseStatusCode < 400) {
+      return preflight ? "preflight-response-3xx" : "response-3xx";
+    }
+    if (responseStatusCode >= 400 && responseStatusCode < 500) {
+      return preflight ? "preflight-response-4xx" : "response-4xx";
+    }
+    if (responseStatusCode >= 500 && responseStatusCode < 600) {
+      return preflight ? "preflight-response-5xx" : "response-5xx";
+    }
+    return preflight
+      ? "preflight-response-other-status"
+      : "response-other-status";
+  } catch {
+    return null;
+  }
+};
+const safeAuthenticationConfigReadResponseFailureClass = (responseClass) =>
+  typeof responseClass === "string" &&
+  Object.prototype.hasOwnProperty.call(
+    SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_FAILURE_CLASSES,
+    responseClass,
+  )
+    ? SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_FAILURE_CLASSES[responseClass]
+    : null;
+const resolveSafeAuthenticationConfigReadResponseOutcome = (input) => {
+  try {
+    if (!input || typeof input !== "object" || Array.isArray(input))
+      return null;
+    const descriptors = Object.getOwnPropertyDescriptors(input);
+    if (
+      Object.keys(descriptors).sort().join(",") !==
+      "observedRequestClass,requestClass,responseErrorReason,responseStatusCode"
+    ) {
+      return null;
+    }
+    for (const descriptor of Object.values(descriptors)) {
+      if (
+        !Object.prototype.hasOwnProperty.call(descriptor, "value") ||
+        descriptor.get !== undefined ||
+        descriptor.set !== undefined
+      ) {
+        return null;
+      }
+    }
+    const requestClass = descriptors.requestClass.value;
+    const observedRequestClass = descriptors.observedRequestClass.value;
+    if (
+      !SAFE_AUTHENTICATION_CONFIG_READ_REQUEST_CLASSES.includes(requestClass) ||
+      (observedRequestClass !== null &&
+        !SAFE_AUTHENTICATION_CONFIG_READ_REQUEST_CLASSES.includes(
+          observedRequestClass,
+        )) ||
+      observedRequestClass !== requestClass
+    ) {
+      return null;
+    }
+    return classifySafeAuthenticationConfigReadResponse({
+      requestClass,
+      responseObserved: true,
+      responseStatusCode: descriptors.responseStatusCode.value,
+      responseErrorReason: descriptors.responseErrorReason.value,
+    });
+  } catch {
+    return null;
+  }
+};
 const SAFE_AUTHENTICATION_FAILURE_CLASSES = Object.freeze([
   "navigation-failed",
   "authentication-evaluate-failed",
   ...Object.values(SAFE_AUTHENTICATION_EVALUATION_FAILURE_CLASSES),
+  ...Object.values(SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_FAILURE_CLASSES),
   "application-session-proof-registration-failed",
   "authentication-bootstrap-pre-retirement-drain-failed",
   "authentication-bootstrap-retirement-failed",
@@ -11627,6 +11843,374 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
       false,
     );
   }
+  const exactConfigReadUrl = `https://firestore.googleapis.com/v1/projects/${contract.firebaseProjectId}/databases/(default)/documents/site_settings/config`;
+  const exactConfigReadScopeInput = {
+    requestUrl: exactConfigReadUrl,
+    method: "GET",
+    phase: "authentication",
+  };
+  assert.equal(
+    classifyExactAuthenticationConfigReadRequest(exactConfigReadScopeInput),
+    "get",
+  );
+  assert.equal(
+    classifyExactAuthenticationConfigReadRequest({
+      ...exactConfigReadScopeInput,
+      method: "OPTIONS",
+    }),
+    "preflight",
+  );
+  const configReadScopeNegativeFixtures = [
+    { ...exactConfigReadScopeInput, method: "get" },
+    { ...exactConfigReadScopeInput, method: "POST" },
+    { ...exactConfigReadScopeInput, method: "DELETE" },
+    { ...exactConfigReadScopeInput, phase: "screen-capture" },
+    { ...exactConfigReadScopeInput, requestUrl: exactConfigReadUrl + "?x=1" },
+    { ...exactConfigReadScopeInput, requestUrl: exactConfigReadUrl + "#x" },
+    {
+      ...exactConfigReadScopeInput,
+      requestUrl: exactConfigReadUrl.replace("https:", "http:"),
+    },
+    {
+      ...exactConfigReadScopeInput,
+      requestUrl: exactConfigReadUrl.replace(
+        "firestore.googleapis.com",
+        "user:pass@firestore.googleapis.com",
+      ),
+    },
+    {
+      ...exactConfigReadScopeInput,
+      requestUrl: exactConfigReadUrl.replace(
+        "firestore.googleapis.com",
+        "firestore.googleapis.com:443",
+      ),
+    },
+    {
+      ...exactConfigReadScopeInput,
+      requestUrl: exactConfigReadUrl.replace(
+        "firestore.googleapis.com",
+        "firestore.googleapis.com:444",
+      ),
+    },
+    {
+      ...exactConfigReadScopeInput,
+      requestUrl: exactConfigReadUrl.replace(
+        "/site_settings/config",
+        "/site_settings/other",
+      ),
+    },
+    {
+      ...exactConfigReadScopeInput,
+      requestUrl: exactConfigReadUrl.replace(
+        contract.firebaseProjectId,
+        `${contract.firebaseProjectId}-other`,
+      ),
+    },
+    { ...exactConfigReadScopeInput, extra: rawSecretUrl },
+    { ...exactConfigReadScopeInput, requestUrl: new URL(exactConfigReadUrl) },
+    null,
+    [],
+    new Proxy(
+      {},
+      {
+        ownKeys() {
+          throw new Error(rawSecretUrl);
+        },
+      },
+    ),
+  ];
+  for (const scopeFixture of configReadScopeNegativeFixtures) {
+    assert.equal(
+      classifyExactAuthenticationConfigReadRequest(scopeFixture),
+      null,
+    );
+  }
+  const configReadResponseClassFixtures = [
+    ["get", false, undefined, undefined, "handler-before-response"],
+    ["get", true, 200, undefined, "response-2xx"],
+    ["get", true, 299, undefined, "response-2xx"],
+    ["get", true, 300, undefined, "response-3xx"],
+    ["get", true, 399, undefined, "response-3xx"],
+    ["get", true, 400, undefined, "response-4xx"],
+    ["get", true, 499, undefined, "response-4xx"],
+    ["get", true, 500, undefined, "response-5xx"],
+    ["get", true, 599, undefined, "response-5xx"],
+    ["get", true, 199, undefined, "response-other-status"],
+    ["get", true, 600, undefined, "response-other-status"],
+    ["get", true, undefined, rawSecretUrl, "response-error"],
+    [
+      "preflight",
+      false,
+      undefined,
+      undefined,
+      "preflight-handler-before-response",
+    ],
+    ["preflight", true, 200, undefined, "preflight-response-2xx"],
+    ["preflight", true, 300, undefined, "preflight-response-3xx"],
+    ["preflight", true, 400, undefined, "preflight-response-4xx"],
+    ["preflight", true, 500, undefined, "preflight-response-5xx"],
+    ["preflight", true, 600, undefined, "preflight-response-other-status"],
+    ["preflight", true, undefined, rawSecretUrl, "preflight-response-error"],
+  ];
+  for (const [
+    requestClass,
+    responseObserved,
+    responseStatusCode,
+    responseErrorReason,
+    expectedClass,
+  ] of configReadResponseClassFixtures) {
+    assert.equal(
+      classifySafeAuthenticationConfigReadResponse({
+        requestClass,
+        responseObserved,
+        responseStatusCode,
+        responseErrorReason,
+      }),
+      expectedClass,
+    );
+  }
+  let configReadClassifierCoercionCount = 0;
+  const configReadClassifierCoercionValue = {
+    valueOf() {
+      configReadClassifierCoercionCount += 1;
+      return 403;
+    },
+    toString() {
+      configReadClassifierCoercionCount += 1;
+      return "403";
+    },
+  };
+  const configReadResponseClassNegativeFixtures = [
+    null,
+    [],
+    {
+      requestClass: "get",
+      responseObserved: true,
+      responseStatusCode: 403,
+    },
+    {
+      requestClass: "get",
+      responseObserved: true,
+      responseStatusCode: 403,
+      responseErrorReason: undefined,
+      responseBody: rawSecretUrl,
+    },
+    {
+      requestClass: "get",
+      responseObserved: "true",
+      responseStatusCode: 403,
+      responseErrorReason: undefined,
+    },
+    {
+      requestClass: "get",
+      responseObserved: true,
+      responseStatusCode: "403",
+      responseErrorReason: undefined,
+    },
+    {
+      requestClass: "get",
+      responseObserved: true,
+      responseStatusCode: Number.NaN,
+      responseErrorReason: undefined,
+    },
+    {
+      requestClass: "get",
+      responseObserved: true,
+      responseStatusCode: 403,
+      responseErrorReason: rawSecretUrl,
+    },
+    {
+      requestClass: "get",
+      responseObserved: true,
+      responseStatusCode: undefined,
+      responseErrorReason: "",
+    },
+    {
+      requestClass: "other",
+      responseObserved: true,
+      responseStatusCode: 403,
+      responseErrorReason: undefined,
+    },
+    {
+      requestClass: "get",
+      responseObserved: true,
+      responseStatusCode: configReadClassifierCoercionValue,
+      responseErrorReason: undefined,
+    },
+    Object.defineProperty(
+      {
+        requestClass: "get",
+        responseObserved: true,
+        responseErrorReason: undefined,
+      },
+      "responseStatusCode",
+      {
+        enumerable: true,
+        get() {
+          throw new Error(rawSecretUrl);
+        },
+      },
+    ),
+    new Proxy(
+      {},
+      {
+        ownKeys() {
+          throw new Error(rawSecretUrl);
+        },
+      },
+    ),
+  ];
+  for (const responseFixture of configReadResponseClassNegativeFixtures) {
+    assert.equal(
+      classifySafeAuthenticationConfigReadResponse(responseFixture),
+      null,
+    );
+  }
+  const runConfigReadResponseTransitionFixture = ({
+    requestClass,
+    responseStatusCode,
+    responseErrorReason,
+  }) => {
+    let groupOutcome = classifySafeAuthenticationConfigReadResponse({
+      requestClass,
+      responseObserved: false,
+      responseStatusCode: undefined,
+      responseErrorReason: undefined,
+    });
+    assert.ok(groupOutcome);
+    groupOutcome = null;
+    const responseClass = classifySafeAuthenticationConfigReadResponse({
+      requestClass,
+      responseObserved: true,
+      responseStatusCode,
+      responseErrorReason,
+    });
+    if (responseClass !== null) groupOutcome = responseClass;
+    return groupOutcome;
+  };
+  assert.equal(
+    runConfigReadResponseTransitionFixture({
+      requestClass: "get",
+      responseStatusCode: "403",
+      responseErrorReason: undefined,
+    }),
+    null,
+  );
+  assert.equal(
+    resolveSafeAuthenticationConfigReadResponseOutcome({
+      requestClass: "get",
+      observedRequestClass: null,
+      responseStatusCode: 403,
+      responseErrorReason: undefined,
+    }),
+    null,
+  );
+  assert.equal(
+    resolveSafeAuthenticationConfigReadResponseOutcome({
+      requestClass: "get",
+      observedRequestClass: "preflight",
+      responseStatusCode: 403,
+      responseErrorReason: undefined,
+    }),
+    null,
+  );
+  assert.equal(
+    resolveSafeAuthenticationConfigReadResponseOutcome({
+      requestClass: "get",
+      observedRequestClass: "get",
+      responseStatusCode: 403,
+      responseErrorReason: undefined,
+    }),
+    "response-4xx",
+  );
+  const configReadResponseOutcomeNegativeFixtures = [
+    null,
+    [],
+    {
+      requestClass: "get",
+      observedRequestClass: "get",
+      responseStatusCode: 403,
+      responseErrorReason: undefined,
+      extra: rawSecretUrl,
+    },
+    {
+      requestClass: configReadClassifierCoercionValue,
+      observedRequestClass: "get",
+      responseStatusCode: 403,
+      responseErrorReason: undefined,
+    },
+    Object.defineProperty(
+      {
+        requestClass: "get",
+        responseStatusCode: 403,
+        responseErrorReason: undefined,
+      },
+      "observedRequestClass",
+      {
+        enumerable: true,
+        get() {
+          throw new Error(rawSecretUrl);
+        },
+      },
+    ),
+    new Proxy(
+      {},
+      {
+        ownKeys() {
+          throw new Error(rawSecretUrl);
+        },
+      },
+    ),
+  ];
+  for (const outcomeFixture of configReadResponseOutcomeNegativeFixtures) {
+    assert.equal(
+      resolveSafeAuthenticationConfigReadResponseOutcome(outcomeFixture),
+      null,
+    );
+  }
+  assert.equal(
+    runConfigReadResponseTransitionFixture({
+      requestClass: "preflight",
+      responseStatusCode: 204,
+      responseErrorReason: undefined,
+    }),
+    "preflight-response-2xx",
+  );
+  const successfulPreflightOutcome = runConfigReadResponseTransitionFixture({
+    requestClass: "preflight",
+    responseStatusCode: 204,
+    responseErrorReason: undefined,
+  });
+  let getRequestObserved = false;
+  let getOutcome = null;
+  assert.equal(
+    getRequestObserved ? getOutcome : successfulPreflightOutcome,
+    "preflight-response-2xx",
+  );
+  getRequestObserved = true;
+  getOutcome = classifySafeAuthenticationConfigReadResponse({
+    requestClass: "get",
+    responseObserved: false,
+    responseStatusCode: undefined,
+    responseErrorReason: undefined,
+  });
+  assert.equal(
+    getRequestObserved ? getOutcome : successfulPreflightOutcome,
+    "handler-before-response",
+  );
+  assert.equal(configReadClassifierCoercionCount, 0);
+  assert.deepEqual(
+    Object.keys(
+      SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_FAILURE_CLASSES,
+    ).sort(),
+    [...SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_CLASSES].sort(),
+  );
+  assert.equal(
+    new Set(
+      Object.values(SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_FAILURE_CLASSES),
+    ).size,
+    SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_CLASSES.length,
+  );
   const routeFixtures = [
     ["#/teacher/dashboard", "/teacher/dashboard", "expected-dashboard"],
     [
@@ -11709,6 +12293,7 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
   );
   const boundedAuthenticationEvaluationFailureClassFixtures = [
     ...Object.values(SAFE_AUTHENTICATION_EVALUATION_FAILURE_CLASSES),
+    ...Object.values(SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_FAILURE_CLASSES),
     "application-session-proof-registration-failed",
   ];
   assert.equal(
@@ -11756,6 +12341,43 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     diagnostic,
     forbiddenValues,
   );
+  const serializedConfigReadResponseFailures =
+    SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_CLASSES.map((responseClass) => {
+      const failureClass =
+        safeAuthenticationConfigReadResponseFailureClass(responseClass);
+      assert.ok(failureClass);
+      const serialized = serializeSafeAuthenticationFailure(
+        createSafeAuthenticationFailureDiagnostic({
+          failureClass,
+          stage: "baseline",
+          captureRole: "admin",
+          authRole: "admin",
+          viewport: "1440x900",
+          pageState: saturatedState,
+        }),
+        forbiddenValues,
+      );
+      for (const forbiddenValue of forbiddenValues) {
+        assert.equal(serialized.includes(forbiddenValue), false);
+      }
+      assert.equal(JWT_PATTERN.test(serialized), false);
+      return serialized;
+    });
+  assert.equal(
+    new Set(serializedConfigReadResponseFailures).size,
+    SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_CLASSES.length,
+  );
+  assert.equal(
+    safeAuthenticationConfigReadResponseFailureClass(rawSecretUrl),
+    null,
+  );
+  assert.equal(
+    safeAuthenticationConfigReadResponseFailureClass(
+      configReadClassifierCoercionValue,
+    ),
+    null,
+  );
+  assert.equal(configReadClassifierCoercionCount, 0);
   const safeEvaluationAttemptId = "11111111-1111-4111-8111-111111111111";
   let safeEvaluationMarkerCleanupCount = 0;
   const collectEvaluationFailureClassFixture = (
@@ -12004,6 +12626,16 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     safeAuthenticationDiagnosticForbiddenBrowserDataSourceReferenceCount: 0,
     safeAuthenticationDiagnosticCoercionCount: coercionCount,
     safeAuthenticationDiagnosticFallbackFixtureCount: fallbackFixtures.length,
+    safeAuthenticationConfigReadScopeNegativeFixtureCount:
+      configReadScopeNegativeFixtures.length,
+    safeAuthenticationConfigReadResponseClassFixtureCount:
+      configReadResponseClassFixtures.length,
+    safeAuthenticationConfigReadResponseNegativeFixtureCount:
+      configReadResponseClassNegativeFixtures.length,
+    safeAuthenticationConfigReadResponseFailureClassFixtureCount:
+      serializedConfigReadResponseFailures.length,
+    safeAuthenticationConfigReadClassifierCoercionCount:
+      configReadClassifierCoercionCount,
     safeAuthenticationBootstrapRetirementFailureClassFixtureCount:
       authenticationBootstrapRetirementFailureClassFixtures.length,
   };
@@ -23107,6 +23739,7 @@ const authenticate = async (
     confirmAuthenticationBootstrapRetirement,
     prepareApplicationNavigation,
     unregisterApplicationSessionProof,
+    collectAuthenticationConfigReadResponseClass,
   },
 ) => {
   let failureClass = "navigation-failed";
@@ -23135,6 +23768,25 @@ const authenticate = async (
           authenticationEvaluationAttemptId,
         );
       if (refinedFailureClass !== null) failureClass = refinedFailureClass;
+    }
+    if (
+      failureClass ===
+      SAFE_AUTHENTICATION_EVALUATION_FAILURE_CLASSES["config-read"]
+    ) {
+      let configReadResponseClass = null;
+      try {
+        configReadResponseClass =
+          collectAuthenticationConfigReadResponseClass();
+      } catch {
+        // The bounded CDP diagnostic is optional and fails closed.
+      }
+      const configReadResponseFailureClass =
+        safeAuthenticationConfigReadResponseFailureClass(
+          configReadResponseClass,
+        );
+      if (configReadResponseFailureClass !== null) {
+        failureClass = configReadResponseFailureClass;
+      }
     }
     const expectedRoute =
       authRole === "student" ? "/student/dashboard" : "/teacher/dashboard";
@@ -26156,6 +26808,10 @@ try {
     const stableOriginRewriteRequestsByFetchRequestId = new Map();
     const allowedEgressRequestsByFetchRequestId = new Map();
     const informationalResponseRequestsByFetchRequestId = new Set();
+    const authenticationConfigReadRequestClassesByFetchRequestId = new Map();
+    let groupAuthenticationConfigReadGetRequestObserved = false;
+    let groupAuthenticationConfigReadGetOutcomeClass = null;
+    let groupAuthenticationConfigReadPreflightOutcomeClass = null;
     const allowedEgressLifecycleByFetchRequestId = new Map();
     const allowedEgressFetchRequestIdsByNetworkId = new Map();
     const cdpHandlerDiagnosticContexts = new WeakMap();
@@ -26414,6 +27070,31 @@ try {
           responseStatusCode: event.responseStatusCode,
           responseErrorReason: event.responseErrorReason,
         });
+        const authenticationConfigReadRequestClass =
+          authenticationConfigReadRequestClassesByFetchRequestId.get(
+            primaryRequestId,
+          ) || null;
+        if (authenticationConfigReadRequestClass !== null) {
+          const observedAuthenticationConfigReadRequestClass =
+            classifyExactAuthenticationConfigReadRequest({
+              requestUrl: event.request.url,
+              method: event.request.method,
+              phase: requestCaptureScope.phase,
+            });
+          const responseClass =
+            resolveSafeAuthenticationConfigReadResponseOutcome({
+              requestClass: authenticationConfigReadRequestClass,
+              observedRequestClass:
+                observedAuthenticationConfigReadRequestClass,
+              responseStatusCode: event.responseStatusCode,
+              responseErrorReason: event.responseErrorReason,
+            });
+          if (authenticationConfigReadRequestClass === "get") {
+            groupAuthenticationConfigReadGetOutcomeClass = responseClass;
+          } else {
+            groupAuthenticationConfigReadPreflightOutcomeClass = responseClass;
+          }
+        }
         const lifecycleDecision = allowedEgressResponseLifecycleDecision({
           lifecycleState: lifecycle.state,
           responseStageDecision,
@@ -27764,6 +28445,33 @@ try {
         captureId: activeCaptureId,
       });
       if (!responseStagePause) {
+        const authenticationConfigReadRequestClass =
+          classifyExactAuthenticationConfigReadRequest({
+            requestUrl: event.request.url,
+            method: event.request.method,
+            phase: requestCaptureScope.phase,
+          });
+        if (authenticationConfigReadRequestClass !== null) {
+          const initialResponseClass =
+            classifySafeAuthenticationConfigReadResponse({
+              requestClass: authenticationConfigReadRequestClass,
+              responseObserved: false,
+              responseStatusCode: undefined,
+              responseErrorReason: undefined,
+            });
+          assert.ok(initialResponseClass);
+          authenticationConfigReadRequestClassesByFetchRequestId.set(
+            event.requestId,
+            authenticationConfigReadRequestClass,
+          );
+          if (authenticationConfigReadRequestClass === "get") {
+            groupAuthenticationConfigReadGetRequestObserved = true;
+            groupAuthenticationConfigReadGetOutcomeClass = initialResponseClass;
+          } else {
+            groupAuthenticationConfigReadPreflightOutcomeClass =
+              initialResponseClass;
+          }
+        }
         const listenerInspection = inspectNetworkRequest({
           url: event.request.url,
           method: event.request.method,
@@ -28111,6 +28819,17 @@ try {
             groupApplicationSessionProof.uid = "";
             assert.equal(liveApplicationSessionProofsByPage.delete(page), true);
             groupApplicationSessionProof = null;
+          },
+          collectAuthenticationConfigReadResponseClass: () => {
+            const responseClass =
+              groupAuthenticationConfigReadGetRequestObserved
+                ? groupAuthenticationConfigReadGetOutcomeClass
+                : groupAuthenticationConfigReadPreflightOutcomeClass;
+            return SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_CLASSES.includes(
+              responseClass,
+            )
+              ? responseClass
+              : null;
           },
         },
       );
