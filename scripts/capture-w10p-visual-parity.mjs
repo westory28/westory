@@ -11233,6 +11233,9 @@ const SAFE_AUTHENTICATION_EVALUATION_FAILURE_CLASSES = Object.freeze({
   "protected-token": "authentication-evaluate-protected-token-failed",
   "config-read": "authentication-evaluate-config-read-failed",
   "profile-read": "authentication-evaluate-profile-read-failed",
+  "profile-fetch": "authentication-evaluate-profile-fetch-failed",
+  "profile-status": "authentication-evaluate-profile-status-failed",
+  "profile-json": "authentication-evaluate-profile-json-failed",
   "identity-finalize": "authentication-evaluate-identity-finalize-failed",
 });
 const SAFE_AUTHENTICATION_CONFIG_READ_REQUEST_CLASSES = Object.freeze([
@@ -11322,6 +11325,38 @@ const SAFE_AUTHENTICATION_CONFIG_READ_PROXY_FAILURE_CLASSES = Object.freeze(
     ),
   ),
 );
+const SAFE_AUTHENTICATION_PROFILE_RESPONSE_FAILURE_CLASSES = Object.freeze(
+  Object.fromEntries(
+    Object.entries(
+      SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_FAILURE_CLASSES,
+    ).map(([responseClass, failureClass]) => [
+      responseClass,
+      failureClass.replace("config-read", "profile-fetch"),
+    ]),
+  ),
+);
+const SAFE_AUTHENTICATION_PROFILE_PROXY_FAILURE_CLASSES = Object.freeze(
+  Object.fromEntries(
+    Object.entries(SAFE_AUTHENTICATION_CONFIG_READ_PROXY_FAILURE_CLASSES).map(
+      ([proxyClass, failureClass]) => [
+        proxyClass,
+        failureClass.replace("config-read", "profile-fetch"),
+      ],
+    ),
+  ),
+);
+const SAFE_AUTHENTICATION_PROFILE_STATUS_FAILURE_CLASSES = Object.freeze(
+  Object.fromEntries(
+    Object.entries(SAFE_AUTHENTICATION_PROFILE_RESPONSE_FAILURE_CLASSES)
+      .filter(([responseClass]) =>
+        /^response-(?:2xx|3xx|4xx|5xx|other-status)$/u.test(responseClass),
+      )
+      .map(([responseClass, failureClass]) => [
+        responseClass,
+        failureClass.replace("profile-fetch", "profile-status"),
+      ]),
+  ),
+);
 const classifyExactAuthenticationConfigReadRequest = (input) => {
   try {
     if (!input || typeof input !== "object" || Array.isArray(input)) {
@@ -11366,6 +11401,72 @@ const classifyExactAuthenticationConfigReadRequest = (input) => {
       parsed.search === "" &&
       parsed.hash === "" &&
       parsed.href === expectedUrl;
+    if (!exactUrl) return null;
+    return method === "GET" ? "get" : "preflight";
+  } catch {
+    return null;
+  }
+};
+const classifyExactAuthenticationProfileRequest = (input) => {
+  try {
+    if (!input || typeof input !== "object" || Array.isArray(input)) {
+      return null;
+    }
+    const descriptors = Object.getOwnPropertyDescriptors(input);
+    if (
+      Object.keys(descriptors).sort().join(",") !==
+      "expectedUidHash,method,phase,requestUrl"
+    ) {
+      return null;
+    }
+    for (const descriptor of Object.values(descriptors)) {
+      if (
+        !Object.prototype.hasOwnProperty.call(descriptor, "value") ||
+        descriptor.get !== undefined ||
+        descriptor.set !== undefined
+      ) {
+        return null;
+      }
+    }
+    const method = descriptors.method.value;
+    const phase = descriptors.phase.value;
+    const requestUrl = descriptors.requestUrl.value;
+    const expectedUidHash = descriptors.expectedUidHash.value;
+    if (
+      !["GET", "OPTIONS"].includes(method) ||
+      phase !== "authentication" ||
+      typeof requestUrl !== "string" ||
+      typeof expectedUidHash !== "string" ||
+      !/^[a-f0-9]{64}$/u.test(expectedUidHash)
+    ) {
+      return null;
+    }
+    const parsed = new URL(requestUrl);
+    const expectedOrigin = "https://firestore.googleapis.com";
+    const profilePathPrefix = `/v1/projects/${contract.firebaseProjectId}/databases/(default)/documents/users/`;
+    const encodedUid = parsed.pathname.startsWith(profilePathPrefix)
+      ? parsed.pathname.slice(profilePathPrefix.length)
+      : "";
+    const decodedUid = decodeURIComponent(encodedUid);
+    const canonicalUid =
+      encodedUid !== "" &&
+      !encodedUid.includes("/") &&
+      !decodedUid.includes("/") &&
+      Buffer.byteLength(decodedUid, "utf8") > 0 &&
+      Buffer.byteLength(decodedUid, "utf8") <= 128 &&
+      encodeURIComponent(decodedUid) === encodedUid &&
+      secretSha256(decodedUid) === expectedUidHash;
+    const exactUrl =
+      canonicalUid &&
+      requestUrl === `${expectedOrigin}${parsed.pathname}` &&
+      parsed.protocol === "https:" &&
+      parsed.hostname === "firestore.googleapis.com" &&
+      parsed.port === "" &&
+      parsed.username === "" &&
+      parsed.password === "" &&
+      parsed.search === "" &&
+      parsed.hash === "" &&
+      parsed.href === requestUrl;
     if (!exactUrl) return null;
     return method === "GET" ? "get" : "preflight";
   } catch {
@@ -11570,6 +11671,62 @@ const resolveSafeAuthenticationConfigReadFailureClass = (input) => {
     return null;
   }
 };
+const resolveSafeAuthenticationProfileFailureClass = (input) => {
+  try {
+    if (!input || typeof input !== "object" || Array.isArray(input))
+      return null;
+    const descriptors = Object.getOwnPropertyDescriptors(input);
+    if (
+      Object.keys(descriptors).sort().join(",") !==
+      "proxyLeaseClass,responseClass,step"
+    ) {
+      return null;
+    }
+    for (const descriptor of Object.values(descriptors)) {
+      if (!Object.prototype.hasOwnProperty.call(descriptor, "value"))
+        return null;
+    }
+    const step = descriptors.step.value;
+    const responseClass = descriptors.responseClass.value;
+    const proxyLeaseClass = descriptors.proxyLeaseClass.value;
+    if (step === "profile-status") {
+      if (proxyLeaseClass !== null) return null;
+      return Object.prototype.hasOwnProperty.call(
+        SAFE_AUTHENTICATION_PROFILE_STATUS_FAILURE_CLASSES,
+        responseClass,
+      )
+        ? SAFE_AUTHENTICATION_PROFILE_STATUS_FAILURE_CLASSES[responseClass]
+        : null;
+    }
+    if (step !== "profile-fetch") return null;
+    if (typeof responseClass !== "string") return null;
+    if (
+      responseClass !== "handler-before-response" &&
+      responseClass !== "preflight-handler-before-response" &&
+      !responseClass.startsWith("response-error-") &&
+      !responseClass.startsWith("preflight-response-error-")
+    ) {
+      return null;
+    }
+    const configFailureClass = resolveSafeAuthenticationConfigReadFailureClass({
+      responseClass,
+      proxyLeaseClass,
+    });
+    if (configFailureClass === null) return null;
+    const profileFailureClass = configFailureClass.replace(
+      "config-read",
+      "profile-fetch",
+    );
+    return [
+      ...Object.values(SAFE_AUTHENTICATION_PROFILE_RESPONSE_FAILURE_CLASSES),
+      ...Object.values(SAFE_AUTHENTICATION_PROFILE_PROXY_FAILURE_CLASSES),
+    ].includes(profileFailureClass)
+      ? profileFailureClass
+      : null;
+  } catch {
+    return null;
+  }
+};
 const resolveSafeAuthenticationConfigReadResponseOutcome = (input) => {
   try {
     if (!input || typeof input !== "object" || Array.isArray(input))
@@ -11666,6 +11823,9 @@ const SAFE_AUTHENTICATION_FAILURE_CLASSES = Object.freeze([
   ...Object.values(SAFE_AUTHENTICATION_EVALUATION_FAILURE_CLASSES),
   ...Object.values(SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_FAILURE_CLASSES),
   ...Object.values(SAFE_AUTHENTICATION_CONFIG_READ_PROXY_FAILURE_CLASSES),
+  ...Object.values(SAFE_AUTHENTICATION_PROFILE_RESPONSE_FAILURE_CLASSES),
+  ...Object.values(SAFE_AUTHENTICATION_PROFILE_PROXY_FAILURE_CLASSES),
+  ...Object.values(SAFE_AUTHENTICATION_PROFILE_STATUS_FAILURE_CLASSES),
   "application-session-proof-registration-failed",
   "authentication-bootstrap-pre-retirement-drain-failed",
   "authentication-bootstrap-retirement-failed",
@@ -12232,6 +12392,134 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
       null,
     );
   }
+  const syntheticProfileUids = [
+    "fixture-student",
+    "fixture-teacher",
+    "fixture-admin",
+  ];
+  let profileUidHashCoercionCount = 0;
+  const profileUidHashCoercionValue = {
+    toString() {
+      profileUidHashCoercionCount += 1;
+      return rawSecretUrl;
+    },
+  };
+  const exactProfileReadUrls = syntheticProfileUids.map(
+    (uid) =>
+      `https://firestore.googleapis.com/v1/projects/${contract.firebaseProjectId}/databases/(default)/documents/users/${encodeURIComponent(uid)}`,
+  );
+  for (const [
+    fixtureIndex,
+    exactProfileReadUrl,
+  ] of exactProfileReadUrls.entries()) {
+    const exactProfileReadScopeInput = {
+      requestUrl: exactProfileReadUrl,
+      method: "GET",
+      phase: "authentication",
+      expectedUidHash: secretSha256(syntheticProfileUids[fixtureIndex]),
+    };
+    assert.equal(
+      classifyExactAuthenticationProfileRequest(exactProfileReadScopeInput),
+      "get",
+    );
+    assert.equal(
+      classifyExactAuthenticationProfileRequest({
+        ...exactProfileReadScopeInput,
+        method: "OPTIONS",
+      }),
+      "preflight",
+    );
+    const profileReadScopeNegativeFixtures = [
+      { ...exactProfileReadScopeInput, method: "get" },
+      { ...exactProfileReadScopeInput, method: "POST" },
+      { ...exactProfileReadScopeInput, phase: "screen-capture" },
+      {
+        ...exactProfileReadScopeInput,
+        expectedUidHash: secretSha256(
+          syntheticProfileUids[
+            (fixtureIndex + 1) % syntheticProfileUids.length
+          ],
+        ),
+      },
+      {
+        ...exactProfileReadScopeInput,
+        requestUrl: exactProfileReadUrl.replace(
+          encodeURIComponent(syntheticProfileUids[fixtureIndex]),
+          "fixture-fourth",
+        ),
+      },
+      {
+        ...exactProfileReadScopeInput,
+        requestUrl: `${exactProfileReadUrl}?x=1`,
+      },
+      { ...exactProfileReadScopeInput, requestUrl: `${exactProfileReadUrl}#x` },
+      {
+        ...exactProfileReadScopeInput,
+        requestUrl: exactProfileReadUrl.replace("https:", "http:"),
+      },
+      {
+        ...exactProfileReadScopeInput,
+        requestUrl: exactProfileReadUrl.replace(
+          "firestore.googleapis.com",
+          "user:pass@firestore.googleapis.com",
+        ),
+      },
+      {
+        ...exactProfileReadScopeInput,
+        requestUrl: exactProfileReadUrl.replace(
+          "firestore.googleapis.com",
+          "firestore.googleapis.com:444",
+        ),
+      },
+      {
+        ...exactProfileReadScopeInput,
+        requestUrl: `${exactProfileReadUrl}/nested`,
+      },
+      {
+        ...exactProfileReadScopeInput,
+        requestUrl: exactProfileReadUrl.replace("fixture-", "%66ixture-"),
+      },
+      { ...exactProfileReadScopeInput, extra: rawSecretUrl },
+      {
+        ...exactProfileReadScopeInput,
+        requestUrl: new URL(exactProfileReadUrl),
+      },
+      {
+        ...exactProfileReadScopeInput,
+        expectedUidHash: profileUidHashCoercionValue,
+      },
+      Object.defineProperty(
+        { ...exactProfileReadScopeInput },
+        "expectedUidHash",
+        {
+          enumerable: true,
+          get() {
+            throw new Error(rawSecretUrl);
+          },
+        },
+      ),
+    ];
+    for (const scopeFixture of profileReadScopeNegativeFixtures) {
+      assert.equal(
+        classifyExactAuthenticationProfileRequest(scopeFixture),
+        null,
+      );
+    }
+  }
+  assert.equal(
+    classifyExactAuthenticationProfileRequest(
+      new Proxy(
+        {},
+        {
+          ownKeys() {
+            throw new Error(rawSecretUrl);
+          },
+        },
+      ),
+    ),
+    null,
+  );
+  assert.equal(profileUidHashCoercionCount, 0);
   const configReadResponseClassFixtures = [
     ["get", false, undefined, undefined, "handler-before-response"],
     ["get", true, 200, undefined, "response-2xx"],
@@ -12962,6 +13250,94 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
       expectedFailureClass,
     );
   }
+  const profileProxyPrecedenceFixtures = [
+    [
+      "response-error-connection",
+      "issued-no-active-tunnel",
+      "authentication-evaluate-profile-fetch-cdp-proxy-issued-no-active-tunnel-failed",
+    ],
+    [
+      "preflight-response-error-timeout",
+      "expired-no-active-tunnel",
+      "authentication-evaluate-profile-fetch-cdp-preflight-proxy-expired-no-active-tunnel-failed",
+    ],
+    [
+      "response-error-name-resolution",
+      "issued-active-tunnel",
+      "authentication-evaluate-profile-fetch-cdp-response-error-name-resolution-failed",
+    ],
+  ];
+  for (const [
+    responseClass,
+    proxyLeaseClass,
+    expectedFailureClass,
+  ] of profileProxyPrecedenceFixtures) {
+    assert.equal(
+      resolveSafeAuthenticationProfileFailureClass({
+        step: "profile-fetch",
+        responseClass,
+        proxyLeaseClass,
+      }),
+      expectedFailureClass,
+    );
+  }
+  assert.equal(
+    resolveSafeAuthenticationProfileFailureClass({
+      step: "profile-fetch",
+      responseClass: "response-2xx",
+      proxyLeaseClass: "issued-no-active-tunnel",
+    }),
+    null,
+  );
+  assert.equal(
+    resolveSafeAuthenticationProfileFailureClass({
+      step: "profile-status",
+      responseClass: "response-4xx",
+      proxyLeaseClass: null,
+    }),
+    "authentication-evaluate-profile-status-cdp-response-4xx-failed",
+  );
+  assert.equal(
+    resolveSafeAuthenticationProfileFailureClass({
+      step: "profile-status",
+      responseClass: "response-error-failed",
+      proxyLeaseClass: null,
+    }),
+    null,
+  );
+  assert.equal(
+    resolveSafeAuthenticationProfileFailureClass({
+      step: "profile-json",
+      responseClass: "response-2xx",
+      proxyLeaseClass: null,
+    }),
+    null,
+  );
+  assert.equal(
+    resolveSafeAuthenticationProfileFailureClass({
+      step: "profile-fetch",
+      responseClass: configReadClassifierCoercionValue,
+      proxyLeaseClass: null,
+    }),
+    null,
+  );
+  assert.equal(
+    new Set([
+      ...Object.values(
+        SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_FAILURE_CLASSES,
+      ),
+      ...Object.values(SAFE_AUTHENTICATION_CONFIG_READ_PROXY_FAILURE_CLASSES),
+      ...Object.values(SAFE_AUTHENTICATION_PROFILE_RESPONSE_FAILURE_CLASSES),
+      ...Object.values(SAFE_AUTHENTICATION_PROFILE_PROXY_FAILURE_CLASSES),
+    ]).size,
+    Object.values(SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_FAILURE_CLASSES)
+      .length +
+      Object.values(SAFE_AUTHENTICATION_CONFIG_READ_PROXY_FAILURE_CLASSES)
+        .length +
+      Object.values(SAFE_AUTHENTICATION_PROFILE_RESPONSE_FAILURE_CLASSES)
+        .length +
+      Object.values(SAFE_AUTHENTICATION_PROFILE_PROXY_FAILURE_CLASSES).length,
+  );
   const configReadProxyPrecedenceNegativeFixtures = [
     null,
     [],
@@ -13192,6 +13568,9 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     ...Object.values(SAFE_AUTHENTICATION_EVALUATION_FAILURE_CLASSES),
     ...Object.values(SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_FAILURE_CLASSES),
     ...Object.values(SAFE_AUTHENTICATION_CONFIG_READ_PROXY_FAILURE_CLASSES),
+    ...Object.values(SAFE_AUTHENTICATION_PROFILE_RESPONSE_FAILURE_CLASSES),
+    ...Object.values(SAFE_AUTHENTICATION_PROFILE_PROXY_FAILURE_CLASSES),
+    ...Object.values(SAFE_AUTHENTICATION_PROFILE_STATUS_FAILURE_CLASSES),
     "application-session-proof-registration-failed",
   ];
   assert.equal(
@@ -13288,6 +13667,42 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
   assert.equal(
     new Set(serializedConfigReadProxyFailures).size,
     Object.keys(SAFE_AUTHENTICATION_CONFIG_READ_PROXY_FAILURE_CLASSES).length,
+  );
+  const serializedProfileFailures = [
+    ...Object.values(SAFE_AUTHENTICATION_PROFILE_RESPONSE_FAILURE_CLASSES),
+    ...Object.values(SAFE_AUTHENTICATION_PROFILE_PROXY_FAILURE_CLASSES),
+    ...Object.values(SAFE_AUTHENTICATION_PROFILE_STATUS_FAILURE_CLASSES),
+  ].map((failureClass) =>
+    serializeSafeAuthenticationFailure(
+      createSafeAuthenticationFailureDiagnostic({
+        failureClass,
+        stage: "baseline",
+        captureRole: "admin",
+        authRole: "admin",
+        viewport: "1440x900",
+        pageState: saturatedState,
+      }),
+      [
+        ...forbiddenValues,
+        ...exactProfileReadUrls,
+        ...syntheticProfileUids.map((uid) => secretSha256(uid)),
+      ],
+    ),
+  );
+  for (const serialized of serializedProfileFailures) {
+    for (const forbiddenValue of [
+      ...forbiddenValues,
+      ...exactProfileReadUrls,
+      ...syntheticProfileUids,
+      ...syntheticProfileUids.map((uid) => secretSha256(uid)),
+    ]) {
+      assert.equal(serialized.includes(forbiddenValue), false);
+    }
+    assert.equal(JWT_PATTERN.test(serialized), false);
+  }
+  assert.equal(
+    new Set(serializedProfileFailures).size,
+    serializedProfileFailures.length,
   );
   assert.equal(
     safeAuthenticationConfigReadResponseFailureClass(rawSecretUrl),
@@ -21715,6 +22130,15 @@ assert.equal(
   ),
   true,
 );
+const trustedAuthenticationUidHashesByRole = new Map(
+  fixtureAudit.authRoles.map(({ role, uidHash }) => {
+    assert.ok(["student", "teacher", "admin"].includes(role));
+    assert.match(uidHash, /^[a-f0-9]{64}$/u);
+    return [role, uidHash];
+  }),
+);
+assert.equal(trustedAuthenticationUidHashesByRole.size, 3);
+assert.equal(new Set(trustedAuthenticationUidHashesByRole.values()).size, 3);
 assert.equal(fixtureAudit.strict?.collectionCount, 63);
 assert.equal(fixtureAudit.strict?.expectedRowCount, 51);
 assert.equal(fixtureAudit.strict?.actualRowCount, 51);
@@ -24466,7 +24890,7 @@ const authenticateCore = async (
           throw new Error("VISUAL_PROTECTED_READ_FENCE_FAILED");
         }
         await protectedConfigResponse.arrayBuffer();
-        setEvaluationStep("profile-read");
+        setEvaluationStep("profile-fetch");
         const profileResponse = await fetch(
           `${firestoreDocumentsBase}/users/${encodeURIComponent(
             credentialResult.user.uid,
@@ -24476,9 +24900,11 @@ const authenticateCore = async (
             redirect: "error",
           },
         );
+        setEvaluationStep("profile-status");
         if (profileResponse.status !== 200) {
           throw new Error("VISUAL_PROFILE_MISSING");
         }
+        setEvaluationStep("profile-json");
         profileDocument = await profileResponse.json();
       } finally {
         if (protectedReadHeaders) {
@@ -24680,6 +25106,8 @@ const authenticate = async (
     unregisterApplicationSessionProof,
     collectAuthenticationConfigReadResponseClass,
     collectAuthenticationConfigReadProxyLeaseClass,
+    collectAuthenticationProfileResponseClass,
+    collectAuthenticationProfileProxyLeaseClass,
   },
 ) => {
   let failureClass = "navigation-failed";
@@ -24735,6 +25163,37 @@ const authenticate = async (
       if (configReadResponseFailureClass !== null) {
         failureClass = configReadResponseFailureClass;
       }
+    }
+    const profileFailureStep =
+      failureClass ===
+      SAFE_AUTHENTICATION_EVALUATION_FAILURE_CLASSES["profile-fetch"]
+        ? "profile-fetch"
+        : failureClass ===
+            SAFE_AUTHENTICATION_EVALUATION_FAILURE_CLASSES["profile-status"]
+          ? "profile-status"
+          : null;
+    if (profileFailureStep !== null) {
+      let profileResponseClass = null;
+      let profileProxyLeaseClass = null;
+      try {
+        profileResponseClass = collectAuthenticationProfileResponseClass();
+      } catch {
+        // The bounded CDP diagnostic is optional and fails closed.
+      }
+      if (profileFailureStep === "profile-fetch") {
+        try {
+          profileProxyLeaseClass =
+            collectAuthenticationProfileProxyLeaseClass();
+        } catch {
+          // The bounded proxy diagnostic is optional and fails closed.
+        }
+      }
+      const profileFailureClass = resolveSafeAuthenticationProfileFailureClass({
+        step: profileFailureStep,
+        responseClass: profileResponseClass,
+        proxyLeaseClass: profileProxyLeaseClass,
+      });
+      if (profileFailureClass !== null) failureClass = profileFailureClass;
     }
     const expectedRoute =
       authRole === "student" ? "/student/dashboard" : "/teacher/dashboard";
@@ -27757,11 +28216,17 @@ try {
     const allowedEgressRequestsByFetchRequestId = new Map();
     const informationalResponseRequestsByFetchRequestId = new Set();
     const authenticationConfigReadRequestClassesByFetchRequestId = new Map();
+    const authenticationProfileRequestClassesByFetchRequestId = new Map();
     let groupAuthenticationConfigReadGetRequestObserved = false;
     let groupAuthenticationConfigReadGetOutcomeClass = null;
     let groupAuthenticationConfigReadPreflightOutcomeClass = null;
     let groupAuthenticationConfigReadGetProxyLeaseClass = null;
     let groupAuthenticationConfigReadPreflightProxyLeaseClass = null;
+    let groupAuthenticationProfileGetRequestObserved = false;
+    let groupAuthenticationProfileGetOutcomeClass = null;
+    let groupAuthenticationProfilePreflightOutcomeClass = null;
+    let groupAuthenticationProfileGetProxyLeaseClass = null;
+    let groupAuthenticationProfilePreflightProxyLeaseClass = null;
     const allowedEgressLifecycleByFetchRequestId = new Map();
     const allowedEgressFetchRequestIdsByNetworkId = new Map();
     const cdpHandlerDiagnosticContexts = new WeakMap();
@@ -28041,6 +28506,29 @@ try {
               responseErrorReason: event.responseErrorReason,
             });
         }
+        const authenticationProfileRequestClass =
+          authenticationProfileRequestClassesByFetchRequestId.get(
+            primaryRequestId,
+          ) || null;
+        let authenticationProfileResponseClass = null;
+        if (authenticationProfileRequestClass !== null) {
+          const observedAuthenticationProfileRequestClass =
+            classifyExactAuthenticationProfileRequest({
+              requestUrl: event.request.url,
+              method: event.request.method,
+              phase: requestCaptureScope.phase,
+              expectedUidHash:
+                trustedAuthenticationUidHashesByRole.get(authenticationRole) ||
+                null,
+            });
+          authenticationProfileResponseClass =
+            resolveSafeAuthenticationConfigReadResponseOutcome({
+              requestClass: authenticationProfileRequestClass,
+              observedRequestClass: observedAuthenticationProfileRequestClass,
+              responseStatusCode: event.responseStatusCode,
+              responseErrorReason: event.responseErrorReason,
+            });
+        }
         const lifecycleDecision = allowedEgressResponseLifecycleDecision({
           lifecycleState: lifecycle.state,
           responseStageDecision,
@@ -28091,6 +28579,48 @@ try {
                 nextProxyLeaseClass;
             } else {
               groupAuthenticationConfigReadPreflightProxyLeaseClass =
+                nextProxyLeaseClass;
+            }
+          }
+        }
+        if (authenticationProfileRequestClass !== null) {
+          const previousOutcomeClass =
+            authenticationProfileRequestClass === "get"
+              ? groupAuthenticationProfileGetOutcomeClass
+              : groupAuthenticationProfilePreflightOutcomeClass;
+          const nextOutcomeClass =
+            authenticationConfigReadOutcomeAfterLifecycle(
+              previousOutcomeClass,
+              authenticationProfileResponseClass,
+              lifecycleDecision.kind,
+            );
+          if (authenticationProfileRequestClass === "get") {
+            groupAuthenticationProfileGetOutcomeClass = nextOutcomeClass;
+          } else {
+            groupAuthenticationProfilePreflightOutcomeClass = nextOutcomeClass;
+          }
+          if (responseStageDecision.kind === "response-error") {
+            const previousProxyLeaseClass =
+              authenticationProfileRequestClass === "get"
+                ? groupAuthenticationProfileGetProxyLeaseClass
+                : groupAuthenticationProfilePreflightProxyLeaseClass;
+            const observedProxyLeaseClass =
+              lifecycleDecision.kind === "primary"
+                ? browserConnectProxy.requestStageAuthorityLeaseDiagnosticClass(
+                    primaryRequestId,
+                  )
+                : null;
+            const nextProxyLeaseClass =
+              authenticationConfigReadProxyLeaseAfterLifecycle(
+                previousProxyLeaseClass,
+                observedProxyLeaseClass,
+                lifecycleDecision.kind,
+              );
+            if (authenticationProfileRequestClass === "get") {
+              groupAuthenticationProfileGetProxyLeaseClass =
+                nextProxyLeaseClass;
+            } else {
+              groupAuthenticationProfilePreflightProxyLeaseClass =
                 nextProxyLeaseClass;
             }
           }
@@ -29463,6 +29993,38 @@ try {
             groupAuthenticationConfigReadPreflightProxyLeaseClass = null;
           }
         }
+        const authenticationProfileRequestClass =
+          classifyExactAuthenticationProfileRequest({
+            requestUrl: event.request.url,
+            method: event.request.method,
+            phase: requestCaptureScope.phase,
+            expectedUidHash:
+              trustedAuthenticationUidHashesByRole.get(authenticationRole) ||
+              null,
+          });
+        if (authenticationProfileRequestClass !== null) {
+          const initialResponseClass =
+            classifySafeAuthenticationConfigReadResponse({
+              requestClass: authenticationProfileRequestClass,
+              responseObserved: false,
+              responseStatusCode: undefined,
+              responseErrorReason: undefined,
+            });
+          assert.ok(initialResponseClass);
+          authenticationProfileRequestClassesByFetchRequestId.set(
+            event.requestId,
+            authenticationProfileRequestClass,
+          );
+          if (authenticationProfileRequestClass === "get") {
+            groupAuthenticationProfileGetRequestObserved = true;
+            groupAuthenticationProfileGetOutcomeClass = initialResponseClass;
+            groupAuthenticationProfileGetProxyLeaseClass = null;
+          } else {
+            groupAuthenticationProfilePreflightOutcomeClass =
+              initialResponseClass;
+            groupAuthenticationProfilePreflightProxyLeaseClass = null;
+          }
+        }
         const listenerInspection = inspectNetworkRequest({
           url: event.request.url,
           method: event.request.method,
@@ -29827,6 +30389,26 @@ try {
               groupAuthenticationConfigReadGetRequestObserved
                 ? groupAuthenticationConfigReadGetProxyLeaseClass
                 : groupAuthenticationConfigReadPreflightProxyLeaseClass;
+            return SAFE_BROWSER_CONNECT_PROXY_AUTHORITY_LEASE_DIAGNOSTIC_CLASSES.includes(
+              proxyLeaseClass,
+            )
+              ? proxyLeaseClass
+              : null;
+          },
+          collectAuthenticationProfileResponseClass: () => {
+            const responseClass = groupAuthenticationProfileGetRequestObserved
+              ? groupAuthenticationProfileGetOutcomeClass
+              : groupAuthenticationProfilePreflightOutcomeClass;
+            return SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_CLASSES.includes(
+              responseClass,
+            )
+              ? responseClass
+              : null;
+          },
+          collectAuthenticationProfileProxyLeaseClass: () => {
+            const proxyLeaseClass = groupAuthenticationProfileGetRequestObserved
+              ? groupAuthenticationProfileGetProxyLeaseClass
+              : groupAuthenticationProfilePreflightProxyLeaseClass;
             return SAFE_BROWSER_CONNECT_PROXY_AUTHORITY_LEASE_DIAGNOSTIC_CLASSES.includes(
               proxyLeaseClass,
             )
