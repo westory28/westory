@@ -5766,7 +5766,8 @@ const summarizeSafeAuthenticationBootstrapRetirement = ({ before, after }) => {
   });
 };
 const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_POLICY_ID =
-  "w10p-protected-read-shared-transport-retry-v1";
+  "w10p-protected-read-shared-transport-retry-v2";
+const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_DELAY_MS = 2_000;
 const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_TARGETS = Object.freeze([
   "none",
   "config",
@@ -5913,7 +5914,10 @@ const normalizeSafeAuthenticationProtectedReadRetryAttestation = (
       attestation.retryTarget,
     ),
   );
-  assert.equal(attestation.retryDelayMs, 250);
+  assert.equal(
+    attestation.retryDelayMs,
+    SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_DELAY_MS,
+  );
   for (const key of ["configAttemptCount", "profileAttemptCount"]) {
     assert.ok([1, 2].includes(attestation[key]));
   }
@@ -13894,7 +13898,7 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     retryBudget: 1,
     retryUsed: Number(retryTarget !== "none"),
     retryTarget,
-    retryDelayMs: 250,
+    retryDelayMs: SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_DELAY_MS,
     configAttemptCount: retryTarget === "config" ? 2 : 1,
     configFirstOutcomeClass:
       retryTarget === "config" ? "transport-error" : "response-2xx",
@@ -29146,7 +29150,8 @@ const authenticateCore = async (
       authSignInCodeClasses: SAFE_AUTHENTICATION_AUTH_SIGN_IN_CODE_CLASSES,
       protectedReadRetryPolicyId:
         SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_POLICY_ID,
-      protectedReadRetryDelayMs: 250,
+      protectedReadRetryDelayMs:
+        SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_DELAY_MS,
     },
   );
   setFailureClass(
@@ -38203,7 +38208,7 @@ const authenticationProtectedReadRetry = Object.freeze({
   schemaVersion: 4,
   policyId: SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_POLICY_ID,
   retryBudgetPerGroup: 1,
-  retryDelayMs: 250,
+  retryDelayMs: SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_DELAY_MS,
   expectedGroupCount: applicationSessionKeepaliveClientExpectedGroupCount,
   attestationCount: sortedAuthenticationProtectedReadRetryAttestations.length,
   attestationSetSha256: sha256(

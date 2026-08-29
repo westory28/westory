@@ -5989,10 +5989,10 @@ assertExactObjectKeys(authenticationProtectedReadRetry, [
 assert.equal(authenticationProtectedReadRetry.schemaVersion, 4);
 assert.equal(
   authenticationProtectedReadRetry.policyId,
-  "w10p-protected-read-shared-transport-retry-v1",
+  "w10p-protected-read-shared-transport-retry-v2",
 );
 assert.equal(authenticationProtectedReadRetry.retryBudgetPerGroup, 1);
-assert.equal(authenticationProtectedReadRetry.retryDelayMs, 250);
+assert.equal(authenticationProtectedReadRetry.retryDelayMs, 2_000);
 assert.equal(authenticationProtectedReadRetry.passed, true);
 for (const field of [
   "expectedGroupCount",
@@ -6628,7 +6628,7 @@ for (const attestation of authenticationProtectedReadRetry.attestations) {
   assert.equal(attestation.schemaVersion, 4);
   assert.equal(attestation.policyId, authenticationProtectedReadRetry.policyId);
   assert.equal(attestation.retryBudget, 1);
-  assert.equal(attestation.retryDelayMs, 250);
+  assert.equal(attestation.retryDelayMs, 2_000);
   assert.ok(["baseline", "candidate"].includes(attestation.stage));
   assert.ok(Object.hasOwn(protectedReadRetryRolePairs, attestation.role));
   assert.equal(
