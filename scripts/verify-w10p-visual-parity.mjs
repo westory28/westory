@@ -5986,7 +5986,7 @@ assertExactObjectKeys(authenticationProtectedReadRetry, [
   "sensitiveAppCheckResponseErrorObservedCount",
   "sensitiveAppCheckResponseErrorRecoveredCount",
 ]);
-assert.equal(authenticationProtectedReadRetry.schemaVersion, 3);
+assert.equal(authenticationProtectedReadRetry.schemaVersion, 4);
 assert.equal(
   authenticationProtectedReadRetry.policyId,
   "w10p-protected-read-shared-transport-retry-v1",
@@ -6129,14 +6129,36 @@ const assertProtectedReadRetryCdpLoadingFailureEchoClass = (attestation) => {
   const {
     retryUsed,
     playwrightFailureEchoClass,
+    cdpLoadingFailureBlockedReasonClass,
+    cdpLoadingFailureCorsErrorStatusAbsent,
     cdpLoadingFailureEchoClass,
     cdpLoadingFailureFetchNetworkIdentityBound,
+    cdpLoadingFailureLocalFailRequestTimingClass,
+    cdpLocalFailRequestCommandCompleted,
+    cdpLocalFailRequestCommandIssued,
+    cdpLocalFailRequestErrorReasonClass,
+    cdpLocalFailRequestExactAttemptBound,
+    cdpLocalFailRequestIssuerClass,
+    cdpLocalFailRequestResponseErrorBound,
+    cdpLocalFailRequestResponseFetchCorrelationClass,
   } = attestation;
   if (retryUsed === 0) {
+    assert.equal(cdpLoadingFailureBlockedReasonClass, null);
+    assert.equal(cdpLoadingFailureCorsErrorStatusAbsent, null);
     assert.equal(cdpLoadingFailureEchoClass, null);
     assert.equal(cdpLoadingFailureFetchNetworkIdentityBound, null);
+    assert.equal(cdpLoadingFailureLocalFailRequestTimingClass, null);
+    assert.equal(cdpLocalFailRequestCommandCompleted, null);
+    assert.equal(cdpLocalFailRequestCommandIssued, null);
+    assert.equal(cdpLocalFailRequestErrorReasonClass, null);
+    assert.equal(cdpLocalFailRequestExactAttemptBound, null);
+    assert.equal(cdpLocalFailRequestIssuerClass, null);
+    assert.equal(cdpLocalFailRequestResponseErrorBound, null);
+    assert.equal(cdpLocalFailRequestResponseFetchCorrelationClass, null);
     return;
   }
+  assert.ok([null, "inspector"].includes(cdpLoadingFailureBlockedReasonClass));
+  assert.equal(cdpLoadingFailureCorsErrorStatusAbsent, true);
   assert.equal(typeof cdpLoadingFailureEchoClass, "string");
   assert.equal(
     protectedReadRetryPlaywrightFailureEchoClasses.includes(
@@ -6144,32 +6166,114 @@ const assertProtectedReadRetryCdpLoadingFailureEchoClass = (attestation) => {
     ),
     true,
   );
+  assert.equal(cdpLoadingFailureFetchNetworkIdentityBound, true);
+  assert.ok(
+    ["pre-local-fail", "local-fail-in-flight", "post-local-fail"].includes(
+      cdpLoadingFailureLocalFailRequestTimingClass,
+    ),
+  );
+  assert.equal(cdpLocalFailRequestCommandCompleted, true);
+  assert.equal(cdpLocalFailRequestCommandIssued, true);
+  assert.equal(cdpLocalFailRequestErrorReasonClass, "blocked-by-client");
+  assert.equal(cdpLocalFailRequestExactAttemptBound, true);
+  assert.equal(
+    cdpLocalFailRequestIssuerClass,
+    "protected-read-response-error-terminalization",
+  );
+  assert.equal(cdpLocalFailRequestResponseErrorBound, true);
+  assert.ok(
+    ["same-fetch", "same-network-single-alias"].includes(
+      cdpLocalFailRequestResponseFetchCorrelationClass,
+    ),
+  );
+  if (cdpLoadingFailureBlockedReasonClass === "inspector") {
+    assert.equal(playwrightFailureEchoClass, "other");
+    assert.equal(cdpLoadingFailureEchoClass, "blocked-by-client");
+    assert.ok(
+      ["local-fail-in-flight", "post-local-fail"].includes(
+        cdpLoadingFailureLocalFailRequestTimingClass,
+      ),
+    );
+    return;
+  }
   assert.equal(
     cdpLoadingFailureEchoClass === playwrightFailureEchoClass ||
       (playwrightFailureEchoClass === "other" &&
         cdpLoadingFailureEchoClass === "aborted"),
     true,
   );
-  assert.equal(cdpLoadingFailureFetchNetworkIdentityBound, true);
+};
+const protectedReadRetryNoFailureEchoFixture = {
+  retryUsed: 0,
+  playwrightFailureEchoClass: null,
+  cdpLoadingFailureBlockedReasonClass: null,
+  cdpLoadingFailureCorsErrorStatusAbsent: null,
+  cdpLoadingFailureEchoClass: null,
+  cdpLoadingFailureFetchNetworkIdentityBound: null,
+  cdpLoadingFailureLocalFailRequestTimingClass: null,
+  cdpLocalFailRequestCommandCompleted: null,
+  cdpLocalFailRequestCommandIssued: null,
+  cdpLocalFailRequestErrorReasonClass: null,
+  cdpLocalFailRequestExactAttemptBound: null,
+  cdpLocalFailRequestIssuerClass: null,
+  cdpLocalFailRequestResponseErrorBound: null,
+  cdpLocalFailRequestResponseFetchCorrelationClass: null,
+};
+const protectedReadRetryOrdinaryFailureEchoFixture = {
+  retryUsed: 1,
+  playwrightFailureEchoClass: "other",
+  cdpLoadingFailureBlockedReasonClass: null,
+  cdpLoadingFailureCorsErrorStatusAbsent: true,
+  cdpLoadingFailureEchoClass: "other",
+  cdpLoadingFailureFetchNetworkIdentityBound: true,
+  cdpLoadingFailureLocalFailRequestTimingClass: "pre-local-fail",
+  cdpLocalFailRequestCommandCompleted: true,
+  cdpLocalFailRequestCommandIssued: true,
+  cdpLocalFailRequestErrorReasonClass: "blocked-by-client",
+  cdpLocalFailRequestExactAttemptBound: true,
+  cdpLocalFailRequestIssuerClass:
+    "protected-read-response-error-terminalization",
+  cdpLocalFailRequestResponseErrorBound: true,
+  cdpLocalFailRequestResponseFetchCorrelationClass: "same-fetch",
+};
+const protectedReadRetryInspectorFailureEchoFixture = {
+  retryUsed: 1,
+  playwrightFailureEchoClass: "other",
+  cdpLoadingFailureBlockedReasonClass: "inspector",
+  cdpLoadingFailureCorsErrorStatusAbsent: true,
+  cdpLoadingFailureEchoClass: "blocked-by-client",
+  cdpLoadingFailureFetchNetworkIdentityBound: true,
+  cdpLoadingFailureLocalFailRequestTimingClass: "local-fail-in-flight",
+  cdpLocalFailRequestCommandCompleted: true,
+  cdpLocalFailRequestCommandIssued: true,
+  cdpLocalFailRequestErrorReasonClass: "blocked-by-client",
+  cdpLocalFailRequestExactAttemptBound: true,
+  cdpLocalFailRequestIssuerClass:
+    "protected-read-response-error-terminalization",
+  cdpLocalFailRequestResponseErrorBound: true,
+  cdpLocalFailRequestResponseFetchCorrelationClass: "same-fetch",
 };
 for (const validFixture of [
+  protectedReadRetryNoFailureEchoFixture,
+  protectedReadRetryOrdinaryFailureEchoFixture,
   {
-    retryUsed: 0,
-    playwrightFailureEchoClass: null,
-    cdpLoadingFailureEchoClass: null,
-    cdpLoadingFailureFetchNetworkIdentityBound: null,
-  },
-  {
-    retryUsed: 1,
-    playwrightFailureEchoClass: "other",
-    cdpLoadingFailureEchoClass: "other",
-    cdpLoadingFailureFetchNetworkIdentityBound: true,
-  },
-  {
-    retryUsed: 1,
-    playwrightFailureEchoClass: "other",
+    ...protectedReadRetryOrdinaryFailureEchoFixture,
     cdpLoadingFailureEchoClass: "aborted",
-    cdpLoadingFailureFetchNetworkIdentityBound: true,
+  },
+  {
+    ...protectedReadRetryOrdinaryFailureEchoFixture,
+    cdpLoadingFailureLocalFailRequestTimingClass: "local-fail-in-flight",
+  },
+  {
+    ...protectedReadRetryOrdinaryFailureEchoFixture,
+    cdpLoadingFailureLocalFailRequestTimingClass: "post-local-fail",
+    cdpLocalFailRequestResponseFetchCorrelationClass:
+      "same-network-single-alias",
+  },
+  protectedReadRetryInspectorFailureEchoFixture,
+  {
+    ...protectedReadRetryInspectorFailureEchoFixture,
+    cdpLoadingFailureLocalFailRequestTimingClass: "post-local-fail",
   },
 ]) {
   assert.doesNotThrow(() =>
@@ -6178,52 +6282,178 @@ for (const validFixture of [
 }
 for (const invalidFixture of [
   {
-    retryUsed: 0,
-    playwrightFailureEchoClass: null,
+    ...protectedReadRetryNoFailureEchoFixture,
     cdpLoadingFailureEchoClass: "other",
-    cdpLoadingFailureFetchNetworkIdentityBound: null,
   },
   {
-    retryUsed: 0,
-    playwrightFailureEchoClass: null,
-    cdpLoadingFailureEchoClass: null,
+    ...protectedReadRetryNoFailureEchoFixture,
     cdpLoadingFailureFetchNetworkIdentityBound: true,
   },
   {
-    retryUsed: 1,
-    playwrightFailureEchoClass: "other",
-    cdpLoadingFailureEchoClass: null,
-    cdpLoadingFailureFetchNetworkIdentityBound: true,
+    ...protectedReadRetryNoFailureEchoFixture,
+    cdpLoadingFailureBlockedReasonClass: "inspector",
   },
   {
-    retryUsed: 1,
-    playwrightFailureEchoClass: "other",
+    ...protectedReadRetryNoFailureEchoFixture,
+    cdpLoadingFailureCorsErrorStatusAbsent: true,
+  },
+  {
+    ...protectedReadRetryNoFailureEchoFixture,
+    cdpLocalFailRequestErrorReasonClass: "blocked-by-client",
+  },
+  {
+    ...protectedReadRetryNoFailureEchoFixture,
+    cdpLocalFailRequestExactAttemptBound: true,
+  },
+  {
+    ...protectedReadRetryNoFailureEchoFixture,
+    cdpLoadingFailureLocalFailRequestTimingClass: "pre-local-fail",
+  },
+  {
+    ...protectedReadRetryNoFailureEchoFixture,
+    cdpLocalFailRequestIssuerClass:
+      "protected-read-response-error-terminalization",
+  },
+  {
+    ...protectedReadRetryNoFailureEchoFixture,
+    cdpLocalFailRequestCommandIssued: true,
+  },
+  {
+    ...protectedReadRetryNoFailureEchoFixture,
+    cdpLocalFailRequestCommandCompleted: true,
+  },
+  {
+    ...protectedReadRetryNoFailureEchoFixture,
+    cdpLocalFailRequestResponseErrorBound: true,
+  },
+  {
+    ...protectedReadRetryNoFailureEchoFixture,
+    cdpLocalFailRequestResponseFetchCorrelationClass: "same-fetch",
+  },
+  {
+    ...protectedReadRetryOrdinaryFailureEchoFixture,
+    cdpLoadingFailureEchoClass: null,
+  },
+  {
+    ...protectedReadRetryOrdinaryFailureEchoFixture,
     cdpLoadingFailureEchoClass: "generic-failed",
-    cdpLoadingFailureFetchNetworkIdentityBound: true,
   },
   {
-    retryUsed: 1,
+    ...protectedReadRetryOrdinaryFailureEchoFixture,
     playwrightFailureEchoClass: "aborted",
     cdpLoadingFailureEchoClass: "other",
-    cdpLoadingFailureFetchNetworkIdentityBound: true,
   },
   {
-    retryUsed: 1,
-    playwrightFailureEchoClass: "other",
+    ...protectedReadRetryOrdinaryFailureEchoFixture,
     cdpLoadingFailureEchoClass: "policy-blocked",
-    cdpLoadingFailureFetchNetworkIdentityBound: true,
   },
   {
-    retryUsed: 1,
-    playwrightFailureEchoClass: "other",
+    ...protectedReadRetryOrdinaryFailureEchoFixture,
     cdpLoadingFailureEchoClass: "cors-blocked",
-    cdpLoadingFailureFetchNetworkIdentityBound: true,
   },
   {
-    retryUsed: 1,
-    playwrightFailureEchoClass: "other",
-    cdpLoadingFailureEchoClass: "other",
+    ...protectedReadRetryOrdinaryFailureEchoFixture,
     cdpLoadingFailureFetchNetworkIdentityBound: false,
+  },
+  {
+    ...protectedReadRetryOrdinaryFailureEchoFixture,
+    cdpLoadingFailureBlockedReasonClass: "policy",
+  },
+  {
+    ...protectedReadRetryOrdinaryFailureEchoFixture,
+    cdpLoadingFailureCorsErrorStatusAbsent: false,
+  },
+  {
+    ...protectedReadRetryOrdinaryFailureEchoFixture,
+    cdpLoadingFailureCorsErrorStatusAbsent: null,
+  },
+  {
+    ...protectedReadRetryOrdinaryFailureEchoFixture,
+    cdpLocalFailRequestErrorReasonClass: null,
+  },
+  {
+    ...protectedReadRetryOrdinaryFailureEchoFixture,
+    cdpLocalFailRequestErrorReasonClass: "aborted",
+  },
+  {
+    ...protectedReadRetryOrdinaryFailureEchoFixture,
+    cdpLocalFailRequestExactAttemptBound: false,
+  },
+  {
+    ...protectedReadRetryOrdinaryFailureEchoFixture,
+    cdpLocalFailRequestExactAttemptBound: null,
+  },
+  {
+    ...protectedReadRetryOrdinaryFailureEchoFixture,
+    cdpLoadingFailureLocalFailRequestTimingClass: null,
+  },
+  {
+    ...protectedReadRetryOrdinaryFailureEchoFixture,
+    cdpLoadingFailureLocalFailRequestTimingClass: "unknown-timing",
+  },
+  {
+    ...protectedReadRetryOrdinaryFailureEchoFixture,
+    cdpLocalFailRequestIssuerClass: null,
+  },
+  {
+    ...protectedReadRetryOrdinaryFailureEchoFixture,
+    cdpLocalFailRequestIssuerClass: "unknown-issuer",
+  },
+  {
+    ...protectedReadRetryOrdinaryFailureEchoFixture,
+    cdpLocalFailRequestCommandIssued: false,
+  },
+  {
+    ...protectedReadRetryOrdinaryFailureEchoFixture,
+    cdpLocalFailRequestCommandIssued: null,
+  },
+  {
+    ...protectedReadRetryOrdinaryFailureEchoFixture,
+    cdpLocalFailRequestCommandCompleted: false,
+  },
+  {
+    ...protectedReadRetryOrdinaryFailureEchoFixture,
+    cdpLocalFailRequestCommandCompleted: null,
+  },
+  {
+    ...protectedReadRetryOrdinaryFailureEchoFixture,
+    cdpLocalFailRequestResponseErrorBound: false,
+  },
+  {
+    ...protectedReadRetryOrdinaryFailureEchoFixture,
+    cdpLocalFailRequestResponseErrorBound: null,
+  },
+  {
+    ...protectedReadRetryOrdinaryFailureEchoFixture,
+    cdpLocalFailRequestResponseFetchCorrelationClass: null,
+  },
+  {
+    ...protectedReadRetryOrdinaryFailureEchoFixture,
+    cdpLocalFailRequestResponseFetchCorrelationClass: "ambiguous",
+  },
+  {
+    ...protectedReadRetryInspectorFailureEchoFixture,
+    cdpLoadingFailureEchoClass: "other",
+  },
+  {
+    ...protectedReadRetryInspectorFailureEchoFixture,
+    cdpLocalFailRequestErrorReasonClass: null,
+  },
+  {
+    ...protectedReadRetryInspectorFailureEchoFixture,
+    cdpLocalFailRequestExactAttemptBound: false,
+  },
+  {
+    ...protectedReadRetryInspectorFailureEchoFixture,
+    playwrightFailureEchoClass: "policy-blocked",
+  },
+  {
+    ...protectedReadRetryInspectorFailureEchoFixture,
+    playwrightFailureEchoClass: "generic-failed",
+  },
+  {
+    ...protectedReadRetryInspectorFailureEchoFixture,
+    cdpLoadingFailureLocalFailRequestTimingClass: "pre-local-fail",
   },
 ]) {
   assert.throws(() =>
@@ -6346,8 +6576,18 @@ for (const attestation of authenticationProtectedReadRetry.attestations) {
     "cdpConfigFinalResponseClass",
     "cdpConfigFirstResponseClass",
     "cdpExactFetchNetworkIdentityBound",
+    "cdpLoadingFailureBlockedReasonClass",
+    "cdpLoadingFailureCorsErrorStatusAbsent",
     "cdpLoadingFailureEchoClass",
     "cdpLoadingFailureFetchNetworkIdentityBound",
+    "cdpLoadingFailureLocalFailRequestTimingClass",
+    "cdpLocalFailRequestCommandCompleted",
+    "cdpLocalFailRequestCommandIssued",
+    "cdpLocalFailRequestErrorReasonClass",
+    "cdpLocalFailRequestExactAttemptBound",
+    "cdpLocalFailRequestIssuerClass",
+    "cdpLocalFailRequestResponseErrorBound",
+    "cdpLocalFailRequestResponseFetchCorrelationClass",
     "cdpNetworkErrorLogCount",
     "cdpProfileFinalResponseClass",
     "cdpProfileFirstResponseClass",
@@ -6385,7 +6625,7 @@ for (const attestation of authenticationProtectedReadRetry.attestations) {
     "tokenRefreshCount",
     "viewport",
   ]);
-  assert.equal(attestation.schemaVersion, 3);
+  assert.equal(attestation.schemaVersion, 4);
   assert.equal(attestation.policyId, authenticationProtectedReadRetry.policyId);
   assert.equal(attestation.retryBudget, 1);
   assert.equal(attestation.retryDelayMs, 250);

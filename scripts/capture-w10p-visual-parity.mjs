@@ -5796,12 +5796,23 @@ const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_ECHO_CLASSES =
     "blocked-by-client",
     "other",
   ]);
+const SAFE_AUTHENTICATION_PROTECTED_READ_LOCAL_FAIL_REQUEST_ISSUER_CLASS =
+  "protected-read-response-error-terminalization";
+const SAFE_AUTHENTICATION_PROTECTED_READ_LOCAL_FAIL_REQUEST_ERROR_REASON_CLASS =
+  "blocked-by-client";
+const SAFE_AUTHENTICATION_PROTECTED_READ_LOADING_FAILURE_TIMING_CLASSES =
+  Object.freeze(["pre-local-fail", "local-fail-in-flight", "post-local-fail"]);
 const safeAuthenticationProtectedReadFailureEchoClassesCompatible = ({
   playwrightFailureClass,
   cdpLoadingFailureClass,
+  localResponseErrorTerminalizationEcho = false,
 }) =>
   playwrightFailureClass === cdpLoadingFailureClass ||
-  (playwrightFailureClass === "other" && cdpLoadingFailureClass === "aborted");
+  (playwrightFailureClass === "other" &&
+    cdpLoadingFailureClass === "aborted") ||
+  (localResponseErrorTerminalizationEcho === true &&
+    playwrightFailureClass === "other" &&
+    cdpLoadingFailureClass === "blocked-by-client");
 const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES = Object.freeze({
   generic: "authentication-protected-read-retry-attestation-failed",
   callbackPreconditionMismatch:
@@ -5822,6 +5833,8 @@ const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES = Object.freeze({
     "authentication-protected-read-request-failure-record-unsettled",
   loadingFailureRecordUnsettled:
     "authentication-protected-read-loading-failure-record-unsettled",
+  localFailRequestRecordUnsettled:
+    "authentication-protected-read-local-fail-request-record-unsettled",
   consoleRecoveryRecordUnsettled:
     "authentication-protected-read-console-recovery-record-unsettled",
   recordExtractionFailed:
@@ -5834,6 +5847,8 @@ const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES = Object.freeze({
     "authentication-protected-read-proxy-provenance-contract-mismatch",
   requestFailureContractMismatch:
     "authentication-protected-read-request-failure-contract-mismatch",
+  localFailRequestContractMismatch:
+    "authentication-protected-read-local-fail-request-contract-mismatch",
   loadingFailureContractMismatch:
     "authentication-protected-read-loading-failure-contract-mismatch",
   consoleRecoveryContractMismatch:
@@ -5961,6 +5976,7 @@ const confirmSafeAuthenticationProtectedReadRetry = (
     pageAttestation,
     cdpResponseRecords,
     requestFailureRecords,
+    localFailRequestRecords,
     cdpLoadingFailureRecords,
     cdpNetworkErrorLogRecords,
     playwrightConsoleErrorRecords,
@@ -5988,6 +6004,10 @@ const confirmSafeAuthenticationProtectedReadRetry = (
     SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.requestFailureContractMismatch,
   );
   assert.ok(Array.isArray(requestFailureRecords));
+  markFailureClass(
+    SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.localFailRequestContractMismatch,
+  );
+  assert.ok(Array.isArray(localFailRequestRecords));
   markFailureClass(
     SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.loadingFailureContractMismatch,
   );
@@ -6115,23 +6135,90 @@ const confirmSafeAuthenticationProtectedReadRetry = (
     assert.equal(requestFailureRecords[0].target, attestation.retryTarget);
   }
   markFailureClass(
+    SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.localFailRequestContractMismatch,
+  );
+  assert.equal(localFailRequestRecords.length, requestFailureRecords.length);
+  for (const [index, record] of localFailRequestRecords.entries()) {
+    assert.deepEqual(Object.keys(record).sort(), [
+      "attemptNumber",
+      "commandCompleted",
+      "commandIssued",
+      "completedSequence",
+      "errorReasonClass",
+      "exactAttemptBound",
+      "issuedSequence",
+      "issuerClass",
+      "responseErrorBound",
+      "responseFetchCorrelationClass",
+      "target",
+    ]);
+    assert.ok(["config", "profile"].includes(record.target));
+    assert.equal(record.attemptNumber, 1);
+    assert.equal(record.commandIssued, true);
+    assert.equal(record.commandCompleted, true);
+    assert.equal(record.exactAttemptBound, true);
+    assert.equal(record.responseErrorBound, true);
+    assert.equal(
+      record.issuerClass,
+      SAFE_AUTHENTICATION_PROTECTED_READ_LOCAL_FAIL_REQUEST_ISSUER_CLASS,
+    );
+    assert.equal(
+      record.errorReasonClass,
+      SAFE_AUTHENTICATION_PROTECTED_READ_LOCAL_FAIL_REQUEST_ERROR_REASON_CLASS,
+    );
+    assert.ok(
+      ["same-fetch", "same-network-single-alias"].includes(
+        record.responseFetchCorrelationClass,
+      ),
+    );
+    assert.ok(Number.isSafeInteger(record.issuedSequence));
+    assert.ok(record.issuedSequence > 0);
+    assert.ok(Number.isSafeInteger(record.completedSequence));
+    assert.ok(record.completedSequence > record.issuedSequence);
+    assert.deepEqual(
+      {
+        target: record.target,
+        attemptNumber: record.attemptNumber,
+      },
+      {
+        target: requestFailureRecords[index].target,
+        attemptNumber: requestFailureRecords[index].attemptNumber,
+      },
+    );
+    const responseRecord = cdpResponseRecords.find(
+      (candidate) =>
+        candidate.target === record.target &&
+        candidate.attemptNumber === record.attemptNumber,
+    );
+    assert.equal(responseRecord?.responseClass, "response-error-failed");
+  }
+  markFailureClass(
     SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.loadingFailureContractMismatch,
   );
   assert.equal(cdpLoadingFailureRecords.length, requestFailureRecords.length);
   for (const [index, record] of cdpLoadingFailureRecords.entries()) {
     assert.deepEqual(Object.keys(record).sort(), [
       "attemptNumber",
-      "blockedReasonAbsent",
+      "blockedReasonClass",
       "corsErrorStatusAbsent",
       "failureClass",
+      "localFailRequestTimingClass",
       "networkIdentityBound",
+      "observedSequence",
       "target",
     ]);
     assert.ok(["config", "profile"].includes(record.target));
     assert.equal(record.attemptNumber, 1);
-    assert.equal(record.blockedReasonAbsent, true);
+    assert.ok([null, "inspector"].includes(record.blockedReasonClass));
     assert.equal(record.corsErrorStatusAbsent, true);
     assert.equal(record.networkIdentityBound, true);
+    assert.ok(
+      SAFE_AUTHENTICATION_PROTECTED_READ_LOADING_FAILURE_TIMING_CLASSES.includes(
+        record.localFailRequestTimingClass,
+      ),
+    );
+    assert.ok(Number.isSafeInteger(record.observedSequence));
+    assert.ok(record.observedSequence > 0);
     assert.ok(
       SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_ECHO_CLASSES.includes(
         record.failureClass,
@@ -6147,10 +6234,56 @@ const confirmSafeAuthenticationProtectedReadRetry = (
         attemptNumber: requestFailureRecords[index].attemptNumber,
       },
     );
+    const localFailRequestRecord = localFailRequestRecords[index];
+    assert.deepEqual(
+      {
+        target: record.target,
+        attemptNumber: record.attemptNumber,
+      },
+      {
+        target: localFailRequestRecord.target,
+        attemptNumber: localFailRequestRecord.attemptNumber,
+      },
+    );
+    if (record.localFailRequestTimingClass === "pre-local-fail") {
+      assert.ok(
+        record.observedSequence < localFailRequestRecord.issuedSequence,
+      );
+    } else if (record.localFailRequestTimingClass === "local-fail-in-flight") {
+      assert.ok(
+        localFailRequestRecord.issuedSequence < record.observedSequence,
+      );
+      assert.ok(
+        record.observedSequence < localFailRequestRecord.completedSequence,
+      );
+    } else {
+      assert.equal(record.localFailRequestTimingClass, "post-local-fail");
+      assert.ok(
+        localFailRequestRecord.completedSequence < record.observedSequence,
+      );
+    }
+    const localResponseErrorTerminalizationEcho =
+      record.blockedReasonClass === "inspector" &&
+      record.failureClass === "blocked-by-client" &&
+      ["local-fail-in-flight", "post-local-fail"].includes(
+        record.localFailRequestTimingClass,
+      ) &&
+      localFailRequestRecord.issuerClass ===
+        SAFE_AUTHENTICATION_PROTECTED_READ_LOCAL_FAIL_REQUEST_ISSUER_CLASS &&
+      localFailRequestRecord.errorReasonClass ===
+        SAFE_AUTHENTICATION_PROTECTED_READ_LOCAL_FAIL_REQUEST_ERROR_REASON_CLASS &&
+      localFailRequestRecord.commandIssued === true &&
+      localFailRequestRecord.commandCompleted === true &&
+      localFailRequestRecord.responseErrorBound === true &&
+      localFailRequestRecord.exactAttemptBound === true;
+    if (record.blockedReasonClass === "inspector") {
+      assert.equal(localResponseErrorTerminalizationEcho, true);
+    }
     assert.equal(
       safeAuthenticationProtectedReadFailureEchoClassesCompatible({
         playwrightFailureClass: requestFailureRecords[index].failureClass,
         cdpLoadingFailureClass: record.failureClass,
+        localResponseErrorTerminalizationEcho,
       }),
       true,
     );
@@ -6226,7 +6359,7 @@ const confirmSafeAuthenticationProtectedReadRetry = (
     playwrightConsoleErrorRecords.length;
   return Object.freeze({
     ...attestation,
-    schemaVersion: 3,
+    schemaVersion: 4,
     cdpConfigFirstResponseClass: firstResponseClassByTarget.config,
     cdpConfigFinalResponseClass: finalResponseClassByTarget.config,
     cdpProfileFirstResponseClass: firstResponseClassByTarget.profile,
@@ -6244,8 +6377,28 @@ const confirmSafeAuthenticationProtectedReadRetry = (
     playwrightFailureEchoClass: requestFailureRecords[0]?.failureClass ?? null,
     cdpLoadingFailureEchoClass:
       cdpLoadingFailureRecords[0]?.failureClass ?? null,
+    cdpLoadingFailureBlockedReasonClass:
+      cdpLoadingFailureRecords[0]?.blockedReasonClass ?? null,
+    cdpLoadingFailureCorsErrorStatusAbsent:
+      cdpLoadingFailureRecords.length === 0 ? null : true,
+    cdpLoadingFailureLocalFailRequestTimingClass:
+      cdpLoadingFailureRecords[0]?.localFailRequestTimingClass ?? null,
     cdpLoadingFailureFetchNetworkIdentityBound:
       cdpLoadingFailureRecords.length === 0 ? null : true,
+    cdpLocalFailRequestErrorReasonClass:
+      localFailRequestRecords[0]?.errorReasonClass ?? null,
+    cdpLocalFailRequestExactAttemptBound:
+      localFailRequestRecords.length === 0 ? null : true,
+    cdpLocalFailRequestIssuerClass:
+      localFailRequestRecords[0]?.issuerClass ?? null,
+    cdpLocalFailRequestCommandIssued:
+      localFailRequestRecords.length === 0 ? null : true,
+    cdpLocalFailRequestCommandCompleted:
+      localFailRequestRecords.length === 0 ? null : true,
+    cdpLocalFailRequestResponseErrorBound:
+      localFailRequestRecords.length === 0 ? null : true,
+    cdpLocalFailRequestResponseFetchCorrelationClass:
+      localFailRequestRecords[0]?.responseFetchCorrelationClass ?? null,
     cdpNetworkErrorLogCount: cdpNetworkErrorLogRecords.length,
     playwrightResourceLoadErrorCount: playwrightConsoleErrorRecords.length,
     playwrightFailureConsoleEchoClass:
@@ -13799,6 +13952,26 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
             failureClass: "generic-failed",
           },
         ];
+  const createLocalFailRequestRecords = (retryTarget = "none") =>
+    retryTarget === "none"
+      ? []
+      : [
+          {
+            target: retryTarget,
+            attemptNumber: 1,
+            issuerClass:
+              SAFE_AUTHENTICATION_PROTECTED_READ_LOCAL_FAIL_REQUEST_ISSUER_CLASS,
+            errorReasonClass:
+              SAFE_AUTHENTICATION_PROTECTED_READ_LOCAL_FAIL_REQUEST_ERROR_REASON_CLASS,
+            exactAttemptBound: true,
+            responseErrorBound: true,
+            responseFetchCorrelationClass: "same-fetch",
+            commandIssued: true,
+            commandCompleted: true,
+            issuedSequence: 2,
+            completedSequence: 3,
+          },
+        ];
   const createCdpLoadingFailureRecords = (retryTarget = "none") =>
     retryTarget === "none"
       ? []
@@ -13808,8 +13981,10 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
             attemptNumber: 1,
             failureClass: "generic-failed",
             networkIdentityBound: true,
-            blockedReasonAbsent: true,
+            blockedReasonClass: null,
             corsErrorStatusAbsent: true,
+            localFailRequestTimingClass: "pre-local-fail",
+            observedSequence: 1,
           },
         ];
   const protectedReadConsoleSha256 = secretSha256(
@@ -13865,6 +14040,7 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     pageAttestation: createPageAttestation(retryTarget),
     cdpResponseRecords: createCdpResponseRecords(retryTarget),
     requestFailureRecords: createRequestFailureRecords(retryTarget),
+    localFailRequestRecords: createLocalFailRequestRecords(retryTarget),
     cdpLoadingFailureRecords: createCdpLoadingFailureRecords(retryTarget),
     cdpNetworkErrorLogRecords: createCdpNetworkErrorLogRecords(retryTarget),
     playwrightConsoleErrorRecords:
@@ -13911,6 +14087,68 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
   assert.equal(
     compatibleCanceledFailureEchoAttestation.cdpLoadingFailureEchoClass,
     "aborted",
+  );
+  const createInspectorTerminalizationFixture = (timingClass) => {
+    const fixture = createFixture("config");
+    fixture.requestFailureRecords[0].failureClass = "other";
+    fixture.cdpLoadingFailureRecords[0].failureClass = "blocked-by-client";
+    fixture.cdpLoadingFailureRecords[0].blockedReasonClass = "inspector";
+    fixture.cdpLoadingFailureRecords[0].localFailRequestTimingClass =
+      timingClass;
+    fixture.localFailRequestRecords[0].issuedSequence = 1;
+    if (timingClass === "local-fail-in-flight") {
+      fixture.cdpLoadingFailureRecords[0].observedSequence = 2;
+      fixture.localFailRequestRecords[0].completedSequence = 3;
+    } else {
+      assert.equal(timingClass, "post-local-fail");
+      fixture.localFailRequestRecords[0].completedSequence = 2;
+      fixture.cdpLoadingFailureRecords[0].observedSequence = 3;
+    }
+    return fixture;
+  };
+  const inspectorTerminalizationAttestations = [
+    "local-fail-in-flight",
+    "post-local-fail",
+  ].map((timingClass) =>
+    confirmSafeAuthenticationProtectedReadRetry(
+      createInspectorTerminalizationFixture(timingClass),
+    ),
+  );
+  const soleAliasTerminalizationFixture =
+    createInspectorTerminalizationFixture("post-local-fail");
+  soleAliasTerminalizationFixture.localFailRequestRecords[0].responseFetchCorrelationClass =
+    "same-network-single-alias";
+  const soleAliasTerminalizationAttestation =
+    confirmSafeAuthenticationProtectedReadRetry(
+      soleAliasTerminalizationFixture,
+    );
+  assert.equal(
+    soleAliasTerminalizationAttestation.cdpLocalFailRequestResponseFetchCorrelationClass,
+    "same-network-single-alias",
+  );
+  assert.equal(
+    inspectorTerminalizationAttestations.every(
+      (attestation) =>
+        attestation.cdpLoadingFailureEchoClass === "blocked-by-client" &&
+        attestation.cdpLoadingFailureBlockedReasonClass === "inspector" &&
+        attestation.cdpLoadingFailureCorsErrorStatusAbsent === true &&
+        ["local-fail-in-flight", "post-local-fail"].includes(
+          attestation.cdpLoadingFailureLocalFailRequestTimingClass,
+        ) &&
+        attestation.cdpLocalFailRequestErrorReasonClass ===
+          "blocked-by-client" &&
+        attestation.cdpLocalFailRequestExactAttemptBound === true &&
+        attestation.cdpLocalFailRequestIssuerClass ===
+          SAFE_AUTHENTICATION_PROTECTED_READ_LOCAL_FAIL_REQUEST_ISSUER_CLASS &&
+        attestation.cdpLocalFailRequestCommandIssued === true &&
+        attestation.cdpLocalFailRequestCommandCompleted === true &&
+        attestation.cdpLocalFailRequestResponseErrorBound === true &&
+        ["same-fetch", "same-network-single-alias"].includes(
+          attestation.cdpLocalFailRequestResponseFetchCorrelationClass,
+        ) &&
+        attestation.passed === true,
+    ),
+    true,
   );
   assert.equal(
     acceptedFailureEchoAttestations.every(
@@ -14035,6 +14273,62 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     },
     () => {
       const fixture = createFixture("config");
+      fixture.localFailRequestRecords = [];
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("config");
+      fixture.localFailRequestRecords[0].extra = true;
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("profile");
+      fixture.localFailRequestRecords[0].issuerClass = "request-stage-block";
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("profile");
+      fixture.localFailRequestRecords[0].errorReasonClass = "other";
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("config");
+      fixture.localFailRequestRecords[0].exactAttemptBound = false;
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("config");
+      fixture.localFailRequestRecords[0].responseErrorBound = false;
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("profile");
+      fixture.localFailRequestRecords[0].commandCompleted = false;
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("profile");
+      fixture.localFailRequestRecords[0].commandIssued = false;
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("profile");
+      fixture.localFailRequestRecords[0].completedSequence = 2;
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("config");
+      fixture.localFailRequestRecords[0].responseFetchCorrelationClass =
+        "ambiguous-alias";
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("config");
+      fixture.localFailRequestRecords[0].target = "profile";
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("config");
       fixture.cdpLoadingFailureRecords = [];
       return fixture;
     },
@@ -14050,7 +14344,7 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     },
     () => {
       const fixture = createFixture("config");
-      fixture.cdpLoadingFailureRecords[0].blockedReasonAbsent = false;
+      fixture.cdpLoadingFailureRecords[0].blockedReasonClass = "csp";
       return fixture;
     },
     () => {
@@ -14072,6 +14366,47 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
       const fixture = createFixture("config");
       fixture.requestFailureRecords[0].failureClass = "aborted";
       fixture.cdpLoadingFailureRecords[0].failureClass = "other";
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("config");
+      fixture.requestFailureRecords[0].failureClass = "other";
+      fixture.cdpLoadingFailureRecords[0].failureClass = "blocked-by-client";
+      fixture.cdpLoadingFailureRecords[0].blockedReasonClass = "inspector";
+      return fixture;
+    },
+    () => {
+      const fixture = createInspectorTerminalizationFixture(
+        "local-fail-in-flight",
+      );
+      fixture.cdpLoadingFailureRecords[0].failureClass = "generic-failed";
+      return fixture;
+    },
+    () => {
+      const fixture = createInspectorTerminalizationFixture(
+        "local-fail-in-flight",
+      );
+      fixture.requestFailureRecords[0].failureClass = "generic-failed";
+      return fixture;
+    },
+    () => {
+      const fixture = createInspectorTerminalizationFixture(
+        "local-fail-in-flight",
+      );
+      fixture.cdpLoadingFailureRecords[0].localFailRequestTimingClass =
+        "invalid";
+      return fixture;
+    },
+    () => {
+      const fixture = createInspectorTerminalizationFixture(
+        "local-fail-in-flight",
+      );
+      fixture.cdpLoadingFailureRecords[0].observedSequence = 3;
+      return fixture;
+    },
+    () => {
+      const fixture = createInspectorTerminalizationFixture("post-local-fail");
+      fixture.cdpLoadingFailureRecords[0].observedSequence = 2;
       return fixture;
     },
     () => {
@@ -14160,7 +14495,10 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     ...Array(5).fill(
       SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.requestFailureContractMismatch,
     ),
-    ...Array(8).fill(
+    ...Array(11).fill(
+      SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.localFailRequestContractMismatch,
+    ),
+    ...Array(14).fill(
       SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.loadingFailureContractMismatch,
     ),
     ...Array(10).fill(
@@ -14225,6 +14563,8 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
   const serializedAccepted = JSON.stringify([
     ...accepted,
     ...acceptedFailureEchoAttestations,
+    ...inspectorTerminalizationAttestations,
+    soleAliasTerminalizationAttestation,
   ]);
   assert.equal(serializedAccepted.includes(privateRawValue), false);
   assert.equal(JWT_PATTERN.test(serializedAccepted), false);
@@ -32114,6 +32454,14 @@ try {
     const authenticationProtectedReadAttemptsByNetworkId = new Map();
     const authenticationProtectedReadPlaywrightConsoleErrorRecords = [];
     let authenticationProtectedReadRecoveryEvidenceLastObservedAtMs = null;
+    let authenticationProtectedReadEvidenceSequence = 0;
+    const nextAuthenticationProtectedReadEvidenceSequence = () => {
+      authenticationProtectedReadEvidenceSequence += 1;
+      assert.ok(
+        Number.isSafeInteger(authenticationProtectedReadEvidenceSequence),
+      );
+      return authenticationProtectedReadEvidenceSequence;
+    };
     const authenticationProtectedReadAttemptCounts = {
       config: 0,
       profile: 0,
@@ -32202,6 +32550,7 @@ try {
         responseRecord: null,
         requestFailureClass: null,
         requestFailureFetchNetworkIdentityBound: false,
+        localResponseErrorFailRequest: null,
         loadingFailureRecords: [],
         networkErrorLogRecords: [],
       };
@@ -32245,6 +32594,11 @@ try {
           event,
           "blockedReason",
         );
+        const blockedReasonClass = blockedReasonPresent
+          ? event.blockedReason === "inspector"
+            ? "inspector"
+            : "unsupported"
+          : null;
         const corsErrorStatusPresent = Object.prototype.hasOwnProperty.call(
           event,
           "corsErrorStatus",
@@ -32259,6 +32613,18 @@ try {
           corsError,
         });
         if (failureClass === null) return;
+        const localFailRequestState =
+          attempt.localResponseErrorFailRequest?.commandState ?? null;
+        const localFailRequestTimingClass =
+          localFailRequestState === null
+            ? "pre-local-fail"
+            : localFailRequestState === "in-flight"
+              ? "local-fail-in-flight"
+              : localFailRequestState === "complete"
+                ? "post-local-fail"
+                : "invalid";
+        const observedSequence =
+          nextAuthenticationProtectedReadEvidenceSequence();
         attempt.loadingFailureRecords.push(
           Object.freeze({
             target: attempt.target,
@@ -32268,8 +32634,10 @@ try {
               authenticationProtectedReadAttemptsByNetworkId.get(
                 event.requestId,
               ) === attempt,
-            blockedReasonAbsent: !blockedReasonPresent,
+            blockedReasonClass,
             corsErrorStatusAbsent: !corsErrorStatusPresent,
+            localFailRequestTimingClass,
+            observedSequence,
           }),
         );
         authenticationProtectedReadRecoveryEvidenceLastObservedAtMs =
@@ -32881,6 +33249,67 @@ try {
             primaryRequestId,
             "terminal-command-in-flight",
           );
+          if (authenticationProtectedReadAttempt !== null) {
+            assert.equal(
+              authenticationProtectedReadAttempt.localResponseErrorFailRequest,
+              null,
+            );
+            const responseRecord =
+              authenticationProtectedReadAttempt.responseRecord;
+            const responseErrorBound =
+              responseRecord?.target ===
+                authenticationProtectedReadAttempt.target &&
+              responseRecord?.attemptNumber ===
+                authenticationProtectedReadAttempt.attemptNumber &&
+              responseRecord?.lifecycleKind === "primary" &&
+              responseRecord?.responseClass === "response-error-failed";
+            const responseFetchCorrelationClass = responseCorrelation.source;
+            const correlationOwnerIds = [
+              ...(allowedEgressFetchRequestIdsByNetworkId.get(
+                authenticationProtectedReadAttempt.networkId,
+              ) || []),
+            ].filter((requestId) =>
+              allowedEgressLifecycleByFetchRequestId.has(requestId),
+            );
+            const exactAttemptBound =
+              responseCorrelation.valid === true &&
+              responseCorrelation.primaryRequestId ===
+                authenticationProtectedReadAttempt.primaryRequestId &&
+              responseCorrelation.lifecycle === lifecycle &&
+              authenticationProtectedReadAttemptsByFetchRequestId.get(
+                primaryRequestId,
+              ) === authenticationProtectedReadAttempt &&
+              authenticationProtectedReadAttemptsByNetworkId.get(
+                authenticationProtectedReadAttempt.networkId,
+              ) === authenticationProtectedReadAttempt &&
+              event.networkId ===
+                authenticationProtectedReadAttempt.networkId &&
+              correlationOwnerIds.length === 1 &&
+              correlationOwnerIds[0] === primaryRequestId &&
+              ((responseFetchCorrelationClass === "same-fetch" &&
+                event.requestId === primaryRequestId) ||
+                (responseFetchCorrelationClass ===
+                  "same-network-single-alias" &&
+                  event.requestId !== primaryRequestId));
+            assert.equal(responseErrorBound, true);
+            assert.equal(exactAttemptBound, true);
+            authenticationProtectedReadAttempt.localResponseErrorFailRequest =
+              Object.freeze({
+                issuerClass:
+                  SAFE_AUTHENTICATION_PROTECTED_READ_LOCAL_FAIL_REQUEST_ISSUER_CLASS,
+                errorReasonClass:
+                  SAFE_AUTHENTICATION_PROTECTED_READ_LOCAL_FAIL_REQUEST_ERROR_REASON_CLASS,
+                target: authenticationProtectedReadAttempt.target,
+                attemptNumber: authenticationProtectedReadAttempt.attemptNumber,
+                exactAttemptBound,
+                responseErrorBound,
+                responseFetchCorrelationClass,
+                commandState: "in-flight",
+                issuedSequence:
+                  nextAuthenticationProtectedReadEvidenceSequence(),
+                completedSequence: null,
+              });
+          }
           allowedEgressRequestsByFetchRequestId.delete(primaryRequestId);
           sensitiveAppCheckRequestsByFetchRequestId.delete(primaryRequestId);
           stableOriginRewriteRequestsByFetchRequestId.delete(primaryRequestId);
@@ -32892,6 +33321,20 @@ try {
             requestId: event.requestId,
             errorReason: "BlockedByClient",
           });
+          if (authenticationProtectedReadAttempt !== null) {
+            const localFailRequest =
+              authenticationProtectedReadAttempt.localResponseErrorFailRequest;
+            assert.ok(localFailRequest);
+            assert.equal(localFailRequest.commandState, "in-flight");
+            assert.equal(localFailRequest.completedSequence, null);
+            authenticationProtectedReadAttempt.localResponseErrorFailRequest =
+              Object.freeze({
+                ...localFailRequest,
+                commandState: "complete",
+                completedSequence:
+                  nextAuthenticationProtectedReadEvidenceSequence(),
+              });
+          }
           completeProxyAuthorization();
           setAllowedEgressLifecycleState(primaryRequestId, "terminal-complete");
           return;
@@ -34653,6 +35096,18 @@ try {
               const successfulAttempts = attempts.filter(
                 (attempt) => attempt.requestFailureClass === null,
               );
+              const localFailRequestRecordsSettled =
+                failedAttempts.every(
+                  (attempt) =>
+                    attempt.localResponseErrorFailRequest?.commandState ===
+                      "complete" &&
+                    Number.isSafeInteger(
+                      attempt.localResponseErrorFailRequest.completedSequence,
+                    ),
+                ) &&
+                successfulAttempts.every(
+                  (attempt) => attempt.localResponseErrorFailRequest === null,
+                );
               const loadingFailureRecordsSettled =
                 failedAttempts.every(
                   (attempt) => attempt.loadingFailureRecords.length === 1,
@@ -34680,6 +35135,7 @@ try {
                 exactNetworkIdentityBound &&
                 responseRecordsSettled &&
                 requestFailureRecordsSettled &&
+                localFailRequestRecordsSettled &&
                 loadingFailureRecordsSettled &&
                 consoleRecoveryRecordsSettled &&
                 recoveryEvidenceQuietWindowSettled
@@ -34695,9 +35151,11 @@ try {
                       ? SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.responseRecordUnsettled
                       : !requestFailureRecordsSettled
                         ? SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.requestFailureRecordUnsettled
-                        : !loadingFailureRecordsSettled
-                          ? SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.loadingFailureRecordUnsettled
-                          : SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.consoleRecoveryRecordUnsettled;
+                        : !localFailRequestRecordsSettled
+                          ? SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.localFailRequestRecordUnsettled
+                          : !loadingFailureRecordsSettled
+                            ? SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.loadingFailureRecordUnsettled
+                            : SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.consoleRecoveryRecordUnsettled;
               setProtectedReadFailureClass(unsettledFailureClass);
               assert.ok(
                 Date.now() < settlementDeadline,
@@ -34736,6 +35194,30 @@ try {
                 attemptNumber: attempt.attemptNumber,
                 failureClass: attempt.requestFailureClass,
               }));
+            const localFailRequestRecords = attempts
+              .filter(
+                (attempt) => attempt.localResponseErrorFailRequest !== null,
+              )
+              .map((attempt) => {
+                const localFailRequest = attempt.localResponseErrorFailRequest;
+                assert.ok(localFailRequest);
+                return {
+                  target: localFailRequest.target,
+                  attemptNumber: localFailRequest.attemptNumber,
+                  issuerClass: localFailRequest.issuerClass,
+                  errorReasonClass: localFailRequest.errorReasonClass,
+                  exactAttemptBound: localFailRequest.exactAttemptBound,
+                  responseErrorBound: localFailRequest.responseErrorBound,
+                  responseFetchCorrelationClass:
+                    localFailRequest.responseFetchCorrelationClass,
+                  commandIssued: localFailRequest.issuedSequence !== null,
+                  commandCompleted:
+                    localFailRequest.commandState === "complete" &&
+                    localFailRequest.completedSequence !== null,
+                  issuedSequence: localFailRequest.issuedSequence,
+                  completedSequence: localFailRequest.completedSequence,
+                };
+              });
             const cdpLoadingFailureRecords = attempts.flatMap(
               (attempt) => attempt.loadingFailureRecords,
             );
@@ -34783,6 +35265,7 @@ try {
                 pageAttestation: normalizedPageAttestation,
                 cdpResponseRecords,
                 requestFailureRecords,
+                localFailRequestRecords,
                 cdpLoadingFailureRecords,
                 cdpNetworkErrorLogRecords,
                 playwrightConsoleErrorRecords,
@@ -34823,6 +35306,7 @@ try {
               SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.cdpRecoveredCountMismatch,
             );
             assert.equal(requestFailureRecords.length, recoveredCount);
+            assert.equal(localFailRequestRecords.length, recoveredCount);
             assert.equal(cdpLoadingFailureRecords.length, recoveredCount);
             assert.equal(
               cdpNetworkErrorLogRecords.length,
@@ -37716,7 +38200,7 @@ assert.equal(
   recoveredProtectedReadTransportFailureCount,
 );
 const authenticationProtectedReadRetry = Object.freeze({
-  schemaVersion: 3,
+  schemaVersion: 4,
   policyId: SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_POLICY_ID,
   retryBudgetPerGroup: 1,
   retryDelayMs: 250,
