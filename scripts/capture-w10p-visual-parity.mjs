@@ -5796,6 +5796,12 @@ const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_ECHO_CLASSES =
     "blocked-by-client",
     "other",
   ]);
+const safeAuthenticationProtectedReadFailureEchoClassesCompatible = ({
+  playwrightFailureClass,
+  cdpLoadingFailureClass,
+}) =>
+  playwrightFailureClass === cdpLoadingFailureClass ||
+  (playwrightFailureClass === "other" && cdpLoadingFailureClass === "aborted");
 const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES = Object.freeze({
   generic: "authentication-protected-read-retry-attestation-failed",
   callbackPreconditionMismatch:
@@ -6135,9 +6141,18 @@ const confirmSafeAuthenticationProtectedReadRetry = (
       {
         target: record.target,
         attemptNumber: record.attemptNumber,
-        failureClass: record.failureClass,
       },
-      requestFailureRecords[index],
+      {
+        target: requestFailureRecords[index].target,
+        attemptNumber: requestFailureRecords[index].attemptNumber,
+      },
+    );
+    assert.equal(
+      safeAuthenticationProtectedReadFailureEchoClassesCompatible({
+        playwrightFailureClass: requestFailureRecords[index].failureClass,
+        cdpLoadingFailureClass: record.failureClass,
+      }),
+      true,
     );
   }
   markFailureClass(
@@ -13880,6 +13895,23 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
         return confirmSafeAuthenticationProtectedReadRetry(fixture);
       },
     );
+  const compatibleCanceledFailureEchoFixture = createFixture("config");
+  compatibleCanceledFailureEchoFixture.requestFailureRecords[0].failureClass =
+    "other";
+  compatibleCanceledFailureEchoFixture.cdpLoadingFailureRecords[0].failureClass =
+    "aborted";
+  const compatibleCanceledFailureEchoAttestation =
+    confirmSafeAuthenticationProtectedReadRetry(
+      compatibleCanceledFailureEchoFixture,
+    );
+  assert.equal(
+    compatibleCanceledFailureEchoAttestation.playwrightFailureEchoClass,
+    "other",
+  );
+  assert.equal(
+    compatibleCanceledFailureEchoAttestation.cdpLoadingFailureEchoClass,
+    "aborted",
+  );
   assert.equal(
     acceptedFailureEchoAttestations.every(
       (attestation, index) =>
@@ -14038,6 +14070,12 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     },
     () => {
       const fixture = createFixture("config");
+      fixture.requestFailureRecords[0].failureClass = "aborted";
+      fixture.cdpLoadingFailureRecords[0].failureClass = "other";
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("config");
       fixture.cdpNetworkErrorLogRecords[0].sourceNetwork = false;
       return fixture;
     },
@@ -14122,7 +14160,7 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     ...Array(5).fill(
       SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.requestFailureContractMismatch,
     ),
-    ...Array(7).fill(
+    ...Array(8).fill(
       SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.loadingFailureContractMismatch,
     ),
     ...Array(10).fill(

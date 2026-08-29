@@ -6144,7 +6144,12 @@ const assertProtectedReadRetryCdpLoadingFailureEchoClass = (attestation) => {
     ),
     true,
   );
-  assert.equal(cdpLoadingFailureEchoClass, playwrightFailureEchoClass);
+  assert.equal(
+    cdpLoadingFailureEchoClass === playwrightFailureEchoClass ||
+      (playwrightFailureEchoClass === "other" &&
+        cdpLoadingFailureEchoClass === "aborted"),
+    true,
+  );
   assert.equal(cdpLoadingFailureFetchNetworkIdentityBound, true);
 };
 for (const validFixture of [
@@ -6158,6 +6163,12 @@ for (const validFixture of [
     retryUsed: 1,
     playwrightFailureEchoClass: "other",
     cdpLoadingFailureEchoClass: "other",
+    cdpLoadingFailureFetchNetworkIdentityBound: true,
+  },
+  {
+    retryUsed: 1,
+    playwrightFailureEchoClass: "other",
+    cdpLoadingFailureEchoClass: "aborted",
     cdpLoadingFailureFetchNetworkIdentityBound: true,
   },
 ]) {
@@ -6188,6 +6199,12 @@ for (const invalidFixture of [
     retryUsed: 1,
     playwrightFailureEchoClass: "other",
     cdpLoadingFailureEchoClass: "generic-failed",
+    cdpLoadingFailureFetchNetworkIdentityBound: true,
+  },
+  {
+    retryUsed: 1,
+    playwrightFailureEchoClass: "aborted",
+    cdpLoadingFailureEchoClass: "other",
     cdpLoadingFailureFetchNetworkIdentityBound: true,
   },
   {
