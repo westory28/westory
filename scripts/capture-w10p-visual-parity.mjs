@@ -13811,6 +13811,7 @@ const SAFE_AUTHENTICATION_FAILURE_CLASSES = Object.freeze([
   "authentication-bootstrap-retirement-failed",
   "authentication-bootstrap-post-retirement-drain-failed",
   "auth-persistence-migration-failed",
+  "pre-navigation-application-session-fence-failed",
   "post-auth-reload-failed",
   "post-reload-route-wait-failed",
   "stability-delay-failed",
@@ -29744,6 +29745,7 @@ const authenticateCore = async (
   confirmAuthenticationProtectedReadRetry,
   prepareAuthenticationBootstrapRetirement,
   confirmAuthenticationBootstrapRetirement,
+  attestPreNavigationApplicationSession,
   prepareApplicationNavigation,
   authenticationEvaluationAttemptId,
 ) => {
@@ -30270,6 +30272,11 @@ const authenticateCore = async (
     identity.uid,
     "The authenticated identity changed during persistence migration.",
   );
+  setFailureClass("pre-navigation-application-session-fence-failed");
+  identity.preNavigationApplicationSessionFenceAttestation =
+    await attestPreNavigationApplicationSession(
+      identity.applicationSessionProof,
+    );
   setFailureClass("post-auth-reload-failed");
   await prepareApplicationNavigation();
   await page.goto(`${origin}/#/`, { waitUntil: "domcontentloaded" });
@@ -30316,6 +30323,7 @@ const authenticate = async (
     confirmAuthenticationProtectedReadRetry,
     prepareAuthenticationBootstrapRetirement,
     confirmAuthenticationBootstrapRetirement,
+    attestPreNavigationApplicationSession,
     prepareApplicationNavigation,
     unregisterApplicationSessionProof,
     collectAuthenticationConfigReadResponseClass,
@@ -30341,6 +30349,7 @@ const authenticate = async (
       confirmAuthenticationProtectedReadRetry,
       prepareAuthenticationBootstrapRetirement,
       confirmAuthenticationBootstrapRetirement,
+      attestPreNavigationApplicationSession,
       prepareApplicationNavigation,
       authenticationEvaluationAttemptId,
     );
@@ -30471,8 +30480,10 @@ const CAPTURE_APPLICATION_SESSION_MINIMUM_REMAINING_LEASE_MS = 10 * 60 * 1000;
 const createCaptureApplicationSessionKeepaliveClient = async ({
   page,
   proof,
+  trackLifecycle = true,
 }) => {
   assert.ok(page);
+  assert.equal(typeof trackLifecycle, "boolean");
   assert.ok(proof && typeof proof === "object");
   assert.ok(Number.isSafeInteger(proof.authTime) && proof.authTime > 0);
   assert.equal(proof.authorityGeneration, "w1r2-2026-08-09");
@@ -30482,7 +30493,7 @@ const createCaptureApplicationSessionKeepaliveClient = async ({
   assert.ok(typeof proof.uid === "string" && proof.uid.length > 0);
   assert.equal(firebaseConfig.projectId, contract.firebaseProjectId);
   assert.equal(firebaseConfig.appId, STAGING_APP_ID);
-  applicationSessionKeepaliveClientInitAttemptCount += 1;
+  if (trackLifecycle) applicationSessionKeepaliveClientInitAttemptCount += 1;
   let clientHandle = null;
   try {
     clientHandle = await page.evaluateHandle(
@@ -30629,7 +30640,7 @@ const createCaptureApplicationSessionKeepaliveClient = async ({
         return true;
       },
     });
-    applicationSessionKeepaliveClientInitSuccessCount += 1;
+    if (trackLifecycle) applicationSessionKeepaliveClientInitSuccessCount += 1;
     return client;
   } catch (error) {
     if (clientHandle) await clientHandle.dispose();
@@ -30644,7 +30655,9 @@ const refreshCaptureApplicationSession = async ({
   appCheckToken,
   appCheckTokenExpiresAtMs,
   nodeNowMs,
+  trackReuse = true,
 }) => {
+  assert.equal(typeof trackReuse, "boolean");
   assert.ok(proof && typeof proof === "object");
   assert.ok(Number.isSafeInteger(proof.authTime) && proof.authTime > 0);
   assert.equal(proof.authorityGeneration, "w1r2-2026-08-09");
@@ -30982,7 +30995,7 @@ const refreshCaptureApplicationSession = async ({
     }
     if (protectedReadPassed) {
       client.markSuccessfulReuse();
-      applicationSessionKeepaliveClientReuseCount += 1;
+      if (trackReuse) applicationSessionKeepaliveClientReuseCount += 1;
     }
     return Object.freeze({
       completed: true,
@@ -31010,9 +31023,13 @@ const refreshCaptureApplicationSession = async ({
   }
 };
 
-const disposeCaptureApplicationSessionKeepaliveClient = async ({ client }) => {
+const disposeCaptureApplicationSessionKeepaliveClient = async ({
+  client,
+  trackLifecycle = true,
+}) => {
   assert.ok(client && typeof client.evaluate === "function");
-  applicationSessionKeepaliveClientDisposeAttemptCount += 1;
+  assert.equal(typeof trackLifecycle, "boolean");
+  if (trackLifecycle) applicationSessionKeepaliveClientDisposeAttemptCount += 1;
   let attestation = null;
   try {
     attestation = await client.evaluate(
@@ -31057,16 +31074,20 @@ const disposeCaptureApplicationSessionKeepaliveClient = async ({ client }) => {
       Object.values(attestation).every((value) => value === true),
       true,
     );
-    applicationSessionKeepaliveClientDeleteCount += 1;
-    applicationSessionKeepaliveClientDisposeSuccessCount += 1;
-    applicationSessionKeepaliveClientRegistryResidualCount += Number(
-      !attestation.registryResidualAbsent,
-    );
+    if (trackLifecycle) {
+      applicationSessionKeepaliveClientDeleteCount += 1;
+      applicationSessionKeepaliveClientDisposeSuccessCount += 1;
+      applicationSessionKeepaliveClientRegistryResidualCount += Number(
+        !attestation.registryResidualAbsent,
+      );
+    }
     return attestation;
   } finally {
     const handleReleased = await client.releaseHandle();
-    applicationSessionKeepaliveClientHandleDisposeCount +=
-      Number(handleReleased);
+    if (trackLifecycle) {
+      applicationSessionKeepaliveClientHandleDisposeCount +=
+        Number(handleReleased);
+    }
   }
 };
 
@@ -32264,6 +32285,8 @@ let applicationSessionKeepaliveClientDisposeSuccessCount = 0;
 let applicationSessionKeepaliveClientDeleteCount = 0;
 let applicationSessionKeepaliveClientRegistryResidualCount = 0;
 let applicationSessionKeepaliveClientHandleDisposeCount = 0;
+let applicationSessionPreNavigationFenceAttemptCount = 0;
+let applicationSessionPreNavigationFenceSuccessCount = 0;
 let pageRawDebugTokenInjectionCount = 0;
 let browserGlobalRawDebugTokenWriteCount = 0;
 let browserGlobalDebugSentinelWriteCount = 0;
@@ -36540,6 +36563,96 @@ try {
               )}`,
             );
           },
+          attestPreNavigationApplicationSession: async (proof) => {
+            assert.equal(proof, groupApplicationSessionProof);
+            assert.equal(activeCaptureId, null);
+            assert.equal(networkPhase, "authentication");
+            applicationSessionPreNavigationFenceAttemptCount += 1;
+            const previousNetworkPhase = networkPhase;
+            let preNavigationClient = null;
+            let preNavigationClientInitializationAttestation = null;
+            let preNavigationRefreshAttestation = null;
+            let preNavigationDisposalAttestation = null;
+            let preNavigationAppCheckToken = "";
+            networkPhase = "session-keepalive";
+            try {
+              preNavigationClient =
+                await createCaptureApplicationSessionKeepaliveClient({
+                  page,
+                  proof,
+                  trackLifecycle: false,
+                });
+              preNavigationClientInitializationAttestation =
+                preNavigationClient.initializationAttestation;
+              preNavigationAppCheckToken =
+                await captureAppCheckTokenManager.ensureFresh();
+              const preNavigationNowMs = Date.now();
+              preNavigationRefreshAttestation =
+                await refreshCaptureApplicationSession({
+                  client: preNavigationClient,
+                  proof,
+                  appCheckToken: preNavigationAppCheckToken,
+                  appCheckTokenExpiresAtMs:
+                    captureAppCheckTokenManager.expiresAtMillis,
+                  nodeNowMs: preNavigationNowMs,
+                  trackReuse: false,
+                });
+              assert.equal(
+                preNavigationRefreshAttestation.protectedReadPassed,
+                true,
+              );
+              assert.equal(
+                preNavigationRefreshAttestation.protectedReadResponseClass,
+                "response-2xx",
+              );
+            } finally {
+              preNavigationAppCheckToken = "";
+              try {
+                if (preNavigationClient) {
+                  preNavigationDisposalAttestation =
+                    await disposeCaptureApplicationSessionKeepaliveClient({
+                      client: preNavigationClient,
+                      trackLifecycle: false,
+                    });
+                }
+              } finally {
+                preNavigationClient = null;
+                networkPhase = previousNetworkPhase;
+                await drainAppCheckCdpHandlerPromises();
+                await flushNetworkAttestations();
+              }
+            }
+            const attestation = Object.freeze({
+              passed: true,
+              clientInitializationBound: Object.values(
+                preNavigationClientInitializationAttestation,
+              ).every((value) => value === true),
+              sessionTouchCompleted:
+                preNavigationRefreshAttestation.completed === true,
+              completedBeforeApplicationNavigation:
+                preNavigationRefreshAttestation.completedBeforeRouteNavigation ===
+                true,
+              protectedReadPassed:
+                preNavigationRefreshAttestation.protectedReadPassed === true,
+              protectedReadResponse2xx:
+                preNavigationRefreshAttestation.protectedReadResponseClass ===
+                "response-2xx",
+              authTimeBound:
+                preNavigationRefreshAttestation.authTimeBound === true,
+              revisionUnchanged:
+                preNavigationRefreshAttestation.revisionUnchanged === true,
+              leaseBound: preNavigationRefreshAttestation.leaseBound === true,
+              clientDisposalBound: Object.values(
+                preNavigationDisposalAttestation,
+              ).every((value) => value === true),
+            });
+            assert.equal(
+              Object.values(attestation).every((value) => value === true),
+              true,
+            );
+            applicationSessionPreNavigationFenceSuccessCount += 1;
+            return attestation;
+          },
           prepareApplicationNavigation: async () => {
             assert.ok(groupApplicationSessionProof);
             assert.equal(activeCaptureId, null);
@@ -36633,6 +36746,7 @@ try {
         applicationSessionProof,
         applicationSessionAuthorityMode,
         authenticationProtectedReadRetryAttestation,
+        preNavigationApplicationSessionFenceAttestation,
         ...identity
       } = authentication;
       assert.equal(
@@ -36640,6 +36754,12 @@ try {
         groupAuthenticationProtectedReadRetryAttestation,
       );
       assert.equal(authenticationProtectedReadRetryAttestation?.passed, true);
+      assert.equal(
+        Object.values(preNavigationApplicationSessionFenceAttestation).every(
+          (value) => value === true,
+        ),
+        true,
+      );
       assert.ok(
         ["ENFORCE", "OBSERVE_ONLY", "DISABLED"].includes(
           applicationSessionAuthorityMode,
@@ -36844,6 +36964,7 @@ try {
         authenticationConsoleErrorFatalCount,
         authenticationProtectedReadRetryAttestation:
           groupAuthenticationProtectedReadRetryAttestation,
+        preNavigationApplicationSessionFenceAttestation,
         authenticationAppCheckCdpHandlerErrorCount,
         authenticationOptionalTelemetrySuppressedRequestCount,
         authenticationAllowedEgressHttpErrorAbortCount:
@@ -39087,6 +39208,14 @@ assert.ok(candidateApplicationSessionKeepaliveSuccessCount > 0);
 assert.equal(liveApplicationSessionProofsByPage.size, 0);
 assert.ok(applicationSessionKeepaliveClientExpectedGroupCount > 0);
 assert.equal(
+  applicationSessionPreNavigationFenceAttemptCount,
+  applicationSessionKeepaliveClientExpectedGroupCount,
+);
+assert.equal(
+  applicationSessionPreNavigationFenceSuccessCount,
+  applicationSessionKeepaliveClientExpectedGroupCount,
+);
+assert.equal(
   applicationSessionKeepaliveClientInitAttemptCount,
   applicationSessionKeepaliveClientExpectedGroupCount,
 );
@@ -40297,6 +40426,10 @@ const appCheckBinding = {
   applicationSessionKeepaliveSuccessCount,
   baselineApplicationSessionKeepaliveSuccessCount,
   candidateApplicationSessionKeepaliveSuccessCount,
+  applicationSessionPreNavigationFenceExpectedGroupCount:
+    applicationSessionKeepaliveClientExpectedGroupCount,
+  applicationSessionPreNavigationFenceAttemptCount,
+  applicationSessionPreNavigationFenceSuccessCount,
   applicationSessionKeepaliveClientExpectedGroupCount,
   applicationSessionKeepaliveClientInitAttemptCount,
   applicationSessionKeepaliveClientInitSuccessCount,

@@ -10730,6 +10730,9 @@ for (const audit of manifest.browserAudits) {
     (captureId) =>
       Boolean(authenticationRoleForCapture(captures.get(captureId))),
   ).length;
+  const expectedAuditApplicationSessionPreNavigationFenceCount = Number(
+    expectedAuditApplicationSessionKeepaliveCount > 0,
+  );
   const expectedFunctionsHostname = `asia-northeast3-${contract.firebaseProjectId}.cloudfunctions.net`;
   const applicationSessionKeepaliveRequests = requestEvents.filter(
     (request) =>
@@ -10772,12 +10775,14 @@ for (const audit of manifest.browserAudits) {
   }
   assert.equal(
     applicationSessionKeepaliveRequests.length,
-    expectedAuditApplicationSessionKeepaliveCount,
+    expectedAuditApplicationSessionKeepaliveCount +
+      expectedAuditApplicationSessionPreNavigationFenceCount,
     `${audit.id} has an invalid application-session keepalive request count.`,
   );
   assert.equal(
     applicationSessionKeepaliveResponses.length,
-    expectedAuditApplicationSessionKeepaliveCount,
+    expectedAuditApplicationSessionKeepaliveCount +
+      expectedAuditApplicationSessionPreNavigationFenceCount,
     `${audit.id} has an invalid application-session keepalive response count.`,
   );
   assert.deepEqual(
@@ -11890,6 +11895,9 @@ assertExactObjectKeys(appCheckBinding, [
   "applicationSessionKeepaliveSuccessCount",
   "baselineApplicationSessionKeepaliveSuccessCount",
   "candidateApplicationSessionKeepaliveSuccessCount",
+  "applicationSessionPreNavigationFenceExpectedGroupCount",
+  "applicationSessionPreNavigationFenceAttemptCount",
+  "applicationSessionPreNavigationFenceSuccessCount",
   "applicationSessionKeepaliveClientExpectedGroupCount",
   "applicationSessionKeepaliveClientInitAttemptCount",
   "applicationSessionKeepaliveClientInitSuccessCount",
@@ -12216,12 +12224,26 @@ const expectedApplicationSessionKeepaliveCounts = {
 const expectedApplicationSessionKeepaliveCount =
   expectedApplicationSessionKeepaliveCounts.baseline +
   expectedApplicationSessionKeepaliveCounts.candidate;
+const expectedApplicationSessionPreNavigationFenceCounts = {
+  baseline: [...expectedProtectedReadRetryAuditIds].filter((auditId) =>
+    auditId.startsWith("baseline:"),
+  ).length,
+  candidate: [...expectedProtectedReadRetryAuditIds].filter((auditId) =>
+    auditId.startsWith("candidate:"),
+  ).length,
+};
+const expectedApplicationSessionPreNavigationFenceCount =
+  expectedApplicationSessionPreNavigationFenceCounts.baseline +
+  expectedApplicationSessionPreNavigationFenceCounts.candidate;
 for (const field of [
   "applicationSessionKeepaliveExpectedCount",
   "applicationSessionKeepaliveAttemptCount",
   "applicationSessionKeepaliveSuccessCount",
   "baselineApplicationSessionKeepaliveSuccessCount",
   "candidateApplicationSessionKeepaliveSuccessCount",
+  "applicationSessionPreNavigationFenceExpectedGroupCount",
+  "applicationSessionPreNavigationFenceAttemptCount",
+  "applicationSessionPreNavigationFenceSuccessCount",
   "applicationSessionKeepaliveClientExpectedGroupCount",
   "applicationSessionKeepaliveClientInitAttemptCount",
   "applicationSessionKeepaliveClientInitSuccessCount",
@@ -12257,6 +12279,16 @@ assert.equal(
   appCheckBinding.candidateApplicationSessionKeepaliveSuccessCount,
   expectedApplicationSessionKeepaliveCounts.candidate,
 );
+for (const field of [
+  "applicationSessionPreNavigationFenceExpectedGroupCount",
+  "applicationSessionPreNavigationFenceAttemptCount",
+  "applicationSessionPreNavigationFenceSuccessCount",
+]) {
+  assert.equal(
+    appCheckBinding[field],
+    expectedApplicationSessionPreNavigationFenceCount,
+  );
+}
 assert.equal(
   appCheckBinding.applicationSessionKeepaliveClientExpectedGroupCount,
   expectedProtectedReadRetryAuditIds.size,
@@ -12279,14 +12311,22 @@ assert.equal(
   appCheckBinding.applicationSessionKeepaliveClientRegistryResidualCount,
   0,
 );
-assert.deepEqual(
-  auditedApplicationSessionKeepaliveRequestCounts,
-  expectedApplicationSessionKeepaliveCounts,
-);
-assert.deepEqual(
-  auditedApplicationSessionKeepaliveResponseCounts,
-  expectedApplicationSessionKeepaliveCounts,
-);
+assert.deepEqual(auditedApplicationSessionKeepaliveRequestCounts, {
+  baseline:
+    expectedApplicationSessionKeepaliveCounts.baseline +
+    expectedApplicationSessionPreNavigationFenceCounts.baseline,
+  candidate:
+    expectedApplicationSessionKeepaliveCounts.candidate +
+    expectedApplicationSessionPreNavigationFenceCounts.candidate,
+});
+assert.deepEqual(auditedApplicationSessionKeepaliveResponseCounts, {
+  baseline:
+    expectedApplicationSessionKeepaliveCounts.baseline +
+    expectedApplicationSessionPreNavigationFenceCounts.baseline,
+  candidate:
+    expectedApplicationSessionKeepaliveCounts.candidate +
+    expectedApplicationSessionPreNavigationFenceCounts.candidate,
+});
 assert.equal(appCheckBinding.applicationSessionProofRetentionResidualCount, 0);
 assert.equal(
   appCheckBinding.debugTokenSha256,
