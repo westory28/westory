@@ -4986,6 +4986,44 @@ const createBrowserConnectProxyGate = ({
     },
   };
 };
+const waitForBrowserConnectProxyContextDrain = async ({
+  proxy,
+  timeoutMilliseconds = 5_000,
+  pollMilliseconds = 10,
+}) => {
+  assert.ok(proxy && typeof proxy.snapshot === "function");
+  assert.ok(
+    Number.isSafeInteger(timeoutMilliseconds) && timeoutMilliseconds > 0,
+  );
+  assert.ok(Number.isSafeInteger(pollMilliseconds) && pollMilliseconds > 0);
+  const deadline = Date.now() + timeoutMilliseconds;
+  while (true) {
+    const snapshot = proxy.snapshot();
+    const observedAt = Date.now();
+    assert.ok(
+      observedAt <= deadline,
+      "Timed out waiting for the context-closed browser proxy transport to drain.",
+    );
+    const drained = [
+      snapshot.requestStageAuthorizationResidualCount,
+      snapshot.authorityLeaseResidualCount,
+      snapshot.authorityLeaseQueueResidualCount,
+      snapshot.activeAllowedTunnelResidualCount,
+    ].every((count) => count === 0);
+    if (drained) return snapshot;
+    const remainingMilliseconds = deadline - observedAt;
+    assert.ok(
+      remainingMilliseconds > 0,
+      "Timed out waiting for the context-closed browser proxy transport to drain.",
+    );
+    await new Promise((resolvePoll) =>
+      setTimeout(
+        resolvePoll,
+        Math.min(pollMilliseconds, remainingMilliseconds),
+      ),
+    );
+  }
+};
 const sendLoopbackProxyFixtureRequest = ({ proxyUrl, requestText }) => {
   const parsedProxyUrl = new URL(proxyUrl);
   assert.equal(parsedProxyUrl.protocol, "http:");
@@ -24259,24 +24297,8 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
     );
     assert.equal(contextCloseBackchannelOpenResponses.size, 0);
     assert.equal(contextCloseBackchannelOpenSockets.size, 0);
-    const postContextCloseProxySnapshot = await withExplicitTimeout(
-      (async () => {
-        while (true) {
-          const snapshot = loopbackProxy.snapshot();
-          if (
-            snapshot.requestStageAuthorizationResidualCount === 0 &&
-            snapshot.authorityLeaseResidualCount === 0 &&
-            snapshot.authorityLeaseQueueResidualCount === 0 &&
-            snapshot.activeAllowedTunnelResidualCount === 0
-          ) {
-            return snapshot;
-          }
-          await new Promise((resolvePoll) => setTimeout(resolvePoll, 10));
-        }
-      })(),
-      5000,
-      "Timed out waiting for the context-close backchannel proxy state to drain.",
-    );
+    const postContextCloseProxySnapshot =
+      await waitForBrowserConnectProxyContextDrain({ proxy: loopbackProxy });
     assert.equal(
       postContextCloseProxySnapshot.requestStageAuthorizationCount,
       5,
@@ -37723,6 +37745,22 @@ try {
         0,
         `Allowed-egress proxy authorization must be settled for ${groupKey}.`,
       );
+      const groupPostContextCloseProxySnapshot =
+        await waitForBrowserConnectProxyContextDrain({
+          proxy: browserConnectProxy,
+        });
+      for (const field of [
+        "requestStageAuthorizationResidualCount",
+        "authorityLeaseResidualCount",
+        "authorityLeaseQueueResidualCount",
+        "activeAllowedTunnelResidualCount",
+      ]) {
+        assert.equal(
+          groupPostContextCloseProxySnapshot[field],
+          0,
+          `Browser proxy ${field} must be zero before the next group after ${groupKey}.`,
+        );
+      }
       if (groupApplicationSessionProof) {
         groupApplicationSessionProof.revision = "";
         groupApplicationSessionProof.uid = "";
