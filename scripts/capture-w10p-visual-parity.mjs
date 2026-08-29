@@ -5814,6 +5814,10 @@ const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES = Object.freeze({
     "authentication-protected-read-response-record-unsettled",
   requestFailureRecordUnsettled:
     "authentication-protected-read-request-failure-record-unsettled",
+  loadingFailureRecordUnsettled:
+    "authentication-protected-read-loading-failure-record-unsettled",
+  consoleRecoveryRecordUnsettled:
+    "authentication-protected-read-console-recovery-record-unsettled",
   recordExtractionFailed:
     "authentication-protected-read-record-extraction-failed",
   pageContractMismatch: "authentication-protected-read-page-contract-mismatch",
@@ -5824,6 +5828,10 @@ const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES = Object.freeze({
     "authentication-protected-read-proxy-provenance-contract-mismatch",
   requestFailureContractMismatch:
     "authentication-protected-read-request-failure-contract-mismatch",
+  loadingFailureContractMismatch:
+    "authentication-protected-read-loading-failure-contract-mismatch",
+  consoleRecoveryContractMismatch:
+    "authentication-protected-read-console-recovery-contract-mismatch",
   browserFailureCountMismatch:
     "authentication-protected-read-browser-failure-count-mismatch",
   egressResponseErrorCountMismatch:
@@ -5947,6 +5955,9 @@ const confirmSafeAuthenticationProtectedReadRetry = (
     pageAttestation,
     cdpResponseRecords,
     requestFailureRecords,
+    cdpLoadingFailureRecords,
+    cdpNetworkErrorLogRecords,
+    playwrightConsoleErrorRecords,
     bindingAttestation,
   },
   setFailureClass = null,
@@ -5971,6 +5982,15 @@ const confirmSafeAuthenticationProtectedReadRetry = (
     SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.requestFailureContractMismatch,
   );
   assert.ok(Array.isArray(requestFailureRecords));
+  markFailureClass(
+    SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.loadingFailureContractMismatch,
+  );
+  assert.ok(Array.isArray(cdpLoadingFailureRecords));
+  markFailureClass(
+    SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.consoleRecoveryContractMismatch,
+  );
+  assert.ok(Array.isArray(cdpNetworkErrorLogRecords));
+  assert.ok(Array.isArray(playwrightConsoleErrorRecords));
   markFailureClass(
     SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.bindingContractMismatch,
   );
@@ -6088,9 +6108,110 @@ const confirmSafeAuthenticationProtectedReadRetry = (
   if (attestation.retryUsed === 1) {
     assert.equal(requestFailureRecords[0].target, attestation.retryTarget);
   }
+  markFailureClass(
+    SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.loadingFailureContractMismatch,
+  );
+  assert.equal(cdpLoadingFailureRecords.length, requestFailureRecords.length);
+  for (const [index, record] of cdpLoadingFailureRecords.entries()) {
+    assert.deepEqual(Object.keys(record).sort(), [
+      "attemptNumber",
+      "blockedReasonAbsent",
+      "corsErrorStatusAbsent",
+      "failureClass",
+      "networkIdentityBound",
+      "target",
+    ]);
+    assert.ok(["config", "profile"].includes(record.target));
+    assert.equal(record.attemptNumber, 1);
+    assert.equal(record.blockedReasonAbsent, true);
+    assert.equal(record.corsErrorStatusAbsent, true);
+    assert.equal(record.networkIdentityBound, true);
+    assert.ok(
+      SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_ECHO_CLASSES.includes(
+        record.failureClass,
+      ),
+    );
+    assert.deepEqual(
+      {
+        target: record.target,
+        attemptNumber: record.attemptNumber,
+        failureClass: record.failureClass,
+      },
+      requestFailureRecords[index],
+    );
+  }
+  markFailureClass(
+    SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.consoleRecoveryContractMismatch,
+  );
+  assert.ok(cdpNetworkErrorLogRecords.length <= requestFailureRecords.length);
+  assert.equal(
+    cdpNetworkErrorLogRecords.length,
+    playwrightConsoleErrorRecords.length,
+  );
+  for (const [index, record] of cdpNetworkErrorLogRecords.entries()) {
+    assert.deepEqual(Object.keys(record).sort(), [
+      "attemptNumber",
+      "categoryAbsent",
+      "errorNameClass",
+      "levelError",
+      "lineNumber",
+      "messageClass",
+      "networkIdentityBound",
+      "operationClass",
+      "sha256",
+      "sourceClass",
+      "sourceNetwork",
+      "target",
+      "targetUrlBound",
+      "timestamp",
+    ]);
+    assert.equal(record.attemptNumber, 1);
+    assert.equal(record.categoryAbsent, true);
+    assert.equal(record.levelError, true);
+    assert.equal(record.networkIdentityBound, true);
+    assert.equal(record.sourceNetwork, true);
+    assert.equal(record.targetUrlBound, true);
+    assert.equal(record.sourceClass, "console-error");
+    assert.equal(record.errorNameClass, "console-error");
+    assert.equal(record.messageClass, "resource-load-failed");
+    assert.equal(record.operationClass, "unknown-operation");
+    assert.ok(["config", "profile"].includes(record.target));
+    assert.ok(Number.isSafeInteger(record.lineNumber));
+    assert.ok(record.lineNumber >= 0);
+    assert.equal(typeof record.timestamp, "number");
+    assert.equal(Number.isFinite(record.timestamp), true);
+    assert.ok(record.timestamp > 0);
+    assert.match(record.sha256, /^[a-f0-9]{64}$/u);
+    const playwrightRecord = playwrightConsoleErrorRecords[index];
+    assert.deepEqual(Object.keys(playwrightRecord).sort(), [
+      "columnNumber",
+      "errorNameClass",
+      "lineNumber",
+      "locationUrlBound",
+      "messageClass",
+      "operationClass",
+      "sha256",
+      "sourceClass",
+      "target",
+      "timestamp",
+    ]);
+    assert.equal(playwrightRecord.columnNumber, 0);
+    assert.equal(playwrightRecord.locationUrlBound, true);
+    assert.equal(playwrightRecord.sourceClass, record.sourceClass);
+    assert.equal(playwrightRecord.errorNameClass, record.errorNameClass);
+    assert.equal(playwrightRecord.messageClass, record.messageClass);
+    assert.equal(playwrightRecord.operationClass, record.operationClass);
+    assert.equal(playwrightRecord.target, record.target);
+    assert.equal(playwrightRecord.lineNumber, record.lineNumber);
+    assert.equal(playwrightRecord.timestamp, record.timestamp);
+    assert.equal(playwrightRecord.sha256, record.sha256);
+    assert.equal(requestFailureRecords[index].target, record.target);
+  }
+  const recoveredProtectedReadConsoleErrorCount =
+    playwrightConsoleErrorRecords.length;
   return Object.freeze({
     ...attestation,
-    schemaVersion: 2,
+    schemaVersion: 3,
     cdpConfigFirstResponseClass: firstResponseClassByTarget.config,
     cdpConfigFinalResponseClass: finalResponseClassByTarget.config,
     cdpProfileFirstResponseClass: firstResponseClassByTarget.profile,
@@ -6106,7 +6227,20 @@ const confirmSafeAuthenticationProtectedReadRetry = (
     playwrightRequestFailureFetchNetworkIdentityBound:
       bindingAttestation.requestFailureFetchNetworkIdentityBound,
     playwrightFailureEchoClass: requestFailureRecords[0]?.failureClass ?? null,
+    cdpLoadingFailureEchoClass:
+      cdpLoadingFailureRecords[0]?.failureClass ?? null,
+    cdpLoadingFailureFetchNetworkIdentityBound:
+      cdpLoadingFailureRecords.length === 0 ? null : true,
+    cdpNetworkErrorLogCount: cdpNetworkErrorLogRecords.length,
+    playwrightResourceLoadErrorCount: playwrightConsoleErrorRecords.length,
+    playwrightFailureConsoleEchoClass:
+      recoveredProtectedReadConsoleErrorCount === 0
+        ? null
+        : "resource-load-failed",
+    playwrightFailureConsoleCdpNetworkIdentityBound:
+      recoveredProtectedReadConsoleErrorCount === 0 ? null : true,
     recoveredProtectedReadTransportFailureCount: requestFailureRecords.length,
+    recoveredProtectedReadConsoleErrorCount,
     passed: true,
   });
 };
@@ -13650,6 +13784,60 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
             failureClass: "generic-failed",
           },
         ];
+  const createCdpLoadingFailureRecords = (retryTarget = "none") =>
+    retryTarget === "none"
+      ? []
+      : [
+          {
+            target: retryTarget,
+            attemptNumber: 1,
+            failureClass: "generic-failed",
+            networkIdentityBound: true,
+            blockedReasonAbsent: true,
+            corsErrorStatusAbsent: true,
+          },
+        ];
+  const protectedReadConsoleSha256 = secretSha256(
+    "fixed-protected-read-console-error",
+  );
+  const createCdpNetworkErrorLogRecords = (retryTarget = "none") =>
+    retryTarget === "none"
+      ? []
+      : [
+          {
+            target: retryTarget,
+            attemptNumber: 1,
+            sourceClass: "console-error",
+            errorNameClass: "console-error",
+            messageClass: "resource-load-failed",
+            operationClass: "unknown-operation",
+            sha256: protectedReadConsoleSha256,
+            lineNumber: 0,
+            timestamp: 12345.5,
+            sourceNetwork: true,
+            levelError: true,
+            categoryAbsent: true,
+            networkIdentityBound: true,
+            targetUrlBound: true,
+          },
+        ];
+  const createPlaywrightConsoleErrorRecords = (retryTarget = "none") =>
+    retryTarget === "none"
+      ? []
+      : [
+          {
+            target: retryTarget,
+            sourceClass: "console-error",
+            errorNameClass: "console-error",
+            messageClass: "resource-load-failed",
+            operationClass: "unknown-operation",
+            sha256: protectedReadConsoleSha256,
+            lineNumber: 0,
+            columnNumber: 0,
+            timestamp: 12345.5,
+            locationUrlBound: true,
+          },
+        ];
   const bindingAttestation = {
     exactFetchNetworkIdentityBound: true,
     sameAuthorizationHeader: true,
@@ -13662,6 +13850,10 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     pageAttestation: createPageAttestation(retryTarget),
     cdpResponseRecords: createCdpResponseRecords(retryTarget),
     requestFailureRecords: createRequestFailureRecords(retryTarget),
+    cdpLoadingFailureRecords: createCdpLoadingFailureRecords(retryTarget),
+    cdpNetworkErrorLogRecords: createCdpNetworkErrorLogRecords(retryTarget),
+    playwrightConsoleErrorRecords:
+      createPlaywrightConsoleErrorRecords(retryTarget),
     bindingAttestation: { ...bindingAttestation },
   });
   const accepted = ["none", "config", "profile"].map((retryTarget) =>
@@ -13673,11 +13865,18 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
   accepted.push(
     confirmSafeAuthenticationProtectedReadRetry(consumedActiveTunnelFixture),
   );
+  const noConsoleEchoFixture = createFixture("config");
+  noConsoleEchoFixture.cdpNetworkErrorLogRecords = [];
+  noConsoleEchoFixture.playwrightConsoleErrorRecords = [];
+  accepted.push(
+    confirmSafeAuthenticationProtectedReadRetry(noConsoleEchoFixture),
+  );
   const acceptedFailureEchoAttestations =
     SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_ECHO_CLASSES.map(
       (failureClass) => {
         const fixture = createFixture("config");
         fixture.requestFailureRecords[0].failureClass = failureClass;
+        fixture.cdpLoadingFailureRecords[0].failureClass = failureClass;
         return confirmSafeAuthenticationProtectedReadRetry(fixture);
       },
     );
@@ -13689,6 +13888,17 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
           SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_ECHO_CLASSES[
             index
           ] &&
+        attestation.cdpLoadingFailureEchoClass ===
+          SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_ECHO_CLASSES[
+            index
+          ] &&
+        attestation.cdpLoadingFailureFetchNetworkIdentityBound === true &&
+        attestation.cdpNetworkErrorLogCount === 1 &&
+        attestation.playwrightResourceLoadErrorCount === 1 &&
+        attestation.playwrightFailureConsoleEchoClass ===
+          "resource-load-failed" &&
+        attestation.playwrightFailureConsoleCdpNetworkIdentityBound === true &&
+        attestation.recoveredProtectedReadConsoleErrorCount === 1 &&
         attestation.passed === true,
     ),
     true,
@@ -13697,11 +13907,23 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     accepted.map(
       (attestation) => attestation.recoveredProtectedReadTransportFailureCount,
     ),
-    [0, 1, 1, 1],
+    [0, 1, 1, 1, 1],
   );
   assert.deepEqual(
     accepted.map((attestation) => attestation.playwrightFailureEchoClass),
-    [null, "generic-failed", "generic-failed", "generic-failed"],
+    [
+      null,
+      "generic-failed",
+      "generic-failed",
+      "generic-failed",
+      "generic-failed",
+    ],
+  );
+  assert.deepEqual(
+    accepted.map(
+      (attestation) => attestation.recoveredProtectedReadConsoleErrorCount,
+    ),
+    [0, 1, 1, 1, 0],
   );
   assert.equal(
     accepted.every((attestation) => attestation.passed),
@@ -13781,6 +14003,99 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     },
     () => {
       const fixture = createFixture("config");
+      fixture.cdpLoadingFailureRecords = [];
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("config");
+      fixture.cdpLoadingFailureRecords[0].failureClass = "policy-blocked";
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("profile");
+      fixture.cdpLoadingFailureRecords[0].failureClass = "cors-blocked";
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("config");
+      fixture.cdpLoadingFailureRecords[0].blockedReasonAbsent = false;
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("profile");
+      fixture.cdpLoadingFailureRecords[0].corsErrorStatusAbsent = false;
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("config");
+      fixture.cdpLoadingFailureRecords[0].networkIdentityBound = false;
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("profile");
+      fixture.cdpLoadingFailureRecords[0].failureClass = "other";
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("config");
+      fixture.cdpNetworkErrorLogRecords[0].sourceNetwork = false;
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("config");
+      fixture.cdpNetworkErrorLogRecords[0].categoryAbsent = false;
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("profile");
+      fixture.cdpNetworkErrorLogRecords[0].networkIdentityBound = false;
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("profile");
+      fixture.cdpNetworkErrorLogRecords[0].targetUrlBound = false;
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("config");
+      fixture.playwrightConsoleErrorRecords[0].locationUrlBound = false;
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("config");
+      fixture.playwrightConsoleErrorRecords[0].sha256 = "f".repeat(64);
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("profile");
+      fixture.playwrightConsoleErrorRecords[0].timestamp += 1;
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("profile");
+      fixture.cdpNetworkErrorLogRecords.push(
+        clone(fixture.cdpNetworkErrorLogRecords[0]),
+      );
+      fixture.playwrightConsoleErrorRecords.push(
+        clone(fixture.playwrightConsoleErrorRecords[0]),
+      );
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture();
+      fixture.cdpNetworkErrorLogRecords =
+        createCdpNetworkErrorLogRecords("config");
+      fixture.playwrightConsoleErrorRecords =
+        createPlaywrightConsoleErrorRecords("config");
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("config");
+      fixture.cdpNetworkErrorLogRecords = [];
+      return fixture;
+    },
+    () => {
+      const fixture = createFixture("config");
       fixture.bindingAttestation.exactFetchNetworkIdentityBound = false;
       return fixture;
     },
@@ -13806,6 +14121,12 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     ),
     ...Array(5).fill(
       SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.requestFailureContractMismatch,
+    ),
+    ...Array(7).fill(
+      SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.loadingFailureContractMismatch,
+    ),
+    ...Array(10).fill(
+      SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.consoleRecoveryContractMismatch,
     ),
     SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.bindingContractMismatch,
     ...Array(2).fill(
@@ -30451,6 +30772,8 @@ let browserCorsConsoleErrorCount = 0;
 let browserDomSecretObservationCount = 0;
 let browserRequestFailureCount = 0;
 let browserRequestFailureRecoveredProtectedReadCount = 0;
+let browserConsoleErrorObservedAuthenticationCount = 0;
+let browserConsoleErrorRecoveredProtectedReadCount = 0;
 let browserContextCloseCount = 0;
 let unexpectedExtraPageCount = 0;
 let unexpectedDedicatedWorkerCount = 0;
@@ -31751,6 +32074,8 @@ try {
     const authenticationProfileRequestClassesByFetchRequestId = new Map();
     const authenticationProtectedReadAttemptsByFetchRequestId = new Map();
     const authenticationProtectedReadAttemptsByNetworkId = new Map();
+    const authenticationProtectedReadPlaywrightConsoleErrorRecords = [];
+    let authenticationProtectedReadRecoveryEvidenceLastObservedAtMs = null;
     const authenticationProtectedReadAttemptCounts = {
       config: 0,
       profile: 0,
@@ -31839,6 +32164,8 @@ try {
         responseRecord: null,
         requestFailureClass: null,
         requestFailureFetchNetworkIdentityBound: false,
+        loadingFailureRecords: [],
+        networkErrorLogRecords: [],
       };
       authenticationProtectedReadAttemptsByFetchRequestId.set(
         event.requestId,
@@ -31849,6 +32176,125 @@ try {
         attempt,
       );
     };
+    const exactAuthenticationProtectedReadTargetForUrl = (requestUrl) => {
+      const configRequestClass = classifyExactAuthenticationConfigReadRequest({
+        requestUrl,
+        method: "GET",
+        phase: "authentication",
+      });
+      const profileRequestClass = classifyExactAuthenticationProfileRequest({
+        requestUrl,
+        method: "GET",
+        phase: "authentication",
+        expectedUidHash:
+          trustedAuthenticationUidHashesByRole.get(authenticationRole) || null,
+      });
+      if (configRequestClass === "get" && profileRequestClass !== "get") {
+        return "config";
+      }
+      if (profileRequestClass === "get" && configRequestClass !== "get") {
+        return "profile";
+      }
+      return null;
+    };
+    appCheckCdpSession.on("Network.loadingFailed", (event) => {
+      try {
+        const attempt =
+          authenticationProtectedReadAttemptsByNetworkId.get(event.requestId) ||
+          null;
+        if (attempt === null) return;
+        const blockedReasonPresent = Object.prototype.hasOwnProperty.call(
+          event,
+          "blockedReason",
+        );
+        const corsErrorStatusPresent = Object.prototype.hasOwnProperty.call(
+          event,
+          "corsErrorStatus",
+        );
+        const corsError = corsErrorStatusPresent
+          ? event.corsErrorStatus?.corsError
+          : undefined;
+        const failureClass = classifySafeAuthenticationProfileLoadingFailed({
+          errorText: event.errorText,
+          canceled: event.canceled === true,
+          blockedReason: blockedReasonPresent ? event.blockedReason : undefined,
+          corsError,
+        });
+        if (failureClass === null) return;
+        attempt.loadingFailureRecords.push(
+          Object.freeze({
+            target: attempt.target,
+            attemptNumber: attempt.attemptNumber,
+            failureClass,
+            networkIdentityBound:
+              authenticationProtectedReadAttemptsByNetworkId.get(
+                event.requestId,
+              ) === attempt,
+            blockedReasonAbsent: !blockedReasonPresent,
+            corsErrorStatusAbsent: !corsErrorStatusPresent,
+          }),
+        );
+        authenticationProtectedReadRecoveryEvidenceLastObservedAtMs =
+          Date.now();
+      } catch {
+        // Invalid protected-read evidence remains unsettled and fails closed.
+      }
+    });
+    appCheckCdpSession.on("Log.entryAdded", ({ entry }) => {
+      try {
+        const attempt =
+          authenticationProtectedReadAttemptsByNetworkId.get(
+            entry?.networkRequestId,
+          ) || null;
+        if (attempt === null) return;
+        let rawText = String(entry.text || "");
+        const safeRecord = createSafeBrowserErrorRecord({
+          sourceClass: "console-error",
+          value: rawText,
+          debugToken: appCheckDebugToken,
+          debugSentinel: APP_CHECK_DEBUG_SENTINEL,
+          deploymentBypassSecret: bypassSecret,
+        });
+        const exactTarget = exactAuthenticationProtectedReadTargetForUrl(
+          entry.url,
+        );
+        attempt.networkErrorLogRecords.push(
+          Object.freeze({
+            target: attempt.target,
+            attemptNumber: attempt.attemptNumber,
+            ...safeRecord,
+            lineNumber:
+              entry.lineNumber === undefined
+                ? 0
+                : Number.isSafeInteger(entry.lineNumber) &&
+                    entry.lineNumber >= 0
+                  ? entry.lineNumber
+                  : -1,
+            timestamp:
+              typeof entry.timestamp === "number" &&
+              Number.isFinite(entry.timestamp)
+                ? entry.timestamp
+                : null,
+            sourceNetwork: entry.source === "network",
+            levelError: entry.level === "error",
+            categoryAbsent: !Object.prototype.hasOwnProperty.call(
+              entry,
+              "category",
+            ),
+            networkIdentityBound:
+              authenticationProtectedReadAttemptsByNetworkId.get(
+                entry.networkRequestId,
+              ) === attempt,
+            targetUrlBound: exactTarget === attempt.target,
+          }),
+        );
+        authenticationProtectedReadRecoveryEvidenceLastObservedAtMs =
+          Date.now();
+        rawText = "";
+      } catch {
+        // Invalid protected-read evidence remains unsettled and fails closed.
+      }
+    });
     let groupAuthenticationConfigReadGetRequestObserved = false;
     let groupAuthenticationConfigReadGetOutcomeClass = null;
     let groupAuthenticationConfigReadPreflightOutcomeClass = null;
@@ -33890,6 +34336,7 @@ try {
         });
       appCheckCdpHandlerPromises.add(handlerPromise);
     });
+    await appCheckCdpSession.send("Log.enable");
     await appCheckCdpSession.send("Fetch.enable", {
       patterns: [{ urlPattern: "*", requestStage: "Request" }],
     });
@@ -34019,6 +34466,47 @@ try {
         browserConsoleSecretObservationCount += 1;
       }
       if (safeRecord) {
+        if (
+          networkPhase === "authentication" &&
+          safeRecord.sourceClass === "console-error" &&
+          safeRecord.errorNameClass === "console-error" &&
+          safeRecord.messageClass === "resource-load-failed" &&
+          safeRecord.operationClass === "unknown-operation"
+        ) {
+          const location = message.location();
+          const exactTarget = exactAuthenticationProtectedReadTargetForUrl(
+            location?.url,
+          );
+          if (exactTarget !== null) {
+            const timestamp =
+              typeof message.timestamp === "function"
+                ? message.timestamp()
+                : null;
+            authenticationProtectedReadPlaywrightConsoleErrorRecords.push(
+              Object.freeze({
+                target: exactTarget,
+                ...safeRecord,
+                lineNumber:
+                  Number.isSafeInteger(location?.lineNumber) &&
+                  location.lineNumber >= 0
+                    ? location.lineNumber
+                    : -1,
+                columnNumber:
+                  Number.isSafeInteger(location?.columnNumber) &&
+                  location.columnNumber >= 0
+                    ? location.columnNumber
+                    : -1,
+                timestamp:
+                  typeof timestamp === "number" && Number.isFinite(timestamp)
+                    ? timestamp
+                    : null,
+                locationUrlBound: true,
+              }),
+            );
+            authenticationProtectedReadRecoveryEvidenceLastObservedAtMs =
+              Date.now();
+          }
+        }
         appendSafeBrowserErrorRecord(pageErrorAccumulator, safeRecord);
       }
       rawText = "";
@@ -34121,11 +34609,42 @@ try {
                     (attempt) =>
                       attempt.requestFailureFetchNetworkIdentityBound === true,
                   );
+              const failedAttempts = attempts.filter(
+                (attempt) => attempt.requestFailureClass !== null,
+              );
+              const successfulAttempts = attempts.filter(
+                (attempt) => attempt.requestFailureClass === null,
+              );
+              const loadingFailureRecordsSettled =
+                failedAttempts.every(
+                  (attempt) => attempt.loadingFailureRecords.length === 1,
+                ) &&
+                successfulAttempts.every(
+                  (attempt) => attempt.loadingFailureRecords.length === 0,
+                );
+              const cdpNetworkErrorLogRecordCount = attempts.reduce(
+                (total, attempt) =>
+                  total + attempt.networkErrorLogRecords.length,
+                0,
+              );
+              const consoleRecoveryRecordsSettled =
+                cdpNetworkErrorLogRecordCount ===
+                authenticationProtectedReadPlaywrightConsoleErrorRecords.length;
+              const recoveryEvidenceQuietWindowSettled =
+                expectedRequestFailureCount === 0 ||
+                (authenticationProtectedReadRecoveryEvidenceLastObservedAtMs !==
+                  null &&
+                  Date.now() -
+                    authenticationProtectedReadRecoveryEvidenceLastObservedAtMs >=
+                    500);
               if (
                 attempts.length === expectedAttemptCount &&
                 exactNetworkIdentityBound &&
                 responseRecordsSettled &&
-                requestFailureRecordsSettled
+                requestFailureRecordsSettled &&
+                loadingFailureRecordsSettled &&
+                consoleRecoveryRecordsSettled &&
+                recoveryEvidenceQuietWindowSettled
               ) {
                 break;
               }
@@ -34136,7 +34655,11 @@ try {
                     ? SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.networkIdentityUnsettled
                     : !responseRecordsSettled
                       ? SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.responseRecordUnsettled
-                      : SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.requestFailureRecordUnsettled;
+                      : !requestFailureRecordsSettled
+                        ? SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.requestFailureRecordUnsettled
+                        : !loadingFailureRecordsSettled
+                          ? SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.loadingFailureRecordUnsettled
+                          : SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.consoleRecoveryRecordUnsettled;
               setProtectedReadFailureClass(unsettledFailureClass);
               assert.ok(
                 Date.now() < settlementDeadline,
@@ -34175,6 +34698,15 @@ try {
                 attemptNumber: attempt.attemptNumber,
                 failureClass: attempt.requestFailureClass,
               }));
+            const cdpLoadingFailureRecords = attempts.flatMap(
+              (attempt) => attempt.loadingFailureRecords,
+            );
+            const cdpNetworkErrorLogRecords = attempts.flatMap(
+              (attempt) => attempt.networkErrorLogRecords,
+            );
+            const playwrightConsoleErrorRecords = [
+              ...authenticationProtectedReadPlaywrightConsoleErrorRecords,
+            ];
             const bindingAttestation = {
               exactFetchNetworkIdentityBound: attempts.every(
                 (attempt) =>
@@ -34213,6 +34745,9 @@ try {
                 pageAttestation: normalizedPageAttestation,
                 cdpResponseRecords,
                 requestFailureRecords,
+                cdpLoadingFailureRecords,
+                cdpNetworkErrorLogRecords,
+                playwrightConsoleErrorRecords,
                 bindingAttestation,
               },
               setProtectedReadFailureClass,
@@ -34250,6 +34785,15 @@ try {
               SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.cdpRecoveredCountMismatch,
             );
             assert.equal(requestFailureRecords.length, recoveredCount);
+            assert.equal(cdpLoadingFailureRecords.length, recoveredCount);
+            assert.equal(
+              cdpNetworkErrorLogRecords.length,
+              safeAttestation.recoveredProtectedReadConsoleErrorCount,
+            );
+            assert.equal(
+              playwrightConsoleErrorRecords.length,
+              safeAttestation.recoveredProtectedReadConsoleErrorCount,
+            );
             assert.equal(
               cdpResponseRecords.filter(
                 (record) => record.responseClass === "response-error-failed",
@@ -34516,8 +35060,38 @@ try {
         groupCdpFirebaseResponseDiagnostics.filter(
           (response) => response.phase === "authentication",
         );
+      const authenticationBrowserErrorSnapshot =
+        snapshotSafeBrowserErrorAccumulator(pageErrorAccumulator);
+      const authenticationPageErrorCount =
+        authenticationBrowserErrorSnapshot.pageErrorClassHistogram
+          .filter((record) => record.sourceClass === "pageerror")
+          .reduce((total, record) => total + record.count, 0);
+      const authenticationConsoleErrorObservedCount =
+        authenticationBrowserErrorSnapshot.pageErrorClassHistogram
+          .filter((record) => record.sourceClass === "console-error")
+          .reduce((total, record) => total + record.count, 0);
+      const authenticationConsoleErrorRecoveredCount =
+        groupAuthenticationProtectedReadRetryAttestation?.recoveredProtectedReadConsoleErrorCount ||
+        0;
+      const authenticationConsoleErrorFatalCount =
+        authenticationConsoleErrorObservedCount -
+        authenticationConsoleErrorRecoveredCount;
+      assert.equal(
+        authenticationBrowserErrorSnapshot.pageErrorCount,
+        authenticationPageErrorCount + authenticationConsoleErrorObservedCount,
+      );
+      assert.ok(authenticationConsoleErrorFatalCount >= 0);
+      assert.equal(
+        authenticationConsoleErrorObservedCount,
+        authenticationConsoleErrorRecoveredCount +
+          authenticationConsoleErrorFatalCount,
+      );
+      browserConsoleErrorObservedAuthenticationCount +=
+        authenticationConsoleErrorObservedCount;
+      browserConsoleErrorRecoveredProtectedReadCount +=
+        authenticationConsoleErrorRecoveredCount;
       const authenticationBrowserErrorDiagnostic = {
-        ...snapshotSafeBrowserErrorAccumulator(pageErrorAccumulator),
+        ...authenticationBrowserErrorSnapshot,
         ...summarizeSafeFirebaseResponseStatuses(
           authenticationFirebaseResponses,
         ),
@@ -34542,6 +35116,17 @@ try {
         authenticationObservedBrowserRequestFailureCount,
         authenticationRecoveredBrowserRequestFailureCount,
         authenticationFatalBrowserRequestFailureCount,
+        cumulativeObservedBrowserConsoleErrorCount:
+          browserConsoleErrorObservedAuthenticationCount,
+        cumulativeRecoveredBrowserConsoleErrorCount:
+          browserConsoleErrorRecoveredProtectedReadCount,
+        cumulativeFatalBrowserConsoleErrorCount:
+          browserConsoleErrorObservedAuthenticationCount -
+          browserConsoleErrorRecoveredProtectedReadCount,
+        authenticationPageErrorCount,
+        authenticationConsoleErrorObservedCount,
+        authenticationConsoleErrorRecoveredCount,
+        authenticationConsoleErrorFatalCount,
         authenticationProtectedReadRetryAttestation:
           groupAuthenticationProtectedReadRetryAttestation,
         authenticationAppCheckCdpHandlerErrorCount,
@@ -34562,9 +35147,16 @@ try {
           networkHeaderAttestationErrorCount,
       };
       assert.equal(
-        pageErrorAccumulator.totalCount,
+        authenticationPageErrorCount,
         0,
-        `Authentication browser error count must be zero: ${JSON.stringify(
+        `Authentication page error count must be zero: ${JSON.stringify(
+          authenticationBrowserErrorDiagnostic,
+        )}`,
+      );
+      assert.equal(
+        authenticationConsoleErrorFatalCount,
+        0,
+        `Authentication fatal console error count must be zero: ${JSON.stringify(
           authenticationBrowserErrorDiagnostic,
         )}`,
       );
@@ -37018,6 +37610,9 @@ const fatalProtectedReadTransportFailureCount =
   recoveredProtectedReadTransportFailureCount;
 const browserRequestFailureFatalCount =
   browserRequestFailureCount - browserRequestFailureRecoveredProtectedReadCount;
+const browserConsoleErrorFatalCount =
+  browserConsoleErrorObservedAuthenticationCount -
+  browserConsoleErrorRecoveredProtectedReadCount;
 const allowedEgressResponseErrorFatalCount =
   allowedEgressResponseErrorAbortCount -
   allowedEgressResponseErrorRecoveredProtectedReadCount;
@@ -37026,6 +37621,7 @@ const sensitiveAppCheckResponseErrorFatalCount =
   sensitiveAppCheckResponseErrorRecoveredProtectedReadCount;
 for (const count of [
   fatalProtectedReadTransportFailureCount,
+  browserConsoleErrorFatalCount,
   browserRequestFailureFatalCount,
   allowedEgressResponseErrorFatalCount,
   sensitiveAppCheckResponseErrorFatalCount,
@@ -37036,6 +37632,11 @@ assert.equal(
   observedProtectedReadTransportFailureCount,
   recoveredProtectedReadTransportFailureCount +
     fatalProtectedReadTransportFailureCount,
+);
+assert.equal(
+  browserConsoleErrorObservedAuthenticationCount,
+  browserConsoleErrorRecoveredProtectedReadCount +
+    browserConsoleErrorFatalCount,
 );
 assert.equal(
   browserRequestFailureCount,
@@ -37053,6 +37654,18 @@ assert.equal(
     sensitiveAppCheckResponseErrorFatalCount,
 );
 assert.equal(
+  browserConsoleErrorRecoveredProtectedReadCount,
+  sortedAuthenticationProtectedReadRetryAttestations.reduce(
+    (total, attestation) =>
+      total + attestation.recoveredProtectedReadConsoleErrorCount,
+    0,
+  ),
+);
+assert.ok(
+  browserConsoleErrorRecoveredProtectedReadCount <=
+    recoveredProtectedReadTransportFailureCount,
+);
+assert.equal(
   browserRequestFailureRecoveredProtectedReadCount,
   recoveredProtectedReadTransportFailureCount,
 );
@@ -37065,7 +37678,7 @@ assert.equal(
   recoveredProtectedReadTransportFailureCount,
 );
 const authenticationProtectedReadRetry = Object.freeze({
-  schemaVersion: 2,
+  schemaVersion: 3,
   policyId: SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_POLICY_ID,
   retryBudgetPerGroup: 1,
   retryDelayMs: 250,
@@ -37077,6 +37690,11 @@ const authenticationProtectedReadRetry = Object.freeze({
   observedProtectedReadTransportFailureCount,
   recoveredProtectedReadTransportFailureCount,
   fatalProtectedReadTransportFailureCount,
+  browserConsoleErrorObservedCount:
+    browserConsoleErrorObservedAuthenticationCount,
+  browserConsoleErrorRecoveredCount:
+    browserConsoleErrorRecoveredProtectedReadCount,
+  browserConsoleErrorFatalCount,
   browserRequestFailureObservedCount: browserRequestFailureCount,
   browserRequestFailureRecoveredCount:
     browserRequestFailureRecoveredProtectedReadCount,
@@ -37093,6 +37711,7 @@ const authenticationProtectedReadRetry = Object.freeze({
   attestations: sortedAuthenticationProtectedReadRetryAttestations,
   passed:
     fatalProtectedReadTransportFailureCount === 0 &&
+    browserConsoleErrorFatalCount === 0 &&
     browserRequestFailureFatalCount === 0 &&
     allowedEgressResponseErrorFatalCount === 0 &&
     sensitiveAppCheckResponseErrorFatalCount === 0,

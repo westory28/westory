@@ -5967,6 +5967,9 @@ assertExactObjectKeys(authenticationProtectedReadRetry, [
   "attestationCount",
   "attestationSetSha256",
   "attestations",
+  "browserConsoleErrorFatalCount",
+  "browserConsoleErrorObservedCount",
+  "browserConsoleErrorRecoveredCount",
   "browserRequestFailureFatalCount",
   "browserRequestFailureObservedCount",
   "browserRequestFailureRecoveredCount",
@@ -5983,7 +5986,7 @@ assertExactObjectKeys(authenticationProtectedReadRetry, [
   "sensitiveAppCheckResponseErrorObservedCount",
   "sensitiveAppCheckResponseErrorRecoveredCount",
 ]);
-assert.equal(authenticationProtectedReadRetry.schemaVersion, 2);
+assert.equal(authenticationProtectedReadRetry.schemaVersion, 3);
 assert.equal(
   authenticationProtectedReadRetry.policyId,
   "w10p-protected-read-shared-transport-retry-v1",
@@ -5997,6 +6000,9 @@ for (const field of [
   "observedProtectedReadTransportFailureCount",
   "recoveredProtectedReadTransportFailureCount",
   "fatalProtectedReadTransportFailureCount",
+  "browserConsoleErrorObservedCount",
+  "browserConsoleErrorRecoveredCount",
+  "browserConsoleErrorFatalCount",
   "browserRequestFailureObservedCount",
   "browserRequestFailureRecoveredCount",
   "browserRequestFailureFatalCount",
@@ -6118,6 +6124,201 @@ for (const invalidFixture of [
     assertProtectedReadRetryPlaywrightFailureEchoClass(invalidFixture),
   );
 }
+const assertProtectedReadRetryCdpLoadingFailureEchoClass = (attestation) => {
+  assertProtectedReadRetryPlaywrightFailureEchoClass(attestation);
+  const {
+    retryUsed,
+    playwrightFailureEchoClass,
+    cdpLoadingFailureEchoClass,
+    cdpLoadingFailureFetchNetworkIdentityBound,
+  } = attestation;
+  if (retryUsed === 0) {
+    assert.equal(cdpLoadingFailureEchoClass, null);
+    assert.equal(cdpLoadingFailureFetchNetworkIdentityBound, null);
+    return;
+  }
+  assert.equal(typeof cdpLoadingFailureEchoClass, "string");
+  assert.equal(
+    protectedReadRetryPlaywrightFailureEchoClasses.includes(
+      cdpLoadingFailureEchoClass,
+    ),
+    true,
+  );
+  assert.equal(cdpLoadingFailureEchoClass, playwrightFailureEchoClass);
+  assert.equal(cdpLoadingFailureFetchNetworkIdentityBound, true);
+};
+for (const validFixture of [
+  {
+    retryUsed: 0,
+    playwrightFailureEchoClass: null,
+    cdpLoadingFailureEchoClass: null,
+    cdpLoadingFailureFetchNetworkIdentityBound: null,
+  },
+  {
+    retryUsed: 1,
+    playwrightFailureEchoClass: "other",
+    cdpLoadingFailureEchoClass: "other",
+    cdpLoadingFailureFetchNetworkIdentityBound: true,
+  },
+]) {
+  assert.doesNotThrow(() =>
+    assertProtectedReadRetryCdpLoadingFailureEchoClass(validFixture),
+  );
+}
+for (const invalidFixture of [
+  {
+    retryUsed: 0,
+    playwrightFailureEchoClass: null,
+    cdpLoadingFailureEchoClass: "other",
+    cdpLoadingFailureFetchNetworkIdentityBound: null,
+  },
+  {
+    retryUsed: 0,
+    playwrightFailureEchoClass: null,
+    cdpLoadingFailureEchoClass: null,
+    cdpLoadingFailureFetchNetworkIdentityBound: true,
+  },
+  {
+    retryUsed: 1,
+    playwrightFailureEchoClass: "other",
+    cdpLoadingFailureEchoClass: null,
+    cdpLoadingFailureFetchNetworkIdentityBound: true,
+  },
+  {
+    retryUsed: 1,
+    playwrightFailureEchoClass: "other",
+    cdpLoadingFailureEchoClass: "generic-failed",
+    cdpLoadingFailureFetchNetworkIdentityBound: true,
+  },
+  {
+    retryUsed: 1,
+    playwrightFailureEchoClass: "other",
+    cdpLoadingFailureEchoClass: "policy-blocked",
+    cdpLoadingFailureFetchNetworkIdentityBound: true,
+  },
+  {
+    retryUsed: 1,
+    playwrightFailureEchoClass: "other",
+    cdpLoadingFailureEchoClass: "cors-blocked",
+    cdpLoadingFailureFetchNetworkIdentityBound: true,
+  },
+  {
+    retryUsed: 1,
+    playwrightFailureEchoClass: "other",
+    cdpLoadingFailureEchoClass: "other",
+    cdpLoadingFailureFetchNetworkIdentityBound: false,
+  },
+]) {
+  assert.throws(() =>
+    assertProtectedReadRetryCdpLoadingFailureEchoClass(invalidFixture),
+  );
+}
+const assertProtectedReadRetryConsoleEvidence = ({
+  retryUsed,
+  recoveredProtectedReadTransportFailureCount,
+  cdpNetworkErrorLogCount,
+  playwrightResourceLoadErrorCount,
+  playwrightFailureConsoleEchoClass,
+  playwrightFailureConsoleCdpNetworkIdentityBound,
+  recoveredProtectedReadConsoleErrorCount,
+}) => {
+  assert.ok([0, 1].includes(retryUsed));
+  assert.ok([0, 1].includes(recoveredProtectedReadTransportFailureCount));
+  for (const count of [
+    cdpNetworkErrorLogCount,
+    playwrightResourceLoadErrorCount,
+    recoveredProtectedReadConsoleErrorCount,
+  ]) {
+    assert.ok([0, 1].includes(count));
+  }
+  assert.equal(cdpNetworkErrorLogCount, playwrightResourceLoadErrorCount);
+  assert.equal(
+    playwrightResourceLoadErrorCount,
+    recoveredProtectedReadConsoleErrorCount,
+  );
+  assert.ok(recoveredProtectedReadConsoleErrorCount <= retryUsed);
+  assert.ok(
+    recoveredProtectedReadConsoleErrorCount <=
+      recoveredProtectedReadTransportFailureCount,
+  );
+  if (recoveredProtectedReadConsoleErrorCount === 0) {
+    assert.equal(playwrightFailureConsoleEchoClass, null);
+    assert.equal(playwrightFailureConsoleCdpNetworkIdentityBound, null);
+    return;
+  }
+  assert.equal(playwrightFailureConsoleEchoClass, "resource-load-failed");
+  assert.equal(playwrightFailureConsoleCdpNetworkIdentityBound, true);
+};
+const protectedReadRetryConsoleEvidenceWithoutRecoveryFixture = {
+  retryUsed: 0,
+  recoveredProtectedReadTransportFailureCount: 0,
+  cdpNetworkErrorLogCount: 0,
+  playwrightResourceLoadErrorCount: 0,
+  playwrightFailureConsoleEchoClass: null,
+  playwrightFailureConsoleCdpNetworkIdentityBound: null,
+  recoveredProtectedReadConsoleErrorCount: 0,
+};
+const protectedReadRetryConsoleEvidenceWithRecoveryFixture = {
+  retryUsed: 1,
+  recoveredProtectedReadTransportFailureCount: 1,
+  cdpNetworkErrorLogCount: 1,
+  playwrightResourceLoadErrorCount: 1,
+  playwrightFailureConsoleEchoClass: "resource-load-failed",
+  playwrightFailureConsoleCdpNetworkIdentityBound: true,
+  recoveredProtectedReadConsoleErrorCount: 1,
+};
+for (const validFixture of [
+  protectedReadRetryConsoleEvidenceWithoutRecoveryFixture,
+  protectedReadRetryConsoleEvidenceWithRecoveryFixture,
+]) {
+  assert.doesNotThrow(() =>
+    assertProtectedReadRetryConsoleEvidence(validFixture),
+  );
+}
+for (const invalidFixture of [
+  {
+    ...protectedReadRetryConsoleEvidenceWithoutRecoveryFixture,
+    cdpNetworkErrorLogCount: 1,
+  },
+  {
+    ...protectedReadRetryConsoleEvidenceWithoutRecoveryFixture,
+    playwrightResourceLoadErrorCount: 1,
+  },
+  {
+    ...protectedReadRetryConsoleEvidenceWithoutRecoveryFixture,
+    recoveredProtectedReadConsoleErrorCount: 1,
+  },
+  {
+    ...protectedReadRetryConsoleEvidenceWithoutRecoveryFixture,
+    playwrightFailureConsoleEchoClass: "resource-load-failed",
+  },
+  {
+    ...protectedReadRetryConsoleEvidenceWithoutRecoveryFixture,
+    playwrightFailureConsoleCdpNetworkIdentityBound: true,
+  },
+  {
+    ...protectedReadRetryConsoleEvidenceWithRecoveryFixture,
+    retryUsed: 0,
+  },
+  {
+    ...protectedReadRetryConsoleEvidenceWithRecoveryFixture,
+    recoveredProtectedReadTransportFailureCount: 0,
+  },
+  {
+    ...protectedReadRetryConsoleEvidenceWithRecoveryFixture,
+    playwrightFailureConsoleEchoClass: "other",
+  },
+  {
+    ...protectedReadRetryConsoleEvidenceWithRecoveryFixture,
+    playwrightFailureConsoleCdpNetworkIdentityBound: false,
+  },
+  {
+    ...protectedReadRetryConsoleEvidenceWithRecoveryFixture,
+    cdpNetworkErrorLogCount: 2,
+  },
+]) {
+  assert.throws(() => assertProtectedReadRetryConsoleEvidence(invalidFixture));
+}
 const protectedReadRetryGroupKeys = new Set();
 for (const attestation of authenticationProtectedReadRetry.attestations) {
   assertExactObjectKeys(attestation, [
@@ -6128,6 +6329,9 @@ for (const attestation of authenticationProtectedReadRetry.attestations) {
     "cdpConfigFinalResponseClass",
     "cdpConfigFirstResponseClass",
     "cdpExactFetchNetworkIdentityBound",
+    "cdpLoadingFailureEchoClass",
+    "cdpLoadingFailureFetchNetworkIdentityBound",
+    "cdpNetworkErrorLogCount",
     "cdpProfileFinalResponseClass",
     "cdpProfileFirstResponseClass",
     "cdpSameAppCheckHeader",
@@ -6138,13 +6342,17 @@ for (const attestation of authenticationProtectedReadRetry.attestations) {
     "exactUrlMethodBound",
     "groupKey",
     "passed",
+    "playwrightFailureConsoleCdpNetworkIdentityBound",
+    "playwrightFailureConsoleEchoClass",
     "playwrightFailureEchoClass",
     "playwrightRequestFailureFetchNetworkIdentityBound",
+    "playwrightResourceLoadErrorCount",
     "policyId",
     "profileAttemptCount",
     "profileFinalOutcomeClass",
     "profileFirstOutcomeClass",
     "recoveredByRetry",
+    "recoveredProtectedReadConsoleErrorCount",
     "recoveredProtectedReadTransportFailureCount",
     "retryBudget",
     "retryDelayMs",
@@ -6160,7 +6368,7 @@ for (const attestation of authenticationProtectedReadRetry.attestations) {
     "tokenRefreshCount",
     "viewport",
   ]);
-  assert.equal(attestation.schemaVersion, 2);
+  assert.equal(attestation.schemaVersion, 3);
   assert.equal(attestation.policyId, authenticationProtectedReadRetry.policyId);
   assert.equal(attestation.retryBudget, 1);
   assert.equal(attestation.retryDelayMs, 250);
@@ -6184,6 +6392,8 @@ for (const attestation of authenticationProtectedReadRetry.attestations) {
     Number(attestation.retryTarget !== "none"),
   );
   assertProtectedReadRetryPlaywrightFailureEchoClass(attestation);
+  assertProtectedReadRetryCdpLoadingFailureEchoClass(attestation);
+  assertProtectedReadRetryConsoleEvidence(attestation);
   assert.equal(attestation.recoveredByRetry, attestation.retryUsed === 1);
   assert.equal(
     attestation.recoveredProtectedReadTransportFailureCount,
@@ -6258,6 +6468,24 @@ assert.equal(
       total + attestation.recoveredProtectedReadTransportFailureCount,
     0,
   ),
+);
+assert.equal(
+  authenticationProtectedReadRetry.browserConsoleErrorRecoveredCount,
+  authenticationProtectedReadRetry.attestations.reduce(
+    (total, attestation) =>
+      total + attestation.recoveredProtectedReadConsoleErrorCount,
+    0,
+  ),
+);
+assert.equal(
+  authenticationProtectedReadRetry.browserConsoleErrorObservedCount,
+  authenticationProtectedReadRetry.browserConsoleErrorRecoveredCount +
+    authenticationProtectedReadRetry.browserConsoleErrorFatalCount,
+);
+assert.equal(authenticationProtectedReadRetry.browserConsoleErrorFatalCount, 0);
+assert.ok(
+  authenticationProtectedReadRetry.browserConsoleErrorObservedCount >=
+    authenticationProtectedReadRetry.browserConsoleErrorRecoveredCount,
 );
 for (const [observedField, recoveredField, fatalField] of [
   [
