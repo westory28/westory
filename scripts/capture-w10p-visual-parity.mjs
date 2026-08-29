@@ -5593,6 +5593,7 @@ const SAFE_FIRESTORE_WEBCHANNEL_AUTH_BINDING_CLASSES = Object.freeze([
   "initial-authorization-missing",
   "initial-bearer-malformed",
   "initial-claims-malformed",
+  "initial-email-claim-denied",
   "initial-encoded-headers-malformed",
   "initial-exp-unhealthy",
   "initial-jwt-malformed",
@@ -5602,6 +5603,14 @@ const SAFE_FIRESTORE_WEBCHANNEL_AUTH_BINDING_CLASSES = Object.freeze([
   "initial-subject-mismatch",
   "session-backchannel-inherited",
   "session-forward-inherited",
+]);
+const SAFE_FIRESTORE_WEBCHANNEL_EMAIL_CLAIM_CLASSES = Object.freeze([
+  "admin-exact-allowed",
+  "missing",
+  "non-string",
+  "other-denied",
+  "school-domain-case-variant-denied",
+  "school-domain-exact-allowed",
 ]);
 const SAFE_FIRESTORE_WEBCHANNEL_AUTH_DIAGNOSTIC_PHASES = Object.freeze([
   "context-bootstrap",
@@ -6502,6 +6511,8 @@ const createSafeFirestoreWebChannelAuthRecord = ({
   subjectMatchesApplicationSessionProof,
   authTimeMatchesApplicationSessionProof,
   expirationHealthy,
+  emailClaimClass,
+  emailClaimAllowedByFirestoreRules,
   applicationSessionProofAvailable,
   inherited,
 }) => {
@@ -6519,9 +6530,14 @@ const createSafeFirestoreWebChannelAuthRecord = ({
     subjectMatchesApplicationSessionProof,
     authTimeMatchesApplicationSessionProof,
     expirationHealthy,
+    emailClaimAllowedByFirestoreRules,
   ]) {
     assert.ok(value === null || typeof value === "boolean");
   }
+  assert.ok(
+    emailClaimClass === null ||
+      SAFE_FIRESTORE_WEBCHANNEL_EMAIL_CLAIM_CLASSES.includes(emailClaimClass),
+  );
   assert.equal(typeof applicationSessionProofAvailable, "boolean");
   assert.equal(typeof inherited, "boolean");
   return Object.freeze({
@@ -6536,6 +6552,8 @@ const createSafeFirestoreWebChannelAuthRecord = ({
     subjectMatchesApplicationSessionProof,
     authTimeMatchesApplicationSessionProof,
     expirationHealthy,
+    emailClaimClass,
+    emailClaimAllowedByFirestoreRules,
     applicationSessionProofAvailable,
     inherited,
   });
@@ -6581,6 +6599,28 @@ const decodeTransientJwtPayload = (token) => {
     return { jwtShapeValid: true, payload: null };
   }
 };
+const classifySafeFirestoreWebChannelEmailClaim = (claims) => {
+  if (!Object.prototype.hasOwnProperty.call(claims, "email")) {
+    return "missing";
+  }
+  const email = claims.email;
+  if (typeof email !== "string") return "non-string";
+  if (email === "westoria28@gmail.com") return "admin-exact-allowed";
+  const schoolDomainSuffix = "@yongshin-ms.ms.kr";
+  const exactSchoolDomainMatch =
+    !email.includes("\n") && email.endsWith(schoolDomainSuffix);
+  if (exactSchoolDomainMatch) {
+    return "school-domain-exact-allowed";
+  }
+  const schoolDomainCaseVariantMatch =
+    !email.includes("\n") &&
+    email.slice(-schoolDomainSuffix.length).toLowerCase() ===
+      schoolDomainSuffix;
+  if (schoolDomainCaseVariantMatch) {
+    return "school-domain-case-variant-denied";
+  }
+  return "other-denied";
+};
 const classifySafeFirestoreWebChannelAuth = ({
   requestClass,
   headers = {},
@@ -6611,6 +6651,8 @@ const classifySafeFirestoreWebChannelAuth = ({
     subjectMatchesApplicationSessionProof: null,
     authTimeMatchesApplicationSessionProof: null,
     expirationHealthy: null,
+    emailClaimClass: null,
+    emailClaimAllowedByFirestoreRules: null,
     applicationSessionProofAvailable,
     inherited: requestClass !== "initial-forward-post",
   };
@@ -6716,6 +6758,11 @@ const classifySafeFirestoreWebChannelAuth = ({
       ? claims.auth_time === applicationSessionProof.authTime
       : null;
   const expirationHealthy = claims.exp > nowEpochSeconds;
+  const emailClaimClass = classifySafeFirestoreWebChannelEmailClaim(claims);
+  const emailClaimAllowedByFirestoreRules = [
+    "admin-exact-allowed",
+    "school-domain-exact-allowed",
+  ].includes(emailClaimClass);
   const classified = {
     ...base,
     authorizationPresent: true,
@@ -6728,6 +6775,8 @@ const classifySafeFirestoreWebChannelAuth = ({
     subjectMatchesApplicationSessionProof,
     authTimeMatchesApplicationSessionProof,
     expirationHealthy,
+    emailClaimClass,
+    emailClaimAllowedByFirestoreRules,
   };
   let bindingClass = "initial-proof-bound";
   if (!audienceMatchesStagingProject || !issuerMatchesStagingProject) {
@@ -6740,6 +6789,8 @@ const classifySafeFirestoreWebChannelAuth = ({
     bindingClass = "initial-auth-time-mismatch";
   } else if (!expirationHealthy) {
     bindingClass = "initial-exp-unhealthy";
+  } else if (!emailClaimAllowedByFirestoreRules) {
+    bindingClass = "initial-email-claim-denied";
   }
   return createSafeFirestoreWebChannelAuthRecord({
     ...classified,
@@ -8982,6 +9033,11 @@ const verifyNetworkPolicyNegativeFixtures = () => {
   const syntheticAuthTime = 1_900_000_000;
   const syntheticNowEpochSeconds = syntheticAuthTime + 60;
   const syntheticUid = "fixed-private-webchannel-user-uid";
+  const syntheticEmail = "fixed-private-webchannel-user@yongshin-ms.ms.kr";
+  const syntheticEmbeddedNewlineEmail =
+    "fixed-private-prefix\nfixed-private-webchannel-user@yongshin-ms.ms.kr";
+  const syntheticTrailingNewlineEmail =
+    "fixed-private-webchannel-user@yongshin-ms.ms.kr\n";
   const syntheticSessionProof = {
     authTime: syntheticAuthTime,
     uid: syntheticUid,
@@ -9002,6 +9058,7 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     sub: syntheticUid,
     auth_time: syntheticAuthTime,
     exp: syntheticNowEpochSeconds + 3_600,
+    email: syntheticEmail,
   };
   const syntheticAuthorizationToken = createSyntheticJwt(syntheticClaims);
   const createSyntheticWebChannelPostData = (authorizationLines) => {
@@ -9079,6 +9136,47 @@ const verifyNetworkPolicyNegativeFixtures = () => {
       ],
     }),
     classifySyntheticWebChannelAuth({
+      authorizationLines: [
+        `Authorization:Bearer ${createSyntheticJwt({ ...syntheticClaims, email: "westoria28@gmail.com" })}`,
+      ],
+    }),
+    classifySyntheticWebChannelAuth({
+      authorizationLines: [
+        `Authorization:Bearer ${createSyntheticJwt(
+          Object.fromEntries(
+            Object.entries(syntheticClaims).filter(
+              ([name]) => name !== "email",
+            ),
+          ),
+        )}`,
+      ],
+    }),
+    classifySyntheticWebChannelAuth({
+      authorizationLines: [
+        `Authorization:Bearer ${createSyntheticJwt({ ...syntheticClaims, email: { raw: syntheticEmail } })}`,
+      ],
+    }),
+    classifySyntheticWebChannelAuth({
+      authorizationLines: [
+        `Authorization:Bearer ${createSyntheticJwt({ ...syntheticClaims, email: "fixed-private-webchannel-user@YONGSHIN-MS.MS.KR" })}`,
+      ],
+    }),
+    classifySyntheticWebChannelAuth({
+      authorizationLines: [
+        `Authorization:Bearer ${createSyntheticJwt({ ...syntheticClaims, email: "fixed-private-webchannel-user@example.invalid" })}`,
+      ],
+    }),
+    classifySyntheticWebChannelAuth({
+      authorizationLines: [
+        `Authorization:Bearer ${createSyntheticJwt({ ...syntheticClaims, email: syntheticEmbeddedNewlineEmail })}`,
+      ],
+    }),
+    classifySyntheticWebChannelAuth({
+      authorizationLines: [
+        `Authorization:Bearer ${createSyntheticJwt({ ...syntheticClaims, email: syntheticTrailingNewlineEmail })}`,
+      ],
+    }),
+    classifySyntheticWebChannelAuth({
       requestClass: "session-forward-post",
       postData: "",
     }),
@@ -9102,11 +9200,43 @@ const verifyNetworkPolicyNegativeFixtures = () => {
       "initial-subject-mismatch",
       "initial-proof-unavailable",
       "initial-exp-unhealthy",
+      "initial-proof-bound",
+      "initial-email-claim-denied",
+      "initial-email-claim-denied",
+      "initial-email-claim-denied",
+      "initial-email-claim-denied",
+      "initial-email-claim-denied",
+      "initial-email-claim-denied",
       "session-forward-inherited",
       "session-backchannel-inherited",
     ],
   );
   assert.equal(safeWebChannelAuthFixtures[0].expirationHealthy, true);
+  assert.equal(
+    safeWebChannelAuthFixtures[0].emailClaimClass,
+    "school-domain-exact-allowed",
+  );
+  assert.equal(
+    safeWebChannelAuthFixtures[0].emailClaimAllowedByFirestoreRules,
+    true,
+  );
+  assert.equal(
+    safeWebChannelAuthFixtures.at(-9).emailClaimClass,
+    "admin-exact-allowed",
+  );
+  assert.deepEqual(
+    safeWebChannelAuthFixtures
+      .slice(-8, -2)
+      .map(({ emailClaimClass }) => emailClaimClass),
+    [
+      "missing",
+      "non-string",
+      "school-domain-case-variant-denied",
+      "other-denied",
+      "other-denied",
+      "other-denied",
+    ],
+  );
   assert.equal(safeWebChannelAuthFixtures.at(-2).authorizationPresent, null);
   assert.equal(safeWebChannelAuthFixtures.at(-2).inherited, true);
   const serializedSafeWebChannelAuthFixtures = JSON.stringify(
@@ -9120,6 +9250,12 @@ const verifyNetworkPolicyNegativeFixtures = () => {
     "fixed-private-basic-secret",
     "wrong-project",
     "wrong-user",
+    syntheticEmail,
+    "westoria28@gmail.com",
+    "fixed-private-webchannel-user@YONGSHIN-MS.MS.KR",
+    "fixed-private-webchannel-user@example.invalid",
+    syntheticEmbeddedNewlineEmail,
+    syntheticTrailingNewlineEmail,
   ]) {
     assert.equal(
       serializedSafeWebChannelAuthFixtures.includes(rawValue),
@@ -12173,6 +12309,8 @@ const summarizeSafeFirestoreWebChannelAuthBindings = ({
   );
   const authBindingClasses = (bindings) =>
     bindings.map((record) => record.firebaseAuth?.bindingClass);
+  const emailClaimClasses = (bindings) =>
+    bindings.map((record) => record.firebaseAuth?.emailClaimClass);
   const appCheckHeaderSources = (bindings) =>
     bindings.map((record) => {
       if (
@@ -12252,6 +12390,17 @@ const summarizeSafeFirestoreWebChannelAuthBindings = ({
         allowedValues: SAFE_FIRESTORE_WEBCHANNEL_AUTH_BINDING_CLASSES,
         key: "bindingClass",
       }),
+    groupWebChannelInitialHandshakeEmailClaimClassHistogram:
+      safeFixedValueHistogram({
+        values: emailClaimClasses(initialBindings),
+        allowedValues: SAFE_FIRESTORE_WEBCHANNEL_EMAIL_CLAIM_CLASSES,
+        key: "emailClaimClass",
+      }),
+    groupWebChannelInitialHandshakeEmailClaimAllowedCount:
+      initialBindings.filter(
+        (record) =>
+          record.firebaseAuth?.emailClaimAllowedByFirestoreRules === true,
+      ).length,
     groupWebChannelInitialHandshakeAppCheckHeaderSourceHistogram:
       safeFixedValueHistogram({
         values: appCheckHeaderSources(initialBindings),
@@ -12287,6 +12436,16 @@ const summarizeSafeFirestoreWebChannelAuthBindings = ({
       allowedValues: SAFE_FIRESTORE_WEBCHANNEL_AUTH_BINDING_CLASSES,
       key: "bindingClass",
     }),
+    activeRouteWebChannelEmailClaimClassHistogram: safeFixedValueHistogram({
+      values: emailClaimClasses(activeRouteInitialBindings),
+      allowedValues: SAFE_FIRESTORE_WEBCHANNEL_EMAIL_CLAIM_CLASSES,
+      key: "emailClaimClass",
+    }),
+    activeRouteWebChannelEmailClaimAllowedCount:
+      activeRouteInitialBindings.filter(
+        (record) =>
+          record.firebaseAuth?.emailClaimAllowedByFirestoreRules === true,
+      ).length,
     activeRouteWebChannelAppCheckHeaderSourceHistogram: safeFixedValueHistogram(
       {
         values: appCheckHeaderSources(activeRouteBindings),
@@ -18826,6 +18985,8 @@ const verifySafeBrowserErrorDiagnosticFixtures = () => {
     subjectMatchesApplicationSessionProof: null,
     authTimeMatchesApplicationSessionProof: null,
     expirationHealthy: null,
+    emailClaimClass: null,
+    emailClaimAllowedByFirestoreRules: null,
     applicationSessionProofAvailable: false,
     inherited: false,
   };
@@ -18847,6 +19008,8 @@ const verifySafeBrowserErrorDiagnosticFixtures = () => {
     subjectMatchesApplicationSessionProof: true,
     authTimeMatchesApplicationSessionProof: true,
     expirationHealthy: true,
+    emailClaimClass: "school-domain-exact-allowed",
+    emailClaimAllowedByFirestoreRules: true,
     applicationSessionProofAvailable: true,
   });
   const inheritedForwardAuth = createSafeFirestoreWebChannelAuthRecord({
@@ -18911,6 +19074,25 @@ const verifySafeBrowserErrorDiagnosticFixtures = () => {
   assert.deepEqual(
     safeWebChannelAuthBindingSummary.activeRouteWebChannelAppCheckHeaderSourceHistogram,
     [{ appCheckHeaderSource: "native-sdk", count: 2 }],
+  );
+  assert.deepEqual(
+    safeWebChannelAuthBindingSummary.groupWebChannelInitialHandshakeEmailClaimClassHistogram,
+    [
+      { emailClaimClass: "school-domain-exact-allowed", count: 1 },
+      { emailClaimClass: "unknown", count: 1 },
+    ],
+  );
+  assert.equal(
+    safeWebChannelAuthBindingSummary.groupWebChannelInitialHandshakeEmailClaimAllowedCount,
+    1,
+  );
+  assert.deepEqual(
+    safeWebChannelAuthBindingSummary.activeRouteWebChannelEmailClaimClassHistogram,
+    [{ emailClaimClass: "school-domain-exact-allowed", count: 1 }],
+  );
+  assert.equal(
+    safeWebChannelAuthBindingSummary.activeRouteWebChannelEmailClaimAllowedCount,
+    1,
   );
   const bootstrapAttestationFixture = {
     responseUrlExact: true,
@@ -26852,6 +27034,315 @@ const viewportsForScreen = (screenId) =>
     (viewport) =>
       keyScreens.has(screenId) || minimumViewports.has(viewportKey(viewport)),
   );
+const SAFE_SCREEN_CAPTURE_IDS = Object.freeze([...screensById.keys()].sort());
+const SAFE_SCREEN_CAPTURE_CONTEXT_KEYS = Object.freeze([
+  "authRole",
+  "captureId",
+  "captureRole",
+  "groupKey",
+  "screenId",
+  "stage",
+  "viewport",
+]);
+const safeScreenAuthenticationRole = (screen) =>
+  contract.captureAuthenticationRoles[screen.id] ??
+  (screen.role === "support" ? null : screen.role);
+const safeScreenCaptureRole = (screen, authenticationRole) =>
+  screen.role === "support"
+    ? authenticationRole
+      ? `support-${authenticationRole}`
+      : "support-public"
+    : screen.role;
+const normalizeSafeScreenCaptureDiagnosticContext = (
+  context,
+  expectedScreen,
+  expectedActiveCaptureId,
+) => {
+  const reject = () => {
+    throw new Error("W10P_SAFE_SCREEN_CONTEXT_REJECTED");
+  };
+  if (!context || typeof context !== "object" || Array.isArray(context)) {
+    reject();
+  }
+  let contextPrototype;
+  let ownKeys;
+  let descriptors;
+  try {
+    contextPrototype = Object.getPrototypeOf(context);
+    ownKeys = Reflect.ownKeys(context);
+    descriptors = Object.getOwnPropertyDescriptors(context);
+  } catch {
+    reject();
+  }
+  if (
+    contextPrototype !== Object.prototype ||
+    ownKeys.some((key) => typeof key !== "string") ||
+    [...ownKeys].sort().join("\u0000") !==
+      [...SAFE_SCREEN_CAPTURE_CONTEXT_KEYS].sort().join("\u0000")
+  ) {
+    reject();
+  }
+  const values = {};
+  for (const key of SAFE_SCREEN_CAPTURE_CONTEXT_KEYS) {
+    const descriptor = descriptors[key];
+    if (
+      !descriptor ||
+      !Object.prototype.hasOwnProperty.call(descriptor, "value") ||
+      descriptor.get !== undefined ||
+      descriptor.set !== undefined ||
+      descriptor.enumerable !== true ||
+      typeof descriptor.value !== "string"
+    ) {
+      reject();
+    }
+    values[key] = descriptor.value;
+  }
+  const screen = screensById.get(values.screenId);
+  const authenticationRole = screen
+    ? safeScreenAuthenticationRole(screen)
+    : null;
+  const expectedCaptureRole = screen
+    ? safeScreenCaptureRole(screen, authenticationRole)
+    : null;
+  const viewportEligible = viewportsForScreen(values.screenId).some(
+    (viewport) => viewportKey(viewport) === values.viewport,
+  );
+  if (
+    !SAFE_AUTHENTICATION_STAGES.includes(values.stage) ||
+    !SAFE_AUTHENTICATION_VIEWPORT_KEYS.includes(values.viewport) ||
+    !SAFE_SCREEN_CAPTURE_IDS.includes(values.screenId) ||
+    screen !== expectedScreen ||
+    !viewportEligible ||
+    !(
+      (SAFE_AUTHENTICATION_AUTH_ROLES.includes(authenticationRole) &&
+        SAFE_AUTHENTICATION_CAPTURE_ROLES.includes(expectedCaptureRole) &&
+        SAFE_AUTHENTICATION_ROLE_PAIRS[expectedCaptureRole] ===
+          authenticationRole) ||
+      (authenticationRole === null && expectedCaptureRole === "support-public")
+    ) ||
+    values.captureRole !== expectedCaptureRole ||
+    values.authRole !== (authenticationRole ?? "none") ||
+    values.groupKey !==
+      `${values.stage}:${values.captureRole}:${values.viewport}` ||
+    values.captureId !==
+      `${values.stage}:${values.screenId}:${values.viewport}` ||
+    expectedActiveCaptureId !== values.captureId
+  ) {
+    reject();
+  }
+  return Object.freeze({
+    stage: values.stage,
+    captureRole: values.captureRole,
+    authRole: values.authRole,
+    viewport: values.viewport,
+    groupKey: values.groupKey,
+    screenId: values.screenId,
+    captureId: values.captureId,
+  });
+};
+const verifySafeScreenCaptureDiagnosticContextFixtures = () => {
+  assert.deepEqual(
+    SAFE_SCREEN_CAPTURE_IDS,
+    Object.keys(contract.screenReadyStates).sort(),
+  );
+  const accepted = [];
+  for (const stage of SAFE_AUTHENTICATION_STAGES) {
+    for (const screen of [...screensById.values()].sort((left, right) =>
+      left.id.localeCompare(right.id),
+    )) {
+      const authenticationRole = safeScreenAuthenticationRole(screen);
+      const captureRole = safeScreenCaptureRole(screen, authenticationRole);
+      for (const viewport of viewportsForScreen(screen.id)) {
+        const viewportName = viewportKey(viewport);
+        const captureId = captureKey(stage, screen.id, viewport);
+        const fixture = {
+          stage,
+          captureRole,
+          authRole: authenticationRole ?? "none",
+          viewport: viewportName,
+          groupKey: `${stage}:${captureRole}:${viewportName}`,
+          screenId: screen.id,
+          captureId,
+        };
+        assert.deepEqual(
+          normalizeSafeScreenCaptureDiagnosticContext(
+            fixture,
+            screen,
+            captureId,
+          ),
+          fixture,
+        );
+        accepted.push({ fixture, screen });
+      }
+    }
+  }
+  const authenticated = accepted.find(
+    ({ fixture }) => fixture.authRole === "student",
+  );
+  const supportPublic = accepted.find(
+    ({ fixture }) => fixture.authRole === "none",
+  );
+  assert.ok(authenticated);
+  assert.ok(supportPublic);
+  const base = authenticated.fixture;
+  const expectedScreen = authenticated.screen;
+  const otherScreen = [...screensById.values()].find(
+    (screen) => screen !== expectedScreen,
+  );
+  assert.ok(otherScreen);
+  const privateRawValue =
+    "https://private.invalid/?token=aaa.bbb.ccc&email=fixed-private@example.invalid";
+  let coercionCount = 0;
+  let accessorReadCount = 0;
+  let proxyGetCount = 0;
+  const coercionValue = {
+    toString() {
+      coercionCount += 1;
+      return base.screenId;
+    },
+    [Symbol.toPrimitive]() {
+      coercionCount += 1;
+      return base.screenId;
+    },
+  };
+  const withAccessor = Object.defineProperty({ ...base }, "screenId", {
+    enumerable: true,
+    get() {
+      accessorReadCount += 1;
+      return base.screenId;
+    },
+  });
+  const withHiddenExtra = Object.defineProperty(
+    { ...base },
+    "fixedPrivateExtra",
+    { value: privateRawValue, enumerable: false },
+  );
+  const rejected = [
+    null,
+    [],
+    Object.assign(Object.create(null), base),
+    Object.assign(Object.create({ inherited: privateRawValue }), base),
+    { ...base, stage: "production" },
+    { ...base, viewport: "391x844" },
+    { ...base, screenId: "missing-screen" },
+    {
+      ...base,
+      screenId: otherScreen.id,
+      captureId: `${base.stage}:${otherScreen.id}:${base.viewport}`,
+    },
+    { ...base, captureId: `candidate:${base.screenId}:${base.viewport}` },
+    { ...base, captureId: `${base.stage}:missing-screen:${base.viewport}` },
+    { ...base, captureId: `${base.stage}:${base.screenId}:391x844` },
+    { ...base, captureId: `${base.captureId}:extra` },
+    { ...base, captureId: `${base.captureId}?secret=${privateRawValue}` },
+    { ...base, captureId: `${base.captureId}#fragment` },
+    { ...base, groupKey: `candidate:${base.captureRole}:${base.viewport}` },
+    { ...base, groupKey: `${base.stage}:teacher:${base.viewport}` },
+    { ...base, groupKey: `${base.stage}:${base.captureRole}:391x844` },
+    { ...base, groupKey: `${base.groupKey}:extra` },
+    { ...base, captureRole: "teacher" },
+    { ...base, authRole: "teacher" },
+    { ...base, authRole: "none" },
+    { ...base, screenId: privateRawValue },
+    { ...base, captureId: privateRawValue },
+    { ...base, groupKey: privateRawValue },
+    { ...base, viewport: privateRawValue },
+    { ...base, screenId: coercionValue },
+    { ...base, extra: privateRawValue },
+    { ...base, [Symbol("fixed-private-screen")]: privateRawValue },
+    withHiddenExtra,
+    withAccessor,
+    new Proxy(
+      {},
+      {
+        ownKeys() {
+          throw new Error(privateRawValue);
+        },
+      },
+    ),
+    new Proxy(
+      {},
+      {
+        getOwnPropertyDescriptor() {
+          throw new Error(privateRawValue);
+        },
+      },
+    ),
+    new Proxy(
+      {},
+      {
+        getPrototypeOf() {
+          throw new Error(privateRawValue);
+        },
+      },
+    ),
+  ];
+  for (const fixture of rejected) {
+    assert.throws(
+      () =>
+        normalizeSafeScreenCaptureDiagnosticContext(
+          fixture,
+          expectedScreen,
+          base.captureId,
+        ),
+      /W10P_SAFE_SCREEN_CONTEXT_REJECTED/u,
+    );
+  }
+  for (const fixture of [
+    { ...supportPublic.fixture, authRole: "student" },
+    { ...supportPublic.fixture, captureRole: "support-teacher" },
+  ]) {
+    assert.throws(
+      () =>
+        normalizeSafeScreenCaptureDiagnosticContext(
+          fixture,
+          supportPublic.screen,
+          supportPublic.fixture.captureId,
+        ),
+      /W10P_SAFE_SCREEN_CONTEXT_REJECTED/u,
+    );
+  }
+  assert.throws(
+    () =>
+      normalizeSafeScreenCaptureDiagnosticContext(
+        base,
+        expectedScreen,
+        `${base.captureId}:other`,
+      ),
+    /W10P_SAFE_SCREEN_CONTEXT_REJECTED/u,
+  );
+  const proxyWithoutGet = new Proxy(
+    { ...base },
+    {
+      get(target, key, receiver) {
+        proxyGetCount += 1;
+        return Reflect.get(target, key, receiver);
+      },
+    },
+  );
+  assert.deepEqual(
+    normalizeSafeScreenCaptureDiagnosticContext(
+      proxyWithoutGet,
+      expectedScreen,
+      base.captureId,
+    ),
+    base,
+  );
+  assert.equal(coercionCount, 0);
+  assert.equal(accessorReadCount, 0);
+  assert.equal(proxyGetCount, 0);
+  assert.equal(
+    JSON.stringify(
+      normalizeSafeScreenCaptureDiagnosticContext(
+        base,
+        expectedScreen,
+        base.captureId,
+      ),
+    ).includes(privateRawValue),
+    false,
+  );
+};
+verifySafeScreenCaptureDiagnosticContextFixtures();
 
 const candidateTargets = [];
 const baselineTargetsByKey = new Map();
@@ -30149,10 +30640,17 @@ const refreshCaptureApplicationSession = async ({
   assert.equal(firebaseConfig.appId, STAGING_APP_ID);
 
   const functionsEndpoint = `https://${STAGING_FUNCTIONS_REGION}-${contract.firebaseProjectId}.cloudfunctions.net/touchApplicationSession`;
+  const protectedReadEndpoint = `https://firestore.googleapis.com/v1/projects/${contract.firebaseProjectId}/databases/(default)/documents/site_settings/config`;
   assert.equal(
     new URL(functionsEndpoint).hostname,
     `${STAGING_FUNCTIONS_REGION}-${contract.firebaseProjectId}.cloudfunctions.net`,
   );
+  assert.equal(
+    new URL(protectedReadEndpoint).hostname,
+    "firestore.googleapis.com",
+  );
+  assert.equal(new URL(protectedReadEndpoint).search, "");
+  assert.equal(new URL(protectedReadEndpoint).hash, "");
 
   let ephemeralAppCheckToken = appCheckToken;
   try {
@@ -30173,6 +30671,7 @@ const refreshCaptureApplicationSession = async ({
             expectedAppId,
             expectedFunctionsRegion,
             expectedFunctionsEndpoint,
+            expectedProtectedReadEndpoint,
             observedNowMs,
             minimumRemainingLeaseMs,
           } = input;
@@ -30186,6 +30685,8 @@ const refreshCaptureApplicationSession = async ({
             config.appId !== expectedAppId ||
             expectedFunctionsEndpoint !==
               `https://${expectedFunctionsRegion}-${expectedProjectId}.cloudfunctions.net/touchApplicationSession` ||
+            expectedProtectedReadEndpoint !==
+              `https://firestore.googleapis.com/v1/projects/${expectedProjectId}/databases/(default)/documents/site_settings/config` ||
             tokenExpiresAtMs - observedNowMs < 5 * 60 * 1000
           ) {
             throw new Error(
@@ -30321,13 +30822,65 @@ const refreshCaptureApplicationSession = async ({
               "VISUAL_APPLICATION_SESSION_KEEPALIVE_ATTESTATION_FAILED",
             );
           }
-          state.refreshSuccessCount += 1;
+          let protectedReadHeaders = {
+            Authorization: `Bearer ${ephemeralIdToken}`,
+            "X-Firebase-AppCheck": ephemeralToken,
+          };
+          const protectedReadExactUrlMethodBound =
+            expectedProtectedReadEndpoint ===
+            `https://firestore.googleapis.com/v1/projects/${expectedProjectId}/databases/(default)/documents/site_settings/config`;
+          const protectedReadSameAuthorizationToken =
+            protectedReadHeaders.Authorization === `Bearer ${ephemeralIdToken}`;
+          const protectedReadSameAppCheckToken =
+            protectedReadHeaders["X-Firebase-AppCheck"] === ephemeralToken;
+          let protectedReadResponse = null;
+          let protectedReadBody = null;
+          let protectedReadResponseStatusCode = null;
+          let protectedReadBodyDiscarded = false;
+          const protectedReadAbortController = new AbortController();
+          const protectedReadTimeoutId = setTimeout(
+            () => protectedReadAbortController.abort(),
+            20_000,
+          );
+          try {
+            protectedReadResponse = await fetch(expectedProtectedReadEndpoint, {
+              method: "GET",
+              headers: protectedReadHeaders,
+              redirect: "error",
+              signal: protectedReadAbortController.signal,
+            });
+            protectedReadResponseStatusCode = protectedReadResponse.status;
+            protectedReadBody = await protectedReadResponse.arrayBuffer();
+            protectedReadBody = null;
+            protectedReadBodyDiscarded = true;
+          } catch {
+            throw new Error("VISUAL_APPLICATION_SESSION_PROTECTED_READ_FAILED");
+          } finally {
+            clearTimeout(protectedReadTimeoutId);
+            protectedReadHeaders.Authorization = "";
+            protectedReadHeaders["X-Firebase-AppCheck"] = "";
+            protectedReadHeaders = null;
+            protectedReadResponse = null;
+            protectedReadBody = null;
+          }
+          const protectedReadPassed =
+            Number.isInteger(protectedReadResponseStatusCode) &&
+            protectedReadResponseStatusCode >= 200 &&
+            protectedReadResponseStatusCode < 300;
+          if (protectedReadPassed) state.refreshSuccessCount += 1;
           return {
             attestation,
             idTokenResultCallMode:
               forceRefreshCount === 1
                 ? "forced-refresh-second-call"
                 : "initial-call-only",
+            protectedReadResponseStatusCode,
+            protectedReadExactUrlMethodBound,
+            protectedReadSameAuthorizationToken,
+            protectedReadSameAppCheckToken,
+            protectedReadCompletedAfterTouch: true,
+            protectedReadBodyDiscarded,
+            protectedReadPassed,
           };
         } finally {
           ephemeralIdToken = "";
@@ -30350,6 +30903,7 @@ const refreshCaptureApplicationSession = async ({
         expectedAppId: STAGING_APP_ID,
         expectedFunctionsRegion: STAGING_FUNCTIONS_REGION,
         expectedFunctionsEndpoint: functionsEndpoint,
+        expectedProtectedReadEndpoint: protectedReadEndpoint,
         observedNowMs: nodeNowMs,
         minimumRemainingLeaseMs:
           CAPTURE_APPLICATION_SESSION_MINIMUM_REMAINING_LEASE_MS,
@@ -30381,8 +30935,33 @@ const refreshCaptureApplicationSession = async ({
         refreshResult.idTokenResultCallMode,
       ),
     );
-    client.markSuccessfulReuse();
-    applicationSessionKeepaliveClientReuseCount += 1;
+    const protectedReadResponseClass =
+      classifySafeAuthenticationConfigReadResponse({
+        requestClass: "get",
+        responseObserved: true,
+        responseStatusCode: refreshResult.protectedReadResponseStatusCode,
+        responseErrorReason: undefined,
+      });
+    assert.ok(
+      SAFE_AUTHENTICATION_CONFIG_READ_RESPONSE_CLASSES.includes(
+        protectedReadResponseClass,
+      ),
+    );
+    const protectedReadPassed = protectedReadResponseClass === "response-2xx";
+    assert.equal(refreshResult.protectedReadPassed, protectedReadPassed);
+    for (const field of [
+      "protectedReadExactUrlMethodBound",
+      "protectedReadSameAuthorizationToken",
+      "protectedReadSameAppCheckToken",
+      "protectedReadCompletedAfterTouch",
+      "protectedReadBodyDiscarded",
+    ]) {
+      assert.equal(refreshResult[field], true);
+    }
+    if (protectedReadPassed) {
+      client.markSuccessfulReuse();
+      applicationSessionKeepaliveClientReuseCount += 1;
+    }
     return Object.freeze({
       completed: true,
       completedBeforeRouteNavigation: true,
@@ -30392,6 +30971,17 @@ const refreshCaptureApplicationSession = async ({
       revisionUnchanged: attestation.revisionUnchanged,
       authTimeBound: attestation.authTimeBound,
       appCheckMinimumLeaseBound: true,
+      protectedReadResponseClass,
+      protectedReadPassed,
+      protectedReadExactUrlMethodBound:
+        refreshResult.protectedReadExactUrlMethodBound,
+      protectedReadSameAuthorizationToken:
+        refreshResult.protectedReadSameAuthorizationToken,
+      protectedReadSameAppCheckToken:
+        refreshResult.protectedReadSameAppCheckToken,
+      protectedReadCompletedAfterTouch:
+        refreshResult.protectedReadCompletedAfterTouch,
+      protectedReadBodyDiscarded: refreshResult.protectedReadBodyDiscarded,
     });
   } finally {
     ephemeralAppCheckToken = "";
@@ -35512,6 +36102,7 @@ try {
     let groupApplicationSessionKeepaliveClientInitializationAttestation = null;
     let groupApplicationSessionKeepaliveClientDisposalAttestation = null;
     let groupApplicationSessionKeepaliveClientLifecycleEvidence = null;
+    let authenticationGroupContext = null;
     if (authenticationRole) {
       networkPhase = "authentication";
       const captureRole = SAFE_AUTHENTICATION_CAPTURE_ROLES.find(
@@ -35522,14 +36113,13 @@ try {
         SAFE_AUTHENTICATION_ROLE_PAIRS[captureRole],
         authenticationRole,
       );
-      const authenticationGroupContext =
-        normalizeSafeAuthenticationGroupContext({
-          groupKey,
-          stage,
-          captureRole,
-          authenticationRole,
-          viewport: viewportName,
-        });
+      authenticationGroupContext = normalizeSafeAuthenticationGroupContext({
+        groupKey,
+        stage,
+        captureRole,
+        authenticationRole,
+        viewport: viewportName,
+      });
       const authenticationBrowserErrorSequenceBaseline =
         safeBrowserErrorObservationSequence;
       const authenticationBrowserErrorCountBaseline =
@@ -36316,15 +36906,50 @@ try {
           } finally {
             keepaliveAppCheckToken = "";
           }
+          await drainAppCheckCdpHandlerPromises();
+          await flushNetworkAttestations();
+        }
+        activeCaptureId = nextCaptureId;
+        const screenCaptureDiagnosticContext =
+          normalizeSafeScreenCaptureDiagnosticContext(
+            {
+              stage: authenticationGroupContext?.stage ?? stage,
+              captureRole: authenticationGroupContext?.captureRole ?? traceRole,
+              authRole:
+                authenticationGroupContext?.authenticationRole ?? "none",
+              viewport: authenticationGroupContext?.viewport ?? viewportName,
+              groupKey: authenticationGroupContext?.groupKey ?? groupKey,
+              screenId: target.screen.id,
+              captureId: activeCaptureId,
+            },
+            target.screen,
+            activeCaptureId,
+          );
+        if (authenticationRole) {
+          assert.ok(screenApplicationSessionKeepaliveAttestation);
+          const screenApplicationSessionFenceDiagnostic = {
+            ...screenCaptureDiagnosticContext,
+            applicationSessionKeepaliveAttestation:
+              screenApplicationSessionKeepaliveAttestation,
+          };
+          assert.equal(
+            screenApplicationSessionKeepaliveAttestation.protectedReadPassed,
+            true,
+            `Screen application-session rules probe must pass: ${JSON.stringify(
+              screenApplicationSessionFenceDiagnostic,
+            )}`,
+          );
+          assert.equal(
+            screenApplicationSessionKeepaliveAttestation.protectedReadResponseClass,
+            "response-2xx",
+          );
           applicationSessionKeepaliveSuccessCount += 1;
           if (stage === "baseline") {
             baselineApplicationSessionKeepaliveSuccessCount += 1;
           } else {
             candidateApplicationSessionKeepaliveSuccessCount += 1;
           }
-          await flushNetworkAttestations();
         }
-        activeCaptureId = nextCaptureId;
         requestFinishedAccumulatorsByCaptureId.set(
           activeCaptureId,
           createSafeFinishedRequestAccumulator(),
@@ -36495,9 +37120,7 @@ try {
               .sort(([left], [right]) => left.localeCompare(right))
               .map(([value, count]) => ({ value, count }));
           const failureDiagnostic = {
-            stage,
-            screenId: target.screen.id,
-            viewport: viewportName,
+            ...screenCaptureDiagnosticContext,
             originalErrorName:
               error &&
               typeof error === "object" &&
@@ -36623,6 +37246,7 @@ try {
         const browserErrorNetworkAttestationDrainDiagnostic =
           await collectSafeFailureNetworkAttestationDrainDiagnostic();
         const browserErrorDiagnostic = {
+          ...screenCaptureDiagnosticContext,
           ...snapshotSafeBrowserErrorAccumulator(pageErrorAccumulator),
           browserErrorNetworkAttestationDrainDiagnostic,
           ...summarizeSafeFirestoreWebChannelAuthBindings({
@@ -36701,11 +37325,15 @@ try {
         const fileName = `${stage}/${target.screen.id}-${viewportName}.png`;
         const absoluteFile = resolve(outputRoot, fileName);
         await page.screenshot({ path: absoluteFile, fullPage });
+        const screenshotBrowserErrorDiagnostic = {
+          ...screenCaptureDiagnosticContext,
+          ...snapshotSafeBrowserErrorAccumulator(pageErrorAccumulator),
+        };
         assert.equal(
           pageErrorAccumulator.totalCount,
           0,
           `${target.screen.id} emitted an error during screenshot capture: ${JSON.stringify(
-            snapshotSafeBrowserErrorAccumulator(pageErrorAccumulator),
+            screenshotBrowserErrorDiagnostic,
           )}`,
         );
         const postScreenshotMetadata = await describePage(
