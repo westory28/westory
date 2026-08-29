@@ -4448,6 +4448,10 @@ const createBrowserConnectProxyGate = ({
     targetedTunnelRetiredClientSocketCount: 0,
     targetedTunnelRetiredUpstreamSocketCount: 0,
     targetedTunnelAuthorityDrainSuccessCount: 0,
+    releasedResponseStreamRegisterCount: 0,
+    releasedResponseStreamLoadingFinishedSettlementCount: 0,
+    releasedResponseStreamLoadingFailedSettlementCount: 0,
+    releasedResponseStreamAuthorityTransportDrainSettlementCount: 0,
     releasedResponseStreamResidualAtCloseCount: 0,
     uncorrelatedAllowedConnectDenyCount: 0,
     upstreamSocketCreateCount: 0,
@@ -4494,6 +4498,60 @@ const createBrowserConnectProxyGate = ({
       if (stream.authority === authority) nonterminalCount += 1;
     }
     return Object.freeze({ nonterminalCount, unknownOrUnboundCount });
+  };
+  const settleReleasedResponseStreamsForAuthorityTransportDrain = (
+    authority,
+  ) => {
+    assert.equal(typeof authority, "string");
+    assert.ok(authority.length > 0);
+    const activeAuthorityTunnelCount =
+      activeAllowedTunnelCounts.get(authority) || 0;
+    assert.ok(
+      Number.isSafeInteger(activeAuthorityTunnelCount) &&
+        activeAuthorityTunnelCount >= 0,
+    );
+    const activeAuthorityTunnelBindings = [
+      ...activeAllowedTunnelsByRequestId.values(),
+    ].filter((tunnel) => tunnel.authority === authority);
+    assert.equal(
+      activeAuthorityTunnelCount,
+      activeAuthorityTunnelBindings.length,
+      "Released stream transport settlement requires exact authority tunnel accounting.",
+    );
+    if (activeAuthorityTunnelCount !== 0) return 0;
+    const settlementEntries = [];
+    for (const [networkId, stream] of releasedResponseStreamsByNetworkId) {
+      assert.ok(stream && typeof stream === "object");
+      assert.deepEqual(Object.keys(stream).sort(), [
+        "authority",
+        "hostname",
+        "networkId",
+        "requestId",
+        "stage",
+        "state",
+      ]);
+      assert.equal(typeof stream.networkId, "string");
+      assert.ok(stream.networkId.length > 0);
+      assert.equal(stream.networkId, networkId);
+      assert.equal(typeof stream.requestId, "string");
+      assert.ok(stream.requestId.length > 0);
+      assert.equal(typeof stream.stage, "string");
+      assert.ok(stream.stage.length > 0);
+      assert.equal(typeof stream.hostname, "string");
+      assert.ok(stream.hostname.length > 0);
+      assert.equal(typeof stream.authority, "string");
+      assert.ok(stream.authority.length > 0);
+      assert.equal(stream.state, "released-nonterminal");
+      if (stream.authority === authority) {
+        settlementEntries.push([networkId, stream]);
+      }
+    }
+    for (const [networkId, stream] of settlementEntries) {
+      assert.equal(releasedResponseStreamsByNetworkId.get(networkId), stream);
+      assert.equal(releasedResponseStreamsByNetworkId.delete(networkId), true);
+      stats.releasedResponseStreamAuthorityTransportDrainSettlementCount += 1;
+    }
+    return settlementEntries.length;
   };
   const removeLeaseFromQueue = (lease) => {
     const queue = authorityLeaseQueues.get(lease.authority) || [];
@@ -4737,6 +4795,7 @@ const createBrowserConnectProxyGate = ({
       if (remaining > 0)
         activeAllowedTunnelCounts.set(allowedAuthority, remaining);
       else activeAllowedTunnelCounts.delete(allowedAuthority);
+      settleReleasedResponseStreamsForAuthorityTransportDrain(allowedAuthority);
     });
     upstreamSocket.once("error", (error) => {
       stats.tunnelErrorCount += 1;
@@ -5015,6 +5074,10 @@ const createBrowserConnectProxyGate = ({
           state: "released-nonterminal",
         }),
       );
+      stats.releasedResponseStreamRegisterCount += 1;
+      settleReleasedResponseStreamsForAuthorityTransportDrain(
+        authorization.authority,
+      );
     },
     settleReleasedResponseStream({ networkId, terminalClass }) {
       assert.equal(typeof networkId, "string");
@@ -5024,7 +5087,12 @@ const createBrowserConnectProxyGate = ({
       if (stream === null) return false;
       assert.equal(stream.networkId, networkId);
       assert.equal(stream.state, "released-nonterminal");
-      releasedResponseStreamsByNetworkId.delete(networkId);
+      assert.equal(releasedResponseStreamsByNetworkId.delete(networkId), true);
+      if (terminalClass === "loading-finished") {
+        stats.releasedResponseStreamLoadingFinishedSettlementCount += 1;
+      } else {
+        stats.releasedResponseStreamLoadingFailedSettlementCount += 1;
+      }
       return true;
     },
     prepareExactRequestAuthorityTunnelReset({
@@ -5428,8 +5496,19 @@ const createBrowserConnectProxyGate = ({
         stats.activeTunnelPresentAtAuthorizationCount >=
           stats.targetedTunnelRetirementSuccessCount,
       );
+      const releasedResponseStreamResidualCount =
+        releasedResponseStreamsByNetworkId.size;
+      assert.equal(
+        stats.releasedResponseStreamRegisterCount,
+        stats.releasedResponseStreamLoadingFinishedSettlementCount +
+          stats.releasedResponseStreamLoadingFailedSettlementCount +
+          stats.releasedResponseStreamAuthorityTransportDrainSettlementCount +
+          releasedResponseStreamResidualCount +
+          stats.releasedResponseStreamResidualAtCloseCount,
+        "Released response stream terminal accounting drifted.",
+      );
       return {
-        schemaVersion: 4,
+        schemaVersion: 5,
         allowedHostnames: [...allowedHostnameSet].sort(),
         allowedHostnameSetHash: secretSha256(
           JSON.stringify([...allowedHostnameSet].sort()),
@@ -5485,8 +5564,7 @@ const createBrowserConnectProxyGate = ({
           activeAllowedTunnelsByRequestId.size,
         preparedExactTunnelResetResidualCount:
           preparedExactTunnelResetsByRequestId.size,
-        releasedResponseStreamResidualCount:
-          releasedResponseStreamsByNetworkId.size,
+        releasedResponseStreamResidualCount,
         activeClientSocketCount: clientSockets.size,
         activeUpstreamSocketCount: upstreamSockets.size,
         fatalErrorCount: fatalErrors.length,
@@ -5494,46 +5572,137 @@ const createBrowserConnectProxyGate = ({
     },
   };
 };
+const BROWSER_CONNECT_PROXY_CONTEXT_DRAIN_RESIDUAL_FIELDS = Object.freeze([
+  "requestStageAuthorizationResidualCount",
+  "authorityLeaseResidualCount",
+  "authorityLeaseQueueResidualCount",
+  "activeAllowedTunnelResidualCount",
+  "activeAllowedTunnelRequestBindingResidualCount",
+  "preparedExactTunnelResetResidualCount",
+  "releasedResponseStreamResidualCount",
+]);
+const browserConnectProxyContextDrainResidualCounts = (snapshot) => {
+  assert.ok(snapshot && typeof snapshot === "object");
+  const residualCounts = {};
+  for (const field of BROWSER_CONNECT_PROXY_CONTEXT_DRAIN_RESIDUAL_FIELDS) {
+    const count = snapshot[field];
+    assert.ok(Number.isSafeInteger(count) && count >= 0);
+    residualCounts[field] = count;
+  }
+  return Object.freeze(residualCounts);
+};
 const waitForBrowserConnectProxyContextDrain = async ({
   proxy,
   timeoutMilliseconds = 5_000,
   pollMilliseconds = 10,
+  nowMilliseconds = () => Date.now(),
+  waitForPoll = (milliseconds) =>
+    new Promise((resolvePoll) => setTimeout(resolvePoll, milliseconds)),
 }) => {
   assert.ok(proxy && typeof proxy.snapshot === "function");
   assert.ok(
     Number.isSafeInteger(timeoutMilliseconds) && timeoutMilliseconds > 0,
   );
   assert.ok(Number.isSafeInteger(pollMilliseconds) && pollMilliseconds > 0);
-  const deadline = Date.now() + timeoutMilliseconds;
+  assert.equal(typeof nowMilliseconds, "function");
+  assert.equal(typeof waitForPoll, "function");
+  const startedAt = nowMilliseconds();
+  assert.ok(Number.isSafeInteger(startedAt) && startedAt >= 0);
+  const deadline = startedAt + timeoutMilliseconds;
+  assert.ok(Number.isSafeInteger(deadline));
   while (true) {
     const snapshot = proxy.snapshot();
-    const observedAt = Date.now();
-    assert.ok(
-      observedAt <= deadline,
-      "Timed out waiting for the context-closed browser proxy transport to drain.",
-    );
-    const drained = [
-      snapshot.requestStageAuthorizationResidualCount,
-      snapshot.authorityLeaseResidualCount,
-      snapshot.authorityLeaseQueueResidualCount,
-      snapshot.activeAllowedTunnelResidualCount,
-      snapshot.activeAllowedTunnelRequestBindingResidualCount,
-      snapshot.preparedExactTunnelResetResidualCount,
-      snapshot.releasedResponseStreamResidualCount,
-    ].every((count) => count === 0);
+    const residualCounts =
+      browserConnectProxyContextDrainResidualCounts(snapshot);
+    const drained = Object.values(residualCounts).every((count) => count === 0);
     if (drained) return snapshot;
+    const observedAt = nowMilliseconds();
+    assert.ok(Number.isSafeInteger(observedAt) && observedAt >= 0);
     const remainingMilliseconds = deadline - observedAt;
-    assert.ok(
-      remainingMilliseconds > 0,
-      "Timed out waiting for the context-closed browser proxy transport to drain.",
-    );
-    await new Promise((resolvePoll) =>
-      setTimeout(
-        resolvePoll,
-        Math.min(pollMilliseconds, remainingMilliseconds),
-      ),
-    );
+    if (remainingMilliseconds <= 0) {
+      throw new Error(
+        `Timed out waiting for the context-closed browser proxy transport to drain. Residual counts: ${JSON.stringify(residualCounts)}`,
+      );
+    }
+    await waitForPoll(Math.min(pollMilliseconds, remainingMilliseconds));
   }
+};
+const verifyBrowserConnectProxyContextDrainFixtures = async () => {
+  const zeroResidualCounts = Object.fromEntries(
+    BROWSER_CONNECT_PROXY_CONTEXT_DRAIN_RESIDUAL_FIELDS.map((field) => [
+      field,
+      0,
+    ]),
+  );
+  const zeroSnapshot = Object.freeze({
+    ...zeroResidualCounts,
+    fixtureMarker: "zero-after-deadline",
+  });
+  let zeroFixtureNowMilliseconds = 1_000;
+  const zeroResult = await waitForBrowserConnectProxyContextDrain({
+    proxy: {
+      snapshot: () => {
+        zeroFixtureNowMilliseconds = 1_002;
+        return zeroSnapshot;
+      },
+    },
+    timeoutMilliseconds: 1,
+    pollMilliseconds: 1,
+    nowMilliseconds: () => zeroFixtureNowMilliseconds,
+    waitForPoll: () => {
+      throw new Error("The drained overshoot fixture must not poll.");
+    },
+  });
+  assert.equal(zeroResult, zeroSnapshot);
+  const residualCounts = Object.freeze({
+    ...zeroResidualCounts,
+    releasedResponseStreamResidualCount: 1,
+  });
+  assert.deepEqual(
+    Object.keys(residualCounts),
+    BROWSER_CONNECT_PROXY_CONTEXT_DRAIN_RESIDUAL_FIELDS,
+  );
+  const privateFixtureValue =
+    "https://firestore.googleapis.com/private-context-drain-fixture";
+  let residualFixtureNowMilliseconds = 2_000;
+  let residualTimeoutError = null;
+  await assert.rejects(
+    () =>
+      waitForBrowserConnectProxyContextDrain({
+        proxy: {
+          snapshot: () => {
+            residualFixtureNowMilliseconds = 2_002;
+            return {
+              ...residualCounts,
+              privateFixtureValue,
+            };
+          },
+        },
+        timeoutMilliseconds: 1,
+        pollMilliseconds: 1,
+        nowMilliseconds: () => residualFixtureNowMilliseconds,
+        waitForPoll: () => {
+          throw new Error("The residual overshoot fixture must not poll.");
+        },
+      }),
+    (error) => {
+      residualTimeoutError = error;
+      return error instanceof Error;
+    },
+  );
+  assert.equal(
+    residualTimeoutError.message,
+    `Timed out waiting for the context-closed browser proxy transport to drain. Residual counts: ${JSON.stringify(residualCounts)}`,
+  );
+  assert.equal(
+    residualTimeoutError.message.includes(privateFixtureValue),
+    false,
+  );
+  return Object.freeze({
+    browserConnectProxyContextDrainDeadlineOvershootZeroFixtureCount: 1,
+    browserConnectProxyContextDrainDeadlineOvershootResidualFixtureCount: 1,
+    browserConnectProxyContextDrainTimeoutRawValueOutputCount: 0,
+  });
 };
 const sendLoopbackProxyFixtureRequest = ({ proxyUrl, requestText }) => {
   const parsedProxyUrl = new URL(proxyUrl);
@@ -17465,8 +17634,12 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     "fixed-proxy-active-tunnel-reset-pending";
   const activeTunnelFixtureConsumedRequestId =
     "fixed-proxy-active-tunnel-consumed";
+  const activeTunnelFixtureLoadingFailedRequestId =
+    "fixed-proxy-active-tunnel-loading-failed";
   const activeTunnelFixtureOtherAuthorityRequestId =
     "fixed-proxy-active-tunnel-other-authority";
+  const activeTunnelFixtureOtherAuthorityLateRegisterRequestId =
+    "fixed-proxy-active-tunnel-other-authority-late-register";
   const activeTunnelFixtureMultiRequestId = "fixed-proxy-active-tunnel-multi";
   const activeTunnelFixtureUnknownRequestId =
     "fixed-proxy-active-tunnel-unknown";
@@ -17905,8 +18078,45 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     activeTunnelFixtureGate.completeRequestStageAuthorization(
       activeTunnelFixtureOtherAuthorityRequestId,
     );
+    activeTunnelFixtureGate.authorizeRequestStage({
+      requestId: activeTunnelFixtureOtherAuthorityLateRegisterRequestId,
+      requestUrl: "https://identitytoolkit.googleapis.com/v1/accounts:lookup",
+      requestMethod: "POST",
+      requestOrigin: "https://capture.invalid",
+      stage: "browser-launch",
+    });
+    assert.equal(
+      activeTunnelFixtureGate.requestStageAuthorityLeaseDiagnosticClass(
+        activeTunnelFixtureOtherAuthorityLateRegisterRequestId,
+      ),
+      "issued-active-tunnel",
+    );
     const releasedResponseStreamNetworkId =
       "fixed-proxy-released-response-stream";
+    activeTunnelFixtureGate.authorizeRequestStage({
+      requestId: activeTunnelFixtureLoadingFailedRequestId,
+      requestUrl: exactConfigReadUrl,
+      requestMethod: "GET",
+      requestOrigin: "https://capture.invalid",
+      stage: "browser-launch",
+    });
+    const loadingFailedReleasedResponseStreamNetworkId =
+      "fixed-proxy-released-response-stream-loading-failed";
+    activeTunnelFixtureGate.registerReleasedResponseStream({
+      requestId: activeTunnelFixtureLoadingFailedRequestId,
+      networkId: loadingFailedReleasedResponseStreamNetworkId,
+      stage: "browser-launch",
+    });
+    assert.equal(
+      activeTunnelFixtureGate.settleReleasedResponseStream({
+        networkId: loadingFailedReleasedResponseStreamNetworkId,
+        terminalClass: "loading-failed",
+      }),
+      true,
+    );
+    activeTunnelFixtureGate.completeRequestStageAuthorization(
+      activeTunnelFixtureLoadingFailedRequestId,
+    );
     activeTunnelFixtureGate.registerReleasedResponseStream({
       requestId: activeTunnelFixtureConsumedRequestId,
       networkId: releasedResponseStreamNetworkId,
@@ -17962,16 +18172,19 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
       "consumed-active-tunnel",
     );
     assert.equal(consumedActiveResetAttestation.authorityDrained, true);
+    const snapshotAfterOtherAuthorityDrain = activeTunnelFixtureGate.snapshot();
     assert.equal(
-      activeTunnelFixtureGate.snapshot().activeAllowedTunnelResidualCount,
+      snapshotAfterOtherAuthorityDrain.activeAllowedTunnelResidualCount,
       1,
     );
     assert.equal(
-      activeTunnelFixtureGate.settleReleasedResponseStream({
-        networkId: otherAuthorityReleasedResponseStreamNetworkId,
-        terminalClass: "loading-finished",
-      }),
-      true,
+      snapshotAfterOtherAuthorityDrain.releasedResponseStreamResidualCount,
+      1,
+      "Draining one authority must not settle another authority's stream.",
+    );
+    assert.equal(
+      snapshotAfterOtherAuthorityDrain.releasedResponseStreamAuthorityTransportDrainSettlementCount,
+      0,
     );
     activeTunnelFixtureOtherAuthorityClientSocket.destroy();
     await withExplicitTimeout(
@@ -17982,7 +18195,9 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     for (let attempt = 0; attempt < 100; attempt += 1) {
       if (
         activeTunnelFixtureGate.snapshot().activeAllowedTunnelResidualCount ===
-        0
+          0 &&
+        activeTunnelFixtureGate.snapshot()
+          .releasedResponseStreamResidualCount === 0
       ) {
         break;
       }
@@ -17991,6 +18206,48 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     assert.equal(
       activeTunnelFixtureGate.snapshot().activeAllowedTunnelResidualCount,
       0,
+    );
+    const snapshotAfterRegisteredStreamTransportClose =
+      activeTunnelFixtureGate.snapshot();
+    assert.equal(
+      snapshotAfterRegisteredStreamTransportClose.releasedResponseStreamResidualCount,
+      0,
+    );
+    assert.equal(
+      snapshotAfterRegisteredStreamTransportClose.releasedResponseStreamAuthorityTransportDrainSettlementCount,
+      1,
+    );
+    const closeBeforeRegisterNetworkId =
+      "fixed-proxy-released-response-stream-close-before-register";
+    activeTunnelFixtureGate.registerReleasedResponseStream({
+      requestId: activeTunnelFixtureOtherAuthorityLateRegisterRequestId,
+      networkId: closeBeforeRegisterNetworkId,
+      stage: "browser-launch",
+    });
+    const snapshotAfterTransportCloseBeforeRegister =
+      activeTunnelFixtureGate.snapshot();
+    assert.equal(
+      snapshotAfterTransportCloseBeforeRegister.releasedResponseStreamResidualCount,
+      0,
+    );
+    assert.equal(
+      snapshotAfterTransportCloseBeforeRegister.releasedResponseStreamAuthorityTransportDrainSettlementCount,
+      2,
+    );
+    assert.equal(
+      snapshotAfterTransportCloseBeforeRegister.releasedResponseStreamRegisterCount,
+      4,
+    );
+    assert.equal(
+      snapshotAfterTransportCloseBeforeRegister.releasedResponseStreamLoadingFinishedSettlementCount,
+      1,
+    );
+    assert.equal(
+      snapshotAfterTransportCloseBeforeRegister.releasedResponseStreamLoadingFailedSettlementCount,
+      1,
+    );
+    activeTunnelFixtureGate.completeRequestStageAuthorization(
+      activeTunnelFixtureOtherAuthorityLateRegisterRequestId,
     );
   } finally {
     activeTunnelFixtureClientSocket?.destroy();
@@ -18008,7 +18265,9 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
           activeTunnelFixtureConcurrentRequestId,
           activeTunnelFixtureResetPendingRequestId,
           activeTunnelFixtureConsumedRequestId,
+          activeTunnelFixtureLoadingFailedRequestId,
           activeTunnelFixtureOtherAuthorityRequestId,
+          activeTunnelFixtureOtherAuthorityLateRegisterRequestId,
           activeTunnelFixtureMultiRequestId,
         ]) {
           if (activeTunnelFixtureGate.hasRequestStageAuthorization(requestId)) {
@@ -20048,6 +20307,11 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
       cdpNetworkErrorReasonCoercionCount,
     safeAuthenticationConfigReadProxyLeaseCoercionCount:
       proxyLeaseClassifierCoercionCount,
+    browserConnectProxyReleasedResponseStreamAuthorityIsolationFixtureCount: 1,
+    browserConnectProxyReleasedResponseStreamRegisteredBeforeTransportDrainFixtureCount: 1,
+    browserConnectProxyReleasedResponseStreamTransportDrainBeforeRegisterFixtureCount: 1,
+    browserConnectProxyReleasedResponseStreamResetCensusBlockFixtureCount: 1,
+    browserConnectProxyReleasedResponseStreamNetworkTerminalClassFixtureCount: 2,
     safeAuthenticationBootstrapRetirementFailureClassFixtureCount:
       authenticationBootstrapRetirementFailureClassFixtures.length,
   };
@@ -20922,6 +21186,8 @@ const verifyAppCheckSecretNegativeFixtures = () => {
   };
 };
 const appCheckSecretNegativeSelfTest = verifyAppCheckSecretNegativeFixtures();
+const browserConnectProxyContextDrainSelfTest =
+  await verifyBrowserConnectProxyContextDrainFixtures();
 const safeAuthenticationProtectedReadRetrySelfTest =
   verifySafeAuthenticationProtectedReadRetryFixtures();
 const safeAuthenticationFailureDiagnosticSelfTest =
@@ -26300,6 +26566,7 @@ if (args.includes("--self-test-app-check")) {
       suite: "w10p-app-check-capture-secret-self-test",
       passed: true,
       ...appCheckSecretNegativeSelfTest,
+      ...browserConnectProxyContextDrainSelfTest,
       ...authenticationLandingGuardSelfTest,
       ...safeAuthenticationProtectedReadRetrySelfTest,
       ...safeAuthenticationFailureDiagnosticSelfTest,
@@ -41072,6 +41339,36 @@ for (const count of [
 assert.equal(applicationSessionKeepaliveClientRegistryResidualCount, 0);
 assert.ok(browserConnectProxyFinalSnapshot);
 browserConnectProxy.assertHealthy();
+assert.equal(browserConnectProxyFinalSnapshot.schemaVersion, 5);
+for (const field of [
+  "releasedResponseStreamRegisterCount",
+  "releasedResponseStreamLoadingFinishedSettlementCount",
+  "releasedResponseStreamLoadingFailedSettlementCount",
+  "releasedResponseStreamAuthorityTransportDrainSettlementCount",
+  "releasedResponseStreamResidualCount",
+  "releasedResponseStreamResidualAtCloseCount",
+]) {
+  assert.ok(
+    Number.isSafeInteger(browserConnectProxyFinalSnapshot[field]) &&
+      browserConnectProxyFinalSnapshot[field] >= 0,
+  );
+}
+assert.equal(
+  browserConnectProxyFinalSnapshot.releasedResponseStreamRegisterCount,
+  browserConnectProxyFinalSnapshot.releasedResponseStreamLoadingFinishedSettlementCount +
+    browserConnectProxyFinalSnapshot.releasedResponseStreamLoadingFailedSettlementCount +
+    browserConnectProxyFinalSnapshot.releasedResponseStreamAuthorityTransportDrainSettlementCount +
+    browserConnectProxyFinalSnapshot.releasedResponseStreamResidualCount +
+    browserConnectProxyFinalSnapshot.releasedResponseStreamResidualAtCloseCount,
+);
+assert.equal(
+  browserConnectProxyFinalSnapshot.releasedResponseStreamResidualCount,
+  0,
+);
+assert.equal(
+  browserConnectProxyFinalSnapshot.releasedResponseStreamResidualAtCloseCount,
+  0,
+);
 assert.equal(browserConnectProxyFinalSnapshot.listenerStartCount, 1);
 assert.equal(browserConnectProxyFinalSnapshot.listenerCloseCount, 1);
 assert.deepEqual(

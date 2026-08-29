@@ -2838,7 +2838,15 @@ const assertCaptureProtectedReadTransportResetSourceContract = (sourceText) => {
     "releasedResponseStreamCensusForAuthority",
     "registerReleasedResponseStream",
     "settleReleasedResponseStream",
+    "settleReleasedResponseStreamsForAuthorityTransportDrain",
+    "releasedResponseStreamRegisterCount",
+    "releasedResponseStreamLoadingFinishedSettlementCount",
+    "releasedResponseStreamLoadingFailedSettlementCount",
+    "releasedResponseStreamAuthorityTransportDrainSettlementCount",
     "releasedResponseStreamResidualAtCloseCount",
+    "BROWSER_CONNECT_PROXY_CONTEXT_DRAIN_RESIDUAL_FIELDS",
+    "browserConnectProxyContextDrainResidualCounts",
+    "verifyBrowserConnectProxyContextDrainFixtures",
   ]) {
     assert.ok(
       sourceText.includes(needle),
@@ -3047,6 +3055,236 @@ const assertCaptureProtectedReadTransportResetSourceContract = (sourceText) => {
     sourceText,
     /Network\.loadingFailed[\s\S]*settleReleasedResponseStream[\s\S]*terminalClass: "loading-failed"/u,
   );
+  const authorityDrainHelperStart = sourceText.indexOf(
+    "const settleReleasedResponseStreamsForAuthorityTransportDrain = (",
+  );
+  const authorityDrainHelperEnd = sourceText.indexOf(
+    "const removeLeaseFromQueue = (lease) =>",
+    authorityDrainHelperStart,
+  );
+  assert.ok(
+    authorityDrainHelperStart >= 0 &&
+      authorityDrainHelperEnd > authorityDrainHelperStart,
+  );
+  const authorityDrainHelperSource = sourceText.slice(
+    authorityDrainHelperStart,
+    authorityDrainHelperEnd,
+  );
+  assert.match(
+    authorityDrainHelperSource,
+    /const activeAuthorityTunnelCount\s*=\s*activeAllowedTunnelCounts\.get\(authority\) \|\| 0;[\s\S]*const activeAuthorityTunnelBindings\s*=\s*\[[\s\S]*activeAllowedTunnelsByRequestId\.values\(\)[\s\S]*\.filter\(\(tunnel\) => tunnel\.authority === authority\);[\s\S]*assert\.equal\(\s*activeAuthorityTunnelCount,\s*activeAuthorityTunnelBindings\.length,[\s\S]*if \(activeAuthorityTunnelCount !== 0\) return 0;/u,
+    "Authority transport settlement must require both the count and exact request-binding census to be zero.",
+  );
+  assert.match(
+    authorityDrainHelperSource,
+    /for \(const \[networkId, stream\] of releasedResponseStreamsByNetworkId\)[\s\S]*assert\.equal\(stream\.networkId, networkId\);[\s\S]*assert\.equal\(stream\.state, "released-nonterminal"\);[\s\S]*if \(stream\.authority === authority\) \{\s*settlementEntries\.push\(\[networkId, stream\]\);\s*\}/u,
+    "Authority transport settlement must validate every stream record before selecting the exact authority.",
+  );
+  assert.match(
+    authorityDrainHelperSource,
+    /assert\.equal\(releasedResponseStreamsByNetworkId\.get\(networkId\), stream\);\s*assert\.equal\(releasedResponseStreamsByNetworkId\.delete\(networkId\), true\);\s*stats\.releasedResponseStreamAuthorityTransportDrainSettlementCount \+= 1;/u,
+    "Authority transport settlement must count only successful exact map deletions.",
+  );
+  assert.doesNotMatch(
+    authorityDrainHelperSource,
+    /\.clear\(|\.destroy\(|prepareExactRequestAuthorityTunnelReset|retirePreparedExactRequestAuthorityTunnel/u,
+    "Authority transport settlement must not clear unknown streams or destroy/reset sockets.",
+  );
+  const upstreamCloseStart = sourceText.indexOf(
+    'upstreamSocket.once("close", () => {',
+  );
+  const upstreamCloseEnd = sourceText.indexOf(
+    'upstreamSocket.once("error", (error) => {',
+    upstreamCloseStart,
+  );
+  assert.ok(upstreamCloseStart >= 0 && upstreamCloseEnd > upstreamCloseStart);
+  const upstreamCloseSource = sourceText.slice(
+    upstreamCloseStart,
+    upstreamCloseEnd,
+  );
+  const upstreamBindingDeleteIndex = upstreamCloseSource.indexOf(
+    "activeAllowedTunnelsByRequestId.delete(allowedTunnel.requestId)",
+  );
+  const upstreamCountDeleteIndex = upstreamCloseSource.indexOf(
+    "activeAllowedTunnelCounts.delete(allowedAuthority)",
+  );
+  const upstreamAuthorityDrainSettleIndex = upstreamCloseSource.indexOf(
+    "settleReleasedResponseStreamsForAuthorityTransportDrain(allowedAuthority)",
+  );
+  assert.ok(
+    upstreamBindingDeleteIndex >= 0 &&
+      upstreamCountDeleteIndex > upstreamBindingDeleteIndex &&
+      upstreamAuthorityDrainSettleIndex > upstreamCountDeleteIndex,
+    "The upstream close callback must retire tunnel count/binding state before authority stream settlement.",
+  );
+  const proxyRegisterStart = sourceText.indexOf(
+    "registerReleasedResponseStream({ requestId, networkId, stage }) {",
+  );
+  const proxyRegisterEnd = sourceText.indexOf(
+    "settleReleasedResponseStream({ networkId, terminalClass }) {",
+    proxyRegisterStart,
+  );
+  assert.ok(proxyRegisterStart >= 0 && proxyRegisterEnd > proxyRegisterStart);
+  const proxyRegisterSource = sourceText.slice(
+    proxyRegisterStart,
+    proxyRegisterEnd,
+  );
+  const proxyRegisterMapSetIndex = proxyRegisterSource.indexOf(
+    "releasedResponseStreamsByNetworkId.set(",
+  );
+  const proxyRegisterCountIndex = proxyRegisterSource.indexOf(
+    "stats.releasedResponseStreamRegisterCount += 1",
+  );
+  const proxyRegisterAuthorityDrainIndex = proxyRegisterSource.indexOf(
+    "settleReleasedResponseStreamsForAuthorityTransportDrain(",
+  );
+  assert.ok(
+    proxyRegisterMapSetIndex >= 0 &&
+      proxyRegisterCountIndex > proxyRegisterMapSetIndex &&
+      proxyRegisterAuthorityDrainIndex > proxyRegisterCountIndex,
+    "Registration must account the stream before closing the transport-close-before-register race.",
+  );
+  const proxySettleStart = proxyRegisterEnd;
+  const proxySettleEnd = sourceText.indexOf(
+    "prepareExactRequestAuthorityTunnelReset({",
+    proxySettleStart,
+  );
+  assert.ok(proxySettleEnd > proxySettleStart);
+  const proxySettleSource = sourceText.slice(proxySettleStart, proxySettleEnd);
+  assert.match(
+    proxySettleSource,
+    /assert\.equal\(releasedResponseStreamsByNetworkId\.delete\(networkId\), true\);\s*if \(terminalClass === "loading-finished"\) \{\s*stats\.releasedResponseStreamLoadingFinishedSettlementCount \+= 1;\s*\} else \{\s*stats\.releasedResponseStreamLoadingFailedSettlementCount \+= 1;\s*\}/u,
+    "CDP terminal counters must increment only after the exact stream deletion.",
+  );
+  assert.match(
+    sourceText,
+    /const releasedResponseStreamResidualCount\s*=\s*releasedResponseStreamsByNetworkId\.size;\s*assert\.equal\(\s*stats\.releasedResponseStreamRegisterCount,\s*stats\.releasedResponseStreamLoadingFinishedSettlementCount \+\s*stats\.releasedResponseStreamLoadingFailedSettlementCount \+\s*stats\.releasedResponseStreamAuthorityTransportDrainSettlementCount \+\s*releasedResponseStreamResidualCount \+\s*stats\.releasedResponseStreamResidualAtCloseCount,[\s\S]*schemaVersion: 5,/u,
+    "The proxy snapshot must enforce exact released-stream accounting before emitting schema 5.",
+  );
+  const proxyCloseStart = sourceText.indexOf("    async close() {");
+  const proxyCloseEnd = sourceText.indexOf(
+    "    setAuditStage(stage) {",
+    proxyCloseStart,
+  );
+  assert.ok(proxyCloseStart >= 0 && proxyCloseEnd > proxyCloseStart);
+  const proxyCloseSource = sourceText.slice(proxyCloseStart, proxyCloseEnd);
+  const residualAtCloseIndex = proxyCloseSource.indexOf(
+    "stats.releasedResponseStreamResidualAtCloseCount =",
+  );
+  const releasedStreamClearIndex = proxyCloseSource.indexOf(
+    "releasedResponseStreamsByNetworkId.clear()",
+  );
+  const proxyCloseSocketDestroyIndex =
+    proxyCloseSource.indexOf("socket.destroy()");
+  assert.ok(
+    residualAtCloseIndex >= 0 &&
+      releasedStreamClearIndex > residualAtCloseIndex &&
+      proxyCloseSocketDestroyIndex > releasedStreamClearIndex,
+    "Proxy close must preserve residual-at-close evidence before clear and socket destruction.",
+  );
+  const contextDrainFieldsStart = sourceText.indexOf(
+    "const BROWSER_CONNECT_PROXY_CONTEXT_DRAIN_RESIDUAL_FIELDS = Object.freeze([",
+  );
+  const contextDrainWaitStart = sourceText.indexOf(
+    "const waitForBrowserConnectProxyContextDrain = async ({",
+    contextDrainFieldsStart,
+  );
+  const contextDrainFixtureStart = sourceText.indexOf(
+    "const verifyBrowserConnectProxyContextDrainFixtures = async () =>",
+    contextDrainWaitStart,
+  );
+  assert.ok(
+    contextDrainFieldsStart >= 0 &&
+      contextDrainWaitStart > contextDrainFieldsStart &&
+      contextDrainFixtureStart > contextDrainWaitStart,
+  );
+  const contextDrainFieldsSource = sourceText.slice(
+    contextDrainFieldsStart,
+    contextDrainWaitStart,
+  );
+  const expectedContextDrainResidualFields = [
+    "requestStageAuthorizationResidualCount",
+    "authorityLeaseResidualCount",
+    "authorityLeaseQueueResidualCount",
+    "activeAllowedTunnelResidualCount",
+    "activeAllowedTunnelRequestBindingResidualCount",
+    "preparedExactTunnelResetResidualCount",
+    "releasedResponseStreamResidualCount",
+  ];
+  const contextDrainFieldListEnd = sourceText.indexOf(
+    "]);",
+    contextDrainFieldsStart,
+  );
+  assert.ok(
+    contextDrainFieldListEnd > contextDrainFieldsStart &&
+      contextDrainFieldListEnd < contextDrainWaitStart,
+  );
+  const contextDrainFieldListSource = sourceText.slice(
+    contextDrainFieldsStart,
+    contextDrainFieldListEnd,
+  );
+  assert.deepEqual(
+    [...contextDrainFieldListSource.matchAll(/^\s*"([^"]+)",$/gmu)].map(
+      ([, field]) => field,
+    ),
+    expectedContextDrainResidualFields,
+    "The context-drain timeout vector must retain exactly seven count-only keys in fixed order.",
+  );
+  for (const field of expectedContextDrainResidualFields) {
+    assert.equal(
+      (contextDrainFieldsSource.match(new RegExp(`"${field}"`, "gu")) || [])
+        .length,
+      1,
+      `The context-drain count-only vector must contain ${field} exactly once.`,
+    );
+  }
+  const contextDrainWaitSource = sourceText.slice(
+    contextDrainWaitStart,
+    contextDrainFixtureStart,
+  );
+  const contextDrainSnapshotIndex = contextDrainWaitSource.indexOf(
+    "const snapshot = proxy.snapshot();",
+  );
+  const contextDrainResidualIndex = contextDrainWaitSource.indexOf(
+    "browserConnectProxyContextDrainResidualCounts(snapshot)",
+  );
+  const contextDrainDrainedIndex = contextDrainWaitSource.indexOf(
+    "const drained = Object.values(residualCounts).every",
+  );
+  const contextDrainReturnIndex = contextDrainWaitSource.indexOf(
+    "if (drained) return snapshot;",
+  );
+  const contextDrainDeadlineReadIndex = contextDrainWaitSource.indexOf(
+    "const observedAt = nowMilliseconds();",
+  );
+  assert.ok(
+    contextDrainSnapshotIndex >= 0 &&
+      contextDrainResidualIndex > contextDrainSnapshotIndex &&
+      contextDrainDrainedIndex > contextDrainResidualIndex &&
+      contextDrainReturnIndex > contextDrainDrainedIndex &&
+      contextDrainDeadlineReadIndex > contextDrainReturnIndex,
+    "A zero context-drain snapshot must return before the post-snapshot deadline read.",
+  );
+  assert.match(
+    contextDrainWaitSource,
+    /Residual counts: \$\{JSON\.stringify\(residualCounts\)\}/u,
+    "A real context-drain timeout must expose only the fixed count vector.",
+  );
+  const contextDrainFixtureEnd = sourceText.indexOf(
+    "const sendLoopbackProxyFixtureRequest =",
+    contextDrainFixtureStart,
+  );
+  assert.ok(contextDrainFixtureEnd > contextDrainFixtureStart);
+  const contextDrainFixtureSource = sourceText.slice(
+    contextDrainFixtureStart,
+    contextDrainFixtureEnd,
+  );
+  assert.match(contextDrainFixtureSource, /zero-after-deadline/u);
+  assert.match(
+    contextDrainFixtureSource,
+    /releasedResponseStreamResidualCount: 1/u,
+  );
+  assert.match(contextDrainFixtureSource, /await assert\.rejects\(/u);
   const proxyResetStart = sourceText.indexOf(
     "prepareExactRequestAuthorityTunnelReset({",
   );
@@ -13390,6 +13628,10 @@ assertExactObjectKeys(browserConnectProxyAttestation, [
   "targetedTunnelRetiredClientSocketCount",
   "targetedTunnelRetiredUpstreamSocketCount",
   "targetedTunnelAuthorityDrainSuccessCount",
+  "releasedResponseStreamRegisterCount",
+  "releasedResponseStreamLoadingFinishedSettlementCount",
+  "releasedResponseStreamLoadingFailedSettlementCount",
+  "releasedResponseStreamAuthorityTransportDrainSettlementCount",
   "releasedResponseStreamResidualAtCloseCount",
   "uncorrelatedAllowedConnectDenyCount",
   "upstreamSocketCreateCount",
@@ -13426,7 +13668,7 @@ assertExactObjectKeys(browserConnectProxyAttestation, [
   "activeUpstreamSocketCount",
   "fatalErrorCount",
 ]);
-assert.equal(browserConnectProxyAttestation.schemaVersion, 4);
+assert.equal(browserConnectProxyAttestation.schemaVersion, 5);
 assert.deepEqual(
   browserConnectProxyAttestation.allowedHostnames,
   BROWSER_CONNECT_PROXY_ALLOWED_FIREBASE_HOSTNAMES,
@@ -13524,6 +13766,29 @@ assert.equal(
     browserConnectProxyAttestation.authorityLeaseUnusedCompletionCount +
     browserConnectProxyAttestation.authorityLeaseRevocationCount +
     browserConnectProxyAttestation.authorityLeaseExpiredBeforeConnectCount,
+);
+for (const field of [
+  "releasedResponseStreamRegisterCount",
+  "releasedResponseStreamLoadingFinishedSettlementCount",
+  "releasedResponseStreamLoadingFailedSettlementCount",
+  "releasedResponseStreamAuthorityTransportDrainSettlementCount",
+  "releasedResponseStreamResidualCount",
+  "releasedResponseStreamResidualAtCloseCount",
+]) {
+  assert.equal(
+    Number.isSafeInteger(browserConnectProxyAttestation[field]),
+    true,
+  );
+  assert.ok(browserConnectProxyAttestation[field] >= 0);
+}
+assert.equal(
+  browserConnectProxyAttestation.releasedResponseStreamRegisterCount,
+  browserConnectProxyAttestation.releasedResponseStreamLoadingFinishedSettlementCount +
+    browserConnectProxyAttestation.releasedResponseStreamLoadingFailedSettlementCount +
+    browserConnectProxyAttestation.releasedResponseStreamAuthorityTransportDrainSettlementCount +
+    browserConnectProxyAttestation.releasedResponseStreamResidualCount +
+    browserConnectProxyAttestation.releasedResponseStreamResidualAtCloseCount,
+  "Released response streams were not exactly reconciled to one terminal source or a final residual.",
 );
 for (const field of [
   "targetedTunnelRetirementAttemptCount",
