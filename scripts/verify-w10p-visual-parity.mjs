@@ -2512,6 +2512,49 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     /const isPostFinalAlreadyRetiredInterceptionError\s*=\s*\(error\)\s*=>\s*error instanceof Error\s*&&\s*\["Error",\s*"ProtocolError"\]\.includes\(error\.name\)\s*&&\s*POST_FINAL_ALREADY_RETIRED_INTERCEPTION_ERROR_MESSAGES\.has\(error\.message\);/u,
     "The already-retired interception matcher must require Error identity, an exact name, and exact Set membership.",
   );
+  assert.match(
+    sourceText,
+    /const CONTINUE_RESPONSE_INVALID_INTERCEPTION_ERROR_MESSAGES\s*=\s*POST_FINAL_ALREADY_RETIRED_INTERCEPTION_ERROR_MESSAGES;/u,
+    "The unrecovered continue-response classifier must use the same exact allowlisted messages as the recovered post-final matcher.",
+  );
+  const protocolClassifierStart = sourceText.indexOf(
+    "const safeCdpHandlerProtocolErrorClass = (error) =>",
+  );
+  const protocolClassifierEnd = sourceText.indexOf(
+    "const createPerCorrelationTaskCoordinator = () =>",
+    protocolClassifierStart,
+  );
+  assert.ok(
+    protocolClassifierStart >= 0 &&
+      protocolClassifierEnd > protocolClassifierStart,
+  );
+  const protocolClassifierSource = sourceText.slice(
+    protocolClassifierStart,
+    protocolClassifierEnd,
+  );
+  assert.match(
+    protocolClassifierSource,
+    /CONTINUE_REQUEST_INVALID_INTERCEPTION_ERROR_MESSAGES\.has\(error\.message\)[\s\S]*return "continue-request-invalid-interception"/u,
+  );
+  assert.match(
+    protocolClassifierSource,
+    /CONTINUE_RESPONSE_INVALID_INTERCEPTION_ERROR_MESSAGES\.has\(error\.message\)[\s\S]*return "continue-response-invalid-interception"/u,
+  );
+  assert.match(
+    protocolClassifierSource,
+    /const continueResponseInvalidInterceptionLifecycleClass[\s\S]*return operation === "response-continue-final"\s*&&\s*lifecycleState === "final-response-command-in-flight"\s*\? "primary-final"\s*:\s*"other";/u,
+    "Primary-final and other continue-response failures must share one exact operation-and-lifecycle predicate.",
+  );
+  assert.match(
+    sourceText,
+    /const lifecycleClass\s*=\s*continueResponseInvalidInterceptionLifecycleClass\(\{\s*protocolErrorClass,\s*operation: diagnosticContext\.operation,\s*lifecycleState: diagnosticContext\.lifecycleStateAtFailure,?\s*\}\)[\s\S]*lifecycleClass === "primary-final"\s*\? "continue-response-invalid-interception-primary-final"\s*:\s*"continue-response-invalid-interception-other"/u,
+    "The safe handler histogram must use the shared continue-response lifecycle predicate.",
+  );
+  assert.match(
+    sourceText,
+    /const continueResponseInvalidInterceptionClass\s*=\s*continueResponseInvalidInterceptionLifecycleClass\(\{\s*protocolErrorClass,\s*operation: diagnosticContext\.operation,\s*lifecycleState: lifecycleStateAtFailure,?\s*\}\)[\s\S]*cdpPrimaryFinalContinueResponseInvalidInterceptionErrorCount \+=\s*Number\(primaryFinalContinueResponseInvalidInterception\)[\s\S]*cdpOtherContinueResponseInvalidInterceptionErrorCount \+= Number\(\s*continueResponseInvalidInterceptionClass === "other",?\s*\)/u,
+    "The unrecovered counters must use the same continue-response lifecycle predicate as the histogram.",
+  );
   const informationalBranchStart = sourceText.lastIndexOf(
     'if (responseStageDecision.kind === "informational")',
   );
@@ -2579,6 +2622,30 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     publicResponseBranch,
     /setAllowedEgressLifecycleState\(\s*primaryRequestId,\s*"post-final-error-observed-retired",?\s*\)/u,
     "An already-retired post-final observation must enter its fixed retired state.",
+  );
+  const primaryFinalContinueStart = publicResponseBranch.lastIndexOf(
+    'diagnosticContext.operation = "response-continue-final"',
+  );
+  const primaryFinalContinueEnd = publicResponseBranch.indexOf(
+    '"final-response-released"',
+    primaryFinalContinueStart,
+  );
+  assert.ok(
+    primaryFinalContinueStart >= 0 &&
+      primaryFinalContinueEnd > primaryFinalContinueStart,
+  );
+  const primaryFinalContinueSource = publicResponseBranch.slice(
+    primaryFinalContinueStart,
+    primaryFinalContinueEnd,
+  );
+  assert.match(
+    primaryFinalContinueSource,
+    /await appCheckCdpSession\.send\("Fetch\.continueResponse"/u,
+  );
+  assert.doesNotMatch(
+    primaryFinalContinueSource,
+    /catch\s*\(/u,
+    "A primary-final Fetch.continueResponse failure must propagate to the unrecovered handler path.",
   );
   assert.match(
     publicResponseBranch,
@@ -2765,6 +2832,13 @@ const assertCaptureProtectedReadTransportResetSourceContract = (sourceText) => {
     "protectedReadConfigAttemptCount",
     "protectedReadProfileAttemptCount",
     "protectedReadSharedRetryTarget",
+    "protectedReadWholeBrowserProcessRestartRequired",
+    "W10P_PROTECTED_READ_WHOLE_BROWSER_PROCESS_RESTART_REQUIRED",
+    "authentication-protected-read-issued-active-tunnel-whole-browser-process-restart-required",
+    "releasedResponseStreamCensusForAuthority",
+    "registerReleasedResponseStream",
+    "settleReleasedResponseStream",
+    "releasedResponseStreamResidualAtCloseCount",
   ]) {
     assert.ok(
       sourceText.includes(needle),
@@ -2780,8 +2854,100 @@ const assertCaptureProtectedReadTransportResetSourceContract = (sourceText) => {
   );
   assert.ok(resetBranchStart >= 0 && resetBranchEnd > resetBranchStart);
   const resetBranchSource = sourceText.slice(resetBranchStart, resetBranchEnd);
+  const issuedRestartStart = resetBranchSource.indexOf(
+    'if (responseRecord.proxyLeaseClass === "issued-active-tunnel")',
+  );
+  const consumedResetStart = resetBranchSource.indexOf(
+    "} else {",
+    issuedRestartStart,
+  );
+  const resetBarrierStart = resetBranchSource.indexOf(
+    "if (protectedReadTransportResetPreparation !== null)",
+    consumedResetStart,
+  );
+  assert.ok(
+    issuedRestartStart >= 0 &&
+      consumedResetStart > issuedRestartStart &&
+      resetBarrierStart > consumedResetStart,
+  );
+  const issuedRestartSource = resetBranchSource.slice(
+    issuedRestartStart,
+    consumedResetStart,
+  );
+  assert.match(
+    issuedRestartSource,
+    /authenticationProtectedReadWholeBrowserProcessRestartRequired\s*=\s*true/u,
+  );
+  assert.doesNotMatch(
+    issuedRestartSource,
+    /prepareExactRequestAuthorityTunnelReset|retirePreparedExactRequestAuthorityTunnel|\.destroy\(/u,
+    "An issued-active protected read must require a fresh browser process without direct tunnel retirement.",
+  );
+  assert.match(
+    sourceText,
+    /const SAFE_AUTHENTICATION_PROTECTED_READ_WHOLE_BROWSER_PROCESS_RESTART_ERROR\s*=\s*"W10P_PROTECTED_READ_WHOLE_BROWSER_PROCESS_RESTART_REQUIRED";/u,
+  );
+  const retryRestartGuardStart = sourceText.indexOf(
+    "if (authenticationProtectedReadWholeBrowserProcessRestartRequired)",
+  );
+  const retryResetBarrierStart = sourceText.indexOf(
+    "const resetBarrier = authenticationProtectedReadTransportResetBarrier;",
+    retryRestartGuardStart,
+  );
+  assert.ok(
+    retryRestartGuardStart >= 0 &&
+      retryResetBarrierStart > retryRestartGuardStart,
+  );
+  const retryRestartGuardSource = sourceText.slice(
+    retryRestartGuardStart,
+    retryResetBarrierStart,
+  );
+  assert.match(
+    retryRestartGuardSource,
+    /diagnosticContext\.reason\s*=\s*"protected-read-whole-browser-process-restart-required"[\s\S]*throw new Error\(\s*SAFE_AUTHENTICATION_PROTECTED_READ_WHOLE_BROWSER_PROCESS_RESTART_ERROR,?\s*\)/u,
+    "Attempt two must fail under the same fixed whole-browser-process restart marker before any reset barrier is read.",
+  );
+  assert.match(
+    sourceText,
+    /collectAuthenticationProtectedReadAttemptDiagnostic:\s*\(\)\s*=>\s*\(\{[\s\S]*wholeBrowserProcessRestartRequired:\s*authenticationProtectedReadWholeBrowserProcessRestartRequired[\s\S]*\}\)/u,
+    "The bounded authentication collector must expose only the fixed restart-required boolean.",
+  );
+  assert.match(
+    sourceText,
+    /if \(protectedReadAttemptDiagnostic\.wholeBrowserProcessRestartRequired\) \{\s*failureClass\s*=\s*SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES\.wholeBrowserProcessRestartRequired;\s*\}/u,
+    "Authentication failure serialization must override to the fixed restart-required class.",
+  );
+  const safeFailureDiagnosticStart = sourceText.indexOf(
+    "const createSafeAuthenticationFailureDiagnostic = ({",
+  );
+  const safeFailureDiagnosticEnd = sourceText.indexOf(
+    "const serializeSafeAuthenticationFailure = (",
+    safeFailureDiagnosticStart,
+  );
+  assert.ok(
+    safeFailureDiagnosticStart >= 0 &&
+      safeFailureDiagnosticEnd > safeFailureDiagnosticStart,
+  );
+  const safeFailureDiagnosticSource = sourceText.slice(
+    safeFailureDiagnosticStart,
+    safeFailureDiagnosticEnd,
+  );
+  assert.match(
+    safeFailureDiagnosticSource,
+    /wholeBrowserProcessRestartRequired[\s\S]*protectedReadWholeBrowserProcessRestartRequired !==\s*\(failureClass ===\s*SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES\.wholeBrowserProcessRestartRequired\)[\s\S]*schemaVersion:\s*3[\s\S]*protectedReadWholeBrowserProcessRestartRequired/u,
+    "The schema-3 safe failure diagnostic must bind its restart boolean iff the fixed failure class is selected.",
+  );
+  const consumedResetSource = resetBranchSource.slice(
+    consumedResetStart,
+    resetBarrierStart,
+  );
+  assert.match(
+    consumedResetSource,
+    /responseRecord\.proxyLeaseClass,\s*"consumed-active-tunnel"/u,
+  );
   const prepareIndex = resetBranchSource.indexOf(
     "prepareExactRequestAuthorityTunnelReset",
+    consumedResetStart,
   );
   const completeIndex = resetBranchSource.indexOf(
     "completeProxyAuthorization();",
@@ -2800,7 +2966,7 @@ const assertCaptureProtectedReadTransportResetSourceContract = (sourceText) => {
       completeIndex > prepareIndex &&
       failIndex > completeIndex &&
       retireIndex > failIndex,
-    "The failed issued lease must complete before local failure and exact tunnel retirement.",
+    "A consumed-active failed lease must complete before local failure and exact tunnel retirement.",
   );
   const retryBarrierIndex = sourceText.indexOf(
     "const resetAttestation = await resetBarrier.promise;",
@@ -2821,11 +2987,97 @@ const assertCaptureProtectedReadTransportResetSourceContract = (sourceText) => {
   );
   assert.match(
     sourceText,
-    /lease\.state === "issued"[\s\S]*lease\.consumedTunnelSequence, null[\s\S]*activeTunnelSequencesAtAuthorization/u,
+    /assert\.equal\(lease\.state, "consumed"\)[\s\S]*assert\.equal\(lease\.consumedTunnelSequence, tunnel\.tunnelSequence\)/u,
+  );
+  const primaryFinalOperationIndex = sourceText.lastIndexOf(
+    'diagnosticContext.operation = "response-continue-final";',
+  );
+  const primaryFinalLifecycleIndex = sourceText.lastIndexOf(
+    '"final-response-command-in-flight"',
+    primaryFinalOperationIndex,
+  );
+  const primaryFinalLifecycleCallIndex = sourceText.lastIndexOf(
+    "setAllowedEgressLifecycleState(",
+    primaryFinalLifecycleIndex,
+  );
+  const primaryFinalReleaseIndex = sourceText.indexOf(
+    '"final-response-released"',
+    primaryFinalOperationIndex,
+  );
+  assert.ok(
+    primaryFinalLifecycleCallIndex >= 0 &&
+      primaryFinalLifecycleIndex > primaryFinalLifecycleCallIndex &&
+      primaryFinalOperationIndex > primaryFinalLifecycleIndex &&
+      primaryFinalReleaseIndex > primaryFinalOperationIndex,
+  );
+  const primaryFinalHandlerSource = sourceText.slice(
+    primaryFinalLifecycleCallIndex,
+    primaryFinalReleaseIndex,
+  );
+  assert.equal(
+    (
+      primaryFinalHandlerSource.match(
+        /browserConnectProxy\.registerReleasedResponseStream\(\{/gu,
+      ) || []
+    ).length,
+    1,
+  );
+  assert.match(
+    primaryFinalHandlerSource,
+    /browserConnectProxy\.registerReleasedResponseStream\(\{\s*requestId: primaryRequestId,\s*networkId: lifecycle\.networkId,\s*stage,?\s*\}\);/u,
+    "The primary-final handler must register its exact lifecycle network identity, not merely expose the proxy method definition.",
+  );
+  const primaryFinalRegisterIndex = primaryFinalHandlerSource.indexOf(
+    "browserConnectProxy.registerReleasedResponseStream({",
+  );
+  const primaryFinalContinueIndex = primaryFinalHandlerSource.indexOf(
+    'appCheckCdpSession.send("Fetch.continueResponse"',
+  );
+  assert.ok(
+    primaryFinalRegisterIndex >
+      primaryFinalHandlerSource.indexOf('"final-response-command-in-flight"') &&
+      primaryFinalContinueIndex > primaryFinalRegisterIndex,
+    "The released stream registration must occur after the primary-final lifecycle transition and before Fetch.continueResponse.",
   );
   assert.match(
     sourceText,
-    /lease\.state, "consumed"[\s\S]*lease\.consumedTunnelSequence, tunnel\.tunnelSequence/u,
+    /Network\.loadingFinished[\s\S]*settleReleasedResponseStream[\s\S]*terminalClass: "loading-finished"/u,
+  );
+  assert.match(
+    sourceText,
+    /Network\.loadingFailed[\s\S]*settleReleasedResponseStream[\s\S]*terminalClass: "loading-failed"/u,
+  );
+  const proxyResetStart = sourceText.indexOf(
+    "prepareExactRequestAuthorityTunnelReset({",
+  );
+  const proxyResetEnd = sourceText.indexOf(
+    "attestFreshConnectForRequest({",
+    proxyResetStart,
+  );
+  assert.ok(proxyResetStart >= 0 && proxyResetEnd > proxyResetStart);
+  const proxyResetSource = sourceText.slice(proxyResetStart, proxyResetEnd);
+  assert.equal(
+    (proxyResetSource.match(/releasedResponseStreamCensusForAuthority/gu) || [])
+      .length,
+    2,
+  );
+  assert.match(
+    proxyResetSource,
+    /const releasedResponseStreamCensusAtPreparation\s*=\s*releasedResponseStreamCensusForAuthority\(\s*authorization\.authority,?\s*\);/u,
+    "Reset preparation must census the failed authorization's exact authority.",
+  );
+  assert.match(
+    proxyResetSource,
+    /const releasedResponseStreamCensusBeforeRetirement\s*=\s*releasedResponseStreamCensusForAuthority\(\s*authority,?\s*\);[\s\S]*tunnel\.clientSocket\.destroy\(\)/u,
+    "The pre-destroy census must use the prepared reset authority.",
+  );
+  assert.match(
+    proxyResetSource,
+    /releasedResponseStreamCensusAtPreparation[\s\S]*nonterminalCount: 0[\s\S]*unknownOrUnboundCount: 0/u,
+  );
+  assert.match(
+    proxyResetSource,
+    /releasedResponseStreamCensusBeforeRetirement[\s\S]*nonterminalCount: 0[\s\S]*unknownOrUnboundCount: 0[\s\S]*tunnel\.clientSocket\.destroy\(\)/u,
   );
   return true;
 };
@@ -2835,12 +3087,12 @@ const assertProtectedReadTransportResetLeaseSequenceInvariant = ({
   creatorLeaseIssueSequence,
   leaseConsumeSequence,
   retirementCompleteSequence,
+  releasedResponseStreamNonterminalCountAtPreparation,
+  releasedResponseStreamNonterminalCountBeforeRetirement,
+  releasedResponseStreamUnknownOrUnboundCountAtPreparation,
+  releasedResponseStreamUnknownOrUnboundCountBeforeRetirement,
 }) => {
-  assert.ok(
-    ["issued-active-tunnel", "consumed-active-tunnel"].includes(
-      failedLeaseClass,
-    ),
-  );
+  assert.equal(failedLeaseClass, "consumed-active-tunnel");
   for (const value of [
     failedLeaseIssueSequence,
     creatorLeaseIssueSequence,
@@ -2850,30 +3102,30 @@ const assertProtectedReadTransportResetLeaseSequenceInvariant = ({
     assert.equal(Number.isSafeInteger(value), true);
     assert.ok(value > 0);
   }
-  if (failedLeaseClass === "issued-active-tunnel") {
-    assert.ok(creatorLeaseIssueSequence < leaseConsumeSequence);
-    assert.ok(leaseConsumeSequence < failedLeaseIssueSequence);
-  } else {
-    assert.equal(failedLeaseIssueSequence, creatorLeaseIssueSequence);
-    assert.ok(failedLeaseIssueSequence < leaseConsumeSequence);
-  }
+  assert.equal(failedLeaseIssueSequence, creatorLeaseIssueSequence);
+  assert.ok(failedLeaseIssueSequence < leaseConsumeSequence);
   assert.ok(leaseConsumeSequence < retirementCompleteSequence);
+  for (const value of [
+    releasedResponseStreamNonterminalCountAtPreparation,
+    releasedResponseStreamNonterminalCountBeforeRetirement,
+    releasedResponseStreamUnknownOrUnboundCountAtPreparation,
+    releasedResponseStreamUnknownOrUnboundCountBeforeRetirement,
+  ]) {
+    assert.equal(value, 0);
+  }
 };
 const verifyProtectedReadTransportResetLeaseSequenceFixtures = () => {
   const validFixtures = [
-    {
-      failedLeaseClass: "issued-active-tunnel",
-      creatorLeaseIssueSequence: 1,
-      leaseConsumeSequence: 2,
-      failedLeaseIssueSequence: 3,
-      retirementCompleteSequence: 4,
-    },
     {
       failedLeaseClass: "consumed-active-tunnel",
       creatorLeaseIssueSequence: 1,
       failedLeaseIssueSequence: 1,
       leaseConsumeSequence: 2,
       retirementCompleteSequence: 3,
+      releasedResponseStreamNonterminalCountAtPreparation: 0,
+      releasedResponseStreamNonterminalCountBeforeRetirement: 0,
+      releasedResponseStreamUnknownOrUnboundCountAtPreparation: 0,
+      releasedResponseStreamUnknownOrUnboundCountBeforeRetirement: 0,
     },
   ];
   for (const fixture of validFixtures) {
@@ -2884,11 +3136,15 @@ const verifyProtectedReadTransportResetLeaseSequenceFixtures = () => {
   const invalidFixtures = [
     {
       ...validFixtures[0],
+      failedLeaseClass: "issued-active-tunnel",
+    },
+    {
+      ...validFixtures[0],
       failedLeaseIssueSequence: validFixtures[0].leaseConsumeSequence,
     },
     {
-      ...validFixtures[1],
-      failedLeaseIssueSequence: validFixtures[1].leaseConsumeSequence,
+      ...validFixtures[0],
+      releasedResponseStreamNonterminalCountAtPreparation: 1,
     },
   ];
   for (const fixture of invalidFixtures) {
@@ -6889,6 +7145,10 @@ const assertProtectedReadTransportResetEvidence = (attestation) => {
     "noSameAuthorityAuthorizationBeforeRetirement",
     "otherAuthorityTunnelRetirementCount",
     "policyId",
+    "releasedResponseStreamNonterminalCountAtPreparation",
+    "releasedResponseStreamNonterminalCountBeforeRetirement",
+    "releasedResponseStreamUnknownOrUnboundCountAtPreparation",
+    "releasedResponseStreamUnknownOrUnboundCountBeforeRetirement",
     "requestBound",
     "retiredClientSocketCount",
     "retiredTunnelSequence",
@@ -6900,7 +7160,7 @@ const assertProtectedReadTransportResetEvidence = (attestation) => {
     "stage",
     "target",
   ]);
-  assert.equal(reset.schemaVersion, 1);
+  assert.equal(reset.schemaVersion, 2);
   assert.equal(reset.policyId, attestation.transportResetPolicyId);
   assert.equal(reset.hostname, "firestore.googleapis.com");
   assert.equal(reset.stage, attestation.stage);
@@ -6908,11 +7168,7 @@ const assertProtectedReadTransportResetEvidence = (attestation) => {
   assert.equal(reset.failedAttemptNumber, 1);
   assert.equal(reset.retryAttemptNumber, 2);
   assert.equal(reset.requestBound, true);
-  assert.ok(
-    ["issued-active-tunnel", "consumed-active-tunnel"].includes(
-      reset.failedLeaseClass,
-    ),
-  );
+  assert.equal(reset.failedLeaseClass, "consumed-active-tunnel");
   assert.equal(reset.currentTunnelClassBefore, "current-active-tunnel");
   assert.equal(reset.singletonAuthorityTunnelBound, true);
   assert.equal(reset.failedAuthorizationCompletedBeforeRetirement, true);
@@ -6924,6 +7180,14 @@ const assertProtectedReadTransportResetEvidence = (attestation) => {
   assert.equal(reset.retiredUpstreamSocketCount, 1);
   assert.equal(reset.activeAuthorityTunnelCountAfter, 0);
   assert.equal(reset.authorityDrained, true);
+  for (const field of [
+    "releasedResponseStreamNonterminalCountAtPreparation",
+    "releasedResponseStreamNonterminalCountBeforeRetirement",
+    "releasedResponseStreamUnknownOrUnboundCountAtPreparation",
+    "releasedResponseStreamUnknownOrUnboundCountBeforeRetirement",
+  ]) {
+    assert.equal(reset[field], 0);
+  }
   for (const field of [
     "failedLeaseIssueSequence",
     "creatorLeaseIssueSequence",
@@ -12491,6 +12755,11 @@ assertExactObjectKeys(appCheckBinding, [
   "allowedEgressPostFinalResponseErrorPauseCount",
   "allowedEgressPostFinalContinueResponseSuccessCount",
   "allowedEgressPostFinalAlreadyRetiredInterceptionCount",
+  "cdpContinueRequestInvalidInterceptionErrorCount",
+  "cdpContinueResponseInvalidInterceptionErrorCount",
+  "cdpPrimaryFinalContinueResponseInvalidInterceptionErrorCount",
+  "cdpOtherContinueResponseInvalidInterceptionErrorCount",
+  "cdpOtherProtocolErrorCount",
   "pageRawDebugTokenInjectionCount",
   "pageAppCheckSecretInitRegistrationCount",
   "pendingBridgeDecisionResidualCount",
@@ -13121,6 +13390,7 @@ assertExactObjectKeys(browserConnectProxyAttestation, [
   "targetedTunnelRetiredClientSocketCount",
   "targetedTunnelRetiredUpstreamSocketCount",
   "targetedTunnelAuthorityDrainSuccessCount",
+  "releasedResponseStreamResidualAtCloseCount",
   "uncorrelatedAllowedConnectDenyCount",
   "upstreamSocketCreateCount",
   "httpAbsoluteFormDenyCount",
@@ -13151,11 +13421,12 @@ assertExactObjectKeys(browserConnectProxyAttestation, [
   "activeAllowedTunnelResidualCount",
   "activeAllowedTunnelRequestBindingResidualCount",
   "preparedExactTunnelResetResidualCount",
+  "releasedResponseStreamResidualCount",
   "activeClientSocketCount",
   "activeUpstreamSocketCount",
   "fatalErrorCount",
 ]);
-assert.equal(browserConnectProxyAttestation.schemaVersion, 3);
+assert.equal(browserConnectProxyAttestation.schemaVersion, 4);
 assert.deepEqual(
   browserConnectProxyAttestation.allowedHostnames,
   BROWSER_CONNECT_PROXY_ALLOWED_FIREBASE_HOSTNAMES,
@@ -13307,6 +13578,8 @@ for (const field of [
   "activeAllowedTunnelResidualCount",
   "activeAllowedTunnelRequestBindingResidualCount",
   "preparedExactTunnelResetResidualCount",
+  "releasedResponseStreamResidualCount",
+  "releasedResponseStreamResidualAtCloseCount",
   "activeClientSocketCount",
   "activeUpstreamSocketCount",
   "fatalErrorCount",
@@ -13543,6 +13816,19 @@ assert.equal(
   0,
 );
 assert.equal(
+  browserWideBoundaryAttestation.browserConnectProxyCleanupResidualCount,
+  browserConnectProxyAttestation.activeClientSocketCount +
+    browserConnectProxyAttestation.activeUpstreamSocketCount +
+    browserConnectProxyAttestation.activeAllowedTunnelResidualCount +
+    browserConnectProxyAttestation.activeAllowedTunnelRequestBindingResidualCount +
+    browserConnectProxyAttestation.preparedExactTunnelResetResidualCount +
+    browserConnectProxyAttestation.releasedResponseStreamResidualCount +
+    browserConnectProxyAttestation.releasedResponseStreamResidualAtCloseCount +
+    browserConnectProxyAttestation.requestStageAuthorizationResidualCount +
+    browserConnectProxyAttestation.authorityLeaseResidualCount +
+    browserConnectProxyAttestation.authorityLeaseQueueResidualCount,
+);
+assert.equal(
   appCheckBinding.browserConnectProxyHash,
   browserWideBoundaryAttestation.browserConnectProxyHash,
 );
@@ -13555,6 +13841,10 @@ assert.equal(
   browserConnectProxyAttestation.deniedConnectCount,
 );
 assert.equal(appCheckBinding.browserConnectProxyCleanupResidualCount, 0);
+assert.equal(
+  appCheckBinding.browserConnectProxyCleanupResidualCount,
+  browserWideBoundaryAttestation.browserConnectProxyCleanupResidualCount,
+);
 assert.equal(
   appCheckBinding.preTransmissionBoundaryAttestationHash,
   preTransmissionNetworkBoundaryAttestationHash,
@@ -13646,6 +13936,26 @@ for (const field of [
   assert.ok(Number.isSafeInteger(appCheckBinding[field]));
   assert.ok(appCheckBinding[field] >= 0);
 }
+for (const field of [
+  "cdpContinueRequestInvalidInterceptionErrorCount",
+  "cdpContinueResponseInvalidInterceptionErrorCount",
+  "cdpPrimaryFinalContinueResponseInvalidInterceptionErrorCount",
+  "cdpOtherContinueResponseInvalidInterceptionErrorCount",
+  "cdpOtherProtocolErrorCount",
+]) {
+  assert.equal(appCheckBinding[field], 0);
+}
+assert.equal(
+  appCheckBinding.cdpContinueResponseInvalidInterceptionErrorCount,
+  appCheckBinding.cdpPrimaryFinalContinueResponseInvalidInterceptionErrorCount +
+    appCheckBinding.cdpOtherContinueResponseInvalidInterceptionErrorCount,
+);
+assert.ok(
+  appCheckBinding.cdpContinueRequestInvalidInterceptionErrorCount +
+    appCheckBinding.cdpContinueResponseInvalidInterceptionErrorCount +
+    appCheckBinding.cdpOtherProtocolErrorCount <=
+    appCheckBinding.appCheckCdpHandlerErrorCount,
+);
 assert.equal(
   appCheckBinding.baselineProtectedDataRequestCount,
   auditedBaselineProtectedDataRequests,

@@ -3146,6 +3146,8 @@ const isPostFinalAlreadyRetiredInterceptionError = (error) =>
   error instanceof Error &&
   ["Error", "ProtocolError"].includes(error.name) &&
   POST_FINAL_ALREADY_RETIRED_INTERCEPTION_ERROR_MESSAGES.has(error.message);
+const CONTINUE_RESPONSE_INVALID_INTERCEPTION_ERROR_MESSAGES =
+  POST_FINAL_ALREADY_RETIRED_INTERCEPTION_ERROR_MESSAGES;
 const CONTINUE_REQUEST_INVALID_INTERCEPTION_ERROR_MESSAGES = new Set([
   "Protocol error (Fetch.continueRequest): Invalid InterceptionId.",
   "cdpSession.send: Protocol error (Fetch.continueRequest): Invalid InterceptionId.",
@@ -3158,9 +3160,29 @@ const safeCdpHandlerProtocolErrorClass = (error) => {
   ) {
     return "continue-request-invalid-interception";
   }
+  if (
+    error instanceof Error &&
+    ["Error", "ProtocolError"].includes(error.name) &&
+    CONTINUE_RESPONSE_INVALID_INTERCEPTION_ERROR_MESSAGES.has(error.message)
+  ) {
+    return "continue-response-invalid-interception";
+  }
   return error instanceof Error && error.name === "ProtocolError"
     ? "other-protocol-error"
     : "non-protocol-error";
+};
+const continueResponseInvalidInterceptionLifecycleClass = ({
+  protocolErrorClass,
+  operation,
+  lifecycleState,
+}) => {
+  if (protocolErrorClass !== "continue-response-invalid-interception") {
+    return null;
+  }
+  return operation === "response-continue-final" &&
+    lifecycleState === "final-response-command-in-flight"
+    ? "primary-final"
+    : "other";
 };
 const createPerCorrelationTaskCoordinator = () => {
   const tailsByCorrelation = new Map();
@@ -4385,6 +4407,7 @@ const createBrowserConnectProxyGate = ({
   const activeAllowedTunnelCounts = new Map();
   const activeAllowedTunnelsByRequestId = new Map();
   const preparedExactTunnelResetsByRequestId = new Map();
+  const releasedResponseStreamsByNetworkId = new Map();
   const requestStageAuthorizationCounts = new Map();
   const authorityLeaseConsumeCounts = new Map();
   const targetedTunnelRetirementCounts = new Map();
@@ -4425,6 +4448,7 @@ const createBrowserConnectProxyGate = ({
     targetedTunnelRetiredClientSocketCount: 0,
     targetedTunnelRetiredUpstreamSocketCount: 0,
     targetedTunnelAuthorityDrainSuccessCount: 0,
+    releasedResponseStreamResidualAtCloseCount: 0,
     uncorrelatedAllowedConnectDenyCount: 0,
     upstreamSocketCreateCount: 0,
     httpAbsoluteFormDenyCount: 0,
@@ -4448,6 +4472,28 @@ const createBrowserConnectProxyGate = ({
     return [...preparedExactTunnelResetsByRequestId.values()].some(
       (preparation) => preparation.authority === authority,
     );
+  };
+  const releasedResponseStreamCensusForAuthority = (authority) => {
+    assert.equal(typeof authority, "string");
+    assert.ok(authority.length > 0);
+    let nonterminalCount = 0;
+    let unknownOrUnboundCount = 0;
+    for (const stream of releasedResponseStreamsByNetworkId.values()) {
+      if (
+        !stream ||
+        typeof stream !== "object" ||
+        typeof stream.authority !== "string" ||
+        stream.authority.length === 0 ||
+        typeof stream.networkId !== "string" ||
+        stream.networkId.length === 0 ||
+        stream.state !== "released-nonterminal"
+      ) {
+        unknownOrUnboundCount += 1;
+        continue;
+      }
+      if (stream.authority === authority) nonterminalCount += 1;
+    }
+    return Object.freeze({ nonterminalCount, unknownOrUnboundCount });
   };
   const removeLeaseFromQueue = (lease) => {
     const queue = authorityLeaseQueues.get(lease.authority) || [];
@@ -4742,6 +4788,14 @@ const createBrowserConnectProxyGate = ({
         stats.requestStageAuthorizationRevocationCount += 1;
       }
       authorityLeaseQueues.clear();
+      stats.releasedResponseStreamResidualAtCloseCount =
+        releasedResponseStreamsByNetworkId.size;
+      if (stats.releasedResponseStreamResidualAtCloseCount > 0) {
+        recordFatal(
+          "Browser proxy closed with nonterminal released response streams.",
+        );
+      }
+      releasedResponseStreamsByNetworkId.clear();
       const sockets = [...new Set([...clientSockets, ...upstreamSockets])];
       const socketClosePromises = sockets.map(
         (socket) =>
@@ -4932,6 +4986,47 @@ const createBrowserConnectProxyGate = ({
         return null;
       }
     },
+    registerReleasedResponseStream({ requestId, networkId, stage }) {
+      assert.equal(typeof requestId, "string");
+      assert.ok(requestId.length > 0);
+      assert.equal(typeof networkId, "string");
+      assert.ok(networkId.length > 0);
+      assert.equal(typeof stage, "string");
+      assert.equal(stage, auditStage);
+      assert.equal(releasedResponseStreamsByNetworkId.has(networkId), false);
+      const authorization =
+        requestStageAuthorizationsByRequestId.get(requestId) || null;
+      const lease = authorityLeasesByRequestId.get(requestId) || null;
+      assert.ok(authorization);
+      assert.ok(lease);
+      assert.equal(authorization.requestId, requestId);
+      assert.equal(lease.requestId, requestId);
+      assert.equal(authorization.stage, stage);
+      assert.equal(lease.stage, stage);
+      assert.equal(authorization.authority, lease.authority);
+      releasedResponseStreamsByNetworkId.set(
+        networkId,
+        Object.freeze({
+          networkId,
+          requestId,
+          stage,
+          hostname: authorization.hostname,
+          authority: authorization.authority,
+          state: "released-nonterminal",
+        }),
+      );
+    },
+    settleReleasedResponseStream({ networkId, terminalClass }) {
+      assert.equal(typeof networkId, "string");
+      assert.ok(networkId.length > 0);
+      assert.ok(["loading-finished", "loading-failed"].includes(terminalClass));
+      const stream = releasedResponseStreamsByNetworkId.get(networkId) || null;
+      if (stream === null) return false;
+      assert.equal(stream.networkId, networkId);
+      assert.equal(stream.state, "released-nonterminal");
+      releasedResponseStreamsByNetworkId.delete(networkId);
+      return true;
+    },
     prepareExactRequestAuthorityTunnelReset({
       requestId,
       expectedHostname,
@@ -4963,7 +5058,7 @@ const createBrowserConnectProxyGate = ({
         exactTunnelResetPendingForAuthority(authorization.authority),
         false,
       );
-      assert.ok(["issued", "consumed"].includes(lease.state));
+      assert.equal(lease.state, "consumed");
       assert.equal(authorization.activeTunnelPresentAtAuthorization, true);
       const failedLeaseClass =
         classifyBrowserConnectProxyAuthorityLeaseDiagnostic({
@@ -4972,11 +5067,13 @@ const createBrowserConnectProxyGate = ({
           nowMilliseconds: currentTimeMilliseconds(),
           activeTunnelPresent: authorization.activeTunnelPresentAtAuthorization,
         });
-      assert.ok(
-        ["issued-active-tunnel", "consumed-active-tunnel"].includes(
-          failedLeaseClass,
-        ),
-      );
+      assert.equal(failedLeaseClass, "consumed-active-tunnel");
+      const releasedResponseStreamCensusAtPreparation =
+        releasedResponseStreamCensusForAuthority(authorization.authority);
+      assert.deepEqual(releasedResponseStreamCensusAtPreparation, {
+        nonterminalCount: 0,
+        unknownOrUnboundCount: 0,
+      });
       const sameAuthorityAuthorizations = [
         ...requestStageAuthorizationsByRequestId.values(),
       ].filter((candidate) => candidate.authority === authorization.authority);
@@ -4990,15 +5087,7 @@ const createBrowserConnectProxyGate = ({
       assert.equal(tunnel.stage, stage);
       assert.equal(tunnel.hostname, expectedHostname);
       assert.equal(tunnel.authority, authorization.authority);
-      if (lease.state === "issued") {
-        assert.equal(lease.consumedTunnelSequence, null);
-        assert.deepEqual(authorization.activeTunnelSequencesAtAuthorization, [
-          tunnel.tunnelSequence,
-        ]);
-      } else {
-        assert.equal(lease.state, "consumed");
-        assert.equal(lease.consumedTunnelSequence, tunnel.tunnelSequence);
-      }
+      assert.equal(lease.consumedTunnelSequence, tunnel.tunnelSequence);
       const activeAuthorityTunnelCountBefore =
         activeAllowedTunnelCounts.get(tunnel.authority) || 0;
       assert.equal(activeAuthorityTunnelCountBefore, 1);
@@ -5011,6 +5100,7 @@ const createBrowserConnectProxyGate = ({
         failedLeaseIssueSequence: lease.issueSequence,
         tunnel,
         activeAuthorityTunnelCountBefore,
+        releasedResponseStreamCensusAtPreparation,
       });
       preparedExactTunnelResetsByRequestId.set(requestId, preparation);
       assert.equal(
@@ -5037,6 +5127,7 @@ const createBrowserConnectProxyGate = ({
         failedLeaseIssueSequence,
         tunnel,
         activeAuthorityTunnelCountBefore,
+        releasedResponseStreamCensusAtPreparation,
       } = preparation;
       assert.equal(
         preparedExactTunnelResetsByRequestId.get(requestId),
@@ -5069,6 +5160,12 @@ const createBrowserConnectProxyGate = ({
             socket.once("close", resolveSocketClose);
           }),
       );
+      const releasedResponseStreamCensusBeforeRetirement =
+        releasedResponseStreamCensusForAuthority(authority);
+      assert.deepEqual(releasedResponseStreamCensusBeforeRetirement, {
+        nonterminalCount: 0,
+        unknownOrUnboundCount: 0,
+      });
       tunnel.clientSocket.destroy();
       tunnel.upstreamSocket.destroy();
       let timeoutId = null;
@@ -5115,7 +5212,7 @@ const createBrowserConnectProxyGate = ({
         hostname: expectedHostname,
       });
       return Object.freeze({
-        schemaVersion: 1,
+        schemaVersion: 2,
         hostname: expectedHostname,
         stage,
         requestBound: true,
@@ -5136,6 +5233,14 @@ const createBrowserConnectProxyGate = ({
         leaseConsumeSequence: tunnel.leaseConsumeSequence,
         retiredTunnelSequence: tunnel.tunnelSequence,
         retirementCompleteSequence,
+        releasedResponseStreamNonterminalCountAtPreparation:
+          releasedResponseStreamCensusAtPreparation.nonterminalCount,
+        releasedResponseStreamUnknownOrUnboundCountAtPreparation:
+          releasedResponseStreamCensusAtPreparation.unknownOrUnboundCount,
+        releasedResponseStreamNonterminalCountBeforeRetirement:
+          releasedResponseStreamCensusBeforeRetirement.nonterminalCount,
+        releasedResponseStreamUnknownOrUnboundCountBeforeRetirement:
+          releasedResponseStreamCensusBeforeRetirement.unknownOrUnboundCount,
       });
     },
     attestFreshConnectForRequest({
@@ -5324,7 +5429,7 @@ const createBrowserConnectProxyGate = ({
           stats.targetedTunnelRetirementSuccessCount,
       );
       return {
-        schemaVersion: 3,
+        schemaVersion: 4,
         allowedHostnames: [...allowedHostnameSet].sort(),
         allowedHostnameSetHash: secretSha256(
           JSON.stringify([...allowedHostnameSet].sort()),
@@ -5380,6 +5485,8 @@ const createBrowserConnectProxyGate = ({
           activeAllowedTunnelsByRequestId.size,
         preparedExactTunnelResetResidualCount:
           preparedExactTunnelResetsByRequestId.size,
+        releasedResponseStreamResidualCount:
+          releasedResponseStreamsByNetworkId.size,
         activeClientSocketCount: clientSockets.size,
         activeUpstreamSocketCount: upstreamSockets.size,
         fatalErrorCount: fatalErrors.length,
@@ -5412,6 +5519,7 @@ const waitForBrowserConnectProxyContextDrain = async ({
       snapshot.activeAllowedTunnelResidualCount,
       snapshot.activeAllowedTunnelRequestBindingResidualCount,
       snapshot.preparedExactTunnelResetResidualCount,
+      snapshot.releasedResponseStreamResidualCount,
     ].every((count) => count === 0);
     if (drained) return snapshot;
     const remainingMilliseconds = deadline - observedAt;
@@ -6219,6 +6327,8 @@ const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_POLICY_ID =
   "w10p-protected-read-shared-transport-retry-v3";
 const SAFE_AUTHENTICATION_PROTECTED_READ_TRANSPORT_RESET_POLICY_ID =
   "w10p-protected-read-exact-firestore-tunnel-reset-v1";
+const SAFE_AUTHENTICATION_PROTECTED_READ_WHOLE_BROWSER_PROCESS_RESTART_ERROR =
+  "W10P_PROTECTED_READ_WHOLE_BROWSER_PROCESS_RESTART_REQUIRED";
 const SAFE_AUTHENTICATION_PROTECTED_READ_FIRESTORE_HOSTNAME =
   "firestore.googleapis.com";
 const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_DELAY_MS = 2_000;
@@ -6230,7 +6340,7 @@ const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_TARGETS = Object.freeze([
 const SAFE_AUTHENTICATION_PROTECTED_READ_BROWSER_OUTCOME_CLASSES =
   Object.freeze(["response-2xx", "transport-error"]);
 const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_PROXY_LEASE_CLASSES =
-  Object.freeze(["issued-active-tunnel", "consumed-active-tunnel"]);
+  Object.freeze(["consumed-active-tunnel"]);
 const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_CURRENT_TUNNEL_CLASSES =
   Object.freeze(["current-active-tunnel"]);
 const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_ECHO_CLASSES =
@@ -6318,6 +6428,8 @@ const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES = Object.freeze({
     "authentication-protected-read-sensitive-response-error-count-mismatch",
   cdpRecoveredCountMismatch:
     "authentication-protected-read-cdp-recovered-count-mismatch",
+  wholeBrowserProcessRestartRequired:
+    "authentication-protected-read-issued-active-tunnel-whole-browser-process-restart-required",
 });
 const setSafeAuthenticationProtectedReadRetryFailureClass = (
   setFailureClass,
@@ -6451,6 +6563,10 @@ const normalizeSafeAuthenticationProtectedReadTransportResetAttestation = (
     "noSameAuthorityAuthorizationBeforeRetirement",
     "otherAuthorityTunnelRetirementCount",
     "policyId",
+    "releasedResponseStreamNonterminalCountAtPreparation",
+    "releasedResponseStreamNonterminalCountBeforeRetirement",
+    "releasedResponseStreamUnknownOrUnboundCountAtPreparation",
+    "releasedResponseStreamUnknownOrUnboundCountBeforeRetirement",
     "requestBound",
     "retiredClientSocketCount",
     "retiredTunnelSequence",
@@ -6462,7 +6578,7 @@ const normalizeSafeAuthenticationProtectedReadTransportResetAttestation = (
     "stage",
     "target",
   ]);
-  assert.equal(attestation.schemaVersion, 1);
+  assert.equal(attestation.schemaVersion, 2);
   assert.equal(
     attestation.policyId,
     SAFE_AUTHENTICATION_PROTECTED_READ_TRANSPORT_RESET_POLICY_ID,
@@ -6476,11 +6592,7 @@ const normalizeSafeAuthenticationProtectedReadTransportResetAttestation = (
   assert.equal(attestation.failedAttemptNumber, 1);
   assert.equal(attestation.retryAttemptNumber, 2);
   assert.equal(attestation.requestBound, true);
-  assert.ok(
-    ["issued-active-tunnel", "consumed-active-tunnel"].includes(
-      attestation.failedLeaseClass,
-    ),
-  );
+  assert.equal(attestation.failedLeaseClass, "consumed-active-tunnel");
   assert.equal(attestation.currentTunnelClassBefore, "current-active-tunnel");
   assert.equal(attestation.singletonAuthorityTunnelBound, true);
   assert.equal(attestation.failedAuthorizationCompletedBeforeRetirement, true);
@@ -6492,6 +6604,14 @@ const normalizeSafeAuthenticationProtectedReadTransportResetAttestation = (
   assert.equal(attestation.retiredUpstreamSocketCount, 1);
   assert.equal(attestation.activeAuthorityTunnelCountAfter, 0);
   assert.equal(attestation.authorityDrained, true);
+  for (const key of [
+    "releasedResponseStreamNonterminalCountAtPreparation",
+    "releasedResponseStreamNonterminalCountBeforeRetirement",
+    "releasedResponseStreamUnknownOrUnboundCountAtPreparation",
+    "releasedResponseStreamUnknownOrUnboundCountBeforeRetirement",
+  ]) {
+    assert.equal(attestation[key], 0);
+  }
   for (const key of [
     "failedLeaseIssueSequence",
     "creatorLeaseIssueSequence",
@@ -6510,23 +6630,13 @@ const normalizeSafeAuthenticationProtectedReadTransportResetAttestation = (
         attestation.leaseConsumeSequence,
       ),
   );
-  if (attestation.failedLeaseClass === "issued-active-tunnel") {
-    assert.ok(
-      attestation.creatorLeaseIssueSequence < attestation.leaseConsumeSequence,
-    );
-    assert.ok(
-      attestation.leaseConsumeSequence < attestation.failedLeaseIssueSequence,
-    );
-  } else {
-    assert.equal(attestation.failedLeaseClass, "consumed-active-tunnel");
-    assert.equal(
-      attestation.failedLeaseIssueSequence,
-      attestation.creatorLeaseIssueSequence,
-    );
-    assert.ok(
-      attestation.failedLeaseIssueSequence < attestation.leaseConsumeSequence,
-    );
-  }
+  assert.equal(
+    attestation.failedLeaseIssueSequence,
+    attestation.creatorLeaseIssueSequence,
+  );
+  assert.ok(
+    attestation.failedLeaseIssueSequence < attestation.leaseConsumeSequence,
+  );
   assert.ok(
     attestation.leaseConsumeSequence < attestation.retirementCompleteSequence,
   );
@@ -10789,6 +10899,12 @@ const verifyAllowedEgressResponseLifecycleFixtures = async () => {
       "continue-request-invalid-interception",
     );
   }
+  for (const message of CONTINUE_RESPONSE_INVALID_INTERCEPTION_ERROR_MESSAGES) {
+    assert.equal(
+      safeCdpHandlerProtocolErrorClass(new Error(message)),
+      "continue-response-invalid-interception",
+    );
+  }
   const continueRequestProtocolErrorFixture = new Error(
     "Protocol error (Fetch.continueRequest): Invalid InterceptionId.",
   );
@@ -10796,6 +10912,46 @@ const verifyAllowedEgressResponseLifecycleFixtures = async () => {
   assert.equal(
     safeCdpHandlerProtocolErrorClass(continueRequestProtocolErrorFixture),
     "continue-request-invalid-interception",
+  );
+  assert.equal(
+    continueResponseInvalidInterceptionLifecycleClass({
+      protocolErrorClass: "continue-response-invalid-interception",
+      operation: "response-continue-final",
+      lifecycleState: "final-response-command-in-flight",
+    }),
+    "primary-final",
+  );
+  assert.equal(
+    continueResponseInvalidInterceptionLifecycleClass({
+      protocolErrorClass: "continue-response-invalid-interception",
+      operation: "response-continue-post-final-error",
+      lifecycleState: "final-response-command-in-flight",
+    }),
+    "other",
+  );
+  assert.equal(
+    continueResponseInvalidInterceptionLifecycleClass({
+      protocolErrorClass: "continue-response-invalid-interception",
+      operation: "response-continue-final",
+      lifecycleState: "post-final-error-command-in-flight",
+    }),
+    "other",
+  );
+  assert.equal(
+    continueResponseInvalidInterceptionLifecycleClass({
+      protocolErrorClass: "continue-response-invalid-interception",
+      operation: "response-continue-post-final-error",
+      lifecycleState: "post-final-error-command-in-flight",
+    }),
+    "other",
+  );
+  assert.equal(
+    continueResponseInvalidInterceptionLifecycleClass({
+      protocolErrorClass: "continue-request-invalid-interception",
+      operation: "response-continue-final",
+      lifecycleState: "final-response-command-in-flight",
+    }),
+    null,
   );
   const otherProtocolErrorFixture = new Error(
     "Protocol error (Fetch.continueRequest): Other failure.",
@@ -14943,6 +15099,7 @@ const createSafeAuthenticationFailureDiagnostic = ({
     configAttemptCount: 0,
     profileAttemptCount: 0,
     sharedRetryTarget: "none",
+    wholeBrowserProcessRestartRequired: false,
   },
 }) => {
   const reject = () => {
@@ -14974,7 +15131,12 @@ const createSafeAuthenticationFailureDiagnostic = ({
   }
   const protectedReadAttemptDescriptors = exactOwnDataDescriptors(
     protectedReadAttemptDiagnostic,
-    ["configAttemptCount", "profileAttemptCount", "sharedRetryTarget"],
+    [
+      "configAttemptCount",
+      "profileAttemptCount",
+      "sharedRetryTarget",
+      "wholeBrowserProcessRestartRequired",
+    ],
   );
   const protectedReadConfigAttemptCount =
     protectedReadAttemptDescriptors?.configAttemptCount?.value;
@@ -14982,6 +15144,8 @@ const createSafeAuthenticationFailureDiagnostic = ({
     protectedReadAttemptDescriptors?.profileAttemptCount?.value;
   const protectedReadSharedRetryTarget =
     protectedReadAttemptDescriptors?.sharedRetryTarget?.value;
+  const protectedReadWholeBrowserProcessRestartRequired =
+    protectedReadAttemptDescriptors?.wholeBrowserProcessRestartRequired?.value;
   if (
     protectedReadAttemptPrototype !== Object.prototype ||
     protectedReadAttemptDescriptors === null ||
@@ -14991,6 +15155,7 @@ const createSafeAuthenticationFailureDiagnostic = ({
     !SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_TARGETS.includes(
       protectedReadSharedRetryTarget,
     ) ||
+    typeof protectedReadWholeBrowserProcessRestartRequired !== "boolean" ||
     (protectedReadSharedRetryTarget === "config" &&
       protectedReadConfigAttemptCount !== 2) ||
     (protectedReadSharedRetryTarget === "profile" &&
@@ -15001,8 +15166,15 @@ const createSafeAuthenticationFailureDiagnostic = ({
   ) {
     reject();
   }
+  if (
+    protectedReadWholeBrowserProcessRestartRequired !==
+    (failureClass ===
+      SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.wholeBrowserProcessRestartRequired)
+  ) {
+    reject();
+  }
   return Object.freeze({
-    schemaVersion: 2,
+    schemaVersion: 3,
     failureClass,
     stage,
     captureRole,
@@ -15018,6 +15190,8 @@ const createSafeAuthenticationFailureDiagnostic = ({
     protectedReadConfigAttemptCount: protectedReadConfigAttemptCount,
     protectedReadProfileAttemptCount: protectedReadProfileAttemptCount,
     protectedReadSharedRetryTarget: protectedReadSharedRetryTarget,
+    protectedReadWholeBrowserProcessRestartRequired:
+      protectedReadWholeBrowserProcessRestartRequired,
   });
 };
 const serializeSafeAuthenticationFailure = (
@@ -15065,7 +15239,7 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     exactUrlMethodBound: true,
   });
   const createTransportResetAttestation = (target) => ({
-    schemaVersion: 1,
+    schemaVersion: 2,
     policyId: SAFE_AUTHENTICATION_PROTECTED_READ_TRANSPORT_RESET_POLICY_ID,
     hostname: SAFE_AUTHENTICATION_PROTECTED_READ_FIRESTORE_HOSTNAME,
     stage: "baseline",
@@ -15073,7 +15247,7 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     failedAttemptNumber: 1,
     retryAttemptNumber: 2,
     requestBound: true,
-    failedLeaseClass: "issued-active-tunnel",
+    failedLeaseClass: "consumed-active-tunnel",
     currentTunnelClassBefore: "current-active-tunnel",
     singletonAuthorityTunnelBound: true,
     failedAuthorizationCompletedBeforeRetirement: true,
@@ -15085,11 +15259,15 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     retiredUpstreamSocketCount: 1,
     activeAuthorityTunnelCountAfter: 0,
     authorityDrained: true,
-    failedLeaseIssueSequence: 3,
+    failedLeaseIssueSequence: 1,
     creatorLeaseIssueSequence: 1,
     leaseConsumeSequence: 2,
     retiredTunnelSequence: 1,
-    retirementCompleteSequence: 4,
+    retirementCompleteSequence: 3,
+    releasedResponseStreamNonterminalCountAtPreparation: 0,
+    releasedResponseStreamNonterminalCountBeforeRetirement: 0,
+    releasedResponseStreamUnknownOrUnboundCountAtPreparation: 0,
+    releasedResponseStreamUnknownOrUnboundCountBeforeRetirement: 0,
   });
   const createFreshConnectAttestation = (target) => ({
     schemaVersion: 1,
@@ -15120,7 +15298,9 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     lifecycleKind: "primary",
     responseClass,
     proxyLeaseClass:
-      responseClass === "response-error-failed" ? "issued-active-tunnel" : null,
+      responseClass === "response-error-failed"
+        ? "consumed-active-tunnel"
+        : null,
     currentTunnelClass:
       responseClass === "response-error-failed"
         ? "current-active-tunnel"
@@ -15271,13 +15451,26 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     ),
   );
   const invalidConsumedActiveSequenceFixture = createFixture("config");
-  invalidConsumedActiveSequenceFixture.cdpResponseRecords[0].proxyLeaseClass =
-    "consumed-active-tunnel";
-  invalidConsumedActiveSequenceFixture.cdpResponseRecords[1].transportResetAttestation.failedLeaseClass =
-    "consumed-active-tunnel";
+  invalidConsumedActiveSequenceFixture.cdpResponseRecords[1].transportResetAttestation.failedLeaseIssueSequence = 3;
   assert.throws(() =>
     confirmSafeAuthenticationProtectedReadRetry(
       invalidConsumedActiveSequenceFixture,
+    ),
+  );
+  const issuedActiveRetirementFixture = createFixture("config");
+  issuedActiveRetirementFixture.cdpResponseRecords[0].proxyLeaseClass =
+    "issued-active-tunnel";
+  issuedActiveRetirementFixture.cdpResponseRecords[1].transportResetAttestation.failedLeaseClass =
+    "issued-active-tunnel";
+  issuedActiveRetirementFixture.cdpResponseRecords[1].transportResetAttestation.failedLeaseIssueSequence = 3;
+  assert.throws(() =>
+    confirmSafeAuthenticationProtectedReadRetry(issuedActiveRetirementFixture),
+  );
+  const releasedResponseStreamCensusFixture = createFixture("profile");
+  releasedResponseStreamCensusFixture.cdpResponseRecords[2].transportResetAttestation.releasedResponseStreamNonterminalCountAtPreparation = 1;
+  assert.throws(() =>
+    confirmSafeAuthenticationProtectedReadRetry(
+      releasedResponseStreamCensusFixture,
     ),
   );
   const invalidTransportResetDrainFixture = createFixture("profile");
@@ -15296,7 +15489,7 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     ),
   );
   const invalidFreshConnectSequenceFixture = createFixture("profile");
-  invalidFreshConnectSequenceFixture.cdpResponseRecords[2].freshConnectAttestation.retryLeaseIssueSequence = 4;
+  invalidFreshConnectSequenceFixture.cdpResponseRecords[2].freshConnectAttestation.retryLeaseIssueSequence = 3;
   assert.throws(() =>
     confirmSafeAuthenticationProtectedReadRetry(
       invalidFreshConnectSequenceFixture,
@@ -17272,6 +17465,8 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     "fixed-proxy-active-tunnel-reset-pending";
   const activeTunnelFixtureConsumedRequestId =
     "fixed-proxy-active-tunnel-consumed";
+  const activeTunnelFixtureOtherAuthorityRequestId =
+    "fixed-proxy-active-tunnel-other-authority";
   const activeTunnelFixtureMultiRequestId = "fixed-proxy-active-tunnel-multi";
   const activeTunnelFixtureUnknownRequestId =
     "fixed-proxy-active-tunnel-unknown";
@@ -17280,6 +17475,7 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
   let activeTunnelFixtureClientSocket = null;
   let activeTunnelFixtureRetryClientSocket = null;
   let activeTunnelFixtureConsumedClientSocket = null;
+  let activeTunnelFixtureOtherAuthorityClientSocket = null;
   let activeTunnelFixtureMultiClientSocket = null;
   try {
     activeTunnelFixtureUpstreamAddress = await withExplicitTimeout(
@@ -17288,12 +17484,20 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
       "The active-tunnel diagnostic fixture did not start its loopback listener.",
     );
     activeTunnelFixtureGate = createBrowserConnectProxyGate({
-      allowedHostnames: ["firestore.googleapis.com"],
+      allowedHostnames: [
+        "firestore.googleapis.com",
+        "identitytoolkit.googleapis.com",
+      ],
       allowedRequestOrigins: ["https://capture.invalid"],
       fatalOnDeny: false,
       nowMilliseconds: () => 1_000,
       connectAllowed: ({ hostname, port }) => {
-        assert.equal(hostname, "firestore.googleapis.com");
+        assert.ok(
+          [
+            "firestore.googleapis.com",
+            "identitytoolkit.googleapis.com",
+          ].includes(hostname),
+        );
         assert.equal(port, "443");
         return connectTcp({
           host: "127.0.0.1",
@@ -17523,161 +17727,29 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
         stage: "browser-launch",
       }),
     );
-    const issuedActiveResetPreparation =
+    assert.throws(() =>
       activeTunnelFixtureGate.prepareExactRequestAuthorityTunnelReset({
         requestId: activeTunnelFixtureExactRequestId,
         expectedHostname: "firestore.googleapis.com",
         stage: "browser-launch",
-      });
-    assert.equal(
-      activeTunnelFixtureGate.snapshot().preparedExactTunnelResetResidualCount,
-      1,
-    );
-    assert.throws(() =>
-      activeTunnelFixtureGate.authorizeRequestStage({
-        requestId: activeTunnelFixtureResetPendingRequestId,
-        requestUrl: exactConfigReadUrl,
-        requestMethod: "GET",
-        requestOrigin: "https://capture.invalid",
-        stage: "browser-launch",
       }),
     );
     assert.equal(
-      activeTunnelFixtureGate.hasRequestStageAuthorization(
-        activeTunnelFixtureResetPendingRequestId,
+      activeTunnelFixtureGate.snapshot().preparedExactTunnelResetResidualCount,
+      0,
+    );
+    assert.equal(
+      activeTunnelFixtureGate.requestStageAuthorityLeaseDiagnosticClass(
+        activeTunnelFixtureExactRequestId,
       ),
-      false,
+      "issued-active-tunnel",
     );
     activeTunnelFixtureGate.completeRequestStageAuthorization(
       activeTunnelFixtureExactRequestId,
     );
-    const issuedActiveResetAttestation = await withExplicitTimeout(
-      activeTunnelFixtureGate.retirePreparedExactRequestAuthorityTunnel({
-        preparation: issuedActiveResetPreparation,
-      }),
-      5_000,
-      "The issued-active tunnel reset fixture did not drain its exact tunnel.",
-    );
     assert.equal(
-      issuedActiveResetAttestation.failedLeaseClass,
-      "issued-active-tunnel",
-    );
-    assert.equal(issuedActiveResetAttestation.authorityDrained, true);
-    assert.equal(
-      issuedActiveResetAttestation.activeAuthorityTunnelCountAfter,
-      0,
-    );
-    await withExplicitTimeout(
-      Promise.all([
-        activeTunnelFixtureClientClosed,
-        activeTunnelFixtureUpstreamClosed,
-      ]),
-      5_000,
-      "The issued-active tunnel reset fixture did not close its exact socket pair.",
-    );
-    await assert.rejects(() =>
-      activeTunnelFixtureGate.retirePreparedExactRequestAuthorityTunnel({
-        preparation: issuedActiveResetPreparation,
-      }),
-    );
-    activeTunnelFixtureGate.authorizeRequestStage({
-      requestId: activeTunnelFixtureRetryRequestId,
-      requestUrl: exactConfigReadUrl,
-      requestMethod: "GET",
-      requestOrigin: "https://capture.invalid",
-      stage: "browser-launch",
-    });
-    assert.throws(() =>
-      activeTunnelFixtureGate.prepareExactRequestAuthorityTunnelReset({
-        requestId: activeTunnelFixtureRetryRequestId,
-        expectedHostname: "firestore.googleapis.com",
-        stage: "browser-launch",
-      }),
-    );
-    assert.throws(() =>
-      activeTunnelFixtureGate.attestFreshConnectForRequest({
-        requestId: activeTunnelFixtureRetryRequestId,
-        expectedHostname: "firestore.googleapis.com",
-        stage: "browser-launch",
-        priorRetirement: issuedActiveResetAttestation,
-      }),
-    );
-    const parsedRetryProxyUrl = new URL(activeTunnelFixtureProxyUrl);
-    let retryResponseText = "";
-    let resolveRetryReady;
-    let rejectRetryReady;
-    const retryReady = new Promise((resolveFixture, rejectFixture) => {
-      resolveRetryReady = resolveFixture;
-      rejectRetryReady = rejectFixture;
-    });
-    activeTunnelFixtureRetryClientSocket = connectTcp({
-      host: parsedRetryProxyUrl.hostname,
-      port: Number(parsedRetryProxyUrl.port),
-    });
-    activeTunnelFixtureRetryClientSocket.once("error", rejectRetryReady);
-    activeTunnelFixtureRetryClientSocket.on("data", (chunk) => {
-      retryResponseText += Buffer.from(chunk).toString("latin1");
-      if (!retryResponseText.includes("\r\n\r\n")) return;
-      try {
-        assert.match(
-          retryResponseText,
-          /^HTTP\/1\.1 200 Connection Established\r\n/iu,
-        );
-        activeTunnelFixtureRetryClientSocket.removeListener(
-          "error",
-          rejectRetryReady,
-        );
-        activeTunnelFixtureRetryClientSocket.on("error", () => {});
-        resolveRetryReady();
-      } catch (error) {
-        rejectRetryReady(error);
-      }
-    });
-    activeTunnelFixtureRetryClientSocket.once("connect", () => {
-      activeTunnelFixtureRetryClientSocket.write(
-        "CONNECT firestore.googleapis.com:443 HTTP/1.1\r\nHost: firestore.googleapis.com:443\r\n\r\n",
-      );
-    });
-    await withExplicitTimeout(
-      retryReady,
-      5_000,
-      "The fresh CONNECT fixture did not establish its replacement tunnel.",
-    );
-    const freshConnectAttestation =
-      activeTunnelFixtureGate.attestFreshConnectForRequest({
-        requestId: activeTunnelFixtureRetryRequestId,
-        expectedHostname: "firestore.googleapis.com",
-        stage: "browser-launch",
-        priorRetirement: issuedActiveResetAttestation,
-      });
-    assert.deepEqual(freshConnectAttestation, {
-      schemaVersion: 1,
-      hostname: "firestore.googleapis.com",
-      stage: "browser-launch",
-      requestBound: true,
-      activeTunnelPresentAtAuthorization: false,
-      retryLeaseClass: "consumed-no-active-tunnel",
-      freshLeaseIssued: true,
-      freshConnectConsumedLease: true,
-      leaseIssueSequenceAdvanced: true,
-      tunnelSequenceAdvanced: true,
-      sameAuthorityActiveAuthorizationCount: 1,
-      retryLeaseIssueSequence: freshConnectAttestation.retryLeaseIssueSequence,
-      retryLeaseConsumeSequence:
-        freshConnectAttestation.retryLeaseConsumeSequence,
-      freshTunnelSequence: freshConnectAttestation.freshTunnelSequence,
-    });
-    assert.ok(
-      freshConnectAttestation.retryLeaseIssueSequence >
-        issuedActiveResetAttestation.retirementCompleteSequence,
-    );
-    assert.ok(
-      freshConnectAttestation.retryLeaseConsumeSequence >
-        freshConnectAttestation.retryLeaseIssueSequence,
-    );
-    assert.ok(
-      freshConnectAttestation.freshTunnelSequence >
-        issuedActiveResetAttestation.retiredTunnelSequence,
+      activeTunnelFixtureGate.snapshot().activeAllowedTunnelResidualCount,
+      1,
     );
     activeTunnelFixtureGate.authorizeRequestStage({
       requestId: activeTunnelFixtureConsumedRequestId,
@@ -17686,10 +17758,22 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
       requestOrigin: "https://capture.invalid",
       stage: "browser-launch",
     });
-    activeTunnelFixtureGate.completeRequestStageAuthorization(
-      activeTunnelFixtureRetryRequestId,
+    assert.equal(
+      activeTunnelFixtureGate.requestStageAuthorityLeaseDiagnosticClass(
+        activeTunnelFixtureConsumedRequestId,
+      ),
+      "issued-active-tunnel",
     );
-    activeTunnelFixtureRetryClientSocket.destroy();
+    activeTunnelFixtureClientSocket.destroy();
+    await withExplicitTimeout(
+      Promise.all([
+        activeTunnelFixtureClientClosed,
+        activeTunnelFixtureUpstreamClosed,
+      ]),
+      5_000,
+      "The issued-active restart-required fixture did not close during cleanup.",
+    );
+    const parsedRetryProxyUrl = new URL(activeTunnelFixtureProxyUrl);
     for (let attempt = 0; attempt < 100; attempt += 1) {
       if (
         activeTunnelFixtureGate.snapshot().activeAllowedTunnelResidualCount ===
@@ -17749,12 +17833,120 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
       ),
       "consumed-active-tunnel",
     );
+    activeTunnelFixtureGate.authorizeRequestStage({
+      requestId: activeTunnelFixtureOtherAuthorityRequestId,
+      requestUrl: "https://identitytoolkit.googleapis.com/v1/accounts:lookup",
+      requestMethod: "POST",
+      requestOrigin: "https://capture.invalid",
+      stage: "browser-launch",
+    });
+    let otherAuthorityResponseText = "";
+    let resolveOtherAuthorityReady;
+    let rejectOtherAuthorityReady;
+    const otherAuthorityReady = new Promise((resolveFixture, rejectFixture) => {
+      resolveOtherAuthorityReady = resolveFixture;
+      rejectOtherAuthorityReady = rejectFixture;
+    });
+    activeTunnelFixtureOtherAuthorityClientSocket = connectTcp({
+      host: parsedRetryProxyUrl.hostname,
+      port: Number(parsedRetryProxyUrl.port),
+    });
+    const otherAuthorityClientClosed = new Promise((resolveFixture) => {
+      activeTunnelFixtureOtherAuthorityClientSocket.once(
+        "close",
+        resolveFixture,
+      );
+    });
+    activeTunnelFixtureOtherAuthorityClientSocket.once(
+      "error",
+      rejectOtherAuthorityReady,
+    );
+    activeTunnelFixtureOtherAuthorityClientSocket.on("data", (chunk) => {
+      otherAuthorityResponseText += Buffer.from(chunk).toString("latin1");
+      if (!otherAuthorityResponseText.includes("\r\n\r\n")) return;
+      try {
+        assert.match(
+          otherAuthorityResponseText,
+          /^HTTP\/1\.1 200 Connection Established\r\n/iu,
+        );
+        activeTunnelFixtureOtherAuthorityClientSocket.removeListener(
+          "error",
+          rejectOtherAuthorityReady,
+        );
+        activeTunnelFixtureOtherAuthorityClientSocket.on("error", () => {});
+        resolveOtherAuthorityReady();
+      } catch (error) {
+        rejectOtherAuthorityReady(error);
+      }
+    });
+    activeTunnelFixtureOtherAuthorityClientSocket.once("connect", () => {
+      activeTunnelFixtureOtherAuthorityClientSocket.write(
+        "CONNECT identitytoolkit.googleapis.com:443 HTTP/1.1\r\nHost: identitytoolkit.googleapis.com:443\r\n\r\n",
+      );
+    });
+    await withExplicitTimeout(
+      otherAuthorityReady,
+      5_000,
+      "The multi-authority stream census fixture did not establish its tunnel.",
+    );
+    assert.equal(
+      activeTunnelFixtureGate.requestStageAuthorityLeaseDiagnosticClass(
+        activeTunnelFixtureOtherAuthorityRequestId,
+      ),
+      "consumed-no-active-tunnel",
+    );
+    const otherAuthorityReleasedResponseStreamNetworkId =
+      "fixed-proxy-released-response-stream-other-authority";
+    activeTunnelFixtureGate.registerReleasedResponseStream({
+      requestId: activeTunnelFixtureOtherAuthorityRequestId,
+      networkId: otherAuthorityReleasedResponseStreamNetworkId,
+      stage: "browser-launch",
+    });
+    activeTunnelFixtureGate.completeRequestStageAuthorization(
+      activeTunnelFixtureOtherAuthorityRequestId,
+    );
+    const releasedResponseStreamNetworkId =
+      "fixed-proxy-released-response-stream";
+    activeTunnelFixtureGate.registerReleasedResponseStream({
+      requestId: activeTunnelFixtureConsumedRequestId,
+      networkId: releasedResponseStreamNetworkId,
+      stage: "browser-launch",
+    });
+    assert.throws(() =>
+      activeTunnelFixtureGate.prepareExactRequestAuthorityTunnelReset({
+        requestId: activeTunnelFixtureConsumedRequestId,
+        expectedHostname: "firestore.googleapis.com",
+        stage: "browser-launch",
+      }),
+    );
+    assert.equal(
+      activeTunnelFixtureGate.settleReleasedResponseStream({
+        networkId: releasedResponseStreamNetworkId,
+        terminalClass: "loading-finished",
+      }),
+      true,
+    );
     const consumedActivePreparation =
       activeTunnelFixtureGate.prepareExactRequestAuthorityTunnelReset({
         requestId: activeTunnelFixtureConsumedRequestId,
         expectedHostname: "firestore.googleapis.com",
         stage: "browser-launch",
       });
+    assert.throws(() =>
+      activeTunnelFixtureGate.authorizeRequestStage({
+        requestId: activeTunnelFixtureResetPendingRequestId,
+        requestUrl: exactConfigReadUrl,
+        requestMethod: "GET",
+        requestOrigin: "https://capture.invalid",
+        stage: "browser-launch",
+      }),
+    );
+    assert.equal(
+      activeTunnelFixtureGate.hasRequestStageAuthorization(
+        activeTunnelFixtureResetPendingRequestId,
+      ),
+      false,
+    );
     activeTunnelFixtureGate.completeRequestStageAuthorization(
       activeTunnelFixtureConsumedRequestId,
     );
@@ -17772,12 +17964,39 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     assert.equal(consumedActiveResetAttestation.authorityDrained, true);
     assert.equal(
       activeTunnelFixtureGate.snapshot().activeAllowedTunnelResidualCount,
+      1,
+    );
+    assert.equal(
+      activeTunnelFixtureGate.settleReleasedResponseStream({
+        networkId: otherAuthorityReleasedResponseStreamNetworkId,
+        terminalClass: "loading-finished",
+      }),
+      true,
+    );
+    activeTunnelFixtureOtherAuthorityClientSocket.destroy();
+    await withExplicitTimeout(
+      otherAuthorityClientClosed,
+      5_000,
+      "The multi-authority stream census fixture did not close its tunnel.",
+    );
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      if (
+        activeTunnelFixtureGate.snapshot().activeAllowedTunnelResidualCount ===
+        0
+      ) {
+        break;
+      }
+      await new Promise((resolveFixture) => setImmediate(resolveFixture));
+    }
+    assert.equal(
+      activeTunnelFixtureGate.snapshot().activeAllowedTunnelResidualCount,
       0,
     );
   } finally {
     activeTunnelFixtureClientSocket?.destroy();
     activeTunnelFixtureRetryClientSocket?.destroy();
     activeTunnelFixtureConsumedClientSocket?.destroy();
+    activeTunnelFixtureOtherAuthorityClientSocket?.destroy();
     activeTunnelFixtureMultiClientSocket?.destroy();
     for (const socket of activeTunnelFixtureUpstreamSockets) socket.destroy();
     try {
@@ -17789,6 +18008,7 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
           activeTunnelFixtureConcurrentRequestId,
           activeTunnelFixtureResetPendingRequestId,
           activeTunnelFixtureConsumedRequestId,
+          activeTunnelFixtureOtherAuthorityRequestId,
           activeTunnelFixtureMultiRequestId,
         ]) {
           if (activeTunnelFixtureGate.hasRequestStageAuthorization(requestId)) {
@@ -18943,6 +19163,16 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
           authRole: "admin",
           viewport: "1440x900",
           pageState: saturatedState,
+          protectedReadAttemptDiagnostic:
+            failureClass ===
+            SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.wholeBrowserProcessRestartRequired
+              ? {
+                  configAttemptCount: 2,
+                  profileAttemptCount: 0,
+                  sharedRetryTarget: "config",
+                  wholeBrowserProcessRestartRequired: true,
+                }
+              : undefined,
         }).failureClass,
     ),
     boundedAuthenticationEvaluationFailureClassFixtures,
@@ -18964,8 +19194,9 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     "protectedReadConfigAttemptCount",
     "protectedReadProfileAttemptCount",
     "protectedReadSharedRetryTarget",
+    "protectedReadWholeBrowserProcessRestartRequired",
   ]);
-  assert.equal(diagnostic.schemaVersion, 2);
+  assert.equal(diagnostic.schemaVersion, 3);
   const retryFailureDiagnostic = createSafeAuthenticationFailureDiagnostic({
     failureClass:
       SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.transportResetContractMismatch,
@@ -18978,6 +19209,7 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
       configAttemptCount: 1,
       profileAttemptCount: 2,
       sharedRetryTarget: "profile",
+      wholeBrowserProcessRestartRequired: false,
     },
   });
   assert.equal(retryFailureDiagnostic.protectedReadConfigAttemptCount, 1);
@@ -18986,6 +19218,41 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     retryFailureDiagnostic.protectedReadSharedRetryTarget,
     "profile",
   );
+  assert.equal(
+    retryFailureDiagnostic.protectedReadWholeBrowserProcessRestartRequired,
+    false,
+  );
+  const restartRequirementMismatchFixtures = [
+    {
+      failureClass:
+        SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.transportResetContractMismatch,
+      wholeBrowserProcessRestartRequired: true,
+    },
+    {
+      failureClass:
+        SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.wholeBrowserProcessRestartRequired,
+      wholeBrowserProcessRestartRequired: false,
+    },
+  ];
+  for (const mismatch of restartRequirementMismatchFixtures) {
+    assert.throws(() =>
+      createSafeAuthenticationFailureDiagnostic({
+        failureClass: mismatch.failureClass,
+        stage: "baseline",
+        captureRole: "admin",
+        authRole: "admin",
+        viewport: "1440x900",
+        pageState: saturatedState,
+        protectedReadAttemptDiagnostic: {
+          configAttemptCount: 2,
+          profileAttemptCount: 0,
+          sharedRetryTarget: "config",
+          wholeBrowserProcessRestartRequired:
+            mismatch.wholeBrowserProcessRestartRequired,
+        },
+      }),
+    );
+  }
   for (const invalidAttemptDiagnostic of [
     {
       configAttemptCount: 2,
@@ -19205,6 +19472,16 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
         authRole: "admin",
         viewport: "1440x900",
         pageState: saturatedState,
+        protectedReadAttemptDiagnostic:
+          failureClass ===
+          SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.wholeBrowserProcessRestartRequired
+            ? {
+                configAttemptCount: 2,
+                profileAttemptCount: 0,
+                sharedRetryTarget: "config",
+                wholeBrowserProcessRestartRequired: true,
+              }
+            : undefined,
       }),
       forbiddenValues,
     ),
@@ -31702,12 +31979,17 @@ const authenticate = async (
       configAttemptCount: 0,
       profileAttemptCount: 0,
       sharedRetryTarget: "none",
+      wholeBrowserProcessRestartRequired: false,
     };
     try {
       protectedReadAttemptDiagnostic =
         collectAuthenticationProtectedReadAttemptDiagnostic();
     } catch {
       // The bounded secret-free attempt diagnostic remains at its safe default.
+    }
+    if (protectedReadAttemptDiagnostic.wholeBrowserProcessRestartRequired) {
+      failureClass =
+        SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.wholeBrowserProcessRestartRequired;
     }
     const diagnostic = createSafeAuthenticationFailureDiagnostic({
       failureClass,
@@ -32776,6 +33058,9 @@ let playwrightAllHeadersHeaderAttestationRequestCount = 0;
 let playwrightAllHeadersHeaderAttestationCompletedRequestCount = 0;
 let appCheckCdpHandlerErrorCount = 0;
 let cdpContinueRequestInvalidInterceptionErrorCount = 0;
+let cdpContinueResponseInvalidInterceptionErrorCount = 0;
+let cdpPrimaryFinalContinueResponseInvalidInterceptionErrorCount = 0;
+let cdpOtherContinueResponseInvalidInterceptionErrorCount = 0;
 let cdpOtherProtocolErrorCount = 0;
 const cdpHandlerFailureClassCounts = new Map();
 const webChannelListenerDiagnosticClassCounts = new Map();
@@ -32882,7 +33167,11 @@ const SAFE_CDP_HANDLER_FAILURE_REASONS = [
   "maximum-bytes-exceeded",
   "assertion-failed",
   "cdp-protocol-error",
+  "continue-request-invalid-interception",
+  "continue-response-invalid-interception-primary-final",
+  "continue-response-invalid-interception-other",
   "target-closed",
+  "protected-read-whole-browser-process-restart-required",
   "unexpected-handler-error",
   ...SAFE_CDP_SANITIZER_FAILURE_REASONS,
   ...SAFE_CDP_CORRELATION_FAILURE_REASONS,
@@ -32992,6 +33281,28 @@ const snapshotSafeDiagnosticClasses = (histogram, baseline = new Map()) =>
 const safeDiagnosticClassTotal = (histogram) =>
   [...histogram.values()].reduce((total, value) => total + value.count, 0);
 const safeCdpHandlerFailureReason = (error, diagnosticContext) => {
+  if (
+    error instanceof Error &&
+    error.name === "Error" &&
+    error.message ===
+      SAFE_AUTHENTICATION_PROTECTED_READ_WHOLE_BROWSER_PROCESS_RESTART_ERROR
+  ) {
+    return "protected-read-whole-browser-process-restart-required";
+  }
+  const protocolErrorClass = safeCdpHandlerProtocolErrorClass(error);
+  if (protocolErrorClass === "continue-request-invalid-interception") {
+    return "continue-request-invalid-interception";
+  }
+  if (protocolErrorClass === "continue-response-invalid-interception") {
+    const lifecycleClass = continueResponseInvalidInterceptionLifecycleClass({
+      protocolErrorClass,
+      operation: diagnosticContext.operation,
+      lifecycleState: diagnosticContext.lifecycleStateAtFailure,
+    });
+    return lifecycleClass === "primary-final"
+      ? "continue-response-invalid-interception-primary-final"
+      : "continue-response-invalid-interception-other";
+  }
   if (
     error instanceof PausedRequestPostDataResolutionError &&
     SAFE_CDP_HANDLER_FAILURE_REASONS.includes(String(error.code))
@@ -33771,6 +34082,12 @@ try {
       browserRequestFailureRecoveredProtectedReadCount;
     const groupCdpContinueRequestInvalidInterceptionErrorStart =
       cdpContinueRequestInvalidInterceptionErrorCount;
+    const groupCdpContinueResponseInvalidInterceptionErrorStart =
+      cdpContinueResponseInvalidInterceptionErrorCount;
+    const groupCdpPrimaryFinalContinueResponseInvalidInterceptionErrorStart =
+      cdpPrimaryFinalContinueResponseInvalidInterceptionErrorCount;
+    const groupCdpOtherContinueResponseInvalidInterceptionErrorStart =
+      cdpOtherContinueResponseInvalidInterceptionErrorCount;
     const groupCdpOtherProtocolErrorStart = cdpOtherProtocolErrorCount;
     const groupCdpHandlerFailureClassCountsStart = new Map(
       cdpHandlerFailureClassCounts,
@@ -34019,6 +34336,15 @@ try {
         groupCdpContinueRequestInvalidInterceptionErrorCount:
           cdpContinueRequestInvalidInterceptionErrorCount -
           groupCdpContinueRequestInvalidInterceptionErrorStart,
+        groupCdpContinueResponseInvalidInterceptionErrorCount:
+          cdpContinueResponseInvalidInterceptionErrorCount -
+          groupCdpContinueResponseInvalidInterceptionErrorStart,
+        groupCdpPrimaryFinalContinueResponseInvalidInterceptionErrorCount:
+          cdpPrimaryFinalContinueResponseInvalidInterceptionErrorCount -
+          groupCdpPrimaryFinalContinueResponseInvalidInterceptionErrorStart,
+        groupCdpOtherContinueResponseInvalidInterceptionErrorCount:
+          cdpOtherContinueResponseInvalidInterceptionErrorCount -
+          groupCdpOtherContinueResponseInvalidInterceptionErrorStart,
         groupCdpOtherProtocolErrorCount:
           cdpOtherProtocolErrorCount - groupCdpOtherProtocolErrorStart,
         groupCdpHandlerFailureClasses: snapshotSafeDiagnosticClasses(
@@ -34872,6 +35198,7 @@ try {
     };
     let authenticationProtectedReadSharedRetryTarget = null;
     let authenticationProtectedReadTransportResetBarrier = null;
+    let authenticationProtectedReadWholeBrowserProcessRestartRequired = false;
     let authenticationProtectedReadAuthorizationHeaderSha256 = null;
     let authenticationProtectedReadAppCheckHeaderSha256 = null;
     const exactCaseInsensitiveRequestHeaderValue = (headers, headerName) => {
@@ -34993,6 +35320,12 @@ try {
     };
     appCheckCdpSession.on("Network.loadingFailed", (event) => {
       try {
+        if (typeof event.requestId === "string" && event.requestId.length > 0) {
+          browserConnectProxy.settleReleasedResponseStream({
+            networkId: event.requestId,
+            terminalClass: "loading-failed",
+          });
+        }
         const attempt =
           authenticationProtectedReadAttemptsByNetworkId.get(event.requestId) ||
           null;
@@ -35051,6 +35384,22 @@ try {
           Date.now();
       } catch {
         // Invalid protected-read evidence remains unsettled and fails closed.
+      }
+    });
+    appCheckCdpSession.on("Network.loadingFinished", (event) => {
+      try {
+        if (
+          typeof event.requestId !== "string" ||
+          event.requestId.length === 0
+        ) {
+          return;
+        }
+        browserConnectProxy.settleReleasedResponseStream({
+          networkId: event.requestId,
+          terminalClass: "loading-finished",
+        });
+      } catch {
+        // A malformed terminal event leaves the stream nonterminal, so reset fails closed.
       }
     });
     appCheckCdpSession.on("Log.entryAdded", ({ entry }) => {
@@ -35332,6 +35681,14 @@ try {
           authenticationProtectedReadSharedRetryTarget,
           authenticationProtectedReadAttempt.target,
         );
+        if (authenticationProtectedReadWholeBrowserProcessRestartRequired) {
+          diagnosticContext.operation = "request-proxy-authorize";
+          diagnosticContext.reason =
+            "protected-read-whole-browser-process-restart-required";
+          throw new Error(
+            SAFE_AUTHENTICATION_PROTECTED_READ_WHOLE_BROWSER_PROCESS_RESTART_ERROR,
+          );
+        }
         const resetBarrier = authenticationProtectedReadTransportResetBarrier;
         assert.ok(resetBarrier);
         assert.equal(
@@ -35800,38 +36157,48 @@ try {
               responseRecord.currentTunnelClass,
               "current-active-tunnel",
             );
-            protectedReadTransportResetPreparation =
-              browserConnectProxy.prepareExactRequestAuthorityTunnelReset({
-                requestId: primaryRequestId,
-                expectedHostname:
-                  SAFE_AUTHENTICATION_PROTECTED_READ_FIRESTORE_HOSTNAME,
-                stage,
-              });
-            let resolveResetBarrier;
-            let rejectResetBarrier;
-            const resetBarrierPromise = new Promise(
-              (resolveBarrier, rejectBarrier) => {
-                resolveResetBarrier = resolveBarrier;
-                rejectResetBarrier = rejectBarrier;
-              },
-            );
-            resetBarrierPromise.catch(() => {});
-            protectedReadTransportResetBarrier = {
-              target: authenticationProtectedReadAttempt.target,
-              failedAttemptNumber: 1,
-              retryAttemptNumber: 2,
-              promise: resetBarrierPromise,
-              resolve: resolveResetBarrier,
-              reject: rejectResetBarrier,
-              settled: false,
-              attestation: null,
-            };
-            authenticationProtectedReadTransportResetBarrier =
-              protectedReadTransportResetBarrier;
-            // Complete the failed request's still-issued authority lease before
-            // the local failure can make Chromium reconnect. The singleton
-            // creator tunnel remains bound by the prepared reset handle.
-            completeProxyAuthorization();
+            if (responseRecord.proxyLeaseClass === "issued-active-tunnel") {
+              authenticationProtectedReadWholeBrowserProcessRestartRequired = true;
+            } else {
+              assert.equal(
+                responseRecord.proxyLeaseClass,
+                "consumed-active-tunnel",
+              );
+              protectedReadTransportResetPreparation =
+                browserConnectProxy.prepareExactRequestAuthorityTunnelReset({
+                  requestId: primaryRequestId,
+                  expectedHostname:
+                    SAFE_AUTHENTICATION_PROTECTED_READ_FIRESTORE_HOSTNAME,
+                  stage,
+                });
+            }
+            if (protectedReadTransportResetPreparation !== null) {
+              let resolveResetBarrier;
+              let rejectResetBarrier;
+              const resetBarrierPromise = new Promise(
+                (resolveBarrier, rejectBarrier) => {
+                  resolveResetBarrier = resolveBarrier;
+                  rejectResetBarrier = rejectBarrier;
+                },
+              );
+              resetBarrierPromise.catch(() => {});
+              protectedReadTransportResetBarrier = {
+                target: authenticationProtectedReadAttempt.target,
+                failedAttemptNumber: 1,
+                retryAttemptNumber: 2,
+                promise: resetBarrierPromise,
+                resolve: resolveResetBarrier,
+                reject: rejectResetBarrier,
+                settled: false,
+                attestation: null,
+              };
+              authenticationProtectedReadTransportResetBarrier =
+                protectedReadTransportResetBarrier;
+              // Complete the failed request's consumed authorization before the
+              // local failure can make Chromium reconnect. The consumed lease's
+              // creator tunnel remains bound by the prepared reset handle.
+              completeProxyAuthorization();
+            }
           }
           allowedEgressRequestsByFetchRequestId.delete(primaryRequestId);
           sensitiveAppCheckRequestsByFetchRequestId.delete(primaryRequestId);
@@ -36117,6 +36484,11 @@ try {
           primaryRequestId,
           "final-response-command-in-flight",
         );
+        browserConnectProxy.registerReleasedResponseStream({
+          requestId: primaryRequestId,
+          networkId: lifecycle.networkId,
+          stage,
+        });
         sensitiveAppCheckRequestsByFetchRequestId.delete(primaryRequestId);
         allowedEgressRequestsByFetchRequestId.delete(primaryRequestId);
         diagnosticContext.operation = "response-continue-final";
@@ -37310,10 +37682,33 @@ try {
               }
             })
             .catch(async (error) => {
+              const primaryRequestId =
+                cdpHandlerPrimaryRequestIds.get(event) || event.requestId;
+              const lifecycleStateAtFailure =
+                allowedEgressLifecycleByFetchRequestId.get(primaryRequestId)
+                  ?.state || null;
               const protocolErrorClass =
                 safeCdpHandlerProtocolErrorClass(error);
               cdpContinueRequestInvalidInterceptionErrorCount += Number(
                 protocolErrorClass === "continue-request-invalid-interception",
+              );
+              const continueResponseInvalidInterceptionClass =
+                continueResponseInvalidInterceptionLifecycleClass({
+                  protocolErrorClass,
+                  operation: diagnosticContext.operation,
+                  lifecycleState: lifecycleStateAtFailure,
+                });
+              const continueResponseInvalidInterception =
+                continueResponseInvalidInterceptionClass !== null;
+              const primaryFinalContinueResponseInvalidInterception =
+                continueResponseInvalidInterceptionClass === "primary-final";
+              cdpContinueResponseInvalidInterceptionErrorCount += Number(
+                continueResponseInvalidInterception,
+              );
+              cdpPrimaryFinalContinueResponseInvalidInterceptionErrorCount +=
+                Number(primaryFinalContinueResponseInvalidInterception);
+              cdpOtherContinueResponseInvalidInterceptionErrorCount += Number(
+                continueResponseInvalidInterceptionClass === "other",
               );
               cdpOtherProtocolErrorCount += Number(
                 protocolErrorClass === "other-protocol-error",
@@ -37330,13 +37725,14 @@ try {
                 cdpHandlerFailureClassCounts,
                 {
                   ...diagnosticContext,
-                  reason: safeCdpHandlerFailureReason(error, diagnosticContext),
+                  reason: safeCdpHandlerFailureReason(error, {
+                    ...diagnosticContext,
+                    lifecycleStateAtFailure,
+                  }),
                 },
                 SAFE_CDP_HANDLER_FAILURE_REASONS,
               );
               appCheckCdpHandlerErrorCount += 1;
-              const primaryRequestId =
-                cdpHandlerPrimaryRequestIds.get(event) || event.requestId;
               setAllowedEgressLifecycleState(
                 primaryRequestId,
                 "handler-failed",
@@ -38152,6 +38548,8 @@ try {
               authenticationProtectedReadAttemptCounts.profile,
             sharedRetryTarget:
               authenticationProtectedReadSharedRetryTarget || "none",
+            wholeBrowserProcessRestartRequired:
+              authenticationProtectedReadWholeBrowserProcessRestartRequired,
           }),
         },
       );
@@ -38397,6 +38795,15 @@ try {
         groupCdpContinueRequestInvalidInterceptionErrorCount:
           cdpContinueRequestInvalidInterceptionErrorCount -
           groupCdpContinueRequestInvalidInterceptionErrorStart,
+        groupCdpContinueResponseInvalidInterceptionErrorCount:
+          cdpContinueResponseInvalidInterceptionErrorCount -
+          groupCdpContinueResponseInvalidInterceptionErrorStart,
+        groupCdpPrimaryFinalContinueResponseInvalidInterceptionErrorCount:
+          cdpPrimaryFinalContinueResponseInvalidInterceptionErrorCount -
+          groupCdpPrimaryFinalContinueResponseInvalidInterceptionErrorStart,
+        groupCdpOtherContinueResponseInvalidInterceptionErrorCount:
+          cdpOtherContinueResponseInvalidInterceptionErrorCount -
+          groupCdpOtherContinueResponseInvalidInterceptionErrorStart,
         groupCdpOtherProtocolErrorCount:
           cdpOtherProtocolErrorCount - groupCdpOtherProtocolErrorStart,
         groupCdpHandlerFailureClasses: snapshotSafeDiagnosticClasses(
@@ -39301,6 +39708,7 @@ try {
         "activeAllowedTunnelResidualCount",
         "activeAllowedTunnelRequestBindingResidualCount",
         "preparedExactTunnelResetResidualCount",
+        "releasedResponseStreamResidualCount",
       ]) {
         assert.equal(
           groupPostContextCloseProxySnapshot[field],
@@ -41754,6 +42162,8 @@ const browserWideBoundaryAttestation = {
     browserConnectProxyFinalSnapshot.activeAllowedTunnelResidualCount +
     browserConnectProxyFinalSnapshot.activeAllowedTunnelRequestBindingResidualCount +
     browserConnectProxyFinalSnapshot.preparedExactTunnelResetResidualCount +
+    browserConnectProxyFinalSnapshot.releasedResponseStreamResidualCount +
+    browserConnectProxyFinalSnapshot.releasedResponseStreamResidualAtCloseCount +
     browserConnectProxyFinalSnapshot.requestStageAuthorizationResidualCount +
     browserConnectProxyFinalSnapshot.authorityLeaseResidualCount +
     browserConnectProxyFinalSnapshot.authorityLeaseQueueResidualCount,
@@ -41916,6 +42326,8 @@ const appCheckBinding = {
     browserConnectProxyFinalSnapshot.activeAllowedTunnelResidualCount +
     browserConnectProxyFinalSnapshot.activeAllowedTunnelRequestBindingResidualCount +
     browserConnectProxyFinalSnapshot.preparedExactTunnelResetResidualCount +
+    browserConnectProxyFinalSnapshot.releasedResponseStreamResidualCount +
+    browserConnectProxyFinalSnapshot.releasedResponseStreamResidualAtCloseCount +
     browserConnectProxyFinalSnapshot.requestStageAuthorizationResidualCount +
     browserConnectProxyFinalSnapshot.authorityLeaseResidualCount +
     browserConnectProxyFinalSnapshot.authorityLeaseQueueResidualCount,
@@ -42034,6 +42446,11 @@ const appCheckBinding = {
   allowedEgressPostFinalResponseErrorPauseCount,
   allowedEgressPostFinalContinueResponseSuccessCount,
   allowedEgressPostFinalAlreadyRetiredInterceptionCount,
+  cdpContinueRequestInvalidInterceptionErrorCount,
+  cdpContinueResponseInvalidInterceptionErrorCount,
+  cdpPrimaryFinalContinueResponseInvalidInterceptionErrorCount,
+  cdpOtherContinueResponseInvalidInterceptionErrorCount,
+  cdpOtherProtocolErrorCount,
   traceWriteCount,
   harWriteCount,
   storageStateWriteCount,
@@ -42265,6 +42682,16 @@ assert.equal(
   allowedEgressPostFinalResponseErrorPauseCount,
   allowedEgressPostFinalContinueResponseSuccessCount +
     allowedEgressPostFinalAlreadyRetiredInterceptionCount,
+);
+assert.equal(cdpContinueRequestInvalidInterceptionErrorCount, 0);
+assert.equal(cdpContinueResponseInvalidInterceptionErrorCount, 0);
+assert.equal(cdpPrimaryFinalContinueResponseInvalidInterceptionErrorCount, 0);
+assert.equal(cdpOtherContinueResponseInvalidInterceptionErrorCount, 0);
+assert.equal(cdpOtherProtocolErrorCount, 0);
+assert.equal(
+  cdpContinueResponseInvalidInterceptionErrorCount,
+  cdpPrimaryFinalContinueResponseInvalidInterceptionErrorCount +
+    cdpOtherContinueResponseInvalidInterceptionErrorCount,
 );
 assert.equal(nodeOwnedExternalInformationalBrowserExposureCount, 0);
 assert.equal(directBrowserEarlyHintsObservationCount, 0);
