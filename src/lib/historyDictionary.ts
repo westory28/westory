@@ -213,6 +213,13 @@ export const subscribeStudentHistoryDictionaryWords = (
         snapshot.docs.map((item) => mapDoc<StudentHistoryDictionaryWord>(item)),
       );
     },
+    (error) => {
+      console.error(
+        "Failed to subscribe student history dictionary words:",
+        error,
+      );
+      onChange([]);
+    },
   );
 
 export const subscribeTeacherHistoryDictionaryRequests = (

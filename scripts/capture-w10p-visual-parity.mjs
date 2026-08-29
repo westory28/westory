@@ -11396,6 +11396,8 @@ const SAFE_BROWSER_ERROR_OPERATION_CLASSES = Object.freeze([
   "settings-privacy-policy-read",
   "settings-privacy-terms-read",
   "settings-school-config-read",
+  "student-history-dictionary-read",
+  "student-rank-promotion-read",
   "teacher-patch-notes-read",
   "unknown-operation",
 ]);
@@ -11616,6 +11618,16 @@ const classifySafeBrowserErrorOperation = (value) => {
     ["Failed to load semester core:", "semester-core-read"],
     ["Failed to load canonical semester readiness:", "semester-readiness-read"],
     ["Failed to load semester readiness:", "semester-readiness-read"],
+    [
+      "Failed to subscribe student history dictionary words:",
+      "student-history-dictionary-read",
+    ],
+    [
+      "Failed to load student rank promotion state:",
+      "student-rank-promotion-read",
+    ],
+    ["Failed to load student header rank:", "student-rank-promotion-read"],
+    ["Failed to refresh student header rank:", "student-rank-promotion-read"],
   ];
   return (
     fixedOperationByPrefix.find(([prefix]) =>
@@ -11756,6 +11768,194 @@ const snapshotSafeBrowserErrorAccumulator = (accumulator) => ({
   pageErrorSha256SampleLimit: SAFE_BROWSER_ERROR_HASH_SAMPLE_LIMIT,
   pageErrorSha256SampleTruncated: accumulator.hashSampleTruncated,
 });
+const normalizeSafeBrowserErrorClassHistogram = (records) => {
+  const reject = () => {
+    throw new Error("W10P_SAFE_BROWSER_ERROR_HISTOGRAM_REJECTED");
+  };
+  if (!Array.isArray(records)) reject();
+  const expectedKeys = [
+    "count",
+    "errorNameClass",
+    "messageClass",
+    "operationClass",
+    "sourceClass",
+  ];
+  let recordValues;
+  try {
+    const arrayDescriptors = Object.getOwnPropertyDescriptors(records);
+    const lengthDescriptor = arrayDescriptors.length;
+    if (
+      Object.getPrototypeOf(records) !== Array.prototype ||
+      !lengthDescriptor ||
+      !Object.prototype.hasOwnProperty.call(lengthDescriptor, "value") ||
+      !Number.isSafeInteger(lengthDescriptor.value) ||
+      lengthDescriptor.value < 0
+    ) {
+      reject();
+    }
+    const expectedArrayKeys = [
+      ...Array.from({ length: lengthDescriptor.value }, (_, index) =>
+        String(index),
+      ),
+      "length",
+    ].sort();
+    const arrayOwnKeys = Reflect.ownKeys(records);
+    if (
+      arrayOwnKeys.some((key) => typeof key !== "string") ||
+      [...arrayOwnKeys].sort().join("\u0000") !==
+        expectedArrayKeys.join("\u0000")
+    ) {
+      reject();
+    }
+    recordValues = expectedArrayKeys
+      .filter((key) => key !== "length")
+      .map((key) => {
+        const descriptor = arrayDescriptors[key];
+        if (
+          !descriptor ||
+          !Object.prototype.hasOwnProperty.call(descriptor, "value") ||
+          descriptor.get !== undefined ||
+          descriptor.set !== undefined ||
+          descriptor.enumerable !== true
+        ) {
+          reject();
+        }
+        return descriptor.value;
+      });
+  } catch {
+    reject();
+  }
+  const seenKeys = new Set();
+  const normalized = recordValues.map((record) => {
+    if (!record || typeof record !== "object" || Array.isArray(record)) {
+      reject();
+    }
+    let recordPrototype;
+    let ownKeys;
+    let descriptors;
+    try {
+      recordPrototype = Object.getPrototypeOf(record);
+      ownKeys = Reflect.ownKeys(record);
+      descriptors = Object.getOwnPropertyDescriptors(record);
+    } catch {
+      reject();
+    }
+    if (
+      recordPrototype !== Object.prototype ||
+      ownKeys.some((key) => typeof key !== "string") ||
+      [...ownKeys].sort().join("\u0000") !== expectedKeys.join("\u0000")
+    ) {
+      reject();
+    }
+    const values = {};
+    for (const key of expectedKeys) {
+      const descriptor = descriptors[key];
+      if (
+        !descriptor ||
+        !Object.prototype.hasOwnProperty.call(descriptor, "value") ||
+        descriptor.get !== undefined ||
+        descriptor.set !== undefined ||
+        descriptor.enumerable !== true
+      ) {
+        reject();
+      }
+      values[key] = descriptor.value;
+    }
+    if (
+      !SAFE_BROWSER_ERROR_SOURCE_CLASSES.includes(values.sourceClass) ||
+      !SAFE_BROWSER_ERROR_NAME_CLASSES.includes(values.errorNameClass) ||
+      !SAFE_BROWSER_ERROR_MESSAGE_CLASSES.includes(values.messageClass) ||
+      !SAFE_BROWSER_ERROR_OPERATION_CLASSES.includes(values.operationClass) ||
+      !Number.isSafeInteger(values.count) ||
+      values.count < 1
+    ) {
+      reject();
+    }
+    const key = `${values.sourceClass}\u0000${values.errorNameClass}\u0000${values.messageClass}\u0000${values.operationClass}`;
+    if (seenKeys.has(key)) reject();
+    seenKeys.add(key);
+    return Object.freeze({
+      sourceClass: values.sourceClass,
+      errorNameClass: values.errorNameClass,
+      messageClass: values.messageClass,
+      operationClass: values.operationClass,
+      count: values.count,
+    });
+  });
+  return Object.freeze(
+    normalized.sort(
+      (left, right) =>
+        left.sourceClass.localeCompare(right.sourceClass) ||
+        left.errorNameClass.localeCompare(right.errorNameClass) ||
+        left.messageClass.localeCompare(right.messageClass) ||
+        left.operationClass.localeCompare(right.operationClass),
+    ),
+  );
+};
+const subtractSafeBrowserErrorClassHistograms = (input) => {
+  const reject = () => {
+    throw new Error("W10P_SAFE_BROWSER_ERROR_HISTOGRAM_REJECTED");
+  };
+  if (!input || typeof input !== "object" || Array.isArray(input)) reject();
+  let baseline;
+  let settlement;
+  try {
+    const ownKeys = Reflect.ownKeys(input);
+    const descriptors = Object.getOwnPropertyDescriptors(input);
+    if (
+      Object.getPrototypeOf(input) !== Object.prototype ||
+      ownKeys.some((key) => typeof key !== "string") ||
+      [...ownKeys].sort().join("\u0000") !== "baseline\u0000settlement"
+    ) {
+      reject();
+    }
+    for (const key of ["baseline", "settlement"]) {
+      const descriptor = descriptors[key];
+      if (
+        !descriptor ||
+        !Object.prototype.hasOwnProperty.call(descriptor, "value") ||
+        descriptor.get !== undefined ||
+        descriptor.set !== undefined ||
+        descriptor.enumerable !== true
+      ) {
+        reject();
+      }
+    }
+    baseline = descriptors.baseline.value;
+    settlement = descriptors.settlement.value;
+  } catch {
+    reject();
+  }
+  const normalizedBaseline = normalizeSafeBrowserErrorClassHistogram(baseline);
+  const normalizedSettlement =
+    normalizeSafeBrowserErrorClassHistogram(settlement);
+  const baselineByKey = new Map(
+    normalizedBaseline.map((record) => [
+      `${record.sourceClass}\u0000${record.errorNameClass}\u0000${record.messageClass}\u0000${record.operationClass}`,
+      record.count,
+    ]),
+  );
+  const delta = [];
+  for (const record of normalizedSettlement) {
+    const key = `${record.sourceClass}\u0000${record.errorNameClass}\u0000${record.messageClass}\u0000${record.operationClass}`;
+    const baselineCount = baselineByKey.get(key) || 0;
+    assert.equal(record.count >= baselineCount, true);
+    baselineByKey.delete(key);
+    if (record.count > baselineCount) {
+      delta.push(
+        Object.freeze({
+          sourceClass: record.sourceClass,
+          errorNameClass: record.errorNameClass,
+          messageClass: record.messageClass,
+          operationClass: record.operationClass,
+          count: record.count - baselineCount,
+        }),
+      );
+    }
+  }
+  assert.equal(baselineByKey.size, 0);
+  return Object.freeze(delta);
+};
 const safeHttpErrorResourceTypeClass = (resourceType) => {
   const normalizedResourceType = String(resourceType || "")
     .trim()
@@ -13466,6 +13666,73 @@ const SAFE_AUTHENTICATION_SNAPSHOT_STATUSES = Object.freeze([
 const SAFE_AUTHENTICATION_VIEWPORT_KEYS = Object.freeze(
   ["390x844", "768x1024", "1024x768", "1440x900", "1600x900"].sort(),
 );
+const SAFE_AUTHENTICATION_GROUP_CONTEXT_KEYS = Object.freeze([
+  "authenticationRole",
+  "captureRole",
+  "groupKey",
+  "stage",
+  "viewport",
+]);
+const normalizeSafeAuthenticationGroupContext = (context) => {
+  const reject = () => {
+    throw new Error("W10P_SAFE_AUTH_GROUP_CONTEXT_REJECTED");
+  };
+  if (!context || typeof context !== "object" || Array.isArray(context)) {
+    reject();
+  }
+  let contextPrototype;
+  let ownKeys;
+  let descriptors;
+  try {
+    contextPrototype = Object.getPrototypeOf(context);
+    ownKeys = Reflect.ownKeys(context);
+    descriptors = Object.getOwnPropertyDescriptors(context);
+  } catch {
+    reject();
+  }
+  if (
+    contextPrototype !== Object.prototype ||
+    ownKeys.some((key) => typeof key !== "string") ||
+    [...ownKeys].sort().join("\u0000") !==
+      [...SAFE_AUTHENTICATION_GROUP_CONTEXT_KEYS].sort().join("\u0000")
+  ) {
+    reject();
+  }
+  const values = {};
+  for (const key of SAFE_AUTHENTICATION_GROUP_CONTEXT_KEYS) {
+    const descriptor = descriptors[key];
+    if (
+      !descriptor ||
+      !Object.prototype.hasOwnProperty.call(descriptor, "value") ||
+      descriptor.get !== undefined ||
+      descriptor.set !== undefined ||
+      descriptor.enumerable !== true ||
+      typeof descriptor.value !== "string"
+    ) {
+      reject();
+    }
+    values[key] = descriptor.value;
+  }
+  if (
+    !SAFE_AUTHENTICATION_STAGES.includes(values.stage) ||
+    !SAFE_AUTHENTICATION_CAPTURE_ROLES.includes(values.captureRole) ||
+    !SAFE_AUTHENTICATION_AUTH_ROLES.includes(values.authenticationRole) ||
+    SAFE_AUTHENTICATION_ROLE_PAIRS[values.captureRole] !==
+      values.authenticationRole ||
+    !SAFE_AUTHENTICATION_VIEWPORT_KEYS.includes(values.viewport) ||
+    values.groupKey !==
+      `${values.stage}:${values.captureRole}:${values.viewport}`
+  ) {
+    reject();
+  }
+  return Object.freeze({
+    groupKey: values.groupKey,
+    stage: values.stage,
+    captureRole: values.captureRole,
+    authenticationRole: values.authenticationRole,
+    viewport: values.viewport,
+  });
+};
 const contractAuthenticationViewportKeys = Object.freeze(
   contract.viewports.map(({ width, height }) => `${width}x${height}`).sort(),
 );
@@ -14596,6 +14863,114 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
   const bypassSecret = "fixed-safe-auth-bypass-secret";
   const privateEmail = "fixed-safe-auth@example.invalid";
   const rawSecretUrl = `https://private.invalid/#/${debugToken}?token=${exchangedToken}&email=${privateEmail}&key=${apiKey}&bypass=${bypassSecret}`;
+  const authenticationGroupPositiveFixtures = [
+    {
+      groupKey: "baseline:admin:1440x900",
+      stage: "baseline",
+      captureRole: "admin",
+      authenticationRole: "admin",
+      viewport: "1440x900",
+    },
+    {
+      groupKey: "candidate:student:390x844",
+      stage: "candidate",
+      captureRole: "student",
+      authenticationRole: "student",
+      viewport: "390x844",
+    },
+    {
+      groupKey: "baseline:support-teacher:1440x900",
+      stage: "baseline",
+      captureRole: "support-teacher",
+      authenticationRole: "teacher",
+      viewport: "1440x900",
+    },
+    {
+      groupKey: "candidate:teacher:768x1024",
+      stage: "candidate",
+      captureRole: "teacher",
+      authenticationRole: "teacher",
+      viewport: "768x1024",
+    },
+  ];
+  for (const fixture of authenticationGroupPositiveFixtures) {
+    const normalized = normalizeSafeAuthenticationGroupContext(fixture);
+    assert.deepEqual(normalized, fixture);
+    assert.equal(Object.isFrozen(normalized), true);
+    assert.deepEqual(
+      Object.keys(normalized).sort(),
+      [...SAFE_AUTHENTICATION_GROUP_CONTEXT_KEYS].sort(),
+    );
+  }
+  const authenticationGroupBase = authenticationGroupPositiveFixtures[1];
+  let authenticationGroupCoercionCount = 0;
+  let authenticationGroupAccessorReadCount = 0;
+  const authenticationGroupCoercionValue = {
+    toString() {
+      authenticationGroupCoercionCount += 1;
+      return "student";
+    },
+    [Symbol.toPrimitive]() {
+      authenticationGroupCoercionCount += 1;
+      return "student";
+    },
+  };
+  const authenticationGroupWithSymbol = {
+    ...authenticationGroupBase,
+    [Symbol("fixed-private-auth-group")]: rawSecretUrl,
+  };
+  const authenticationGroupWithHiddenExtra = Object.defineProperty(
+    { ...authenticationGroupBase },
+    "fixedPrivateExtra",
+    { value: rawSecretUrl, enumerable: false },
+  );
+  const authenticationGroupWithAccessor = Object.defineProperty(
+    { ...authenticationGroupBase },
+    "viewport",
+    {
+      enumerable: true,
+      get() {
+        authenticationGroupAccessorReadCount += 1;
+        return "390x844";
+      },
+    },
+  );
+  const authenticationGroupRejectedFixtures = [
+    null,
+    [],
+    Object.assign(Object.create(null), authenticationGroupBase),
+    { ...authenticationGroupBase, stage: "production" },
+    { ...authenticationGroupBase, captureRole: "support-student" },
+    { ...authenticationGroupBase, authenticationRole: "teacher" },
+    { ...authenticationGroupBase, viewport: "391x844" },
+    { ...authenticationGroupBase, groupKey: "baseline:student:390x844" },
+    { ...authenticationGroupBase, groupKey: "candidate:student:390x844:extra" },
+    { ...authenticationGroupBase, groupKey: rawSecretUrl },
+    { ...authenticationGroupBase, extra: rawSecretUrl },
+    {
+      ...authenticationGroupBase,
+      captureRole: authenticationGroupCoercionValue,
+    },
+    authenticationGroupWithSymbol,
+    authenticationGroupWithHiddenExtra,
+    authenticationGroupWithAccessor,
+    new Proxy(
+      {},
+      {
+        ownKeys() {
+          throw new Error(rawSecretUrl);
+        },
+      },
+    ),
+  ];
+  for (const fixture of authenticationGroupRejectedFixtures) {
+    assert.throws(
+      () => normalizeSafeAuthenticationGroupContext(fixture),
+      /W10P_SAFE_AUTH_GROUP_CONTEXT_REJECTED/u,
+    );
+  }
+  assert.equal(authenticationGroupCoercionCount, 0);
+  assert.equal(authenticationGroupAccessorReadCount, 0);
   const baseSnapshot = {
     readyState: "complete",
     rootPresent: true,
@@ -17878,6 +18253,14 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     assert.equal(JSON.stringify(fallbackState).includes(rawSecretUrl), false);
   }
   return {
+    safeAuthenticationGroupContextAcceptedFixtureCount:
+      authenticationGroupPositiveFixtures.length,
+    safeAuthenticationGroupContextRejectedFixtureCount:
+      authenticationGroupRejectedFixtures.length,
+    safeAuthenticationGroupContextCoercionCount:
+      authenticationGroupCoercionCount,
+    safeAuthenticationGroupContextAccessorReadCount:
+      authenticationGroupAccessorReadCount,
     safeAuthenticationRouteDiagnosticFixtureCount: routeFixtures.length,
     safeAuthenticationRolePairFixtureCount: rolePairFixtures.length,
     safeAuthenticationDiagnosticRejectedFixtureCount: rejectedMutations.length,
@@ -18069,6 +18452,16 @@ const verifySafeBrowserErrorDiagnosticFixtures = () => {
     ["Failed to load semester core:", "semester-core-read"],
     ["Failed to load canonical semester readiness:", "semester-readiness-read"],
     ["Failed to load semester readiness:", "semester-readiness-read"],
+    [
+      "Failed to subscribe student history dictionary words:",
+      "student-history-dictionary-read",
+    ],
+    [
+      "Failed to load student rank promotion state:",
+      "student-rank-promotion-read",
+    ],
+    ["Failed to load student header rank:", "student-rank-promotion-read"],
+    ["Failed to refresh student header rank:", "student-rank-promotion-read"],
     ["opaque fixed-private-runtime-message", "unknown-operation"],
   ];
   for (const [prefix, expectedOperationClass] of operationFixtures) {
@@ -18080,6 +18473,23 @@ const verifySafeBrowserErrorDiagnosticFixtures = () => {
       deploymentBypassSecret,
     });
     assert.equal(operationRecord.operationClass, expectedOperationClass);
+  }
+  const operationBoundaryNegativeFixtures = [
+    "Uncaught error in snapshot listener",
+    "Failed to subscribe student history dictionary word:",
+    "Failed to load student rank promotion states:",
+    "Failed to load student header ranks:",
+    "prefix Failed to refresh student header rank:",
+  ];
+  for (const prefix of operationBoundaryNegativeFixtures) {
+    const operationRecord = createSafeBrowserErrorRecord({
+      sourceClass: "console-error",
+      value: `${prefix} ${permissionMessage}`,
+      debugToken,
+      debugSentinel,
+      deploymentBypassSecret,
+    });
+    assert.equal(operationRecord.operationClass, "unknown-operation");
   }
   const messageClassFixtures = [
     [
@@ -18143,6 +18553,97 @@ const verifySafeBrowserErrorDiagnosticFixtures = () => {
     operationAccumulatorSnapshot.pageErrorClassHistogram,
     operationHistogram,
   );
+  const operationDeltaRecord = createSafeBrowserErrorRecord({
+    sourceClass: "console-error",
+    value:
+      "Failed to subscribe student history dictionary words: FirebaseError: Missing or insufficient permissions.",
+    debugToken,
+    debugSentinel,
+    deploymentBypassSecret,
+  });
+  appendSafeBrowserErrorRecord(operationAccumulator, operationDeltaRecord);
+  const operationDeltaHistogram = subtractSafeBrowserErrorClassHistograms({
+    baseline: operationAccumulatorSnapshot.pageErrorClassHistogram,
+    settlement:
+      snapshotSafeBrowserErrorAccumulator(operationAccumulator)
+        .pageErrorClassHistogram,
+  });
+  assert.deepEqual(operationDeltaHistogram, [
+    {
+      sourceClass: "console-error",
+      errorNameClass: "console-error",
+      messageClass: "firebase-permission-denied",
+      operationClass: "student-history-dictionary-read",
+      count: 1,
+    },
+  ]);
+  assert.throws(() =>
+    subtractSafeBrowserErrorClassHistograms({
+      baseline: [{ ...operationDeltaHistogram[0], count: 2 }],
+      settlement: operationDeltaHistogram,
+    }),
+  );
+  let histogramRecordGetTrapCount = 0;
+  const histogramRecordProxy = new Proxy(
+    { ...operationDeltaHistogram[0] },
+    {
+      get(target, property, receiver) {
+        histogramRecordGetTrapCount += 1;
+        return Reflect.get(target, property, receiver);
+      },
+    },
+  );
+  assert.deepEqual(
+    normalizeSafeBrowserErrorClassHistogram([histogramRecordProxy]),
+    operationDeltaHistogram,
+  );
+  assert.equal(histogramRecordGetTrapCount, 0);
+  let histogramAccessorReadCount = 0;
+  const histogramAccessorRecord = Object.defineProperty(
+    { ...operationDeltaHistogram[0] },
+    "count",
+    {
+      enumerable: true,
+      get() {
+        histogramAccessorReadCount += 1;
+        return 1;
+      },
+    },
+  );
+  assert.throws(
+    () => normalizeSafeBrowserErrorClassHistogram([histogramAccessorRecord]),
+    /W10P_SAFE_BROWSER_ERROR_HISTOGRAM_REJECTED/u,
+  );
+  const histogramInputAccessor = Object.defineProperty(
+    { settlement: operationDeltaHistogram },
+    "baseline",
+    {
+      enumerable: true,
+      get() {
+        histogramAccessorReadCount += 1;
+        return [];
+      },
+    },
+  );
+  assert.throws(
+    () => subtractSafeBrowserErrorClassHistograms(histogramInputAccessor),
+    /W10P_SAFE_BROWSER_ERROR_HISTOGRAM_REJECTED/u,
+  );
+  assert.throws(
+    () =>
+      normalizeSafeBrowserErrorClassHistogram([
+        new Proxy(
+          {},
+          {
+            ownKeys() {
+              throw new Error(privateFragment);
+            },
+          },
+        ),
+      ]),
+    /W10P_SAFE_BROWSER_ERROR_HISTOGRAM_REJECTED/u,
+  );
+  assert.equal(histogramAccessorReadCount, 0);
   assert.deepEqual(
     records.map((record) => record.operationClass),
     [
@@ -18590,9 +19091,15 @@ const verifySafeBrowserErrorDiagnosticFixtures = () => {
   return {
     safeBrowserErrorDiagnosticFixtureCount: records.length,
     safeBrowserErrorOperationFixtureCount: operationFixtures.length,
+    safeBrowserErrorOperationBoundaryNegativeFixtureCount:
+      operationBoundaryNegativeFixtures.length,
     safeBrowserErrorMessageClassFixtureCount: messageClassFixtures.length,
     safeBrowserErrorOperationHistogramFixtureCount:
       operationHistogramRecords.length,
+    safeBrowserErrorOperationDeltaHistogramFixtureCount:
+      operationDeltaHistogram.length,
+    safeBrowserErrorHistogramAccessorReadCount: histogramAccessorReadCount,
+    safeBrowserErrorHistogramRecordGetTrapCount: histogramRecordGetTrapCount,
     safeBrowserErrorDiagnosticHistogramEntryCount: histogram.length,
     safeRouteResponseDiagnosticFixtureCount: 5,
     safeFirebaseResponseDiagnosticFixtureCount: 4,
@@ -34829,6 +35336,7 @@ try {
     browserConnectProxy.setAuditStage(stage);
     await browserWideBoundaryController.handoffPrimaryRequestBoundary(groupKey);
     const pageErrorAccumulator = createSafeBrowserErrorAccumulator();
+    let safeBrowserErrorObservationSequence = 0;
     page.on("pageerror", (error) => {
       let rawText = String(error);
       const safeRecord = createSafeBrowserErrorRecord({
@@ -34857,6 +35365,7 @@ try {
       ) {
         browserConsoleSecretObservationCount += 1;
       }
+      safeBrowserErrorObservationSequence += 1;
       appendSafeBrowserErrorRecord(pageErrorAccumulator, safeRecord);
       rawText = "";
     });
@@ -34993,6 +35502,7 @@ try {
               Date.now();
           }
         }
+        safeBrowserErrorObservationSequence += 1;
         appendSafeBrowserErrorRecord(pageErrorAccumulator, safeRecord);
       }
       rawText = "";
@@ -35011,6 +35521,29 @@ try {
       assert.equal(
         SAFE_AUTHENTICATION_ROLE_PAIRS[captureRole],
         authenticationRole,
+      );
+      const authenticationGroupContext =
+        normalizeSafeAuthenticationGroupContext({
+          groupKey,
+          stage,
+          captureRole,
+          authenticationRole,
+          viewport: viewportName,
+        });
+      const authenticationBrowserErrorSequenceBaseline =
+        safeBrowserErrorObservationSequence;
+      const authenticationBrowserErrorCountBaseline =
+        pageErrorAccumulator.totalCount;
+      const authenticationBrowserErrorBaselineClassHistogram =
+        snapshotSafeBrowserErrorAccumulator(
+          pageErrorAccumulator,
+        ).pageErrorClassHistogram;
+      assert.equal(
+        authenticationBrowserErrorBaselineClassHistogram.reduce(
+          (total, record) => total + record.count,
+          0,
+        ),
+        authenticationBrowserErrorCountBaseline,
       );
       const authentication = await authenticate(
         page,
@@ -35587,8 +36120,41 @@ try {
         groupCdpFirebaseResponseDiagnostics.filter(
           (response) => response.phase === "authentication",
         );
+      const authenticationBrowserErrorSequenceAtSettlement =
+        safeBrowserErrorObservationSequence;
+      const authenticationBrowserErrorCountAtSettlement =
+        pageErrorAccumulator.totalCount;
+      const authenticationBrowserErrorSequenceDelta =
+        authenticationBrowserErrorSequenceAtSettlement -
+        authenticationBrowserErrorSequenceBaseline;
+      const authenticationBrowserErrorCountDelta =
+        authenticationBrowserErrorCountAtSettlement -
+        authenticationBrowserErrorCountBaseline;
+      assert.ok(authenticationBrowserErrorSequenceDelta >= 0);
+      assert.ok(authenticationBrowserErrorCountDelta >= 0);
+      assert.equal(
+        authenticationBrowserErrorSequenceDelta,
+        authenticationBrowserErrorCountDelta,
+      );
       const authenticationBrowserErrorSnapshot =
         snapshotSafeBrowserErrorAccumulator(pageErrorAccumulator);
+      assert.equal(
+        authenticationBrowserErrorCountAtSettlement,
+        authenticationBrowserErrorSnapshot.pageErrorCount,
+      );
+      const authenticationBrowserErrorDeltaClassHistogram =
+        subtractSafeBrowserErrorClassHistograms({
+          baseline: authenticationBrowserErrorBaselineClassHistogram,
+          settlement:
+            authenticationBrowserErrorSnapshot.pageErrorClassHistogram,
+        });
+      assert.equal(
+        authenticationBrowserErrorDeltaClassHistogram.reduce(
+          (total, record) => total + record.count,
+          0,
+        ),
+        authenticationBrowserErrorCountDelta,
+      );
       const authenticationPageErrorCount =
         authenticationBrowserErrorSnapshot.pageErrorClassHistogram
           .filter((record) => record.sourceClass === "pageerror")
@@ -35618,7 +36184,17 @@ try {
       browserConsoleErrorRecoveredProtectedReadCount +=
         authenticationConsoleErrorRecoveredCount;
       const authenticationBrowserErrorDiagnostic = {
+        ...authenticationGroupContext,
         ...authenticationBrowserErrorSnapshot,
+        authenticationBrowserErrorSequenceBaseline,
+        authenticationBrowserErrorSequenceAtSettlement,
+        authenticationBrowserErrorSequenceDelta,
+        authenticationBrowserErrorCountBaseline,
+        authenticationBrowserErrorCountDelta,
+        authenticationBrowserErrorBaselineClassHistogram,
+        authenticationBrowserErrorDeltaClassHistogram,
+        authenticationBrowserErrorSnapshotScope: "group-listener-lifetime",
+        authenticationBrowserErrorDeltaScope: "authentication-window",
         ...summarizeSafeFirebaseResponseStatuses(
           authenticationFirebaseResponses,
         ),
