@@ -4383,14 +4383,24 @@ const createBrowserConnectProxyGate = ({
   const authorityLeasesByRequestId = new Map();
   const authorityLeaseQueues = new Map();
   const activeAllowedTunnelCounts = new Map();
+  const activeAllowedTunnelsByRequestId = new Map();
+  const preparedExactTunnelResetsByRequestId = new Map();
   const requestStageAuthorizationCounts = new Map();
   const authorityLeaseConsumeCounts = new Map();
+  const targetedTunnelRetirementCounts = new Map();
   let auditStage = "browser-launch";
+  let allowedTunnelSequence = 0;
+  let proxyTransportEventSequence = 0;
   const authorityLeaseTtlMilliseconds = 5_000;
   const currentTimeMilliseconds = () => {
     const value = nowMilliseconds();
     assert.ok(Number.isSafeInteger(value) && value >= 0);
     return value;
+  };
+  const nextProxyTransportEventSequence = () => {
+    proxyTransportEventSequence += 1;
+    assert.ok(Number.isSafeInteger(proxyTransportEventSequence));
+    return proxyTransportEventSequence;
   };
   const stats = {
     listenerStartCount: 0,
@@ -4410,6 +4420,11 @@ const createBrowserConnectProxyGate = ({
     authorityLeaseUnusedCompletionCount: 0,
     authorityLeaseRevocationCount: 0,
     authorityLeaseExpiredBeforeConnectCount: 0,
+    targetedTunnelRetirementAttemptCount: 0,
+    targetedTunnelRetirementSuccessCount: 0,
+    targetedTunnelRetiredClientSocketCount: 0,
+    targetedTunnelRetiredUpstreamSocketCount: 0,
+    targetedTunnelAuthorityDrainSuccessCount: 0,
     uncorrelatedAllowedConnectDenyCount: 0,
     upstreamSocketCreateCount: 0,
     httpAbsoluteFormDenyCount: 0,
@@ -4427,6 +4442,13 @@ const createBrowserConnectProxyGate = ({
   };
   const authorityKey = (hostname, port) =>
     `${String(hostname).toLowerCase()}:${String(port)}`;
+  const exactTunnelResetPendingForAuthority = (authority) => {
+    assert.equal(typeof authority, "string");
+    assert.ok(authority.length > 0);
+    return [...preparedExactTunnelResetsByRequestId.values()].some(
+      (preparation) => preparation.authority === authority,
+    );
+  };
   const removeLeaseFromQueue = (lease) => {
     const queue = authorityLeaseQueues.get(lease.authority) || [];
     const nextQueue = queue.filter(
@@ -4466,6 +4488,17 @@ const createBrowserConnectProxyGate = ({
     authorityLeaseConsumeCounts.set(
       key,
       (authorityLeaseConsumeCounts.get(key) || 0) + 1,
+    );
+  };
+  const recordTargetedTunnelRetirementObservation = ({ stage, hostname }) => {
+    const key = JSON.stringify({
+      stage,
+      hostname,
+      kind: "exact-request-authority-tunnel-retired-and-drained",
+    });
+    targetedTunnelRetirementCounts.set(
+      key,
+      (targetedTunnelRetirementCounts.get(key) || 0) + 1,
     );
   };
   const denySocket = (socket, responseLine, message, { fatal = true } = {}) => {
@@ -4600,6 +4633,10 @@ const createBrowserConnectProxyGate = ({
     }
     stats.allowedConnectCount += 1;
     stats.authorityLeaseConsumeCount += 1;
+    allowedTunnelSequence += 1;
+    assert.ok(Number.isSafeInteger(allowedTunnelSequence));
+    consumedAuthorityLease.consumedTunnelSequence = allowedTunnelSequence;
+    consumedAuthorityLease.consumeSequence = nextProxyTransportEventSequence();
     recordLeaseConsumeObservation(consumedAuthorityLease);
     stats.upstreamSocketCreateCount += 1;
     const allowedAuthority = authorityKey(authority.hostname, authority.port);
@@ -4625,8 +4662,30 @@ const createBrowserConnectProxyGate = ({
       return;
     }
     upstreamSockets.add(upstreamSocket);
+    const allowedTunnel = Object.freeze({
+      requestId: consumedAuthorityLease.requestId,
+      stage: consumedAuthorityLease.stage,
+      hostname: consumedAuthorityLease.hostname,
+      authority: allowedAuthority,
+      leaseIssueSequence: consumedAuthorityLease.issueSequence,
+      leaseConsumeSequence: consumedAuthorityLease.consumeSequence,
+      tunnelSequence: allowedTunnelSequence,
+      clientSocket,
+      upstreamSocket,
+    });
+    assert.equal(
+      activeAllowedTunnelsByRequestId.has(allowedTunnel.requestId),
+      false,
+    );
+    activeAllowedTunnelsByRequestId.set(allowedTunnel.requestId, allowedTunnel);
     upstreamSocket.once("close", () => {
       upstreamSockets.delete(upstreamSocket);
+      if (
+        activeAllowedTunnelsByRequestId.get(allowedTunnel.requestId) ===
+        allowedTunnel
+      ) {
+        activeAllowedTunnelsByRequestId.delete(allowedTunnel.requestId);
+      }
       const remaining =
         (activeAllowedTunnelCounts.get(allowedAuthority) || 1) - 1;
       if (remaining > 0)
@@ -4710,6 +4769,8 @@ const createBrowserConnectProxyGate = ({
       }
       assert.equal(clientSockets.size, 0);
       assert.equal(upstreamSockets.size, 0);
+      assert.equal(activeAllowedTunnelsByRequestId.size, 0);
+      assert.equal(preparedExactTunnelResetsByRequestId.size, 0);
     },
     setAuditStage(stage) {
       assert.equal(typeof stage, "string");
@@ -4748,8 +4809,19 @@ const createBrowserConnectProxyGate = ({
       assert.equal(allowedRequestOriginSet.has(normalizedRequestOrigin), true);
       assert.equal(stage, auditStage);
       const authority = authorityKey(hostname, port);
+      assert.equal(exactTunnelResetPendingForAuthority(authority), false);
       const activeTunnelPresentAtAuthorization =
         (activeAllowedTunnelCounts.get(authority) || 0) > 0;
+      const activeTunnelSequencesAtAuthorization = [
+        ...activeAllowedTunnelsByRequestId.values(),
+      ]
+        .filter((tunnel) => tunnel.authority === authority)
+        .map((tunnel) => tunnel.tunnelSequence)
+        .sort((left, right) => left - right);
+      assert.equal(
+        activeTunnelPresentAtAuthorization,
+        activeTunnelSequencesAtAuthorization.length > 0,
+      );
       const authorization = {
         requestId,
         stage,
@@ -4758,6 +4830,7 @@ const createBrowserConnectProxyGate = ({
         requestMethod: normalizedRequestMethod,
         requestOrigin: normalizedRequestOrigin,
         activeTunnelPresentAtAuthorization,
+        activeTunnelSequencesAtAuthorization,
       };
       requestStageAuthorizationsByRequestId.set(requestId, authorization);
       stats.requestStageAuthorizationCount += 1;
@@ -4781,10 +4854,13 @@ const createBrowserConnectProxyGate = ({
         authority,
         requestMethod: normalizedRequestMethod,
         requestOrigin: normalizedRequestOrigin,
+        issueSequence: nextProxyTransportEventSequence(),
         issuedAt,
         expiresAt: issuedAt + authorityLeaseTtlMilliseconds,
         state: "issued",
         consumedAt: null,
+        consumeSequence: null,
+        consumedTunnelSequence: null,
       };
       authorityLeasesByRequestId.set(requestId, lease);
       authorityLeaseQueues.set(authority, [
@@ -4855,6 +4931,289 @@ const createBrowserConnectProxyGate = ({
       } catch {
         return null;
       }
+    },
+    prepareExactRequestAuthorityTunnelReset({
+      requestId,
+      expectedHostname,
+      stage,
+    }) {
+      assert.equal(typeof requestId, "string");
+      assert.ok(requestId.length > 0);
+      assert.equal(typeof expectedHostname, "string");
+      assert.equal(
+        expectedHostname,
+        canonicalNetworkHostname(expectedHostname),
+      );
+      assert.equal(allowedHostnameSet.has(expectedHostname), true);
+      assert.equal(typeof stage, "string");
+      assert.equal(stage, auditStage);
+      assert.equal(preparedExactTunnelResetsByRequestId.has(requestId), false);
+      const authorization =
+        requestStageAuthorizationsByRequestId.get(requestId) || null;
+      const lease = authorityLeasesByRequestId.get(requestId) || null;
+      assert.ok(authorization);
+      assert.ok(lease);
+      assert.equal(authorization.requestId, requestId);
+      assert.equal(lease.requestId, requestId);
+      assert.equal(authorization.stage, stage);
+      assert.equal(lease.stage, stage);
+      assert.equal(authorization.hostname, expectedHostname);
+      assert.equal(lease.hostname, expectedHostname);
+      assert.equal(
+        exactTunnelResetPendingForAuthority(authorization.authority),
+        false,
+      );
+      assert.ok(["issued", "consumed"].includes(lease.state));
+      assert.equal(authorization.activeTunnelPresentAtAuthorization, true);
+      const failedLeaseClass =
+        classifyBrowserConnectProxyAuthorityLeaseDiagnostic({
+          leaseState: lease.state,
+          expiresAt: lease.expiresAt,
+          nowMilliseconds: currentTimeMilliseconds(),
+          activeTunnelPresent: authorization.activeTunnelPresentAtAuthorization,
+        });
+      assert.ok(
+        ["issued-active-tunnel", "consumed-active-tunnel"].includes(
+          failedLeaseClass,
+        ),
+      );
+      const sameAuthorityAuthorizations = [
+        ...requestStageAuthorizationsByRequestId.values(),
+      ].filter((candidate) => candidate.authority === authorization.authority);
+      assert.equal(sameAuthorityAuthorizations.length, 1);
+      assert.equal(sameAuthorityAuthorizations[0], authorization);
+      const authorityTunnels = [
+        ...activeAllowedTunnelsByRequestId.values(),
+      ].filter((candidate) => candidate.authority === authorization.authority);
+      assert.equal(authorityTunnels.length, 1);
+      const tunnel = authorityTunnels[0];
+      assert.equal(tunnel.stage, stage);
+      assert.equal(tunnel.hostname, expectedHostname);
+      assert.equal(tunnel.authority, authorization.authority);
+      if (lease.state === "issued") {
+        assert.equal(lease.consumedTunnelSequence, null);
+        assert.deepEqual(authorization.activeTunnelSequencesAtAuthorization, [
+          tunnel.tunnelSequence,
+        ]);
+      } else {
+        assert.equal(lease.state, "consumed");
+        assert.equal(lease.consumedTunnelSequence, tunnel.tunnelSequence);
+      }
+      const activeAuthorityTunnelCountBefore =
+        activeAllowedTunnelCounts.get(tunnel.authority) || 0;
+      assert.equal(activeAuthorityTunnelCountBefore, 1);
+      const preparation = Object.freeze({
+        requestId,
+        expectedHostname,
+        stage,
+        authority: authorization.authority,
+        failedLeaseClass,
+        failedLeaseIssueSequence: lease.issueSequence,
+        tunnel,
+        activeAuthorityTunnelCountBefore,
+      });
+      preparedExactTunnelResetsByRequestId.set(requestId, preparation);
+      assert.equal(
+        exactTunnelResetPendingForAuthority(preparation.authority),
+        true,
+      );
+      stats.targetedTunnelRetirementAttemptCount += 1;
+      return preparation;
+    },
+    async retirePreparedExactRequestAuthorityTunnel({
+      preparation,
+      timeoutMilliseconds = 5_000,
+    }) {
+      assert.ok(preparation && typeof preparation === "object");
+      assert.ok(
+        Number.isSafeInteger(timeoutMilliseconds) && timeoutMilliseconds > 0,
+      );
+      const {
+        requestId,
+        expectedHostname,
+        stage,
+        authority,
+        failedLeaseClass,
+        failedLeaseIssueSequence,
+        tunnel,
+        activeAuthorityTunnelCountBefore,
+      } = preparation;
+      assert.equal(
+        preparedExactTunnelResetsByRequestId.get(requestId),
+        preparation,
+      );
+      assert.equal(exactTunnelResetPendingForAuthority(authority), true);
+      assert.equal(stage, auditStage);
+      assert.equal(requestStageAuthorizationsByRequestId.has(requestId), false);
+      assert.equal(authorityLeasesByRequestId.has(requestId), false);
+      assert.equal(
+        activeAllowedTunnelsByRequestId.get(tunnel.requestId),
+        tunnel,
+      );
+      assert.equal(tunnel.authority, authority);
+      assert.equal(tunnel.hostname, expectedHostname);
+      assert.equal(activeAllowedTunnelCounts.get(authority) || 0, 1);
+      assert.equal(
+        [...requestStageAuthorizationsByRequestId.values()].filter(
+          (candidate) => candidate.authority === authority,
+        ).length,
+        0,
+      );
+      const closePromises = [tunnel.clientSocket, tunnel.upstreamSocket].map(
+        (socket) =>
+          new Promise((resolveSocketClose) => {
+            if (socket.closed) {
+              resolveSocketClose();
+              return;
+            }
+            socket.once("close", resolveSocketClose);
+          }),
+      );
+      tunnel.clientSocket.destroy();
+      tunnel.upstreamSocket.destroy();
+      let timeoutId = null;
+      try {
+        await Promise.race([
+          Promise.all(closePromises),
+          new Promise((_, rejectTimeout) => {
+            timeoutId = setTimeout(
+              () =>
+                rejectTimeout(
+                  new Error(
+                    "The exact request authority tunnel did not drain within the bounded window.",
+                  ),
+                ),
+              timeoutMilliseconds,
+            );
+          }),
+        ]);
+      } finally {
+        if (timeoutId !== null) clearTimeout(timeoutId);
+      }
+      assert.equal(
+        activeAllowedTunnelsByRequestId.has(tunnel.requestId),
+        false,
+      );
+      assert.equal(activeAllowedTunnelCounts.get(tunnel.authority) || 0, 0);
+      assert.equal(
+        [...activeAllowedTunnelsByRequestId.values()].filter(
+          (candidate) => candidate.authority === tunnel.authority,
+        ).length,
+        0,
+      );
+      assert.equal(clientSockets.has(tunnel.clientSocket), false);
+      assert.equal(upstreamSockets.has(tunnel.upstreamSocket), false);
+      preparedExactTunnelResetsByRequestId.delete(requestId);
+      assert.equal(exactTunnelResetPendingForAuthority(authority), false);
+      const retirementCompleteSequence = nextProxyTransportEventSequence();
+      stats.targetedTunnelRetirementSuccessCount += 1;
+      stats.targetedTunnelRetiredClientSocketCount += 1;
+      stats.targetedTunnelRetiredUpstreamSocketCount += 1;
+      stats.targetedTunnelAuthorityDrainSuccessCount += 1;
+      recordTargetedTunnelRetirementObservation({
+        stage,
+        hostname: expectedHostname,
+      });
+      return Object.freeze({
+        schemaVersion: 1,
+        hostname: expectedHostname,
+        stage,
+        requestBound: true,
+        failedLeaseClass,
+        currentTunnelClassBefore: "current-active-tunnel",
+        singletonAuthorityTunnelBound: true,
+        failedAuthorizationCompletedBeforeRetirement: true,
+        noSameAuthorityAuthorizationBeforeRetirement: true,
+        creatorLeaseGenerationBound: true,
+        otherAuthorityTunnelRetirementCount: 0,
+        activeAuthorityTunnelCountBefore,
+        retiredClientSocketCount: 1,
+        retiredUpstreamSocketCount: 1,
+        activeAuthorityTunnelCountAfter: 0,
+        authorityDrained: true,
+        failedLeaseIssueSequence,
+        creatorLeaseIssueSequence: tunnel.leaseIssueSequence,
+        leaseConsumeSequence: tunnel.leaseConsumeSequence,
+        retiredTunnelSequence: tunnel.tunnelSequence,
+        retirementCompleteSequence,
+      });
+    },
+    attestFreshConnectForRequest({
+      requestId,
+      expectedHostname,
+      stage,
+      priorRetirement,
+    }) {
+      assert.equal(typeof requestId, "string");
+      assert.ok(requestId.length > 0);
+      assert.equal(typeof expectedHostname, "string");
+      assert.equal(
+        expectedHostname,
+        canonicalNetworkHostname(expectedHostname),
+      );
+      assert.equal(allowedHostnameSet.has(expectedHostname), true);
+      assert.equal(stage, auditStage);
+      assert.ok(priorRetirement && typeof priorRetirement === "object");
+      assert.equal(priorRetirement.hostname, expectedHostname);
+      assert.equal(priorRetirement.stage, stage);
+      assert.equal(priorRetirement.requestBound, true);
+      assert.equal(priorRetirement.authorityDrained, true);
+      assert.equal(priorRetirement.activeAuthorityTunnelCountAfter, 0);
+      const authorization =
+        requestStageAuthorizationsByRequestId.get(requestId) || null;
+      const lease = authorityLeasesByRequestId.get(requestId) || null;
+      assert.ok(authorization);
+      assert.ok(lease);
+      assert.equal(authorization.requestId, requestId);
+      assert.equal(lease.requestId, requestId);
+      assert.equal(authorization.hostname, expectedHostname);
+      assert.equal(lease.hostname, expectedHostname);
+      assert.equal(authorization.stage, stage);
+      assert.equal(lease.stage, stage);
+      assert.equal(
+        [...requestStageAuthorizationsByRequestId.values()].filter(
+          (candidate) => candidate.authority === authorization.authority,
+        ).length,
+        1,
+      );
+      const sameAuthorityActiveAuthorizationCount = 1;
+      assert.equal(authorization.activeTunnelPresentAtAuthorization, false);
+      assert.deepEqual(authorization.activeTunnelSequencesAtAuthorization, []);
+      assert.equal(lease.state, "consumed");
+      assert.ok(Number.isSafeInteger(lease.issueSequence));
+      assert.ok(Number.isSafeInteger(lease.consumeSequence));
+      assert.ok(Number.isSafeInteger(lease.consumedTunnelSequence));
+      assert.ok(
+        lease.issueSequence > priorRetirement.retirementCompleteSequence,
+      );
+      assert.ok(lease.consumeSequence > lease.issueSequence);
+      assert.ok(
+        lease.consumedTunnelSequence > priorRetirement.retiredTunnelSequence,
+      );
+      const tunnel = activeAllowedTunnelsByRequestId.get(requestId) || null;
+      if (tunnel !== null) {
+        assert.equal(tunnel.requestId, requestId);
+        assert.equal(tunnel.hostname, expectedHostname);
+        assert.equal(tunnel.stage, stage);
+        assert.equal(tunnel.leaseIssueSequence, lease.issueSequence);
+        assert.equal(tunnel.tunnelSequence, lease.consumedTunnelSequence);
+      }
+      return Object.freeze({
+        schemaVersion: 1,
+        hostname: expectedHostname,
+        stage,
+        requestBound: true,
+        activeTunnelPresentAtAuthorization: false,
+        retryLeaseClass: "consumed-no-active-tunnel",
+        freshLeaseIssued: true,
+        freshConnectConsumedLease: true,
+        leaseIssueSequenceAdvanced: true,
+        tunnelSequenceAdvanced: true,
+        sameAuthorityActiveAuthorizationCount,
+        retryLeaseIssueSequence: lease.issueSequence,
+        retryLeaseConsumeSequence: lease.consumeSequence,
+        freshTunnelSequence: lease.consumedTunnelSequence,
+      });
     },
     completeRequestStageAuthorization(requestId) {
       const authorization =
@@ -4930,8 +5289,42 @@ const createBrowserConnectProxyGate = ({
         .sort((left, right) =>
           JSON.stringify(left).localeCompare(JSON.stringify(right)),
         );
+      const targetedTunnelRetirementObservations = [
+        ...targetedTunnelRetirementCounts.entries(),
+      ]
+        .map(([serializedObservation, count]) => ({
+          ...JSON.parse(serializedObservation),
+          count,
+        }))
+        .sort((left, right) =>
+          JSON.stringify(left).localeCompare(JSON.stringify(right)),
+        );
+      const activeTunnelPresentAuthorizationObservationCount =
+        requestStageAuthorizationObservations
+          .filter(
+            (observation) =>
+              observation.kind === "authority-lease-active-tunnel-present",
+          )
+          .reduce((total, observation) => total + observation.count, 0);
+      const targetedTunnelRetirementObservationCount =
+        targetedTunnelRetirementObservations.reduce(
+          (total, observation) => total + observation.count,
+          0,
+        );
+      assert.equal(
+        stats.activeTunnelPresentAtAuthorizationCount,
+        activeTunnelPresentAuthorizationObservationCount,
+      );
+      assert.equal(
+        stats.targetedTunnelRetirementSuccessCount,
+        targetedTunnelRetirementObservationCount,
+      );
+      assert.ok(
+        stats.activeTunnelPresentAtAuthorizationCount >=
+          stats.targetedTunnelRetirementSuccessCount,
+      );
       return {
-        schemaVersion: 2,
+        schemaVersion: 3,
         allowedHostnames: [...allowedHostnameSet].sort(),
         allowedHostnameSetHash: secretSha256(
           JSON.stringify([...allowedHostnameSet].sort()),
@@ -4970,6 +5363,10 @@ const createBrowserConnectProxyGate = ({
         authorityLeaseConsumeObservationSetHash: secretSha256(
           JSON.stringify(authorityLeaseConsumeObservations),
         ),
+        targetedTunnelRetirementObservations,
+        targetedTunnelRetirementObservationSetHash: secretSha256(
+          JSON.stringify(targetedTunnelRetirementObservations),
+        ),
         requestStageAuthorizationResidualCount:
           requestStageAuthorizationsByRequestId.size,
         authorityLeaseResidualCount: authorityLeasesByRequestId.size,
@@ -4979,6 +5376,10 @@ const createBrowserConnectProxyGate = ({
         activeAllowedTunnelResidualCount: [
           ...activeAllowedTunnelCounts.values(),
         ].reduce((total, count) => total + count, 0),
+        activeAllowedTunnelRequestBindingResidualCount:
+          activeAllowedTunnelsByRequestId.size,
+        preparedExactTunnelResetResidualCount:
+          preparedExactTunnelResetsByRequestId.size,
         activeClientSocketCount: clientSockets.size,
         activeUpstreamSocketCount: upstreamSockets.size,
         fatalErrorCount: fatalErrors.length,
@@ -5009,6 +5410,8 @@ const waitForBrowserConnectProxyContextDrain = async ({
       snapshot.authorityLeaseResidualCount,
       snapshot.authorityLeaseQueueResidualCount,
       snapshot.activeAllowedTunnelResidualCount,
+      snapshot.activeAllowedTunnelRequestBindingResidualCount,
+      snapshot.preparedExactTunnelResetResidualCount,
     ].every((count) => count === 0);
     if (drained) return snapshot;
     const remainingMilliseconds = deadline - observedAt;
@@ -5813,7 +6216,11 @@ const summarizeSafeAuthenticationBootstrapRetirement = ({ before, after }) => {
   });
 };
 const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_POLICY_ID =
-  "w10p-protected-read-shared-transport-retry-v2";
+  "w10p-protected-read-shared-transport-retry-v3";
+const SAFE_AUTHENTICATION_PROTECTED_READ_TRANSPORT_RESET_POLICY_ID =
+  "w10p-protected-read-exact-firestore-tunnel-reset-v1";
+const SAFE_AUTHENTICATION_PROTECTED_READ_FIRESTORE_HOSTNAME =
+  "firestore.googleapis.com";
 const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_DELAY_MS = 2_000;
 const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_TARGETS = Object.freeze([
   "none",
@@ -5893,6 +6300,8 @@ const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES = Object.freeze({
   cdpContractMismatch: "authentication-protected-read-cdp-contract-mismatch",
   proxyProvenanceContractMismatch:
     "authentication-protected-read-proxy-provenance-contract-mismatch",
+  transportResetContractMismatch:
+    "authentication-protected-read-transport-reset-contract-mismatch",
   requestFailureContractMismatch:
     "authentication-protected-read-request-failure-contract-mismatch",
   localFailRequestContractMismatch:
@@ -6022,6 +6431,163 @@ const normalizeSafeAuthenticationProtectedReadRetryAttestation = (
   assert.equal(attestation.profileFinalOutcomeClass, "response-2xx");
   return Object.freeze({ ...attestation });
 };
+const normalizeSafeAuthenticationProtectedReadTransportResetAttestation = (
+  attestation,
+) => {
+  assert.ok(attestation && typeof attestation === "object");
+  assert.deepEqual(Object.keys(attestation).sort(), [
+    "activeAuthorityTunnelCountAfter",
+    "activeAuthorityTunnelCountBefore",
+    "authorityDrained",
+    "creatorLeaseGenerationBound",
+    "creatorLeaseIssueSequence",
+    "currentTunnelClassBefore",
+    "failedAttemptNumber",
+    "failedAuthorizationCompletedBeforeRetirement",
+    "failedLeaseClass",
+    "failedLeaseIssueSequence",
+    "hostname",
+    "leaseConsumeSequence",
+    "noSameAuthorityAuthorizationBeforeRetirement",
+    "otherAuthorityTunnelRetirementCount",
+    "policyId",
+    "requestBound",
+    "retiredClientSocketCount",
+    "retiredTunnelSequence",
+    "retiredUpstreamSocketCount",
+    "retirementCompleteSequence",
+    "retryAttemptNumber",
+    "schemaVersion",
+    "singletonAuthorityTunnelBound",
+    "stage",
+    "target",
+  ]);
+  assert.equal(attestation.schemaVersion, 1);
+  assert.equal(
+    attestation.policyId,
+    SAFE_AUTHENTICATION_PROTECTED_READ_TRANSPORT_RESET_POLICY_ID,
+  );
+  assert.equal(
+    attestation.hostname,
+    SAFE_AUTHENTICATION_PROTECTED_READ_FIRESTORE_HOSTNAME,
+  );
+  assert.ok(["baseline", "candidate"].includes(attestation.stage));
+  assert.ok(["config", "profile"].includes(attestation.target));
+  assert.equal(attestation.failedAttemptNumber, 1);
+  assert.equal(attestation.retryAttemptNumber, 2);
+  assert.equal(attestation.requestBound, true);
+  assert.ok(
+    ["issued-active-tunnel", "consumed-active-tunnel"].includes(
+      attestation.failedLeaseClass,
+    ),
+  );
+  assert.equal(attestation.currentTunnelClassBefore, "current-active-tunnel");
+  assert.equal(attestation.singletonAuthorityTunnelBound, true);
+  assert.equal(attestation.failedAuthorizationCompletedBeforeRetirement, true);
+  assert.equal(attestation.noSameAuthorityAuthorizationBeforeRetirement, true);
+  assert.equal(attestation.creatorLeaseGenerationBound, true);
+  assert.equal(attestation.otherAuthorityTunnelRetirementCount, 0);
+  assert.equal(attestation.activeAuthorityTunnelCountBefore, 1);
+  assert.equal(attestation.retiredClientSocketCount, 1);
+  assert.equal(attestation.retiredUpstreamSocketCount, 1);
+  assert.equal(attestation.activeAuthorityTunnelCountAfter, 0);
+  assert.equal(attestation.authorityDrained, true);
+  for (const key of [
+    "failedLeaseIssueSequence",
+    "creatorLeaseIssueSequence",
+    "leaseConsumeSequence",
+    "retiredTunnelSequence",
+    "retirementCompleteSequence",
+  ]) {
+    assert.ok(Number.isSafeInteger(attestation[key]));
+    assert.ok(attestation[key] > 0);
+  }
+  assert.ok(
+    attestation.retirementCompleteSequence >
+      Math.max(
+        attestation.failedLeaseIssueSequence,
+        attestation.creatorLeaseIssueSequence,
+        attestation.leaseConsumeSequence,
+      ),
+  );
+  if (attestation.failedLeaseClass === "issued-active-tunnel") {
+    assert.ok(
+      attestation.creatorLeaseIssueSequence < attestation.leaseConsumeSequence,
+    );
+    assert.ok(
+      attestation.leaseConsumeSequence < attestation.failedLeaseIssueSequence,
+    );
+  } else {
+    assert.equal(attestation.failedLeaseClass, "consumed-active-tunnel");
+    assert.equal(
+      attestation.failedLeaseIssueSequence,
+      attestation.creatorLeaseIssueSequence,
+    );
+    assert.ok(
+      attestation.failedLeaseIssueSequence < attestation.leaseConsumeSequence,
+    );
+  }
+  assert.ok(
+    attestation.leaseConsumeSequence < attestation.retirementCompleteSequence,
+  );
+  return Object.freeze({ ...attestation });
+};
+const normalizeSafeAuthenticationProtectedReadFreshConnectAttestation = (
+  attestation,
+) => {
+  assert.ok(attestation && typeof attestation === "object");
+  assert.deepEqual(Object.keys(attestation).sort(), [
+    "activeTunnelPresentAtAuthorization",
+    "freshConnectConsumedLease",
+    "freshLeaseIssued",
+    "freshTunnelSequence",
+    "hostname",
+    "leaseIssueSequenceAdvanced",
+    "policyId",
+    "requestBound",
+    "retryAttemptNumber",
+    "retryLeaseClass",
+    "retryLeaseConsumeSequence",
+    "retryLeaseIssueSequence",
+    "sameAuthorityActiveAuthorizationCount",
+    "schemaVersion",
+    "stage",
+    "target",
+    "tunnelSequenceAdvanced",
+  ]);
+  assert.equal(attestation.schemaVersion, 1);
+  assert.equal(
+    attestation.policyId,
+    SAFE_AUTHENTICATION_PROTECTED_READ_TRANSPORT_RESET_POLICY_ID,
+  );
+  assert.equal(
+    attestation.hostname,
+    SAFE_AUTHENTICATION_PROTECTED_READ_FIRESTORE_HOSTNAME,
+  );
+  assert.ok(["baseline", "candidate"].includes(attestation.stage));
+  assert.ok(["config", "profile"].includes(attestation.target));
+  assert.equal(attestation.retryAttemptNumber, 2);
+  assert.equal(attestation.requestBound, true);
+  assert.equal(attestation.activeTunnelPresentAtAuthorization, false);
+  assert.equal(attestation.retryLeaseClass, "consumed-no-active-tunnel");
+  assert.equal(attestation.freshLeaseIssued, true);
+  assert.equal(attestation.freshConnectConsumedLease, true);
+  assert.equal(attestation.leaseIssueSequenceAdvanced, true);
+  assert.equal(attestation.tunnelSequenceAdvanced, true);
+  assert.equal(attestation.sameAuthorityActiveAuthorizationCount, 1);
+  for (const key of [
+    "retryLeaseIssueSequence",
+    "retryLeaseConsumeSequence",
+    "freshTunnelSequence",
+  ]) {
+    assert.ok(Number.isSafeInteger(attestation[key]));
+    assert.ok(attestation[key] > 0);
+  }
+  assert.ok(
+    attestation.retryLeaseConsumeSequence > attestation.retryLeaseIssueSequence,
+  );
+  return Object.freeze({ ...attestation });
+};
 const confirmSafeAuthenticationProtectedReadRetry = (
   {
     pageAttestation,
@@ -6117,10 +6683,12 @@ const confirmSafeAuthenticationProtectedReadRetry = (
       assert.deepEqual(Object.keys(record).sort(), [
         "attemptNumber",
         "currentTunnelClass",
+        "freshConnectAttestation",
         "lifecycleKind",
         "proxyLeaseClass",
         "responseClass",
         "target",
+        "transportResetAttestation",
       ]);
       assert.equal(record.attemptNumber, index + 1);
       assert.equal(record.lifecycleKind, "primary");
@@ -6143,12 +6711,54 @@ const confirmSafeAuthenticationProtectedReadRetry = (
             record.currentTunnelClass,
           ),
         );
+        assert.equal(record.transportResetAttestation, null);
+        assert.equal(record.freshConnectAttestation, null);
       } else {
         markFailureClass(
           SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.cdpContractMismatch,
         );
         assert.equal(record.proxyLeaseClass, null);
         assert.equal(record.currentTunnelClass, null);
+        const retryResponse =
+          attestation.retryTarget === target && record.attemptNumber === 2;
+        if (retryResponse) {
+          markFailureClass(
+            SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.transportResetContractMismatch,
+          );
+          const transportResetAttestation =
+            normalizeSafeAuthenticationProtectedReadTransportResetAttestation(
+              record.transportResetAttestation,
+            );
+          const freshConnectAttestation =
+            normalizeSafeAuthenticationProtectedReadFreshConnectAttestation(
+              record.freshConnectAttestation,
+            );
+          assert.equal(transportResetAttestation.target, target);
+          assert.equal(freshConnectAttestation.target, target);
+          assert.equal(
+            transportResetAttestation.failedLeaseClass,
+            targetRecords[0].proxyLeaseClass,
+          );
+          assert.equal(
+            transportResetAttestation.currentTunnelClassBefore,
+            targetRecords[0].currentTunnelClass,
+          );
+          assert.equal(
+            freshConnectAttestation.stage,
+            transportResetAttestation.stage,
+          );
+          assert.ok(
+            freshConnectAttestation.retryLeaseIssueSequence >
+              transportResetAttestation.retirementCompleteSequence,
+          );
+          assert.ok(
+            freshConnectAttestation.freshTunnelSequence >
+              transportResetAttestation.retiredTunnelSequence,
+          );
+        } else {
+          assert.equal(record.transportResetAttestation, null);
+          assert.equal(record.freshConnectAttestation, null);
+        }
       }
       markFailureClass(
         SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.cdpContractMismatch,
@@ -6408,9 +7018,31 @@ const confirmSafeAuthenticationProtectedReadRetry = (
   }
   const recoveredProtectedReadConsoleErrorCount =
     playwrightConsoleErrorRecords.length;
+  const retryResponseRecord =
+    attestation.retryUsed === 1
+      ? cdpResponseRecords.find(
+          (record) =>
+            record.target === attestation.retryTarget &&
+            record.attemptNumber === 2,
+        ) || null
+      : null;
+  const transportResetAttestation =
+    retryResponseRecord === null
+      ? null
+      : normalizeSafeAuthenticationProtectedReadTransportResetAttestation(
+          retryResponseRecord.transportResetAttestation,
+        );
+  const freshConnectAttestation =
+    retryResponseRecord === null
+      ? null
+      : normalizeSafeAuthenticationProtectedReadFreshConnectAttestation(
+          retryResponseRecord.freshConnectAttestation,
+        );
+  assert.equal(transportResetAttestation === null, attestation.retryUsed === 0);
+  assert.equal(freshConnectAttestation === null, attestation.retryUsed === 0);
   return Object.freeze({
     ...attestation,
-    schemaVersion: 4,
+    schemaVersion: 5,
     cdpConfigFirstResponseClass: firstResponseClassByTarget.config,
     cdpConfigFinalResponseClass: finalResponseClassByTarget.config,
     cdpProfileFirstResponseClass: firstResponseClassByTarget.profile,
@@ -6460,6 +7092,12 @@ const confirmSafeAuthenticationProtectedReadRetry = (
       recoveredProtectedReadConsoleErrorCount === 0 ? null : true,
     recoveredProtectedReadTransportFailureCount: requestFailureRecords.length,
     recoveredProtectedReadConsoleErrorCount,
+    transportResetPolicyId:
+      SAFE_AUTHENTICATION_PROTECTED_READ_TRANSPORT_RESET_POLICY_ID,
+    transportResetUsed: attestation.retryUsed,
+    transportResetTarget: attestation.retryTarget,
+    transportResetAttestation,
+    freshConnectAttestation,
     passed: true,
   });
 };
@@ -14301,6 +14939,11 @@ const createSafeAuthenticationFailureDiagnostic = ({
   authRole,
   viewport,
   pageState,
+  protectedReadAttemptDiagnostic = {
+    configAttemptCount: 0,
+    profileAttemptCount: 0,
+    sharedRetryTarget: "none",
+  },
 }) => {
   const reject = () => {
     throw new Error("W10P_SAFE_AUTH_DIAGNOSTIC_REJECTED");
@@ -14321,8 +14964,45 @@ const createSafeAuthenticationFailureDiagnostic = ({
     reject();
   }
   const normalizedPageState = normalizeSafeAuthenticationPageState(pageState);
+  let protectedReadAttemptPrototype;
+  try {
+    protectedReadAttemptPrototype = Object.getPrototypeOf(
+      protectedReadAttemptDiagnostic,
+    );
+  } catch {
+    reject();
+  }
+  const protectedReadAttemptDescriptors = exactOwnDataDescriptors(
+    protectedReadAttemptDiagnostic,
+    ["configAttemptCount", "profileAttemptCount", "sharedRetryTarget"],
+  );
+  const protectedReadConfigAttemptCount =
+    protectedReadAttemptDescriptors?.configAttemptCount?.value;
+  const protectedReadProfileAttemptCount =
+    protectedReadAttemptDescriptors?.profileAttemptCount?.value;
+  const protectedReadSharedRetryTarget =
+    protectedReadAttemptDescriptors?.sharedRetryTarget?.value;
+  if (
+    protectedReadAttemptPrototype !== Object.prototype ||
+    protectedReadAttemptDescriptors === null ||
+    ![0, 1, 2].includes(protectedReadConfigAttemptCount) ||
+    ![0, 1, 2].includes(protectedReadProfileAttemptCount) ||
+    protectedReadConfigAttemptCount + protectedReadProfileAttemptCount > 3 ||
+    !SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_TARGETS.includes(
+      protectedReadSharedRetryTarget,
+    ) ||
+    (protectedReadSharedRetryTarget === "config" &&
+      protectedReadConfigAttemptCount !== 2) ||
+    (protectedReadSharedRetryTarget === "profile" &&
+      protectedReadProfileAttemptCount !== 2) ||
+    (protectedReadSharedRetryTarget === "none" &&
+      (protectedReadConfigAttemptCount === 2 ||
+        protectedReadProfileAttemptCount === 2))
+  ) {
+    reject();
+  }
   return Object.freeze({
-    schemaVersion: 1,
+    schemaVersion: 2,
     failureClass,
     stage,
     captureRole,
@@ -14335,6 +15015,9 @@ const createSafeAuthenticationFailureDiagnostic = ({
     rootPresent: normalizedPageState.rootPresent,
     rootHeadingCount: normalizedPageState.rootHeadingCount,
     rootAlertCount: normalizedPageState.rootAlertCount,
+    protectedReadConfigAttemptCount: protectedReadConfigAttemptCount,
+    protectedReadProfileAttemptCount: protectedReadProfileAttemptCount,
+    protectedReadSharedRetryTarget: protectedReadSharedRetryTarget,
   });
 };
 const serializeSafeAuthenticationFailure = (
@@ -14381,6 +15064,52 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     sessionMutationCount: 0,
     exactUrlMethodBound: true,
   });
+  const createTransportResetAttestation = (target) => ({
+    schemaVersion: 1,
+    policyId: SAFE_AUTHENTICATION_PROTECTED_READ_TRANSPORT_RESET_POLICY_ID,
+    hostname: SAFE_AUTHENTICATION_PROTECTED_READ_FIRESTORE_HOSTNAME,
+    stage: "baseline",
+    target,
+    failedAttemptNumber: 1,
+    retryAttemptNumber: 2,
+    requestBound: true,
+    failedLeaseClass: "issued-active-tunnel",
+    currentTunnelClassBefore: "current-active-tunnel",
+    singletonAuthorityTunnelBound: true,
+    failedAuthorizationCompletedBeforeRetirement: true,
+    noSameAuthorityAuthorizationBeforeRetirement: true,
+    creatorLeaseGenerationBound: true,
+    otherAuthorityTunnelRetirementCount: 0,
+    activeAuthorityTunnelCountBefore: 1,
+    retiredClientSocketCount: 1,
+    retiredUpstreamSocketCount: 1,
+    activeAuthorityTunnelCountAfter: 0,
+    authorityDrained: true,
+    failedLeaseIssueSequence: 3,
+    creatorLeaseIssueSequence: 1,
+    leaseConsumeSequence: 2,
+    retiredTunnelSequence: 1,
+    retirementCompleteSequence: 4,
+  });
+  const createFreshConnectAttestation = (target) => ({
+    schemaVersion: 1,
+    policyId: SAFE_AUTHENTICATION_PROTECTED_READ_TRANSPORT_RESET_POLICY_ID,
+    hostname: SAFE_AUTHENTICATION_PROTECTED_READ_FIRESTORE_HOSTNAME,
+    stage: "baseline",
+    target,
+    retryAttemptNumber: 2,
+    requestBound: true,
+    activeTunnelPresentAtAuthorization: false,
+    retryLeaseClass: "consumed-no-active-tunnel",
+    freshLeaseIssued: true,
+    freshConnectConsumedLease: true,
+    leaseIssueSequenceAdvanced: true,
+    tunnelSequenceAdvanced: true,
+    sameAuthorityActiveAuthorizationCount: 1,
+    retryLeaseIssueSequence: 5,
+    retryLeaseConsumeSequence: 6,
+    freshTunnelSequence: 2,
+  });
   const createResponseRecord = (
     target,
     attemptNumber,
@@ -14396,6 +15125,10 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
       responseClass === "response-error-failed"
         ? "current-active-tunnel"
         : null,
+    transportResetAttestation:
+      attemptNumber === 2 ? createTransportResetAttestation(target) : null,
+    freshConnectAttestation:
+      attemptNumber === 2 ? createFreshConnectAttestation(target) : null,
   });
   const createCdpResponseRecords = (retryTarget = "none") => [
     createResponseRecord(
@@ -14522,8 +15255,60 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
   const consumedActiveTunnelFixture = createFixture("config");
   consumedActiveTunnelFixture.cdpResponseRecords[0].proxyLeaseClass =
     "consumed-active-tunnel";
+  consumedActiveTunnelFixture.cdpResponseRecords[1].transportResetAttestation.failedLeaseClass =
+    "consumed-active-tunnel";
+  consumedActiveTunnelFixture.cdpResponseRecords[1].transportResetAttestation.failedLeaseIssueSequence =
+    consumedActiveTunnelFixture.cdpResponseRecords[1].transportResetAttestation.creatorLeaseIssueSequence;
   accepted.push(
     confirmSafeAuthenticationProtectedReadRetry(consumedActiveTunnelFixture),
+  );
+  const invalidIssuedActiveSequenceFixture = createFixture("config");
+  invalidIssuedActiveSequenceFixture.cdpResponseRecords[1].transportResetAttestation.failedLeaseIssueSequence =
+    invalidIssuedActiveSequenceFixture.cdpResponseRecords[1].transportResetAttestation.leaseConsumeSequence;
+  assert.throws(() =>
+    confirmSafeAuthenticationProtectedReadRetry(
+      invalidIssuedActiveSequenceFixture,
+    ),
+  );
+  const invalidConsumedActiveSequenceFixture = createFixture("config");
+  invalidConsumedActiveSequenceFixture.cdpResponseRecords[0].proxyLeaseClass =
+    "consumed-active-tunnel";
+  invalidConsumedActiveSequenceFixture.cdpResponseRecords[1].transportResetAttestation.failedLeaseClass =
+    "consumed-active-tunnel";
+  assert.throws(() =>
+    confirmSafeAuthenticationProtectedReadRetry(
+      invalidConsumedActiveSequenceFixture,
+    ),
+  );
+  const invalidTransportResetDrainFixture = createFixture("profile");
+  invalidTransportResetDrainFixture.cdpResponseRecords[2].transportResetAttestation.authorityDrained = false;
+  assert.throws(() =>
+    confirmSafeAuthenticationProtectedReadRetry(
+      invalidTransportResetDrainFixture,
+    ),
+  );
+  const invalidFreshConnectLeaseFixture = createFixture("profile");
+  invalidFreshConnectLeaseFixture.cdpResponseRecords[2].freshConnectAttestation.retryLeaseClass =
+    "issued-active-tunnel";
+  assert.throws(() =>
+    confirmSafeAuthenticationProtectedReadRetry(
+      invalidFreshConnectLeaseFixture,
+    ),
+  );
+  const invalidFreshConnectSequenceFixture = createFixture("profile");
+  invalidFreshConnectSequenceFixture.cdpResponseRecords[2].freshConnectAttestation.retryLeaseIssueSequence = 4;
+  assert.throws(() =>
+    confirmSafeAuthenticationProtectedReadRetry(
+      invalidFreshConnectSequenceFixture,
+    ),
+  );
+  const invalidUnexpectedTransportResetFixture = createFixture("none");
+  invalidUnexpectedTransportResetFixture.cdpResponseRecords[0].transportResetAttestation =
+    createTransportResetAttestation("config");
+  assert.throws(() =>
+    confirmSafeAuthenticationProtectedReadRetry(
+      invalidUnexpectedTransportResetFixture,
+    ),
   );
   const noConsoleEchoFixture = createFixture("config");
   noConsoleEchoFixture.cdpNetworkErrorLogRecords = [];
@@ -14958,7 +15743,8 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     ...Array(3).fill(
       SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.pageContractMismatch,
     ),
-    ...Array(5).fill(
+    SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.transportResetContractMismatch,
+    ...Array(4).fill(
       SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.cdpContractMismatch,
     ),
     ...Array(5).fill(
@@ -14992,6 +15778,7 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     assert.equal(
       observedRejectedFailureClasses.at(-1),
       expectedRejectedFailureClasses[index],
+      `Protected-read rejected fixture ${index} produced the wrong safe failure class.`,
     );
   }
   const observedFailureClasses = [];
@@ -16478,11 +17265,22 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
   const activeTunnelFixtureBootstrapRequestId =
     "fixed-proxy-active-tunnel-bootstrap";
   const activeTunnelFixtureExactRequestId = "fixed-proxy-active-tunnel-exact";
+  const activeTunnelFixtureRetryRequestId = "fixed-proxy-active-tunnel-retry";
+  const activeTunnelFixtureConcurrentRequestId =
+    "fixed-proxy-active-tunnel-concurrent";
+  const activeTunnelFixtureResetPendingRequestId =
+    "fixed-proxy-active-tunnel-reset-pending";
+  const activeTunnelFixtureConsumedRequestId =
+    "fixed-proxy-active-tunnel-consumed";
+  const activeTunnelFixtureMultiRequestId = "fixed-proxy-active-tunnel-multi";
   const activeTunnelFixtureUnknownRequestId =
     "fixed-proxy-active-tunnel-unknown";
   let activeTunnelFixtureUpstreamAddress = null;
   let activeTunnelFixtureGate = null;
   let activeTunnelFixtureClientSocket = null;
+  let activeTunnelFixtureRetryClientSocket = null;
+  let activeTunnelFixtureConsumedClientSocket = null;
+  let activeTunnelFixtureMultiClientSocket = null;
   try {
     activeTunnelFixtureUpstreamAddress = await withExplicitTimeout(
       listenOnLoopback(activeTunnelFixtureUpstreamServer),
@@ -16572,6 +17370,9 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
       5_000,
       "The active-tunnel diagnostic fixture did not establish its loopback tunnel.",
     );
+    activeTunnelFixtureGate.completeRequestStageAuthorization(
+      activeTunnelFixtureBootstrapRequestId,
+    );
     const activeTunnelFixtureAuthorization =
       activeTunnelFixtureGate.authorizeRequestStage({
         requestId: activeTunnelFixtureExactRequestId,
@@ -16596,16 +17397,299 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
       activeTunnelFixtureGate.snapshot(),
       activeTunnelSnapshotBeforeDiagnostic,
     );
-    activeTunnelFixtureClientSocket.destroy();
-    for (const socket of activeTunnelFixtureUpstreamSockets) socket.destroy();
+    activeTunnelFixtureGate.authorizeRequestStage({
+      requestId: activeTunnelFixtureConcurrentRequestId,
+      requestUrl: exactConfigReadUrl,
+      requestMethod: "GET",
+      requestOrigin: "https://capture.invalid",
+      stage: "browser-launch",
+    });
+    assert.throws(() =>
+      activeTunnelFixtureGate.prepareExactRequestAuthorityTunnelReset({
+        requestId: activeTunnelFixtureExactRequestId,
+        expectedHostname: "firestore.googleapis.com",
+        stage: "browser-launch",
+      }),
+    );
+    activeTunnelFixtureGate.revokeRequestStageAuthorization(
+      activeTunnelFixtureConcurrentRequestId,
+    );
+    activeTunnelFixtureGate.revokeRequestStageAuthorization(
+      activeTunnelFixtureExactRequestId,
+    );
+    activeTunnelFixtureGate.authorizeRequestStage({
+      requestId: activeTunnelFixtureMultiRequestId,
+      requestUrl: exactConfigReadUrl,
+      requestMethod: "GET",
+      requestOrigin: "https://capture.invalid",
+      stage: "browser-launch",
+    });
+    let multiTunnelResponseText = "";
+    let resolveMultiTunnelReady;
+    let rejectMultiTunnelReady;
+    const multiTunnelReady = new Promise((resolveFixture, rejectFixture) => {
+      resolveMultiTunnelReady = resolveFixture;
+      rejectMultiTunnelReady = rejectFixture;
+    });
+    activeTunnelFixtureMultiClientSocket = connectTcp({
+      host: parsedActiveTunnelFixtureProxyUrl.hostname,
+      port: Number(parsedActiveTunnelFixtureProxyUrl.port),
+    });
+    activeTunnelFixtureMultiClientSocket.once("error", rejectMultiTunnelReady);
+    activeTunnelFixtureMultiClientSocket.on("data", (chunk) => {
+      multiTunnelResponseText += Buffer.from(chunk).toString("latin1");
+      if (!multiTunnelResponseText.includes("\r\n\r\n")) return;
+      try {
+        assert.match(
+          multiTunnelResponseText,
+          /^HTTP\/1\.1 200 Connection Established\r\n/iu,
+        );
+        activeTunnelFixtureMultiClientSocket.removeListener(
+          "error",
+          rejectMultiTunnelReady,
+        );
+        activeTunnelFixtureMultiClientSocket.on("error", () => {});
+        resolveMultiTunnelReady();
+      } catch (error) {
+        rejectMultiTunnelReady(error);
+      }
+    });
+    activeTunnelFixtureMultiClientSocket.once("connect", () => {
+      activeTunnelFixtureMultiClientSocket.write(
+        "CONNECT firestore.googleapis.com:443 HTTP/1.1\r\nHost: firestore.googleapis.com:443\r\n\r\n",
+      );
+    });
+    await withExplicitTimeout(
+      multiTunnelReady,
+      5_000,
+      "The multiple-tunnel negative fixture did not establish its second tunnel.",
+    );
+    activeTunnelFixtureGate.completeRequestStageAuthorization(
+      activeTunnelFixtureMultiRequestId,
+    );
+    assert.equal(
+      activeTunnelFixtureGate.snapshot().activeAllowedTunnelResidualCount,
+      2,
+    );
+    activeTunnelFixtureGate.authorizeRequestStage({
+      requestId: activeTunnelFixtureExactRequestId,
+      requestUrl: exactConfigReadUrl,
+      requestMethod: "GET",
+      requestOrigin: "https://capture.invalid",
+      stage: "browser-launch",
+    });
+    assert.throws(() =>
+      activeTunnelFixtureGate.prepareExactRequestAuthorityTunnelReset({
+        requestId: activeTunnelFixtureExactRequestId,
+        expectedHostname: "firestore.googleapis.com",
+        stage: "browser-launch",
+      }),
+    );
+    activeTunnelFixtureGate.revokeRequestStageAuthorization(
+      activeTunnelFixtureExactRequestId,
+    );
+    activeTunnelFixtureMultiClientSocket.destroy();
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      if (
+        activeTunnelFixtureGate.snapshot().activeAllowedTunnelResidualCount ===
+        1
+      ) {
+        break;
+      }
+      await new Promise((resolveFixture) => setImmediate(resolveFixture));
+    }
+    assert.equal(
+      activeTunnelFixtureGate.snapshot().activeAllowedTunnelResidualCount,
+      1,
+    );
+    activeTunnelFixtureGate.authorizeRequestStage({
+      requestId: activeTunnelFixtureExactRequestId,
+      requestUrl: exactConfigReadUrl,
+      requestMethod: "GET",
+      requestOrigin: "https://capture.invalid",
+      stage: "browser-launch",
+    });
+    assert.throws(() =>
+      activeTunnelFixtureGate.prepareExactRequestAuthorityTunnelReset({
+        requestId: activeTunnelFixtureUnknownRequestId,
+        expectedHostname: "firestore.googleapis.com",
+        stage: "browser-launch",
+      }),
+    );
+    assert.throws(() =>
+      activeTunnelFixtureGate.prepareExactRequestAuthorityTunnelReset({
+        requestId: activeTunnelFixtureExactRequestId,
+        expectedHostname: "identitytoolkit.googleapis.com",
+        stage: "browser-launch",
+      }),
+    );
+    const issuedActiveResetPreparation =
+      activeTunnelFixtureGate.prepareExactRequestAuthorityTunnelReset({
+        requestId: activeTunnelFixtureExactRequestId,
+        expectedHostname: "firestore.googleapis.com",
+        stage: "browser-launch",
+      });
+    assert.equal(
+      activeTunnelFixtureGate.snapshot().preparedExactTunnelResetResidualCount,
+      1,
+    );
+    assert.throws(() =>
+      activeTunnelFixtureGate.authorizeRequestStage({
+        requestId: activeTunnelFixtureResetPendingRequestId,
+        requestUrl: exactConfigReadUrl,
+        requestMethod: "GET",
+        requestOrigin: "https://capture.invalid",
+        stage: "browser-launch",
+      }),
+    );
+    assert.equal(
+      activeTunnelFixtureGate.hasRequestStageAuthorization(
+        activeTunnelFixtureResetPendingRequestId,
+      ),
+      false,
+    );
+    activeTunnelFixtureGate.completeRequestStageAuthorization(
+      activeTunnelFixtureExactRequestId,
+    );
+    const issuedActiveResetAttestation = await withExplicitTimeout(
+      activeTunnelFixtureGate.retirePreparedExactRequestAuthorityTunnel({
+        preparation: issuedActiveResetPreparation,
+      }),
+      5_000,
+      "The issued-active tunnel reset fixture did not drain its exact tunnel.",
+    );
+    assert.equal(
+      issuedActiveResetAttestation.failedLeaseClass,
+      "issued-active-tunnel",
+    );
+    assert.equal(issuedActiveResetAttestation.authorityDrained, true);
+    assert.equal(
+      issuedActiveResetAttestation.activeAuthorityTunnelCountAfter,
+      0,
+    );
     await withExplicitTimeout(
       Promise.all([
         activeTunnelFixtureClientClosed,
         activeTunnelFixtureUpstreamClosed,
       ]),
       5_000,
-      "The active-tunnel diagnostic fixture did not close its loopback tunnel.",
+      "The issued-active tunnel reset fixture did not close its exact socket pair.",
     );
+    await assert.rejects(() =>
+      activeTunnelFixtureGate.retirePreparedExactRequestAuthorityTunnel({
+        preparation: issuedActiveResetPreparation,
+      }),
+    );
+    activeTunnelFixtureGate.authorizeRequestStage({
+      requestId: activeTunnelFixtureRetryRequestId,
+      requestUrl: exactConfigReadUrl,
+      requestMethod: "GET",
+      requestOrigin: "https://capture.invalid",
+      stage: "browser-launch",
+    });
+    assert.throws(() =>
+      activeTunnelFixtureGate.prepareExactRequestAuthorityTunnelReset({
+        requestId: activeTunnelFixtureRetryRequestId,
+        expectedHostname: "firestore.googleapis.com",
+        stage: "browser-launch",
+      }),
+    );
+    assert.throws(() =>
+      activeTunnelFixtureGate.attestFreshConnectForRequest({
+        requestId: activeTunnelFixtureRetryRequestId,
+        expectedHostname: "firestore.googleapis.com",
+        stage: "browser-launch",
+        priorRetirement: issuedActiveResetAttestation,
+      }),
+    );
+    const parsedRetryProxyUrl = new URL(activeTunnelFixtureProxyUrl);
+    let retryResponseText = "";
+    let resolveRetryReady;
+    let rejectRetryReady;
+    const retryReady = new Promise((resolveFixture, rejectFixture) => {
+      resolveRetryReady = resolveFixture;
+      rejectRetryReady = rejectFixture;
+    });
+    activeTunnelFixtureRetryClientSocket = connectTcp({
+      host: parsedRetryProxyUrl.hostname,
+      port: Number(parsedRetryProxyUrl.port),
+    });
+    activeTunnelFixtureRetryClientSocket.once("error", rejectRetryReady);
+    activeTunnelFixtureRetryClientSocket.on("data", (chunk) => {
+      retryResponseText += Buffer.from(chunk).toString("latin1");
+      if (!retryResponseText.includes("\r\n\r\n")) return;
+      try {
+        assert.match(
+          retryResponseText,
+          /^HTTP\/1\.1 200 Connection Established\r\n/iu,
+        );
+        activeTunnelFixtureRetryClientSocket.removeListener(
+          "error",
+          rejectRetryReady,
+        );
+        activeTunnelFixtureRetryClientSocket.on("error", () => {});
+        resolveRetryReady();
+      } catch (error) {
+        rejectRetryReady(error);
+      }
+    });
+    activeTunnelFixtureRetryClientSocket.once("connect", () => {
+      activeTunnelFixtureRetryClientSocket.write(
+        "CONNECT firestore.googleapis.com:443 HTTP/1.1\r\nHost: firestore.googleapis.com:443\r\n\r\n",
+      );
+    });
+    await withExplicitTimeout(
+      retryReady,
+      5_000,
+      "The fresh CONNECT fixture did not establish its replacement tunnel.",
+    );
+    const freshConnectAttestation =
+      activeTunnelFixtureGate.attestFreshConnectForRequest({
+        requestId: activeTunnelFixtureRetryRequestId,
+        expectedHostname: "firestore.googleapis.com",
+        stage: "browser-launch",
+        priorRetirement: issuedActiveResetAttestation,
+      });
+    assert.deepEqual(freshConnectAttestation, {
+      schemaVersion: 1,
+      hostname: "firestore.googleapis.com",
+      stage: "browser-launch",
+      requestBound: true,
+      activeTunnelPresentAtAuthorization: false,
+      retryLeaseClass: "consumed-no-active-tunnel",
+      freshLeaseIssued: true,
+      freshConnectConsumedLease: true,
+      leaseIssueSequenceAdvanced: true,
+      tunnelSequenceAdvanced: true,
+      sameAuthorityActiveAuthorizationCount: 1,
+      retryLeaseIssueSequence: freshConnectAttestation.retryLeaseIssueSequence,
+      retryLeaseConsumeSequence:
+        freshConnectAttestation.retryLeaseConsumeSequence,
+      freshTunnelSequence: freshConnectAttestation.freshTunnelSequence,
+    });
+    assert.ok(
+      freshConnectAttestation.retryLeaseIssueSequence >
+        issuedActiveResetAttestation.retirementCompleteSequence,
+    );
+    assert.ok(
+      freshConnectAttestation.retryLeaseConsumeSequence >
+        freshConnectAttestation.retryLeaseIssueSequence,
+    );
+    assert.ok(
+      freshConnectAttestation.freshTunnelSequence >
+        issuedActiveResetAttestation.retiredTunnelSequence,
+    );
+    activeTunnelFixtureGate.authorizeRequestStage({
+      requestId: activeTunnelFixtureConsumedRequestId,
+      requestUrl: exactConfigReadUrl,
+      requestMethod: "GET",
+      requestOrigin: "https://capture.invalid",
+      stage: "browser-launch",
+    });
+    activeTunnelFixtureGate.completeRequestStageAuthorization(
+      activeTunnelFixtureRetryRequestId,
+    );
+    activeTunnelFixtureRetryClientSocket.destroy();
     for (let attempt = 0; attempt < 100; attempt += 1) {
       if (
         activeTunnelFixtureGate.snapshot().activeAllowedTunnelResidualCount ===
@@ -16619,44 +17703,93 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
       activeTunnelFixtureGate.snapshot().activeAllowedTunnelResidualCount,
       0,
     );
+    let consumedResponseText = "";
+    let resolveConsumedReady;
+    let rejectConsumedReady;
+    const consumedReady = new Promise((resolveFixture, rejectFixture) => {
+      resolveConsumedReady = resolveFixture;
+      rejectConsumedReady = rejectFixture;
+    });
+    activeTunnelFixtureConsumedClientSocket = connectTcp({
+      host: parsedRetryProxyUrl.hostname,
+      port: Number(parsedRetryProxyUrl.port),
+    });
+    activeTunnelFixtureConsumedClientSocket.once("error", rejectConsumedReady);
+    activeTunnelFixtureConsumedClientSocket.on("data", (chunk) => {
+      consumedResponseText += Buffer.from(chunk).toString("latin1");
+      if (!consumedResponseText.includes("\r\n\r\n")) return;
+      try {
+        assert.match(
+          consumedResponseText,
+          /^HTTP\/1\.1 200 Connection Established\r\n/iu,
+        );
+        activeTunnelFixtureConsumedClientSocket.removeListener(
+          "error",
+          rejectConsumedReady,
+        );
+        activeTunnelFixtureConsumedClientSocket.on("error", () => {});
+        resolveConsumedReady();
+      } catch (error) {
+        rejectConsumedReady(error);
+      }
+    });
+    activeTunnelFixtureConsumedClientSocket.once("connect", () => {
+      activeTunnelFixtureConsumedClientSocket.write(
+        "CONNECT firestore.googleapis.com:443 HTTP/1.1\r\nHost: firestore.googleapis.com:443\r\n\r\n",
+      );
+    });
+    await withExplicitTimeout(
+      consumedReady,
+      5_000,
+      "The consumed-active fixture did not establish its replacement tunnel.",
+    );
     assert.equal(
       activeTunnelFixtureGate.requestStageAuthorityLeaseDiagnosticClass(
-        activeTunnelFixtureExactRequestId,
+        activeTunnelFixtureConsumedRequestId,
       ),
-      "issued-active-tunnel",
+      "consumed-active-tunnel",
     );
-    assert.equal(
-      activeTunnelFixtureGate.requestStageCurrentAuthorityTunnelDiagnosticClass(
-        activeTunnelFixtureExactRequestId,
-      ),
-      "current-no-active-tunnel",
-    );
-    assert.equal(
-      activeTunnelFixtureGate.requestStageAuthorityLeaseDiagnosticClass(
-        activeTunnelFixtureUnknownRequestId,
-      ),
-      null,
-    );
-    assert.equal(
-      activeTunnelFixtureGate.requestStageCurrentAuthorityTunnelDiagnosticClass(
-        activeTunnelFixtureUnknownRequestId,
-      ),
-      null,
-    );
+    const consumedActivePreparation =
+      activeTunnelFixtureGate.prepareExactRequestAuthorityTunnelReset({
+        requestId: activeTunnelFixtureConsumedRequestId,
+        expectedHostname: "firestore.googleapis.com",
+        stage: "browser-launch",
+      });
     activeTunnelFixtureGate.completeRequestStageAuthorization(
-      activeTunnelFixtureBootstrapRequestId,
+      activeTunnelFixtureConsumedRequestId,
     );
-    activeTunnelFixtureGate.revokeRequestStageAuthorization(
-      activeTunnelFixtureExactRequestId,
+    const consumedActiveResetAttestation = await withExplicitTimeout(
+      activeTunnelFixtureGate.retirePreparedExactRequestAuthorityTunnel({
+        preparation: consumedActivePreparation,
+      }),
+      5_000,
+      "The consumed-active fixture did not retire its exact replacement tunnel.",
+    );
+    assert.equal(
+      consumedActiveResetAttestation.failedLeaseClass,
+      "consumed-active-tunnel",
+    );
+    assert.equal(consumedActiveResetAttestation.authorityDrained, true);
+    assert.equal(
+      activeTunnelFixtureGate.snapshot().activeAllowedTunnelResidualCount,
+      0,
     );
   } finally {
     activeTunnelFixtureClientSocket?.destroy();
+    activeTunnelFixtureRetryClientSocket?.destroy();
+    activeTunnelFixtureConsumedClientSocket?.destroy();
+    activeTunnelFixtureMultiClientSocket?.destroy();
     for (const socket of activeTunnelFixtureUpstreamSockets) socket.destroy();
     try {
       if (activeTunnelFixtureGate) {
         for (const requestId of [
           activeTunnelFixtureBootstrapRequestId,
           activeTunnelFixtureExactRequestId,
+          activeTunnelFixtureRetryRequestId,
+          activeTunnelFixtureConcurrentRequestId,
+          activeTunnelFixtureResetPendingRequestId,
+          activeTunnelFixtureConsumedRequestId,
+          activeTunnelFixtureMultiRequestId,
         ]) {
           if (activeTunnelFixtureGate.hasRequestStageAuthorization(requestId)) {
             activeTunnelFixtureGate.revokeRequestStageAuthorization(requestId);
@@ -17828,7 +18961,105 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     "rootPresent",
     "rootHeadingCount",
     "rootAlertCount",
+    "protectedReadConfigAttemptCount",
+    "protectedReadProfileAttemptCount",
+    "protectedReadSharedRetryTarget",
   ]);
+  assert.equal(diagnostic.schemaVersion, 2);
+  const retryFailureDiagnostic = createSafeAuthenticationFailureDiagnostic({
+    failureClass:
+      SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.transportResetContractMismatch,
+    stage: "baseline",
+    captureRole: "admin",
+    authRole: "admin",
+    viewport: "1440x900",
+    pageState: saturatedState,
+    protectedReadAttemptDiagnostic: {
+      configAttemptCount: 1,
+      profileAttemptCount: 2,
+      sharedRetryTarget: "profile",
+    },
+  });
+  assert.equal(retryFailureDiagnostic.protectedReadConfigAttemptCount, 1);
+  assert.equal(retryFailureDiagnostic.protectedReadProfileAttemptCount, 2);
+  assert.equal(
+    retryFailureDiagnostic.protectedReadSharedRetryTarget,
+    "profile",
+  );
+  for (const invalidAttemptDiagnostic of [
+    {
+      configAttemptCount: 2,
+      profileAttemptCount: 1,
+      sharedRetryTarget: "none",
+    },
+    {
+      configAttemptCount: 1,
+      profileAttemptCount: 1,
+      sharedRetryTarget: "config",
+    },
+    {
+      configAttemptCount: 2,
+      profileAttemptCount: 2,
+      sharedRetryTarget: "config",
+    },
+  ]) {
+    assert.throws(() =>
+      createSafeAuthenticationFailureDiagnostic({
+        failureClass:
+          SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.generic,
+        stage: "baseline",
+        captureRole: "admin",
+        authRole: "admin",
+        viewport: "1440x900",
+        pageState: saturatedState,
+        protectedReadAttemptDiagnostic: invalidAttemptDiagnostic,
+      }),
+    );
+  }
+  let protectedReadAttemptGetterAccessCount = 0;
+  const protectedReadAttemptGetterFixture = {
+    profileAttemptCount: 1,
+    sharedRetryTarget: "none",
+  };
+  Object.defineProperty(
+    protectedReadAttemptGetterFixture,
+    "configAttemptCount",
+    {
+      enumerable: true,
+      get() {
+        protectedReadAttemptGetterAccessCount += 1;
+        return 1;
+      },
+    },
+  );
+  for (const invalidAttemptDiagnostic of [
+    protectedReadAttemptGetterFixture,
+    Object.assign(Object.create(null), {
+      configAttemptCount: 1,
+      profileAttemptCount: 1,
+      sharedRetryTarget: "none",
+    }),
+    {
+      configAttemptCount: 1,
+      profileAttemptCount: 1,
+      sharedRetryTarget: "none",
+      [Symbol("unexpected")]: rawSecretUrl,
+    },
+  ]) {
+    assert.throws(() =>
+      createSafeAuthenticationFailureDiagnostic({
+        failureClass:
+          SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.generic,
+        stage: "baseline",
+        captureRole: "admin",
+        authRole: "admin",
+        viewport: "1440x900",
+        pageState: saturatedState,
+        protectedReadAttemptDiagnostic: invalidAttemptDiagnostic,
+      }),
+    );
+  }
+  assert.equal(protectedReadAttemptGetterAccessCount, 0);
   const forbiddenValues = [
     debugToken,
     exchangedToken,
@@ -24325,6 +25556,14 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
       postContextCloseProxySnapshot.activeAllowedTunnelResidualCount,
       0,
     );
+    assert.equal(
+      postContextCloseProxySnapshot.activeAllowedTunnelRequestBindingResidualCount,
+      0,
+    );
+    assert.equal(
+      postContextCloseProxySnapshot.preparedExactTunnelResetResidualCount,
+      0,
+    );
     assert.deepEqual(rawExternalWireConnections, []);
     assert.deepEqual(rawExternalWireBytes, []);
     await loopbackBoundaryController.deactivate("loopback");
@@ -24462,6 +25701,11 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
   assert.equal(loopbackProxySnapshot.authorityLeaseResidualCount, 0);
   assert.equal(loopbackProxySnapshot.authorityLeaseQueueResidualCount, 0);
   assert.equal(loopbackProxySnapshot.activeAllowedTunnelResidualCount, 0);
+  assert.equal(
+    loopbackProxySnapshot.activeAllowedTunnelRequestBindingResidualCount,
+    0,
+  );
+  assert.equal(loopbackProxySnapshot.preparedExactTunnelResetResidualCount, 0);
   assert.ok(loopbackProxySnapshot.uncorrelatedAllowedConnectDenyCount >= 1);
   assert.equal(
     loopbackProxySnapshot.authorityLeaseIssueCount,
@@ -30332,6 +31576,7 @@ const authenticate = async (
     collectAuthenticationProfileProxyLeaseClass,
     collectAuthenticationProfileCurrentTunnelClass,
     collectAuthenticationProfileLoadingFailedDiagnostic,
+    collectAuthenticationProtectedReadAttemptDiagnostic,
   },
 ) => {
   let failureClass = "navigation-failed";
@@ -30453,6 +31698,17 @@ const authenticate = async (
       page,
       expectedRoute,
     );
+    let protectedReadAttemptDiagnostic = {
+      configAttemptCount: 0,
+      profileAttemptCount: 0,
+      sharedRetryTarget: "none",
+    };
+    try {
+      protectedReadAttemptDiagnostic =
+        collectAuthenticationProtectedReadAttemptDiagnostic();
+    } catch {
+      // The bounded secret-free attempt diagnostic remains at its safe default.
+    }
     const diagnostic = createSafeAuthenticationFailureDiagnostic({
       failureClass,
       stage,
@@ -30460,6 +31716,7 @@ const authenticate = async (
       authRole,
       viewport,
       pageState,
+      protectedReadAttemptDiagnostic,
     });
     const safeFailure = serializeSafeAuthenticationFailure(diagnostic, [
       origin,
@@ -33614,6 +34871,7 @@ try {
       profile: 0,
     };
     let authenticationProtectedReadSharedRetryTarget = null;
+    let authenticationProtectedReadTransportResetBarrier = null;
     let authenticationProtectedReadAuthorizationHeaderSha256 = null;
     let authenticationProtectedReadAppCheckHeaderSha256 = null;
     const exactCaseInsensitiveRequestHeaderValue = (headers, headerName) => {
@@ -33700,6 +34958,8 @@ try {
         localResponseErrorFailRequest: null,
         loadingFailureRecords: [],
         networkErrorLogRecords: [],
+        transportResetAttestation: null,
+        freshConnectAttestation: null,
       };
       authenticationProtectedReadAttemptsByFetchRequestId.set(
         event.requestId,
@@ -34063,6 +35323,33 @@ try {
           resourceType: String(event.resourceType).toLowerCase(),
         }),
       );
+      const authenticationProtectedReadAttempt =
+        authenticationProtectedReadAttemptsByFetchRequestId.get(
+          event.requestId,
+        ) || null;
+      if (authenticationProtectedReadAttempt?.attemptNumber === 2) {
+        assert.equal(
+          authenticationProtectedReadSharedRetryTarget,
+          authenticationProtectedReadAttempt.target,
+        );
+        const resetBarrier = authenticationProtectedReadTransportResetBarrier;
+        assert.ok(resetBarrier);
+        assert.equal(
+          resetBarrier.target,
+          authenticationProtectedReadAttempt.target,
+        );
+        assert.equal(resetBarrier.failedAttemptNumber, 1);
+        assert.equal(resetBarrier.retryAttemptNumber, 2);
+        const resetAttestation = await resetBarrier.promise;
+        assert.equal(resetBarrier.settled, true);
+        assert.equal(resetBarrier.attestation, resetAttestation);
+        assert.equal(resetAttestation.authorityDrained, true);
+        assert.equal(resetAttestation.activeAuthorityTunnelCountAfter, 0);
+        authenticationProtectedReadAttempt.transportResetAttestation =
+          resetAttestation;
+      } else if (authenticationProtectedReadAttempt !== null) {
+        assert.equal(authenticationProtectedReadAttempt.attemptNumber, 1);
+      }
       recordAllowedEgressRequestStageLifecycle(event, diagnosticContext.phase);
       diagnosticContext.operation = "request-proxy-authorize";
       diagnosticContext.reason = "unexpected-handler-error";
@@ -34200,6 +35487,33 @@ try {
               null,
             );
             const responseError = responseClass.startsWith("response-error-");
+            let freshConnectAttestation = null;
+            if (
+              authenticationProtectedReadAttempt.attemptNumber === 2 &&
+              responseClass === "response-2xx"
+            ) {
+              const transportResetAttestation =
+                authenticationProtectedReadAttempt.transportResetAttestation;
+              assert.ok(transportResetAttestation);
+              freshConnectAttestation =
+                normalizeSafeAuthenticationProtectedReadFreshConnectAttestation(
+                  {
+                    ...browserConnectProxy.attestFreshConnectForRequest({
+                      requestId: primaryRequestId,
+                      expectedHostname:
+                        SAFE_AUTHENTICATION_PROTECTED_READ_FIRESTORE_HOSTNAME,
+                      stage,
+                      priorRetirement: transportResetAttestation,
+                    }),
+                    policyId:
+                      SAFE_AUTHENTICATION_PROTECTED_READ_TRANSPORT_RESET_POLICY_ID,
+                    target: authenticationProtectedReadAttempt.target,
+                    retryAttemptNumber: 2,
+                  },
+                );
+              authenticationProtectedReadAttempt.freshConnectAttestation =
+                freshConnectAttestation;
+            }
             authenticationProtectedReadAttempt.responseRecord = Object.freeze({
               target: authenticationProtectedReadAttempt.target,
               attemptNumber: authenticationProtectedReadAttempt.attemptNumber,
@@ -34215,6 +35529,11 @@ try {
                     primaryRequestId,
                   )
                 : null,
+              transportResetAttestation:
+                authenticationProtectedReadAttempt.attemptNumber === 2
+                  ? authenticationProtectedReadAttempt.transportResetAttestation
+                  : null,
+              freshConnectAttestation,
             });
           } else {
             assert.ok(authenticationProtectedReadAttempt.responseRecord);
@@ -34457,6 +35776,63 @@ try {
                 completedSequence: null,
               });
           }
+          let protectedReadTransportResetPreparation = null;
+          let protectedReadTransportResetBarrier = null;
+          const protectedReadTransportResetEligible =
+            authenticationProtectedReadAttempt !== null &&
+            authenticationProtectedReadAttempt.attemptNumber === 1 &&
+            authenticationProtectedReadSharedRetryTarget === null;
+          if (protectedReadTransportResetEligible) {
+            assert.equal(
+              authenticationProtectedReadTransportResetBarrier,
+              null,
+            );
+            const responseRecord =
+              authenticationProtectedReadAttempt.responseRecord;
+            assert.ok(responseRecord);
+            assert.equal(responseRecord.responseClass, "response-error-failed");
+            assert.ok(
+              ["issued-active-tunnel", "consumed-active-tunnel"].includes(
+                responseRecord.proxyLeaseClass,
+              ),
+            );
+            assert.equal(
+              responseRecord.currentTunnelClass,
+              "current-active-tunnel",
+            );
+            protectedReadTransportResetPreparation =
+              browserConnectProxy.prepareExactRequestAuthorityTunnelReset({
+                requestId: primaryRequestId,
+                expectedHostname:
+                  SAFE_AUTHENTICATION_PROTECTED_READ_FIRESTORE_HOSTNAME,
+                stage,
+              });
+            let resolveResetBarrier;
+            let rejectResetBarrier;
+            const resetBarrierPromise = new Promise(
+              (resolveBarrier, rejectBarrier) => {
+                resolveResetBarrier = resolveBarrier;
+                rejectResetBarrier = rejectBarrier;
+              },
+            );
+            resetBarrierPromise.catch(() => {});
+            protectedReadTransportResetBarrier = {
+              target: authenticationProtectedReadAttempt.target,
+              failedAttemptNumber: 1,
+              retryAttemptNumber: 2,
+              promise: resetBarrierPromise,
+              resolve: resolveResetBarrier,
+              reject: rejectResetBarrier,
+              settled: false,
+              attestation: null,
+            };
+            authenticationProtectedReadTransportResetBarrier =
+              protectedReadTransportResetBarrier;
+            // Complete the failed request's still-issued authority lease before
+            // the local failure can make Chromium reconnect. The singleton
+            // creator tunnel remains bound by the prepared reset handle.
+            completeProxyAuthorization();
+          }
           allowedEgressRequestsByFetchRequestId.delete(primaryRequestId);
           sensitiveAppCheckRequestsByFetchRequestId.delete(primaryRequestId);
           stableOriginRewriteRequestsByFetchRequestId.delete(primaryRequestId);
@@ -34464,25 +35840,66 @@ try {
             primaryRequestId,
           );
           diagnosticContext.operation = "response-fail";
-          await appCheckCdpSession.send("Fetch.failRequest", {
-            requestId: event.requestId,
-            errorReason: "BlockedByClient",
-          });
-          if (authenticationProtectedReadAttempt !== null) {
-            const localFailRequest =
-              authenticationProtectedReadAttempt.localResponseErrorFailRequest;
-            assert.ok(localFailRequest);
-            assert.equal(localFailRequest.commandState, "in-flight");
-            assert.equal(localFailRequest.completedSequence, null);
-            authenticationProtectedReadAttempt.localResponseErrorFailRequest =
-              Object.freeze({
-                ...localFailRequest,
-                commandState: "complete",
-                completedSequence:
-                  nextAuthenticationProtectedReadEvidenceSequence(),
-              });
+          try {
+            await appCheckCdpSession.send("Fetch.failRequest", {
+              requestId: event.requestId,
+              errorReason: "BlockedByClient",
+            });
+            if (authenticationProtectedReadAttempt !== null) {
+              const localFailRequest =
+                authenticationProtectedReadAttempt.localResponseErrorFailRequest;
+              assert.ok(localFailRequest);
+              assert.equal(localFailRequest.commandState, "in-flight");
+              assert.equal(localFailRequest.completedSequence, null);
+              authenticationProtectedReadAttempt.localResponseErrorFailRequest =
+                Object.freeze({
+                  ...localFailRequest,
+                  commandState: "complete",
+                  completedSequence:
+                    nextAuthenticationProtectedReadEvidenceSequence(),
+                });
+            }
+            if (protectedReadTransportResetPreparation !== null) {
+              assert.ok(protectedReadTransportResetBarrier);
+              const proxyResetAttestation =
+                await browserConnectProxy.retirePreparedExactRequestAuthorityTunnel(
+                  {
+                    preparation: protectedReadTransportResetPreparation,
+                  },
+                );
+              const transportResetAttestation =
+                normalizeSafeAuthenticationProtectedReadTransportResetAttestation(
+                  {
+                    ...proxyResetAttestation,
+                    policyId:
+                      SAFE_AUTHENTICATION_PROTECTED_READ_TRANSPORT_RESET_POLICY_ID,
+                    target: authenticationProtectedReadAttempt.target,
+                    failedAttemptNumber: 1,
+                    retryAttemptNumber: 2,
+                  },
+                );
+              authenticationProtectedReadAttempt.transportResetAttestation =
+                transportResetAttestation;
+              protectedReadTransportResetBarrier.attestation =
+                transportResetAttestation;
+              protectedReadTransportResetBarrier.settled = true;
+              protectedReadTransportResetBarrier.resolve(
+                transportResetAttestation,
+              );
+            }
+          } catch (error) {
+            if (
+              protectedReadTransportResetBarrier !== null &&
+              protectedReadTransportResetBarrier.settled === false
+            ) {
+              protectedReadTransportResetBarrier.settled = true;
+              protectedReadTransportResetBarrier.reject(error);
+            }
+            throw error;
           }
-          completeProxyAuthorization();
+          if (protectedReadTransportResetPreparation === null) {
+            completeProxyAuthorization();
+          }
           setAllowedEgressLifecycleState(primaryRequestId, "terminal-complete");
           return;
         }
@@ -36729,6 +38146,13 @@ try {
               : null,
           collectAuthenticationProfileLoadingFailedDiagnostic: () =>
             authenticationProfileLoadingFailedObserver.collect(),
+          collectAuthenticationProtectedReadAttemptDiagnostic: () => ({
+            configAttemptCount: authenticationProtectedReadAttemptCounts.config,
+            profileAttemptCount:
+              authenticationProtectedReadAttemptCounts.profile,
+            sharedRetryTarget:
+              authenticationProtectedReadSharedRetryTarget || "none",
+          }),
         },
       );
       telemetryCapabilityGuardRuntimeAttestations.push(
@@ -37875,6 +39299,8 @@ try {
         "authorityLeaseResidualCount",
         "authorityLeaseQueueResidualCount",
         "activeAllowedTunnelResidualCount",
+        "activeAllowedTunnelRequestBindingResidualCount",
+        "preparedExactTunnelResetResidualCount",
       ]) {
         assert.equal(
           groupPostContextCloseProxySnapshot[field],
@@ -39334,6 +40760,14 @@ assert.equal(
   browserConnectProxyFinalSnapshot.activeAllowedTunnelResidualCount,
   0,
 );
+assert.equal(
+  browserConnectProxyFinalSnapshot.activeAllowedTunnelRequestBindingResidualCount,
+  0,
+);
+assert.equal(
+  browserConnectProxyFinalSnapshot.preparedExactTunnelResetResidualCount,
+  0,
+);
 for (const observation of browserConnectProxyFinalSnapshot.browserProductBackgroundDenyObservations) {
   assert.equal(observation.stage, "browser-launch");
   assert.equal(observation.source, "browser-process-proxy-only-connect");
@@ -39575,8 +41009,27 @@ assert.equal(
   sensitiveAppCheckResponseErrorRecoveredProtectedReadCount,
   recoveredProtectedReadTransportFailureCount,
 );
+for (const field of [
+  "targetedTunnelRetirementAttemptCount",
+  "targetedTunnelRetirementSuccessCount",
+  "targetedTunnelRetiredClientSocketCount",
+  "targetedTunnelRetiredUpstreamSocketCount",
+  "targetedTunnelAuthorityDrainSuccessCount",
+]) {
+  assert.equal(
+    browserConnectProxyFinalSnapshot[field],
+    recoveredProtectedReadTransportFailureCount,
+  );
+}
+assert.equal(
+  browserConnectProxyFinalSnapshot.targetedTunnelRetirementObservations.reduce(
+    (total, observation) => total + observation.count,
+    0,
+  ),
+  recoveredProtectedReadTransportFailureCount,
+);
 const authenticationProtectedReadRetry = Object.freeze({
-  schemaVersion: 4,
+  schemaVersion: 5,
   policyId: SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_POLICY_ID,
   retryBudgetPerGroup: 1,
   retryDelayMs: SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_DELAY_MS,
@@ -40299,6 +41752,8 @@ const browserWideBoundaryAttestation = {
     browserConnectProxyFinalSnapshot.activeClientSocketCount +
     browserConnectProxyFinalSnapshot.activeUpstreamSocketCount +
     browserConnectProxyFinalSnapshot.activeAllowedTunnelResidualCount +
+    browserConnectProxyFinalSnapshot.activeAllowedTunnelRequestBindingResidualCount +
+    browserConnectProxyFinalSnapshot.preparedExactTunnelResetResidualCount +
     browserConnectProxyFinalSnapshot.requestStageAuthorizationResidualCount +
     browserConnectProxyFinalSnapshot.authorityLeaseResidualCount +
     browserConnectProxyFinalSnapshot.authorityLeaseQueueResidualCount,
@@ -40459,6 +41914,8 @@ const appCheckBinding = {
     browserConnectProxyFinalSnapshot.activeClientSocketCount +
     browserConnectProxyFinalSnapshot.activeUpstreamSocketCount +
     browserConnectProxyFinalSnapshot.activeAllowedTunnelResidualCount +
+    browserConnectProxyFinalSnapshot.activeAllowedTunnelRequestBindingResidualCount +
+    browserConnectProxyFinalSnapshot.preparedExactTunnelResetResidualCount +
     browserConnectProxyFinalSnapshot.requestStageAuthorizationResidualCount +
     browserConnectProxyFinalSnapshot.authorityLeaseResidualCount +
     browserConnectProxyFinalSnapshot.authorityLeaseQueueResidualCount,
