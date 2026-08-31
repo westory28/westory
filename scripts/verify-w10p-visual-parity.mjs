@@ -2951,6 +2951,11 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   );
   assert.match(
     frozenBaselineFixtureSource,
+    /const duplicateConsoleObserver\s*=\s*createObserver\(\);\s*observePositiveLifecycle\(duplicateConsoleObserver\);\s*duplicateConsoleObserver\.observeConsoleError\(exactConsoleError\);\s*assert\.equal\(duplicateConsoleObserver\.readyForSettlement\(\), false\);\s*const duplicateConsoleDecision\s*=\s*duplicateConsoleObserver\.settleAuthentication\(\{ dashboardStable: true \}\);\s*assert\.equal\(duplicateConsoleDecision\.tupleBoundRetirementCount, 0\);\s*assert\.equal\(duplicateConsoleDecision\.retiredExactConsoleErrorCount, 0\);\s*assert\.equal\(duplicateConsoleDecision\.fatalExactConsoleErrorCount, 2\);\s*const duplicateConsoleSnapshot\s*=\s*duplicateConsoleObserver\.safeSnapshot\(\);\s*assert\.equal\(duplicateConsoleSnapshot\.passed, false\);\s*assert\.equal\(duplicateConsoleSnapshot\.fatalExactConsoleErrorCount, 2\);/u,
+    "An exact-console over-count must remain unready for the bounded collection window and settle as a negative fixture with two fatal errors.",
+  );
+  assert.match(
+    frozenBaselineFixtureSource,
     /negativeSnapshots\.reduce\(\s*\(count, snapshot\)\s*=>\s*count \+ Number\(snapshot\.parseFailureCount > 0\),\s*0,\s*\),\s*10,/u,
     "The frozen-baseline negative ledger must retain ten parse-failure cases.",
   );
@@ -2998,7 +3003,6 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "streamFailureCount > 0",
     "parseFailureCount > 0",
     "bufferExceededCount > 0",
-    "exactConsoleSequences.length > policy.consoleError.expectedCount",
     "inboundRemoveCauseCodeCount > 1",
     "removedTargetClassMatchCount > 1",
     "successorAddTargetCount > 1",
@@ -3029,6 +3033,16 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
       `The frozen-baseline readiness contract is missing: ${requiredReadinessFragment}`,
     );
   }
+  assert.equal(
+    compactFrozenBaselineReadinessSource.includes(
+      "exactConsoleSequences.length > policy.consoleError.expectedCount".replace(
+        /\s+/gu,
+        "",
+      ),
+    ),
+    false,
+    "An exact-console over-count must not end the bounded listener collection window before target evidence arrives.",
+  );
   assert.match(
     sourceText,
     /const readyForSettlement\s*=\s*\(\)\s*=>\s*\{\s*if \(settledDecision !== null\) return true;\s*const irrecoverableFailureObserved\s*=[\s\S]*?if \(irrecoverableFailureObserved\) return true;\s*if \(!eligible\) return pendingInitialMutationsByRequestId\.size === 0;[\s\S]*?const removedTargets\s*=\s*allTargetEpochs\(\)\.filter/u,
@@ -3244,6 +3258,11 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     sourceText,
     /await drainAppCheckCdpHandlerPromises\(\);\s*let authenticationNetworkAttestationDrainDiagnostic\s*=\s*await flushNetworkAttestations\(\);\s*const listenerSettlementDeadline\s*=\s*Date\.now\(\) \+ FROZEN_BASELINE_LISTENER_SETTLEMENT_TIMEOUT_MS;\s*while \(\s*!frozenBaselineListenerBindingObserver\.readyForSettlement\(\) &&\s*Date\.now\(\) < listenerSettlementDeadline\s*\) \{\s*await new Promise\(\(resolvePoll\)\s*=>\s*setTimeout\(resolvePoll, FROZEN_BASELINE_LISTENER_SETTLEMENT_POLL_MS\),?\s*\);\s*await drainAppCheckCdpHandlerPromises\(\);\s*authenticationNetworkAttestationDrainDiagnostic\s*=\s*await flushNetworkAttestations\(\);\s*\}[\s\S]*?groupFrozenBaselineListenerRetirementDecision\s*=\s*frozenBaselineListenerBindingObserver\.settleAuthentication\(\{\s*dashboardStable:\s*true,?\s*\}\);/u,
     "Frozen-baseline listener settlement must use a bounded poll, drain and flush every poll, then settle fail-closed after readiness or timeout.",
+  );
+  assert.match(
+    sourceText,
+    /groupFrozenBaselineListenerRetirementDecision\s*=\s*frozenBaselineListenerBindingObserver\.settleAuthentication\(\{\s*dashboardStable:\s*true,?\s*\}\);\s*const frozenBaselineListenerAttestationAtSettlement\s*=\s*frozenBaselineListenerBindingObserver\.safeSnapshot\(\);\s*const frozenBaselineListenerFailureDiagnosticAtSettlement\s*=\s*frozenBaselineListenerBindingObserver\.safeFailureDiagnostic\(\);[\s\S]*?const authenticationBrowserErrorDiagnostic\s*=\s*\{[\s\S]*?frozenBaselineListenerRetirementDecision:\s*groupFrozenBaselineListenerRetirementDecision,\s*frozenBaselineListenerAttestationAtSettlement,\s*frozenBaselineListenerFailureDiagnosticAtSettlement,/u,
+    "Authentication failure diagnostics must include the settled safe listener attestation and its existing eight-field safe failure diagnostic.",
   );
   const frozenBaselineRuntimeFailureDiagnosticSourceStart =
     sourceText.lastIndexOf("let frozenBaselineListenerGroupAttestation;");

@@ -7701,7 +7701,6 @@ const createFrozenBaselineListenerBindingObserver = ({
       streamFailureCount > 0 ||
       parseFailureCount > 0 ||
       bufferExceededCount > 0 ||
-      exactConsoleSequences.length > policy.consoleError.expectedCount ||
       inboundRemoveCauseCodeCount > 1 ||
       removedTargetClassMatchCount > 1 ||
       successorAddTargetCount > 1 ||
@@ -9319,8 +9318,16 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
   const duplicateConsoleObserver = createObserver();
   observePositiveLifecycle(duplicateConsoleObserver);
   duplicateConsoleObserver.observeConsoleError(exactConsoleError);
-  duplicateConsoleObserver.settleAuthentication({ dashboardStable: true });
-  negativeSnapshots.push(duplicateConsoleObserver.safeSnapshot());
+  assert.equal(duplicateConsoleObserver.readyForSettlement(), false);
+  const duplicateConsoleDecision =
+    duplicateConsoleObserver.settleAuthentication({ dashboardStable: true });
+  assert.equal(duplicateConsoleDecision.tupleBoundRetirementCount, 0);
+  assert.equal(duplicateConsoleDecision.retiredExactConsoleErrorCount, 0);
+  assert.equal(duplicateConsoleDecision.fatalExactConsoleErrorCount, 2);
+  const duplicateConsoleSnapshot = duplicateConsoleObserver.safeSnapshot();
+  assert.equal(duplicateConsoleSnapshot.passed, false);
+  assert.equal(duplicateConsoleSnapshot.fatalExactConsoleErrorCount, 2);
+  negativeSnapshots.push(duplicateConsoleSnapshot);
   const streamFailureObserver = createObserver();
   observePositiveLifecycle(streamFailureObserver);
   const preResponseListenGetTerminalFailure =
@@ -43262,6 +43269,10 @@ try {
         frozenBaselineListenerBindingObserver.settleAuthentication({
           dashboardStable: true,
         });
+      const frozenBaselineListenerAttestationAtSettlement =
+        frozenBaselineListenerBindingObserver.safeSnapshot();
+      const frozenBaselineListenerFailureDiagnosticAtSettlement =
+        frozenBaselineListenerBindingObserver.safeFailureDiagnostic();
       const authenticationObservedBrowserRequestFailureCount =
         browserRequestFailureCount - groupBrowserRequestFailureStart;
       const authenticationRecoveredBrowserRequestFailureCount =
@@ -43412,6 +43423,8 @@ try {
         authenticationConsoleErrorFatalCount,
         frozenBaselineListenerRetirementDecision:
           groupFrozenBaselineListenerRetirementDecision,
+        frozenBaselineListenerAttestationAtSettlement,
+        frozenBaselineListenerFailureDiagnosticAtSettlement,
         authenticationProtectedReadRetryAttestation:
           groupAuthenticationProtectedReadRetryAttestation,
         preNavigationApplicationSessionFenceAttestation,
