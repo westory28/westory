@@ -2829,6 +2829,15 @@ const assertCaptureProtectedReadTransportResetSourceContract = (sourceText) => {
     "activeTunnelPresentAuthorizationObservationCount",
     "targetedTunnelRetirementObservationCount",
     "retirementCompleteSequence",
+    "retirementBasis",
+    "retirementBinding",
+    "authorizationSingletonTunnelSequence",
+    "failedLeaseConsumeSequence",
+    "failedLeaseConsumedTunnelSequence",
+    "resetPreparationOrderSequence",
+    "retryBarrierReleaseOrderSequence",
+    "assertBrowserConnectProxyExactTunnelResetPreparationInvariant",
+    "exactTunnelResetPreparationMutationFixtures",
     "protectedReadConfigAttemptCount",
     "protectedReadProfileAttemptCount",
     "protectedReadSharedRetryTarget",
@@ -2862,34 +2871,21 @@ const assertCaptureProtectedReadTransportResetSourceContract = (sourceText) => {
   );
   assert.ok(resetBranchStart >= 0 && resetBranchEnd > resetBranchStart);
   const resetBranchSource = sourceText.slice(resetBranchStart, resetBranchEnd);
-  const issuedRestartStart = resetBranchSource.indexOf(
-    'if (responseRecord.proxyLeaseClass === "issued-active-tunnel")',
-  );
-  const consumedResetStart = resetBranchSource.indexOf(
-    "} else {",
-    issuedRestartStart,
-  );
   const resetBarrierStart = resetBranchSource.indexOf(
     "if (protectedReadTransportResetPreparation !== null)",
-    consumedResetStart,
   );
-  assert.ok(
-    issuedRestartStart >= 0 &&
-      consumedResetStart > issuedRestartStart &&
-      resetBarrierStart > consumedResetStart,
+  const prepareIndex = resetBranchSource.indexOf(
+    "prepareExactRequestAuthorityTunnelReset",
   );
-  const issuedRestartSource = resetBranchSource.slice(
-    issuedRestartStart,
-    consumedResetStart,
-  );
+  assert.ok(prepareIndex >= 0 && resetBarrierStart > prepareIndex);
   assert.match(
-    issuedRestartSource,
-    /authenticationProtectedReadWholeBrowserProcessRestartRequired\s*=\s*true/u,
+    resetBranchSource,
+    /\["issued-active-tunnel", "consumed-active-tunnel"\]\.includes\(\s*responseRecord\.proxyLeaseClass,?\s*\)/u,
   );
   assert.doesNotMatch(
-    issuedRestartSource,
-    /prepareExactRequestAuthorityTunnelReset|retirePreparedExactRequestAuthorityTunnel|\.destroy\(/u,
-    "An issued-active protected read must require a fresh browser process without direct tunnel retirement.",
+    resetBranchSource,
+    /authenticationProtectedReadWholeBrowserProcessRestartRequired\s*=\s*true/u,
+    "A proof-bound issued-active reset must not be converted to the whole-process marker.",
   );
   assert.match(
     sourceText,
@@ -2945,18 +2941,6 @@ const assertCaptureProtectedReadTransportResetSourceContract = (sourceText) => {
     /wholeBrowserProcessRestartRequired[\s\S]*protectedReadWholeBrowserProcessRestartRequired !==\s*\(failureClass ===\s*SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES\.wholeBrowserProcessRestartRequired\)[\s\S]*schemaVersion:\s*3[\s\S]*protectedReadWholeBrowserProcessRestartRequired/u,
     "The schema-3 safe failure diagnostic must bind its restart boolean iff the fixed failure class is selected.",
   );
-  const consumedResetSource = resetBranchSource.slice(
-    consumedResetStart,
-    resetBarrierStart,
-  );
-  assert.match(
-    consumedResetSource,
-    /responseRecord\.proxyLeaseClass,\s*"consumed-active-tunnel"/u,
-  );
-  const prepareIndex = resetBranchSource.indexOf(
-    "prepareExactRequestAuthorityTunnelReset",
-    consumedResetStart,
-  );
   const completeIndex = resetBranchSource.indexOf(
     "completeProxyAuthorization();",
     prepareIndex,
@@ -2974,7 +2958,30 @@ const assertCaptureProtectedReadTransportResetSourceContract = (sourceText) => {
       completeIndex > prepareIndex &&
       failIndex > completeIndex &&
       retireIndex > failIndex,
-    "A consumed-active failed lease must complete before local failure and exact tunnel retirement.",
+    "Both active-tunnel lease classes must prepare, complete, locally fail, and retire in fixed order.",
+  );
+  assert.doesNotMatch(
+    resetBranchSource.slice(prepareIndex, completeIndex),
+    /\bawait\b/u,
+    "Issued reset preparation and authorization completion must remain in the same synchronous turn.",
+  );
+  const retirementDrainOrderIndex = resetBranchSource.indexOf(
+    "const retirementDrainCompletionOrderSequence =",
+    retireIndex,
+  );
+  const retryBarrierReleaseOrderIndex = resetBranchSource.indexOf(
+    "const retryBarrierReleaseOrderSequence =",
+    retirementDrainOrderIndex,
+  );
+  const retryBarrierResolveIndex = resetBranchSource.indexOf(
+    "protectedReadTransportResetBarrier.resolve(",
+    retryBarrierReleaseOrderIndex,
+  );
+  assert.ok(
+    retirementDrainOrderIndex > retireIndex &&
+      retryBarrierReleaseOrderIndex > retirementDrainOrderIndex &&
+      retryBarrierResolveIndex > retryBarrierReleaseOrderIndex,
+    "Retirement drain evidence must settle before the retry barrier is released.",
   );
   const retryBarrierIndex = sourceText.indexOf(
     "const resetAttestation = await resetBarrier.promise;",
@@ -3294,6 +3301,45 @@ const assertCaptureProtectedReadTransportResetSourceContract = (sourceText) => {
   );
   assert.ok(proxyResetStart >= 0 && proxyResetEnd > proxyResetStart);
   const proxyResetSource = sourceText.slice(proxyResetStart, proxyResetEnd);
+  assert.doesNotMatch(
+    proxyResetSource,
+    /requestBound|creatorLeaseGenerationBound/u,
+    "Issued-active retirement must not claim failed-request or creator-generation binding.",
+  );
+  assert.match(
+    proxyResetSource,
+    /schemaVersion:\s*3[\s\S]*retirementBasis[\s\S]*retirementBinding/u,
+  );
+  const resetInvariantStart = sourceText.indexOf(
+    "const assertBrowserConnectProxyExactTunnelResetPreparationInvariant = ({",
+  );
+  const resetInvariantEnd = sourceText.indexOf(
+    "const createBrowserConnectProxyGate = ({",
+    resetInvariantStart,
+  );
+  assert.ok(
+    resetInvariantStart >= 0 && resetInvariantEnd > resetInvariantStart,
+  );
+  const resetInvariantSource = sourceText.slice(
+    resetInvariantStart,
+    resetInvariantEnd,
+  );
+  assert.match(
+    resetInvariantSource,
+    /preparedResetCount, 0[\s\S]*sameAuthorityAuthorizations\.length, 1[\s\S]*authorityTunnels\.length, 1/u,
+  );
+  assert.match(
+    resetInvariantSource,
+    /failedLeaseClass === "issued-active-tunnel"[\s\S]*assert\.notEqual\(tunnel\.requestId, requestId\)[\s\S]*lease\.consumedAt, null[\s\S]*lease\.consumeSequence, null[\s\S]*lease\.consumedTunnelSequence, null[\s\S]*activeTunnelBindingsAtAuthorization\[0\][\s\S]*browserConnectProxyTunnelIdentity\(tunnel\)/u,
+  );
+  assert.match(
+    resetInvariantSource,
+    /tunnel\.leaseConsumeSequence < lease\.issueSequence/u,
+  );
+  assert.match(
+    resetInvariantSource,
+    /failedLeaseClass, "consumed-active-tunnel"[\s\S]*assert\.equal\(tunnel\.requestId, requestId\)[\s\S]*lease\.consumedTunnelSequence, tunnel\.tunnelSequence[\s\S]*lease\.issueSequence, tunnel\.leaseIssueSequence[\s\S]*lease\.consumeSequence, tunnel\.leaseConsumeSequence/u,
+  );
   assert.equal(
     (proxyResetSource.match(/releasedResponseStreamCensusForAuthority/gu) || [])
       .length,
@@ -3317,32 +3363,80 @@ const assertCaptureProtectedReadTransportResetSourceContract = (sourceText) => {
     proxyResetSource,
     /releasedResponseStreamCensusBeforeRetirement[\s\S]*nonterminalCount: 0[\s\S]*unknownOrUnboundCount: 0[\s\S]*tunnel\.clientSocket\.destroy\(\)/u,
   );
+  assert.match(
+    proxyResetSource,
+    /tunnel\.clientSocket\.destroy\(\);\s*tunnel\.upstreamSocket\.destroy\(\);[\s\S]*otherAuthorityTunnelRetirementCount:\s*0[\s\S]*otherAuthorityTunnelTargetingExcluded:\s*true/u,
+  );
   return true;
 };
 const assertProtectedReadTransportResetLeaseSequenceInvariant = ({
   failedLeaseClass,
   failedLeaseIssueSequence,
+  failedLeaseConsumeSequence,
+  failedLeaseConsumedTunnelSequence,
   creatorLeaseIssueSequence,
-  leaseConsumeSequence,
+  creatorLeaseConsumeSequence,
+  authorizationSingletonTunnelSequence,
+  retiredTunnelSequence,
   retirementCompleteSequence,
+  resetPreparationOrderSequence,
+  failedAuthorizationCompletionOrderSequence,
+  localFailRequestCompletionOrderSequence,
+  retirementDrainCompletionOrderSequence,
+  retryBarrierReleaseOrderSequence,
   releasedResponseStreamNonterminalCountAtPreparation,
   releasedResponseStreamNonterminalCountBeforeRetirement,
   releasedResponseStreamUnknownOrUnboundCountAtPreparation,
   releasedResponseStreamUnknownOrUnboundCountBeforeRetirement,
 }) => {
-  assert.equal(failedLeaseClass, "consumed-active-tunnel");
+  assert.ok(
+    ["issued-active-tunnel", "consumed-active-tunnel"].includes(
+      failedLeaseClass,
+    ),
+  );
   for (const value of [
     failedLeaseIssueSequence,
     creatorLeaseIssueSequence,
-    leaseConsumeSequence,
+    creatorLeaseConsumeSequence,
+    retiredTunnelSequence,
     retirementCompleteSequence,
+    resetPreparationOrderSequence,
+    failedAuthorizationCompletionOrderSequence,
+    localFailRequestCompletionOrderSequence,
+    retirementDrainCompletionOrderSequence,
+    retryBarrierReleaseOrderSequence,
   ]) {
     assert.equal(Number.isSafeInteger(value), true);
     assert.ok(value > 0);
   }
-  assert.equal(failedLeaseIssueSequence, creatorLeaseIssueSequence);
-  assert.ok(failedLeaseIssueSequence < leaseConsumeSequence);
-  assert.ok(leaseConsumeSequence < retirementCompleteSequence);
+  if (failedLeaseClass === "issued-active-tunnel") {
+    assert.equal(failedLeaseConsumeSequence, null);
+    assert.equal(failedLeaseConsumedTunnelSequence, null);
+    assert.equal(authorizationSingletonTunnelSequence, retiredTunnelSequence);
+    assert.ok(creatorLeaseConsumeSequence < failedLeaseIssueSequence);
+  } else {
+    assert.equal(failedLeaseIssueSequence, creatorLeaseIssueSequence);
+    assert.equal(failedLeaseConsumeSequence, creatorLeaseConsumeSequence);
+    assert.equal(failedLeaseConsumedTunnelSequence, retiredTunnelSequence);
+    assert.equal(authorizationSingletonTunnelSequence, null);
+  }
+  assert.ok(creatorLeaseIssueSequence < creatorLeaseConsumeSequence);
+  assert.ok(creatorLeaseConsumeSequence < retirementCompleteSequence);
+  assert.ok(failedLeaseIssueSequence < retirementCompleteSequence);
+  assert.ok(
+    resetPreparationOrderSequence < failedAuthorizationCompletionOrderSequence,
+  );
+  assert.ok(
+    failedAuthorizationCompletionOrderSequence <
+      localFailRequestCompletionOrderSequence,
+  );
+  assert.ok(
+    localFailRequestCompletionOrderSequence <
+      retirementDrainCompletionOrderSequence,
+  );
+  assert.ok(
+    retirementDrainCompletionOrderSequence < retryBarrierReleaseOrderSequence,
+  );
   for (const value of [
     releasedResponseStreamNonterminalCountAtPreparation,
     releasedResponseStreamNonterminalCountBeforeRetirement,
@@ -3355,11 +3449,40 @@ const assertProtectedReadTransportResetLeaseSequenceInvariant = ({
 const verifyProtectedReadTransportResetLeaseSequenceFixtures = () => {
   const validFixtures = [
     {
+      failedLeaseClass: "issued-active-tunnel",
+      creatorLeaseIssueSequence: 1,
+      creatorLeaseConsumeSequence: 2,
+      failedLeaseIssueSequence: 3,
+      failedLeaseConsumeSequence: null,
+      failedLeaseConsumedTunnelSequence: null,
+      authorizationSingletonTunnelSequence: 1,
+      retiredTunnelSequence: 1,
+      retirementCompleteSequence: 4,
+      resetPreparationOrderSequence: 1,
+      failedAuthorizationCompletionOrderSequence: 2,
+      localFailRequestCompletionOrderSequence: 3,
+      retirementDrainCompletionOrderSequence: 4,
+      retryBarrierReleaseOrderSequence: 5,
+      releasedResponseStreamNonterminalCountAtPreparation: 0,
+      releasedResponseStreamNonterminalCountBeforeRetirement: 0,
+      releasedResponseStreamUnknownOrUnboundCountAtPreparation: 0,
+      releasedResponseStreamUnknownOrUnboundCountBeforeRetirement: 0,
+    },
+    {
       failedLeaseClass: "consumed-active-tunnel",
       creatorLeaseIssueSequence: 1,
       failedLeaseIssueSequence: 1,
-      leaseConsumeSequence: 2,
+      creatorLeaseConsumeSequence: 2,
+      failedLeaseConsumeSequence: 2,
+      failedLeaseConsumedTunnelSequence: 1,
+      authorizationSingletonTunnelSequence: null,
+      retiredTunnelSequence: 1,
       retirementCompleteSequence: 3,
+      resetPreparationOrderSequence: 1,
+      failedAuthorizationCompletionOrderSequence: 2,
+      localFailRequestCompletionOrderSequence: 3,
+      retirementDrainCompletionOrderSequence: 4,
+      retryBarrierReleaseOrderSequence: 5,
       releasedResponseStreamNonterminalCountAtPreparation: 0,
       releasedResponseStreamNonterminalCountBeforeRetirement: 0,
       releasedResponseStreamUnknownOrUnboundCountAtPreparation: 0,
@@ -3374,15 +3497,28 @@ const verifyProtectedReadTransportResetLeaseSequenceFixtures = () => {
   const invalidFixtures = [
     {
       ...validFixtures[0],
-      failedLeaseClass: "issued-active-tunnel",
+      failedLeaseConsumeSequence: 2,
     },
     {
       ...validFixtures[0],
-      failedLeaseIssueSequence: validFixtures[0].leaseConsumeSequence,
+      authorizationSingletonTunnelSequence: 2,
     },
     {
       ...validFixtures[0],
       releasedResponseStreamNonterminalCountAtPreparation: 1,
+    },
+    {
+      ...validFixtures[0],
+      failedLeaseIssueSequence: validFixtures[0].creatorLeaseConsumeSequence,
+    },
+    {
+      ...validFixtures[0],
+      retryBarrierReleaseOrderSequence:
+        validFixtures[0].retirementDrainCompletionOrderSequence,
+    },
+    {
+      ...validFixtures[1],
+      failedLeaseConsumedTunnelSequence: 2,
     },
   ];
   for (const fixture of invalidFixtures) {
@@ -7356,7 +7492,7 @@ const protectedReadRetryGroupKeys = new Set();
 const assertProtectedReadTransportResetEvidence = (attestation) => {
   assert.equal(
     attestation.transportResetPolicyId,
-    "w10p-protected-read-exact-firestore-tunnel-reset-v1",
+    "w10p-protected-read-exact-firestore-tunnel-reset-v2",
   );
   assert.equal(attestation.transportResetUsed, attestation.retryUsed);
   assert.equal(attestation.transportResetTarget, attestation.retryTarget);
@@ -7371,48 +7507,83 @@ const assertProtectedReadTransportResetEvidence = (attestation) => {
     "activeAuthorityTunnelCountAfter",
     "activeAuthorityTunnelCountBefore",
     "authorityDrained",
-    "creatorLeaseGenerationBound",
+    "authorizationSingletonTunnelSequence",
+    "creatorLeaseConsumeSequence",
     "creatorLeaseIssueSequence",
     "currentTunnelClassBefore",
     "failedAttemptNumber",
+    "failedAuthorizationCompletionOrderSequence",
     "failedAuthorizationCompletedBeforeRetirement",
     "failedLeaseClass",
+    "failedLeaseConsumedTunnelSequence",
+    "failedLeaseConsumeSequence",
     "failedLeaseIssueSequence",
+    "failedRequestLocalFailureCompletedBeforeRetirement",
     "hostname",
-    "leaseConsumeSequence",
+    "localFailRequestCompletionOrderSequence",
     "noSameAuthorityAuthorizationBeforeRetirement",
+    "otherAuthorityTunnelTargetingExcluded",
     "otherAuthorityTunnelRetirementCount",
     "policyId",
     "releasedResponseStreamNonterminalCountAtPreparation",
     "releasedResponseStreamNonterminalCountBeforeRetirement",
     "releasedResponseStreamUnknownOrUnboundCountAtPreparation",
     "releasedResponseStreamUnknownOrUnboundCountBeforeRetirement",
-    "requestBound",
+    "resetPreparationOrderSequence",
     "retiredClientSocketCount",
     "retiredTunnelSequence",
     "retiredUpstreamSocketCount",
+    "retirementBasis",
     "retirementCompleteSequence",
+    "retirementDrainCompletionOrderSequence",
+    "retirementBinding",
+    "retryBarrierReleaseOrderSequence",
     "retryAttemptNumber",
+    "sameAuthorityAuthorizationCountAtPreparation",
     "schemaVersion",
     "singletonAuthorityTunnelBound",
     "stage",
     "target",
   ]);
-  assert.equal(reset.schemaVersion, 2);
+  assert.equal(reset.schemaVersion, 3);
   assert.equal(reset.policyId, attestation.transportResetPolicyId);
   assert.equal(reset.hostname, "firestore.googleapis.com");
   assert.equal(reset.stage, attestation.stage);
   assert.equal(reset.target, attestation.retryTarget);
   assert.equal(reset.failedAttemptNumber, 1);
   assert.equal(reset.retryAttemptNumber, 2);
-  assert.equal(reset.requestBound, true);
-  assert.equal(reset.failedLeaseClass, "consumed-active-tunnel");
+  assert.ok(
+    ["issued-active-tunnel", "consumed-active-tunnel"].includes(
+      reset.failedLeaseClass,
+    ),
+  );
+  const expectedRetirementContract =
+    reset.failedLeaseClass === "issued-active-tunnel"
+      ? {
+          retirementBasis: "authorization-time-singleton-tunnel-snapshot",
+          retirementBinding:
+            "authorization-singleton-sequence-current-identity",
+        }
+      : {
+          retirementBasis: "failed-lease-consumed-tunnel",
+          retirementBinding: "failed-lease-consumed-sequence-current-identity",
+        };
+  assert.equal(
+    reset.retirementBasis,
+    expectedRetirementContract.retirementBasis,
+  );
+  assert.equal(
+    reset.retirementBinding,
+    expectedRetirementContract.retirementBinding,
+  );
   assert.equal(reset.currentTunnelClassBefore, "current-active-tunnel");
   assert.equal(reset.singletonAuthorityTunnelBound, true);
+  assert.equal(reset.sameAuthorityAuthorizationCountAtPreparation, 1);
   assert.equal(reset.failedAuthorizationCompletedBeforeRetirement, true);
+  assert.equal(reset.failedRequestLocalFailureCompletedBeforeRetirement, true);
   assert.equal(reset.noSameAuthorityAuthorizationBeforeRetirement, true);
-  assert.equal(reset.creatorLeaseGenerationBound, true);
   assert.equal(reset.otherAuthorityTunnelRetirementCount, 0);
+  assert.equal(reset.otherAuthorityTunnelTargetingExcluded, true);
   assert.equal(reset.activeAuthorityTunnelCountBefore, 1);
   assert.equal(reset.retiredClientSocketCount, 1);
   assert.equal(reset.retiredUpstreamSocketCount, 1);
@@ -7429,9 +7600,14 @@ const assertProtectedReadTransportResetEvidence = (attestation) => {
   for (const field of [
     "failedLeaseIssueSequence",
     "creatorLeaseIssueSequence",
-    "leaseConsumeSequence",
+    "creatorLeaseConsumeSequence",
     "retiredTunnelSequence",
     "retirementCompleteSequence",
+    "resetPreparationOrderSequence",
+    "failedAuthorizationCompletionOrderSequence",
+    "localFailRequestCompletionOrderSequence",
+    "retirementDrainCompletionOrderSequence",
+    "retryBarrierReleaseOrderSequence",
   ]) {
     assert.equal(Number.isSafeInteger(reset[field]), true);
     assert.ok(reset[field] > 0);
@@ -7441,7 +7617,7 @@ const assertProtectedReadTransportResetEvidence = (attestation) => {
       Math.max(
         reset.failedLeaseIssueSequence,
         reset.creatorLeaseIssueSequence,
-        reset.leaseConsumeSequence,
+        reset.creatorLeaseConsumeSequence,
       ),
   );
   assertProtectedReadTransportResetLeaseSequenceInvariant(reset);
