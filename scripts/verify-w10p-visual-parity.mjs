@@ -2008,6 +2008,38 @@ const verifyNetworkPolicyNegativeFixtures = () => {
 };
 const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   const compactSourceText = sourceText.replace(/\s+/gu, "");
+  const expectedFrozenBaselineListenerParseFailureClasses = Object.freeze([
+    "target-tuple-duplicate",
+    "initial-target-request-registration",
+    "outbound-request-parse",
+    "initial-target-promotion",
+    "inbound-payload-parse",
+    "pending-initial-target-unresolved-at-settlement",
+    "response-stream-parse",
+    "buffered-stream-segment-replay",
+    "data-received-chunk-replay",
+    "cdp-listener-request-registration",
+    "cdp-session-sid-conflict",
+    "cdp-initial-response-binding",
+    "cdp-stream-activation-duplicate",
+    "cdp-stream-buffer-missing",
+    "cdp-data-length-invalid",
+    "cdp-stream-data-missing",
+    "cdp-pending-data-buffer-exceeded",
+  ]);
+  const frozenBaselineParseFailureClassDeclaration = sourceText.match(
+    /const SAFE_FROZEN_BASELINE_LISTENER_PARSE_FAILURE_CLASSES\s*=\s*Object\.freeze\(\[([\s\S]*?)\]\);/u,
+  );
+  assert.ok(frozenBaselineParseFailureClassDeclaration);
+  assert.deepEqual(
+    [
+      ...frozenBaselineParseFailureClassDeclaration[1].matchAll(
+        /"([a-z0-9]+(?:-[a-z0-9]+)*)"/gu,
+      ),
+    ].map((match) => match[1]),
+    expectedFrozenBaselineListenerParseFailureClasses,
+    "The frozen-baseline listener parse-failure taxonomy must remain the exact fixed 17-class safe enum.",
+  );
   assert.match(
     sourceText,
     /const nonFirebaseHostnameAllowed = isNonFirebaseHostnameAllowed\(\{\s*requestUrl,\s*method,\s*resourceType,\s*isFirebaseRequest,\s*allowedOrigins: allowedNonFirebaseOrigins,\s*\}\);/u,
@@ -2462,8 +2494,9 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "const irrecoverableFailureObserved =",
     "if (irrecoverableFailureObserved) return true",
     "if (!eligible) return pendingInitialTargetsByRequestId.size === 0",
-    "if (pendingInitialTargetsByRequestId.size > 0) recordParseFailure()",
+    'failureClass: "pending-initial-target-unresolved-at-settlement"',
     "readyForSettlement,",
+    "safeFailureDiagnostic,",
     "assert.equal(positiveObserver.readyForSettlement(), false)",
     "assert.equal(positiveObserver.readyForSettlement(), true)",
     "assert.equal(deferredStreamObserver.readyForSettlement(), false)",
@@ -2508,6 +2541,80 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     frozenBaselineFixtureSourceStart,
     frozenBaselineFixtureSourceEnd,
   );
+  const frozenBaselineProductionSource = `${sourceText.slice(
+    0,
+    frozenBaselineFixtureSourceStart,
+  )}${sourceText.slice(frozenBaselineFixtureSourceEnd)}`;
+  const extractFrozenBaselineParseFailureCallClasses = (candidateSource) =>
+    [
+      ...candidateSource.matchAll(
+        /\brecordParseFailure\(\s*\{\s*failureClass:\s*"([^"]+)"/gu,
+      ),
+    ].map((match) => match[1]);
+  const frozenBaselineParseFailureCallCount = (candidateSource) =>
+    (candidateSource.match(/\brecordParseFailure\s*\(/gu) || []).length;
+  const productionParseFailureCallClasses =
+    extractFrozenBaselineParseFailureCallClasses(
+      frozenBaselineProductionSource,
+    );
+  const fixtureParseFailureCallClasses =
+    extractFrozenBaselineParseFailureCallClasses(frozenBaselineFixtureSource);
+  assert.equal(
+    frozenBaselineParseFailureCallCount(sourceText),
+    21,
+    "Every frozen-baseline parse-failure call site must remain explicitly accounted.",
+  );
+  assert.equal(
+    frozenBaselineParseFailureCallCount(frozenBaselineProductionSource),
+    expectedFrozenBaselineListenerParseFailureClasses.length,
+    "Production must retain exactly one classified call site per frozen-baseline parse-failure class.",
+  );
+  assert.deepEqual(
+    productionParseFailureCallClasses,
+    expectedFrozenBaselineListenerParseFailureClasses,
+    "Production parse-failure call sites must cover the fixed taxonomy exactly once and in source order.",
+  );
+  assert.equal(
+    frozenBaselineParseFailureCallCount(frozenBaselineFixtureSource),
+    4,
+    "Frozen-baseline fixtures must retain three classified injections and one unknown-class rejection.",
+  );
+  assert.deepEqual(fixtureParseFailureCallClasses, [
+    "unsupported-private-fixture-class",
+    "response-stream-parse",
+    "outbound-request-parse",
+    "buffered-stream-segment-replay",
+  ]);
+  assert.match(
+    frozenBaselineFixtureSource,
+    /assert\.equal\(SAFE_FROZEN_BASELINE_LISTENER_PARSE_FAILURE_CLASSES\.length, 17\);[\s\S]*?new Set\(SAFE_FROZEN_BASELINE_LISTENER_PARSE_FAILURE_CLASSES\)\.size,[\s\S]*?SAFE_FROZEN_BASELINE_LISTENER_PARSE_FAILURE_CLASSES\.every\(\(failureClass\) =>\s*\/\^\[a-z0-9\]\+\(\?:-\[a-z0-9\]\+\)\*\$\/u\.test\(failureClass\),?\s*\),\s*true,/u,
+    "The capture self-test must pin the safe taxonomy length, uniqueness and slug shape.",
+  );
+  assert.match(
+    frozenBaselineFixtureSource,
+    /assert\.deepEqual\(safeTransportFailureFixture, \{\s*activeListenerRequestCount: 3,\s*initialResponseGsessionidBindingCount: 2,\s*sessionUrlSidBindingCount: 2,\s*exactBindingKeyIntersectionCount: 1,\s*unmatchedInitialResponseGsessionidBindingCount: 1,\s*unmatchedSessionUrlSidBindingCount: 1,\s*\}\);/u,
+    "The transport failure fixture must expose only the exact six safe aggregate counts.",
+  );
+  assert.match(
+    frozenBaselineFixtureSource,
+    /const positiveFailureDiagnostic\s*=\s*positiveObserver\.safeFailureDiagnostic\(\);[\s\S]*?positiveFailureDiagnostic\.parseFailureClassCountSum, 0[\s\S]*?positiveFailureDiagnostic\.parseFailureClassHistogram\.every\([\s\S]*?entry\.count === 0[\s\S]*?positiveObserver\.recordParseFailure\(\{\s*failureClass: "unsupported-private-fixture-class",\s*\}\),[\s\S]*?assert\.deepEqual\(\s*positiveObserver\.safeFailureDiagnostic\(\),\s*positiveFailureDiagnostic,/u,
+    "The settled observer must reject an unknown class before its guard and preserve the zero failure diagnostic.",
+  );
+  assert.match(
+    frozenBaselineFixtureSource,
+    /const noneligibleUnresolvedInitialDiagnostic\s*=\s*noneligibleUnresolvedInitialObserver\.safeFailureDiagnostic\(\);[\s\S]*?"pending-initial-target-unresolved-at-settlement",\s*\),\s*1,[\s\S]*?noneligibleUnresolvedInitialDiagnostic\.pendingInitialTargetRequestCount,\s*1,[\s\S]*?noneligibleUnresolvedInitialDiagnostic\.initialTargetRequestPromotionCount,\s*0,/u,
+    "The unresolved admin fixture must identify exactly the pending-initial settlement failure class without raw request data.",
+  );
+  assert.match(
+    frozenBaselineFixtureSource,
+    /const noneligiblePendingFailureDiagnostic\s*=\s*noneligiblePendingFailureObserver\.safeFailureDiagnostic\(\);[\s\S]*?"outbound-request-parse",\s*\),\s*1,[\s\S]*?"pending-initial-target-unresolved-at-settlement",\s*\),\s*1,[\s\S]*?noneligiblePendingFailureDiagnostic\.pendingInitialTargetRequestCount,\s*1,/u,
+    "The preexisting-plus-pending admin fixture must reconcile its two fixed failure classes.",
+  );
+  assert.match(
+    frozenBaselineFixtureSource,
+    /const serializedSafeFailureDiagnostics\s*=\s*JSON\.stringify\(\{[\s\S]*?safeTransportFailureFixture,[\s\S]*?noneligibleUnresolvedInitialDiagnostic,[\s\S]*?noneligiblePendingFailureDiagnostic,[\s\S]*?\}\);[\s\S]*?for \(const privateValue of \[[\s\S]*?privateUid,[\s\S]*?privateGsessionid,[\s\S]*?privateSid,[\s\S]*?privateTransportRequestId,[\s\S]*?requestUrl\.toString\(\),[\s\S]*?"fixture-resume-token",[\s\S]*?\]\) \{[\s\S]*?serializedSafeFailureDiagnostics\.includes\(privateValue\),\s*false,/u,
+    "Safe failure diagnostics must retain zero raw UID, session, request, URL, body and token sentinel values.",
+  );
   assert.match(
     frozenBaselineFixtureSource,
     /frozenBaselineListenerBindingPositiveFixtureCount:\s*4/u,
@@ -2541,7 +2648,7 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   );
   assert.match(
     frozenBaselineFixtureSource,
-    /const noneligiblePendingFailureObserver\s*=\s*createNoneligibleAdminObserver\(\);[\s\S]*?noneligiblePendingFailureObserver\.recordParseFailure\(\);\s*assert\.equal\(noneligiblePendingFailureObserver\.readyForSettlement\(\), true\);[\s\S]*?noneligiblePendingFailureObserver\.settleAuthentication\(\{[\s\S]*?\}\);[\s\S]*?assert\.equal\(noneligiblePendingFailureSnapshot\.parseFailureCount, 2\);\s*assert\.equal\(noneligiblePendingFailureSnapshot\.passed, false\);/u,
+    /const noneligiblePendingFailureObserver\s*=\s*createNoneligibleAdminObserver\(\);[\s\S]*?noneligiblePendingFailureObserver\.recordParseFailure\(\{\s*failureClass: "outbound-request-parse",\s*\}\);\s*assert\.equal\(noneligiblePendingFailureObserver\.readyForSettlement\(\), true\);[\s\S]*?noneligiblePendingFailureObserver\.settleAuthentication\(\{[\s\S]*?\}\);[\s\S]*?assert\.equal\(noneligiblePendingFailureSnapshot\.parseFailureCount, 2\);\s*assert\.equal\(noneligiblePendingFailureSnapshot\.passed, false\);/u,
     "A preexisting noneligible parse failure must settle immediately and retain the unresolved-pending failure.",
   );
   assert.match(
@@ -2634,13 +2741,126 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   );
   assert.match(
     sourceText,
-    /const settleAuthentication\s*=\s*\(\{ dashboardStable \}\)\s*=>\s*\{\s*assert\.equal\(settledDecision, null\);\s*assert\.equal\(dashboardStable, true\);\s*if \(pendingInitialTargetsByRequestId\.size > 0\) recordParseFailure\(\);/u,
+    /const settleAuthentication\s*=\s*\(\{ dashboardStable \}\)\s*=>\s*\{\s*assert\.equal\(settledDecision, null\);\s*assert\.equal\(dashboardStable, true\);\s*if \(pendingInitialTargetsByRequestId\.size > 0\) \{\s*recordParseFailure\(\{\s*failureClass: "pending-initial-target-unresolved-at-settlement",\s*\}\);\s*\}/u,
     "Timed-out pending initial targets must remain a parse-fatal settlement outcome.",
   );
+  const frozenBaselineRecordParseFailureSourceStart = sourceText.indexOf(
+    "const recordParseFailure = ({ failureClass, bufferExceeded = false }) => {",
+  );
+  const frozenBaselineRecordParseFailureSourceEnd = sourceText.indexOf(
+    "const registerSessionTarget = ({",
+    frozenBaselineRecordParseFailureSourceStart,
+  );
+  assert.ok(frozenBaselineRecordParseFailureSourceStart >= 0);
+  assert.ok(
+    frozenBaselineRecordParseFailureSourceEnd >
+      frozenBaselineRecordParseFailureSourceStart,
+  );
+  const compactFrozenBaselineRecordParseFailureSource = sourceText
+    .slice(
+      frozenBaselineRecordParseFailureSourceStart,
+      frozenBaselineRecordParseFailureSourceEnd,
+    )
+    .replace(/\s+/gu, "");
+  const frozenBaselineRecordParseFailureOrdering = [
+    "SAFE_FROZEN_BASELINE_LISTENER_PARSE_FAILURE_CLASSES.includes(failureClass,)",
+    'assert.equal(typeofbufferExceeded,"boolean")',
+    "if(settledDecision!==null)return",
+    "parseFailureCount+=1",
+    "bufferExceededCount+=Number(bufferExceeded)",
+    "parseFailureClassCounts.set(failureClass,parseFailureClassCounts.get(failureClass)+1,)",
+  ].map((fragment) =>
+    compactFrozenBaselineRecordParseFailureSource.indexOf(fragment),
+  );
+  assert.equal(
+    frozenBaselineRecordParseFailureOrdering.every((index) => index >= 0),
+    true,
+    "The classified parse-failure ledger is incomplete.",
+  );
+  assert.deepEqual(
+    frozenBaselineRecordParseFailureOrdering,
+    [...frozenBaselineRecordParseFailureOrdering].sort(
+      (left, right) => left - right,
+    ),
+    "Failure-class and buffer validation must precede the settled guard, followed by atomic safe accounting.",
+  );
+  assert.doesNotMatch(
+    compactFrozenBaselineRecordParseFailureSource,
+    /recordParseFailure=\(\{bufferExceeded=false\}=\{\}\)/u,
+    "A parse failure must not be recordable without an explicit safe class.",
+  );
+  const frozenBaselineSafeFailureDiagnosticSourceStart = sourceText.indexOf(
+    "const safeFailureDiagnostic = () => {",
+    frozenBaselineRecordParseFailureSourceEnd,
+  );
+  const frozenBaselineSafeFailureDiagnosticSourceEnd = sourceText.indexOf(
+    "const safeSnapshot = () => {",
+    frozenBaselineSafeFailureDiagnosticSourceStart,
+  );
+  assert.ok(frozenBaselineSafeFailureDiagnosticSourceStart >= 0);
+  assert.ok(
+    frozenBaselineSafeFailureDiagnosticSourceEnd >
+      frozenBaselineSafeFailureDiagnosticSourceStart,
+  );
+  const frozenBaselineSafeFailureDiagnosticSource = sourceText.slice(
+    frozenBaselineSafeFailureDiagnosticSourceStart,
+    frozenBaselineSafeFailureDiagnosticSourceEnd,
+  );
   assert.match(
-    sourceText,
-    /const recordParseFailure\s*=\s*\(\{ bufferExceeded = false \} = \{\}\)\s*=>\s*\{\s*if \(settledDecision !== null\) return;/u,
-    "Frozen-baseline parse failures must not mutate the settled semantic ledger.",
+    frozenBaselineSafeFailureDiagnosticSource,
+    /const parseFailureClassHistogram\s*=\s*Object\.freeze\(\s*SAFE_FROZEN_BASELINE_LISTENER_PARSE_FAILURE_CLASSES\.map\(\(failureClass\)\s*=>\s*Object\.freeze\(\{\s*failureClass,\s*count: parseFailureClassCounts\.get\(failureClass\),\s*\}\),?\s*\),?\s*\);/u,
+    "The failure histogram must be zero-inclusive and retain the fixed taxonomy order.",
+  );
+  assert.match(
+    frozenBaselineSafeFailureDiagnosticSource,
+    /assert\.deepEqual\(Object\.keys\(entry\), \["failureClass", "count"\]\);[\s\S]*?assert\.equal\(\s*entry\.failureClass,\s*SAFE_FROZEN_BASELINE_LISTENER_PARSE_FAILURE_CLASSES\[index\],\s*\);[\s\S]*?assert\.ok\(Number\.isSafeInteger\(entry\.count\) && entry\.count >= 0\);/u,
+    "Every failure histogram entry must expose only its safe class and nonnegative safe-integer count.",
+  );
+  assert.match(
+    frozenBaselineSafeFailureDiagnosticSource,
+    /assert\.equal\(parseFailureClassCountSum, parseFailureCount\);\s*assert\.ok\(bufferExceededCount <= parseFailureCount\);/u,
+    "The failure-class histogram and buffer-failure subset must reconcile with the manifest parse ledger.",
+  );
+  assert.match(
+    frozenBaselineSafeFailureDiagnosticSource,
+    /return Object\.freeze\(\{\s*parseFailureClassHistogram,\s*parseFailureClassCountSum,\s*pendingInitialTargetRequestCount,\s*initialTargetRequestPromotionCount,\s*\}\);/u,
+    "The observer failure diagnostic must retain exactly four safe aggregate fields.",
+  );
+  assert.doesNotMatch(
+    frozenBaselineSafeFailureDiagnosticSource,
+    /\b(?:uid|path|session|requestId|body|token)\s*:/iu,
+    "Observer diagnostics must not expose raw identifiers, paths, bodies or tokens.",
+  );
+  const frozenBaselineSafeTransportDiagnosticSourceStart = sourceText.indexOf(
+    "const summarizeSafeFrozenBaselineListenerTransportFailure = ({",
+  );
+  const frozenBaselineSafeTransportDiagnosticSourceEnd = sourceText.indexOf(
+    "const createFrozenBaselineListenerBindingObserver = ({",
+    frozenBaselineSafeTransportDiagnosticSourceStart,
+  );
+  assert.ok(frozenBaselineSafeTransportDiagnosticSourceStart >= 0);
+  assert.ok(
+    frozenBaselineSafeTransportDiagnosticSourceEnd >
+      frozenBaselineSafeTransportDiagnosticSourceStart,
+  );
+  const frozenBaselineSafeTransportDiagnosticSource = sourceText.slice(
+    frozenBaselineSafeTransportDiagnosticSourceStart,
+    frozenBaselineSafeTransportDiagnosticSourceEnd,
+  );
+  assert.match(
+    frozenBaselineSafeTransportDiagnosticSource,
+    /return Object\.freeze\(\{\s*activeListenerRequestCount,\s*initialResponseGsessionidBindingCount,\s*sessionUrlSidBindingCount,\s*exactBindingKeyIntersectionCount,\s*unmatchedInitialResponseGsessionidBindingCount,\s*unmatchedSessionUrlSidBindingCount,\s*\}\);/u,
+    "The transport failure diagnostic must expose only its exact six safe aggregate counts.",
+  );
+  assert.match(
+    frozenBaselineSafeTransportDiagnosticSource,
+    /exactBindingKeyIntersectionCount \+\s*unmatchedInitialResponseGsessionidBindingCount,\s*initialResponseGsessionidBindingCount,[\s\S]*?exactBindingKeyIntersectionCount \+ unmatchedSessionUrlSidBindingCount,\s*sessionUrlSidBindingCount,/u,
+    "Matched and unmatched transport bindings must reconcile exactly for both directions.",
+  );
+  assert.doesNotMatch(
+    frozenBaselineSafeTransportDiagnosticSource,
+    /\b(?:uid|path|session|requestId|body|token)\s*:/iu,
+    "Transport diagnostics must not expose raw identifiers, paths, bodies or tokens.",
   );
   assert.match(
     sourceText,
@@ -2666,6 +2886,50 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     sourceText,
     /await drainAppCheckCdpHandlerPromises\(\);\s*let authenticationNetworkAttestationDrainDiagnostic\s*=\s*await flushNetworkAttestations\(\);\s*const listenerSettlementDeadline\s*=\s*Date\.now\(\) \+ FROZEN_BASELINE_LISTENER_SETTLEMENT_TIMEOUT_MS;\s*while \(\s*!frozenBaselineListenerBindingObserver\.readyForSettlement\(\) &&\s*Date\.now\(\) < listenerSettlementDeadline\s*\) \{\s*await new Promise\(\(resolvePoll\)\s*=>\s*setTimeout\(resolvePoll, FROZEN_BASELINE_LISTENER_SETTLEMENT_POLL_MS\),?\s*\);\s*await drainAppCheckCdpHandlerPromises\(\);\s*authenticationNetworkAttestationDrainDiagnostic\s*=\s*await flushNetworkAttestations\(\);\s*\}[\s\S]*?groupFrozenBaselineListenerRetirementDecision\s*=\s*frozenBaselineListenerBindingObserver\.settleAuthentication\(\{\s*dashboardStable:\s*true,?\s*\}\);/u,
     "Frozen-baseline listener settlement must use a bounded poll, drain and flush every poll, then settle fail-closed after readiness or timeout.",
+  );
+  const frozenBaselineRuntimeFailureDiagnosticSourceStart =
+    sourceText.lastIndexOf("let frozenBaselineListenerGroupAttestation;");
+  const frozenBaselineRuntimeFailureDiagnosticSourceEnd = sourceText.indexOf(
+    "frozenBaselineAuthenticationAnomalyGroupAttestations.push(",
+    frozenBaselineRuntimeFailureDiagnosticSourceStart,
+  );
+  assert.ok(frozenBaselineRuntimeFailureDiagnosticSourceStart >= 0);
+  assert.ok(
+    frozenBaselineRuntimeFailureDiagnosticSourceEnd >
+      frozenBaselineRuntimeFailureDiagnosticSourceStart,
+  );
+  const compactFrozenBaselineRuntimeFailureDiagnosticSource = sourceText
+    .slice(
+      frozenBaselineRuntimeFailureDiagnosticSourceStart,
+      frozenBaselineRuntimeFailureDiagnosticSourceEnd,
+    )
+    .replace(/\s+/gu, "");
+  const frozenBaselineRuntimeFailureDiagnosticOrdering = [
+    "try{",
+    "frozenBaselineListenerGroupAttestation=frozenBaselineListenerBindingObserver.safeSnapshot()",
+    "if(!frozenBaselineListenerGroupAttestation.passed){",
+    "constobserverFailureDiagnostic=frozenBaselineListenerBindingObserver.safeFailureDiagnostic()",
+    "consttransportFailureDiagnostic=summarizeSafeFrozenBaselineListenerTransportFailure({",
+    "attestation:frozenBaselineListenerGroupAttestation,observerFailureDiagnostic,transportFailureDiagnostic,",
+    "}finally{",
+    "frozenBaselineListenerRequestsByNetworkId.clear()",
+    "frozenBaselineInitialRequestIdByGsessionid.clear()",
+    "frozenBaselineSessionSidByGsessionid.clear()",
+    "assert.equal(frozenBaselineListenerGroupAttestation.passed,true,frozenBaselineListenerFailureMessage,)",
+  ].map((fragment) =>
+    compactFrozenBaselineRuntimeFailureDiagnosticSource.indexOf(fragment),
+  );
+  assert.equal(
+    frozenBaselineRuntimeFailureDiagnosticOrdering.every((index) => index >= 0),
+    true,
+    "The frozen-baseline safe failure-only diagnostic and cleanup contract is incomplete.",
+  );
+  assert.deepEqual(
+    frozenBaselineRuntimeFailureDiagnosticOrdering,
+    [...frozenBaselineRuntimeFailureDiagnosticOrdering].sort(
+      (left, right) => left - right,
+    ),
+    "Safe diagnostics must be created only after a failed snapshot, then raw transport maps must clear in finally before assertion.",
   );
   assert.match(
     sourceText,
@@ -2763,7 +3027,7 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   }
   assert.match(
     sourceText,
-    /await context\.close\(\);\s*groupBrowserContextClosed = true;[\s\S]*?await drainAppCheckCdpHandlerPromises\(\);\s*assert\.equal\(\s*allowedEgressHandlerTaskCoordinator\.pendingCount\(\),\s*0,[\s\S]*?await flushNetworkAttestations\(\);\s*if \(frozenBaselineListenerBindingObserver\) \{[\s\S]*?entry\.responseStream\.finish\(\{\s*allowIncomplete:\s*true,?\s*\}\);[\s\S]*?frozenBaselineListenerRequestsByNetworkId\.clear\(\);\s*frozenBaselineInitialRequestIdByGsessionid\.clear\(\);\s*frozenBaselineSessionSidByGsessionid\.clear\(\);\s*const frozenBaselineListenerGroupAttestation\s*=\s*frozenBaselineListenerBindingObserver\.safeSnapshot\(\);\s*assert\.equal\(\s*frozenBaselineListenerGroupAttestation\.passed,\s*true,[\s\S]*?frozenBaselineAuthenticationAnomalyGroupAttestations\.push\(\s*frozenBaselineListenerGroupAttestation,?\s*\);[\s\S]*?retireContextClosedWebChannelAuthorizations\(\);\s*assert\.equal\(\s*allowedEgressProxyAuthorizationCoordinator\.activeCount\(\),\s*0,/u,
+    /await context\.close\(\);\s*groupBrowserContextClosed = true;[\s\S]*?await drainAppCheckCdpHandlerPromises\(\);\s*assert\.equal\(\s*allowedEgressHandlerTaskCoordinator\.pendingCount\(\),\s*0,[\s\S]*?await flushNetworkAttestations\(\);\s*if \(frozenBaselineListenerBindingObserver\) \{[\s\S]*?entry\.responseStream\.finish\(\{\s*allowIncomplete:\s*true,?\s*\}\);[\s\S]*?let frozenBaselineListenerGroupAttestation;[\s\S]*?try \{\s*frozenBaselineListenerGroupAttestation\s*=\s*frozenBaselineListenerBindingObserver\.safeSnapshot\(\);[\s\S]*?\} finally \{\s*frozenBaselineListenerRequestsByNetworkId\.clear\(\);\s*frozenBaselineInitialRequestIdByGsessionid\.clear\(\);\s*frozenBaselineSessionSidByGsessionid\.clear\(\);\s*\}\s*assert\.equal\(\s*frozenBaselineListenerGroupAttestation\.passed,\s*true,[\s\S]*?frozenBaselineAuthenticationAnomalyGroupAttestations\.push\(\s*frozenBaselineListenerGroupAttestation,?\s*\);[\s\S]*?retireContextClosedWebChannelAuthorizations\(\);\s*assert\.equal\(\s*allowedEgressProxyAuthorizationCoordinator\.activeCount\(\),\s*0,/u,
     "The context-close WebChannel retirement must follow close, late handler drain, network-attestation flush, and safe frozen-baseline listener finalization.",
   );
   assert.match(

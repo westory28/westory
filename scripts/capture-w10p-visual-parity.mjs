@@ -6549,6 +6549,29 @@ const FIRESTORE_LISTEN_TARGET_CHANGE_TYPES = Object.freeze([
   "REMOVE",
   "RESET",
 ]);
+const SAFE_FROZEN_BASELINE_LISTENER_PARSE_FAILURE_CLASSES = Object.freeze([
+  "target-tuple-duplicate",
+  "initial-target-request-registration",
+  "outbound-request-parse",
+  "initial-target-promotion",
+  "inbound-payload-parse",
+  "pending-initial-target-unresolved-at-settlement",
+  "response-stream-parse",
+  "buffered-stream-segment-replay",
+  "data-received-chunk-replay",
+  "cdp-listener-request-registration",
+  "cdp-session-sid-conflict",
+  "cdp-initial-response-binding",
+  "cdp-stream-activation-duplicate",
+  "cdp-stream-buffer-missing",
+  "cdp-data-length-invalid",
+  "cdp-stream-data-missing",
+  "cdp-pending-data-buffer-exceeded",
+]);
+assert.equal(
+  new Set(SAFE_FROZEN_BASELINE_LISTENER_PARSE_FAILURE_CLASSES).size,
+  SAFE_FROZEN_BASELINE_LISTENER_PARSE_FAILURE_CLASSES.length,
+);
 const exactFirestoreListenSessionIdentity = (requestUrl) => {
   try {
     const parsed = new URL(String(requestUrl));
@@ -7003,6 +7026,66 @@ const frozenBaselineObservationSequenceBefore = (left, right) =>
     (left.frameSequence < right.frameSequence ||
       (left.frameSequence === right.frameSequence &&
         left.withinEventSequence < right.withinEventSequence)));
+const summarizeSafeFrozenBaselineListenerTransportFailure = ({
+  activeListenerRequestCount,
+  initialResponseBindings,
+  sessionUrlSidBindings,
+}) => {
+  assert.ok(
+    Number.isSafeInteger(activeListenerRequestCount) &&
+      activeListenerRequestCount >= 0,
+  );
+  assert.equal(initialResponseBindings instanceof Map, true);
+  assert.equal(sessionUrlSidBindings instanceof Map, true);
+  const initialResponseBindingKeys = new Set(initialResponseBindings.keys());
+  const sessionUrlSidBindingKeys = new Set(sessionUrlSidBindings.keys());
+  assert.equal(initialResponseBindingKeys.size, initialResponseBindings.size);
+  assert.equal(sessionUrlSidBindingKeys.size, sessionUrlSidBindings.size);
+  assert.equal(
+    [...initialResponseBindingKeys, ...sessionUrlSidBindingKeys].every(
+      (key) => typeof key === "string" && key.length > 0,
+    ),
+    true,
+  );
+  const exactBindingKeyIntersectionCount = [
+    ...initialResponseBindingKeys,
+  ].reduce(
+    (count, key) => count + Number(sessionUrlSidBindingKeys.has(key)),
+    0,
+  );
+  const initialResponseGsessionidBindingCount = initialResponseBindingKeys.size;
+  const sessionUrlSidBindingCount = sessionUrlSidBindingKeys.size;
+  const unmatchedInitialResponseGsessionidBindingCount =
+    initialResponseGsessionidBindingCount - exactBindingKeyIntersectionCount;
+  const unmatchedSessionUrlSidBindingCount =
+    sessionUrlSidBindingCount - exactBindingKeyIntersectionCount;
+  for (const count of [
+    exactBindingKeyIntersectionCount,
+    initialResponseGsessionidBindingCount,
+    sessionUrlSidBindingCount,
+    unmatchedInitialResponseGsessionidBindingCount,
+    unmatchedSessionUrlSidBindingCount,
+  ]) {
+    assert.ok(Number.isSafeInteger(count) && count >= 0);
+  }
+  assert.equal(
+    exactBindingKeyIntersectionCount +
+      unmatchedInitialResponseGsessionidBindingCount,
+    initialResponseGsessionidBindingCount,
+  );
+  assert.equal(
+    exactBindingKeyIntersectionCount + unmatchedSessionUrlSidBindingCount,
+    sessionUrlSidBindingCount,
+  );
+  return Object.freeze({
+    activeListenerRequestCount,
+    initialResponseGsessionidBindingCount,
+    sessionUrlSidBindingCount,
+    exactBindingKeyIntersectionCount,
+    unmatchedInitialResponseGsessionidBindingCount,
+    unmatchedSessionUrlSidBindingCount,
+  });
+};
 const createFrozenBaselineListenerBindingObserver = ({
   stage,
   captureRole,
@@ -7028,8 +7111,15 @@ const createFrozenBaselineListenerBindingObserver = ({
   let streamFailureCount = 0;
   let parseFailureCount = 0;
   let bufferExceededCount = 0;
+  let initialTargetRequestPromotionCount = 0;
   let settledDecision = null;
   let settledSemanticLedger = null;
+  const parseFailureClassCounts = new Map(
+    SAFE_FROZEN_BASELINE_LISTENER_PARSE_FAILURE_CLASSES.map((failureClass) => [
+      failureClass,
+      0,
+    ]),
+  );
   const targetClassCounts = new Map(
     SAFE_FROZEN_BASELINE_LISTENER_TARGET_CLASSES.map((targetClass) => [
       targetClass,
@@ -7076,10 +7166,27 @@ const createFrozenBaselineListenerBindingObserver = ({
     authenticationRole === policy.authenticationRole &&
     viewport === policy.viewport &&
     policy.phase === "authentication";
-  const recordParseFailure = ({ bufferExceeded = false } = {}) => {
+  const recordParseFailure = ({ failureClass, bufferExceeded = false }) => {
+    assert.equal(
+      SAFE_FROZEN_BASELINE_LISTENER_PARSE_FAILURE_CLASSES.includes(
+        failureClass,
+      ),
+      true,
+      "Frozen-baseline listener parse failure class was unsupported.",
+    );
+    assert.equal(typeof bufferExceeded, "boolean");
     if (settledDecision !== null) return;
     parseFailureCount += 1;
     bufferExceededCount += Number(bufferExceeded);
+    parseFailureClassCounts.set(
+      failureClass,
+      parseFailureClassCounts.get(failureClass) + 1,
+    );
+    assert.ok(
+      Number.isSafeInteger(parseFailureCount) &&
+        Number.isSafeInteger(bufferExceededCount) &&
+        Number.isSafeInteger(parseFailureClassCounts.get(failureClass)),
+    );
   };
   const registerSessionTarget = ({
     sessionIdentity,
@@ -7089,7 +7196,7 @@ const createFrozenBaselineListenerBindingObserver = ({
   }) => {
     const tupleKey = frozenBaselineListenerTupleKey(sessionIdentity, targetId);
     if (targetsByTuple.has(tupleKey)) {
-      recordParseFailure();
+      recordParseFailure({ failureClass: "target-tuple-duplicate" });
       return;
     }
     targetsByTuple.set(tupleKey, {
@@ -7134,7 +7241,9 @@ const createFrozenBaselineListenerBindingObserver = ({
           request.networkRequestId.length === 0 ||
           pendingInitialTargetsByRequestId.has(request.networkRequestId)
         ) {
-          recordParseFailure();
+          recordParseFailure({
+            failureClass: "initial-target-request-registration",
+          });
         } else {
           pendingInitialTargetsByRequestId.set(
             request.networkRequestId,
@@ -7145,6 +7254,7 @@ const createFrozenBaselineListenerBindingObserver = ({
       return parsed.sessionIdentity;
     } catch (error) {
       recordParseFailure({
+        failureClass: "outbound-request-parse",
         bufferExceeded: String(error?.message || "").includes(
           "bounded parser limit",
         ),
@@ -7175,8 +7285,10 @@ const createFrozenBaselineListenerBindingObserver = ({
         });
       }
       pendingInitialTargetsByRequestId.delete(networkRequestId);
+      initialTargetRequestPromotionCount += 1;
+      assert.ok(Number.isSafeInteger(initialTargetRequestPromotionCount));
     } catch {
-      recordParseFailure();
+      recordParseFailure({ failureClass: "initial-target-promotion" });
     }
   };
   const reserveInboundPayloadSequence = () => {
@@ -7254,6 +7366,7 @@ const createFrozenBaselineListenerBindingObserver = ({
       }
     } catch (error) {
       recordParseFailure({
+        failureClass: "inbound-payload-parse",
         bufferExceeded: String(error?.message || "").includes(
           "bounded parser limit",
         ),
@@ -7330,7 +7443,11 @@ const createFrozenBaselineListenerBindingObserver = ({
   const settleAuthentication = ({ dashboardStable }) => {
     assert.equal(settledDecision, null);
     assert.equal(dashboardStable, true);
-    if (pendingInitialTargetsByRequestId.size > 0) recordParseFailure();
+    if (pendingInitialTargetsByRequestId.size > 0) {
+      recordParseFailure({
+        failureClass: "pending-initial-target-unresolved-at-settlement",
+      });
+    }
     const removedTargets = [...targetsByTuple.values()].filter(
       (target) => target.targetClass === policy.removedTargetClass,
     );
@@ -7397,6 +7514,45 @@ const createFrozenBaselineListenerBindingObserver = ({
     settledSemanticLedger = Object.freeze(snapshotSemanticLedger());
     return settledDecision;
   };
+  const safeFailureDiagnostic = () => {
+    const parseFailureClassHistogram = Object.freeze(
+      SAFE_FROZEN_BASELINE_LISTENER_PARSE_FAILURE_CLASSES.map((failureClass) =>
+        Object.freeze({
+          failureClass,
+          count: parseFailureClassCounts.get(failureClass),
+        }),
+      ),
+    );
+    const parseFailureClassCountSum = parseFailureClassHistogram.reduce(
+      (sum, entry) => sum + entry.count,
+      0,
+    );
+    const pendingInitialTargetRequestCount =
+      pendingInitialTargetsByRequestId.size;
+    for (const [index, entry] of parseFailureClassHistogram.entries()) {
+      assert.deepEqual(Object.keys(entry), ["failureClass", "count"]);
+      assert.equal(
+        entry.failureClass,
+        SAFE_FROZEN_BASELINE_LISTENER_PARSE_FAILURE_CLASSES[index],
+      );
+      assert.ok(Number.isSafeInteger(entry.count) && entry.count >= 0);
+    }
+    for (const count of [
+      parseFailureClassCountSum,
+      pendingInitialTargetRequestCount,
+      initialTargetRequestPromotionCount,
+    ]) {
+      assert.ok(Number.isSafeInteger(count) && count >= 0);
+    }
+    assert.equal(parseFailureClassCountSum, parseFailureCount);
+    assert.ok(bufferExceededCount <= parseFailureCount);
+    return Object.freeze({
+      parseFailureClassHistogram,
+      parseFailureClassCountSum,
+      pendingInitialTargetRequestCount,
+      initialTargetRequestPromotionCount,
+    });
+  };
   const safeSnapshot = () => {
     assert.ok(settledDecision);
     assert.deepEqual(snapshotSemanticLedger(), settledSemanticLedger);
@@ -7457,6 +7613,7 @@ const createFrozenBaselineListenerBindingObserver = ({
     recordStreamFailure,
     readyForSettlement,
     settleAuthentication,
+    safeFailureDiagnostic,
     safeSnapshot,
     isSettled: () => settledDecision !== null,
   });
@@ -7475,7 +7632,12 @@ const createFrozenBaselineListenerResponseStream = ({
   let currentFrameArrivalEventSequence = null;
   let currentArrivalFrameSequence = 0;
   const fail = ({ bufferExceeded = false } = {}) => {
-    if (!failed) recordParseFailure({ bufferExceeded });
+    if (!failed) {
+      recordParseFailure({
+        failureClass: "response-stream-parse",
+        bufferExceeded,
+      });
+    }
     failed = true;
   };
   const drainFrames = (arrivalSequence) => {
@@ -7615,6 +7777,7 @@ const appendFrozenBaselineBufferedStreamSegments = ({
     return true;
   } catch (error) {
     recordParseFailure({
+      failureClass: "buffered-stream-segment-replay",
       bufferExceeded: String(error?.message || "").includes(
         "bounded parser limit",
       ),
@@ -7636,6 +7799,7 @@ const appendFrozenBaselineDataReceivedStreamChunk = ({
     return true;
   } catch (error) {
     recordParseFailure({
+      failureClass: "data-received-chunk-replay",
       bufferExceeded: String(error?.message || "").includes(
         "bounded parser limit",
       ),
@@ -7655,6 +7819,17 @@ const shouldRecordFrozenBaselineListenTerminalStreamFailure = ({
   ((method === "GET" && initialRequest !== true) ||
     (initialRequest === true && responseGsessionid === null));
 const verifyFrozenBaselineListenerBindingFixtures = async () => {
+  assert.equal(SAFE_FROZEN_BASELINE_LISTENER_PARSE_FAILURE_CLASSES.length, 17);
+  assert.equal(
+    new Set(SAFE_FROZEN_BASELINE_LISTENER_PARSE_FAILURE_CLASSES).size,
+    SAFE_FROZEN_BASELINE_LISTENER_PARSE_FAILURE_CLASSES.length,
+  );
+  assert.equal(
+    SAFE_FROZEN_BASELINE_LISTENER_PARSE_FAILURE_CLASSES.every((failureClass) =>
+      /^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(failureClass),
+    ),
+    true,
+  );
   const privateUid = "private-w10p-listener-fixture-uid";
   const privateGsessionid = "private-w10p-listener-gsessionid";
   const privateSid = "private-w10p-listener-sid";
@@ -7671,6 +7846,44 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
   requestUrl.searchParams.set("AID", "1");
   requestUrl.searchParams.set("zx", "fixture");
   requestUrl.searchParams.set("t", "1");
+  const privateOtherGsessionid = "private-w10p-listener-other-gsessionid";
+  const privateUnmatchedGsessionid =
+    "private-w10p-listener-unmatched-gsessionid";
+  const privateTransportRequestId = "private-w10p-listener-request-id";
+  const safeTransportFailureFixture =
+    summarizeSafeFrozenBaselineListenerTransportFailure({
+      activeListenerRequestCount: 3,
+      initialResponseBindings: new Map([
+        [privateGsessionid, privateTransportRequestId],
+        [privateOtherGsessionid, `${privateTransportRequestId}-other`],
+      ]),
+      sessionUrlSidBindings: new Map([
+        [privateGsessionid, privateSid],
+        [privateUnmatchedGsessionid, `${privateSid}-unmatched`],
+      ]),
+    });
+  assert.deepEqual(safeTransportFailureFixture, {
+    activeListenerRequestCount: 3,
+    initialResponseGsessionidBindingCount: 2,
+    sessionUrlSidBindingCount: 2,
+    exactBindingKeyIntersectionCount: 1,
+    unmatchedInitialResponseGsessionidBindingCount: 1,
+    unmatchedSessionUrlSidBindingCount: 1,
+  });
+  for (const privateTransportValue of [
+    privateGsessionid,
+    privateOtherGsessionid,
+    privateUnmatchedGsessionid,
+    privateTransportRequestId,
+    privateSid,
+  ]) {
+    assert.equal(
+      JSON.stringify(safeTransportFailureFixture).includes(
+        privateTransportValue,
+      ),
+      false,
+    );
+  }
   for (const [targetChange, expectedTargetIds] of [
     [{ readTime: "fixture-read-time" }, []],
     [{ targetIds: [2], resumeToken: "fixture-resume-token" }, [2]],
@@ -7829,6 +8042,13 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
       policy: frozenBaselineAuthenticationAnomalyPolicy,
       expectedUidHash: secretSha256(privateUid),
     });
+  const parseFailureClassCount = (diagnostic, failureClass) => {
+    const entries = diagnostic.parseFailureClassHistogram.filter(
+      (entry) => entry.failureClass === failureClass,
+    );
+    assert.equal(entries.length, 1);
+    return entries[0].count;
+  };
   const exactConsoleError = {
     ...frozenBaselineAuthenticationAnomalyPolicy.consoleError,
   };
@@ -7915,6 +8135,47 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
       count: targetClass === "unknown" ? 0 : 1,
     })),
   );
+  const positiveFailureDiagnostic = positiveObserver.safeFailureDiagnostic();
+  assert.equal(Object.isFrozen(positiveFailureDiagnostic), true);
+  assert.deepEqual(Object.keys(positiveFailureDiagnostic), [
+    "parseFailureClassHistogram",
+    "parseFailureClassCountSum",
+    "pendingInitialTargetRequestCount",
+    "initialTargetRequestPromotionCount",
+  ]);
+  assert.equal(
+    Object.isFrozen(positiveFailureDiagnostic.parseFailureClassHistogram),
+    true,
+  );
+  assert.equal(positiveFailureDiagnostic.parseFailureClassCountSum, 0);
+  assert.equal(positiveFailureDiagnostic.pendingInitialTargetRequestCount, 0);
+  assert.equal(positiveFailureDiagnostic.initialTargetRequestPromotionCount, 0);
+  assert.equal(
+    positiveFailureDiagnostic.parseFailureClassHistogram.every(
+      (entry) =>
+        Object.isFrozen(entry) &&
+        Number.isSafeInteger(entry.count) &&
+        entry.count === 0,
+    ),
+    true,
+  );
+  assert.deepEqual(
+    positiveFailureDiagnostic.parseFailureClassHistogram.map(
+      (entry) => entry.failureClass,
+    ),
+    SAFE_FROZEN_BASELINE_LISTENER_PARSE_FAILURE_CLASSES,
+  );
+  assert.throws(
+    () =>
+      positiveObserver.recordParseFailure({
+        failureClass: "unsupported-private-fixture-class",
+      }),
+    /parse failure class was unsupported/u,
+  );
+  assert.deepEqual(
+    positiveObserver.safeFailureDiagnostic(),
+    positiveFailureDiagnostic,
+  );
   const positiveSessionIdentity = exactFirestoreListenSessionIdentity(
     requestUrl.toString(),
   );
@@ -7922,7 +8183,10 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
     sessionIdentity: positiveSessionIdentity,
     payload: "{",
   });
-  positiveObserver.recordParseFailure({ bufferExceeded: true });
+  positiveObserver.recordParseFailure({
+    failureClass: "response-stream-parse",
+    bufferExceeded: true,
+  });
   positiveObserver.recordStreamFailure();
   positiveObserver.observeConsoleError(exactConsoleError);
   positiveObserver.observeOutboundRequest({
@@ -7946,6 +8210,10 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
   );
   postSettlementOversizeResponseStream.finish();
   assert.deepEqual(positiveObserver.safeSnapshot(), positiveSnapshot);
+  assert.deepEqual(
+    positiveObserver.safeFailureDiagnostic(),
+    positiveFailureDiagnostic,
+  );
   const initialRequestUrl = new URL(
     "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel",
   );
@@ -8053,6 +8321,20 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
   assert.equal(noneligibleDeferredPromotionSnapshot.unknownTargetCount, 1);
   assert.equal(noneligibleDeferredPromotionSnapshot.parseFailureCount, 0);
   assert.equal(noneligibleDeferredPromotionSnapshot.passed, true);
+  const noneligibleDeferredPromotionDiagnostic =
+    noneligibleDeferredPromotionObserver.safeFailureDiagnostic();
+  assert.equal(
+    noneligibleDeferredPromotionDiagnostic.parseFailureClassCountSum,
+    0,
+  );
+  assert.equal(
+    noneligibleDeferredPromotionDiagnostic.pendingInitialTargetRequestCount,
+    0,
+  );
+  assert.equal(
+    noneligibleDeferredPromotionDiagnostic.initialTargetRequestPromotionCount,
+    1,
+  );
   const noneligibleUnresolvedInitialObserver = createNoneligibleAdminObserver();
   noneligibleUnresolvedInitialObserver.observeOutboundRequest({
     networkRequestId: "private-admin-unresolved-initial-network-request-id",
@@ -8073,6 +8355,27 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
   assert.equal(noneligibleUnresolvedInitialSnapshot.eligible, false);
   assert.equal(noneligibleUnresolvedInitialSnapshot.parseFailureCount, 1);
   assert.equal(noneligibleUnresolvedInitialSnapshot.passed, false);
+  const noneligibleUnresolvedInitialDiagnostic =
+    noneligibleUnresolvedInitialObserver.safeFailureDiagnostic();
+  assert.equal(
+    noneligibleUnresolvedInitialDiagnostic.parseFailureClassCountSum,
+    noneligibleUnresolvedInitialSnapshot.parseFailureCount,
+  );
+  assert.equal(
+    parseFailureClassCount(
+      noneligibleUnresolvedInitialDiagnostic,
+      "pending-initial-target-unresolved-at-settlement",
+    ),
+    1,
+  );
+  assert.equal(
+    noneligibleUnresolvedInitialDiagnostic.pendingInitialTargetRequestCount,
+    1,
+  );
+  assert.equal(
+    noneligibleUnresolvedInitialDiagnostic.initialTargetRequestPromotionCount,
+    0,
+  );
   const noneligiblePendingFailureObserver = createNoneligibleAdminObserver();
   noneligiblePendingFailureObserver.observeOutboundRequest({
     networkRequestId: "private-admin-failed-initial-network-request-id",
@@ -8081,7 +8384,9 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
     hasPostData: true,
     postData: requestBodyForTargets([attendanceTargetWithExtraFilter]),
   });
-  noneligiblePendingFailureObserver.recordParseFailure();
+  noneligiblePendingFailureObserver.recordParseFailure({
+    failureClass: "outbound-request-parse",
+  });
   assert.equal(noneligiblePendingFailureObserver.readyForSettlement(), true);
   noneligiblePendingFailureObserver.settleAuthentication({
     dashboardStable: true,
@@ -8091,6 +8396,30 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
   assert.equal(noneligiblePendingFailureSnapshot.eligible, false);
   assert.equal(noneligiblePendingFailureSnapshot.parseFailureCount, 2);
   assert.equal(noneligiblePendingFailureSnapshot.passed, false);
+  const noneligiblePendingFailureDiagnostic =
+    noneligiblePendingFailureObserver.safeFailureDiagnostic();
+  assert.equal(
+    noneligiblePendingFailureDiagnostic.parseFailureClassCountSum,
+    noneligiblePendingFailureSnapshot.parseFailureCount,
+  );
+  assert.equal(
+    parseFailureClassCount(
+      noneligiblePendingFailureDiagnostic,
+      "outbound-request-parse",
+    ),
+    1,
+  );
+  assert.equal(
+    parseFailureClassCount(
+      noneligiblePendingFailureDiagnostic,
+      "pending-initial-target-unresolved-at-settlement",
+    ),
+    1,
+  );
+  assert.equal(
+    noneligiblePendingFailureDiagnostic.pendingInitialTargetRequestCount,
+    1,
+  );
   const deferredStreamObserver = createObserver();
   deferredStreamObserver.observeOutboundRequest({
     requestUrl: requestUrl.toString(),
@@ -8202,7 +8531,9 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
     false,
   );
   assert.equal(mismatchedBufferedParseFailureCount, 1);
-  mismatchedBufferedObserver.recordParseFailure();
+  mismatchedBufferedObserver.recordParseFailure({
+    failureClass: "buffered-stream-segment-replay",
+  });
   mismatchedBufferedObserver.settleAuthentication({ dashboardStable: true });
   const mismatchedBufferedSnapshot = mismatchedBufferedObserver.safeSnapshot();
   assert.equal(mismatchedBufferedSnapshot.passed, false);
@@ -8510,13 +8841,32 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
     deferredStreamSnapshot,
     negativeSnapshots,
   });
+  const serializedSafeFailureDiagnostics = JSON.stringify({
+    safeTransportFailureFixture,
+    positiveFailureDiagnostic,
+    noneligibleDeferredPromotionDiagnostic,
+    noneligibleUnresolvedInitialDiagnostic,
+    noneligiblePendingFailureDiagnostic,
+  });
   for (const privateValue of [
     privateUid,
     privateGsessionid,
+    privateOtherGsessionid,
+    privateUnmatchedGsessionid,
     privateSid,
+    privateTransportRequestId,
+    "private-admin-deferred-initial-network-request-id",
+    "private-admin-unresolved-initial-network-request-id",
+    "private-admin-failed-initial-network-request-id",
+    requestUrl.toString(),
+    "fixture-resume-token",
     requestBodyForTargets([attendanceTarget("2026_1", 2)]),
   ]) {
     assert.equal(serializedSafeEvidence.includes(privateValue), false);
+    assert.equal(
+      serializedSafeFailureDiagnostics.includes(privateValue),
+      false,
+    );
   }
   return {
     frozenBaselineListenerBindingPositiveFixtureCount: 4,
@@ -38230,7 +38580,9 @@ try {
           event.requestId.length === 0 ||
           frozenBaselineListenerRequestsByNetworkId.has(event.requestId)
         ) {
-          frozenBaselineListenerBindingObserver.recordParseFailure();
+          frozenBaselineListenerBindingObserver.recordParseFailure({
+            failureClass: "cdp-listener-request-registration",
+          });
           return;
         }
         const method = String(event.request?.method || "").toUpperCase();
@@ -38259,7 +38611,9 @@ try {
               sessionIdentity.gsessionid,
             ) || null;
           if (previousSid !== null && previousSid !== sessionIdentity.sid) {
-            frozenBaselineListenerBindingObserver.recordParseFailure();
+            frozenBaselineListenerBindingObserver.recordParseFailure({
+              failureClass: "cdp-session-sid-conflict",
+            });
           } else {
             frozenBaselineSessionSidByGsessionid.set(
               sessionIdentity.gsessionid,
@@ -38286,7 +38640,9 @@ try {
             responseGsessionid === null ||
             frozenBaselineInitialRequestIdByGsessionid.has(responseGsessionid)
           ) {
-            frozenBaselineListenerBindingObserver.recordParseFailure();
+            frozenBaselineListenerBindingObserver.recordParseFailure({
+              failureClass: "cdp-initial-response-binding",
+            });
             return;
           }
           entry.responseGsessionid = responseGsessionid;
@@ -38299,7 +38655,9 @@ try {
         }
         if (entry.method !== "GET") return;
         if (entry.streamRequested) {
-          frozenBaselineListenerBindingObserver.recordParseFailure();
+          frozenBaselineListenerBindingObserver.recordParseFailure({
+            failureClass: "cdp-stream-activation-duplicate",
+          });
           return;
         }
         entry.streamRequested = true;
@@ -38310,7 +38668,9 @@ try {
               { requestId: event.requestId },
             );
             if (typeof streamed?.bufferedData !== "string") {
-              frozenBaselineListenerBindingObserver.recordParseFailure();
+              frozenBaselineListenerBindingObserver.recordParseFailure({
+                failureClass: "cdp-stream-buffer-missing",
+              });
               return;
             }
             if (frozenBaselineListenerBindingObserver.isSettled()) {
@@ -38382,7 +38742,9 @@ try {
           frozenBaselineListenerBindingObserver.reserveInboundPayloadSequence();
         const dataLength = Number(event.dataLength);
         if (!Number.isSafeInteger(dataLength) || dataLength < 0) {
-          frozenBaselineListenerBindingObserver.recordParseFailure();
+          frozenBaselineListenerBindingObserver.recordParseFailure({
+            failureClass: "cdp-data-length-invalid",
+          });
           return;
         }
         if (typeof event.data !== "string") {
@@ -38392,7 +38754,9 @@ try {
               arrivalSequence,
             });
           } else if (entry.streamSettled && dataLength > 0) {
-            frozenBaselineListenerBindingObserver.recordParseFailure();
+            frozenBaselineListenerBindingObserver.recordParseFailure({
+              failureClass: "cdp-stream-data-missing",
+            });
           }
           return;
         }
@@ -38424,6 +38788,7 @@ try {
         ) {
           entry.pendingBase64Chunks.length = 0;
           frozenBaselineListenerBindingObserver.recordParseFailure({
+            failureClass: "cdp-pending-data-buffer-exceeded",
             bufferExceeded: true,
           });
         }
@@ -43177,17 +43542,39 @@ try {
             entry.responseStream.finish({ allowIncomplete: true });
           } else frozenBaselineListenerBindingObserver.recordStreamFailure();
         }
-        frozenBaselineListenerRequestsByNetworkId.clear();
-        frozenBaselineInitialRequestIdByGsessionid.clear();
-        frozenBaselineSessionSidByGsessionid.clear();
-        const frozenBaselineListenerGroupAttestation =
-          frozenBaselineListenerBindingObserver.safeSnapshot();
+        let frozenBaselineListenerGroupAttestation;
+        let frozenBaselineListenerFailureMessage;
+        try {
+          frozenBaselineListenerGroupAttestation =
+            frozenBaselineListenerBindingObserver.safeSnapshot();
+          if (!frozenBaselineListenerGroupAttestation.passed) {
+            const observerFailureDiagnostic =
+              frozenBaselineListenerBindingObserver.safeFailureDiagnostic();
+            const transportFailureDiagnostic =
+              summarizeSafeFrozenBaselineListenerTransportFailure({
+                activeListenerRequestCount:
+                  frozenBaselineListenerRequestsByNetworkId.size,
+                initialResponseBindings:
+                  frozenBaselineInitialRequestIdByGsessionid,
+                sessionUrlSidBindings: frozenBaselineSessionSidByGsessionid,
+              });
+            frozenBaselineListenerFailureMessage = `Frozen-baseline listener retirement attestation failed: ${JSON.stringify(
+              {
+                attestation: frozenBaselineListenerGroupAttestation,
+                observerFailureDiagnostic,
+                transportFailureDiagnostic,
+              },
+            )}`;
+          }
+        } finally {
+          frozenBaselineListenerRequestsByNetworkId.clear();
+          frozenBaselineInitialRequestIdByGsessionid.clear();
+          frozenBaselineSessionSidByGsessionid.clear();
+        }
         assert.equal(
           frozenBaselineListenerGroupAttestation.passed,
           true,
-          `Frozen-baseline listener retirement attestation failed: ${JSON.stringify(
-            frozenBaselineListenerGroupAttestation,
-          )}`,
+          frozenBaselineListenerFailureMessage,
         );
         frozenBaselineAuthenticationAnomalyGroupAttestations.push(
           frozenBaselineListenerGroupAttestation,
