@@ -2443,6 +2443,9 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "const frozenBaselineListenerTupleKey = ({ gsessionid, sid }, targetId) =>",
     "const createFrozenBaselineListenerBindingObserver = ({",
     "secretSha256(parentSegments[1]) === expectedUidHash",
+    'Object.prototype.hasOwnProperty.call(targetChange, "targetChangeType",)',
+    '? targetChange.targetChangeType : "NO_CHANGE"',
+    'targetChangeTypePresent || !Object.prototype.hasOwnProperty.call(targetChange, "cause")',
     "targetChange.causeCode !== policy.removedCauseCode",
     "const frozenBaselineObservationSequenceBefore = (left, right) =>",
     "eventSequence: observationSequence",
@@ -2518,6 +2521,21 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
       .length,
     7,
     "The frozen-baseline listener source contract must retain eight negative lifecycle fixtures.",
+  );
+  assert.match(
+    frozenBaselineFixtureSource,
+    /for \(const \[targetChange, expectedTargetIds\] of \[\s*\[\{ readTime: "fixture-read-time" \}, \[\]\],\s*\[\{ targetIds: \[2\], resumeToken: "fixture-resume-token" \}, \[2\]\],\s*\]\) \{[\s\S]*?targetChangeType: "NO_CHANGE",\s*targetIds: expectedTargetIds,\s*causeCode: null,/u,
+    "Only an own-property-absent Firestore targetChange type may normalize to NO_CHANGE.",
+  );
+  assert.match(
+    frozenBaselineFixtureSource,
+    /for \(const explicitInvalidTargetChangeType of \["", null, false, 0\]\) \{[\s\S]*?targetChangeType: explicitInvalidTargetChangeType,[\s\S]*?\/targetChange type was unsupported\/u,/u,
+    "Explicit empty, null, false and zero Firestore targetChange types must remain rejected.",
+  );
+  assert.match(
+    frozenBaselineFixtureSource,
+    /targetChange: \{ cause: \{ code: 7 \}, targetIds: \[2\] \}[\s\S]*?\/omitted its type while declaring a cause\/u,/u,
+    "A Firestore targetChange with an omitted type and an explicit cause must remain rejected.",
   );
   assert.match(
     frozenBaselineFixtureSource,

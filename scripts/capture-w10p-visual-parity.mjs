@@ -6941,11 +6941,23 @@ const parseFirestoreListenTargetChanges = (payload) => {
         !Array.isArray(targetChange),
       "Firestore Listen targetChange was malformed.",
     );
-    const targetChangeType = targetChange.targetChangeType;
+    const targetChangeTypePresent = Object.prototype.hasOwnProperty.call(
+      targetChange,
+      "targetChangeType",
+    );
+    const targetChangeType = targetChangeTypePresent
+      ? targetChange.targetChangeType
+      : "NO_CHANGE";
     assert.equal(
       FIRESTORE_LISTEN_TARGET_CHANGE_TYPES.includes(targetChangeType),
       true,
       "Firestore Listen targetChange type was unsupported.",
+    );
+    assert.equal(
+      targetChangeTypePresent ||
+        !Object.prototype.hasOwnProperty.call(targetChange, "cause"),
+      true,
+      "Firestore Listen targetChange omitted its type while declaring a cause.",
     );
     const targetIds = targetChange.targetIds ?? [];
     assert.equal(
@@ -7658,6 +7670,52 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
   requestUrl.searchParams.set("AID", "1");
   requestUrl.searchParams.set("zx", "fixture");
   requestUrl.searchParams.set("t", "1");
+  for (const [targetChange, expectedTargetIds] of [
+    [{ readTime: "fixture-read-time" }, []],
+    [{ targetIds: [2], resumeToken: "fixture-resume-token" }, [2]],
+  ]) {
+    assert.deepEqual(
+      parseFirestoreListenTargetChanges(
+        JSON.stringify([[1, [{ targetChange }]]]),
+      ),
+      [
+        {
+          targetChangeType: "NO_CHANGE",
+          targetIds: expectedTargetIds,
+          causeCode: null,
+        },
+      ],
+    );
+  }
+  for (const explicitInvalidTargetChangeType of ["", null, false, 0]) {
+    assert.throws(
+      () =>
+        parseFirestoreListenTargetChanges(
+          JSON.stringify([
+            [
+              1,
+              [
+                {
+                  targetChange: {
+                    targetChangeType: explicitInvalidTargetChangeType,
+                  },
+                },
+              ],
+            ],
+          ]),
+        ),
+      /targetChange type was unsupported/u,
+    );
+  }
+  assert.throws(
+    () =>
+      parseFirestoreListenTargetChanges(
+        JSON.stringify([
+          [1, [{ targetChange: { cause: { code: 7 }, targetIds: [2] } }]],
+        ]),
+      ),
+    /omitted its type while declaring a cause/u,
+  );
   const attendanceTarget = (scope, targetId, uid = privateUid) => ({
     targetId,
     query: {
