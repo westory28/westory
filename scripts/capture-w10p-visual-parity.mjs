@@ -6538,6 +6538,7 @@ const exactStagingFirestoreWebChannelEncodedApiKeyBodyScope = ({
 const FROZEN_BASELINE_LISTENER_MAX_REQUEST_BODY_BYTES = 64 * 1024;
 const FROZEN_BASELINE_LISTENER_MAX_RESPONSE_CHARACTERS = 512 * 1024;
 const FROZEN_BASELINE_LISTENER_MAX_FRAME_CHARACTERS = 256 * 1024;
+const FROZEN_BASELINE_LISTENER_MAX_LOGICAL_MESSAGES_PER_SESSION = 4096;
 const FROZEN_BASELINE_LISTENER_SETTLEMENT_TIMEOUT_MS = 3_000;
 const FROZEN_BASELINE_LISTENER_SETTLEMENT_POLL_MS = 50;
 const FIRESTORE_LISTEN_WEBCHANNEL_PATHNAME =
@@ -6770,6 +6771,12 @@ const canonicalFrozenBaselineListenRequestJson = (value) => {
 const frozenBaselineListenRequestStructureSha256 = (message) =>
   secretSha256(
     `w10p-frozen-baseline-firestore-listen-request-v1\u0000${canonicalFrozenBaselineListenRequestJson(
+      message,
+    )}`,
+  );
+const frozenBaselineListenInboundMessageStructureSha256 = (message) =>
+  secretSha256(
+    `w10p-frozen-baseline-firestore-listen-inbound-v1\u0000${canonicalFrozenBaselineListenRequestJson(
       message,
     )}`,
   );
@@ -7074,63 +7081,100 @@ const collectFirestoreListenTargetChanges = (value, output = []) => {
   }
   return output;
 };
+const normalizeFirestoreListenTargetChange = (targetChange) => {
+  assert.ok(
+    targetChange &&
+      typeof targetChange === "object" &&
+      !Array.isArray(targetChange),
+    "Firestore Listen targetChange was malformed.",
+  );
+  const targetChangeTypePresent = Object.prototype.hasOwnProperty.call(
+    targetChange,
+    "targetChangeType",
+  );
+  const targetChangeType = targetChangeTypePresent
+    ? targetChange.targetChangeType
+    : "NO_CHANGE";
+  assert.equal(
+    FIRESTORE_LISTEN_TARGET_CHANGE_TYPES.includes(targetChangeType),
+    true,
+    "Firestore Listen targetChange type was unsupported.",
+  );
+  assert.equal(
+    targetChangeTypePresent ||
+      !Object.prototype.hasOwnProperty.call(targetChange, "cause"),
+    true,
+    "Firestore Listen targetChange omitted its type while declaring a cause.",
+  );
+  const targetIds = targetChange.targetIds ?? [];
+  assert.equal(
+    Array.isArray(targetIds) &&
+      targetIds.every(
+        (targetId) => Number.isSafeInteger(targetId) && targetId > 0,
+      ),
+    true,
+    "Firestore Listen targetChange targetIds were malformed.",
+  );
+  const causeCode = Object.prototype.hasOwnProperty.call(targetChange, "cause")
+    ? targetChange.cause?.code
+    : null;
+  assert.equal(
+    causeCode === null || Number.isSafeInteger(causeCode),
+    true,
+    "Firestore Listen targetChange cause code was malformed.",
+  );
+  return Object.freeze({
+    targetChangeType,
+    targetIds: Object.freeze([...targetIds]),
+    causeCode,
+  });
+};
 const parseFirestoreListenTargetChanges = (payload) => {
   assert.ok(
     payload.length <= FROZEN_BASELINE_LISTENER_MAX_FRAME_CHARACTERS,
     "Firestore Listen response frame exceeded the bounded parser limit.",
   );
   const parsed = JSON.parse(payload);
-  return collectFirestoreListenTargetChanges(parsed).map((targetChange) => {
-    assert.ok(
-      targetChange &&
-        typeof targetChange === "object" &&
-        !Array.isArray(targetChange),
-      "Firestore Listen targetChange was malformed.",
-    );
-    const targetChangeTypePresent = Object.prototype.hasOwnProperty.call(
-      targetChange,
-      "targetChangeType",
-    );
-    const targetChangeType = targetChangeTypePresent
-      ? targetChange.targetChangeType
-      : "NO_CHANGE";
-    assert.equal(
-      FIRESTORE_LISTEN_TARGET_CHANGE_TYPES.includes(targetChangeType),
-      true,
-      "Firestore Listen targetChange type was unsupported.",
-    );
-    assert.equal(
-      targetChangeTypePresent ||
-        !Object.prototype.hasOwnProperty.call(targetChange, "cause"),
-      true,
-      "Firestore Listen targetChange omitted its type while declaring a cause.",
-    );
-    const targetIds = targetChange.targetIds ?? [];
-    assert.equal(
-      Array.isArray(targetIds) &&
-        targetIds.every(
-          (targetId) => Number.isSafeInteger(targetId) && targetId > 0,
+  return collectFirestoreListenTargetChanges(parsed).map(
+    normalizeFirestoreListenTargetChange,
+  );
+};
+const parseFirestoreListenInboundLogicalMessages = (payload) => {
+  assert.ok(
+    payload.length <= FROZEN_BASELINE_LISTENER_MAX_FRAME_CHARACTERS,
+    "Firestore Listen response frame exceeded the bounded parser limit.",
+  );
+  const parsed = JSON.parse(payload);
+  assert.equal(
+    Array.isArray(parsed),
+    true,
+    "Firestore Listen response frame envelope was malformed.",
+  );
+  return Object.freeze(
+    parsed.map((logicalMessage) => {
+      assert.equal(
+        Array.isArray(logicalMessage) && logicalMessage.length === 2,
+        true,
+        "Firestore Listen logical message envelope was malformed.",
+      );
+      const [messageId, messagePayload] = logicalMessage;
+      assert.equal(
+        Number.isSafeInteger(messageId) && messageId >= 0,
+        true,
+        "Firestore Listen inbound logical message id was invalid.",
+      );
+      return Object.freeze({
+        messageId,
+        messageStructureSha256:
+          frozenBaselineListenInboundMessageStructureSha256(logicalMessage),
+        targetChanges: Object.freeze(
+          collectFirestoreListenTargetChanges(messagePayload).map(
+            normalizeFirestoreListenTargetChange,
+          ),
         ),
-      true,
-      "Firestore Listen targetChange targetIds were malformed.",
-    );
-    const causeCode = Object.prototype.hasOwnProperty.call(
-      targetChange,
-      "cause",
-    )
-      ? targetChange.cause?.code
-      : null;
-    assert.equal(
-      causeCode === null || Number.isSafeInteger(causeCode),
-      true,
-      "Firestore Listen targetChange cause code was malformed.",
-    );
-    return Object.freeze({
-      targetChangeType,
-      targetIds: Object.freeze([...targetIds]),
-      causeCode,
-    });
-  });
+      });
+    }),
+  );
 };
 const exactBase64Buffer = (encodedValue) => {
   assert.equal(typeof encodedValue, "string");
@@ -7149,6 +7193,17 @@ const frozenBaselineObservationSequenceBefore = (left, right) =>
     (left.frameSequence < right.frameSequence ||
       (left.frameSequence === right.frameSequence &&
         left.withinEventSequence < right.withinEventSequence)));
+const frozenBaselineTargetEpochActiveAtInboundSequence = ({
+  addSequence,
+  outboundRemoveSequence,
+  inboundSequence,
+}) =>
+  frozenBaselineObservationSequenceBefore(addSequence, inboundSequence) &&
+  (outboundRemoveSequence === null ||
+    frozenBaselineObservationSequenceBefore(
+      inboundSequence,
+      outboundRemoveSequence,
+    ));
 const summarizeSafeFrozenBaselineListenerTransportFailure = ({
   activeListenerRequestCount,
   initialResponseBindings,
@@ -7221,6 +7276,7 @@ const createFrozenBaselineListenerBindingObserver = ({
   assert.match(expectedUidHash, /^[0-9a-f]{64}$/u);
   const targetEpochHistoryByTuple = new Map();
   const activeTargetEpochByTuple = new Map();
+  const inboundLogicalMessageLedgerBySession = new Map();
   const pendingInitialMutationsByRequestId = new Map();
   const exactConsoleSequences = [];
   let observationSequence = 0;
@@ -7232,12 +7288,17 @@ const createFrozenBaselineListenerBindingObserver = ({
   let unknownRemovedTargetCount = 0;
   let unboundRemovedTargetCount = 0;
   let ambiguousRemovedTargetCount = 0;
+  let ambiguousRemovedEpochBindingCount = 0;
+  let ambiguousAcknowledgementTargetCount = 0;
+  let ambiguousOtherRemovedTargetCount = 0;
   let streamFailureCount = 0;
   let parseFailureCount = 0;
   let bufferExceededCount = 0;
   let initialTargetRequestPromotionCount = 0;
   let witnessedOutboundRemoveTargetCount = 0;
   let acceptedPostRemoveReaddCount = 0;
+  let acceptedInboundLogicalMessageReplayCount = 0;
+  let conflictingOrStaleInboundLogicalMessageCount = 0;
   let settledDecision = null;
   let settledSemanticLedger = null;
   const targetTupleMismatchReasonCounts = new Map(
@@ -7253,6 +7314,12 @@ const createFrozenBaselineListenerBindingObserver = ({
     ]),
   );
   const targetClassCounts = new Map(
+    SAFE_FROZEN_BASELINE_LISTENER_TARGET_CLASSES.map((targetClass) => [
+      targetClass,
+      0,
+    ]),
+  );
+  const removedCauseTargetClassCounts = new Map(
     SAFE_FROZEN_BASELINE_LISTENER_TARGET_CLASSES.map((targetClass) => [
       targetClass,
       0,
@@ -7338,6 +7405,70 @@ const createFrozenBaselineListenerBindingObserver = ({
   };
   const allTargetEpochs = () =>
     [...targetEpochHistoryByTuple.values()].flatMap((epochs) => epochs);
+  const resolveInboundTargetEpoch = ({
+    sessionIdentity,
+    targetId,
+    inboundSequence,
+  }) => {
+    const tupleKey = frozenBaselineListenerTupleKey(sessionIdentity, targetId);
+    const matchingEpochs = (
+      targetEpochHistoryByTuple.get(tupleKey) || []
+    ).filter((epoch) =>
+      frozenBaselineTargetEpochActiveAtInboundSequence({
+        addSequence: epoch.addSequence,
+        outboundRemoveSequence: epoch.outboundRemoveSequence,
+        inboundSequence,
+      }),
+    );
+    return Object.freeze({
+      targetEpoch: matchingEpochs.length === 1 ? matchingEpochs[0] : null,
+      matchCount: matchingEpochs.length,
+    });
+  };
+  const acceptInboundLogicalMessage = ({
+    sessionIdentity,
+    messageId,
+    messageStructureSha256,
+  }) => {
+    const sessionKey = `${sessionIdentity.gsessionid}\u0000${sessionIdentity.sid}`;
+    let ledger = inboundLogicalMessageLedgerBySession.get(sessionKey) || null;
+    if (ledger === null) {
+      ledger = {
+        greatestMessageId: -1,
+        messageStructureSha256ById: new Map(),
+      };
+      inboundLogicalMessageLedgerBySession.set(sessionKey, ledger);
+    }
+    const existingStructureSha256 =
+      ledger.messageStructureSha256ById.get(messageId) || null;
+    if (existingStructureSha256 !== null) {
+      if (existingStructureSha256 === messageStructureSha256) {
+        acceptedInboundLogicalMessageReplayCount += 1;
+        return false;
+      }
+      conflictingOrStaleInboundLogicalMessageCount += 1;
+      recordParseFailure({ failureClass: "inbound-payload-parse" });
+      return false;
+    }
+    if (messageId <= ledger.greatestMessageId) {
+      conflictingOrStaleInboundLogicalMessageCount += 1;
+      recordParseFailure({ failureClass: "inbound-payload-parse" });
+      return false;
+    }
+    if (
+      ledger.messageStructureSha256ById.size >=
+      FROZEN_BASELINE_LISTENER_MAX_LOGICAL_MESSAGES_PER_SESSION
+    ) {
+      recordParseFailure({
+        failureClass: "inbound-payload-parse",
+        bufferExceeded: true,
+      });
+      return false;
+    }
+    ledger.greatestMessageId = messageId;
+    ledger.messageStructureSha256ById.set(messageId, messageStructureSha256);
+    return true;
+  };
   const appendTargetEpoch = ({
     tupleKey,
     targetClass,
@@ -7593,64 +7724,99 @@ const createFrozenBaselineListenerBindingObserver = ({
   }) => {
     if (settledDecision !== null) return;
     try {
-      const targetChanges = parseFirestoreListenTargetChanges(payload);
+      const logicalMessages =
+        parseFirestoreListenInboundLogicalMessages(payload);
       const payloadArrivalSequence = arrivalSequence || nextSequence();
       let withinPayloadSequence = 0;
-      for (const targetChange of targetChanges) {
+      for (const logicalMessage of logicalMessages) {
         if (
-          targetChange.targetChangeType === "REMOVE" &&
-          targetChange.causeCode === policy.removedCauseCode &&
-          targetChange.targetIds.length === 0
+          !acceptInboundLogicalMessage({
+            sessionIdentity,
+            messageId: logicalMessage.messageId,
+            messageStructureSha256: logicalMessage.messageStructureSha256,
+          })
         ) {
-          inboundRemoveCauseCodeCount += 1;
-          unboundRemovedTargetCount += 1;
-          ambiguousRemovedTargetCount += 1;
           continue;
         }
-        for (const targetId of targetChange.targetIds) {
-          withinPayloadSequence += 1;
-          const sequence = sequenceWithinInboundPayload(
-            payloadArrivalSequence,
-            arrivalFrameSequence,
-            withinPayloadSequence,
-          );
-          const target = activeTargetEpochByTuple.get(
-            frozenBaselineListenerTupleKey(sessionIdentity, targetId),
-          );
+        for (const targetChange of logicalMessage.targetChanges) {
           if (
-            targetChange.targetChangeType === "ADD" ||
-            targetChange.targetChangeType === "CURRENT"
+            targetChange.targetChangeType === "REMOVE" &&
+            targetChange.causeCode === policy.removedCauseCode &&
+            targetChange.targetIds.length === 0
           ) {
-            if (target) {
-              target.acknowledgementSequences.push(sequence);
-              if (
-                target.targetClass === policy.successorTargetClass &&
-                target.acknowledgementSequences.length === 1
-              ) {
-                successorTargetAcknowledgedCount += 1;
-              }
-            }
-          }
-          if (
-            targetChange.targetChangeType !== "REMOVE" ||
-            targetChange.causeCode !== policy.removedCauseCode
-          ) {
-            continue;
-          }
-          inboundRemoveCauseCodeCount += 1;
-          if (!target) {
+            inboundRemoveCauseCodeCount += 1;
             unboundRemovedTargetCount += 1;
             continue;
           }
-          target.removedCauseCodeSequences.push(sequence);
-          if (target.removedCauseCodeSequences.length > 1) {
-            ambiguousRemovedTargetCount += 1;
-          }
-          if (target.targetClass === "unknown") {
-            unknownRemovedTargetCount += 1;
-          }
-          if (target.targetClass === policy.removedTargetClass) {
-            removedTargetClassMatchCount += 1;
+          for (const targetId of targetChange.targetIds) {
+            withinPayloadSequence += 1;
+            const sequence = sequenceWithinInboundPayload(
+              payloadArrivalSequence,
+              arrivalFrameSequence,
+              withinPayloadSequence,
+            );
+            const inboundTargetBinding = resolveInboundTargetEpoch({
+              sessionIdentity,
+              targetId,
+              inboundSequence: sequence,
+            });
+            const target = inboundTargetBinding.targetEpoch;
+            if (
+              targetChange.targetChangeType === "ADD" ||
+              targetChange.targetChangeType === "CURRENT"
+            ) {
+              if (inboundTargetBinding.matchCount > 1) {
+                ambiguousAcknowledgementTargetCount += 1;
+                continue;
+              }
+              if (target) {
+                target.acknowledgementSequences.push(sequence);
+                if (
+                  target.targetClass === policy.successorTargetClass &&
+                  target.acknowledgementSequences.length === 1
+                ) {
+                  successorTargetAcknowledgedCount += 1;
+                }
+              }
+            }
+            if (
+              targetChange.targetChangeType !== "REMOVE" ||
+              targetChange.causeCode !== policy.removedCauseCode
+            ) {
+              if (
+                targetChange.targetChangeType === "REMOVE" &&
+                inboundTargetBinding.matchCount > 1
+              ) {
+                ambiguousOtherRemovedTargetCount += 1;
+              }
+              continue;
+            }
+            inboundRemoveCauseCodeCount += 1;
+            if (inboundTargetBinding.matchCount === 0) {
+              unboundRemovedTargetCount += 1;
+              continue;
+            }
+            if (inboundTargetBinding.matchCount > 1) {
+              ambiguousRemovedTargetCount += 1;
+              ambiguousRemovedEpochBindingCount += 1;
+              continue;
+            }
+            assert.ok(target);
+            const removedCauseTargetClass = target.targetClass;
+            removedCauseTargetClassCounts.set(
+              removedCauseTargetClass,
+              removedCauseTargetClassCounts.get(removedCauseTargetClass) + 1,
+            );
+            target.removedCauseCodeSequences.push(sequence);
+            if (target.removedCauseCodeSequences.length > 1) {
+              ambiguousRemovedTargetCount += 1;
+            }
+            if (target.targetClass === "unknown") {
+              unknownRemovedTargetCount += 1;
+            }
+            if (target.targetClass === policy.removedTargetClass) {
+              removedTargetClassMatchCount += 1;
+            }
           }
         }
       }
@@ -7688,6 +7854,11 @@ const createFrozenBaselineListenerBindingObserver = ({
     unknownRemovedTargetCount,
     unboundRemovedTargetCount,
     ambiguousRemovedTargetCount,
+    ambiguousRemovedEpochBindingCount,
+    ambiguousAcknowledgementTargetCount,
+    ambiguousOtherRemovedTargetCount,
+    acceptedInboundLogicalMessageReplayCount,
+    conflictingOrStaleInboundLogicalMessageCount,
     targetClassHistogram: SAFE_FROZEN_BASELINE_LISTENER_TARGET_CLASSES.map(
       (targetClass) => ({
         targetClass,
@@ -7697,19 +7868,24 @@ const createFrozenBaselineListenerBindingObserver = ({
   });
   const readyForSettlement = () => {
     if (settledDecision !== null) return true;
-    const irrecoverableFailureObserved =
+    const structuralFailureObserved =
       streamFailureCount > 0 ||
       parseFailureCount > 0 ||
-      bufferExceededCount > 0 ||
+      bufferExceededCount > 0;
+    if (structuralFailureObserved) return true;
+    if (!eligible) return pendingInitialMutationsByRequestId.size === 0;
+    const semanticOverCountObserved =
+      exactConsoleSequences.length > policy.consoleError.expectedCount ||
       inboundRemoveCauseCodeCount > 1 ||
       removedTargetClassMatchCount > 1 ||
       successorAddTargetCount > 1 ||
       successorTargetAcknowledgedCount > 1 ||
       unknownRemovedTargetCount > 0 ||
       unboundRemovedTargetCount > 0 ||
-      ambiguousRemovedTargetCount > 0;
-    if (irrecoverableFailureObserved) return true;
-    if (!eligible) return pendingInitialMutationsByRequestId.size === 0;
+      ambiguousRemovedTargetCount > 0 ||
+      ambiguousAcknowledgementTargetCount > 0 ||
+      ambiguousOtherRemovedTargetCount > 0;
+    if (semanticOverCountObserved) return false;
     const removedTargets = allTargetEpochs().filter(
       (target) => target.targetClass === policy.removedTargetClass,
     );
@@ -7785,6 +7961,8 @@ const createFrozenBaselineListenerBindingObserver = ({
         unknownRemovedTargetCount === 0 &&
         unboundRemovedTargetCount === 0 &&
         ambiguousRemovedTargetCount === 0 &&
+        ambiguousAcknowledgementTargetCount === 0 &&
+        ambiguousOtherRemovedTargetCount === 0 &&
         streamFailureCount === 0 &&
         parseFailureCount === 0 &&
         bufferExceededCount === 0,
@@ -7829,8 +8007,23 @@ const createFrozenBaselineListenerBindingObserver = ({
         (sum, entry) => sum + entry.count,
         0,
       );
+    const removedCauseTargetClassHistogram = Object.freeze(
+      SAFE_FROZEN_BASELINE_LISTENER_TARGET_CLASSES.map((targetClass) =>
+        Object.freeze({
+          targetClass,
+          count: removedCauseTargetClassCounts.get(targetClass),
+        }),
+      ),
+    );
+    const removedCauseTargetClassCountSum =
+      removedCauseTargetClassHistogram.reduce(
+        (sum, entry) => sum + entry.count,
+        0,
+      );
     const pendingInitialTargetRequestCount =
       pendingInitialMutationsByRequestId.size;
+    const ambiguousNonCauseTargetBindingCount =
+      ambiguousAcknowledgementTargetCount + ambiguousOtherRemovedTargetCount;
     for (const [index, entry] of parseFailureClassHistogram.entries()) {
       assert.deepEqual(Object.keys(entry), ["failureClass", "count"]);
       assert.equal(
@@ -7847,9 +8040,21 @@ const createFrozenBaselineListenerBindingObserver = ({
       );
       assert.ok(Number.isSafeInteger(entry.count) && entry.count >= 0);
     }
+    for (const [index, entry] of removedCauseTargetClassHistogram.entries()) {
+      assert.deepEqual(Object.keys(entry), ["targetClass", "count"]);
+      assert.equal(
+        entry.targetClass,
+        SAFE_FROZEN_BASELINE_LISTENER_TARGET_CLASSES[index],
+      );
+      assert.ok(Number.isSafeInteger(entry.count) && entry.count >= 0);
+    }
     for (const count of [
       parseFailureClassCountSum,
       targetTupleMismatchReasonCountSum,
+      removedCauseTargetClassCountSum,
+      ambiguousNonCauseTargetBindingCount,
+      acceptedInboundLogicalMessageReplayCount,
+      conflictingOrStaleInboundLogicalMessageCount,
       pendingInitialTargetRequestCount,
       initialTargetRequestPromotionCount,
       witnessedOutboundRemoveTargetCount,
@@ -7862,12 +8067,22 @@ const createFrozenBaselineListenerBindingObserver = ({
       targetTupleMismatchReasonCountSum,
       parseFailureClassCounts.get("target-tuple-duplicate"),
     );
+    assert.equal(
+      removedCauseTargetClassCountSum,
+      inboundRemoveCauseCodeCount -
+        unboundRemovedTargetCount -
+        ambiguousRemovedEpochBindingCount,
+    );
     assert.ok(bufferExceededCount <= parseFailureCount);
     return Object.freeze({
       parseFailureClassHistogram,
       parseFailureClassCountSum,
       targetTupleMismatchReasonHistogram,
       targetTupleMismatchReasonCountSum,
+      removedCauseTargetClassHistogram,
+      ambiguousNonCauseTargetBindingCount,
+      acceptedInboundLogicalMessageReplayCount,
+      conflictingOrStaleInboundLogicalMessageCount,
       pendingInitialTargetRequestCount,
       initialTargetRequestPromotionCount,
       witnessedOutboundRemoveTargetCount,
@@ -7885,6 +8100,8 @@ const createFrozenBaselineListenerBindingObserver = ({
       unknownRemovedTargetCount === 0 &&
       unboundRemovedTargetCount === 0 &&
       ambiguousRemovedTargetCount === 0 &&
+      ambiguousAcknowledgementTargetCount === 0 &&
+      ambiguousOtherRemovedTargetCount === 0 &&
       (eligible
         ? settledDecision.tupleBoundRetirementCount === 1 &&
           settledDecision.fatalExactConsoleErrorCount === 0
@@ -7936,6 +8153,7 @@ const createFrozenBaselineListenerBindingObserver = ({
     settleAuthentication,
     safeFailureDiagnostic,
     safeSnapshot,
+    requiresFullSettlementWindow: () => eligible,
     isSettled: () => settledDecision !== null,
   });
 };
@@ -8149,6 +8367,66 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
     SAFE_FROZEN_BASELINE_LISTENER_PARSE_FAILURE_CLASSES.every((failureClass) =>
       /^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(failureClass),
     ),
+    true,
+  );
+  const epochBoundarySequence = (eventSequence) =>
+    Object.freeze({
+      eventSequence,
+      frameSequence: 0,
+      withinEventSequence: 0,
+    });
+  const firstEpochAddSequence = epochBoundarySequence(1);
+  const firstEpochInboundSequence = epochBoundarySequence(2);
+  const firstEpochRemoveSequence = epochBoundarySequence(3);
+  const betweenEpochsInboundSequence = epochBoundarySequence(4);
+  const readdedEpochAddSequence = epochBoundarySequence(5);
+  const readdedEpochInboundSequence = epochBoundarySequence(6);
+  assert.equal(
+    frozenBaselineTargetEpochActiveAtInboundSequence({
+      addSequence: firstEpochAddSequence,
+      outboundRemoveSequence: firstEpochRemoveSequence,
+      inboundSequence: firstEpochAddSequence,
+    }),
+    false,
+  );
+  assert.equal(
+    frozenBaselineTargetEpochActiveAtInboundSequence({
+      addSequence: firstEpochAddSequence,
+      outboundRemoveSequence: firstEpochRemoveSequence,
+      inboundSequence: firstEpochRemoveSequence,
+    }),
+    false,
+  );
+  assert.equal(
+    frozenBaselineTargetEpochActiveAtInboundSequence({
+      addSequence: firstEpochAddSequence,
+      outboundRemoveSequence: firstEpochRemoveSequence,
+      inboundSequence: firstEpochInboundSequence,
+    }),
+    true,
+  );
+  assert.equal(
+    frozenBaselineTargetEpochActiveAtInboundSequence({
+      addSequence: firstEpochAddSequence,
+      outboundRemoveSequence: firstEpochRemoveSequence,
+      inboundSequence: betweenEpochsInboundSequence,
+    }),
+    false,
+  );
+  assert.equal(
+    frozenBaselineTargetEpochActiveAtInboundSequence({
+      addSequence: readdedEpochAddSequence,
+      outboundRemoveSequence: null,
+      inboundSequence: betweenEpochsInboundSequence,
+    }),
+    false,
+  );
+  assert.equal(
+    frozenBaselineTargetEpochActiveAtInboundSequence({
+      addSequence: readdedEpochAddSequence,
+      outboundRemoveSequence: null,
+      inboundSequence: readdedEpochInboundSequence,
+    }),
     true,
   );
   const privateUid = "private-w10p-listener-fixture-uid";
@@ -8488,6 +8766,13 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
     assert.equal(entries.length, 1);
     return entries[0].count;
   };
+  const removedCauseTargetClassCount = (diagnostic, targetClass) => {
+    const entries = diagnostic.removedCauseTargetClassHistogram.filter(
+      (entry) => entry.targetClass === targetClass,
+    );
+    assert.equal(entries.length, 1);
+    return entries[0].count;
+  };
   const exactConsoleError = {
     ...frozenBaselineAuthenticationAnomalyPolicy.consoleError,
   };
@@ -8549,6 +8834,7 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
     });
   };
   const positiveObserver = createObserver();
+  assert.equal(positiveObserver.requiresFullSettlementWindow(), true);
   assert.equal(positiveObserver.readyForSettlement(), false);
   observePositiveLifecycle(positiveObserver);
   assert.equal(positiveObserver.readyForSettlement(), true);
@@ -8581,6 +8867,10 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
     "parseFailureClassCountSum",
     "targetTupleMismatchReasonHistogram",
     "targetTupleMismatchReasonCountSum",
+    "removedCauseTargetClassHistogram",
+    "ambiguousNonCauseTargetBindingCount",
+    "acceptedInboundLogicalMessageReplayCount",
+    "conflictingOrStaleInboundLogicalMessageCount",
     "pendingInitialTargetRequestCount",
     "initialTargetRequestPromotionCount",
     "witnessedOutboundRemoveTargetCount",
@@ -8592,6 +8882,33 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
   );
   assert.equal(positiveFailureDiagnostic.parseFailureClassCountSum, 0);
   assert.equal(positiveFailureDiagnostic.targetTupleMismatchReasonCountSum, 0);
+  assert.equal(
+    Object.isFrozen(positiveFailureDiagnostic.removedCauseTargetClassHistogram),
+    true,
+  );
+  assert.deepEqual(
+    positiveFailureDiagnostic.removedCauseTargetClassHistogram,
+    SAFE_FROZEN_BASELINE_LISTENER_TARGET_CLASSES.map((targetClass) => ({
+      targetClass,
+      count:
+        targetClass ===
+        frozenBaselineAuthenticationAnomalyPolicy.removedTargetClass
+          ? 1
+          : 0,
+    })),
+  );
+  assert.equal(
+    positiveFailureDiagnostic.ambiguousNonCauseTargetBindingCount,
+    0,
+  );
+  assert.equal(
+    positiveFailureDiagnostic.acceptedInboundLogicalMessageReplayCount,
+    0,
+  );
+  assert.equal(
+    positiveFailureDiagnostic.conflictingOrStaleInboundLogicalMessageCount,
+    0,
+  );
   assert.equal(positiveFailureDiagnostic.pendingInitialTargetRequestCount, 0);
   assert.equal(positiveFailureDiagnostic.initialTargetRequestPromotionCount, 0);
   assert.equal(positiveFailureDiagnostic.witnessedOutboundRemoveTargetCount, 0);
@@ -8666,6 +8983,212 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
   assert.deepEqual(
     positiveObserver.safeFailureDiagnostic(),
     positiveFailureDiagnostic,
+  );
+  const exactInboundReplayObserver = createObserver();
+  exactInboundReplayObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([attendanceTarget("2026_1", 2)]),
+  });
+  const exactInboundRemovedPayload = JSON.stringify([
+    [
+      1,
+      [
+        {
+          targetChange: {
+            targetChangeType: "REMOVE",
+            targetIds: [2],
+            cause: { code: 7 },
+          },
+        },
+      ],
+    ],
+  ]);
+  exactInboundReplayObserver.observeInboundPayload({
+    sessionIdentity: positiveSessionIdentity,
+    payload: exactInboundRemovedPayload,
+  });
+  exactInboundReplayObserver.observeInboundPayload({
+    sessionIdentity: positiveSessionIdentity,
+    payload: exactInboundRemovedPayload,
+  });
+  exactInboundReplayObserver.observeConsoleError(exactConsoleError);
+  exactInboundReplayObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([attendanceTarget("2026_2", 4)]),
+  });
+  const exactInboundAcknowledgePayload = JSON.stringify([
+    [
+      2,
+      [
+        {
+          targetChange: {
+            targetChangeType: "ADD",
+            targetIds: [4],
+          },
+        },
+      ],
+    ],
+  ]);
+  exactInboundReplayObserver.observeInboundPayload({
+    sessionIdentity: positiveSessionIdentity,
+    payload: exactInboundAcknowledgePayload,
+  });
+  exactInboundReplayObserver.observeInboundPayload({
+    sessionIdentity: positiveSessionIdentity,
+    payload: exactInboundAcknowledgePayload,
+  });
+  assert.equal(exactInboundReplayObserver.readyForSettlement(), true);
+  exactInboundReplayObserver.settleAuthentication({ dashboardStable: true });
+  const exactInboundReplaySnapshot = exactInboundReplayObserver.safeSnapshot();
+  assert.equal(exactInboundReplaySnapshot.passed, true);
+  assert.equal(exactInboundReplaySnapshot.inboundRemoveCauseCodeCount, 1);
+  assert.equal(exactInboundReplaySnapshot.successorTargetAcknowledgedCount, 1);
+  const exactInboundReplayFailureDiagnostic =
+    exactInboundReplayObserver.safeFailureDiagnostic();
+  assert.equal(
+    exactInboundReplayFailureDiagnostic.acceptedInboundLogicalMessageReplayCount,
+    2,
+  );
+  assert.equal(
+    exactInboundReplayFailureDiagnostic.conflictingOrStaleInboundLogicalMessageCount,
+    0,
+  );
+  const conflictingInboundMessageObserver = createObserver();
+  conflictingInboundMessageObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([attendanceTarget("2026_1", 2)]),
+  });
+  conflictingInboundMessageObserver.observeInboundPayload({
+    sessionIdentity: positiveSessionIdentity,
+    payload: exactInboundRemovedPayload,
+  });
+  conflictingInboundMessageObserver.observeInboundPayload({
+    sessionIdentity: positiveSessionIdentity,
+    payload: JSON.stringify([
+      [
+        1,
+        [
+          {
+            targetChange: {
+              targetChangeType: "REMOVE",
+              targetIds: [2],
+              cause: {
+                code: 7,
+                message: "private-conflicting-inbound-message",
+              },
+            },
+          },
+        ],
+      ],
+    ]),
+  });
+  conflictingInboundMessageObserver.settleAuthentication({
+    dashboardStable: true,
+  });
+  const conflictingInboundMessageSnapshot =
+    conflictingInboundMessageObserver.safeSnapshot();
+  assert.equal(conflictingInboundMessageSnapshot.passed, false);
+  assert.equal(conflictingInboundMessageSnapshot.parseFailureCount, 1);
+  assert.equal(
+    conflictingInboundMessageSnapshot.inboundRemoveCauseCodeCount,
+    1,
+  );
+  const conflictingInboundMessageFailureDiagnostic =
+    conflictingInboundMessageObserver.safeFailureDiagnostic();
+  assert.equal(
+    conflictingInboundMessageFailureDiagnostic.acceptedInboundLogicalMessageReplayCount,
+    0,
+  );
+  assert.equal(
+    conflictingInboundMessageFailureDiagnostic.conflictingOrStaleInboundLogicalMessageCount,
+    1,
+  );
+  const staleInboundMessageObserver = createObserver();
+  staleInboundMessageObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([attendanceTarget("2026_1", 2)]),
+  });
+  const staleInboundRemovedPayload = JSON.stringify([
+    [
+      2,
+      [
+        {
+          targetChange: {
+            targetChangeType: "REMOVE",
+            targetIds: [2],
+            cause: { code: 7 },
+          },
+        },
+      ],
+    ],
+  ]);
+  staleInboundMessageObserver.observeInboundPayload({
+    sessionIdentity: positiveSessionIdentity,
+    payload: staleInboundRemovedPayload,
+  });
+  staleInboundMessageObserver.observeConsoleError(exactConsoleError);
+  staleInboundMessageObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([attendanceTarget("2026_2", 4)]),
+  });
+  staleInboundMessageObserver.observeInboundPayload({
+    sessionIdentity: positiveSessionIdentity,
+    payload: JSON.stringify([
+      [
+        1,
+        [
+          {
+            targetChange: {
+              targetChangeType: "ADD",
+              targetIds: [4],
+            },
+          },
+        ],
+      ],
+    ]),
+  });
+  staleInboundMessageObserver.observeInboundPayload({
+    sessionIdentity: positiveSessionIdentity,
+    payload: JSON.stringify([
+      [
+        3,
+        [
+          {
+            targetChange: {
+              targetChangeType: "ADD",
+              targetIds: [4],
+            },
+          },
+        ],
+      ],
+    ]),
+  });
+  staleInboundMessageObserver.settleAuthentication({ dashboardStable: true });
+  const staleInboundMessageSnapshot =
+    staleInboundMessageObserver.safeSnapshot();
+  assert.equal(staleInboundMessageSnapshot.passed, false);
+  assert.equal(staleInboundMessageSnapshot.parseFailureCount, 1);
+  assert.equal(staleInboundMessageSnapshot.inboundRemoveCauseCodeCount, 1);
+  assert.equal(staleInboundMessageSnapshot.successorTargetAcknowledgedCount, 1);
+  const staleInboundMessageFailureDiagnostic =
+    staleInboundMessageObserver.safeFailureDiagnostic();
+  assert.equal(
+    staleInboundMessageFailureDiagnostic.acceptedInboundLogicalMessageReplayCount,
+    0,
+  );
+  assert.equal(
+    staleInboundMessageFailureDiagnostic.conflictingOrStaleInboundLogicalMessageCount,
+    1,
   );
   const initialRequestUrl = new URL(
     "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel",
@@ -8756,6 +9279,10 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
   assert.equal(initialRequestSnapshot.outboundAddTargetCount, 2);
   assert.equal(initialRequestSnapshot.parseFailureCount, 0);
   const noneligibleDeferredPromotionObserver = createNoneligibleAdminObserver();
+  assert.equal(
+    noneligibleDeferredPromotionObserver.requiresFullSettlementWindow(),
+    false,
+  );
   noneligibleDeferredPromotionObserver.observeOutboundRequest({
     networkRequestId: "private-admin-deferred-initial-network-request-id",
     requestUrl: initialRequestUrl.toString(),
@@ -9146,6 +9673,14 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
   });
   const deferredRemoveArrivalSequence =
     deferredStreamObserver.reserveInboundPayloadSequence();
+  deferredStreamObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForListenMessages([{ removeTarget: 2 }], {
+      offset: 1,
+    }),
+  });
   const deferredRemovePayload = JSON.stringify([
     [
       1,
@@ -9174,6 +9709,14 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
   });
   const deferredAcknowledgeArrivalSequence =
     deferredStreamObserver.reserveInboundPayloadSequence();
+  deferredStreamObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForListenMessages([{ removeTarget: 4 }], {
+      offset: 1,
+    }),
+  });
   assert.equal(deferredStreamObserver.readyForSettlement(), false);
   const deferredAcknowledgePayload = JSON.stringify([
     [
@@ -9257,6 +9800,126 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
   deferredStreamObserver.settleAuthentication({ dashboardStable: true });
   const deferredStreamSnapshot = deferredStreamObserver.safeSnapshot();
   assert.equal(deferredStreamSnapshot.passed, true);
+  assert.equal(deferredStreamSnapshot.inboundRemoveCauseCodeCount, 1);
+  assert.equal(deferredStreamSnapshot.successorTargetAcknowledgedCount, 1);
+  const deferredStreamFailureDiagnostic =
+    deferredStreamObserver.safeFailureDiagnostic();
+  assert.equal(
+    deferredStreamFailureDiagnostic.witnessedOutboundRemoveTargetCount,
+    2,
+  );
+  assert.equal(
+    removedCauseTargetClassCount(
+      deferredStreamFailureDiagnostic,
+      frozenBaselineAuthenticationAnomalyPolicy.removedTargetClass,
+    ),
+    1,
+  );
+  const readdedEpochArrivalObserver = createObserver();
+  readdedEpochArrivalObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([attendanceTarget("2026_1", 2)]),
+  });
+  const readdedEpochRemovedArrivalSequence =
+    readdedEpochArrivalObserver.reserveInboundPayloadSequence();
+  readdedEpochArrivalObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForListenMessages([{ removeTarget: 2 }], {
+      offset: 1,
+    }),
+  });
+  readdedEpochArrivalObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([attendanceTarget("2026_2", 2)], {
+      offset: 2,
+    }),
+  });
+  const readdedEpochAcknowledgeArrivalSequence =
+    readdedEpochArrivalObserver.reserveInboundPayloadSequence();
+  readdedEpochArrivalObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForListenMessages([{ removeTarget: 2 }], {
+      offset: 3,
+    }),
+  });
+  readdedEpochArrivalObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([attendanceTarget("2026_1", 2)], {
+      offset: 4,
+    }),
+  });
+  readdedEpochArrivalObserver.observeInboundPayload({
+    sessionIdentity: positiveSessionIdentity,
+    arrivalSequence: readdedEpochRemovedArrivalSequence,
+    payload: JSON.stringify([
+      [
+        1,
+        [
+          {
+            targetChange: {
+              targetChangeType: "REMOVE",
+              targetIds: [2],
+              cause: { code: 7 },
+            },
+          },
+        ],
+      ],
+    ]),
+  });
+  readdedEpochArrivalObserver.observeInboundPayload({
+    sessionIdentity: positiveSessionIdentity,
+    arrivalSequence: readdedEpochAcknowledgeArrivalSequence,
+    payload: JSON.stringify([
+      [
+        2,
+        [
+          {
+            targetChange: {
+              targetChangeType: "ADD",
+              targetIds: [2],
+            },
+          },
+        ],
+      ],
+    ]),
+  });
+  readdedEpochArrivalObserver.observeConsoleError(exactConsoleError);
+  assert.equal(readdedEpochArrivalObserver.readyForSettlement(), false);
+  readdedEpochArrivalObserver.settleAuthentication({ dashboardStable: true });
+  const readdedEpochArrivalSnapshot =
+    readdedEpochArrivalObserver.safeSnapshot();
+  assert.equal(readdedEpochArrivalSnapshot.passed, false);
+  assert.equal(readdedEpochArrivalSnapshot.inboundRemoveCauseCodeCount, 1);
+  assert.equal(readdedEpochArrivalSnapshot.removedTargetClassMatchCount, 1);
+  assert.equal(readdedEpochArrivalSnapshot.successorTargetAcknowledgedCount, 1);
+  assert.equal(readdedEpochArrivalSnapshot.unboundRemovedTargetCount, 0);
+  assert.equal(readdedEpochArrivalSnapshot.ambiguousRemovedTargetCount, 0);
+  const readdedEpochArrivalFailureDiagnostic =
+    readdedEpochArrivalObserver.safeFailureDiagnostic();
+  assert.equal(
+    removedCauseTargetClassCount(
+      readdedEpochArrivalFailureDiagnostic,
+      frozenBaselineAuthenticationAnomalyPolicy.removedTargetClass,
+    ),
+    1,
+  );
+  assert.equal(
+    removedCauseTargetClassCount(
+      readdedEpochArrivalFailureDiagnostic,
+      frozenBaselineAuthenticationAnomalyPolicy.successorTargetClass,
+    ),
+    0,
+  );
   const streamedTargetChanges = [];
   let streamedParseFailureCount = 0;
   const responseStream = createFrozenBaselineListenerResponseStream({
@@ -9310,6 +9973,9 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
     stalePostRemoveAddSnapshot,
     staleActiveRemoveSnapshot,
     nonReplayInactiveRemoveSnapshot,
+    readdedEpochArrivalSnapshot,
+    conflictingInboundMessageSnapshot,
+    staleInboundMessageSnapshot,
   ];
   const wrongViewportObserver = createObserver({ viewport: "393x852" });
   observePositiveLifecycle(wrongViewportObserver);
@@ -9317,6 +9983,25 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
   negativeSnapshots.push(wrongViewportObserver.safeSnapshot());
   const duplicateConsoleObserver = createObserver();
   observePositiveLifecycle(duplicateConsoleObserver);
+  assert.equal(duplicateConsoleObserver.readyForSettlement(), true);
+  assert.equal(duplicateConsoleObserver.requiresFullSettlementWindow(), true);
+  duplicateConsoleObserver.observeInboundPayload({
+    sessionIdentity: positiveSessionIdentity,
+    payload: JSON.stringify([
+      [
+        3,
+        [
+          {
+            targetChange: {
+              targetChangeType: "REMOVE",
+              targetIds: [4],
+              cause: { code: 7 },
+            },
+          },
+        ],
+      ],
+    ]),
+  });
   duplicateConsoleObserver.observeConsoleError(exactConsoleError);
   assert.equal(duplicateConsoleObserver.readyForSettlement(), false);
   const duplicateConsoleDecision =
@@ -9327,6 +10012,23 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
   const duplicateConsoleSnapshot = duplicateConsoleObserver.safeSnapshot();
   assert.equal(duplicateConsoleSnapshot.passed, false);
   assert.equal(duplicateConsoleSnapshot.fatalExactConsoleErrorCount, 2);
+  assert.equal(duplicateConsoleSnapshot.inboundRemoveCauseCodeCount, 2);
+  const duplicateConsoleFailureDiagnostic =
+    duplicateConsoleObserver.safeFailureDiagnostic();
+  assert.equal(
+    removedCauseTargetClassCount(
+      duplicateConsoleFailureDiagnostic,
+      frozenBaselineAuthenticationAnomalyPolicy.removedTargetClass,
+    ),
+    1,
+  );
+  assert.equal(
+    removedCauseTargetClassCount(
+      duplicateConsoleFailureDiagnostic,
+      frozenBaselineAuthenticationAnomalyPolicy.successorTargetClass,
+    ),
+    1,
+  );
   negativeSnapshots.push(duplicateConsoleSnapshot);
   const streamFailureObserver = createObserver();
   observePositiveLifecycle(streamFailureObserver);
@@ -9556,7 +10258,7 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
     emptyRemoveTargetIdsObserver.safeSnapshot();
   assert.equal(emptyRemoveTargetIdsSnapshot.inboundRemoveCauseCodeCount, 1);
   assert.equal(emptyRemoveTargetIdsSnapshot.unboundRemovedTargetCount, 1);
-  assert.equal(emptyRemoveTargetIdsSnapshot.ambiguousRemovedTargetCount, 1);
+  assert.equal(emptyRemoveTargetIdsSnapshot.ambiguousRemovedTargetCount, 0);
   negativeSnapshots.push(emptyRemoveTargetIdsSnapshot);
   const malformedBodyObserver = createObserver();
   malformedBodyObserver.observeOutboundRequest({
@@ -9576,10 +10278,11 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
       (count, snapshot) => count + Number(snapshot.parseFailureCount > 0),
       0,
     ),
-    10,
+    12,
   );
   const serializedSafeEvidence = JSON.stringify({
     positiveSnapshot,
+    exactInboundReplaySnapshot,
     initialRequestSnapshot,
     noneligibleDeferredPromotionSnapshot,
     deferredStreamSnapshot,
@@ -9597,6 +10300,12 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
     nonReplayInactiveRemoveDiagnostic,
     noneligibleUnresolvedInitialDiagnostic,
     noneligiblePendingFailureDiagnostic,
+    duplicateConsoleFailureDiagnostic,
+    deferredStreamFailureDiagnostic,
+    readdedEpochArrivalFailureDiagnostic,
+    exactInboundReplayFailureDiagnostic,
+    conflictingInboundMessageFailureDiagnostic,
+    staleInboundMessageFailureDiagnostic,
   });
   for (const privateReplayBindingField of [
     "messageStructureSha256",
@@ -9646,6 +10355,7 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
     privateSid,
     privateTransportRequestId,
     privateReplayStructureLabel,
+    "private-conflicting-inbound-message",
     "private-admin-deferred-initial-network-request-id",
     "private-admin-unresolved-initial-network-request-id",
     "private-admin-failed-initial-network-request-id",
@@ -9660,7 +10370,7 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
     );
   }
   return {
-    frozenBaselineListenerBindingPositiveFixtureCount: 4,
+    frozenBaselineListenerBindingPositiveFixtureCount: 5,
     frozenBaselineListenerBindingNegativeFixtureCount: negativeSnapshots.length,
     frozenBaselineListenerBindingStreamFixtureCount: 1,
     frozenBaselineListenerBindingTargetClassFixtureCount:
@@ -43239,7 +43949,8 @@ try {
       const listenerSettlementDeadline =
         Date.now() + FROZEN_BASELINE_LISTENER_SETTLEMENT_TIMEOUT_MS;
       while (
-        !frozenBaselineListenerBindingObserver.readyForSettlement() &&
+        (frozenBaselineListenerBindingObserver.requiresFullSettlementWindow() ||
+          !frozenBaselineListenerBindingObserver.readyForSettlement()) &&
         Date.now() < listenerSettlementDeadline
       ) {
         await new Promise((resolvePoll) =>

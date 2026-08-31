@@ -2500,6 +2500,8 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     'targetChangeTypePresent || !Object.prototype.hasOwnProperty.call(targetChange, "cause")',
     "targetChange.causeCode !== policy.removedCauseCode",
     "const frozenBaselineObservationSequenceBefore = (left, right) =>",
+    "const frozenBaselineTargetEpochActiveAtInboundSequence = ({",
+    "const parseFirestoreListenInboundLogicalMessages = (payload) =>",
     "eventSequence: observationSequence",
     "frameSequence: 0",
     "withinEventSequence: 0",
@@ -2511,12 +2513,15 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "const FROZEN_BASELINE_LISTENER_SETTLEMENT_POLL_MS = 50",
     "const readyForSettlement = () =>",
     "if (settledDecision !== null) return true",
-    "const irrecoverableFailureObserved =",
-    "if (irrecoverableFailureObserved) return true",
+    "const structuralFailureObserved =",
+    "if (structuralFailureObserved) return true",
+    "const semanticOverCountObserved =",
+    "if (semanticOverCountObserved) return false",
     "if (!eligible) return pendingInitialMutationsByRequestId.size === 0",
     'failureClass: "pending-initial-target-unresolved-at-settlement"',
     "readyForSettlement,",
     "safeFailureDiagnostic,",
+    "requiresFullSettlementWindow: () => eligible",
     "assert.equal(positiveObserver.readyForSettlement(), false)",
     "assert.equal(positiveObserver.readyForSettlement(), true)",
     "assert.equal(deferredStreamObserver.readyForSettlement(), false)",
@@ -2581,19 +2586,23 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     extractFrozenBaselineParseFailureCallClasses(frozenBaselineFixtureSource);
   assert.equal(
     frozenBaselineParseFailureCallCount(sourceText),
-    21,
+    24,
     "Every frozen-baseline parse-failure call site must remain explicitly accounted.",
   );
   assert.equal(
     frozenBaselineParseFailureCallCount(frozenBaselineProductionSource),
-    expectedFrozenBaselineListenerParseFailureClasses.length,
-    "Production must retain exactly one classified call site per frozen-baseline parse-failure class.",
+    expectedFrozenBaselineListenerParseFailureClasses.length + 3,
+    "Production must retain the fixed taxonomy plus the three explicit inbound logical-message conflict and bound call sites.",
   );
-  assert.deepEqual(
-    productionParseFailureCallClasses,
-    expectedFrozenBaselineListenerParseFailureClasses,
-    "Production parse-failure call sites must cover the fixed taxonomy exactly once and in source order.",
-  );
+  for (const failureClass of expectedFrozenBaselineListenerParseFailureClasses) {
+    assert.equal(
+      productionParseFailureCallClasses.filter(
+        (candidate) => candidate === failureClass,
+      ).length,
+      failureClass === "inbound-payload-parse" ? 4 : 1,
+      `Production parse-failure call-site multiplicity changed for ${failureClass}.`,
+    );
+  }
   assert.equal(
     frozenBaselineParseFailureCallCount(frozenBaselineFixtureSource),
     4,
@@ -2636,6 +2645,7 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     'Object.is(value,-0)?"-0":JSON.stringify(value)',
     'typeofvalue==="string"||typeofvalue==="boolean"',
     "w10p-frozen-baseline-firestore-listen-request-v1\\u0000",
+    "w10p-frozen-baseline-firestore-listen-inbound-v1\\u0000",
     "canonicalFrozenBaselineListenRequestJson(message,)",
   ]) {
     assert.equal(
@@ -2651,6 +2661,15 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
       .length,
     2,
     "The domain-separated full-message hash helper must be defined once and consumed only by the private parser binding.",
+  );
+  assert.equal(
+    (
+      sourceText.match(
+        /\bfrozenBaselineListenInboundMessageStructureSha256\b/gu,
+      ) || []
+    ).length,
+    2,
+    "The inbound full-message hash helper must be defined once and consumed only by the private response parser binding.",
   );
   const frozenBaselineListenRequestParserSourceStart = sourceText.indexOf(
     "const parseFrozenBaselineFirestoreListenTargetMutations = ({",
@@ -2729,6 +2748,10 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "targetTupleMismatchReasonCounts.set(reason,targetTupleMismatchReasonCounts.get(reason)+1,)",
     'recordParseFailure({failureClass:"target-tuple-duplicate"})',
     "constallTargetEpochs=()=>[...targetEpochHistoryByTuple.values()].flatMap((epochs)=>epochs)",
+    "constresolveInboundTargetEpoch=({",
+    "constmatchingEpochs=(targetEpochHistoryByTuple.get(tupleKey)||[]).filter((epoch)=>frozenBaselineTargetEpochActiveAtInboundSequence({addSequence:epoch.addSequence,outboundRemoveSequence:epoch.outboundRemoveSequence,inboundSequence,}),)",
+    "targetEpoch:matchingEpochs.length===1?matchingEpochs[0]:null",
+    "matchCount:matchingEpochs.length",
     "constappendTargetEpoch=({",
     "addWebChannelMessageSequence:webChannelMessageSequence",
     "addMessageStructureSha256:messageStructureSha256",
@@ -2825,8 +2848,33 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   );
   assert.match(
     frozenBaselineObserverSource,
-    /const target\s*=\s*activeTargetEpochByTuple\.get\(\s*frozenBaselineListenerTupleKey\(sessionIdentity, targetId\),\s*\);[\s\S]*?if \(target\) \{\s*target\.acknowledgementSequences\.push\(sequence\);[\s\S]*?if \(!target\) \{\s*unboundRemovedTargetCount \+= 1;\s*continue;\s*\}\s*target\.removedCauseCodeSequences\.push\(sequence\);/u,
-    "Inbound acknowledgement and removal evidence must bind only to the currently active target epoch.",
+    /const inboundTargetBinding\s*=\s*resolveInboundTargetEpoch\(\{\s*sessionIdentity,\s*targetId,\s*inboundSequence: sequence,\s*\}\);\s*const target = inboundTargetBinding\.targetEpoch;[\s\S]*?targetChange\.targetChangeType === "ADD" \|\|\s*targetChange\.targetChangeType === "CURRENT"[\s\S]*?ambiguousAcknowledgementTargetCount \+= 1;[\s\S]*?targetChange\.targetChangeType === "REMOVE" &&\s*inboundTargetBinding\.matchCount > 1[\s\S]*?ambiguousOtherRemovedTargetCount \+= 1;[\s\S]*?if \(inboundTargetBinding\.matchCount === 0\) \{\s*unboundRemovedTargetCount \+= 1;\s*continue;\s*\}\s*if \(inboundTargetBinding\.matchCount > 1\) \{\s*ambiguousRemovedTargetCount \+= 1;\s*ambiguousRemovedEpochBindingCount \+= 1;\s*continue;\s*\}\s*assert\.ok\(target\);[\s\S]*?target\.removedCauseCodeSequences\.push\(sequence\);/u,
+    "Inbound acknowledgement and removal evidence must resolve the unique target epoch active at payload arrival and fail closed on ambiguous or unbound code-7 removal evidence.",
+  );
+  assert.doesNotMatch(
+    frozenBaselineObserverSource.slice(
+      frozenBaselineObserverSource.indexOf("const observeInboundPayload = ({"),
+      frozenBaselineObserverSource.indexOf(
+        "const observeConsoleError = (record) => {",
+      ),
+    ),
+    /activeTargetEpochByTuple\.get/u,
+    "Inbound payload parsing must not bind to the later active-map state.",
+  );
+  assert.match(
+    sourceText,
+    /const parseFirestoreListenInboundLogicalMessages\s*=\s*\(payload\)\s*=>\s*\{[\s\S]*?Array\.isArray\(logicalMessage\) && logicalMessage\.length === 2[\s\S]*?Number\.isSafeInteger\(messageId\) && messageId >= 0[\s\S]*?messageStructureSha256:\s*frozenBaselineListenInboundMessageStructureSha256\(logicalMessage\)[\s\S]*?collectFirestoreListenTargetChanges\(messagePayload\)\.map\(\s*normalizeFirestoreListenTargetChange,?\s*\)/u,
+    "Inbound WebChannel frames must retain their logical message id and canonical full-message structure before target-change parsing.",
+  );
+  assert.match(
+    frozenBaselineObserverSource,
+    /const acceptInboundLogicalMessage\s*=\s*\(\{[\s\S]*?const existingStructureSha256\s*=[\s\S]*?if \(existingStructureSha256 !== null\) \{\s*if \(existingStructureSha256 === messageStructureSha256\) \{\s*acceptedInboundLogicalMessageReplayCount \+= 1;\s*return false;\s*\}\s*conflictingOrStaleInboundLogicalMessageCount \+= 1;\s*recordParseFailure\(\{ failureClass: "inbound-payload-parse" \}\);\s*return false;\s*\}\s*if \(messageId <= ledger\.greatestMessageId\) \{\s*conflictingOrStaleInboundLogicalMessageCount \+= 1;\s*recordParseFailure\(\{ failureClass: "inbound-payload-parse" \}\);\s*return false;[\s\S]*?ledger\.greatestMessageId = messageId;\s*ledger\.messageStructureSha256ById\.set\(\s*messageId,\s*messageStructureSha256,?\s*\);\s*return true;/u,
+    "Exact inbound logical-message replays must be idempotent, while conflicting same-id and unseen stale ids fail closed before semantic processing.",
+  );
+  assert.match(
+    frozenBaselineObserverSource,
+    /const logicalMessages\s*=\s*parseFirestoreListenInboundLogicalMessages\(payload\);[\s\S]*?for \(const logicalMessage of logicalMessages\) \{\s*if \(\s*!acceptInboundLogicalMessage\(\{[\s\S]*?\) \{\s*continue;\s*\}\s*for \(const targetChange of logicalMessage\.targetChanges\) \{/u,
+    "Only strictly newer inbound logical messages may reach target-change accounting.",
   );
   assert.match(
     frozenBaselineFixtureSource,
@@ -2915,19 +2963,53 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   );
   assert.match(
     frozenBaselineFixtureSource,
-    /frozenBaselineListenerBindingPositiveFixtureCount:\s*4/u,
-    "The frozen-baseline listener source contract must retain four positive lifecycle fixtures.",
+    /frozenBaselineListenerBindingPositiveFixtureCount:\s*5/u,
+    "The frozen-baseline listener source contract must retain five positive lifecycle fixtures.",
+  );
+  assert.equal(
+    (
+      frozenBaselineFixtureSource.match(
+        /frozenBaselineTargetEpochActiveAtInboundSequence\(\{/gu,
+      ) || []
+    ).length,
+    6,
+    "The boundary fixture must cover add equality, remove equality, open interval, inter-epoch gap, pre-readd and post-readd arrival predicates.",
   );
   assert.match(
     frozenBaselineFixtureSource,
-    /const negativeSnapshots\s*=\s*\[\s*mismatchedBufferedSnapshot,\s*noneligibleUnresolvedInitialSnapshot,\s*noneligiblePendingFailureSnapshot,\s*conflictingReplayStructureSnapshot,\s*conflictingReplayIndexSnapshot,\s*unknownOutboundRemoveSnapshot,\s*stalePostRemoveAddSnapshot,\s*staleActiveRemoveSnapshot,\s*nonReplayInactiveRemoveSnapshot,\s*\];/u,
+    /const firstEpochAddSequence = epochBoundarySequence\(1\);\s*const firstEpochInboundSequence = epochBoundarySequence\(2\);\s*const firstEpochRemoveSequence = epochBoundarySequence\(3\);\s*const betweenEpochsInboundSequence = epochBoundarySequence\(4\);\s*const readdedEpochAddSequence = epochBoundarySequence\(5\);\s*const readdedEpochInboundSequence = epochBoundarySequence\(6\);[\s\S]*?inboundSequence: firstEpochAddSequence,[\s\S]*?false,[\s\S]*?inboundSequence: firstEpochRemoveSequence,[\s\S]*?false,[\s\S]*?inboundSequence: firstEpochInboundSequence,[\s\S]*?true,[\s\S]*?inboundSequence: betweenEpochsInboundSequence,[\s\S]*?false,[\s\S]*?addSequence: readdedEpochAddSequence,[\s\S]*?inboundSequence: betweenEpochsInboundSequence,[\s\S]*?false,[\s\S]*?inboundSequence: readdedEpochInboundSequence,[\s\S]*?true,/u,
+    "Strict epoch boundaries and the remove-to-readd gap must remain fail-closed.",
+  );
+  assert.match(
+    frozenBaselineFixtureSource,
+    /const negativeSnapshots\s*=\s*\[\s*mismatchedBufferedSnapshot,\s*noneligibleUnresolvedInitialSnapshot,\s*noneligiblePendingFailureSnapshot,\s*conflictingReplayStructureSnapshot,\s*conflictingReplayIndexSnapshot,\s*unknownOutboundRemoveSnapshot,\s*stalePostRemoveAddSnapshot,\s*staleActiveRemoveSnapshot,\s*nonReplayInactiveRemoveSnapshot,\s*readdedEpochArrivalSnapshot,\s*conflictingInboundMessageSnapshot,\s*staleInboundMessageSnapshot,\s*\];/u,
     "Buffered, pending-initial, replay-conflict and outbound epoch failures must seed the frozen-baseline negative fixture ledger.",
   );
   assert.equal(
     (frozenBaselineFixtureSource.match(/negativeSnapshots\.push\(/gu) || [])
       .length,
     7,
-    "The frozen-baseline listener source contract must retain sixteen negative lifecycle fixtures.",
+    "The frozen-baseline listener source contract must retain nineteen negative lifecycle fixtures.",
+  );
+  assert.match(
+    frozenBaselineFixtureSource,
+    /const positiveObserver = createObserver\(\);\s*assert\.equal\(positiveObserver\.requiresFullSettlementWindow\(\), true\);[\s\S]*?const noneligibleDeferredPromotionObserver = createNoneligibleAdminObserver\(\);\s*assert\.equal\(\s*noneligibleDeferredPromotionObserver\.requiresFullSettlementWindow\(\),\s*false,\s*\);/u,
+    "Only the exact eligible baseline student group may require the complete settlement window.",
+  );
+  assert.match(
+    frozenBaselineFixtureSource,
+    /const readdedEpochArrivalObserver = createObserver\(\);[\s\S]*?const readdedEpochRemovedArrivalSequence\s*=\s*readdedEpochArrivalObserver\.reserveInboundPayloadSequence\(\);[\s\S]*?removeTarget: 2[\s\S]*?attendanceTarget\("2026_2", 2\)[\s\S]*?const readdedEpochAcknowledgeArrivalSequence\s*=\s*readdedEpochArrivalObserver\.reserveInboundPayloadSequence\(\);[\s\S]*?removeTarget: 2[\s\S]*?attendanceTarget\("2026_1", 2\)[\s\S]*?arrivalSequence: readdedEpochRemovedArrivalSequence,[\s\S]*?targetChangeType: "REMOVE"[\s\S]*?arrivalSequence: readdedEpochAcknowledgeArrivalSequence,[\s\S]*?targetChangeType: "ADD"[\s\S]*?assert\.equal\(readdedEpochArrivalSnapshot\.passed, false\);[\s\S]*?readdedEpochArrivalSnapshot\.removedTargetClassMatchCount, 1[\s\S]*?readdedEpochArrivalSnapshot\.successorTargetAcknowledgedCount, 1[\s\S]*?readdedEpochArrivalSnapshot\.unboundRemovedTargetCount, 0[\s\S]*?readdedEpochArrivalSnapshot\.ambiguousRemovedTargetCount, 0[\s\S]*?frozenBaselineAuthenticationAnomalyPolicy\.removedTargetClass,[\s\S]*?\),\s*1,[\s\S]*?frozenBaselineAuthenticationAnomalyPolicy\.successorTargetClass,[\s\S]*?\),\s*0,/u,
+    "A same-target remove and class-changing re-add must bind delayed REMOVE and successor ACK payloads only to the epoch active at their reserved arrivals.",
+  );
+  assert.match(
+    frozenBaselineFixtureSource,
+    /const exactInboundReplayObserver = createObserver\(\);[\s\S]*?payload: exactInboundRemovedPayload,[\s\S]*?payload: exactInboundRemovedPayload,[\s\S]*?payload: exactInboundAcknowledgePayload,[\s\S]*?payload: exactInboundAcknowledgePayload,[\s\S]*?assert\.equal\(exactInboundReplaySnapshot\.passed, true\);[\s\S]*?exactInboundReplaySnapshot\.inboundRemoveCauseCodeCount, 1[\s\S]*?exactInboundReplaySnapshot\.successorTargetAcknowledgedCount, 1[\s\S]*?acceptedInboundLogicalMessageReplayCount,[\s\S]*?2,[\s\S]*?conflictingOrStaleInboundLogicalMessageCount,[\s\S]*?0,/u,
+    "Exact inbound logical-message replays must be accepted twice without double-counting either removal or acknowledgement semantics.",
+  );
+  assert.match(
+    frozenBaselineFixtureSource,
+    /const conflictingInboundMessageObserver = createObserver\(\);[\s\S]*?payload: exactInboundRemovedPayload,[\s\S]*?message: "private-conflicting-inbound-message"[\s\S]*?assert\.equal\(conflictingInboundMessageSnapshot\.parseFailureCount, 1\);[\s\S]*?conflictingInboundMessageSnapshot\.inboundRemoveCauseCodeCount,[\s\S]*?1,[\s\S]*?conflictingOrStaleInboundLogicalMessageCount,[\s\S]*?1,[\s\S]*?const staleInboundMessageObserver = createObserver\(\);[\s\S]*?const staleInboundRemovedPayload[\s\S]*?\[\s*2,[\s\S]*?payload: staleInboundRemovedPayload,[\s\S]*?\[\s*1,[\s\S]*?\[\s*3,[\s\S]*?assert\.equal\(staleInboundMessageSnapshot\.parseFailureCount, 1\);[\s\S]*?staleInboundMessageSnapshot\.successorTargetAcknowledgedCount, 1[\s\S]*?conflictingOrStaleInboundLogicalMessageCount,[\s\S]*?1,/u,
+    "Conflicting same-id and unseen stale inbound logical messages must fail closed while a later strictly newer id still reaches target-change processing.",
   );
   assert.match(
     frozenBaselineFixtureSource,
@@ -2951,13 +3033,13 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   );
   assert.match(
     frozenBaselineFixtureSource,
-    /const duplicateConsoleObserver\s*=\s*createObserver\(\);\s*observePositiveLifecycle\(duplicateConsoleObserver\);\s*duplicateConsoleObserver\.observeConsoleError\(exactConsoleError\);\s*assert\.equal\(duplicateConsoleObserver\.readyForSettlement\(\), false\);\s*const duplicateConsoleDecision\s*=\s*duplicateConsoleObserver\.settleAuthentication\(\{ dashboardStable: true \}\);\s*assert\.equal\(duplicateConsoleDecision\.tupleBoundRetirementCount, 0\);\s*assert\.equal\(duplicateConsoleDecision\.retiredExactConsoleErrorCount, 0\);\s*assert\.equal\(duplicateConsoleDecision\.fatalExactConsoleErrorCount, 2\);\s*const duplicateConsoleSnapshot\s*=\s*duplicateConsoleObserver\.safeSnapshot\(\);\s*assert\.equal\(duplicateConsoleSnapshot\.passed, false\);\s*assert\.equal\(duplicateConsoleSnapshot\.fatalExactConsoleErrorCount, 2\);/u,
-    "An exact-console over-count must remain unready for the bounded collection window and settle as a negative fixture with two fatal errors.",
+    /const duplicateConsoleObserver\s*=\s*createObserver\(\);\s*observePositiveLifecycle\(duplicateConsoleObserver\);\s*assert\.equal\(duplicateConsoleObserver\.readyForSettlement\(\), true\);\s*assert\.equal\(duplicateConsoleObserver\.requiresFullSettlementWindow\(\), true\);[\s\S]*?targetChangeType: "REMOVE",\s*targetIds: \[4\],\s*cause: \{ code: 7 \},[\s\S]*?duplicateConsoleObserver\.observeConsoleError\(exactConsoleError\);\s*assert\.equal\(duplicateConsoleObserver\.readyForSettlement\(\), false\);[\s\S]*?assert\.equal\(duplicateConsoleSnapshot\.passed, false\);\s*assert\.equal\(duplicateConsoleSnapshot\.fatalExactConsoleErrorCount, 2\);\s*assert\.equal\(duplicateConsoleSnapshot\.inboundRemoveCauseCodeCount, 2\);[\s\S]*?frozenBaselineAuthenticationAnomalyPolicy\.removedTargetClass,[\s\S]*?\),\s*1,[\s\S]*?frozenBaselineAuthenticationAnomalyPolicy\.successorTargetClass,[\s\S]*?\),\s*1,/u,
+    "An eligible exact success must keep its full collection window open so late duplicate console and second classified code-7 evidence remain fatal and diagnostic.",
   );
   assert.match(
     frozenBaselineFixtureSource,
-    /negativeSnapshots\.reduce\(\s*\(count, snapshot\)\s*=>\s*count \+ Number\(snapshot\.parseFailureCount > 0\),\s*0,\s*\),\s*10,/u,
-    "The frozen-baseline negative ledger must retain ten parse-failure cases.",
+    /negativeSnapshots\.reduce\(\s*\(count, snapshot\)\s*=>\s*count \+ Number\(snapshot\.parseFailureCount > 0\),\s*0,\s*\),\s*12,/u,
+    "The frozen-baseline negative ledger must retain twelve parse-failure cases.",
   );
   assert.match(
     frozenBaselineFixtureSource,
@@ -2984,6 +3066,11 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     /const frozenBaselineObservationSequenceBefore\s*=\s*\(left, right\)\s*=>\s*left\.eventSequence < right\.eventSequence \|\|\s*\(left\.eventSequence === right\.eventSequence &&\s*\(left\.frameSequence < right\.frameSequence \|\|\s*\(left\.frameSequence === right\.frameSequence &&\s*left\.withinEventSequence < right\.withinEventSequence\)\)\);/u,
     "Frozen-baseline observations must retain exact event/frame/within-event lexicographic ordering.",
   );
+  assert.match(
+    sourceText,
+    /const frozenBaselineTargetEpochActiveAtInboundSequence\s*=\s*\(\{\s*addSequence,\s*outboundRemoveSequence,\s*inboundSequence,\s*\}\)\s*=>\s*frozenBaselineObservationSequenceBefore\(addSequence, inboundSequence\) &&\s*\(outboundRemoveSequence === null \|\|\s*frozenBaselineObservationSequenceBefore\(\s*inboundSequence,\s*outboundRemoveSequence,\s*\)\);/u,
+    "Inbound evidence must use the strict add-before-arrival-before-remove epoch predicate.",
+  );
   const frozenBaselineReadinessSourceStart = sourceText.indexOf(
     "const readyForSettlement = () => {",
   );
@@ -3000,9 +3087,14 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     .replace(/\s+/gu, "");
   for (const requiredReadinessFragment of [
     "if (settledDecision !== null) return true",
+    "const structuralFailureObserved =",
     "streamFailureCount > 0",
     "parseFailureCount > 0",
     "bufferExceededCount > 0",
+    "if (structuralFailureObserved) return true",
+    "if (!eligible) return pendingInitialMutationsByRequestId.size === 0",
+    "const semanticOverCountObserved =",
+    "exactConsoleSequences.length > policy.consoleError.expectedCount",
     "inboundRemoveCauseCodeCount > 1",
     "removedTargetClassMatchCount > 1",
     "successorAddTargetCount > 1",
@@ -3010,8 +3102,9 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "unknownRemovedTargetCount > 0",
     "unboundRemovedTargetCount > 0",
     "ambiguousRemovedTargetCount > 0",
-    "if (irrecoverableFailureObserved) return true",
-    "if (!eligible) return pendingInitialMutationsByRequestId.size === 0",
+    "ambiguousAcknowledgementTargetCount > 0",
+    "ambiguousOtherRemovedTargetCount > 0",
+    "if (semanticOverCountObserved) return false",
     "pendingInitialMutationsByRequestId.size === 0",
     "const removedTargets = allTargetEpochs().filter",
     "const successorTargets = allTargetEpochs().filter",
@@ -3033,20 +3126,38 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
       `The frozen-baseline readiness contract is missing: ${requiredReadinessFragment}`,
     );
   }
-  assert.equal(
-    compactFrozenBaselineReadinessSource.includes(
-      "exactConsoleSequences.length > policy.consoleError.expectedCount".replace(
-        /\s+/gu,
-        "",
-      ),
-    ),
-    false,
-    "An exact-console over-count must not end the bounded listener collection window before target evidence arrives.",
-  );
+  const frozenBaselineStructuralReadinessEnd =
+    compactFrozenBaselineReadinessSource.indexOf(
+      "if(structuralFailureObserved)returntrue;",
+    );
+  assert.ok(frozenBaselineStructuralReadinessEnd > 0);
+  const frozenBaselineStructuralReadinessSource =
+    compactFrozenBaselineReadinessSource.slice(
+      0,
+      frozenBaselineStructuralReadinessEnd,
+    );
+  for (const semanticCounter of [
+    "exactConsoleSequences",
+    "inboundRemoveCauseCodeCount",
+    "removedTargetClassMatchCount",
+    "successorAddTargetCount",
+    "successorTargetAcknowledgedCount",
+    "unknownRemovedTargetCount",
+    "unboundRemovedTargetCount",
+    "ambiguousRemovedTargetCount",
+    "ambiguousAcknowledgementTargetCount",
+    "ambiguousOtherRemovedTargetCount",
+  ]) {
+    assert.equal(
+      frozenBaselineStructuralReadinessSource.includes(semanticCounter),
+      false,
+      `Semantic over-count must not terminate the bounded collection window early: ${semanticCounter}`,
+    );
+  }
   assert.match(
     sourceText,
-    /const readyForSettlement\s*=\s*\(\)\s*=>\s*\{\s*if \(settledDecision !== null\) return true;\s*const irrecoverableFailureObserved\s*=[\s\S]*?if \(irrecoverableFailureObserved\) return true;\s*if \(!eligible\) return pendingInitialMutationsByRequestId\.size === 0;[\s\S]*?const removedTargets\s*=\s*allTargetEpochs\(\)\.filter/u,
-    "Frozen-baseline readiness must fail fast on irrecoverable evidence, then wait only for noneligible pending initial promotion.",
+    /const readyForSettlement\s*=\s*\(\)\s*=>\s*\{\s*if \(settledDecision !== null\) return true;\s*const structuralFailureObserved\s*=[\s\S]*?if \(structuralFailureObserved\) return true;\s*if \(!eligible\) return pendingInitialMutationsByRequestId\.size === 0;\s*const semanticOverCountObserved\s*=[\s\S]*?if \(semanticOverCountObserved\) return false;[\s\S]*?const removedTargets\s*=\s*allTargetEpochs\(\)\.filter/u,
+    "Frozen-baseline readiness must settle clean noneligible groups without delay while keeping eligible semantic over-count collection open until the bounded deadline.",
   );
   assert.doesNotMatch(
     sourceText,
@@ -3185,13 +3296,18 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   );
   assert.match(
     frozenBaselineSafeFailureDiagnosticSource,
-    /assert\.equal\(parseFailureClassCountSum, parseFailureCount\);\s*assert\.equal\(\s*targetTupleMismatchReasonCountSum,\s*parseFailureClassCounts\.get\("target-tuple-duplicate"\),\s*\);\s*assert\.ok\(bufferExceededCount <= parseFailureCount\);/u,
-    "The failure-class histogram and buffer-failure subset must reconcile with the manifest parse ledger.",
+    /const removedCauseTargetClassHistogram\s*=\s*Object\.freeze\(\s*SAFE_FROZEN_BASELINE_LISTENER_TARGET_CLASSES\.map\(\(targetClass\)\s*=>\s*Object\.freeze\(\{\s*targetClass,\s*count: removedCauseTargetClassCounts\.get\(targetClass\),\s*\}\),?\s*\),?\s*\);[\s\S]*?assert\.deepEqual\(Object\.keys\(entry\), \["targetClass", "count"\]\);[\s\S]*?entry\.targetClass,\s*SAFE_FROZEN_BASELINE_LISTENER_TARGET_CLASSES\[index\],[\s\S]*?Number\.isSafeInteger\(entry\.count\) && entry\.count >= 0/u,
+    "The removed-cause target-class histogram must remain zero-inclusive, fixed-order and numeric-only.",
   );
   assert.match(
     frozenBaselineSafeFailureDiagnosticSource,
-    /return Object\.freeze\(\{\s*parseFailureClassHistogram,\s*parseFailureClassCountSum,\s*targetTupleMismatchReasonHistogram,\s*targetTupleMismatchReasonCountSum,\s*pendingInitialTargetRequestCount,\s*initialTargetRequestPromotionCount,\s*witnessedOutboundRemoveTargetCount,\s*acceptedPostRemoveReaddCount,\s*\}\);/u,
-    "The observer failure diagnostic must retain exactly eight safe aggregate fields.",
+    /assert\.equal\(parseFailureClassCountSum, parseFailureCount\);\s*assert\.equal\(\s*targetTupleMismatchReasonCountSum,\s*parseFailureClassCounts\.get\("target-tuple-duplicate"\),\s*\);\s*assert\.equal\(\s*removedCauseTargetClassCountSum,\s*inboundRemoveCauseCodeCount -\s*unboundRemovedTargetCount -\s*ambiguousRemovedEpochBindingCount,\s*\);\s*assert\.ok\(bufferExceededCount <= parseFailureCount\);/u,
+    "Failure, mismatch, uniquely bound removed-cause class and buffer ledgers must reconcile exactly.",
+  );
+  assert.match(
+    frozenBaselineSafeFailureDiagnosticSource,
+    /return Object\.freeze\(\{\s*parseFailureClassHistogram,\s*parseFailureClassCountSum,\s*targetTupleMismatchReasonHistogram,\s*targetTupleMismatchReasonCountSum,\s*removedCauseTargetClassHistogram,\s*ambiguousNonCauseTargetBindingCount,\s*acceptedInboundLogicalMessageReplayCount,\s*conflictingOrStaleInboundLogicalMessageCount,\s*pendingInitialTargetRequestCount,\s*initialTargetRequestPromotionCount,\s*witnessedOutboundRemoveTargetCount,\s*acceptedPostRemoveReaddCount,\s*\}\);/u,
+    "The observer failure diagnostic must retain exactly twelve safe aggregate fields.",
   );
   assert.doesNotMatch(
     frozenBaselineSafeFailureDiagnosticSource,
@@ -3241,8 +3357,8 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   );
   assert.match(
     sourceText,
-    /targetChange\.targetChangeType === "REMOVE" &&\s*targetChange\.causeCode === policy\.removedCauseCode &&\s*targetChange\.targetIds\.length === 0\s*\) \{\s*inboundRemoveCauseCodeCount \+= 1;\s*unboundRemovedTargetCount \+= 1;\s*ambiguousRemovedTargetCount \+= 1;/u,
-    "An empty code-7 REMOVE must be counted as unbound and ambiguous.",
+    /targetChange\.targetChangeType === "REMOVE" &&\s*targetChange\.causeCode === policy\.removedCauseCode &&\s*targetChange\.targetIds\.length === 0\s*\) \{\s*inboundRemoveCauseCodeCount \+= 1;\s*unboundRemovedTargetCount \+= 1;\s*continue;/u,
+    "An empty code-7 REMOVE must occupy only the unbound resolution bucket.",
   );
   assert.match(
     sourceText,
@@ -3256,13 +3372,18 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   );
   assert.match(
     sourceText,
-    /await drainAppCheckCdpHandlerPromises\(\);\s*let authenticationNetworkAttestationDrainDiagnostic\s*=\s*await flushNetworkAttestations\(\);\s*const listenerSettlementDeadline\s*=\s*Date\.now\(\) \+ FROZEN_BASELINE_LISTENER_SETTLEMENT_TIMEOUT_MS;\s*while \(\s*!frozenBaselineListenerBindingObserver\.readyForSettlement\(\) &&\s*Date\.now\(\) < listenerSettlementDeadline\s*\) \{\s*await new Promise\(\(resolvePoll\)\s*=>\s*setTimeout\(resolvePoll, FROZEN_BASELINE_LISTENER_SETTLEMENT_POLL_MS\),?\s*\);\s*await drainAppCheckCdpHandlerPromises\(\);\s*authenticationNetworkAttestationDrainDiagnostic\s*=\s*await flushNetworkAttestations\(\);\s*\}[\s\S]*?groupFrozenBaselineListenerRetirementDecision\s*=\s*frozenBaselineListenerBindingObserver\.settleAuthentication\(\{\s*dashboardStable:\s*true,?\s*\}\);/u,
-    "Frozen-baseline listener settlement must use a bounded poll, drain and flush every poll, then settle fail-closed after readiness or timeout.",
+    /await drainAppCheckCdpHandlerPromises\(\);\s*let authenticationNetworkAttestationDrainDiagnostic\s*=\s*await flushNetworkAttestations\(\);\s*const listenerSettlementDeadline\s*=\s*Date\.now\(\) \+ FROZEN_BASELINE_LISTENER_SETTLEMENT_TIMEOUT_MS;\s*while \(\s*\(frozenBaselineListenerBindingObserver\.requiresFullSettlementWindow\(\) \|\|\s*!frozenBaselineListenerBindingObserver\.readyForSettlement\(\)\) &&\s*Date\.now\(\) < listenerSettlementDeadline\s*\) \{\s*await new Promise\(\(resolvePoll\)\s*=>\s*setTimeout\(resolvePoll, FROZEN_BASELINE_LISTENER_SETTLEMENT_POLL_MS\),?\s*\);\s*await drainAppCheckCdpHandlerPromises\(\);\s*authenticationNetworkAttestationDrainDiagnostic\s*=\s*await flushNetworkAttestations\(\);\s*\}[\s\S]*?groupFrozenBaselineListenerRetirementDecision\s*=\s*frozenBaselineListenerBindingObserver\.settleAuthentication\(\{\s*dashboardStable:\s*true,?\s*\}\);/u,
+    "Eligible frozen-baseline listener settlement must always fill the bounded window while noneligible groups retain readiness-based early settlement.",
+  );
+  assert.match(
+    frozenBaselineObserverSource,
+    /requiresFullSettlementWindow:\s*\(\)\s*=>\s*eligible,/u,
+    "The observer must explicitly identify only its exact eligible group as full-window collection required.",
   );
   assert.match(
     sourceText,
     /groupFrozenBaselineListenerRetirementDecision\s*=\s*frozenBaselineListenerBindingObserver\.settleAuthentication\(\{\s*dashboardStable:\s*true,?\s*\}\);\s*const frozenBaselineListenerAttestationAtSettlement\s*=\s*frozenBaselineListenerBindingObserver\.safeSnapshot\(\);\s*const frozenBaselineListenerFailureDiagnosticAtSettlement\s*=\s*frozenBaselineListenerBindingObserver\.safeFailureDiagnostic\(\);[\s\S]*?const authenticationBrowserErrorDiagnostic\s*=\s*\{[\s\S]*?frozenBaselineListenerRetirementDecision:\s*groupFrozenBaselineListenerRetirementDecision,\s*frozenBaselineListenerAttestationAtSettlement,\s*frozenBaselineListenerFailureDiagnosticAtSettlement,/u,
-    "Authentication failure diagnostics must include the settled safe listener attestation and its existing eight-field safe failure diagnostic.",
+    "Authentication failure diagnostics must include the settled safe listener attestation and its twelve-field safe failure diagnostic.",
   );
   const frozenBaselineRuntimeFailureDiagnosticSourceStart =
     sourceText.lastIndexOf("let frozenBaselineListenerGroupAttestation;");
@@ -5745,8 +5866,8 @@ const verifyPreTransmissionBoundaryNegativeFixtures = () => {
     frozenBaselineListenerPostSettlementGuardSourceContractVerified: true,
     frozenBaselineListenerTerminalFailureSourceContractVerified: true,
     frozenBaselineListenerBoundedReadinessSettlementSourceContractVerified: true,
-    frozenBaselineListenerBindingPositiveFixtureSourceCount: 4,
-    frozenBaselineListenerBindingNegativeFixtureSourceCount: 16,
+    frozenBaselineListenerBindingPositiveFixtureSourceCount: 5,
+    frozenBaselineListenerBindingNegativeFixtureSourceCount: 19,
     safeAuthenticationSignInSourceContractVerified: true,
     safeAuthenticationSignInSourceMutationRejectedCaseCount,
   };
