@@ -6568,9 +6568,20 @@ const SAFE_FROZEN_BASELINE_LISTENER_PARSE_FAILURE_CLASSES = Object.freeze([
   "cdp-stream-data-missing",
   "cdp-pending-data-buffer-exceeded",
 ]);
+const SAFE_FROZEN_BASELINE_TARGET_TUPLE_MISMATCH_REASONS = Object.freeze([
+  "active-add-without-remove",
+  "inactive-add-not-after-remove",
+  "unknown-remove-target",
+  "active-remove-not-after-add",
+  "inactive-remove-not-exact-replay",
+]);
 assert.equal(
   new Set(SAFE_FROZEN_BASELINE_LISTENER_PARSE_FAILURE_CLASSES).size,
   SAFE_FROZEN_BASELINE_LISTENER_PARSE_FAILURE_CLASSES.length,
+);
+assert.equal(
+  new Set(SAFE_FROZEN_BASELINE_TARGET_TUPLE_MISMATCH_REASONS).size,
+  SAFE_FROZEN_BASELINE_TARGET_TUPLE_MISMATCH_REASONS.length,
 );
 const exactFirestoreListenSessionIdentity = (requestUrl) => {
   try {
@@ -6877,7 +6888,7 @@ const classifyFrozenBaselineFirestoreListenTarget = (
   }
   return "unknown";
 };
-const parseFrozenBaselineFirestoreListenAddTargets = ({
+const parseFrozenBaselineFirestoreListenTargetMutations = ({
   requestUrl,
   method,
   postData,
@@ -6893,7 +6904,7 @@ const parseFrozenBaselineFirestoreListenAddTargets = ({
     return Object.freeze({
       initialRequest,
       sessionIdentity,
-      targets: Object.freeze([]),
+      mutations: Object.freeze([]),
     });
   }
   assert.equal(hasPostData, true, "Firestore Listen POST body was absent.");
@@ -6972,7 +6983,7 @@ const parseFrozenBaselineFirestoreListenAddTargets = ({
     true,
     "Firestore Listen message indices were not contiguous.",
   );
-  const targets = [];
+  const mutations = [];
   for (const { requestIndex, encodedMessage } of dataEntries) {
     assert.ok(
       Buffer.byteLength(encodedMessage, "utf8") <=
@@ -6984,12 +6995,20 @@ const parseFrozenBaselineFirestoreListenAddTargets = ({
       message && typeof message === "object" && !Array.isArray(message),
       "Firestore Listen message was not an object.",
     );
-    if (!Object.prototype.hasOwnProperty.call(message, "addTarget")) continue;
-    const targetId = message.addTarget?.targetId;
-    assert.ok(
-      Number.isSafeInteger(targetId) && targetId > 0,
-      "Firestore Listen addTarget targetId was invalid.",
+    const hasAddTarget = Object.prototype.hasOwnProperty.call(
+      message,
+      "addTarget",
     );
+    const hasRemoveTarget = Object.prototype.hasOwnProperty.call(
+      message,
+      "removeTarget",
+    );
+    assert.equal(
+      Number(hasAddTarget) + Number(hasRemoveTarget) <= 1,
+      true,
+      "Firestore Listen request declared conflicting target mutations.",
+    );
+    if (!hasAddTarget && !hasRemoveTarget) continue;
     const webChannelMessageSequence = requestOffset + requestIndex;
     assert.equal(
       Number.isSafeInteger(webChannelMessageSequence) &&
@@ -6997,24 +7016,47 @@ const parseFrozenBaselineFirestoreListenAddTargets = ({
       true,
       "Firestore Listen logical message sequence was invalid.",
     );
-    targets.push(
-      Object.freeze({
-        sessionIdentity,
-        targetId,
-        targetClass: classifyFrozenBaselineFirestoreListenTarget(
-          message.addTarget,
-          expectedUidHash,
-        ),
-        webChannelMessageSequence,
-        messageStructureSha256:
-          frozenBaselineListenRequestStructureSha256(message),
-      }),
-    );
+    const messageStructureSha256 =
+      frozenBaselineListenRequestStructureSha256(message);
+    if (hasAddTarget) {
+      const targetId = message.addTarget?.targetId;
+      assert.ok(
+        Number.isSafeInteger(targetId) && targetId > 0,
+        "Firestore Listen addTarget targetId was invalid.",
+      );
+      mutations.push(
+        Object.freeze({
+          mutationType: "add-target",
+          sessionIdentity,
+          targetId,
+          targetClass: classifyFrozenBaselineFirestoreListenTarget(
+            message.addTarget,
+            expectedUidHash,
+          ),
+          webChannelMessageSequence,
+          messageStructureSha256,
+        }),
+      );
+    } else {
+      assert.ok(
+        Number.isSafeInteger(message.removeTarget) && message.removeTarget > 0,
+        "Firestore Listen removeTarget targetId was invalid.",
+      );
+      mutations.push(
+        Object.freeze({
+          mutationType: "remove-target",
+          sessionIdentity,
+          targetId: message.removeTarget,
+          webChannelMessageSequence,
+          messageStructureSha256,
+        }),
+      );
+    }
   }
   return Object.freeze({
     initialRequest,
     sessionIdentity,
-    targets: Object.freeze(targets),
+    mutations: Object.freeze(mutations),
   });
 };
 const collectFirestoreListenTargetChanges = (value, output = []) => {
@@ -7177,8 +7219,9 @@ const createFrozenBaselineListenerBindingObserver = ({
   expectedUidHash,
 }) => {
   assert.match(expectedUidHash, /^[0-9a-f]{64}$/u);
-  const targetsByTuple = new Map();
-  const pendingInitialTargetsByRequestId = new Map();
+  const targetEpochHistoryByTuple = new Map();
+  const activeTargetEpochByTuple = new Map();
+  const pendingInitialMutationsByRequestId = new Map();
   const exactConsoleSequences = [];
   let observationSequence = 0;
   let outboundAddTargetCount = 0;
@@ -7193,8 +7236,16 @@ const createFrozenBaselineListenerBindingObserver = ({
   let parseFailureCount = 0;
   let bufferExceededCount = 0;
   let initialTargetRequestPromotionCount = 0;
+  let witnessedOutboundRemoveTargetCount = 0;
+  let acceptedPostRemoveReaddCount = 0;
   let settledDecision = null;
   let settledSemanticLedger = null;
+  const targetTupleMismatchReasonCounts = new Map(
+    SAFE_FROZEN_BASELINE_TARGET_TUPLE_MISMATCH_REASONS.map((reason) => [
+      reason,
+      0,
+    ]),
+  );
   const parseFailureClassCounts = new Map(
     SAFE_FROZEN_BASELINE_LISTENER_PARSE_FAILURE_CLASSES.map((failureClass) => [
       failureClass,
@@ -7269,6 +7320,62 @@ const createFrozenBaselineListenerBindingObserver = ({
         Number.isSafeInteger(parseFailureClassCounts.get(failureClass)),
     );
   };
+  const recordTargetTupleMismatch = (reason) => {
+    assert.equal(
+      SAFE_FROZEN_BASELINE_TARGET_TUPLE_MISMATCH_REASONS.includes(reason),
+      true,
+      "Frozen-baseline target tuple mismatch reason was unsupported.",
+    );
+    if (settledDecision !== null) return;
+    targetTupleMismatchReasonCounts.set(
+      reason,
+      targetTupleMismatchReasonCounts.get(reason) + 1,
+    );
+    assert.ok(
+      Number.isSafeInteger(targetTupleMismatchReasonCounts.get(reason)),
+    );
+    recordParseFailure({ failureClass: "target-tuple-duplicate" });
+  };
+  const allTargetEpochs = () =>
+    [...targetEpochHistoryByTuple.values()].flatMap((epochs) => epochs);
+  const appendTargetEpoch = ({
+    tupleKey,
+    targetClass,
+    addSequence,
+    webChannelMessageSequence,
+    messageStructureSha256,
+    postRemoveReadd,
+  }) => {
+    const targetEpoch = {
+      targetClass,
+      addSequence,
+      addWebChannelMessageSequence: webChannelMessageSequence,
+      addMessageStructureSha256: messageStructureSha256,
+      active: true,
+      outboundRemoveSequence: null,
+      removeWebChannelMessageSequence: null,
+      removeMessageStructureSha256: null,
+      acknowledgementSequences: [],
+      removedCauseCodeSequences: [],
+    };
+    const epochs = targetEpochHistoryByTuple.get(tupleKey) || [];
+    epochs.push(targetEpoch);
+    targetEpochHistoryByTuple.set(tupleKey, epochs);
+    activeTargetEpochByTuple.set(tupleKey, targetEpoch);
+    outboundAddTargetCount += 1;
+    targetClassCounts.set(targetClass, targetClassCounts.get(targetClass) + 1);
+    successorAddTargetCount += Number(
+      targetClass === policy.successorTargetClass,
+    );
+    acceptedPostRemoveReaddCount += Number(postRemoveReadd);
+    assert.ok(
+      Number.isSafeInteger(outboundAddTargetCount) &&
+        Number.isSafeInteger(targetClassCounts.get(targetClass)) &&
+        Number.isSafeInteger(successorAddTargetCount) &&
+        Number.isSafeInteger(acceptedPostRemoveReaddCount),
+    );
+    return targetEpoch;
+  };
   const registerSessionTarget = ({
     sessionIdentity,
     targetId,
@@ -7278,83 +7385,159 @@ const createFrozenBaselineListenerBindingObserver = ({
     messageStructureSha256,
   }) => {
     const tupleKey = frozenBaselineListenerTupleKey(sessionIdentity, targetId);
-    const existingTarget = targetsByTuple.get(tupleKey) || null;
-    if (existingTarget !== null) {
-      const exactIdempotentReplay =
-        existingTarget.webChannelMessageSequence ===
-          webChannelMessageSequence &&
-        existingTarget.messageStructureSha256 === messageStructureSha256 &&
-        existingTarget.targetClass === targetClass;
-      if (exactIdempotentReplay) {
-        if (
-          frozenBaselineObservationSequenceBefore(
-            addSequence,
-            existingTarget.addSequence,
-          )
-        ) {
-          existingTarget.addSequence = addSequence;
-        }
-        return "idempotent-replay";
+    const epochs = targetEpochHistoryByTuple.get(tupleKey) || [];
+    const exactReplayEpoch =
+      epochs.find(
+        (epoch) =>
+          epoch.addWebChannelMessageSequence === webChannelMessageSequence &&
+          epoch.addMessageStructureSha256 === messageStructureSha256 &&
+          epoch.targetClass === targetClass,
+      ) || null;
+    if (exactReplayEpoch !== null) {
+      if (
+        frozenBaselineObservationSequenceBefore(
+          addSequence,
+          exactReplayEpoch.addSequence,
+        )
+      ) {
+        exactReplayEpoch.addSequence = addSequence;
       }
-      recordParseFailure({ failureClass: "target-tuple-duplicate" });
-      return "conflicting-duplicate";
+      return exactReplayEpoch.active
+        ? "idempotent-active-add-replay"
+        : "idempotent-stale-add-replay";
     }
-    targetsByTuple.set(tupleKey, {
+    const activeEpoch = activeTargetEpochByTuple.get(tupleKey) || null;
+    if (activeEpoch !== null) {
+      recordTargetTupleMismatch("active-add-without-remove");
+      return "conflicting-active-add";
+    }
+    const latestEpoch = epochs.at(-1) || null;
+    if (latestEpoch !== null) {
+      assert.equal(latestEpoch.active, false);
+      if (
+        webChannelMessageSequence <= latestEpoch.removeWebChannelMessageSequence
+      ) {
+        recordTargetTupleMismatch("inactive-add-not-after-remove");
+        return "conflicting-stale-add";
+      }
+      appendTargetEpoch({
+        tupleKey,
+        targetClass,
+        addSequence,
+        webChannelMessageSequence,
+        messageStructureSha256,
+        postRemoveReadd: true,
+      });
+      return "registered-post-remove-readd";
+    }
+    appendTargetEpoch({
+      tupleKey,
       targetClass,
       addSequence,
       webChannelMessageSequence,
       messageStructureSha256,
-      acknowledgementSequences: [],
-      removedCauseCodeSequences: [],
+      postRemoveReadd: false,
     });
-    outboundAddTargetCount += 1;
-    targetClassCounts.set(targetClass, targetClassCounts.get(targetClass) + 1);
-    successorAddTargetCount += Number(
-      targetClass === policy.successorTargetClass,
+    return "registered-initial-epoch";
+  };
+  const removeSessionTarget = ({
+    sessionIdentity,
+    targetId,
+    removeSequence,
+    webChannelMessageSequence,
+    messageStructureSha256,
+  }) => {
+    witnessedOutboundRemoveTargetCount += 1;
+    assert.ok(Number.isSafeInteger(witnessedOutboundRemoveTargetCount));
+    const tupleKey = frozenBaselineListenerTupleKey(sessionIdentity, targetId);
+    const epochs = targetEpochHistoryByTuple.get(tupleKey) || [];
+    const exactRemoveReplayEpoch =
+      epochs.find(
+        (epoch) =>
+          epoch.removeWebChannelMessageSequence === webChannelMessageSequence &&
+          epoch.removeMessageStructureSha256 === messageStructureSha256,
+      ) || null;
+    if (exactRemoveReplayEpoch !== null) {
+      if (
+        frozenBaselineObservationSequenceBefore(
+          removeSequence,
+          exactRemoveReplayEpoch.outboundRemoveSequence,
+        )
+      ) {
+        exactRemoveReplayEpoch.outboundRemoveSequence = removeSequence;
+      }
+      return "idempotent-remove-replay";
+    }
+    const latestEpoch = epochs.at(-1) || null;
+    if (latestEpoch === null) {
+      recordTargetTupleMismatch("unknown-remove-target");
+      return "conflicting-unknown-remove";
+    }
+    const activeEpoch = activeTargetEpochByTuple.get(tupleKey) || null;
+    if (activeEpoch === null) {
+      recordTargetTupleMismatch("inactive-remove-not-exact-replay");
+      return "conflicting-inactive-remove";
+    }
+    assert.equal(
+      activeEpoch === latestEpoch,
+      true,
+      "Frozen-baseline active target epoch history was inconsistent.",
     );
-    assert.ok(
-      Number.isSafeInteger(outboundAddTargetCount) &&
-        Number.isSafeInteger(targetClassCounts.get(targetClass)) &&
-        Number.isSafeInteger(successorAddTargetCount),
-    );
-    return "registered";
+    if (webChannelMessageSequence <= activeEpoch.addWebChannelMessageSequence) {
+      recordTargetTupleMismatch("active-remove-not-after-add");
+      return "conflicting-stale-remove";
+    }
+    activeEpoch.active = false;
+    activeEpoch.outboundRemoveSequence = removeSequence;
+    activeEpoch.removeWebChannelMessageSequence = webChannelMessageSequence;
+    activeEpoch.removeMessageStructureSha256 = messageStructureSha256;
+    activeTargetEpochByTuple.delete(tupleKey);
+    return "removed-active-epoch";
+  };
+  const observeSessionTargetMutation = (mutation) => {
+    if (mutation.mutationType === "add-target") {
+      return registerSessionTarget({
+        ...mutation,
+        addSequence: mutation.mutationSequence,
+      });
+    }
+    assert.equal(mutation.mutationType, "remove-target");
+    return removeSessionTarget({
+      ...mutation,
+      removeSequence: mutation.mutationSequence,
+    });
   };
   const observeOutboundRequest = (request) => {
     if (settledDecision !== null) {
       return exactFirestoreListenSessionIdentity(request.requestUrl);
     }
     try {
-      const parsed = parseFrozenBaselineFirestoreListenAddTargets({
+      const parsed = parseFrozenBaselineFirestoreListenTargetMutations({
         ...request,
         expectedUidHash,
       });
-      const pendingInitialTargets = [];
-      for (const target of parsed.targets) {
-        const addSequence = nextSequence();
-        const targetRecord = {
-          sessionIdentity: target.sessionIdentity,
-          targetId: target.targetId,
-          targetClass: target.targetClass,
-          addSequence,
-          webChannelMessageSequence: target.webChannelMessageSequence,
-          messageStructureSha256: target.messageStructureSha256,
+      const pendingInitialMutations = [];
+      for (const mutation of parsed.mutations) {
+        const mutationRecord = {
+          ...mutation,
+          mutationSequence: nextSequence(),
         };
-        if (parsed.initialRequest) pendingInitialTargets.push(targetRecord);
-        else registerSessionTarget(targetRecord);
+        if (parsed.initialRequest) pendingInitialMutations.push(mutationRecord);
+        else observeSessionTargetMutation(mutationRecord);
       }
-      if (parsed.initialRequest && pendingInitialTargets.length > 0) {
+      if (parsed.initialRequest && pendingInitialMutations.length > 0) {
         if (
           typeof request.networkRequestId !== "string" ||
           request.networkRequestId.length === 0 ||
-          pendingInitialTargetsByRequestId.has(request.networkRequestId)
+          pendingInitialMutationsByRequestId.has(request.networkRequestId)
         ) {
           recordParseFailure({
             failureClass: "initial-target-request-registration",
           });
         } else {
-          pendingInitialTargetsByRequestId.set(
+          pendingInitialMutationsByRequestId.set(
             request.networkRequestId,
-            pendingInitialTargets,
+            pendingInitialMutations,
           );
         }
       }
@@ -7374,9 +7557,9 @@ const createFrozenBaselineListenerBindingObserver = ({
     try {
       assert.equal(typeof networkRequestId, "string");
       assert.ok(networkRequestId.length > 0);
-      const pendingTargets =
-        pendingInitialTargetsByRequestId.get(networkRequestId) || null;
-      if (pendingTargets === null) return;
+      const pendingMutations =
+        pendingInitialMutationsByRequestId.get(networkRequestId) || null;
+      if (pendingMutations === null) return;
       const sessionIdentity = exactFirestoreListenSessionIdentity(
         `https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?database=${encodeURIComponent(
           `projects/${contract.firebaseProjectId}/databases/(default)`,
@@ -7385,13 +7568,13 @@ const createFrozenBaselineListenerBindingObserver = ({
         )}`,
       );
       assert.ok(sessionIdentity);
-      for (const pendingTarget of pendingTargets) {
-        registerSessionTarget({
-          ...pendingTarget,
+      for (const pendingMutation of pendingMutations) {
+        observeSessionTargetMutation({
+          ...pendingMutation,
           sessionIdentity,
         });
       }
-      pendingInitialTargetsByRequestId.delete(networkRequestId);
+      pendingInitialMutationsByRequestId.delete(networkRequestId);
       initialTargetRequestPromotionCount += 1;
       assert.ok(Number.isSafeInteger(initialTargetRequestPromotionCount));
     } catch {
@@ -7431,7 +7614,7 @@ const createFrozenBaselineListenerBindingObserver = ({
             arrivalFrameSequence,
             withinPayloadSequence,
           );
-          const target = targetsByTuple.get(
+          const target = activeTargetEpochByTuple.get(
             frozenBaselineListenerTupleKey(sessionIdentity, targetId),
           );
           if (
@@ -7527,15 +7710,15 @@ const createFrozenBaselineListenerBindingObserver = ({
       unboundRemovedTargetCount > 0 ||
       ambiguousRemovedTargetCount > 0;
     if (irrecoverableFailureObserved) return true;
-    if (!eligible) return pendingInitialTargetsByRequestId.size === 0;
-    const removedTargets = [...targetsByTuple.values()].filter(
+    if (!eligible) return pendingInitialMutationsByRequestId.size === 0;
+    const removedTargets = allTargetEpochs().filter(
       (target) => target.targetClass === policy.removedTargetClass,
     );
-    const successorTargets = [...targetsByTuple.values()].filter(
+    const successorTargets = allTargetEpochs().filter(
       (target) => target.targetClass === policy.successorTargetClass,
     );
     return (
-      pendingInitialTargetsByRequestId.size === 0 &&
+      pendingInitialMutationsByRequestId.size === 0 &&
       exactConsoleSequences.length === policy.consoleError.expectedCount &&
       inboundRemoveCauseCodeCount === 1 &&
       removedTargetClassMatchCount === 1 &&
@@ -7550,15 +7733,15 @@ const createFrozenBaselineListenerBindingObserver = ({
   const settleAuthentication = ({ dashboardStable }) => {
     assert.equal(settledDecision, null);
     assert.equal(dashboardStable, true);
-    if (pendingInitialTargetsByRequestId.size > 0) {
+    if (pendingInitialMutationsByRequestId.size > 0) {
       recordParseFailure({
         failureClass: "pending-initial-target-unresolved-at-settlement",
       });
     }
-    const removedTargets = [...targetsByTuple.values()].filter(
+    const removedTargets = allTargetEpochs().filter(
       (target) => target.targetClass === policy.removedTargetClass,
     );
-    const successorTargets = [...targetsByTuple.values()].filter(
+    const successorTargets = allTargetEpochs().filter(
       (target) => target.targetClass === policy.successorTargetClass,
     );
     const removedSequence =
@@ -7634,8 +7817,21 @@ const createFrozenBaselineListenerBindingObserver = ({
       (sum, entry) => sum + entry.count,
       0,
     );
+    const targetTupleMismatchReasonHistogram = Object.freeze(
+      SAFE_FROZEN_BASELINE_TARGET_TUPLE_MISMATCH_REASONS.map((reason) =>
+        Object.freeze({
+          reason,
+          count: targetTupleMismatchReasonCounts.get(reason),
+        }),
+      ),
+    );
+    const targetTupleMismatchReasonCountSum =
+      targetTupleMismatchReasonHistogram.reduce(
+        (sum, entry) => sum + entry.count,
+        0,
+      );
     const pendingInitialTargetRequestCount =
-      pendingInitialTargetsByRequestId.size;
+      pendingInitialMutationsByRequestId.size;
     for (const [index, entry] of parseFailureClassHistogram.entries()) {
       assert.deepEqual(Object.keys(entry), ["failureClass", "count"]);
       assert.equal(
@@ -7644,20 +7840,39 @@ const createFrozenBaselineListenerBindingObserver = ({
       );
       assert.ok(Number.isSafeInteger(entry.count) && entry.count >= 0);
     }
+    for (const [index, entry] of targetTupleMismatchReasonHistogram.entries()) {
+      assert.deepEqual(Object.keys(entry), ["reason", "count"]);
+      assert.equal(
+        entry.reason,
+        SAFE_FROZEN_BASELINE_TARGET_TUPLE_MISMATCH_REASONS[index],
+      );
+      assert.ok(Number.isSafeInteger(entry.count) && entry.count >= 0);
+    }
     for (const count of [
       parseFailureClassCountSum,
+      targetTupleMismatchReasonCountSum,
       pendingInitialTargetRequestCount,
       initialTargetRequestPromotionCount,
+      witnessedOutboundRemoveTargetCount,
+      acceptedPostRemoveReaddCount,
     ]) {
       assert.ok(Number.isSafeInteger(count) && count >= 0);
     }
     assert.equal(parseFailureClassCountSum, parseFailureCount);
+    assert.equal(
+      targetTupleMismatchReasonCountSum,
+      parseFailureClassCounts.get("target-tuple-duplicate"),
+    );
     assert.ok(bufferExceededCount <= parseFailureCount);
     return Object.freeze({
       parseFailureClassHistogram,
       parseFailureClassCountSum,
+      targetTupleMismatchReasonHistogram,
+      targetTupleMismatchReasonCountSum,
       pendingInitialTargetRequestCount,
       initialTargetRequestPromotionCount,
+      witnessedOutboundRemoveTargetCount,
+      acceptedPostRemoveReaddCount,
     });
   };
   const safeSnapshot = () => {
@@ -8138,24 +8353,27 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
       options,
     );
   const canonicalReplayTarget = attendanceTargetWithExtraFilter;
-  const canonicalReplayLeft = parseFrozenBaselineFirestoreListenAddTargets({
-    requestUrl: requestUrl.toString(),
-    method: "POST",
-    hasPostData: true,
-    postData: requestBodyForListenMessages([
-      { database, addTarget: canonicalReplayTarget },
-    ]),
-    expectedUidHash: secretSha256(privateUid),
-  }).targets[0];
-  const canonicalReplayRight = parseFrozenBaselineFirestoreListenAddTargets({
-    requestUrl: requestUrl.toString(),
-    method: "POST",
-    hasPostData: true,
-    postData: requestBodyForListenMessages([
-      { addTarget: canonicalReplayTarget, database },
-    ]),
-    expectedUidHash: secretSha256(privateUid),
-  }).targets[0];
+  const canonicalReplayLeft = parseFrozenBaselineFirestoreListenTargetMutations(
+    {
+      requestUrl: requestUrl.toString(),
+      method: "POST",
+      hasPostData: true,
+      postData: requestBodyForListenMessages([
+        { database, addTarget: canonicalReplayTarget },
+      ]),
+      expectedUidHash: secretSha256(privateUid),
+    },
+  ).mutations[0];
+  const canonicalReplayRight =
+    parseFrozenBaselineFirestoreListenTargetMutations({
+      requestUrl: requestUrl.toString(),
+      method: "POST",
+      hasPostData: true,
+      postData: requestBodyForListenMessages([
+        { addTarget: canonicalReplayTarget, database },
+      ]),
+      expectedUidHash: secretSha256(privateUid),
+    }).mutations[0];
   assert.equal(
     canonicalReplayLeft.messageStructureSha256 ===
       canonicalReplayRight.messageStructureSha256,
@@ -8166,6 +8384,61 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
       canonicalReplayRight.webChannelMessageSequence,
     true,
   );
+  const orderedTargetMutations =
+    parseFrozenBaselineFirestoreListenTargetMutations({
+      requestUrl: requestUrl.toString(),
+      method: "POST",
+      hasPostData: true,
+      postData: requestBodyForListenMessages(
+        [
+          { addTarget: canonicalReplayTarget },
+          { removeTarget: 12 },
+          { addTarget: attendanceTarget("2026_1", 14) },
+        ],
+        { offset: 5 },
+      ),
+      expectedUidHash: secretSha256(privateUid),
+    }).mutations;
+  assert.deepEqual(
+    orderedTargetMutations.map(
+      ({ mutationType, targetId, webChannelMessageSequence }) => ({
+        mutationType,
+        targetId,
+        webChannelMessageSequence,
+      }),
+    ),
+    [
+      {
+        mutationType: "add-target",
+        targetId: 12,
+        webChannelMessageSequence: 5,
+      },
+      {
+        mutationType: "remove-target",
+        targetId: 12,
+        webChannelMessageSequence: 6,
+      },
+      {
+        mutationType: "add-target",
+        targetId: 14,
+        webChannelMessageSequence: 7,
+      },
+    ],
+  );
+  const canonicalRemoveMutation = orderedTargetMutations[1];
+  assert.throws(
+    () =>
+      parseFrozenBaselineFirestoreListenTargetMutations({
+        requestUrl: requestUrl.toString(),
+        method: "POST",
+        hasPostData: true,
+        postData: requestBodyForListenMessages([
+          { addTarget: canonicalReplayTarget, removeTarget: 12 },
+        ]),
+        expectedUidHash: secretSha256(privateUid),
+      }),
+    /conflicting target mutations/u,
+  );
   const noncontiguousReplayParams = new URLSearchParams({
     count: "1",
     ofs: "0",
@@ -8173,7 +8446,7 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
   });
   assert.throws(
     () =>
-      parseFrozenBaselineFirestoreListenAddTargets({
+      parseFrozenBaselineFirestoreListenTargetMutations({
         requestUrl: requestUrl.toString(),
         method: "POST",
         hasPostData: true,
@@ -8205,6 +8478,13 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
   const parseFailureClassCount = (diagnostic, failureClass) => {
     const entries = diagnostic.parseFailureClassHistogram.filter(
       (entry) => entry.failureClass === failureClass,
+    );
+    assert.equal(entries.length, 1);
+    return entries[0].count;
+  };
+  const targetTupleMismatchReasonCount = (diagnostic, reason) => {
+    const entries = diagnostic.targetTupleMismatchReasonHistogram.filter(
+      (entry) => entry.reason === reason,
     );
     assert.equal(entries.length, 1);
     return entries[0].count;
@@ -8300,16 +8580,23 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
   assert.deepEqual(Object.keys(positiveFailureDiagnostic), [
     "parseFailureClassHistogram",
     "parseFailureClassCountSum",
+    "targetTupleMismatchReasonHistogram",
+    "targetTupleMismatchReasonCountSum",
     "pendingInitialTargetRequestCount",
     "initialTargetRequestPromotionCount",
+    "witnessedOutboundRemoveTargetCount",
+    "acceptedPostRemoveReaddCount",
   ]);
   assert.equal(
     Object.isFrozen(positiveFailureDiagnostic.parseFailureClassHistogram),
     true,
   );
   assert.equal(positiveFailureDiagnostic.parseFailureClassCountSum, 0);
+  assert.equal(positiveFailureDiagnostic.targetTupleMismatchReasonCountSum, 0);
   assert.equal(positiveFailureDiagnostic.pendingInitialTargetRequestCount, 0);
   assert.equal(positiveFailureDiagnostic.initialTargetRequestPromotionCount, 0);
+  assert.equal(positiveFailureDiagnostic.witnessedOutboundRemoveTargetCount, 0);
+  assert.equal(positiveFailureDiagnostic.acceptedPostRemoveReaddCount, 0);
   assert.equal(
     positiveFailureDiagnostic.parseFailureClassHistogram.every(
       (entry) =>
@@ -8324,6 +8611,13 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
       (entry) => entry.failureClass,
     ),
     SAFE_FROZEN_BASELINE_LISTENER_PARSE_FAILURE_CLASSES,
+  );
+  assert.deepEqual(
+    positiveFailureDiagnostic.targetTupleMismatchReasonHistogram,
+    SAFE_FROZEN_BASELINE_TARGET_TUPLE_MISMATCH_REASONS.map((reason) => ({
+      reason,
+      count: 0,
+    })),
   );
   assert.throws(
     () =>
@@ -8385,13 +8679,13 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
   initialRequestUrl.searchParams.set("zx", "fixture");
   initialRequestUrl.searchParams.set("t", "1");
   assert.deepEqual(
-    parseFrozenBaselineFirestoreListenAddTargets({
+    parseFrozenBaselineFirestoreListenTargetMutations({
       requestUrl: initialRequestUrl.toString(),
       method: "POST",
       hasPostData: true,
       postData: "headers=fixture&count=0",
       expectedUidHash: secretSha256(privateUid),
-    }).targets,
+    }).mutations,
     [],
   );
   const initialRequestObserver = createObserver();
@@ -8485,6 +8779,36 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
     gsessionid: privateGsessionid,
     sid: privateSid,
   });
+  noneligibleDeferredPromotionObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForListenMessages([{ removeTarget: 12 }], {
+      offset: 1,
+    }),
+  });
+  noneligibleDeferredPromotionObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForListenMessages([{ removeTarget: 12 }], {
+      offset: 1,
+    }),
+  });
+  noneligibleDeferredPromotionObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([attendanceTargetWithExtraFilter]),
+  });
+  noneligibleDeferredPromotionObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([attendanceTargetWithExtraFilter], {
+      offset: 2,
+    }),
+  });
   assert.equal(noneligibleDeferredPromotionObserver.readyForSettlement(), true);
   noneligibleDeferredPromotionObserver.settleAuthentication({
     dashboardStable: true,
@@ -8492,7 +8816,8 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
   const noneligibleDeferredPromotionSnapshot =
     noneligibleDeferredPromotionObserver.safeSnapshot();
   assert.equal(noneligibleDeferredPromotionSnapshot.eligible, false);
-  assert.equal(noneligibleDeferredPromotionSnapshot.unknownTargetCount, 1);
+  assert.equal(noneligibleDeferredPromotionSnapshot.outboundAddTargetCount, 2);
+  assert.equal(noneligibleDeferredPromotionSnapshot.unknownTargetCount, 2);
   assert.equal(noneligibleDeferredPromotionSnapshot.parseFailureCount, 0);
   assert.equal(noneligibleDeferredPromotionSnapshot.passed, true);
   const noneligibleDeferredPromotionDiagnostic =
@@ -8508,6 +8833,18 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
   assert.equal(
     noneligibleDeferredPromotionDiagnostic.initialTargetRequestPromotionCount,
     1,
+  );
+  assert.equal(
+    noneligibleDeferredPromotionDiagnostic.witnessedOutboundRemoveTargetCount,
+    2,
+  );
+  assert.equal(
+    noneligibleDeferredPromotionDiagnostic.acceptedPostRemoveReaddCount,
+    1,
+  );
+  assert.equal(
+    noneligibleDeferredPromotionDiagnostic.targetTupleMismatchReasonCountSum,
+    0,
   );
   const conflictingReplayStructureObserver = createNoneligibleAdminObserver();
   conflictingReplayStructureObserver.observeOutboundRequest({
@@ -8544,6 +8881,13 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
     ),
     1,
   );
+  assert.equal(
+    targetTupleMismatchReasonCount(
+      conflictingReplayStructureDiagnostic,
+      "active-add-without-remove",
+    ),
+    1,
+  );
   const conflictingReplayIndexObserver = createNoneligibleAdminObserver();
   conflictingReplayIndexObserver.observeOutboundRequest({
     requestUrl: requestUrl.toString(),
@@ -8571,6 +8915,141 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
     parseFailureClassCount(
       conflictingReplayIndexDiagnostic,
       "target-tuple-duplicate",
+    ),
+    1,
+  );
+  assert.equal(
+    targetTupleMismatchReasonCount(
+      conflictingReplayIndexDiagnostic,
+      "active-add-without-remove",
+    ),
+    1,
+  );
+  const unknownOutboundRemoveObserver = createNoneligibleAdminObserver();
+  unknownOutboundRemoveObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForListenMessages([{ removeTarget: 12 }]),
+  });
+  unknownOutboundRemoveObserver.settleAuthentication({ dashboardStable: true });
+  const unknownOutboundRemoveSnapshot =
+    unknownOutboundRemoveObserver.safeSnapshot();
+  const unknownOutboundRemoveDiagnostic =
+    unknownOutboundRemoveObserver.safeFailureDiagnostic();
+  assert.equal(unknownOutboundRemoveSnapshot.passed, false);
+  assert.equal(unknownOutboundRemoveSnapshot.outboundAddTargetCount, 0);
+  assert.equal(unknownOutboundRemoveSnapshot.parseFailureCount, 1);
+  assert.equal(
+    targetTupleMismatchReasonCount(
+      unknownOutboundRemoveDiagnostic,
+      "unknown-remove-target",
+    ),
+    1,
+  );
+  assert.equal(
+    unknownOutboundRemoveDiagnostic.witnessedOutboundRemoveTargetCount,
+    1,
+  );
+  const stalePostRemoveAddObserver = createNoneligibleAdminObserver();
+  stalePostRemoveAddObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([canonicalReplayTarget]),
+  });
+  stalePostRemoveAddObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForListenMessages([{ removeTarget: 12 }], {
+      offset: 2,
+    }),
+  });
+  stalePostRemoveAddObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([canonicalReplayTarget], { offset: 1 }),
+  });
+  stalePostRemoveAddObserver.settleAuthentication({ dashboardStable: true });
+  const stalePostRemoveAddSnapshot = stalePostRemoveAddObserver.safeSnapshot();
+  const stalePostRemoveAddDiagnostic =
+    stalePostRemoveAddObserver.safeFailureDiagnostic();
+  assert.equal(stalePostRemoveAddSnapshot.passed, false);
+  assert.equal(stalePostRemoveAddSnapshot.outboundAddTargetCount, 1);
+  assert.equal(stalePostRemoveAddSnapshot.unknownTargetCount, 1);
+  assert.equal(stalePostRemoveAddSnapshot.parseFailureCount, 1);
+  assert.equal(
+    targetTupleMismatchReasonCount(
+      stalePostRemoveAddDiagnostic,
+      "inactive-add-not-after-remove",
+    ),
+    1,
+  );
+  assert.equal(stalePostRemoveAddDiagnostic.acceptedPostRemoveReaddCount, 0);
+  const staleActiveRemoveObserver = createNoneligibleAdminObserver();
+  staleActiveRemoveObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([canonicalReplayTarget], { offset: 1 }),
+  });
+  staleActiveRemoveObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForListenMessages([{ removeTarget: 12 }]),
+  });
+  staleActiveRemoveObserver.settleAuthentication({ dashboardStable: true });
+  const staleActiveRemoveSnapshot = staleActiveRemoveObserver.safeSnapshot();
+  const staleActiveRemoveDiagnostic =
+    staleActiveRemoveObserver.safeFailureDiagnostic();
+  assert.equal(staleActiveRemoveSnapshot.passed, false);
+  assert.equal(staleActiveRemoveSnapshot.outboundAddTargetCount, 1);
+  assert.equal(
+    targetTupleMismatchReasonCount(
+      staleActiveRemoveDiagnostic,
+      "active-remove-not-after-add",
+    ),
+    1,
+  );
+  const nonReplayInactiveRemoveObserver = createNoneligibleAdminObserver();
+  nonReplayInactiveRemoveObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([canonicalReplayTarget]),
+  });
+  nonReplayInactiveRemoveObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForListenMessages([{ removeTarget: 12 }], {
+      offset: 1,
+    }),
+  });
+  nonReplayInactiveRemoveObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForListenMessages([{ removeTarget: 12 }], {
+      offset: 2,
+    }),
+  });
+  nonReplayInactiveRemoveObserver.settleAuthentication({
+    dashboardStable: true,
+  });
+  const nonReplayInactiveRemoveSnapshot =
+    nonReplayInactiveRemoveObserver.safeSnapshot();
+  const nonReplayInactiveRemoveDiagnostic =
+    nonReplayInactiveRemoveObserver.safeFailureDiagnostic();
+  assert.equal(nonReplayInactiveRemoveSnapshot.passed, false);
+  assert.equal(nonReplayInactiveRemoveSnapshot.outboundAddTargetCount, 1);
+  assert.equal(
+    targetTupleMismatchReasonCount(
+      nonReplayInactiveRemoveDiagnostic,
+      "inactive-remove-not-exact-replay",
     ),
     1,
   );
@@ -8828,6 +9307,10 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
     noneligiblePendingFailureSnapshot,
     conflictingReplayStructureSnapshot,
     conflictingReplayIndexSnapshot,
+    unknownOutboundRemoveSnapshot,
+    stalePostRemoveAddSnapshot,
+    staleActiveRemoveSnapshot,
+    nonReplayInactiveRemoveSnapshot,
   ];
   const wrongViewportObserver = createObserver({ viewport: "393x852" });
   observePositiveLifecycle(wrongViewportObserver);
@@ -9086,7 +9569,7 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
       (count, snapshot) => count + Number(snapshot.parseFailureCount > 0),
       0,
     ),
-    6,
+    10,
   );
   const serializedSafeEvidence = JSON.stringify({
     positiveSnapshot,
@@ -9101,12 +9584,21 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
     noneligibleDeferredPromotionDiagnostic,
     conflictingReplayStructureDiagnostic,
     conflictingReplayIndexDiagnostic,
+    unknownOutboundRemoveDiagnostic,
+    stalePostRemoveAddDiagnostic,
+    staleActiveRemoveDiagnostic,
+    nonReplayInactiveRemoveDiagnostic,
     noneligibleUnresolvedInitialDiagnostic,
     noneligiblePendingFailureDiagnostic,
   });
   for (const privateReplayBindingField of [
     "messageStructureSha256",
     "webChannelMessageSequence",
+    "addMessageStructureSha256",
+    "addWebChannelMessageSequence",
+    "removeMessageStructureSha256",
+    "removeWebChannelMessageSequence",
+    "outboundRemoveSequence",
   ]) {
     assert.equal(
       serializedSafeEvidence.includes(privateReplayBindingField),
@@ -9124,6 +9616,18 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
   assert.equal(
     serializedSafeFailureDiagnostics.includes(
       canonicalReplayLeft.messageStructureSha256,
+    ),
+    false,
+  );
+  assert.equal(
+    serializedSafeEvidence.includes(
+      canonicalRemoveMutation.messageStructureSha256,
+    ),
+    false,
+  );
+  assert.equal(
+    serializedSafeFailureDiagnostics.includes(
+      canonicalRemoveMutation.messageStructureSha256,
     ),
     false,
   );
@@ -38866,13 +39370,6 @@ try {
           return;
         }
         const method = String(event.request?.method || "").toUpperCase();
-        frozenBaselineListenerBindingObserver.observeOutboundRequest({
-          networkRequestId: event.requestId,
-          requestUrl,
-          method,
-          hasPostData: event.request?.hasPostData === true,
-          postData: event.request?.postData,
-        });
         frozenBaselineListenerRequestsByNetworkId.set(event.requestId, {
           initialRequest,
           sessionIdentity,
@@ -38902,6 +39399,13 @@ try {
             promoteFrozenBaselineInitialTargets(sessionIdentity.gsessionid);
           }
         }
+        frozenBaselineListenerBindingObserver.observeOutboundRequest({
+          networkRequestId: event.requestId,
+          requestUrl,
+          method,
+          hasPostData: event.request?.hasPostData === true,
+          postData: event.request?.postData,
+        });
       });
       appCheckCdpSession.on("Network.responseReceived", (event) => {
         const entry =

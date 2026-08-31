@@ -2040,6 +2040,26 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     expectedFrozenBaselineListenerParseFailureClasses,
     "The frozen-baseline listener parse-failure taxonomy must remain the exact fixed 17-class safe enum.",
   );
+  const expectedFrozenBaselineTargetTupleMismatchReasons = Object.freeze([
+    "active-add-without-remove",
+    "inactive-add-not-after-remove",
+    "unknown-remove-target",
+    "active-remove-not-after-add",
+    "inactive-remove-not-exact-replay",
+  ]);
+  const frozenBaselineTargetTupleMismatchReasonDeclaration = sourceText.match(
+    /const SAFE_FROZEN_BASELINE_TARGET_TUPLE_MISMATCH_REASONS\s*=\s*Object\.freeze\(\[([\s\S]*?)\]\);/u,
+  );
+  assert.ok(frozenBaselineTargetTupleMismatchReasonDeclaration);
+  assert.deepEqual(
+    [
+      ...frozenBaselineTargetTupleMismatchReasonDeclaration[1].matchAll(
+        /"([a-z0-9]+(?:-[a-z0-9]+)*)"/gu,
+      ),
+    ].map((match) => match[1]),
+    expectedFrozenBaselineTargetTupleMismatchReasons,
+    "The target-tuple mismatch taxonomy must remain the exact fixed five-reason safe enum.",
+  );
   assert.match(
     sourceText,
     /const nonFirebaseHostnameAllowed = isNonFirebaseHostnameAllowed\(\{\s*requestUrl,\s*method,\s*resourceType,\s*isFirebaseRequest,\s*allowedOrigins: allowedNonFirebaseOrigins,\s*\}\);/u,
@@ -2493,7 +2513,7 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "if (settledDecision !== null) return true",
     "const irrecoverableFailureObserved =",
     "if (irrecoverableFailureObserved) return true",
-    "if (!eligible) return pendingInitialTargetsByRequestId.size === 0",
+    "if (!eligible) return pendingInitialMutationsByRequestId.size === 0",
     'failureClass: "pending-initial-target-unresolved-at-settlement"',
     "readyForSettlement,",
     "safeFailureDiagnostic,",
@@ -2633,7 +2653,7 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "The domain-separated full-message hash helper must be defined once and consumed only by the private parser binding.",
   );
   const frozenBaselineListenRequestParserSourceStart = sourceText.indexOf(
-    "const parseFrozenBaselineFirestoreListenAddTargets = ({",
+    "const parseFrozenBaselineFirestoreListenTargetMutations = ({",
   );
   const frozenBaselineListenRequestParserSourceEnd = sourceText.indexOf(
     "const collectFirestoreListenTargetChanges = (value, output = []) => {",
@@ -2660,10 +2680,16 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "dataEntries.every(({requestIndex},index)=>requestIndex===index)",
     "for(const{requestIndex,encodedMessage}ofdataEntries)",
     "constmessage=JSON.parse(encodedMessage)",
+    'consthasAddTarget=Object.prototype.hasOwnProperty.call(message,"addTarget",)',
+    'consthasRemoveTarget=Object.prototype.hasOwnProperty.call(message,"removeTarget",)',
+    "Number(hasAddTarget)+Number(hasRemoveTarget)<=1",
     "constwebChannelMessageSequence=requestOffset+requestIndex",
     "Number.isSafeInteger(webChannelMessageSequence)&&webChannelMessageSequence>=0",
+    "constmessageStructureSha256=frozenBaselineListenRequestStructureSha256(message)",
+    'mutationType:"add-target"',
     "webChannelMessageSequence,",
-    "messageStructureSha256:frozenBaselineListenRequestStructureSha256(message)",
+    'mutationType:"remove-target"',
+    "mutations:Object.freeze(mutations)",
   ].map((fragment) =>
     compactFrozenBaselineListenRequestParserSource.indexOf(fragment),
   );
@@ -2680,7 +2706,7 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "Firestore Listen request entries must be normalized before their full-message replay binding is derived.",
   );
   const frozenBaselineRegisterTargetSourceStart = sourceText.indexOf(
-    "const registerSessionTarget = ({",
+    "const recordTargetTupleMismatch = (reason) => {",
     frozenBaselineListenRequestParserSourceEnd,
   );
   const frozenBaselineRegisterTargetSourceEnd = sourceText.indexOf(
@@ -2699,34 +2725,63 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     )
     .replace(/\s+/gu, "");
   const frozenBaselineRegisterTargetOrdering = [
-    "constexistingTarget=targetsByTuple.get(tupleKey)||null",
-    "if(existingTarget!==null){",
-    "constexactIdempotentReplay=existingTarget.webChannelMessageSequence===webChannelMessageSequence&&existingTarget.messageStructureSha256===messageStructureSha256&&existingTarget.targetClass===targetClass",
-    "if(exactIdempotentReplay){",
-    "frozenBaselineObservationSequenceBefore(addSequence,existingTarget.addSequence,)",
-    "existingTarget.addSequence=addSequence",
-    'return"idempotent-replay"',
+    "SAFE_FROZEN_BASELINE_TARGET_TUPLE_MISMATCH_REASONS.includes(reason)",
+    "targetTupleMismatchReasonCounts.set(reason,targetTupleMismatchReasonCounts.get(reason)+1,)",
     'recordParseFailure({failureClass:"target-tuple-duplicate"})',
-    'return"conflicting-duplicate"',
-    "targetsByTuple.set(tupleKey,{targetClass,addSequence,webChannelMessageSequence,messageStructureSha256,",
+    "constallTargetEpochs=()=>[...targetEpochHistoryByTuple.values()].flatMap((epochs)=>epochs)",
+    "constappendTargetEpoch=({",
+    "addWebChannelMessageSequence:webChannelMessageSequence",
+    "addMessageStructureSha256:messageStructureSha256",
+    "active:true",
+    "targetEpochHistoryByTuple.set(tupleKey,epochs)",
+    "activeTargetEpochByTuple.set(tupleKey,targetEpoch)",
     "outboundAddTargetCount+=1",
     "targetClassCounts.set(targetClass,targetClassCounts.get(targetClass)+1)",
     "successorAddTargetCount+=Number(targetClass===policy.successorTargetClass,)",
-    'return"registered"',
+    "acceptedPostRemoveReaddCount+=Number(postRemoveReadd)",
+    "constregisterSessionTarget=({",
+    "constexactReplayEpoch=epochs.find((epoch)=>epoch.addWebChannelMessageSequence===webChannelMessageSequence&&epoch.addMessageStructureSha256===messageStructureSha256&&epoch.targetClass===targetClass,)",
+    "if(exactReplayEpoch!==null){",
+    "frozenBaselineObservationSequenceBefore(addSequence,exactReplayEpoch.addSequence,)",
+    "exactReplayEpoch.addSequence=addSequence",
+    'returnexactReplayEpoch.active?"idempotent-active-add-replay":"idempotent-stale-add-replay"',
+    'recordTargetTupleMismatch("active-add-without-remove")',
+    "webChannelMessageSequence<=latestEpoch.removeWebChannelMessageSequence",
+    'recordTargetTupleMismatch("inactive-add-not-after-remove")',
+    "postRemoveReadd:true",
+    'return"registered-post-remove-readd"',
+    "postRemoveReadd:false",
+    'return"registered-initial-epoch"',
+    "constremoveSessionTarget=({",
+    "witnessedOutboundRemoveTargetCount+=1",
+    "constexactRemoveReplayEpoch=epochs.find((epoch)=>epoch.removeWebChannelMessageSequence===webChannelMessageSequence&&epoch.removeMessageStructureSha256===messageStructureSha256,)",
+    'return"idempotent-remove-replay"',
+    'recordTargetTupleMismatch("unknown-remove-target")',
+    'recordTargetTupleMismatch("inactive-remove-not-exact-replay")',
+    "assert.equal(activeEpoch===latestEpoch,true",
+    "webChannelMessageSequence<=activeEpoch.addWebChannelMessageSequence",
+    'recordTargetTupleMismatch("active-remove-not-after-add")',
+    "activeEpoch.active=false",
+    "activeEpoch.outboundRemoveSequence=removeSequence",
+    "activeTargetEpochByTuple.delete(tupleKey)",
+    'return"removed-active-epoch"',
+    "constobserveSessionTargetMutation=(mutation)=>{",
+    'if(mutation.mutationType==="add-target")',
+    'assert.equal(mutation.mutationType,"remove-target")',
   ].map((fragment) =>
     compactFrozenBaselineRegisterTargetSource.indexOf(fragment),
   );
   assert.equal(
     frozenBaselineRegisterTargetOrdering.every((index) => index >= 0),
     true,
-    "The exact idempotent-replay and conflicting-duplicate registration contract is incomplete.",
+    "The ordered add/remove epoch lifecycle and mismatch contract is incomplete.",
   );
   assert.deepEqual(
     frozenBaselineRegisterTargetOrdering,
     [...frozenBaselineRegisterTargetOrdering].sort(
       (left, right) => left - right,
     ),
-    "Only a first unique tuple may mutate semantic target and class counters; an exact replay may only preserve the earliest add sequence.",
+    "Only a unique epoch may change semantic counters; exact stale replays must not reopen an inactive epoch and a re-add must follow its witnessed remove.",
   );
   const frozenBaselineObserverSourceStart = sourceText.indexOf(
     "const createFrozenBaselineListenerBindingObserver = ({",
@@ -2747,6 +2802,8 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     [/outboundAddTargetCount \+= 1/gu, 1],
     [/targetClassCounts\.set\(/gu, 1],
     [/successorAddTargetCount \+= Number\(/gu, 1],
+    [/acceptedPostRemoveReaddCount \+= Number\(/gu, 1],
+    [/witnessedOutboundRemoveTargetCount \+= 1/gu, 1],
   ]) {
     assert.equal(
       (frozenBaselineObserverSource.match(pattern) || []).length,
@@ -2756,15 +2813,20 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   }
   assert.match(
     frozenBaselineObserverSource,
-    /const targetRecord\s*=\s*\{\s*sessionIdentity: target\.sessionIdentity,\s*targetId: target\.targetId,\s*targetClass: target\.targetClass,\s*addSequence,\s*webChannelMessageSequence: target\.webChannelMessageSequence,\s*messageStructureSha256: target\.messageStructureSha256,\s*\};[\s\S]*?if \(parsed\.initialRequest\) pendingInitialTargets\.push\(targetRecord\);/u,
-    "Pending initial targets must retain both private replay bindings until exact promotion.",
+    /const mutationRecord\s*=\s*\{\s*\.\.\.mutation,\s*mutationSequence: nextSequence\(\),\s*\};\s*if \(parsed\.initialRequest\) pendingInitialMutations\.push\(mutationRecord\);\s*else observeSessionTargetMutation\(mutationRecord\);/u,
+    "Pending initial add/remove mutations must retain their private replay bindings and wire order until exact promotion.",
   );
   assert.doesNotMatch(
     frozenBaselineObserverSource.slice(
       frozenBaselineObserverSource.indexOf("const safeSnapshot = () => {"),
     ),
-    /\b(?:webChannelMessageSequence|messageStructureSha256)\b/u,
-    "Replay sequence and hash bindings must not reach snapshots or exported observer evidence.",
+    /\b(?:webChannelMessageSequence|messageStructureSha256|addWebChannelMessageSequence|removeWebChannelMessageSequence|addMessageStructureSha256|removeMessageStructureSha256|mutationSequence)\b/u,
+    "Epoch sequence and hash bindings must not reach snapshots or exported observer evidence.",
+  );
+  assert.match(
+    frozenBaselineObserverSource,
+    /const target\s*=\s*activeTargetEpochByTuple\.get\(\s*frozenBaselineListenerTupleKey\(sessionIdentity, targetId\),\s*\);[\s\S]*?if \(target\) \{\s*target\.acknowledgementSequences\.push\(sequence\);[\s\S]*?if \(!target\) \{\s*unboundRemovedTargetCount \+= 1;\s*continue;\s*\}\s*target\.removedCauseCodeSequences\.push\(sequence\);/u,
+    "Inbound acknowledgement and removal evidence must bind only to the currently active target epoch.",
   );
   assert.match(
     frozenBaselineFixtureSource,
@@ -2798,7 +2860,7 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   );
   assert.match(
     frozenBaselineFixtureSource,
-    /const canonicalReplayLeft\s*=\s*parseFrozenBaselineFirestoreListenAddTargets\(\{[\s\S]*?\{ database, addTarget: canonicalReplayTarget \},[\s\S]*?const canonicalReplayRight\s*=\s*parseFrozenBaselineFirestoreListenAddTargets\(\{[\s\S]*?\{ addTarget: canonicalReplayTarget, database \},[\s\S]*?canonicalReplayLeft\.messageStructureSha256 ===\s*canonicalReplayRight\.messageStructureSha256,[\s\S]*?canonicalReplayLeft\.webChannelMessageSequence ===\s*canonicalReplayRight\.webChannelMessageSequence,[\s\S]*?req1___data__:[\s\S]*?\/message indices were not contiguous\/u,/u,
+    /const canonicalReplayLeft\s*=\s*parseFrozenBaselineFirestoreListenTargetMutations\([\s\S]*?\{ database, addTarget: canonicalReplayTarget \},[\s\S]*?const canonicalReplayRight\s*=\s*parseFrozenBaselineFirestoreListenTargetMutations\([\s\S]*?\{ addTarget: canonicalReplayTarget, database \},[\s\S]*?canonicalReplayLeft\.messageStructureSha256 ===\s*canonicalReplayRight\.messageStructureSha256,[\s\S]*?canonicalReplayLeft\.webChannelMessageSequence ===\s*canonicalReplayRight\.webChannelMessageSequence,[\s\S]*?req1___data__:[\s\S]*?\/message indices were not contiguous\/u,/u,
     "Canonical full-message hashing must ignore object key order while noncontiguous request indices fail closed.",
   );
   assert.match(
@@ -2808,17 +2870,37 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   );
   assert.match(
     frozenBaselineFixtureSource,
-    /const noneligibleDeferredPromotionObserver\s*=\s*createNoneligibleAdminObserver\(\);[\s\S]*?requestUrl: initialRequestUrl\.toString\(\),[\s\S]*?noneligibleDeferredPromotionObserver\.readyForSettlement\(\),\s*false,[\s\S]*?noneligibleDeferredPromotionObserver\.observeOutboundRequest\(\{\s*requestUrl: requestUrl\.toString\(\),[\s\S]*?noneligibleDeferredPromotionObserver\.promoteInitialTargets\(\{[\s\S]*?assert\.equal\(noneligibleDeferredPromotionSnapshot\.unknownTargetCount, 1\);\s*assert\.equal\(noneligibleDeferredPromotionSnapshot\.parseFailureCount, 0\);\s*assert\.equal\(noneligibleDeferredPromotionSnapshot\.passed, true\);/u,
-    "A noneligible session-first replay followed by earlier initial promotion must remain one unique target and pass.",
+    /const orderedTargetMutations\s*=\s*parseFrozenBaselineFirestoreListenTargetMutations\([\s\S]*?\{ addTarget: canonicalReplayTarget \},\s*\{ removeTarget: 12 \},\s*\{ addTarget: attendanceTarget\("2026_1", 14\) \},[\s\S]*?offset: 5[\s\S]*?mutationType: "add-target",\s*targetId: 12,\s*webChannelMessageSequence: 5,[\s\S]*?mutationType: "remove-target",\s*targetId: 12,\s*webChannelMessageSequence: 6,[\s\S]*?mutationType: "add-target",\s*targetId: 14,\s*webChannelMessageSequence: 7,[\s\S]*?\{ addTarget: canonicalReplayTarget, removeTarget: 12 \}[\s\S]*?\/conflicting target mutations\/u/u,
+    "The parser fixture must preserve add/remove wire order and reject a message containing both mutation kinds.",
+  );
+  assert.match(
+    frozenBaselineFixtureSource,
+    /const noneligibleDeferredPromotionObserver\s*=\s*createNoneligibleAdminObserver\(\);[\s\S]*?requestUrl: initialRequestUrl\.toString\(\),[\s\S]*?noneligibleDeferredPromotionObserver\.readyForSettlement\(\),\s*false,[\s\S]*?noneligibleDeferredPromotionObserver\.promoteInitialTargets\(\{[\s\S]*?assert\.equal\(noneligibleDeferredPromotionSnapshot\.outboundAddTargetCount, 2\);\s*assert\.equal\(noneligibleDeferredPromotionSnapshot\.unknownTargetCount, 2\);\s*assert\.equal\(noneligibleDeferredPromotionSnapshot\.parseFailureCount, 0\);\s*assert\.equal\(noneligibleDeferredPromotionSnapshot\.passed, true\);[\s\S]*?witnessedOutboundRemoveTargetCount,\s*2,[\s\S]*?acceptedPostRemoveReaddCount,\s*1,[\s\S]*?targetTupleMismatchReasonCountSum,\s*0,/u,
+    "A noneligible promoted epoch must preserve ordered exact add/remove replays and count only its strict post-remove re-add.",
   );
   for (const replayConflictName of ["Structure", "Index"]) {
     assert.match(
       frozenBaselineFixtureSource,
       new RegExp(
-        `const conflictingReplay${replayConflictName}Observer\\s*=\\s*createNoneligibleAdminObserver\\(\\);[\\s\\S]*?const conflictingReplay${replayConflictName}Snapshot[\\s\\S]*?assert\\.equal\\(conflictingReplay${replayConflictName}Snapshot\\.passed, false\\);\\s*assert\\.equal\\(conflictingReplay${replayConflictName}Snapshot\\.outboundAddTargetCount, 1\\);\\s*assert\\.equal\\(conflictingReplay${replayConflictName}Snapshot\\.unknownTargetCount, 1\\);[\\s\\S]*?"target-tuple-duplicate",\\s*\\),\\s*1,`,
+        `const conflictingReplay${replayConflictName}Observer\\s*=\\s*createNoneligibleAdminObserver\\(\\);[\\s\\S]*?const conflictingReplay${replayConflictName}Snapshot[\\s\\S]*?assert\\.equal\\(conflictingReplay${replayConflictName}Snapshot\\.passed, false\\);\\s*assert\\.equal\\(conflictingReplay${replayConflictName}Snapshot\\.outboundAddTargetCount, 1\\);\\s*assert\\.equal\\(conflictingReplay${replayConflictName}Snapshot\\.unknownTargetCount, 1\\);[\\s\\S]*?"target-tuple-duplicate",\\s*\\),\\s*1,[\\s\\S]*?"active-add-without-remove",\\s*\\),\\s*1,`,
         "u",
       ),
       `A ${replayConflictName.toLowerCase()} replay mismatch must remain one unique target and fail as target-tuple-duplicate.`,
+    );
+  }
+  for (const [fixtureName, reason] of [
+    ["unknownOutboundRemove", "unknown-remove-target"],
+    ["stalePostRemoveAdd", "inactive-add-not-after-remove"],
+    ["staleActiveRemove", "active-remove-not-after-add"],
+    ["nonReplayInactiveRemove", "inactive-remove-not-exact-replay"],
+  ]) {
+    assert.match(
+      frozenBaselineFixtureSource,
+      new RegExp(
+        `const ${fixtureName}Snapshot[\\s\\S]*?assert\\.equal\\(${fixtureName}Snapshot\\.passed, false\\);[\\s\\S]*?"${reason}",\\s*\\),\\s*1,`,
+        "u",
+      ),
+      `${fixtureName} must fail closed with its exact safe epoch-mismatch reason.`,
     );
   }
   assert.match(
@@ -2828,7 +2910,7 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   );
   assert.match(
     frozenBaselineFixtureSource,
-    /for \(const privateReplayBindingField of \[\s*"messageStructureSha256",\s*"webChannelMessageSequence",\s*\]\) \{[\s\S]*?serializedSafeEvidence\.includes\(privateReplayBindingField\),\s*false,[\s\S]*?serializedSafeFailureDiagnostics\.includes\(privateReplayBindingField\),\s*false,[\s\S]*?serializedSafeEvidence\.includes\(canonicalReplayLeft\.messageStructureSha256\),\s*false,[\s\S]*?serializedSafeFailureDiagnostics\.includes\(\s*canonicalReplayLeft\.messageStructureSha256,\s*\),\s*false,/u,
+    /for \(const privateReplayBindingField of \[\s*"messageStructureSha256",\s*"webChannelMessageSequence",\s*"addMessageStructureSha256",\s*"addWebChannelMessageSequence",\s*"removeMessageStructureSha256",\s*"removeWebChannelMessageSequence",\s*"outboundRemoveSequence",\s*\]\) \{[\s\S]*?serializedSafeEvidence\.includes\(privateReplayBindingField\),\s*false,[\s\S]*?serializedSafeFailureDiagnostics\.includes\(privateReplayBindingField\),\s*false,[\s\S]*?serializedSafeEvidence\.includes\(canonicalReplayLeft\.messageStructureSha256\),\s*false,[\s\S]*?serializedSafeFailureDiagnostics\.includes\(\s*canonicalReplayLeft\.messageStructureSha256,\s*\),\s*false,[\s\S]*?serializedSafeEvidence\.includes\(\s*canonicalRemoveMutation\.messageStructureSha256,\s*\),\s*false,[\s\S]*?serializedSafeFailureDiagnostics\.includes\(\s*canonicalRemoveMutation\.messageStructureSha256,\s*\),\s*false,/u,
     "Replay sequence identifiers and the internal canonical hash must remain absent from snapshots and failure diagnostics.",
   );
   assert.match(
@@ -2838,14 +2920,14 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   );
   assert.match(
     frozenBaselineFixtureSource,
-    /const negativeSnapshots\s*=\s*\[\s*mismatchedBufferedSnapshot,\s*noneligibleUnresolvedInitialSnapshot,\s*noneligiblePendingFailureSnapshot,\s*conflictingReplayStructureSnapshot,\s*conflictingReplayIndexSnapshot,\s*\];/u,
-    "Buffered, pending-initial and both conflicting-replay failures must seed the frozen-baseline negative fixture ledger.",
+    /const negativeSnapshots\s*=\s*\[\s*mismatchedBufferedSnapshot,\s*noneligibleUnresolvedInitialSnapshot,\s*noneligiblePendingFailureSnapshot,\s*conflictingReplayStructureSnapshot,\s*conflictingReplayIndexSnapshot,\s*unknownOutboundRemoveSnapshot,\s*stalePostRemoveAddSnapshot,\s*staleActiveRemoveSnapshot,\s*nonReplayInactiveRemoveSnapshot,\s*\];/u,
+    "Buffered, pending-initial, replay-conflict and outbound epoch failures must seed the frozen-baseline negative fixture ledger.",
   );
   assert.equal(
     (frozenBaselineFixtureSource.match(/negativeSnapshots\.push\(/gu) || [])
       .length,
     7,
-    "The frozen-baseline listener source contract must retain twelve negative lifecycle fixtures.",
+    "The frozen-baseline listener source contract must retain sixteen negative lifecycle fixtures.",
   );
   assert.match(
     frozenBaselineFixtureSource,
@@ -2869,8 +2951,8 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   );
   assert.match(
     frozenBaselineFixtureSource,
-    /negativeSnapshots\.reduce\(\s*\(count, snapshot\)\s*=>\s*count \+ Number\(snapshot\.parseFailureCount > 0\),\s*0,\s*\),\s*6,/u,
-    "The frozen-baseline negative ledger must retain six parse-failure cases.",
+    /negativeSnapshots\.reduce\(\s*\(count, snapshot\)\s*=>\s*count \+ Number\(snapshot\.parseFailureCount > 0\),\s*0,\s*\),\s*10,/u,
+    "The frozen-baseline negative ledger must retain ten parse-failure cases.",
   );
   assert.match(
     frozenBaselineFixtureSource,
@@ -2925,8 +3007,10 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "unboundRemovedTargetCount > 0",
     "ambiguousRemovedTargetCount > 0",
     "if (irrecoverableFailureObserved) return true",
-    "if (!eligible) return pendingInitialTargetsByRequestId.size === 0",
-    "pendingInitialTargetsByRequestId.size === 0",
+    "if (!eligible) return pendingInitialMutationsByRequestId.size === 0",
+    "pendingInitialMutationsByRequestId.size === 0",
+    "const removedTargets = allTargetEpochs().filter",
+    "const successorTargets = allTargetEpochs().filter",
     "exactConsoleSequences.length === policy.consoleError.expectedCount",
     "inboundRemoveCauseCodeCount === 1",
     "removedTargetClassMatchCount === 1",
@@ -2947,7 +3031,7 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   }
   assert.match(
     sourceText,
-    /const readyForSettlement\s*=\s*\(\)\s*=>\s*\{\s*if \(settledDecision !== null\) return true;\s*const irrecoverableFailureObserved\s*=[\s\S]*?if \(irrecoverableFailureObserved\) return true;\s*if \(!eligible\) return pendingInitialTargetsByRequestId\.size === 0;[\s\S]*?const removedTargets/u,
+    /const readyForSettlement\s*=\s*\(\)\s*=>\s*\{\s*if \(settledDecision !== null\) return true;\s*const irrecoverableFailureObserved\s*=[\s\S]*?if \(irrecoverableFailureObserved\) return true;\s*if \(!eligible\) return pendingInitialMutationsByRequestId\.size === 0;[\s\S]*?const removedTargets\s*=\s*allTargetEpochs\(\)\.filter/u,
     "Frozen-baseline readiness must fail fast on irrecoverable evidence, then wait only for noneligible pending initial promotion.",
   );
   assert.doesNotMatch(
@@ -2957,8 +3041,56 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   );
   assert.match(
     sourceText,
-    /const settleAuthentication\s*=\s*\(\{ dashboardStable \}\)\s*=>\s*\{\s*assert\.equal\(settledDecision, null\);\s*assert\.equal\(dashboardStable, true\);\s*if \(pendingInitialTargetsByRequestId\.size > 0\) \{\s*recordParseFailure\(\{\s*failureClass: "pending-initial-target-unresolved-at-settlement",\s*\}\);\s*\}/u,
+    /const settleAuthentication\s*=\s*\(\{ dashboardStable \}\)\s*=>\s*\{\s*assert\.equal\(settledDecision, null\);\s*assert\.equal\(dashboardStable, true\);\s*if \(pendingInitialMutationsByRequestId\.size > 0\) \{\s*recordParseFailure\(\{\s*failureClass: "pending-initial-target-unresolved-at-settlement",\s*\}\);\s*\}[\s\S]*?const removedTargets\s*=\s*allTargetEpochs\(\)\.filter[\s\S]*?const successorTargets\s*=\s*allTargetEpochs\(\)\.filter/u,
     "Timed-out pending initial targets must remain a parse-fatal settlement outcome.",
+  );
+  assert.equal(
+    (
+      sourceText.match(
+        /const removedTargets\s*=\s*allTargetEpochs\(\)\.filter/gu,
+      ) || []
+    ).length,
+    2,
+    "Readiness and settlement must both derive removed targets from full epoch history.",
+  );
+  assert.equal(
+    (
+      sourceText.match(
+        /const successorTargets\s*=\s*allTargetEpochs\(\)\.filter/gu,
+      ) || []
+    ).length,
+    2,
+    "Readiness and settlement must both derive successor targets from full epoch history.",
+  );
+  const frozenBaselineCdpRequestStart = sourceText.indexOf(
+    "frozenBaselineListenerRequestsByNetworkId.set(event.requestId, {",
+  );
+  const frozenBaselineCdpRequestEnd = sourceText.indexOf(
+    'appCheckCdpSession.on("Network.responseReceived"',
+    frozenBaselineCdpRequestStart,
+  );
+  assert.ok(
+    frozenBaselineCdpRequestStart >= 0 &&
+      frozenBaselineCdpRequestEnd > frozenBaselineCdpRequestStart,
+  );
+  const frozenBaselineCdpRequestSource = sourceText.slice(
+    frozenBaselineCdpRequestStart,
+    frozenBaselineCdpRequestEnd,
+  );
+  const frozenBaselineCdpRequestOrder = [
+    "frozenBaselineListenerRequestsByNetworkId.set(event.requestId, {",
+    "frozenBaselineSessionSidByGsessionid.set(",
+    "promoteFrozenBaselineInitialTargets(sessionIdentity.gsessionid)",
+    "frozenBaselineListenerBindingObserver.observeOutboundRequest({",
+  ].map((fragment) => frozenBaselineCdpRequestSource.indexOf(fragment));
+  assert.equal(
+    frozenBaselineCdpRequestOrder.every((index) => index >= 0),
+    true,
+  );
+  assert.deepEqual(
+    frozenBaselineCdpRequestOrder,
+    [...frozenBaselineCdpRequestOrder].sort((left, right) => left - right),
+    "CDP tracking and SID promotion must precede observation of the current request body.",
   );
   const frozenBaselineRecordParseFailureSourceStart = sourceText.indexOf(
     "const recordParseFailure = ({ failureClass, bufferExceeded = false }) => {",
@@ -3034,13 +3166,18 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   );
   assert.match(
     frozenBaselineSafeFailureDiagnosticSource,
-    /assert\.equal\(parseFailureClassCountSum, parseFailureCount\);\s*assert\.ok\(bufferExceededCount <= parseFailureCount\);/u,
+    /const targetTupleMismatchReasonHistogram\s*=\s*Object\.freeze\(\s*SAFE_FROZEN_BASELINE_TARGET_TUPLE_MISMATCH_REASONS\.map\(\(reason\)\s*=>\s*Object\.freeze\(\{\s*reason,\s*count: targetTupleMismatchReasonCounts\.get\(reason\),\s*\}\),?\s*\),?\s*\);[\s\S]*?assert\.deepEqual\(Object\.keys\(entry\), \["reason", "count"\]\);[\s\S]*?entry\.reason,\s*SAFE_FROZEN_BASELINE_TARGET_TUPLE_MISMATCH_REASONS\[index\],[\s\S]*?Number\.isSafeInteger\(entry\.count\) && entry\.count >= 0/u,
+    "The mismatch histogram must remain zero-inclusive, fixed-order and numeric-only.",
+  );
+  assert.match(
+    frozenBaselineSafeFailureDiagnosticSource,
+    /assert\.equal\(parseFailureClassCountSum, parseFailureCount\);\s*assert\.equal\(\s*targetTupleMismatchReasonCountSum,\s*parseFailureClassCounts\.get\("target-tuple-duplicate"\),\s*\);\s*assert\.ok\(bufferExceededCount <= parseFailureCount\);/u,
     "The failure-class histogram and buffer-failure subset must reconcile with the manifest parse ledger.",
   );
   assert.match(
     frozenBaselineSafeFailureDiagnosticSource,
-    /return Object\.freeze\(\{\s*parseFailureClassHistogram,\s*parseFailureClassCountSum,\s*pendingInitialTargetRequestCount,\s*initialTargetRequestPromotionCount,\s*\}\);/u,
-    "The observer failure diagnostic must retain exactly four safe aggregate fields.",
+    /return Object\.freeze\(\{\s*parseFailureClassHistogram,\s*parseFailureClassCountSum,\s*targetTupleMismatchReasonHistogram,\s*targetTupleMismatchReasonCountSum,\s*pendingInitialTargetRequestCount,\s*initialTargetRequestPromotionCount,\s*witnessedOutboundRemoveTargetCount,\s*acceptedPostRemoveReaddCount,\s*\}\);/u,
+    "The observer failure diagnostic must retain exactly eight safe aggregate fields.",
   );
   assert.doesNotMatch(
     frozenBaselineSafeFailureDiagnosticSource,
@@ -3049,7 +3186,7 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   );
   assert.doesNotMatch(
     frozenBaselineSafeFailureDiagnosticSource,
-    /\b(?:webChannelMessageSequence|messageStructureSha256)\b/u,
+    /\b(?:webChannelMessageSequence|messageStructureSha256|addWebChannelMessageSequence|removeWebChannelMessageSequence|addMessageStructureSha256|removeMessageStructureSha256|outboundRemoveSequence|mutationSequence)\b/u,
     "Observer diagnostics must not expose private replay identifiers or hashes.",
   );
   const frozenBaselineSafeTransportDiagnosticSourceStart = sourceText.indexOf(
@@ -4604,6 +4741,12 @@ const assertNoRawFrozenBaselineAuthenticationRetirementFields = (value) => {
     "body",
     "idtoken",
     "messagestructuresha256",
+    "addmessagestructuresha256",
+    "addwebchannelmessagesequence",
+    "removemessagestructuresha256",
+    "removewebchannelmessagesequence",
+    "outboundremovesequence",
+    "mutationsequence",
     "path",
     "rawbody",
     "rawpath",
@@ -5584,7 +5727,7 @@ const verifyPreTransmissionBoundaryNegativeFixtures = () => {
     frozenBaselineListenerTerminalFailureSourceContractVerified: true,
     frozenBaselineListenerBoundedReadinessSettlementSourceContractVerified: true,
     frozenBaselineListenerBindingPositiveFixtureSourceCount: 4,
-    frozenBaselineListenerBindingNegativeFixtureSourceCount: 12,
+    frozenBaselineListenerBindingNegativeFixtureSourceCount: 16,
     safeAuthenticationSignInSourceContractVerified: true,
     safeAuthenticationSignInSourceMutationRejectedCaseCount,
   };
