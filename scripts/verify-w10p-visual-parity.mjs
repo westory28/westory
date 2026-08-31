@@ -7,7 +7,7 @@ import { inflateSync } from "node:zlib";
 
 const readJson = (path) => JSON.parse(readFileSync(resolve(path), "utf8"));
 const contract = readJson("scripts/w10p-visual-parity-contract.json");
-assert.equal(contract.schemaVersion, 14);
+assert.equal(contract.schemaVersion, 15);
 const resolveAuthenticationLandingGuard = ({
   guardContract,
   fixedTimeValue,
@@ -108,6 +108,74 @@ const verifyAuthenticationLandingGuardFixtures = () => {
 };
 const authenticationLandingGuardSelfTest =
   verifyAuthenticationLandingGuardFixtures();
+const FROZEN_BASELINE_AUTHENTICATION_TARGET_CLASSES = Object.freeze([
+  "attendance-default-scope",
+  "attendance-active-scope",
+  "history-dictionary",
+  "notification-inbox",
+  "broadcast",
+  "unknown",
+]);
+const resolveFrozenBaselineAuthenticationAnomalyPolicy = (policy) => {
+  assert.deepEqual(Object.keys(policy || {}).sort(), [
+    "authenticationRole",
+    "captureRole",
+    "consoleError",
+    "id",
+    "phase",
+    "presentationSourceCommit",
+    "removedCauseCode",
+    "removedTargetClass",
+    "stage",
+    "successorTargetClass",
+    "viewport",
+  ]);
+  assert.deepEqual(Object.keys(policy.consoleError || {}).sort(), [
+    "errorNameClass",
+    "expectedCount",
+    "messageClass",
+    "operationClass",
+    "sha256",
+    "sourceClass",
+  ]);
+  assert.equal(policy.id, "w10p-frozen-dashboard-attendance-default-scope-v1");
+  assert.equal(
+    policy.presentationSourceCommit,
+    "676869fa289d3e7ecef234cbb5cca65c60ec4597",
+  );
+  assert.equal(
+    policy.presentationSourceCommit,
+    contract.productionPresentationSha,
+  );
+  assert.equal(policy.stage, "baseline");
+  assert.equal(policy.captureRole, "student");
+  assert.equal(policy.authenticationRole, "student");
+  assert.equal(policy.viewport, "1024x768");
+  assert.equal(policy.phase, "authentication");
+  assert.equal(policy.consoleError.sourceClass, "console-error");
+  assert.equal(policy.consoleError.errorNameClass, "console-error");
+  assert.equal(policy.consoleError.messageClass, "firebase-permission-denied");
+  assert.equal(
+    policy.consoleError.operationClass,
+    "firestore-unhandled-snapshot-listener",
+  );
+  assert.equal(
+    policy.consoleError.sha256,
+    "22a802d5f907a1f881328ae78eab9ea0711a8e266a7bcf540c0066906e56e6d6",
+  );
+  assert.equal(policy.consoleError.expectedCount, 1);
+  assert.equal(policy.removedTargetClass, "attendance-default-scope");
+  assert.equal(policy.successorTargetClass, "attendance-active-scope");
+  assert.equal(policy.removedCauseCode, 7);
+  return Object.freeze({
+    ...policy,
+    consoleError: Object.freeze({ ...policy.consoleError }),
+  });
+};
+const frozenBaselineAuthenticationAnomalyPolicy =
+  resolveFrozenBaselineAuthenticationAnomalyPolicy(
+    contract.frozenBaselineAuthenticationAnomalyPolicy,
+  );
 const MAX_RESOLVED_REQUEST_POST_DATA_BYTES = 8 * 1024 * 1024;
 const NODE_OWNED_EXTERNAL_STATIC_RESPONSE_HEADER_MAXIMUM_BYTES = 64 * 1024;
 const NODE_OWNED_EXTERNAL_STATIC_RESPONSE_BODY_MAXIMUM_BYTES = 16 * 1024 * 1024;
@@ -2371,6 +2439,50 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "responseHeaders: cachedExternal.responseHeaders",
     'canonicalHostname.endsWith(".firebasedatabase.app")',
     'upstreamParsed.hostname.endsWith(".firebasedatabase.app")',
+    "const exactFirestoreListenInitialRequest = (requestUrl) =>",
+    "const frozenBaselineListenerTupleKey = ({ gsessionid, sid }, targetId) =>",
+    "const createFrozenBaselineListenerBindingObserver = ({",
+    "secretSha256(parentSegments[1]) === expectedUidHash",
+    "targetChange.causeCode !== policy.removedCauseCode",
+    "const frozenBaselineObservationSequenceBefore = (left, right) =>",
+    "eventSequence: observationSequence",
+    "frameSequence: 0",
+    "withinEventSequence: 0",
+    "frozenBaselineObservationSequenceBefore(removedSequence, exactConsoleSequence,)",
+    "frozenBaselineObservationSequenceBefore(removedSequence, successorTargets[0].addSequence,)",
+    "frozenBaselineObservationSequenceBefore(successorTargets[0].addSequence, successorTargets[0].acknowledgementSequences[0],)",
+    "const reserveInboundPayloadSequence = () =>",
+    "const FROZEN_BASELINE_LISTENER_SETTLEMENT_TIMEOUT_MS = 3_000",
+    "const FROZEN_BASELINE_LISTENER_SETTLEMENT_POLL_MS = 50",
+    "const readyForSettlement = () =>",
+    "if (settledDecision !== null || !eligible) return true",
+    "const irrecoverableFailureObserved =",
+    "if (irrecoverableFailureObserved) return true",
+    "readyForSettlement,",
+    "assert.equal(positiveObserver.readyForSettlement(), false)",
+    "assert.equal(positiveObserver.readyForSettlement(), true)",
+    "assert.equal(deferredStreamObserver.readyForSettlement(), false)",
+    "assert.equal(deferredStreamObserver.readyForSettlement(), true)",
+    "const appendFrozenBaselineBufferedStreamSegments = ({",
+    "preStreamBufferedSegments: []",
+    "assert.equal(bufferedBytes.length, expectedByteLength)",
+    "const appendFrozenBaselineDataReceivedStreamChunk = ({",
+    "assert.equal(exactBase64Buffer(encodedValue).length, byteLength)",
+    "if (settledDecision !== null) return",
+    "snapshotSemanticLedger(), settledSemanticLedger",
+    "targetChange.targetIds.length === 0",
+    "unboundRemovedTargetCount += 1",
+    "ambiguousRemovedTargetCount += 1",
+    "const shouldRecordFrozenBaselineListenTerminalStreamFailure = ({",
+    "settled !== true && streamRequested !== true",
+    '(method === "GET" && initialRequest !== true)',
+    "(initialRequest === true && responseGsessionid === null)",
+    'appCheckCdpSession.send("Network.streamResourceContent"',
+    "frozenBaselineListenerBindingObserver.promoteInitialTargets({",
+    "frozenBaselineListenerBindingRawValueOutputCount: 0",
+    "verifyFrozenBaselineListenerBindingFixtures();",
+    "browserConsoleErrorRecoveredProtectedReadCount + browserConsoleErrorRetiredFrozenBaselineCount",
+    "frozenBaselineAuthenticationAnomalyRetirement,",
   ]) {
     assert.equal(
       compactSourceText.includes(requiredSourceFragment.replace(/\s+/gu, "")),
@@ -2378,6 +2490,122 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
       `The all-target pre-transmission source contract is missing: ${requiredSourceFragment}`,
     );
   }
+  const frozenBaselineFixtureSourceStart = sourceText.indexOf(
+    "const verifyFrozenBaselineListenerBindingFixtures = async () => {",
+  );
+  const frozenBaselineFixtureSourceEnd = sourceText.indexOf(
+    "const SAFE_FIRESTORE_WEBCHANNEL_AUTH_BINDING_CLASSES",
+    frozenBaselineFixtureSourceStart,
+  );
+  assert.ok(frozenBaselineFixtureSourceStart >= 0);
+  assert.ok(frozenBaselineFixtureSourceEnd > frozenBaselineFixtureSourceStart);
+  const frozenBaselineFixtureSource = sourceText.slice(
+    frozenBaselineFixtureSourceStart,
+    frozenBaselineFixtureSourceEnd,
+  );
+  assert.match(
+    frozenBaselineFixtureSource,
+    /frozenBaselineListenerBindingPositiveFixtureCount:\s*3/u,
+    "The frozen-baseline listener source contract must retain three positive lifecycle fixtures.",
+  );
+  assert.match(
+    frozenBaselineFixtureSource,
+    /const negativeSnapshots\s*=\s*\[mismatchedBufferedSnapshot\];/u,
+    "The buffered byte-length mismatch must seed the frozen-baseline negative fixture ledger.",
+  );
+  assert.equal(
+    (frozenBaselineFixtureSource.match(/negativeSnapshots\.push\(/gu) || [])
+      .length,
+    7,
+    "The frozen-baseline listener source contract must retain eight negative lifecycle fixtures.",
+  );
+  assert.match(
+    frozenBaselineFixtureSource,
+    /frozenBaselineListenerBindingNegativeFixtureCount:\s*negativeSnapshots\.length/u,
+    "The frozen-baseline listener self-test output must be derived from the complete negative fixture ledger.",
+  );
+  assert.match(
+    sourceText,
+    /const frozenBaselineObservationSequenceBefore\s*=\s*\(left, right\)\s*=>\s*left\.eventSequence < right\.eventSequence \|\|\s*\(left\.eventSequence === right\.eventSequence &&\s*\(left\.frameSequence < right\.frameSequence \|\|\s*\(left\.frameSequence === right\.frameSequence &&\s*left\.withinEventSequence < right\.withinEventSequence\)\)\);/u,
+    "Frozen-baseline observations must retain exact event/frame/within-event lexicographic ordering.",
+  );
+  const frozenBaselineReadinessSourceStart = sourceText.indexOf(
+    "const readyForSettlement = () => {",
+  );
+  const frozenBaselineReadinessSourceEnd = sourceText.indexOf(
+    "const settleAuthentication = ({ dashboardStable }) => {",
+    frozenBaselineReadinessSourceStart,
+  );
+  assert.ok(frozenBaselineReadinessSourceStart >= 0);
+  assert.ok(
+    frozenBaselineReadinessSourceEnd > frozenBaselineReadinessSourceStart,
+  );
+  const compactFrozenBaselineReadinessSource = sourceText
+    .slice(frozenBaselineReadinessSourceStart, frozenBaselineReadinessSourceEnd)
+    .replace(/\s+/gu, "");
+  for (const requiredReadinessFragment of [
+    "if (settledDecision !== null || !eligible) return true",
+    "streamFailureCount > 0",
+    "parseFailureCount > 0",
+    "bufferExceededCount > 0",
+    "exactConsoleSequences.length > policy.consoleError.expectedCount",
+    "inboundRemoveCauseCodeCount > 1",
+    "removedTargetClassMatchCount > 1",
+    "successorAddTargetCount > 1",
+    "successorTargetAcknowledgedCount > 1",
+    "unknownRemovedTargetCount > 0",
+    "unboundRemovedTargetCount > 0",
+    "ambiguousRemovedTargetCount > 0",
+    "if (irrecoverableFailureObserved) return true",
+    "pendingInitialTargetsByRequestId.size === 0",
+    "exactConsoleSequences.length === policy.consoleError.expectedCount",
+    "inboundRemoveCauseCodeCount === 1",
+    "removedTargetClassMatchCount === 1",
+    "removedTargets.length === 1",
+    "removedTargets[0].removedCauseCodeSequences.length === 1",
+    "successorAddTargetCount === 1",
+    "successorTargetAcknowledgedCount === 1",
+    "successorTargets.length === 1",
+    "successorTargets[0].acknowledgementSequences.length >= 1",
+  ]) {
+    assert.equal(
+      compactFrozenBaselineReadinessSource.includes(
+        requiredReadinessFragment.replace(/\s+/gu, ""),
+      ),
+      true,
+      `The frozen-baseline readiness contract is missing: ${requiredReadinessFragment}`,
+    );
+  }
+  assert.match(
+    sourceText,
+    /const recordParseFailure\s*=\s*\(\{ bufferExceeded = false \} = \{\}\)\s*=>\s*\{\s*if \(settledDecision !== null\) return;/u,
+    "Frozen-baseline parse failures must not mutate the settled semantic ledger.",
+  );
+  assert.match(
+    sourceText,
+    /const recordStreamFailure\s*=\s*\(\)\s*=>\s*\{\s*if \(settledDecision !== null\) return;/u,
+    "Frozen-baseline stream failures must not mutate the settled semantic ledger.",
+  );
+  assert.match(
+    sourceText,
+    /targetChange\.targetChangeType === "REMOVE" &&\s*targetChange\.causeCode === policy\.removedCauseCode &&\s*targetChange\.targetIds\.length === 0\s*\) \{\s*inboundRemoveCauseCodeCount \+= 1;\s*unboundRemovedTargetCount \+= 1;\s*ambiguousRemovedTargetCount \+= 1;/u,
+    "An empty code-7 REMOVE must be counted as unbound and ambiguous.",
+  );
+  assert.match(
+    sourceText,
+    /const arrivalSequence\s*=\s*frozenBaselineListenerBindingObserver\.reserveInboundPayloadSequence\(\);[\s\S]*?entry\.preStreamBufferedSegments\.push\(\{\s*byteLength: dataLength,\s*arrivalSequence,\s*\}\);/u,
+    "Pre-stream data must reserve its event sequence before exact byte-length replay.",
+  );
+  assert.match(
+    sourceText,
+    /const shouldRecordFrozenBaselineListenTerminalStreamFailure\s*=\s*\(\{[\s\S]*?\}\)\s*=>\s*settled !== true &&\s*streamRequested !== true &&\s*\(\(method === "GET" && initialRequest !== true\) \|\|\s*\(initialRequest === true && responseGsessionid === null\)\);/u,
+    "Only an unsettled pre-stream Listen terminal may increment stream failure accounting.",
+  );
+  assert.match(
+    sourceText,
+    /await drainAppCheckCdpHandlerPromises\(\);\s*let authenticationNetworkAttestationDrainDiagnostic\s*=\s*await flushNetworkAttestations\(\);\s*const listenerSettlementDeadline\s*=\s*Date\.now\(\) \+ FROZEN_BASELINE_LISTENER_SETTLEMENT_TIMEOUT_MS;\s*while \(\s*!frozenBaselineListenerBindingObserver\.readyForSettlement\(\) &&\s*Date\.now\(\) < listenerSettlementDeadline\s*\) \{\s*await new Promise\(\(resolvePoll\)\s*=>\s*setTimeout\(resolvePoll, FROZEN_BASELINE_LISTENER_SETTLEMENT_POLL_MS\),?\s*\);\s*await drainAppCheckCdpHandlerPromises\(\);\s*authenticationNetworkAttestationDrainDiagnostic\s*=\s*await flushNetworkAttestations\(\);\s*\}[\s\S]*?groupFrozenBaselineListenerRetirementDecision\s*=\s*frozenBaselineListenerBindingObserver\.settleAuthentication\(\{\s*dashboardStable:\s*true,?\s*\}\);/u,
+    "Frozen-baseline listener settlement must use a bounded poll, drain and flush every poll, then settle fail-closed after readiness or timeout.",
+  );
   assert.match(
     sourceText,
     /const expectedFirestoreWebChannelResourceTypeForObserver\s*=\s*\(\s*observerSurface,?\s*\)\s*=>\s*\{\s*switch \(observerSurface\) \{\s*case "cdp-request-paused":\s*return "xhr";\s*case "playwright-request":\s*return "fetch";\s*default:\s*return null;\s*\}\s*\};/u,
@@ -2474,8 +2702,8 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   }
   assert.match(
     sourceText,
-    /await context\.close\(\);\s*groupBrowserContextClosed = true;[\s\S]*?await drainAppCheckCdpHandlerPromises\(\);\s*assert\.equal\(\s*allowedEgressHandlerTaskCoordinator\.pendingCount\(\),\s*0,[\s\S]*?await flushNetworkAttestations\(\);\s*retireContextClosedWebChannelAuthorizations\(\);\s*assert\.equal\(\s*allowedEgressProxyAuthorizationCoordinator\.activeCount\(\),\s*0,/u,
-    "The context-close WebChannel retirement must follow close, late handler drain, and network-attestation flush.",
+    /await context\.close\(\);\s*groupBrowserContextClosed = true;[\s\S]*?await drainAppCheckCdpHandlerPromises\(\);\s*assert\.equal\(\s*allowedEgressHandlerTaskCoordinator\.pendingCount\(\),\s*0,[\s\S]*?await flushNetworkAttestations\(\);\s*if \(frozenBaselineListenerBindingObserver\) \{[\s\S]*?entry\.responseStream\.finish\(\{\s*allowIncomplete:\s*true,?\s*\}\);[\s\S]*?frozenBaselineListenerRequestsByNetworkId\.clear\(\);\s*frozenBaselineInitialRequestIdByGsessionid\.clear\(\);\s*frozenBaselineSessionSidByGsessionid\.clear\(\);\s*const frozenBaselineListenerGroupAttestation\s*=\s*frozenBaselineListenerBindingObserver\.safeSnapshot\(\);\s*assert\.equal\(\s*frozenBaselineListenerGroupAttestation\.passed,\s*true,[\s\S]*?frozenBaselineAuthenticationAnomalyGroupAttestations\.push\(\s*frozenBaselineListenerGroupAttestation,?\s*\);[\s\S]*?retireContextClosedWebChannelAuthorizations\(\);\s*assert\.equal\(\s*allowedEgressProxyAuthorizationCoordinator\.activeCount\(\),\s*0,/u,
+    "The context-close WebChannel retirement must follow close, late handler drain, network-attestation flush, and safe frozen-baseline listener finalization.",
   );
   assert.match(
     sourceText,
@@ -3802,6 +4030,657 @@ const assertExactObjectKeys = (value, expectedKeys) => {
   assert.ok(value && typeof value === "object" && !Array.isArray(value));
   assert.deepEqual(Object.keys(value).sort(), [...expectedKeys].sort());
 };
+const canonicalFrozenBaselineAuthenticationRetirementJson = (value) => {
+  if (Array.isArray(value)) {
+    return `[${value
+      .map(canonicalFrozenBaselineAuthenticationRetirementJson)
+      .join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value)
+      .sort()
+      .map(
+        (key) =>
+          `${JSON.stringify(key)}:${canonicalFrozenBaselineAuthenticationRetirementJson(
+            value[key],
+          )}`,
+      )
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+};
+const frozenBaselineAuthenticationRetirementSetSha256 = (groups) =>
+  createHash("sha256")
+    .update(canonicalFrozenBaselineAuthenticationRetirementJson(groups))
+    .digest("hex");
+const assertNoRawFrozenBaselineAuthenticationRetirementFields = (value) => {
+  const forbiddenNormalizedKeys = new Set([
+    "body",
+    "idtoken",
+    "path",
+    "rawbody",
+    "rawpath",
+    "rawtoken",
+    "rawuid",
+    "refreshtoken",
+    "requestbody",
+    "responsebody",
+    "token",
+    "uid",
+  ]);
+  const visit = (candidate) => {
+    if (Array.isArray(candidate)) {
+      for (const item of candidate) visit(item);
+      return;
+    }
+    if (!candidate || typeof candidate !== "object") return;
+    for (const [key, child] of Object.entries(candidate)) {
+      assert.equal(
+        forbiddenNormalizedKeys.has(
+          key.replaceAll(/[^a-z0-9]/giu, "").toLowerCase(),
+        ),
+        false,
+        `Raw path/UID/body/token field is forbidden in the frozen-baseline authentication retirement: ${key}`,
+      );
+      visit(child);
+    }
+  };
+  visit(value);
+};
+const frozenBaselineAuthenticationRetirementGroupKey = (group) => {
+  assert.match(group.viewport, /^[1-9][0-9]{2,4}x[1-9][0-9]{2,4}$/u);
+  return `${group.stage}:${group.captureRole}:${group.viewport}`;
+};
+const assertFrozenBaselineAuthenticationAnomalyRetirement = ({
+  retirement,
+  expectedGroupKeys,
+  expectedPresentationSourceCommit,
+}) => {
+  const policy = frozenBaselineAuthenticationAnomalyPolicy;
+  assertNoRawFrozenBaselineAuthenticationRetirementFields(retirement);
+  assertExactObjectKeys(retirement, [
+    "ambiguousRemovedTargetCount",
+    "bufferExceededCount",
+    "eligibleGroupCount",
+    "expectedEligibleGroupCount",
+    "fatalExactConsoleErrorCount",
+    "groupAttestationCount",
+    "groupAttestationSetSha256",
+    "groups",
+    "inboundRemoveCauseCodeCount",
+    "observedExactConsoleErrorCount",
+    "outboundAddTargetCount",
+    "parseFailureCount",
+    "passed",
+    "policyId",
+    "presentationSourceCommit",
+    "retiredExactConsoleErrorCount",
+    "schemaVersion",
+    "streamFailureCount",
+    "successorAddTargetCount",
+    "targetClasses",
+    "transportObserver",
+    "unboundRemovedTargetCount",
+    "unknownRemovedTargetCount",
+    "unknownTargetCount",
+  ]);
+  assert.equal(retirement.schemaVersion, 1);
+  assert.equal(retirement.policyId, policy.id);
+  assert.equal(
+    retirement.presentationSourceCommit,
+    policy.presentationSourceCommit,
+  );
+  assert.equal(
+    retirement.presentationSourceCommit,
+    expectedPresentationSourceCommit,
+  );
+  assert.equal(
+    retirement.transportObserver,
+    "cdp-network-stream-resource-content",
+  );
+  assert.deepEqual(
+    retirement.targetClasses,
+    FROZEN_BASELINE_AUTHENTICATION_TARGET_CLASSES,
+  );
+  assert.equal(retirement.expectedEligibleGroupCount, 1);
+  assert.equal(retirement.eligibleGroupCount, 1);
+  assert.equal(retirement.passed, true);
+  assert.equal(Array.isArray(retirement.groups), true);
+  const integerFields = [
+    "ambiguousRemovedTargetCount",
+    "bufferExceededCount",
+    "eligibleGroupCount",
+    "expectedEligibleGroupCount",
+    "fatalExactConsoleErrorCount",
+    "groupAttestationCount",
+    "inboundRemoveCauseCodeCount",
+    "observedExactConsoleErrorCount",
+    "outboundAddTargetCount",
+    "parseFailureCount",
+    "retiredExactConsoleErrorCount",
+    "streamFailureCount",
+    "successorAddTargetCount",
+    "unboundRemovedTargetCount",
+    "unknownRemovedTargetCount",
+    "unknownTargetCount",
+  ];
+  for (const field of integerFields) {
+    assert.equal(Number.isSafeInteger(retirement[field]), true);
+    assert.ok(retirement[field] >= 0);
+  }
+  const exactExpectedGroupKeys = [...expectedGroupKeys].sort((left, right) =>
+    left.localeCompare(right),
+  );
+  assert.equal(
+    new Set(exactExpectedGroupKeys).size,
+    exactExpectedGroupKeys.length,
+  );
+  assert.equal(retirement.groupAttestationCount, exactExpectedGroupKeys.length);
+  assert.equal(retirement.groups.length, retirement.groupAttestationCount);
+  assert.match(retirement.groupAttestationSetSha256, /^[a-f0-9]{64}$/u);
+  assert.equal(
+    retirement.groupAttestationSetSha256,
+    frozenBaselineAuthenticationRetirementSetSha256(retirement.groups),
+  );
+
+  const observedGroupKeys = retirement.groups.map(
+    frozenBaselineAuthenticationRetirementGroupKey,
+  );
+  assert.deepEqual(observedGroupKeys, exactExpectedGroupKeys);
+  assert.equal(new Set(observedGroupKeys).size, observedGroupKeys.length);
+  const groupIntegerFields = [
+    "ambiguousRemovedTargetCount",
+    "bufferExceededCount",
+    "exactConsoleErrorCount",
+    "fatalExactConsoleErrorCount",
+    "inboundRemoveCauseCodeCount",
+    "outboundAddTargetCount",
+    "parseFailureCount",
+    "removedTargetClassMatchCount",
+    "retiredExactConsoleErrorCount",
+    "streamFailureCount",
+    "successorAddTargetCount",
+    "successorTargetAcknowledgedCount",
+    "tupleBoundRetirementCount",
+    "unboundRemovedTargetCount",
+    "unknownRemovedTargetCount",
+    "unknownTargetCount",
+  ];
+  const aggregateFields = [
+    "ambiguousRemovedTargetCount",
+    "bufferExceededCount",
+    "fatalExactConsoleErrorCount",
+    "inboundRemoveCauseCodeCount",
+    "observedExactConsoleErrorCount",
+    "outboundAddTargetCount",
+    "parseFailureCount",
+    "retiredExactConsoleErrorCount",
+    "streamFailureCount",
+    "successorAddTargetCount",
+    "unboundRemovedTargetCount",
+    "unknownRemovedTargetCount",
+    "unknownTargetCount",
+  ];
+  const aggregateValues = Object.fromEntries(
+    aggregateFields.map((field) => [field, 0]),
+  );
+  let eligibleGroupCount = 0;
+  let removedTargetClassMatchCount = 0;
+  let tupleBoundRetirementCount = 0;
+  for (const group of retirement.groups) {
+    assertExactObjectKeys(group, [
+      "ambiguousRemovedTargetCount",
+      "authenticationRole",
+      "bufferExceededCount",
+      "captureRole",
+      "dashboardStable",
+      "eligible",
+      "exactConsoleErrorCount",
+      "fatalExactConsoleErrorCount",
+      "groupKey",
+      "inboundRemoveCauseCodeCount",
+      "outboundAddTargetCount",
+      "parseFailureCount",
+      "passed",
+      "phase",
+      "removedTargetClassMatchCount",
+      "retiredExactConsoleErrorCount",
+      "stage",
+      "streamFailureCount",
+      "successorAddTargetCount",
+      "successorExplicitlyAcknowledged",
+      "successorSequenceBound",
+      "successorTargetAcknowledgedCount",
+      "targetClassHistogram",
+      "tupleBoundRetirementCount",
+      "unboundRemovedTargetCount",
+      "unknownRemovedTargetCount",
+      "unknownTargetCount",
+      "viewport",
+    ]);
+    assert.ok(["baseline", "candidate"].includes(group.stage));
+    assert.ok(
+      ["admin", "student", "support-teacher", "teacher"].includes(
+        group.captureRole,
+      ),
+    );
+    assert.equal(
+      group.authenticationRole,
+      group.captureRole === "support-teacher" ? "teacher" : group.captureRole,
+    );
+    assert.equal(group.phase, "authentication");
+    assert.equal(
+      group.groupKey,
+      frozenBaselineAuthenticationRetirementGroupKey(group),
+    );
+    assert.equal(typeof group.eligible, "boolean");
+    assert.equal(typeof group.dashboardStable, "boolean");
+    assert.equal(typeof group.successorExplicitlyAcknowledged, "boolean");
+    assert.equal(typeof group.successorSequenceBound, "boolean");
+    assert.equal(group.dashboardStable, true);
+    assert.equal(group.passed, true);
+    for (const field of groupIntegerFields) {
+      assert.equal(Number.isSafeInteger(group[field]), true);
+      assert.ok(group[field] >= 0);
+    }
+    assert.equal(Array.isArray(group.targetClassHistogram), true);
+    assert.deepEqual(
+      group.targetClassHistogram.map(({ targetClass }) => targetClass),
+      FROZEN_BASELINE_AUTHENTICATION_TARGET_CLASSES,
+    );
+    for (const histogramEntry of group.targetClassHistogram) {
+      assertExactObjectKeys(histogramEntry, ["count", "targetClass"]);
+      assert.equal(Number.isSafeInteger(histogramEntry.count), true);
+      assert.ok(histogramEntry.count >= 0);
+    }
+    assert.equal(
+      group.outboundAddTargetCount,
+      group.targetClassHistogram.reduce(
+        (total, histogramEntry) => total + histogramEntry.count,
+        0,
+      ),
+    );
+    const histogram = Object.fromEntries(
+      group.targetClassHistogram.map(({ targetClass, count }) => [
+        targetClass,
+        count,
+      ]),
+    );
+    assert.equal(group.unknownTargetCount, histogram.unknown);
+    assert.equal(
+      group.successorAddTargetCount,
+      histogram[policy.successorTargetClass],
+    );
+    assert.ok(
+      group.successorTargetAcknowledgedCount <= group.successorAddTargetCount,
+    );
+    assert.equal(
+      group.successorExplicitlyAcknowledged,
+      group.successorAddTargetCount === 1 &&
+        group.successorTargetAcknowledgedCount === 1,
+    );
+    const isEligible =
+      group.stage === policy.stage &&
+      group.captureRole === policy.captureRole &&
+      group.authenticationRole === policy.authenticationRole &&
+      group.viewport === policy.viewport &&
+      group.phase === policy.phase;
+    assert.equal(group.eligible, isEligible);
+    if (isEligible) {
+      eligibleGroupCount += 1;
+      assert.equal(histogram[policy.removedTargetClass], 1);
+      assert.equal(histogram[policy.successorTargetClass], 1);
+      assert.equal(
+        group.exactConsoleErrorCount,
+        policy.consoleError.expectedCount,
+      );
+      assert.equal(group.inboundRemoveCauseCodeCount, 1);
+      assert.equal(group.removedTargetClassMatchCount, 1);
+      assert.equal(group.successorAddTargetCount, 1);
+      assert.equal(group.successorTargetAcknowledgedCount, 1);
+      assert.equal(group.successorSequenceBound, true);
+      assert.equal(group.tupleBoundRetirementCount, 1);
+      assert.equal(
+        group.retiredExactConsoleErrorCount,
+        policy.consoleError.expectedCount,
+      );
+    } else {
+      for (const field of [
+        "exactConsoleErrorCount",
+        "inboundRemoveCauseCodeCount",
+        "removedTargetClassMatchCount",
+        "retiredExactConsoleErrorCount",
+        "tupleBoundRetirementCount",
+      ]) {
+        assert.equal(group[field], 0);
+      }
+      assert.equal(group.successorSequenceBound, false);
+    }
+    assert.equal(group.unknownRemovedTargetCount, 0);
+    assert.equal(group.unboundRemovedTargetCount, 0);
+    assert.equal(group.ambiguousRemovedTargetCount, 0);
+    assert.equal(group.streamFailureCount, 0);
+    assert.equal(group.parseFailureCount, 0);
+    assert.equal(group.bufferExceededCount, 0);
+    assert.equal(group.fatalExactConsoleErrorCount, 0);
+    aggregateValues.observedExactConsoleErrorCount +=
+      group.exactConsoleErrorCount;
+    for (const field of aggregateFields.filter(
+      (candidate) => candidate !== "observedExactConsoleErrorCount",
+    )) {
+      aggregateValues[field] += group[field];
+    }
+    removedTargetClassMatchCount += group.removedTargetClassMatchCount;
+    tupleBoundRetirementCount += group.tupleBoundRetirementCount;
+  }
+  assert.equal(eligibleGroupCount, retirement.eligibleGroupCount);
+  for (const field of aggregateFields) {
+    assert.equal(retirement[field], aggregateValues[field]);
+  }
+  assert.equal(removedTargetClassMatchCount, 1);
+  assert.equal(tupleBoundRetirementCount, 1);
+  assert.equal(
+    retirement.observedExactConsoleErrorCount,
+    policy.consoleError.expectedCount,
+  );
+  assert.equal(
+    retirement.retiredExactConsoleErrorCount,
+    policy.consoleError.expectedCount,
+  );
+  assert.equal(retirement.fatalExactConsoleErrorCount, 0);
+  assert.equal(
+    retirement.observedExactConsoleErrorCount,
+    retirement.retiredExactConsoleErrorCount +
+      retirement.fatalExactConsoleErrorCount,
+  );
+  assert.equal(retirement.inboundRemoveCauseCodeCount, 1);
+  assert.equal(retirement.unknownRemovedTargetCount, 0);
+  assert.equal(retirement.unboundRemovedTargetCount, 0);
+  assert.equal(retirement.ambiguousRemovedTargetCount, 0);
+  assert.equal(retirement.streamFailureCount, 0);
+  assert.equal(retirement.parseFailureCount, 0);
+  assert.equal(retirement.bufferExceededCount, 0);
+  return retirement;
+};
+const verifyFrozenBaselineAuthenticationAnomalyRetirementFixtures = () => {
+  const clone = (value) => JSON.parse(JSON.stringify(value));
+  const histogram = ({ eligible = false } = {}) =>
+    FROZEN_BASELINE_AUTHENTICATION_TARGET_CLASSES.map((targetClass) => ({
+      targetClass,
+      count:
+        targetClass === "unknown"
+          ? 2
+          : eligible &&
+              ["attendance-default-scope", "attendance-active-scope"].includes(
+                targetClass,
+              )
+            ? 1
+            : 0,
+    }));
+  const group = ({ stage, captureRole, authenticationRole, width, height }) => {
+    const eligible =
+      stage === frozenBaselineAuthenticationAnomalyPolicy.stage &&
+      captureRole === frozenBaselineAuthenticationAnomalyPolicy.captureRole &&
+      authenticationRole ===
+        frozenBaselineAuthenticationAnomalyPolicy.authenticationRole &&
+      `${width}x${height}` ===
+        frozenBaselineAuthenticationAnomalyPolicy.viewport;
+    const targetClassHistogram = histogram({ eligible });
+    return {
+      groupKey: `${stage}:${captureRole}:${width}x${height}`,
+      stage,
+      captureRole,
+      authenticationRole,
+      viewport: `${width}x${height}`,
+      phase: "authentication",
+      eligible,
+      exactConsoleErrorCount: Number(eligible),
+      outboundAddTargetCount: targetClassHistogram.reduce(
+        (total, entry) => total + entry.count,
+        0,
+      ),
+      targetClassHistogram,
+      inboundRemoveCauseCodeCount: Number(eligible),
+      removedTargetClassMatchCount: Number(eligible),
+      successorAddTargetCount: Number(eligible),
+      successorTargetAcknowledgedCount: Number(eligible),
+      unknownTargetCount: 2,
+      unknownRemovedTargetCount: 0,
+      unboundRemovedTargetCount: 0,
+      ambiguousRemovedTargetCount: 0,
+      streamFailureCount: 0,
+      parseFailureCount: 0,
+      bufferExceededCount: 0,
+      tupleBoundRetirementCount: Number(eligible),
+      retiredExactConsoleErrorCount: Number(eligible),
+      fatalExactConsoleErrorCount: 0,
+      dashboardStable: true,
+      successorExplicitlyAcknowledged: eligible,
+      successorSequenceBound: eligible,
+      passed: true,
+    };
+  };
+  const expectedGroupKeys = [
+    "baseline:student:1024x768",
+    "baseline:teacher:1024x768",
+    "candidate:student:1024x768",
+    "candidate:support-teacher:1024x768",
+  ].sort();
+  const baseGroups = [
+    group({
+      stage: "baseline",
+      captureRole: "student",
+      authenticationRole: "student",
+      width: 1024,
+      height: 768,
+    }),
+    group({
+      stage: "baseline",
+      captureRole: "teacher",
+      authenticationRole: "teacher",
+      width: 1024,
+      height: 768,
+    }),
+    group({
+      stage: "candidate",
+      captureRole: "student",
+      authenticationRole: "student",
+      width: 1024,
+      height: 768,
+    }),
+    group({
+      stage: "candidate",
+      captureRole: "support-teacher",
+      authenticationRole: "teacher",
+      width: 1024,
+      height: 768,
+    }),
+  ].sort((left, right) =>
+    frozenBaselineAuthenticationRetirementGroupKey(left).localeCompare(
+      frozenBaselineAuthenticationRetirementGroupKey(right),
+    ),
+  );
+  const finalize = (fixture) => {
+    fixture.groupAttestationCount = fixture.groups.length;
+    fixture.eligibleGroupCount = fixture.groups.filter(
+      ({ eligible }) => eligible,
+    ).length;
+    for (const [topLevelField, groupField] of [
+      ["observedExactConsoleErrorCount", "exactConsoleErrorCount"],
+      ["retiredExactConsoleErrorCount", "retiredExactConsoleErrorCount"],
+      ["fatalExactConsoleErrorCount", "fatalExactConsoleErrorCount"],
+      ["outboundAddTargetCount", "outboundAddTargetCount"],
+      ["inboundRemoveCauseCodeCount", "inboundRemoveCauseCodeCount"],
+      ["successorAddTargetCount", "successorAddTargetCount"],
+      ["unknownRemovedTargetCount", "unknownRemovedTargetCount"],
+      ["unboundRemovedTargetCount", "unboundRemovedTargetCount"],
+      ["ambiguousRemovedTargetCount", "ambiguousRemovedTargetCount"],
+      ["unknownTargetCount", "unknownTargetCount"],
+      ["streamFailureCount", "streamFailureCount"],
+      ["parseFailureCount", "parseFailureCount"],
+      ["bufferExceededCount", "bufferExceededCount"],
+    ]) {
+      fixture[topLevelField] = fixture.groups.reduce(
+        (total, candidate) => total + candidate[groupField],
+        0,
+      );
+    }
+    fixture.groupAttestationSetSha256 =
+      frozenBaselineAuthenticationRetirementSetSha256(fixture.groups);
+    return fixture;
+  };
+  const validFixture = finalize({
+    schemaVersion: 1,
+    policyId: frozenBaselineAuthenticationAnomalyPolicy.id,
+    presentationSourceCommit:
+      frozenBaselineAuthenticationAnomalyPolicy.presentationSourceCommit,
+    transportObserver: "cdp-network-stream-resource-content",
+    targetClasses: [...FROZEN_BASELINE_AUTHENTICATION_TARGET_CLASSES],
+    expectedEligibleGroupCount: 1,
+    eligibleGroupCount: 0,
+    observedExactConsoleErrorCount: 0,
+    retiredExactConsoleErrorCount: 0,
+    fatalExactConsoleErrorCount: 0,
+    outboundAddTargetCount: 0,
+    inboundRemoveCauseCodeCount: 0,
+    successorAddTargetCount: 0,
+    unknownTargetCount: 0,
+    unknownRemovedTargetCount: 0,
+    unboundRemovedTargetCount: 0,
+    ambiguousRemovedTargetCount: 0,
+    streamFailureCount: 0,
+    parseFailureCount: 0,
+    bufferExceededCount: 0,
+    groupAttestationCount: 0,
+    groupAttestationSetSha256: "",
+    groups: clone(baseGroups),
+    passed: true,
+  });
+  const verify = (fixture) =>
+    assertFrozenBaselineAuthenticationAnomalyRetirement({
+      retirement: fixture,
+      expectedGroupKeys,
+      expectedPresentationSourceCommit:
+        frozenBaselineAuthenticationAnomalyPolicy.presentationSourceCommit,
+    });
+  assert.doesNotThrow(() => verify(validFixture));
+  const mutations = [];
+  const pushFinalizedMutation = (mutate) => {
+    const fixture = clone(validFixture);
+    mutate(fixture);
+    mutations.push(finalize(fixture));
+  };
+  pushFinalizedMutation((fixture) => {
+    const candidate = fixture.groups.find(
+      ({ stage, captureRole }) =>
+        stage === "candidate" && captureRole === "student",
+    );
+    candidate.eligible = true;
+    candidate.exactConsoleErrorCount = 1;
+    candidate.inboundRemoveCauseCodeCount = 1;
+    candidate.removedTargetClassMatchCount = 1;
+    candidate.successorAddTargetCount = 1;
+    candidate.successorTargetAcknowledgedCount = 1;
+    candidate.tupleBoundRetirementCount = 1;
+    candidate.retiredExactConsoleErrorCount = 1;
+  });
+  pushFinalizedMutation((fixture) => {
+    const otherGroup = fixture.groups.find(
+      ({ stage, captureRole }) =>
+        stage === "baseline" && captureRole === "teacher",
+    );
+    otherGroup.exactConsoleErrorCount = 1;
+    otherGroup.retiredExactConsoleErrorCount = 1;
+  });
+  pushFinalizedMutation((fixture) => {
+    const eligible = fixture.groups.find(({ eligible }) => eligible);
+    eligible.exactConsoleErrorCount = 0;
+    eligible.inboundRemoveCauseCodeCount = 0;
+    eligible.removedTargetClassMatchCount = 0;
+    eligible.tupleBoundRetirementCount = 0;
+    eligible.retiredExactConsoleErrorCount = 0;
+  });
+  pushFinalizedMutation((fixture) => {
+    const eligible = fixture.groups.find(({ eligible }) => eligible);
+    eligible.exactConsoleErrorCount = 2;
+    eligible.fatalExactConsoleErrorCount = 1;
+  });
+  pushFinalizedMutation((fixture) => {
+    const eligible = fixture.groups.find(({ eligible }) => eligible);
+    const removedTargetClass = eligible.targetClassHistogram.find(
+      ({ targetClass }) =>
+        targetClass ===
+        frozenBaselineAuthenticationAnomalyPolicy.removedTargetClass,
+    );
+    removedTargetClass.count = 2;
+    eligible.outboundAddTargetCount += 1;
+  });
+  pushFinalizedMutation((fixture) => {
+    const eligible = fixture.groups.find(({ eligible }) => eligible);
+    const successorTargetClass = eligible.targetClassHistogram.find(
+      ({ targetClass }) =>
+        targetClass ===
+        frozenBaselineAuthenticationAnomalyPolicy.successorTargetClass,
+    );
+    successorTargetClass.count = 2;
+    eligible.outboundAddTargetCount += 1;
+  });
+  pushFinalizedMutation((fixture) => {
+    fixture.groups[0].unknownRemovedTargetCount = 1;
+  });
+  pushFinalizedMutation((fixture) => {
+    fixture.groups[0].parseFailureCount = 1;
+  });
+  pushFinalizedMutation((fixture) => {
+    fixture.groups[0].streamFailureCount = 1;
+  });
+  pushFinalizedMutation((fixture) => {
+    fixture.groups[0].bufferExceededCount = 1;
+  });
+  pushFinalizedMutation((fixture) => {
+    fixture.groups.push(clone(fixture.groups.at(-1)));
+  });
+  const missingGroupFixture = clone(validFixture);
+  missingGroupFixture.groups.shift();
+  mutations.push(finalize(missingGroupFixture));
+  const extraFieldFixture = clone(validFixture);
+  extraFieldFixture.extra = true;
+  mutations.push(extraFieldFixture);
+  const missingFieldFixture = clone(validFixture);
+  delete missingFieldFixture.passed;
+  mutations.push(missingFieldFixture);
+  const wrongHashFixture = clone(validFixture);
+  wrongHashFixture.groupAttestationSetSha256 = "f".repeat(64);
+  mutations.push(wrongHashFixture);
+  const wrongSourceFixture = clone(validFixture);
+  wrongSourceFixture.presentationSourceCommit = "f".repeat(40);
+  mutations.push(wrongSourceFixture);
+  for (const forbiddenField of ["path", "uid", "body", "token"]) {
+    const fixture = clone(validFixture);
+    fixture.groups[0][forbiddenField] = "raw-value";
+    mutations.push(fixture);
+  }
+  for (const mutation of mutations) {
+    assert.throws(() => verify(mutation));
+  }
+  return {
+    frozenBaselineAuthenticationRetirementAcceptedFixtureCount: 1,
+    frozenBaselineAuthenticationRetirementRejectedFixtureCount:
+      mutations.length,
+    frozenBaselineAuthenticationRetirementCandidateRejectedCaseCount: 1,
+    frozenBaselineAuthenticationRetirementOtherGroupRejectedCaseCount: 1,
+    frozenBaselineAuthenticationRetirementMissingExactErrorRejectedCaseCount: 1,
+    frozenBaselineAuthenticationRetirementDuplicateExactErrorRejectedCaseCount: 1,
+    frozenBaselineAuthenticationRetirementDuplicateRemovedTargetRejectedCaseCount: 1,
+    frozenBaselineAuthenticationRetirementSuccessorHistogramMismatchRejectedCaseCount: 1,
+    frozenBaselineAuthenticationRetirementUnknownRemovedRejectedCaseCount: 1,
+    frozenBaselineAuthenticationRetirementMissingGroupRejectedCaseCount: 1,
+    frozenBaselineAuthenticationRetirementDuplicateGroupRejectedCaseCount: 1,
+    frozenBaselineAuthenticationRetirementParseFailureRejectedCaseCount: 1,
+    frozenBaselineAuthenticationRetirementRawFieldRejectedCaseCount: 4,
+    frozenBaselineAuthenticationRetirementNetworkAccess: 0,
+  };
+};
 const assertNoHashedAppCheckDebugToken = (textValue, debugTokenSha256) => {
   assert.match(debugTokenSha256, /^[a-f0-9]{64}$/u);
   for (const candidate of String(textValue).matchAll(
@@ -4140,6 +5019,13 @@ const verifyPreTransmissionBoundaryNegativeFixtures = () => {
     preTransmissionRegionalRealtimeDatabaseRejectedCaseCount: 4,
     preTransmissionMalformedEncodingRejectedCaseCount: 1,
     preTransmissionSourceOrderingVerified: true,
+    frozenBaselineListenerAsyncSequenceSourceContractVerified: true,
+    frozenBaselineListenerBufferedByteReplaySourceContractVerified: true,
+    frozenBaselineListenerPostSettlementGuardSourceContractVerified: true,
+    frozenBaselineListenerTerminalFailureSourceContractVerified: true,
+    frozenBaselineListenerBoundedReadinessSettlementSourceContractVerified: true,
+    frozenBaselineListenerBindingPositiveFixtureSourceCount: 3,
+    frozenBaselineListenerBindingNegativeFixtureSourceCount: 8,
     safeAuthenticationSignInSourceContractVerified: true,
     safeAuthenticationSignInSourceMutationRejectedCaseCount,
   };
@@ -4277,6 +5163,8 @@ const protectedReadTransportResetLeaseSequenceSelfTest =
   verifyProtectedReadTransportResetLeaseSequenceFixtures();
 const browserConnectProxyTransportResetObservationSelfTest =
   verifyBrowserConnectProxyTransportResetObservationFixtures();
+const frozenBaselineAuthenticationAnomalyRetirementSelfTest =
+  verifyFrozenBaselineAuthenticationAnomalyRetirementFixtures();
 if (args.includes("--self-test-app-check")) {
   console.log(
     JSON.stringify({
@@ -4292,6 +5180,7 @@ if (args.includes("--self-test-app-check")) {
       ...networkPolicyNegativeSelfTest,
       ...protectedReadTransportResetLeaseSequenceSelfTest,
       ...browserConnectProxyTransportResetObservationSelfTest,
+      ...frozenBaselineAuthenticationAnomalyRetirementSelfTest,
       verifierChildSecretEnvScrubbed: true,
       verifierChildSecretEnvironmentVariableCount,
       verifierChildSecretValueObservationCount,
@@ -7960,6 +8849,15 @@ for (const attestation of authenticationProtectedReadRetry.attestations) {
   assert.equal(attestation.tokenRefreshCount, 0);
   assert.equal(attestation.sessionMutationCount, 0);
 }
+const frozenBaselineAuthenticationAnomalyRetirement =
+  assertFrozenBaselineAuthenticationAnomalyRetirement({
+    retirement: manifest.frozenBaselineAuthenticationAnomalyRetirement,
+    expectedGroupKeys: authenticationProtectedReadRetry.attestations.map(
+      ({ groupKey }) => groupKey,
+    ),
+    expectedPresentationSourceCommit:
+      manifest.baselineDeployment?.sourceCommitSha,
+  });
 assert.equal(
   authenticationProtectedReadRetry.observedProtectedReadTransportFailureCount,
   authenticationProtectedReadRetry.attestations.reduce(
@@ -7981,7 +8879,8 @@ assert.equal(
     (total, attestation) =>
       total + attestation.recoveredProtectedReadConsoleErrorCount,
     0,
-  ),
+  ) +
+    frozenBaselineAuthenticationAnomalyRetirement.retiredExactConsoleErrorCount,
 );
 assert.equal(
   authenticationProtectedReadRetry.browserConsoleErrorObservedCount,
@@ -8595,9 +9494,9 @@ assert.equal(
   ),
   true,
 );
-assert.equal(fixtureAudit.strict?.collectionCount, 63);
-assert.equal(fixtureAudit.strict?.expectedRowCount, 51);
-assert.equal(fixtureAudit.strict?.actualRowCount, 51);
+assert.equal(fixtureAudit.strict?.collectionCount, 64);
+assert.equal(fixtureAudit.strict?.expectedRowCount, 52);
+assert.equal(fixtureAudit.strict?.actualRowCount, 52);
 assert.equal(fixtureAudit.strict?.extraRowCount, 0);
 assert.equal(
   fixtureAudit.strict?.collections?.every(

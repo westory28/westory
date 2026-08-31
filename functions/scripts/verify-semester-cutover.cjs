@@ -243,7 +243,7 @@ function activeLearningPlaceholder() { return { title: "합성 자료", summary:
     fixtureOwner: "w10p-visual-parity",
     fixtureRevision: 1,
     planHash:
-      "324d9c5f63f1673d7de9366e632c23175a14bfb69aeee1423f9aa64735daaedb",
+      "53d6f784bdfda8b731085d468e402e2b144ee4c6e4d5bab612352d131be5c509",
     projectId: "westory-staging-177587430482",
     status: "READY",
   };

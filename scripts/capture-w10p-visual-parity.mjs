@@ -2425,7 +2425,81 @@ const attestBrowserPreTransmissionCommandLine = async (
 
 const readJson = (path) => JSON.parse(readFileSync(resolve(path), "utf8"));
 const contract = readJson("scripts/w10p-visual-parity-contract.json");
-assert.equal(contract.schemaVersion, 14);
+assert.equal(contract.schemaVersion, 15);
+const SAFE_FROZEN_BASELINE_LISTENER_TARGET_CLASSES = Object.freeze([
+  "attendance-default-scope",
+  "attendance-active-scope",
+  "history-dictionary",
+  "notification-inbox",
+  "broadcast",
+  "unknown",
+]);
+const resolveFrozenBaselineAuthenticationAnomalyPolicy = (policyContract) => {
+  assert.deepEqual(Object.keys(policyContract || {}).sort(), [
+    "authenticationRole",
+    "captureRole",
+    "consoleError",
+    "id",
+    "phase",
+    "presentationSourceCommit",
+    "removedCauseCode",
+    "removedTargetClass",
+    "stage",
+    "successorTargetClass",
+    "viewport",
+  ]);
+  assert.deepEqual(Object.keys(policyContract.consoleError || {}).sort(), [
+    "errorNameClass",
+    "expectedCount",
+    "messageClass",
+    "operationClass",
+    "sha256",
+    "sourceClass",
+  ]);
+  assert.equal(
+    policyContract.id,
+    "w10p-frozen-dashboard-attendance-default-scope-v1",
+  );
+  assert.match(policyContract.presentationSourceCommit, /^[0-9a-f]{40}$/u);
+  assert.equal(
+    policyContract.presentationSourceCommit,
+    contract.productionPresentationSha,
+  );
+  assert.equal(policyContract.stage, "baseline");
+  assert.equal(policyContract.captureRole, "student");
+  assert.equal(policyContract.authenticationRole, "student");
+  assert.equal(policyContract.viewport, "1024x768");
+  assert.equal(policyContract.phase, "authentication");
+  assert.deepEqual(policyContract.consoleError, {
+    sourceClass: "console-error",
+    errorNameClass: "console-error",
+    messageClass: "firebase-permission-denied",
+    operationClass: "firestore-unhandled-snapshot-listener",
+    sha256: "22a802d5f907a1f881328ae78eab9ea0711a8e266a7bcf540c0066906e56e6d6",
+    expectedCount: 1,
+  });
+  assert.equal(policyContract.removedTargetClass, "attendance-default-scope");
+  assert.equal(policyContract.successorTargetClass, "attendance-active-scope");
+  assert.equal(policyContract.removedCauseCode, 7);
+  for (const targetClass of [
+    policyContract.removedTargetClass,
+    policyContract.successorTargetClass,
+  ]) {
+    assert.equal(
+      SAFE_FROZEN_BASELINE_LISTENER_TARGET_CLASSES.includes(targetClass),
+      true,
+    );
+    assert.notEqual(targetClass, "unknown");
+  }
+  return Object.freeze({
+    ...policyContract,
+    consoleError: Object.freeze({ ...policyContract.consoleError }),
+  });
+};
+const frozenBaselineAuthenticationAnomalyPolicy =
+  resolveFrozenBaselineAuthenticationAnomalyPolicy(
+    contract.frozenBaselineAuthenticationAnomalyPolicy,
+  );
 const resolveAuthenticationLandingGuard = ({
   guardContract,
   fixedTimeValue,
@@ -6460,6 +6534,1860 @@ const exactStagingFirestoreWebChannelEncodedApiKeyBodyScope = ({
     apiKeyHeaderLines.length === 1 &&
     apiKeyHeaderLines[0].value === stagingApiKey
   );
+};
+const FROZEN_BASELINE_LISTENER_MAX_REQUEST_BODY_BYTES = 64 * 1024;
+const FROZEN_BASELINE_LISTENER_MAX_RESPONSE_CHARACTERS = 512 * 1024;
+const FROZEN_BASELINE_LISTENER_MAX_FRAME_CHARACTERS = 256 * 1024;
+const FROZEN_BASELINE_LISTENER_SETTLEMENT_TIMEOUT_MS = 3_000;
+const FROZEN_BASELINE_LISTENER_SETTLEMENT_POLL_MS = 50;
+const FIRESTORE_LISTEN_WEBCHANNEL_PATHNAME =
+  "/google.firestore.v1.Firestore/Listen/channel";
+const FIRESTORE_LISTEN_TARGET_CHANGE_TYPES = Object.freeze([
+  "ADD",
+  "CURRENT",
+  "NO_CHANGE",
+  "REMOVE",
+  "RESET",
+]);
+const exactFirestoreListenSessionIdentity = (requestUrl) => {
+  try {
+    const parsed = new URL(String(requestUrl));
+    const databaseValues = parsed.searchParams.getAll("database");
+    const gsessionidValues = parsed.searchParams.getAll("gsessionid");
+    const sidValues = parsed.searchParams.getAll("SID");
+    const boundedOpaqueSessionValue = (values) =>
+      values.length === 1 &&
+      values[0].length >= 1 &&
+      values[0].length <= 512 &&
+      !/[\u0000-\u0020\u007f]/u.test(values[0]);
+    if (
+      parsed.protocol !== "https:" ||
+      parsed.hostname.toLowerCase() !== "firestore.googleapis.com" ||
+      parsed.username !== "" ||
+      parsed.password !== "" ||
+      !["", "443"].includes(parsed.port) ||
+      parsed.hash !== "" ||
+      parsed.pathname !== FIRESTORE_LISTEN_WEBCHANNEL_PATHNAME ||
+      databaseValues.length !== 1 ||
+      databaseValues[0] !==
+        `projects/${contract.firebaseProjectId}/databases/(default)` ||
+      !boundedOpaqueSessionValue(gsessionidValues) ||
+      !boundedOpaqueSessionValue(sidValues)
+    ) {
+      return null;
+    }
+    return Object.freeze({
+      gsessionid: gsessionidValues[0],
+      sid: sidValues[0],
+    });
+  } catch {
+    return null;
+  }
+};
+const exactFirestoreListenInitialRequest = (requestUrl) => {
+  try {
+    const parsed = new URL(String(requestUrl));
+    const queryNames = [...parsed.searchParams.keys()].sort();
+    return (
+      parsed.protocol === "https:" &&
+      parsed.hostname.toLowerCase() === "firestore.googleapis.com" &&
+      parsed.username === "" &&
+      parsed.password === "" &&
+      ["", "443"].includes(parsed.port) &&
+      parsed.hash === "" &&
+      parsed.pathname === FIRESTORE_LISTEN_WEBCHANNEL_PATHNAME &&
+      JSON.stringify(queryNames) ===
+        JSON.stringify(FIRESTORE_WEBCHANNEL_INITIAL_QUERY_NAMES) &&
+      parsed.searchParams.getAll("database").length === 1 &&
+      parsed.searchParams.get("database") ===
+        `projects/${contract.firebaseProjectId}/databases/(default)` &&
+      parsed.searchParams.getAll("VER").length === 1 &&
+      parsed.searchParams.get("VER") === "8" &&
+      parsed.searchParams.getAll("CVER").length === 1 &&
+      parsed.searchParams.get("CVER") === "22" &&
+      parsed.searchParams.getAll("X-HTTP-Session-Id").length === 1 &&
+      parsed.searchParams.get("X-HTTP-Session-Id") === "gsessionid" &&
+      parsed.searchParams.getAll("RID").length === 1 &&
+      /^(?:0|[1-9][0-9]{0,4})$/u.test(parsed.searchParams.get("RID")) &&
+      parsed.searchParams.getAll("t").length === 1 &&
+      /^[1-9][0-9]*$/u.test(parsed.searchParams.get("t")) &&
+      parsed.searchParams.getAll("zx").length === 1 &&
+      /^[0-9a-z]+$/u.test(parsed.searchParams.get("zx"))
+    );
+  } catch {
+    return false;
+  }
+};
+const exactFirestoreListenResponseGsessionid = (headers) => {
+  const values = Object.entries(headers || {})
+    .filter(([name]) => String(name).toLowerCase() === "x-http-session-id")
+    .map(([, value]) => String(value));
+  return values.length === 1 &&
+    values[0].length >= 1 &&
+    values[0].length <= 512 &&
+    !/[\u0000-\u0020\u007f]/u.test(values[0])
+    ? values[0]
+    : null;
+};
+const exactFirestoreDocumentResourceSegments = (resourceName) => {
+  const prefix = `projects/${contract.firebaseProjectId}/databases/(default)/documents/`;
+  const value = String(resourceName || "");
+  if (!value.startsWith(prefix)) return null;
+  const segments = value.slice(prefix.length).split("/");
+  if (
+    segments.length === 0 ||
+    segments.some(
+      (segment) =>
+        segment.length === 0 ||
+        segment.length > 1_500 ||
+        /[\u0000-\u001f\u007f]/u.test(segment),
+    )
+  ) {
+    return null;
+  }
+  return segments;
+};
+const firestoreStructuredQueryCollectionId = (structuredQuery) => {
+  if (
+    !structuredQuery ||
+    typeof structuredQuery !== "object" ||
+    Array.isArray(structuredQuery) ||
+    !Array.isArray(structuredQuery.from) ||
+    structuredQuery.from.length !== 1
+  ) {
+    return null;
+  }
+  const collectionSelector = structuredQuery.from[0];
+  if (
+    !collectionSelector ||
+    typeof collectionSelector !== "object" ||
+    Array.isArray(collectionSelector) ||
+    typeof collectionSelector.collectionId !== "string" ||
+    collectionSelector.collectionId.length === 0 ||
+    collectionSelector.allDescendants === true
+  ) {
+    return null;
+  }
+  return collectionSelector.collectionId;
+};
+const collectFirestoreFieldFilters = (where, output = []) => {
+  if (!where || typeof where !== "object" || Array.isArray(where)) {
+    return output;
+  }
+  if (
+    where.fieldFilter &&
+    typeof where.fieldFilter === "object" &&
+    !Array.isArray(where.fieldFilter)
+  ) {
+    output.push(where.fieldFilter);
+  }
+  const nestedFilters = where.compositeFilter?.filters;
+  if (Array.isArray(nestedFilters)) {
+    for (const filter of nestedFilters) {
+      collectFirestoreFieldFilters(filter, output);
+    }
+  }
+  return output;
+};
+const hasExactObjectKeys = (value, expectedKeys) =>
+  value &&
+  typeof value === "object" &&
+  !Array.isArray(value) &&
+  Object.keys(value).sort().join("\u0000") ===
+    [...expectedKeys].sort().join("\u0000");
+const exactAttendanceScopeFilterValue = (structuredQuery) => {
+  if (
+    !hasExactObjectKeys(structuredQuery, ["from", "where"]) &&
+    !hasExactObjectKeys(structuredQuery, ["from", "orderBy", "where"])
+  ) {
+    return null;
+  }
+  if (
+    !hasExactObjectKeys(structuredQuery.where, ["fieldFilter"]) ||
+    !hasExactObjectKeys(structuredQuery.where.fieldFilter, [
+      "field",
+      "op",
+      "value",
+    ]) ||
+    !hasExactObjectKeys(structuredQuery.where.fieldFilter.field, [
+      "fieldPath",
+    ]) ||
+    !hasExactObjectKeys(structuredQuery.where.fieldFilter.value, [
+      "stringValue",
+    ])
+  ) {
+    return null;
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(structuredQuery, "orderBy") &&
+    (!Array.isArray(structuredQuery.orderBy) ||
+      structuredQuery.orderBy.length !== 1 ||
+      !hasExactObjectKeys(structuredQuery.orderBy[0], ["direction", "field"]) ||
+      structuredQuery.orderBy[0].direction !== "ASCENDING" ||
+      !hasExactObjectKeys(structuredQuery.orderBy[0].field, ["fieldPath"]) ||
+      structuredQuery.orderBy[0].field.fieldPath !== "__name__")
+  ) {
+    return null;
+  }
+  const filters = collectFirestoreFieldFilters(structuredQuery?.where);
+  if (filters.length !== 1) return null;
+  const scopeFilters = filters.filter(
+    (filter) =>
+      filter?.field?.fieldPath === "scope" &&
+      filter?.op === "EQUAL" &&
+      typeof filter?.value?.stringValue === "string",
+  );
+  return scopeFilters.length === 1 ? scopeFilters[0].value.stringValue : null;
+};
+const classifyFrozenBaselineFirestoreListenTarget = (
+  addTarget,
+  expectedUidHash,
+) => {
+  assert.match(expectedUidHash, /^[0-9a-f]{64}$/u);
+  if (!addTarget || typeof addTarget !== "object" || Array.isArray(addTarget)) {
+    return "unknown";
+  }
+  const documents = addTarget.documents?.documents;
+  if (Array.isArray(documents) && documents.length === 1) {
+    const documentSegments = exactFirestoreDocumentResourceSegments(
+      documents[0],
+    );
+    if (
+      documentSegments?.length === 6 &&
+      documentSegments[0] === "years" &&
+      documentSegments[1] === "2026" &&
+      documentSegments[2] === "semesters" &&
+      documentSegments[3] === "2" &&
+      documentSegments[4] === "notification_inboxes" &&
+      secretSha256(documentSegments[5]) === expectedUidHash
+    ) {
+      return "notification-inbox";
+    }
+    return "unknown";
+  }
+  const queryTarget = addTarget.query;
+  if (
+    !queryTarget ||
+    typeof queryTarget !== "object" ||
+    Array.isArray(queryTarget)
+  ) {
+    return "unknown";
+  }
+  const parentSegments = exactFirestoreDocumentResourceSegments(
+    queryTarget.parent,
+  );
+  if (parentSegments === null) return "unknown";
+  const structuredQuery = queryTarget.structuredQuery;
+  const collectionId = firestoreStructuredQueryCollectionId(structuredQuery);
+  if (
+    parentSegments.length === 2 &&
+    parentSegments[0] === "users" &&
+    secretSha256(parentSegments[1]) === expectedUidHash &&
+    collectionId === "attendance"
+  ) {
+    const scope = exactAttendanceScopeFilterValue(structuredQuery);
+    if (scope === "2026_1") return "attendance-default-scope";
+    if (scope === "2026_2") return "attendance-active-scope";
+    return "unknown";
+  }
+  if (
+    parentSegments.length === 2 &&
+    parentSegments[0] === "users" &&
+    secretSha256(parentSegments[1]) === expectedUidHash &&
+    collectionId === "history_dictionary_words"
+  ) {
+    return "history-dictionary";
+  }
+  if (
+    parentSegments.length === 4 &&
+    parentSegments[0] === "years" &&
+    parentSegments[1] === "2026" &&
+    parentSegments[2] === "semesters" &&
+    parentSegments[3] === "2" &&
+    collectionId === "broadcast_notifications"
+  ) {
+    return "broadcast";
+  }
+  return "unknown";
+};
+const parseFrozenBaselineFirestoreListenAddTargets = ({
+  requestUrl,
+  method,
+  postData,
+  hasPostData,
+  expectedUidHash,
+}) => {
+  const sessionIdentity = exactFirestoreListenSessionIdentity(requestUrl);
+  const initialRequest = exactFirestoreListenInitialRequest(requestUrl);
+  if (
+    (sessionIdentity === null && !initialRequest) ||
+    String(method).toUpperCase() !== "POST"
+  ) {
+    return Object.freeze({
+      initialRequest,
+      sessionIdentity,
+      targets: Object.freeze([]),
+    });
+  }
+  assert.equal(hasPostData, true, "Firestore Listen POST body was absent.");
+  assert.equal(
+    typeof postData,
+    "string",
+    "Firestore Listen POST body was unavailable.",
+  );
+  assert.ok(
+    Buffer.byteLength(postData, "utf8") <=
+      FROZEN_BASELINE_LISTENER_MAX_REQUEST_BODY_BYTES,
+    "Firestore Listen POST body exceeded the bounded parser limit.",
+  );
+  assert.notEqual(
+    safelyDecodeUrl(postData.replace(/\+/gu, "%20")),
+    null,
+    "Firestore Listen POST body encoding was malformed.",
+  );
+  const params = new URLSearchParams(postData);
+  const countValues = params.getAll("count");
+  const offsetValues = params.getAll("ofs");
+  assert.equal(
+    countValues.length,
+    1,
+    "Firestore Listen message count was ambiguous.",
+  );
+  assert.match(countValues[0], /^(?:0|[1-9][0-9]{0,3})$/u);
+  const expectedMessageCount = Number(countValues[0]);
+  assert.equal(
+    expectedMessageCount === 0
+      ? [0, 1].includes(offsetValues.length)
+      : offsetValues.length === 1,
+    true,
+    "Firestore Listen message offset was ambiguous.",
+  );
+  if (offsetValues.length === 1) {
+    assert.match(offsetValues[0], /^(?:0|[1-9][0-9]{0,9})$/u);
+  }
+  const dataEntries = [...params.entries()].filter(([name]) =>
+    /^req(?:0|[1-9][0-9]{0,3})___data__$/u.test(name),
+  );
+  assert.equal(
+    dataEntries.length,
+    expectedMessageCount,
+    "Firestore Listen message body was incomplete or ambiguous.",
+  );
+  assert.equal(
+    new Set(dataEntries.map(([name]) => name)).size,
+    dataEntries.length,
+    "Firestore Listen message keys were duplicated.",
+  );
+  const targets = [];
+  for (const [, encodedMessage] of dataEntries) {
+    assert.ok(
+      Buffer.byteLength(encodedMessage, "utf8") <=
+        FROZEN_BASELINE_LISTENER_MAX_REQUEST_BODY_BYTES,
+      "Firestore Listen message exceeded the bounded parser limit.",
+    );
+    const message = JSON.parse(encodedMessage);
+    assert.ok(
+      message && typeof message === "object" && !Array.isArray(message),
+      "Firestore Listen message was not an object.",
+    );
+    if (!Object.prototype.hasOwnProperty.call(message, "addTarget")) continue;
+    const targetId = message.addTarget?.targetId;
+    assert.ok(
+      Number.isSafeInteger(targetId) && targetId > 0,
+      "Firestore Listen addTarget targetId was invalid.",
+    );
+    targets.push(
+      Object.freeze({
+        sessionIdentity,
+        targetId,
+        targetClass: classifyFrozenBaselineFirestoreListenTarget(
+          message.addTarget,
+          expectedUidHash,
+        ),
+      }),
+    );
+  }
+  return Object.freeze({
+    initialRequest,
+    sessionIdentity,
+    targets: Object.freeze(targets),
+  });
+};
+const collectFirestoreListenTargetChanges = (value, output = []) => {
+  if (Array.isArray(value)) {
+    for (const item of value) collectFirestoreListenTargetChanges(item, output);
+    return output;
+  }
+  if (!value || typeof value !== "object") return output;
+  if (Object.prototype.hasOwnProperty.call(value, "targetChange")) {
+    output.push(value.targetChange);
+    return output;
+  }
+  for (const nestedValue of Object.values(value)) {
+    collectFirestoreListenTargetChanges(nestedValue, output);
+  }
+  return output;
+};
+const parseFirestoreListenTargetChanges = (payload) => {
+  assert.ok(
+    payload.length <= FROZEN_BASELINE_LISTENER_MAX_FRAME_CHARACTERS,
+    "Firestore Listen response frame exceeded the bounded parser limit.",
+  );
+  const parsed = JSON.parse(payload);
+  return collectFirestoreListenTargetChanges(parsed).map((targetChange) => {
+    assert.ok(
+      targetChange &&
+        typeof targetChange === "object" &&
+        !Array.isArray(targetChange),
+      "Firestore Listen targetChange was malformed.",
+    );
+    const targetChangeType = targetChange.targetChangeType;
+    assert.equal(
+      FIRESTORE_LISTEN_TARGET_CHANGE_TYPES.includes(targetChangeType),
+      true,
+      "Firestore Listen targetChange type was unsupported.",
+    );
+    const targetIds = targetChange.targetIds ?? [];
+    assert.equal(
+      Array.isArray(targetIds) &&
+        targetIds.every(
+          (targetId) => Number.isSafeInteger(targetId) && targetId > 0,
+        ),
+      true,
+      "Firestore Listen targetChange targetIds were malformed.",
+    );
+    const causeCode = Object.prototype.hasOwnProperty.call(
+      targetChange,
+      "cause",
+    )
+      ? targetChange.cause?.code
+      : null;
+    assert.equal(
+      causeCode === null || Number.isSafeInteger(causeCode),
+      true,
+      "Firestore Listen targetChange cause code was malformed.",
+    );
+    return Object.freeze({
+      targetChangeType,
+      targetIds: Object.freeze([...targetIds]),
+      causeCode,
+    });
+  });
+};
+const exactBase64Buffer = (encodedValue) => {
+  assert.equal(typeof encodedValue, "string");
+  assert.match(
+    encodedValue,
+    /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u,
+    "CDP streamed response data was not canonical base64.",
+  );
+  return Buffer.from(encodedValue, "base64");
+};
+const frozenBaselineListenerTupleKey = ({ gsessionid, sid }, targetId) =>
+  `${gsessionid}\u0000${sid}\u0000${targetId}`;
+const frozenBaselineObservationSequenceBefore = (left, right) =>
+  left.eventSequence < right.eventSequence ||
+  (left.eventSequence === right.eventSequence &&
+    (left.frameSequence < right.frameSequence ||
+      (left.frameSequence === right.frameSequence &&
+        left.withinEventSequence < right.withinEventSequence)));
+const createFrozenBaselineListenerBindingObserver = ({
+  stage,
+  captureRole,
+  authenticationRole,
+  viewport,
+  groupKey,
+  policy,
+  expectedUidHash,
+}) => {
+  assert.match(expectedUidHash, /^[0-9a-f]{64}$/u);
+  const targetsByTuple = new Map();
+  const pendingInitialTargetsByRequestId = new Map();
+  const exactConsoleSequences = [];
+  let observationSequence = 0;
+  let outboundAddTargetCount = 0;
+  let inboundRemoveCauseCodeCount = 0;
+  let removedTargetClassMatchCount = 0;
+  let successorAddTargetCount = 0;
+  let successorTargetAcknowledgedCount = 0;
+  let unknownRemovedTargetCount = 0;
+  let unboundRemovedTargetCount = 0;
+  let ambiguousRemovedTargetCount = 0;
+  let streamFailureCount = 0;
+  let parseFailureCount = 0;
+  let bufferExceededCount = 0;
+  let settledDecision = null;
+  let settledSemanticLedger = null;
+  const targetClassCounts = new Map(
+    SAFE_FROZEN_BASELINE_LISTENER_TARGET_CLASSES.map((targetClass) => [
+      targetClass,
+      0,
+    ]),
+  );
+  const nextSequence = () => {
+    observationSequence += 1;
+    assert.ok(Number.isSafeInteger(observationSequence));
+    return Object.freeze({
+      eventSequence: observationSequence,
+      frameSequence: 0,
+      withinEventSequence: 0,
+    });
+  };
+  const sequenceWithinInboundPayload = (
+    arrivalSequence,
+    frameSequence,
+    ordinal,
+  ) => {
+    assert.deepEqual(Object.keys(arrivalSequence || {}).sort(), [
+      "eventSequence",
+      "frameSequence",
+      "withinEventSequence",
+    ]);
+    assert.ok(
+      Number.isSafeInteger(arrivalSequence.eventSequence) &&
+        arrivalSequence.eventSequence > 0 &&
+        arrivalSequence.eventSequence <= observationSequence,
+    );
+    assert.equal(arrivalSequence.frameSequence, 0);
+    assert.equal(arrivalSequence.withinEventSequence, 0);
+    assert.ok(Number.isSafeInteger(frameSequence) && frameSequence >= 0);
+    assert.ok(Number.isSafeInteger(ordinal) && ordinal > 0);
+    return Object.freeze({
+      eventSequence: arrivalSequence.eventSequence,
+      frameSequence,
+      withinEventSequence: ordinal,
+    });
+  };
+  const eligible =
+    stage === policy.stage &&
+    captureRole === policy.captureRole &&
+    authenticationRole === policy.authenticationRole &&
+    viewport === policy.viewport &&
+    policy.phase === "authentication";
+  const recordParseFailure = ({ bufferExceeded = false } = {}) => {
+    if (settledDecision !== null) return;
+    parseFailureCount += 1;
+    bufferExceededCount += Number(bufferExceeded);
+  };
+  const registerSessionTarget = ({
+    sessionIdentity,
+    targetId,
+    targetClass,
+    addSequence,
+  }) => {
+    const tupleKey = frozenBaselineListenerTupleKey(sessionIdentity, targetId);
+    if (targetsByTuple.has(tupleKey)) {
+      recordParseFailure();
+      return;
+    }
+    targetsByTuple.set(tupleKey, {
+      targetClass,
+      addSequence,
+      acknowledgementSequences: [],
+      removedCauseCodeSequences: [],
+    });
+  };
+  const observeOutboundRequest = (request) => {
+    if (settledDecision !== null) {
+      return exactFirestoreListenSessionIdentity(request.requestUrl);
+    }
+    try {
+      const parsed = parseFrozenBaselineFirestoreListenAddTargets({
+        ...request,
+        expectedUidHash,
+      });
+      const pendingInitialTargets = [];
+      for (const target of parsed.targets) {
+        const addSequence = nextSequence();
+        const targetRecord = {
+          sessionIdentity: target.sessionIdentity,
+          targetId: target.targetId,
+          targetClass: target.targetClass,
+          addSequence,
+        };
+        if (parsed.initialRequest) pendingInitialTargets.push(targetRecord);
+        else registerSessionTarget(targetRecord);
+        outboundAddTargetCount += 1;
+        targetClassCounts.set(
+          target.targetClass,
+          targetClassCounts.get(target.targetClass) + 1,
+        );
+        successorAddTargetCount += Number(
+          target.targetClass === policy.successorTargetClass,
+        );
+      }
+      if (parsed.initialRequest && pendingInitialTargets.length > 0) {
+        if (
+          typeof request.networkRequestId !== "string" ||
+          request.networkRequestId.length === 0 ||
+          pendingInitialTargetsByRequestId.has(request.networkRequestId)
+        ) {
+          recordParseFailure();
+        } else {
+          pendingInitialTargetsByRequestId.set(
+            request.networkRequestId,
+            pendingInitialTargets,
+          );
+        }
+      }
+      return parsed.sessionIdentity;
+    } catch (error) {
+      recordParseFailure({
+        bufferExceeded: String(error?.message || "").includes(
+          "bounded parser limit",
+        ),
+      });
+      return exactFirestoreListenSessionIdentity(request.requestUrl);
+    }
+  };
+  const promoteInitialTargets = ({ networkRequestId, gsessionid, sid }) => {
+    if (settledDecision !== null) return;
+    try {
+      assert.equal(typeof networkRequestId, "string");
+      assert.ok(networkRequestId.length > 0);
+      const pendingTargets =
+        pendingInitialTargetsByRequestId.get(networkRequestId) || null;
+      if (pendingTargets === null) return;
+      const sessionIdentity = exactFirestoreListenSessionIdentity(
+        `https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel?database=${encodeURIComponent(
+          `projects/${contract.firebaseProjectId}/databases/(default)`,
+        )}&gsessionid=${encodeURIComponent(gsessionid)}&SID=${encodeURIComponent(
+          sid,
+        )}`,
+      );
+      assert.ok(sessionIdentity);
+      for (const pendingTarget of pendingTargets) {
+        registerSessionTarget({
+          ...pendingTarget,
+          sessionIdentity,
+        });
+      }
+      pendingInitialTargetsByRequestId.delete(networkRequestId);
+    } catch {
+      recordParseFailure();
+    }
+  };
+  const reserveInboundPayloadSequence = () => {
+    if (settledDecision !== null) return null;
+    return nextSequence();
+  };
+  const observeInboundPayload = ({
+    sessionIdentity,
+    payload,
+    arrivalSequence = null,
+    arrivalFrameSequence = 0,
+  }) => {
+    if (settledDecision !== null) return;
+    try {
+      const targetChanges = parseFirestoreListenTargetChanges(payload);
+      const payloadArrivalSequence = arrivalSequence || nextSequence();
+      let withinPayloadSequence = 0;
+      for (const targetChange of targetChanges) {
+        if (
+          targetChange.targetChangeType === "REMOVE" &&
+          targetChange.causeCode === policy.removedCauseCode &&
+          targetChange.targetIds.length === 0
+        ) {
+          inboundRemoveCauseCodeCount += 1;
+          unboundRemovedTargetCount += 1;
+          ambiguousRemovedTargetCount += 1;
+          continue;
+        }
+        for (const targetId of targetChange.targetIds) {
+          withinPayloadSequence += 1;
+          const sequence = sequenceWithinInboundPayload(
+            payloadArrivalSequence,
+            arrivalFrameSequence,
+            withinPayloadSequence,
+          );
+          const target = targetsByTuple.get(
+            frozenBaselineListenerTupleKey(sessionIdentity, targetId),
+          );
+          if (
+            targetChange.targetChangeType === "ADD" ||
+            targetChange.targetChangeType === "CURRENT"
+          ) {
+            if (target) {
+              target.acknowledgementSequences.push(sequence);
+              if (
+                target.targetClass === policy.successorTargetClass &&
+                target.acknowledgementSequences.length === 1
+              ) {
+                successorTargetAcknowledgedCount += 1;
+              }
+            }
+          }
+          if (
+            targetChange.targetChangeType !== "REMOVE" ||
+            targetChange.causeCode !== policy.removedCauseCode
+          ) {
+            continue;
+          }
+          inboundRemoveCauseCodeCount += 1;
+          if (!target) {
+            unboundRemovedTargetCount += 1;
+            continue;
+          }
+          target.removedCauseCodeSequences.push(sequence);
+          if (target.removedCauseCodeSequences.length > 1) {
+            ambiguousRemovedTargetCount += 1;
+          }
+          if (target.targetClass === "unknown") {
+            unknownRemovedTargetCount += 1;
+          }
+          if (target.targetClass === policy.removedTargetClass) {
+            removedTargetClassMatchCount += 1;
+          }
+        }
+      }
+    } catch (error) {
+      recordParseFailure({
+        bufferExceeded: String(error?.message || "").includes(
+          "bounded parser limit",
+        ),
+      });
+    }
+  };
+  const observeConsoleError = (record) => {
+    if (settledDecision !== null) return;
+    const exact =
+      record.sourceClass === policy.consoleError.sourceClass &&
+      record.errorNameClass === policy.consoleError.errorNameClass &&
+      record.messageClass === policy.consoleError.messageClass &&
+      record.operationClass === policy.consoleError.operationClass &&
+      record.sha256 === policy.consoleError.sha256;
+    if (exact) exactConsoleSequences.push(nextSequence());
+  };
+  const recordStreamFailure = () => {
+    if (settledDecision !== null) return;
+    streamFailureCount += 1;
+  };
+  const snapshotSemanticLedger = () => ({
+    observationSequence,
+    exactConsoleErrorCount: exactConsoleSequences.length,
+    outboundAddTargetCount,
+    inboundRemoveCauseCodeCount,
+    removedTargetClassMatchCount,
+    successorAddTargetCount,
+    successorTargetAcknowledgedCount,
+    unknownRemovedTargetCount,
+    unboundRemovedTargetCount,
+    ambiguousRemovedTargetCount,
+    targetClassHistogram: SAFE_FROZEN_BASELINE_LISTENER_TARGET_CLASSES.map(
+      (targetClass) => ({
+        targetClass,
+        count: targetClassCounts.get(targetClass),
+      }),
+    ),
+  });
+  const readyForSettlement = () => {
+    if (settledDecision !== null || !eligible) return true;
+    const irrecoverableFailureObserved =
+      streamFailureCount > 0 ||
+      parseFailureCount > 0 ||
+      bufferExceededCount > 0 ||
+      exactConsoleSequences.length > policy.consoleError.expectedCount ||
+      inboundRemoveCauseCodeCount > 1 ||
+      removedTargetClassMatchCount > 1 ||
+      successorAddTargetCount > 1 ||
+      successorTargetAcknowledgedCount > 1 ||
+      unknownRemovedTargetCount > 0 ||
+      unboundRemovedTargetCount > 0 ||
+      ambiguousRemovedTargetCount > 0;
+    if (irrecoverableFailureObserved) return true;
+    const removedTargets = [...targetsByTuple.values()].filter(
+      (target) => target.targetClass === policy.removedTargetClass,
+    );
+    const successorTargets = [...targetsByTuple.values()].filter(
+      (target) => target.targetClass === policy.successorTargetClass,
+    );
+    return (
+      pendingInitialTargetsByRequestId.size === 0 &&
+      exactConsoleSequences.length === policy.consoleError.expectedCount &&
+      inboundRemoveCauseCodeCount === 1 &&
+      removedTargetClassMatchCount === 1 &&
+      removedTargets.length === 1 &&
+      removedTargets[0].removedCauseCodeSequences.length === 1 &&
+      successorAddTargetCount === 1 &&
+      successorTargetAcknowledgedCount === 1 &&
+      successorTargets.length === 1 &&
+      successorTargets[0].acknowledgementSequences.length >= 1
+    );
+  };
+  const settleAuthentication = ({ dashboardStable }) => {
+    assert.equal(settledDecision, null);
+    assert.equal(dashboardStable, true);
+    if (pendingInitialTargetsByRequestId.size > 0) recordParseFailure();
+    const removedTargets = [...targetsByTuple.values()].filter(
+      (target) => target.targetClass === policy.removedTargetClass,
+    );
+    const successorTargets = [...targetsByTuple.values()].filter(
+      (target) => target.targetClass === policy.successorTargetClass,
+    );
+    const removedSequence =
+      removedTargets.length === 1 &&
+      removedTargets[0].removedCauseCodeSequences.length === 1
+        ? removedTargets[0].removedCauseCodeSequences[0]
+        : null;
+    const exactConsoleSequence =
+      exactConsoleSequences.length === policy.consoleError.expectedCount
+        ? exactConsoleSequences[0]
+        : null;
+    const successorExplicitlyAcknowledged =
+      successorTargets.length === 1 &&
+      successorTargets[0].acknowledgementSequences.length >= 1;
+    const successorSequenceBound =
+      successorExplicitlyAcknowledged &&
+      removedSequence !== null &&
+      frozenBaselineObservationSequenceBefore(
+        removedSequence,
+        successorTargets[0].addSequence,
+      ) &&
+      frozenBaselineObservationSequenceBefore(
+        successorTargets[0].addSequence,
+        successorTargets[0].acknowledgementSequences[0],
+      );
+    const tupleBoundRetirementCount = Number(
+      eligible &&
+        exactConsoleSequences.length === policy.consoleError.expectedCount &&
+        inboundRemoveCauseCodeCount === 1 &&
+        removedTargetClassMatchCount === 1 &&
+        removedTargets.length === 1 &&
+        removedSequence !== null &&
+        exactConsoleSequence !== null &&
+        frozenBaselineObservationSequenceBefore(
+          removedSequence,
+          exactConsoleSequence,
+        ) &&
+        successorAddTargetCount === 1 &&
+        successorTargetAcknowledgedCount === 1 &&
+        successorExplicitlyAcknowledged &&
+        successorSequenceBound &&
+        unknownRemovedTargetCount === 0 &&
+        unboundRemovedTargetCount === 0 &&
+        ambiguousRemovedTargetCount === 0 &&
+        streamFailureCount === 0 &&
+        parseFailureCount === 0 &&
+        bufferExceededCount === 0,
+    );
+    const retiredExactConsoleErrorCount = tupleBoundRetirementCount;
+    const fatalExactConsoleErrorCount =
+      exactConsoleSequences.length - retiredExactConsoleErrorCount;
+    settledDecision = Object.freeze({
+      tupleBoundRetirementCount,
+      retiredExactConsoleErrorCount,
+      fatalExactConsoleErrorCount,
+      dashboardStable: true,
+      successorExplicitlyAcknowledged,
+      successorSequenceBound,
+    });
+    settledSemanticLedger = Object.freeze(snapshotSemanticLedger());
+    return settledDecision;
+  };
+  const safeSnapshot = () => {
+    assert.ok(settledDecision);
+    assert.deepEqual(snapshotSemanticLedger(), settledSemanticLedger);
+    const targetClassHistogram = settledSemanticLedger.targetClassHistogram;
+    const passed =
+      streamFailureCount === 0 &&
+      parseFailureCount === 0 &&
+      bufferExceededCount === 0 &&
+      unknownRemovedTargetCount === 0 &&
+      unboundRemovedTargetCount === 0 &&
+      ambiguousRemovedTargetCount === 0 &&
+      (eligible
+        ? settledDecision.tupleBoundRetirementCount === 1 &&
+          settledDecision.fatalExactConsoleErrorCount === 0
+        : settledDecision.tupleBoundRetirementCount === 0 &&
+          exactConsoleSequences.length === 0 &&
+          inboundRemoveCauseCodeCount === 0);
+    return Object.freeze({
+      groupKey,
+      stage,
+      captureRole,
+      authenticationRole,
+      viewport,
+      phase: policy.phase,
+      eligible,
+      exactConsoleErrorCount: exactConsoleSequences.length,
+      outboundAddTargetCount,
+      targetClassHistogram,
+      inboundRemoveCauseCodeCount,
+      removedTargetClassMatchCount,
+      successorAddTargetCount,
+      successorTargetAcknowledgedCount,
+      unknownTargetCount: targetClassCounts.get("unknown"),
+      unknownRemovedTargetCount,
+      unboundRemovedTargetCount,
+      ambiguousRemovedTargetCount,
+      streamFailureCount,
+      parseFailureCount,
+      bufferExceededCount,
+      tupleBoundRetirementCount: settledDecision.tupleBoundRetirementCount,
+      retiredExactConsoleErrorCount:
+        settledDecision.retiredExactConsoleErrorCount,
+      fatalExactConsoleErrorCount: settledDecision.fatalExactConsoleErrorCount,
+      dashboardStable: settledDecision.dashboardStable,
+      successorExplicitlyAcknowledged:
+        settledDecision.successorExplicitlyAcknowledged,
+      successorSequenceBound: settledDecision.successorSequenceBound,
+      passed,
+    });
+  };
+  return Object.freeze({
+    observeOutboundRequest,
+    observeInboundPayload,
+    observeConsoleError,
+    promoteInitialTargets,
+    reserveInboundPayloadSequence,
+    recordParseFailure,
+    recordStreamFailure,
+    readyForSettlement,
+    settleAuthentication,
+    safeSnapshot,
+    isSettled: () => settledDecision !== null,
+  });
+};
+const createFrozenBaselineListenerResponseStream = ({
+  sessionIdentity,
+  observeInboundPayload,
+  recordParseFailure,
+}) => {
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  let decodedBuffer = "";
+  let totalDecodedCharacterCount = 0;
+  let terminal = false;
+  let failed = false;
+  let lastArrivalSequence = null;
+  let currentFrameArrivalEventSequence = null;
+  let currentArrivalFrameSequence = 0;
+  const fail = ({ bufferExceeded = false } = {}) => {
+    if (!failed) recordParseFailure({ bufferExceeded });
+    failed = true;
+  };
+  const drainFrames = (arrivalSequence) => {
+    const arrivalEventSequence = arrivalSequence?.eventSequence ?? null;
+    if (arrivalEventSequence !== currentFrameArrivalEventSequence) {
+      currentFrameArrivalEventSequence = arrivalEventSequence;
+      currentArrivalFrameSequence = 0;
+    }
+    while (!failed && decodedBuffer.length > 0) {
+      const newlineIndex = decodedBuffer.indexOf("\n");
+      if (newlineIndex < 0) {
+        if (decodedBuffer.length > 10) fail();
+        return;
+      }
+      const lengthPrefix = decodedBuffer.slice(0, newlineIndex);
+      if (!/^(?:0|[1-9][0-9]{0,8})$/u.test(lengthPrefix)) {
+        fail();
+        return;
+      }
+      const frameLength = Number(lengthPrefix);
+      if (frameLength > FROZEN_BASELINE_LISTENER_MAX_FRAME_CHARACTERS) {
+        fail({ bufferExceeded: true });
+        return;
+      }
+      const frameStart = newlineIndex + 1;
+      const frameEnd = frameStart + frameLength;
+      if (decodedBuffer.length < frameEnd) return;
+      const payload = decodedBuffer.slice(frameStart, frameEnd);
+      decodedBuffer = decodedBuffer.slice(frameEnd);
+      currentArrivalFrameSequence += 1;
+      observeInboundPayload({
+        sessionIdentity,
+        payload,
+        arrivalSequence,
+        arrivalFrameSequence: currentArrivalFrameSequence,
+      });
+    }
+  };
+  const appendBase64 = (encodedValue, arrivalSequence = null) => {
+    if (terminal || failed) {
+      fail();
+      return;
+    }
+    try {
+      lastArrivalSequence = arrivalSequence;
+      const bytes = exactBase64Buffer(encodedValue);
+      const decoded = decoder.decode(bytes, { stream: true });
+      totalDecodedCharacterCount += decoded.length;
+      if (
+        totalDecodedCharacterCount >
+        FROZEN_BASELINE_LISTENER_MAX_RESPONSE_CHARACTERS
+      ) {
+        fail({ bufferExceeded: true });
+        return;
+      }
+      decodedBuffer += decoded;
+      drainFrames(arrivalSequence);
+    } catch (error) {
+      fail({
+        bufferExceeded: String(error?.message || "").includes(
+          "bounded parser limit",
+        ),
+      });
+    }
+  };
+  const finish = ({ allowIncomplete = false } = {}) => {
+    if (terminal) return;
+    terminal = true;
+    if (failed) return;
+    if (allowIncomplete) {
+      decodedBuffer = "";
+      return;
+    }
+    try {
+      decodedBuffer += decoder.decode();
+      drainFrames(lastArrivalSequence);
+      if (decodedBuffer.length !== 0) fail();
+    } catch {
+      fail();
+    }
+  };
+  return Object.freeze({
+    appendBase64,
+    finish,
+    failed: () => failed,
+  });
+};
+const appendFrozenBaselineBufferedStreamSegments = ({
+  bufferedData,
+  bufferedSegments,
+  responseStream,
+  recordParseFailure,
+}) => {
+  try {
+    assert.equal(Array.isArray(bufferedSegments), true);
+    assert.ok(
+      bufferedData.length <=
+        Math.ceil((FROZEN_BASELINE_LISTENER_MAX_RESPONSE_CHARACTERS * 4) / 3) +
+          16,
+      "Firestore Listen buffered response exceeded the bounded parser limit.",
+    );
+    const bufferedBytes = exactBase64Buffer(bufferedData);
+    let expectedByteLength = 0;
+    for (const segment of bufferedSegments) {
+      assert.deepEqual(Object.keys(segment || {}).sort(), [
+        "arrivalSequence",
+        "byteLength",
+      ]);
+      assert.ok(
+        Number.isSafeInteger(segment.byteLength) && segment.byteLength > 0,
+      );
+      assert.deepEqual(Object.keys(segment.arrivalSequence || {}).sort(), [
+        "eventSequence",
+        "frameSequence",
+        "withinEventSequence",
+      ]);
+      assert.ok(
+        Number.isSafeInteger(segment.arrivalSequence.eventSequence) &&
+          segment.arrivalSequence.eventSequence > 0,
+      );
+      assert.equal(segment.arrivalSequence.frameSequence, 0);
+      assert.equal(segment.arrivalSequence.withinEventSequence, 0);
+      expectedByteLength += segment.byteLength;
+      assert.ok(Number.isSafeInteger(expectedByteLength));
+    }
+    assert.equal(bufferedBytes.length, expectedByteLength);
+    let offset = 0;
+    for (const segment of bufferedSegments) {
+      const nextOffset = offset + segment.byteLength;
+      responseStream.appendBase64(
+        bufferedBytes.subarray(offset, nextOffset).toString("base64"),
+        segment.arrivalSequence,
+      );
+      offset = nextOffset;
+    }
+    assert.equal(offset, bufferedBytes.length);
+    return true;
+  } catch (error) {
+    recordParseFailure({
+      bufferExceeded: String(error?.message || "").includes(
+        "bounded parser limit",
+      ),
+    });
+    return false;
+  }
+};
+const appendFrozenBaselineDataReceivedStreamChunk = ({
+  encodedValue,
+  byteLength,
+  arrivalSequence,
+  responseStream,
+  recordParseFailure,
+}) => {
+  try {
+    assert.ok(Number.isSafeInteger(byteLength) && byteLength >= 0);
+    assert.equal(exactBase64Buffer(encodedValue).length, byteLength);
+    responseStream.appendBase64(encodedValue, arrivalSequence);
+    return true;
+  } catch (error) {
+    recordParseFailure({
+      bufferExceeded: String(error?.message || "").includes(
+        "bounded parser limit",
+      ),
+    });
+    return false;
+  }
+};
+const shouldRecordFrozenBaselineListenTerminalStreamFailure = ({
+  method,
+  initialRequest,
+  streamRequested,
+  responseGsessionid,
+  settled,
+}) =>
+  settled !== true &&
+  streamRequested !== true &&
+  ((method === "GET" && initialRequest !== true) ||
+    (initialRequest === true && responseGsessionid === null));
+const verifyFrozenBaselineListenerBindingFixtures = async () => {
+  const privateUid = "private-w10p-listener-fixture-uid";
+  const privateGsessionid = "private-w10p-listener-gsessionid";
+  const privateSid = "private-w10p-listener-sid";
+  const database = `projects/${contract.firebaseProjectId}/databases/(default)`;
+  const documentPrefix = `${database}/documents`;
+  const requestUrl = new URL(
+    "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel",
+  );
+  requestUrl.searchParams.set("database", database);
+  requestUrl.searchParams.set("VER", "8");
+  requestUrl.searchParams.set("gsessionid", privateGsessionid);
+  requestUrl.searchParams.set("SID", privateSid);
+  requestUrl.searchParams.set("RID", "12345");
+  requestUrl.searchParams.set("AID", "1");
+  requestUrl.searchParams.set("zx", "fixture");
+  requestUrl.searchParams.set("t", "1");
+  const attendanceTarget = (scope, targetId, uid = privateUid) => ({
+    targetId,
+    query: {
+      parent: `${documentPrefix}/users/${uid}`,
+      structuredQuery: {
+        from: [{ collectionId: "attendance" }],
+        where: {
+          fieldFilter: {
+            field: { fieldPath: "scope" },
+            op: "EQUAL",
+            value: { stringValue: scope },
+          },
+        },
+      },
+    },
+  });
+  const historyDictionaryTarget = {
+    targetId: 6,
+    query: {
+      parent: `${documentPrefix}/users/${privateUid}`,
+      structuredQuery: {
+        from: [{ collectionId: "history_dictionary_words" }],
+      },
+    },
+  };
+  const notificationInboxTarget = {
+    targetId: 8,
+    documents: {
+      documents: [
+        `${documentPrefix}/years/2026/semesters/2/notification_inboxes/${privateUid}`,
+      ],
+    },
+  };
+  const broadcastTarget = {
+    targetId: 10,
+    query: {
+      parent: `${documentPrefix}/years/2026/semesters/2`,
+      structuredQuery: {
+        from: [{ collectionId: "broadcast_notifications" }],
+      },
+    },
+  };
+  const attendanceTargetWithExtraFilter = attendanceTarget("2026_1", 12);
+  attendanceTargetWithExtraFilter.query.structuredQuery.where = {
+    compositeFilter: {
+      op: "AND",
+      filters: [
+        attendanceTarget("2026_1", 12).query.structuredQuery.where,
+        {
+          fieldFilter: {
+            field: { fieldPath: "status" },
+            op: "EQUAL",
+            value: { stringValue: "present" },
+          },
+        },
+      ],
+    },
+  };
+  assert.equal(
+    classifyFrozenBaselineFirestoreListenTarget(
+      attendanceTargetWithExtraFilter,
+      secretSha256(privateUid),
+    ),
+    "unknown",
+  );
+  const attendanceTargetWithImplicitNameOrdering = attendanceTarget(
+    "2026_1",
+    14,
+  );
+  attendanceTargetWithImplicitNameOrdering.query.structuredQuery.orderBy = [
+    {
+      field: { fieldPath: "__name__" },
+      direction: "ASCENDING",
+    },
+  ];
+  assert.equal(
+    classifyFrozenBaselineFirestoreListenTarget(
+      attendanceTargetWithImplicitNameOrdering,
+      secretSha256(privateUid),
+    ),
+    "attendance-default-scope",
+  );
+  const requestBodyForTargets = (targets) => {
+    const params = new URLSearchParams({
+      count: String(targets.length),
+      ofs: "0",
+    });
+    targets.forEach((addTarget, index) => {
+      params.set(`req${index}___data__`, JSON.stringify({ addTarget }));
+    });
+    return params.toString();
+  };
+  const createObserver = ({ stage = "baseline", viewport = "1024x768" } = {}) =>
+    createFrozenBaselineListenerBindingObserver({
+      stage,
+      captureRole: "student",
+      authenticationRole: "student",
+      viewport,
+      groupKey: `${stage}:student:${viewport}`,
+      policy: frozenBaselineAuthenticationAnomalyPolicy,
+      expectedUidHash: secretSha256(privateUid),
+    });
+  const exactConsoleError = {
+    ...frozenBaselineAuthenticationAnomalyPolicy.consoleError,
+  };
+  delete exactConsoleError.expectedCount;
+  const observePositiveLifecycle = (observer) => {
+    observer.observeOutboundRequest({
+      requestUrl: requestUrl.toString(),
+      method: "POST",
+      hasPostData: true,
+      postData: requestBodyForTargets([attendanceTarget("2026_1", 2)]),
+    });
+    const sessionIdentity = exactFirestoreListenSessionIdentity(
+      requestUrl.toString(),
+    );
+    observer.observeInboundPayload({
+      sessionIdentity,
+      payload: JSON.stringify([
+        [
+          1,
+          [
+            {
+              targetChange: {
+                targetChangeType: "REMOVE",
+                targetIds: [2],
+                cause: { code: 7, message: "private fixture message" },
+              },
+            },
+          ],
+        ],
+      ]),
+    });
+    observer.observeConsoleError(exactConsoleError);
+    observer.observeOutboundRequest({
+      requestUrl: requestUrl.toString(),
+      method: "POST",
+      hasPostData: true,
+      postData: requestBodyForTargets([
+        attendanceTarget("2026_2", 4),
+        historyDictionaryTarget,
+        notificationInboxTarget,
+        broadcastTarget,
+      ]),
+    });
+    observer.observeInboundPayload({
+      sessionIdentity,
+      payload: JSON.stringify([
+        [
+          2,
+          [
+            {
+              targetChange: {
+                targetChangeType: "ADD",
+                targetIds: [4],
+              },
+            },
+          ],
+        ],
+      ]),
+    });
+  };
+  const positiveObserver = createObserver();
+  assert.equal(positiveObserver.readyForSettlement(), false);
+  observePositiveLifecycle(positiveObserver);
+  assert.equal(positiveObserver.readyForSettlement(), true);
+  const positiveDecision = positiveObserver.settleAuthentication({
+    dashboardStable: true,
+  });
+  assert.deepEqual(positiveDecision, {
+    tupleBoundRetirementCount: 1,
+    retiredExactConsoleErrorCount: 1,
+    fatalExactConsoleErrorCount: 0,
+    dashboardStable: true,
+    successorExplicitlyAcknowledged: true,
+    successorSequenceBound: true,
+  });
+  const positiveSnapshot = positiveObserver.safeSnapshot();
+  assert.equal(positiveSnapshot.passed, true);
+  assert.equal(positiveSnapshot.outboundAddTargetCount, 5);
+  assert.equal(positiveSnapshot.unknownRemovedTargetCount, 0);
+  assert.deepEqual(
+    positiveSnapshot.targetClassHistogram,
+    SAFE_FROZEN_BASELINE_LISTENER_TARGET_CLASSES.map((targetClass) => ({
+      targetClass,
+      count: targetClass === "unknown" ? 0 : 1,
+    })),
+  );
+  const positiveSessionIdentity = exactFirestoreListenSessionIdentity(
+    requestUrl.toString(),
+  );
+  positiveObserver.observeInboundPayload({
+    sessionIdentity: positiveSessionIdentity,
+    payload: "{",
+  });
+  positiveObserver.recordParseFailure({ bufferExceeded: true });
+  positiveObserver.recordStreamFailure();
+  positiveObserver.observeConsoleError(exactConsoleError);
+  positiveObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: "malformed-post-settlement-body",
+  });
+  const postSettlementOversizeResponseStream =
+    createFrozenBaselineListenerResponseStream({
+      sessionIdentity: positiveSessionIdentity,
+      observeInboundPayload: positiveObserver.observeInboundPayload,
+      recordParseFailure: positiveObserver.recordParseFailure,
+    });
+  postSettlementOversizeResponseStream.appendBase64(
+    Buffer.from(
+      "x".repeat(FROZEN_BASELINE_LISTENER_MAX_RESPONSE_CHARACTERS + 1),
+      "utf8",
+    ).toString("base64"),
+    positiveObserver.reserveInboundPayloadSequence(),
+  );
+  postSettlementOversizeResponseStream.finish();
+  assert.deepEqual(positiveObserver.safeSnapshot(), positiveSnapshot);
+  const initialRequestUrl = new URL(
+    "https://firestore.googleapis.com/google.firestore.v1.Firestore/Listen/channel",
+  );
+  initialRequestUrl.searchParams.set("database", database);
+  initialRequestUrl.searchParams.set("VER", "8");
+  initialRequestUrl.searchParams.set("RID", "12345");
+  initialRequestUrl.searchParams.set("CVER", "22");
+  initialRequestUrl.searchParams.set("X-HTTP-Session-Id", "gsessionid");
+  initialRequestUrl.searchParams.set("zx", "fixture");
+  initialRequestUrl.searchParams.set("t", "1");
+  assert.deepEqual(
+    parseFrozenBaselineFirestoreListenAddTargets({
+      requestUrl: initialRequestUrl.toString(),
+      method: "POST",
+      hasPostData: true,
+      postData: "headers=fixture&count=0",
+      expectedUidHash: secretSha256(privateUid),
+    }).targets,
+    [],
+  );
+  const initialRequestObserver = createObserver();
+  initialRequestObserver.observeOutboundRequest({
+    networkRequestId: "private-initial-network-request-id",
+    requestUrl: initialRequestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([attendanceTarget("2026_1", 2)]),
+  });
+  initialRequestObserver.promoteInitialTargets({
+    networkRequestId: "private-initial-network-request-id",
+    gsessionid: privateGsessionid,
+    sid: privateSid,
+  });
+  const promotedSessionIdentity = exactFirestoreListenSessionIdentity(
+    requestUrl.toString(),
+  );
+  initialRequestObserver.observeInboundPayload({
+    sessionIdentity: promotedSessionIdentity,
+    payload: JSON.stringify([
+      [
+        1,
+        [
+          {
+            targetChange: {
+              targetChangeType: "REMOVE",
+              targetIds: [2],
+              cause: { code: 7 },
+            },
+          },
+        ],
+      ],
+    ]),
+  });
+  initialRequestObserver.observeConsoleError(exactConsoleError);
+  initialRequestObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([attendanceTarget("2026_2", 4)]),
+  });
+  initialRequestObserver.observeInboundPayload({
+    sessionIdentity: promotedSessionIdentity,
+    payload: JSON.stringify([
+      [
+        2,
+        [
+          {
+            targetChange: {
+              targetChangeType: "ADD",
+              targetIds: [4],
+            },
+          },
+        ],
+      ],
+    ]),
+  });
+  assert.equal(initialRequestObserver.readyForSettlement(), true);
+  initialRequestObserver.settleAuthentication({ dashboardStable: true });
+  const initialRequestSnapshot = initialRequestObserver.safeSnapshot();
+  assert.equal(initialRequestSnapshot.passed, true);
+  const deferredStreamObserver = createObserver();
+  deferredStreamObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([attendanceTarget("2026_1", 2)]),
+  });
+  const deferredRemoveArrivalSequence =
+    deferredStreamObserver.reserveInboundPayloadSequence();
+  const deferredRemovePayload = JSON.stringify([
+    [
+      1,
+      [
+        {
+          targetChange: {
+            targetChangeType: "REMOVE",
+            targetIds: [2],
+            cause: { code: 7 },
+          },
+        },
+      ],
+    ],
+  ]);
+  const deferredResponseStream = createFrozenBaselineListenerResponseStream({
+    sessionIdentity: positiveSessionIdentity,
+    observeInboundPayload: deferredStreamObserver.observeInboundPayload,
+    recordParseFailure: deferredStreamObserver.recordParseFailure,
+  });
+  deferredStreamObserver.observeConsoleError(exactConsoleError);
+  deferredStreamObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([attendanceTarget("2026_2", 4)]),
+  });
+  const deferredAcknowledgeArrivalSequence =
+    deferredStreamObserver.reserveInboundPayloadSequence();
+  assert.equal(deferredStreamObserver.readyForSettlement(), false);
+  const deferredAcknowledgePayload = JSON.stringify([
+    [
+      2,
+      [
+        {
+          targetChange: {
+            targetChangeType: "ADD",
+            targetIds: [4],
+          },
+        },
+      ],
+    ],
+  ]);
+  const deferredRemoveFrameBytes = Buffer.from(
+    `${deferredRemovePayload.length}\n${deferredRemovePayload}`,
+    "utf8",
+  );
+  const deferredAcknowledgeFrameBytes = Buffer.from(
+    `${deferredAcknowledgePayload.length}\n${deferredAcknowledgePayload}`,
+    "utf8",
+  );
+  const deferredBufferedBytes = Buffer.concat([
+    deferredRemoveFrameBytes,
+    deferredAcknowledgeFrameBytes,
+  ]);
+  const deferredStreamActivation = Promise.resolve().then(() =>
+    appendFrozenBaselineBufferedStreamSegments({
+      bufferedData: deferredBufferedBytes.toString("base64"),
+      bufferedSegments: [
+        {
+          byteLength: deferredRemoveFrameBytes.length,
+          arrivalSequence: deferredRemoveArrivalSequence,
+        },
+        {
+          byteLength: deferredAcknowledgeFrameBytes.length,
+          arrivalSequence: deferredAcknowledgeArrivalSequence,
+        },
+      ],
+      responseStream: deferredResponseStream,
+      recordParseFailure: deferredStreamObserver.recordParseFailure,
+    }),
+  );
+  assert.equal(await deferredStreamActivation, true);
+  deferredResponseStream.finish();
+  assert.equal(deferredStreamObserver.readyForSettlement(), true);
+  const mismatchedBufferedObserver = createObserver();
+  let mismatchedBufferedParseFailureCount = 0;
+  const mismatchedBufferedResponseStream =
+    createFrozenBaselineListenerResponseStream({
+      sessionIdentity: positiveSessionIdentity,
+      observeInboundPayload: mismatchedBufferedObserver.observeInboundPayload,
+      recordParseFailure: () => {
+        mismatchedBufferedParseFailureCount += 1;
+      },
+    });
+  assert.equal(
+    appendFrozenBaselineBufferedStreamSegments({
+      bufferedData: deferredRemoveFrameBytes.toString("base64"),
+      bufferedSegments: [
+        {
+          byteLength: deferredRemoveFrameBytes.length + 1,
+          arrivalSequence:
+            mismatchedBufferedObserver.reserveInboundPayloadSequence(),
+        },
+      ],
+      responseStream: mismatchedBufferedResponseStream,
+      recordParseFailure: () => {
+        mismatchedBufferedParseFailureCount += 1;
+      },
+    }),
+    false,
+  );
+  assert.equal(mismatchedBufferedParseFailureCount, 1);
+  mismatchedBufferedObserver.recordParseFailure();
+  mismatchedBufferedObserver.settleAuthentication({ dashboardStable: true });
+  const mismatchedBufferedSnapshot = mismatchedBufferedObserver.safeSnapshot();
+  assert.equal(mismatchedBufferedSnapshot.passed, false);
+  deferredStreamObserver.settleAuthentication({ dashboardStable: true });
+  const deferredStreamSnapshot = deferredStreamObserver.safeSnapshot();
+  assert.equal(deferredStreamSnapshot.passed, true);
+  const streamedTargetChanges = [];
+  let streamedParseFailureCount = 0;
+  const responseStream = createFrozenBaselineListenerResponseStream({
+    sessionIdentity: exactFirestoreListenSessionIdentity(requestUrl.toString()),
+    observeInboundPayload: ({ payload }) => {
+      streamedTargetChanges.push(...parseFirestoreListenTargetChanges(payload));
+    },
+    recordParseFailure: () => {
+      streamedParseFailureCount += 1;
+    },
+  });
+  const streamedPayload = JSON.stringify([
+    [
+      3,
+      [
+        {
+          targetChange: {
+            targetChangeType: "REMOVE",
+            targetIds: [2],
+            cause: { code: 7 },
+          },
+        },
+      ],
+    ],
+  ]);
+  const unrelatedMultibytePayload = JSON.stringify([
+    [4, [{ documentChange: { fixtureText: "한글-프레임" } }]],
+  ]);
+  const framedPayload = `${unrelatedMultibytePayload.length}\n${unrelatedMultibytePayload}${streamedPayload.length}\n${streamedPayload}`;
+  const framedPayloadBytes = Buffer.from(framedPayload, "utf8");
+  const multibyteStart = framedPayloadBytes.indexOf(Buffer.from("한", "utf8"));
+  assert.ok(multibyteStart > 0);
+  const splitIndex = multibyteStart + 1;
+  responseStream.appendBase64(
+    framedPayloadBytes.subarray(0, splitIndex).toString("base64"),
+  );
+  responseStream.appendBase64(
+    framedPayloadBytes.subarray(splitIndex).toString("base64"),
+  );
+  responseStream.finish();
+  assert.equal(streamedParseFailureCount, 0);
+  assert.equal(streamedTargetChanges.length, 1);
+  assert.equal(streamedTargetChanges[0].causeCode, 7);
+  const negativeSnapshots = [mismatchedBufferedSnapshot];
+  const wrongViewportObserver = createObserver({ viewport: "393x852" });
+  observePositiveLifecycle(wrongViewportObserver);
+  wrongViewportObserver.settleAuthentication({ dashboardStable: true });
+  negativeSnapshots.push(wrongViewportObserver.safeSnapshot());
+  const duplicateConsoleObserver = createObserver();
+  observePositiveLifecycle(duplicateConsoleObserver);
+  duplicateConsoleObserver.observeConsoleError(exactConsoleError);
+  duplicateConsoleObserver.settleAuthentication({ dashboardStable: true });
+  negativeSnapshots.push(duplicateConsoleObserver.safeSnapshot());
+  const streamFailureObserver = createObserver();
+  observePositiveLifecycle(streamFailureObserver);
+  const preResponseListenGetTerminalFailure =
+    shouldRecordFrozenBaselineListenTerminalStreamFailure({
+      method: "GET",
+      initialRequest: false,
+      streamRequested: false,
+      responseGsessionid: null,
+      settled: false,
+    });
+  assert.equal(preResponseListenGetTerminalFailure, true);
+  assert.equal(
+    shouldRecordFrozenBaselineListenTerminalStreamFailure({
+      method: "POST",
+      initialRequest: true,
+      streamRequested: false,
+      responseGsessionid: null,
+      settled: false,
+    }),
+    true,
+  );
+  for (const terminalFixture of [
+    {
+      method: "GET",
+      initialRequest: false,
+      streamRequested: false,
+      responseGsessionid: null,
+      settled: true,
+    },
+    {
+      method: "GET",
+      initialRequest: false,
+      streamRequested: true,
+      responseGsessionid: null,
+      settled: false,
+    },
+    {
+      method: "POST",
+      initialRequest: true,
+      streamRequested: false,
+      responseGsessionid: privateGsessionid,
+      settled: false,
+    },
+    {
+      method: "POST",
+      initialRequest: false,
+      streamRequested: false,
+      responseGsessionid: null,
+      settled: false,
+    },
+  ]) {
+    assert.equal(
+      shouldRecordFrozenBaselineListenTerminalStreamFailure(terminalFixture),
+      false,
+    );
+  }
+  if (preResponseListenGetTerminalFailure) {
+    streamFailureObserver.recordStreamFailure();
+  }
+  streamFailureObserver.settleAuthentication({ dashboardStable: true });
+  negativeSnapshots.push(streamFailureObserver.safeSnapshot());
+  const preexistingSuccessorObserver = createObserver();
+  preexistingSuccessorObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([
+      attendanceTarget("2026_1", 2),
+      attendanceTarget("2026_2", 4),
+    ]),
+  });
+  const preexistingSessionIdentity = exactFirestoreListenSessionIdentity(
+    requestUrl.toString(),
+  );
+  preexistingSuccessorObserver.observeInboundPayload({
+    sessionIdentity: preexistingSessionIdentity,
+    payload: JSON.stringify([
+      [
+        1,
+        [
+          {
+            targetChange: {
+              targetChangeType: "REMOVE",
+              targetIds: [2],
+              cause: { code: 7 },
+            },
+          },
+        ],
+      ],
+    ]),
+  });
+  preexistingSuccessorObserver.observeConsoleError(exactConsoleError);
+  preexistingSuccessorObserver.observeInboundPayload({
+    sessionIdentity: preexistingSessionIdentity,
+    payload: JSON.stringify([
+      [
+        2,
+        [
+          {
+            targetChange: {
+              targetChangeType: "ADD",
+              targetIds: [4],
+            },
+          },
+        ],
+      ],
+    ]),
+  });
+  preexistingSuccessorObserver.settleAuthentication({ dashboardStable: true });
+  negativeSnapshots.push(preexistingSuccessorObserver.safeSnapshot());
+  const wrongUidObserver = createObserver();
+  wrongUidObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([
+      attendanceTarget("2026_1", 2, "different-private-uid"),
+    ]),
+  });
+  wrongUidObserver.observeInboundPayload({
+    sessionIdentity: preexistingSessionIdentity,
+    payload: JSON.stringify([
+      [
+        1,
+        [
+          {
+            targetChange: {
+              targetChangeType: "REMOVE",
+              targetIds: [2],
+              cause: { code: 7 },
+            },
+          },
+        ],
+      ],
+    ]),
+  });
+  wrongUidObserver.observeConsoleError(exactConsoleError);
+  wrongUidObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([attendanceTarget("2026_2", 4)]),
+  });
+  wrongUidObserver.observeInboundPayload({
+    sessionIdentity: preexistingSessionIdentity,
+    payload: JSON.stringify([
+      [
+        2,
+        [
+          {
+            targetChange: {
+              targetChangeType: "ADD",
+              targetIds: [4],
+            },
+          },
+        ],
+      ],
+    ]),
+  });
+  wrongUidObserver.settleAuthentication({ dashboardStable: true });
+  const wrongUidSnapshot = wrongUidObserver.safeSnapshot();
+  assert.equal(wrongUidSnapshot.unknownRemovedTargetCount, 1);
+  negativeSnapshots.push(wrongUidSnapshot);
+  const emptyRemoveTargetIdsObserver = createObserver();
+  emptyRemoveTargetIdsObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([attendanceTarget("2026_1", 2)]),
+  });
+  emptyRemoveTargetIdsObserver.observeInboundPayload({
+    sessionIdentity: positiveSessionIdentity,
+    payload: JSON.stringify([
+      [
+        1,
+        [
+          {
+            targetChange: {
+              targetChangeType: "REMOVE",
+              targetIds: [],
+              cause: { code: 7 },
+            },
+          },
+        ],
+      ],
+    ]),
+  });
+  emptyRemoveTargetIdsObserver.observeConsoleError(exactConsoleError);
+  emptyRemoveTargetIdsObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([attendanceTarget("2026_2", 4)]),
+  });
+  emptyRemoveTargetIdsObserver.observeInboundPayload({
+    sessionIdentity: positiveSessionIdentity,
+    payload: JSON.stringify([
+      [
+        2,
+        [
+          {
+            targetChange: {
+              targetChangeType: "ADD",
+              targetIds: [4],
+            },
+          },
+        ],
+      ],
+    ]),
+  });
+  emptyRemoveTargetIdsObserver.settleAuthentication({ dashboardStable: true });
+  const emptyRemoveTargetIdsSnapshot =
+    emptyRemoveTargetIdsObserver.safeSnapshot();
+  assert.equal(emptyRemoveTargetIdsSnapshot.inboundRemoveCauseCodeCount, 1);
+  assert.equal(emptyRemoveTargetIdsSnapshot.unboundRemovedTargetCount, 1);
+  assert.equal(emptyRemoveTargetIdsSnapshot.ambiguousRemovedTargetCount, 1);
+  negativeSnapshots.push(emptyRemoveTargetIdsSnapshot);
+  const malformedBodyObserver = createObserver();
+  malformedBodyObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: "count=1&ofs=0&req0___data__=%7B",
+  });
+  malformedBodyObserver.settleAuthentication({ dashboardStable: true });
+  negativeSnapshots.push(malformedBodyObserver.safeSnapshot());
+  assert.equal(
+    negativeSnapshots.every((snapshot) => !snapshot.passed),
+    true,
+  );
+  assert.equal(
+    negativeSnapshots.reduce(
+      (count, snapshot) => count + Number(snapshot.parseFailureCount > 0),
+      0,
+    ),
+    2,
+  );
+  const serializedSafeEvidence = JSON.stringify({
+    positiveSnapshot,
+    initialRequestSnapshot,
+    deferredStreamSnapshot,
+    negativeSnapshots,
+  });
+  for (const privateValue of [
+    privateUid,
+    privateGsessionid,
+    privateSid,
+    requestBodyForTargets([attendanceTarget("2026_1", 2)]),
+  ]) {
+    assert.equal(serializedSafeEvidence.includes(privateValue), false);
+  }
+  return {
+    frozenBaselineListenerBindingPositiveFixtureCount: 3,
+    frozenBaselineListenerBindingNegativeFixtureCount: negativeSnapshots.length,
+    frozenBaselineListenerBindingStreamFixtureCount: 1,
+    frozenBaselineListenerBindingTargetClassFixtureCount:
+      SAFE_FROZEN_BASELINE_LISTENER_TARGET_CLASSES.length,
+    frozenBaselineListenerBindingRawValueOutputCount: 0,
+    frozenBaselineListenerBindingNetworkAccess: 0,
+  };
 };
 const SAFE_FIRESTORE_WEBCHANNEL_AUTH_BINDING_CLASSES = Object.freeze([
   "initial-auth-time-mismatch",
@@ -21926,6 +23854,8 @@ const safeAuthenticationFailureDiagnosticSelfTest =
   await verifySafeAuthenticationFailureDiagnosticFixtures();
 const safeBrowserErrorDiagnosticSelfTest =
   verifySafeBrowserErrorDiagnosticFixtures();
+const frozenBaselineListenerBindingSelfTest =
+  await verifyFrozenBaselineListenerBindingFixtures();
 const preTransmissionBoundaryNegativeSelfTest =
   verifyPreTransmissionBoundaryNegativeFixtures();
 const fixtureAuditFreshnessNegativeSelfTest =
@@ -27303,6 +29233,7 @@ if (args.includes("--self-test-app-check")) {
       ...safeAuthenticationProtectedReadRetrySelfTest,
       ...safeAuthenticationFailureDiagnosticSelfTest,
       ...safeBrowserErrorDiagnosticSelfTest,
+      ...frozenBaselineListenerBindingSelfTest,
       ...preTransmissionBoundaryNegativeSelfTest,
       ...fixtureAuditFreshnessNegativeSelfTest,
       ...stableOriginRewriteNegativeSelfTest,
@@ -29424,9 +31355,9 @@ const trustedAuthenticationUidHashesByRole = new Map(
 );
 assert.equal(trustedAuthenticationUidHashesByRole.size, 3);
 assert.equal(new Set(trustedAuthenticationUidHashesByRole.values()).size, 3);
-assert.equal(fixtureAudit.strict?.collectionCount, 63);
-assert.equal(fixtureAudit.strict?.expectedRowCount, 51);
-assert.equal(fixtureAudit.strict?.actualRowCount, 51);
+assert.equal(fixtureAudit.strict?.collectionCount, 64);
+assert.equal(fixtureAudit.strict?.expectedRowCount, 52);
+assert.equal(fixtureAudit.strict?.actualRowCount, 52);
 assert.equal(fixtureAudit.strict?.extraRowCount, 0);
 assert.equal(
   fixtureAudit.strict?.collections?.every(
@@ -34834,6 +36765,7 @@ const captures = [];
 const browserAudits = [];
 const identityAttestations = new Map();
 const authenticationProtectedReadRetryAttestations = [];
+const frozenBaselineAuthenticationAnomalyGroupAttestations = [];
 const liveApplicationSessionProofsByPage = new Map();
 const networkObservations = [];
 const networkResponseObservations = [];
@@ -34868,6 +36800,7 @@ let browserRequestFailureCount = 0;
 let browserRequestFailureRecoveredProtectedReadCount = 0;
 let browserConsoleErrorObservedAuthenticationCount = 0;
 let browserConsoleErrorRecoveredProtectedReadCount = 0;
+let browserConsoleErrorRetiredFrozenBaselineCount = 0;
 let browserContextCloseCount = 0;
 let unexpectedExtraPageCount = 0;
 let unexpectedDedicatedWorkerCount = 0;
@@ -35279,6 +37212,19 @@ try {
     let groupAuthenticationBootstrapRetirementAttestation = null;
     let groupApplicationNavigationWebChannelBindingStart = null;
     let groupBrowserWideBoundaryAttestation = null;
+    const frozenBaselineListenerBindingObserver = authenticationRole
+      ? createFrozenBaselineListenerBindingObserver({
+          stage,
+          captureRole: traceRole,
+          authenticationRole,
+          viewport: viewportName,
+          groupKey,
+          policy: frozenBaselineAuthenticationAnomalyPolicy,
+          expectedUidHash:
+            trustedAuthenticationUidHashesByRole.get(authenticationRole),
+        })
+      : null;
+    let groupFrozenBaselineListenerRetirementDecision = null;
     let networkRequestSequence = 0;
     const requestCorrelations = new WeakMap();
     const requestObservations = new WeakMap();
@@ -36117,6 +38063,233 @@ try {
     await appCheckCdpSession.send("Network.enable", {
       maxPostDataSize: FETCH_INLINE_POST_DATA_LIMIT_BYTES,
     });
+    const frozenBaselineListenerRequestsByNetworkId = new Map();
+    const frozenBaselineInitialRequestIdByGsessionid = new Map();
+    const frozenBaselineSessionSidByGsessionid = new Map();
+    if (frozenBaselineListenerBindingObserver) {
+      const promoteFrozenBaselineInitialTargets = (gsessionid) => {
+        const networkRequestId =
+          frozenBaselineInitialRequestIdByGsessionid.get(gsessionid) || null;
+        const sid =
+          frozenBaselineSessionSidByGsessionid.get(gsessionid) || null;
+        if (networkRequestId === null || sid === null) return;
+        frozenBaselineListenerBindingObserver.promoteInitialTargets({
+          networkRequestId,
+          gsessionid,
+          sid,
+        });
+        frozenBaselineInitialRequestIdByGsessionid.delete(gsessionid);
+      };
+      appCheckCdpSession.on("Network.requestWillBeSent", (event) => {
+        const requestUrl = String(event.request?.url || "");
+        const sessionIdentity = exactFirestoreListenSessionIdentity(requestUrl);
+        const initialRequest = exactFirestoreListenInitialRequest(requestUrl);
+        if (sessionIdentity === null && !initialRequest) return;
+        if (frozenBaselineListenerBindingObserver.isSettled()) return;
+        if (
+          typeof event.requestId !== "string" ||
+          event.requestId.length === 0 ||
+          frozenBaselineListenerRequestsByNetworkId.has(event.requestId)
+        ) {
+          frozenBaselineListenerBindingObserver.recordParseFailure();
+          return;
+        }
+        const method = String(event.request?.method || "").toUpperCase();
+        frozenBaselineListenerBindingObserver.observeOutboundRequest({
+          networkRequestId: event.requestId,
+          requestUrl,
+          method,
+          hasPostData: event.request?.hasPostData === true,
+          postData: event.request?.postData,
+        });
+        frozenBaselineListenerRequestsByNetworkId.set(event.requestId, {
+          initialRequest,
+          sessionIdentity,
+          method,
+          streamRequested: false,
+          streamSettled: false,
+          responseStream: null,
+          pendingBase64Chunks: [],
+          preStreamBufferedSegments: [],
+          terminalClass: null,
+          responseGsessionid: null,
+        });
+        if (sessionIdentity !== null) {
+          const previousSid =
+            frozenBaselineSessionSidByGsessionid.get(
+              sessionIdentity.gsessionid,
+            ) || null;
+          if (previousSid !== null && previousSid !== sessionIdentity.sid) {
+            frozenBaselineListenerBindingObserver.recordParseFailure();
+          } else {
+            frozenBaselineSessionSidByGsessionid.set(
+              sessionIdentity.gsessionid,
+              sessionIdentity.sid,
+            );
+            promoteFrozenBaselineInitialTargets(sessionIdentity.gsessionid);
+          }
+        }
+      });
+      appCheckCdpSession.on("Network.responseReceived", (event) => {
+        const entry =
+          frozenBaselineListenerRequestsByNetworkId.get(event.requestId) ||
+          null;
+        if (entry === null) return;
+        if (frozenBaselineListenerBindingObserver.isSettled()) {
+          frozenBaselineListenerRequestsByNetworkId.delete(event.requestId);
+          return;
+        }
+        if (entry.initialRequest) {
+          const responseGsessionid = exactFirestoreListenResponseGsessionid(
+            event.response?.headers,
+          );
+          if (
+            responseGsessionid === null ||
+            frozenBaselineInitialRequestIdByGsessionid.has(responseGsessionid)
+          ) {
+            frozenBaselineListenerBindingObserver.recordParseFailure();
+            return;
+          }
+          entry.responseGsessionid = responseGsessionid;
+          frozenBaselineInitialRequestIdByGsessionid.set(
+            responseGsessionid,
+            event.requestId,
+          );
+          promoteFrozenBaselineInitialTargets(responseGsessionid);
+          return;
+        }
+        if (entry.method !== "GET") return;
+        if (entry.streamRequested) {
+          frozenBaselineListenerBindingObserver.recordParseFailure();
+          return;
+        }
+        entry.streamRequested = true;
+        const streamActivation = (async () => {
+          try {
+            const streamed = await appCheckCdpSession.send(
+              "Network.streamResourceContent",
+              { requestId: event.requestId },
+            );
+            if (typeof streamed?.bufferedData !== "string") {
+              frozenBaselineListenerBindingObserver.recordParseFailure();
+              return;
+            }
+            if (frozenBaselineListenerBindingObserver.isSettled()) {
+              entry.pendingBase64Chunks.length = 0;
+              frozenBaselineListenerRequestsByNetworkId.delete(event.requestId);
+              return;
+            }
+            entry.responseStream = createFrozenBaselineListenerResponseStream({
+              sessionIdentity: entry.sessionIdentity,
+              observeInboundPayload:
+                frozenBaselineListenerBindingObserver.observeInboundPayload,
+              recordParseFailure:
+                frozenBaselineListenerBindingObserver.recordParseFailure,
+            });
+            const bufferedSegmentsReplayed =
+              appendFrozenBaselineBufferedStreamSegments({
+                bufferedData: streamed.bufferedData,
+                bufferedSegments: entry.preStreamBufferedSegments,
+                responseStream: entry.responseStream,
+                recordParseFailure:
+                  frozenBaselineListenerBindingObserver.recordParseFailure,
+              });
+            entry.preStreamBufferedSegments.length = 0;
+            if (!bufferedSegmentsReplayed) {
+              entry.pendingBase64Chunks.length = 0;
+              frozenBaselineListenerRequestsByNetworkId.delete(event.requestId);
+              return;
+            }
+            entry.streamSettled = true;
+            for (const pendingChunk of entry.pendingBase64Chunks) {
+              if (
+                !appendFrozenBaselineDataReceivedStreamChunk({
+                  ...pendingChunk,
+                  responseStream: entry.responseStream,
+                  recordParseFailure:
+                    frozenBaselineListenerBindingObserver.recordParseFailure,
+                })
+              ) {
+                entry.pendingBase64Chunks.length = 0;
+                frozenBaselineListenerRequestsByNetworkId.delete(
+                  event.requestId,
+                );
+                return;
+              }
+            }
+            entry.pendingBase64Chunks.length = 0;
+            if (entry.terminalClass !== null) {
+              entry.responseStream.finish({
+                allowIncomplete:
+                  entry.terminalClass === "loading-failed" &&
+                  frozenBaselineListenerBindingObserver.isSettled(),
+              });
+              frozenBaselineListenerRequestsByNetworkId.delete(event.requestId);
+            }
+          } catch {
+            frozenBaselineListenerBindingObserver.recordStreamFailure();
+            frozenBaselineListenerRequestsByNetworkId.delete(event.requestId);
+          }
+        })();
+        trackNetworkAttestation(streamActivation);
+      });
+      appCheckCdpSession.on("Network.dataReceived", (event) => {
+        const entry =
+          frozenBaselineListenerRequestsByNetworkId.get(event.requestId) ||
+          null;
+        if (entry === null || !entry.streamRequested) return;
+        if (frozenBaselineListenerBindingObserver.isSettled()) return;
+        const arrivalSequence =
+          frozenBaselineListenerBindingObserver.reserveInboundPayloadSequence();
+        const dataLength = Number(event.dataLength);
+        if (!Number.isSafeInteger(dataLength) || dataLength < 0) {
+          frozenBaselineListenerBindingObserver.recordParseFailure();
+          return;
+        }
+        if (typeof event.data !== "string") {
+          if (!entry.streamSettled && dataLength > 0) {
+            entry.preStreamBufferedSegments.push({
+              byteLength: dataLength,
+              arrivalSequence,
+            });
+          } else if (entry.streamSettled && dataLength > 0) {
+            frozenBaselineListenerBindingObserver.recordParseFailure();
+          }
+          return;
+        }
+        if (entry.streamSettled && entry.responseStream) {
+          appendFrozenBaselineDataReceivedStreamChunk({
+            encodedValue: event.data,
+            byteLength: dataLength,
+            arrivalSequence,
+            responseStream: entry.responseStream,
+            recordParseFailure:
+              frozenBaselineListenerBindingObserver.recordParseFailure,
+          });
+          return;
+        }
+        entry.pendingBase64Chunks.push({
+          encodedValue: event.data,
+          byteLength: dataLength,
+          arrivalSequence,
+        });
+        if (
+          entry.pendingBase64Chunks.reduce(
+            (total, chunk) => total + chunk.encodedValue.length,
+            0,
+          ) >
+          Math.ceil(
+            (FROZEN_BASELINE_LISTENER_MAX_RESPONSE_CHARACTERS * 4) / 3,
+          ) +
+            16
+        ) {
+          entry.pendingBase64Chunks.length = 0;
+          frozenBaselineListenerBindingObserver.recordParseFailure({
+            bufferExceeded: true,
+          });
+        }
+      });
+    }
     appCheckCdpSession.on(
       "Network.responseReceivedEarlyHints",
       ({ requestId, headers }) => {
@@ -36324,6 +38497,41 @@ try {
     };
     appCheckCdpSession.on("Network.loadingFailed", (event) => {
       try {
+        const listenerEntry =
+          frozenBaselineListenerRequestsByNetworkId.get(event.requestId) ||
+          null;
+        if (
+          listenerEntry !== null &&
+          shouldRecordFrozenBaselineListenTerminalStreamFailure({
+            ...listenerEntry,
+            settled:
+              frozenBaselineListenerBindingObserver?.isSettled() === true,
+          })
+        ) {
+          frozenBaselineListenerBindingObserver?.recordStreamFailure();
+        }
+        if (
+          (listenerEntry?.method === "GET" ||
+            listenerEntry?.initialRequest === true) &&
+          listenerEntry.streamRequested &&
+          !listenerEntry.streamSettled
+        ) {
+          listenerEntry.terminalClass = "loading-failed";
+        } else if (listenerEntry?.responseStream) {
+          listenerEntry.responseStream.finish({
+            allowIncomplete:
+              frozenBaselineListenerBindingObserver?.isSettled() === true,
+          });
+        } else if (
+          (listenerEntry?.method === "GET" ||
+            listenerEntry?.initialRequest === true) &&
+          listenerEntry.streamRequested
+        ) {
+          frozenBaselineListenerBindingObserver?.recordStreamFailure();
+        }
+        if (listenerEntry?.terminalClass === null) {
+          frozenBaselineListenerRequestsByNetworkId.delete(event.requestId);
+        }
         if (typeof event.requestId === "string" && event.requestId.length > 0) {
           browserConnectProxy.settleReleasedResponseStream({
             networkId: event.requestId,
@@ -36397,6 +38605,38 @@ try {
           event.requestId.length === 0
         ) {
           return;
+        }
+        const listenerEntry =
+          frozenBaselineListenerRequestsByNetworkId.get(event.requestId) ||
+          null;
+        if (
+          listenerEntry !== null &&
+          shouldRecordFrozenBaselineListenTerminalStreamFailure({
+            ...listenerEntry,
+            settled:
+              frozenBaselineListenerBindingObserver?.isSettled() === true,
+          })
+        ) {
+          frozenBaselineListenerBindingObserver?.recordStreamFailure();
+        }
+        if (
+          (listenerEntry?.method === "GET" ||
+            listenerEntry?.initialRequest === true) &&
+          listenerEntry.streamRequested &&
+          !listenerEntry.streamSettled
+        ) {
+          listenerEntry.terminalClass = "loading-finished";
+        } else if (listenerEntry?.responseStream) {
+          listenerEntry.responseStream.finish();
+        } else if (
+          (listenerEntry?.method === "GET" ||
+            listenerEntry?.initialRequest === true) &&
+          listenerEntry.streamRequested
+        ) {
+          frozenBaselineListenerBindingObserver?.recordStreamFailure();
+        }
+        if (listenerEntry?.terminalClass === null) {
+          frozenBaselineListenerRequestsByNetworkId.delete(event.requestId);
         }
         browserConnectProxy.settleReleasedResponseStream({
           networkId: event.requestId,
@@ -38964,6 +41204,11 @@ try {
         browserConsoleSecretObservationCount += 1;
       }
       if (safeRecord) {
+        if (networkPhase === frozenBaselineAuthenticationAnomalyPolicy.phase) {
+          frozenBaselineListenerBindingObserver?.observeConsoleError(
+            safeRecord,
+          );
+        }
         if (
           networkPhase === "authentication" &&
           safeRecord.sourceClass === "console-error" &&
@@ -39694,8 +41939,21 @@ try {
       groupApplicationSessionKeepaliveClientInitializationAttestation =
         groupApplicationSessionKeepaliveClient.initializationAttestation;
       await drainAppCheckCdpHandlerPromises();
-      const authenticationNetworkAttestationDrainDiagnostic =
+      let authenticationNetworkAttestationDrainDiagnostic =
         await flushNetworkAttestations();
+      const listenerSettlementDeadline =
+        Date.now() + FROZEN_BASELINE_LISTENER_SETTLEMENT_TIMEOUT_MS;
+      while (
+        !frozenBaselineListenerBindingObserver.readyForSettlement() &&
+        Date.now() < listenerSettlementDeadline
+      ) {
+        await new Promise((resolvePoll) =>
+          setTimeout(resolvePoll, FROZEN_BASELINE_LISTENER_SETTLEMENT_POLL_MS),
+        );
+        await drainAppCheckCdpHandlerPromises();
+        authenticationNetworkAttestationDrainDiagnostic =
+          await flushNetworkAttestations();
+      }
       assert.ok(
         Number.isSafeInteger(groupApplicationNavigationWebChannelBindingStart),
       );
@@ -39712,6 +41970,10 @@ try {
           authenticatedApplicationWebChannelEpoch,
         )}`,
       );
+      groupFrozenBaselineListenerRetirementDecision =
+        frozenBaselineListenerBindingObserver.settleAuthentication({
+          dashboardStable: true,
+        });
       const authenticationObservedBrowserRequestFailureCount =
         browserRequestFailureCount - groupBrowserRequestFailureStart;
       const authenticationRecoveredBrowserRequestFailureCount =
@@ -39778,9 +42040,14 @@ try {
         authenticationBrowserErrorDeltaClassHistogram
           .filter((record) => record.sourceClass === "console-error")
           .reduce((total, record) => total + record.count, 0);
-      const authenticationConsoleErrorRecoveredCount =
+      const authenticationConsoleErrorRecoveredProtectedReadCount =
         groupAuthenticationProtectedReadRetryAttestation?.recoveredProtectedReadConsoleErrorCount ||
         0;
+      const authenticationConsoleErrorRetiredFrozenBaselineCount =
+        groupFrozenBaselineListenerRetirementDecision.retiredExactConsoleErrorCount;
+      const authenticationConsoleErrorRecoveredCount =
+        authenticationConsoleErrorRecoveredProtectedReadCount +
+        authenticationConsoleErrorRetiredFrozenBaselineCount;
       const authenticationConsoleErrorFatalCount =
         authenticationConsoleErrorObservedCount -
         authenticationConsoleErrorRecoveredCount;
@@ -39801,7 +42068,9 @@ try {
       browserConsoleErrorObservedAuthenticationCount +=
         authenticationConsoleErrorObservedCount;
       browserConsoleErrorRecoveredProtectedReadCount +=
-        authenticationConsoleErrorRecoveredCount;
+        authenticationConsoleErrorRecoveredProtectedReadCount;
+      browserConsoleErrorRetiredFrozenBaselineCount +=
+        authenticationConsoleErrorRetiredFrozenBaselineCount;
       const authenticationBrowserErrorDiagnostic = {
         ...authenticationGroupContext,
         ...authenticationBrowserErrorSnapshot,
@@ -39841,14 +42110,20 @@ try {
         cumulativeObservedBrowserConsoleErrorCount:
           browserConsoleErrorObservedAuthenticationCount,
         cumulativeRecoveredBrowserConsoleErrorCount:
-          browserConsoleErrorRecoveredProtectedReadCount,
+          browserConsoleErrorRecoveredProtectedReadCount +
+          browserConsoleErrorRetiredFrozenBaselineCount,
         cumulativeFatalBrowserConsoleErrorCount:
           browserConsoleErrorObservedAuthenticationCount -
-          browserConsoleErrorRecoveredProtectedReadCount,
+          browserConsoleErrorRecoveredProtectedReadCount -
+          browserConsoleErrorRetiredFrozenBaselineCount,
         authenticationPageErrorCount,
         authenticationConsoleErrorObservedCount,
         authenticationConsoleErrorRecoveredCount,
+        authenticationConsoleErrorRecoveredProtectedReadCount,
+        authenticationConsoleErrorRetiredFrozenBaselineCount,
         authenticationConsoleErrorFatalCount,
+        frozenBaselineListenerRetirementDecision:
+          groupFrozenBaselineListenerRetirementDecision,
         authenticationProtectedReadRetryAttestation:
           groupAuthenticationProtectedReadRetryAttestation,
         preNavigationApplicationSessionFenceAttestation,
@@ -40756,6 +43031,31 @@ try {
         `Allowed-egress handler queue must be empty after cleanup for ${groupKey}.`,
       );
       await flushNetworkAttestations();
+      if (frozenBaselineListenerBindingObserver) {
+        for (const entry of frozenBaselineListenerRequestsByNetworkId.values()) {
+          if (entry.method !== "GET") continue;
+          if (entry.responseStream) {
+            entry.responseStream.finish({ allowIncomplete: true });
+          } else frozenBaselineListenerBindingObserver.recordStreamFailure();
+        }
+        frozenBaselineListenerRequestsByNetworkId.clear();
+        frozenBaselineInitialRequestIdByGsessionid.clear();
+        frozenBaselineSessionSidByGsessionid.clear();
+        const frozenBaselineListenerGroupAttestation =
+          frozenBaselineListenerBindingObserver.safeSnapshot();
+        assert.equal(
+          frozenBaselineListenerGroupAttestation.passed,
+          true,
+          `Frozen-baseline listener retirement attestation failed: ${JSON.stringify(
+            frozenBaselineListenerGroupAttestation,
+          )}`,
+        );
+        frozenBaselineAuthenticationAnomalyGroupAttestations.push(
+          frozenBaselineListenerGroupAttestation,
+        );
+      } else {
+        assert.equal(frozenBaselineListenerRequestsByNetworkId.size, 0);
+      }
       retireContextClosedWebChannelAuthorizations();
       assert.equal(
         allowedEgressProxyAuthorizationCoordinator.activeCount(),
@@ -42440,6 +44740,117 @@ const recoveredProtectedReadTransportFailureCount =
       total + attestation.recoveredProtectedReadTransportFailureCount,
     0,
   );
+const sortedFrozenBaselineAuthenticationAnomalyGroupAttestations = [
+  ...frozenBaselineAuthenticationAnomalyGroupAttestations,
+].sort((left, right) => left.groupKey.localeCompare(right.groupKey));
+assert.equal(
+  sortedFrozenBaselineAuthenticationAnomalyGroupAttestations.length,
+  applicationSessionKeepaliveClientExpectedGroupCount,
+);
+assert.equal(
+  new Set(
+    sortedFrozenBaselineAuthenticationAnomalyGroupAttestations.map(
+      (attestation) => attestation.groupKey,
+    ),
+  ).size,
+  sortedFrozenBaselineAuthenticationAnomalyGroupAttestations.length,
+);
+const sumFrozenBaselineAuthenticationAnomalyGroupField = (field) =>
+  sortedFrozenBaselineAuthenticationAnomalyGroupAttestations.reduce(
+    (total, attestation) => total + attestation[field],
+    0,
+  );
+const frozenBaselineAuthenticationAnomalyRetirement = Object.freeze({
+  schemaVersion: 1,
+  policyId: frozenBaselineAuthenticationAnomalyPolicy.id,
+  presentationSourceCommit:
+    frozenBaselineAuthenticationAnomalyPolicy.presentationSourceCommit,
+  transportObserver: "cdp-network-stream-resource-content",
+  targetClasses: SAFE_FROZEN_BASELINE_LISTENER_TARGET_CLASSES,
+  expectedEligibleGroupCount: 1,
+  eligibleGroupCount:
+    sortedFrozenBaselineAuthenticationAnomalyGroupAttestations.filter(
+      (attestation) => attestation.eligible,
+    ).length,
+  observedExactConsoleErrorCount:
+    sumFrozenBaselineAuthenticationAnomalyGroupField("exactConsoleErrorCount"),
+  retiredExactConsoleErrorCount:
+    sumFrozenBaselineAuthenticationAnomalyGroupField(
+      "retiredExactConsoleErrorCount",
+    ),
+  fatalExactConsoleErrorCount: sumFrozenBaselineAuthenticationAnomalyGroupField(
+    "fatalExactConsoleErrorCount",
+  ),
+  outboundAddTargetCount: sumFrozenBaselineAuthenticationAnomalyGroupField(
+    "outboundAddTargetCount",
+  ),
+  inboundRemoveCauseCodeCount: sumFrozenBaselineAuthenticationAnomalyGroupField(
+    "inboundRemoveCauseCodeCount",
+  ),
+  successorAddTargetCount: sumFrozenBaselineAuthenticationAnomalyGroupField(
+    "successorAddTargetCount",
+  ),
+  unknownTargetCount:
+    sumFrozenBaselineAuthenticationAnomalyGroupField("unknownTargetCount"),
+  unknownRemovedTargetCount: sumFrozenBaselineAuthenticationAnomalyGroupField(
+    "unknownRemovedTargetCount",
+  ),
+  unboundRemovedTargetCount: sumFrozenBaselineAuthenticationAnomalyGroupField(
+    "unboundRemovedTargetCount",
+  ),
+  ambiguousRemovedTargetCount: sumFrozenBaselineAuthenticationAnomalyGroupField(
+    "ambiguousRemovedTargetCount",
+  ),
+  streamFailureCount:
+    sumFrozenBaselineAuthenticationAnomalyGroupField("streamFailureCount"),
+  parseFailureCount:
+    sumFrozenBaselineAuthenticationAnomalyGroupField("parseFailureCount"),
+  bufferExceededCount: sumFrozenBaselineAuthenticationAnomalyGroupField(
+    "bufferExceededCount",
+  ),
+  groupAttestationCount:
+    sortedFrozenBaselineAuthenticationAnomalyGroupAttestations.length,
+  groupAttestationSetSha256: sha256(
+    canonicalJson(sortedFrozenBaselineAuthenticationAnomalyGroupAttestations),
+  ),
+  groups: sortedFrozenBaselineAuthenticationAnomalyGroupAttestations,
+  passed:
+    sortedFrozenBaselineAuthenticationAnomalyGroupAttestations.length ===
+      applicationSessionKeepaliveClientExpectedGroupCount &&
+    sortedFrozenBaselineAuthenticationAnomalyGroupAttestations.every(
+      (attestation) => attestation.passed,
+    ) &&
+    sortedFrozenBaselineAuthenticationAnomalyGroupAttestations.filter(
+      (attestation) => attestation.eligible,
+    ).length === 1 &&
+    sumFrozenBaselineAuthenticationAnomalyGroupField(
+      "retiredExactConsoleErrorCount",
+    ) ===
+      frozenBaselineAuthenticationAnomalyPolicy.consoleError.expectedCount &&
+    sumFrozenBaselineAuthenticationAnomalyGroupField(
+      "fatalExactConsoleErrorCount",
+    ) === 0 &&
+    sumFrozenBaselineAuthenticationAnomalyGroupField(
+      "unknownRemovedTargetCount",
+    ) === 0 &&
+    sumFrozenBaselineAuthenticationAnomalyGroupField(
+      "unboundRemovedTargetCount",
+    ) === 0 &&
+    sumFrozenBaselineAuthenticationAnomalyGroupField(
+      "ambiguousRemovedTargetCount",
+    ) === 0 &&
+    sumFrozenBaselineAuthenticationAnomalyGroupField("streamFailureCount") ===
+      0 &&
+    sumFrozenBaselineAuthenticationAnomalyGroupField("parseFailureCount") ===
+      0 &&
+    sumFrozenBaselineAuthenticationAnomalyGroupField("bufferExceededCount") ===
+      0,
+});
+assert.equal(frozenBaselineAuthenticationAnomalyRetirement.passed, true);
+assert.equal(
+  browserConsoleErrorRetiredFrozenBaselineCount,
+  frozenBaselineAuthenticationAnomalyRetirement.retiredExactConsoleErrorCount,
+);
 const fatalProtectedReadTransportFailureCount =
   observedProtectedReadTransportFailureCount -
   recoveredProtectedReadTransportFailureCount;
@@ -42447,7 +44858,8 @@ const browserRequestFailureFatalCount =
   browserRequestFailureCount - browserRequestFailureRecoveredProtectedReadCount;
 const browserConsoleErrorFatalCount =
   browserConsoleErrorObservedAuthenticationCount -
-  browserConsoleErrorRecoveredProtectedReadCount;
+  browserConsoleErrorRecoveredProtectedReadCount -
+  browserConsoleErrorRetiredFrozenBaselineCount;
 const allowedEgressResponseErrorFatalCount =
   allowedEgressResponseErrorAbortCount -
   allowedEgressResponseErrorRecoveredProtectedReadCount;
@@ -42471,6 +44883,7 @@ assert.equal(
 assert.equal(
   browserConsoleErrorObservedAuthenticationCount,
   browserConsoleErrorRecoveredProtectedReadCount +
+    browserConsoleErrorRetiredFrozenBaselineCount +
     browserConsoleErrorFatalCount,
 );
 assert.equal(
@@ -42548,7 +44961,8 @@ const authenticationProtectedReadRetry = Object.freeze({
   browserConsoleErrorObservedCount:
     browserConsoleErrorObservedAuthenticationCount,
   browserConsoleErrorRecoveredCount:
-    browserConsoleErrorRecoveredProtectedReadCount,
+    browserConsoleErrorRecoveredProtectedReadCount +
+    browserConsoleErrorRetiredFrozenBaselineCount,
   browserConsoleErrorFatalCount,
   browserRequestFailureObservedCount: browserRequestFailureCount,
   browserRequestFailureRecoveredCount:
@@ -43923,6 +46337,7 @@ const manifest = {
   appCheckBinding,
   appCheckBindingHash,
   authenticationProtectedReadRetry,
+  frozenBaselineAuthenticationAnomalyRetirement,
   authenticationLandingGuard: {
     id: authenticationLandingGuard.id,
     storage: authenticationLandingGuard.storage,

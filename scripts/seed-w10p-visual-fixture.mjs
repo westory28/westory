@@ -48,6 +48,7 @@ const FIXED_TIME = "2026-08-17T06:00:00.000Z";
 const SEMESTER_ID = "2026-2";
 const YEAR = "2026";
 const SEMESTER = "2";
+const FROZEN_PRESENTATION_DEFAULT_SEMESTER = "1";
 const CLASS_ID = "w10p-class-3-1";
 const ENROLLMENT_ID = "w10p-enrollment-student";
 const STUDENT_UID = "w10p-visual-student";
@@ -851,6 +852,20 @@ const writtenGrade = gradeFixture(
   "W10P 정기시험 근거",
   "written",
 );
+
+const attendanceCompatibilityTransactionFixture = () =>
+  owned({
+    uid: STUDENT_UID,
+    type: "manual_adjust",
+    activityType: "manual_adjust",
+    delta: 700,
+    balanceAfter: 700,
+    sourceId: "w10p-visual-grant",
+    sourceLabel: "W10P 위스 기록",
+    policyId: "current",
+    createdBy: TEACHER_UID,
+    createdAt: fixedDate,
+  });
 
 const createDocs = new Map([
   [
@@ -1687,22 +1702,14 @@ const createDocs = new Map([
     }),
   ],
   [
-    // Frozen Dashboard checks this deterministic attendance activity path.
-    // Keep the single manual-adjust ledger row and its visible marker intact;
-    // only the fixture document ID bridges that legacy presentation read.
+    // Current-semester Dashboard checks this deterministic attendance activity path.
     `years/${YEAR}/semesters/${SEMESTER}/point_transactions/activity_${STUDENT_UID}_attendance_attendance-2026-08-17`,
-    owned({
-      uid: STUDENT_UID,
-      type: "manual_adjust",
-      activityType: "manual_adjust",
-      delta: 700,
-      balanceAfter: 700,
-      sourceId: "w10p-visual-grant",
-      sourceLabel: "W10P 위스 기록",
-      policyId: "current",
-      createdBy: TEACHER_UID,
-      createdAt: fixedDate,
-    }),
+    attendanceCompatibilityTransactionFixture(),
+  ],
+  [
+    // Frozen presentation initializes before config and reads the 2026/1 default.
+    `years/${YEAR}/semesters/${FROZEN_PRESENTATION_DEFAULT_SEMESTER}/point_transactions/activity_${STUDENT_UID}_attendance_attendance-2026-08-17`,
+    attendanceCompatibilityTransactionFixture(),
   ],
   [
     `years/${YEAR}/semesters/${SEMESTER}/point_products/w10p-point-product`,
@@ -2061,6 +2068,10 @@ const strictCollections = new Map([
     [`activity_${STUDENT_UID}_attendance_attendance-2026-08-17`],
   ],
   [
+    `years/${YEAR}/semesters/${FROZEN_PRESENTATION_DEFAULT_SEMESTER}/point_transactions`,
+    [`activity_${STUDENT_UID}_attendance_attendance-2026-08-17`],
+  ],
+  [
     `years/${YEAR}/semesters/${SEMESTER}/point_products`,
     ["w10p-point-product"],
   ],
@@ -2185,6 +2196,13 @@ const assertSeedPlanIntegrity = () => {
   );
   const compatibilityAttendanceTransaction = createDocs.get(
     `years/${YEAR}/semesters/${SEMESTER}/point_transactions/activity_${STUDENT_UID}_attendance_attendance-2026-08-17`,
+  );
+  const frozenPresentationAttendanceTransaction = createDocs.get(
+    `years/${YEAR}/semesters/${FROZEN_PRESENTATION_DEFAULT_SEMESTER}/point_transactions/activity_${STUDENT_UID}_attendance_attendance-2026-08-17`,
+  );
+  assert.deepEqual(
+    frozenPresentationAttendanceTransaction,
+    compatibilityAttendanceTransaction,
   );
   assert.equal(studentUser?.customNameConfirmed, true);
   assert.deepEqual(

@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 14,
+  "schemaVersion": 15,
   "phase": "W10P",
   "functionalBaselineSha": "ef74b571a6964ddbc61eb7877a98d21b3c7c8c85",
   "productionPresentationSha": "676869fa289d3e7ecef234cbb5cca65c60ec4597",
@@ -662,8 +662,28 @@
   },
   "fixtureId": "w10p-visual-fixture-v1",
   "fixtureRevision": 1,
-  "fixturePlanHash": "324d9c5f63f1673d7de9366e632c23175a14bfb69aeee1423f9aa64735daaedb",
+  "fixturePlanHash": "53d6f784bdfda8b731085d468e402e2b144ee4c6e4d5bab612352d131be5c509",
   "fixedTime": "2026-08-17T06:00:00.000Z",
+  "frozenBaselineAuthenticationAnomalyPolicy": {
+    "id": "w10p-frozen-dashboard-attendance-default-scope-v1",
+    "presentationSourceCommit": "676869fa289d3e7ecef234cbb5cca65c60ec4597",
+    "stage": "baseline",
+    "captureRole": "student",
+    "authenticationRole": "student",
+    "viewport": "1024x768",
+    "phase": "authentication",
+    "consoleError": {
+      "sourceClass": "console-error",
+      "errorNameClass": "console-error",
+      "messageClass": "firebase-permission-denied",
+      "operationClass": "firestore-unhandled-snapshot-listener",
+      "sha256": "22a802d5f907a1f881328ae78eab9ea0711a8e266a7bcf540c0066906e56e6d6",
+      "expectedCount": 1
+    },
+    "removedTargetClass": "attendance-default-scope",
+    "successorTargetClass": "attendance-active-scope",
+    "removedCauseCode": 7
+  },
   "authenticationLandingGuard": {
     "id": "korean-public-holiday-sync-v1",
     "storage": "localStorage",
