@@ -6718,6 +6718,50 @@ const hasExactObjectKeys = (value, expectedKeys) =>
   !Array.isArray(value) &&
   Object.keys(value).sort().join("\u0000") ===
     [...expectedKeys].sort().join("\u0000");
+const canonicalFrozenBaselineListenRequestJson = (value) => {
+  if (value === null) return "null";
+  if (Array.isArray(value)) {
+    return `[${value
+      .map((item) => canonicalFrozenBaselineListenRequestJson(item))
+      .join(",")}]`;
+  }
+  if (typeof value === "object") {
+    if (Object.getPrototypeOf(value) !== Object.prototype) {
+      throw new Error(
+        "Firestore Listen request structure had an unsupported prototype.",
+      );
+    }
+    return `{${Object.keys(value)
+      .sort()
+      .map(
+        (key) =>
+          `${JSON.stringify(key)}:${canonicalFrozenBaselineListenRequestJson(
+            value[key],
+          )}`,
+      )
+      .join(",")}}`;
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      throw new Error(
+        "Firestore Listen request structure contained a non-finite number.",
+      );
+    }
+    return Object.is(value, -0) ? "-0" : JSON.stringify(value);
+  }
+  if (typeof value === "string" || typeof value === "boolean") {
+    return JSON.stringify(value);
+  }
+  throw new Error(
+    "Firestore Listen request structure contained an unsupported value.",
+  );
+};
+const frozenBaselineListenRequestStructureSha256 = (message) =>
+  secretSha256(
+    `w10p-frozen-baseline-firestore-listen-request-v1\u0000${canonicalFrozenBaselineListenRequestJson(
+      message,
+    )}`,
+  );
 const exactAttendanceScopeFilterValue = (structuredQuery) => {
   if (
     !hasExactObjectKeys(structuredQuery, ["from", "where"]) &&
@@ -6876,7 +6920,11 @@ const parseFrozenBaselineFirestoreListenAddTargets = ({
     1,
     "Firestore Listen message count was ambiguous.",
   );
-  assert.match(countValues[0], /^(?:0|[1-9][0-9]{0,3})$/u);
+  assert.equal(
+    /^(?:0|[1-9][0-9]{0,3})$/u.test(countValues[0]),
+    true,
+    "Firestore Listen message count was invalid.",
+  );
   const expectedMessageCount = Number(countValues[0]);
   assert.equal(
     expectedMessageCount === 0
@@ -6886,23 +6934,46 @@ const parseFrozenBaselineFirestoreListenAddTargets = ({
     "Firestore Listen message offset was ambiguous.",
   );
   if (offsetValues.length === 1) {
-    assert.match(offsetValues[0], /^(?:0|[1-9][0-9]{0,9})$/u);
+    assert.equal(
+      /^(?:0|[1-9][0-9]{0,9})$/u.test(offsetValues[0]),
+      true,
+      "Firestore Listen message offset was invalid.",
+    );
   }
-  const dataEntries = [...params.entries()].filter(([name]) =>
-    /^req(?:0|[1-9][0-9]{0,3})___data__$/u.test(name),
+  const requestOffset = Number(offsetValues[0] || "0");
+  assert.equal(
+    Number.isSafeInteger(requestOffset) && requestOffset >= 0,
+    true,
+    "Firestore Listen message offset was invalid.",
   );
+  const dataEntries = [...params.entries()]
+    .filter(([name]) => /^req(?:0|[1-9][0-9]{0,3})___data__$/u.test(name))
+    .map(([name, encodedMessage]) => {
+      const requestIndexMatch = /^req(0|[1-9][0-9]{0,3})___data__$/u.exec(name);
+      assert.ok(requestIndexMatch);
+      return Object.freeze({
+        requestIndex: Number(requestIndexMatch[1]),
+        encodedMessage,
+      });
+    })
+    .sort((left, right) => left.requestIndex - right.requestIndex);
   assert.equal(
     dataEntries.length,
     expectedMessageCount,
     "Firestore Listen message body was incomplete or ambiguous.",
   );
   assert.equal(
-    new Set(dataEntries.map(([name]) => name)).size,
+    new Set(dataEntries.map(({ requestIndex }) => requestIndex)).size,
     dataEntries.length,
     "Firestore Listen message keys were duplicated.",
   );
+  assert.equal(
+    dataEntries.every(({ requestIndex }, index) => requestIndex === index),
+    true,
+    "Firestore Listen message indices were not contiguous.",
+  );
   const targets = [];
-  for (const [, encodedMessage] of dataEntries) {
+  for (const { requestIndex, encodedMessage } of dataEntries) {
     assert.ok(
       Buffer.byteLength(encodedMessage, "utf8") <=
         FROZEN_BASELINE_LISTENER_MAX_REQUEST_BODY_BYTES,
@@ -6919,6 +6990,13 @@ const parseFrozenBaselineFirestoreListenAddTargets = ({
       Number.isSafeInteger(targetId) && targetId > 0,
       "Firestore Listen addTarget targetId was invalid.",
     );
+    const webChannelMessageSequence = requestOffset + requestIndex;
+    assert.equal(
+      Number.isSafeInteger(webChannelMessageSequence) &&
+        webChannelMessageSequence >= 0,
+      true,
+      "Firestore Listen logical message sequence was invalid.",
+    );
     targets.push(
       Object.freeze({
         sessionIdentity,
@@ -6927,6 +7005,9 @@ const parseFrozenBaselineFirestoreListenAddTargets = ({
           message.addTarget,
           expectedUidHash,
         ),
+        webChannelMessageSequence,
+        messageStructureSha256:
+          frozenBaselineListenRequestStructureSha256(message),
       }),
     );
   }
@@ -7193,18 +7274,50 @@ const createFrozenBaselineListenerBindingObserver = ({
     targetId,
     targetClass,
     addSequence,
+    webChannelMessageSequence,
+    messageStructureSha256,
   }) => {
     const tupleKey = frozenBaselineListenerTupleKey(sessionIdentity, targetId);
-    if (targetsByTuple.has(tupleKey)) {
+    const existingTarget = targetsByTuple.get(tupleKey) || null;
+    if (existingTarget !== null) {
+      const exactIdempotentReplay =
+        existingTarget.webChannelMessageSequence ===
+          webChannelMessageSequence &&
+        existingTarget.messageStructureSha256 === messageStructureSha256 &&
+        existingTarget.targetClass === targetClass;
+      if (exactIdempotentReplay) {
+        if (
+          frozenBaselineObservationSequenceBefore(
+            addSequence,
+            existingTarget.addSequence,
+          )
+        ) {
+          existingTarget.addSequence = addSequence;
+        }
+        return "idempotent-replay";
+      }
       recordParseFailure({ failureClass: "target-tuple-duplicate" });
-      return;
+      return "conflicting-duplicate";
     }
     targetsByTuple.set(tupleKey, {
       targetClass,
       addSequence,
+      webChannelMessageSequence,
+      messageStructureSha256,
       acknowledgementSequences: [],
       removedCauseCodeSequences: [],
     });
+    outboundAddTargetCount += 1;
+    targetClassCounts.set(targetClass, targetClassCounts.get(targetClass) + 1);
+    successorAddTargetCount += Number(
+      targetClass === policy.successorTargetClass,
+    );
+    assert.ok(
+      Number.isSafeInteger(outboundAddTargetCount) &&
+        Number.isSafeInteger(targetClassCounts.get(targetClass)) &&
+        Number.isSafeInteger(successorAddTargetCount),
+    );
+    return "registered";
   };
   const observeOutboundRequest = (request) => {
     if (settledDecision !== null) {
@@ -7223,17 +7336,11 @@ const createFrozenBaselineListenerBindingObserver = ({
           targetId: target.targetId,
           targetClass: target.targetClass,
           addSequence,
+          webChannelMessageSequence: target.webChannelMessageSequence,
+          messageStructureSha256: target.messageStructureSha256,
         };
         if (parsed.initialRequest) pendingInitialTargets.push(targetRecord);
         else registerSessionTarget(targetRecord);
-        outboundAddTargetCount += 1;
-        targetClassCounts.set(
-          target.targetClass,
-          targetClassCounts.get(target.targetClass) + 1,
-        );
-        successorAddTargetCount += Number(
-          target.targetClass === policy.successorTargetClass,
-        );
       }
       if (parsed.initialRequest && pendingInitialTargets.length > 0) {
         if (
@@ -7850,6 +7957,8 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
   const privateUnmatchedGsessionid =
     "private-w10p-listener-unmatched-gsessionid";
   const privateTransportRequestId = "private-w10p-listener-request-id";
+  const privateReplayStructureLabel =
+    "private-w10p-listener-replay-structure-label";
   const safeTransportFailureFixture =
     summarizeSafeFrozenBaselineListenerTransportFailure({
       activeListenerRequestCount: 3,
@@ -8012,16 +8121,67 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
     ),
     "attendance-default-scope",
   );
-  const requestBodyForTargets = (targets) => {
+  const requestBodyForListenMessages = (messages, { offset = 0 } = {}) => {
+    assert.ok(Number.isSafeInteger(offset) && offset >= 0);
     const params = new URLSearchParams({
-      count: String(targets.length),
-      ofs: "0",
+      count: String(messages.length),
+      ofs: String(offset),
     });
-    targets.forEach((addTarget, index) => {
-      params.set(`req${index}___data__`, JSON.stringify({ addTarget }));
+    messages.forEach((message, index) => {
+      params.set(`req${index}___data__`, JSON.stringify(message));
     });
     return params.toString();
   };
+  const requestBodyForTargets = (targets, options) =>
+    requestBodyForListenMessages(
+      targets.map((addTarget) => ({ addTarget })),
+      options,
+    );
+  const canonicalReplayTarget = attendanceTargetWithExtraFilter;
+  const canonicalReplayLeft = parseFrozenBaselineFirestoreListenAddTargets({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForListenMessages([
+      { database, addTarget: canonicalReplayTarget },
+    ]),
+    expectedUidHash: secretSha256(privateUid),
+  }).targets[0];
+  const canonicalReplayRight = parseFrozenBaselineFirestoreListenAddTargets({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForListenMessages([
+      { addTarget: canonicalReplayTarget, database },
+    ]),
+    expectedUidHash: secretSha256(privateUid),
+  }).targets[0];
+  assert.equal(
+    canonicalReplayLeft.messageStructureSha256 ===
+      canonicalReplayRight.messageStructureSha256,
+    true,
+  );
+  assert.equal(
+    canonicalReplayLeft.webChannelMessageSequence ===
+      canonicalReplayRight.webChannelMessageSequence,
+    true,
+  );
+  const noncontiguousReplayParams = new URLSearchParams({
+    count: "1",
+    ofs: "0",
+    req1___data__: JSON.stringify({ addTarget: canonicalReplayTarget }),
+  });
+  assert.throws(
+    () =>
+      parseFrozenBaselineFirestoreListenAddTargets({
+        requestUrl: requestUrl.toString(),
+        method: "POST",
+        hasPostData: true,
+        postData: noncontiguousReplayParams.toString(),
+        expectedUidHash: secretSha256(privateUid),
+      }),
+    /message indices were not contiguous/u,
+  );
   const createObserver = ({ stage = "baseline", viewport = "1024x768" } = {}) =>
     createFrozenBaselineListenerBindingObserver({
       stage,
@@ -8250,6 +8410,12 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
   const promotedSessionIdentity = exactFirestoreListenSessionIdentity(
     requestUrl.toString(),
   );
+  initialRequestObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([attendanceTarget("2026_1", 2)]),
+  });
   initialRequestObserver.observeInboundPayload({
     sessionIdentity: promotedSessionIdentity,
     payload: JSON.stringify([
@@ -8294,6 +8460,8 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
   initialRequestObserver.settleAuthentication({ dashboardStable: true });
   const initialRequestSnapshot = initialRequestObserver.safeSnapshot();
   assert.equal(initialRequestSnapshot.passed, true);
+  assert.equal(initialRequestSnapshot.outboundAddTargetCount, 2);
+  assert.equal(initialRequestSnapshot.parseFailureCount, 0);
   const noneligibleDeferredPromotionObserver = createNoneligibleAdminObserver();
   noneligibleDeferredPromotionObserver.observeOutboundRequest({
     networkRequestId: "private-admin-deferred-initial-network-request-id",
@@ -8306,6 +8474,12 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
     noneligibleDeferredPromotionObserver.readyForSettlement(),
     false,
   );
+  noneligibleDeferredPromotionObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([attendanceTargetWithExtraFilter]),
+  });
   noneligibleDeferredPromotionObserver.promoteInitialTargets({
     networkRequestId: "private-admin-deferred-initial-network-request-id",
     gsessionid: privateGsessionid,
@@ -8333,6 +8507,71 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
   );
   assert.equal(
     noneligibleDeferredPromotionDiagnostic.initialTargetRequestPromotionCount,
+    1,
+  );
+  const conflictingReplayStructureObserver = createNoneligibleAdminObserver();
+  conflictingReplayStructureObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([canonicalReplayTarget]),
+  });
+  conflictingReplayStructureObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForListenMessages([
+      {
+        addTarget: canonicalReplayTarget,
+        labels: { fixture: privateReplayStructureLabel },
+      },
+    ]),
+  });
+  conflictingReplayStructureObserver.settleAuthentication({
+    dashboardStable: true,
+  });
+  const conflictingReplayStructureSnapshot =
+    conflictingReplayStructureObserver.safeSnapshot();
+  const conflictingReplayStructureDiagnostic =
+    conflictingReplayStructureObserver.safeFailureDiagnostic();
+  assert.equal(conflictingReplayStructureSnapshot.passed, false);
+  assert.equal(conflictingReplayStructureSnapshot.outboundAddTargetCount, 1);
+  assert.equal(conflictingReplayStructureSnapshot.unknownTargetCount, 1);
+  assert.equal(
+    parseFailureClassCount(
+      conflictingReplayStructureDiagnostic,
+      "target-tuple-duplicate",
+    ),
+    1,
+  );
+  const conflictingReplayIndexObserver = createNoneligibleAdminObserver();
+  conflictingReplayIndexObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([canonicalReplayTarget]),
+  });
+  conflictingReplayIndexObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([canonicalReplayTarget], { offset: 1 }),
+  });
+  conflictingReplayIndexObserver.settleAuthentication({
+    dashboardStable: true,
+  });
+  const conflictingReplayIndexSnapshot =
+    conflictingReplayIndexObserver.safeSnapshot();
+  const conflictingReplayIndexDiagnostic =
+    conflictingReplayIndexObserver.safeFailureDiagnostic();
+  assert.equal(conflictingReplayIndexSnapshot.passed, false);
+  assert.equal(conflictingReplayIndexSnapshot.outboundAddTargetCount, 1);
+  assert.equal(conflictingReplayIndexSnapshot.unknownTargetCount, 1);
+  assert.equal(
+    parseFailureClassCount(
+      conflictingReplayIndexDiagnostic,
+      "target-tuple-duplicate",
+    ),
     1,
   );
   const noneligibleUnresolvedInitialObserver = createNoneligibleAdminObserver();
@@ -8587,6 +8826,8 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
     mismatchedBufferedSnapshot,
     noneligibleUnresolvedInitialSnapshot,
     noneligiblePendingFailureSnapshot,
+    conflictingReplayStructureSnapshot,
+    conflictingReplayIndexSnapshot,
   ];
   const wrongViewportObserver = createObserver({ viewport: "393x852" });
   observePositiveLifecycle(wrongViewportObserver);
@@ -8689,6 +8930,14 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
     ]),
   });
   preexistingSuccessorObserver.observeConsoleError(exactConsoleError);
+  preexistingSuccessorObserver.observeOutboundRequest({
+    requestUrl: requestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([attendanceTarget("2026_2", 4)], {
+      offset: 1,
+    }),
+  });
   preexistingSuccessorObserver.observeInboundPayload({
     sessionIdentity: preexistingSessionIdentity,
     payload: JSON.stringify([
@@ -8706,7 +8955,12 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
     ]),
   });
   preexistingSuccessorObserver.settleAuthentication({ dashboardStable: true });
-  negativeSnapshots.push(preexistingSuccessorObserver.safeSnapshot());
+  const preexistingSuccessorSnapshot =
+    preexistingSuccessorObserver.safeSnapshot();
+  assert.equal(preexistingSuccessorSnapshot.parseFailureCount, 0);
+  assert.equal(preexistingSuccessorSnapshot.successorAddTargetCount, 1);
+  assert.equal(preexistingSuccessorSnapshot.successorSequenceBound, false);
+  negativeSnapshots.push(preexistingSuccessorSnapshot);
   const wrongUidObserver = createObserver();
   wrongUidObserver.observeOutboundRequest({
     requestUrl: requestUrl.toString(),
@@ -8832,7 +9086,7 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
       (count, snapshot) => count + Number(snapshot.parseFailureCount > 0),
       0,
     ),
-    4,
+    6,
   );
   const serializedSafeEvidence = JSON.stringify({
     positiveSnapshot,
@@ -8845,9 +9099,34 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
     safeTransportFailureFixture,
     positiveFailureDiagnostic,
     noneligibleDeferredPromotionDiagnostic,
+    conflictingReplayStructureDiagnostic,
+    conflictingReplayIndexDiagnostic,
     noneligibleUnresolvedInitialDiagnostic,
     noneligiblePendingFailureDiagnostic,
   });
+  for (const privateReplayBindingField of [
+    "messageStructureSha256",
+    "webChannelMessageSequence",
+  ]) {
+    assert.equal(
+      serializedSafeEvidence.includes(privateReplayBindingField),
+      false,
+    );
+    assert.equal(
+      serializedSafeFailureDiagnostics.includes(privateReplayBindingField),
+      false,
+    );
+  }
+  assert.equal(
+    serializedSafeEvidence.includes(canonicalReplayLeft.messageStructureSha256),
+    false,
+  );
+  assert.equal(
+    serializedSafeFailureDiagnostics.includes(
+      canonicalReplayLeft.messageStructureSha256,
+    ),
+    false,
+  );
   for (const privateValue of [
     privateUid,
     privateGsessionid,
@@ -8855,6 +9134,7 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
     privateUnmatchedGsessionid,
     privateSid,
     privateTransportRequestId,
+    privateReplayStructureLabel,
     "private-admin-deferred-initial-network-request-id",
     "private-admin-unresolved-initial-network-request-id",
     "private-admin-failed-initial-network-request-id",
