@@ -6649,7 +6649,7 @@ const summarizeSafeAuthenticationBootstrapRetirement = ({ before, after }) => {
   });
 };
 const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_POLICY_ID =
-  "w10p-protected-read-shared-transport-retry-v3";
+  "w10p-protected-read-per-target-transport-retry-v4";
 const SAFE_AUTHENTICATION_PROTECTED_READ_TRANSPORT_RESET_POLICY_ID =
   "w10p-protected-read-exact-firestore-tunnel-reset-v2";
 const SAFE_AUTHENTICATION_PROTECTED_READ_WHOLE_BROWSER_PROCESS_RESTART_ERROR =
@@ -6658,7 +6658,6 @@ const SAFE_AUTHENTICATION_PROTECTED_READ_FIRESTORE_HOSTNAME =
   "firestore.googleapis.com";
 const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_DELAY_MS = 2_000;
 const SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_TARGETS = Object.freeze([
-  "none",
   "config",
   "profile",
 ]);
@@ -6784,9 +6783,10 @@ const normalizeSafeAuthenticationProtectedReadRetryAttestation = (
     "profileFinalOutcomeClass",
     "profileFirstOutcomeClass",
     "recoveredByRetry",
-    "retryBudget",
+    "retryBudgetPerGroup",
+    "retryBudgetPerTarget",
     "retryDelayMs",
-    "retryTarget",
+    "retryTargets",
     "retryUsed",
     "sameAppCheckToken",
     "sameAuthorizationToken",
@@ -6795,17 +6795,30 @@ const normalizeSafeAuthenticationProtectedReadRetryAttestation = (
     "sessionRevisionUnchanged",
     "tokenRefreshCount",
   ]);
-  assert.equal(attestation.schemaVersion, 1);
+  assert.equal(attestation.schemaVersion, 2);
   assert.equal(
     attestation.policyId,
     SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_POLICY_ID,
   );
-  assert.equal(attestation.retryBudget, 1);
-  assert.ok([0, 1].includes(attestation.retryUsed));
-  assert.ok(
-    SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_TARGETS.includes(
-      attestation.retryTarget,
+  assert.equal(attestation.retryBudgetPerTarget, 1);
+  assert.equal(attestation.retryBudgetPerGroup, 2);
+  assert.ok([0, 1, 2].includes(attestation.retryUsed));
+  assert.equal(Array.isArray(attestation.retryTargets), true);
+  assert.equal(
+    attestation.retryTargets.every((target) =>
+      SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_TARGETS.includes(target),
     ),
+    true,
+  );
+  assert.deepEqual(
+    attestation.retryTargets,
+    SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_TARGETS.filter((target) =>
+      attestation.retryTargets.includes(target),
+    ),
+  );
+  assert.equal(
+    new Set(attestation.retryTargets).size,
+    attestation.retryTargets.length,
   );
   assert.equal(
     attestation.retryDelayMs,
@@ -6843,30 +6856,35 @@ const normalizeSafeAuthenticationProtectedReadRetryAttestation = (
   assert.equal(attestation.tokenRefreshCount, 0);
   assert.equal(attestation.sessionMutationCount, 0);
   assert.equal(attestation.exactUrlMethodBound, true);
-  const expectedRetryTarget =
-    attestation.configAttemptCount === 2
-      ? "config"
-      : attestation.profileAttemptCount === 2
-        ? "profile"
-        : "none";
-  assert.equal(attestation.retryTarget, expectedRetryTarget);
-  assert.equal(attestation.retryUsed, Number(expectedRetryTarget !== "none"));
+  const expectedRetryTargets =
+    SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_TARGETS.filter(
+      (target) => attestation[`${target}AttemptCount`] === 2,
+    );
+  assert.deepEqual(attestation.retryTargets, expectedRetryTargets);
+  assert.equal(attestation.retryUsed, expectedRetryTargets.length);
   assert.equal(
     attestation.configAttemptCount + attestation.profileAttemptCount,
     2 + attestation.retryUsed,
   );
-  assert.equal(attestation.recoveredByRetry, expectedRetryTarget !== "none");
+  assert.equal(attestation.recoveredByRetry, expectedRetryTargets.length > 0);
   assert.equal(
     attestation.configFirstOutcomeClass,
-    expectedRetryTarget === "config" ? "transport-error" : "response-2xx",
+    expectedRetryTargets.includes("config")
+      ? "transport-error"
+      : "response-2xx",
   );
   assert.equal(attestation.configFinalOutcomeClass, "response-2xx");
   assert.equal(
     attestation.profileFirstOutcomeClass,
-    expectedRetryTarget === "profile" ? "transport-error" : "response-2xx",
+    expectedRetryTargets.includes("profile")
+      ? "transport-error"
+      : "response-2xx",
   );
   assert.equal(attestation.profileFinalOutcomeClass, "response-2xx");
-  return Object.freeze({ ...attestation });
+  return Object.freeze({
+    ...attestation,
+    retryTargets: Object.freeze([...attestation.retryTargets]),
+  });
 };
 const normalizeSafeAuthenticationProtectedReadTransportResetAttestation = (
   attestation,
@@ -7166,10 +7184,12 @@ const confirmSafeAuthenticationProtectedReadRetry = (
     profile: attestation.profileAttemptCount,
   };
   const expectedFirstClassByTarget = {
-    config:
-      attestation.retryTarget === "config" ? "response-error" : "response-2xx",
-    profile:
-      attestation.retryTarget === "profile" ? "response-error" : "response-2xx",
+    config: attestation.retryTargets.includes("config")
+      ? "response-error"
+      : "response-2xx",
+    profile: attestation.retryTargets.includes("profile")
+      ? "response-error"
+      : "response-2xx",
   };
   const finalResponseClassByTarget = {};
   const firstResponseClassByTarget = {};
@@ -7232,7 +7252,8 @@ const confirmSafeAuthenticationProtectedReadRetry = (
         assert.equal(record.proxyLeaseClass, null);
         assert.equal(record.currentTunnelClass, null);
         const retryResponse =
-          attestation.retryTarget === target && record.attemptNumber === 2;
+          attestation.retryTargets.includes(target) &&
+          record.attemptNumber === 2;
         if (retryResponse) {
           markFailureClass(
             SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.transportResetContractMismatch,
@@ -7304,9 +7325,10 @@ const confirmSafeAuthenticationProtectedReadRetry = (
     );
   }
   assert.equal(requestFailureRecords.length, attestation.retryUsed);
-  if (attestation.retryUsed === 1) {
-    assert.equal(requestFailureRecords[0].target, attestation.retryTarget);
-  }
+  assert.deepEqual(
+    requestFailureRecords.map((record) => record.target),
+    attestation.retryTargets,
+  );
   markFailureClass(
     SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.localFailRequestContractMismatch,
   );
@@ -7469,6 +7491,16 @@ const confirmSafeAuthenticationProtectedReadRetry = (
     cdpNetworkErrorLogRecords.length,
     playwrightConsoleErrorRecords.length,
   );
+  assert.equal(
+    new Set(cdpNetworkErrorLogRecords.map((record) => record.target)).size,
+    cdpNetworkErrorLogRecords.length,
+  );
+  assert.deepEqual(
+    cdpNetworkErrorLogRecords.map((record) => record.target),
+    attestation.retryTargets.filter((target) =>
+      cdpNetworkErrorLogRecords.some((record) => record.target === target),
+    ),
+  );
   for (const [index, record] of cdpNetworkErrorLogRecords.entries()) {
     assert.deepEqual(Object.keys(record).sort(), [
       "attemptNumber",
@@ -7526,35 +7558,65 @@ const confirmSafeAuthenticationProtectedReadRetry = (
     assert.equal(playwrightRecord.lineNumber, record.lineNumber);
     assert.equal(playwrightRecord.timestamp, record.timestamp);
     assert.equal(playwrightRecord.sha256, record.sha256);
-    assert.equal(requestFailureRecords[index].target, record.target);
+    assert.equal(
+      requestFailureRecords.some(
+        (failureRecord) => failureRecord.target === record.target,
+      ),
+      true,
+    );
   }
   const recoveredProtectedReadConsoleErrorCount =
     playwrightConsoleErrorRecords.length;
-  const retryResponseRecord =
-    attestation.retryUsed === 1
-      ? cdpResponseRecords.find(
-          (record) =>
-            record.target === attestation.retryTarget &&
-            record.attemptNumber === 2,
-        ) || null
-      : null;
-  const transportResetAttestation =
-    retryResponseRecord === null
-      ? null
-      : normalizeSafeAuthenticationProtectedReadTransportResetAttestation(
+  const transportResetRecoveryAttestations = Object.freeze(
+    attestation.retryTargets.map((target) => {
+      const retryResponseRecord = cdpResponseRecords.find(
+        (record) => record.target === target && record.attemptNumber === 2,
+      );
+      assert.ok(retryResponseRecord);
+      const transportResetAttestation =
+        normalizeSafeAuthenticationProtectedReadTransportResetAttestation(
           retryResponseRecord.transportResetAttestation,
         );
-  const freshConnectAttestation =
-    retryResponseRecord === null
-      ? null
-      : normalizeSafeAuthenticationProtectedReadFreshConnectAttestation(
+      const freshConnectAttestation =
+        normalizeSafeAuthenticationProtectedReadFreshConnectAttestation(
           retryResponseRecord.freshConnectAttestation,
         );
-  assert.equal(transportResetAttestation === null, attestation.retryUsed === 0);
-  assert.equal(freshConnectAttestation === null, attestation.retryUsed === 0);
+      assert.equal(transportResetAttestation.target, target);
+      assert.equal(freshConnectAttestation.target, target);
+      return Object.freeze({
+        target,
+        transportResetAttestation,
+        freshConnectAttestation,
+      });
+    }),
+  );
+  assert.equal(
+    transportResetRecoveryAttestations.length,
+    attestation.retryUsed,
+  );
+  for (
+    let index = 1;
+    index < transportResetRecoveryAttestations.length;
+    index += 1
+  ) {
+    const previous = transportResetRecoveryAttestations[index - 1];
+    const current = transportResetRecoveryAttestations[index];
+    assert.ok(
+      previous.transportResetAttestation.retryBarrierReleaseOrderSequence <
+        current.transportResetAttestation.resetPreparationOrderSequence,
+    );
+    assert.ok(
+      previous.freshConnectAttestation.retryLeaseIssueSequence <
+        current.transportResetAttestation.failedLeaseIssueSequence,
+    );
+    assert.ok(
+      previous.freshConnectAttestation.freshTunnelSequence <=
+        current.transportResetAttestation.retiredTunnelSequence,
+    );
+  }
   return Object.freeze({
     ...attestation,
-    schemaVersion: 5,
+    schemaVersion: 6,
     cdpConfigFirstResponseClass: firstResponseClassByTarget.config,
     cdpConfigFinalResponseClass: finalResponseClassByTarget.config,
     cdpProfileFirstResponseClass: firstResponseClassByTarget.profile,
@@ -7607,9 +7669,8 @@ const confirmSafeAuthenticationProtectedReadRetry = (
     transportResetPolicyId:
       SAFE_AUTHENTICATION_PROTECTED_READ_TRANSPORT_RESET_POLICY_ID,
     transportResetUsed: attestation.retryUsed,
-    transportResetTarget: attestation.retryTarget,
-    transportResetAttestation,
-    freshConnectAttestation,
+    transportResetTargets: Object.freeze([...attestation.retryTargets]),
+    transportResetRecoveryAttestations,
     passed: true,
   });
 };
@@ -15500,7 +15561,7 @@ const createSafeAuthenticationFailureDiagnostic = ({
   protectedReadAttemptDiagnostic = {
     configAttemptCount: 0,
     profileAttemptCount: 0,
-    sharedRetryTarget: "none",
+    retryTargets: [],
     wholeBrowserProcessRestartRequired: false,
   },
 }) => {
@@ -15536,7 +15597,7 @@ const createSafeAuthenticationFailureDiagnostic = ({
     [
       "configAttemptCount",
       "profileAttemptCount",
-      "sharedRetryTarget",
+      "retryTargets",
       "wholeBrowserProcessRestartRequired",
     ],
   );
@@ -15544,8 +15605,8 @@ const createSafeAuthenticationFailureDiagnostic = ({
     protectedReadAttemptDescriptors?.configAttemptCount?.value;
   const protectedReadProfileAttemptCount =
     protectedReadAttemptDescriptors?.profileAttemptCount?.value;
-  const protectedReadSharedRetryTarget =
-    protectedReadAttemptDescriptors?.sharedRetryTarget?.value;
+  const protectedReadRetryTargets =
+    protectedReadAttemptDescriptors?.retryTargets?.value;
   const protectedReadWholeBrowserProcessRestartRequired =
     protectedReadAttemptDescriptors?.wholeBrowserProcessRestartRequired?.value;
   if (
@@ -15553,18 +15614,26 @@ const createSafeAuthenticationFailureDiagnostic = ({
     protectedReadAttemptDescriptors === null ||
     ![0, 1, 2].includes(protectedReadConfigAttemptCount) ||
     ![0, 1, 2].includes(protectedReadProfileAttemptCount) ||
-    protectedReadConfigAttemptCount + protectedReadProfileAttemptCount > 3 ||
-    !SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_TARGETS.includes(
-      protectedReadSharedRetryTarget,
+    protectedReadConfigAttemptCount + protectedReadProfileAttemptCount > 4 ||
+    !Array.isArray(protectedReadRetryTargets) ||
+    protectedReadRetryTargets.length > 2 ||
+    !protectedReadRetryTargets.every((target) =>
+      SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_TARGETS.includes(target),
+    ) ||
+    new Set(protectedReadRetryTargets).size !==
+      protectedReadRetryTargets.length ||
+    protectedReadRetryTargets.some(
+      (target, index) =>
+        target !==
+        SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_TARGETS.filter((candidate) =>
+          protectedReadRetryTargets.includes(candidate),
+        )[index],
     ) ||
     typeof protectedReadWholeBrowserProcessRestartRequired !== "boolean" ||
-    (protectedReadSharedRetryTarget === "config" &&
-      protectedReadConfigAttemptCount !== 2) ||
-    (protectedReadSharedRetryTarget === "profile" &&
-      protectedReadProfileAttemptCount !== 2) ||
-    (protectedReadSharedRetryTarget === "none" &&
-      (protectedReadConfigAttemptCount === 2 ||
-        protectedReadProfileAttemptCount === 2))
+    protectedReadRetryTargets.includes("config") !==
+      (protectedReadConfigAttemptCount === 2) ||
+    protectedReadRetryTargets.includes("profile") !==
+      (protectedReadProfileAttemptCount === 2)
   ) {
     reject();
   }
@@ -15576,7 +15645,7 @@ const createSafeAuthenticationFailureDiagnostic = ({
     reject();
   }
   return Object.freeze({
-    schemaVersion: 3,
+    schemaVersion: 4,
     failureClass,
     stage,
     captureRole,
@@ -15591,7 +15660,7 @@ const createSafeAuthenticationFailureDiagnostic = ({
     rootAlertCount: normalizedPageState.rootAlertCount,
     protectedReadConfigAttemptCount: protectedReadConfigAttemptCount,
     protectedReadProfileAttemptCount: protectedReadProfileAttemptCount,
-    protectedReadSharedRetryTarget: protectedReadSharedRetryTarget,
+    protectedReadRetryTargets: Object.freeze([...protectedReadRetryTargets]),
     protectedReadWholeBrowserProcessRestartRequired:
       protectedReadWholeBrowserProcessRestartRequired,
   });
@@ -15616,33 +15685,46 @@ const serializeSafeAuthenticationFailure = (
   return `W10P_SAFE_AUTH_FAILURE ${serialized}`;
 };
 const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
-  const createPageAttestation = (retryTarget = "none") => ({
-    schemaVersion: 1,
-    policyId: SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_POLICY_ID,
-    retryBudget: 1,
-    retryUsed: Number(retryTarget !== "none"),
-    retryTarget,
-    retryDelayMs: SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_DELAY_MS,
-    configAttemptCount: retryTarget === "config" ? 2 : 1,
-    configFirstOutcomeClass:
-      retryTarget === "config" ? "transport-error" : "response-2xx",
-    configFinalOutcomeClass: "response-2xx",
-    profileAttemptCount: retryTarget === "profile" ? 2 : 1,
-    profileFirstOutcomeClass:
-      retryTarget === "profile" ? "transport-error" : "response-2xx",
-    profileFinalOutcomeClass: "response-2xx",
-    recoveredByRetry: retryTarget !== "none",
-    sameAuthorizationToken: true,
-    sameAppCheckToken: true,
-    authTimeUnchanged: true,
-    sessionRevisionUnchanged: true,
-    tokenRefreshCount: 0,
-    sessionMutationCount: 0,
-    exactUrlMethodBound: true,
-  });
+  const normalizeFixtureRetryTargets = (retryTargets = []) =>
+    retryTargets === "none"
+      ? []
+      : typeof retryTargets === "string"
+        ? [retryTargets]
+        : [...retryTargets];
+  const createPageAttestation = (retryTargets = []) => {
+    const normalizedRetryTargets = normalizeFixtureRetryTargets(retryTargets);
+    return {
+      schemaVersion: 2,
+      policyId: SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_POLICY_ID,
+      retryBudgetPerTarget: 1,
+      retryBudgetPerGroup: 2,
+      retryUsed: normalizedRetryTargets.length,
+      retryTargets: normalizedRetryTargets,
+      retryDelayMs: SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_DELAY_MS,
+      configAttemptCount: normalizedRetryTargets.includes("config") ? 2 : 1,
+      configFirstOutcomeClass: normalizedRetryTargets.includes("config")
+        ? "transport-error"
+        : "response-2xx",
+      configFinalOutcomeClass: "response-2xx",
+      profileAttemptCount: normalizedRetryTargets.includes("profile") ? 2 : 1,
+      profileFirstOutcomeClass: normalizedRetryTargets.includes("profile")
+        ? "transport-error"
+        : "response-2xx",
+      profileFinalOutcomeClass: "response-2xx",
+      recoveredByRetry: normalizedRetryTargets.length > 0,
+      sameAuthorizationToken: true,
+      sameAppCheckToken: true,
+      authTimeUnchanged: true,
+      sessionRevisionUnchanged: true,
+      tokenRefreshCount: 0,
+      sessionMutationCount: 0,
+      exactUrlMethodBound: true,
+    };
+  };
   const createTransportResetAttestation = (
     target,
     failedLeaseClass = "issued-active-tunnel",
+    recoveryIndex = 0,
   ) => {
     const issued = failedLeaseClass === "issued-active-tunnel";
     assert.ok(issued || failedLeaseClass === "consumed-active-tunnel");
@@ -15650,6 +15732,9 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
       SAFE_BROWSER_CONNECT_PROXY_EXACT_TUNNEL_RETIREMENT_CONTRACTS[
         failedLeaseClass
       ];
+    const proxySequenceOffset = recoveryIndex * 6;
+    const evidenceSequenceOffset = recoveryIndex * 5;
+    const retiredTunnelSequence = recoveryIndex + 1;
     return {
       schemaVersion: 3,
       policyId: SAFE_AUTHENTICATION_PROTECTED_READ_TRANSPORT_RESET_POLICY_ID,
@@ -15674,26 +15759,30 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
       retiredUpstreamSocketCount: 1,
       activeAuthorityTunnelCountAfter: 0,
       authorityDrained: true,
-      failedLeaseIssueSequence: issued ? 3 : 1,
-      failedLeaseConsumeSequence: issued ? null : 2,
-      failedLeaseConsumedTunnelSequence: issued ? null : 1,
-      authorizationSingletonTunnelSequence: issued ? 1 : null,
-      creatorLeaseIssueSequence: 1,
-      creatorLeaseConsumeSequence: 2,
-      retiredTunnelSequence: 1,
-      retirementCompleteSequence: issued ? 4 : 3,
-      resetPreparationOrderSequence: 1,
-      failedAuthorizationCompletionOrderSequence: 2,
-      localFailRequestCompletionOrderSequence: 3,
-      retirementDrainCompletionOrderSequence: 4,
-      retryBarrierReleaseOrderSequence: 5,
+      failedLeaseIssueSequence: issued
+        ? proxySequenceOffset + 3
+        : proxySequenceOffset + 1,
+      failedLeaseConsumeSequence: issued ? null : proxySequenceOffset + 2,
+      failedLeaseConsumedTunnelSequence: issued ? null : retiredTunnelSequence,
+      authorizationSingletonTunnelSequence: issued
+        ? retiredTunnelSequence
+        : null,
+      creatorLeaseIssueSequence: proxySequenceOffset + 1,
+      creatorLeaseConsumeSequence: proxySequenceOffset + 2,
+      retiredTunnelSequence,
+      retirementCompleteSequence: proxySequenceOffset + (issued ? 4 : 3),
+      resetPreparationOrderSequence: evidenceSequenceOffset + 1,
+      failedAuthorizationCompletionOrderSequence: evidenceSequenceOffset + 2,
+      localFailRequestCompletionOrderSequence: evidenceSequenceOffset + 3,
+      retirementDrainCompletionOrderSequence: evidenceSequenceOffset + 4,
+      retryBarrierReleaseOrderSequence: evidenceSequenceOffset + 5,
       releasedResponseStreamNonterminalCountAtPreparation: 0,
       releasedResponseStreamNonterminalCountBeforeRetirement: 0,
       releasedResponseStreamUnknownOrUnboundCountAtPreparation: 0,
       releasedResponseStreamUnknownOrUnboundCountBeforeRetirement: 0,
     };
   };
-  const createFreshConnectAttestation = (target) => ({
+  const createFreshConnectAttestation = (target, recoveryIndex = 0) => ({
     schemaVersion: 1,
     policyId: SAFE_AUTHENTICATION_PROTECTED_READ_TRANSPORT_RESET_POLICY_ID,
     hostname: SAFE_AUTHENTICATION_PROTECTED_READ_FIRESTORE_HOSTNAME,
@@ -15708,14 +15797,15 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     leaseIssueSequenceAdvanced: true,
     tunnelSequenceAdvanced: true,
     sameAuthorityActiveAuthorizationCount: 1,
-    retryLeaseIssueSequence: 5,
-    retryLeaseConsumeSequence: 6,
-    freshTunnelSequence: 2,
+    retryLeaseIssueSequence: recoveryIndex * 6 + 5,
+    retryLeaseConsumeSequence: recoveryIndex * 6 + 6,
+    freshTunnelSequence: recoveryIndex + 2,
   });
   const createResponseRecord = (
     target,
     attemptNumber,
     responseClass = "response-2xx",
+    recoveryIndex = 0,
   ) => ({
     target,
     attemptNumber,
@@ -15728,110 +15818,124 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
         ? "current-active-tunnel"
         : null,
     transportResetAttestation:
-      attemptNumber === 2 ? createTransportResetAttestation(target) : null,
+      attemptNumber === 2
+        ? createTransportResetAttestation(
+            target,
+            "issued-active-tunnel",
+            recoveryIndex,
+          )
+        : null,
     freshConnectAttestation:
-      attemptNumber === 2 ? createFreshConnectAttestation(target) : null,
+      attemptNumber === 2
+        ? createFreshConnectAttestation(target, recoveryIndex)
+        : null,
   });
-  const createCdpResponseRecords = (retryTarget = "none") => [
-    createResponseRecord(
-      "config",
-      1,
-      retryTarget === "config" ? "response-error-failed" : "response-2xx",
-    ),
-    ...(retryTarget === "config" ? [createResponseRecord("config", 2)] : []),
-    createResponseRecord(
-      "profile",
-      1,
-      retryTarget === "profile" ? "response-error-failed" : "response-2xx",
-    ),
-    ...(retryTarget === "profile" ? [createResponseRecord("profile", 2)] : []),
-  ];
-  const createRequestFailureRecords = (retryTarget = "none") =>
-    retryTarget === "none"
-      ? []
-      : [
-          {
-            target: retryTarget,
-            attemptNumber: 1,
-            failureClass: "generic-failed",
-          },
-        ];
-  const createLocalFailRequestRecords = (retryTarget = "none") =>
-    retryTarget === "none"
-      ? []
-      : [
-          {
-            target: retryTarget,
-            attemptNumber: 1,
-            issuerClass:
-              SAFE_AUTHENTICATION_PROTECTED_READ_LOCAL_FAIL_REQUEST_ISSUER_CLASS,
-            errorReasonClass:
-              SAFE_AUTHENTICATION_PROTECTED_READ_LOCAL_FAIL_REQUEST_ERROR_REASON_CLASS,
-            exactAttemptBound: true,
-            responseErrorBound: true,
-            responseFetchCorrelationClass: "same-fetch",
-            commandIssued: true,
-            commandCompleted: true,
-            issuedSequence: 2,
-            completedSequence: 3,
-          },
-        ];
-  const createCdpLoadingFailureRecords = (retryTarget = "none") =>
-    retryTarget === "none"
-      ? []
-      : [
-          {
-            target: retryTarget,
-            attemptNumber: 1,
-            failureClass: "generic-failed",
-            networkIdentityBound: true,
-            blockedReasonClass: null,
-            corsErrorStatusAbsent: true,
-            localFailRequestTimingClass: "pre-local-fail",
-            observedSequence: 1,
-          },
-        ];
+  const createCdpResponseRecords = (retryTargets = []) => {
+    const normalizedRetryTargets = normalizeFixtureRetryTargets(retryTargets);
+    const recoveryIndexFor = (target) => normalizedRetryTargets.indexOf(target);
+    return [
+      createResponseRecord(
+        "config",
+        1,
+        normalizedRetryTargets.includes("config")
+          ? "response-error-failed"
+          : "response-2xx",
+      ),
+      ...(normalizedRetryTargets.includes("config")
+        ? [
+            createResponseRecord(
+              "config",
+              2,
+              "response-2xx",
+              recoveryIndexFor("config"),
+            ),
+          ]
+        : []),
+      createResponseRecord(
+        "profile",
+        1,
+        normalizedRetryTargets.includes("profile")
+          ? "response-error-failed"
+          : "response-2xx",
+      ),
+      ...(normalizedRetryTargets.includes("profile")
+        ? [
+            createResponseRecord(
+              "profile",
+              2,
+              "response-2xx",
+              recoveryIndexFor("profile"),
+            ),
+          ]
+        : []),
+    ];
+  };
+  const createRequestFailureRecords = (retryTargets = []) =>
+    normalizeFixtureRetryTargets(retryTargets).map((target) => ({
+      target,
+      attemptNumber: 1,
+      failureClass: "generic-failed",
+    }));
+  const createLocalFailRequestRecords = (retryTargets = []) =>
+    normalizeFixtureRetryTargets(retryTargets).map((target, index) => ({
+      target,
+      attemptNumber: 1,
+      issuerClass:
+        SAFE_AUTHENTICATION_PROTECTED_READ_LOCAL_FAIL_REQUEST_ISSUER_CLASS,
+      errorReasonClass:
+        SAFE_AUTHENTICATION_PROTECTED_READ_LOCAL_FAIL_REQUEST_ERROR_REASON_CLASS,
+      exactAttemptBound: true,
+      responseErrorBound: true,
+      responseFetchCorrelationClass: "same-fetch",
+      commandIssued: true,
+      commandCompleted: true,
+      issuedSequence: index * 3 + 2,
+      completedSequence: index * 3 + 3,
+    }));
+  const createCdpLoadingFailureRecords = (retryTargets = []) =>
+    normalizeFixtureRetryTargets(retryTargets).map((target, index) => ({
+      target,
+      attemptNumber: 1,
+      failureClass: "generic-failed",
+      networkIdentityBound: true,
+      blockedReasonClass: null,
+      corsErrorStatusAbsent: true,
+      localFailRequestTimingClass: "pre-local-fail",
+      observedSequence: index * 3 + 1,
+    }));
   const protectedReadConsoleSha256 = secretSha256(
     "fixed-protected-read-console-error",
   );
-  const createCdpNetworkErrorLogRecords = (retryTarget = "none") =>
-    retryTarget === "none"
-      ? []
-      : [
-          {
-            target: retryTarget,
-            attemptNumber: 1,
-            sourceClass: "console-error",
-            errorNameClass: "console-error",
-            messageClass: "resource-load-failed",
-            operationClass: "unknown-operation",
-            sha256: protectedReadConsoleSha256,
-            lineNumber: 0,
-            timestamp: 12345.5,
-            sourceNetwork: true,
-            levelError: true,
-            categoryAbsent: true,
-            networkIdentityBound: true,
-            targetUrlBound: true,
-          },
-        ];
-  const createPlaywrightConsoleErrorRecords = (retryTarget = "none") =>
-    retryTarget === "none"
-      ? []
-      : [
-          {
-            target: retryTarget,
-            sourceClass: "console-error",
-            errorNameClass: "console-error",
-            messageClass: "resource-load-failed",
-            operationClass: "unknown-operation",
-            sha256: protectedReadConsoleSha256,
-            lineNumber: 0,
-            columnNumber: 0,
-            timestamp: 12345.5,
-            locationUrlBound: true,
-          },
-        ];
+  const createCdpNetworkErrorLogRecords = (retryTargets = []) =>
+    normalizeFixtureRetryTargets(retryTargets).map((target, index) => ({
+      target,
+      attemptNumber: 1,
+      sourceClass: "console-error",
+      errorNameClass: "console-error",
+      messageClass: "resource-load-failed",
+      operationClass: "unknown-operation",
+      sha256: protectedReadConsoleSha256,
+      lineNumber: 0,
+      timestamp: 12345.5 + index,
+      sourceNetwork: true,
+      levelError: true,
+      categoryAbsent: true,
+      networkIdentityBound: true,
+      targetUrlBound: true,
+    }));
+  const createPlaywrightConsoleErrorRecords = (retryTargets = []) =>
+    normalizeFixtureRetryTargets(retryTargets).map((target, index) => ({
+      target,
+      sourceClass: "console-error",
+      errorNameClass: "console-error",
+      messageClass: "resource-load-failed",
+      operationClass: "unknown-operation",
+      sha256: protectedReadConsoleSha256,
+      lineNumber: 0,
+      columnNumber: 0,
+      timestamp: 12345.5 + index,
+      locationUrlBound: true,
+    }));
   const bindingAttestation = {
     exactFetchNetworkIdentityBound: true,
     sameAuthorizationHeader: true,
@@ -15840,19 +15944,21 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     appCheckHeaderJwtShapeValid: true,
     requestFailureFetchNetworkIdentityBound: true,
   };
-  const createFixture = (retryTarget = "none") => ({
-    pageAttestation: createPageAttestation(retryTarget),
-    cdpResponseRecords: createCdpResponseRecords(retryTarget),
-    requestFailureRecords: createRequestFailureRecords(retryTarget),
-    localFailRequestRecords: createLocalFailRequestRecords(retryTarget),
-    cdpLoadingFailureRecords: createCdpLoadingFailureRecords(retryTarget),
-    cdpNetworkErrorLogRecords: createCdpNetworkErrorLogRecords(retryTarget),
+  const createFixture = (retryTargets = []) => ({
+    pageAttestation: createPageAttestation(retryTargets),
+    cdpResponseRecords: createCdpResponseRecords(retryTargets),
+    requestFailureRecords: createRequestFailureRecords(retryTargets),
+    localFailRequestRecords: createLocalFailRequestRecords(retryTargets),
+    cdpLoadingFailureRecords: createCdpLoadingFailureRecords(retryTargets),
+    cdpNetworkErrorLogRecords: createCdpNetworkErrorLogRecords(retryTargets),
     playwrightConsoleErrorRecords:
-      createPlaywrightConsoleErrorRecords(retryTarget),
+      createPlaywrightConsoleErrorRecords(retryTargets),
     bindingAttestation: { ...bindingAttestation },
   });
-  const accepted = ["none", "config", "profile"].map((retryTarget) =>
-    confirmSafeAuthenticationProtectedReadRetry(createFixture(retryTarget)),
+  const cloneRetryFixtureValue = (value) => JSON.parse(JSON.stringify(value));
+  const accepted = [[], ["config"], ["profile"], ["config", "profile"]].map(
+    (retryTargets) =>
+      confirmSafeAuthenticationProtectedReadRetry(createFixture(retryTargets)),
   );
   const consumedActiveTunnelFixture = createFixture("config");
   consumedActiveTunnelFixture.cdpResponseRecords[0].proxyLeaseClass =
@@ -15861,6 +15967,14 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     createTransportResetAttestation("config", "consumed-active-tunnel");
   accepted.push(
     confirmSafeAuthenticationProtectedReadRetry(consumedActiveTunnelFixture),
+  );
+  const dualMixedLeaseFixture = createFixture(["config", "profile"]);
+  dualMixedLeaseFixture.cdpResponseRecords[2].proxyLeaseClass =
+    "consumed-active-tunnel";
+  dualMixedLeaseFixture.cdpResponseRecords[3].transportResetAttestation =
+    createTransportResetAttestation("profile", "consumed-active-tunnel", 1);
+  accepted.push(
+    confirmSafeAuthenticationProtectedReadRetry(dualMixedLeaseFixture),
   );
   const invalidIssuedActiveSequenceFixture = createFixture("config");
   invalidIssuedActiveSequenceFixture.cdpResponseRecords[1].transportResetAttestation.failedLeaseIssueSequence =
@@ -15929,11 +16043,100 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
       invalidUnexpectedTransportResetFixture,
     ),
   );
+  const duplicateTargetFixture = createFixture(["config", "profile"]);
+  duplicateTargetFixture.pageAttestation.retryTargets = ["config", "config"];
+  assert.throws(() =>
+    confirmSafeAuthenticationProtectedReadRetry(duplicateTargetFixture),
+  );
+  const reversedTargetFixture = createFixture(["config", "profile"]);
+  reversedTargetFixture.pageAttestation.retryTargets = ["profile", "config"];
+  assert.throws(() =>
+    confirmSafeAuthenticationProtectedReadRetry(reversedTargetFixture),
+  );
+  const retryCountMismatchFixture = createFixture(["config", "profile"]);
+  retryCountMismatchFixture.pageAttestation.retryUsed = 1;
+  assert.throws(() =>
+    confirmSafeAuthenticationProtectedReadRetry(retryCountMismatchFixture),
+  );
+  const missingProfileRetryAttemptFixture = createFixture([
+    "config",
+    "profile",
+  ]);
+  missingProfileRetryAttemptFixture.cdpResponseRecords.pop();
+  assert.throws(() =>
+    confirmSafeAuthenticationProtectedReadRetry(
+      missingProfileRetryAttemptFixture,
+    ),
+  );
+  const thirdConfigAttemptFixture = createFixture("config");
+  thirdConfigAttemptFixture.cdpResponseRecords.push(
+    createResponseRecord("config", 3),
+  );
+  assert.throws(() =>
+    confirmSafeAuthenticationProtectedReadRetry(thirdConfigAttemptFixture),
+  );
+  const missingProfileBarrierFixture = createFixture(["config", "profile"]);
+  missingProfileBarrierFixture.cdpResponseRecords[3].transportResetAttestation =
+    null;
+  assert.throws(() =>
+    confirmSafeAuthenticationProtectedReadRetry(missingProfileBarrierFixture),
+  );
+  const crossTargetBarrierFixture = createFixture(["config", "profile"]);
+  crossTargetBarrierFixture.cdpResponseRecords[3].transportResetAttestation =
+    cloneRetryFixtureValue(
+      crossTargetBarrierFixture.cdpResponseRecords[1].transportResetAttestation,
+    );
+  assert.throws(() =>
+    confirmSafeAuthenticationProtectedReadRetry(crossTargetBarrierFixture),
+  );
+  const reusedRecoveryEvidenceFixture = createFixture(["config", "profile"]);
+  reusedRecoveryEvidenceFixture.cdpResponseRecords[3].transportResetAttestation =
+    cloneRetryFixtureValue(
+      reusedRecoveryEvidenceFixture.cdpResponseRecords[1]
+        .transportResetAttestation,
+    );
+  reusedRecoveryEvidenceFixture.cdpResponseRecords[3].freshConnectAttestation =
+    cloneRetryFixtureValue(
+      reusedRecoveryEvidenceFixture.cdpResponseRecords[1]
+        .freshConnectAttestation,
+    );
+  assert.throws(() =>
+    confirmSafeAuthenticationProtectedReadRetry(reusedRecoveryEvidenceFixture),
+  );
+  const outOfOrderBarrierFixture = createFixture(["config", "profile"]);
+  outOfOrderBarrierFixture.cdpResponseRecords[3].transportResetAttestation.resetPreparationOrderSequence =
+    outOfOrderBarrierFixture.cdpResponseRecords[1].transportResetAttestation.retryBarrierReleaseOrderSequence;
+  assert.throws(() =>
+    confirmSafeAuthenticationProtectedReadRetry(outOfOrderBarrierFixture),
+  );
   const noConsoleEchoFixture = createFixture("config");
   noConsoleEchoFixture.cdpNetworkErrorLogRecords = [];
   noConsoleEchoFixture.playwrightConsoleErrorRecords = [];
   accepted.push(
     confirmSafeAuthenticationProtectedReadRetry(noConsoleEchoFixture),
+  );
+  const dualProfileOnlyConsoleFixture = createFixture(["config", "profile"]);
+  dualProfileOnlyConsoleFixture.cdpNetworkErrorLogRecords.shift();
+  dualProfileOnlyConsoleFixture.playwrightConsoleErrorRecords.shift();
+  const dualProfileOnlyConsoleAttestation =
+    confirmSafeAuthenticationProtectedReadRetry(dualProfileOnlyConsoleFixture);
+  assert.equal(dualProfileOnlyConsoleAttestation.retryUsed, 2);
+  assert.equal(
+    dualProfileOnlyConsoleAttestation.recoveredProtectedReadConsoleErrorCount,
+    1,
+  );
+  const dualDuplicateConsoleTargetFixture = createFixture([
+    "config",
+    "profile",
+  ]);
+  dualDuplicateConsoleTargetFixture.cdpNetworkErrorLogRecords[1].target =
+    "config";
+  dualDuplicateConsoleTargetFixture.playwrightConsoleErrorRecords[1].target =
+    "config";
+  assert.throws(() =>
+    confirmSafeAuthenticationProtectedReadRetry(
+      dualDuplicateConsoleTargetFixture,
+    ),
   );
   const acceptedFailureEchoAttestations =
     SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_ECHO_CLASSES.map(
@@ -15944,6 +16147,25 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
         return confirmSafeAuthenticationProtectedReadRetry(fixture);
       },
     );
+  const dualDistinctFailureEchoFixture = createFixture(["config", "profile"]);
+  dualDistinctFailureEchoFixture.requestFailureRecords[0].failureClass =
+    "other";
+  dualDistinctFailureEchoFixture.cdpLoadingFailureRecords[0].failureClass =
+    "aborted";
+  dualDistinctFailureEchoFixture.requestFailureRecords[1].failureClass = "tls";
+  dualDistinctFailureEchoFixture.cdpLoadingFailureRecords[1].failureClass =
+    "tls";
+  const dualDistinctFailureEchoAttestation =
+    confirmSafeAuthenticationProtectedReadRetry(dualDistinctFailureEchoFixture);
+  assert.equal(dualDistinctFailureEchoAttestation.retryUsed, 2);
+  assert.equal(
+    dualDistinctFailureEchoAttestation.playwrightFailureEchoClass,
+    "other",
+  );
+  assert.equal(
+    dualDistinctFailureEchoAttestation.cdpLoadingFailureEchoClass,
+    "aborted",
+  );
   const compatibleCanceledFailureEchoFixture = createFixture("config");
   compatibleCanceledFailureEchoFixture.requestFailureRecords[0].failureClass =
     "other";
@@ -16050,12 +16272,14 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     accepted.map(
       (attestation) => attestation.recoveredProtectedReadTransportFailureCount,
     ),
-    [0, 1, 1, 1, 1],
+    [0, 1, 1, 2, 1, 2, 1],
   );
   assert.deepEqual(
     accepted.map((attestation) => attestation.playwrightFailureEchoClass),
     [
       null,
+      "generic-failed",
+      "generic-failed",
       "generic-failed",
       "generic-failed",
       "generic-failed",
@@ -16066,7 +16290,7 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     accepted.map(
       (attestation) => attestation.recoveredProtectedReadConsoleErrorCount,
     ),
-    [0, 1, 1, 1, 0],
+    [0, 1, 1, 2, 1, 2, 0],
   );
   assert.equal(
     accepted.every((attestation) => attestation.passed),
@@ -16083,7 +16307,7 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     },
     () => {
       const fixture = createFixture();
-      fixture.pageAttestation.retryBudget = 2;
+      fixture.pageAttestation.retryBudgetPerGroup = 3;
       return fixture;
     },
     () => {
@@ -16440,6 +16664,8 @@ const verifySafeAuthenticationProtectedReadRetryFixtures = () => {
     ...acceptedFailureEchoAttestations,
     ...inspectorTerminalizationAttestations,
     soleAliasTerminalizationAttestation,
+    dualProfileOnlyConsoleAttestation,
+    dualDistinctFailureEchoAttestation,
   ]);
   assert.equal(serializedAccepted.includes(privateRawValue), false);
   assert.equal(JWT_PATTERN.test(serializedAccepted), false);
@@ -19930,7 +20156,7 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
               ? {
                   configAttemptCount: 2,
                   profileAttemptCount: 0,
-                  sharedRetryTarget: "config",
+                  retryTargets: ["config"],
                   wholeBrowserProcessRestartRequired: true,
                 }
               : undefined,
@@ -19954,10 +20180,10 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     "rootAlertCount",
     "protectedReadConfigAttemptCount",
     "protectedReadProfileAttemptCount",
-    "protectedReadSharedRetryTarget",
+    "protectedReadRetryTargets",
     "protectedReadWholeBrowserProcessRestartRequired",
   ]);
-  assert.equal(diagnostic.schemaVersion, 3);
+  assert.equal(diagnostic.schemaVersion, 4);
   const retryFailureDiagnostic = createSafeAuthenticationFailureDiagnostic({
     failureClass:
       SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.transportResetContractMismatch,
@@ -19969,16 +20195,15 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     protectedReadAttemptDiagnostic: {
       configAttemptCount: 1,
       profileAttemptCount: 2,
-      sharedRetryTarget: "profile",
+      retryTargets: ["profile"],
       wholeBrowserProcessRestartRequired: false,
     },
   });
   assert.equal(retryFailureDiagnostic.protectedReadConfigAttemptCount, 1);
   assert.equal(retryFailureDiagnostic.protectedReadProfileAttemptCount, 2);
-  assert.equal(
-    retryFailureDiagnostic.protectedReadSharedRetryTarget,
+  assert.deepEqual(retryFailureDiagnostic.protectedReadRetryTargets, [
     "profile",
-  );
+  ]);
   assert.equal(
     retryFailureDiagnostic.protectedReadWholeBrowserProcessRestartRequired,
     false,
@@ -20007,7 +20232,7 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
         protectedReadAttemptDiagnostic: {
           configAttemptCount: 2,
           profileAttemptCount: 0,
-          sharedRetryTarget: "config",
+          retryTargets: ["config"],
           wholeBrowserProcessRestartRequired:
             mismatch.wholeBrowserProcessRestartRequired,
         },
@@ -20018,17 +20243,17 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     {
       configAttemptCount: 2,
       profileAttemptCount: 1,
-      sharedRetryTarget: "none",
+      retryTargets: [],
     },
     {
       configAttemptCount: 1,
       profileAttemptCount: 1,
-      sharedRetryTarget: "config",
+      retryTargets: ["config"],
     },
     {
       configAttemptCount: 2,
       profileAttemptCount: 2,
-      sharedRetryTarget: "config",
+      retryTargets: ["config"],
     },
   ]) {
     assert.throws(() =>
@@ -20047,7 +20272,7 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
   let protectedReadAttemptGetterAccessCount = 0;
   const protectedReadAttemptGetterFixture = {
     profileAttemptCount: 1,
-    sharedRetryTarget: "none",
+    retryTargets: [],
   };
   Object.defineProperty(
     protectedReadAttemptGetterFixture,
@@ -20065,12 +20290,12 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
     Object.assign(Object.create(null), {
       configAttemptCount: 1,
       profileAttemptCount: 1,
-      sharedRetryTarget: "none",
+      retryTargets: [],
     }),
     {
       configAttemptCount: 1,
       profileAttemptCount: 1,
-      sharedRetryTarget: "none",
+      retryTargets: [],
       [Symbol("unexpected")]: rawSecretUrl,
     },
   ]) {
@@ -20239,7 +20464,7 @@ const verifySafeAuthenticationFailureDiagnosticFixtures = async () => {
             ? {
                 configAttemptCount: 2,
                 profileAttemptCount: 0,
-                sharedRetryTarget: "config",
+                retryTargets: ["config"],
                 wholeBrowserProcessRestartRequired: true,
               }
             : undefined,
@@ -32309,8 +32534,7 @@ const authenticateCore = async (
           )}`,
         });
         const protectedReadOutcomes = { config: [], profile: [] };
-        let protectedReadRetryUsed = 0;
-        let protectedReadRetryTarget = "none";
+        const protectedReadRetryTargets = [];
         const fetchExactProtectedRead = async (target) => {
           if (
             !Object.prototype.hasOwnProperty.call(protectedReadUrls, target)
@@ -32334,9 +32558,11 @@ const authenticateCore = async (
               });
             } catch {
               protectedReadOutcomes[target].push("transport-error");
-              if (attemptNumber === 1 && protectedReadRetryUsed === 0) {
-                protectedReadRetryUsed = 1;
-                protectedReadRetryTarget = target;
+              if (
+                attemptNumber === 1 &&
+                !protectedReadRetryTargets.includes(target)
+              ) {
+                protectedReadRetryTargets.push(target);
                 await new Promise((resolveDelay) =>
                   setTimeout(resolveDelay, protectedReadRetryDelayMs),
                 );
@@ -32367,11 +32593,12 @@ const authenticateCore = async (
         const configAttemptCount = protectedReadOutcomes.config.length;
         const profileAttemptCount = protectedReadOutcomes.profile.length;
         protectedReadRetryAttestation = Object.freeze({
-          schemaVersion: 1,
+          schemaVersion: 2,
           policyId: protectedReadRetryPolicyId,
-          retryBudget: 1,
-          retryUsed: protectedReadRetryUsed,
-          retryTarget: protectedReadRetryTarget,
+          retryBudgetPerTarget: 1,
+          retryBudgetPerGroup: 2,
+          retryUsed: protectedReadRetryTargets.length,
+          retryTargets: Object.freeze([...protectedReadRetryTargets]),
           retryDelayMs: protectedReadRetryDelayMs,
           configAttemptCount,
           configFirstOutcomeClass: protectedReadOutcomes.config[0],
@@ -32381,7 +32608,7 @@ const authenticateCore = async (
           profileFirstOutcomeClass: protectedReadOutcomes.profile[0],
           profileFinalOutcomeClass:
             protectedReadOutcomes.profile[profileAttemptCount - 1],
-          recoveredByRetry: protectedReadRetryUsed === 1,
+          recoveredByRetry: protectedReadRetryTargets.length > 0,
           sameAuthorizationToken:
             protectedReadHeaders.Authorization ===
             `Bearer ${protectedReadIdToken}`,
@@ -32752,7 +32979,7 @@ const authenticate = async (
     let protectedReadAttemptDiagnostic = {
       configAttemptCount: 0,
       profileAttemptCount: 0,
-      sharedRetryTarget: "none",
+      retryTargets: [],
       wholeBrowserProcessRestartRequired: false,
     };
     try {
@@ -35970,8 +36197,8 @@ try {
       config: 0,
       profile: 0,
     };
-    let authenticationProtectedReadSharedRetryTarget = null;
-    let authenticationProtectedReadTransportResetBarrier = null;
+    const authenticationProtectedReadRetryTargets = new Set();
+    const authenticationProtectedReadTransportResetBarriersByTarget = new Map();
     let authenticationProtectedReadWholeBrowserProcessRestartRequired = false;
     let authenticationProtectedReadAuthorizationHeaderSha256 = null;
     let authenticationProtectedReadAppCheckHeaderSha256 = null;
@@ -36008,10 +36235,13 @@ try {
       const protectedReadAttemptCount =
         authenticationProtectedReadAttemptCounts.config +
         authenticationProtectedReadAttemptCounts.profile;
-      assert.ok(protectedReadAttemptCount <= 3);
+      assert.ok(protectedReadAttemptCount <= 4);
       if (attemptNumber === 2) {
-        assert.equal(authenticationProtectedReadSharedRetryTarget, null);
-        authenticationProtectedReadSharedRetryTarget = target;
+        assert.equal(
+          authenticationProtectedReadRetryTargets.has(target),
+          false,
+        );
+        authenticationProtectedReadRetryTargets.add(target);
       }
       const authorizationHeader = exactCaseInsensitiveRequestHeaderValue(
         event.request.headers,
@@ -36452,8 +36682,10 @@ try {
         ) || null;
       if (authenticationProtectedReadAttempt?.attemptNumber === 2) {
         assert.equal(
-          authenticationProtectedReadSharedRetryTarget,
-          authenticationProtectedReadAttempt.target,
+          authenticationProtectedReadRetryTargets.has(
+            authenticationProtectedReadAttempt.target,
+          ),
+          true,
         );
         if (authenticationProtectedReadWholeBrowserProcessRestartRequired) {
           diagnosticContext.operation = "request-proxy-authorize";
@@ -36463,7 +36695,10 @@ try {
             SAFE_AUTHENTICATION_PROTECTED_READ_WHOLE_BROWSER_PROCESS_RESTART_ERROR,
           );
         }
-        const resetBarrier = authenticationProtectedReadTransportResetBarrier;
+        const resetBarrier =
+          authenticationProtectedReadTransportResetBarriersByTarget.get(
+            authenticationProtectedReadAttempt.target,
+          ) || null;
         assert.ok(resetBarrier);
         assert.equal(
           resetBarrier.target,
@@ -36476,6 +36711,16 @@ try {
         assert.equal(resetBarrier.attestation, resetAttestation);
         assert.equal(resetAttestation.authorityDrained, true);
         assert.equal(resetAttestation.activeAuthorityTunnelCountAfter, 0);
+        assert.equal(
+          authenticationProtectedReadTransportResetBarriersByTarget.delete(
+            authenticationProtectedReadAttempt.target,
+          ),
+          true,
+        );
+        assert.equal(
+          authenticationProtectedReadTransportResetBarriersByTarget.size,
+          0,
+        );
         authenticationProtectedReadAttempt.transportResetAttestation =
           resetAttestation;
       } else if (authenticationProtectedReadAttempt !== null) {
@@ -36914,11 +37159,19 @@ try {
           const protectedReadTransportResetEligible =
             authenticationProtectedReadAttempt !== null &&
             authenticationProtectedReadAttempt.attemptNumber === 1 &&
-            authenticationProtectedReadSharedRetryTarget === null;
+            !authenticationProtectedReadTransportResetBarriersByTarget.has(
+              authenticationProtectedReadAttempt.target,
+            );
           if (protectedReadTransportResetEligible) {
             assert.equal(
-              authenticationProtectedReadTransportResetBarrier,
-              null,
+              authenticationProtectedReadTransportResetBarriersByTarget.size,
+              0,
+            );
+            assert.equal(
+              authenticationProtectedReadTransportResetBarriersByTarget.has(
+                authenticationProtectedReadAttempt.target,
+              ),
+              false,
             );
             const responseRecord =
               authenticationProtectedReadAttempt.responseRecord;
@@ -36962,8 +37215,14 @@ try {
                 settled: false,
                 attestation: null,
               };
-              authenticationProtectedReadTransportResetBarrier =
-                protectedReadTransportResetBarrier;
+              authenticationProtectedReadTransportResetBarriersByTarget.set(
+                authenticationProtectedReadAttempt.target,
+                protectedReadTransportResetBarrier,
+              );
+              assert.equal(
+                authenticationProtectedReadTransportResetBarriersByTarget.size,
+                1,
+              );
               // Complete the failed request's consumed authorization before the
               // local failure can make Chromium reconnect. The consumed lease's
               // creator tunnel or the issued lease's authorization-time tunnel
@@ -38954,6 +39213,10 @@ try {
             );
             assert.equal(new Set(attempts).size, attempts.length);
             assert.equal(
+              authenticationProtectedReadTransportResetBarriersByTarget.size,
+              0,
+            );
+            assert.equal(
               attempts.every(
                 (attempt) =>
                   authenticationProtectedReadAttemptsByNetworkId.get(
@@ -39060,7 +39323,7 @@ try {
             setProtectedReadFailureClass(
               SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.cdpRecoveredCountMismatch,
             );
-            assert.ok([0, 1].includes(recoveredCount));
+            assert.ok([0, 1, 2].includes(recoveredCount));
             setProtectedReadFailureClass(
               SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.browserFailureCountMismatch,
             );
@@ -39342,8 +39605,10 @@ try {
             configAttemptCount: authenticationProtectedReadAttemptCounts.config,
             profileAttemptCount:
               authenticationProtectedReadAttemptCounts.profile,
-            sharedRetryTarget:
-              authenticationProtectedReadSharedRetryTarget || "none",
+            retryTargets:
+              SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_TARGETS.filter(
+                (target) => authenticationProtectedReadRetryTargets.has(target),
+              ),
             wholeBrowserProcessRestartRequired:
               authenticationProtectedReadWholeBrowserProcessRestartRequired,
           }),
@@ -39506,11 +39771,11 @@ try {
         authenticationBrowserErrorCountDelta,
       );
       const authenticationPageErrorCount =
-        authenticationBrowserErrorSnapshot.pageErrorClassHistogram
+        authenticationBrowserErrorDeltaClassHistogram
           .filter((record) => record.sourceClass === "pageerror")
           .reduce((total, record) => total + record.count, 0);
       const authenticationConsoleErrorObservedCount =
-        authenticationBrowserErrorSnapshot.pageErrorClassHistogram
+        authenticationBrowserErrorDeltaClassHistogram
           .filter((record) => record.sourceClass === "console-error")
           .reduce((total, record) => total + record.count, 0);
       const authenticationConsoleErrorRecoveredCount =
@@ -39520,8 +39785,12 @@ try {
         authenticationConsoleErrorObservedCount -
         authenticationConsoleErrorRecoveredCount;
       assert.equal(
-        authenticationBrowserErrorSnapshot.pageErrorCount,
+        authenticationBrowserErrorCountDelta,
         authenticationPageErrorCount + authenticationConsoleErrorObservedCount,
+      );
+      assert.ok(
+        authenticationConsoleErrorRecoveredCount <=
+          authenticationConsoleErrorObservedCount,
       );
       assert.ok(authenticationConsoleErrorFatalCount >= 0);
       assert.equal(
@@ -42154,7 +42423,7 @@ assert.equal(
   sortedAuthenticationProtectedReadRetryAttestations.every(
     (attestation) =>
       attestation.passed === true &&
-      [0, 1].includes(attestation.retryUsed) &&
+      [0, 1, 2].includes(attestation.retryUsed) &&
       attestation.retryUsed ===
         attestation.recoveredProtectedReadTransportFailureCount,
   ),
@@ -42263,9 +42532,10 @@ assert.equal(
   recoveredProtectedReadTransportFailureCount,
 );
 const authenticationProtectedReadRetry = Object.freeze({
-  schemaVersion: 5,
+  schemaVersion: 6,
   policyId: SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_POLICY_ID,
-  retryBudgetPerGroup: 1,
+  retryBudgetPerTarget: 1,
+  retryBudgetPerGroup: 2,
   retryDelayMs: SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_DELAY_MS,
   expectedGroupCount: applicationSessionKeepaliveClientExpectedGroupCount,
   attestationCount: sortedAuthenticationProtectedReadRetryAttestations.length,

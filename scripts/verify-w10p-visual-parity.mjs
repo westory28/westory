@@ -2840,7 +2840,15 @@ const assertCaptureProtectedReadTransportResetSourceContract = (sourceText) => {
     "exactTunnelResetPreparationMutationFixtures",
     "protectedReadConfigAttemptCount",
     "protectedReadProfileAttemptCount",
-    "protectedReadSharedRetryTarget",
+    "protectedReadRetryTargets",
+    "authenticationProtectedReadTransportResetBarriersByTarget",
+    "authenticationProtectedReadTransportResetBarriersByTarget.delete",
+    "transportResetRecoveryAttestations",
+    "duplicateTargetFixture",
+    "missingProfileBarrierFixture",
+    "crossTargetBarrierFixture",
+    "reusedRecoveryEvidenceFixture",
+    "outOfOrderBarrierFixture",
     "protectedReadWholeBrowserProcessRestartRequired",
     "W10P_PROTECTED_READ_WHOLE_BROWSER_PROCESS_RESTART_REQUIRED",
     "authentication-protected-read-issued-active-tunnel-whole-browser-process-restart-required",
@@ -2862,6 +2870,36 @@ const assertCaptureProtectedReadTransportResetSourceContract = (sourceText) => {
       `The protected-read transport reset contract is missing ${needle}.`,
     );
   }
+  assert.match(
+    sourceText,
+    /assert\.ok\(protectedReadAttemptCount <= 4\)/u,
+    "The protected-read group must allow exactly two primary attempts and at most one retry per target.",
+  );
+  assert.match(
+    sourceText,
+    /assert\.ok\(\[1, 2\]\.includes\(attemptNumber\)\)/u,
+    "Each protected-read target must remain bounded to one primary attempt and one retry.",
+  );
+  assert.doesNotMatch(
+    sourceText,
+    /protectedReadRetryUsed\s*===\s*0|authenticationProtectedReadSharedRetryTarget\b|authenticationProtectedReadTransportResetBarrier\s*=/u,
+    "The per-target retry contract must not regress to a group-global retry gate or singleton barrier.",
+  );
+  assert.match(
+    sourceText,
+    /const authenticationPageErrorCount\s*=\s*authenticationBrowserErrorDeltaClassHistogram[\s\S]*?const authenticationConsoleErrorObservedCount\s*=\s*authenticationBrowserErrorDeltaClassHistogram/u,
+    "Authentication page and console errors must be counted from the bounded authentication-window delta.",
+  );
+  assert.match(
+    sourceText,
+    /assert\.equal\(\s*authenticationBrowserErrorCountDelta,\s*authenticationPageErrorCount \+ authenticationConsoleErrorObservedCount,?\s*\)/u,
+    "Authentication browser-error accounting must reconcile against the authentication-window delta.",
+  );
+  assert.match(
+    sourceText,
+    /authenticationProtectedReadTransportResetBarriersByTarget\.get\([\s\S]*authenticationProtectedReadTransportResetBarriersByTarget\.delete\([\s\S]*authenticationProtectedReadTransportResetBarriersByTarget\.has\([\s\S]*authenticationProtectedReadTransportResetBarriersByTarget\.set\(/u,
+    "Each protected-read target must own, consume, retire, and independently register its reset barrier.",
+  );
   const resetBranchStart = sourceText.indexOf(
     "const protectedReadTransportResetEligible =",
   );
@@ -2895,7 +2933,7 @@ const assertCaptureProtectedReadTransportResetSourceContract = (sourceText) => {
     "if (authenticationProtectedReadWholeBrowserProcessRestartRequired)",
   );
   const retryResetBarrierStart = sourceText.indexOf(
-    "const resetBarrier = authenticationProtectedReadTransportResetBarrier;",
+    "authenticationProtectedReadTransportResetBarriersByTarget.get(",
     retryRestartGuardStart,
   );
   assert.ok(
@@ -2938,8 +2976,8 @@ const assertCaptureProtectedReadTransportResetSourceContract = (sourceText) => {
   );
   assert.match(
     safeFailureDiagnosticSource,
-    /wholeBrowserProcessRestartRequired[\s\S]*protectedReadWholeBrowserProcessRestartRequired !==\s*\(failureClass ===\s*SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES\.wholeBrowserProcessRestartRequired\)[\s\S]*schemaVersion:\s*3[\s\S]*protectedReadWholeBrowserProcessRestartRequired/u,
-    "The schema-3 safe failure diagnostic must bind its restart boolean iff the fixed failure class is selected.",
+    /retryTargets[\s\S]*wholeBrowserProcessRestartRequired[\s\S]*protectedReadWholeBrowserProcessRestartRequired !==\s*\(failureClass ===\s*SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES\.wholeBrowserProcessRestartRequired\)[\s\S]*schemaVersion:\s*4[\s\S]*protectedReadRetryTargets[\s\S]*protectedReadWholeBrowserProcessRestartRequired/u,
+    "The schema-4 safe failure diagnostic must bind per-target retry evidence and its restart boolean iff the fixed failure class is selected.",
   );
   const completeIndex = resetBranchSource.indexOf(
     "completeProxyAuthorization();",
@@ -3554,6 +3592,11 @@ const assertBrowserConnectProxyTransportResetObservationConsistency = ({
   ]) {
     assert.equal(Array.isArray(observations), true);
   }
+  for (const attestation of authenticationProtectedReadRetryAttestations) {
+    assert.ok(["baseline", "candidate"].includes(attestation?.stage));
+    assert.equal(Number.isSafeInteger(attestation?.retryUsed), true);
+    assert.ok([0, 1, 2].includes(attestation.retryUsed));
+  }
   const activeTunnelPresentAuthorizationObservationCount =
     requestStageAuthorizationObservations
       .filter(
@@ -3620,9 +3663,33 @@ const verifyBrowserConnectProxyTransportResetObservationFixtures = () => {
       { stage: "candidate", retryUsed: 0 },
     ],
   };
-  assert.doesNotThrow(() =>
-    assertBrowserConnectProxyTransportResetObservationConsistency(validFixture),
-  );
+  const dualRetryValidFixture = {
+    activeTunnelPresentAtAuthorizationCount: 3,
+    targetedTunnelRetirementSuccessCount: 2,
+    requestStageAuthorizationObservations: [
+      {
+        stage: "baseline",
+        kind: "authority-lease-active-tunnel-present",
+        count: 2,
+      },
+      {
+        stage: "candidate",
+        kind: "authority-lease-active-tunnel-present",
+        count: 1,
+      },
+    ],
+    targetedTunnelRetirementObservations: [{ stage: "baseline", count: 2 }],
+    authenticationProtectedReadRetryAttestations: [
+      { stage: "baseline", retryUsed: 2 },
+      { stage: "candidate", retryUsed: 0 },
+    ],
+  };
+  const validFixtures = [validFixture, dualRetryValidFixture];
+  for (const fixture of validFixtures) {
+    assert.doesNotThrow(() =>
+      assertBrowserConnectProxyTransportResetObservationConsistency(fixture),
+    );
+  }
   const invalidFixtures = [
     {
       ...validFixture,
@@ -3643,6 +3710,13 @@ const verifyBrowserConnectProxyTransportResetObservationFixtures = () => {
         { stage: "candidate", retryUsed: 1 },
       ],
     },
+    {
+      ...dualRetryValidFixture,
+      authenticationProtectedReadRetryAttestations: [
+        { stage: "baseline", retryUsed: 3 },
+        { stage: "candidate", retryUsed: 0 },
+      ],
+    },
   ];
   for (const fixture of invalidFixtures) {
     assert.throws(() =>
@@ -3650,7 +3724,8 @@ const verifyBrowserConnectProxyTransportResetObservationFixtures = () => {
     );
   }
   return {
-    browserConnectProxyTransportResetObservationAcceptedFixtureCount: 1,
+    browserConnectProxyTransportResetObservationAcceptedFixtureCount:
+      validFixtures.length,
     browserConnectProxyTransportResetObservationRejectedFixtureCount:
       invalidFixtures.length,
   };
@@ -6902,18 +6977,20 @@ assertExactObjectKeys(authenticationProtectedReadRetry, [
   "policyId",
   "recoveredProtectedReadTransportFailureCount",
   "retryBudgetPerGroup",
+  "retryBudgetPerTarget",
   "retryDelayMs",
   "schemaVersion",
   "sensitiveAppCheckResponseErrorFatalCount",
   "sensitiveAppCheckResponseErrorObservedCount",
   "sensitiveAppCheckResponseErrorRecoveredCount",
 ]);
-assert.equal(authenticationProtectedReadRetry.schemaVersion, 5);
+assert.equal(authenticationProtectedReadRetry.schemaVersion, 6);
 assert.equal(
   authenticationProtectedReadRetry.policyId,
-  "w10p-protected-read-shared-transport-retry-v3",
+  "w10p-protected-read-per-target-transport-retry-v4",
 );
-assert.equal(authenticationProtectedReadRetry.retryBudgetPerGroup, 1);
+assert.equal(authenticationProtectedReadRetry.retryBudgetPerTarget, 1);
+assert.equal(authenticationProtectedReadRetry.retryBudgetPerGroup, 2);
 assert.equal(authenticationProtectedReadRetry.retryDelayMs, 2_000);
 assert.equal(authenticationProtectedReadRetry.passed, true);
 for (const field of [
@@ -7010,7 +7087,7 @@ const assertProtectedReadRetryPlaywrightFailureEchoClass = ({
   retryUsed,
   playwrightFailureEchoClass,
 }) => {
-  assert.ok([0, 1].includes(retryUsed));
+  assert.ok([0, 1, 2].includes(retryUsed));
   if (retryUsed === 0) {
     assert.equal(playwrightFailureEchoClass, null);
     return;
@@ -7032,6 +7109,12 @@ assert.doesNotThrow(() =>
 assert.doesNotThrow(() =>
   assertProtectedReadRetryPlaywrightFailureEchoClass({
     retryUsed: 1,
+    playwrightFailureEchoClass: "other",
+  }),
+);
+assert.doesNotThrow(() =>
+  assertProtectedReadRetryPlaywrightFailureEchoClass({
+    retryUsed: 2,
     playwrightFailureEchoClass: "other",
   }),
 );
@@ -7178,6 +7261,7 @@ const protectedReadRetryInspectorFailureEchoFixture = {
 for (const validFixture of [
   protectedReadRetryNoFailureEchoFixture,
   protectedReadRetryOrdinaryFailureEchoFixture,
+  { ...protectedReadRetryOrdinaryFailureEchoFixture, retryUsed: 2 },
   {
     ...protectedReadRetryOrdinaryFailureEchoFixture,
     cdpLoadingFailureEchoClass: "aborted",
@@ -7391,14 +7475,14 @@ const assertProtectedReadRetryConsoleEvidence = ({
   playwrightFailureConsoleCdpNetworkIdentityBound,
   recoveredProtectedReadConsoleErrorCount,
 }) => {
-  assert.ok([0, 1].includes(retryUsed));
-  assert.ok([0, 1].includes(recoveredProtectedReadTransportFailureCount));
+  assert.ok([0, 1, 2].includes(retryUsed));
+  assert.ok([0, 1, 2].includes(recoveredProtectedReadTransportFailureCount));
   for (const count of [
     cdpNetworkErrorLogCount,
     playwrightResourceLoadErrorCount,
     recoveredProtectedReadConsoleErrorCount,
   ]) {
-    assert.ok([0, 1].includes(count));
+    assert.ok([0, 1, 2].includes(count));
   }
   assert.equal(cdpNetworkErrorLogCount, playwrightResourceLoadErrorCount);
   assert.equal(
@@ -7436,9 +7520,18 @@ const protectedReadRetryConsoleEvidenceWithRecoveryFixture = {
   playwrightFailureConsoleCdpNetworkIdentityBound: true,
   recoveredProtectedReadConsoleErrorCount: 1,
 };
+const protectedReadRetryConsoleEvidenceWithDualRecoveryFixture = {
+  ...protectedReadRetryConsoleEvidenceWithRecoveryFixture,
+  retryUsed: 2,
+  recoveredProtectedReadTransportFailureCount: 2,
+  cdpNetworkErrorLogCount: 2,
+  playwrightResourceLoadErrorCount: 2,
+  recoveredProtectedReadConsoleErrorCount: 2,
+};
 for (const validFixture of [
   protectedReadRetryConsoleEvidenceWithoutRecoveryFixture,
   protectedReadRetryConsoleEvidenceWithRecoveryFixture,
+  protectedReadRetryConsoleEvidenceWithDualRecoveryFixture,
 ]) {
   assert.doesNotThrow(() =>
     assertProtectedReadRetryConsoleEvidence(validFixture),
@@ -7495,176 +7588,215 @@ const assertProtectedReadTransportResetEvidence = (attestation) => {
     "w10p-protected-read-exact-firestore-tunnel-reset-v2",
   );
   assert.equal(attestation.transportResetUsed, attestation.retryUsed);
-  assert.equal(attestation.transportResetTarget, attestation.retryTarget);
-  if (attestation.retryUsed === 0) {
-    assert.equal(attestation.transportResetAttestation, null);
-    assert.equal(attestation.freshConnectAttestation, null);
-    return;
-  }
-  const reset = attestation.transportResetAttestation;
-  const fresh = attestation.freshConnectAttestation;
-  assertExactObjectKeys(reset, [
-    "activeAuthorityTunnelCountAfter",
-    "activeAuthorityTunnelCountBefore",
-    "authorityDrained",
-    "authorizationSingletonTunnelSequence",
-    "creatorLeaseConsumeSequence",
-    "creatorLeaseIssueSequence",
-    "currentTunnelClassBefore",
-    "failedAttemptNumber",
-    "failedAuthorizationCompletionOrderSequence",
-    "failedAuthorizationCompletedBeforeRetirement",
-    "failedLeaseClass",
-    "failedLeaseConsumedTunnelSequence",
-    "failedLeaseConsumeSequence",
-    "failedLeaseIssueSequence",
-    "failedRequestLocalFailureCompletedBeforeRetirement",
-    "hostname",
-    "localFailRequestCompletionOrderSequence",
-    "noSameAuthorityAuthorizationBeforeRetirement",
-    "otherAuthorityTunnelTargetingExcluded",
-    "otherAuthorityTunnelRetirementCount",
-    "policyId",
-    "releasedResponseStreamNonterminalCountAtPreparation",
-    "releasedResponseStreamNonterminalCountBeforeRetirement",
-    "releasedResponseStreamUnknownOrUnboundCountAtPreparation",
-    "releasedResponseStreamUnknownOrUnboundCountBeforeRetirement",
-    "resetPreparationOrderSequence",
-    "retiredClientSocketCount",
-    "retiredTunnelSequence",
-    "retiredUpstreamSocketCount",
-    "retirementBasis",
-    "retirementCompleteSequence",
-    "retirementDrainCompletionOrderSequence",
-    "retirementBinding",
-    "retryBarrierReleaseOrderSequence",
-    "retryAttemptNumber",
-    "sameAuthorityAuthorizationCountAtPreparation",
-    "schemaVersion",
-    "singletonAuthorityTunnelBound",
-    "stage",
-    "target",
-  ]);
-  assert.equal(reset.schemaVersion, 3);
-  assert.equal(reset.policyId, attestation.transportResetPolicyId);
-  assert.equal(reset.hostname, "firestore.googleapis.com");
-  assert.equal(reset.stage, attestation.stage);
-  assert.equal(reset.target, attestation.retryTarget);
-  assert.equal(reset.failedAttemptNumber, 1);
-  assert.equal(reset.retryAttemptNumber, 2);
-  assert.ok(
-    ["issued-active-tunnel", "consumed-active-tunnel"].includes(
-      reset.failedLeaseClass,
-    ),
-  );
-  const expectedRetirementContract =
-    reset.failedLeaseClass === "issued-active-tunnel"
-      ? {
-          retirementBasis: "authorization-time-singleton-tunnel-snapshot",
-          retirementBinding:
-            "authorization-singleton-sequence-current-identity",
-        }
-      : {
-          retirementBasis: "failed-lease-consumed-tunnel",
-          retirementBinding: "failed-lease-consumed-sequence-current-identity",
-        };
+  assert.deepEqual(attestation.transportResetTargets, attestation.retryTargets);
   assert.equal(
-    reset.retirementBasis,
-    expectedRetirementContract.retirementBasis,
+    Array.isArray(attestation.transportResetRecoveryAttestations),
+    true,
   );
   assert.equal(
-    reset.retirementBinding,
-    expectedRetirementContract.retirementBinding,
+    attestation.transportResetRecoveryAttestations.length,
+    attestation.retryUsed,
   );
-  assert.equal(reset.currentTunnelClassBefore, "current-active-tunnel");
-  assert.equal(reset.singletonAuthorityTunnelBound, true);
-  assert.equal(reset.sameAuthorityAuthorizationCountAtPreparation, 1);
-  assert.equal(reset.failedAuthorizationCompletedBeforeRetirement, true);
-  assert.equal(reset.failedRequestLocalFailureCompletedBeforeRetirement, true);
-  assert.equal(reset.noSameAuthorityAuthorizationBeforeRetirement, true);
-  assert.equal(reset.otherAuthorityTunnelRetirementCount, 0);
-  assert.equal(reset.otherAuthorityTunnelTargetingExcluded, true);
-  assert.equal(reset.activeAuthorityTunnelCountBefore, 1);
-  assert.equal(reset.retiredClientSocketCount, 1);
-  assert.equal(reset.retiredUpstreamSocketCount, 1);
-  assert.equal(reset.activeAuthorityTunnelCountAfter, 0);
-  assert.equal(reset.authorityDrained, true);
-  for (const field of [
-    "releasedResponseStreamNonterminalCountAtPreparation",
-    "releasedResponseStreamNonterminalCountBeforeRetirement",
-    "releasedResponseStreamUnknownOrUnboundCountAtPreparation",
-    "releasedResponseStreamUnknownOrUnboundCountBeforeRetirement",
-  ]) {
-    assert.equal(reset[field], 0);
-  }
-  for (const field of [
-    "failedLeaseIssueSequence",
-    "creatorLeaseIssueSequence",
-    "creatorLeaseConsumeSequence",
-    "retiredTunnelSequence",
-    "retirementCompleteSequence",
-    "resetPreparationOrderSequence",
-    "failedAuthorizationCompletionOrderSequence",
-    "localFailRequestCompletionOrderSequence",
-    "retirementDrainCompletionOrderSequence",
-    "retryBarrierReleaseOrderSequence",
-  ]) {
-    assert.equal(Number.isSafeInteger(reset[field]), true);
-    assert.ok(reset[field] > 0);
-  }
-  assert.ok(
-    reset.retirementCompleteSequence >
-      Math.max(
-        reset.failedLeaseIssueSequence,
-        reset.creatorLeaseIssueSequence,
-        reset.creatorLeaseConsumeSequence,
+  for (const [
+    index,
+    recovery,
+  ] of attestation.transportResetRecoveryAttestations.entries()) {
+    assertExactObjectKeys(recovery, [
+      "freshConnectAttestation",
+      "target",
+      "transportResetAttestation",
+    ]);
+    const target = attestation.retryTargets[index];
+    assert.equal(recovery.target, target);
+    const reset = recovery.transportResetAttestation;
+    const fresh = recovery.freshConnectAttestation;
+    assertExactObjectKeys(reset, [
+      "activeAuthorityTunnelCountAfter",
+      "activeAuthorityTunnelCountBefore",
+      "authorityDrained",
+      "authorizationSingletonTunnelSequence",
+      "creatorLeaseConsumeSequence",
+      "creatorLeaseIssueSequence",
+      "currentTunnelClassBefore",
+      "failedAttemptNumber",
+      "failedAuthorizationCompletionOrderSequence",
+      "failedAuthorizationCompletedBeforeRetirement",
+      "failedLeaseClass",
+      "failedLeaseConsumedTunnelSequence",
+      "failedLeaseConsumeSequence",
+      "failedLeaseIssueSequence",
+      "failedRequestLocalFailureCompletedBeforeRetirement",
+      "hostname",
+      "localFailRequestCompletionOrderSequence",
+      "noSameAuthorityAuthorizationBeforeRetirement",
+      "otherAuthorityTunnelTargetingExcluded",
+      "otherAuthorityTunnelRetirementCount",
+      "policyId",
+      "releasedResponseStreamNonterminalCountAtPreparation",
+      "releasedResponseStreamNonterminalCountBeforeRetirement",
+      "releasedResponseStreamUnknownOrUnboundCountAtPreparation",
+      "releasedResponseStreamUnknownOrUnboundCountBeforeRetirement",
+      "resetPreparationOrderSequence",
+      "retiredClientSocketCount",
+      "retiredTunnelSequence",
+      "retiredUpstreamSocketCount",
+      "retirementBasis",
+      "retirementCompleteSequence",
+      "retirementDrainCompletionOrderSequence",
+      "retirementBinding",
+      "retryBarrierReleaseOrderSequence",
+      "retryAttemptNumber",
+      "sameAuthorityAuthorizationCountAtPreparation",
+      "schemaVersion",
+      "singletonAuthorityTunnelBound",
+      "stage",
+      "target",
+    ]);
+    assert.equal(reset.schemaVersion, 3);
+    assert.equal(reset.policyId, attestation.transportResetPolicyId);
+    assert.equal(reset.hostname, "firestore.googleapis.com");
+    assert.equal(reset.stage, attestation.stage);
+    assert.equal(reset.target, target);
+    assert.equal(reset.failedAttemptNumber, 1);
+    assert.equal(reset.retryAttemptNumber, 2);
+    assert.ok(
+      ["issued-active-tunnel", "consumed-active-tunnel"].includes(
+        reset.failedLeaseClass,
       ),
-  );
-  assertProtectedReadTransportResetLeaseSequenceInvariant(reset);
-  assertExactObjectKeys(fresh, [
-    "activeTunnelPresentAtAuthorization",
-    "freshConnectConsumedLease",
-    "freshLeaseIssued",
-    "freshTunnelSequence",
-    "hostname",
-    "leaseIssueSequenceAdvanced",
-    "policyId",
-    "requestBound",
-    "retryAttemptNumber",
-    "retryLeaseClass",
-    "retryLeaseConsumeSequence",
-    "retryLeaseIssueSequence",
-    "sameAuthorityActiveAuthorizationCount",
-    "schemaVersion",
-    "stage",
-    "target",
-    "tunnelSequenceAdvanced",
-  ]);
-  assert.equal(fresh.schemaVersion, 1);
-  assert.equal(fresh.policyId, attestation.transportResetPolicyId);
-  assert.equal(fresh.hostname, "firestore.googleapis.com");
-  assert.equal(fresh.stage, attestation.stage);
-  assert.equal(fresh.target, attestation.retryTarget);
-  assert.equal(fresh.retryAttemptNumber, 2);
-  assert.equal(fresh.requestBound, true);
-  assert.equal(fresh.activeTunnelPresentAtAuthorization, false);
-  assert.equal(fresh.retryLeaseClass, "consumed-no-active-tunnel");
-  assert.equal(fresh.freshLeaseIssued, true);
-  assert.equal(fresh.freshConnectConsumedLease, true);
-  assert.equal(fresh.leaseIssueSequenceAdvanced, true);
-  assert.equal(fresh.tunnelSequenceAdvanced, true);
-  assert.equal(fresh.sameAuthorityActiveAuthorizationCount, 1);
-  for (const field of [
-    "retryLeaseIssueSequence",
-    "retryLeaseConsumeSequence",
-    "freshTunnelSequence",
-  ]) {
-    assert.equal(Number.isSafeInteger(fresh[field]), true);
-    assert.ok(fresh[field] > 0);
+    );
+    const expectedRetirementContract =
+      reset.failedLeaseClass === "issued-active-tunnel"
+        ? {
+            retirementBasis: "authorization-time-singleton-tunnel-snapshot",
+            retirementBinding:
+              "authorization-singleton-sequence-current-identity",
+          }
+        : {
+            retirementBasis: "failed-lease-consumed-tunnel",
+            retirementBinding:
+              "failed-lease-consumed-sequence-current-identity",
+          };
+    assert.equal(
+      reset.retirementBasis,
+      expectedRetirementContract.retirementBasis,
+    );
+    assert.equal(
+      reset.retirementBinding,
+      expectedRetirementContract.retirementBinding,
+    );
+    assert.equal(reset.currentTunnelClassBefore, "current-active-tunnel");
+    assert.equal(reset.singletonAuthorityTunnelBound, true);
+    assert.equal(reset.sameAuthorityAuthorizationCountAtPreparation, 1);
+    assert.equal(reset.failedAuthorizationCompletedBeforeRetirement, true);
+    assert.equal(
+      reset.failedRequestLocalFailureCompletedBeforeRetirement,
+      true,
+    );
+    assert.equal(reset.noSameAuthorityAuthorizationBeforeRetirement, true);
+    assert.equal(reset.otherAuthorityTunnelRetirementCount, 0);
+    assert.equal(reset.otherAuthorityTunnelTargetingExcluded, true);
+    assert.equal(reset.activeAuthorityTunnelCountBefore, 1);
+    assert.equal(reset.retiredClientSocketCount, 1);
+    assert.equal(reset.retiredUpstreamSocketCount, 1);
+    assert.equal(reset.activeAuthorityTunnelCountAfter, 0);
+    assert.equal(reset.authorityDrained, true);
+    for (const field of [
+      "releasedResponseStreamNonterminalCountAtPreparation",
+      "releasedResponseStreamNonterminalCountBeforeRetirement",
+      "releasedResponseStreamUnknownOrUnboundCountAtPreparation",
+      "releasedResponseStreamUnknownOrUnboundCountBeforeRetirement",
+    ]) {
+      assert.equal(reset[field], 0);
+    }
+    for (const field of [
+      "failedLeaseIssueSequence",
+      "creatorLeaseIssueSequence",
+      "creatorLeaseConsumeSequence",
+      "retiredTunnelSequence",
+      "retirementCompleteSequence",
+      "resetPreparationOrderSequence",
+      "failedAuthorizationCompletionOrderSequence",
+      "localFailRequestCompletionOrderSequence",
+      "retirementDrainCompletionOrderSequence",
+      "retryBarrierReleaseOrderSequence",
+    ]) {
+      assert.equal(Number.isSafeInteger(reset[field]), true);
+      assert.ok(reset[field] > 0);
+    }
+    assert.ok(
+      reset.retirementCompleteSequence >
+        Math.max(
+          reset.failedLeaseIssueSequence,
+          reset.creatorLeaseIssueSequence,
+          reset.creatorLeaseConsumeSequence,
+        ),
+    );
+    assertProtectedReadTransportResetLeaseSequenceInvariant(reset);
+    assertExactObjectKeys(fresh, [
+      "activeTunnelPresentAtAuthorization",
+      "freshConnectConsumedLease",
+      "freshLeaseIssued",
+      "freshTunnelSequence",
+      "hostname",
+      "leaseIssueSequenceAdvanced",
+      "policyId",
+      "requestBound",
+      "retryAttemptNumber",
+      "retryLeaseClass",
+      "retryLeaseConsumeSequence",
+      "retryLeaseIssueSequence",
+      "sameAuthorityActiveAuthorizationCount",
+      "schemaVersion",
+      "stage",
+      "target",
+      "tunnelSequenceAdvanced",
+    ]);
+    assert.equal(fresh.schemaVersion, 1);
+    assert.equal(fresh.policyId, attestation.transportResetPolicyId);
+    assert.equal(fresh.hostname, "firestore.googleapis.com");
+    assert.equal(fresh.stage, attestation.stage);
+    assert.equal(fresh.target, target);
+    assert.equal(fresh.retryAttemptNumber, 2);
+    assert.equal(fresh.requestBound, true);
+    assert.equal(fresh.activeTunnelPresentAtAuthorization, false);
+    assert.equal(fresh.retryLeaseClass, "consumed-no-active-tunnel");
+    assert.equal(fresh.freshLeaseIssued, true);
+    assert.equal(fresh.freshConnectConsumedLease, true);
+    assert.equal(fresh.leaseIssueSequenceAdvanced, true);
+    assert.equal(fresh.tunnelSequenceAdvanced, true);
+    assert.equal(fresh.sameAuthorityActiveAuthorizationCount, 1);
+    for (const field of [
+      "retryLeaseIssueSequence",
+      "retryLeaseConsumeSequence",
+      "freshTunnelSequence",
+    ]) {
+      assert.equal(Number.isSafeInteger(fresh[field]), true);
+      assert.ok(fresh[field] > 0);
+    }
+    assert.ok(fresh.retryLeaseIssueSequence > reset.retirementCompleteSequence);
+    assert.ok(fresh.retryLeaseConsumeSequence > fresh.retryLeaseIssueSequence);
+    assert.ok(fresh.freshTunnelSequence > reset.retiredTunnelSequence);
   }
-  assert.ok(fresh.retryLeaseIssueSequence > reset.retirementCompleteSequence);
-  assert.ok(fresh.retryLeaseConsumeSequence > fresh.retryLeaseIssueSequence);
-  assert.ok(fresh.freshTunnelSequence > reset.retiredTunnelSequence);
+  for (
+    let index = 1;
+    index < attestation.transportResetRecoveryAttestations.length;
+    index += 1
+  ) {
+    const previous = attestation.transportResetRecoveryAttestations[index - 1];
+    const current = attestation.transportResetRecoveryAttestations[index];
+    assert.ok(
+      previous.transportResetAttestation.retryBarrierReleaseOrderSequence <
+        current.transportResetAttestation.resetPreparationOrderSequence,
+    );
+    assert.ok(
+      previous.freshConnectAttestation.retryLeaseIssueSequence <
+        current.transportResetAttestation.failedLeaseIssueSequence,
+    );
+    assert.ok(
+      previous.freshConnectAttestation.freshTunnelSequence <=
+        current.transportResetAttestation.retiredTunnelSequence,
+    );
+  }
 };
 for (const attestation of authenticationProtectedReadRetry.attestations) {
   assertExactObjectKeys(attestation, [
@@ -7696,7 +7828,6 @@ for (const attestation of authenticationProtectedReadRetry.attestations) {
     "configFinalOutcomeClass",
     "configFirstOutcomeClass",
     "exactUrlMethodBound",
-    "freshConnectAttestation",
     "groupKey",
     "passed",
     "playwrightFailureConsoleCdpNetworkIdentityBound",
@@ -7711,9 +7842,10 @@ for (const attestation of authenticationProtectedReadRetry.attestations) {
     "recoveredByRetry",
     "recoveredProtectedReadConsoleErrorCount",
     "recoveredProtectedReadTransportFailureCount",
-    "retryBudget",
+    "retryBudgetPerGroup",
+    "retryBudgetPerTarget",
     "retryDelayMs",
-    "retryTarget",
+    "retryTargets",
     "retryUsed",
     "role",
     "sameAppCheckToken",
@@ -7723,15 +7855,16 @@ for (const attestation of authenticationProtectedReadRetry.attestations) {
     "sessionRevisionUnchanged",
     "stage",
     "tokenRefreshCount",
-    "transportResetAttestation",
     "transportResetPolicyId",
-    "transportResetTarget",
+    "transportResetRecoveryAttestations",
+    "transportResetTargets",
     "transportResetUsed",
     "viewport",
   ]);
-  assert.equal(attestation.schemaVersion, 5);
+  assert.equal(attestation.schemaVersion, 6);
   assert.equal(attestation.policyId, authenticationProtectedReadRetry.policyId);
-  assert.equal(attestation.retryBudget, 1);
+  assert.equal(attestation.retryBudgetPerTarget, 1);
+  assert.equal(attestation.retryBudgetPerGroup, 2);
   assert.equal(attestation.retryDelayMs, 2_000);
   assert.ok(["baseline", "candidate"].includes(attestation.stage));
   assert.ok(Object.hasOwn(protectedReadRetryRolePairs, attestation.role));
@@ -7746,28 +7879,35 @@ for (const attestation of authenticationProtectedReadRetry.attestations) {
   );
   assert.equal(protectedReadRetryGroupKeys.has(attestation.groupKey), false);
   protectedReadRetryGroupKeys.add(attestation.groupKey);
-  assert.ok(["none", "config", "profile"].includes(attestation.retryTarget));
-  assert.ok([0, 1].includes(attestation.retryUsed));
-  assert.equal(
-    attestation.retryUsed,
-    Number(attestation.retryTarget !== "none"),
+  assert.equal(Array.isArray(attestation.retryTargets), true);
+  assert.deepEqual(
+    attestation.retryTargets,
+    ["config", "profile"].filter((target) =>
+      attestation.retryTargets.includes(target),
+    ),
   );
+  assert.equal(
+    new Set(attestation.retryTargets).size,
+    attestation.retryTargets.length,
+  );
+  assert.ok([0, 1, 2].includes(attestation.retryUsed));
+  assert.equal(attestation.retryUsed, attestation.retryTargets.length);
   assertProtectedReadRetryPlaywrightFailureEchoClass(attestation);
   assertProtectedReadRetryCdpLoadingFailureEchoClass(attestation);
   assertProtectedReadRetryConsoleEvidence(attestation);
   assertProtectedReadTransportResetEvidence(attestation);
-  assert.equal(attestation.recoveredByRetry, attestation.retryUsed === 1);
+  assert.equal(attestation.recoveredByRetry, attestation.retryUsed > 0);
   assert.equal(
     attestation.recoveredProtectedReadTransportFailureCount,
     attestation.retryUsed,
   );
   assert.equal(
     attestation.configAttemptCount,
-    attestation.retryTarget === "config" ? 2 : 1,
+    attestation.retryTargets.includes("config") ? 2 : 1,
   );
   assert.equal(
     attestation.profileAttemptCount,
-    attestation.retryTarget === "profile" ? 2 : 1,
+    attestation.retryTargets.includes("profile") ? 2 : 1,
   );
   assert.equal(
     attestation.configAttemptCount + attestation.profileAttemptCount,
@@ -7775,24 +7915,28 @@ for (const attestation of authenticationProtectedReadRetry.attestations) {
   );
   assert.equal(
     attestation.configFirstOutcomeClass,
-    attestation.retryTarget === "config" ? "transport-error" : "response-2xx",
+    attestation.retryTargets.includes("config")
+      ? "transport-error"
+      : "response-2xx",
   );
   assert.equal(attestation.configFinalOutcomeClass, "response-2xx");
   assert.equal(
     attestation.profileFirstOutcomeClass,
-    attestation.retryTarget === "profile" ? "transport-error" : "response-2xx",
+    attestation.retryTargets.includes("profile")
+      ? "transport-error"
+      : "response-2xx",
   );
   assert.equal(attestation.profileFinalOutcomeClass, "response-2xx");
   assert.equal(
     attestation.cdpConfigFirstResponseClass,
-    attestation.retryTarget === "config"
+    attestation.retryTargets.includes("config")
       ? "response-error-failed"
       : "response-2xx",
   );
   assert.equal(attestation.cdpConfigFinalResponseClass, "response-2xx");
   assert.equal(
     attestation.cdpProfileFirstResponseClass,
-    attestation.retryTarget === "profile"
+    attestation.retryTargets.includes("profile")
       ? "response-error-failed"
       : "response-2xx",
   );
