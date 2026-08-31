@@ -2458,9 +2458,11 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "const FROZEN_BASELINE_LISTENER_SETTLEMENT_TIMEOUT_MS = 3_000",
     "const FROZEN_BASELINE_LISTENER_SETTLEMENT_POLL_MS = 50",
     "const readyForSettlement = () =>",
-    "if (settledDecision !== null || !eligible) return true",
+    "if (settledDecision !== null) return true",
     "const irrecoverableFailureObserved =",
     "if (irrecoverableFailureObserved) return true",
+    "if (!eligible) return pendingInitialTargetsByRequestId.size === 0",
+    "if (pendingInitialTargetsByRequestId.size > 0) recordParseFailure()",
     "readyForSettlement,",
     "assert.equal(positiveObserver.readyForSettlement(), false)",
     "assert.equal(positiveObserver.readyForSettlement(), true)",
@@ -2508,19 +2510,44 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   );
   assert.match(
     frozenBaselineFixtureSource,
-    /frozenBaselineListenerBindingPositiveFixtureCount:\s*3/u,
-    "The frozen-baseline listener source contract must retain three positive lifecycle fixtures.",
+    /frozenBaselineListenerBindingPositiveFixtureCount:\s*4/u,
+    "The frozen-baseline listener source contract must retain four positive lifecycle fixtures.",
   );
   assert.match(
     frozenBaselineFixtureSource,
-    /const negativeSnapshots\s*=\s*\[mismatchedBufferedSnapshot\];/u,
-    "The buffered byte-length mismatch must seed the frozen-baseline negative fixture ledger.",
+    /const negativeSnapshots\s*=\s*\[\s*mismatchedBufferedSnapshot,\s*noneligibleUnresolvedInitialSnapshot,\s*noneligiblePendingFailureSnapshot,\s*\];/u,
+    "Buffered mismatch and both noneligible pending-initial failures must seed the frozen-baseline negative fixture ledger.",
   );
   assert.equal(
     (frozenBaselineFixtureSource.match(/negativeSnapshots\.push\(/gu) || [])
       .length,
     7,
-    "The frozen-baseline listener source contract must retain eight negative lifecycle fixtures.",
+    "The frozen-baseline listener source contract must retain ten negative lifecycle fixtures.",
+  );
+  assert.match(
+    frozenBaselineFixtureSource,
+    /const createNoneligibleAdminObserver\s*=\s*\(\)\s*=>[\s\S]*?captureRole: "admin",\s*authenticationRole: "admin",\s*viewport: "1024x768",\s*groupKey: "baseline:admin:1024x768",/u,
+    "The pending-initial fixtures must use the exact noneligible baseline admin group.",
+  );
+  assert.match(
+    frozenBaselineFixtureSource,
+    /const noneligibleDeferredPromotionObserver\s*=\s*createNoneligibleAdminObserver\(\);[\s\S]*?assert\.equal\(\s*noneligibleDeferredPromotionObserver\.readyForSettlement\(\),\s*false,\s*\);[\s\S]*?noneligibleDeferredPromotionObserver\.promoteInitialTargets\(\{[\s\S]*?\}\);\s*assert\.equal\(noneligibleDeferredPromotionObserver\.readyForSettlement\(\), true\);[\s\S]*?assert\.equal\(noneligibleDeferredPromotionSnapshot\.parseFailureCount, 0\);\s*assert\.equal\(noneligibleDeferredPromotionSnapshot\.passed, true\);/u,
+    "A noneligible initial target must wait for exact promotion and then pass without a parse failure.",
+  );
+  assert.match(
+    frozenBaselineFixtureSource,
+    /const noneligibleUnresolvedInitialObserver\s*=\s*createNoneligibleAdminObserver\(\);[\s\S]*?assert\.equal\(\s*noneligibleUnresolvedInitialObserver\.readyForSettlement\(\),\s*false,\s*\);[\s\S]*?noneligibleUnresolvedInitialObserver\.settleAuthentication\(\{[\s\S]*?\}\);[\s\S]*?assert\.equal\(noneligibleUnresolvedInitialSnapshot\.parseFailureCount, 1\);\s*assert\.equal\(noneligibleUnresolvedInitialSnapshot\.passed, false\);/u,
+    "An unresolved noneligible initial target must remain fail-closed at settlement.",
+  );
+  assert.match(
+    frozenBaselineFixtureSource,
+    /const noneligiblePendingFailureObserver\s*=\s*createNoneligibleAdminObserver\(\);[\s\S]*?noneligiblePendingFailureObserver\.recordParseFailure\(\);\s*assert\.equal\(noneligiblePendingFailureObserver\.readyForSettlement\(\), true\);[\s\S]*?noneligiblePendingFailureObserver\.settleAuthentication\(\{[\s\S]*?\}\);[\s\S]*?assert\.equal\(noneligiblePendingFailureSnapshot\.parseFailureCount, 2\);\s*assert\.equal\(noneligiblePendingFailureSnapshot\.passed, false\);/u,
+    "A preexisting noneligible parse failure must settle immediately and retain the unresolved-pending failure.",
+  );
+  assert.match(
+    frozenBaselineFixtureSource,
+    /negativeSnapshots\.reduce\(\s*\(count, snapshot\)\s*=>\s*count \+ Number\(snapshot\.parseFailureCount > 0\),\s*0,\s*\),\s*4,/u,
+    "The frozen-baseline negative ledger must retain four parse-failure cases.",
   );
   assert.match(
     frozenBaselineFixtureSource,
@@ -2562,7 +2589,7 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     .slice(frozenBaselineReadinessSourceStart, frozenBaselineReadinessSourceEnd)
     .replace(/\s+/gu, "");
   for (const requiredReadinessFragment of [
-    "if (settledDecision !== null || !eligible) return true",
+    "if (settledDecision !== null) return true",
     "streamFailureCount > 0",
     "parseFailureCount > 0",
     "bufferExceededCount > 0",
@@ -2575,6 +2602,7 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "unboundRemovedTargetCount > 0",
     "ambiguousRemovedTargetCount > 0",
     "if (irrecoverableFailureObserved) return true",
+    "if (!eligible) return pendingInitialTargetsByRequestId.size === 0",
     "pendingInitialTargetsByRequestId.size === 0",
     "exactConsoleSequences.length === policy.consoleError.expectedCount",
     "inboundRemoveCauseCodeCount === 1",
@@ -2594,6 +2622,21 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
       `The frozen-baseline readiness contract is missing: ${requiredReadinessFragment}`,
     );
   }
+  assert.match(
+    sourceText,
+    /const readyForSettlement\s*=\s*\(\)\s*=>\s*\{\s*if \(settledDecision !== null\) return true;\s*const irrecoverableFailureObserved\s*=[\s\S]*?if \(irrecoverableFailureObserved\) return true;\s*if \(!eligible\) return pendingInitialTargetsByRequestId\.size === 0;[\s\S]*?const removedTargets/u,
+    "Frozen-baseline readiness must fail fast on irrecoverable evidence, then wait only for noneligible pending initial promotion.",
+  );
+  assert.doesNotMatch(
+    sourceText,
+    /if \(settledDecision !== null \|\| !eligible\) return true;/u,
+    "A noneligible listener must not bypass pending initial promotion readiness.",
+  );
+  assert.match(
+    sourceText,
+    /const settleAuthentication\s*=\s*\(\{ dashboardStable \}\)\s*=>\s*\{\s*assert\.equal\(settledDecision, null\);\s*assert\.equal\(dashboardStable, true\);\s*if \(pendingInitialTargetsByRequestId\.size > 0\) recordParseFailure\(\);/u,
+    "Timed-out pending initial targets must remain a parse-fatal settlement outcome.",
+  );
   assert.match(
     sourceText,
     /const recordParseFailure\s*=\s*\(\{ bufferExceeded = false \} = \{\}\)\s*=>\s*\{\s*if \(settledDecision !== null\) return;/u,
@@ -5042,8 +5085,8 @@ const verifyPreTransmissionBoundaryNegativeFixtures = () => {
     frozenBaselineListenerPostSettlementGuardSourceContractVerified: true,
     frozenBaselineListenerTerminalFailureSourceContractVerified: true,
     frozenBaselineListenerBoundedReadinessSettlementSourceContractVerified: true,
-    frozenBaselineListenerBindingPositiveFixtureSourceCount: 3,
-    frozenBaselineListenerBindingNegativeFixtureSourceCount: 8,
+    frozenBaselineListenerBindingPositiveFixtureSourceCount: 4,
+    frozenBaselineListenerBindingNegativeFixtureSourceCount: 10,
     safeAuthenticationSignInSourceContractVerified: true,
     safeAuthenticationSignInSourceMutationRejectedCaseCount,
   };

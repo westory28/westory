@@ -7293,7 +7293,7 @@ const createFrozenBaselineListenerBindingObserver = ({
     ),
   });
   const readyForSettlement = () => {
-    if (settledDecision !== null || !eligible) return true;
+    if (settledDecision !== null) return true;
     const irrecoverableFailureObserved =
       streamFailureCount > 0 ||
       parseFailureCount > 0 ||
@@ -7307,6 +7307,7 @@ const createFrozenBaselineListenerBindingObserver = ({
       unboundRemovedTargetCount > 0 ||
       ambiguousRemovedTargetCount > 0;
     if (irrecoverableFailureObserved) return true;
+    if (!eligible) return pendingInitialTargetsByRequestId.size === 0;
     const removedTargets = [...targetsByTuple.values()].filter(
       (target) => target.targetClass === policy.removedTargetClass,
     );
@@ -7818,6 +7819,16 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
       policy: frozenBaselineAuthenticationAnomalyPolicy,
       expectedUidHash: secretSha256(privateUid),
     });
+  const createNoneligibleAdminObserver = () =>
+    createFrozenBaselineListenerBindingObserver({
+      stage: "baseline",
+      captureRole: "admin",
+      authenticationRole: "admin",
+      viewport: "1024x768",
+      groupKey: "baseline:admin:1024x768",
+      policy: frozenBaselineAuthenticationAnomalyPolicy,
+      expectedUidHash: secretSha256(privateUid),
+    });
   const exactConsoleError = {
     ...frozenBaselineAuthenticationAnomalyPolicy.consoleError,
   };
@@ -8015,6 +8026,71 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
   initialRequestObserver.settleAuthentication({ dashboardStable: true });
   const initialRequestSnapshot = initialRequestObserver.safeSnapshot();
   assert.equal(initialRequestSnapshot.passed, true);
+  const noneligibleDeferredPromotionObserver = createNoneligibleAdminObserver();
+  noneligibleDeferredPromotionObserver.observeOutboundRequest({
+    networkRequestId: "private-admin-deferred-initial-network-request-id",
+    requestUrl: initialRequestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([attendanceTargetWithExtraFilter]),
+  });
+  assert.equal(
+    noneligibleDeferredPromotionObserver.readyForSettlement(),
+    false,
+  );
+  noneligibleDeferredPromotionObserver.promoteInitialTargets({
+    networkRequestId: "private-admin-deferred-initial-network-request-id",
+    gsessionid: privateGsessionid,
+    sid: privateSid,
+  });
+  assert.equal(noneligibleDeferredPromotionObserver.readyForSettlement(), true);
+  noneligibleDeferredPromotionObserver.settleAuthentication({
+    dashboardStable: true,
+  });
+  const noneligibleDeferredPromotionSnapshot =
+    noneligibleDeferredPromotionObserver.safeSnapshot();
+  assert.equal(noneligibleDeferredPromotionSnapshot.eligible, false);
+  assert.equal(noneligibleDeferredPromotionSnapshot.unknownTargetCount, 1);
+  assert.equal(noneligibleDeferredPromotionSnapshot.parseFailureCount, 0);
+  assert.equal(noneligibleDeferredPromotionSnapshot.passed, true);
+  const noneligibleUnresolvedInitialObserver = createNoneligibleAdminObserver();
+  noneligibleUnresolvedInitialObserver.observeOutboundRequest({
+    networkRequestId: "private-admin-unresolved-initial-network-request-id",
+    requestUrl: initialRequestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([attendanceTargetWithExtraFilter]),
+  });
+  assert.equal(
+    noneligibleUnresolvedInitialObserver.readyForSettlement(),
+    false,
+  );
+  noneligibleUnresolvedInitialObserver.settleAuthentication({
+    dashboardStable: true,
+  });
+  const noneligibleUnresolvedInitialSnapshot =
+    noneligibleUnresolvedInitialObserver.safeSnapshot();
+  assert.equal(noneligibleUnresolvedInitialSnapshot.eligible, false);
+  assert.equal(noneligibleUnresolvedInitialSnapshot.parseFailureCount, 1);
+  assert.equal(noneligibleUnresolvedInitialSnapshot.passed, false);
+  const noneligiblePendingFailureObserver = createNoneligibleAdminObserver();
+  noneligiblePendingFailureObserver.observeOutboundRequest({
+    networkRequestId: "private-admin-failed-initial-network-request-id",
+    requestUrl: initialRequestUrl.toString(),
+    method: "POST",
+    hasPostData: true,
+    postData: requestBodyForTargets([attendanceTargetWithExtraFilter]),
+  });
+  noneligiblePendingFailureObserver.recordParseFailure();
+  assert.equal(noneligiblePendingFailureObserver.readyForSettlement(), true);
+  noneligiblePendingFailureObserver.settleAuthentication({
+    dashboardStable: true,
+  });
+  const noneligiblePendingFailureSnapshot =
+    noneligiblePendingFailureObserver.safeSnapshot();
+  assert.equal(noneligiblePendingFailureSnapshot.eligible, false);
+  assert.equal(noneligiblePendingFailureSnapshot.parseFailureCount, 2);
+  assert.equal(noneligiblePendingFailureSnapshot.passed, false);
   const deferredStreamObserver = createObserver();
   deferredStreamObserver.observeOutboundRequest({
     requestUrl: requestUrl.toString(),
@@ -8176,7 +8252,11 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
   assert.equal(streamedParseFailureCount, 0);
   assert.equal(streamedTargetChanges.length, 1);
   assert.equal(streamedTargetChanges[0].causeCode, 7);
-  const negativeSnapshots = [mismatchedBufferedSnapshot];
+  const negativeSnapshots = [
+    mismatchedBufferedSnapshot,
+    noneligibleUnresolvedInitialSnapshot,
+    noneligiblePendingFailureSnapshot,
+  ];
   const wrongViewportObserver = createObserver({ viewport: "393x852" });
   observePositiveLifecycle(wrongViewportObserver);
   wrongViewportObserver.settleAuthentication({ dashboardStable: true });
@@ -8421,11 +8501,12 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
       (count, snapshot) => count + Number(snapshot.parseFailureCount > 0),
       0,
     ),
-    2,
+    4,
   );
   const serializedSafeEvidence = JSON.stringify({
     positiveSnapshot,
     initialRequestSnapshot,
+    noneligibleDeferredPromotionSnapshot,
     deferredStreamSnapshot,
     negativeSnapshots,
   });
@@ -8438,7 +8519,7 @@ const verifyFrozenBaselineListenerBindingFixtures = async () => {
     assert.equal(serializedSafeEvidence.includes(privateValue), false);
   }
   return {
-    frozenBaselineListenerBindingPositiveFixtureCount: 3,
+    frozenBaselineListenerBindingPositiveFixtureCount: 4,
     frozenBaselineListenerBindingNegativeFixtureCount: negativeSnapshots.length,
     frozenBaselineListenerBindingStreamFixtureCount: 1,
     frozenBaselineListenerBindingTargetClassFixtureCount:
