@@ -5000,6 +5000,1083 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   );
   return true;
 };
+const assertCaptureSafeLocalBlockIntentSourceContract = (sourceText) => {
+  const expectedIssuerClasses = Object.freeze([
+    "browser-wide-pre-transmission-boundary",
+    "primary-app-check-cdp-handler",
+  ]);
+  const expectedIntentClasses = Object.freeze([
+    "browser-wide-deterministic-response-contract-block",
+    "browser-wide-external-static-private-owner-block",
+    "browser-wide-handler-exception-block",
+    "browser-wide-optional-telemetry-suppression",
+    "browser-wide-pre-transmission-boundary-block",
+    "browser-wide-raw-sensitive-block",
+    "browser-wide-staging-api-key-scope-block",
+    "primary-allowed-egress-response-error-terminalization",
+    "primary-collection-preflight-contract-block",
+    "primary-deterministic-response-contract-block",
+    "primary-direct-immutable-origin-block",
+    "primary-external-static-contract-block",
+    "primary-final-http-or-redirect-terminalization",
+    "primary-handler-exception-block",
+    "primary-invalid-pre-final-response-terminalization",
+    "primary-optional-telemetry-suppression",
+    "primary-pre-transmission-boundary-block",
+    "primary-raw-sensitive-block",
+    "primary-redirected-allowed-egress-block",
+    "primary-skip-toolbar-header-block",
+    "primary-stable-origin-rewrite-contract-block",
+    "primary-unauthorized-app-check-header-block",
+  ]);
+  const expectedAdditionalTaxonomies = Object.freeze([
+    [
+      "SAFE_LOCAL_BLOCK_INTENT_PHASE_CLASSES",
+      Object.freeze(["handler", "request", "response"]),
+    ],
+    [
+      "SAFE_LOCAL_BLOCK_INTENT_DIAGNOSTIC_PHASES",
+      Object.freeze([
+        "authentication",
+        "browser-audit-finalization",
+        "context-bootstrap",
+        "screen-capture",
+        "session-keepalive",
+      ]),
+    ],
+    [
+      "SAFE_LOCAL_BLOCK_INTENT_FIREBASE_SERVICE_CLASSES",
+      Object.freeze([
+        "app-check",
+        "auth",
+        "firestore",
+        "functions",
+        "hosting",
+        "non-firebase",
+        "realtime-database",
+        "storage",
+        "unknown",
+      ]),
+    ],
+    [
+      "SAFE_LOCAL_BLOCK_INTENT_REQUEST_METHOD_CLASSES",
+      Object.freeze([
+        "delete",
+        "get",
+        "head",
+        "options",
+        "other",
+        "patch",
+        "post",
+        "put",
+      ]),
+    ],
+    [
+      "SAFE_LOCAL_BLOCK_INTENT_RESOURCE_TYPE_CLASSES",
+      Object.freeze([
+        "document",
+        "eventsource",
+        "fetch",
+        "font",
+        "image",
+        "manifest",
+        "media",
+        "other",
+        "script",
+        "stylesheet",
+        "texttrack",
+        "websocket",
+        "xhr",
+      ]),
+    ],
+    [
+      "SAFE_LOCAL_BLOCK_INTENT_WEBCHANNEL_REQUEST_CLASSES",
+      Object.freeze([
+        "backchannel-get",
+        "initial-forward-post",
+        "session-forward-post",
+      ]),
+    ],
+    [
+      "SAFE_LOCAL_BLOCK_INTENT_WEBCHANNEL_TERMINATION_CLASSES",
+      Object.freeze(["termination-image-get"]),
+    ],
+    [
+      "SAFE_LOCAL_BLOCK_INTENT_COMMAND_STATES",
+      Object.freeze(["complete", "failed", "in-flight"]),
+    ],
+    [
+      "SAFE_LOCAL_BLOCK_INTENT_POLICY_REASON_CLASSES",
+      Object.freeze([
+        "creator-side-secondary-bootstrap",
+        "cross-origin-document",
+        "debug-sentinel-scope",
+        "debug-token-scope",
+        "deterministic-scope-mismatch",
+        "direct-immutable-origin-scope-mismatch",
+        "external-static-private-owner",
+        "external-static-scope-mismatch",
+        "forbidden-header",
+        "http-error-response",
+        "invalid-api-key-scope",
+        "invalid-request-shape",
+        "invalid-response-status",
+        "malformed-url-encoding",
+        "non-firebase-hostname-not-allowlisted",
+        "production",
+        "redirect-response",
+        "redirected-request",
+        "refresh-token-scope",
+        "response-error",
+        "stable-origin-rewrite-scope-mismatch",
+        "staging-api-key-scope",
+        "telemetry-suppression",
+        "test-credential-scope",
+        "unauthorized-header",
+        "unbound-firebase",
+        "unexpected-handler-error",
+        "vercel-bypass-scope",
+      ]),
+    ],
+    [
+      "SAFE_LOCAL_BLOCK_INTENT_REQUEST_SCOPE_CLASSES",
+      Object.freeze([
+        "allowed-egress",
+        "authentication-collection-preflight",
+        "authentication-protected-read",
+        "cdp-handler-fallback",
+        "deterministic-response",
+        "direct-immutable-origin",
+        "external-static",
+        "native-app-check-header",
+        "optional-telemetry",
+        "pre-transmission-boundary",
+        "redirected-allowed-egress",
+        "response-lifecycle",
+        "sensitive-pre-transmission",
+        "stable-origin-rewrite",
+        "staging-api-key",
+        "vercel-skip-toolbar",
+      ]),
+    ],
+    [
+      "SAFE_LOCAL_BLOCK_INTENT_RESPONSE_CORRELATION_CLASSES",
+      Object.freeze(["same-fetch", "same-network-single-alias"]),
+    ],
+    [
+      "SAFE_LOCAL_BLOCK_INTENT_WEBCHANNEL_PATH_CLASSES",
+      Object.freeze(["listen-channel", "write-channel"]),
+    ],
+    [
+      "SAFE_LOCAL_BLOCK_INTENT_PROBE_SOURCE_CLASSES",
+      Object.freeze([
+        "console-location",
+        "network-loading-failed",
+        "network-log",
+        "playwright-request-failed",
+      ]),
+    ],
+  ]);
+  const expectedRuntimeCallsiteContracts = Object.freeze([
+    {
+      intentClass: "browser-wide-deterministic-response-contract-block",
+      issuerClass: "browser-wide-pre-transmission-boundary",
+      phaseClassSource: `"request"`,
+      policyReasonClassSource: `"deterministic-scope-mismatch"`,
+      requestScopeClassSource: `"deterministic-response"`,
+    },
+    {
+      intentClass: "browser-wide-external-static-private-owner-block",
+      issuerClass: "browser-wide-pre-transmission-boundary",
+      phaseClassSource: `"request"`,
+      policyReasonClassSource: `"external-static-private-owner"`,
+      requestScopeClassSource: `"external-static"`,
+    },
+    {
+      intentClass: "browser-wide-handler-exception-block",
+      issuerClass: "browser-wide-pre-transmission-boundary",
+      phaseClassSource: `"handler"`,
+      policyReasonClassSource: `"unexpected-handler-error"`,
+      requestScopeClassSource: `"cdp-handler-fallback"`,
+    },
+    {
+      intentClass: "browser-wide-optional-telemetry-suppression",
+      issuerClass: "browser-wide-pre-transmission-boundary",
+      phaseClassSource: `"request"`,
+      policyReasonClassSource: `"telemetry-suppression"`,
+      requestScopeClassSource: `"optional-telemetry"`,
+    },
+    {
+      intentClass: "browser-wide-pre-transmission-boundary-block",
+      issuerClass: "browser-wide-pre-transmission-boundary",
+      phaseClassSource: `"request"`,
+      policyReasonClassSource:
+        'decision.block?decision.marker:"creator-side-secondary-bootstrap"',
+      requestScopeClassSource: `"pre-transmission-boundary"`,
+    },
+    {
+      intentClass: "browser-wide-raw-sensitive-block",
+      issuerClass: "browser-wide-pre-transmission-boundary",
+      phaseClassSource: `"request"`,
+      policyReasonClassSource: "sensitiveDecision.marker",
+      requestScopeClassSource: `"sensitive-pre-transmission"`,
+    },
+    {
+      intentClass: "browser-wide-staging-api-key-scope-block",
+      issuerClass: "browser-wide-pre-transmission-boundary",
+      phaseClassSource: `"request"`,
+      policyReasonClassSource: `"invalid-api-key-scope"`,
+      requestScopeClassSource: `"staging-api-key"`,
+    },
+    {
+      intentClass: "primary-allowed-egress-response-error-terminalization",
+      issuerClass: "primary-app-check-cdp-handler",
+      phaseClassSource: `"response"`,
+      policyReasonClassSource: `"response-error"`,
+      requestScopeClassSource:
+        'authenticationProtectedReadAttempt===null?"allowed-egress":"authentication-protected-read"',
+    },
+    {
+      intentClass: "primary-collection-preflight-contract-block",
+      issuerClass: "primary-app-check-cdp-handler",
+      phaseClassSource: `"request"`,
+      policyReasonClassSource: `"invalid-request-shape"`,
+      requestScopeClassSource: `"authentication-collection-preflight"`,
+    },
+    {
+      intentClass: "primary-deterministic-response-contract-block",
+      issuerClass: "primary-app-check-cdp-handler",
+      phaseClassSource: `"request"`,
+      policyReasonClassSource: `"deterministic-scope-mismatch"`,
+      requestScopeClassSource: `"deterministic-response"`,
+    },
+    {
+      intentClass: "primary-direct-immutable-origin-block",
+      issuerClass: "primary-app-check-cdp-handler",
+      phaseClassSource: `"request"`,
+      policyReasonClassSource: `"direct-immutable-origin-scope-mismatch"`,
+      requestScopeClassSource: `"direct-immutable-origin"`,
+    },
+    {
+      intentClass: "primary-external-static-contract-block",
+      issuerClass: "primary-app-check-cdp-handler",
+      phaseClassSource: `"request"`,
+      policyReasonClassSource: `"external-static-scope-mismatch"`,
+      requestScopeClassSource: `"external-static"`,
+    },
+    {
+      intentClass: "primary-final-http-or-redirect-terminalization",
+      issuerClass: "primary-app-check-cdp-handler",
+      phaseClassSource: `"response"`,
+      policyReasonClassSource:
+        'redirectResponseMustAbort(responseStatus)?"redirect-response":"http-error-response"',
+      requestScopeClassSource: `"response-lifecycle"`,
+    },
+    {
+      intentClass: "primary-handler-exception-block",
+      issuerClass: "primary-app-check-cdp-handler",
+      phaseClassSource: `"handler"`,
+      policyReasonClassSource: `"unexpected-handler-error"`,
+      requestScopeClassSource: `"cdp-handler-fallback"`,
+    },
+    {
+      intentClass: "primary-invalid-pre-final-response-terminalization",
+      issuerClass: "primary-app-check-cdp-handler",
+      phaseClassSource: `"response"`,
+      policyReasonClassSource: `"invalid-response-status"`,
+      requestScopeClassSource: `"response-lifecycle"`,
+    },
+    {
+      intentClass: "primary-optional-telemetry-suppression",
+      issuerClass: "primary-app-check-cdp-handler",
+      phaseClassSource: `"request"`,
+      policyReasonClassSource: `"telemetry-suppression"`,
+      requestScopeClassSource: `"optional-telemetry"`,
+    },
+    {
+      intentClass: "primary-pre-transmission-boundary-block",
+      issuerClass: "primary-app-check-cdp-handler",
+      phaseClassSource: `"request"`,
+      policyReasonClassSource: "preTransmissionDecision.marker",
+      requestScopeClassSource: `"pre-transmission-boundary"`,
+    },
+    {
+      intentClass: "primary-raw-sensitive-block",
+      issuerClass: "primary-app-check-cdp-handler",
+      phaseClassSource: `"request"`,
+      policyReasonClassSource: "rawSensitiveDecision.marker",
+      requestScopeClassSource: `"sensitive-pre-transmission"`,
+    },
+    {
+      intentClass: "primary-redirected-allowed-egress-block",
+      issuerClass: "primary-app-check-cdp-handler",
+      phaseClassSource: `"request"`,
+      policyReasonClassSource: `"redirected-request"`,
+      requestScopeClassSource: `"redirected-allowed-egress"`,
+    },
+    {
+      intentClass: "primary-skip-toolbar-header-block",
+      issuerClass: "primary-app-check-cdp-handler",
+      phaseClassSource: `"request"`,
+      policyReasonClassSource: `"forbidden-header"`,
+      requestScopeClassSource: `"vercel-skip-toolbar"`,
+    },
+    {
+      intentClass: "primary-stable-origin-rewrite-contract-block",
+      issuerClass: "primary-app-check-cdp-handler",
+      phaseClassSource: `"request"`,
+      policyReasonClassSource: `"stable-origin-rewrite-scope-mismatch"`,
+      requestScopeClassSource: `"stable-origin-rewrite"`,
+    },
+    {
+      intentClass: "primary-unauthorized-app-check-header-block",
+      issuerClass: "primary-app-check-cdp-handler",
+      phaseClassSource: `"request"`,
+      policyReasonClassSource: `"unauthorized-header"`,
+      requestScopeClassSource: `"native-app-check-header"`,
+    },
+  ]);
+  const expectedRecordKeys = Object.freeze(
+    [
+      "captureStage",
+      "commandState",
+      "completedSequence",
+      "diagnosticPhase",
+      "errorReasonClass",
+      "exactScopeBound",
+      "failedSequence",
+      "fetchRequestIdSha256",
+      "firebaseService",
+      "intentClass",
+      "issuedSequence",
+      "issuerClass",
+      "networkRequestIdSha256",
+      "operationClass",
+      "phaseClass",
+      "policyReasonClass",
+      "primaryFetchRequestIdSha256",
+      "requestMethod",
+      "requestScopeClass",
+      "requestUrlSha256",
+      "resourceType",
+      "responseFetchCorrelationClass",
+      "webChannelPathClass",
+      "webChannelRequestClass",
+      "webChannelTerminationClass",
+    ].sort(),
+  );
+  const expectedProbeKeys = Object.freeze(
+    [
+      "blockedReasonClass",
+      "diagnosticPhase",
+      "failureClass",
+      "networkRequestIdSha256",
+      "observedSequence",
+      "requestUrlSha256",
+      "sourceClass",
+    ].sort(),
+  );
+  const extractFixedStringArray = (declarationName) => {
+    const declaration = sourceText.match(
+      new RegExp(
+        `const ${declarationName}\\s*=\\s*Object\\.freeze\\(\\s*\\[([\\s\\S]*?)\\]\\s*(?:\\.sort\\(\\))?\\s*,?\\s*\\);`,
+        "u",
+      ),
+    );
+    assert.ok(
+      declaration,
+      `Missing fixed local-block declaration: ${declarationName}`,
+    );
+    return [...declaration[1].matchAll(/"([A-Za-z0-9-]+)"/gu)].map(
+      (match) => match[1],
+    );
+  };
+  assert.match(
+    sourceText,
+    /const SAFE_LOCAL_BLOCK_INTENT_RECORD_LIMIT\s*=\s*128;/u,
+    "The local-block intent ledger must remain bounded to 128 records and probes.",
+  );
+  assert.deepEqual(
+    extractFixedStringArray("SAFE_LOCAL_BLOCK_INTENT_ISSUER_CLASSES"),
+    expectedIssuerClasses,
+    "The local-block issuer taxonomy changed.",
+  );
+  assert.deepEqual(
+    extractFixedStringArray("SAFE_LOCAL_BLOCK_INTENT_CLASSES"),
+    expectedIntentClasses,
+    "The local-block intent taxonomy must remain the exact fixed 22-class enum.",
+  );
+  for (const [
+    declarationName,
+    expectedValues,
+  ] of expectedAdditionalTaxonomies) {
+    assert.deepEqual(
+      extractFixedStringArray(declarationName),
+      expectedValues,
+      `The fixed local-block taxonomy changed: ${declarationName}`,
+    );
+  }
+  assert.deepEqual(
+    extractFixedStringArray("SAFE_LOCAL_BLOCK_INTENT_RECORD_KEYS").sort(),
+    expectedRecordKeys,
+    "The local-block intent record schema changed.",
+  );
+  assert.deepEqual(
+    extractFixedStringArray("SAFE_LOCAL_BLOCK_INTENT_PROBE_KEYS").sort(),
+    expectedProbeKeys,
+    "The local-block intent probe schema changed.",
+  );
+  for (const rawKey of [
+    "fetchRequestId",
+    "networkRequestId",
+    "primaryFetchRequestId",
+    "requestId",
+    "requestUrl",
+    "url",
+  ]) {
+    assert.equal(
+      expectedRecordKeys.includes(rawKey) || expectedProbeKeys.includes(rawKey),
+      false,
+      `The local-block safe schemas expose a raw transport key: ${rawKey}`,
+    );
+  }
+
+  const gateSourceStart = sourceText.indexOf(
+    "const SAFE_LOCAL_BLOCK_INTENT_RECORD_LIMIT = 128;",
+  );
+  const gateSourceEnd = sourceText.indexOf(
+    "const SAFE_FIRESTORE_WEBCHANNEL_LISTENER_DIAGNOSTIC_REASONS",
+    gateSourceStart,
+  );
+  assert.ok(gateSourceStart >= 0 && gateSourceEnd > gateSourceStart);
+  const gateSource = sourceText.slice(gateSourceStart, gateSourceEnd);
+  const compactGateSource = gateSource.replace(/\s+/gu, "");
+  for (const gateFragment of [
+    "constsafeLocalBlockIntentHash=(rawValue,existingHash=null)=>{",
+    "assert.match(existingHash,/^[a-f0-9]{64}$/u)",
+    'if(typeofrawValue==="string"&&rawValue.length>0)',
+    "assert.equal(existingHash,secretSha256(rawValue))",
+    "?secretSha256(rawValue):null",
+    "constownKeys=Reflect.ownKeys(value)",
+    'ownKeys.every((key)=>typeofkey==="string")',
+    "assertSafeLocalBlockIntentExactStringKeys(record,SAFE_LOCAL_BLOCK_INTENT_RECORD_KEYS,)",
+    "assertSafeLocalBlockIntentExactStringKeys(probe,SAFE_LOCAL_BLOCK_INTENT_PROBE_KEYS,)",
+    "classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({",
+    "classifyExactStagingFirestoreWebChannelTerminationLifecycleScope({",
+    "headers:requestHeaders",
+    "postDataPresent:requestPostDataPresent",
+    "strictHeaderClass!==webChannelRequestClass",
+    "normalizedMethod!==expectedMethod",
+    'normalizedResourceType!=="xhr"',
+    "strictTerminationClass!==webChannelTerminationClass",
+    'pathname==="/google.firestore.v1.Firestore/Listen/channel"',
+    'pathname==="/google.firestore.v1.Firestore/Write/channel"',
+    "SAFE_LOCAL_BLOCK_INTENT_RECORD_KEYS",
+    "SAFE_LOCAL_BLOCK_INTENT_PROBE_KEYS",
+    'record.errorReasonClass,"blocked-by-client"',
+    '["request-fail","response-fail"].includes(record.operationClass)',
+    '["baseline","candidate"].includes(record.captureStage)',
+    '[null,"inspector","unsupported"].includes(probe.blockedReasonClass)',
+    "entries.size<SAFE_LOCAL_BLOCK_INTENT_RECORD_LIMIT",
+    "probes.length<SAFE_LOCAL_BLOCK_INTENT_RECORD_LIMIT",
+    "intents.length<=SAFE_LOCAL_BLOCK_INTENT_RECORD_LIMIT",
+    "probes.length<=SAFE_LOCAL_BLOCK_INTENT_RECORD_LIMIT",
+    "returnObject.freeze({...record})",
+    "returnObject.freeze({...probe})",
+  ]) {
+    assert.equal(
+      compactGateSource.includes(gateFragment),
+      true,
+      `The bounded exact-key/hash-only local-block gate is incomplete: ${gateFragment}`,
+    );
+  }
+  assert.equal(
+    (compactGateSource.match(/postDataPresent:requestPostDataPresent/gu) || [])
+      .length,
+    2,
+    "Both strict WebChannel classifiers must receive the caller's actual post-data presence.",
+  );
+  assert.match(
+    gateSource,
+    /for \(const key of \[\s*"fetchRequestIdSha256",\s*"networkRequestIdSha256",\s*"primaryFetchRequestIdSha256",\s*"requestUrlSha256",\s*\]\) \{\s*assert\.ok\(record\[key\] === null \|\| \/\^\[a-f0-9\]\{64\}\$\/u\.test\(record\[key\]\)\);/u,
+    "Every local-block record transport identity must be null or an exact SHA-256 value.",
+  );
+  assert.match(
+    gateSource,
+    /for \(const key of \["networkRequestIdSha256", "requestUrlSha256"\]\) \{\s*assert\.ok\(probe\[key\] === null \|\| \/\^\[a-f0-9\]\{64\}\$\/u\.test\(probe\[key\]\)\);/u,
+    "Every local-block probe transport identity must be null or an exact SHA-256 value.",
+  );
+
+  const resolverSourceStart = sourceText.indexOf(
+    "const resolveSafeLocalBlockIntentProbesAtSettlement = ({ intents, probes }) => {",
+  );
+  assert.ok(resolverSourceStart >= 0);
+  const resolverSource = sourceText.slice(resolverSourceStart, gateSourceEnd);
+  const compactResolverSource = resolverSource.replace(/\s+/gu, "");
+  for (const resolverFragment of [
+    "intent.exactScopeBound===true",
+    "networkCandidates.length===1?networkCandidates[0]:null",
+    "requestUrlCandidates.length===1?requestUrlCandidates[0]:null",
+    "networkBinding!==null&&requestUrlBinding!==null&&networkBinding!==requestUrlBinding",
+    "!networkIdentityResolutionComplete||!requestUrlIdentityResolutionComplete||bindingConflict?null:networkBinding||requestUrlBinding",
+    'probe.sourceClass==="network-loading-failed"?probe.blockedReasonClass==="inspector"',
+    'probe.sourceClass==="playwright-request-failed"?probe.failureClass==="other"',
+    ":false",
+    'constsourceEvidenceSupportingOnly=["console-location","network-log",].includes(probe.sourceClass)',
+    "probe.observedSequence>identityCandidate.issuedSequence",
+    'identityCandidate.commandState==="complete"&&Number.isSafeInteger(identityCandidate.completedSequence)',
+    "sourceEvidenceEligible&&eventAfterCommandIssued===true&&commandComplete===true?identityCandidate:null",
+    "eventAfterCommandCompleted:",
+  ]) {
+    assert.equal(
+      compactResolverSource.includes(resolverFragment),
+      true,
+      `The exact-one/conflict/late/failed/wrong-inspector local-block resolver is incomplete: ${resolverFragment}`,
+    );
+  }
+
+  const fixtureSourceStart = sourceText.indexOf(
+    "const verifySafeLocalBlockIntentDiagnosticFixtures = () => {",
+  );
+  const fixtureSourceEnd = sourceText.indexOf(
+    "const verifyAppCheckSecretNegativeFixtures = () => {",
+    fixtureSourceStart,
+  );
+  assert.ok(fixtureSourceStart >= 0 && fixtureSourceEnd > fixtureSourceStart);
+  const fixtureSource = sourceText.slice(fixtureSourceStart, fixtureSourceEnd);
+  const compactFixtureSource = fixtureSource.replace(/\s+/gu, "");
+  const pathFixturePairs = [
+    ...fixtureSource.matchAll(
+      /\[\s*"(\/google\.firestore\.v1\.Firestore\/(?:Listen|Write)\/channel)",\s*"((?:listen|write)-channel)"\s*,?\s*\]/gu,
+    ),
+  ].map((match) => [match[1], match[2]]);
+  assert.deepEqual(pathFixturePairs, [
+    ["/google.firestore.v1.Firestore/Listen/channel", "listen-channel"],
+    ["/google.firestore.v1.Firestore/Write/channel", "write-channel"],
+  ]);
+  for (const validPathFixture of [
+    'requestUrl:exactWebChannelUrl(pathname,initialForwardEntries),requestMethod:"POST",requestHeaders:formContentTypeHeaders,requestPostDataPresent:true,resourceType:"xhr",webChannelRequestClass:"initial-forward-post",webChannelTerminationClass:null,',
+    'requestUrl:exactWebChannelUrl(pathname,sessionForwardEntries),requestMethod:"POST",requestHeaders:formContentTypeHeaders,requestPostDataPresent:true,resourceType:"xhr",webChannelRequestClass:"session-forward-post",webChannelTerminationClass:null,',
+    'requestUrl:exactWebChannelUrl(pathname,backchannelEntries),requestMethod:"GET",requestHeaders:{},requestPostDataPresent:false,resourceType:"xhr",webChannelRequestClass:"backchannel-get",webChannelTerminationClass:null,',
+    'requestUrl:exactWebChannelUrl(pathname,terminationEntries),requestMethod:"GET",requestHeaders:{},requestPostDataPresent:false,resourceType:"image",webChannelRequestClass:null,webChannelTerminationClass:"termination-image-get",',
+  ]) {
+    assert.equal(
+      compactFixtureSource.includes(validPathFixture),
+      true,
+      `The eight-case strict WebChannel path fixture matrix is incomplete: ${validPathFixture}`,
+    );
+  }
+  assert.equal(
+    compactFixtureSource.includes(
+      "for(constinvalidPostDataPresentof[true,null]){",
+    ),
+    true,
+    "Termination path classification must reject true and null post-data presence.",
+  );
+  for (const pathFixtureExecutionFragment of [
+    "for(const[pathname,expectedPathClass]offirestoreWebChannelPathnames){",
+    "safeLocalBlockIntentWebChannelPathClass(fixture),expectedPathClass",
+    "requestPostDataPresent:invalidPostDataPresent",
+  ]) {
+    assert.equal(
+      compactFixtureSource.includes(pathFixtureExecutionFragment),
+      true,
+      `The strict WebChannel path fixture execution changed: ${pathFixtureExecutionFragment}`,
+    );
+  }
+  const fixtureIntentClasses = [
+    ...fixtureSource.matchAll(
+      /intentClass:\s*"((?:browser-wide|primary)-[a-z0-9-]+)"/gu,
+    ),
+  ].map((match) => match[1]);
+  assert.deepEqual(
+    [...fixtureIntentClasses].sort(),
+    expectedIntentClasses,
+    "The local-block self-test must exercise every fixed intent class exactly once.",
+  );
+  assert.equal(
+    (
+      fixtureSource.match(
+        /issuerClass:\s*"browser-wide-pre-transmission-boundary"/gu,
+      ) || []
+    ).length,
+    7,
+  );
+  assert.equal(
+    (
+      fixtureSource.match(/issuerClass:\s*"primary-app-check-cdp-handler"/gu) ||
+      []
+    ).length,
+    15,
+  );
+  for (const fixtureFragment of [
+    '"listen-channel"',
+    '"write-channel"',
+    "taxonomySnapshot.map(({intentClass})=>intentClass).sort()",
+    'positiveResolution.selectedBy,"network-and-request-url"',
+    "positiveResolution.eventAfterCommandCompleted,true",
+    'positiveResolution.selectedIntent.webChannelPathClass,"write-channel"',
+    'aliasResolution.selectedBy,"network-only"',
+    '"same-network-single-alias"',
+    "missingIdentityResolution.selectedIntent,null",
+    "ambiguousResolution.networkCandidateCount,2",
+    "ambiguousResolution.requestUrlCandidateCount,2",
+    "ambiguousResolution.selectedIntent,null",
+    "conflictResolution.bindingConflict,true",
+    "conflictResolution.selectedIntent,null",
+    "failedCommandResolution.networkIdentityMatchCount,1",
+    "failedCommandResolution.networkCandidateCount,0",
+    "failedCommandResolution.selectedIntent,null",
+    "wrongInspectorResolution.sourceEvidenceEligible,false",
+    "wrongInspectorResolution.selectedIntent,null",
+    "supportingSourceResolution.networkCandidateCount,1",
+    "supportingSourceResolution.requestUrlCandidateCount,1",
+    "supportingSourceResolution.sourceEvidenceEligible,false",
+    "supportingSourceResolution.sourceEvidenceSupportingOnly,true",
+    "supportingSourceResolution.selectedIntent,null",
+    "unboundScopeResolution.networkIdentityMatchCount,1",
+    "unboundScopeResolution.networkCandidateCount,0",
+    "unboundScopeResolution.selectedIntent,null",
+    "lateResolution.eventAfterCommandIssued,false",
+    "lateResolution.selectedIntent,null",
+    "recordBoundLedger.size(),SAFE_LOCAL_BLOCK_INTENT_RECORD_LIMIT",
+    "index<SAFE_LOCAL_BLOCK_INTENT_RECORD_LIMIT",
+    "SAFE_LOCAL_BLOCK_INTENT_RECORD_LIMIT+100",
+    "networkRequestId:`${privateSentinel}-probe-overflow`",
+    'Symbol("raw-private-field")',
+    "assertSafeShape(JSON.parse(serializedSafeDiagnostics))",
+    "serializedSafeDiagnostics.includes(rawValue),false",
+    "localBlockIntentDiagnosticOnlyObservedRequestFailureCount-localBlockIntentDiagnosticOnlyRecoveredRequestFailureCount",
+    "localBlockIntentDiagnosticOnlyFatalRequestFailureCount,2",
+    "safeLocalBlockIntentTaxonomyFixtureCount:intentFixtures.length",
+    "safeLocalBlockIntentSettlementAcceptedFixtureCount:2",
+    "safeLocalBlockIntentSettlementRejectedFixtureCount:8",
+    "safeLocalBlockIntentRawValueOutputCount:0",
+    "safeLocalBlockIntentNetworkAccess:0",
+  ]) {
+    assert.equal(
+      compactFixtureSource.includes(fixtureFragment),
+      true,
+      `The local-block diagnostic self-test is incomplete: ${fixtureFragment}`,
+    );
+  }
+
+  const escapeSourceRegExp = (value) =>
+    value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  const compactSourceExpression = (value) => value.replace(/\s+/gu, "");
+  const assertLocalBlockTransitionCallsites = ({
+    source,
+    issuerClass,
+    beginFunctionName,
+    completeFunctionName,
+    failFunctionName,
+    transitionArgumentPrefix,
+    literalFailRequestPattern,
+    defaultPhaseClassSource,
+    expectedContracts,
+  }) => {
+    const beginPattern = new RegExp(
+      `\\bconst\\s+([A-Za-z_$][A-Za-z0-9_$]*)\\s*=\\s*${escapeSourceRegExp(beginFunctionName)}\\(\\{`,
+      "gu",
+    );
+    const beginMatches = [...source.matchAll(beginPattern)];
+    assert.equal(
+      beginMatches.length,
+      expectedContracts.length,
+      `Unexpected ${issuerClass} begin callsite count.`,
+    );
+    const actualContracts = beginMatches.map((beginMatch, index) => {
+      const handleName = beginMatch[1];
+      const blockEnd =
+        index + 1 < beginMatches.length
+          ? beginMatches[index + 1].index
+          : source.length;
+      const blockSource = source.slice(beginMatch.index, blockEnd);
+      const beginInvocationEnd = blockSource.indexOf("});");
+      assert.ok(
+        beginInvocationEnd > beginMatch[0].length,
+        `The ${issuerClass} begin call is not closed for ${handleName}.`,
+      );
+      const beginSource = blockSource.slice(0, beginInvocationEnd + 3);
+      const intentClassMatch = beginSource.match(
+        /\bintentClass:\s*"((?:browser-wide|primary)-[a-z0-9-]+)"\s*,/u,
+      );
+      assert.ok(
+        intentClassMatch,
+        `The ${issuerClass} callsite lost its fixed intent class.`,
+      );
+      const fieldSource = (fieldName, fallback = null) => {
+        const fieldMatch = beginSource.match(
+          new RegExp(`\\b${fieldName}:\\s*([^,]+),`, "u"),
+        );
+        if (fieldMatch === null) {
+          assert.notEqual(
+            fallback,
+            null,
+            `The ${intentClassMatch[1]} callsite lost ${fieldName}.`,
+          );
+          return fallback;
+        }
+        return compactSourceExpression(fieldMatch[1]);
+      };
+      const escapedHandleName = escapeSourceRegExp(handleName);
+      const completePattern = new RegExp(
+        `\\b${escapeSourceRegExp(completeFunctionName)}\\(\\s*${transitionArgumentPrefix}${escapedHandleName}\\s*\\);`,
+        "u",
+      );
+      const failPattern = new RegExp(
+        `\\b${escapeSourceRegExp(failFunctionName)}\\(\\s*${transitionArgumentPrefix}${escapedHandleName}\\s*\\);`,
+        "u",
+      );
+      const catchFailPattern = new RegExp(
+        `\\bcatch\\s*\\([^)]*\\)\\s*\\{\\s*${failPattern.source}`,
+        "u",
+      );
+      const countMatches = (pattern) =>
+        (
+          blockSource.match(new RegExp(pattern.source, `${pattern.flags}g`)) ||
+          []
+        ).length;
+      assert.equal(
+        countMatches(literalFailRequestPattern),
+        1,
+        `The ${intentClassMatch[1]} callsite must own exactly one literal failRequest.`,
+      );
+      assert.equal(
+        countMatches(completePattern),
+        1,
+        `The ${intentClassMatch[1]} callsite must complete the same handle exactly once.`,
+      );
+      assert.equal(
+        countMatches(failPattern),
+        1,
+        `The ${intentClassMatch[1]} callsite must fail the same handle exactly once.`,
+      );
+      const sendOffset = blockSource.search(literalFailRequestPattern);
+      const completeOffset = blockSource.search(completePattern);
+      const catchFailOffset = blockSource.search(catchFailPattern);
+      assert.ok(
+        sendOffset > beginInvocationEnd,
+        `The ${intentClassMatch[1]} intent must be issued before failRequest.`,
+      );
+      assert.match(
+        blockSource.slice(beginInvocationEnd + 3, sendOffset),
+        /\btry\s*\{/u,
+        `The ${intentClassMatch[1]} failRequest must remain in a guarded command path.`,
+      );
+      assert.ok(
+        completeOffset > sendOffset,
+        `The ${intentClassMatch[1]} command must complete after failRequest.`,
+      );
+      assert.ok(
+        catchFailOffset > completeOffset,
+        `The ${intentClassMatch[1]} catch path must fail the same handle after the command path.`,
+      );
+      return {
+        intentClass: intentClassMatch[1],
+        issuerClass,
+        phaseClassSource: fieldSource("phaseClass", defaultPhaseClassSource),
+        policyReasonClassSource: fieldSource("policyReasonClass"),
+        requestScopeClassSource: fieldSource("requestScopeClass"),
+      };
+    });
+    actualContracts.sort((left, right) =>
+      left.intentClass < right.intentClass
+        ? -1
+        : left.intentClass > right.intentClass
+          ? 1
+          : 0,
+    );
+    assert.deepEqual(
+      actualContracts,
+      expectedContracts,
+      `The ${issuerClass} intent/reason/scope callsite mapping changed.`,
+    );
+    return true;
+  };
+
+  const browserWideSourceStart = sourceText.indexOf(
+    "const installBrowserWidePreTransmissionBoundary = async ({",
+  );
+  const browserWideSourceEnd = sourceText.indexOf(
+    "const stableOriginRewriteDecision = ({",
+    browserWideSourceStart,
+  );
+  assert.ok(
+    browserWideSourceStart >= 0 &&
+      browserWideSourceEnd > browserWideSourceStart,
+  );
+  const browserWideSource = sourceText.slice(
+    browserWideSourceStart,
+    browserWideSourceEnd,
+  );
+  const browserWideBeginHelperStart = browserWideSource.indexOf(
+    "const beginBrowserWideLocalBlockIntent = ({",
+  );
+  const browserWideBeginHelperEnd = browserWideSource.indexOf(
+    "const completeBrowserWideLocalBlockIntent =",
+    browserWideBeginHelperStart,
+  );
+  assert.ok(
+    browserWideBeginHelperStart >= 0 &&
+      browserWideBeginHelperEnd > browserWideBeginHelperStart,
+  );
+  assert.match(
+    browserWideSource.slice(
+      browserWideBeginHelperStart,
+      browserWideBeginHelperEnd,
+    ),
+    /issuerClass:\s*"browser-wide-pre-transmission-boundary"/u,
+    "The browser-wide begin helper issuer changed.",
+  );
+  assert.match(
+    browserWideSource.slice(
+      browserWideBeginHelperStart,
+      browserWideBeginHelperEnd,
+    ),
+    /phaseClass\s*=\s*"request"/u,
+    "The browser-wide begin helper request-phase default changed.",
+  );
+  assert.match(
+    browserWideSource.slice(
+      browserWideBeginHelperStart,
+      browserWideBeginHelperEnd,
+    ),
+    /operationClass:\s*"request-fail"/u,
+    "The browser-wide begin helper operation mapping changed.",
+  );
+  assert.equal(
+    (
+      browserWideSource.match(
+        /await originalSend\.call\(\s*session,\s*"Fetch\.failRequest"/gu,
+      ) || []
+    ).length,
+    7,
+    "Every browser-wide fail-closed callsite must remain a literal Fetch.failRequest.",
+  );
+  assert.equal(
+    (browserWideSource.match(/\bbeginBrowserWideLocalBlockIntent\(\{/gu) || [])
+      .length,
+    7,
+    "All seven browser-wide literal failRequest callsites must issue local-block intent first.",
+  );
+  assert.equal(
+    (
+      browserWideSource.match(
+        /\bcompleteBrowserWideLocalBlockIntent\(\s*scope,/gu,
+      ) || []
+    ).length,
+    7,
+    "All seven browser-wide literal failRequest callsites must complete their issued intent.",
+  );
+  assert.equal(
+    (
+      browserWideSource.match(
+        /\bfailBrowserWideLocalBlockIntent\(\s*scope,/gu,
+      ) || []
+    ).length,
+    7,
+    "All seven browser-wide literal failRequest catch paths must fail their issued intent.",
+  );
+  const browserWideRuntimeIntentClasses = [
+    ...browserWideSource.matchAll(
+      /intentClass:\s*"(browser-wide-[a-z0-9-]+)"/gu,
+    ),
+  ].map((match) => match[1]);
+  assert.deepEqual(
+    [...browserWideRuntimeIntentClasses].sort(),
+    expectedIntentClasses.filter((value) => value.startsWith("browser-wide-")),
+    "Every browser-wide intent class must be issued exactly once at runtime.",
+  );
+  const browserWideTransitionContract = Object.freeze({
+    source: browserWideSource,
+    issuerClass: "browser-wide-pre-transmission-boundary",
+    beginFunctionName: "beginBrowserWideLocalBlockIntent",
+    completeFunctionName: "completeBrowserWideLocalBlockIntent",
+    failFunctionName: "failBrowserWideLocalBlockIntent",
+    transitionArgumentPrefix: "scope\\s*,\\s*",
+    literalFailRequestPattern:
+      /await originalSend\.call\(\s*session,\s*"Fetch\.failRequest",\s*\{\s*requestId:\s*event\.requestId,\s*errorReason:\s*"BlockedByClient",?\s*\},?\s*\)/u,
+    defaultPhaseClassSource: `"request"`,
+    expectedContracts: expectedRuntimeCallsiteContracts.filter((contract) =>
+      contract.intentClass.startsWith("browser-wide-"),
+    ),
+  });
+  assert.equal(
+    assertLocalBlockTransitionCallsites(browserWideTransitionContract),
+    true,
+  );
+  const browserWideCompletionDeletionMutation = browserWideSource.replace(
+    "completeBrowserWideLocalBlockIntent(scope, localBlockIntentHandle);",
+    "",
+  );
+  assert.notEqual(browserWideCompletionDeletionMutation, browserWideSource);
+  assert.throws(
+    () =>
+      assertLocalBlockTransitionCallsites({
+        ...browserWideTransitionContract,
+        source: browserWideCompletionDeletionMutation,
+      }),
+    "Deleting a browser-wide complete transition must fail the source contract.",
+  );
+
+  const primarySourceStart = sourceText.lastIndexOf(
+    "const beginPrimaryLocalBlockIntent = ({",
+  );
+  const primarySourceEnd = sourceText.indexOf(
+    'await appCheckCdpSession.send("Log.enable")',
+    primarySourceStart,
+  );
+  assert.ok(primarySourceStart >= 0 && primarySourceEnd > primarySourceStart);
+  const primarySource = sourceText.slice(primarySourceStart, primarySourceEnd);
+  const primaryBeginHelperStart = primarySource.indexOf(
+    "const beginPrimaryLocalBlockIntent = ({",
+  );
+  const primaryBeginHelperEnd = primarySource.indexOf(
+    "const completePrimaryLocalBlockIntent =",
+    primaryBeginHelperStart,
+  );
+  assert.ok(
+    primaryBeginHelperStart >= 0 &&
+      primaryBeginHelperEnd > primaryBeginHelperStart,
+  );
+  assert.match(
+    primarySource.slice(primaryBeginHelperStart, primaryBeginHelperEnd),
+    /issuerClass:\s*"primary-app-check-cdp-handler"/u,
+    "The primary App Check begin helper issuer changed.",
+  );
+  assert.equal(
+    primarySource
+      .slice(primaryBeginHelperStart, primaryBeginHelperEnd)
+      .replace(/\s+/gu, "")
+      .includes(
+        'operationClass:phaseClass==="response"?"response-fail":"request-fail"',
+      ),
+    true,
+    "The primary App Check begin helper operation mapping changed.",
+  );
+  assert.equal(
+    (
+      primarySource.match(
+        /await appCheckCdpSession\.send\(\s*"Fetch\.failRequest"/gu,
+      ) || []
+    ).length,
+    15,
+    "Every primary App Check fail-closed callsite must remain a literal Fetch.failRequest.",
+  );
+  assert.equal(
+    (primarySource.match(/\bbeginPrimaryLocalBlockIntent\(\{/gu) || []).length,
+    15,
+    "All fifteen primary literal failRequest callsites must issue local-block intent first.",
+  );
+  assert.equal(
+    (primarySource.match(/\bcompletePrimaryLocalBlockIntent\(/gu) || []).length,
+    15,
+    "All fifteen primary literal failRequest callsites must complete their issued intent.",
+  );
+  assert.equal(
+    (primarySource.match(/\bfailPrimaryLocalBlockIntent\(/gu) || []).length,
+    15,
+    "All fifteen primary literal failRequest catch paths must fail their issued intent.",
+  );
+  const primaryRuntimeIntentClasses = [
+    ...primarySource.matchAll(/intentClass:\s*"(primary-[a-z0-9-]+)"/gu),
+  ].map((match) => match[1]);
+  assert.deepEqual(
+    [...primaryRuntimeIntentClasses].sort(),
+    expectedIntentClasses.filter((value) => value.startsWith("primary-")),
+    "Every primary intent class must be issued exactly once at runtime.",
+  );
+  const primaryTransitionContract = Object.freeze({
+    source: primarySource,
+    issuerClass: "primary-app-check-cdp-handler",
+    beginFunctionName: "beginPrimaryLocalBlockIntent",
+    completeFunctionName: "completePrimaryLocalBlockIntent",
+    failFunctionName: "failPrimaryLocalBlockIntent",
+    transitionArgumentPrefix: "",
+    literalFailRequestPattern:
+      /await appCheckCdpSession\.send\(\s*"Fetch\.failRequest",\s*\{\s*requestId:\s*event\.requestId,\s*errorReason:\s*"BlockedByClient",?\s*\},?\s*\)/u,
+    defaultPhaseClassSource: null,
+    expectedContracts: expectedRuntimeCallsiteContracts.filter((contract) =>
+      contract.intentClass.startsWith("primary-"),
+    ),
+  });
+  assert.equal(
+    assertLocalBlockTransitionCallsites(primaryTransitionContract),
+    true,
+  );
+
+  const authenticationDiagnosticSourceStart = sourceText.indexOf(
+    "const authenticationLocalBlockIntentDiagnostics =",
+  );
+  const authenticationDiagnosticSourceEnd = sourceText.indexOf(
+    "authenticationExactWebChannelDiagnosticTombstones.clear();",
+    authenticationDiagnosticSourceStart,
+  );
+  assert.ok(
+    authenticationDiagnosticSourceStart >= 0 &&
+      authenticationDiagnosticSourceEnd > authenticationDiagnosticSourceStart,
+  );
+  const authenticationDiagnosticSource = sourceText.slice(
+    authenticationDiagnosticSourceStart,
+    authenticationDiagnosticSourceEnd,
+  );
+  for (const outputField of [
+    "authenticationLocalBlockIntentDiagnostics",
+    "authenticationLocalBlockIntentProbeDiagnostics",
+    "authenticationLocalBlockIntentResolutionDiagnostics",
+    "authenticationLocalBlockIntentDiagnosticErrorCount",
+    "authenticationAllowedEgressResponseErrorAbortCount",
+  ]) {
+    assert.equal(
+      authenticationDiagnosticSource.includes(outputField),
+      true,
+      `The authentication diagnostic lost local-block evidence: ${outputField}`,
+    );
+  }
+  assert.match(
+    authenticationDiagnosticSource,
+    /assert\.equal\(\s*groupLocalBlockIntentState\.diagnosticErrorCount,\s*0,/u,
+    "Any local-block diagnostic recording error must invalidate authentication capture.",
+  );
+
+  const authenticationFatalAccountingStart = sourceText.indexOf(
+    "const authenticationBrowserErrorCountDelta =",
+  );
+  const authenticationFatalAccountingEnd = sourceText.indexOf(
+    "const authenticationLocalBlockIntentDiagnostics =",
+    authenticationFatalAccountingStart,
+  );
+  assert.ok(
+    authenticationFatalAccountingStart >= 0 &&
+      authenticationFatalAccountingEnd > authenticationFatalAccountingStart,
+  );
+  assert.doesNotMatch(
+    sourceText.slice(
+      authenticationFatalAccountingStart,
+      authenticationFatalAccountingEnd,
+    ),
+    /localBlockIntent/iu,
+    "Local-block diagnostics must not subtract authentication failures from fatal accounting.",
+  );
+  const globalFatalAccountingStart = sourceText.lastIndexOf(
+    "const fatalProtectedReadTransportFailureCount =",
+  );
+  const globalFatalAccountingEnd = sourceText.indexOf(
+    "const authenticationProtectedReadRetry = Object.freeze({",
+    globalFatalAccountingStart,
+  );
+  assert.ok(
+    globalFatalAccountingStart >= 0 &&
+      globalFatalAccountingEnd > globalFatalAccountingStart,
+  );
+  assert.doesNotMatch(
+    sourceText.slice(globalFatalAccountingStart, globalFatalAccountingEnd),
+    /localBlockIntent/iu,
+    "Local-block diagnostics must not subtract any global request or console failure from fatal accounting.",
+  );
+  return true;
+};
 const assertCaptureSafeAuthenticationSignInSourceContract = (sourceText) => {
   assert.match(
     sourceText,
@@ -7454,6 +8531,10 @@ const verifyPreTransmissionBoundaryNegativeFixtures = () => {
     true,
   );
   assert.equal(
+    assertCaptureSafeLocalBlockIntentSourceContract(captureRunnerSourceText),
+    true,
+  );
+  assert.equal(
     assertCaptureSafeAuthenticationSignInSourceContract(
       captureRunnerSourceText,
     ),
@@ -7511,6 +8592,27 @@ const verifyPreTransmissionBoundaryNegativeFixtures = () => {
     safeExactWebChannelDiagnosticSettlementResolutionSourceCount: 3,
     safeExactWebChannelDiagnosticRawValueOutputCount: 0,
     safeExactWebChannelDiagnosticFatalRecoverySubtractionCount: 0,
+    safeLocalBlockIntentSourceContractVerified: true,
+    safeLocalBlockIntentFixedTaxonomySourceCount: 15,
+    safeLocalBlockIntentIssuerClassSourceCount: 2,
+    safeLocalBlockIntentClassSourceCount: 22,
+    safeLocalBlockIntentRecordLimit: 128,
+    safeLocalBlockIntentTaxonomyFixtureSourceCount: 22,
+    safeLocalBlockIntentSettlementAcceptedFixtureSourceCount: 2,
+    safeLocalBlockIntentSettlementRejectedFixtureSourceCount: 8,
+    safeLocalBlockIntentRecordBoundFixtureSourceCount: 128,
+    safeLocalBlockIntentProbeBoundFixtureSourceCount: 128,
+    safeLocalBlockIntentRawValueOutputCount: 0,
+    safeLocalBlockIntentBrowserWideCallsiteSourceCount: 7,
+    safeLocalBlockIntentBrowserWideCompleteTransitionSourceCount: 7,
+    safeLocalBlockIntentBrowserWideFailTransitionSourceCount: 7,
+    safeLocalBlockIntentPrimaryCallsiteSourceCount: 15,
+    safeLocalBlockIntentPrimaryCompleteTransitionSourceCount: 15,
+    safeLocalBlockIntentPrimaryFailTransitionSourceCount: 15,
+    safeLocalBlockIntentTransitionMutationRejectedCaseCount: 1,
+    safeLocalBlockIntentWebChannelPathAcceptedFixtureSourceCount: 8,
+    safeLocalBlockIntentWebChannelTerminationRejectedFixtureSourceCount: 2,
+    safeLocalBlockIntentFatalRecoverySubtractionCount: 0,
     safeAuthenticationSignInSourceContractVerified: true,
     safeAuthenticationSignInSourceMutationRejectedCaseCount,
     authenticationCollectionListPreflightSourceMutationRejectedCaseCount,
@@ -10155,6 +11257,10 @@ const captureRunnerSourceText = readFileSync(
 );
 assert.equal(
   assertCapturePreTransmissionBoundarySourceOrdering(captureRunnerSourceText),
+  true,
+);
+assert.equal(
+  assertCaptureSafeLocalBlockIntentSourceContract(captureRunnerSourceText),
   true,
 );
 assert.equal(

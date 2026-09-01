@@ -13530,6 +13530,674 @@ const resolveSafeExactAuthenticationWebChannelDiagnosticProbesAtSettlement = ({
     }),
   );
 };
+const SAFE_LOCAL_BLOCK_INTENT_RECORD_LIMIT = 128;
+const SAFE_LOCAL_BLOCK_INTENT_ISSUER_CLASSES = Object.freeze([
+  "browser-wide-pre-transmission-boundary",
+  "primary-app-check-cdp-handler",
+]);
+const SAFE_LOCAL_BLOCK_INTENT_PHASE_CLASSES = Object.freeze([
+  "handler",
+  "request",
+  "response",
+]);
+const SAFE_LOCAL_BLOCK_INTENT_DIAGNOSTIC_PHASES = Object.freeze([
+  "authentication",
+  "browser-audit-finalization",
+  "context-bootstrap",
+  "screen-capture",
+  "session-keepalive",
+]);
+const SAFE_LOCAL_BLOCK_INTENT_FIREBASE_SERVICE_CLASSES = Object.freeze([
+  "app-check",
+  "auth",
+  "firestore",
+  "functions",
+  "hosting",
+  "non-firebase",
+  "realtime-database",
+  "storage",
+  "unknown",
+]);
+const SAFE_LOCAL_BLOCK_INTENT_REQUEST_METHOD_CLASSES = Object.freeze([
+  "delete",
+  "get",
+  "head",
+  "options",
+  "other",
+  "patch",
+  "post",
+  "put",
+]);
+const SAFE_LOCAL_BLOCK_INTENT_RESOURCE_TYPE_CLASSES = Object.freeze([
+  "document",
+  "eventsource",
+  "fetch",
+  "font",
+  "image",
+  "manifest",
+  "media",
+  "other",
+  "script",
+  "stylesheet",
+  "texttrack",
+  "websocket",
+  "xhr",
+]);
+const SAFE_LOCAL_BLOCK_INTENT_WEBCHANNEL_REQUEST_CLASSES = Object.freeze([
+  "backchannel-get",
+  "initial-forward-post",
+  "session-forward-post",
+]);
+const SAFE_LOCAL_BLOCK_INTENT_WEBCHANNEL_TERMINATION_CLASSES = Object.freeze([
+  "termination-image-get",
+]);
+const SAFE_LOCAL_BLOCK_INTENT_COMMAND_STATES = Object.freeze([
+  "complete",
+  "failed",
+  "in-flight",
+]);
+const SAFE_LOCAL_BLOCK_INTENT_CLASSES = Object.freeze([
+  "browser-wide-deterministic-response-contract-block",
+  "browser-wide-external-static-private-owner-block",
+  "browser-wide-handler-exception-block",
+  "browser-wide-optional-telemetry-suppression",
+  "browser-wide-pre-transmission-boundary-block",
+  "browser-wide-raw-sensitive-block",
+  "browser-wide-staging-api-key-scope-block",
+  "primary-allowed-egress-response-error-terminalization",
+  "primary-collection-preflight-contract-block",
+  "primary-deterministic-response-contract-block",
+  "primary-direct-immutable-origin-block",
+  "primary-external-static-contract-block",
+  "primary-final-http-or-redirect-terminalization",
+  "primary-handler-exception-block",
+  "primary-invalid-pre-final-response-terminalization",
+  "primary-optional-telemetry-suppression",
+  "primary-pre-transmission-boundary-block",
+  "primary-raw-sensitive-block",
+  "primary-redirected-allowed-egress-block",
+  "primary-skip-toolbar-header-block",
+  "primary-stable-origin-rewrite-contract-block",
+  "primary-unauthorized-app-check-header-block",
+]);
+const SAFE_LOCAL_BLOCK_INTENT_POLICY_REASON_CLASSES = Object.freeze([
+  "creator-side-secondary-bootstrap",
+  "cross-origin-document",
+  "debug-sentinel-scope",
+  "debug-token-scope",
+  "deterministic-scope-mismatch",
+  "direct-immutable-origin-scope-mismatch",
+  "external-static-private-owner",
+  "external-static-scope-mismatch",
+  "forbidden-header",
+  "http-error-response",
+  "invalid-api-key-scope",
+  "invalid-request-shape",
+  "invalid-response-status",
+  "malformed-url-encoding",
+  "non-firebase-hostname-not-allowlisted",
+  "production",
+  "redirect-response",
+  "redirected-request",
+  "refresh-token-scope",
+  "response-error",
+  "stable-origin-rewrite-scope-mismatch",
+  "staging-api-key-scope",
+  "telemetry-suppression",
+  "test-credential-scope",
+  "unauthorized-header",
+  "unbound-firebase",
+  "unexpected-handler-error",
+  "vercel-bypass-scope",
+]);
+const SAFE_LOCAL_BLOCK_INTENT_REQUEST_SCOPE_CLASSES = Object.freeze([
+  "allowed-egress",
+  "authentication-collection-preflight",
+  "authentication-protected-read",
+  "cdp-handler-fallback",
+  "deterministic-response",
+  "direct-immutable-origin",
+  "external-static",
+  "native-app-check-header",
+  "optional-telemetry",
+  "pre-transmission-boundary",
+  "redirected-allowed-egress",
+  "response-lifecycle",
+  "sensitive-pre-transmission",
+  "stable-origin-rewrite",
+  "staging-api-key",
+  "vercel-skip-toolbar",
+]);
+const SAFE_LOCAL_BLOCK_INTENT_RESPONSE_CORRELATION_CLASSES = Object.freeze([
+  "same-fetch",
+  "same-network-single-alias",
+]);
+const SAFE_LOCAL_BLOCK_INTENT_WEBCHANNEL_PATH_CLASSES = Object.freeze([
+  "listen-channel",
+  "write-channel",
+]);
+const SAFE_LOCAL_BLOCK_INTENT_PROBE_SOURCE_CLASSES = Object.freeze([
+  "console-location",
+  "network-loading-failed",
+  "network-log",
+  "playwright-request-failed",
+]);
+const SAFE_LOCAL_BLOCK_INTENT_RECORD_KEYS = Object.freeze(
+  [
+    "captureStage",
+    "commandState",
+    "completedSequence",
+    "diagnosticPhase",
+    "errorReasonClass",
+    "exactScopeBound",
+    "failedSequence",
+    "fetchRequestIdSha256",
+    "firebaseService",
+    "intentClass",
+    "issuedSequence",
+    "issuerClass",
+    "networkRequestIdSha256",
+    "operationClass",
+    "phaseClass",
+    "policyReasonClass",
+    "primaryFetchRequestIdSha256",
+    "requestMethod",
+    "requestScopeClass",
+    "requestUrlSha256",
+    "resourceType",
+    "responseFetchCorrelationClass",
+    "webChannelPathClass",
+    "webChannelRequestClass",
+    "webChannelTerminationClass",
+  ].sort(),
+);
+const SAFE_LOCAL_BLOCK_INTENT_PROBE_KEYS = Object.freeze(
+  [
+    "blockedReasonClass",
+    "diagnosticPhase",
+    "failureClass",
+    "networkRequestIdSha256",
+    "observedSequence",
+    "requestUrlSha256",
+    "sourceClass",
+  ].sort(),
+);
+const safeLocalBlockIntentHash = (rawValue, existingHash = null) => {
+  if (existingHash !== null) {
+    assert.match(existingHash, /^[a-f0-9]{64}$/u);
+    if (typeof rawValue === "string" && rawValue.length > 0) {
+      assert.equal(existingHash, secretSha256(rawValue));
+    }
+    return existingHash;
+  }
+  return typeof rawValue === "string" && rawValue.length > 0
+    ? secretSha256(rawValue)
+    : null;
+};
+const safeLocalBlockIntentWebChannelPathClass = ({
+  requestUrl,
+  requestMethod,
+  requestHeaders,
+  requestPostDataPresent,
+  resourceType,
+  webChannelRequestClass,
+  webChannelTerminationClass,
+}) => {
+  const exactClassCount =
+    Number(webChannelRequestClass !== null) +
+    Number(webChannelTerminationClass !== null);
+  if (exactClassCount !== 1 || typeof requestUrl !== "string") return null;
+  const normalizedMethod = String(requestMethod).toUpperCase();
+  const normalizedResourceType = String(resourceType).toLowerCase();
+  if (webChannelRequestClass !== null) {
+    const strictHeaderClass =
+      classifyExactStagingFirestoreWebChannelHeaderCorrelationScope({
+        requestUrl,
+        method: normalizedMethod,
+        observerSurface: "cdp-request-paused",
+        resourceType: normalizedResourceType,
+        headers: requestHeaders,
+        postDataPresent: requestPostDataPresent,
+        redirected: false,
+        inspection: SAFE_EXACT_AUTHENTICATION_WEBCHANNEL_DIAGNOSTIC_INSPECTION,
+      });
+    const expectedMethod = [
+      "initial-forward-post",
+      "session-forward-post",
+    ].includes(webChannelRequestClass)
+      ? "POST"
+      : "GET";
+    if (
+      strictHeaderClass !== webChannelRequestClass ||
+      normalizedMethod !== expectedMethod ||
+      normalizedResourceType !== "xhr"
+    ) {
+      return null;
+    }
+  } else {
+    const strictTerminationClass =
+      classifyExactStagingFirestoreWebChannelTerminationLifecycleScope({
+        requestUrl,
+        method: normalizedMethod,
+        observerSurface: "cdp-request-paused",
+        resourceType: normalizedResourceType,
+        postDataPresent: requestPostDataPresent,
+        redirected: false,
+        inspection: SAFE_EXACT_AUTHENTICATION_WEBCHANNEL_DIAGNOSTIC_INSPECTION,
+      });
+    if (strictTerminationClass !== webChannelTerminationClass) return null;
+  }
+  try {
+    const pathname = new URL(requestUrl).pathname;
+    if (pathname === "/google.firestore.v1.Firestore/Listen/channel") {
+      return "listen-channel";
+    }
+    if (pathname === "/google.firestore.v1.Firestore/Write/channel") {
+      return "write-channel";
+    }
+  } catch {
+    return null;
+  }
+  return null;
+};
+const assertSafeLocalBlockIntentExactStringKeys = (value, expectedKeys) => {
+  assert.ok(value && typeof value === "object" && !Array.isArray(value));
+  const ownKeys = Reflect.ownKeys(value);
+  assert.equal(
+    ownKeys.every((key) => typeof key === "string"),
+    true,
+  );
+  assert.deepEqual(ownKeys.slice().sort(), expectedKeys);
+};
+const safeLocalBlockIntentFixedClass = (value, allowedValues, fallback) => {
+  const normalizedValue = String(value || "")
+    .trim()
+    .toLowerCase();
+  return allowedValues.includes(normalizedValue) ? normalizedValue : fallback;
+};
+const freezeSafeLocalBlockIntentRecord = (record) => {
+  assertSafeLocalBlockIntentExactStringKeys(
+    record,
+    SAFE_LOCAL_BLOCK_INTENT_RECORD_KEYS,
+  );
+  for (const key of [
+    "fetchRequestIdSha256",
+    "networkRequestIdSha256",
+    "primaryFetchRequestIdSha256",
+    "requestUrlSha256",
+  ]) {
+    assert.ok(record[key] === null || /^[a-f0-9]{64}$/u.test(record[key]));
+  }
+  assert.ok(
+    SAFE_LOCAL_BLOCK_INTENT_ISSUER_CLASSES.includes(record.issuerClass),
+  );
+  assert.ok(SAFE_LOCAL_BLOCK_INTENT_CLASSES.includes(record.intentClass));
+  assert.ok(SAFE_LOCAL_BLOCK_INTENT_PHASE_CLASSES.includes(record.phaseClass));
+  assert.ok(
+    SAFE_LOCAL_BLOCK_INTENT_POLICY_REASON_CLASSES.includes(
+      record.policyReasonClass,
+    ),
+  );
+  assert.ok(
+    SAFE_LOCAL_BLOCK_INTENT_REQUEST_SCOPE_CLASSES.includes(
+      record.requestScopeClass,
+    ),
+  );
+  assert.ok(
+    SAFE_LOCAL_BLOCK_INTENT_COMMAND_STATES.includes(record.commandState),
+  );
+  assert.equal(record.errorReasonClass, "blocked-by-client");
+  assert.ok(["request-fail", "response-fail"].includes(record.operationClass));
+  assert.ok(["baseline", "candidate"].includes(record.captureStage));
+  assert.ok(
+    record.responseFetchCorrelationClass === null ||
+      SAFE_LOCAL_BLOCK_INTENT_RESPONSE_CORRELATION_CLASSES.includes(
+        record.responseFetchCorrelationClass,
+      ),
+  );
+  assert.ok(
+    record.webChannelPathClass === null ||
+      SAFE_LOCAL_BLOCK_INTENT_WEBCHANNEL_PATH_CLASSES.includes(
+        record.webChannelPathClass,
+      ),
+  );
+  assert.ok(
+    Number.isSafeInteger(record.issuedSequence) && record.issuedSequence > 0,
+  );
+  for (const key of ["completedSequence", "failedSequence"]) {
+    assert.ok(record[key] === null || Number.isSafeInteger(record[key]));
+  }
+  assert.equal(typeof record.exactScopeBound, "boolean");
+  assert.ok(
+    SAFE_LOCAL_BLOCK_INTENT_DIAGNOSTIC_PHASES.includes(record.diagnosticPhase),
+  );
+  assert.ok(
+    SAFE_LOCAL_BLOCK_INTENT_FIREBASE_SERVICE_CLASSES.includes(
+      record.firebaseService,
+    ),
+  );
+  assert.ok(
+    SAFE_LOCAL_BLOCK_INTENT_REQUEST_METHOD_CLASSES.includes(
+      record.requestMethod,
+    ),
+  );
+  assert.ok(
+    SAFE_LOCAL_BLOCK_INTENT_RESOURCE_TYPE_CLASSES.includes(record.resourceType),
+  );
+  assert.ok(
+    record.webChannelRequestClass === null ||
+      SAFE_LOCAL_BLOCK_INTENT_WEBCHANNEL_REQUEST_CLASSES.includes(
+        record.webChannelRequestClass,
+      ),
+  );
+  assert.ok(
+    record.webChannelTerminationClass === null ||
+      SAFE_LOCAL_BLOCK_INTENT_WEBCHANNEL_TERMINATION_CLASSES.includes(
+        record.webChannelTerminationClass,
+      ),
+  );
+  return Object.freeze({ ...record });
+};
+const freezeSafeLocalBlockIntentProbe = (probe) => {
+  assertSafeLocalBlockIntentExactStringKeys(
+    probe,
+    SAFE_LOCAL_BLOCK_INTENT_PROBE_KEYS,
+  );
+  for (const key of ["networkRequestIdSha256", "requestUrlSha256"]) {
+    assert.ok(probe[key] === null || /^[a-f0-9]{64}$/u.test(probe[key]));
+  }
+  assert.ok(
+    SAFE_LOCAL_BLOCK_INTENT_PROBE_SOURCE_CLASSES.includes(probe.sourceClass),
+  );
+  assert.ok(
+    [null, "inspector", "unsupported"].includes(probe.blockedReasonClass),
+  );
+  assert.ok(
+    probe.failureClass === null ||
+      SAFE_AUTHENTICATION_PROFILE_LOADING_FAILED_CLASSES.includes(
+        probe.failureClass,
+      ) ||
+      SAFE_BROWSER_ERROR_MESSAGE_CLASSES.includes(probe.failureClass),
+  );
+  assert.ok(
+    SAFE_LOCAL_BLOCK_INTENT_DIAGNOSTIC_PHASES.includes(probe.diagnosticPhase),
+  );
+  assert.ok(
+    Number.isSafeInteger(probe.observedSequence) && probe.observedSequence > 0,
+  );
+  return Object.freeze({ ...probe });
+};
+const createSafeLocalBlockIntentLedger = () => {
+  let sequence = 0;
+  let handleSequence = 0;
+  const entries = new Map();
+  const probes = [];
+  const nextSequence = () => {
+    sequence += 1;
+    assert.ok(Number.isSafeInteger(sequence) && sequence > 0);
+    return sequence;
+  };
+  const begin = ({
+    scopeId,
+    captureStage,
+    diagnosticPhase,
+    issuerClass,
+    intentClass,
+    phaseClass,
+    operationClass,
+    policyReasonClass,
+    requestScopeClass,
+    fetchRequestId = null,
+    primaryFetchRequestId = null,
+    networkRequestId = null,
+    requestUrl = null,
+    requestUrlSha256 = null,
+    firebaseService = "unknown",
+    requestMethod = "other",
+    requestHeaders = {},
+    requestPostDataPresent = null,
+    resourceType = "other",
+    responseFetchCorrelationClass = null,
+    webChannelRequestClass = null,
+    webChannelTerminationClass = null,
+    exactScopeBound = false,
+  }) => {
+    assert.equal(typeof scopeId, "string");
+    assert.ok(scopeId.length > 0);
+    assert.ok(entries.size < SAFE_LOCAL_BLOCK_INTENT_RECORD_LIMIT);
+    handleSequence += 1;
+    const handle = handleSequence;
+    const record = freezeSafeLocalBlockIntentRecord({
+      captureStage,
+      commandState: "in-flight",
+      completedSequence: null,
+      diagnosticPhase,
+      errorReasonClass: "blocked-by-client",
+      exactScopeBound,
+      failedSequence: null,
+      fetchRequestIdSha256: safeLocalBlockIntentHash(fetchRequestId),
+      firebaseService: safeLocalBlockIntentFixedClass(
+        firebaseService,
+        SAFE_LOCAL_BLOCK_INTENT_FIREBASE_SERVICE_CLASSES,
+        "unknown",
+      ),
+      intentClass,
+      issuedSequence: nextSequence(),
+      issuerClass,
+      networkRequestIdSha256: safeLocalBlockIntentHash(networkRequestId),
+      operationClass,
+      phaseClass,
+      policyReasonClass,
+      primaryFetchRequestIdSha256: safeLocalBlockIntentHash(
+        primaryFetchRequestId,
+      ),
+      requestMethod: safeLocalBlockIntentFixedClass(
+        requestMethod,
+        SAFE_LOCAL_BLOCK_INTENT_REQUEST_METHOD_CLASSES,
+        "other",
+      ),
+      requestScopeClass,
+      requestUrlSha256: safeLocalBlockIntentHash(requestUrl, requestUrlSha256),
+      resourceType: safeLocalBlockIntentFixedClass(
+        resourceType,
+        SAFE_LOCAL_BLOCK_INTENT_RESOURCE_TYPE_CLASSES,
+        "other",
+      ),
+      responseFetchCorrelationClass,
+      webChannelPathClass: safeLocalBlockIntentWebChannelPathClass({
+        requestUrl,
+        requestMethod,
+        requestHeaders,
+        requestPostDataPresent,
+        resourceType,
+        webChannelRequestClass,
+        webChannelTerminationClass,
+      }),
+      webChannelRequestClass,
+      webChannelTerminationClass,
+    });
+    entries.set(handle, { scopeId, record });
+    return handle;
+  };
+  const transition = (handle, commandState) => {
+    const entry = entries.get(handle) || null;
+    assert.ok(entry);
+    assert.equal(entry.record.commandState, "in-flight");
+    const transitionSequence = nextSequence();
+    entries.set(handle, {
+      scopeId: entry.scopeId,
+      record: freezeSafeLocalBlockIntentRecord({
+        ...entry.record,
+        commandState,
+        completedSequence:
+          commandState === "complete" ? transitionSequence : null,
+        failedSequence: commandState === "failed" ? transitionSequence : null,
+      }),
+    });
+  };
+  const observe = ({
+    diagnosticPhase,
+    sourceClass,
+    networkRequestId = null,
+    networkRequestIdSha256 = null,
+    requestUrl = null,
+    requestUrlSha256 = null,
+    failureClass = null,
+    blockedReasonClass = null,
+  }) => {
+    assert.ok(probes.length < SAFE_LOCAL_BLOCK_INTENT_RECORD_LIMIT);
+    const probe = freezeSafeLocalBlockIntentProbe({
+      blockedReasonClass,
+      diagnosticPhase,
+      failureClass,
+      networkRequestIdSha256: safeLocalBlockIntentHash(
+        networkRequestId,
+        networkRequestIdSha256,
+      ),
+      observedSequence: nextSequence(),
+      requestUrlSha256: safeLocalBlockIntentHash(requestUrl, requestUrlSha256),
+      sourceClass,
+    });
+    probes.push(probe);
+    return probe;
+  };
+  return Object.freeze({
+    begin,
+    complete: (handle) => transition(handle, "complete"),
+    fail: (handle) => transition(handle, "failed"),
+    observe,
+    safeIntentSnapshot: (scopeId, diagnosticPhase) =>
+      Object.freeze(
+        [...entries.values()]
+          .filter(
+            (entry) =>
+              entry.scopeId === scopeId &&
+              entry.record.diagnosticPhase === diagnosticPhase,
+          )
+          .map((entry) => entry.record)
+          .sort((left, right) => left.issuedSequence - right.issuedSequence),
+      ),
+    safeProbeSnapshot: (diagnosticPhase) =>
+      Object.freeze(
+        probes
+          .filter((probe) => probe.diagnosticPhase === diagnosticPhase)
+          .slice()
+          .sort(
+            (left, right) => left.observedSequence - right.observedSequence,
+          ),
+      ),
+    nextObservedSequence: nextSequence,
+    size: () => entries.size,
+  });
+};
+const resolveSafeLocalBlockIntentProbesAtSettlement = ({ intents, probes }) => {
+  assert.ok(Array.isArray(intents));
+  assert.ok(Array.isArray(probes));
+  assert.ok(intents.length <= SAFE_LOCAL_BLOCK_INTENT_RECORD_LIMIT);
+  assert.ok(probes.length <= SAFE_LOCAL_BLOCK_INTENT_RECORD_LIMIT);
+  return Object.freeze(
+    probes.map((probe) => {
+      const networkIdentityMatches =
+        probe.networkRequestIdSha256 === null
+          ? []
+          : intents.filter(
+              (intent) =>
+                intent.networkRequestIdSha256 === probe.networkRequestIdSha256,
+            );
+      const requestUrlIdentityMatches =
+        probe.requestUrlSha256 === null
+          ? []
+          : intents.filter(
+              (intent) => intent.requestUrlSha256 === probe.requestUrlSha256,
+            );
+      const completedCommandCandidate = (intent) =>
+        intent.exactScopeBound === true &&
+        intent.commandState === "complete" &&
+        Number.isSafeInteger(intent.completedSequence) &&
+        intent.completedSequence > intent.issuedSequence &&
+        intent.failedSequence === null;
+      const networkCandidates = networkIdentityMatches.filter(
+        completedCommandCandidate,
+      );
+      const requestUrlCandidates = requestUrlIdentityMatches.filter(
+        completedCommandCandidate,
+      );
+      const networkBinding =
+        networkCandidates.length === 1 ? networkCandidates[0] : null;
+      const requestUrlBinding =
+        requestUrlCandidates.length === 1 ? requestUrlCandidates[0] : null;
+      const networkIdentityResolutionComplete =
+        probe.networkRequestIdSha256 === null || networkCandidates.length === 1;
+      const requestUrlIdentityResolutionComplete =
+        probe.requestUrlSha256 === null || requestUrlCandidates.length === 1;
+      const bindingConflict =
+        networkBinding !== null &&
+        requestUrlBinding !== null &&
+        networkBinding !== requestUrlBinding;
+      const identityCandidate =
+        !networkIdentityResolutionComplete ||
+        !requestUrlIdentityResolutionComplete ||
+        bindingConflict
+          ? null
+          : networkBinding || requestUrlBinding;
+      const sourceEvidenceEligible =
+        probe.sourceClass === "network-loading-failed"
+          ? probe.blockedReasonClass === "inspector"
+          : probe.sourceClass === "playwright-request-failed"
+            ? probe.failureClass === "other"
+            : false;
+      const sourceEvidenceSupportingOnly = [
+        "console-location",
+        "network-log",
+      ].includes(probe.sourceClass);
+      const eventAfterCommandIssued =
+        identityCandidate === null
+          ? null
+          : probe.observedSequence > identityCandidate.issuedSequence;
+      const commandComplete =
+        identityCandidate === null
+          ? null
+          : identityCandidate.commandState === "complete" &&
+            Number.isSafeInteger(identityCandidate.completedSequence);
+      const selectedIntent =
+        sourceEvidenceEligible &&
+        eventAfterCommandIssued === true &&
+        commandComplete === true
+          ? identityCandidate
+          : null;
+      return Object.freeze({
+        probe,
+        settlementResolution: Object.freeze({
+          bindingConflict,
+          commandComplete,
+          eventAfterCommandCompleted:
+            identityCandidate === null ||
+            identityCandidate.completedSequence === null
+              ? null
+              : probe.observedSequence > identityCandidate.completedSequence,
+          eventAfterCommandIssued,
+          networkIdentityMatchCount: networkIdentityMatches.length,
+          networkCandidateCount: networkCandidates.length,
+          networkIdentityResolutionComplete,
+          requestUrlIdentityMatchCount: requestUrlIdentityMatches.length,
+          requestUrlCandidateCount: requestUrlCandidates.length,
+          requestUrlIdentityResolutionComplete,
+          selectedBy:
+            selectedIntent === null
+              ? null
+              : networkBinding !== null && requestUrlBinding !== null
+                ? "network-and-request-url"
+                : networkBinding !== null
+                  ? "network-only"
+                  : "request-url-only",
+          selectedIntent,
+          sourceEvidenceEligible,
+          sourceEvidenceSupportingOnly,
+        }),
+      });
+    }),
+  );
+};
 const SAFE_FIRESTORE_WEBCHANNEL_LISTENER_DIAGNOSTIC_REASONS = [
   "classified",
   "inspection-missing",
@@ -14010,9 +14678,15 @@ const installBrowserWidePreTransmissionBoundary = async ({
   browser,
   inspectPausedRequest,
   inspectSensitiveRequest,
+  beginLocalBlockIntent,
+  completeLocalBlockIntent,
+  failLocalBlockIntent,
 }) => {
   assert.equal(typeof inspectPausedRequest, "function");
   assert.equal(typeof inspectSensitiveRequest, "function");
+  assert.equal(typeof beginLocalBlockIntent, "function");
+  assert.equal(typeof completeLocalBlockIntent, "function");
+  assert.equal(typeof failLocalBlockIntent, "function");
   const {
     crBrowser,
     rootSession,
@@ -14094,6 +14768,51 @@ const installBrowserWidePreTransmissionBoundary = async ({
         }),
     );
   };
+  const beginBrowserWideLocalBlockIntent = ({
+    event,
+    resolvedEvent = event,
+    scope,
+    inspection = null,
+    intentClass,
+    phaseClass = "request",
+    policyReasonClass,
+    requestScopeClass,
+  }) =>
+    beginLocalBlockIntent({
+      scopeId: scope.id,
+      captureStage: scope.stage,
+      diagnosticPhase: scope.getNetworkPhase(),
+      issuerClass: "browser-wide-pre-transmission-boundary",
+      intentClass,
+      phaseClass,
+      operationClass: "request-fail",
+      policyReasonClass,
+      requestScopeClass,
+      fetchRequestId: event.requestId,
+      primaryFetchRequestId: event.requestId,
+      networkRequestId:
+        typeof event.networkId === "string" && event.networkId.length > 0
+          ? event.networkId
+          : null,
+      requestUrl: resolvedEvent.request?.url || event.request?.url || null,
+      firebaseService: inspection?.firebaseService || "unknown",
+      requestMethod:
+        resolvedEvent.request?.method || event.request?.method || "unknown",
+      resourceType: event.resourceType || "unknown",
+      responseFetchCorrelationClass: null,
+      webChannelRequestClass: null,
+      webChannelTerminationClass: null,
+      exactScopeBound:
+        typeof event.requestId === "string" &&
+        event.requestId.length > 0 &&
+        typeof (resolvedEvent.request?.url || event.request?.url) === "string",
+    });
+  const completeBrowserWideLocalBlockIntent = (scope, handle) => {
+    completeLocalBlockIntent({ scopeId: scope.id, handle });
+  };
+  const failBrowserWideLocalBlockIntent = (scope, handle) => {
+    failLocalBlockIntent({ scopeId: scope.id, handle });
+  };
   const handlePausedRequest = (session, event, scope) => {
     const handlerPromise = (async () => {
       const resolvedPostData = await resolvePausedRequestPostData({
@@ -14143,10 +14862,25 @@ const installBrowserWidePreTransmissionBoundary = async ({
           sensitiveDecision.marker === "debug-sentinel-scope",
         );
         stats.requestBlockCount += 1;
-        await originalSend.call(session, "Fetch.failRequest", {
-          requestId: event.requestId,
-          errorReason: "BlockedByClient",
+        const localBlockIntentHandle = beginBrowserWideLocalBlockIntent({
+          event,
+          resolvedEvent,
+          scope,
+          inspection,
+          intentClass: "browser-wide-raw-sensitive-block",
+          policyReasonClass: sensitiveDecision.marker,
+          requestScopeClass: "sensitive-pre-transmission",
         });
+        try {
+          await originalSend.call(session, "Fetch.failRequest", {
+            requestId: event.requestId,
+            errorReason: "BlockedByClient",
+          });
+          completeBrowserWideLocalBlockIntent(scope, localBlockIntentHandle);
+        } catch (error) {
+          failBrowserWideLocalBlockIntent(scope, localBlockIntentHandle);
+          throw error;
+        }
         return;
       }
       const telemetryDecision = optionalTelemetrySuppressionDecision({
@@ -14155,10 +14889,25 @@ const installBrowserWidePreTransmissionBoundary = async ({
       });
       if (telemetryDecision.eligible) {
         stats.optionalTelemetrySuppressionCount += 1;
-        await originalSend.call(session, "Fetch.failRequest", {
-          requestId: event.requestId,
-          errorReason: "BlockedByClient",
+        const localBlockIntentHandle = beginBrowserWideLocalBlockIntent({
+          event,
+          resolvedEvent,
+          scope,
+          inspection,
+          intentClass: "browser-wide-optional-telemetry-suppression",
+          policyReasonClass: "telemetry-suppression",
+          requestScopeClass: "optional-telemetry",
         });
+        try {
+          await originalSend.call(session, "Fetch.failRequest", {
+            requestId: event.requestId,
+            errorReason: "BlockedByClient",
+          });
+          completeBrowserWideLocalBlockIntent(scope, localBlockIntentHandle);
+        } catch (error) {
+          failBrowserWideLocalBlockIntent(scope, localBlockIntentHandle);
+          throw error;
+        }
         return;
       }
       const creatorSideSecondaryBootstrap = [
@@ -14177,10 +14926,27 @@ const installBrowserWidePreTransmissionBoundary = async ({
       });
       if (decision.block || creatorSideSecondaryBootstrap) {
         stats.requestBlockCount += 1;
-        await originalSend.call(session, "Fetch.failRequest", {
-          requestId: event.requestId,
-          errorReason: "BlockedByClient",
+        const localBlockIntentHandle = beginBrowserWideLocalBlockIntent({
+          event,
+          resolvedEvent,
+          scope,
+          inspection,
+          intentClass: "browser-wide-pre-transmission-boundary-block",
+          policyReasonClass: decision.block
+            ? decision.marker
+            : "creator-side-secondary-bootstrap",
+          requestScopeClass: "pre-transmission-boundary",
         });
+        try {
+          await originalSend.call(session, "Fetch.failRequest", {
+            requestId: event.requestId,
+            errorReason: "BlockedByClient",
+          });
+          completeBrowserWideLocalBlockIntent(scope, localBlockIntentHandle);
+        } catch (error) {
+          failBrowserWideLocalBlockIntent(scope, localBlockIntentHandle);
+          throw error;
+        }
         return;
       }
       const apiKeyScope = stagingApiKeyScopeDecision({
@@ -14193,10 +14959,25 @@ const installBrowserWidePreTransmissionBoundary = async ({
       });
       if (!apiKeyScope.valid) {
         stats.requestBlockCount += 1;
-        await originalSend.call(session, "Fetch.failRequest", {
-          requestId: event.requestId,
-          errorReason: "BlockedByClient",
+        const localBlockIntentHandle = beginBrowserWideLocalBlockIntent({
+          event,
+          resolvedEvent,
+          scope,
+          inspection,
+          intentClass: "browser-wide-staging-api-key-scope-block",
+          policyReasonClass: "invalid-api-key-scope",
+          requestScopeClass: "staging-api-key",
         });
+        try {
+          await originalSend.call(session, "Fetch.failRequest", {
+            requestId: event.requestId,
+            errorReason: "BlockedByClient",
+          });
+          completeBrowserWideLocalBlockIntent(scope, localBlockIntentHandle);
+        } catch (error) {
+          failBrowserWideLocalBlockIntent(scope, localBlockIntentHandle);
+          throw error;
+        }
         return;
       }
       const deterministicDecision = deterministicResponseDecision({
@@ -14210,10 +14991,25 @@ const installBrowserWidePreTransmissionBoundary = async ({
       if (deterministicDecision.scoped) {
         if (!deterministicDecision.eligible) {
           stats.deterministicResponseScopeMismatchBlockCount += 1;
-          await originalSend.call(session, "Fetch.failRequest", {
-            requestId: event.requestId,
-            errorReason: "BlockedByClient",
+          const localBlockIntentHandle = beginBrowserWideLocalBlockIntent({
+            event,
+            resolvedEvent,
+            scope,
+            inspection,
+            intentClass: "browser-wide-deterministic-response-contract-block",
+            policyReasonClass: "deterministic-scope-mismatch",
+            requestScopeClass: "deterministic-response",
           });
+          try {
+            await originalSend.call(session, "Fetch.failRequest", {
+              requestId: event.requestId,
+              errorReason: "BlockedByClient",
+            });
+            completeBrowserWideLocalBlockIntent(scope, localBlockIntentHandle);
+          } catch (error) {
+            failBrowserWideLocalBlockIntent(scope, localBlockIntentHandle);
+            throw error;
+          }
           return;
         }
         const payload = deterministicFulfillPayload(
@@ -14251,10 +15047,25 @@ const installBrowserWidePreTransmissionBoundary = async ({
           return;
         }
         stats.externalStaticPrivateOwnerBlockCount += 1;
-        await originalSend.call(session, "Fetch.failRequest", {
-          requestId: event.requestId,
-          errorReason: "BlockedByClient",
+        const localBlockIntentHandle = beginBrowserWideLocalBlockIntent({
+          event,
+          resolvedEvent,
+          scope,
+          inspection,
+          intentClass: "browser-wide-external-static-private-owner-block",
+          policyReasonClass: "external-static-private-owner",
+          requestScopeClass: "external-static",
         });
+        try {
+          await originalSend.call(session, "Fetch.failRequest", {
+            requestId: event.requestId,
+            errorReason: "BlockedByClient",
+          });
+          completeBrowserWideLocalBlockIntent(scope, localBlockIntentHandle);
+        } catch (error) {
+          failBrowserWideLocalBlockIntent(scope, localBlockIntentHandle);
+          throw error;
+        }
         return;
       }
       stats.requestContinueCount += 1;
@@ -14273,12 +15084,22 @@ const installBrowserWidePreTransmissionBoundary = async ({
       }
       stats.handlerErrorCount += 1;
       fatalErrors.push(error);
+      const localBlockIntentHandle = beginBrowserWideLocalBlockIntent({
+        event,
+        scope,
+        intentClass: "browser-wide-handler-exception-block",
+        phaseClass: "handler",
+        policyReasonClass: "unexpected-handler-error",
+        requestScopeClass: "cdp-handler-fallback",
+      });
       try {
         await originalSend.call(session, "Fetch.failRequest", {
           requestId: event.requestId,
           errorReason: "BlockedByClient",
         });
+        completeBrowserWideLocalBlockIntent(scope, localBlockIntentHandle);
       } catch (_failError) {
+        failBrowserWideLocalBlockIntent(scope, localBlockIntentHandle);
         // The target remains capture-fatal even if it closed first.
       }
     });
@@ -14409,6 +15230,7 @@ const installBrowserWidePreTransmissionBoundary = async ({
     activate(scope) {
       assert.equal(activeScope, null);
       assert.ok(scope?.id);
+      assert.ok(["baseline", "candidate"].includes(scope?.stage));
       assert.ok(scope?.stableBrowserOrigin);
       assert.ok(scope?.stagingApiKey);
       activeScope = { ...scope, primaryTargetId: null };
@@ -28503,6 +29325,746 @@ const verifySafeExactAuthenticationWebChannelDiagnosticFixtures = () => {
     safeExactWebChannelDiagnosticNetworkAccess: 0,
   };
 };
+const verifySafeLocalBlockIntentDiagnosticFixtures = () => {
+  const privateSentinel = "private-local-block-intent-sentinel";
+  const privateJwt = `${"g".repeat(24)}.${"h".repeat(24)}.${"i".repeat(24)}`;
+  const exactWebChannelUrl = (pathname, entries) => {
+    const url = new URL(`https://firestore.googleapis.com${pathname}`);
+    for (const [name, value] of entries) url.searchParams.append(name, value);
+    return url.toString();
+  };
+  const sharedWebChannelEntries = [
+    ["gsessionid", `${privateSentinel}-gsession`],
+    ["VER", "8"],
+    ["database", `projects/${contract.firebaseProjectId}/databases/(default)`],
+  ];
+  const firestoreWebChannelPathnames = [
+    ["/google.firestore.v1.Firestore/Listen/channel", "listen-channel"],
+    ["/google.firestore.v1.Firestore/Write/channel", "write-channel"],
+  ];
+  const formContentTypeHeaders = {
+    "content-type": "application/x-www-form-urlencoded;charset=UTF-8",
+  };
+  const initialForwardEntries = [
+    ["VER", "8"],
+    ["database", `projects/${contract.firebaseProjectId}/databases/(default)`],
+    ["CVER", "22"],
+    ["X-HTTP-Session-Id", "gsessionid"],
+    ["RID", "1000"],
+    ["zx", "abc123"],
+    ["t", "1"],
+  ];
+  const sessionForwardEntries = [
+    ...sharedWebChannelEntries,
+    ["RID", "100001"],
+    ["SID", `${privateSentinel}-sid`],
+    ["AID", "0"],
+    ["zx", "abc123"],
+    ["t", "1"],
+  ];
+  const backchannelEntries = [
+    ...sharedWebChannelEntries,
+    ["RID", "rpc"],
+    ["SID", `${privateSentinel}-sid`],
+    ["AID", "0"],
+    ["CI", "0"],
+    ["TYPE", "xmlhttp"],
+    ["zx", "abc123"],
+    ["t", "1"],
+  ];
+  const terminationEntries = [
+    ...sharedWebChannelEntries,
+    ["RID", "100001"],
+    ["SID", `${privateSentinel}-sid`],
+    ["TYPE", "terminate"],
+    ["zx", "abc123"],
+  ];
+  const writeUrl = exactWebChannelUrl(
+    "/google.firestore.v1.Firestore/Write/channel",
+    terminationEntries,
+  );
+  for (const [pathname, expectedPathClass] of firestoreWebChannelPathnames) {
+    for (const fixture of [
+      {
+        requestUrl: exactWebChannelUrl(pathname, initialForwardEntries),
+        requestMethod: "POST",
+        requestHeaders: formContentTypeHeaders,
+        requestPostDataPresent: true,
+        resourceType: "xhr",
+        webChannelRequestClass: "initial-forward-post",
+        webChannelTerminationClass: null,
+      },
+      {
+        requestUrl: exactWebChannelUrl(pathname, sessionForwardEntries),
+        requestMethod: "POST",
+        requestHeaders: formContentTypeHeaders,
+        requestPostDataPresent: true,
+        resourceType: "xhr",
+        webChannelRequestClass: "session-forward-post",
+        webChannelTerminationClass: null,
+      },
+      {
+        requestUrl: exactWebChannelUrl(pathname, backchannelEntries),
+        requestMethod: "GET",
+        requestHeaders: {},
+        requestPostDataPresent: false,
+        resourceType: "xhr",
+        webChannelRequestClass: "backchannel-get",
+        webChannelTerminationClass: null,
+      },
+      {
+        requestUrl: exactWebChannelUrl(pathname, terminationEntries),
+        requestMethod: "GET",
+        requestHeaders: {},
+        requestPostDataPresent: false,
+        resourceType: "image",
+        webChannelRequestClass: null,
+        webChannelTerminationClass: "termination-image-get",
+      },
+    ]) {
+      assert.equal(
+        safeLocalBlockIntentWebChannelPathClass(fixture),
+        expectedPathClass,
+      );
+    }
+  }
+  for (const invalidPostDataPresent of [true, null]) {
+    assert.equal(
+      safeLocalBlockIntentWebChannelPathClass({
+        requestUrl: writeUrl,
+        requestMethod: "GET",
+        requestHeaders: {},
+        requestPostDataPresent: invalidPostDataPresent,
+        resourceType: "image",
+        webChannelRequestClass: null,
+        webChannelTerminationClass: "termination-image-get",
+      }),
+      null,
+    );
+  }
+  assert.equal(
+    safeLocalBlockIntentWebChannelPathClass({
+      requestUrl: writeUrl,
+      requestMethod: "GET",
+      requestHeaders: {},
+      requestPostDataPresent: false,
+      resourceType: "image",
+      webChannelRequestClass: "backchannel-get",
+      webChannelTerminationClass: "termination-image-get",
+    }),
+    null,
+  );
+  assert.throws(() =>
+    safeLocalBlockIntentHash(
+      `${privateSentinel}-raw-value`,
+      secretSha256(`${privateSentinel}-different-value`),
+    ),
+  );
+
+  const intentFixtures = [
+    {
+      intentClass: "browser-wide-deterministic-response-contract-block",
+      issuerClass: "browser-wide-pre-transmission-boundary",
+      policyReasonClass: "deterministic-scope-mismatch",
+      requestScopeClass: "deterministic-response",
+    },
+    {
+      intentClass: "browser-wide-external-static-private-owner-block",
+      issuerClass: "browser-wide-pre-transmission-boundary",
+      policyReasonClass: "external-static-private-owner",
+      requestScopeClass: "external-static",
+    },
+    {
+      intentClass: "browser-wide-handler-exception-block",
+      issuerClass: "browser-wide-pre-transmission-boundary",
+      policyReasonClass: "unexpected-handler-error",
+      requestScopeClass: "cdp-handler-fallback",
+    },
+    {
+      intentClass: "browser-wide-optional-telemetry-suppression",
+      issuerClass: "browser-wide-pre-transmission-boundary",
+      policyReasonClass: "telemetry-suppression",
+      requestScopeClass: "optional-telemetry",
+    },
+    {
+      intentClass: "browser-wide-pre-transmission-boundary-block",
+      issuerClass: "browser-wide-pre-transmission-boundary",
+      policyReasonClass: "unbound-firebase",
+      requestScopeClass: "pre-transmission-boundary",
+    },
+    {
+      intentClass: "browser-wide-raw-sensitive-block",
+      issuerClass: "browser-wide-pre-transmission-boundary",
+      policyReasonClass: "production",
+      requestScopeClass: "sensitive-pre-transmission",
+    },
+    {
+      intentClass: "browser-wide-staging-api-key-scope-block",
+      issuerClass: "browser-wide-pre-transmission-boundary",
+      policyReasonClass: "invalid-api-key-scope",
+      requestScopeClass: "staging-api-key",
+    },
+    {
+      intentClass: "primary-allowed-egress-response-error-terminalization",
+      issuerClass: "primary-app-check-cdp-handler",
+      policyReasonClass: "response-error",
+      requestScopeClass: "allowed-egress",
+    },
+    {
+      intentClass: "primary-collection-preflight-contract-block",
+      issuerClass: "primary-app-check-cdp-handler",
+      policyReasonClass: "invalid-request-shape",
+      requestScopeClass: "authentication-collection-preflight",
+    },
+    {
+      intentClass: "primary-deterministic-response-contract-block",
+      issuerClass: "primary-app-check-cdp-handler",
+      policyReasonClass: "deterministic-scope-mismatch",
+      requestScopeClass: "deterministic-response",
+    },
+    {
+      intentClass: "primary-direct-immutable-origin-block",
+      issuerClass: "primary-app-check-cdp-handler",
+      policyReasonClass: "direct-immutable-origin-scope-mismatch",
+      requestScopeClass: "direct-immutable-origin",
+    },
+    {
+      intentClass: "primary-external-static-contract-block",
+      issuerClass: "primary-app-check-cdp-handler",
+      policyReasonClass: "external-static-scope-mismatch",
+      requestScopeClass: "external-static",
+    },
+    {
+      intentClass: "primary-final-http-or-redirect-terminalization",
+      issuerClass: "primary-app-check-cdp-handler",
+      policyReasonClass: "http-error-response",
+      requestScopeClass: "response-lifecycle",
+    },
+    {
+      intentClass: "primary-handler-exception-block",
+      issuerClass: "primary-app-check-cdp-handler",
+      policyReasonClass: "unexpected-handler-error",
+      requestScopeClass: "cdp-handler-fallback",
+    },
+    {
+      intentClass: "primary-invalid-pre-final-response-terminalization",
+      issuerClass: "primary-app-check-cdp-handler",
+      policyReasonClass: "invalid-response-status",
+      requestScopeClass: "response-lifecycle",
+    },
+    {
+      intentClass: "primary-optional-telemetry-suppression",
+      issuerClass: "primary-app-check-cdp-handler",
+      policyReasonClass: "telemetry-suppression",
+      requestScopeClass: "optional-telemetry",
+    },
+    {
+      intentClass: "primary-pre-transmission-boundary-block",
+      issuerClass: "primary-app-check-cdp-handler",
+      policyReasonClass: "unbound-firebase",
+      requestScopeClass: "pre-transmission-boundary",
+    },
+    {
+      intentClass: "primary-raw-sensitive-block",
+      issuerClass: "primary-app-check-cdp-handler",
+      policyReasonClass: "production",
+      requestScopeClass: "sensitive-pre-transmission",
+    },
+    {
+      intentClass: "primary-redirected-allowed-egress-block",
+      issuerClass: "primary-app-check-cdp-handler",
+      policyReasonClass: "redirected-request",
+      requestScopeClass: "redirected-allowed-egress",
+    },
+    {
+      intentClass: "primary-skip-toolbar-header-block",
+      issuerClass: "primary-app-check-cdp-handler",
+      policyReasonClass: "forbidden-header",
+      requestScopeClass: "vercel-skip-toolbar",
+    },
+    {
+      intentClass: "primary-stable-origin-rewrite-contract-block",
+      issuerClass: "primary-app-check-cdp-handler",
+      policyReasonClass: "stable-origin-rewrite-scope-mismatch",
+      requestScopeClass: "stable-origin-rewrite",
+    },
+    {
+      intentClass: "primary-unauthorized-app-check-header-block",
+      issuerClass: "primary-app-check-cdp-handler",
+      policyReasonClass: "unauthorized-header",
+      requestScopeClass: "native-app-check-header",
+    },
+  ];
+  assert.deepEqual(
+    intentFixtures.map(({ intentClass }) => intentClass).sort(),
+    [...SAFE_LOCAL_BLOCK_INTENT_CLASSES].sort(),
+  );
+  const responseIntentClasses = new Set([
+    "primary-allowed-egress-response-error-terminalization",
+    "primary-final-http-or-redirect-terminalization",
+    "primary-invalid-pre-final-response-terminalization",
+  ]);
+  const handlerIntentClasses = new Set([
+    "browser-wide-handler-exception-block",
+    "primary-handler-exception-block",
+  ]);
+  const scopeId = "local-block-intent-self-test";
+  const diagnosticPhase = "authentication";
+  const beginFixture = (ledger, fixture, index, overrides = {}) =>
+    ledger.begin({
+      scopeId,
+      captureStage: index % 2 === 0 ? "baseline" : "candidate",
+      diagnosticPhase,
+      issuerClass: fixture.issuerClass,
+      intentClass: fixture.intentClass,
+      phaseClass: responseIntentClasses.has(fixture.intentClass)
+        ? "response"
+        : handlerIntentClasses.has(fixture.intentClass)
+          ? "handler"
+          : "request",
+      operationClass: responseIntentClasses.has(fixture.intentClass)
+        ? "response-fail"
+        : "request-fail",
+      policyReasonClass: fixture.policyReasonClass,
+      requestScopeClass: fixture.requestScopeClass,
+      fetchRequestId: `${privateSentinel}-fetch-${index}`,
+      primaryFetchRequestId: `${privateSentinel}-primary-${index}`,
+      networkRequestId: `${privateSentinel}-network-${index}`,
+      requestUrl: `https://example.invalid/${privateSentinel}/${index}`,
+      firebaseService: "firestore",
+      requestMethod: "get",
+      resourceType: "image",
+      responseFetchCorrelationClass: responseIntentClasses.has(
+        fixture.intentClass,
+      )
+        ? "same-fetch"
+        : null,
+      webChannelRequestClass: null,
+      webChannelTerminationClass: null,
+      exactScopeBound: true,
+      ...overrides,
+    });
+
+  const taxonomyLedger = createSafeLocalBlockIntentLedger();
+  for (const [index, fixture] of intentFixtures.entries()) {
+    const handle = beginFixture(taxonomyLedger, fixture, index);
+    taxonomyLedger.complete(handle);
+  }
+  const taxonomySnapshot = taxonomyLedger.safeIntentSnapshot(
+    scopeId,
+    diagnosticPhase,
+  );
+  assert.equal(taxonomySnapshot.length, SAFE_LOCAL_BLOCK_INTENT_CLASSES.length);
+  assert.deepEqual(
+    taxonomySnapshot.map(({ intentClass }) => intentClass).sort(),
+    [...SAFE_LOCAL_BLOCK_INTENT_CLASSES].sort(),
+  );
+  for (const record of taxonomySnapshot) {
+    assertSafeLocalBlockIntentExactStringKeys(
+      record,
+      SAFE_LOCAL_BLOCK_INTENT_RECORD_KEYS,
+    );
+    assert.equal(record.commandState, "complete");
+    assert.ok(record.completedSequence > record.issuedSequence);
+    assert.equal(record.failedSequence, null);
+  }
+
+  const positiveLedger = createSafeLocalBlockIntentLedger();
+  const positiveUrl = writeUrl;
+  const positiveNetworkId = `${privateSentinel}-positive-network`;
+  const positiveHandle = beginFixture(positiveLedger, intentFixtures[7], 40, {
+    networkRequestId: positiveNetworkId,
+    requestUrl: positiveUrl,
+    requestPostDataPresent: false,
+    webChannelRequestClass: null,
+    webChannelTerminationClass: "termination-image-get",
+  });
+  positiveLedger.complete(positiveHandle);
+  positiveLedger.observe({
+    diagnosticPhase,
+    sourceClass: "network-loading-failed",
+    networkRequestId: positiveNetworkId,
+    requestUrl: positiveUrl,
+    failureClass: "aborted",
+    blockedReasonClass: "inspector",
+  });
+  const positiveResolution = resolveSafeLocalBlockIntentProbesAtSettlement({
+    intents: positiveLedger.safeIntentSnapshot(scopeId, diagnosticPhase),
+    probes: positiveLedger.safeProbeSnapshot(diagnosticPhase),
+  })[0].settlementResolution;
+  assert.equal(positiveResolution.selectedBy, "network-and-request-url");
+  assert.equal(positiveResolution.bindingConflict, false);
+  assert.equal(positiveResolution.commandComplete, true);
+  assert.equal(positiveResolution.eventAfterCommandIssued, true);
+  assert.equal(positiveResolution.eventAfterCommandCompleted, true);
+  assert.equal(
+    positiveResolution.selectedIntent.webChannelPathClass,
+    "write-channel",
+  );
+
+  const networkAliasLedger = createSafeLocalBlockIntentLedger();
+  const aliasNetworkId = `${privateSentinel}-alias-network`;
+  const aliasHandle = beginFixture(networkAliasLedger, intentFixtures[7], 41, {
+    fetchRequestId: `${privateSentinel}-response-fetch-alias`,
+    primaryFetchRequestId: `${privateSentinel}-primary-fetch-alias`,
+    networkRequestId: aliasNetworkId,
+    responseFetchCorrelationClass: "same-network-single-alias",
+  });
+  networkAliasLedger.complete(aliasHandle);
+  networkAliasLedger.observe({
+    diagnosticPhase,
+    sourceClass: "playwright-request-failed",
+    networkRequestId: aliasNetworkId,
+    failureClass: "other",
+  });
+  const aliasResolution = resolveSafeLocalBlockIntentProbesAtSettlement({
+    intents: networkAliasLedger.safeIntentSnapshot(scopeId, diagnosticPhase),
+    probes: networkAliasLedger.safeProbeSnapshot(diagnosticPhase),
+  })[0].settlementResolution;
+  assert.equal(aliasResolution.selectedBy, "network-only");
+  assert.equal(
+    aliasResolution.selectedIntent.responseFetchCorrelationClass,
+    "same-network-single-alias",
+  );
+
+  const missingIdentityLedger = createSafeLocalBlockIntentLedger();
+  missingIdentityLedger.observe({
+    diagnosticPhase,
+    sourceClass: "network-log",
+    failureClass: "aborted",
+  });
+  const missingIdentityResolution =
+    resolveSafeLocalBlockIntentProbesAtSettlement({
+      intents: taxonomySnapshot,
+      probes: missingIdentityLedger.safeProbeSnapshot(diagnosticPhase),
+    })[0].settlementResolution;
+  assert.equal(missingIdentityResolution.selectedIntent, null);
+  assert.equal(missingIdentityResolution.selectedBy, null);
+
+  const ambiguousLedger = createSafeLocalBlockIntentLedger();
+  const ambiguousNetworkId = `${privateSentinel}-ambiguous-network`;
+  const ambiguousUrl = `https://example.invalid/${privateSentinel}/ambiguous`;
+  for (const index of [50, 51]) {
+    const handle = beginFixture(
+      ambiguousLedger,
+      intentFixtures[index - 50],
+      index,
+      {
+        networkRequestId: ambiguousNetworkId,
+        requestUrl: ambiguousUrl,
+      },
+    );
+    ambiguousLedger.complete(handle);
+  }
+  ambiguousLedger.observe({
+    diagnosticPhase,
+    sourceClass: "console-location",
+    networkRequestId: ambiguousNetworkId,
+    requestUrl: ambiguousUrl,
+    failureClass: "aborted",
+  });
+  const ambiguousResolution = resolveSafeLocalBlockIntentProbesAtSettlement({
+    intents: ambiguousLedger.safeIntentSnapshot(scopeId, diagnosticPhase),
+    probes: ambiguousLedger.safeProbeSnapshot(diagnosticPhase),
+  })[0].settlementResolution;
+  assert.equal(ambiguousResolution.networkCandidateCount, 2);
+  assert.equal(ambiguousResolution.requestUrlCandidateCount, 2);
+  assert.equal(ambiguousResolution.selectedIntent, null);
+
+  const conflictLedger = createSafeLocalBlockIntentLedger();
+  const conflictNetworkA = `${privateSentinel}-conflict-network-a`;
+  const conflictNetworkB = `${privateSentinel}-conflict-network-b`;
+  const conflictUrlA = `https://example.invalid/${privateSentinel}/conflict-a`;
+  const conflictUrlB = `https://example.invalid/${privateSentinel}/conflict-b`;
+  for (const [index, networkRequestId, requestUrl] of [
+    [60, conflictNetworkA, conflictUrlA],
+    [61, conflictNetworkB, conflictUrlB],
+  ]) {
+    const handle = beginFixture(
+      conflictLedger,
+      intentFixtures[index - 60],
+      index,
+      {
+        networkRequestId,
+        requestUrl,
+      },
+    );
+    conflictLedger.complete(handle);
+  }
+  conflictLedger.observe({
+    diagnosticPhase,
+    sourceClass: "console-location",
+    networkRequestId: conflictNetworkA,
+    requestUrl: conflictUrlB,
+    failureClass: "aborted",
+  });
+  const conflictResolution = resolveSafeLocalBlockIntentProbesAtSettlement({
+    intents: conflictLedger.safeIntentSnapshot(scopeId, diagnosticPhase),
+    probes: conflictLedger.safeProbeSnapshot(diagnosticPhase),
+  })[0].settlementResolution;
+  assert.equal(conflictResolution.bindingConflict, true);
+  assert.equal(conflictResolution.selectedIntent, null);
+
+  const failedCommandLedger = createSafeLocalBlockIntentLedger();
+  const failedNetworkId = `${privateSentinel}-failed-network`;
+  const failedHandle = beginFixture(
+    failedCommandLedger,
+    intentFixtures[2],
+    70,
+    { networkRequestId: failedNetworkId },
+  );
+  failedCommandLedger.fail(failedHandle);
+  failedCommandLedger.observe({
+    diagnosticPhase,
+    sourceClass: "playwright-request-failed",
+    networkRequestId: failedNetworkId,
+    failureClass: "other",
+  });
+  const failedCommandResolution = resolveSafeLocalBlockIntentProbesAtSettlement(
+    {
+      intents: failedCommandLedger.safeIntentSnapshot(scopeId, diagnosticPhase),
+      probes: failedCommandLedger.safeProbeSnapshot(diagnosticPhase),
+    },
+  )[0].settlementResolution;
+  assert.equal(failedCommandResolution.networkIdentityMatchCount, 1);
+  assert.equal(failedCommandResolution.networkCandidateCount, 0);
+  assert.equal(failedCommandResolution.selectedIntent, null);
+
+  const wrongInspectorLedger = createSafeLocalBlockIntentLedger();
+  const wrongInspectorNetworkId = `${privateSentinel}-wrong-inspector-network`;
+  const wrongInspectorHandle = beginFixture(
+    wrongInspectorLedger,
+    intentFixtures[0],
+    71,
+    { networkRequestId: wrongInspectorNetworkId },
+  );
+  wrongInspectorLedger.complete(wrongInspectorHandle);
+  wrongInspectorLedger.observe({
+    diagnosticPhase,
+    sourceClass: "network-loading-failed",
+    networkRequestId: wrongInspectorNetworkId,
+    failureClass: "aborted",
+    blockedReasonClass: "unsupported",
+  });
+  const wrongInspectorResolution =
+    resolveSafeLocalBlockIntentProbesAtSettlement({
+      intents: wrongInspectorLedger.safeIntentSnapshot(
+        scopeId,
+        diagnosticPhase,
+      ),
+      probes: wrongInspectorLedger.safeProbeSnapshot(diagnosticPhase),
+    })[0].settlementResolution;
+  assert.equal(wrongInspectorResolution.sourceEvidenceEligible, false);
+  assert.equal(wrongInspectorResolution.selectedIntent, null);
+
+  const supportingSourceLedger = createSafeLocalBlockIntentLedger();
+  const supportingSourceNetworkId = `${privateSentinel}-supporting-network`;
+  const supportingSourceUrl = `https://example.invalid/${privateSentinel}/supporting`;
+  const supportingSourceHandle = beginFixture(
+    supportingSourceLedger,
+    intentFixtures[0],
+    72,
+    {
+      networkRequestId: supportingSourceNetworkId,
+      requestUrl: supportingSourceUrl,
+    },
+  );
+  supportingSourceLedger.complete(supportingSourceHandle);
+  supportingSourceLedger.observe({
+    diagnosticPhase,
+    sourceClass: "network-log",
+    networkRequestId: supportingSourceNetworkId,
+    requestUrl: supportingSourceUrl,
+    failureClass: "resource-load-failed",
+  });
+  const supportingSourceResolution =
+    resolveSafeLocalBlockIntentProbesAtSettlement({
+      intents: supportingSourceLedger.safeIntentSnapshot(
+        scopeId,
+        diagnosticPhase,
+      ),
+      probes: supportingSourceLedger.safeProbeSnapshot(diagnosticPhase),
+    })[0].settlementResolution;
+  assert.equal(supportingSourceResolution.networkCandidateCount, 1);
+  assert.equal(supportingSourceResolution.requestUrlCandidateCount, 1);
+  assert.equal(supportingSourceResolution.sourceEvidenceEligible, false);
+  assert.equal(supportingSourceResolution.sourceEvidenceSupportingOnly, true);
+  assert.equal(supportingSourceResolution.selectedIntent, null);
+
+  const lateIntent = positiveLedger.safeIntentSnapshot(
+    scopeId,
+    diagnosticPhase,
+  )[0];
+  const unboundScopeIntent = Object.freeze({
+    ...lateIntent,
+    exactScopeBound: false,
+  });
+  const unboundScopeResolution = resolveSafeLocalBlockIntentProbesAtSettlement({
+    intents: [unboundScopeIntent],
+    probes: positiveLedger.safeProbeSnapshot(diagnosticPhase),
+  })[0].settlementResolution;
+  assert.equal(unboundScopeResolution.networkIdentityMatchCount, 1);
+  assert.equal(unboundScopeResolution.networkCandidateCount, 0);
+  assert.equal(unboundScopeResolution.selectedIntent, null);
+
+  const lateProbe = freezeSafeLocalBlockIntentProbe({
+    blockedReasonClass: "inspector",
+    diagnosticPhase,
+    failureClass: "aborted",
+    networkRequestIdSha256: lateIntent.networkRequestIdSha256,
+    observedSequence: lateIntent.issuedSequence,
+    requestUrlSha256: lateIntent.requestUrlSha256,
+    sourceClass: "network-loading-failed",
+  });
+  const lateResolution = resolveSafeLocalBlockIntentProbesAtSettlement({
+    intents: [lateIntent],
+    probes: [lateProbe],
+  })[0].settlementResolution;
+  assert.equal(lateResolution.eventAfterCommandIssued, false);
+  assert.equal(lateResolution.selectedIntent, null);
+
+  const recordBoundLedger = createSafeLocalBlockIntentLedger();
+  for (
+    let index = 0;
+    index < SAFE_LOCAL_BLOCK_INTENT_RECORD_LIMIT;
+    index += 1
+  ) {
+    beginFixture(recordBoundLedger, intentFixtures[0], index + 100);
+  }
+  assert.equal(recordBoundLedger.size(), SAFE_LOCAL_BLOCK_INTENT_RECORD_LIMIT);
+  assert.throws(() =>
+    beginFixture(
+      recordBoundLedger,
+      intentFixtures[0],
+      SAFE_LOCAL_BLOCK_INTENT_RECORD_LIMIT + 100,
+    ),
+  );
+  const probeBoundLedger = createSafeLocalBlockIntentLedger();
+  for (
+    let index = 0;
+    index < SAFE_LOCAL_BLOCK_INTENT_RECORD_LIMIT;
+    index += 1
+  ) {
+    probeBoundLedger.observe({
+      diagnosticPhase,
+      sourceClass: "network-log",
+      networkRequestId: `${privateSentinel}-probe-${index}`,
+      failureClass: "aborted",
+    });
+  }
+  assert.throws(() =>
+    probeBoundLedger.observe({
+      diagnosticPhase,
+      sourceClass: "network-log",
+      networkRequestId: `${privateSentinel}-probe-overflow`,
+      failureClass: "aborted",
+    }),
+  );
+
+  const exactRecordFixture = taxonomySnapshot[0];
+  const exactProbeFixture =
+    positiveLedger.safeProbeSnapshot(diagnosticPhase)[0];
+  assert.throws(() =>
+    freezeSafeLocalBlockIntentRecord({
+      ...exactRecordFixture,
+      requestUrl: positiveUrl,
+    }),
+  );
+  assert.throws(() =>
+    freezeSafeLocalBlockIntentProbe({
+      ...exactProbeFixture,
+      networkRequestId: positiveNetworkId,
+    }),
+  );
+  const symbolicRecordFixture = { ...exactRecordFixture };
+  symbolicRecordFixture[Symbol("raw-private-field")] = privateSentinel;
+  assert.throws(() => freezeSafeLocalBlockIntentRecord(symbolicRecordFixture));
+  const symbolicProbeFixture = { ...exactProbeFixture };
+  symbolicProbeFixture[Symbol("raw-private-field")] = privateSentinel;
+  assert.throws(() => freezeSafeLocalBlockIntentProbe(symbolicProbeFixture));
+  assert.throws(() =>
+    freezeSafeLocalBlockIntentRecord({
+      ...exactRecordFixture,
+      firebaseService: privateJwt,
+    }),
+  );
+  assert.throws(() =>
+    freezeSafeLocalBlockIntentProbe({
+      ...exactProbeFixture,
+      failureClass: privateJwt,
+    }),
+  );
+
+  const forbiddenRawKeys = new Set([
+    "authorization",
+    "fetchRequestId",
+    "networkRequestId",
+    "postData",
+    "primaryFetchRequestId",
+    "requestId",
+    "requestUrl",
+    "responseBody",
+    "token",
+    "url",
+  ]);
+  const assertSafeShape = (value) => {
+    if (Array.isArray(value)) {
+      value.forEach(assertSafeShape);
+      return;
+    }
+    if (value === null || typeof value !== "object") return;
+    for (const key of Reflect.ownKeys(value)) {
+      assert.equal(typeof key, "string");
+      assert.equal(forbiddenRawKeys.has(key), false);
+      const nestedValue = value[key];
+      if (key.endsWith("Sha256")) {
+        assert.ok(nestedValue === null || /^[a-f0-9]{64}$/u.test(nestedValue));
+      }
+      assertSafeShape(nestedValue);
+    }
+  };
+  const serializedSafeDiagnostics = JSON.stringify({
+    taxonomySnapshot,
+    positiveResolution,
+    aliasResolution,
+    missingIdentityResolution,
+    ambiguousResolution,
+    conflictResolution,
+    failedCommandResolution,
+    wrongInspectorResolution,
+    supportingSourceResolution,
+    unboundScopeResolution,
+    lateResolution,
+  });
+  assertSafeShape(JSON.parse(serializedSafeDiagnostics));
+  for (const rawValue of [
+    privateSentinel,
+    privateJwt,
+    positiveNetworkId,
+    positiveUrl,
+  ]) {
+    assert.equal(serializedSafeDiagnostics.includes(rawValue), false);
+  }
+
+  const localBlockIntentDiagnosticOnlyObservedRequestFailureCount = 2;
+  const localBlockIntentDiagnosticOnlyRecoveredRequestFailureCount = 0;
+  const localBlockIntentDiagnosticOnlyFatalRequestFailureCount =
+    localBlockIntentDiagnosticOnlyObservedRequestFailureCount -
+    localBlockIntentDiagnosticOnlyRecoveredRequestFailureCount;
+  assert.equal(localBlockIntentDiagnosticOnlyFatalRequestFailureCount, 2);
+  return {
+    safeLocalBlockIntentTaxonomyFixtureCount: intentFixtures.length,
+    safeLocalBlockIntentSettlementAcceptedFixtureCount: 2,
+    safeLocalBlockIntentSettlementRejectedFixtureCount: 8,
+    safeLocalBlockIntentRecordBoundFixtureCount:
+      SAFE_LOCAL_BLOCK_INTENT_RECORD_LIMIT,
+    safeLocalBlockIntentProbeBoundFixtureCount:
+      SAFE_LOCAL_BLOCK_INTENT_RECORD_LIMIT,
+    safeLocalBlockIntentRawValueOutputCount: 0,
+    safeLocalBlockIntentDiagnosticOnlyFatalAccountingFixtureCount: 1,
+    safeLocalBlockIntentNetworkAccess: 0,
+  };
+};
 const verifyAppCheckSecretNegativeFixtures = () => {
   const debugToken = "12345678-1234-4123-8123-123456789abc";
   const exchangedToken = `${"a".repeat(24)}.${"b".repeat(24)}.${"c".repeat(
@@ -28584,6 +30146,8 @@ const safeBrowserErrorDiagnosticSelfTest =
   verifySafeBrowserErrorDiagnosticFixtures();
 const safeExactAuthenticationWebChannelDiagnosticSelfTest =
   verifySafeExactAuthenticationWebChannelDiagnosticFixtures();
+const safeLocalBlockIntentDiagnosticSelfTest =
+  verifySafeLocalBlockIntentDiagnosticFixtures();
 const frozenBaselineListenerBindingSelfTest =
   await verifyFrozenBaselineListenerBindingFixtures();
 const preTransmissionBoundaryNegativeSelfTest =
@@ -29586,11 +31150,17 @@ const verifyDirectCdpAllHeadersLoopback = async () => {
             debugSentinel: APP_CHECK_DEBUG_SENTINEL,
             bypassSecret: syntheticBypassSecret,
           }),
+        beginLocalBlockIntent: () => null,
+        completeLocalBlockIntent: () => {},
+        failLocalBlockIntent: () => {},
       });
     loopbackBoundaryController.activate({
       id: "loopback",
+      stage: "baseline",
       stableBrowserOrigin: stableOrigin,
       stagingApiKey: syntheticStagingApiKey,
+      getNetworkPhase: () => "context-bootstrap",
+      getCaptureId: () => null,
     });
     const context = await loopbackBrowser.newContext({
       serviceWorkers: "block",
@@ -33965,6 +35535,7 @@ if (args.includes("--self-test-app-check")) {
       ...safeAuthenticationFailureDiagnosticSelfTest,
       ...safeBrowserErrorDiagnosticSelfTest,
       ...safeExactAuthenticationWebChannelDiagnosticSelfTest,
+      ...safeLocalBlockIntentDiagnosticSelfTest,
       ...frozenBaselineListenerBindingSelfTest,
       ...preTransmissionBoundaryNegativeSelfTest,
       ...fixtureAuditFreshnessNegativeSelfTest,
@@ -41607,6 +43178,8 @@ let browserWideBoundaryController = null;
 let browserWideBoundaryFinalSnapshot = null;
 let browserConnectProxyFinalSnapshot = null;
 const browserWideBoundaryGroupAttestations = [];
+const browserWideLocalBlockIntentStatesByScopeId = new Map();
+let browserWideLocalBlockIntentUnboundDiagnosticErrorCount = 0;
 const browserVersion = browser.version();
 const captureSessionId = randomUUID();
 const startedAt = new Date().toISOString();
@@ -41763,6 +43336,48 @@ try {
             postData: String(event.request.postData || ""),
           }),
         });
+      },
+      beginLocalBlockIntent: ({ scopeId, ...input }) => {
+        const state =
+          browserWideLocalBlockIntentStatesByScopeId.get(scopeId) || null;
+        if (state === null) {
+          browserWideLocalBlockIntentUnboundDiagnosticErrorCount += 1;
+          return null;
+        }
+        try {
+          return state.ledger.begin({ scopeId, ...input });
+        } catch {
+          state.diagnosticErrorCount += 1;
+          return null;
+        }
+      },
+      completeLocalBlockIntent: ({ scopeId, handle }) => {
+        if (handle === null) return;
+        const state =
+          browserWideLocalBlockIntentStatesByScopeId.get(scopeId) || null;
+        if (state === null) {
+          browserWideLocalBlockIntentUnboundDiagnosticErrorCount += 1;
+          return;
+        }
+        try {
+          state.ledger.complete(handle);
+        } catch {
+          state.diagnosticErrorCount += 1;
+        }
+      },
+      failLocalBlockIntent: ({ scopeId, handle }) => {
+        if (handle === null) return;
+        const state =
+          browserWideLocalBlockIntentStatesByScopeId.get(scopeId) || null;
+        if (state === null) {
+          browserWideLocalBlockIntentUnboundDiagnosticErrorCount += 1;
+          return;
+        }
+        try {
+          state.ledger.fail(handle);
+        } catch {
+          state.diagnosticErrorCount += 1;
+        }
       },
     });
   for (const [groupKey, groupTargets] of [...groupedTargets.entries()].sort()) {
@@ -42061,6 +43676,19 @@ try {
       vercelBypassHeaderMismatchRequestCount;
     let networkPhase = "context-bootstrap";
     let activeCaptureId = null;
+    const groupLocalBlockIntentState = {
+      ledger: createSafeLocalBlockIntentLedger(),
+      diagnosticErrorCount: 0,
+    };
+    const groupLocalBlockIntentLedger = groupLocalBlockIntentState.ledger;
+    assert.equal(
+      browserWideLocalBlockIntentStatesByScopeId.has(groupKey),
+      false,
+    );
+    browserWideLocalBlockIntentStatesByScopeId.set(
+      groupKey,
+      groupLocalBlockIntentState,
+    );
     let groupApplicationSessionProof = null;
     let groupAuthenticationProtectedReadRetryAttestation = null;
     let groupAuthenticationCollectionListPreflightAttestation = null;
@@ -42840,6 +44468,7 @@ try {
       browserWideBoundaryController.snapshot();
     browserWideBoundaryController.activate({
       id: groupKey,
+      stage,
       stableBrowserOrigin: origin,
       stagingApiKey: firebaseConfig.apiKey,
       getNetworkPhase: () => networkPhase,
@@ -42929,6 +44558,14 @@ try {
     const authenticationExactWebChannelConsoleLocationRecords = [];
     let authenticationExactWebChannelLoadingFailureHandlerErrorCount = 0;
     let authenticationExactWebChannelNetworkLogHandlerErrorCount = 0;
+    const recordLocalBlockIntentProbe = (input) => {
+      try {
+        return groupLocalBlockIntentLedger.observe(input);
+      } catch {
+        groupLocalBlockIntentState.diagnosticErrorCount += 1;
+        return null;
+      }
+    };
     if (frozenBaselineListenerBindingObserver) {
       const promoteFrozenBaselineInitialTargets = (gsessionid) => {
         const networkRequestId =
@@ -43511,6 +45148,24 @@ try {
           event,
           "corsErrorStatus",
         );
+        const blockedReasonClass = blockedReasonPresent
+          ? event.blockedReason === "inspector"
+            ? "inspector"
+            : "unsupported"
+          : null;
+        const localBlockProbeFailureClass = safeBrowserRequestFailureClass(
+          event.errorText,
+        );
+        if (networkPhase === "authentication") {
+          recordLocalBlockIntentProbe({
+            diagnosticPhase: "authentication",
+            sourceClass: "network-loading-failed",
+            networkRequestId: event.requestId,
+            requestUrlSha256: exactObservation?.requestUrlSha256 || null,
+            failureClass: localBlockProbeFailureClass,
+            blockedReasonClass,
+          });
+        }
         authenticationExactWebChannelLoadingFailureDuplicateCount += Number(
           authenticationExactWebChannelLoadingFailuresByNetworkId.has(
             event.requestId,
@@ -43534,14 +45189,10 @@ try {
               gsessionidSha256:
                 exactObservation?.webChannelListenSessionHashes
                   ?.gsessionidSha256 || null,
-              failureClass: safeBrowserRequestFailureClass(event.errorText),
+              failureClass: localBlockProbeFailureClass,
               canceled: event.canceled === true,
               blockedReasonPresent,
-              blockedReasonClass: blockedReasonPresent
-                ? event.blockedReason === "inspector"
-                  ? "inspector"
-                  : "unsupported"
-                : null,
+              blockedReasonClass,
               corsErrorStatusAbsent: !corsErrorStatusPresent,
               exactNetworkBindingCandidateCount:
                 exactWebChannelBinding.candidateCount,
@@ -43558,11 +45209,6 @@ try {
           authenticationProtectedReadAttemptsByNetworkId.get(event.requestId) ||
           null;
         if (attempt === null) return;
-        const blockedReasonClass = blockedReasonPresent
-          ? event.blockedReason === "inspector"
-            ? "inspector"
-            : "unsupported"
-          : null;
         const corsError = corsErrorStatusPresent
           ? event.corsErrorStatus?.corsError
           : undefined;
@@ -43686,6 +45332,17 @@ try {
             typeof entry?.url === "string" && entry.url.length > 0
               ? entry.url
               : null;
+          recordLocalBlockIntentProbe({
+            diagnosticPhase: "authentication",
+            sourceClass: "network-log",
+            networkRequestId:
+              typeof entry?.networkRequestId === "string"
+                ? entry.networkRequestId
+                : null,
+            requestUrl: entryUrl,
+            failureClass: safeRecord.messageClass,
+            blockedReasonClass: null,
+          });
           authenticationExactWebChannelNetworkLogRecords.push(
             freezeSafeExactAuthenticationWebChannelDiagnosticRecord(
               "networkLog",
@@ -43956,6 +45613,98 @@ try {
       return networkAliasPhases.length === 1
         ? networkAliasPhases[0]
         : networkPhase;
+    };
+    const beginPrimaryLocalBlockIntent = ({
+      event,
+      diagnosticContext,
+      intentClass,
+      phaseClass,
+      policyReasonClass,
+      requestScopeClass,
+      primaryRequestId = event.requestId,
+      responseFetchCorrelationClass = null,
+      observation = null,
+      lifecycle = null,
+      inspection = null,
+      webChannelRequestClass = null,
+      webChannelTerminationClass = null,
+    }) => {
+      try {
+        const networkRequestId =
+          lifecycle?.networkId ||
+          (typeof event.networkId === "string" && event.networkId.length > 0
+            ? event.networkId
+            : null);
+        const exactPrimaryIdentity =
+          typeof primaryRequestId === "string" &&
+          primaryRequestId.length > 0 &&
+          typeof event.requestId === "string" &&
+          event.requestId.length > 0 &&
+          typeof networkRequestId === "string" &&
+          networkRequestId.length > 0;
+        const exactScopeBound =
+          exactPrimaryIdentity &&
+          (phaseClass !== "response" ||
+            SAFE_LOCAL_BLOCK_INTENT_RESPONSE_CORRELATION_CLASSES.includes(
+              responseFetchCorrelationClass,
+            ));
+        return groupLocalBlockIntentLedger.begin({
+          scopeId: groupKey,
+          captureStage: stage,
+          diagnosticPhase: diagnosticContext.phase,
+          issuerClass: "primary-app-check-cdp-handler",
+          intentClass,
+          phaseClass,
+          operationClass:
+            phaseClass === "response" ? "response-fail" : "request-fail",
+          policyReasonClass,
+          requestScopeClass,
+          fetchRequestId: event.requestId,
+          primaryFetchRequestId: primaryRequestId,
+          networkRequestId,
+          requestUrl: event.request.url,
+          requestUrlSha256: observation?.requestUrlSha256 || null,
+          firebaseService:
+            observation?.firebaseService ||
+            inspection?.firebaseService ||
+            diagnosticContext.service ||
+            "unknown",
+          requestMethod:
+            observation?.requestMethod || event.request.method || "unknown",
+          requestHeaders: event.request.headers || {},
+          requestPostDataPresent: pausedRequestPostDataPresenceForCorrelation(
+            event.request,
+          ),
+          resourceType:
+            observation?.resourceType || event.resourceType || "unknown",
+          responseFetchCorrelationClass,
+          webChannelRequestClass:
+            observation?.webChannelRequestClass || webChannelRequestClass,
+          webChannelTerminationClass:
+            observation?.webChannelTerminationClass ||
+            webChannelTerminationClass,
+          exactScopeBound,
+        });
+      } catch {
+        groupLocalBlockIntentState.diagnosticErrorCount += 1;
+        return null;
+      }
+    };
+    const completePrimaryLocalBlockIntent = (handle) => {
+      if (handle === null) return;
+      try {
+        groupLocalBlockIntentLedger.complete(handle);
+      } catch {
+        groupLocalBlockIntentState.diagnosticErrorCount += 1;
+      }
+    };
+    const failPrimaryLocalBlockIntent = (handle) => {
+      if (handle === null) return;
+      try {
+        groupLocalBlockIntentLedger.fail(handle);
+      } catch {
+        groupLocalBlockIntentState.diagnosticErrorCount += 1;
+      }
     };
     const continueInspectedDirectFirebaseRequest = async ({
       event,
@@ -44661,11 +46410,33 @@ try {
             primaryRequestId,
           );
           diagnosticContext.operation = "response-fail";
+          const responseErrorLocalBlockIntent = beginPrimaryLocalBlockIntent({
+            event,
+            diagnosticContext,
+            intentClass:
+              "primary-allowed-egress-response-error-terminalization",
+            phaseClass: "response",
+            policyReasonClass: "response-error",
+            requestScopeClass:
+              authenticationProtectedReadAttempt === null
+                ? "allowed-egress"
+                : "authentication-protected-read",
+            primaryRequestId,
+            responseFetchCorrelationClass: responseCorrelation.source,
+            observation: allowedEgressObservation,
+            lifecycle,
+          });
           try {
-            await appCheckCdpSession.send("Fetch.failRequest", {
-              requestId: event.requestId,
-              errorReason: "BlockedByClient",
-            });
+            try {
+              await appCheckCdpSession.send("Fetch.failRequest", {
+                requestId: event.requestId,
+                errorReason: "BlockedByClient",
+              });
+              completePrimaryLocalBlockIntent(responseErrorLocalBlockIntent);
+            } catch (error) {
+              failPrimaryLocalBlockIntent(responseErrorLocalBlockIntent);
+              throw error;
+            }
             if (authenticationProtectedReadAttempt !== null) {
               const localFailRequest =
                 authenticationProtectedReadAttempt.localResponseErrorFailRequest;
@@ -44790,10 +46561,28 @@ try {
           );
           diagnosticContext.operation = "response-fail";
           diagnosticContext.reason = "unexpected-handler-error";
-          await appCheckCdpSession.send("Fetch.failRequest", {
-            requestId: event.requestId,
-            errorReason: "BlockedByClient",
+          const invalidResponseLocalBlockIntent = beginPrimaryLocalBlockIntent({
+            event,
+            diagnosticContext,
+            intentClass: "primary-invalid-pre-final-response-terminalization",
+            phaseClass: "response",
+            policyReasonClass: "invalid-response-status",
+            requestScopeClass: "response-lifecycle",
+            primaryRequestId,
+            responseFetchCorrelationClass: responseCorrelation.source,
+            observation: allowedEgressObservation,
+            lifecycle,
           });
+          try {
+            await appCheckCdpSession.send("Fetch.failRequest", {
+              requestId: event.requestId,
+              errorReason: "BlockedByClient",
+            });
+            completePrimaryLocalBlockIntent(invalidResponseLocalBlockIntent);
+          } catch (error) {
+            failPrimaryLocalBlockIntent(invalidResponseLocalBlockIntent);
+            throw error;
+          }
           completeProxyAuthorization();
           setAllowedEgressLifecycleState(primaryRequestId, "terminal-complete");
           return;
@@ -44896,10 +46685,30 @@ try {
           stableOriginRewriteRequestsByFetchRequestId.delete(primaryRequestId);
           diagnosticContext.operation = "response-fail";
           diagnosticContext.reason = "unexpected-handler-error";
-          await appCheckCdpSession.send("Fetch.failRequest", {
-            requestId: event.requestId,
-            errorReason: "BlockedByClient",
+          const finalResponseLocalBlockIntent = beginPrimaryLocalBlockIntent({
+            event,
+            diagnosticContext,
+            intentClass: "primary-final-http-or-redirect-terminalization",
+            phaseClass: "response",
+            policyReasonClass: redirectResponseMustAbort(responseStatus)
+              ? "redirect-response"
+              : "http-error-response",
+            requestScopeClass: "response-lifecycle",
+            primaryRequestId,
+            responseFetchCorrelationClass: responseCorrelation.source,
+            observation: allowedEgressObservation,
+            lifecycle,
           });
+          try {
+            await appCheckCdpSession.send("Fetch.failRequest", {
+              requestId: event.requestId,
+              errorReason: "BlockedByClient",
+            });
+            completePrimaryLocalBlockIntent(finalResponseLocalBlockIntent);
+          } catch (error) {
+            failPrimaryLocalBlockIntent(finalResponseLocalBlockIntent);
+            throw error;
+          }
           completeProxyAuthorization();
           setAllowedEgressLifecycleState(primaryRequestId, "terminal-complete");
           return;
@@ -44998,10 +46807,24 @@ try {
         browserSkipToolbarHeaderPreTransmissionBlockCount += 1;
         diagnosticContext.operation = "request-fail";
         diagnosticContext.reason = "unexpected-handler-error";
-        await appCheckCdpSession.send("Fetch.failRequest", {
-          requestId: event.requestId,
-          errorReason: "BlockedByClient",
+        const skipToolbarLocalBlockIntent = beginPrimaryLocalBlockIntent({
+          event,
+          diagnosticContext,
+          intentClass: "primary-skip-toolbar-header-block",
+          phaseClass: "request",
+          policyReasonClass: "forbidden-header",
+          requestScopeClass: "vercel-skip-toolbar",
         });
+        try {
+          await appCheckCdpSession.send("Fetch.failRequest", {
+            requestId: event.requestId,
+            errorReason: "BlockedByClient",
+          });
+          completePrimaryLocalBlockIntent(skipToolbarLocalBlockIntent);
+        } catch (error) {
+          failPrimaryLocalBlockIntent(skipToolbarLocalBlockIntent);
+          throw error;
+        }
         return;
       }
       diagnosticContext.operation = "request-post-data";
@@ -45147,10 +46970,25 @@ try {
             SAFE_PRE_TRANSMISSION_BOUNDARY_FAILURE_REASONS,
           );
         }
-        await appCheckCdpSession.send("Fetch.failRequest", {
-          requestId: event.requestId,
-          errorReason: "BlockedByClient",
+        const rawSensitiveLocalBlockIntent = beginPrimaryLocalBlockIntent({
+          event,
+          diagnosticContext,
+          intentClass: "primary-raw-sensitive-block",
+          phaseClass: "request",
+          policyReasonClass: rawSensitiveDecision.marker,
+          requestScopeClass: "sensitive-pre-transmission",
+          inspection: preTransmissionInspection,
         });
+        try {
+          await appCheckCdpSession.send("Fetch.failRequest", {
+            requestId: event.requestId,
+            errorReason: "BlockedByClient",
+          });
+          completePrimaryLocalBlockIntent(rawSensitiveLocalBlockIntent);
+        } catch (error) {
+          failPrimaryLocalBlockIntent(rawSensitiveLocalBlockIntent);
+          throw error;
+        }
         if (rawSensitiveDecision.marker === "production") {
           preTransmissionBoundaryFailRequestCount += 1;
         }
@@ -45173,10 +47011,25 @@ try {
         });
         diagnosticContext.operation = "request-fail";
         diagnosticContext.reason = "unexpected-handler-error";
-        await appCheckCdpSession.send("Fetch.failRequest", {
-          requestId: event.requestId,
-          errorReason: "BlockedByClient",
+        const telemetryLocalBlockIntent = beginPrimaryLocalBlockIntent({
+          event,
+          diagnosticContext,
+          intentClass: "primary-optional-telemetry-suppression",
+          phaseClass: "request",
+          policyReasonClass: "telemetry-suppression",
+          requestScopeClass: "optional-telemetry",
+          inspection: preTransmissionInspection,
         });
+        try {
+          await appCheckCdpSession.send("Fetch.failRequest", {
+            requestId: event.requestId,
+            errorReason: "BlockedByClient",
+          });
+          completePrimaryLocalBlockIntent(telemetryLocalBlockIntent);
+        } catch (error) {
+          failPrimaryLocalBlockIntent(telemetryLocalBlockIntent);
+          throw error;
+        }
         return;
       }
       const preTransmissionDecision = preTransmissionBoundaryDecision({
@@ -45220,10 +47073,25 @@ try {
           },
           SAFE_PRE_TRANSMISSION_BOUNDARY_FAILURE_REASONS,
         );
-        await appCheckCdpSession.send("Fetch.failRequest", {
-          requestId: event.requestId,
-          errorReason: "BlockedByClient",
+        const boundaryLocalBlockIntent = beginPrimaryLocalBlockIntent({
+          event,
+          diagnosticContext,
+          intentClass: "primary-pre-transmission-boundary-block",
+          phaseClass: "request",
+          policyReasonClass: preTransmissionDecision.marker,
+          requestScopeClass: "pre-transmission-boundary",
+          inspection: preTransmissionInspection,
         });
+        try {
+          await appCheckCdpSession.send("Fetch.failRequest", {
+            requestId: event.requestId,
+            errorReason: "BlockedByClient",
+          });
+          completePrimaryLocalBlockIntent(boundaryLocalBlockIntent);
+        } catch (error) {
+          failPrimaryLocalBlockIntent(boundaryLocalBlockIntent);
+          throw error;
+        }
         preTransmissionBoundaryFailRequestCount += 1;
         return;
       }
@@ -45256,10 +47124,26 @@ try {
       ) {
         diagnosticContext.operation = "request-fail";
         diagnosticContext.reason = "unexpected-handler-error";
-        await appCheckCdpSession.send("Fetch.failRequest", {
-          requestId: event.requestId,
-          errorReason: "BlockedByClient",
-        });
+        const collectionPreflightLocalBlockIntent =
+          beginPrimaryLocalBlockIntent({
+            event,
+            diagnosticContext,
+            intentClass: "primary-collection-preflight-contract-block",
+            phaseClass: "request",
+            policyReasonClass: "invalid-request-shape",
+            requestScopeClass: "authentication-collection-preflight",
+            inspection: preTransmissionInspection,
+          });
+        try {
+          await appCheckCdpSession.send("Fetch.failRequest", {
+            requestId: event.requestId,
+            errorReason: "BlockedByClient",
+          });
+          completePrimaryLocalBlockIntent(collectionPreflightLocalBlockIntent);
+        } catch (error) {
+          failPrimaryLocalBlockIntent(collectionPreflightLocalBlockIntent);
+          throw error;
+        }
         return;
       }
       if (collectionListPreflightQueryClass !== null) {
@@ -45282,10 +47166,25 @@ try {
           deterministicResponseScopeMismatchBlockCount += 1;
           diagnosticContext.operation = "request-fail";
           diagnosticContext.reason = "unexpected-handler-error";
-          await appCheckCdpSession.send("Fetch.failRequest", {
-            requestId: event.requestId,
-            errorReason: "BlockedByClient",
+          const deterministicLocalBlockIntent = beginPrimaryLocalBlockIntent({
+            event,
+            diagnosticContext,
+            intentClass: "primary-deterministic-response-contract-block",
+            phaseClass: "request",
+            policyReasonClass: "deterministic-scope-mismatch",
+            requestScopeClass: "deterministic-response",
+            inspection: preTransmissionInspection,
           });
+          try {
+            await appCheckCdpSession.send("Fetch.failRequest", {
+              requestId: event.requestId,
+              errorReason: "BlockedByClient",
+            });
+            completePrimaryLocalBlockIntent(deterministicLocalBlockIntent);
+          } catch (error) {
+            failPrimaryLocalBlockIntent(deterministicLocalBlockIntent);
+            throw error;
+          }
           return;
         }
         const payload = deterministicFulfillPayload(
@@ -45333,10 +47232,25 @@ try {
           externalStaticRequestScopeMismatchBlockCount += 1;
           diagnosticContext.operation = "request-fail";
           diagnosticContext.reason = "unexpected-handler-error";
-          await appCheckCdpSession.send("Fetch.failRequest", {
-            requestId: event.requestId,
-            errorReason: "BlockedByClient",
+          const externalStaticLocalBlockIntent = beginPrimaryLocalBlockIntent({
+            event,
+            diagnosticContext,
+            intentClass: "primary-external-static-contract-block",
+            phaseClass: "request",
+            policyReasonClass: "external-static-scope-mismatch",
+            requestScopeClass: "external-static",
+            inspection: preTransmissionInspection,
           });
+          try {
+            await appCheckCdpSession.send("Fetch.failRequest", {
+              requestId: event.requestId,
+              errorReason: "BlockedByClient",
+            });
+            completePrimaryLocalBlockIntent(externalStaticLocalBlockIntent);
+          } catch (error) {
+            failPrimaryLocalBlockIntent(externalStaticLocalBlockIntent);
+            throw error;
+          }
           return;
         }
         if (externalStaticDecision.action === "local-node-module-fulfill") {
@@ -45546,20 +47460,50 @@ try {
         stableOriginRewriteScopeMismatchRequestCount += 1;
         diagnosticContext.operation = "request-fail";
         diagnosticContext.reason = "unexpected-handler-error";
-        await appCheckCdpSession.send("Fetch.failRequest", {
-          requestId: event.requestId,
-          errorReason: "BlockedByClient",
+        const directImmutableLocalBlockIntent = beginPrimaryLocalBlockIntent({
+          event,
+          diagnosticContext,
+          intentClass: "primary-direct-immutable-origin-block",
+          phaseClass: "request",
+          policyReasonClass: "direct-immutable-origin-scope-mismatch",
+          requestScopeClass: "direct-immutable-origin",
+          inspection: preTransmissionInspection,
         });
+        try {
+          await appCheckCdpSession.send("Fetch.failRequest", {
+            requestId: event.requestId,
+            errorReason: "BlockedByClient",
+          });
+          completePrimaryLocalBlockIntent(directImmutableLocalBlockIntent);
+        } catch (error) {
+          failPrimaryLocalBlockIntent(directImmutableLocalBlockIntent);
+          throw error;
+        }
         return;
       }
       if (rewriteDecision.stableOriginRequest && !rewriteDecision.eligible) {
         stableOriginRewriteScopeMismatchRequestCount += 1;
         diagnosticContext.operation = "request-fail";
         diagnosticContext.reason = "unexpected-handler-error";
-        await appCheckCdpSession.send("Fetch.failRequest", {
-          requestId: event.requestId,
-          errorReason: "BlockedByClient",
+        const stableRewriteLocalBlockIntent = beginPrimaryLocalBlockIntent({
+          event,
+          diagnosticContext,
+          intentClass: "primary-stable-origin-rewrite-contract-block",
+          phaseClass: "request",
+          policyReasonClass: "stable-origin-rewrite-scope-mismatch",
+          requestScopeClass: "stable-origin-rewrite",
+          inspection: preTransmissionInspection,
         });
+        try {
+          await appCheckCdpSession.send("Fetch.failRequest", {
+            requestId: event.requestId,
+            errorReason: "BlockedByClient",
+          });
+          completePrimaryLocalBlockIntent(stableRewriteLocalBlockIntent);
+        } catch (error) {
+          failPrimaryLocalBlockIntent(stableRewriteLocalBlockIntent);
+          throw error;
+        }
         return;
       }
       const debugSentinelInUrl = requestUrl.includes(APP_CHECK_DEBUG_SENTINEL);
@@ -45640,10 +47584,25 @@ try {
         }
         diagnosticContext.operation = "request-fail";
         diagnosticContext.reason = "unexpected-handler-error";
-        await appCheckCdpSession.send("Fetch.failRequest", {
-          requestId: event.requestId,
-          errorReason: "BlockedByClient",
+        const redirectedRequestLocalBlockIntent = beginPrimaryLocalBlockIntent({
+          event,
+          diagnosticContext,
+          intentClass: "primary-redirected-allowed-egress-block",
+          phaseClass: "request",
+          policyReasonClass: "redirected-request",
+          requestScopeClass: "redirected-allowed-egress",
+          inspection: preTransmissionInspection,
         });
+        try {
+          await appCheckCdpSession.send("Fetch.failRequest", {
+            requestId: event.requestId,
+            errorReason: "BlockedByClient",
+          });
+          completePrimaryLocalBlockIntent(redirectedRequestLocalBlockIntent);
+        } catch (error) {
+          failPrimaryLocalBlockIntent(redirectedRequestLocalBlockIntent);
+          throw error;
+        }
         return;
       }
       const decision = baselineAppCheckBridgeDecision({
@@ -45663,10 +47622,26 @@ try {
           unauthorizedAppCheckHeaderEgressCount += 1;
           diagnosticContext.operation = "request-fail";
           diagnosticContext.reason = "unexpected-handler-error";
-          await appCheckCdpSession.send("Fetch.failRequest", {
-            requestId: event.requestId,
-            errorReason: "BlockedByClient",
-          });
+          const unauthorizedHeaderLocalBlockIntent =
+            beginPrimaryLocalBlockIntent({
+              event,
+              diagnosticContext,
+              intentClass: "primary-unauthorized-app-check-header-block",
+              phaseClass: "request",
+              policyReasonClass: "unauthorized-header",
+              requestScopeClass: "native-app-check-header",
+              inspection: preTransmissionInspection,
+            });
+          try {
+            await appCheckCdpSession.send("Fetch.failRequest", {
+              requestId: event.requestId,
+              errorReason: "BlockedByClient",
+            });
+            completePrimaryLocalBlockIntent(unauthorizedHeaderLocalBlockIntent);
+          } catch (error) {
+            failPrimaryLocalBlockIntent(unauthorizedHeaderLocalBlockIntent);
+            throw error;
+          }
           return;
         }
         authorizedAppCheckHeaderRequestCount += 1;
@@ -46232,9 +48207,13 @@ try {
             .catch(async (error) => {
               const primaryRequestId =
                 cdpHandlerPrimaryRequestIds.get(event) || event.requestId;
-              const lifecycleStateAtFailure =
-                allowedEgressLifecycleByFetchRequestId.get(primaryRequestId)
-                  ?.state || null;
+              const lifecycleAtFailure =
+                allowedEgressLifecycleByFetchRequestId.get(primaryRequestId) ||
+                null;
+              const observationAtFailure =
+                allowedEgressRequestsByFetchRequestId.get(primaryRequestId) ||
+                null;
+              const lifecycleStateAtFailure = lifecycleAtFailure?.state || null;
               const protocolErrorClass =
                 safeCdpHandlerProtocolErrorClass(error);
               cdpContinueRequestInvalidInterceptionErrorCount += Number(
@@ -46307,12 +48286,28 @@ try {
                   error.code === "representation-mismatch",
                 );
               }
+              const handlerFailureLocalBlockIntent =
+                beginPrimaryLocalBlockIntent({
+                  event,
+                  diagnosticContext,
+                  intentClass: "primary-handler-exception-block",
+                  phaseClass: "handler",
+                  policyReasonClass: "unexpected-handler-error",
+                  requestScopeClass: "cdp-handler-fallback",
+                  primaryRequestId,
+                  responseFetchCorrelationClass:
+                    responseCorrelationHint?.source || null,
+                  observation: observationAtFailure,
+                  lifecycle: lifecycleAtFailure,
+                });
               try {
                 await appCheckCdpSession.send("Fetch.failRequest", {
                   requestId: event.requestId,
                   errorReason: "BlockedByClient",
                 });
+                completePrimaryLocalBlockIntent(handlerFailureLocalBlockIntent);
               } catch (_error) {
+                failPrimaryLocalBlockIntent(handlerFailureLocalBlockIntent);
                 // The request may already have been terminated by the browser.
               }
             }),
@@ -46411,6 +48406,17 @@ try {
         exactWebChannelBinding.binding?.observation || null;
       const exactWebChannelTombstone =
         exactWebChannelBinding.binding?.tombstone || null;
+      const localBlockDiagnosticPhase = observation?.phase || networkPhase;
+      if (localBlockDiagnosticPhase === "authentication") {
+        recordLocalBlockIntentProbe({
+          diagnosticPhase: "authentication",
+          sourceClass: "playwright-request-failed",
+          networkRequestIdSha256,
+          requestUrl: request.url(),
+          failureClass,
+          blockedReasonClass: null,
+        });
+      }
       groupBrowserRequestFailureDiagnostics.push(
         freezeSafeExactAuthenticationWebChannelDiagnosticRecord(
           "requestFailure",
@@ -46565,6 +48571,15 @@ try {
             typeof location?.url === "string" && location.url.length > 0
               ? location.url
               : null;
+          recordLocalBlockIntentProbe({
+            diagnosticPhase: "authentication",
+            sourceClass: "console-location",
+            networkRequestId:
+              exactLifecycle === null ? null : exactLifecycle.networkId,
+            requestUrl: locationUrl,
+            failureClass: safeRecord.messageClass,
+            blockedReasonClass: null,
+          });
           authenticationExactWebChannelConsoleLocationRecords.push(
             freezeSafeExactAuthenticationWebChannelDiagnosticRecord(
               "consoleLocation",
@@ -47613,6 +49628,18 @@ try {
               ? 1
               : 0;
         });
+      const authenticationLocalBlockIntentDiagnostics =
+        groupLocalBlockIntentLedger.safeIntentSnapshot(
+          groupKey,
+          "authentication",
+        );
+      const authenticationLocalBlockIntentProbeDiagnostics =
+        groupLocalBlockIntentLedger.safeProbeSnapshot("authentication");
+      const authenticationLocalBlockIntentResolutionDiagnostics =
+        resolveSafeLocalBlockIntentProbesAtSettlement({
+          intents: authenticationLocalBlockIntentDiagnostics,
+          probes: authenticationLocalBlockIntentProbeDiagnostics,
+        });
       const authenticationWebChannelDiagnosticTombstones =
         authenticationExactWebChannelDiagnosticTombstones.safeSnapshot();
       const authenticationWebChannelTombstoneRegistration =
@@ -47768,6 +49795,11 @@ try {
         ),
         authenticationNetworkAttestationDrainDiagnostic,
         authenticationBrowserRequestFailureDiagnostics,
+        authenticationLocalBlockIntentDiagnostics,
+        authenticationLocalBlockIntentProbeDiagnostics,
+        authenticationLocalBlockIntentResolutionDiagnostics,
+        authenticationLocalBlockIntentDiagnosticErrorCount:
+          groupLocalBlockIntentState.diagnosticErrorCount,
         authenticationWebChannelDiagnosticTombstones,
         authenticationWebChannelTombstoneRegistration,
         authenticationWebChannelRequestFailureResolutionDiagnostics,
@@ -47839,6 +49871,9 @@ try {
         authenticationAllowedEgressHttpErrorAbortCount:
           allowedEgressHttpErrorAbortCount -
           groupAllowedEgressHttpErrorAbortStart,
+        authenticationAllowedEgressResponseErrorAbortCount:
+          allowedEgressResponseErrorAbortCount -
+          groupAllowedEgressResponseErrorAbortStart,
         groupCdpContinueRequestInvalidInterceptionErrorCount:
           cdpContinueRequestInvalidInterceptionErrorCount -
           groupCdpContinueRequestInvalidInterceptionErrorStart,
@@ -47899,6 +49934,13 @@ try {
         authenticationExactWebChannelNetworkLogHandlerErrorCount,
         0,
         `Authentication Log.entryAdded diagnostic handler error count must be zero: ${JSON.stringify(
+          authenticationBrowserErrorDiagnostic,
+        )}`,
+      );
+      assert.equal(
+        groupLocalBlockIntentState.diagnosticErrorCount,
+        0,
+        `Authentication local-block intent diagnostic error count must be zero: ${JSON.stringify(
           authenticationBrowserErrorDiagnostic,
         )}`,
       );
@@ -48611,6 +50653,15 @@ try {
       groupBrowserContextClosed = true;
       browserContextCloseCount += 1;
       await browserWideBoundaryController.deactivate(groupKey);
+      assert.equal(
+        groupLocalBlockIntentState.diagnosticErrorCount,
+        0,
+        `Group local-block intent diagnostic error count must be zero for ${groupKey}.`,
+      );
+      assert.equal(
+        browserWideLocalBlockIntentStatesByScopeId.delete(groupKey),
+        true,
+      );
       const groupBrowserWideBoundaryEnd =
         browserWideBoundaryController.snapshot();
       groupBrowserWideBoundaryAttestation = {
@@ -50128,6 +52179,8 @@ try {
     0,
   );
   assert.equal(browserWideBoundaryFinalSnapshot.fatalErrorCount, 0);
+  assert.equal(browserWideLocalBlockIntentStatesByScopeId.size, 0);
+  assert.equal(browserWideLocalBlockIntentUnboundDiagnosticErrorCount, 0);
   await browserWideBoundaryController.restore();
 } finally {
   for (const proof of liveApplicationSessionProofsByPage.values()) {
@@ -51437,6 +53490,10 @@ const browserWideBoundaryAttestation = {
     canonicalJson(contract.networkBoundary.executionTargetBoundary),
   ),
   ...browserWideBoundaryFinalSnapshot,
+  localBlockIntentScopeResidualCount:
+    browserWideLocalBlockIntentStatesByScopeId.size,
+  localBlockIntentUnboundDiagnosticErrorCount:
+    browserWideLocalBlockIntentUnboundDiagnosticErrorCount,
   groupAttestationCount: browserWideBoundaryGroupAttestations.length,
   groupAttestationSetHash: sha256(
     canonicalJson(browserWideBoundaryGroupAttestations),
