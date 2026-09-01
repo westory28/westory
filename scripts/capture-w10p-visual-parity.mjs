@@ -12937,7 +12937,13 @@ const isSafeExactAuthenticationWebChannelDiagnosticBindingCandidate = ({
 const SAFE_EXACT_AUTHENTICATION_WEBCHANNEL_DIAGNOSTIC_RECORD_KEYS =
   Object.freeze({
     requestFailure: Object.freeze([
+      "directWebChannelGsessionidSha256",
+      "directWebChannelInitialRequest",
+      "directWebChannelRequestClass",
+      "directWebChannelSidSha256",
+      "directWebChannelTerminationClass",
       "exactWebChannelBindingCandidateCount",
+      "exactWebChannelRequestUrlBindingCandidateCount",
       "failureClass",
       "finalResponseReleaseState",
       "finalResponseStatusClass",
@@ -12946,6 +12952,7 @@ const SAFE_EXACT_AUTHENTICATION_WEBCHANNEL_DIAGNOSTIC_RECORD_KEYS =
       "networkIdentityBound",
       "networkRequestIdSha256",
       "observedSequence",
+      "playwrightNetworkIdentityResolved",
       "requestUrlSha256",
       "resourceType",
       "sidSha256",
@@ -13120,11 +13127,41 @@ const freezeSafeExactAuthenticationWebChannelDiagnosticRecord = (
 };
 const SAFE_EXACT_AUTHENTICATION_WEBCHANNEL_FINAL_RESPONSE_RELEASE_STATES =
   Object.freeze(["not-started", "command-in-flight", "released"]);
+const SAFE_EXACT_AUTHENTICATION_WEBCHANNEL_TOMBSTONE_REGISTRATION_REASONS =
+  Object.freeze([
+    "accepted",
+    "duplicate-fetch-request-id",
+    "exact-candidate-invariant-rejected",
+    "initial-request-no-session",
+    "lifecycle-missing",
+    "lifecycle-network-identity-missing",
+    "lifecycle-state-or-phase-invalid",
+    "observation-missing",
+    "outside-exact-authentication-webchannel-scope",
+  ]);
 const createExactAuthenticationWebChannelDiagnosticTombstoneRegistry = () => {
   let sequence = 0;
+  let registrationAttemptCount = 0;
+  let exactScopeRegistrationAttemptCount = 0;
   const entriesByFetchRequestId = new Map();
   const fetchRequestIdsByNetworkId = new Map();
   const fetchRequestIdsByRequestUrlSha256 = new Map();
+  const registrationReasonCounts = new Map(
+    SAFE_EXACT_AUTHENTICATION_WEBCHANNEL_TOMBSTONE_REGISTRATION_REASONS.map(
+      (reason) => [reason, 0],
+    ),
+  );
+  const recordRegistrationReason = (reason) => {
+    assert.ok(
+      SAFE_EXACT_AUTHENTICATION_WEBCHANNEL_TOMBSTONE_REGISTRATION_REASONS.includes(
+        reason,
+      ),
+    );
+    registrationReasonCounts.set(
+      reason,
+      registrationReasonCounts.get(reason) + 1,
+    );
+  };
   const nextSequence = () => {
     sequence += 1;
     assert.ok(Number.isSafeInteger(sequence) && sequence > 0);
@@ -13179,14 +13216,62 @@ const createExactAuthenticationWebChannelDiagnosticTombstoneRegistry = () => {
   const register = ({ fetchRequestId, lifecycle, observation }) => {
     assert.equal(typeof fetchRequestId, "string");
     assert.ok(fetchRequestId.length > 0);
+    registrationAttemptCount += 1;
+    if (entriesByFetchRequestId.has(fetchRequestId)) {
+      recordRegistrationReason("duplicate-fetch-request-id");
+      return false;
+    }
+    if (observation === null || observation === undefined) {
+      recordRegistrationReason("observation-missing");
+      return false;
+    }
     if (
-      entriesByFetchRequestId.has(fetchRequestId) ||
+      observation.diagnosticPhase === "authentication" &&
+      observation.firebaseService === "firestore" &&
+      observation.webChannelInitialRequestExact === true
+    ) {
+      recordRegistrationReason("initial-request-no-session");
+      return false;
+    }
+    const exactAuthenticationWebChannelScope =
+      observation.diagnosticPhase === "authentication" &&
+      observation.firebaseService === "firestore" &&
+      observation.webChannelListenPathExact === true &&
+      (["session-forward-post", "backchannel-get"].includes(
+        observation.webChannelRequestClass,
+      ) ||
+        observation.webChannelTerminationClass === "termination-image-get");
+    if (!exactAuthenticationWebChannelScope) {
+      recordRegistrationReason("outside-exact-authentication-webchannel-scope");
+      return false;
+    }
+    exactScopeRegistrationAttemptCount += 1;
+    if (lifecycle === null || lifecycle === undefined) {
+      recordRegistrationReason("lifecycle-missing");
+      return false;
+    }
+    if (
+      typeof lifecycle.networkId !== "string" ||
+      lifecycle.networkId.length === 0
+    ) {
+      recordRegistrationReason("lifecycle-network-identity-missing");
+      return false;
+    }
+    if (
+      lifecycle.state !== "response-awaiting" ||
+      lifecycle.diagnosticPhase !== "authentication"
+    ) {
+      recordRegistrationReason("lifecycle-state-or-phase-invalid");
+      return false;
+    }
+    if (
       !isSafeExactAuthenticationWebChannelDiagnosticBindingCandidate({
         lifecycle,
         observation,
-        expectedNetworkId: lifecycle?.networkId || null,
+        expectedNetworkId: lifecycle.networkId,
       })
     ) {
+      recordRegistrationReason("exact-candidate-invariant-rejected");
       return false;
     }
     const record = freezeSafeExactAuthenticationWebChannelDiagnosticRecord(
@@ -13226,6 +13311,7 @@ const createExactAuthenticationWebChannelDiagnosticTombstoneRegistry = () => {
       observation.requestUrlSha256,
       fetchRequestId,
     );
+    recordRegistrationReason("accepted");
     return true;
   };
   const markFinalResponseReleaseCommand = ({
@@ -13314,12 +13400,135 @@ const createExactAuthenticationWebChannelDiagnosticTombstoneRegistry = () => {
     resolveForRequestUrl,
     nextObservedSequence: nextSequence,
     size: () => entriesByFetchRequestId.size,
+    registrationSnapshot: () => {
+      const reasonHistogram =
+        SAFE_EXACT_AUTHENTICATION_WEBCHANNEL_TOMBSTONE_REGISTRATION_REASONS.map(
+          (reason) =>
+            Object.freeze({
+              reason,
+              count: registrationReasonCounts.get(reason),
+            }),
+        );
+      const acceptedCount = registrationReasonCounts.get("accepted");
+      const exactScopeRejectedCount =
+        exactScopeRegistrationAttemptCount - acceptedCount;
+      assert.ok(exactScopeRejectedCount >= 0);
+      assert.equal(
+        reasonHistogram.reduce((total, entry) => total + entry.count, 0),
+        registrationAttemptCount,
+      );
+      return Object.freeze({
+        registrationAttemptCount,
+        exactScopeRegistrationAttemptCount,
+        acceptedCount,
+        exactScopeRejectedCount,
+        reasonHistogram: Object.freeze(reasonHistogram),
+      });
+    },
+    safeSnapshot: () =>
+      Object.freeze(
+        [...entriesByFetchRequestId.values()]
+          .map((entry) => entry.record)
+          .sort((left, right) =>
+            left.fetchRequestIdSha256.localeCompare(right.fetchRequestIdSha256),
+          ),
+      ),
     clear: () => {
       entriesByFetchRequestId.clear();
       fetchRequestIdsByNetworkId.clear();
       fetchRequestIdsByRequestUrlSha256.clear();
     },
   });
+};
+const resolveSafeExactAuthenticationWebChannelDiagnosticProbesAtSettlement = ({
+  probes,
+  tombstones,
+}) => {
+  assert.ok(Array.isArray(probes));
+  assert.ok(Array.isArray(tombstones));
+  assert.ok(probes.length <= 128);
+  assert.ok(tombstones.length <= 128);
+  for (const tombstone of tombstones) {
+    assert.deepEqual(
+      Object.keys(tombstone).sort(),
+      SAFE_EXACT_AUTHENTICATION_WEBCHANNEL_DIAGNOSTIC_RECORD_KEYS.tombstone,
+    );
+  }
+  return Object.freeze(
+    probes.map((probe) => {
+      assert.ok(probe && typeof probe === "object" && !Array.isArray(probe));
+      assert.ok(
+        Number.isSafeInteger(probe.observedSequence) &&
+          probe.observedSequence > 0,
+      );
+      const networkCandidates =
+        probe.networkRequestIdSha256 === null
+          ? []
+          : tombstones.filter(
+              (tombstone) =>
+                tombstone.networkRequestIdSha256 ===
+                probe.networkRequestIdSha256,
+            );
+      const requestUrlCandidates =
+        probe.requestUrlSha256 === null
+          ? []
+          : tombstones.filter(
+              (tombstone) =>
+                tombstone.requestUrlSha256 === probe.requestUrlSha256,
+            );
+      const networkBinding =
+        networkCandidates.length === 1 ? networkCandidates[0] : null;
+      const requestUrlBinding =
+        requestUrlCandidates.length === 1 ? requestUrlCandidates[0] : null;
+      const networkIdentityResolutionComplete =
+        probe.networkRequestIdSha256 === null || networkCandidates.length === 1;
+      const requestUrlIdentityResolutionComplete =
+        probe.requestUrlSha256 === null || requestUrlCandidates.length === 1;
+      const bindingConflict =
+        networkBinding !== null &&
+        requestUrlBinding !== null &&
+        networkBinding.fetchRequestIdSha256 !==
+          requestUrlBinding.fetchRequestIdSha256;
+      const selectedTombstone =
+        !networkIdentityResolutionComplete ||
+        !requestUrlIdentityResolutionComplete ||
+        bindingConflict
+          ? null
+          : networkBinding || requestUrlBinding;
+      const selectedBy =
+        selectedTombstone === null
+          ? null
+          : networkBinding !== null && requestUrlBinding !== null
+            ? "network-and-request-url"
+            : networkBinding !== null
+              ? "network-only"
+              : "request-url-only";
+      return Object.freeze({
+        probe,
+        settlementResolution: Object.freeze({
+          networkCandidateCount: networkCandidates.length,
+          requestUrlCandidateCount: requestUrlCandidates.length,
+          networkIdentityResolutionComplete,
+          requestUrlIdentityResolutionComplete,
+          bindingConflict,
+          selectedBy,
+          selectedTombstone,
+          eventBeforeTombstoneAdmission:
+            selectedTombstone === null
+              ? null
+              : probe.observedSequence < selectedTombstone.admissionSequence,
+          eventAfterFinalResponseRelease:
+            selectedTombstone === null
+              ? null
+              : selectedTombstone.finalResponseReleaseState === "released" &&
+                selectedTombstone.finalResponseStatusClass === "2xx" &&
+                selectedTombstone.releaseCompletedSequence > 0 &&
+                selectedTombstone.releaseCompletedSequence <
+                  probe.observedSequence,
+        }),
+      });
+    }),
+  );
 };
 const SAFE_FIRESTORE_WEBCHANNEL_LISTENER_DIAGNOSTIC_REASONS = [
   "classified",
@@ -27686,6 +27895,34 @@ const verifySafeExactAuthenticationWebChannelDiagnosticFixtures = () => {
     Object.keys(safeReleasedTombstone).sort(),
     SAFE_EXACT_AUTHENTICATION_WEBCHANNEL_DIAGNOSTIC_RECORD_KEYS.tombstone,
   );
+  assert.deepEqual(diagnosticTombstoneRegistry.safeSnapshot(), [
+    safeReleasedTombstone,
+  ]);
+  const diagnosticTombstoneRegistrationSnapshot =
+    diagnosticTombstoneRegistry.registrationSnapshot();
+  assert.deepEqual(
+    Object.keys(diagnosticTombstoneRegistrationSnapshot).sort(),
+    [
+      "acceptedCount",
+      "exactScopeRegistrationAttemptCount",
+      "exactScopeRejectedCount",
+      "reasonHistogram",
+      "registrationAttemptCount",
+    ],
+  );
+  assert.equal(
+    diagnosticTombstoneRegistrationSnapshot.registrationAttemptCount,
+    1,
+  );
+  assert.equal(
+    diagnosticTombstoneRegistrationSnapshot.exactScopeRegistrationAttemptCount,
+    1,
+  );
+  assert.equal(diagnosticTombstoneRegistrationSnapshot.acceptedCount, 1);
+  assert.equal(
+    diagnosticTombstoneRegistrationSnapshot.exactScopeRejectedCount,
+    0,
+  );
   const ambiguousDiagnosticTombstoneRegistry =
     createExactAuthenticationWebChannelDiagnosticTombstoneRegistry();
   for (const fetchRequestId of ["ambiguous-fetch-a", "ambiguous-fetch-b"]) {
@@ -27704,6 +27941,158 @@ const verifySafeExactAuthenticationWebChannelDiagnosticFixtures = () => {
     ),
     { candidateCount: 2, binding: null },
   );
+  assert.equal(
+    ambiguousDiagnosticTombstoneRegistry.registrationSnapshot().acceptedCount,
+    2,
+  );
+  const diagnosticTombstoneRegistrationReasonFixtures = [
+    {
+      reason: "accepted",
+      calls: [
+        {
+          fetchRequestId: "private-accepted-fetch-request-id",
+          lifecycle: exactDiagnosticLifecycle,
+          observation: exactForwardObservation,
+        },
+      ],
+      expectedResults: [true],
+    },
+    {
+      reason: "duplicate-fetch-request-id",
+      calls: [
+        {
+          fetchRequestId: "private-duplicate-fetch-request-id",
+          lifecycle: exactDiagnosticLifecycle,
+          observation: exactForwardObservation,
+        },
+        {
+          fetchRequestId: "private-duplicate-fetch-request-id",
+          lifecycle: exactDiagnosticLifecycle,
+          observation: exactForwardObservation,
+        },
+      ],
+      expectedResults: [true, false],
+    },
+    {
+      reason: "exact-candidate-invariant-rejected",
+      calls: [
+        {
+          fetchRequestId: "private-invariant-fetch-request-id",
+          lifecycle: exactDiagnosticLifecycle,
+          observation: {
+            ...exactForwardObservation,
+            productionMarker: true,
+          },
+        },
+      ],
+      expectedResults: [false],
+    },
+    {
+      reason: "initial-request-no-session",
+      calls: [
+        {
+          fetchRequestId: "private-initial-fetch-request-id",
+          lifecycle: exactDiagnosticLifecycle,
+          observation: {
+            ...exactForwardObservation,
+            webChannelInitialRequestExact: true,
+            webChannelListenPathExact: false,
+            webChannelListenSessionHashes: null,
+            webChannelRequestClass: "initial-forward-post",
+          },
+        },
+      ],
+      expectedResults: [false],
+    },
+    {
+      reason: "lifecycle-missing",
+      calls: [
+        {
+          fetchRequestId: "private-lifecycle-missing-fetch-request-id",
+          lifecycle: null,
+          observation: exactForwardObservation,
+        },
+      ],
+      expectedResults: [false],
+    },
+    {
+      reason: "lifecycle-network-identity-missing",
+      calls: [
+        {
+          fetchRequestId: "private-networkless-fetch-request-id",
+          lifecycle: { ...exactDiagnosticLifecycle, networkId: null },
+          observation: exactForwardObservation,
+        },
+      ],
+      expectedResults: [false],
+    },
+    {
+      reason: "lifecycle-state-or-phase-invalid",
+      calls: [
+        {
+          fetchRequestId: "private-lifecycle-state-fetch-request-id",
+          lifecycle: { ...exactDiagnosticLifecycle, state: "transmitted" },
+          observation: exactForwardObservation,
+        },
+      ],
+      expectedResults: [false],
+    },
+    {
+      reason: "observation-missing",
+      calls: [
+        {
+          fetchRequestId: "private-observation-missing-fetch-request-id",
+          lifecycle: exactDiagnosticLifecycle,
+          observation: null,
+        },
+      ],
+      expectedResults: [false],
+    },
+    {
+      reason: "outside-exact-authentication-webchannel-scope",
+      calls: [
+        {
+          fetchRequestId: "private-outside-scope-fetch-request-id",
+          lifecycle: exactDiagnosticLifecycle,
+          observation: { ...exactForwardObservation, firebaseService: "auth" },
+        },
+      ],
+      expectedResults: [false],
+    },
+  ];
+  assert.deepEqual(
+    diagnosticTombstoneRegistrationReasonFixtures
+      .map(({ reason }) => reason)
+      .sort(),
+    [
+      ...SAFE_EXACT_AUTHENTICATION_WEBCHANNEL_TOMBSTONE_REGISTRATION_REASONS,
+    ].sort(),
+  );
+  const diagnosticTombstoneRegistrationReasonSnapshots = [];
+  for (const fixture of diagnosticTombstoneRegistrationReasonFixtures) {
+    const registry =
+      createExactAuthenticationWebChannelDiagnosticTombstoneRegistry();
+    assert.deepEqual(
+      fixture.calls.map((call) => registry.register(call)),
+      fixture.expectedResults,
+    );
+    const snapshot = registry.registrationSnapshot();
+    assert.equal(
+      snapshot.reasonHistogram.reduce(
+        (total, record) => total + record.count,
+        0,
+      ),
+      fixture.calls.length,
+    );
+    assert.equal(
+      snapshot.reasonHistogram.find(({ reason }) => reason === fixture.reason)
+        .count,
+      1,
+    );
+    diagnosticTombstoneRegistrationReasonSnapshots.push(snapshot);
+    registry.clear();
+    assert.equal(registry.size(), 0);
+  }
   diagnosticTombstoneRegistry.clear();
   ambiguousDiagnosticTombstoneRegistry.clear();
   assert.equal(diagnosticTombstoneRegistry.size(), 0);
@@ -27717,6 +28106,11 @@ const verifySafeExactAuthenticationWebChannelDiagnosticFixtures = () => {
     requestFailure: freezeSafeExactAuthenticationWebChannelDiagnosticRecord(
       "requestFailure",
       {
+        directWebChannelGsessionidSha256: sessionHashes.gsessionidSha256,
+        directWebChannelInitialRequest: false,
+        directWebChannelRequestClass: "session-forward-post",
+        directWebChannelSidSha256: sessionHashes.sidSha256,
+        directWebChannelTerminationClass: null,
         firebaseService: "firestore",
         resourceType: "fetch",
         failureClass: "aborted",
@@ -27727,6 +28121,8 @@ const verifySafeExactAuthenticationWebChannelDiagnosticFixtures = () => {
         observedSequence: 4,
         networkIdentityBound: true,
         exactWebChannelBindingCandidateCount: 1,
+        exactWebChannelRequestUrlBindingCandidateCount: 1,
+        playwrightNetworkIdentityResolved: true,
         webChannelRequestClass: "session-forward-post",
         webChannelTerminationClass: null,
         webChannelListenPathExact: true,
@@ -27801,6 +28197,93 @@ const verifySafeExactAuthenticationWebChannelDiagnosticFixtures = () => {
       },
     ),
   });
+  const releasedProbeSettlement =
+    resolveSafeExactAuthenticationWebChannelDiagnosticProbesAtSettlement({
+      probes: [safeExactWebChannelDiagnosticRecordFixtures.requestFailure],
+      tombstones: [safeReleasedTombstone],
+    });
+  assert.equal(releasedProbeSettlement.length, 1);
+  assert.equal(
+    releasedProbeSettlement[0].settlementResolution.networkCandidateCount,
+    1,
+  );
+  assert.equal(
+    releasedProbeSettlement[0].settlementResolution.requestUrlCandidateCount,
+    1,
+  );
+  assert.equal(
+    releasedProbeSettlement[0].settlementResolution.selectedBy,
+    "network-and-request-url",
+  );
+  assert.equal(
+    releasedProbeSettlement[0].settlementResolution.bindingConflict,
+    false,
+  );
+  assert.equal(
+    releasedProbeSettlement[0].settlementResolution
+      .eventBeforeTombstoneAdmission,
+    false,
+  );
+  assert.equal(
+    releasedProbeSettlement[0].settlementResolution
+      .eventAfterFinalResponseRelease,
+    true,
+  );
+  const lateAdmissionTombstone =
+    freezeSafeExactAuthenticationWebChannelDiagnosticRecord("tombstone", {
+      ...safeReleasedTombstone,
+      admissionSequence: 5,
+      releaseCommandSequence: 6,
+      releaseCompletedSequence: 7,
+    });
+  const lateAdmissionProbeSettlement =
+    resolveSafeExactAuthenticationWebChannelDiagnosticProbesAtSettlement({
+      probes: [safeExactWebChannelDiagnosticRecordFixtures.requestFailure],
+      tombstones: [lateAdmissionTombstone],
+    });
+  assert.equal(
+    lateAdmissionProbeSettlement[0].settlementResolution
+      .eventBeforeTombstoneAdmission,
+    true,
+  );
+  assert.equal(
+    lateAdmissionProbeSettlement[0].settlementResolution
+      .eventAfterFinalResponseRelease,
+    false,
+  );
+  const ambiguousSettlementTombstone =
+    freezeSafeExactAuthenticationWebChannelDiagnosticRecord("tombstone", {
+      ...safeReleasedTombstone,
+      fetchRequestIdSha256: secretSha256("private-second-fetch-request-id"),
+      networkRequestIdSha256: secretSha256("private-second-network-id"),
+    });
+  const ambiguousProbeSettlement =
+    resolveSafeExactAuthenticationWebChannelDiagnosticProbesAtSettlement({
+      probes: [safeExactWebChannelDiagnosticRecordFixtures.requestFailure],
+      tombstones: [safeReleasedTombstone, ambiguousSettlementTombstone],
+    });
+  assert.equal(
+    ambiguousProbeSettlement[0].settlementResolution.networkCandidateCount,
+    1,
+  );
+  assert.equal(
+    ambiguousProbeSettlement[0].settlementResolution.requestUrlCandidateCount,
+    2,
+  );
+  assert.equal(
+    ambiguousProbeSettlement[0].settlementResolution.selectedTombstone,
+    null,
+  );
+  assert.equal(
+    ambiguousProbeSettlement[0].settlementResolution
+      .networkIdentityResolutionComplete,
+    true,
+  );
+  assert.equal(
+    ambiguousProbeSettlement[0].settlementResolution
+      .requestUrlIdentityResolutionComplete,
+    false,
+  );
   assert.throws(() =>
     freezeSafeExactAuthenticationWebChannelDiagnosticRecord("requestFailure", {
       ...safeExactWebChannelDiagnosticRecordFixtures.requestFailure,
@@ -27815,7 +28298,13 @@ const verifySafeExactAuthenticationWebChannelDiagnosticFixtures = () => {
   );
   const exactDiagnosticRecordKeys = Object.freeze({
     requestFailure: [
+      "directWebChannelGsessionidSha256",
+      "directWebChannelInitialRequest",
+      "directWebChannelRequestClass",
+      "directWebChannelSidSha256",
+      "directWebChannelTerminationClass",
       "exactWebChannelBindingCandidateCount",
+      "exactWebChannelRequestUrlBindingCandidateCount",
       "failureClass",
       "finalResponseReleaseState",
       "finalResponseStatusClass",
@@ -27824,6 +28313,7 @@ const verifySafeExactAuthenticationWebChannelDiagnosticFixtures = () => {
       "networkIdentityBound",
       "networkRequestIdSha256",
       "observedSequence",
+      "playwrightNetworkIdentityResolved",
       "requestUrlSha256",
       "resourceType",
       "sidSha256",
@@ -27959,6 +28449,11 @@ const verifySafeExactAuthenticationWebChannelDiagnosticFixtures = () => {
     safeExactWebChannelDiagnosticFixtures,
     safeExactWebChannelDiagnosticRecordFixtures,
     safeReleasedTombstone,
+    diagnosticTombstoneRegistrationSnapshot,
+    diagnosticTombstoneRegistrationReasonSnapshots,
+    releasedProbeSettlement,
+    lateAdmissionProbeSettlement,
+    ambiguousProbeSettlement,
   });
   const diagnosticPrivateUrl = privateRequestUrl;
   for (const rawValue of [
@@ -28001,6 +28496,9 @@ const verifySafeExactAuthenticationWebChannelDiagnosticFixtures = () => {
     safeExactWebChannelDiagnosticTombstoneAcceptedFixtureCount: 1,
     safeExactWebChannelDiagnosticTombstoneAmbiguousFixtureCount: 1,
     safeExactWebChannelDiagnosticTombstoneReleaseSequenceFixtureCount: 3,
+    safeExactWebChannelDiagnosticTombstoneRegistrationReasonFixtureCount:
+      diagnosticTombstoneRegistrationReasonFixtures.length,
+    safeExactWebChannelDiagnosticSettlementResolutionFixtureCount: 3,
     safeExactWebChannelDiagnosticRawValueOutputCount: 0,
     safeExactWebChannelDiagnosticNetworkAccess: 0,
   };
@@ -42429,6 +42927,8 @@ try {
     let authenticationExactWebChannelLoadingFailureDuplicateCount = 0;
     const authenticationExactWebChannelNetworkLogRecords = [];
     const authenticationExactWebChannelConsoleLocationRecords = [];
+    let authenticationExactWebChannelLoadingFailureHandlerErrorCount = 0;
+    let authenticationExactWebChannelNetworkLogHandlerErrorCount = 0;
     if (frozenBaselineListenerBindingObserver) {
       const promoteFrozenBaselineInitialTargets = (gsessionid) => {
         const networkRequestId =
@@ -42997,72 +43497,72 @@ try {
           resolveExactAuthenticationWebChannelBindingForNetworkId(
             event.requestId,
           );
-        if (exactWebChannelBinding.binding !== null) {
-          const { lifecycle, observation, tombstone } =
-            exactWebChannelBinding.binding;
-          const blockedReasonPresent = Object.prototype.hasOwnProperty.call(
-            event,
-            "blockedReason",
-          );
-          const corsErrorStatusPresent = Object.prototype.hasOwnProperty.call(
-            event,
-            "corsErrorStatus",
-          );
-          authenticationExactWebChannelLoadingFailureDuplicateCount += Number(
-            authenticationExactWebChannelLoadingFailuresByNetworkId.has(
-              event.requestId,
-            ),
-          );
-          authenticationExactWebChannelLoadingFailuresByNetworkId.set(
-            event.requestId,
-            freezeSafeExactAuthenticationWebChannelDiagnosticRecord(
-              "loadingFailure",
-              {
-                networkRequestIdSha256: sha256(event.requestId),
-                requestUrlSha256: observation.requestUrlSha256,
-                requestClass: observation.webChannelRequestClass,
-                terminationClass: observation.webChannelTerminationClass,
-                resourceType: observation.resourceType,
-                lifecycleState: lifecycle.state,
-                sidSha256: observation.webChannelListenSessionHashes.sidSha256,
-                gsessionidSha256:
-                  observation.webChannelListenSessionHashes.gsessionidSha256,
-                failureClass: safeBrowserRequestFailureClass(event.errorText),
-                canceled: event.canceled === true,
-                blockedReasonPresent,
-                blockedReasonClass: blockedReasonPresent
-                  ? event.blockedReason === "inspector"
-                    ? "inspector"
-                    : "unsupported"
-                  : null,
-                corsErrorStatusAbsent: !corsErrorStatusPresent,
-                exactNetworkBindingCandidateCount:
-                  exactWebChannelBinding.candidateCount,
-                finalResponseReleaseState: tombstone.finalResponseReleaseState,
-                finalResponseStatusClass: tombstone.finalResponseStatusClass,
-                observedSequence:
-                  authenticationExactWebChannelDiagnosticTombstones.nextObservedSequence(),
-              },
-            ),
-          );
-        }
-        const attempt =
-          authenticationProtectedReadAttemptsByNetworkId.get(event.requestId) ||
-          null;
-        if (attempt === null) return;
+        const exactLifecycle =
+          exactWebChannelBinding.binding?.lifecycle || null;
+        const exactObservation =
+          exactWebChannelBinding.binding?.observation || null;
+        const exactTombstone =
+          exactWebChannelBinding.binding?.tombstone || null;
         const blockedReasonPresent = Object.prototype.hasOwnProperty.call(
           event,
           "blockedReason",
         );
+        const corsErrorStatusPresent = Object.prototype.hasOwnProperty.call(
+          event,
+          "corsErrorStatus",
+        );
+        authenticationExactWebChannelLoadingFailureDuplicateCount += Number(
+          authenticationExactWebChannelLoadingFailuresByNetworkId.has(
+            event.requestId,
+          ),
+        );
+        authenticationExactWebChannelLoadingFailuresByNetworkId.set(
+          event.requestId,
+          freezeSafeExactAuthenticationWebChannelDiagnosticRecord(
+            "loadingFailure",
+            {
+              networkRequestIdSha256: sha256(event.requestId),
+              requestUrlSha256: exactObservation?.requestUrlSha256 || null,
+              requestClass: exactObservation?.webChannelRequestClass || null,
+              terminationClass:
+                exactObservation?.webChannelTerminationClass || null,
+              resourceType: exactObservation?.resourceType || null,
+              lifecycleState: exactLifecycle?.state || null,
+              sidSha256:
+                exactObservation?.webChannelListenSessionHashes?.sidSha256 ||
+                null,
+              gsessionidSha256:
+                exactObservation?.webChannelListenSessionHashes
+                  ?.gsessionidSha256 || null,
+              failureClass: safeBrowserRequestFailureClass(event.errorText),
+              canceled: event.canceled === true,
+              blockedReasonPresent,
+              blockedReasonClass: blockedReasonPresent
+                ? event.blockedReason === "inspector"
+                  ? "inspector"
+                  : "unsupported"
+                : null,
+              corsErrorStatusAbsent: !corsErrorStatusPresent,
+              exactNetworkBindingCandidateCount:
+                exactWebChannelBinding.candidateCount,
+              finalResponseReleaseState:
+                exactTombstone?.finalResponseReleaseState || null,
+              finalResponseStatusClass:
+                exactTombstone?.finalResponseStatusClass || null,
+              observedSequence:
+                authenticationExactWebChannelDiagnosticTombstones.nextObservedSequence(),
+            },
+          ),
+        );
+        const attempt =
+          authenticationProtectedReadAttemptsByNetworkId.get(event.requestId) ||
+          null;
+        if (attempt === null) return;
         const blockedReasonClass = blockedReasonPresent
           ? event.blockedReason === "inspector"
             ? "inspector"
             : "unsupported"
           : null;
-        const corsErrorStatusPresent = Object.prototype.hasOwnProperty.call(
-          event,
-          "corsErrorStatus",
-        );
         const corsError = corsErrorStatusPresent
           ? event.corsErrorStatus?.corsError
           : undefined;
@@ -43103,6 +43603,7 @@ try {
         authenticationProtectedReadRecoveryEvidenceLastObservedAtMs =
           Date.now();
       } catch {
+        authenticationExactWebChannelLoadingFailureHandlerErrorCount += 1;
         // Invalid protected-read evidence remains unsettled and fails closed.
       }
     });
@@ -43168,22 +43669,44 @@ try {
           resolveExactAuthenticationWebChannelBindingForNetworkId(
             entry?.networkRequestId,
           );
-        if (exactWebChannelBinding.binding !== null) {
-          const { lifecycle, observation, tombstone } =
-            exactWebChannelBinding.binding;
+        const exactLifecycle =
+          exactWebChannelBinding.binding?.lifecycle || null;
+        const exactObservation =
+          exactWebChannelBinding.binding?.observation || null;
+        const exactTombstone =
+          exactWebChannelBinding.binding?.tombstone || null;
+        if (
+          networkPhase === "authentication" &&
+          (entry?.source === "network" ||
+            safeRecord.messageClass === "resource-load-failed") &&
+          (entry?.level === "error" ||
+            safeRecord.messageClass === "resource-load-failed")
+        ) {
+          const entryUrl =
+            typeof entry?.url === "string" && entry.url.length > 0
+              ? entry.url
+              : null;
           authenticationExactWebChannelNetworkLogRecords.push(
             freezeSafeExactAuthenticationWebChannelDiagnosticRecord(
               "networkLog",
               {
-                networkRequestIdSha256: sha256(entry.networkRequestId),
-                requestUrlSha256: observation.requestUrlSha256,
-                requestClass: observation.webChannelRequestClass,
-                terminationClass: observation.webChannelTerminationClass,
-                resourceType: observation.resourceType,
-                lifecycleState: lifecycle.state,
-                sidSha256: observation.webChannelListenSessionHashes.sidSha256,
+                networkRequestIdSha256:
+                  typeof entry?.networkRequestId === "string" &&
+                  entry.networkRequestId.length > 0
+                    ? sha256(entry.networkRequestId)
+                    : null,
+                requestUrlSha256: entryUrl === null ? null : sha256(entryUrl),
+                requestClass: exactObservation?.webChannelRequestClass || null,
+                terminationClass:
+                  exactObservation?.webChannelTerminationClass || null,
+                resourceType: exactObservation?.resourceType || null,
+                lifecycleState: exactLifecycle?.state || null,
+                sidSha256:
+                  exactObservation?.webChannelListenSessionHashes?.sidSha256 ||
+                  null,
                 gsessionidSha256:
-                  observation.webChannelListenSessionHashes.gsessionidSha256,
+                  exactObservation?.webChannelListenSessionHashes
+                    ?.gsessionidSha256 || null,
                 ...safeRecord,
                 sourceNetwork: entry.source === "network",
                 levelError: entry.level === "error",
@@ -43192,12 +43715,14 @@ try {
                   "category",
                 ),
                 locationUrlBound:
-                  typeof entry.url === "string" &&
-                  sha256(entry.url) === observation.requestUrlSha256,
+                  entryUrl !== null &&
+                  exactObservation?.requestUrlSha256 === sha256(entryUrl),
                 exactNetworkBindingCandidateCount:
                   exactWebChannelBinding.candidateCount,
-                finalResponseReleaseState: tombstone.finalResponseReleaseState,
-                finalResponseStatusClass: tombstone.finalResponseStatusClass,
+                finalResponseReleaseState:
+                  exactTombstone?.finalResponseReleaseState || null,
+                finalResponseStatusClass:
+                  exactTombstone?.finalResponseStatusClass || null,
                 observedSequence:
                   authenticationExactWebChannelDiagnosticTombstones.nextObservedSequence(),
               },
@@ -43249,6 +43774,7 @@ try {
           Date.now();
         rawText = "";
       } catch {
+        authenticationExactWebChannelNetworkLogHandlerErrorCount += 1;
         // Invalid protected-read evidence remains unsettled and fails closed.
       }
     });
@@ -43467,6 +43993,8 @@ try {
           diagnosticPhase: diagnosticContext.phase,
           webChannelRequestClass,
           webChannelTerminationClass,
+          webChannelInitialRequestExact:
+            exactFirestoreListenInitialRequest(requestUrl),
           webChannelListenPathExact:
             safeExactFirestoreListenSessionHashes(requestUrl) !== null,
           webChannelListenSessionHashes:
@@ -43537,6 +44065,8 @@ try {
         assert.equal(authenticationProtectedReadAttempt.attemptNumber, 1);
       }
       recordAllowedEgressRequestStageLifecycle(event, diagnosticContext.phase);
+      const exactWebChannelDiagnosticObservationBeforeContinue =
+        allowedEgressRequestsByFetchRequestId.get(event.requestId) || null;
       diagnosticContext.operation = "request-proxy-authorize";
       diagnosticContext.reason = "unexpected-handler-error";
       allowedEgressProxyAuthorizationCoordinator.authorize(event.requestId, {
@@ -43557,8 +44087,7 @@ try {
           fetchRequestId: event.requestId,
           lifecycle:
             allowedEgressLifecycleByFetchRequestId.get(event.requestId) || null,
-          observation:
-            allowedEgressRequestsByFetchRequestId.get(event.requestId) || null,
+          observation: exactWebChannelDiagnosticObservationBeforeContinue,
         });
       } catch (error) {
         setAllowedEgressLifecycleState(
@@ -45853,12 +46382,16 @@ try {
         candidateCount: 0,
         binding: null,
       });
+      const directWebChannelClassification =
+        classifySafeExactAuthenticationWebChannelDiagnosticUrl(request.url());
       let networkRequestIdSha256 = null;
+      let playwrightNetworkIdentityResolved = false;
       try {
         const chromiumIdentity = resolveExactChromiumNetworkRequestIdentity({
           browser,
           request,
         });
+        playwrightNetworkIdentityResolved = true;
         networkRequestIdSha256 = sha256(chromiumIdentity.networkRequestId);
         exactWebChannelBinding =
           resolveExactAuthenticationWebChannelBindingForNetworkId(
@@ -45870,6 +46403,8 @@ try {
           binding: null,
         });
       }
+      const exactWebChannelRequestUrlBinding =
+        resolveExactAuthenticationWebChannelBindingForRequestUrl(request.url());
       const exactWebChannelLifecycle =
         exactWebChannelBinding.binding?.lifecycle || null;
       const exactWebChannelObservation =
@@ -45880,6 +46415,8 @@ try {
         freezeSafeExactAuthenticationWebChannelDiagnosticRecord(
           "requestFailure",
           {
+            directWebChannelGsessionidSha256:
+              directWebChannelClassification?.gsessionidSha256 || null,
             firebaseService: safeFirebaseServiceDiagnosticClass(
               exactWebChannelObservation || observation,
             ),
@@ -45894,12 +46431,22 @@ try {
             requestUrlSha256: sha256(request.url()),
             networkRequestIdSha256,
             observedSequence:
-              exactWebChannelTombstone === null
-                ? 0
-                : authenticationExactWebChannelDiagnosticTombstones.nextObservedSequence(),
+              authenticationExactWebChannelDiagnosticTombstones.nextObservedSequence(),
+            playwrightNetworkIdentityResolved,
+            directWebChannelInitialRequest: exactFirestoreListenInitialRequest(
+              request.url(),
+            ),
+            directWebChannelRequestClass:
+              directWebChannelClassification?.requestClass || null,
+            directWebChannelSidSha256:
+              directWebChannelClassification?.sidSha256 || null,
+            directWebChannelTerminationClass:
+              directWebChannelClassification?.terminationClass || null,
             networkIdentityBound: exactWebChannelBinding.binding !== null,
             exactWebChannelBindingCandidateCount:
               exactWebChannelBinding.candidateCount,
+            exactWebChannelRequestUrlBindingCandidateCount:
+              exactWebChannelRequestUrlBinding.candidateCount,
             webChannelRequestClass:
               exactWebChannelObservation?.webChannelRequestClass || null,
             webChannelTerminationClass:
@@ -46008,37 +46555,52 @@ try {
             resolveExactAuthenticationWebChannelBindingForRequestUrl(
               location?.url,
             );
-          if (exactWebChannelBinding.binding !== null) {
-            const { lifecycle, observation, tombstone } =
-              exactWebChannelBinding.binding;
-            authenticationExactWebChannelConsoleLocationRecords.push(
-              freezeSafeExactAuthenticationWebChannelDiagnosticRecord(
-                "consoleLocation",
-                {
-                  networkRequestIdSha256: sha256(lifecycle.networkId),
-                  requestUrlSha256: sha256(location.url),
-                  requestClass: observation.webChannelRequestClass,
-                  terminationClass: observation.webChannelTerminationClass,
-                  resourceType: observation.resourceType,
-                  lifecycleState: lifecycle.state,
-                  sidSha256:
-                    observation.webChannelListenSessionHashes.sidSha256,
-                  gsessionidSha256:
-                    observation.webChannelListenSessionHashes.gsessionidSha256,
-                  ...safeRecord,
-                  requestUrlBound:
-                    observation.requestUrlSha256 === sha256(location.url),
-                  exactWebChannelBindingCandidateCount:
-                    exactWebChannelBinding.candidateCount,
-                  finalResponseReleaseState:
-                    tombstone.finalResponseReleaseState,
-                  finalResponseStatusClass: tombstone.finalResponseStatusClass,
-                  observedSequence:
-                    authenticationExactWebChannelDiagnosticTombstones.nextObservedSequence(),
-                },
-              ),
-            );
-          }
+          const exactLifecycle =
+            exactWebChannelBinding.binding?.lifecycle || null;
+          const exactObservation =
+            exactWebChannelBinding.binding?.observation || null;
+          const exactTombstone =
+            exactWebChannelBinding.binding?.tombstone || null;
+          const locationUrl =
+            typeof location?.url === "string" && location.url.length > 0
+              ? location.url
+              : null;
+          authenticationExactWebChannelConsoleLocationRecords.push(
+            freezeSafeExactAuthenticationWebChannelDiagnosticRecord(
+              "consoleLocation",
+              {
+                networkRequestIdSha256:
+                  exactLifecycle === null
+                    ? null
+                    : sha256(exactLifecycle.networkId),
+                requestUrlSha256:
+                  locationUrl === null ? null : sha256(locationUrl),
+                requestClass: exactObservation?.webChannelRequestClass || null,
+                terminationClass:
+                  exactObservation?.webChannelTerminationClass || null,
+                resourceType: exactObservation?.resourceType || null,
+                lifecycleState: exactLifecycle?.state || null,
+                sidSha256:
+                  exactObservation?.webChannelListenSessionHashes?.sidSha256 ||
+                  null,
+                gsessionidSha256:
+                  exactObservation?.webChannelListenSessionHashes
+                    ?.gsessionidSha256 || null,
+                ...safeRecord,
+                requestUrlBound:
+                  locationUrl !== null &&
+                  exactObservation?.requestUrlSha256 === sha256(locationUrl),
+                exactWebChannelBindingCandidateCount:
+                  exactWebChannelBinding.candidateCount,
+                finalResponseReleaseState:
+                  exactTombstone?.finalResponseReleaseState || null,
+                finalResponseStatusClass:
+                  exactTombstone?.finalResponseStatusClass || null,
+                observedSequence:
+                  authenticationExactWebChannelDiagnosticTombstones.nextObservedSequence(),
+              },
+            ),
+          );
           const timestamp =
             typeof message.timestamp === "function"
               ? message.timestamp()
@@ -47051,11 +47613,25 @@ try {
               ? 1
               : 0;
         });
+      const authenticationWebChannelDiagnosticTombstones =
+        authenticationExactWebChannelDiagnosticTombstones.safeSnapshot();
+      const authenticationWebChannelTombstoneRegistration =
+        authenticationExactWebChannelDiagnosticTombstones.registrationSnapshot();
+      const authenticationBrowserRequestFailureDiagnostics =
+        sortSafeDiagnosticRecords(groupBrowserRequestFailureDiagnostics);
       const authenticationExactWebChannelRequestFailureDiagnostics =
         sortSafeDiagnosticRecords(
-          groupBrowserRequestFailureDiagnostics.filter(
+          authenticationBrowserRequestFailureDiagnostics.filter(
             (record) =>
               record.firebaseService === "firestore" &&
+              record.directWebChannelRequestClass ===
+                record.webChannelRequestClass &&
+              record.directWebChannelTerminationClass ===
+                record.webChannelTerminationClass &&
+              record.directWebChannelSidSha256 === record.sidSha256 &&
+              record.directWebChannelGsessionidSha256 ===
+                record.gsessionidSha256 &&
+              record.playwrightNetworkIdentityResolved === true &&
               record.networkIdentityBound === true &&
               record.exactWebChannelBindingCandidateCount === 1 &&
               record.webChannelListenPathExact === true &&
@@ -47078,17 +47654,94 @@ try {
                   record.resourceType === "image")),
           ),
         );
-      const authenticationExactWebChannelLoadingFailureDiagnostics =
+      const authenticationWebChannelLoadingFailureProbeDiagnostics =
         sortSafeDiagnosticRecords([
           ...authenticationExactWebChannelLoadingFailuresByNetworkId.values(),
         ]);
-      const authenticationExactWebChannelNetworkLogDiagnostics =
+      const authenticationExactWebChannelLoadingFailureDiagnostics =
+        authenticationWebChannelLoadingFailureProbeDiagnostics.filter(
+          (record) =>
+            record.exactNetworkBindingCandidateCount === 1 &&
+            record.lifecycleState === "response-awaiting" &&
+            /^[a-f0-9]{64}$/u.test(record.requestUrlSha256) &&
+            /^[a-f0-9]{64}$/u.test(record.networkRequestIdSha256) &&
+            /^[a-f0-9]{64}$/u.test(record.sidSha256),
+        );
+      const authenticationWebChannelNetworkLogProbeDiagnostics =
         sortSafeDiagnosticRecords(
           authenticationExactWebChannelNetworkLogRecords,
         );
-      const authenticationExactWebChannelConsoleLocationDiagnostics =
+      const authenticationExactWebChannelNetworkLogDiagnostics =
+        authenticationWebChannelNetworkLogProbeDiagnostics.filter(
+          (record) =>
+            record.exactNetworkBindingCandidateCount === 1 &&
+            record.lifecycleState === "response-awaiting" &&
+            /^[a-f0-9]{64}$/u.test(record.requestUrlSha256) &&
+            /^[a-f0-9]{64}$/u.test(record.networkRequestIdSha256) &&
+            /^[a-f0-9]{64}$/u.test(record.sidSha256),
+        );
+      const authenticationWebChannelConsoleLocationProbeDiagnostics =
         sortSafeDiagnosticRecords(
           authenticationExactWebChannelConsoleLocationRecords,
+        );
+      const authenticationExactWebChannelConsoleLocationDiagnostics =
+        authenticationWebChannelConsoleLocationProbeDiagnostics.filter(
+          (record) =>
+            record.exactWebChannelBindingCandidateCount === 1 &&
+            record.requestUrlBound === true &&
+            record.lifecycleState === "response-awaiting" &&
+            /^[a-f0-9]{64}$/u.test(record.requestUrlSha256) &&
+            /^[a-f0-9]{64}$/u.test(record.networkRequestIdSha256) &&
+            /^[a-f0-9]{64}$/u.test(record.sidSha256),
+        );
+      const resolveAuthenticationWebChannelProbesAtSettlement = (probes) =>
+        resolveSafeExactAuthenticationWebChannelDiagnosticProbesAtSettlement({
+          probes,
+          tombstones: authenticationWebChannelDiagnosticTombstones,
+        });
+      const authenticationWebChannelRequestFailureResolutionDiagnostics =
+        resolveAuthenticationWebChannelProbesAtSettlement(
+          authenticationBrowserRequestFailureDiagnostics,
+        );
+      const authenticationWebChannelLoadingFailureResolutionDiagnostics =
+        resolveAuthenticationWebChannelProbesAtSettlement(
+          authenticationWebChannelLoadingFailureProbeDiagnostics,
+        );
+      const authenticationWebChannelNetworkLogResolutionDiagnostics =
+        resolveAuthenticationWebChannelProbesAtSettlement(
+          authenticationWebChannelNetworkLogProbeDiagnostics,
+        );
+      const authenticationWebChannelConsoleLocationResolutionDiagnostics =
+        resolveAuthenticationWebChannelProbesAtSettlement(
+          authenticationWebChannelConsoleLocationProbeDiagnostics,
+        );
+      const authenticationWebChannelApplicationBindingRecords =
+        webChannelCdpHeaderAttestationBindingRecords.slice(
+          groupApplicationNavigationWebChannelBindingStart,
+        );
+      assert.ok(
+        authenticationWebChannelApplicationBindingRecords.length <= 128,
+      );
+      const authenticationWebChannelApplicationBindingDiagnostics =
+        Object.freeze(
+          authenticationWebChannelApplicationBindingRecords
+            .map((record) =>
+              Object.freeze({
+                networkRequestIdSha256: record.networkRequestIdSha256,
+                requestUrlSha256: record.requestUrlSha256,
+                method: record.method,
+                resourceType: record.resourceType,
+                phase: record.phase,
+                requestClass: record.requestClass,
+                appCheckHeaderSource: record.appCheckHeaderSource,
+                authBindingClass: record.firebaseAuth?.bindingClass || null,
+              }),
+            )
+            .sort((left, right) =>
+              left.networkRequestIdSha256.localeCompare(
+                right.networkRequestIdSha256,
+              ),
+            ),
         );
       const exactWebChannelFailedSidHashes = new Set(
         authenticationExactWebChannelRequestFailureDiagnostics
@@ -47114,6 +47767,19 @@ try {
           groupBrowserRequestFailureDiagnostics,
         ),
         authenticationNetworkAttestationDrainDiagnostic,
+        authenticationBrowserRequestFailureDiagnostics,
+        authenticationWebChannelDiagnosticTombstones,
+        authenticationWebChannelTombstoneRegistration,
+        authenticationWebChannelRequestFailureResolutionDiagnostics,
+        authenticationWebChannelLoadingFailureProbeDiagnostics,
+        authenticationWebChannelLoadingFailureResolutionDiagnostics,
+        authenticationWebChannelNetworkLogProbeDiagnostics,
+        authenticationWebChannelNetworkLogResolutionDiagnostics,
+        authenticationWebChannelConsoleLocationProbeDiagnostics,
+        authenticationWebChannelConsoleLocationResolutionDiagnostics,
+        authenticationWebChannelApplicationBindingDiagnostics,
+        authenticationExactWebChannelLoadingFailureHandlerErrorCount,
+        authenticationExactWebChannelNetworkLogHandlerErrorCount,
         authenticationExactWebChannelRequestFailureDiagnostics,
         authenticationExactWebChannelLoadingFailureDiagnostics,
         authenticationExactWebChannelLoadingFailureDuplicateCount,
@@ -47219,6 +47885,20 @@ try {
         authenticationAppCheckCdpHandlerErrorCount,
         0,
         `Authentication CDP handler error count must be zero: ${JSON.stringify(
+          authenticationBrowserErrorDiagnostic,
+        )}`,
+      );
+      assert.equal(
+        authenticationExactWebChannelLoadingFailureHandlerErrorCount,
+        0,
+        `Authentication Network.loadingFailed diagnostic handler error count must be zero: ${JSON.stringify(
+          authenticationBrowserErrorDiagnostic,
+        )}`,
+      );
+      assert.equal(
+        authenticationExactWebChannelNetworkLogHandlerErrorCount,
+        0,
+        `Authentication Log.entryAdded diagnostic handler error count must be zero: ${JSON.stringify(
           authenticationBrowserErrorDiagnostic,
         )}`,
       );

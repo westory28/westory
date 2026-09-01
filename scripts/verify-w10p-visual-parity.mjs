@@ -2834,7 +2834,20 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "ambiguousDiagnosticTombstoneRegistry.resolveForNetworkId(diagnosticPrivateNetworkId,)",
     "{candidateCount:2,binding:null}",
     "diagnosticTombstoneRegistry.clear()",
-    "constsafeExactWebChannelDiagnosticSerialized=JSON.stringify({safeExactWebChannelDiagnosticFixtures,safeExactWebChannelDiagnosticRecordFixtures,safeReleasedTombstone,})",
+    "constdiagnosticTombstoneRegistrationSnapshot=diagnosticTombstoneRegistry.registrationSnapshot()",
+    "constdiagnosticTombstoneRegistrationReasonFixtures=[",
+    "constdiagnosticTombstoneRegistrationReasonSnapshots=[]",
+    "for(constfixtureofdiagnosticTombstoneRegistrationReasonFixtures)",
+    "fixture.calls.map((call)=>registry.register(call))",
+    "snapshot.reasonHistogram.reduce((total,record)=>total+record.count",
+    "snapshot.reasonHistogram.find(({reason})=>reason===fixture.reason).count,1",
+    "constreleasedProbeSettlement=resolveSafeExactAuthenticationWebChannelDiagnosticProbesAtSettlement({",
+    "constlateAdmissionProbeSettlement=resolveSafeExactAuthenticationWebChannelDiagnosticProbesAtSettlement({",
+    "constambiguousProbeSettlement=resolveSafeExactAuthenticationWebChannelDiagnosticProbesAtSettlement({",
+    'networkRequestIdSha256:secretSha256("private-second-network-id")',
+    "ambiguousProbeSettlement[0].settlementResolution.networkIdentityResolutionComplete,true",
+    "ambiguousProbeSettlement[0].settlementResolution.requestUrlIdentityResolutionComplete,false",
+    "constsafeExactWebChannelDiagnosticSerialized=JSON.stringify({",
     "safeExactWebChannelDiagnosticSerialized.includes(rawValue),false",
     "diagnosticOnlyRequestFailureCount-protectedReadRecoveredRequestFailureCount,1",
     "diagnosticOnlyConsoleErrorCount-protectedReadRecoveredConsoleErrorCount-tupleBoundRetiredConsoleErrorCount,1",
@@ -2845,6 +2858,8 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "safeExactWebChannelDiagnosticTombstoneAcceptedFixtureCount:1",
     "safeExactWebChannelDiagnosticTombstoneAmbiguousFixtureCount:1",
     "safeExactWebChannelDiagnosticTombstoneReleaseSequenceFixtureCount:3",
+    "safeExactWebChannelDiagnosticTombstoneRegistrationReasonFixtureCount:diagnosticTombstoneRegistrationReasonFixtures.length",
+    "safeExactWebChannelDiagnosticSettlementResolutionFixtureCount:3",
     "safeExactWebChannelDiagnosticRawValueOutputCount:0",
     "safeExactWebChannelDiagnosticNetworkAccess:0",
   ]) {
@@ -2974,7 +2989,13 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   };
   const expectedExactDiagnosticRecordKeys = Object.freeze({
     requestFailure: [
+      "directWebChannelGsessionidSha256",
+      "directWebChannelInitialRequest",
+      "directWebChannelRequestClass",
+      "directWebChannelSidSha256",
+      "directWebChannelTerminationClass",
       "exactWebChannelBindingCandidateCount",
+      "exactWebChannelRequestUrlBindingCandidateCount",
       "failureClass",
       "finalResponseReleaseState",
       "finalResponseStatusClass",
@@ -2983,6 +3004,7 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
       "networkIdentityBound",
       "networkRequestIdSha256",
       "observedSequence",
+      "playwrightNetworkIdentityResolved",
       "requestUrlSha256",
       "resourceType",
       "sidSha256",
@@ -3115,6 +3137,29 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   );
   const compactExactWebChannelDiagnosticRecordGateSource =
     exactWebChannelDiagnosticRecordGateSource.replace(/\s+/gu, "");
+  const expectedTombstoneRegistrationReasons = [
+    "accepted",
+    "duplicate-fetch-request-id",
+    "exact-candidate-invariant-rejected",
+    "initial-request-no-session",
+    "lifecycle-missing",
+    "lifecycle-network-identity-missing",
+    "lifecycle-state-or-phase-invalid",
+    "observation-missing",
+    "outside-exact-authentication-webchannel-scope",
+  ];
+  const tombstoneRegistrationReasonRegistryMatch =
+    exactWebChannelDiagnosticRecordGateSource.match(
+      /const SAFE_EXACT_AUTHENTICATION_WEBCHANNEL_TOMBSTONE_REGISTRATION_REASONS\s*=\s*Object\.freeze\(\[([\s\S]*?)\]\);/u,
+    );
+  assert.ok(tombstoneRegistrationReasonRegistryMatch);
+  assert.deepEqual(
+    [
+      ...tombstoneRegistrationReasonRegistryMatch[1].matchAll(/"([^"]+)"/gu),
+    ].map((match) => match[1]),
+    expectedTombstoneRegistrationReasons,
+    "The fixed tombstone registration-reason taxonomy changed.",
+  );
   const registrySourceStart = exactWebChannelDiagnosticRecordGateSource.indexOf(
     "const SAFE_EXACT_AUTHENTICATION_WEBCHANNEL_DIAGNOSTIC_RECORD_KEYS =",
   );
@@ -3142,6 +3187,38 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
       ),
       expectedKeys,
       `The production ${recordClass} diagnostic key registry changed.`,
+    );
+  }
+  const diagnosticRegistrationReasonFixtureSourceStart =
+    exactWebChannelDiagnosticFixtureSource.indexOf(
+      "const diagnosticTombstoneRegistrationReasonFixtures = [",
+    );
+  const diagnosticRegistrationReasonFixtureSourceEnd =
+    exactWebChannelDiagnosticFixtureSource.indexOf(
+      "assert.deepEqual(",
+      diagnosticRegistrationReasonFixtureSourceStart,
+    );
+  assert.ok(diagnosticRegistrationReasonFixtureSourceStart >= 0);
+  assert.ok(
+    diagnosticRegistrationReasonFixtureSourceEnd >
+      diagnosticRegistrationReasonFixtureSourceStart,
+  );
+  const diagnosticRegistrationReasonFixtureSource =
+    exactWebChannelDiagnosticFixtureSource.slice(
+      diagnosticRegistrationReasonFixtureSourceStart,
+      diagnosticRegistrationReasonFixtureSourceEnd,
+    );
+  assert.equal(
+    (diagnosticRegistrationReasonFixtureSource.match(/\breason:/gu) || [])
+      .length,
+    expectedTombstoneRegistrationReasons.length,
+    "Every tombstone registration reason must have exactly one table-driven fixture.",
+  );
+  for (const reason of expectedTombstoneRegistrationReasons) {
+    assert.equal(
+      diagnosticRegistrationReasonFixtureSource.includes(`reason: "${reason}"`),
+      true,
+      `Missing tombstone registration-reason fixture: ${reason}`,
     );
   }
   for (const rawKey of [
@@ -3334,7 +3411,10 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   }
   for (const tombstoneRegistryFragment of [
     "constcreateExactAuthenticationWebChannelDiagnosticTombstoneRegistry=()=>{",
-    "isSafeExactAuthenticationWebChannelDiagnosticBindingCandidate({lifecycle,observation,expectedNetworkId:lifecycle?.networkId||null,})",
+    "SAFE_EXACT_AUTHENTICATION_WEBCHANNEL_TOMBSTONE_REGISTRATION_REASONS",
+    'recordRegistrationReason("initial-request-no-session")',
+    'recordRegistrationReason("lifecycle-network-identity-missing")',
+    "isSafeExactAuthenticationWebChannelDiagnosticBindingCandidate({lifecycle,observation,expectedNetworkId:lifecycle.networkId,})",
     'finalResponseReleaseState:"not-started"',
     'finalResponseReleaseState:"command-in-flight"',
     'finalResponseReleaseState:"released"',
@@ -3343,6 +3423,14 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "entry.record.sidSha256===classification.sidSha256",
     "entry.record.gsessionidSha256===classification.gsessionidSha256",
     "binding:candidates.length===1?candidates[0]:null",
+    "registrationSnapshot:()=>{",
+    "safeSnapshot:()=>Object.freeze(",
+    "constresolveSafeExactAuthenticationWebChannelDiagnosticProbesAtSettlement=({probes,tombstones,})=>{",
+    "constnetworkIdentityResolutionComplete=probe.networkRequestIdSha256===null||networkCandidates.length===1",
+    "constrequestUrlIdentityResolutionComplete=probe.requestUrlSha256===null||requestUrlCandidates.length===1",
+    "!networkIdentityResolutionComplete||!requestUrlIdentityResolutionComplete||bindingConflict?null:networkBinding||requestUrlBinding",
+    "eventBeforeTombstoneAdmission:",
+    "eventAfterFinalResponseRelease:",
   ]) {
     assert.equal(
       compactExactWebChannelDiagnosticRecordGateSource.includes(
@@ -3378,13 +3466,23 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
   );
   assert.match(
     sourceText,
-    /page\.on\("console", \(message\) => \{[\s\S]*?resolveExactAuthenticationWebChannelBindingForRequestUrl\(\s*location\?\.url,?\s*\)[\s\S]*?if \(exactWebChannelBinding\.binding !== null\)[\s\S]*?authenticationExactWebChannelConsoleLocationRecords\.push/u,
-    "Console-location diagnostics must use the same strict URL classifier and exact-one hash binding.",
+    /page\.on\("requestfailed", \(request\) => \{[\s\S]*?const directWebChannelClassification\s*=\s*classifySafeExactAuthenticationWebChannelDiagnosticUrl\(request\.url\(\)\);[\s\S]*?directWebChannelGsessionidSha256:[\s\S]*?directWebChannelRequestClass:[\s\S]*?directWebChannelSidSha256:[\s\S]*?directWebChannelTerminationClass:/u,
+    "Playwright request failures must retain a separate strict URL classification when tombstone admission has not yet completed.",
   );
   assert.match(
     sourceText,
-    /setAllowedEgressLifecycleState\(event\.requestId, "response-awaiting"\);[\s\S]*?authenticationExactWebChannelDiagnosticTombstones\.register\(\{[\s\S]*?fetchRequestId: event\.requestId,[\s\S]*?allowedEgressLifecycleByFetchRequestId\.get\(event\.requestId\)[\s\S]*?allowedEgressRequestsByFetchRequestId\.get\(event\.requestId\)/u,
-    "Exact WebChannel tombstones must be registered only after the request enters response-awaiting with its exact active observation.",
+    /page\.on\("console", \(message\) => \{[\s\S]*?resolveExactAuthenticationWebChannelBindingForRequestUrl\(\s*location\?\.url,?\s*\)[\s\S]*?authenticationExactWebChannelConsoleLocationRecords\.push/u,
+    "Console-location probes must preserve unmatched events while using the same strict URL classifier.",
+  );
+  assert.match(
+    sourceText,
+    /const exactWebChannelDiagnosticObservationBeforeContinue\s*=\s*allowedEgressRequestsByFetchRequestId\.get\(event\.requestId\) \|\| null;[\s\S]*?Fetch\.continueRequest[\s\S]*?setAllowedEgressLifecycleState\(event\.requestId, "response-awaiting"\);[\s\S]*?authenticationExactWebChannelDiagnosticTombstones\.register\(\{[\s\S]*?fetchRequestId: event\.requestId,[\s\S]*?allowedEgressLifecycleByFetchRequestId\.get\(event\.requestId\)[\s\S]*?observation: exactWebChannelDiagnosticObservationBeforeContinue/u,
+    "Exact WebChannel tombstones must retain the immutable pre-continue observation but register only after response-awaiting.",
+  );
+  assert.match(
+    sourceText,
+    /webChannelInitialRequestExact:\s*exactFirestoreListenInitialRequest\(requestUrl\),/u,
+    "Allowed-egress observations must retain the exact initial Listen classification for fixed registration diagnostics.",
   );
   assert.match(
     sourceText,
@@ -3416,6 +3514,11 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     .replace(/\s+/gu, "");
   for (const strictRequestFailureFragment of [
     'record.firebaseService==="firestore"',
+    "record.directWebChannelRequestClass===record.webChannelRequestClass",
+    "record.directWebChannelTerminationClass===record.webChannelTerminationClass",
+    "record.directWebChannelSidSha256===record.sidSha256",
+    "record.directWebChannelGsessionidSha256===record.gsessionidSha256",
+    "record.playwrightNetworkIdentityResolved===true",
     "record.networkIdentityBound===true",
     "record.exactWebChannelBindingCandidateCount===1",
     "record.webChannelListenPathExact===true",
@@ -3438,6 +3541,122 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
       `The requestfailed exact WebChannel diagnostic filter is incomplete: ${strictRequestFailureFragment}`,
     );
   }
+  const authenticationWebChannelDiagnosticSettlementSourceStart =
+    sourceText.indexOf("const authenticationWebChannelDiagnosticTombstones =");
+  const authenticationWebChannelDiagnosticSettlementSourceEnd =
+    sourceText.indexOf(
+      "const exactWebChannelFailedSidHashes =",
+      authenticationWebChannelDiagnosticSettlementSourceStart,
+    );
+  assert.ok(authenticationWebChannelDiagnosticSettlementSourceStart >= 0);
+  assert.ok(
+    authenticationWebChannelDiagnosticSettlementSourceEnd >
+      authenticationWebChannelDiagnosticSettlementSourceStart,
+  );
+  const compactAuthenticationWebChannelDiagnosticSettlementSource = sourceText
+    .slice(
+      authenticationWebChannelDiagnosticSettlementSourceStart,
+      authenticationWebChannelDiagnosticSettlementSourceEnd,
+    )
+    .replace(/\s+/gu, "");
+  for (const diagnosticSettlementFragment of [
+    "authenticationExactWebChannelDiagnosticTombstones.safeSnapshot()",
+    "authenticationExactWebChannelDiagnosticTombstones.registrationSnapshot()",
+    "sortSafeDiagnosticRecords(groupBrowserRequestFailureDiagnostics)",
+    "authenticationExactWebChannelLoadingFailuresByNetworkId.values()",
+    "authenticationExactWebChannelNetworkLogRecords",
+    "authenticationExactWebChannelConsoleLocationRecords",
+    "resolveSafeExactAuthenticationWebChannelDiagnosticProbesAtSettlement({probes,tombstones:authenticationWebChannelDiagnosticTombstones,})",
+    "authenticationWebChannelRequestFailureResolutionDiagnostics=resolveAuthenticationWebChannelProbesAtSettlement(authenticationBrowserRequestFailureDiagnostics,)",
+    "authenticationWebChannelLoadingFailureResolutionDiagnostics=resolveAuthenticationWebChannelProbesAtSettlement(authenticationWebChannelLoadingFailureProbeDiagnostics,)",
+    "authenticationWebChannelNetworkLogResolutionDiagnostics=resolveAuthenticationWebChannelProbesAtSettlement(authenticationWebChannelNetworkLogProbeDiagnostics,)",
+    "authenticationWebChannelConsoleLocationResolutionDiagnostics=resolveAuthenticationWebChannelProbesAtSettlement(authenticationWebChannelConsoleLocationProbeDiagnostics,)",
+    "authenticationWebChannelApplicationBindingRecords=webChannelCdpHeaderAttestationBindingRecords.slice(groupApplicationNavigationWebChannelBindingStart,)",
+    "authenticationWebChannelApplicationBindingRecords.length<=128",
+    "networkRequestIdSha256:record.networkRequestIdSha256",
+    "requestUrlSha256:record.requestUrlSha256",
+    "authBindingClass:record.firebaseAuth?.bindingClass||null",
+  ]) {
+    assert.equal(
+      compactAuthenticationWebChannelDiagnosticSettlementSource.includes(
+        diagnosticSettlementFragment,
+      ),
+      true,
+      `The settlement-safe WebChannel diagnostic output is incomplete: ${diagnosticSettlementFragment}`,
+    );
+  }
+  for (const strictSettlementFilterFragment of [
+    'record.exactNetworkBindingCandidateCount===1&&record.lifecycleState==="response-awaiting"&&/^[a-f0-9]{64}$/u.test(record.requestUrlSha256)&&/^[a-f0-9]{64}$/u.test(record.networkRequestIdSha256)&&/^[a-f0-9]{64}$/u.test(record.sidSha256)',
+    'record.exactWebChannelBindingCandidateCount===1&&record.requestUrlBound===true&&record.lifecycleState==="response-awaiting"&&/^[a-f0-9]{64}$/u.test(record.requestUrlSha256)&&/^[a-f0-9]{64}$/u.test(record.networkRequestIdSha256)&&/^[a-f0-9]{64}$/u.test(record.sidSha256)',
+  ]) {
+    assert.equal(
+      compactAuthenticationWebChannelDiagnosticSettlementSource.includes(
+        strictSettlementFilterFragment,
+      ),
+      true,
+      `The settlement exact-only WebChannel filter is incomplete: ${strictSettlementFilterFragment}`,
+    );
+  }
+  const authenticationBrowserErrorDiagnosticSourceStart = sourceText.indexOf(
+    "const authenticationBrowserErrorDiagnostic = {",
+    authenticationWebChannelDiagnosticSettlementSourceEnd,
+  );
+  const authenticationBrowserErrorDiagnosticSourceEnd = sourceText.indexOf(
+    "assert.equal(\n        authenticationPageErrorCount,",
+    authenticationBrowserErrorDiagnosticSourceStart,
+  );
+  assert.ok(authenticationBrowserErrorDiagnosticSourceStart >= 0);
+  assert.ok(
+    authenticationBrowserErrorDiagnosticSourceEnd >
+      authenticationBrowserErrorDiagnosticSourceStart,
+  );
+  const authenticationBrowserErrorDiagnosticSource = sourceText.slice(
+    authenticationBrowserErrorDiagnosticSourceStart,
+    authenticationBrowserErrorDiagnosticSourceEnd,
+  );
+  for (const diagnosticOutputField of [
+    "authenticationBrowserRequestFailureDiagnostics",
+    "authenticationWebChannelDiagnosticTombstones",
+    "authenticationWebChannelTombstoneRegistration",
+    "authenticationWebChannelRequestFailureResolutionDiagnostics",
+    "authenticationWebChannelLoadingFailureProbeDiagnostics",
+    "authenticationWebChannelLoadingFailureResolutionDiagnostics",
+    "authenticationWebChannelNetworkLogProbeDiagnostics",
+    "authenticationWebChannelNetworkLogResolutionDiagnostics",
+    "authenticationWebChannelConsoleLocationProbeDiagnostics",
+    "authenticationWebChannelConsoleLocationResolutionDiagnostics",
+    "authenticationWebChannelApplicationBindingDiagnostics",
+    "authenticationExactWebChannelLoadingFailureHandlerErrorCount",
+    "authenticationExactWebChannelNetworkLogHandlerErrorCount",
+  ]) {
+    assert.equal(
+      authenticationBrowserErrorDiagnosticSource.includes(
+        `${diagnosticOutputField},`,
+      ),
+      true,
+      `The failure diagnostic lost its bounded safe output field: ${diagnosticOutputField}`,
+    );
+  }
+  assert.match(
+    sourceText,
+    /appCheckCdpSession\.on\("Network\.loadingFailed", \(event\) => \{[\s\S]*?catch \{\s*authenticationExactWebChannelLoadingFailureHandlerErrorCount \+= 1;/u,
+    "Network.loadingFailed diagnostic handler exceptions must be counted and remain capture-visible.",
+  );
+  assert.match(
+    sourceText,
+    /appCheckCdpSession\.on\("Log\.entryAdded", \(\{ entry \}\) => \{[\s\S]*?catch \{\s*authenticationExactWebChannelNetworkLogHandlerErrorCount \+= 1;/u,
+    "Log.entryAdded diagnostic handler exceptions must be counted and remain capture-visible.",
+  );
+  assert.match(
+    sourceText,
+    /assert\.equal\(\s*authenticationExactWebChannelLoadingFailureHandlerErrorCount,\s*0,[\s\S]*?Authentication Network\.loadingFailed diagnostic handler error count must be zero/u,
+    "Network.loadingFailed diagnostic handler errors must invalidate the authentication capture.",
+  );
+  assert.match(
+    sourceText,
+    /assert\.equal\(\s*authenticationExactWebChannelNetworkLogHandlerErrorCount,\s*0,[\s\S]*?Authentication Log\.entryAdded diagnostic handler error count must be zero/u,
+    "Log.entryAdded diagnostic handler errors must invalidate the authentication capture.",
+  );
   const authenticationFatalAccountingSourceStart = sourceText.indexOf(
     "const authenticationObservedBrowserRequestFailureCount =",
   );
@@ -7288,6 +7507,8 @@ const verifyPreTransmissionBoundaryNegativeFixtures = () => {
     safeExactWebChannelDiagnosticTombstoneAcceptedFixtureSourceCount: 1,
     safeExactWebChannelDiagnosticTombstoneAmbiguousFixtureSourceCount: 1,
     safeExactWebChannelDiagnosticTombstoneReleaseSequenceSourceCount: 3,
+    safeExactWebChannelDiagnosticTombstoneRegistrationReasonSourceCount: 9,
+    safeExactWebChannelDiagnosticSettlementResolutionSourceCount: 3,
     safeExactWebChannelDiagnosticRawValueOutputCount: 0,
     safeExactWebChannelDiagnosticFatalRecoverySubtractionCount: 0,
     safeAuthenticationSignInSourceContractVerified: true,
