@@ -176,6 +176,10 @@ const frozenBaselineAuthenticationAnomalyPolicy =
   resolveFrozenBaselineAuthenticationAnomalyPolicy(
     contract.frozenBaselineAuthenticationAnomalyPolicy,
   );
+const SAFE_AUTHENTICATION_COLLECTION_LIST_PREFLIGHT_POLICY_ID =
+  "w10p-frozen-baseline-student-collection-list-preflight-v1";
+const SAFE_AUTHENTICATION_COLLECTION_LIST_PREFLIGHT_QUERY_CLASSES =
+  Object.freeze(["attendance", "history-dictionary"]);
 const MAX_RESOLVED_REQUEST_POST_DATA_BYTES = 8 * 1024 * 1024;
 const NODE_OWNED_EXTERNAL_STATIC_RESPONSE_HEADER_MAXIMUM_BYTES = 64 * 1024;
 const NODE_OWNED_EXTERNAL_STATIC_RESPONSE_BODY_MAXIMUM_BYTES = 16 * 1024 * 1024;
@@ -2472,6 +2476,17 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     "containsVercelPreviewToolbarMarkup(bytes)",
     "stableOriginRewriteLocalFulfillCount += 1",
     "const exactAuthCredentialBodyScope = exactAuthCredentialBodyRequestScope({",
+    "const classifyExactAuthenticationCollectionListPreflightRequest = (input) =>",
+    "const exactAuthenticationCollectionListPreflightCandidate = ({",
+    "authenticationCollectionListPreflightRequestsByFetchRequestId",
+    "authenticationCollectionListPreflightResponsesByQueryClass",
+    "registerAuthenticationCollectionListPreflightRequest",
+    "confirmAuthenticationCollectionListPreflight: async (",
+    "mergeSafeAuthenticationCollectionListPreflightResponseClass(",
+    "normalizeSafeAuthenticationCollectionListPreflightAttestation(",
+    "collectAuthenticationCollectionListPreflightFailureQueryResults",
+    "${userCollectionsRoot}/attendance?pageSize=1",
+    "${userCollectionsRoot}/history_dictionary_words?pageSize=1&orderBy=updatedAt%20desc",
     "const exactRefreshTokenBodyScope = exactRefreshTokenBodyRequestScope({",
     "const apiKeyScope = stagingApiKeyScopeDecision({",
     "const sensitiveMaterialScope = sensitiveMaterialScopeDecision({",
@@ -2553,6 +2568,110 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
       `The all-target pre-transmission source contract is missing: ${requiredSourceFragment}`,
     );
   }
+  const collectionListPreflightClassifierStart = sourceText.indexOf(
+    "const classifyExactAuthenticationCollectionListPreflightRequest = (input) =>",
+  );
+  const collectionListPreflightClassifierEnd = sourceText.indexOf(
+    "const classifySafeCdpNetworkErrorReason = (input) =>",
+    collectionListPreflightClassifierStart,
+  );
+  assert.ok(collectionListPreflightClassifierStart >= 0);
+  assert.ok(
+    collectionListPreflightClassifierEnd >
+      collectionListPreflightClassifierStart,
+  );
+  const collectionListPreflightClassifierSource = sourceText.slice(
+    collectionListPreflightClassifierStart,
+    collectionListPreflightClassifierEnd,
+  );
+  assert.match(
+    collectionListPreflightClassifierSource,
+    /values\.stage !== frozenBaselineAuthenticationAnomalyPolicy\.stage[\s\S]*?values\.captureRole !==[\s\S]*?values\.authenticationRole !==[\s\S]*?values\.viewport !==[\s\S]*?values\.phase !== frozenBaselineAuthenticationAnomalyPolicy\.phase[\s\S]*?values\.method !== "GET"/u,
+    "Collection LIST preflight classification must remain bound to the frozen baseline student 1024 authentication group and GET.",
+  );
+  assert.match(
+    collectionListPreflightClassifierSource,
+    /queryClass === "attendance"\s*\? "\?pageSize=1"\s*:\s*"\?pageSize=1&orderBy=updatedAt%20desc"/u,
+    "Collection LIST preflight classification must retain both exact canonical query strings.",
+  );
+  assert.match(
+    collectionListPreflightClassifierSource,
+    /if \(method === "OPTIONS" \|\| phase !== "authentication"\) return false;/u,
+    "Non-OPTIONS method drift on either collection LIST path must remain a fail-closed pre-transmission candidate.",
+  );
+  assert.match(
+    sourceText,
+    /profileDocument = await profileResponse\.json\(\);[\s\S]*?const preflightRequests = Object\.freeze\(\[[\s\S]*?\$\{userCollectionsRoot\}\/attendance\?pageSize=1[\s\S]*?\$\{userCollectionsRoot\}\/history_dictionary_words\?pageSize=1&orderBy=updatedAt%20desc[\s\S]*?response = await fetch\(request\.url, \{\s*method: "GET",\s*headers: protectedReadHeaders,\s*redirect: "error",[\s\S]*?response\.status === 200[\s\S]*?response\.status === 403[\s\S]*?"other-http"[\s\S]*?await response\.arrayBuffer\(\);[\s\S]*?passed: queryResults\.every\([\s\S]*?result\.responseClass === "response-2xx"/u,
+    "The two exact LIST GET probes must run after the profile read with the same protected headers, discard bodies, and return only safe exact-200 status classes.",
+  );
+  assert.match(
+    sourceText,
+    /normalizeSafeAuthenticationCollectionListPreflightAttestation\(\s*pageAttestation,[\s\S]*?canonicalQueryResults[\s\S]*?if \(!exactSuccess\)[\s\S]*?groupAuthenticationCollectionListPreflightFailureQueryResults\s*=\s*canonicalQueryResults;[\s\S]*?queryResults: canonicalQueryResults/u,
+    "Node must preserve canonical safe query status evidence before failing closed on non-200 collection LIST results.",
+  );
+  assert.match(
+    sourceText,
+    /const mergeSafeAuthenticationCollectionListPreflightResponseClass[\s\S]*?cdpResponseClass === null \|\| cdpResponseClass === "response-2xx"\s*\? pageResponseClass\s*:\s*cdpResponseClass;[\s\S]*?canonicalQueryResults[\s\S]*?mergeSafeAuthenticationCollectionListPreflightResponseClass\(/u,
+    "CDP HTTP/transport failures must take precedence, while CDP 2xx must not erase a page transport failure.",
+  );
+  assert.match(
+    sourceText,
+    /registerAuthenticationCollectionListPreflightRequest[\s\S]*?exactCaseInsensitiveRequestHeaderValue\([\s\S]*?"authorization"[\s\S]*?"x-firebase-appcheck"[\s\S]*?authorizationHeaderSha256,\s*authenticationProtectedReadAuthorizationHeaderSha256[\s\S]*?appCheckHeaderSha256,\s*authenticationProtectedReadAppCheckHeaderSha256[\s\S]*?const sameAuthorizationToken\s*=[\s\S]*?requestRecords\.every[\s\S]*?const sameAppCheckToken\s*=[\s\S]*?requestRecords\.every/u,
+    "LIST authority equality must be derived from actual CDP request-header hashes against the config/profile protected-read authority.",
+  );
+  assert.match(
+    sourceText,
+    /const responseCorrelation = resolveResponseCorrelationForEvent\(event\);[\s\S]*?authenticationCollectionListPreflightRequestsByFetchRequestId\.get\(\s*primaryRequestId,[\s\S]*?classifyExactAuthenticationCollectionListPreflightRequest\(\{[\s\S]*?authenticationCollectionListPreflightResponsesByQueryClass\.set\(/u,
+    "Collection LIST preflight status evidence must be bound through the existing exact Fetch/Network response correlation.",
+  );
+  const fetchPausedListenerStart = sourceText.indexOf(
+    'appCheckCdpSession.on("Fetch.requestPaused", (event) => {',
+  );
+  const collectionListRegistrationIndex = sourceText.indexOf(
+    "registerAuthenticationCollectionListPreflightRequest({",
+    fetchPausedListenerStart,
+  );
+  const handlerEnqueueIndex = sourceText.indexOf(
+    "const handlerPromise = allowedEgressHandlerTaskCoordinator",
+    collectionListRegistrationIndex,
+  );
+  const handlePausedRequestInvocationIndex = sourceText.indexOf(
+    "handlePausedRequest(event, requestCaptureScope)",
+    handlerEnqueueIndex,
+  );
+  assert.ok(
+    fetchPausedListenerStart >= 0 &&
+      collectionListRegistrationIndex > fetchPausedListenerStart &&
+      handlerEnqueueIndex > collectionListRegistrationIndex &&
+      handlePausedRequestInvocationIndex > handlerEnqueueIndex,
+    "Exact LIST classification/header registration must execute before the coordinator invokes the pre-transmission candidate gate.",
+  );
+  const collectionListPreflightNormalizerStart = sourceText.indexOf(
+    "const normalizeSafeAuthenticationCollectionListPreflightAttestation = (",
+  );
+  const collectionListPreflightNormalizerEnd = sourceText.indexOf(
+    "const SAFE_AUTHENTICATION_PROTECTED_READ_BROWSER_OUTCOME_CLASSES",
+    collectionListPreflightNormalizerStart,
+  );
+  assert.ok(collectionListPreflightNormalizerStart >= 0);
+  assert.ok(
+    collectionListPreflightNormalizerEnd >
+      collectionListPreflightNormalizerStart,
+  );
+  const collectionListPreflightNormalizerSource = sourceText.slice(
+    collectionListPreflightNormalizerStart,
+    collectionListPreflightNormalizerEnd,
+  );
+  assert.doesNotMatch(
+    collectionListPreflightNormalizerSource,
+    /\b(?:rawUrl|requestUrl|path|uid|token|responseBody|body)\s*:/iu,
+    "The safe collection LIST preflight attestation must not expose URLs, paths, UIDs, tokens, or response bodies.",
+  );
+  assert.doesNotMatch(
+    collectionListPreflightNormalizerSource,
+    /same(?:Authorization|AppCheck)Token/u,
+    "The page attestation normalizer must not accept renderer self-asserted authority equality.",
+  );
   const frozenBaselineFixtureSourceStart = sourceText.indexOf(
     "const verifyFrozenBaselineListenerBindingFixtures = async () => {",
   );
@@ -4027,8 +4146,8 @@ const assertCaptureProtectedReadTransportResetSourceContract = (sourceText) => {
   );
   assert.match(
     safeFailureDiagnosticSource,
-    /retryTargets[\s\S]*wholeBrowserProcessRestartRequired[\s\S]*protectedReadWholeBrowserProcessRestartRequired !==\s*\(failureClass ===\s*SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES\.wholeBrowserProcessRestartRequired\)[\s\S]*schemaVersion:\s*4[\s\S]*protectedReadRetryTargets[\s\S]*protectedReadWholeBrowserProcessRestartRequired/u,
-    "The schema-4 safe failure diagnostic must bind per-target retry evidence and its restart boolean iff the fixed failure class is selected.",
+    /collectionListPreflightQueryResults[\s\S]*normalizeSafeAuthenticationCollectionListPreflightQueryResults[\s\S]*protectedReadWholeBrowserProcessRestartRequired !==\s*\(failureClass ===\s*SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES\.wholeBrowserProcessRestartRequired\)[\s\S]*schemaVersion:\s*5[\s\S]*collectionListPreflightQueryResults:[\s\S]*protectedReadRetryTargets[\s\S]*protectedReadWholeBrowserProcessRestartRequired/u,
+    "The schema-5 safe failure diagnostic must preserve only normalized LIST query outcomes while retaining the protected-read retry contract.",
   );
   const completeIndex = resetBranchSource.indexOf(
     "completeProxyAuthorization();",
@@ -4839,6 +4958,59 @@ const verifyCaptureSafeAuthenticationSignInSourceContractNegativeFixtures = (
   }
   return mutations.length;
 };
+const verifyCaptureCollectionListPreflightSourceContractNegativeFixtures = (
+  sourceText,
+) => {
+  const replaceAllExact = (needle, replacement) => {
+    assert.equal(
+      sourceText.includes(needle),
+      true,
+      "A collection LIST preflight source mutation fixture is unbound.",
+    );
+    return sourceText.split(needle).join(replacement);
+  };
+  const registrationCall =
+    "registerAuthenticationCollectionListPreflightRequest({";
+  const handlerInvocation = "handlePausedRequest(event, requestCaptureScope)";
+  const orderSentinel = "__W10P_COLLECTION_LIST_REGISTRATION_ORDER__";
+  assert.equal(sourceText.includes(orderSentinel), false);
+  assert.equal(sourceText.includes(registrationCall), true);
+  assert.equal(sourceText.includes(handlerInvocation), true);
+  const registrationAfterHandlerMutation = sourceText
+    .replace(registrationCall, orderSentinel)
+    .replace(handlerInvocation, registrationCall)
+    .replace(orderSentinel, handlerInvocation);
+  const mutations = [
+    registrationAfterHandlerMutation,
+    replaceAllExact(
+      "${userCollectionsRoot}/history_dictionary_words?pageSize=1&orderBy=updatedAt%20desc",
+      "${userCollectionsRoot}/history_dictionary_words?orderBy=updatedAt%20desc&pageSize=1",
+    ),
+    replaceAllExact("if (!exactSuccess)", "if (false)"),
+    replaceAllExact(
+      'if (method === "OPTIONS" || phase !== "authentication") return false;',
+      'if (method !== "GET" || phase !== "authentication") return false;',
+    ),
+    replaceAllExact(
+      "groupAuthenticationCollectionListPreflightFailureQueryResults =",
+      "discardedCollectionListPreflightFailureQueryResults =",
+    ),
+    replaceAllExact(
+      "authenticationProtectedReadAuthorizationHeaderSha256,",
+      "null,",
+    ),
+    replaceAllExact(
+      'cdpResponseClass === null || cdpResponseClass === "response-2xx"',
+      "cdpResponseClass === null",
+    ),
+  ];
+  for (const mutation of mutations) {
+    assert.throws(() =>
+      assertCapturePreTransmissionBoundarySourceOrdering(mutation),
+    );
+  }
+  return mutations.length;
+};
 const assertNoAppCheckSecretMaterial = (
   textValue,
   { debugToken = "", debugSentinel = "", exchangedToken = "" } = {},
@@ -4852,6 +5024,119 @@ const assertNoAppCheckSecretMaterial = (
 const assertExactObjectKeys = (value, expectedKeys) => {
   assert.ok(value && typeof value === "object" && !Array.isArray(value));
   assert.deepEqual(Object.keys(value).sort(), [...expectedKeys].sort());
+};
+const assertAuthenticationCollectionListPreflight = (attestation) => {
+  assertExactObjectKeys(attestation, [
+    "authenticationRole",
+    "captureRole",
+    "exactUrlMethodBound",
+    "groupKey",
+    "passed",
+    "policyId",
+    "queryResults",
+    "sameAppCheckToken",
+    "sameAuthorizationToken",
+    "schemaVersion",
+    "stage",
+    "viewport",
+  ]);
+  assert.equal(attestation.schemaVersion, 1);
+  assert.equal(
+    attestation.policyId,
+    SAFE_AUTHENTICATION_COLLECTION_LIST_PREFLIGHT_POLICY_ID,
+  );
+  assert.equal(attestation.stage, "baseline");
+  assert.equal(attestation.captureRole, "student");
+  assert.equal(attestation.authenticationRole, "student");
+  assert.equal(attestation.viewport, "1024x768");
+  assert.equal(attestation.groupKey, "baseline:student:1024x768");
+  assert.equal(attestation.exactUrlMethodBound, true);
+  assert.equal(attestation.sameAuthorizationToken, true);
+  assert.equal(attestation.sameAppCheckToken, true);
+  assert.equal(attestation.passed, true);
+  assert.equal(Array.isArray(attestation.queryResults), true);
+  assert.equal(
+    attestation.queryResults.length,
+    SAFE_AUTHENTICATION_COLLECTION_LIST_PREFLIGHT_QUERY_CLASSES.length,
+  );
+  for (const [index, result] of attestation.queryResults.entries()) {
+    assertExactObjectKeys(result, [
+      "queryClass",
+      "responseClass",
+      "statusCategory",
+    ]);
+    assert.equal(
+      result.queryClass,
+      SAFE_AUTHENTICATION_COLLECTION_LIST_PREFLIGHT_QUERY_CLASSES[index],
+    );
+    assert.equal(result.responseClass, "response-2xx");
+    assert.equal(result.statusCategory, "2xx");
+  }
+  const serialized = JSON.stringify(attestation);
+  assert.doesNotMatch(
+    serialized,
+    /"(?:rawUrl|requestUrl|path|uid|token|responseBody|body)"\s*:/iu,
+  );
+  return attestation;
+};
+const verifyAuthenticationCollectionListPreflightNegativeFixtures = () => {
+  const valid = {
+    schemaVersion: 1,
+    policyId: SAFE_AUTHENTICATION_COLLECTION_LIST_PREFLIGHT_POLICY_ID,
+    groupKey: "baseline:student:1024x768",
+    stage: "baseline",
+    captureRole: "student",
+    authenticationRole: "student",
+    viewport: "1024x768",
+    exactUrlMethodBound: true,
+    sameAuthorizationToken: true,
+    sameAppCheckToken: true,
+    queryResults:
+      SAFE_AUTHENTICATION_COLLECTION_LIST_PREFLIGHT_QUERY_CLASSES.map(
+        (queryClass) => ({
+          queryClass,
+          responseClass: "response-2xx",
+          statusCategory: "2xx",
+        }),
+      ),
+    passed: true,
+  };
+  assert.doesNotThrow(() => assertAuthenticationCollectionListPreflight(valid));
+  const mutations = [
+    (fixture) => {
+      fixture.queryResults.reverse();
+    },
+    (fixture) => {
+      fixture.queryResults[0].responseClass = "response-4xx";
+    },
+    (fixture) => {
+      fixture.queryResults[0].responseClass = "transport-error";
+      fixture.queryResults[0].statusCategory = "transport-error";
+    },
+    (fixture) => {
+      fixture.queryResults[1].statusCategory = "4xx";
+    },
+    (fixture) => {
+      fixture.stage = "candidate";
+    },
+    (fixture) => {
+      fixture.rawUrl = "https://firestore.googleapis.com/private";
+    },
+    (fixture) => {
+      fixture.queryResults[0].uid = "private-uid";
+    },
+  ];
+  for (const mutate of mutations) {
+    const fixture = structuredClone(valid);
+    mutate(fixture);
+    assert.throws(() => assertAuthenticationCollectionListPreflight(fixture));
+  }
+  return Object.freeze({
+    authenticationCollectionListPreflightSchemaAcceptedFixtureCount: 1,
+    authenticationCollectionListPreflightSchemaRejectedFixtureCount:
+      mutations.length,
+    authenticationCollectionListPreflightSchemaNetworkAccess: 0,
+  });
 };
 const canonicalFrozenBaselineAuthenticationRetirementJson = (value) => {
   if (Array.isArray(value)) {
@@ -5842,6 +6127,10 @@ const verifyPreTransmissionBoundaryNegativeFixtures = () => {
     verifyCaptureSafeAuthenticationSignInSourceContractNegativeFixtures(
       captureRunnerSourceText,
     );
+  const authenticationCollectionListPreflightSourceMutationRejectedCaseCount =
+    verifyCaptureCollectionListPreflightSourceContractNegativeFixtures(
+      captureRunnerSourceText,
+    );
   return {
     preTransmissionProductionGetRejectedCaseCount: 1,
     preTransmissionProductionPostRejectedCaseCount: 1,
@@ -5870,6 +6159,7 @@ const verifyPreTransmissionBoundaryNegativeFixtures = () => {
     frozenBaselineListenerBindingNegativeFixtureSourceCount: 19,
     safeAuthenticationSignInSourceContractVerified: true,
     safeAuthenticationSignInSourceMutationRejectedCaseCount,
+    authenticationCollectionListPreflightSourceMutationRejectedCaseCount,
   };
 };
 const verifyFixtureAuditFreshnessNegativeFixtures = () => {
@@ -6007,6 +6297,8 @@ const browserConnectProxyTransportResetObservationSelfTest =
   verifyBrowserConnectProxyTransportResetObservationFixtures();
 const frozenBaselineAuthenticationAnomalyRetirementSelfTest =
   verifyFrozenBaselineAuthenticationAnomalyRetirementFixtures();
+const authenticationCollectionListPreflightSchemaSelfTest =
+  verifyAuthenticationCollectionListPreflightNegativeFixtures();
 if (args.includes("--self-test-app-check")) {
   console.log(
     JSON.stringify({
@@ -6023,6 +6315,7 @@ if (args.includes("--self-test-app-check")) {
       ...protectedReadTransportResetLeaseSequenceSelfTest,
       ...browserConnectProxyTransportResetObservationSelfTest,
       ...frozenBaselineAuthenticationAnomalyRetirementSelfTest,
+      ...authenticationCollectionListPreflightSchemaSelfTest,
       verifierChildSecretEnvScrubbed: true,
       verifierChildSecretEnvironmentVariableCount,
       verifierChildSecretValueObservationCount,
@@ -10567,6 +10860,9 @@ for (const role of ["student", "teacher", "admin"]) {
 }
 assert.equal(observedIdentityUidHashes.size, 3);
 assert.equal(observedIdentityEmailHashes.size, 3);
+assertAuthenticationCollectionListPreflight(
+  manifest.authenticationCollectionListPreflight,
+);
 
 const deploymentUrlPattern =
   /^https:\/\/westory-staging-[a-z0-9-]+-bbbs-projects-44f9da30\.vercel\.app\/?$/u;
