@@ -1081,18 +1081,15 @@ service cloud.firestore {
       }
 
       match /attendance/{recordId} {
-        allow read: if canUseWestory() && (isOwnUser(userId) || isAdmin());
+        allow read: if isOwnUser(userId) || isAdmin();
         allow create, update, delete: if false;
       }
 
       match /history_dictionary_words/{wordId} {
-        allow read: if canUseWestory()
-          && (
-            isOwnUser(userId)
-            || isAdmin()
-            || isTeacherRole()
-            || hasPermission('lesson_read')
-          );
+        allow read: if isOwnUser(userId)
+          || isAdmin()
+          || isTeacherRole()
+          || hasPermission('lesson_read');
         allow create, update, delete: if false;
       }
     }
