@@ -2604,6 +2604,29 @@ const assertCapturePreTransmissionBoundarySourceOrdering = (sourceText) => {
     /profileDocument = await profileResponse\.json\(\);[\s\S]*?const preflightRequests = Object\.freeze\(\[[\s\S]*?\$\{userCollectionsRoot\}\/attendance\?pageSize=1[\s\S]*?\$\{userCollectionsRoot\}\/history_dictionary_words\?pageSize=1&orderBy=updatedAt%20desc[\s\S]*?response = await fetch\(request\.url, \{\s*method: "GET",\s*headers: protectedReadHeaders,\s*redirect: "error",[\s\S]*?response\.status === 200[\s\S]*?response\.status === 403[\s\S]*?"other-http"[\s\S]*?await response\.arrayBuffer\(\);[\s\S]*?passed: queryResults\.every\([\s\S]*?result\.responseClass === "response-2xx"/u,
     "The two exact LIST GET probes must run after the profile read with the same protected headers, discard bodies, and return only safe exact-200 status classes.",
   );
+  const authenticateCoreStart = sourceText.indexOf(
+    "const authenticateCore = async (",
+  );
+  const authenticateCoreEnd = sourceText.indexOf(
+    "const authenticate = async (",
+    authenticateCoreStart,
+  );
+  const collectionListConfirmationIndex = sourceText.indexOf(
+    "await confirmAuthenticationCollectionListPreflight(",
+    authenticateCoreStart,
+  );
+  const protectedReadConfirmationIndex = sourceText.indexOf(
+    "await confirmAuthenticationProtectedReadRetry(",
+    authenticateCoreStart,
+  );
+  assert.ok(
+    authenticateCoreStart >= 0 &&
+      authenticateCoreEnd > authenticateCoreStart &&
+      collectionListConfirmationIndex > authenticateCoreStart &&
+      collectionListConfirmationIndex < protectedReadConfirmationIndex &&
+      protectedReadConfirmationIndex < authenticateCoreEnd,
+    "Collection LIST confirmation must fail closed before protected-read retry accounting can observe LIST browser failures.",
+  );
   assert.match(
     sourceText,
     /normalizeSafeAuthenticationCollectionListPreflightAttestation\(\s*pageAttestation,[\s\S]*?canonicalQueryResults[\s\S]*?if \(!exactSuccess\)[\s\S]*?groupAuthenticationCollectionListPreflightFailureQueryResults\s*=\s*canonicalQueryResults;[\s\S]*?queryResults: canonicalQueryResults/u,
@@ -4973,15 +4996,29 @@ const verifyCaptureCollectionListPreflightSourceContractNegativeFixtures = (
     "registerAuthenticationCollectionListPreflightRequest({";
   const handlerInvocation = "handlePausedRequest(event, requestCaptureScope)";
   const orderSentinel = "__W10P_COLLECTION_LIST_REGISTRATION_ORDER__";
+  const collectionListConfirmation =
+    "await confirmAuthenticationCollectionListPreflight(";
+  const protectedReadConfirmation =
+    "await confirmAuthenticationProtectedReadRetry(";
+  const confirmationOrderSentinel =
+    "__W10P_COLLECTION_LIST_CONFIRMATION_ORDER__";
   assert.equal(sourceText.includes(orderSentinel), false);
+  assert.equal(sourceText.includes(confirmationOrderSentinel), false);
   assert.equal(sourceText.includes(registrationCall), true);
   assert.equal(sourceText.includes(handlerInvocation), true);
+  assert.equal(sourceText.includes(collectionListConfirmation), true);
+  assert.equal(sourceText.includes(protectedReadConfirmation), true);
   const registrationAfterHandlerMutation = sourceText
     .replace(registrationCall, orderSentinel)
     .replace(handlerInvocation, registrationCall)
     .replace(orderSentinel, handlerInvocation);
+  const collectionConfirmationAfterProtectedReadMutation = sourceText
+    .replace(collectionListConfirmation, confirmationOrderSentinel)
+    .replace(protectedReadConfirmation, collectionListConfirmation)
+    .replace(confirmationOrderSentinel, protectedReadConfirmation);
   const mutations = [
     registrationAfterHandlerMutation,
+    collectionConfirmationAfterProtectedReadMutation,
     replaceAllExact(
       "${userCollectionsRoot}/history_dictionary_words?pageSize=1&orderBy=updatedAt%20desc",
       "${userCollectionsRoot}/history_dictionary_words?orderBy=updatedAt%20desc&pageSize=1",

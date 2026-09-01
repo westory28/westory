@@ -37231,6 +37231,14 @@ const authenticateCore = async (
     },
   );
   setFailureClass(
+    "authentication-collection-list-preflight-attestation-failed",
+  );
+  identity.authenticationCollectionListPreflightAttestation =
+    await confirmAuthenticationCollectionListPreflight(
+      identity.collectionListPreflightAttestation,
+    );
+  delete identity.collectionListPreflightAttestation;
+  setFailureClass(
     SAFE_AUTHENTICATION_PROTECTED_READ_RETRY_FAILURE_CLASSES.generic,
   );
   identity.authenticationProtectedReadRetryAttestation =
@@ -37243,14 +37251,6 @@ const authenticateCore = async (
         ),
     );
   delete identity.protectedReadRetryAttestation;
-  setFailureClass(
-    "authentication-collection-list-preflight-attestation-failed",
-  );
-  identity.authenticationCollectionListPreflightAttestation =
-    await confirmAuthenticationCollectionListPreflight(
-      identity.collectionListPreflightAttestation,
-    );
-  delete identity.collectionListPreflightAttestation;
   setFailureClass("application-session-proof-registration-failed");
   registerApplicationSessionProof(identity.applicationSessionProof);
   setFailureClass("authentication-bootstrap-pre-retirement-drain-failed");
